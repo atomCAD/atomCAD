@@ -171,7 +171,19 @@ with zero layout noise — but it means layout must be recorded on a separate ax
 (D9). The two questions "what did the AI change?" and "what did the layout do to
 my drawing?" are orthogonal, and the panel answers them in separate tabs.
 
-**D4 — Two diff views: *By node* (default) and *Text*.** A plain line diff
+**D4 — Two diff views: *By node* (default) and *Text*.**
+
+> **Amended after Phase 3, in use: the panel shows *Text* only.** The reasoning
+> below is sound and the engine works — but on real edits the per-node blocks
+> turned out to be a rearrangement of lines the text diff already showed, in
+> exchange for a mode switch on every reading. The false-positive mode the view
+> exists to defeat is real and does occur; it was simply not worth a permanent
+> radio group. `diff_by_node`, `split_snapshot` and the `by_node` flag on
+> `ai_history_diff` all stay — this is a UI judgement, not a deletion, and
+> restoring the toggle is a Dart-side change. Everything below stands as the
+> record of why the kernel computes both.
+
+A plain line diff
 over a text-format snapshot has a known false-positive mode: the output is
 topologically sorted, so inserting one upstream node can shift every downstream
 statement, and the line diff reports a large move as a large change.
@@ -669,8 +681,11 @@ convenience for pasting a session into a skill-refinement conversation.
   otherwise.
 - An **incomplete-snapshot banner** on an entry whose serialization was
   truncated by a wire cycle (D2), which greys the diff and says why.
-- **Detail tabs:** *Diff* (By node / Text toggle, `⤢` expands to a dialog; rows
-  are keyed by path, so body nodes read `m1/d`), *Request* (the submitted
+- **Detail tabs:** *Diff* (the text diff, `⤢` expands to a dialog; the By node
+  toggle was removed, see D4's amendment), *Network* (`after_text` whole, the
+  network as it stood once the edit landed — the question a chain of diffs
+  answers only by being read backwards, and valid `edit --replace` input),
+  *Request* (the submitted
   script, monospace, selectable), *Result* (errors, warnings, connections made,
   and the `description` / `summary` / `output` assignments), *Layout* (path,
   moved count, max displacement, and the moved-node table **grouped by scope**,
@@ -777,12 +792,37 @@ GUI edit between two AI edits and confirm the divergence marker, then undo an AI
 edit and confirm the marker says so instead; trigger a CLI error and read it in
 the panel; export and re-read the JSON.
 
-### Phase 5 (later) — Wider capture
+### Phase 5 — Wider capture
 Log non-edit CLI traffic (`/query`, `/screenshot`, `/networks/*`, `/load`,
 `/save`) as lightweight timeline entries via a single hook in
 `_handleRequest`, so the log shows what the AI *looked at* before it edited.
 Optional `X-Client-Label` header from `atomcad-cli` to replace the manual
 session label.
+
+Two decisions that were only forced once it was written:
+
+- **A second ring, not a second record kind, and one shared `seq`.** An activity
+  entry takes none of an edit record's fields and none of its divergence flags
+  — it holds no snapshot to compare, and a `query` between two edits is not an
+  outside change, so D7's one string comparison must keep reading edit records
+  only. But the two must interleave *exactly*, and a scripted session issues
+  several requests per millisecond, so a timestamp merge ties constantly. They
+  therefore share the sequence counter and nothing else: edit sequence numbers
+  gain gaps, stay unique, and "edit #N" keeps working.
+- **`/edit` and `/health` are not recorded by the hook.** `/edit` records itself
+  far below, in `ai_text_edit`, with the snapshots and the layout outcome a
+  timeline entry has no room for — routing it through the hook as well would put
+  two rows on the timeline for one edit. `/health` is what the CLI polls before
+  every single command, and recording it would roughly double every session log
+  to say nothing.
+
+The label answers open question 5: `atomcad-cli --label` (or
+`ATOMCAD_CLIENT_LABEL`) sends `X-Client-Label`, the hook announces it to the
+kernel *before* dispatch so an `/edit` in the same request carries it too, and
+every record is stamped with the label current when it was pushed. The manual
+session label of D13 stays as the fallback for a client that does not identify
+itself; the panel offers the detected label as its placeholder, and exports
+carry every distinct label regardless of what was typed.
 
 ---
 
@@ -840,10 +880,11 @@ ever appears, the stack should become a tabbed dock — noted, not done here.
    log should show rather than forget.
 4. **A keyboard shortcut?** Console holds Ctrl+`. Recommendation: menu entry
    only for now.
-5. **Should `atomcad-cli` identify itself?** A `X-Client-Label` header would
-   make the session label automatic and per-request rather than per-session, and
-   would let a single log distinguish two models editing in turn. Deferred to
-   Phase 5 because it touches the CLI, the skill and the server.
+5. **Should `atomcad-cli` identify itself?** ~~Deferred to Phase 5~~ —
+   **answered yes, and landed there.** `--label` / `ATOMCAD_CLIENT_LABEL` sends
+   an `X-Client-Label` header; the label is per-request, so one log can tell two
+   models editing in turn apart, and the manual session label became the
+   fallback for a client that says nothing.
 6. **Should an entry offer "revert to this snapshot"?** Recommendation: no. It
    would turn a diagnostic into an editing tool, it interacts badly with undo,
    and `edit --replace` with the exported text already does it explicitly.

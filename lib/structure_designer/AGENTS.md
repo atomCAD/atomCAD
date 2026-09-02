@@ -245,9 +245,14 @@ before touching it:
 - **the summary list is pushed, the payloads are pulled.** `refreshFromKernel`
   re-fetches `aiHistoryList()` only when the cheap `aiHistoryVersion()` compare
   changed *and* the panel is open; the selected entry's detail and diff are
-  fetched inside the panel's `build` and memoised on `(seq, byNode)`. A diff is
-  computed on demand Rust-side, so fetching one per rebuild would re-diff two
-  whole network snapshots for nothing.
+  fetched inside the panel's `build` and memoised on `seq`. A diff is computed
+  on demand Rust-side, so fetching one per rebuild would re-diff two whole
+  network snapshots for nothing.
+- **the panel shows the *Text* diff only.** The design's D4 specified a *By
+  node* view alongside it and made it the default; it was removed from the UI
+  after use, so `aiHistoryDiff` is always called with `byNode: false`. The
+  kernel's `diff_by_node` and the flag on the API stay — this was a UI
+  judgement, not a deletion — so restoring the toggle is a Dart-side change.
 
 Two invariants of the data are easy to get wrong in the UI and are documented at
 their use sites: a row carries **two verdicts** (`applied` is the AI's own,

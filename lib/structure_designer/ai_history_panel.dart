@@ -9,9 +9,16 @@
 /// **The list is pushed, the payloads are pulled** (D12). `refreshFromKernel`
 /// keeps `model.aiHistory` current behind an `ai_history_version()` compare and
 /// only while the panel is open; the selected entry's detail and diff are
-/// fetched here, in `build`, and memoised on `(seq, byNode)`. A diff is
-/// computed on demand Rust-side (D5), so re-fetching it on every rebuild would
-/// re-run `similar` over two whole snapshots for nothing.
+/// fetched here, in `build`, and memoised on `seq`. A diff is computed on
+/// demand Rust-side (D5), so re-fetching it on every rebuild would re-run
+/// `similar` over two whole snapshots for nothing.
+///
+/// **One diff view, not two.** D4 specified a *By node* mode alongside the
+/// literal *Text* one and made it the default; in use the per-node blocks
+/// turned out to say less than the plain unified diff, so the panel shows
+/// *Text* only. `diff_by_node` and the `by_node` flag on `ai_history_diff`
+/// stay in the kernel — the engine is tested and an export could still want
+/// it — but nothing in the UI reaches them.
 ///
 /// **Two verdicts, not one** (D8). A row's primary glyph is `applied` — the
 /// editor's own verdict, "did this edit land" — and `success`, the
@@ -25,6 +32,16 @@
 /// time rather than reflowed. The Layout tab therefore groups moved nodes by
 /// scope and says so in a footnote, instead of letting `none` read as "nothing
 /// was disturbed".
+///
+/// **The timeline carries two kinds of row** (Phase 5). Edits come from
+/// `model.aiHistory`; every other CLI request — `query`, `screenshot`,
+/// `networks/*`, `load`, `save` — comes from `model.aiActivity`, and the two
+/// are merged here by `seq`, which both kernel-side rings draw from. An
+/// activity row is a marker, not an entry: it is dim, it is not selectable, and
+/// there is no detail pane behind it. Its job is to say what the AI was
+/// *looking at* around an edit, which is exactly the context a bare list of
+/// edits cannot give. The `⇄` toolbar button hides them when the edits are all
+/// one wants to see.
 ///
 /// **PlatformInt64 gotcha**, as in `console_panel.dart`: `timestampMs` is
 /// FRB's `PlatformInt64`, `int` on native and `BigInt` on web. Desktop is this
@@ -67,18 +84,27 @@ class _AiHistoryPanelState extends State<AiHistoryPanel>
     with SingleTickerProviderStateMixin {
   static const double _panelHeight = 280;
   static const double _listWidth = 360;
-  static const List<String> _tabs = ['Diff', 'Request', 'Result', 'Layout'];
+  static const List<String> _tabs = [
+    'Diff',
+    'Network',
+    'Request',
+    'Result',
+    'Layout',
+  ];
 
   late final TabController _tabController =
       TabController(length: _tabs.length, vsync: this);
 
-  /// Diff mode — *By node* (D4's default) over the literal *Text* diff.
-  bool _byNode = true;
+  /// Whether the non-edit CLI requests share the list with the edits.
+  ///
+  /// On by default — showing what the AI looked at is the whole point of
+  /// recording it — but a session that queried forty times between two edits is
+  /// easier to read with them folded away, so it is one click.
+  bool _showActivity = true;
 
   // Memoised payloads for the selected row. An entry is immutable once
-  // pushed, so the key needs nothing beyond the sequence number and the mode.
+  // pushed, so the sequence number is the whole key.
   BigInt? _payloadSeq;
-  bool? _payloadByNode;
   APIAiEditDetail? _detail;
   APIAiDiff? _diff;
 
@@ -93,7 +119,6 @@ class _AiHistoryPanelState extends State<AiHistoryPanel>
   void _syncPayloads(BigInt? seq) {
     if (seq == null) {
       _payloadSeq = null;
-      _payloadByNode = null;
       _detail = null;
       _diff = null;
       return;
@@ -101,11 +126,7 @@ class _AiHistoryPanelState extends State<AiHistoryPanel>
     if (seq != _payloadSeq) {
       _payloadSeq = seq;
       _detail = aiHistoryDetail(seq: seq);
-      _payloadByNode = null;
-    }
-    if (_payloadByNode != _byNode) {
-      _payloadByNode = _byNode;
-      _diff = aiHistoryDiff(seq: seq, byNode: _byNode);
+      _diff = aiHistoryDiff(seq: seq, byNode: false);
     }
   }
 
@@ -136,7 +157,10 @@ class _AiHistoryPanelState extends State<AiHistoryPanel>
                   children: [
                     SizedBox(
                       width: _listWidth,
-                      child: _EntryList(model: model),
+                      child: _EntryList(
+                        model: model,
+                        showActivity: _showActivity,
+                      ),
                     ),
                     const VerticalDivider(
                         width: 1, thickness: 1, color: Colors.black54),
@@ -152,7 +176,9 @@ class _AiHistoryPanelState extends State<AiHistoryPanel>
   }
 
   Widget _buildHeader(StructureDesignerModel model) {
-    final isEmpty = model.aiHistory.isEmpty;
+    // Export and Clear act on the whole log, so a session that has only
+    // looked at the network — no edits yet, a dozen requests — is not empty.
+    final isEmpty = model.aiHistory.isEmpty && model.aiActivity.isEmpty;
     return Container(
       height: 28,
       padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -170,8 +196,30 @@ class _AiHistoryPanelState extends State<AiHistoryPanel>
           const SizedBox(width: 12),
           Text(
             '${model.aiHistory.length} '
-            'edit${model.aiHistory.length == 1 ? "" : "s"}',
+            'edit${model.aiHistory.length == 1 ? "" : "s"}'
+            '${model.aiActivity.isEmpty ? "" : ", "
+                "${model.aiActivity.length} request"
+                "${model.aiActivity.length == 1 ? "" : "s"}"}',
             style: const TextStyle(color: Colors.white38, fontSize: 11),
+          ),
+          const SizedBox(width: 8),
+          InkWell(
+            key: const Key('ai_history_activity_toggle'),
+            onTap: () => setState(() => _showActivity = !_showActivity),
+            child: Tooltip(
+              message: _showActivity
+                  ? 'Hide the non-edit CLI requests'
+                  : 'Show the non-edit CLI requests (query, screenshot, '
+                      'networks, load, save)',
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                child: Icon(
+                  Icons.swap_horiz,
+                  size: 16,
+                  color: _showActivity ? _accent : Colors.white38,
+                ),
+              ),
+            ),
           ),
           const Spacer(),
           const _SessionLabelField(),
@@ -248,13 +296,15 @@ class _AiHistoryPanelState extends State<AiHistoryPanel>
     StructureDesignerModel model,
   ) async {
     final count = model.aiHistory.length;
+    final requests = model.aiActivity.length;
     final confirmed = await showDraggableAlertDialog<bool>(
       context: context,
       title: const Text('Clear AI history?'),
       content: Text(
-        'Discards $count recorded edit${count == 1 ? "" : "s"}. The log is '
-        'kept in memory only and undo does not restore it, so export first if '
-        'you want to keep the session.',
+        'Discards $count recorded edit${count == 1 ? "" : "s"} and $requests '
+        'other CLI request${requests == 1 ? "" : "s"}. The log is kept in '
+        'memory only and undo does not restore it, so export first if you want '
+        'to keep the session.',
       ),
       actions: [
         TextButton(
@@ -275,7 +325,6 @@ class _AiHistoryPanelState extends State<AiHistoryPanel>
     if (!mounted) return;
     setState(() {
       _payloadSeq = null;
-      _payloadByNode = null;
       _detail = null;
       _diff = null;
     });
@@ -301,10 +350,9 @@ class _AiHistoryPanelState extends State<AiHistoryPanel>
             children: [
               _DiffTab(
                 diff: _diff,
-                byNode: _byNode,
-                onModeChanged: (byNode) => setState(() => _byNode = byNode),
                 onExpand: () => _showDiffDialog(detail),
               ),
+              _NetworkTab(detail: detail),
               _RequestTab(detail: detail),
               _ResultTab(detail: detail),
               _LayoutTab(detail: detail),
@@ -332,7 +380,9 @@ class _AiHistoryPanelState extends State<AiHistoryPanel>
           ),
           const SizedBox(width: 12),
           SizedBox(
-            width: 300,
+            // Five scrollable tabs at 11pt; sized to fit them without
+            // scrolling, since a tab strip that scrolls hides tabs.
+            width: 380,
             child: TabBar(
               controller: _tabController,
               isScrollable: true,
@@ -346,6 +396,23 @@ class _AiHistoryPanelState extends State<AiHistoryPanel>
             ),
           ),
           const Spacer(),
+          // Who submitted this edit, when the CLI said so (Phase 5). Shown only
+          // when present: the manual session label covers the case where it is
+          // not, and an empty chip would just be noise.
+          if (detail.clientLabel.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Tooltip(
+                message: 'Submitted by a client identifying itself as '
+                    '"${detail.clientLabel}" (X-Client-Label)',
+                child: Text(
+                  detail.clientLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _monoStyle.copyWith(color: _accent),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -358,61 +425,47 @@ class _AiHistoryPanelState extends State<AiHistoryPanel>
     showDialog<void>(
       context: context,
       builder: (dialogContext) {
-        var byNode = _byNode;
-        var diff = aiHistoryDiff(seq: detail.seq, byNode: byNode);
+        final diff = aiHistoryDiff(seq: detail.seq, byNode: false);
         return Dialog(
           backgroundColor: _panelBackground,
           child: SizedBox(
             width: size.width * 0.8,
             height: size.height * 0.8,
-            child: StatefulBuilder(
-              builder: (builderContext, setDialogState) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Container(
-                      height: 30,
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      color: _headerBackground,
-                      child: Row(
-                        children: [
-                          Text(
-                            'Edit #${detail.seq} — '
-                            '${_networkLabel(detail.networkName)}',
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12,
-                            ),
-                          ),
-                          const Spacer(),
-                          InkWell(
-                            onTap: () => Navigator.of(dialogContext).pop(),
-                            child: const Padding(
-                              padding: EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 2),
-                              child: Icon(Icons.close,
-                                  size: 16, color: Colors.white70),
-                            ),
-                          ),
-                        ],
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  height: 30,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  color: _headerBackground,
+                  child: Row(
+                    children: [
+                      Text(
+                        'Edit #${detail.seq} — '
+                        '${_networkLabel(detail.networkName)}',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12,
+                        ),
                       ),
-                    ),
-                    if (!detail.beforeComplete || !detail.afterComplete)
-                      const _IncompleteSnapshotBanner(),
-                    Expanded(
-                      child: _DiffTab(
-                        diff: diff,
-                        byNode: byNode,
-                        onModeChanged: (next) => setDialogState(() {
-                          byNode = next;
-                          diff = aiHistoryDiff(seq: detail.seq, byNode: byNode);
-                        }),
+                      const Spacer(),
+                      InkWell(
+                        onTap: () => Navigator.of(dialogContext).pop(),
+                        child: const Padding(
+                          padding:
+                              EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          child: Icon(Icons.close,
+                              size: 16, color: Colors.white70),
+                        ),
                       ),
-                    ),
-                  ],
-                );
-              },
+                    ],
+                  ),
+                ),
+                if (!detail.beforeComplete || !detail.afterComplete)
+                  const _IncompleteSnapshotBanner(),
+                Expanded(child: _DiffTab(diff: diff)),
+              ],
             ),
           ),
         );
@@ -440,23 +493,38 @@ String _formatTimestamp(int epochMillis) {
 /// divergence actually happened in — i.e. below a flagged entry, between it and
 /// the older one it diverged from (D7).
 class _EntryList extends StatelessWidget {
-  const _EntryList({required this.model});
+  const _EntryList({required this.model, required this.showActivity});
 
   final StructureDesignerModel model;
 
+  /// Whether the non-edit CLI requests share the list (Phase 5).
+  final bool showActivity;
+
   @override
   Widget build(BuildContext context) {
-    if (model.aiHistory.isEmpty) {
+    // `aiHistory` and `aiActivity` both arrive oldest-first; the panel reads
+    // newest-first. Merging on `seq` is exact because the kernel's two rings
+    // share one counter — a timestamp merge would tie on the sub-millisecond
+    // gaps a scripted session routinely produces.
+    final edits = model.aiHistory.reversed.toList();
+    final rows = <Object>[
+      ...edits,
+      if (showActivity) ...model.aiActivity,
+    ]..sort((a, b) => _seqOf(b).compareTo(_seqOf(a)));
+
+    if (rows.isEmpty) {
       return const _Placeholder('No entries yet.');
     }
-    // `aiHistory` arrives oldest-first; the panel reads newest-first.
-    final entries = model.aiHistory.reversed.toList();
     return Scrollbar(
       child: ListView.builder(
         padding: const EdgeInsets.symmetric(vertical: 2),
-        itemCount: entries.length,
+        itemCount: rows.length,
         itemBuilder: (context, index) {
-          final entry = entries[index];
+          final row = rows[index];
+          if (row is APIAiActivitySummary) {
+            return _ActivityRow(entry: row);
+          }
+          final entry = row as APIAiEditSummary;
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -465,10 +533,14 @@ class _EntryList extends StatelessWidget {
                 selected: entry.seq == model.selectedAiHistorySeq,
                 onTap: () => model.selectAiHistoryEntry(entry.seq),
               ),
+              // The marker belongs in the gap the divergence happened in, which
+              // is between two *edits* — an activity row that happens to sort
+              // in between is not what changed the network, and the comparison
+              // that set the flag never saw it.
               if (entry.diverged)
                 _DivergenceMarker(
                   entry: entry,
-                  previousSeq: _previousSeqForNetwork(entries, index),
+                  previousSeq: _previousSeqForNetwork(edits, entry),
                 ),
             ],
           );
@@ -477,15 +549,77 @@ class _EntryList extends StatelessWidget {
     );
   }
 
+  static BigInt _seqOf(Object row) =>
+      row is APIAiActivitySummary ? row.seq : (row as APIAiEditSummary).seq;
+
   /// The seq of the previous entry *for the same network* — the one the
   /// divergence was measured against, and the one "edit #N undone" names.
-  BigInt? _previousSeqForNetwork(List<APIAiEditSummary> entries, int index) {
-    for (var i = index + 1; i < entries.length; i++) {
-      if (entries[i].networkName == entries[index].networkName) {
-        return entries[i].seq;
+  BigInt? _previousSeqForNetwork(
+    List<APIAiEditSummary> edits,
+    APIAiEditSummary entry,
+  ) {
+    final index = edits.indexOf(entry);
+    if (index < 0) return null;
+    for (var i = index + 1; i < edits.length; i++) {
+      if (edits[i].networkName == entry.networkName) {
+        return edits[i].seq;
       }
     }
     return null;
+  }
+}
+
+/// One non-edit CLI request (Phase 5) — `GET /query`, `POST /networks/rename`.
+///
+/// Dimmer and quieter than an edit row on purpose: these are context, not the
+/// subject. Not selectable either, because there is nothing behind one — the
+/// whole record is the line you are reading.
+class _ActivityRow extends StatelessWidget {
+  const _ActivityRow({required this.entry});
+
+  final APIAiActivitySummary entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = entry.ok ? Colors.white38 : _bad;
+    return Tooltip(
+      message: [
+        '${entry.requestLine} \u2192 ${entry.status} (${entry.durationMs} ms)',
+        if (entry.detail.isNotEmpty) entry.detail,
+        if (entry.clientLabel.isNotEmpty) 'client: ${entry.clientLabel}',
+      ].join('\n'),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 34,
+              child: Text('#${entry.seq}',
+                  style: _monoStyle.copyWith(color: Colors.white24)),
+            ),
+            Text(_formatTimestamp(entry.timestampMs),
+                style: _monoStyle.copyWith(color: Colors.white24)),
+            const SizedBox(width: 6),
+            Text(entry.ok ? '\u00b7' : '\u2717',
+                style: TextStyle(fontSize: 12, color: color)),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                entry.detail.isEmpty
+                    ? entry.requestLine
+                    : '${entry.requestLine}  ${entry.detail}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _monoStyle.copyWith(color: color),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text('${entry.durationMs} ms',
+                style: _monoStyle.copyWith(color: Colors.white24)),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -635,10 +769,14 @@ class _Badge extends StatelessWidget {
 /// only when the undo stack said so.
 /// The free-text session label stamped into exports (D13).
 ///
-/// The application cannot know which model is driving the CLI — the CLI does
-/// not identify itself, and a `X-Client-Label` header is deferred to a later
-/// phase — so it is asked. One line of UI, and it is what turns a pile of
-/// exported sessions into a comparable set.
+/// The application cannot know by itself which model is driving the CLI, so it
+/// is asked. One line of UI, and it is what turns a pile of exported sessions
+/// into a comparable set.
+///
+/// Since Phase 5 the CLI *can* identify itself — `atomcad-cli --label` sends an
+/// `X-Client-Label` header — and when it has, that label becomes this field's
+/// placeholder: there is then nothing left to type, and the export carries
+/// every distinct label regardless of what is in here.
 ///
 /// Stateful, with its own controller, because the model deliberately does not
 /// notify on a label change: a rebuild per keystroke would fight the caret, and
@@ -671,8 +809,13 @@ class _SessionLabelFieldState extends State<_SessionLabelField> {
 
   @override
   Widget build(BuildContext context) {
+    final detected =
+        context.read<StructureDesignerModel>().aiHistoryClientLabel;
     return Tooltip(
-      message: 'Session label — stamped into exports, e.g. "Opus 5 / skill v3"',
+      message: detected == null
+          ? 'Session label — stamped into exports, e.g. "Opus 5 / skill v3"'
+          : 'Session label — stamped into exports. The CLI is identifying '
+              'itself as "$detected", which exports carry anyway.',
       child: SizedBox(
         width: 180,
         height: 20,
@@ -681,20 +824,21 @@ class _SessionLabelFieldState extends State<_SessionLabelField> {
           controller: _controller,
           style: const TextStyle(color: Colors.white70, fontSize: 11),
           cursorColor: _accent,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             isDense: true,
-            contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            hintText: 'Session label',
-            hintStyle: TextStyle(color: Colors.white24, fontSize: 11),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            hintText: detected ?? 'Session label',
+            hintStyle: const TextStyle(color: Colors.white24, fontSize: 11),
             filled: true,
             fillColor: _stripBackground,
-            border: OutlineInputBorder(
+            border: const OutlineInputBorder(
               borderSide: BorderSide(color: Colors.black54),
             ),
-            enabledBorder: OutlineInputBorder(
+            enabledBorder: const OutlineInputBorder(
               borderSide: BorderSide(color: Colors.black54),
             ),
-            focusedBorder: OutlineInputBorder(
+            focusedBorder: const OutlineInputBorder(
               borderSide: BorderSide(color: _accent),
             ),
           ),
@@ -772,18 +916,17 @@ class _IncompleteSnapshotBanner extends StatelessWidget {
   }
 }
 
-/// *By node* (default) or *Text*, per D4.
+/// The literal unified diff of the two snapshots.
+///
+/// D4 also specified a *By node* view and made it the default. It is gone from
+/// the UI: per-node blocks read as a rearrangement of the same lines the text
+/// diff already shows, and the mode switch cost more attention than the second
+/// view returned. The kernel still computes it — `ai_history_diff` keeps its
+/// `by_node` flag — so this is a UI decision, not a deletion.
 class _DiffTab extends StatelessWidget {
-  const _DiffTab({
-    required this.diff,
-    required this.byNode,
-    required this.onModeChanged,
-    this.onExpand,
-  });
+  const _DiffTab({required this.diff, this.onExpand});
 
   final APIAiDiff? diff;
-  final bool byNode;
-  final ValueChanged<bool> onModeChanged;
   final VoidCallback? onExpand;
 
   @override
@@ -791,51 +934,33 @@ class _DiffTab extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildModeStrip(),
+        // Only the docked pane carries the strip; in the expanded dialog there
+        // is nothing left to put in it.
+        if (onExpand != null) _buildExpandStrip(),
         Expanded(child: _buildBody()),
       ],
     );
   }
 
-  Widget _buildModeStrip() {
-    final unchanged = diff?.unchangedCount ?? 0;
+  Widget _buildExpandStrip() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       color: _stripBackground,
       child: Row(
         children: [
-          _ModeButton(
-            label: 'By node',
-            selected: byNode,
-            tooltip: 'One block per node, keyed by scoped path (`m1/d`). '
-                'Stable against the reordering a topological sort produces.',
-            onTap: () => onModeChanged(true),
-          ),
-          const SizedBox(width: 8),
-          _ModeButton(
-            label: 'Text',
-            selected: !byNode,
-            tooltip: 'The literal unified diff of the two snapshots.',
-            onTap: () => onModeChanged(false),
-          ),
-          const SizedBox(width: 12),
-          if (byNode && unchanged > 0)
-            Text('$unchanged unchanged block(s) collapsed',
-                style: const TextStyle(fontSize: 10, color: Colors.white38)),
           const Spacer(),
-          if (onExpand != null)
-            InkWell(
-              key: const Key('ai_history_expand_diff_button'),
-              onTap: onExpand,
-              child: const Tooltip(
-                message: 'Open this diff in a large window',
-                child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                  child:
-                      Icon(Icons.open_in_full, size: 14, color: Colors.white70),
-                ),
+          InkWell(
+            key: const Key('ai_history_expand_diff_button'),
+            onTap: onExpand,
+            child: const Tooltip(
+              message: 'Open this diff in a large window',
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                child:
+                    Icon(Icons.open_in_full, size: 14, color: Colors.white70),
               ),
             ),
+          ),
         ],
       ),
     );
@@ -862,50 +987,7 @@ class _DiffTab extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 4),
             itemCount: current.hunks.length,
             itemBuilder: (context, index) =>
-                _DiffHunkView(hunk: current.hunks[index], byNode: byNode),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ModeButton extends StatelessWidget {
-  const _ModeButton({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-    required this.tooltip,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-  final String tooltip;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                  selected
-                      ? Icons.radio_button_checked
-                      : Icons.radio_button_unchecked,
-                  size: 12,
-                  color: selected ? _accent : Colors.white38),
-              const SizedBox(width: 4),
-              Text(label,
-                  style: TextStyle(
-                      fontSize: 11,
-                      color: selected ? Colors.white : Colors.white38)),
-            ],
+                _DiffHunkView(hunk: current.hunks[index]),
           ),
         ),
       ),
@@ -914,10 +996,9 @@ class _ModeButton extends StatelessWidget {
 }
 
 class _DiffHunkView extends StatelessWidget {
-  const _DiffHunkView({required this.hunk, required this.byNode});
+  const _DiffHunkView({required this.hunk});
 
   final APIDiffHunk hunk;
-  final bool byNode;
 
   @override
   Widget build(BuildContext context) {
@@ -965,12 +1046,7 @@ class _DiffHunkView extends StatelessWidget {
     );
   }
 
-  String _title() {
-    if (hunk.nodePath.isNotEmpty) return hunk.nodePath;
-    // *By node* files the header, `description`, `summary` and `output`
-    // statements — everything that is not a node block — under an empty path.
-    return byNode ? '(network header / output)' : '(hunk)';
-  }
+  String _title() => hunk.nodePath.isNotEmpty ? hunk.nodePath : '(hunk)';
 }
 
 String _kindGlyph(APIDiffHunkKind kind) => switch (kind) {
@@ -1002,6 +1078,60 @@ Color _lineBackground(APIDiffLineTag tag) => switch (tag) {
       APIDiffLineTag.add => const Color(0xFF1E2A1E),
       APIDiffLineTag.remove => const Color(0xFF2A1E1E),
     };
+
+/// The whole network as it stood once this edit landed — `after_text`, the
+/// same AI text-format snapshot D2 records and the diff is computed from.
+///
+/// The diff answers "what changed"; often the question is the other one, "what
+/// did the network actually look like at that point", and reconstructing it by
+/// replaying diffs in one's head is exactly the work the log exists to save.
+/// It is also the state the *next* entry is compared against for divergence
+/// (D7), so a surprising marker downstream is read here.
+///
+/// Unless flagged incomplete, the text is valid `edit --replace` input: select
+/// it, and any moment of the session can be restored.
+class _NetworkTab extends StatelessWidget {
+  const _NetworkTab({required this.detail});
+
+  final APIAiEditDetail detail;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          color: _stripBackground,
+          child: Text(
+            'after edit #${detail.seq} · ${_networkLabel(detail.networkName)}'
+            '${detail.afterComplete ? "" : " · truncated"}',
+            style: TextStyle(
+              fontSize: 10,
+              color: detail.afterComplete ? Colors.white38 : _warn,
+            ),
+          ),
+        ),
+        Expanded(
+          child: detail.afterText.isEmpty
+              // The three rejection paths of D1 — no active network, network
+              // not found, write-locked — never reached a network to
+              // serialize, so there is no snapshot rather than an empty one.
+              ? const _Placeholder(
+                  'No snapshot for this entry: the edit was rejected before it '
+                  'reached a network.',
+                )
+              : Scrollbar(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(8),
+                    child: SelectableText(detail.afterText, style: _monoStyle),
+                  ),
+                ),
+        ),
+      ],
+    );
+  }
+}
 
 /// Exactly what the AI submitted (D8). Verbatim and selectable: this is the raw
 /// material for refining the skill document and the text format.

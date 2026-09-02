@@ -12,7 +12,7 @@ use atomcad_structure_designer::ai_edit_export::{
     EXPORT_FORMAT_ID, EXPORT_FORMAT_VERSION, export_json, export_markdown,
 };
 use atomcad_structure_designer::ai_edit_log::{
-    AiEditLog, AiEditRecord, LayoutOutcome, LayoutPath, MovedNode,
+    AiActivityRecord, AiEditLog, AiEditRecord, LayoutOutcome, LayoutPath, MovedNode,
 };
 use glam::DVec2;
 
@@ -330,4 +330,115 @@ fn markdown_flags_an_incomplete_snapshot() {
     ));
 
     assert!(export_markdown(&log).contains("**incomplete snapshot**"));
+}
+
+// ============================================================================
+// Phase 5 — the non-edit CLI traffic and the client label
+// ============================================================================
+
+/// The activity ring is part of the export, and on the same `seq` timeline as
+/// the entries: a reader outside the application can interleave the two and see
+/// what the AI looked at before it edited, which is the reason the traffic is
+/// recorded at all.
+#[test]
+fn json_carries_the_activity_timeline() {
+    let mut log = AiEditLog::new();
+    log.push_activity(AiActivityRecord::new(
+        "GET".to_string(),
+        "/query".to_string(),
+        String::new(),
+        String::new(),
+        200,
+        7,
+    ));
+    log.push(applied("beam", "a = sphere { radius: 5.0 }", "v0", "v1"));
+
+    let document = parse(&export_json(&log));
+
+    assert_eq!(document["activity_count"], 1);
+    let activity = &document["activity"][0];
+    assert_eq!(activity["seq"], 0);
+    assert_eq!(activity["method"], "GET");
+    assert_eq!(activity["path"], "/query");
+    assert_eq!(activity["status"], 200);
+    assert_eq!(activity["duration_ms"], 7);
+    // …and the edit that followed it is at the next position on the same
+    // timeline, which is what makes the interleave possible.
+    assert_eq!(document["entries"][0]["seq"], 1);
+}
+
+/// What actually identified itself, beside what the maintainer typed. The two
+/// disagree exactly when the export is most worth having — two models editing
+/// in turn, or a session nobody remembered to label.
+#[test]
+fn json_carries_the_client_labels() {
+    let mut log = AiEditLog::new();
+    log.set_client_label("Opus 5 / skill v3".to_string());
+    log.push(applied("beam", "", "v0", "v1"));
+    log.push_activity(AiActivityRecord::new(
+        "GET".to_string(),
+        "/query".to_string(),
+        String::new(),
+        String::new(),
+        200,
+        1,
+    ));
+
+    let document = parse(&export_json(&log));
+
+    assert_eq!(document["client_labels"][0], "Opus 5 / skill v3");
+    assert_eq!(document["entries"][0]["client_label"], "Opus 5 / skill v3");
+    assert_eq!(document["activity"][0]["client_label"], "Opus 5 / skill v3");
+}
+
+/// Markdown interleaves rather than sectioning: two separate lists would throw
+/// away the ordering that is the whole point of recording the traffic.
+#[test]
+fn markdown_interleaves_activity_with_the_edits_by_sequence() {
+    let mut log = AiEditLog::new();
+    log.push_activity(AiActivityRecord::new(
+        "GET".to_string(),
+        "/query".to_string(),
+        String::new(),
+        String::new(),
+        200,
+        4,
+    ));
+    log.push(applied("beam", "a = sphere { radius: 5.0 }", "v0", "v1"));
+    log.push_activity(AiActivityRecord::new(
+        "GET".to_string(),
+        "/screenshot".to_string(),
+        "output=auto".to_string(),
+        String::new(),
+        200,
+        90,
+    ));
+
+    let text = export_markdown(&log);
+    let before = text.find("GET /query").expect("the query is listed");
+    let edit = text.find("## #1").expect("the edit is listed");
+    let after = text
+        .find("GET /screenshot?output=auto")
+        .expect("the screenshot is listed");
+
+    assert!(before < edit, "the query preceded the edit");
+    assert!(edit < after, "the screenshot followed the edit");
+    assert!(text.contains("1 edit, 2 other requests"));
+}
+
+/// A request-body handler attaches a note, because a bare
+/// `POST /networks/rename` never says what was renamed.
+#[test]
+fn markdown_shows_a_handler_supplied_detail() {
+    let mut log = AiEditLog::new();
+    log.push_activity(AiActivityRecord::new(
+        "POST".to_string(),
+        "/networks/rename".to_string(),
+        String::new(),
+        "beam \u{2192} nanobeam".to_string(),
+        200,
+        2,
+    ));
+
+    assert!(export_markdown(&log).contains("beam \u{2192} nanobeam"));
 }

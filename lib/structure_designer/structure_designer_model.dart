@@ -34,7 +34,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/profiling_api.dart'
 import 'package:flutter_cad/src/rust/api/structure_designer/ai_history_api.dart'
     as ai_history_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/ai_history_api.dart'
-    show APIAiEditSummary;
+    show APIAiActivitySummary, APIAiEditSummary;
 import 'package:flutter_cad/src/rust/api/structure_designer/profiling_api.dart'
     show APIRefreshMode, APIRefreshProfile;
 import 'package:flutter_cad/src/rust/api/common_api.dart' as common_api;
@@ -376,6 +376,12 @@ class StructureDesignerModel extends ChangeNotifier {
   /// allocates up to 200 structs of several heap strings each, and the refresh
   /// path is the one `doc/design_eval_profiling.md` D8a exists to keep cheap.
   List<APIAiEditSummary> aiHistory = [];
+
+  /// The non-edit CLI requests of Phase 5 — `query`, `screenshot`,
+  /// `networks/*`, `load`, `save`. A separate list because it comes from a
+  /// separate ring with its own cap; the panel merges the two by `seq`, which
+  /// both rings draw from, into one ordered timeline.
+  List<APIAiActivitySummary> aiActivity = [];
 
   /// The selected entry, whose detail and diff the panel's right-hand pane
   /// shows. Null when the log is empty.
@@ -3618,11 +3624,27 @@ class StructureDesignerModel extends ChangeNotifier {
   /// ring's caps falls back to the newest, and a selection that *was* the
   /// newest follows the log as new edits arrive, so the panel tracks a live AI
   /// session without stealing a deliberate look at an older entry.
+  /// Re-read the AI history for a reason that is *not* a kernel refresh — a
+  /// CLI request that changed nothing about the network but did add a timeline
+  /// entry (Phase 5).
+  ///
+  /// Notifies, because the unread badge on the *View* menu moves even while the
+  /// panel is closed. It costs one `u64` compare when nothing changed, which is
+  /// what makes it safe to call per request.
+  void refreshAiHistoryOnly() {
+    final before = _aiHistoryVersion;
+    _refreshAiHistory();
+    if (_aiHistoryVersion != before) {
+      notifyListeners();
+    }
+  }
+
   void _fetchAiHistoryList() {
     final wasNewest = aiHistory.isEmpty ||
         (selectedAiHistorySeq != null &&
             selectedAiHistorySeq == aiHistory.last.seq);
     aiHistory = ai_history_api.aiHistoryList();
+    aiActivity = ai_history_api.aiHistoryActivityList();
     final stillPresent = selectedAiHistorySeq != null &&
         aiHistory.any((entry) => entry.seq == selectedAiHistorySeq);
     if (aiHistory.isEmpty) {
@@ -3658,6 +3680,18 @@ class StructureDesignerModel extends ChangeNotifier {
     aiHistorySessionLabel = ai_history_api.aiHistoryGetSessionLabel();
   }
 
+  /// The most recent `X-Client-Label` the CLI announced, or `null` when nothing
+  /// identified itself (Phase 5).
+  ///
+  /// The manual session label (D13) exists because the application cannot know
+  /// which model is driving the CLI. When the CLI says so, it can: the panel
+  /// offers this as the label field's placeholder, and exports carry every
+  /// distinct label regardless of what was typed.
+  String? get aiHistoryClientLabel {
+    final labels = ai_history_api.aiHistoryClientLabels();
+    return labels.isEmpty ? null : labels.last;
+  }
+
   /// Set the session label (D13). Does **not** notify: the panel's text field
   /// is the source of the value and already shows it, and a rebuild here would
   /// fight the caret. The kernel bumps the log version, which the next refresh
@@ -3675,6 +3709,7 @@ class StructureDesignerModel extends ChangeNotifier {
   void clearAiHistory() {
     ai_history_api.aiHistoryClear();
     aiHistory = [];
+    aiActivity = [];
     selectedAiHistorySeq = null;
     unreadAiEditCount = 0;
     _aiHistoryVersion = ai_history_api.aiHistoryVersion();

@@ -22,7 +22,7 @@
 //! calls them: the log is domain state, and formatting that is only reachable
 //! through the global `CAD_INSTANCE` cannot be tested.
 
-use crate::ai_edit_log::{AiEditLog, AiEditRecord, LayoutPath};
+use crate::ai_edit_log::{AiActivityRecord, AiEditLog, AiEditRecord, LayoutPath};
 
 /// The `format` marker written into every JSON export, so a reader can tell
 /// one of these files from any other JSON in the same folder.
@@ -30,7 +30,11 @@ pub const EXPORT_FORMAT_ID: &str = "atomcad-ai-edit-history";
 
 /// The `version` written into every JSON export. Bump when the shape of an
 /// entry changes incompatibly.
-pub const EXPORT_FORMAT_VERSION: u32 = 1;
+///
+/// Bumped to 2 by Phase 5, which added `activity` and the per-entry
+/// `client_label`. Both are additive, so a version-1 reader still finds every
+/// field it knew.
+pub const EXPORT_FORMAT_VERSION: u32 = 2;
 
 /// The whole log as pretty-printed JSON — the canonical export form.
 ///
@@ -38,12 +42,23 @@ pub const EXPORT_FORMAT_VERSION: u32 = 1;
 /// an export replayable and diffable outside the application.
 pub fn export_json(log: &AiEditLog) -> String {
     let entries: Vec<serde_json::Value> = log.records().map(record_to_json).collect();
+    let activity: Vec<serde_json::Value> = log.activity().map(activity_to_json).collect();
     let document = serde_json::json!({
         "format": EXPORT_FORMAT_ID,
         "version": EXPORT_FORMAT_VERSION,
         "session_label": log.session_label(),
+        // Every `X-Client-Label` the CLI announced this session. The manual
+        // label above says what the maintainer called the session; this says
+        // what actually identified itself, and the two disagree exactly when
+        // the export is most worth having (Phase 5).
+        "client_labels": log.client_labels(),
         "entry_count": entries.len(),
         "entries": entries,
+        // The non-edit CLI traffic, on the same `seq` timeline as `entries`:
+        // interleave the two by `seq` to see what the AI looked at before it
+        // edited.
+        "activity_count": activity.len(),
+        "activity": activity,
     });
     // `serde_json::json!` over owned strings and numbers cannot fail to
     // serialize; the fallback is here so an export never panics the UI thread.
@@ -75,6 +90,7 @@ fn record_to_json(record: &AiEditRecord) -> serde_json::Value {
         "after_complete": record.after_complete,
         "diverged": record.diverged,
         "diverged_by_undo": record.diverged_by_undo,
+        "client_label": record.client_label,
         "layout": {
             "path": layout_path_key(record.layout.path),
             "node_count": record.layout.node_count,
@@ -93,6 +109,20 @@ fn record_to_json(record: &AiEditRecord) -> serde_json::Value {
                 "wires_removed": delta.wires_removed,
             })),
         },
+    })
+}
+
+fn activity_to_json(record: &AiActivityRecord) -> serde_json::Value {
+    serde_json::json!({
+        "seq": record.seq,
+        "timestamp_ms": record.timestamp_ms,
+        "method": record.method,
+        "path": record.path,
+        "query": record.query,
+        "detail": record.detail,
+        "status": record.status,
+        "duration_ms": record.duration_ms,
+        "client_label": record.client_label,
     })
 }
 
@@ -116,11 +146,59 @@ pub fn export_markdown(log: &AiEditLog) -> String {
     if !log.session_label().is_empty() {
         out.push_str(&format!("**Session:** {}\n\n", log.session_label()));
     }
-    out.push_str(&format!("**Entries:** {}\n", log.len()));
-    for record in log.records() {
-        out.push_str(&record_to_markdown(record));
+    let labels = log.client_labels();
+    if !labels.is_empty() {
+        out.push_str(&format!("**Clients:** {}\n\n", labels.join(", ")));
+    }
+    out.push_str(&format!(
+        "**Entries:** {} edit{}, {} other request{}\n",
+        log.len(),
+        if log.len() == 1 { "" } else { "s" },
+        log.activity_len(),
+        if log.activity_len() == 1 { "" } else { "s" },
+    ));
+
+    // Interleaved by `seq`, which both rings draw from: the point of recording
+    // the non-edit traffic at all is to see what the AI looked at *before* it
+    // edited, and two separate sections would throw that ordering away.
+    let mut edits = log.records().peekable();
+    let mut activity = log.activity().peekable();
+    loop {
+        let next_edit = edits.peek().map(|record| record.seq);
+        let next_activity = activity.peek().map(|record| record.seq);
+        match (next_edit, next_activity) {
+            (Some(edit_seq), Some(activity_seq)) if activity_seq < edit_seq => {
+                out.push_str(&activity_to_markdown(activity.next().expect("peeked")));
+            }
+            (Some(_), _) => out.push_str(&record_to_markdown(edits.next().expect("peeked"))),
+            (None, Some(_)) => {
+                out.push_str(&activity_to_markdown(activity.next().expect("peeked")));
+            }
+            (None, None) => break,
+        }
     }
     out
+}
+
+/// One activity entry as a single Markdown list item.
+///
+/// A line rather than a section: an entry is one request, and a session's worth
+/// of them exists to give the edits around it context, not to be read one at a
+/// time. Runs of them collapse visually into a list, which is how they should
+/// be read.
+fn activity_to_markdown(record: &AiActivityRecord) -> String {
+    let mut line = format!(
+        "\n- `#{}` {} \u{2014} {} ({} ms)",
+        record.seq,
+        record.request_line(),
+        record.status,
+        record.duration_ms
+    );
+    if !record.detail.is_empty() {
+        line.push_str(&format!(" \u{2014} {}", record.detail));
+    }
+    line.push('\n');
+    line
 }
 
 fn record_to_markdown(record: &AiEditRecord) -> String {

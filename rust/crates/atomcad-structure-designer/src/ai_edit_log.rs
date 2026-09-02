@@ -28,6 +28,12 @@
 //!   The position map comes from
 //!   [`snapshot_node_positions`](crate::text_format::snapshot_node_positions),
 //!   the same walk the editor uses for its identity match.
+//! - **Edits are not the only thing recorded** (Phase 5). Every other CLI
+//!   request — `query`, `screenshot`, `networks/*`, `load`, `save` — lands as a
+//!   lightweight [`AiActivityRecord`] on the same timeline, so the log shows
+//!   what the AI *looked at* before it edited. The two rings share one sequence
+//!   counter, which is what makes that timeline exactly ordered; they do not
+//!   share a divergence comparison, which still reads edit records only.
 //! - **Session-only** (D10). Never written to `.cnnd`, never undoable — exempt
 //!   from `feedback_persisted_mutations_must_be_undoable` for the same reason
 //!   `print_log` is. Undoing an AI edit leaves its entry standing (D6): this is
@@ -55,6 +61,21 @@ pub const AI_EDIT_LOG_MAX_ENTRIES: usize = 200;
 /// How many bytes of snapshot text the ring retains before evicting
 /// oldest-first (D10). Whichever cap binds first wins.
 pub const AI_EDIT_LOG_MAX_SNAPSHOT_BYTES: usize = 32 * 1024 * 1024;
+
+/// How many activity entries the ring retains before evicting oldest-first.
+///
+/// An order of magnitude above the edit cap because an activity entry is two
+/// short strings and three numbers: a session that makes 200 edits will have
+/// looked, screenshotted and re-queried many times more often than that, and
+/// the whole point of the timeline is to show what surrounded an edit.
+pub const AI_ACTIVITY_LOG_MAX_ENTRIES: usize = 500;
+
+/// Longest query or detail string an activity record keeps.
+///
+/// A request URL is normally a few dozen characters, but nothing stops a
+/// caller putting a whole script in a query parameter, and a "lightweight"
+/// entry that can grow without bound is not lightweight.
+const ACTIVITY_TEXT_CAP: usize = 500;
 
 /// The serializer's only failure channel: a wire cycle aborts serialization and
 /// leaves this comment in place of the remaining statements (root scope, which
@@ -281,6 +302,14 @@ pub struct AiEditRecord {
     /// detection — `diverged` is still set by the one string comparison.
     pub diverged_by_undo: bool,
 
+    /// Which client submitted this edit, from the `X-Client-Label` header the
+    /// CLI sends (Phase 5). Empty when the caller did not identify itself.
+    ///
+    /// Stamped by [`AiEditLog::push`] from the label the transport most
+    /// recently announced, not passed in by the recorder: the record is built
+    /// deep inside the domain crate, which knows nothing about headers.
+    pub client_label: String,
+
     pub layout: LayoutOutcome,
 }
 
@@ -322,6 +351,7 @@ impl AiEditRecord {
             after_complete: true,
             diverged: false,
             diverged_by_undo: false,
+            client_label: String::new(),
             layout: LayoutOutcome::default(),
         }
     }
@@ -362,6 +392,7 @@ impl AiEditRecord {
             after_text,
             diverged: false,
             diverged_by_undo: false,
+            client_label: String::new(),
             layout,
         }
     }
@@ -379,6 +410,93 @@ impl AiEditRecord {
     }
 }
 
+/// One non-edit CLI request, recorded as a timeline entry (Phase 5).
+///
+/// The edit log answers "what did the AI change"; this answers "what was it
+/// doing either side of that". A `query` before an edit says the model read the
+/// network first; three `screenshot`s after it say it was checking its work; a
+/// `networks/activate` between two edits explains a divergence marker that
+/// would otherwise read as an unexplained outside change.
+///
+/// **Lightweight is the whole point.** No snapshots, no bodies, no response
+/// payload: a request line, a status and a duration. That is what makes it
+/// affordable to record every request rather than a hand-picked few, and what
+/// keeps a 500-entry ring smaller than a single edit's snapshots.
+#[derive(Debug, Clone)]
+pub struct AiActivityRecord {
+    /// Position on the **shared** timeline — the same counter the edit records
+    /// draw from, which is what lets the panel merge the two rings by `seq`
+    /// alone rather than by a timestamp two requests can share.
+    pub seq: u64,
+    pub timestamp_ms: i64,
+    /// `GET` / `POST`.
+    pub method: String,
+    /// The request path, `/query` or `/networks/rename`.
+    pub path: String,
+    /// The raw query string, without the leading `?`, or empty.
+    pub query: String,
+    /// A short human-readable note the handler chose to attach — the network a
+    /// rename targeted, the file a load opened. Empty when the request said
+    /// everything in its query string.
+    pub detail: String,
+    /// The HTTP status the handler produced.
+    pub status: u16,
+    pub duration_ms: u32,
+    /// From the `X-Client-Label` header, stamped by [`AiEditLog::push_activity`]
+    /// like an edit record's. Empty when the caller did not identify itself.
+    pub client_label: String,
+}
+
+impl AiActivityRecord {
+    pub fn new(
+        method: String,
+        path: String,
+        query: String,
+        detail: String,
+        status: u16,
+        duration_ms: u32,
+    ) -> Self {
+        Self {
+            seq: 0,
+            timestamp_ms: now_ms(),
+            method,
+            path,
+            query: truncate_chars(query, ACTIVITY_TEXT_CAP),
+            detail: truncate_chars(detail, ACTIVITY_TEXT_CAP),
+            status,
+            duration_ms,
+            client_label: String::new(),
+        }
+    }
+
+    /// Whether the request succeeded, by the only signal a single hook has.
+    pub fn ok(&self) -> bool {
+        (200..400).contains(&self.status)
+    }
+
+    /// `GET /query?verbose=true` — the request as one line, for a row or an
+    /// export.
+    pub fn request_line(&self) -> String {
+        if self.query.is_empty() {
+            format!("{} {}", self.method, self.path)
+        } else {
+            format!("{} {}?{}", self.method, self.path, self.query)
+        }
+    }
+}
+
+/// Cut `text` to at most `max` **characters**, appending an ellipsis when it
+/// had to. Characters rather than bytes: a byte slice can split a multi-byte
+/// character and panic, and a path or a network name may well contain one.
+fn truncate_chars(text: String, max: usize) -> String {
+    if text.chars().count() <= max {
+        return text;
+    }
+    let mut out: String = text.chars().take(max).collect();
+    out.push('…');
+    out
+}
+
 /// The session's append-only ring of [`AiEditRecord`]s.
 ///
 /// Append-only in the strong sense (D6): undo never rewrites it. An entry that
@@ -387,6 +505,15 @@ impl AiEditRecord {
 #[derive(Debug, Default)]
 pub struct AiEditLog {
     records: VecDeque<AiEditRecord>,
+    /// The non-edit CLI requests of Phase 5, in their own ring so the edit
+    /// ring's caps, divergence comparison and `get`-by-seq are untouched by a
+    /// burst of `query` calls. Merged with `records` only for presentation and
+    /// export, by the shared `seq`.
+    activity: VecDeque<AiActivityRecord>,
+    /// Shared by both rings, so an interleaved timeline is exactly ordered
+    /// without relying on timestamps two requests can share. Edit sequence
+    /// numbers therefore have gaps — they are timeline positions, and stay
+    /// unique, which is all "edit #N" and the export need.
     next_seq: u64,
     session_label: String,
     bytes: usize,
@@ -398,6 +525,12 @@ pub struct AiEditLog {
     /// cleared by the next [`push`](Self::push), which is where it becomes
     /// [`AiEditRecord::diverged_by_undo`].
     ai_undo_since_last_record: bool,
+    /// The label the transport most recently announced through the
+    /// `X-Client-Label` header (Phase 5), stamped into every record pushed
+    /// after it. Deliberately **not** version-bumping: it is invisible until a
+    /// record carries it, and bumping per request would make the UI's refresh
+    /// gate fire on a header.
+    client_label: String,
 }
 
 impl AiEditLog {
@@ -425,10 +558,28 @@ impl AiEditLog {
         }
         record.diverged_by_undo = record.diverged && self.ai_undo_since_last_record;
         self.ai_undo_since_last_record = false;
+        record.client_label = self.client_label.clone();
 
         self.bytes += record.snapshot_bytes();
         self.records.push_back(record);
         self.enforce_caps();
+        self.version += 1;
+    }
+
+    /// Append a non-edit CLI request to the timeline (Phase 5).
+    ///
+    /// Deliberately not `push`: an activity entry takes no divergence flags —
+    /// it holds no snapshot to compare, and a `query` between two edits is not
+    /// an outside change. It shares only the sequence counter.
+    pub fn push_activity(&mut self, mut record: AiActivityRecord) {
+        record.seq = self.next_seq;
+        self.next_seq += 1;
+        record.client_label = self.client_label.clone();
+
+        self.activity.push_back(record);
+        while self.activity.len() > AI_ACTIVITY_LOG_MAX_ENTRIES {
+            self.activity.pop_front();
+        }
         self.version += 1;
     }
 
@@ -480,6 +631,43 @@ impl AiEditLog {
         self.records.iter().find(|r| r.seq == seq)
     }
 
+    /// Every retained activity entry, oldest first.
+    pub fn activity(&self) -> impl Iterator<Item = &AiActivityRecord> {
+        self.activity.iter()
+    }
+
+    pub fn activity_len(&self) -> usize {
+        self.activity.len()
+    }
+
+    /// Every distinct non-empty `X-Client-Label` seen on a retained entry, in
+    /// the order it first appeared.
+    ///
+    /// This is what turns the manual session label (D13) into a fallback: when
+    /// the CLI identifies itself, the log already knows what was driving it,
+    /// and an export of two models editing in turn can tell them apart.
+    pub fn client_labels(&self) -> Vec<String> {
+        let mut labels: Vec<(u64, &str)> = Vec::new();
+        let edits = self
+            .records
+            .iter()
+            .map(|r| (r.seq, r.client_label.as_str()));
+        let activity = self
+            .activity
+            .iter()
+            .map(|r| (r.seq, r.client_label.as_str()));
+        for (seq, label) in edits.chain(activity) {
+            if !label.is_empty() && !labels.iter().any(|(_, seen)| *seen == label) {
+                labels.push((seq, label));
+            }
+        }
+        labels.sort_by_key(|(seq, _)| *seq);
+        labels
+            .into_iter()
+            .map(|(_, label)| label.to_string())
+            .collect()
+    }
+
     /// The most recent record, whatever network it belongs to.
     pub fn last(&self) -> Option<&AiEditRecord> {
         self.records.back()
@@ -499,6 +687,7 @@ impl AiEditLog {
     /// session, and reusing numbers would make an exported log ambiguous.
     pub fn clear(&mut self) {
         self.records.clear();
+        self.activity.clear();
         self.bytes = 0;
         self.version += 1;
     }
@@ -512,5 +701,16 @@ impl AiEditLog {
     pub fn set_session_label(&mut self, label: String) {
         self.session_label = label;
         self.version += 1;
+    }
+
+    /// The label the next pushed record will carry (Phase 5). Set by the HTTP
+    /// transport from each request's `X-Client-Label` header, so it is a
+    /// property of *who is calling right now*, not of the session.
+    pub fn client_label(&self) -> &str {
+        &self.client_label
+    }
+
+    pub fn set_client_label(&mut self, label: String) {
+        self.client_label = label;
     }
 }

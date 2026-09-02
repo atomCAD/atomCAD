@@ -5,11 +5,51 @@ import 'package:http/http.dart' as http;
 
 const int defaultPort = 19847;
 
+/// The header that tells a running atomCAD what is driving it.
+///
+/// atomCAD records every CLI request in its AI History panel, and the one thing
+/// it cannot work out for itself is *who* was calling — which model, against
+/// which version of the skill document. Sending it turns the panel's manual
+/// session-label field into a fallback and lets a single exported log tell two
+/// models editing in turn apart.
+/// See `doc/design_ai_edit_history.md` (Phase 5).
+const String clientLabelHeader = 'X-Client-Label';
+
+/// Environment variable read when `--label` is not given, so an agent harness
+/// can identify itself once for a whole session instead of on every command.
+const String clientLabelEnvVar = 'ATOMCAD_CLIENT_LABEL';
+
+/// The label this process sends, resolved once in [main].
+///
+/// A mutable global rather than a threaded parameter because every request
+/// helper here already takes `serverUrl` and nothing else, and the label is a
+/// property of the process, not of a command.
+String _clientLabel = '';
+
+/// Headers for one request: the caller's own, plus the client label when there
+/// is one. Every HTTP call in this file goes through [_get] / [_post] so that
+/// no route can quietly forget it.
+Map<String, String>? _headers([Map<String, String>? extra]) {
+  if (_clientLabel.isEmpty) return extra;
+  return {...?extra, clientLabelHeader: _clientLabel};
+}
+
+Future<http.Response> _get(Uri uri, {Map<String, String>? headers}) =>
+    http.get(uri, headers: _headers(headers));
+
+Future<http.Response> _post(Uri uri,
+        {Object? body, Map<String, String>? headers}) =>
+    http.post(uri, headers: _headers(headers), body: body);
+
 Future<void> main(List<String> args) async {
   final parser = ArgParser()
     ..addFlag('help', abbr: 'h', negatable: false, help: 'Show help')
     ..addOption('port',
-        abbr: 'p', defaultsTo: '$defaultPort', help: 'Server port');
+        abbr: 'p', defaultsTo: '$defaultPort', help: 'Server port')
+    ..addOption('label',
+        abbr: 'l',
+        help: 'Identify this client to atomCAD\'s AI History '
+            '(or set $clientLabelEnvVar)');
 
   final queryParser = ArgParser();
 
@@ -113,6 +153,13 @@ Future<void> main(List<String> args) async {
 
   final port = int.tryParse(results['port']) ?? defaultPort;
   final serverUrl = 'http://localhost:$port';
+
+  // Resolved before anything is sent — including before the REPL starts, so a
+  // whole REPL session is attributed rather than just the first command.
+  _clientLabel = ((results['label'] as String?) ??
+          Platform.environment[clientLabelEnvVar] ??
+          '')
+      .trim();
 
   // No command = REPL mode
   if (results.command == null) {
@@ -269,18 +316,18 @@ void _printUsage() {
   stdout.writeln('  atomcad-cli networks activate <name>  Switch to a network');
   stdout.writeln('  atomcad-cli networks rename <old> <new>');
   stdout.writeln('                                        Rename a network');
-  stdout.writeln(
-      '  atomcad-cli load <path> [--force]     Load a .cnnd file');
-  stdout.writeln(
-      '  atomcad-cli save [path]               Save to file');
+  stdout.writeln('  atomcad-cli load <path> [--force]     Load a .cnnd file');
+  stdout.writeln('  atomcad-cli save [path]               Save to file');
   stdout.writeln(
       '  atomcad-cli file                      Show current file status');
-  stdout.writeln(
-      '  atomcad-cli new [--force]             Create new project');
+  stdout.writeln('  atomcad-cli new [--force]             Create new project');
   stdout.writeln('');
   stdout.writeln('Options:');
   stdout.writeln('  -h, --help     Show this help');
   stdout.writeln('  -p, --port     Server port (default: $defaultPort)');
+  stdout.writeln('  -l, --label    Identify this client in atomCAD\'s AI');
+  stdout.writeln('                 History panel, e.g. "Opus 5 / skill v3"');
+  stdout.writeln('                 (or set $clientLabelEnvVar)');
   stdout.writeln('');
   stdout.writeln('Categories:');
   stdout.writeln('  Annotation, MathAndProgramming, Geometry2D, Geometry3D,');
@@ -448,7 +495,7 @@ Future<void> _runNodes(String serverUrl, String? category, bool verbose) async {
     final uri = Uri.parse('$serverUrl/nodes')
         .replace(queryParameters: params.isEmpty ? null : params);
 
-    final response = await http.get(uri).timeout(const Duration(seconds: 10));
+    final response = await _get(uri).timeout(const Duration(seconds: 10));
 
     if (response.statusCode == 200) {
       stdout.write(response.body);
@@ -470,7 +517,7 @@ Future<void> _runDescribe(String serverUrl, String nodeName) async {
     final uri = Uri.parse('$serverUrl/describe')
         .replace(queryParameters: {'node': nodeName});
 
-    final response = await http.get(uri).timeout(const Duration(seconds: 10));
+    final response = await _get(uri).timeout(const Duration(seconds: 10));
 
     if (response.statusCode == 200) {
       stdout.write(response.body);
@@ -496,7 +543,7 @@ Future<void> _runEvaluate(
     final uri =
         Uri.parse('$serverUrl/evaluate').replace(queryParameters: params);
 
-    final response = await http.get(uri).timeout(const Duration(seconds: 30));
+    final response = await _get(uri).timeout(const Duration(seconds: 30));
 
     if (response.statusCode == 200) {
       stdout.write(response.body);
@@ -529,7 +576,7 @@ Future<void> _runCamera(String serverUrl, ArgResults args) async {
     final uri = Uri.parse('$serverUrl/camera')
         .replace(queryParameters: queryParams.isEmpty ? null : queryParams);
 
-    final response = await http.get(uri).timeout(const Duration(seconds: 10));
+    final response = await _get(uri).timeout(const Duration(seconds: 10));
 
     if (response.statusCode == 200) {
       stdout.writeln(response.body);
@@ -561,7 +608,7 @@ Future<void> _runScreenshot(String serverUrl, ArgResults args) async {
     final uri = Uri.parse('$serverUrl/screenshot')
         .replace(queryParameters: queryParams);
 
-    final response = await http.get(uri).timeout(const Duration(seconds: 30));
+    final response = await _get(uri).timeout(const Duration(seconds: 30));
 
     if (response.statusCode == 200) {
       // Parse the JSON response to show a nice message
@@ -608,7 +655,7 @@ Future<void> _runDisplay(String serverUrl, ArgResults args) async {
     final uri = Uri.parse('$serverUrl/display')
         .replace(queryParameters: queryParams.isEmpty ? null : queryParams);
 
-    final response = await http.get(uri).timeout(const Duration(seconds: 10));
+    final response = await _get(uri).timeout(const Duration(seconds: 10));
 
     if (response.statusCode == 200) {
       stdout.writeln(response.body);
@@ -807,7 +854,7 @@ Future<void> _runLoad(String serverUrl, ArgResults args) async {
     final uri =
         Uri.parse('$serverUrl/load').replace(queryParameters: queryParams);
 
-    final response = await http.post(uri).timeout(const Duration(seconds: 30));
+    final response = await _post(uri).timeout(const Duration(seconds: 30));
 
     if (response.statusCode == 200) {
       final result = jsonDecode(response.body);
@@ -841,7 +888,7 @@ Future<void> _runSave(String serverUrl, ArgResults args) async {
     final uri = Uri.parse('$serverUrl/save')
         .replace(queryParameters: queryParams.isEmpty ? null : queryParams);
 
-    final response = await http.post(uri).timeout(const Duration(seconds: 30));
+    final response = await _post(uri).timeout(const Duration(seconds: 30));
 
     if (response.statusCode == 200) {
       final result = jsonDecode(response.body);
@@ -903,7 +950,7 @@ Future<void> _runNew(String serverUrl, ArgResults args) async {
     final uri = Uri.parse('$serverUrl/new')
         .replace(queryParameters: queryParams.isEmpty ? null : queryParams);
 
-    final response = await http.post(uri).timeout(const Duration(seconds: 10));
+    final response = await _post(uri).timeout(const Duration(seconds: 10));
 
     if (response.statusCode == 200) {
       final result = jsonDecode(response.body);
@@ -931,7 +978,7 @@ Future<String?> _runEdit(String serverUrl, String code, bool replace) async {
         : Uri.parse('$serverUrl/edit');
 
     final response =
-        await http.post(uri, body: code).timeout(const Duration(seconds: 30));
+        await _post(uri, body: code).timeout(const Duration(seconds: 30));
 
     if (response.statusCode == 200) {
       stdout.writeln(response.body);
@@ -1169,7 +1216,7 @@ Future<void> _runCameraRepl(String serverUrl, List<String> parts) async {
     final uri = Uri.parse('$serverUrl/camera')
         .replace(queryParameters: queryParams.isEmpty ? null : queryParams);
 
-    final response = await http.get(uri).timeout(const Duration(seconds: 10));
+    final response = await _get(uri).timeout(const Duration(seconds: 10));
 
     if (response.statusCode == 200) {
       stdout.writeln(response.body);
@@ -1226,7 +1273,7 @@ Future<void> _runScreenshotRepl(String serverUrl, List<String> parts) async {
     final uri = Uri.parse('$serverUrl/screenshot')
         .replace(queryParameters: queryParams);
 
-    final response = await http.get(uri).timeout(const Duration(seconds: 30));
+    final response = await _get(uri).timeout(const Duration(seconds: 30));
 
     if (response.statusCode == 200) {
       try {
@@ -1272,7 +1319,7 @@ Future<void> _runDisplayRepl(String serverUrl, List<String> parts) async {
     final uri = Uri.parse('$serverUrl/display')
         .replace(queryParameters: queryParams.isEmpty ? null : queryParams);
 
-    final response = await http.get(uri).timeout(const Duration(seconds: 10));
+    final response = await _get(uri).timeout(const Duration(seconds: 10));
 
     if (response.statusCode == 200) {
       stdout.writeln(response.body);
@@ -1457,7 +1504,7 @@ Future<void> _runLoadRepl(String serverUrl, List<String> parts) async {
     final uri =
         Uri.parse('$serverUrl/load').replace(queryParameters: queryParams);
 
-    final response = await http.post(uri).timeout(const Duration(seconds: 30));
+    final response = await _post(uri).timeout(const Duration(seconds: 30));
 
     if (response.statusCode == 200) {
       final result = jsonDecode(response.body);
@@ -1489,7 +1536,7 @@ Future<void> _runSaveRepl(String serverUrl, List<String> parts) async {
     final uri = Uri.parse('$serverUrl/save')
         .replace(queryParameters: queryParams.isEmpty ? null : queryParams);
 
-    final response = await http.post(uri).timeout(const Duration(seconds: 30));
+    final response = await _post(uri).timeout(const Duration(seconds: 30));
 
     if (response.statusCode == 200) {
       final result = jsonDecode(response.body);
@@ -1546,7 +1593,7 @@ Future<void> _runNewRepl(String serverUrl, List<String> parts) async {
     final uri = Uri.parse('$serverUrl/new')
         .replace(queryParameters: queryParams.isEmpty ? null : queryParams);
 
-    final response = await http.post(uri).timeout(const Duration(seconds: 10));
+    final response = await _post(uri).timeout(const Duration(seconds: 10));
 
     if (response.statusCode == 200) {
       final result = jsonDecode(response.body);

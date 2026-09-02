@@ -7,6 +7,8 @@ import 'dart:typed_data';
 import 'constants.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/ai_assistant_api.dart'
     as ai_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/ai_history_api.dart'
+    as ai_history_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
     as sd_api;
 import 'package:flutter_cad/src/rust/api/common_api.dart' as common_api;
@@ -37,6 +39,21 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_p
 /// - `POST /networks/delete` - Delete a node network (required: name parameter)
 /// - `POST /networks/activate` - Switch to a different node network (required: name parameter)
 /// - `POST /networks/rename` - Rename a node network (required: old, new parameters)
+///
+/// ## Every request is logged
+///
+/// One hook in [_handleRequest] records each request into the running
+/// application's AI History log — Phase 5 of `doc/design_ai_edit_history.md`.
+/// `/edit` is deliberately **not** recorded here: it records itself far below,
+/// inside `ai_text_edit`, with the snapshots, the diff and the layout outcome a
+/// timeline entry has no room for. `/health` is skipped as polling noise — the
+/// CLI health-checks before every single command, so recording it would double
+/// the length of every session log for nothing.
+///
+/// A caller may identify itself with an `X-Client-Label` header
+/// ([clientLabelHeader]); `atomcad-cli --label` sends one. The label is
+/// announced to the kernel before the handler runs, so an `/edit` in this
+/// request carries it too.
 ///
 /// ## Example Usage
 ///
@@ -80,9 +97,36 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_p
 /// # Capture screenshot with custom resolution
 /// curl "http://localhost:19847/screenshot?output=hires.png&width=1920&height=1080"
 /// ```
+/// The header a client may use to say what it is — "Opus 5 / skill v3".
+///
+/// Deferred through Phases 1-4 as open question 5 and landed in Phase 5: the
+/// application cannot otherwise know which model is driving the CLI, and a
+/// manually typed session label cannot distinguish two models editing in turn.
+const String clientLabelHeader = 'X-Client-Label';
+
+/// Paths that the request hook does **not** record.
+///
+/// `/edit` records itself with full fidelity inside `ai_text_edit`; recording
+/// it again here would put two rows on the timeline for one edit. `/health` is
+/// what the CLI polls before every command — noise, and a lot of it.
+const Set<String> _unloggedPaths = {'/edit', '/health'};
+
 class AiAssistantServer {
   HttpServer? _server;
   final int port;
+
+  /// A short note the current handler wants on its timeline entry — the network
+  /// a rename targeted, the name a delete removed. Only handlers whose
+  /// arguments arrive in a **request body** need it; a query string is recorded
+  /// verbatim and already says everything.
+  ///
+  /// One field rather than a parameter threaded through nineteen handlers,
+  /// which is only sound because requests here are served one at a time in
+  /// practice (the CLI is serial, and `ai_history_set_client_label` on the Rust
+  /// side already makes the same assumption). It is cleared at the start of
+  /// every request, so the worst a genuinely concurrent pair could do is
+  /// mislabel a row.
+  String? _activityDetail;
 
   /// Callback to notify the UI when edits have been made.
   /// Set this to trigger a UI refresh after successful edits.
@@ -91,6 +135,14 @@ class AiAssistantServer {
   /// Callback to request a viewport re-render (without re-evaluating nodes).
   /// Used for camera changes that only need visual refresh.
   void Function()? onRenderingNeeded;
+
+  /// Callback fired after a request was recorded on the AI History timeline.
+  ///
+  /// Deliberately **not** [onNetworkEdited]: a `query` or a `screenshot`
+  /// changes nothing about the network, and running a full kernel refresh after
+  /// each one would make reading the network more expensive than editing it.
+  /// This one only refreshes the history panel.
+  void Function()? onCliActivity;
 
   AiAssistantServer({this.port = aiAssistantPort});
 
@@ -129,8 +181,8 @@ class AiAssistantServer {
     request.response.headers.add('Access-Control-Allow-Origin', '*');
     request.response.headers
         .add('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    request.response.headers
-        .add('Access-Control-Allow-Headers', 'Content-Type');
+    request.response.headers.add(
+        'Access-Control-Allow-Headers', 'Content-Type, $clientLabelHeader');
 
     // Handle preflight requests
     if (request.method == 'OPTIONS') {
@@ -140,6 +192,15 @@ class AiAssistantServer {
     }
 
     final path = request.uri.path;
+
+    // Phase 5 recording, half one: announce who is calling *before* dispatch,
+    // so that an `/edit` in this request — whose record is pushed deep inside
+    // the domain crate, which knows nothing about HTTP — carries the label too.
+    final stopwatch = Stopwatch()..start();
+    _activityDetail = null;
+    ai_history_api.aiHistorySetClientLabel(
+      label: request.headers.value(clientLabelHeader)?.trim() ?? '',
+    );
 
     try {
       switch (path) {
@@ -215,7 +276,42 @@ class AiAssistantServer {
       }));
     }
 
+    // Read before the close: the status is settled by now, and reaching into a
+    // closed response for it is asking for trouble as dart:io evolves.
+    final status = request.response.statusCode;
     await request.response.close();
+
+    // …and half two: one entry per request, after the response is written so
+    // the duration is the whole round trip.
+    _recordActivity(request, path, status, stopwatch);
+  }
+
+  /// Push one timeline entry for a finished request (Phase 5).
+  ///
+  /// Never throws into the request path: a log that can break the server it
+  /// observes is worse than no log.
+  void _recordActivity(
+    HttpRequest request,
+    String path,
+    int status,
+    Stopwatch stopwatch,
+  ) {
+    if (_unloggedPaths.contains(path)) return;
+    try {
+      ai_history_api.aiHistoryRecordActivity(
+        method: request.method,
+        path: path,
+        query: request.uri.query,
+        detail: _activityDetail ?? '',
+        status: status,
+        durationMs: stopwatch.elapsedMilliseconds,
+      );
+      onCliActivity?.call();
+    } catch (e) {
+      print('[AI Assistant] Failed to record activity for $path: $e');
+    } finally {
+      _activityDetail = null;
+    }
   }
 
   Future<void> _handleHealth(HttpRequest request) async {
@@ -785,6 +881,7 @@ class AiAssistantServer {
     request.response.headers.contentType = ContentType.json;
 
     if (name != null && name.isNotEmpty) {
+      _activityDetail = name;
       // Create with specific name
       final result = sd_api.addNodeNetworkWithName(name: name);
       if (result.success) {
@@ -859,6 +956,7 @@ class AiAssistantServer {
       return;
     }
 
+    _activityDetail = name;
     final result = sd_api.deleteNodeNetwork(networkName: name);
     request.response.headers.contentType = ContentType.json;
 
@@ -918,6 +1016,7 @@ class AiAssistantServer {
       return;
     }
 
+    _activityDetail = name;
     sd_api.setActiveNodeNetwork(nodeNetworkName: name);
     onNetworkEdited?.call();
 
@@ -966,6 +1065,7 @@ class AiAssistantServer {
       return;
     }
 
+    _activityDetail = '$oldName → $newName';
     final success =
         sd_api.renameNodeNetwork(oldName: oldName, newName: newName);
     request.response.headers.contentType = ContentType.json;

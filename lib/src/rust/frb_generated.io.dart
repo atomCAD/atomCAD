@@ -56,6 +56,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIAddBondMoveResult dco_decode_api_add_bond_move_result(dynamic raw);
 
   @protected
+  APIAiActivitySummary dco_decode_api_ai_activity_summary(dynamic raw);
+
+  @protected
   APIAiDiff dco_decode_api_ai_diff(dynamic raw);
 
   @protected
@@ -1070,6 +1073,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> dco_decode_list_String(dynamic raw);
 
   @protected
+  List<APIAiActivitySummary> dco_decode_list_api_ai_activity_summary(
+      dynamic raw);
+
+  @protected
   List<APIAiEditSummary> dco_decode_list_api_ai_edit_summary(dynamic raw);
 
   @protected
@@ -1750,6 +1757,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIAddBondMoveResult sse_decode_api_add_bond_move_result(
+      SseDeserializer deserializer);
+
+  @protected
+  APIAiActivitySummary sse_decode_api_ai_activity_summary(
       SseDeserializer deserializer);
 
   @protected
@@ -2932,6 +2943,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> sse_decode_list_String(SseDeserializer deserializer);
 
   @protected
+  List<APIAiActivitySummary> sse_decode_list_api_ai_activity_summary(
+      SseDeserializer deserializer);
+
+  @protected
   List<APIAiEditSummary> sse_decode_list_api_ai_edit_summary(
       SseDeserializer deserializer);
 
@@ -3730,6 +3745,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_add_bond_move_result(
       APIAddBondMoveResult self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_ai_activity_summary(
+      APIAiActivitySummary self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_ai_diff(APIAiDiff self, SseSerializer serializer);
@@ -4978,6 +4997,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_api_ai_activity_summary(
+      List<APIAiActivitySummary> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_api_ai_edit_summary(

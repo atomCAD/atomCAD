@@ -8,7 +8,7 @@ import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `build`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 /// Bumped on every push, on `clear`, and on a session-label change.
 ///
@@ -20,6 +20,58 @@ BigInt aiHistoryVersion() => RustLib.instance.api
 /// Every retained entry as a lightweight row, oldest first.
 List<APIAiEditSummary> aiHistoryList() =>
     RustLib.instance.api.crateApiStructureDesignerAiHistoryApiAiHistoryList();
+
+/// Every retained non-edit CLI request as a timeline row, oldest first
+/// (Phase 5).
+///
+/// Separate from [`ai_history_list`] and merged in Dart by `seq`: the two rings
+/// have different caps and an activity row shares almost no fields with an edit
+/// row, so a union type would be mostly-null either way.
+List<APIAiActivitySummary> aiHistoryActivityList() => RustLib.instance.api
+    .crateApiStructureDesignerAiHistoryApiAiHistoryActivityList();
+
+/// Record one non-edit CLI request (Phase 5).
+///
+/// Called from the Dart HTTP server's single `_handleRequest` hook, which is
+/// the only place that knows a request happened at all — `/edit` is *not*
+/// routed here, because it records itself with full fidelity down in
+/// `ai_text_edit`, and `/health` is skipped as pure polling noise.
+///
+/// Bumps the log version, so the panel picks the entry up on the next refresh
+/// exactly as it picks up an edit.
+void aiHistoryRecordActivity(
+        {required String method,
+        required String path,
+        required String query,
+        required String detail,
+        required int status,
+        required int durationMs}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerAiHistoryApiAiHistoryRecordActivity(
+            method: method,
+            path: path,
+            query: query,
+            detail: detail,
+            status: status,
+            durationMs: durationMs);
+
+/// Announce which client is calling, from a request's `X-Client-Label` header
+/// (Phase 5, open question 5).
+///
+/// Set once per request, *before* the handler runs, so that the edit record
+/// `ai_text_edit` pushes from deep inside the domain crate carries it too. It
+/// deliberately does **not** bump the log version: a header is invisible until
+/// a record carries it, and bumping here would make the panel's refresh gate
+/// fire on every request.
+void aiHistorySetClientLabel({required String label}) => RustLib.instance.api
+    .crateApiStructureDesignerAiHistoryApiAiHistorySetClientLabel(label: label);
+
+/// Every distinct client label seen this session, oldest first.
+///
+/// The panel offers the newest as the session label's placeholder: when the CLI
+/// identifies itself there is nothing left for the maintainer to type.
+List<String> aiHistoryClientLabels() => RustLib.instance.api
+    .crateApiStructureDesignerAiHistoryApiAiHistoryClientLabels();
 
 /// One entry in full, or `None` when it has been evicted by the ring's caps.
 APIAiEditDetail? aiHistoryDetail({required BigInt seq}) => RustLib.instance.api
@@ -65,6 +117,76 @@ void aiHistorySetSessionLabel({required String label}) => RustLib.instance.api
 
 String aiHistoryGetSessionLabel() => RustLib.instance.api
     .crateApiStructureDesignerAiHistoryApiAiHistoryGetSessionLabel();
+
+/// One non-edit CLI request as a timeline row (Phase 5).
+///
+/// Everything a row renders and nothing more — there is no detail pane behind
+/// an activity entry, so `requestLine` and `detail` are the whole record as far
+/// as Dart is concerned.
+class APIAiActivitySummary {
+  /// Position on the timeline **shared** with the edit rows, which is how the
+  /// panel merges the two lists into one ordered list.
+  final BigInt seq;
+  final PlatformInt64 timestampMs;
+
+  /// `GET /query?verbose=true`, pre-rendered: Dart displays it, never parses
+  /// it.
+  final String requestLine;
+  final String method;
+  final String path;
+
+  /// A short note the handler attached — the network a rename targeted, the
+  /// file a load opened. Empty when the query string said everything.
+  final String detail;
+  final int status;
+
+  /// `2xx`/`3xx`. Pre-computed so the row's tint has one definition.
+  final bool ok;
+  final int durationMs;
+  final String clientLabel;
+
+  const APIAiActivitySummary({
+    required this.seq,
+    required this.timestampMs,
+    required this.requestLine,
+    required this.method,
+    required this.path,
+    required this.detail,
+    required this.status,
+    required this.ok,
+    required this.durationMs,
+    required this.clientLabel,
+  });
+
+  @override
+  int get hashCode =>
+      seq.hashCode ^
+      timestampMs.hashCode ^
+      requestLine.hashCode ^
+      method.hashCode ^
+      path.hashCode ^
+      detail.hashCode ^
+      status.hashCode ^
+      ok.hashCode ^
+      durationMs.hashCode ^
+      clientLabel.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIAiActivitySummary &&
+          runtimeType == other.runtimeType &&
+          seq == other.seq &&
+          timestampMs == other.timestampMs &&
+          requestLine == other.requestLine &&
+          method == other.method &&
+          path == other.path &&
+          detail == other.detail &&
+          status == other.status &&
+          ok == other.ok &&
+          durationMs == other.durationMs &&
+          clientLabel == other.clientLabel;
+}
 
 /// One entry's computed diff.
 class APIAiDiff {
@@ -144,6 +266,12 @@ class APIAiEditDetail {
   final bool afterComplete;
   final bool diverged;
   final bool divergedByUndo;
+
+  /// From the `X-Client-Label` header the CLI sends (Phase 5); empty when the
+  /// caller did not identify itself. This is what the manual session label
+  /// (D13) exists to substitute for, so the detail pane shows it when it is
+  /// there and falls back to the label otherwise.
+  final String clientLabel;
   final APILayoutOutcome layout;
 
   const APIAiEditDetail({
@@ -169,6 +297,7 @@ class APIAiEditDetail {
     required this.afterComplete,
     required this.diverged,
     required this.divergedByUndo,
+    required this.clientLabel,
     required this.layout,
   });
 
@@ -196,6 +325,7 @@ class APIAiEditDetail {
       afterComplete.hashCode ^
       diverged.hashCode ^
       divergedByUndo.hashCode ^
+      clientLabel.hashCode ^
       layout.hashCode;
 
   @override
@@ -225,6 +355,7 @@ class APIAiEditDetail {
           afterComplete == other.afterComplete &&
           diverged == other.diverged &&
           divergedByUndo == other.divergedByUndo &&
+          clientLabel == other.clientLabel &&
           layout == other.layout;
 }
 

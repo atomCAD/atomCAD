@@ -163,6 +163,15 @@ class _MyAppState extends State<MyApp> {
       structureDesignerModel.refreshFromKernel();
     };
 
+    // Every non-edit CLI request lands on the AI History timeline, and the
+    // panel should show it live. Deliberately a *different* callback from
+    // `onNetworkEdited`: a `query` or a `screenshot` changes nothing about the
+    // network, so a full kernel refresh per request would make reading the
+    // network cost more than editing it.
+    _aiServer?.onCliActivity = () {
+      structureDesignerModel.refreshAiHistoryOnly();
+    };
+
     // Connect AI assistant server to request re-render (for camera changes)
     _aiServer?.onRenderingNeeded = () {
       SchedulerBinding.instance.scheduleFrame();

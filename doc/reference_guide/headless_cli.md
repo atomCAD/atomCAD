@@ -71,7 +71,7 @@ zone bodies included; Ctrl+Y (redo) reapplies it.
 An edit that applied but then failed validation is still undoable — that is the
 case the step exists for.
 
-### Every edit is recorded
+### Every request is recorded
 
 Each `atomcad-cli edit` — merge or `--replace`, applied or rejected — is
 recorded in the running application's [AI History
@@ -79,6 +79,33 @@ panel](./ui.md#ai-history-panel): the submitted script, what came back, the
 network before and after, and which nodes the layout pass moved. Edits refused
 because the network is locked against CLI writes are recorded too; locking a
 network does not hide the attempts.
+
+Every *other* command — `query`, `evaluate`, `screenshot`, `camera`, `display`,
+`networks …`, `load`, `save`, `new` — lands on the same timeline as a one-line
+entry: the request, how it ended, how long it took. That is what makes the log
+readable as a session rather than a list of edits: it shows whether the model
+looked at the network before rewriting it, and what it did between two edits.
+(`health`, which the CLI polls before every command, is not recorded.)
+
+### Saying who you are: `--label`
+
+atomCAD cannot tell which model — or which version of a prompt — is driving the
+CLI. Tell it:
+
+```bash
+atomcad-cli --label "Opus 5 / skill v3" query
+ATOMCAD_CLIENT_LABEL="Opus 5 / skill v3" atomcad-cli query
+```
+
+The label rides along as an `X-Client-Label` header on every request, is stamped
+on every entry it produces, and is carried into exports. It replaces typing a
+session label into the panel by hand, and unlike a session label it is
+per-request — so one exported log can tell two models editing in turn apart. It
+is entirely optional; nothing else changes when it is absent.
+
+The environment variable is the form to prefer for an agent harness: set it
+once, and every command of the session is attributed without touching the
+command lines.
 
 The log is a **session** log. It is kept in memory only, nothing about it goes
 into your `.cnnd` file, and undo does not erase an entry — undoing an AI edit
@@ -88,9 +115,10 @@ So if you want to keep a session — to refine a prompt against what the model
 actually did, or to compare two models on the same task — **export it before
 closing the application**. The panel's toolbar writes the whole log to a file:
 JSON keeps everything, including both text snapshots per edit, and Markdown is
-the readable form for pasting into a conversation. The session-label field
-beside it stamps a name of your choosing ("Opus 5 / skill v3") into the export,
-since the application has no way to know which model was driving the CLI.
+the readable form for pasting into a conversation. Both carry the non-edit
+requests interleaved with the edits, in order. The session-label field beside it
+stamps a name of your choosing ("Opus 5 / skill v3") into the export — use it
+when the CLI is not sending `--label`, which says the same thing automatically.
 
 ### Reading query output back in
 

@@ -573,9 +573,10 @@ which line inside it. For that, an external profiler is still the right tool.
 
 ## AI History panel
 
-Every edit made through the [headless CLI](./headless_cli.md) — `atomcad-cli
-edit`, with or without `--replace` — is recorded, and the **AI History panel**
-is where you read that record. It is a docked, collapsible bottom panel, hidden
+Every request made through the [headless CLI](./headless_cli.md) is recorded,
+and the **AI History panel** is where you read that record: the edits in full,
+and every other command — `query`, `screenshot`, `networks`, `load`, `save` — as
+a one-line timeline entry saying what the CLI was doing in between. It is a docked, collapsible bottom panel, hidden
 by default; open it from *View > Show AI History* and close it from the same
 entry or the panel's `×`.
 
@@ -586,7 +587,8 @@ record of something that happened, not a piece of the document.
 
 ### The entry list
 
-Newest first, one row per edit:
+Newest first, one row per edit — and, folded into the same list, one dimmer row
+per non-edit request. An edit row:
 
 - **`#N` and the time** the edit arrived.
 - **Two verdicts, not one.** The `✔` / `✖` glyph is whether *your edit applied*
@@ -613,22 +615,42 @@ Rejected edits are recorded too, including edits refused because the network was
 [locked](./headless_cli.md) against CLI writes. Locking a network does not hide
 the attempts.
 
+### Request rows
+
+Between the edits sit the CLI's other commands, one dim row each: the request
+line (`GET /query`, `POST /networks/rename`), how it ended, and how long it
+took. A failed one is red. They are not selectable — the row *is* the whole
+record — and the `⇄` button in the toolbar folds them away when only the edits
+are wanted.
+
+They are there for context an edit list cannot give: whether the model read the
+network before rewriting it, how many screenshots it took to convince itself,
+which `networks activate` explains the divergence marker on the next edit.
+`/health` is not recorded (the CLI polls it before every command), and `/edit`
+appears as a full edit row rather than a request row.
+
+If the CLI identified itself — `atomcad-cli --label`, see
+[Headless Mode](./headless_cli.md) — that label appears on the right of the
+selected entry's header, and becomes the placeholder in the session-label field:
+there is then nothing left for you to type, and exports carry every label they
+saw regardless.
+
 ### The detail tabs
 
-Select a row and the right-hand pane shows four tabs.
+Select a row and the right-hand pane shows five tabs.
 
-**Diff** — what the edit did to the network, as a comparison of the network's
-text before and after, in the same text format `atomcad-cli query` prints.
+**Diff** — what the edit did to the network: a line diff of the network's text
+before and after, in the same text format `atomcad-cli query` prints. The `⤢`
+button opens it in a large window — the docked panel is short by design, and a
+diff is the one thing here worth reading at length.
 
-- *By node* (the default) lists one block per node, keyed by its scoped path
-  (`m1/d` for a node inside `m1`'s body). Only blocks that differ are shown, and
-  the count of identical ones is reported above. This is the view you want:
-  because the text format is topologically sorted, inserting one upstream node
-  shifts every line below it, and a plain line diff would report that as a large
-  change.
-- *Text* is the literal line diff, for when the literal truth is what you need.
-- The `⤢` button opens the same diff in a large window — the docked panel is
-  short by design, and a diff is the one thing here worth reading at length.
+**Network** — the whole network as it stood once the edit landed, rather than
+only what changed. It is the same snapshot the diff is computed from, so it is
+also valid `edit --replace` input: select it, copy it, and any moment of the
+session can be restored. This is the tab for "what did this actually look like
+then", a question a chain of diffs answers only by being read backwards. An
+edit that was rejected before it reached a network — no active network, or a CLI
+write lock — has no snapshot here and says so.
 
 **Request** — exactly what was submitted, verbatim and selectable, with the mode
 (`edit` or `edit --replace`) and target network above it.

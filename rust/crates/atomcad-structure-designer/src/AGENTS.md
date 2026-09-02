@@ -250,6 +250,27 @@ network"`) and **one entry in `StructureDesigner::ai_edit_log`**
   so an already-broken network makes every later edit report `success: false`
   however clean it was. Anything gating on "did the edit work" wants `applied`.
 
+**The log is wider than its name** since Phase 5: `AiEditLog` holds a *second*
+ring of `AiActivityRecord`s — every non-edit CLI request (`/query`,
+`/screenshot`, `/networks/*`, `/load`, `/save`) — so the timeline shows what the
+AI looked at around an edit. Three things about it:
+
+- the recording **hook is in Dart** (`lib/ai_assistant/http_server.dart`'s
+  `_handleRequest`), because the transport is the only layer that knows a
+  request happened. It reaches the log through
+  `api/…/ai_history_api.rs::ai_history_record_activity`.
+- `/edit` is **not** routed through that hook — it records itself here, with the
+  snapshots — and `/health` is skipped as CLI polling noise.
+- the two rings **share one `seq` counter and nothing else**. That is what makes
+  an interleaved timeline exactly ordered (requests routinely land in the same
+  millisecond); it also means edit sequence numbers have gaps. Activity entries
+  take **no** divergence flags, and `last_after_text` must keep reading edit
+  records only.
+
+A caller may announce itself with an `X-Client-Label` header
+(`atomcad-cli --label`); the hook sets it on the log *before* dispatch, so an
+`/edit` in the same request is stamped with it too.
+
 The log is runtime-only, like `print_log`: never serialized to `.cnnd`, no undo
 command, and undo never rewrites it — an entry that was later undone is still a
 thing that happened. Divergence between entries is detected by **one string

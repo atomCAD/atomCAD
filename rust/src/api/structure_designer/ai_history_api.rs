@@ -22,6 +22,19 @@
 //!
 //! **Diffs are computed here, on demand** (D5), never stored: the record stays
 //! a pure capture and the recording path stays cheap.
+//!
+//! **The timeline has two kinds of row** since Phase 5. Edits come from
+//! [`ai_history_list`]; every other CLI request — `query`, `screenshot`,
+//! `networks/*`, `load`, `save` — comes from [`ai_history_activity_list`], and
+//! the two are merged by `seq`, which both rings draw from. They are separate
+//! calls rather than one union type because an activity row carries none of an
+//! edit row's fifteen fields and has no detail pane behind it: it is a marker
+//! saying what the AI was doing between edits.
+//!
+//! The recording direction is the other half. [`ai_history_record_activity`] is
+//! called by the Dart HTTP server from its single `_handleRequest` hook — the
+//! transport is the only layer that knows a request happened, and `/edit`
+//! records itself far below, inside `ai_text_edit`.
 
 use crate::api::api_common::{with_cad_instance_or, with_mut_cad_instance_or};
 use crate::api::common_api_types::APIVec2;
@@ -30,7 +43,7 @@ use atomcad_structure_designer::ai_edit_diff::{
 };
 use atomcad_structure_designer::ai_edit_export::{export_json, export_markdown};
 use atomcad_structure_designer::ai_edit_log::{
-    AiEditRecord, DeltaCounts, LayoutOutcome, LayoutPath, MovedNode,
+    AiActivityRecord, AiEditRecord, DeltaCounts, LayoutOutcome, LayoutPath, MovedNode,
 };
 
 // ===========================================================================
@@ -230,6 +243,11 @@ pub struct APIAiEditDetail {
     pub after_complete: bool,
     pub diverged: bool,
     pub diverged_by_undo: bool,
+    /// From the `X-Client-Label` header the CLI sends (Phase 5); empty when the
+    /// caller did not identify itself. This is what the manual session label
+    /// (D13) exists to substitute for, so the detail pane shows it when it is
+    /// there and falls back to the label otherwise.
+    pub client_label: String,
     pub layout: APILayoutOutcome,
 }
 
@@ -258,7 +276,51 @@ impl From<&AiEditRecord> for APIAiEditDetail {
             after_complete: record.after_complete,
             diverged: record.diverged,
             diverged_by_undo: record.diverged_by_undo,
+            client_label: record.client_label.clone(),
             layout: APILayoutOutcome::from(&record.layout),
+        }
+    }
+}
+
+/// One non-edit CLI request as a timeline row (Phase 5).
+///
+/// Everything a row renders and nothing more — there is no detail pane behind
+/// an activity entry, so `requestLine` and `detail` are the whole record as far
+/// as Dart is concerned.
+#[derive(Debug, Clone)]
+pub struct APIAiActivitySummary {
+    /// Position on the timeline **shared** with the edit rows, which is how the
+    /// panel merges the two lists into one ordered list.
+    pub seq: u64,
+    pub timestamp_ms: i64,
+    /// `GET /query?verbose=true`, pre-rendered: Dart displays it, never parses
+    /// it.
+    pub request_line: String,
+    pub method: String,
+    pub path: String,
+    /// A short note the handler attached — the network a rename targeted, the
+    /// file a load opened. Empty when the query string said everything.
+    pub detail: String,
+    pub status: u32,
+    /// `2xx`/`3xx`. Pre-computed so the row's tint has one definition.
+    pub ok: bool,
+    pub duration_ms: u32,
+    pub client_label: String,
+}
+
+impl From<&AiActivityRecord> for APIAiActivitySummary {
+    fn from(record: &AiActivityRecord) -> Self {
+        Self {
+            seq: record.seq,
+            timestamp_ms: record.timestamp_ms,
+            request_line: record.request_line(),
+            method: record.method.clone(),
+            path: record.path.clone(),
+            detail: record.detail.clone(),
+            status: record.status as u32,
+            ok: record.ok(),
+            duration_ms: record.duration_ms,
+            client_label: record.client_label.clone(),
         }
     }
 }
@@ -395,6 +457,104 @@ pub fn ai_history_list() -> Vec<APIAiEditSummary> {
                     .map(APIAiEditSummary::from)
                     .collect()
             },
+            Vec::new(),
+        )
+    }
+}
+
+/// Every retained non-edit CLI request as a timeline row, oldest first
+/// (Phase 5).
+///
+/// Separate from [`ai_history_list`] and merged in Dart by `seq`: the two rings
+/// have different caps and an activity row shares almost no fields with an edit
+/// row, so a union type would be mostly-null either way.
+#[flutter_rust_bridge::frb(sync)]
+pub fn ai_history_activity_list() -> Vec<APIAiActivitySummary> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                cad_instance
+                    .structure_designer
+                    .ai_edit_log
+                    .activity()
+                    .map(APIAiActivitySummary::from)
+                    .collect()
+            },
+            Vec::new(),
+        )
+    }
+}
+
+/// Record one non-edit CLI request (Phase 5).
+///
+/// Called from the Dart HTTP server's single `_handleRequest` hook, which is
+/// the only place that knows a request happened at all — `/edit` is *not*
+/// routed here, because it records itself with full fidelity down in
+/// `ai_text_edit`, and `/health` is skipped as pure polling noise.
+///
+/// Bumps the log version, so the panel picks the entry up on the next refresh
+/// exactly as it picks up an edit.
+#[flutter_rust_bridge::frb(sync)]
+pub fn ai_history_record_activity(
+    method: String,
+    path: String,
+    query: String,
+    detail: String,
+    status: u32,
+    duration_ms: u32,
+) {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                cad_instance
+                    .structure_designer
+                    .ai_edit_log
+                    .push_activity(AiActivityRecord::new(
+                        method,
+                        path,
+                        query,
+                        detail,
+                        status as u16,
+                        duration_ms,
+                    ))
+            },
+            (),
+        )
+    }
+}
+
+/// Announce which client is calling, from a request's `X-Client-Label` header
+/// (Phase 5, open question 5).
+///
+/// Set once per request, *before* the handler runs, so that the edit record
+/// `ai_text_edit` pushes from deep inside the domain crate carries it too. It
+/// deliberately does **not** bump the log version: a header is invisible until
+/// a record carries it, and bumping here would make the panel's refresh gate
+/// fire on every request.
+#[flutter_rust_bridge::frb(sync)]
+pub fn ai_history_set_client_label(label: String) {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                cad_instance
+                    .structure_designer
+                    .ai_edit_log
+                    .set_client_label(label)
+            },
+            (),
+        )
+    }
+}
+
+/// Every distinct client label seen this session, oldest first.
+///
+/// The panel offers the newest as the session label's placeholder: when the CLI
+/// identifies itself there is nothing left for the maintainer to type.
+#[flutter_rust_bridge::frb(sync)]
+pub fn ai_history_client_labels() -> Vec<String> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| cad_instance.structure_designer.ai_edit_log.client_labels(),
             Vec::new(),
         )
     }
