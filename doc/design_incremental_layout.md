@@ -37,18 +37,39 @@ project, so one corpus: 76 networks, 2,262 nodes, 2,057 wires):
 | Wires rightward with a full node width of clearance | 81.7% |
 | Overlapping node pairs already present (est. 160×83 boxes) | ~140 |
 
+That corpus is a working file, not a polished one — a point raised in review by
+its own author. So the same measurement was repeated on the **demolib**
+library (`demolib/baselib_with_demos.cnnd`, the older and much tidier
+networks), with one extra row that the first pass lacked:
+
+| Property | from_mechadense | demolib |
+|---|---|---|
+| Networks / nodes | 82 / 2300 | 65 / 901 |
+| Wires pointing rightward | 91.4% | **99.2%** |
+| Backward wires | 177, in 39 networks | **8, in 2 networks** |
+| Overlapping node pairs (est. 160×83 boxes) | 152 | 21 |
+| Nodes sharing an **exact** x with another node | 2.6% | 4.7% |
+| Nodes within **8 px** of another node's x | **51.8%** | **54.1%** |
+
 Three consequences that shape this design:
 
 1. **Zero nodes are where the algorithm would put them.** A full reflow rewrites
    100% of positions in every one of the 76 networks. There is no "mostly
    already correct" case to exploit.
-2. **There is almost no column structure to rediscover.** Nearly every node has
-   its own x. Any scheme that tries to snap the human drawing onto a grid is
-   rewriting it, not preserving it.
-3. **Rightward flow is a real shared invariant** (91.4%), but not a universal
-   one. 177 backward wires and ~140 overlaps already exist in a drawing its
-   author is content with. So the algorithm must never "fix" pre-existing
-   irregularities — only ones the current edit introduced.
+2. **There is no grid, but there is loose alignment everywhere.** The first
+   draft read "almost no column structure" off the exact-x row, which is the
+   wrong metric: in *both* corpora about half the nodes sit within a few pixels
+   of another node's x. A scheme that snaps the drawing onto a grid is still
+   rewriting it — but a scheme that cuts through one of those loose columns,
+   moving some members and not others, is destroying structure the human did
+   put there. The [window rule](#the-window-rule-where-a-shift-may-cut) exists
+   for exactly this.
+3. **Rightward flow is a real shared invariant** — 91.4% in the working file
+   and 99.2% in the polished one — but not a universal one. 177 backward wires
+   and ~150 overlaps already exist in a drawing its author is content with. So
+   the algorithm must never "fix" pre-existing irregularities — only ones the
+   current edit introduced. The polished corpus says the invariant only gets
+   stronger as a network matures, which is the case that matters most.
 
 Point 3 generalizes to the rule this design follows throughout:
 
@@ -245,6 +266,13 @@ snapshot therefore records, per name path, **position, rendered footprint,
 re-applies all of them on a name match — an extension of
 `design_hof_body_text_format.md` D8, listed there as carrying "`position` and
 nothing else" precisely so that this design could add the rest.
+
+**D15 — A half-plane shift cuts inside a window, and snaps into whitespace
+within it.** Every shift has nodes that must move and nodes that must not, and
+those bound where the line may fall. Within that window the threshold moves
+**left only**, to the nearest x that cuts no loose column and no node box; an
+empty window means the shift is skipped. See
+[The window rule](#the-window-rule-where-a-shift-may-cut).
 
 ---
 
@@ -518,7 +546,17 @@ x_max = min over d in D of (d.x - GAP - W)             // left of every consumer
 | `U` empty | `x = x_max` (hug the consumers) |
 | `D` empty | `x = x_min` (hug the inputs) |
 | `x_min ≤ x_max` | `x = x_min` — leftmost valid spot, keeps wires short |
-| `x_min > x_max` | **no room**: `shift_half_plane(x_min, x_min - x_max)` first, then `x = x_min` |
+| `x_min > x_max` | **no room**: `shift_half_plane(x_min, x_min - x_max)` first, then `x = x_min` — with the threshold snapped per the [window rule](#the-window-rule-where-a-shift-may-cut), whose window here is `(max over U of u.x, min over D of d.x]` |
+
+**When the window is empty, skip the shift.** That happens when some consumer
+sits left of some input — a consumer left of an input's right edge. No
+threshold can then move every consumer without also moving an input, and
+moving an input moves `x_min` with it, so the room is never created. The first
+draft shifted at `x_min` unconditionally, which in this case displaces
+everything right of `x_min` for nothing and still leaves the block right of
+its consumer. Instead: no shift, `x = x_min`, Step 5 resolves any overlap, and
+the new wire to that consumer points backward. The consumer being left of the
+input is a pre-existing arrangement, and the baseline rule leaves those alone.
 
 **Vertical.** Rather than centring the block, align it by its connections. For
 every wire between a block-internal node `b` and an anchor `a`, the ideal offset
@@ -565,21 +603,30 @@ Comments are ordinary obstacles here, at their real `CommentData` size (D9).
 and run the [vertical cascade](#the-vertical-cascade) over `R`, choosing the
 direction per node by which side of `R`'s centre it lies on.
 
-Measured over 2,280 simulated insertions on `from_mechadense.cnnd` — dropping a
-node-sized rect exactly onto each existing node's position, a guaranteed initial
-collision, using real comment dimensions:
+Measured by simulation on both corpora (`scripts/layout_cascade_sim.py`) —
+dropping a node-sized rect, inflated by the gap, exactly onto each existing
+node's position with that node removed from the obstacle set, so the drop lands
+in the densest spot the node's neighbours allow; per-node estimated heights,
+real comment dimensions, top-level networks only:
 
-| | |
-|---|---|
-| Cascades pushing **nothing** | 50.9% |
-| Pushing ≤ 1 node | 77.0% |
-| Pushing ≤ 5 nodes | 98.1% |
-| Max nodes pushed | 10 |
-| Final x-extent ÷ `R` width | median 1.00×, p90 1.76×, p99 2.83×, max 5.80× |
+| | from_mechadense (2,300 drops) | demolib (901 drops) |
+|---|---|---|
+| Cascades pushing **nothing** | 50.4% | **65.0%** |
+| Pushing ≤ 1 node | 77.4% | 85.5% |
+| Pushing ≤ 5 nodes | 97.7% | 99.1% |
+| Max nodes pushed | 11 | 10 |
+| Final x-extent ÷ `R` width, median / p90 / p99 / max | 1.00× / 1.74× / 2.89× / 5.04× | 1.00× / **1.01×** / 1.84× / 2.48× |
 
-The 5.80× worst case is 571px of extent in a 1052px-wide network; the worst on a
-large network was 608px of 5837px. Both figures overstate the real cost, because
+The polished corpus is the easier one on every row: two drops in three
+disturb nothing, and nine in ten widen the disturbed region by nothing at all.
+The 5× worst cases are a few hundred pixels of extent in networks a few
+thousand pixels wide. All of these figures overstate the real cost, because
 (5a) runs first and a dead-centre drop is the densest possible start.
+
+*(The first draft quoted 50.9% / 77.0% / 98.1% / max 10 for the working corpus
+from a script that was not kept; the numbers above come from a
+reimplementation of the pseudocode, calibrated to reproduce those within a
+point, and the script is now in the repo so the measurement can be repeated.)*
 
 `SLIDE_WINDOW` is the design's one real tuning constant. It sets the trade
 between long wires (slide too far) and disturbed neighbours (push too eagerly).
@@ -588,7 +635,9 @@ between long wires (slide too far) and disturbed neighbours (push too eagerly).
 
 For each wire in `added_wires` whose endpoints are both kept and both in this
 scope, if `source.x + width(source) + GAP > dest.x`, then
-`shift_half_plane(dest.x, deficit)`. Wires that were already backward before the
+`shift_half_plane(dest.x, deficit)`, threshold snapped within the window
+`(source.x, dest.x]` per the [window rule](#the-window-rule-where-a-shift-may-cut).
+Wires that were already backward before the
 edit are left alone — that is the baseline rule, and the measurement says 177 of
 them exist. Cross-scope wires are skipped (see
 [Wires that cross a scope boundary](#wires-that-cross-a-scope-boundary)).
@@ -687,6 +736,54 @@ side keep their length.
 Used in three places: Step 2 (a node grew wider, via `grow_rect`), Step 4 (no
 horizontal room for a block) and Step 6 (a rewire made a wire point backwards).
 
+#### The window rule: where a shift may cut
+
+A shift is safe at *any* threshold — but not equally good at any threshold.
+The measurement says about half of all nodes sit within a few pixels of
+another node's x: loose columns, not a grid. A line dropped at an arbitrary x
+cuts through such a column, moving some of its members and not others, and
+that is the one disturbance a rigid shift cannot excuse — the moved and unmoved
+sets were one visual group. So the threshold is not taken as given; it is
+chosen.
+
+Every shift site names the nodes that **must move** and the nodes that **must
+not**, and those two sets bound the line:
+
+| Shift site | Must not move | Must move | Window for `T` |
+|---|---|---|---|
+| Step 4, no room for a block | every upstream anchor `u` | every downstream anchor `d` | `(max u.x, min d.x]` |
+| Step 2, `grow_rect` width delta | the grown node | everything right of its old right edge, in its band | `(node.x, old right edge]` |
+| Step 6, new backward wire | the source | the destination | `(source.x, dest.x]` |
+
+The rule, applied identically at all three:
+
+1. **Start at the site's default threshold** — `x_min`, the old right edge,
+   `dest.x` — which is the right end of the window or inside it.
+2. **Snap left, never right.** Move `T` down to the nearest x at which no
+   node's left edge lies within the alignment tolerance (8 px, the same figure
+   the measurement used) and no node's box straddles the line. Left, because
+   moving more nodes rightward stays overlap-free and every node that had to
+   move still does; never right, because that would leave a required node
+   unmoved. Give up and keep the default if no such gap exists within one node
+   width.
+3. **Never leave the window.** The lower bound is strict: a threshold at or
+   below an upstream anchor moves that anchor, and with it `x_min`, so the
+   room is never created. The same for the grown node and for the source.
+4. **An empty window means no shift.** Some consumer is left of some input
+   (Step 4), or the destination is left of the source (Step 6, in which case
+   the wire was never forward and Step 6 does not fire anyway). Nothing can
+   satisfy both sets; skip the shift and let Step 5 handle overlap.
+
+Why the default is the *left* end of the useful range rather than the
+minimum-motion choice: in Step 4 one could shift at `min d.x` and move fewer
+nodes, but the nodes in the strip between `x_min` and the consumers would then
+collide with the block and be pushed *vertically* by the cascade. Those nodes
+are horizontally inside the column that is widening; moving them right with the
+consumers is the "insert a column" a human would do, while pushing them down
+splits them from their row. `x_min` vacates the strip the block will occupy,
+so the block cascades nothing. Snapping only ever moves the line further left,
+into whitespace, within the window.
+
 *Refinement, not for v1:* shift only the destination's **downstream cone**
 instead of the whole half-plane. More surgical, but a translated cone can
 collide with non-cone nodes, so it needs the cascade afterwards. The half-plane
@@ -757,7 +854,8 @@ fn grow_rect(network, registry, node_id, old: DVec2, new: DVec2) -> Vec<(u64, DV
     let anchor = node.position;
     let dw = max(0, new.x - old.x);
     let dh = max(0, new.y - old.y);
-    if dw > 0 { shift_half_plane(anchor.x + old.x, dw); }        // 1. width: old right edge
+    if dw > 0 { shift_half_plane(snap(anchor.x + old.x,          // 1. width: old right edge,
+                                      window = (anchor.x, anchor.x + old.x]), dw); } //    snapped left (D15)
     if dh > 0 { cascade(R = (anchor, new) inflated by GAP,       // 2. height: new rect
                         dir_of = |_| down,
                         excluding node_id and any node that already overlapped (anchor, old)); }
@@ -1062,7 +1160,12 @@ right-moved / down-moved overlap the quadrant shift produced (large `dw`, small
 already overlapped the old rect is left alone; the cascade terminates on a
 dense column and pushes a node whose x-interval overlaps a *pushed* node but
 not `R` (the widening case); a forward wire crossing the shift line stays
-forward; existing case A / B / C reflow tests pass with the new expectations,
+forward; **the window rule** — a loose column straddling the default threshold
+(members at `T − 3` and `T + 3`) moves as a whole; a snap never lands at or
+below the grown node's x; a Step 4 window whose upstream and downstream anchors
+overlap in x produces **no** shift and no upstream anchor moves; the default is
+kept when the nearest gap is more than a node width away; existing case A / B /
+C reflow tests pass with the new expectations,
 and their single-step undo/redo is unchanged.
 
 ### Phase 3 — Block layout and placement
@@ -1112,10 +1215,12 @@ manually placed nodes"). Reference guide: `doc/reference_guide/node_networks.md`
 (what happens to your layout when the AI edits, and how to get a full reflow)
 and `doc/reference_guide/ui.md` for the menu/preference.
 
-*Tests:* end-to-end through `ai_text_edit`; a **corpus regression** — load
-`from_mechadense.cnnd`, apply a synthetic edit to one network, assert that
-every node outside the delta and outside the pushed band is at its exact
-original position, bodies included; a `query` → `edit --replace` round-trip of
+*Tests:* end-to-end through `ai_text_edit`; a **corpus regression** on both
+corpora — load `from_mechadense.cnnd` and `demolib/baselib_with_demos.cnnd`,
+apply a synthetic edit to one network, assert that every node outside the
+delta and outside the pushed band is at its exact original position, bodies
+included, and that no loose column of the polished corpus was split by a
+shift; a `query` → `edit --replace` round-trip of
 a body-bearing network moves nothing; a full reflow of a network with an
 expanded HOF produces no overlap.
 
