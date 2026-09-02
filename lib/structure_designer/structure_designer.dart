@@ -22,6 +22,7 @@ import 'camera_control_widget.dart';
 import 'preferences_window.dart';
 import 'main_content_area.dart';
 import 'console_panel.dart';
+import 'ai_history_panel.dart';
 import 'profiler_panel.dart';
 import 'refresh_profile_strip.dart';
 
@@ -196,6 +197,39 @@ class _StructureDesignerState extends State<StructureDesigner> {
                                 ? 'Hide Profiler'
                                 : 'Show Profiler'),
                           ),
+                          // The AI edit log's panel. The unread dot is the
+                          // whole reason the menu item carries a widget rather
+                          // than a string: an AI session edits while the
+                          // maintainer is looking elsewhere, and the count
+                          // costs nothing beyond the version compare
+                          // `refreshFromKernel` already does (D12).
+                          MenuItemButton(
+                            key: const Key('toggle_ai_history_item'),
+                            onPressed: () => graphModel.toggleAiHistoryPanel(),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(model.aiHistoryPanelVisible
+                                    ? 'Hide AI History'
+                                    : 'Show AI History'),
+                                if (!model.aiHistoryPanelVisible &&
+                                    model.unreadAiEditCount > 0) ...[
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFFE08000),
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text('${model.unreadAiEditCount}',
+                                      style: const TextStyle(fontSize: 11)),
+                                ],
+                              ],
+                            ),
+                          ),
                           // The evaluation memo's off switch. It lives next to
                           // the profiler because switching it off is a
                           // *diagnostic* act — recompute the same design
@@ -369,6 +403,9 @@ class _StructureDesignerState extends State<StructureDesigner> {
             // Bottom-docked Profiler panel (collapses to zero height when
             // hidden). See `doc/design_eval_profiling.md` (D8b).
             const ProfilerPanel(),
+            // Bottom-docked AI History panel (collapses to zero height
+            // when hidden). See `doc/design_ai_edit_history.md` (D11).
+            const AiHistoryPanel(),
             // Always-on refresh phase readout. Repaints off its own
             // ValueNotifier, never with the model — see
             // `doc/design_eval_profiling.md` (D8a).

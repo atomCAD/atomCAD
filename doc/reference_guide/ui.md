@@ -17,6 +17,7 @@ We will discuss the different parts of the UI in detail. The parts are:
 - Camera Control Panel
 - Refresh status strip
 - Profiler panel
+- AI History panel
 - Preferences Dialog (Edit > Preferences)
 
 ## 3D Viewport
@@ -570,6 +571,93 @@ sampled.
 It measures at node boundaries, so it will tell you *which* node is slow but not
 which line inside it. For that, an external profiler is still the right tool.
 
+## AI History panel
+
+Every edit made through the [headless CLI](./headless_cli.md) — `atomcad-cli
+edit`, with or without `--replace` — is recorded, and the **AI History panel**
+is where you read that record. It is a docked, collapsible bottom panel, hidden
+by default; open it from *View > Show AI History* and close it from the same
+entry or the panel's `×`.
+
+The log is a **session** log. It lives in memory only, nothing about it is
+written to your `.cnnd` file, and it is not affected by undo: undoing an AI edit
+puts the network back but leaves the entry standing, because the entry is a
+record of something that happened, not a piece of the document.
+
+### The entry list
+
+Newest first, one row per edit:
+
+- **`#N` and the time** the edit arrived.
+- **Two verdicts, not one.** The `✔` / `✖` glyph is whether *your edit applied*
+  — the statements parsed and landed. A separate amber `⚠` says the *network*
+  does not validate afterwards. Those are different questions and they routinely
+  disagree: creating a `map` and filling its body in a second step leaves the
+  network invalid after the first step, and that first edit was still perfect.
+  A row whose edit did not apply is dimmed.
+- **The network** the edit was aimed at, or *(no active network)* for an edit
+  that was rejected before it reached one.
+- **`REPL`** when `--replace` was used — the whole network was rebuilt from the
+  submitted script rather than merged into.
+- **`+3 ~1 −0`** — nodes created, updated and deleted, and **`⌂2`** — how many
+  nodes changed position.
+- **`✖N` / `⚠N`** — errors and warnings the CLI handed back.
+
+Between two rows you may see a marker: *changed outside the CLI*, or
+*edit #N undone*. It means this network was in a different state than the
+previous entry left it in, so something other than an AI edit happened in
+between — a GUI edit, a file load, an undo, or a display-policy change. It is
+how you tell "the AI did this" from "I did this" after the fact.
+
+Rejected edits are recorded too, including edits refused because the network was
+[locked](./headless_cli.md) against CLI writes. Locking a network does not hide
+the attempts.
+
+### The detail tabs
+
+Select a row and the right-hand pane shows four tabs.
+
+**Diff** — what the edit did to the network, as a comparison of the network's
+text before and after, in the same text format `atomcad-cli query` prints.
+
+- *By node* (the default) lists one block per node, keyed by its scoped path
+  (`m1/d` for a node inside `m1`'s body). Only blocks that differ are shown, and
+  the count of identical ones is reported above. This is the view you want:
+  because the text format is topologically sorted, inserting one upstream node
+  shifts every line below it, and a plain line diff would report that as a large
+  change.
+- *Text* is the literal line diff, for when the literal truth is what you need.
+- The `⤢` button opens the same diff in a large window — the docked panel is
+  short by design, and a diff is the one thing here worth reading at length.
+
+**Request** — exactly what was submitted, verbatim and selectable, with the mode
+(`edit` or `edit --replace`) and target network above it.
+
+**Result** — what came back: the two verdicts, the errors and warnings, the
+nodes created, updated and deleted by path, the connections made, and any
+`description`, `summary` or network `output` the edit set.
+
+**Layout** — the part no diff can show, because the text format carries no node
+positions. Which layout pass ran, how many nodes of the network moved, the
+largest displacement, and the moved nodes themselves grouped by scope, each with
+its before and after position. This is how you answer "did that edit disturb my
+drawing?" without comparing the canvas against your memory of it.
+
+One reading needs care and the panel says so at the bottom of that tab: the
+layout path describes the **root scope** only. Nodes inside a higher-order
+node's body are never re-laid-out, so a body node that moved was placed there
+when it was created. *No layout pass* together with a non-empty list of moved
+nodes is therefore correct rather than contradictory.
+
+### When a snapshot is untrustworthy
+
+If a network contains a wire cycle, the text serializer stops at it, so the
+snapshot is truncated. An entry in that state carries a banner and its diff is
+greyed: a truncated "after" snapshot would otherwise fill the removed column
+with nodes that still exist. Cycles are rare — neither the editor nor the canvas
+lets you create one — which is exactly why an unflagged truncation would be
+believed.
+
 ## Node Properties Panel
 
 The properties of the active node can be edited here.
@@ -704,6 +792,7 @@ Used for loading and saving a design, exporting a design to .xyz or .mol, undo/r
 - *Edit > Copy all problems*: Copies every problem in the design — across all networks — to the clipboard as a plain-text report, for pasting into a bug report. Greyed out when the design has no problems. Available in both modes. See [Where is the error?](#node-networks-panel) above.
 - *View > Switch to Horizontal Layout* / *View > Switch to Vertical Layout*: Changes the orientation of the node network editor panel.
 - *View > Show/Hide Console* (**Ctrl + backtick**): Toggles the [Console panel](#console-panel) docked at the bottom of the window.
+- *View > Show/Hide AI History*: Toggles the [AI History panel](#ai-history-panel) docked at the bottom of the window. A dot and a count on the menu entry say how many AI edits arrived while the panel was closed.
 
 ## Preferences Dialog
 

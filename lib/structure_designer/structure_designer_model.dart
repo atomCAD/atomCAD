@@ -31,6 +31,10 @@ import 'package:flutter_cad/src/rust/api/structure_designer/tag_api.dart'
     as tag_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/profiling_api.dart'
     as profiling_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/ai_history_api.dart'
+    as ai_history_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/ai_history_api.dart'
+    show APIAiEditSummary;
 import 'package:flutter_cad/src/rust/api/structure_designer/profiling_api.dart'
     show APIRefreshMode, APIRefreshProfile;
 import 'package:flutter_cad/src/rust/api/common_api.dart' as common_api;
@@ -360,6 +364,32 @@ class StructureDesignerModel extends ChangeNotifier {
   /// above the always-on status strip). Toggled from the *View* menu.
   /// See `doc/design_eval_profiling.md` (D8b).
   bool profilerPanelVisible = false;
+
+  /// Whether the AI History panel is currently visible (docked at bottom).
+  /// Toggled from the *View* menu.
+  /// See `doc/design_ai_edit_history.md` (D11).
+  bool aiHistoryPanelVisible = false;
+
+  /// The AI edit log's summary rows, **oldest first** — the order
+  /// `ai_history_list()` returns them in. Re-fetched only when
+  /// [aiHistoryVersion] changed *and* the panel is visible (D12): the list
+  /// allocates up to 200 structs of several heap strings each, and the refresh
+  /// path is the one `doc/design_eval_profiling.md` D8a exists to keep cheap.
+  List<APIAiEditSummary> aiHistory = [];
+
+  /// The selected entry, whose detail and diff the panel's right-hand pane
+  /// shows. Null when the log is empty.
+  BigInt? selectedAiHistorySeq;
+
+  /// AI edits recorded since the panel was last open. Drives the *View* menu
+  /// entry's unread dot, and costs nothing beyond the version compare that
+  /// already happens each refresh.
+  int unreadAiEditCount = 0;
+
+  /// Last observed value of `ai_history_version()`. The whole point of the
+  /// version is that this compare — a `u64`, cheap — replaces re-marshalling
+  /// the list on every refresh.
+  BigInt _aiHistoryVersion = BigInt.zero;
 
   /// Whether the **opt-in** per-node evaluation profiler is armed. Mirrors the
   /// kernel flag; phase timing has no off state and is not affected.
@@ -3496,6 +3526,8 @@ class StructureDesignerModel extends ChangeNotifier {
       }
     }
 
+    _refreshAiHistory();
+
     _publishRefreshProfile(viewStopwatch.elapsedMicroseconds / 1000.0);
 
     notifyListeners();
@@ -3547,6 +3579,65 @@ class StructureDesignerModel extends ChangeNotifier {
   /// refresh without the user having asked (D1).
   void toggleProfilerPanel() {
     profilerPanelVisible = !profilerPanelVisible;
+    notifyListeners();
+  }
+
+  /// Re-reads the AI edit log's summary rows, but only when something actually
+  /// changed and someone is looking (D12).
+  ///
+  /// The version is bumped by every push, by `clear`, and by a session-label
+  /// change, so an unchanged version is proof the list is unchanged. While the
+  /// panel is hidden the difference is banked as unread entries instead — an
+  /// over-count by at most the non-push bumps, which cannot happen with the
+  /// panel closed.
+  void _refreshAiHistory() {
+    final version = ai_history_api.aiHistoryVersion();
+    if (version == _aiHistoryVersion) return;
+    final previous = _aiHistoryVersion;
+    _aiHistoryVersion = version;
+    if (aiHistoryPanelVisible) {
+      _fetchAiHistoryList();
+    } else {
+      final arrived = (version - previous).toInt();
+      unreadAiEditCount += arrived > 0 ? arrived : 1;
+    }
+  }
+
+  /// Pulls the list and keeps the selection sensible: an entry evicted by the
+  /// ring's caps falls back to the newest, and a selection that *was* the
+  /// newest follows the log as new edits arrive, so the panel tracks a live AI
+  /// session without stealing a deliberate look at an older entry.
+  void _fetchAiHistoryList() {
+    final wasNewest = aiHistory.isEmpty ||
+        (selectedAiHistorySeq != null &&
+            selectedAiHistorySeq == aiHistory.last.seq);
+    aiHistory = ai_history_api.aiHistoryList();
+    final stillPresent = selectedAiHistorySeq != null &&
+        aiHistory.any((entry) => entry.seq == selectedAiHistorySeq);
+    if (aiHistory.isEmpty) {
+      selectedAiHistorySeq = null;
+    } else if (!stillPresent || wasNewest) {
+      selectedAiHistorySeq = aiHistory.last.seq;
+    }
+  }
+
+  /// Toggle the AI History panel's docked-bottom visibility. Opening it clears
+  /// the unread count and pulls the list that was deliberately not fetched
+  /// while it was closed.
+  void toggleAiHistoryPanel() {
+    aiHistoryPanelVisible = !aiHistoryPanelVisible;
+    if (aiHistoryPanelVisible) {
+      unreadAiEditCount = 0;
+      _aiHistoryVersion = ai_history_api.aiHistoryVersion();
+      _fetchAiHistoryList();
+    }
+    notifyListeners();
+  }
+
+  /// Select one AI history entry; the panel's detail pane follows.
+  void selectAiHistoryEntry(BigInt seq) {
+    if (selectedAiHistorySeq == seq) return;
+    selectedAiHistorySeq = seq;
     notifyListeners();
   }
 

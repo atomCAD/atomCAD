@@ -233,6 +233,28 @@ The **Console panel** (`console_panel.dart`) is a docked-bottom strip showing en
 
 Design doc: `doc/design_node_execution.md`.
 
+## AI History panel
+
+`ai_history_panel.dart` is the third bottom-docked panel, a master–detail view
+of the session's AI edit log (`doc/design_ai_edit_history.md`). It follows the
+Console/Profiler template — `aiHistoryPanelVisible`, `aiHistory`,
+`selectedAiHistorySeq` and `unreadAiEditCount` on `StructureDesignerModel`, a
+*View* menu toggle, zero height when hidden — with one split worth knowing
+before touching it:
+
+- **the summary list is pushed, the payloads are pulled.** `refreshFromKernel`
+  re-fetches `aiHistoryList()` only when the cheap `aiHistoryVersion()` compare
+  changed *and* the panel is open; the selected entry's detail and diff are
+  fetched inside the panel's `build` and memoised on `(seq, byNode)`. A diff is
+  computed on demand Rust-side, so fetching one per rebuild would re-diff two
+  whole network snapshots for nothing.
+
+Two invariants of the data are easy to get wrong in the UI and are documented at
+their use sites: a row carries **two verdicts** (`applied` is the AI's own,
+`success` is a whole-network validity check, and `applied && !success` is
+ordinary), and `LayoutPath.none` **does not** mean nothing moved (body nodes are
+placed at creation time rather than reflowed).
+
 ## node_networks_list/ Subdirectory
 
 Unified user-types panel — lists both node networks and record type defs:
