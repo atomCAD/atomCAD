@@ -291,6 +291,45 @@ array type where a type is wanted. Consequences:
 `tests/structure_designer/text_format_type_syntax_test.rs` round-trips each
 form through `query` → `edit --replace`; a new spelling belongs there.
 
+## Round-trip invariants (what the corpus test enforces)
+
+`tests/structure_designer/text_format_roundtrip_corpus_test.rs` replaces every
+network of `demolib/baselib_with_demos.cnnd` (and, with
+`ATOMCAD_LAYOUT_CORPUS`, the maintainer's working file) with its own `query`
+text and requires the text back unchanged. Its first run failed on 27
+networks; each cause below is now a rule, and each has a reduced pin in the
+same file.
+
+- **`get_text_properties` must be total.** The editor decides whether a pin
+  takes a literal by asking a *fresh* node's properties (`text_prop_names` in
+  `apply_literal_properties`, and `describe`'s "wire-only" the same way). A
+  property emitted only when set therefore reads as wire-only when the fresh
+  node lacks it, and its literal is silently dropped: `structure_rot`'s
+  `axis_index: 2` vanished on every `--replace`. An `Option` field needs a
+  spelling for `None` (`axis_index: -1`, `motif.name: ""`) and must always be
+  written. The mirror bug: a node whose *default* is `Some` (motif's
+  "cubic zincblende") reads an omitted property back as that default.
+- **Node names are made unique by `network_editor::unique_node_names`, and
+  nothing else names a node.** The GUI does not keep `custom_name` unique
+  (copy/paste carries it), so the serializer, the Pass 0 identity snapshot and
+  the editor's name map all go through the one rule (ascending id; later
+  holders get `_2`, `_3`, …). Because they agree, a `--replace` matches every
+  duplicate back to its own node and renames it to the suffixed form.
+- **Wires an edit cannot make yet are retried, not dropped.** An `apply`'s
+  arg pins are derived from its `f` wire, which the same wire pass is
+  creating, so `arg0: x` finds no pin the first time; `wire_pending_connections`
+  defers such failures and `wire_deferred_connections` derives the layouts
+  and retries them before anything is reported as a warning. The editor's
+  closing `initialize_custom_node_types_for_network` resets every `apply` to
+  `[f]`, so it is followed by the `_preserving_args` re-derive.
+- **An array pin's wires are written in stored order.** The order is the
+  value (`atom_union`, `array_concat`), and the old sort by source id
+  reshuffled it on every `--replace`, which mints ids in statement order.
+- **Every identifier position is quoted by `format_identifier`**: node names,
+  node types, property keys (a custom node's parameter named after a dotted
+  network), and multi-output pin names (a `record_destructure` pin is a record
+  field, `z-shift`).
+
 ## Auto-Layout (auto_layout.rs)
 
 Calculates positions for newly created nodes:

@@ -1,5 +1,5 @@
 ---
-source: tests/structure_designer/text_format_snapshot_test.rs
+source: crates/atomcad-structure-designer/tests/structure_designer/text_format_snapshot_test.rs
 expression: text
 ---
 # Network: motif_zinkbkende_point-origin
@@ -38,7 +38,7 @@ BOND INTERIOR3 +..FACE_X
 BOND INTERIOR4 ++.CORNER
 BOND INTERIOR4 ...FACE_Z
 BOND INTERIOR4 .+.FACE_Y
-BOND INTERIOR4 +..FACE_X""", visible: true }
+BOND INTERIOR4 +..FACE_X""", name: "", visible: true }
 cuboid1 = cuboid { min_corner: (0, 0, 0), extent: (1, 1, 1), subdivision: 1 }
 get_structure1 = get_structure { input: cuboid1 }
 structure1 = structure { structure: get_structure1, motif: motif1 }

@@ -118,9 +118,13 @@ impl NodeData for MotifData {
             "definition".to_string(),
             TextValue::String(self.definition.clone()),
         )];
-        if let Some(ref name) = self.name {
-            props.push(("name".to_string(), TextValue::String(name.clone())));
-        }
+        // Always written, `""` for `None`: a fresh node defaults to a *named*
+        // motif, so an omitted `name` would read back as "cubic zincblende"
+        // and a `--replace` of a nameless motif would not round-trip.
+        props.push((
+            "name".to_string(),
+            TextValue::String(self.name.clone().unwrap_or_default()),
+        ));
         props
     }
 
@@ -132,11 +136,10 @@ impl NodeData for MotifData {
                 .to_string();
         }
         if let Some(v) = props.get("name") {
-            self.name = Some(
-                v.as_string()
-                    .ok_or_else(|| "name must be a string".to_string())?
-                    .to_string(),
-            );
+            let name = v
+                .as_string()
+                .ok_or_else(|| "name must be a string".to_string())?;
+            self.name = (!name.is_empty()).then(|| name.to_string());
         }
         // Parse and validate motif after properties are set
         // (matches what motif_data_loader does after deserializing)

@@ -39,6 +39,13 @@ name = type { property: value, property: value }
 - **type**: Node type name (e.g., `sphere`, `cuboid`, `union`)
 - **properties**: Key-value pairs for node data and input connections
 
+Node names are the nodes' `custom_name`s. The GUI does not keep those
+unique — copy/paste and duplicate carry the name along — so when several
+nodes in one network share a name, `query` writes the first (lowest id) bare
+and the others with a numeric suffix: `to_degrees`, `to_degrees_2`,
+`to_degrees_3`. Editing through those names is exact, and a `--replace` of
+the printout renames the nodes to the suffixed form for good.
+
 ### Statements
 
 ```

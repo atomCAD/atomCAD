@@ -1599,7 +1599,25 @@ impl Parser {
                 self.bump();
                 Ok(TextValue::String(s))
             }
-            Token::LeftParen => self.parse_vector_literal(),
+            // A parenthesis opens a vector literal or a function type's
+            // parameter list; an identifier is a type (possibly the start of
+            // `A -> B`, `Iter[T]`, `Record(Name)`) or a bare word. Both are
+            // exactly what the property-value grammar already decides, so
+            // defer to it: an `expr` parameter's `data_type` is written inside
+            // an object literal and needs the full type syntax too.
+            Token::LeftParen | Token::Identifier(_) => match self.parse_property_value()? {
+                PropertyValue::Literal(value) => Ok(value),
+                // A word that is not a type: kept as a string, as before.
+                PropertyValue::NodeRef(name, None) => Ok(TextValue::String(name)),
+                other => {
+                    let (line, col) = self.current_position();
+                    Err(ParseError::new(
+                        format!("Expected literal value, found {:?}", other),
+                        line,
+                        col,
+                    ))
+                }
+            },
             Token::LeftBracket => {
                 self.bump();
                 let mut elements = Vec::new();
@@ -1618,17 +1636,6 @@ impl Parser {
                 Ok(TextValue::Array(elements))
             }
             Token::LeftBrace => self.parse_object_literal(),
-            Token::Identifier(name) => {
-                let name = name.clone();
-                self.bump();
-                // Try to parse as DataType
-                if let Ok(dt) = DataType::from_string(&name) {
-                    Ok(TextValue::DataType(dt))
-                } else {
-                    // Treat as string identifier
-                    Ok(TextValue::String(name))
-                }
-            }
             other => {
                 let (line, col) = self.current_position();
                 Err(ParseError::new(

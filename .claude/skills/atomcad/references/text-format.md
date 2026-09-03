@@ -19,6 +19,11 @@ The text format enables programmatic creation and modification of node networks.
 - Cannot start with a number
 - Case-sensitive
 
+Names come from the nodes' `custom_name`s, which the GUI does not keep
+unique. When several nodes share one, `query` writes the first bare and the
+rest with a numeric suffix (`to_degrees`, `to_degrees_2`, …); use those names
+in edits — they address exactly one node each.
+
 ### Examples
 
 ```

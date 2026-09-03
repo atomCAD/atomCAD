@@ -126,6 +126,49 @@ pub type PositionSnapshot = HashMap<NamePath, NodeLayoutState>;
 /// against exactly the identity match [`NetworkEditor`] performs, and
 /// `layout::diff_scope` diffs against exactly the same map. Three
 /// implementations of the same key would drift.
+/// The name each node goes by in the text format, per node id.
+///
+/// Node names are `custom_name`, which the editor keys everything on — and
+/// which the GUI does not keep unique: copy/paste and duplicate carry the
+/// name along, so a network can hold four nodes called `to_degrees`. Written
+/// bare, a `--replace` would collapse them into one. So the text layer has
+/// **one** naming rule, shared by the serializer, the identity snapshot and
+/// the editor's name map: ascending node id, the first holder keeps the bare
+/// name, later ones get `_2`, `_3`, … (skipping any spelling some other node
+/// already owns). Because all three agree, a `--replace` of a `query`
+/// printout matches every duplicate back to its own node — and renames it to
+/// the suffixed form, which is the fix becoming permanent.
+pub fn unique_node_names(network: &NodeNetwork) -> HashMap<u64, String> {
+    let mut ids: Vec<u64> = network.nodes.keys().copied().collect();
+    ids.sort_unstable();
+    let taken: HashSet<&str> = network
+        .nodes
+        .values()
+        .filter_map(|node| node.custom_name.as_deref())
+        .collect();
+    let mut claimed: HashSet<String> = HashSet::new();
+    let mut out = HashMap::new();
+    for id in ids {
+        let Some(name) = network.nodes[&id].custom_name.as_deref() else {
+            continue;
+        };
+        let unique = if claimed.insert(name.to_string()) {
+            name.to_string()
+        } else {
+            let mut k = 2;
+            loop {
+                let candidate = format!("{name}_{k}");
+                if !taken.contains(candidate.as_str()) && claimed.insert(candidate.clone()) {
+                    break candidate;
+                }
+                k += 1;
+            }
+        };
+        out.insert(id, unique);
+    }
+    out
+}
+
 pub fn snapshot_node_positions(
     network: &NodeNetwork,
     registry: &NodeTypeRegistry,
@@ -136,8 +179,9 @@ pub fn snapshot_node_positions(
         prefix: &mut NamePath,
         out: &mut PositionSnapshot,
     ) {
-        for node in network.nodes.values() {
-            let Some(name) = node.custom_name.as_ref() else {
+        let names = unique_node_names(network);
+        for (id, node) in &network.nodes {
+            let Some(name) = names.get(id) else {
                 continue;
             };
             prefix.push(name.clone());
@@ -370,6 +414,11 @@ pub struct NetworkEditor<'a> {
     new_node_count: usize,
     /// Pending connections to be made in second pass
     pending_connections: Vec<PendingConnection>,
+    /// Connections the wire pass could not make because the destination pin
+    /// did not exist yet — an `apply`'s `arg0…` pins are derived from its `f`
+    /// wire, which the same pass is only now creating. Retried once the
+    /// layouts are derived.
+    deferred_connections: Vec<PendingConnection>,
     /// Nodes that should be visible after edit, per scope.
     visible_nodes: Vec<(ScopePath, String)>,
     /// Comment anchors to resolve after the connection pass
@@ -391,6 +440,7 @@ impl<'a> NetworkEditor<'a> {
             scopes: HashMap::new(),
             new_node_count: 0,
             pending_connections: Vec::new(),
+            deferred_connections: Vec::new(),
             visible_nodes: Vec::new(),
             pending_anchors: Vec::new(),
             deferred: Vec::new(),
@@ -435,6 +485,7 @@ impl<'a> NetworkEditor<'a> {
 
         // Step 5 (Pass 2): wire connections
         self.wire_pending_connections();
+        self.wire_deferred_connections();
 
         // Step 5b: Comment anchors, which need the wires the previous step made
         self.apply_pending_anchors();
@@ -449,6 +500,11 @@ impl<'a> NetworkEditor<'a> {
         // (this walk recurses into bodies).
         self.registry
             .initialize_custom_node_types_for_network(self.network);
+        // That re-init resets every `apply` to its bare `[f]` layout; put the
+        // derived pins back without touching the wires just made (see
+        // `update_apply_pin_layouts_for_network_preserving_args`).
+        self.registry
+            .update_apply_pin_layouts_for_network_preserving_args(self.network);
 
         self.result
     }
@@ -494,11 +550,9 @@ impl<'a> NetworkEditor<'a> {
     fn build_existing_name_map(&mut self, scope: &[u64]) {
         let mut names = ScopeNames::default();
         if let Some(network) = scope_net(self.network, scope) {
-            for (&node_id, node) in &network.nodes {
-                if let Some(ref name) = node.custom_name {
-                    names.name_to_id.insert(name.clone(), node_id);
-                    names.id_to_name.insert(node_id, name.clone());
-                }
+            for (node_id, name) in unique_node_names(network) {
+                names.name_to_id.insert(name.clone(), node_id);
+                names.id_to_name.insert(node_id, name);
             }
         }
         self.scopes.insert(scope.to_vec(), names);
@@ -1344,6 +1398,30 @@ impl<'a> NetworkEditor<'a> {
     fn wire_pending_connections(&mut self) {
         let connections = std::mem::take(&mut self.pending_connections);
 
+        for conn in connections {
+            if self.wire_connection(&conn).is_err() {
+                // Not a warning yet: the pin may simply not exist until the
+                // `apply` layouts are derived from the `f` wires this pass
+                // made. `wire_deferred_connections` reports what still fails.
+                self.deferred_connections.push(conn);
+            }
+        }
+    }
+
+    /// Second chance for the connections the wire pass could not make.
+    ///
+    /// An `apply` node's argument pins are **derived** from the function
+    /// wired into `f` (`nodes/apply.rs`), and until this edit wired `f` the
+    /// node had only that one pin, so `arg0: x` in the same script found no
+    /// pin to land on. Derive the layouts now that every `f` is in place and
+    /// wire what was deferred; whatever still fails is a real warning.
+    fn wire_deferred_connections(&mut self) {
+        let connections = std::mem::take(&mut self.deferred_connections);
+        if connections.is_empty() {
+            return;
+        }
+        self.registry
+            .update_apply_pin_layouts_for_network(self.network);
         for conn in connections {
             if let Err(e) = self.wire_connection(&conn) {
                 self.result.add_warning(format!(

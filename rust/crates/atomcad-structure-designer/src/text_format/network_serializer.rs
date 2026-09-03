@@ -50,6 +50,7 @@
 //! The `output` statement inside a block feeds the **parent HOF node's**
 //! `zone_output_arguments`, not the body network's `return_node_id` (D5).
 
+use super::network_editor::unique_node_names;
 use super::parser::Parser;
 use super::serializer::format_string;
 use crate::node_network::{ArgumentKind, IncomingWire, Node, NodeNetwork, SourcePin};
@@ -214,7 +215,7 @@ impl<'a> NetworkSerializer<'a> {
                     out.push_str(&format!(
                         "{}output {}\n",
                         pad,
-                        format_identifier(return_name)
+                        format_identifier(&return_name)
                     ));
                 }
             }
@@ -322,11 +323,11 @@ impl<'a> NetworkSerializer<'a> {
     ///
     /// Since all nodes now have persistent names assigned at creation,
     /// this is a simple lookup of the custom_name field.
-    fn get_node_name(network: &NodeNetwork, node_id: u64) -> Option<&str> {
-        network
-            .nodes
-            .get(&node_id)
-            .and_then(|node| node.custom_name.as_deref())
+    /// The name a node is written under: its `custom_name`, made unique per
+    /// scope by the one rule the whole text layer shares
+    /// (`network_editor::unique_node_names`).
+    fn get_node_name(network: &NodeNetwork, node_id: u64) -> Option<String> {
+        unique_node_names(network).remove(&node_id)
     }
 
     /// Serialize a single node to text format, indented by `indent` levels.
@@ -347,7 +348,7 @@ impl<'a> NetworkSerializer<'a> {
         };
 
         let node_name = match Self::get_node_name(network, node_id) {
-            Some(name) => name.to_string(),
+            Some(name) => name,
             None => return format!("{}# Error: no name for node {}", pad, node_id),
         };
 
@@ -370,9 +371,12 @@ impl<'a> NetworkSerializer<'a> {
                     // Check if this is a multi-input parameter
                     let is_multi = argument.len() > 1;
 
-                    // Sort by source node ID for deterministic output
-                    let mut wires: Vec<&IncomingWire> = argument.incoming_wires.iter().collect();
-                    wires.sort_by_key(|wire| wire.source_node_id);
+                    // Stored order, never sorted: on an array pin the order is
+                    // the value (`atom_union`, `array_concat` concatenate in
+                    // it), and a sort by source id — the old "determinism" —
+                    // reshuffled it on every `--replace`, which mints fresh
+                    // ids in statement order.
+                    let wires: Vec<&IncomingWire> = argument.incoming_wires.iter().collect();
 
                     if is_multi {
                         // Multi-input: format as array of references
@@ -442,7 +446,9 @@ impl<'a> NetworkSerializer<'a> {
         let rhs = format_identifier(&node.node_type_name);
         let props_str: Vec<String> = properties
             .iter()
-            .map(|(k, v)| format!("{}: {}", k, v))
+            // A property key is an identifier position too: a custom node's
+            // parameter can be named after a dotted network.
+            .map(|(k, v)| format!("{}: {}", format_identifier(k), v))
             .collect();
 
         match body_block {
@@ -510,7 +516,7 @@ impl<'a> NetworkSerializer<'a> {
         let network = stack.last()?.network;
         match anchor {
             CommentAnchor::Node(node_id) => {
-                Some(format_identifier(Self::get_node_name(network, *node_id)?).into_owned())
+                Some(format_identifier(&Self::get_node_name(network, *node_id)?).into_owned())
             }
             CommentAnchor::Wire(wire_anchor) => {
                 let wire = wire_anchor.resolve(network)?;
@@ -541,7 +547,7 @@ impl<'a> NetworkSerializer<'a> {
                 Some(format!(
                     "{} -> {}.{}",
                     source,
-                    format_identifier(dest_name),
+                    format_identifier(&dest_name),
                     format_identifier(&param_name)
                 ))
             }
@@ -565,16 +571,21 @@ impl<'a> NetworkSerializer<'a> {
                 let source_network = stack.get(stack.len().checked_sub(depth + 1)?)?.network;
                 let source_name = Self::get_node_name(source_network, wire.source_node_id)?;
                 let carets = "^".repeat(depth);
-                let formatted_name = format_identifier(source_name);
+                let formatted_name = format_identifier(&source_name);
                 Some(if pin_index == -1 {
                     // Function pin reference
                     format!("{}@{}", carets, formatted_name)
                 } else if pin_index > 0 {
                     // Multi-output pin: look up the pin name from the node
-                    // type. Pin names are always simple identifiers (see
-                    // design doc Non-Goals).
+                    // type. A `record_destructure` pin is a record field, so
+                    // it is not necessarily a bare identifier (`z-shift`).
                     match self.get_output_pin_name(source_network, wire.source_node_id, pin_index) {
-                        Some(pin_name) => format!("{}{}.{}", carets, formatted_name, pin_name),
+                        Some(pin_name) => format!(
+                            "{}{}.{}",
+                            carets,
+                            formatted_name,
+                            format_identifier(&pin_name)
+                        ),
                         // Fallback: use numeric index if pin name unavailable
                         None => format!("{}{}.pin{}", carets, formatted_name, pin_index),
                     }

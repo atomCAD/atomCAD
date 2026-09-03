@@ -48,7 +48,7 @@ mod text_value;
 
 pub use network_editor::{
     EditResult, NamePath, NetworkEditor, NodeLayoutState, PositionSnapshot, edit_network,
-    snapshot_node_positions,
+    snapshot_node_positions, unique_node_names,
 };
 pub use network_serializer::{NetworkSerializer, serialize_network};
 pub use node_type_introspection::{describe_node_type, get_display_summary, truncate_description};

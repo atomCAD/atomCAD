@@ -267,18 +267,26 @@ impl NodeData for StructureRotData {
                 TextValue::IVec3(self.pivot_point),
             ),
         ];
-        if let Some(axis_idx) = self.axis_index {
-            props.insert(0, ("axis_index".to_string(), TextValue::Int(axis_idx)));
-        }
+        // Always written, `-1` for "no axis": the text editor decides whether
+        // a pin takes a literal by asking a fresh node's properties, so a
+        // conditionally emitted one reads as wire-only and `axis_index: 2` is
+        // silently dropped on the way back in.
+        props.insert(
+            0,
+            (
+                "axis_index".to_string(),
+                TextValue::Int(self.axis_index.unwrap_or(-1)),
+            ),
+        );
         props
     }
 
     fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
         if let Some(v) = props.get("axis_index") {
-            self.axis_index = Some(
-                v.as_int()
-                    .ok_or_else(|| "axis_index must be an integer".to_string())?,
-            );
+            let axis_index = v
+                .as_int()
+                .ok_or_else(|| "axis_index must be an integer".to_string())?;
+            self.axis_index = (axis_index >= 0).then_some(axis_index);
         }
         if let Some(v) = props.get("step") {
             self.step = v
