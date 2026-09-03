@@ -52,6 +52,7 @@ Inputs are specified as key-value pairs inside braces, separated by commas.
 | Vec3/IVec3 | 3-tuple | `(1, 2, 3)`, `(0.0, 0.0, 0.0)` |
 | Array | Bracketed list | `[1, 2, 3]`, `[node1, node2]` |
 | Node reference | Node ID | `sphere1`, `my_shape` |
+| Type (for `data_type`, `input_type`, `element_type`, …) | As `query` prints it | `Int`, `[String]`, `HasStructure -> HasStructure`, `(Int, Float) -> Bool`, `() -> Int`, `Iter[Int]`, `Optional[Vec3]`, `Record(ElementMapping)`, `[HasStructure -> HasStructure]` |
 
 ### Special Inputs
 

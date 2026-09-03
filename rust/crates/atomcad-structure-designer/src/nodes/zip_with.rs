@@ -448,9 +448,8 @@ impl NodeData for ZipWithData {
             let mut types = Vec::with_capacity(arr.len());
             for item in arr {
                 types.push(
-                    item.as_data_type()
-                        .ok_or_else(|| "lane_types entries must be DataTypes".to_string())?
-                        .clone(),
+                    item.to_data_type()
+                        .ok_or_else(|| "lane_types entries must be DataTypes".to_string())?,
                 );
             }
             // Positional id merge. Body-wire cleanup for a tail-dropping
@@ -460,9 +459,8 @@ impl NodeData for ZipWithData {
         }
         if let Some(v) = props.get("output_type") {
             self.output_type = v
-                .as_data_type()
-                .ok_or_else(|| "output_type must be a DataType".to_string())?
-                .clone();
+                .to_data_type()
+                .ok_or_else(|| "output_type must be a DataType".to_string())?;
         }
         Ok(())
     }

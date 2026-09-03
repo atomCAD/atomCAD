@@ -992,33 +992,51 @@ fn array_text_format_string_roundtrip() {
     );
 }
 
-/// Pins the KNOWN GAP above so it is visible and starts failing the day the
-/// text-format parser learns to parse a full `DataType` expression (at which
-/// point this test should become the positive round-trip it wants to be).
+/// The KNOWN GAP above is closed: the text-format parser reads a full
+/// `DataType` expression in property position, so `Record(ElementMapping)`
+/// — the serializer's own spelling — authors a record element type, and an
+/// array of record elements round-trips. What has *not* changed is the bare
+/// name: `ElementMapping` alone still fails `DataType::from_string` and is
+/// taken for a node reference, so the serializer's parenthesized form is the
+/// one to write.
 #[test]
-fn array_record_element_type_is_not_yet_authorable_from_the_text_format() {
+fn array_record_element_type_is_authorable_from_the_text_format() {
     let registry = NodeTypeRegistry::new();
 
-    // `Record(ElementMapping)` — the serializer's own spelling — is a lex error.
-    let mut network = standalone_network();
-    let result = edit_network(
-        &mut network,
-        &registry,
-        "rules = array { element_type: Record(ElementMapping) }",
-        true,
+    let data = author_array_from_text(
+        "rules = array { element_type: Record(ElementMapping), elements: [{ from: 6, to: 7 }] }",
     );
-    assert!(
-        !result.success,
-        "TODO: parser cannot lex a parenthesized DataType in property position"
+    assert_eq!(
+        data.element_type,
+        DataType::Record(RecordType::Named("ElementMapping".to_string()))
+    );
+    assert_eq!(
+        data.elements,
+        vec![obj(vec![
+            ("from", TextValue::Int(6)),
+            ("to", TextValue::Int(7))
+        ])]
     );
 
-    // The bare name fails `DataType::from_string` and is silently taken for a
-    // node reference, so `element_type` keeps its default.
+    // And the serializer's output is accepted back verbatim.
+    let mut network = standalone_network();
+    network.add_node("array", DVec2::ZERO, 0, Box::new(data.clone()));
+    let text = serialize_network(&network, &registry, Some("test"));
+    let reparsed = author_array_from_text(&text);
+    assert_eq!(reparsed.element_type, data.element_type);
+    assert_eq!(
+        reparsed.elements, data.elements,
+        "serialized text was:
+{text}"
+    );
+
+    // The bare name is still a node reference, so `element_type` keeps its
+    // default.
     let data = author_array_from_text("rules = array { element_type: ElementMapping }");
     assert_eq!(
         data.element_type,
         DataType::Int,
-        "TODO: a bare record name is silently swallowed as a node ref"
+        "a bare record name is a node ref, not a type; write Record(Name)"
     );
 }
 

@@ -1,4 +1,4 @@
-use crate::data_type::DataType;
+use crate::data_type::{DataType, RecordType};
 use crate::evaluator::network_result::{NetworkResult, rows_to_dmat3};
 use glam::{DVec2, DVec3, IVec2, IVec3};
 use serde::de::{MapAccess, Visitor};
@@ -332,6 +332,32 @@ impl TextValue {
     pub fn as_data_type(&self) -> Option<&DataType> {
         match self {
             TextValue::DataType(dt) => Some(dt),
+            _ => None,
+        }
+    }
+
+    /// Read this value as a **type**, the way a type-valued property
+    /// (`data_type`, `input_type`, `element_type`, …) wants it.
+    ///
+    /// The parser cannot tell `[String]` the array *type* from `[String]` the
+    /// one-element *list* of types that `closure { type_args: [Crystal] }`
+    /// carries, so it always yields the list and the consumer decides. Here a
+    /// one-element list of types is the array type of its element (recursively,
+    /// so `[[Int]]` works), and an object whose values are all types is an
+    /// anonymous record type. Everything else is what [`as_data_type`] returns.
+    pub fn to_data_type(&self) -> Option<DataType> {
+        match self {
+            TextValue::DataType(dt) => Some(dt.clone()),
+            TextValue::Array(items) if items.len() == 1 => items[0]
+                .to_data_type()
+                .map(|t| DataType::Array(Box::new(t))),
+            TextValue::Object(fields) => {
+                let fields = fields
+                    .iter()
+                    .map(|(name, value)| value.to_data_type().map(|t| (name.clone(), t)))
+                    .collect::<Option<Vec<_>>>()?;
+                Some(DataType::Record(RecordType::Anonymous(fields)))
+            }
             _ => None,
         }
     }

@@ -1,5 +1,5 @@
 use super::text_value::TextValue;
-use crate::data_type::DataType;
+use crate::data_type::{DataType, FunctionType, RecordType};
 use glam::{DVec2, DVec3, IVec2, IVec3};
 use std::fmt;
 
@@ -1057,6 +1057,12 @@ impl Parser {
                 Ok(PropertyValue::Array(elements))
             }
             Token::LeftParen => {
+                // A function type's parameter list — `() -> T`, `(A, B) -> C`
+                // — opens like a vector literal, but its first element is a
+                // type (or nothing) rather than a number.
+                if self.starts_function_type() {
+                    return self.parse_function_type();
+                }
                 // Vector literal: (x, y) or (x, y, z)
                 let vec_value = self.parse_vector_literal()?;
                 Ok(PropertyValue::Literal(vec_value))
@@ -1069,7 +1075,39 @@ impl Parser {
                 // Check if this looks like a DataType
                 if let Ok(dt) = DataType::from_string(&name) {
                     // It's a valid DataType like "Int", "Float", "Vec3", etc.
-                    Ok(PropertyValue::Literal(TextValue::DataType(dt)))
+                    // — possibly the parameter half of `A -> B`.
+                    self.finish_type(dt)
+                } else if (name == "Iter" || name == "Optional")
+                    && self.peek() == &Token::LeftBracket
+                {
+                    // `Iter[T]` / `Optional[T]`: the two constructors
+                    // `DataType::from_string` cannot take as a bare word. The
+                    // bracketed part parses as a one-element type list, which
+                    // `to_data_type` folds into an array type; unwrap it.
+                    let (line, col) = self.current_position();
+                    let inner = match self.parse_type_operand()? {
+                        DataType::Array(inner) => *inner,
+                        _ => {
+                            return Err(ParseError::new(
+                                format!("Expected `{name}[T]`"),
+                                line,
+                                col,
+                            ));
+                        }
+                    };
+                    let dt = if name == "Iter" {
+                        DataType::Iterator(Box::new(inner))
+                    } else {
+                        DataType::Optional(Box::new(inner))
+                    };
+                    self.finish_type(dt)
+                } else if name == "Record" && self.peek() == &Token::LeftParen {
+                    // `Record(Name)`, the spelling `DataType`'s `Display` gives a
+                    // named record so it cannot collide with a node reference.
+                    self.bump();
+                    let record_name = self.expect_identifier()?;
+                    self.expect(&Token::RightParen)?;
+                    self.finish_type(DataType::Record(RecordType::Named(record_name)))
                 } else {
                     // Check for `.pin_name` suffix (multi-output pin reference)
                     let pin_name = if self.peek() == &Token::Dot {
@@ -1124,6 +1162,88 @@ impl Parser {
                 ))
             }
         }
+    }
+
+    // ---- Type syntax in property position -------------------------------
+    //
+    // `DataType`'s `Display` is the serializer's spelling of a type-valued
+    // property (`data_type`, `input_type`, `element_type`, …), and the parser
+    // must read everything it can write: `A -> B`, `(A, B) -> C`, `() -> T`,
+    // `[T]`, `Iter[T]`, `Optional[T]`, `Record(Name)`, and any nesting of
+    // those. Until this landed only a bare builtin name parsed, so a network
+    // with a function- or array-typed `parameter` could not round-trip
+    // through `query` → `edit --replace`.
+    //
+    // `[T]` is *not* decided here: the same tokens are a one-element list of
+    // types for `closure { type_args: [Crystal] }`, so the parser yields the
+    // list and `TextValue::to_data_type` folds it where a type is wanted.
+
+    /// A type has been parsed; if `->` follows, it was the single parameter
+    /// of a function type whose return type comes next (right-associative,
+    /// and `FunctionType::new` flattens a curried spelling).
+    fn finish_type(&mut self, dt: DataType) -> Result<PropertyValue, ParseError> {
+        if self.peek() == &Token::Arrow {
+            self.bump();
+            let output = self.parse_type_operand()?;
+            let function = DataType::Function(FunctionType::new(vec![dt], output));
+            return Ok(PropertyValue::Literal(TextValue::DataType(function)));
+        }
+        Ok(PropertyValue::Literal(TextValue::DataType(dt)))
+    }
+
+    /// Parse a property value that must denote a type.
+    fn parse_type_operand(&mut self) -> Result<DataType, ParseError> {
+        let (line, col) = self.current_position();
+        let value = self.parse_property_value()?;
+        Self::property_value_as_type(&value)
+            .ok_or_else(|| ParseError::new("Expected a type", line, col))
+    }
+
+    /// The type a parsed property value denotes, if it denotes one. A
+    /// bracketed type is still a parser-level [`PropertyValue::Array`] here,
+    /// so the one-element fold `TextValue::to_data_type` applies to text
+    /// values is repeated at this level.
+    fn property_value_as_type(value: &PropertyValue) -> Option<DataType> {
+        match value {
+            PropertyValue::Literal(text_value) => text_value.to_data_type(),
+            PropertyValue::Array(items) if items.len() == 1 => {
+                Self::property_value_as_type(&items[0]).map(|t| DataType::Array(Box::new(t)))
+            }
+            _ => None,
+        }
+    }
+
+    /// At `(`: is this a function type's parameter list rather than a vector
+    /// literal? A vector literal's first element is a number; a parameter
+    /// list is empty or opens with a type.
+    fn starts_function_type(&self) -> bool {
+        match self.peek_ahead(1) {
+            Token::RightParen | Token::LeftBracket | Token::LeftBrace => true,
+            Token::Identifier(name) => {
+                DataType::from_string(name).is_ok()
+                    || matches!(name.as_str(), "Iter" | "Optional" | "Record")
+            }
+            _ => false,
+        }
+    }
+
+    /// `(A, B, …) -> R`, including the nullary `() -> R`.
+    fn parse_function_type(&mut self) -> Result<PropertyValue, ParseError> {
+        self.expect(&Token::LeftParen)?;
+        let mut parameter_types = Vec::new();
+        while self.peek() != &Token::RightParen {
+            parameter_types.push(self.parse_type_operand()?);
+            if self.peek() == &Token::Comma {
+                self.bump();
+            } else {
+                break;
+            }
+        }
+        self.expect(&Token::RightParen)?;
+        self.expect(&Token::Arrow)?;
+        let output = self.parse_type_operand()?;
+        let function = DataType::Function(FunctionType::new(parameter_types, output));
+        Ok(PropertyValue::Literal(TextValue::DataType(function)))
     }
 
     /// Parse the destination half of a wire reference, having already

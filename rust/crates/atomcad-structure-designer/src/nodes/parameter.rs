@@ -199,9 +199,8 @@ impl NodeData for ParameterData {
         }
         if let Some(v) = props.get("data_type") {
             self.data_type = v
-                .as_data_type()
-                .ok_or_else(|| "data_type must be a DataType".to_string())?
-                .clone();
+                .to_data_type()
+                .ok_or_else(|| "data_type must be a DataType".to_string())?;
         }
         if let Some(v) = props.get("sort_order") {
             self.sort_order = v

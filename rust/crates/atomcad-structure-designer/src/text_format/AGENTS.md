@@ -262,6 +262,35 @@ The serializer still emits only the block form (D9): paths are input-only
 sugar, so `query` output stays single-valued and one node keeps one statement
 shape.
 
+## Type syntax in property position
+
+A type-valued property (`parameter.data_type`, `map.input_type`,
+`array.element_type`, an `expr` parameter's `data_type`, …) is written the way
+`DataType`'s `Display` prints it, and the parser reads every spelling that can
+produce: a bare builtin (`Int`), `[T]`, `A -> B`, `(A, B) -> C`, `() -> T`,
+`Iter[T]`, `Optional[T]`, `Record(Name)`, `{a: Int, b: Float}`, and nestings
+(`[HasStructure -> HasStructure]`). `parser.rs`'s `finish_type` /
+`parse_function_type` / `parse_type_operand` are the whole grammar.
+
+**`[T]` is ambiguous and the parser does not decide it.** The same tokens are
+the array *type* for `data_type: [String]` and a one-element *list* of types
+for `closure { type_args: [Crystal] }`, so the parser always yields the list
+and **`TextValue::to_data_type`** folds a one-element list of types into the
+array type where a type is wanted. Consequences:
+
+- **A node that reads a type property calls `to_data_type()`, never
+  `as_data_type()`.** The latter only matches a bare `TextValue::DataType`, so
+  `data_type: [String]` — a spelling the serializer itself emits — is rejected
+  with "must be a DataType". Every `set_text_properties` that reads a type
+  went through this once; keep new ones on the folding accessor.
+- A property that reads a *list* of types (`type_args`, `lane_types`) keeps
+  `as_array()` and folds each item.
+- `Record(Name)` is the spelling for a named record: the bare `Name` fails
+  `DataType::from_string` and is taken for a node reference, silently.
+
+`tests/structure_designer/text_format_type_syntax_test.rs` round-trips each
+form through `query` → `edit --replace`; a new spelling belongs there.
+
 ## Auto-Layout (auto_layout.rs)
 
 Calculates positions for newly created nodes:

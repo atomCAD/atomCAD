@@ -441,9 +441,8 @@ impl NodeData for ClosureData {
             let mut types = Vec::with_capacity(arr.len());
             for item in arr {
                 types.push(
-                    item.as_data_type()
-                        .ok_or_else(|| "type_args entries must be DataTypes".to_string())?
-                        .clone(),
+                    item.to_data_type()
+                        .ok_or_else(|| "type_args entries must be DataTypes".to_string())?,
                 );
             }
             self.type_args = types;

@@ -189,15 +189,13 @@ impl NodeData for FoldData {
     fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
         if let Some(v) = props.get("element_type") {
             self.element_type = v
-                .as_data_type()
-                .ok_or_else(|| "element_type must be a DataType".to_string())?
-                .clone();
+                .to_data_type()
+                .ok_or_else(|| "element_type must be a DataType".to_string())?;
         }
         if let Some(v) = props.get("accumulator_type") {
             self.accumulator_type = v
-                .as_data_type()
-                .ok_or_else(|| "accumulator_type must be a DataType".to_string())?
-                .clone();
+                .to_data_type()
+                .ok_or_else(|| "accumulator_type must be a DataType".to_string())?;
         }
         Ok(())
     }

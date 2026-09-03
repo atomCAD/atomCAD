@@ -573,7 +573,7 @@ impl NodeData for SwitchData {
     fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
         if let Some(v) = props.get("selector_type") {
             let dt = v
-                .as_data_type()
+                .to_data_type()
                 .ok_or_else(|| "selector_type must be a DataType".to_string())?;
             if !matches!(dt, DataType::Int | DataType::String) {
                 return Err("selector_type must be Int or String".to_string());
@@ -584,13 +584,12 @@ impl NodeData for SwitchData {
             // old-domain stored values un-matchable against the new-domain text
             // values (String "1" ≠ Int 1 under same-type equality), silently
             // degrading every id to the positional fallback.
-            self.convert_selector_type(dt)?;
+            self.convert_selector_type(&dt)?;
         }
         if let Some(v) = props.get("value_type") {
             self.value_type = v
-                .as_data_type()
-                .ok_or_else(|| "value_type must be a DataType".to_string())?
-                .clone();
+                .to_data_type()
+                .ok_or_else(|| "value_type must be a DataType".to_string())?;
         }
         if let Some(v) = props.get("cases") {
             let arr = v

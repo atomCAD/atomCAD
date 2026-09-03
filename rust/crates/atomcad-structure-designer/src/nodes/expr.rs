@@ -296,9 +296,8 @@ impl NodeData for ExprData {
                     let data_type = obj
                         .iter()
                         .find(|(k, _)| k == "data_type")
-                        .and_then(|(_, v)| v.as_data_type())
-                        .ok_or_else(|| "parameter data_type must be a DataType".to_string())?
-                        .clone();
+                        .and_then(|(_, v)| v.to_data_type())
+                        .ok_or_else(|| "parameter data_type must be a DataType".to_string())?;
                     let data_type_str = obj
                         .iter()
                         .find(|(k, _)| k == "data_type_str")

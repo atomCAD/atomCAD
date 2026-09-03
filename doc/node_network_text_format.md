@@ -439,6 +439,25 @@ query output single-valued and one node to one statement shape.
 
 Some nodes have dynamic types that must be specified explicitly:
 
+### Type syntax
+
+A type is written the way `query` prints it:
+
+| Type | Syntax |
+|------|--------|
+| Builtin | `Int`, `Float`, `Vec3`, `Crystal`, `HasStructure`, … |
+| Array | `[Int]`, `[[Int]]` |
+| Function | `Int -> Float`, `(Int, Float) -> Bool`, `() -> Int` |
+| Iterator / Optional | `Iter[Int]`, `Optional[Vec3]` |
+| Named record | `Record(ElementMapping)` — the bare name would be read as a node reference |
+| Anonymous record | `{ from: Int, to: Int }` |
+
+These nest freely: `[HasStructure -> HasStructure]` is an array of functions.
+The one-element list `[T]` doubles as the array type: on a property that takes
+a single type (`data_type`, `input_type`, `element_type`, …) it is `[T]` the
+type; on a property that takes a list of types (`closure.type_args`,
+`zip_with.lane_types`) it is a list of one.
+
 ### Parameter Node
 
 ```
