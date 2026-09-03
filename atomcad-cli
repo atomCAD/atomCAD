@@ -1,3 +1,15 @@
 #!/bin/bash
 cd "$(dirname "$0")"
-dart run bin/atomcad_cli.dart "$@"
+
+# On Windows `dart` on PATH is usually the Flutter SDK's dart.bat, and cmd.exe
+# cannot pass an argument containing a newline: a multi-line --code="..." is
+# cut at the line break and the batch file's own `& exit_with_errorlevel.bat`
+# is glued onto it. Bypass the shim and call the SDK's dart.exe directly when
+# it is where Flutter keeps it.
+dart=dart
+resolved="$(command -v dart 2>/dev/null)"
+if [ -n "$resolved" ]; then
+  sdk_dart="$(dirname "$resolved")/cache/dart-sdk/bin/dart.exe"
+  [ -x "$sdk_dart" ] && dart="$sdk_dart"
+fi
+exec "$dart" run bin/atomcad_cli.dart "$@"

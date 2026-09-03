@@ -139,7 +139,7 @@ Future<void> main(List<String> args) async {
 
   ArgResults results;
   try {
-    results = parser.parse(args);
+    results = parser.parse(_splitMultilineOptions(args));
   } catch (e) {
     stderr.writeln('Error: $e');
     _printUsage();
@@ -389,6 +389,30 @@ void _printReplHelp() {
   stdout.writeln('  - Empty line to send');
   stdout.writeln("  - '.' on its own line to send");
   stdout.writeln('  - Ctrl+C to cancel');
+}
+
+/// Split `--name=value` arguments whose value spans lines into `--name value`.
+///
+/// `package:args` recognises the `=` form with a regex whose `.` does not
+/// match a newline, so a multi-line `--code="a\nb"` fails to parse as an
+/// option, lands in the positional rest, and the CLI silently drops into
+/// stdin mode. The two-token form takes its value verbatim.
+List<String> _splitMultilineOptions(List<String> args) {
+  final out = <String>[];
+  for (final arg in args) {
+    final eq = arg.indexOf('=');
+    if (arg.startsWith('--') &&
+        eq > 2 &&
+        arg.contains('\n') &&
+        !arg.substring(0, eq).contains('\n')) {
+      out
+        ..add(arg.substring(0, eq))
+        ..add(arg.substring(eq + 1));
+    } else {
+      out.add(arg);
+    }
+  }
+  return out;
 }
 
 /// Process escape sequences in --code argument.

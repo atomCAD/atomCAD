@@ -391,7 +391,7 @@ EOF
 atomcad-cli edit --replace --code="base = cuboid { extent: (10, 10, 10) }\nhole = sphere { radius: 4 }\nresult = diff { base: [base], sub: [hole], visible: true }"
 ```
 
-**Note:** Avoid using literal newlines inside `--code="..."` as shell quoting behavior varies across platforms (bash, PowerShell, etc.).
+**Note:** A literal newline inside `--code="..."` works too (the wrappers and the CLI handle it), but shell quoting of multi-line strings varies across platforms, so stdin piping or the `\n` escape form is the safer habit.
 
 ### Node Network Management
 
