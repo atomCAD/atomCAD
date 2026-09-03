@@ -654,7 +654,8 @@ fn anchors_of(
 /// collisions.
 ///
 /// Horizontally it sits right of everything that feeds it and left of
-/// everything it feeds; when those two demands conflict there is no room, and
+/// everything it feeds (with neither, flush with the drawing's left edge and
+/// below it); when those two demands conflict there is no room, and
 /// the drawing is widened by a half-plane shift placed by the window rule — the
 /// consumers and everything else at or right of the line move over by exactly
 /// the deficit, while the inputs and their whole upstream closure stay.
@@ -685,9 +686,13 @@ fn target_position(
         .fold(f64::INFINITY, f64::min);
 
     let x = match (anchors.upstream.is_empty(), anchors.downstream.is_empty()) {
-        // Anchorless: right of the whole drawing, where nothing can be in the way.
+        // Anchorless: below the whole drawing, flush with its left edge. An
+        // anchorless addition is nearly always a source (a constant, a
+        // parameter, an import), and at the leftmost x every wire it later
+        // gets is forward, so Step 6 never has to widen the drawing for it.
+        // Repeated additions stack into a column down the left side.
         (true, true) => match bbox {
-            Some(bbox) => bbox.right() + GAP,
+            Some(bbox) => bbox.left(),
             None if frame.is_some() => HOF_BODY_BOTTOM_PADDING,
             None => START_X,
         },
@@ -1012,8 +1017,8 @@ fn repair_backward_wires(
 /// to Step 5 (slide, else push) from the first of those candidates when all
 /// four are taken.
 ///
-/// An **unanchored** one is an anchorless block: right of the drawing, where
-/// nothing can be in the way.
+/// An **unanchored** one is an anchorless block: below the drawing, flush with
+/// its left edge.
 ///
 /// Ascending id, each comment joining the obstacle set as it lands.
 fn place_new_comments(
@@ -1320,7 +1325,7 @@ fn rect_of(network: &NodeNetwork, sizes: &HashMap<u64, DVec2>, node_id: u64) -> 
 }
 
 /// The bounding box of the placed nodes — the drawing an anchorless block is
-/// placed beside. Added nodes are absent from `sizes` and so, correctly, from
+/// placed below. Added nodes are absent from `sizes` and so, correctly, from
 /// the box.
 fn drawing_bbox(network: &NodeNetwork, sizes: &HashMap<u64, DVec2>) -> Option<Rect> {
     let mut min = DVec2::splat(f64::MAX);

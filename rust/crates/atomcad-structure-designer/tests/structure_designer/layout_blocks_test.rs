@@ -113,7 +113,7 @@ fn a_twenty_node_addition_is_placed_as_one_rigid_block() {
 }
 
 #[test]
-fn an_anchorless_addition_goes_beyond_the_drawing() {
+fn an_anchorless_addition_goes_below_the_drawing_at_its_left_edge() {
     let mut fixture = Fixture::new(&format!("a = int {{ value: 1 }}\n{}", expr("b", "a")));
     fixture.place(&["a"], 100.0, 100.0);
     fixture.place(&["b"], 400.0, 260.0);
@@ -126,9 +126,12 @@ fn an_anchorless_addition_goes_beyond_the_drawing() {
         outcome.rect(&["b"]),
         outcome.rect(&["z"]),
     );
-    let right = (a.position.x + a.size.x).max(b.position.x + b.size.x);
+    let left = a.position.x.min(b.position.x);
     let bottom = (a.position.y + a.size.y).max(b.position.y + b.size.y);
-    assert_eq!(z.position.x, right + GAP, "right of the drawing's bbox");
+    assert_eq!(
+        z.position.x, left,
+        "flush with the drawing's left edge — a source placed leftmost can only          ever get forward wires"
+    );
     assert_eq!(
         z.position.y,
         bottom + VERTICAL_GAP,
@@ -427,7 +430,8 @@ fn a_node_added_to_a_full_body_shifts_the_hofs_right_neighbour_by_the_width_delt
     fixture.place(&["m", "d"], 140.0, 10.0);
     let map_before = fixture.before.get(&p(&["m"])).unwrap().size;
 
-    fixture.edit("m/e = int { value: 2 }\n");
+    // Fed by `d`, so the block goes right of it — past the stored width.
+    fixture.edit(&expr("m/e", "d"));
     let outcome = fixture.run();
 
     let map_after = outcome.rect(&["m"]).size;
@@ -478,7 +482,8 @@ n = int { value: 7 }
     fixture.place(&["outer", "inner", "d"], 10.0, 10.0);
     let outer_before = fixture.before.get(&p(&["outer"])).unwrap().size;
 
-    fixture.edit("outer/inner/e = int { value: 2 }\n");
+    // Fed by `d`, so the block goes right of it — past the stored width.
+    fixture.edit(&expr("outer/inner/e", "d"));
     let outcome = fixture.run();
 
     let outer_after = outcome.rect(&["outer"]).size;
@@ -524,8 +529,8 @@ m2 = map {{
         "the three-node body widened the map well past its 320-px default: {m2:?}"
     );
     assert!(
-        m2.position.x >= a.position.x + a.size.x + GAP,
-        "an anchorless block goes beyond the drawing: {m2:?} vs {a:?}"
+        m2.position.x == a.position.x && m2.position.y >= a.position.y + a.size.y + VERTICAL_GAP,
+        "an anchorless block goes below the drawing at its left edge: {m2:?} vs {a:?}"
     );
     for name in ["b1", "b2", "b3"] {
         let node = outcome.rect(&["m2", name]);

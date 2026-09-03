@@ -269,7 +269,7 @@ x_max = min over d in D of (d.x - GAP - W)
 
 | Case | Placement |
 |---|---|
-| `U`, `D` both empty | right of the drawing's bbox + `GAP` |
+| `U`, `D` both empty | `x` = the drawing's bbox left edge (see below) |
 | `U` empty | `x = x_max` |
 | `D` empty | `x = x_min` |
 | `x_min ≤ x_max` | `x = x_min` |
@@ -277,8 +277,20 @@ x_max = min over d in D of (d.x - GAP - W)
 
 **Vertical:** align by connections, `y_offset = mean over external wires of
 (anchor.y_center − internal.y_center_local)`. No anchors: below the drawing's
-bbox. Empty body: at the body's left padding, level with the first zone-input
-pin.
+bbox + `VERTICAL_GAP`. Empty body: at the body's left padding, level with the
+first zone-input pin.
+
+**Why an anchorless block goes bottom-left, not right.** An anchorless
+addition is nearly always a *source* — a constant, a `parameter`, a
+`unit_cell`, an `import`, a comment — and in a rightward-flow drawing sources
+belong on the left. Placed at the drawing's leftmost x, every wire it later
+receives is forward, so Step 6 never has to widen the drawing for it; placed
+right of the drawing (the first draft's rule) the very next wire out of it was
+backward and Step 6 shifted everything downstream of the destination right by
+the whole drawing's width. Repeated anchorless additions stack into a column
+down the left side, which is what people draw by hand anyway, and the drawing
+never grows wider, only taller. Verified on the maintainer's walkthrough:
+`int` → far right → wired into a `structure_move` → 780 px shift of the rest.
 
 **Body coordinates are non-negative**: content extent is measured from the
 origin (`rendered_body_size`, Flutter `_computeBodySize`), so candidates are
@@ -731,7 +743,7 @@ Step 4, Step 5 with the slack-first rule, the inside-out driver.
 
 *Tests:* one added node lands beside its input and nothing moves; a 20-node
 connected addition is placed as one block and nothing moves; an anchorless
-addition goes right of the drawing; a block needing a new column shifts the
+addition goes below the drawing at its left edge; a block needing a new column shifts the
 half-plane and nothing reorders; a consumer whose left edge overlaps an input
 is still moved (threshold clamped); a consumer at or left of an input's left
 edge is moved right past the block while the input and its upstream chain

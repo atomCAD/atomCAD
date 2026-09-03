@@ -255,7 +255,7 @@ fn a_new_anchored_comment_lands_beside_its_anchor() {
 }
 
 #[test]
-fn a_new_unanchored_comment_goes_beyond_the_drawing() {
+fn a_new_unanchored_comment_goes_below_the_drawing() {
     let mut fixture = Fixture::new(&format!("a = int {{ value: 1 }}\n{}", expr("b", "a")));
     fixture.place(&["a"], 100.0, 100.0);
     fixture.place(&["b"], 400.0, 260.0);
@@ -268,13 +268,13 @@ fn a_new_unanchored_comment_goes_beyond_the_drawing() {
         outcome.rect(&["b"]),
         outcome.rect(&["note"]),
     );
-    let right = (a.position.x + a.size.x).max(b.position.x + b.size.x);
+    let left = a.position.x.min(b.position.x);
     let bottom = (a.position.y + a.size.y).max(b.position.y + b.size.y);
     assert_eq!(
         note.position,
-        DVec2::new(right + GAP, bottom + VERTICAL_GAP),
-        "an unanchored comment is an anchorless block: beyond the drawing, \
-         where nothing can be in the way"
+        DVec2::new(left, bottom + VERTICAL_GAP),
+        "an unanchored comment is an anchorless block: below the drawing, \
+         flush with its left edge"
     );
     outcome.assert_only_moved(&[&["note"]]);
 }

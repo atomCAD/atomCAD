@@ -223,7 +223,10 @@ Three things do move nodes, and each is deliberately small:
 - **A new node** is placed near what it is wired to, in free space if there is
   any nearby. Nodes already on the canvas stay exactly where they are unless the
   new one leaves no room, in which case the drawing widens — the neighbours
-  slide right together, keeping their spacing and their alignment.
+  slide right together, keeping their spacing and their alignment. A new node
+  wired to nothing goes **below the drawing, at its left edge** — a fresh
+  constant or parameter is a source, and on the left any wire you later draw
+  from it runs forward, so nothing has to make room for it.
 - **A node that grows** — one that gains an input pin, or a higher-order node
   whose body outgrew its frame — pushes what it would otherwise cover. It grows
   right and down from its own top-left corner, so it never moves itself: what is
