@@ -14,12 +14,12 @@
 
 use std::path::{Path, PathBuf};
 
-use atomcad_structure_designer::node_network::{FunctionPinRole, NodeNetwork};
+use atomcad_structure_designer::node_network::{FunctionPinRole, NodeDisplayType, NodeNetwork};
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 use atomcad_structure_designer::text_format::{
     serialize_network, snapshot_node_positions, unique_node_names,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 fn demolib_path() -> PathBuf {
     Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../.."))
@@ -70,6 +70,40 @@ fn roles_by_path(network: &NodeNetwork) -> BTreeMap<String, BTreeMap<usize, Func
     out
 }
 
+/// Every displayed node's display state — type and the set of displayed
+/// output pins — by name path, every scope included. `visible:` spells the
+/// whole state, and the identity snapshot does not look at it.
+fn display_by_path(network: &NodeNetwork) -> BTreeMap<String, (NodeDisplayType, BTreeSet<i32>)> {
+    fn walk(
+        network: &NodeNetwork,
+        prefix: &str,
+        out: &mut BTreeMap<String, (NodeDisplayType, BTreeSet<i32>)>,
+    ) {
+        let names = unique_node_names(network);
+        for (id, node) in &network.nodes {
+            let Some(name) = names.get(id) else {
+                continue;
+            };
+            let path = format!("{prefix}{name}");
+            if let Some(state) = network.displayed_nodes.get(id) {
+                out.insert(
+                    path.clone(),
+                    (
+                        state.display_type,
+                        state.displayed_pins.iter().copied().collect(),
+                    ),
+                );
+            }
+            if let Some(body) = node.zone.as_deref() {
+                walk(body, &format!("{path}/"), out);
+            }
+        }
+    }
+    let mut out = BTreeMap::new();
+    walk(network, "", &mut out);
+    out
+}
+
 fn text_of(sd: &StructureDesigner, name: &str) -> String {
     let network = sd.node_type_registry.node_networks.get(name).unwrap();
     serialize_network(network, &sd.node_type_registry, Some(name))
@@ -98,6 +132,8 @@ fn run_round_trips(path: &Path) {
             &sd.node_type_registry,
         );
         let before_roles = roles_by_path(sd.node_type_registry.node_networks.get(name).unwrap());
+        let before_display =
+            display_by_path(sd.node_type_registry.node_networks.get(name).unwrap());
         let outcome = sd.ai_text_edit(&before, true);
         let applied = sd.ai_edit_log.last().is_some_and(|r| r.applied);
         if !applied {
@@ -120,6 +156,31 @@ fn run_round_trips(path: &Path) {
         if after_roles != before_roles {
             failures.push(format!(
                 "{name}: function pin roles changed across --replace:\n  before {before_roles:?}\n  after  {after_roles:?}"
+            ));
+        }
+        let after_display = display_by_path(sd.node_type_registry.node_networks.get(name).unwrap());
+        if after_display != before_display {
+            let changed: Vec<String> = before_display
+                .keys()
+                .chain(after_display.keys())
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .filter(|path| before_display.get(*path) != after_display.get(*path))
+                .map(|path| {
+                    format!(
+                        "  {path}: {:?} -> {:?}",
+                        before_display.get(path),
+                        after_display.get(path)
+                    )
+                })
+                .collect();
+            failures.push(format!(
+                "{name}: display state changed across --replace:
+{}",
+                changed.join(
+                    "
+"
+                )
             ));
         }
         let after_state = snapshot_node_positions(

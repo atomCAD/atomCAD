@@ -54,7 +54,8 @@ use super::network_editor::{PIN_ROLES_PROPERTY, unique_node_names};
 use super::parser::Parser;
 use super::serializer::format_string;
 use crate::node_network::{
-    ArgumentKind, FunctionPinRole, IncomingWire, Node, NodeNetwork, SourcePin,
+    ArgumentKind, FunctionPinRole, IncomingWire, Node, NodeDisplayState, NodeDisplayType,
+    NodeNetwork, SourcePin,
 };
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::nodes::comment::{ANCHOR_PROPERTY, CommentAnchor, CommentData};
@@ -411,9 +412,14 @@ impl<'a> NetworkSerializer<'a> {
 
         // Third pass: add visibility property (only if visible, since invisible
         // is the default). `displayed_nodes` is per-`NodeNetwork`, so this is
-        // per-scope for free.
-        if network.displayed_nodes.contains_key(&node_id) {
-            properties.push(("visible".to_string(), "true".to_string()));
+        // per-scope for free. The default state — Normal, pin 0 — is still
+        // written as `true`, so a network that never touched pin display or
+        // ghosting prints exactly as before.
+        if let Some(state) = network.displayed_nodes.get(&node_id) {
+            properties.push((
+                "visible".to_string(),
+                self.format_display_state(network, node_id, state),
+            ));
         }
 
         // Fourth pass: comment anchors. Like `visible`, these are not a
@@ -653,6 +659,40 @@ impl<'a> NetworkSerializer<'a> {
                     None => format!("{}$pin{}", carets, pin_index),
                 })
             }
+        }
+    }
+
+    /// Spell a node's display state as the value of `visible:`.
+    ///
+    /// `true` for Normal + pin 0, `ghost` for Ghost + pin 0, a list of output
+    /// pin names (in pin order, the same names the `.pin` wire syntax uses)
+    /// when the displayed set is anything else, and the object form
+    /// `{ pins: [...], ghost: true }` only for a ghosted node with a custom
+    /// pin set. A displayed pin index the node type has no name for cannot be
+    /// spelled and is left out.
+    fn format_display_state(
+        &self,
+        network: &NodeNetwork,
+        node_id: u64,
+        state: &NodeDisplayState,
+    ) -> String {
+        let ghost = state.display_type == NodeDisplayType::Ghost;
+        let default_pins = state.displayed_pins.len() == 1 && state.displayed_pins.contains(&0);
+        if default_pins {
+            return if ghost { "ghost" } else { "true" }.to_string();
+        }
+        let mut indices: Vec<i32> = state.displayed_pins.iter().copied().collect();
+        indices.sort_unstable();
+        let names: Vec<String> = indices
+            .into_iter()
+            .filter_map(|index| self.get_output_pin_name(network, node_id, index))
+            .map(|name| format_identifier(&name).into_owned())
+            .collect();
+        let list = format!("[{}]", names.join(", "));
+        if ghost {
+            format!("{{ pins: {list}, ghost: true }}")
+        } else {
+            list
         }
     }
 

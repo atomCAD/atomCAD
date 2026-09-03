@@ -210,12 +210,36 @@ sphere1 = sphere { center: (0, 0, 0), radius: 5, visible: true }
 int1 = int { value: 42 }
 ```
 
-**Query behavior**: Only visible nodes include `visible: true`. Invisible nodes omit the property entirely.
+**Query behavior**: Only visible nodes include `visible`. Invisible nodes omit the property entirely.
 
 **Edit behavior**:
-- `visible: true` → Node is displayed (added to `displayed_node_ids`)
+- `visible: true` → Node is displayed, showing its primary output (pin 0)
 - `visible` property omitted → Node is invisible (default)
 - `visible: false` → Explicitly invisible (same as omitting)
+
+### Output pins and ghosting
+
+A node with several output pins (`record_destructure`, `structure_unpack`,
+`unpack`, …) can display any subset of them, and any displayed node can be
+drawn as a *ghost* (the semi-transparent display type). The `visible` value
+spells the whole display state:
+
+```
+d = record_destructure { record: r, visible: true }         # Normal, pin 0 only
+d = record_destructure { record: r, visible: [x, y] }       # Normal, exactly these output pins
+d = record_destructure { record: r, visible: ghost }        # Ghost, pin 0 only
+d = record_destructure { record: r, visible: { pins: [x, y], ghost: true } }
+```
+
+Pin names are the node's output-pin names — the same vocabulary the `.pin`
+wire syntax uses, so `d.y` in a wire and `y` in the list refer to the same pin.
+An unknown name is a warning and the rest of the list still applies.
+
+`query` writes `true` (or `ghost`) whenever only pin 0 is displayed and the
+name list only when the displayed set is anything else, so networks that never
+touched pin display print exactly as before. A mentioned `visible` assigns the
+*whole* state: `visible: true` on a node that showed three pins brings it back
+to pin 0, and an omitted `visible` leaves the current pins alone.
 
 **Design rationale**: Defaulting to invisible keeps the format compact. The AI must be deliberate when it wants to display something. This avoids cluttering the viewport with intermediate computation nodes.
 

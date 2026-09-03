@@ -61,7 +61,9 @@ Inputs are specified as key-value pairs inside braces, separated by commas.
 
 ### Special Inputs
 
-- `visible: true/false` - Controls whether the node's output is rendered in the viewport
+- `visible: true/false` - Controls whether the node's output is rendered in the viewport (`true` = primary output pin only)
+- `visible: [x, y]` - Display exactly these output pins of a multi-output node (`record_destructure`, `structure_unpack`, `unpack`, …); names are the same ones the `.pin` wire syntax uses. `query` prints the list only when the displayed set is not just pin 0
+- `visible: ghost` - Display as a ghost (semi-transparent); `visible: { pins: [x, y], ghost: true }` combines the two. A mentioned `visible` assigns the whole display state
 - `pin_roles: { input: delayed, translation: supplied }` - Per-pin overrides of the node's function-pin signature (`delayed` = always a parameter, `supplied` = always baked in; absent = decided by wiring). Written by `query` only when set; `pin_roles: {}` clears
 
 ## Wire Connections

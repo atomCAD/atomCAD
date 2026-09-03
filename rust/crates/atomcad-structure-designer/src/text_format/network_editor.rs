@@ -54,8 +54,8 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use glam::DVec2;
 
 use crate::node_network::{
-    Argument, ArgumentKind, CollapseMode, FunctionPinRole, IncomingWire, NodeNetwork, SourcePin,
-    Wire,
+    Argument, ArgumentKind, CollapseMode, FunctionPinRole, IncomingWire, NodeDisplayState,
+    NodeDisplayType, NodeNetwork, SourcePin, Wire,
 };
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::nodes::comment::{ANCHOR_PROPERTY, CommentAnchor, CommentData, WireAnchor};
@@ -387,6 +387,20 @@ struct PendingPinRoles {
     roles: Vec<(String, String)>,
 }
 
+/// A `visible: …` property, parked until the node it names exists. The
+/// value spells a whole [`NodeDisplayState`]: `true` (Normal, pin 0),
+/// `ghost` (Ghost, pin 0), a list of output-pin names (Normal, exactly those
+/// pins), or `{ pins: […], ghost: true }` for the combination.
+#[derive(Debug, Clone)]
+struct PendingVisibility {
+    scope: ScopePath,
+    node_name: String,
+    node_path: String,
+    ghost: bool,
+    /// `None` means pin 0 only — the state `visible: true` has always meant.
+    pins: Option<Vec<String>>,
+}
+
 /// A statement whose effect has to wait until every node exists and every wire
 /// is drawn. Kept in source order so `delete` / `output` interleave exactly as
 /// written.
@@ -439,8 +453,9 @@ pub struct NetworkEditor<'a> {
     /// wire, which the same pass is only now creating. Retried once the
     /// layouts are derived.
     deferred_connections: Vec<PendingConnection>,
-    /// Nodes that should be visible after edit, per scope.
-    visible_nodes: Vec<(ScopePath, String)>,
+    /// Nodes that should be visible after edit, per scope, with the display
+    /// state each `visible:` value spelled.
+    visible_nodes: Vec<PendingVisibility>,
     /// Comment anchors to resolve after the connection pass
     pending_anchors: Vec<PendingAnchors>,
     pending_pin_roles: Vec<PendingPinRoles>,
@@ -1281,10 +1296,7 @@ impl<'a> NetworkEditor<'a> {
             // Handle visibility. `displayed_nodes` is per-`NodeNetwork`, so
             // this is per-scope for free.
             if prop_name == "visible" {
-                if let PropertyValue::Literal(TextValue::Bool(true)) = prop_value {
-                    self.visible_nodes
-                        .push((scope.to_vec(), dest_node_name.to_string()));
-                }
+                self.collect_visibility(scope, dest_node_name, dest_node_path, prop_value);
                 continue;
             }
 
@@ -2020,15 +2032,127 @@ impl<'a> NetworkEditor<'a> {
     // Pass 3: visibility, deletes, outputs
     // ------------------------------------------------------------------
 
+    /// Queue a `visible: …` property. Four spellings, and `false` (or
+    /// anything unrecognised, with a warning) queues nothing:
+    ///
+    /// - `true` — Normal, output pin 0 only
+    /// - `ghost` — Ghost, output pin 0 only
+    /// - `[x, y]` — Normal, exactly the named output pins
+    /// - `{ pins: [x, y], ghost: true }` — both at once
+    fn collect_visibility(
+        &mut self,
+        scope: &[u64],
+        node_name: &str,
+        node_path: &str,
+        prop_value: &PropertyValue,
+    ) {
+        let bad_pins = |result: &mut EditResult| {
+            result.add_warning(format!(
+                "`visible` on '{}': `pins` must list output pin names like [x, y]; ignored",
+                node_path
+            ));
+        };
+        let (ghost, pins) = match prop_value {
+            PropertyValue::Literal(TextValue::Bool(true)) => (false, None),
+            PropertyValue::Literal(TextValue::Bool(false)) => return,
+            PropertyValue::NodeRef(word, None) if word == "ghost" => (true, None),
+            PropertyValue::Array(items) => {
+                let mut names = Vec::with_capacity(items.len());
+                for item in items {
+                    let PropertyValue::NodeRef(name, None) = item else {
+                        bad_pins(&mut self.result);
+                        return;
+                    };
+                    names.push(name.clone());
+                }
+                (false, Some(names))
+            }
+            PropertyValue::Literal(TextValue::Object(fields)) => {
+                let field = |key: &str| fields.iter().find(|(k, _)| k == key).map(|(_, v)| v);
+                let ghost = field("ghost").and_then(|v| v.as_bool()).unwrap_or(false);
+                let pins = match field("pins") {
+                    None => None,
+                    Some(TextValue::Array(items)) => {
+                        let mut names = Vec::with_capacity(items.len());
+                        for item in items {
+                            let Some(name) = item.as_string() else {
+                                bad_pins(&mut self.result);
+                                return;
+                            };
+                            names.push(name.to_string());
+                        }
+                        Some(names)
+                    }
+                    Some(_) => {
+                        bad_pins(&mut self.result);
+                        return;
+                    }
+                };
+                (ghost, pins)
+            }
+            _ => {
+                self.result.add_warning(format!(
+                    "`visible` on '{}' must be `true`, `false`, `ghost`, a list of output pin names, or {{ pins: [...], ghost: true }}; ignored",
+                    node_path
+                ));
+                return;
+            }
+        };
+        self.visible_nodes.push(PendingVisibility {
+            scope: scope.to_vec(),
+            node_name: node_name.to_string(),
+            node_path: node_path.to_string(),
+            ghost,
+            pins,
+        });
+    }
+
     /// Apply visibility settings to nodes, in the scope each was named in.
+    ///
+    /// A mentioned `visible` assigns the node's whole display state — the
+    /// display type *and* the set of displayed output pins — so `true` on a
+    /// node that showed three pins brings it back to pin 0. Pin names resolve
+    /// on the node type, the same vocabulary the `.pin` wire syntax uses; an
+    /// unknown name warns and the rest of the list still applies. Runs after
+    /// the wire passes because an `apply`'s pins are derived from its `f` wire.
     fn apply_visibility(&mut self) {
         let visible_nodes = std::mem::take(&mut self.visible_nodes);
 
-        for (scope, node_name) in visible_nodes {
-            if let Some(node_id) = self.lookup(&scope, &node_name)
-                && let Some(network) = scope_net_mut(self.network, &scope)
-            {
-                network.set_node_display(node_id, true);
+        for entry in visible_nodes {
+            let Some(node_id) = self.lookup(&entry.scope, &entry.node_name) else {
+                continue;
+            };
+            let display_type = if entry.ghost {
+                NodeDisplayType::Ghost
+            } else {
+                NodeDisplayType::Normal
+            };
+            let displayed_pins: HashSet<i32> = match &entry.pins {
+                None => HashSet::from([0]),
+                Some(names) => {
+                    let mut pins = HashSet::with_capacity(names.len());
+                    for name in names {
+                        match self.resolve_output_pin_index(&entry.scope, node_id, name) {
+                            Ok(index) => {
+                                pins.insert(index);
+                            }
+                            Err(e) => self.result.add_warning(format!(
+                                "`visible` on '{}': {}; that pin was dropped",
+                                entry.node_path, e
+                            )),
+                        }
+                    }
+                    pins
+                }
+            };
+            if let Some(network) = scope_net_mut(self.network, &entry.scope) {
+                network.displayed_nodes.insert(
+                    node_id,
+                    NodeDisplayState {
+                        display_type,
+                        displayed_pins,
+                    },
+                );
             }
         }
     }

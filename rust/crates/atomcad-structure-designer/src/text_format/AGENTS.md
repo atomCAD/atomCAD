@@ -29,7 +29,7 @@ output result
 - **Delete:** `delete node_name`
 - **Description:** `description "Network description text"`
 - **Summary:** `summary "One-line summary"`
-- **Visibility:** `name = NodeType(..., visible: true)`
+- **Visibility:** `visible: true` (Normal, pin 0), `visible: [x, y]` (exactly those output pins, by name), `visible: ghost`, or `visible: { pins: [x, y], ghost: true }`. The value spells the whole `NodeDisplayState`; the serializer writes `true` whenever only pin 0 is shown, so untouched networks print as before.
 - **Function refs:** `func: @network_name` (reference another network)
 - **Arrays:** `values: [1, 2, 3]`
 - **Vectors:** `pos: (1.0, 2.0, 3.0)`
