@@ -9,7 +9,7 @@ Automatic layout algorithms for repositioning nodes in a network.
 | `size.rs` | `rendered_node_size` — **the** node-size function (see below) |
 | `delta.rs` | `EditDelta` / `diff_scope` — the incremental pass's input |
 | `motion.rs` | `shift_half_plane` / `cascade` / `grow_rect` — the two motion primitives (see below) |
-| `incremental.rs` | The incremental pass, step by step (Steps 1-5 and the driver) |
+| `incremental.rs` | The incremental pass, step by step (all eight, and the driver) |
 | `common.rs` | Shared types and constants, depth computation, and the comment-placement pass |
 | `topological_grid.rs` | Simple layered layout (fast, reliable) |
 | `sugiyama.rs` | Sugiyama-style layout with crossing minimization |
@@ -154,9 +154,9 @@ Two things to know before calling any of them:
 
 ## The incremental pass: blocks, and the invisibility rule
 
-`incremental.rs` runs Steps 1-5 per scope, inside-out over
-`delta::scopes_inside_out` (Steps 6-8 are Phase 4). Three things about it are
-easy to break and expensive to debug:
+`incremental.rs` runs all eight steps per scope, inside-out over
+`delta::scopes_inside_out`. Three things about it are easy to break and
+expensive to debug:
 
 - **An added node is invisible until its block is placed.** It is not an
   obstacle, not a snap candidate, not in the drawing's bounding box, and neither
@@ -182,6 +182,41 @@ Comments are ordinary nodes on this path (D9): obstacles at their real size,
 pushed by the cascade, never re-placed by rule. `place_comments` is *not* called
 here — it keeps serving the full reflow — which is why `layout_subgraph` stops
 short of it and each algorithm's `layout` calls it afterwards.
+
+The two comment steps are the exceptions, and both are narrow. **Step 7** places
+a comment the edit *created*, beside its anchor, through `common`'s own
+`anchor_placement_box` / `surrounding_candidates` — one rule for "beside its
+anchor", shared with the full reflow rather than reimplemented. Those four
+candidate positions sit at `ANCHOR_GAP` (24 px), which is *less* than the
+layout's ordinary 30 px vertical clearance, so they must be collision-tested at
+`common::COMMENT_CLEARANCE` (16 px) — the same constant and the same reason
+`place_comments` has. Test them at 30 and all four are rejected every time, and
+every new anchored comment silently falls through to the Step 5 fallback.
+**Step 8** pulls a comment whose distance to its anchor *grew* during the pass
+back to its exact original offset, if that spot is free. It is all-or-nothing
+and has no constant: it can never move a comment away from its anchor, never
+create an overlap, and never act on an anchor it cannot resolve on both the
+before and the after side.
+
+## `hand_moved` is a tiebreaker, in exactly two places
+
+`Node::hand_moved` (D5) never blocks a repair — the pass reads it only where it
+already had a free choice, and both sites have a control test with the flag off:
+
+- **Which way Step 5b cascades.** `CascadeDir::Split` is the specified direction
+  and stays the default; when the scope holds hand-placed nodes, all three
+  directions are simulated (run the real cascade, restore the y positions,
+  score) and ranked by *fewer hand-moved nodes displaced, then fewer nodes, then
+  less total displacement*. With nothing hand-placed the simulation is skipped
+  entirely, so the common path costs nothing.
+- **How far Step 5a slides.** When every node blocking the ordinary
+  `SLIDE_WINDOW` is hand-placed, the window is doubled and searched again before
+  the pass gives up and pushes. Sliding moves nothing; pushing a node a human
+  placed is the most expensive thing this pass can do.
+
+The flag's third documented use — a "respect manually placed nodes" option on
+the *full* reflow — is not implemented: it is a user-facing preference, and it
+lands with the rest of them in Phase 5.
 
 ## `layout_subgraph`: the same algorithms over a subset
 

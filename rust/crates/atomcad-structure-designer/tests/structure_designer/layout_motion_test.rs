@@ -22,7 +22,7 @@ use atomcad_structure_designer::layout::motion::{
 use atomcad_structure_designer::node_data::NoData;
 use atomcad_structure_designer::node_network::NodeNetwork;
 
-use super::layout_oracle::{Placed, check_pushed_order, check_rigid_shift};
+use super::layout_oracle::{Placed, check_cascade_bound, check_pushed_order, check_rigid_shift};
 use super::layout_test_support::empty_network;
 
 /// The vertical clearance the cascade keeps (`layout::common::VERTICAL_GAP`).
@@ -348,6 +348,35 @@ fn the_cascade_propagates_through_a_dense_column_and_terminates() {
     // Oracle invariant 5: the vertical order among the pushed is the pre-edit
     // order. Nothing overlaps afterwards either.
     check_pushed_order(&placed_before, &scene.placed(), &ids(&moved));
+    assert!(overlapping_pairs(&scene).is_empty());
+    check_cascade_bound(&moved);
+}
+
+/// Oracle invariant 8 on the worst case this design has a number for: a column
+/// packed so tightly that every member is pushed.
+///
+/// The corpus simulation measured a real-world maximum of 11 pushed nodes
+/// (`scripts/layout_cascade_sim.py`, over both hand-drawn files). This drops a
+/// rect on a 20-deep column touching *every* one of them, which is the shape
+/// that would break the guard first if the propagation rule ever stopped being
+/// restricted to newly created overlaps.
+#[test]
+fn even_a_twenty_deep_column_stays_within_the_cascade_guard() {
+    let mut scene = Scene::new();
+    for i in 0..20 {
+        scene.plain(0.0, 100.0 + i as f64 * (83.0 + VGAP));
+    }
+
+    let moved = cascade(
+        &mut scene.network,
+        &scene.sizes,
+        Rect::new(DVec2::ZERO, DVec2::new(200.0, 150.0)),
+        CascadeDir::Down,
+        &HashSet::new(),
+        &HashSet::new(),
+    );
+
+    check_cascade_bound(&moved);
     assert!(overlapping_pairs(&scene).is_empty());
 }
 

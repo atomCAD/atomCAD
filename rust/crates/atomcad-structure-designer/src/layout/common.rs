@@ -288,21 +288,31 @@ const MAX_SLIDE_STEPS: usize = 400;
 /// Clearance kept between a placed comment and every obstacle. Deliberately
 /// below [`ANCHOR_GAP`] so a tier-1 candidate placed at exactly that gap is not
 /// rejected by its own gap.
-const COMMENT_CLEARANCE: f64 = 16.0;
+///
+/// Visible to the crate for the same reason [`surrounding_candidates`] is: Step
+/// 7 of the incremental pass tests those same candidates for collisions and
+/// would reject every one of them if it used the layout's ordinary 30 px
+/// vertical clearance — the candidate sits at `ANCHOR_GAP`, which is less.
+pub(crate) const COMMENT_CLEARANCE: f64 = 16.0;
 
 /// An axis-aligned box on the canvas: top-left corner plus size.
+///
+/// Visible to the rest of the crate because Step 7 of the incremental pass
+/// places a *newly created* comment with the same two helpers this pass uses
+/// ([`anchor_placement_box`] and [`surrounding_candidates`]) — one rule for
+/// "beside its anchor", not two that drift.
 #[derive(Debug, Clone, Copy)]
-struct LayoutRect {
-    pos: DVec2,
-    size: DVec2,
+pub(crate) struct LayoutRect {
+    pub(crate) pos: DVec2,
+    pub(crate) size: DVec2,
 }
 
 impl LayoutRect {
-    fn center(&self) -> DVec2 {
+    pub(crate) fn center(&self) -> DVec2 {
         self.pos + self.size * 0.5
     }
 
-    fn max(&self) -> DVec2 {
+    pub(crate) fn max(&self) -> DVec2 {
         self.pos + self.size
     }
 }
@@ -495,7 +505,13 @@ fn has_anchors(network: &NodeNetwork, comment_id: u64) -> bool {
 /// `None` when the comment has no anchors, or none of them designates something
 /// this pass has a position for — in which case the comment falls through to
 /// the unanchored rule.
-fn anchor_placement_box(
+///
+/// `positions` is the placed set: only a node with an entry there can be an
+/// anchor target. The full reflow passes the positions it has just computed;
+/// the incremental pass passes the drawing as it stands (Step 7) or as it stood
+/// before the edit (Step 8), which is what lets a drift be *measured* rather
+/// than guessed at.
+pub(crate) fn anchor_placement_box(
     network: &NodeNetwork,
     registry: &NodeTypeRegistry,
     positions: &HashMap<u64, DVec2>,
@@ -564,7 +580,7 @@ fn wire_midpoint(positions: &HashMap<u64, DVec2>, wire: &Wire) -> Option<DVec2> 
 /// edge, horizontally centred on it; the others are the obvious rotations. For
 /// a wire anchor the box is a point, so the four candidates simply surround the
 /// wire's midpoint.
-fn surrounding_candidates(target: LayoutRect, size: DVec2) -> Vec<DVec2> {
+pub(crate) fn surrounding_candidates(target: LayoutRect, size: DVec2) -> Vec<DVec2> {
     let center = target.center();
     let max = target.max();
     vec![

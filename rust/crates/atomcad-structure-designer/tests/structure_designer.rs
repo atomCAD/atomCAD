@@ -113,6 +113,9 @@ mod layout_incremental_test;
 #[path = "structure_designer/layout_blocks_test.rs"]
 mod layout_blocks_test;
 
+#[path = "structure_designer/layout_repair_test.rs"]
+mod layout_repair_test;
+
 #[path = "structure_designer/parameter_wire_preservation_test.rs"]
 mod parameter_wire_preservation_test;
 

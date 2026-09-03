@@ -6,11 +6,12 @@
 //! delta broke; the pre-edit drawing is the baseline, however irregular.
 //!
 //! Phase 2 landed Step 2 and the primitives it stands on
-//! ([`crate::layout::motion`]). Phase 3 lands Steps 1, 3, 4 and 5 — block
+//! ([`crate::layout::motion`]). Phase 3 landed Steps 1, 3, 4 and 5 — block
 //! layout, placement and fitting — and the inside-out driver
-//! ([`layout_incremental`]). Steps 6 (backward-wire repair), 7 (new comments)
-//! and 8 (drifted comments) arrive in Phase 4, which is why a freshly added
-//! *comment* is left where the editor created it for now.
+//! ([`layout_incremental`]). Phase 4 completes the pass with Steps 6
+//! (backward-wire repair), 7 (new comments) and 8 (drifted comments), and with
+//! the two [`hand_moved`](crate::node_network::Node::hand_moved) tiebreakers
+//! that make the fitting prefer to disturb a node nobody placed deliberately.
 //!
 //! # The one rule everything else depends on
 //!
@@ -27,7 +28,10 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use glam::DVec2;
 
-use crate::layout::common::{LayoutAlgorithm, START_X, START_Y, VERTICAL_GAP, is_comment};
+use crate::layout::common::{
+    COMMENT_CLEARANCE, LayoutAlgorithm, START_X, START_Y, VERTICAL_GAP, anchor_placement_box,
+    is_comment, surrounding_candidates,
+};
 use crate::layout::delta::{EditDelta, WireKey, diff_scope, scopes_inside_out};
 use crate::layout::motion::{
     CascadeDir, GAP, Rect, cascade, grow_rect, measure_scope, shift_half_plane, snap_shift_line,
@@ -50,6 +54,16 @@ const TYPICAL_NODE_HEIGHT: f64 = 83.0;
 /// nodes it is wired to. Sliding moves nothing; pushing moves the drawing, so
 /// the window is the budget for finding a free spot at no cost.
 pub const SLIDE_WINDOW: f64 = 2.0 * TYPICAL_NODE_HEIGHT;
+
+/// How much further Step 5a will look when everything blocking the ordinary
+/// window is [`hand_moved`](crate::node_network::Node::hand_moved).
+///
+/// The second of the flag's three uses (design doc, "Uses of `hand_moved`"):
+/// sliding costs nothing and pushing a node a human placed deliberately is the
+/// most expensive thing this pass can do, so it is worth looking twice as far
+/// for free space first. A tiebreaker, never a constraint — if the extended
+/// window is full too, the cascade runs and the hand-placed nodes move.
+const HAND_MOVED_SLIDE_EXTENSION: f64 = 2.0;
 
 // ---------------------------------------------------------------------------
 // Step 2 — repair grown nodes
@@ -124,6 +138,23 @@ pub struct Block {
     pub size: DVec2,
 }
 
+impl Block {
+    /// A block of one node, its own bounding box.
+    ///
+    /// Step 3 never builds one — a lone added node is a one-member connected
+    /// component and goes through the same path as any other — but Step 7 does:
+    /// a new comment has no wires to lay it out by, and wrapping it as a block
+    /// is what lets it reuse Step 5's fitting and Step 4's anchorless rule
+    /// unchanged.
+    fn single(id: u64, size: DVec2) -> Self {
+        Self {
+            ids: vec![id],
+            rects: HashMap::from([(id, Rect::new(DVec2::ZERO, size))]),
+            size,
+        }
+    }
+}
+
 /// What Step 4 needs to know about the body it is placing a block inside.
 ///
 /// `None` at the top level. Inside a body the scope's own edges are anchors
@@ -177,7 +208,7 @@ impl Anchors {
 // One scope, Steps 1-5
 // ---------------------------------------------------------------------------
 
-/// Run Steps 1-5 of the incremental pass on one scope.
+/// Run all eight steps of the incremental pass on one scope.
 ///
 /// 1. **Take stock.** Nothing moves. The removed nodes are gone already and
 ///    leave holes (D4). The obstacle set is the kept nodes — every node in the
@@ -188,6 +219,11 @@ impl Anchors {
 /// 4. **Choose each block's target position** from its anchors.
 /// 5. **Fit it in**: slide into free space if there is any near the target,
 ///    else place it at the target and cascade the obstacles out of the way.
+/// 6. **Repair the backward wires this edit created**
+///    ([`repair_backward_wires`]).
+/// 7. **Place the comments this edit created** ([`place_new_comments`]).
+/// 8. **Pull a drifted comment back to its anchor**
+///    ([`restore_drifted_comments`]).
 ///
 /// `frame` is `Some` when `scope` is an HOF body, and carries the synthesized
 /// anchors and the slack the body still has. Returns `(id, from, to)` for every
@@ -230,9 +266,18 @@ pub fn layout_scope(
     // --- Steps 4 and 5: place them ------------------------------------------
     place_blocks(scope, &mut sizes, &blocks, frame);
 
+    // --- Step 6: repair the backward wires this edit created -----------------
+    repair_backward_wires(scope, &sizes, delta, &added);
+
+    // --- Step 7: place the comments this edit created ------------------------
+    place_new_comments(scope, registry, &mut sizes, &added, frame);
+
+    // --- Step 8: pull a drifted comment back to its anchor -------------------
+    restore_drifted_comments(scope, registry, &sizes, &added, &before, frame);
+
     let mut moves: Vec<(u64, DVec2, DVec2)> = before
-        .into_iter()
-        .filter_map(|(id, from)| {
+        .iter()
+        .filter_map(|(&id, &from)| {
             let to = scope.nodes.get(&id)?.position;
             (to != from).then_some((id, from, to))
         })
@@ -405,7 +450,21 @@ fn place_block(
     // the shift it performs moves only nodes at or right of the block's own x.
     let target = target_position(scope, sizes, block, &anchors, frame);
     let (origin, push) = fit(scope, sizes, block, target, frame);
+    commit_block(scope, sizes, block, origin, push);
+}
 
+/// Put `block` down at `origin`, cascade the drawing out of the way if the fit
+/// asked for it, and let the block join the obstacle set.
+///
+/// The tail of Step 5, split out because Step 7 places a new comment through
+/// the same three moves after choosing its origin by a rule of its own.
+fn commit_block(
+    scope: &mut NodeNetwork,
+    sizes: &mut HashMap<u64, DVec2>,
+    block: &Block,
+    origin: DVec2,
+    push: bool,
+) {
     for &id in &block.ids {
         let Some(rect) = block.rects.get(&id) else {
             continue;
@@ -418,14 +477,9 @@ fn place_block(
     if push {
         // Step 5b. The block's own nodes are still absent from `sizes`, so the
         // cascade cannot push them — only the drawing they landed on.
-        cascade(
-            scope,
-            sizes,
-            Rect::new(origin, block.size),
-            CascadeDir::Split,
-            &HashSet::new(),
-            &HashSet::new(),
-        );
+        let r = Rect::new(origin, block.size);
+        let dir = choose_cascade_dir(scope, sizes, r);
+        cascade(scope, sizes, r, dir, &HashSet::new(), &HashSet::new());
     }
 
     for &id in &block.ids {
@@ -433,6 +487,63 @@ fn place_block(
             sizes.insert(id, rect.size);
         }
     }
+}
+
+/// Which way Step 5b's cascade should push — the first of `hand_moved`'s three
+/// uses (design doc, "Uses of `hand_moved`").
+///
+/// [`CascadeDir::Split`] is Step 5b's specified direction and stays the default:
+/// with nothing hand-placed in the scope there is nothing to tie-break, and
+/// splitting the obstacles around `r`'s centre is what moves the drawing least.
+/// When the scope *does* hold hand-placed nodes, all three directions are
+/// simulated and scored by the design's chain — **fewer hand-moved nodes
+/// displaced, then fewer nodes, then less total displacement** — so a uniform
+/// push that spares a node a human placed wins over a split that does not.
+/// `Up` is tried before `Down`, and an exact tie keeps `Split`.
+///
+/// Simulating means running the real cascade and undoing it: a cascade only
+/// ever writes `position.y` of a placed node, so restoring those is exact, and
+/// it is far cheaper than cloning the network three times.
+fn choose_cascade_dir(scope: &mut NodeNetwork, sizes: &HashMap<u64, DVec2>, r: Rect) -> CascadeDir {
+    let hand: HashSet<u64> = placed_ids(sizes)
+        .into_iter()
+        .filter(|id| scope.nodes.get(id).is_some_and(|node| node.hand_moved))
+        .collect();
+    if hand.is_empty() {
+        return CascadeDir::Split;
+    }
+
+    let saved: Vec<(u64, f64)> = placed_ids(sizes)
+        .into_iter()
+        .filter_map(|id| scope.nodes.get(&id).map(|node| (id, node.position.y)))
+        .collect();
+
+    let mut best: Option<((usize, usize, f64), CascadeDir)> = None;
+    for dir in [CascadeDir::Split, CascadeDir::Up, CascadeDir::Down] {
+        let moved = cascade(scope, sizes, r, dir, &HashSet::new(), &HashSet::new());
+        let hand_count = moved.iter().filter(|id| hand.contains(id)).count();
+        let displacement: f64 = saved
+            .iter()
+            .filter_map(|&(id, y)| scope.nodes.get(&id).map(|node| (node.position.y - y).abs()))
+            .sum();
+        for &(id, y) in &saved {
+            if let Some(node) = scope.nodes.get_mut(&id) {
+                node.position.y = y;
+            }
+        }
+
+        let score = (hand_count, moved.len(), displacement);
+        let better = best.as_ref().is_none_or(|(best_score, _)| {
+            (score.0, score.1)
+                .cmp(&(best_score.0, best_score.1))
+                .then_with(|| score.2.total_cmp(&best_score.2))
+                .is_lt()
+        });
+        if better {
+            best = Some((score, dir));
+        }
+    }
+    best.map(|(_, dir)| dir).unwrap_or(CascadeDir::Split)
 }
 
 /// **Step 4 anchors.** Every placed node wired to the block, plus — inside a
@@ -646,6 +757,12 @@ fn target_position(
 /// **(5b) Push.** Otherwise the block goes at its target `y` and the caller
 /// cascades whatever it landed on out of the way.
 ///
+/// One tiebreaker sits between the two: when *every* node blocking the ordinary
+/// window is [`hand_moved`](crate::node_network::Node::hand_moved), the window
+/// is widened by [`HAND_MOVED_SLIDE_EXTENSION`] and searched again before the
+/// pass gives up and pushes. Sliding costs nothing; pushing a hand-placed node
+/// is the most expensive thing this pass can do.
+///
 /// Returns the origin to place the block at and whether the caller owes it a
 /// cascade.
 fn fit(
@@ -655,13 +772,6 @@ fn fit(
     target: DVec2,
     frame: Option<&BodyFrame>,
 ) -> (DVec2, bool) {
-    let free = |y: f64| -> bool {
-        let candidate = Rect::new(DVec2::new(target.x, y), block.size);
-        !placed_ids(sizes).into_iter().any(|id| {
-            rect_of(scope, sizes, id).is_some_and(|rect| rect.overlaps(&candidate, VERTICAL_GAP))
-        })
-    };
-
     // 5a, slack-first: everything the stored body size can still absorb.
     if let Some(frame) = frame {
         let limit = frame.stored.y - HOF_BODY_BOTTOM_PADDING - block.size.y;
@@ -673,28 +783,364 @@ fn fit(
                 y += VERTICAL_GAP;
             }
             candidates.sort_by(|a, b| (a - target.y).abs().total_cmp(&(b - target.y).abs()));
-            if let Some(y) = candidates.into_iter().find(|&y| free(y)) {
+            let free = candidates.into_iter().find(|&y| {
+                obstacles_at(scope, sizes, DVec2::new(target.x, y), block.size).is_empty()
+            });
+            if let Some(y) = free {
                 return (DVec2::new(target.x, y), false);
             }
         }
     }
 
     // 5a, the ordinary window.
-    let mut step = 0.0;
-    while step <= SLIDE_WINDOW {
-        for y in [target.y + step, target.y - step] {
-            if frame.is_some() && y < 0.0 {
-                continue;
-            }
-            if free(y) {
-                return (DVec2::new(target.x, y), false);
-            }
-        }
-        step += VERTICAL_GAP;
+    let mut blockers: HashSet<u64> = HashSet::new();
+    if let Some(y) = slide(
+        scope,
+        sizes,
+        block.size,
+        target,
+        frame,
+        SLIDE_WINDOW,
+        &mut blockers,
+    ) {
+        return (DVec2::new(target.x, y), false);
+    }
+
+    // 5a, extended: nothing in the band was put there by the algorithm.
+    let all_hand_placed = !blockers.is_empty()
+        && blockers
+            .iter()
+            .all(|id| scope.nodes.get(id).is_some_and(|node| node.hand_moved));
+    if all_hand_placed
+        && let Some(y) = slide(
+            scope,
+            sizes,
+            block.size,
+            target,
+            frame,
+            SLIDE_WINDOW * HAND_MOVED_SLIDE_EXTENSION,
+            &mut HashSet::new(),
+        )
+    {
+        return (DVec2::new(target.x, y), false);
     }
 
     // 5b.
     (target, true)
+}
+
+/// Search for a free `y` at `target.x`, alternating down and up in
+/// [`VERTICAL_GAP`] steps out to `window`. Nothing moves.
+///
+/// Every node that blocked a candidate is added to `blockers`, which is what
+/// lets the caller ask whether the whole band was hand-placed.
+fn slide(
+    scope: &NodeNetwork,
+    sizes: &HashMap<u64, DVec2>,
+    size: DVec2,
+    target: DVec2,
+    frame: Option<&BodyFrame>,
+    window: f64,
+    blockers: &mut HashSet<u64>,
+) -> Option<f64> {
+    let mut step = 0.0;
+    while step <= window {
+        for y in [target.y + step, target.y - step] {
+            if frame.is_some() && y < 0.0 {
+                continue;
+            }
+            let hits = obstacles_at(scope, sizes, DVec2::new(target.x, y), size);
+            if hits.is_empty() {
+                return Some(y);
+            }
+            blockers.extend(hits);
+        }
+        step += VERTICAL_GAP;
+    }
+    None
+}
+
+/// The placed nodes a box at `position` would come within `clearance` of.
+///
+/// Empty means the spot is free. `except` is for the callers asking on behalf
+/// of a node already in the placed set (Steps 7 and 8, placing and re-homing a
+/// comment), which must not read its own current box as an obstacle.
+///
+/// `clearance` is [`VERTICAL_GAP`] for a block being fitted, and
+/// [`COMMENT_CLEARANCE`] for a comment being placed against its anchor: the
+/// four candidate positions sit at the *anchor* gap, which is smaller than the
+/// layout's ordinary vertical clearance, so testing them at 30 px would reject
+/// all four of them every time and send every new anchored comment to the
+/// fallback.
+fn obstacles_at_except(
+    scope: &NodeNetwork,
+    sizes: &HashMap<u64, DVec2>,
+    position: DVec2,
+    size: DVec2,
+    clearance: f64,
+    except: Option<u64>,
+) -> Vec<u64> {
+    let candidate = Rect::new(position, size);
+    placed_ids(sizes)
+        .into_iter()
+        .filter(|id| Some(*id) != except)
+        .filter(|&id| {
+            rect_of(scope, sizes, id).is_some_and(|rect| rect.overlaps(&candidate, clearance))
+        })
+        .collect()
+}
+
+/// [`obstacles_at_except`] at the ordinary clearance, with nothing excluded.
+fn obstacles_at(
+    scope: &NodeNetwork,
+    sizes: &HashMap<u64, DVec2>,
+    position: DVec2,
+    size: DVec2,
+) -> Vec<u64> {
+    obstacles_at_except(scope, sizes, position, size, VERTICAL_GAP, None)
+}
+
+// ---------------------------------------------------------------------------
+// Step 6 — repair new backward wires
+// ---------------------------------------------------------------------------
+
+/// **Step 6 — Repair the backward wires this edit created.**
+///
+/// For each wire in `delta.added_wires` whose two ends are both **kept** nodes
+/// of this scope: if the source's right edge plus the gap reaches past the
+/// destination's left edge, widen the drawing by exactly that deficit with a
+/// half-plane shift placed by the window rule, holding the source and its whole
+/// upstream closure fixed.
+///
+/// That covers the genuinely backward wire — a destination sitting *left* of
+/// its source — and not merely a consumer crowding its producer. A plain
+/// half-plane shift could never fix the former, since it preserves x-order and
+/// any line at or left of the destination would carry the source along; the
+/// `fixed` closure is what lets the destination and everything at or right of
+/// the line move over while the producer chain stays. No other wire can flip,
+/// which is the closure's standing guarantee.
+///
+/// Three exclusions, each deliberate:
+///
+/// - **A wire that was already backward is left alone.** It is not in
+///   `added_wires`, and the pre-edit drawing is the baseline however irregular.
+/// - **Cross-scope wires are skipped**: the two ends are in different
+///   coordinate frames, so "left of" is not a statement about them.
+/// - **A wire touching an added node is skipped**: Step 4 already placed that
+///   block against this very wire as an anchor, and re-repairing it here would
+///   shift the drawing a second time for one insertion.
+///
+/// Positions are re-read between entries, so several new wires in one scope
+/// compose rather than fight.
+fn repair_backward_wires(
+    scope: &mut NodeNetwork,
+    sizes: &HashMap<u64, DVec2>,
+    delta: &EditDelta,
+    added: &HashSet<u64>,
+) {
+    if delta.added_wires.is_empty() {
+        return;
+    }
+    // Names are unique within a scope, so the last segment of a path is enough
+    // to resolve it here — and it is the only handle that survives a
+    // `--replace`, which mints fresh ids for everything.
+    let by_name: HashMap<String, u64> = scope
+        .nodes
+        .iter()
+        .filter_map(|(&id, node)| node.custom_name.clone().map(|name| (name, id)))
+        .collect();
+
+    for key in &delta.added_wires {
+        if key.is_cross_scope() {
+            continue;
+        }
+        let (Some(source_name), Some(destination_name)) =
+            (key.source.path().last(), key.destination.last())
+        else {
+            continue;
+        };
+        let (Some(&source_id), Some(&destination_id)) =
+            (by_name.get(source_name), by_name.get(destination_name))
+        else {
+            continue;
+        };
+        if source_id == destination_id
+            || added.contains(&source_id)
+            || added.contains(&destination_id)
+        {
+            continue;
+        }
+
+        let (Some(source), Some(destination)) = (
+            rect_of(scope, sizes, source_id),
+            rect_of(scope, sizes, destination_id),
+        ) else {
+            continue;
+        };
+        let deficit = source.right() + GAP - destination.left();
+        if deficit <= 0.0 {
+            continue;
+        }
+
+        let fixed = upstream_closure(scope, [source_id]);
+        if fixed.contains(&destination_id) {
+            // The destination feeds the source: a cycle, and no shift can put
+            // both ends of it in order. Leave the drawing alone.
+            continue;
+        }
+        let right_end = destination.left();
+        let threshold = snap_shift_line(scope, sizes, right_end, right_end, &fixed);
+        shift_half_plane(scope, sizes, threshold, deficit, &fixed);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Steps 7 and 8 — comments
+// ---------------------------------------------------------------------------
+
+/// **Step 7 — Place the comments this edit created.**
+///
+/// Only a comment the edit *created* needs a rule; every other comment is an
+/// ordinary node on this path (D9), an obstacle at its real size that the
+/// cascade may push and the half-plane may shift, but that nothing ever
+/// re-places by rule.
+///
+/// An **anchored** one (`on:`) takes the first free position among the four
+/// sides of its anchor, through the same
+/// [`anchor_placement_box`] / [`surrounding_candidates`] pair the full reflow
+/// uses — one rule for "beside its anchor", not two that drift — and falls back
+/// to Step 5 (slide, else push) from the first of those candidates when all
+/// four are taken.
+///
+/// An **unanchored** one is an anchorless block: right of the drawing, where
+/// nothing can be in the way.
+///
+/// Ascending id, each comment joining the obstacle set as it lands.
+fn place_new_comments(
+    scope: &mut NodeNetwork,
+    registry: &NodeTypeRegistry,
+    sizes: &mut HashMap<u64, DVec2>,
+    added: &HashSet<u64>,
+    frame: Option<&BodyFrame>,
+) {
+    let mut comments: Vec<u64> = added
+        .iter()
+        .copied()
+        .filter(|id| scope.nodes.get(id).is_some_and(is_comment))
+        .collect();
+    comments.sort_unstable();
+
+    for id in comments {
+        let Some(node) = scope.nodes.get(&id) else {
+            continue;
+        };
+        let size = rendered_node_size(node, registry);
+        let block = Block::single(id, size);
+
+        let positions = placed_positions(scope, sizes);
+        let Some(target) = anchor_placement_box(scope, registry, &positions, id) else {
+            // Unanchored, or anchored at something this pass has no position
+            // for: an anchorless block.
+            place_block(scope, sizes, &block, frame);
+            continue;
+        };
+
+        let candidates: Vec<DVec2> = surrounding_candidates(target, size)
+            .into_iter()
+            .filter(|pos| frame.is_none() || (pos.x >= 0.0 && pos.y >= 0.0))
+            .collect();
+        let free = candidates.iter().copied().find(|&pos| {
+            obstacles_at_except(scope, sizes, pos, size, COMMENT_CLEARANCE, Some(id)).is_empty()
+        });
+
+        let (origin, push) = match free {
+            Some(pos) => (pos, false),
+            None => {
+                let first = candidates.first().copied().unwrap_or(target.pos);
+                let start = if frame.is_some() {
+                    first.max(DVec2::ZERO)
+                } else {
+                    first
+                };
+                fit(scope, sizes, &block, start, frame)
+            }
+        };
+        commit_block(scope, sizes, &block, origin, push);
+    }
+}
+
+/// **Step 8 — Pull a drifted comment back to its anchor.**
+///
+/// For each anchored comment that was already there before the edit, ascending
+/// id: if its distance to its anchor *grew* during this pass, put it back at
+/// its exact original offset — `anchor_after + (comment_before −
+/// anchor_before)` — provided that spot is collision-free. Otherwise leave it
+/// where it is.
+///
+/// All-or-nothing, and with no constant of its own. The motivating case is a
+/// comment sitting just left of a shift line whose anchor was carried right:
+/// the comment stayed, the anchor moved, and the leader line grew for no
+/// reason. Three things this can never do: move a comment *away* from its
+/// anchor (the distance test), create an overlap (the collision test), or act
+/// on an anchor it cannot resolve on both sides (a target the edit removed, or
+/// one the edit added, whose "before" position is the throwaway the creation
+/// placer gave it).
+fn restore_drifted_comments(
+    scope: &mut NodeNetwork,
+    registry: &NodeTypeRegistry,
+    sizes: &HashMap<u64, DVec2>,
+    added: &HashSet<u64>,
+    before: &HashMap<u64, DVec2>,
+    frame: Option<&BodyFrame>,
+) {
+    // The pre-edit drawing: the placed set at the positions it held when this
+    // scope's pass began. Added nodes are excluded, exactly as they are from
+    // every other reading of the drawing.
+    let was: HashMap<u64, DVec2> = before
+        .iter()
+        .filter(|(id, _)| sizes.contains_key(id) && !added.contains(id))
+        .map(|(&id, &position)| (id, position))
+        .collect();
+
+    let mut comments: Vec<u64> = was
+        .keys()
+        .copied()
+        .filter(|id| scope.nodes.get(id).is_some_and(is_comment))
+        .collect();
+    comments.sort_unstable();
+
+    for id in comments {
+        let (Some(&comment_before), Some(&size)) = (was.get(&id), sizes.get(&id)) else {
+            continue;
+        };
+        let Some(anchor_before) = anchor_placement_box(scope, registry, &was, id) else {
+            continue;
+        };
+        let now = placed_positions(scope, sizes);
+        let Some(anchor_after) = anchor_placement_box(scope, registry, &now, id) else {
+            continue;
+        };
+        let Some(comment_after) = now.get(&id).copied() else {
+            continue;
+        };
+
+        let drifted = (comment_after - anchor_after.pos).length()
+            > (comment_before - anchor_before.pos).length();
+        if !drifted {
+            continue;
+        }
+
+        let target = anchor_after.pos + (comment_before - anchor_before.pos);
+        if frame.is_some() && (target.x < 0.0 || target.y < 0.0) {
+            continue;
+        }
+        if !obstacles_at_except(scope, sizes, target, size, VERTICAL_GAP, Some(id)).is_empty() {
+            continue;
+        }
+        if let Some(node) = scope.nodes.get_mut(&id) {
+            node.position = target;
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -741,9 +1187,12 @@ pub fn layout_incremental(
         ) else {
             continue; // a body whose owner this edit deleted
         };
-        // Steps 6-8 (Phase 4) are the only consumers of the wire lists, so for
-        // now a delta with nothing added and nothing grown has no work in it.
-        if delta.added.is_empty() && delta.grown.is_empty() {
+        // A delta the layout cannot see is a scope with no work in it. Note
+        // that a wire *removal* alone still qualifies as "something happened"
+        // and the steps run — they are all no-ops on it (D-"wire removal
+        // triggers no repair"), and spelling that out here would only give the
+        // rule two homes.
+        if delta.is_empty() {
             continue;
         }
 
@@ -834,6 +1283,15 @@ fn placed_ids(sizes: &HashMap<u64, DVec2>) -> Vec<u64> {
     let mut ids: Vec<u64> = sizes.keys().copied().collect();
     ids.sort_unstable();
     ids
+}
+
+/// The placed set as a plain `id -> position` map — the shape
+/// [`anchor_placement_box`] reads a drawing through.
+fn placed_positions(network: &NodeNetwork, sizes: &HashMap<u64, DVec2>) -> HashMap<u64, DVec2> {
+    sizes
+        .keys()
+        .filter_map(|&id| network.nodes.get(&id).map(|node| (id, node.position)))
+        .collect()
 }
 
 /// The box `node_id` occupies, or `None` if it is not placed.

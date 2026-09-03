@@ -11,9 +11,7 @@
 //!
 //! # Which invariants are live
 //!
-//! The document lists eight. Seven are implemented here; the last needs
-//! machinery that does not exist yet and is called out at its check site rather
-//! than silently omitted:
+//! All eight of the document's invariants are implemented here:
 //!
 //! | # | Invariant | Status |
 //! |---|---|---|
@@ -24,9 +22,9 @@
 //! | 5 | Order among the pushed | live, via [`check_pushed_order`] |
 //! | 6 | Bodies | live |
 //! | 7 | Determinism | live, via [`assert_deterministic`] |
-//! | 8 | Cascade bound | Phase 4 (needs a per-cascade move count) |
+//! | 8 | Cascade bound | live, via [`check_cascade_bound`] |
 //!
-//! Invariants 4 and 5 are the two that are *about a primitive* rather than
+//! Invariants 4, 5 and 8 are the ones that are *about a primitive* rather than
 //! about a whole pass, so they take the primitive's own reported move set and a
 //! plain `id -> rect` map instead of a [`Drawing`]. [`rects`] projects one scope
 //! of a drawing into that shape for a caller that has a drawing instead.
@@ -428,6 +426,29 @@ pub fn check_bodies(after: &Drawing) {
             content
         );
     }
+}
+
+/// The bound invariant 8 holds a single cascade to.
+///
+/// The design imposes no *cap* — the cascade is proved to terminate, and
+/// capping it would leave an overlap standing — so this is a test-side guard,
+/// deliberately generous: the corpus simulation measured a worst case of 11
+/// nodes over two hand-drawn files, and 50% of drops push nothing at all.
+/// Blowing through 20 means the propagation rule regressed, not that some
+/// drawing was unusually dense.
+pub const CASCADE_MOVE_BOUND: usize = 20;
+
+/// **8 — Bound.** No single cascade moved more than [`CASCADE_MOVE_BOUND`]
+/// nodes.
+///
+/// Takes one `cascade` call's own reported move list, in the family of
+/// invariants 4 and 5.
+pub fn check_cascade_bound(moved: &[u64]) {
+    assert!(
+        moved.len() <= CASCADE_MOVE_BOUND,
+        "one cascade moved {} nodes, over the guard of {CASCADE_MOVE_BOUND}: {moved:?}",
+        moved.len()
+    );
 }
 
 /// **7 — Determinism.** Run `produce` twice from the same input and assert the
