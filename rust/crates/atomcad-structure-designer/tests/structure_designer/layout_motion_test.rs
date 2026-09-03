@@ -88,6 +88,8 @@ impl Scene {
                     Placed {
                         position: self.pos(id),
                         size: self.sizes[&id],
+                        // Plain boxes: this harness builds no zone-owning node.
+                        renders_body: false,
                     },
                 )
             })

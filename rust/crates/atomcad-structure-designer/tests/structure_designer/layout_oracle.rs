@@ -39,7 +39,9 @@ use atomcad_structure_designer::layout::rendered_node_size;
 use atomcad_structure_designer::node_layout::{
     DEFAULT_HORIZONTAL_GAP, HOF_BODY_BOTTOM_PADDING, nodes_overlap,
 };
-use atomcad_structure_designer::node_network::{Node, NodeNetwork, SourcePin};
+use atomcad_structure_designer::node_network::{
+    Node, NodeNetwork, SourcePin, resolve_body_collapsed,
+};
 use atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
 use atomcad_structure_designer::text_format::NamePath;
 
@@ -48,6 +50,13 @@ use atomcad_structure_designer::text_format::NamePath;
 pub struct Placed {
     pub position: DVec2,
     pub size: DVec2,
+    /// Whether this node *renders* its zone body — an expanded HOF or closure.
+    ///
+    /// A **collapsed** one still owns a body, and the incremental pass still
+    /// lays that body out as an ordinary scope, but its footprint is a plain
+    /// node box that says nothing about what the body holds. Invariant 6's
+    /// containment clause applies only to the ones that render it.
+    pub renders_body: bool,
 }
 
 impl Placed {
@@ -119,6 +128,9 @@ fn collect(
             Placed {
                 position: node.position,
                 size: rendered_node_size(node, registry),
+                renders_body: registry
+                    .get_node_type_for_node(node)
+                    .is_some_and(|nt| nt.has_zone() && !resolve_body_collapsed(node, nt)),
             },
         );
     }
@@ -417,6 +429,11 @@ pub fn check_bodies(after: &Drawing) {
         let Some(owner) = after.get(scope) else {
             continue;
         };
+        if !owner.renders_body {
+            // A collapsed HOF renders as a plain node box; its body is laid out
+            // but never shown, so there is nothing for the footprint to contain.
+            continue;
+        }
         assert!(
             owner.size.x >= content.x + HOF_BODY_BOTTOM_PADDING
                 && owner.size.y >= content.y + HOF_BODY_BOTTOM_PADDING,

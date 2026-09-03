@@ -212,6 +212,40 @@ When you select a custom node instance, the **Node Properties** panel auto-gener
 
 As with built-in nodes, a value wired into a parameter pin takes precedence over the value set inline (see [Node properties vs. input pins](#node-properties-vs-input-pins)). A parameter that is neither wired nor set inline falls back to the `default` input pin of its `parameter` node inside the subnetwork.
 
+## Where nodes end up: your arrangement, and what may move it
+
+Node positions are yours. Nothing in atomCAD rearranges a network behind your
+back — the one thing that moves everything is the *Edit > Auto-Layout Network*
+menu item, and it only ever runs when you pick it.
+
+Three things do move nodes, and each is deliberately small:
+
+- **A new node** is placed near what it is wired to, in free space if there is
+  any nearby. Nodes already on the canvas stay exactly where they are unless the
+  new one leaves no room, in which case the drawing widens — the neighbours
+  slide right together, keeping their spacing and their alignment.
+- **A node that grows** — one that gains an input pin, or a higher-order node
+  whose body outgrew its frame — pushes what it would otherwise cover. It grows
+  right and down from its own top-left corner, so it never moves itself: what is
+  to its right shifts right by the width it gained, and what is directly below
+  it is nudged down just far enough to clear it. A node that happens to sit
+  below and to the side, colliding with nothing, does not move at all.
+- **A node that shrinks or is deleted leaves a hole.** Nothing is compacted, and
+  nothing slides back in — pulling the drawing inward would move nodes you never
+  touched, and the space is usually where you want to put the next thing anyway.
+
+The same rules apply inside a higher-order node's body, which is laid out as a
+network of its own before its owner's new size is fitted into the network around
+it. So adding a node inside a `map` body disturbs, at most, whatever sits
+immediately right of the `map`.
+
+**An AI or CLI edit is held to the same rules.** An `edit` through the AI
+assistant fits its own new nodes into your drawing and repairs what it broke;
+it does not re-lay-out the network. If you want the tidy-everything behaviour,
+ask for it explicitly with *Edit > Auto-Layout Network*. The
+[AI History panel](ui.md#ai-history-panel)'s **Layout** tab reports, per edit, exactly
+which nodes moved and how far — usually none.
+
 ## Cost model: how often a node is computed
 
 A node network is a graph, not a script, so "how many times does this run?" is a

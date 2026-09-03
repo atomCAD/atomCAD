@@ -89,8 +89,8 @@ class PreferencesKeys {
   // Layout settings
   static const Key layoutAlgorithmDropdown =
       Key('pref_layout_algorithm_dropdown');
-  static const Key autoLayoutAfterEditCheckbox =
-      Key('pref_auto_layout_after_edit_checkbox');
+  static const Key respectHandMovedInReflowCheckbox =
+      Key('pref_respect_hand_moved_in_reflow_checkbox');
 
   // Simulation settings
   static const Key useVdwCutoffCheckbox = Key('pref_use_vdw_cutoff_checkbox');
@@ -1110,19 +1110,27 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                           ),
                           const SizedBox(height: AppSpacing.medium),
 
-                          // Auto-layout after edit checkbox
+                          // Respect manually placed nodes on a full reflow.
+                          //
+                          // Replaces the old "Auto-layout after AI edit
+                          // operations" switch, which is gone: an AI edit runs
+                          // the incremental repair pass now, which fits the
+                          // edit's own nodes in and leaves the rest of the
+                          // drawing alone, so there is nothing left to switch
+                          // off. This is the remaining choice — what an
+                          // explicit reflow does with nodes the user dragged.
                           Row(
                             children: [
                               Checkbox(
-                                key:
-                                    PreferencesKeys.autoLayoutAfterEditCheckbox,
+                                key: PreferencesKeys
+                                    .respectHandMovedInReflowCheckbox,
                                 value: _preferences
-                                    .layoutPreferences.autoLayoutAfterEdit,
+                                    .layoutPreferences.respectHandMovedInReflow,
                                 onChanged: (value) {
                                   if (value != null) {
                                     setState(() {
                                       _preferences.layoutPreferences
-                                          .autoLayoutAfterEdit = value;
+                                          .respectHandMovedInReflow = value;
                                     });
                                     _applyPreferences();
                                   }
@@ -1131,7 +1139,7 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                               const SizedBox(width: 8),
                               const Expanded(
                                 child: Text(
-                                    'Auto-layout after AI edit operations'),
+                                    'Auto-Layout keeps manually placed nodes in place'),
                               ),
                             ],
                           ),

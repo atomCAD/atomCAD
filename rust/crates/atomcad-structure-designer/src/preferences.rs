@@ -367,10 +367,12 @@ impl Default for BackgroundPreferences {
 ///
 /// These algorithms reorganize the entire network. They are used:
 /// - When "Auto-Layout Network" is triggered from the menu
-/// - After AI edit operations (when auto_layout_after_edit is enabled)
+/// - As the block layout inside the incremental pass that repairs a drawing
+///   after an AI edit (`doc/design_incremental_layout.md`)
 ///
-/// Note: Incremental positioning of new nodes during editing is handled
-/// separately by the auto_layout module, not through this enum.
+/// Note: an AI edit does **not** reflow the whole network any more; it runs the
+/// incremental pass, which uses this algorithm only to arrange the nodes the
+/// edit itself added.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LayoutAlgorithmPreference {
     /// Simple layered layout based on topological depth. Fast and reliable.
@@ -536,27 +538,35 @@ impl Default for MemoryPreferences {
 }
 
 /// Preferences for auto-layout operations.
+///
+/// `auto_layout_after_edit` used to live here and is gone
+/// (`doc/design_incremental_layout.md`, open question 1). An AI edit no longer
+/// reflows the whole network — it runs the *incremental* pass, which is repair
+/// rather than layout: it fits the edit's own nodes in and leaves everything
+/// else where the user put it. There is nothing left to switch off, and the
+/// full reflow is only ever user-invoked. An older `preferences.json` still
+/// carrying the key loads fine; serde ignores it.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct LayoutPreferences {
     /// The layout algorithm to use for auto-layout operations.
     #[serde(default)]
     pub layout_algorithm: LayoutAlgorithmPreference,
-    /// Whether to automatically apply layout after AI edit operations.
-    /// When true, the full network layout is recomputed after each edit.
-    /// When false, only new nodes are positioned incrementally.
-    #[serde(default = "default_auto_layout_after_edit")]
-    pub auto_layout_after_edit: bool,
-}
-
-fn default_auto_layout_after_edit() -> bool {
-    true
+    /// Whether an explicit full reflow leaves hand-placed nodes
+    /// ([`Node::hand_moved`](crate::node_network::Node::hand_moved)) where they
+    /// are and arranges the rest around them.
+    ///
+    /// Off by default: a reflow the user asked for is normally meant to be
+    /// total. This is the one place in the incremental-layout design where the
+    /// flag is a hard constraint rather than a tiebreaker.
+    #[serde(default)]
+    pub respect_hand_moved_in_reflow: bool,
 }
 
 impl Default for LayoutPreferences {
     fn default() -> Self {
         Self {
             layout_algorithm: LayoutAlgorithmPreference::Sugiyama,
-            auto_layout_after_edit: true,
+            respect_hand_moved_in_reflow: false,
         }
     }
 }

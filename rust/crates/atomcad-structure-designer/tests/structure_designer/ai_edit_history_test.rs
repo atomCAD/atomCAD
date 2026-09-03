@@ -11,8 +11,10 @@
 //!   is the ordinary "my edit landed, the network is broken elsewhere";
 //! - **text snapshots, not a delta** (D2) — a `--replace` mints fresh node ids
 //!   for everything, so only the text is comparable across one;
-//! - **`LayoutPath::None` does not mean "nothing moved"** (D9) — body nodes are
-//!   never reflowed but are still re-placed at creation time.
+//! - **the layout record is about every scope** — since Phase 5 of
+//!   `doc/design_incremental_layout.md` an applied edit always runs the
+//!   incremental pass, bodies included, and the interesting assertion has
+//!   flipped: the moved list is expected to be *empty*.
 //!
 //! The ring buffer and its caps are `ai_edit_log_test.rs`.
 
@@ -33,18 +35,9 @@ use glam::DVec2;
 /// whichever machine runs the suite.
 fn designer() -> StructureDesigner {
     let mut sd = StructureDesigner::new();
-    sd.preferences.layout_preferences.auto_layout_after_edit = true;
     sd.preferences.node_display_preferences.display_policy = NodeDisplayPolicy::Manual;
     sd.add_node_network("main");
     sd.set_active_node_network_name(Some("main".to_string()));
-    sd
-}
-
-/// The same, with the full reflow switched off, so a recorded move can only
-/// have come from creation-time placement.
-fn designer_without_auto_layout() -> StructureDesigner {
-    let mut sd = designer();
-    sd.preferences.layout_preferences.auto_layout_after_edit = false;
     sd
 }
 
@@ -165,7 +158,7 @@ fn a_replace_edit_records_the_flag_and_two_comparable_snapshots() {
 
 #[test]
 fn a_replace_of_a_body_bearing_script_is_also_a_text_no_op() {
-    let mut sd = designer_without_auto_layout();
+    let mut sd = designer();
     edit(&mut sd, MAP_WITH_BODY);
 
     let outcome = sd.ai_text_edit(MAP_WITH_BODY, true);
@@ -378,9 +371,13 @@ fn undo_does_not_rewrite_the_log() {
 // Layout (D9)
 // ============================================================================
 
+/// The property the whole incremental design exists to buy, read off the log:
+/// an edit that adds a node reports the pass that ran and an **empty** moved
+/// list. Before Phase 5 this same edit reflowed the network and rewrote every
+/// position in it.
 #[test]
-fn no_layout_pass_and_no_moves_when_auto_layout_is_off() {
-    let mut sd = designer_without_auto_layout();
+fn an_added_node_moves_nothing_that_was_already_there() {
+    let mut sd = designer();
     edit(
         &mut sd,
         "a = sphere { radius: 5 }\nb = cuboid { extent: (2, 2, 2) }\n",
@@ -388,7 +385,7 @@ fn no_layout_pass_and_no_moves_when_auto_layout_is_off() {
     edit(&mut sd, "c = sphere { radius: 9 }\n");
 
     let rec = sd.ai_edit_log.last().unwrap();
-    assert_eq!(rec.layout.path, LayoutPath::None);
+    assert_eq!(rec.layout.path, LayoutPath::Incremental);
     assert!(
         rec.layout.moved.is_empty(),
         "existing nodes must not move: {:?}",
@@ -398,11 +395,12 @@ fn no_layout_pass_and_no_moves_when_auto_layout_is_off() {
     assert_eq!(rec.layout.node_count, 3);
 }
 
+/// The counters the record has carried an empty slot for since its own Phase 1
+/// are populated now: what the edit *asked* layout to do, beside the list of
+/// what layout then did.
 #[test]
-fn a_full_reflow_is_recorded_with_the_nodes_it_moved() {
-    // Build the network with layout off, so the nodes sit where the
-    // creation-time placer put them...
-    let mut sd = designer_without_auto_layout();
+fn the_edits_delta_is_recorded_beside_the_moves() {
+    let mut sd = designer();
     edit(
         &mut sd,
         concat!(
@@ -413,27 +411,23 @@ fn a_full_reflow_is_recorded_with_the_nodes_it_moved() {
         ),
     );
 
-    // ...then switch the reflow on and edit again.
-    sd.preferences.layout_preferences.auto_layout_after_edit = true;
     edit(&mut sd, "c = sphere { radius: 9 }\n");
 
     let rec = sd.ai_edit_log.last().unwrap();
-    assert_eq!(rec.layout.path, LayoutPath::FullReflow);
-    assert!(
-        !rec.layout.moved.is_empty(),
-        "a full reflow of a fresh network should have moved something"
-    );
-    assert!(rec.layout.max_displacement > 0.0);
+    assert_eq!(rec.layout.path, LayoutPath::Incremental);
+    let delta = rec.layout.delta.expect("the incremental pass records one");
+    assert_eq!(delta.nodes_added, 1, "`c`, and nothing else");
+    assert_eq!(delta.nodes_removed, 0);
+    assert_eq!(delta.wires_added, 0);
     assert_eq!(rec.layout.node_count, 4);
 }
 
-/// `LayoutPath::None` is emphatically not "nothing moved": `layout_network`
-/// does not descend into `Node.zone`, so body nodes are never reflowed — but a
-/// body node whose name does not match the pre-edit snapshot is placed at
-/// creation time, and that move belongs in the record.
+/// A body is a first-class scope for the incremental pass, so a rebuild inside
+/// one is laid out like any other edit — a renamed body node fails the identity
+/// match, is classified `added`, and is placed as its own block.
 #[test]
-fn a_body_rebuild_runs_no_layout_pass() {
-    let mut sd = designer_without_auto_layout();
+fn a_body_rebuild_is_laid_out_in_the_body() {
+    let mut sd = designer();
     edit(&mut sd, MAP_WITH_BODY);
 
     // Rename the body's first node, which makes it a new node placed by the
@@ -456,26 +450,24 @@ m1 = map {
     );
 
     let rec = sd.ai_edit_log.last().unwrap();
+    assert_eq!(rec.layout.path, LayoutPath::Incremental);
+    let delta = rec.layout.delta.expect("the incremental pass records one");
     assert_eq!(
-        rec.layout.path,
-        LayoutPath::None,
-        "no layout pass ran, and none would have reached the body anyway"
+        delta.nodes_added, 1,
+        "the renamed body node fails the identity match and counts as added"
     );
     // `node_count` counts bodies too: r, scale, m1 and the two body nodes.
     assert_eq!(rec.layout.node_count, 5);
 }
 
-/// `path` describes what the layout pass did to the **root scope**, and
-/// nothing else: `layout_network` iterates `network.nodes` and never descends
-/// into `Node.zone`, so a full reflow leaves every body node exactly where it
-/// was. That is why a move inside a body has to be attributed to creation-time
-/// placement rather than to layout (D9).
+/// A node added to the *root* scope must not disturb a body — the delta is per
+/// scope, and the body's is empty. (Before Phase 5 the same assertion held for
+/// the opposite reason: no layout pass ever reached a body at all.)
 #[test]
-fn a_full_reflow_does_not_move_body_nodes() {
-    let mut sd = designer_without_auto_layout();
+fn a_root_scope_addition_leaves_a_body_alone() {
+    let mut sd = designer();
     edit(&mut sd, MAP_WITH_BODY);
 
-    sd.preferences.layout_preferences.auto_layout_after_edit = true;
     edit(
         &mut sd,
         "extra = int { value: 7 }
@@ -483,17 +475,17 @@ fn a_full_reflow_does_not_move_body_nodes() {
     );
 
     let rec = sd.ai_edit_log.last().unwrap();
-    assert_eq!(rec.layout.path, LayoutPath::FullReflow);
+    assert_eq!(rec.layout.path, LayoutPath::Incremental);
     assert!(
-        rec.layout.moved.iter().all(|m| m.path.len() == 1),
-        "a body node cannot be moved by the layout pass: {:?}",
+        rec.layout.moved.is_empty(),
+        "nothing in any scope should have moved: {:?}",
         rec.layout
             .moved
             .iter()
             .map(|m| m.path_string())
             .collect::<Vec<_>>()
     );
-    // The count, unlike the reflow, does reach into bodies.
+    // The count reaches into bodies.
     assert_eq!(rec.layout.node_count, 6);
 }
 
@@ -503,7 +495,7 @@ fn a_full_reflow_does_not_move_body_nodes() {
 /// would name the wrong node as moved, or none.
 #[test]
 fn the_shared_identity_walk_keys_body_nodes_by_path() {
-    let mut sd = designer_without_auto_layout();
+    let mut sd = designer();
     edit(
         &mut sd,
         concat!(

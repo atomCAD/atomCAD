@@ -31,7 +31,6 @@ use atomcad_structure_designer::structure_designer::StructureDesigner;
 /// whichever machine runs the suite.
 fn designer() -> StructureDesigner {
     let mut sd = StructureDesigner::new();
-    sd.preferences.layout_preferences.auto_layout_after_edit = true;
     sd.preferences.node_display_preferences.display_policy = NodeDisplayPolicy::Manual;
     sd.add_node_network("main");
     sd.set_active_node_network_name(Some("main".to_string()));

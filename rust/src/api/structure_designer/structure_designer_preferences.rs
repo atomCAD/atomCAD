@@ -477,10 +477,12 @@ impl Default for BackgroundPreferences {
 ///
 /// These algorithms reorganize the entire network. They are used:
 /// - When "Auto-Layout Network" is triggered from the menu
-/// - After AI edit operations (when auto_layout_after_edit is enabled)
+/// - As the block layout inside the incremental pass that repairs a drawing
+///   after an AI edit (`doc/design_incremental_layout.md`)
 ///
-/// Note: Incremental positioning of new nodes during editing is handled
-/// separately by the auto_layout module, not through this enum.
+/// Note: an AI edit does **not** reflow the whole network any more; it runs the
+/// incremental pass, which uses this algorithm only to arrange the nodes the
+/// edit itself added.
 #[frb]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LayoutAlgorithmPreference {
@@ -615,6 +617,11 @@ impl Default for MemoryPreferences {
 }
 
 /// Preferences for auto-layout operations.
+///
+/// `auto_layout_after_edit` used to live here and is gone
+/// (`doc/design_incremental_layout.md`, open question 1): an AI edit runs the
+/// incremental repair pass rather than a full reflow, so there is nothing left
+/// to switch off.
 #[frb]
 #[derive(Clone, Serialize, Deserialize)]
 pub struct LayoutPreferences {
@@ -622,23 +629,18 @@ pub struct LayoutPreferences {
     #[frb(non_final)]
     #[serde(default)]
     pub layout_algorithm: LayoutAlgorithmPreference,
-    /// Whether to automatically apply layout after AI edit operations.
-    /// When true, the full network layout is recomputed after each edit.
-    /// When false, only new nodes are positioned incrementally.
+    /// Whether an explicit full reflow leaves hand-placed nodes where they are
+    /// and arranges the rest around them. Off by default.
     #[frb(non_final)]
-    #[serde(default = "default_auto_layout_after_edit")]
-    pub auto_layout_after_edit: bool,
-}
-
-fn default_auto_layout_after_edit() -> bool {
-    true
+    #[serde(default)]
+    pub respect_hand_moved_in_reflow: bool,
 }
 
 impl Default for LayoutPreferences {
     fn default() -> Self {
         Self {
             layout_algorithm: LayoutAlgorithmPreference::Sugiyama,
-            auto_layout_after_edit: true,
+            respect_hand_moved_in_reflow: false,
         }
     }
 }
@@ -1008,7 +1010,7 @@ impl From<&LayoutPreferences> for domain::LayoutPreferences {
     fn from(p: &LayoutPreferences) -> Self {
         domain::LayoutPreferences {
             layout_algorithm: (&p.layout_algorithm).into(),
-            auto_layout_after_edit: p.auto_layout_after_edit,
+            respect_hand_moved_in_reflow: p.respect_hand_moved_in_reflow,
         }
     }
 }
@@ -1017,7 +1019,7 @@ impl From<&domain::LayoutPreferences> for LayoutPreferences {
     fn from(p: &domain::LayoutPreferences) -> Self {
         LayoutPreferences {
             layout_algorithm: (&p.layout_algorithm).into(),
-            auto_layout_after_edit: p.auto_layout_after_edit,
+            respect_hand_moved_in_reflow: p.respect_hand_moved_in_reflow,
         }
     }
 }

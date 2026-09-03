@@ -412,6 +412,40 @@ pub fn shift_half_plane(
 ///
 /// Returns the ids moved, ascending. A node whose minimum clearing move is zero
 /// is not reported.
+/// What a queued [`cascade`] entry has to clear.
+///
+/// `Node` rather than a rect, because the blocker can move again between the
+/// push and the pop; the rect is read at pop time. `Region` is the cascade's
+/// own `R`, which belongs to nothing and cannot move.
+#[derive(Debug, Clone, Copy)]
+enum Blocker {
+    Region,
+    Node(u64),
+}
+
+/// Whether moving a node from `before` to `after` **newly** collided with
+/// `other`, on the y axis, at either strictness.
+///
+/// Two strictnesses, because the clearance and the overlap are two different
+/// facts and a hand-drawn corpus contains both. `gap` is the clearance the
+/// cascade keeps; `0.0` is a real, pixels-on-pixels overlap. A pair sitting
+/// 13 px apart — routine in both corpora, well inside `VERTICAL_GAP` — already
+/// "overlaps" at clearance strictness, so a single gap-inflated test reads it
+/// as a pre-existing overlap and lets the moving node slide straight *through*
+/// its neighbour. That is the one thing the cascade must never do: the design's
+/// tolerance is for overlaps the drawing already had, not for ones this call is
+/// about to create.
+fn newly_overlaps_y(before: &Rect, after: &Rect, other: &Rect, gap: f64) -> bool {
+    (after.overlaps_y(other, gap) && !before.overlaps_y(other, gap))
+        || (after.overlaps_y(other, 0.0) && !before.overlaps_y(other, 0.0))
+}
+
+/// The two-axis form of [`newly_overlaps_y`], for the `fixed`-clearing pass.
+fn newly_collides(before: &Rect, after: &Rect, other: &Rect, gap: f64) -> bool {
+    (after.overlaps(other, gap) && !before.overlaps(other, gap))
+        || (after.overlaps(other, 0.0) && !before.overlaps(other, 0.0))
+}
+
 pub fn cascade(
     network: &mut NodeNetwork,
     sizes: &HashMap<u64, DVec2>,
@@ -425,9 +459,16 @@ pub fn cascade(
     let gap = VERTICAL_GAP;
     let ids = placed_ids(sizes);
 
-    // (id, direction, blocker rect) — the blocker travels with the entry so a
-    // node pushed by two different nodes clears each of them in turn.
-    let mut queue: VecDeque<(u64, CascadeDir, Rect)> = VecDeque::new();
+    // (id, direction, blocker) — the blocker travels with the entry so a node
+    // pushed by two different nodes clears each of them in turn, and it is
+    // stored **by id** wherever it is a node.
+    //
+    // A rect captured at enqueue time goes stale: a pusher can itself be pushed
+    // again before the node it enqueued is popped, and the node then clears the
+    // place its blocker *used to be*. That is not a corner case — it is what a
+    // chain does, and on the demolib corpus it left two nodes overlapping by
+    // 83 px after a cascade that visited both.
+    let mut queue: VecDeque<(u64, CascadeDir, Blocker)> = VecDeque::new();
     let mut direction: HashMap<u64, CascadeDir> = HashMap::new();
 
     for &id in &ids {
@@ -451,7 +492,7 @@ pub fn cascade(
             other => other,
         };
         direction.insert(id, node_dir);
-        queue.push_back((id, node_dir, r));
+        queue.push_back((id, node_dir, Blocker::Region));
     }
 
     let mut moved: HashSet<u64> = HashSet::new();
@@ -470,6 +511,14 @@ pub fn cascade(
         let Some(before) = rect_of(network, sizes, id) else {
             continue;
         };
+        // Read the blocker **now**, not when this entry was queued.
+        let blocker = match blocker {
+            Blocker::Region => r,
+            Blocker::Node(other) => match rect_of(network, sizes, other) {
+                Some(rect) => rect,
+                None => continue,
+            },
+        };
 
         // Minimum (possibly zero) move along `dir` that clears the blocker …
         let mut after = before;
@@ -482,12 +531,10 @@ pub fn cascade(
             let Some(rect) = rect_of(network, sizes, other) else {
                 continue;
             };
-            if rect.overlaps(&before, gap) {
+            if !newly_collides(&before, &after, &rect, gap) {
                 continue; // it was already there; not this call's problem
             }
-            if after.overlaps(&rect, gap) {
-                clear(&mut after, &rect, node_dir, gap);
-            }
+            clear(&mut after, &rect, node_dir, gap);
         }
 
         if after.pos.y == before.pos.y {
@@ -509,11 +556,11 @@ pub fn cascade(
             if !after.overlaps_x(&rect, gap) {
                 continue;
             }
-            if !after.overlaps_y(&rect, gap) || before.overlaps_y(&rect, gap) {
+            if !newly_overlaps_y(&before, &after, &rect, gap) {
                 continue;
             }
             direction.insert(other, node_dir);
-            queue.push_back((other, node_dir, after));
+            queue.push_back((other, node_dir, Blocker::Node(id)));
         }
     }
 
@@ -555,6 +602,12 @@ fn clear(rect: &mut Rect, blocker: &Rect, dir: CascadeDir, gap: f64) {
 /// horizontally, so if its overlap is new, it is new in y — and the rect only
 /// grew downward.
 ///
+/// "Pre-existing" there means a **real** overlap, measured at zero clearance,
+/// not merely a node sitting inside `VERTICAL_GAP` of the old rect. Both
+/// hand-drawn corpora are full of neighbours a dozen pixels apart, and reading
+/// those as pre-existing overlaps put them in `ignore`, which is to say let the
+/// node grow straight over them with nothing to repair it afterwards.
+///
 /// Returns `(id, old position, new position)` for every node that actually
 /// moved, ascending id — the shape `ScopedMoves` bundles into the undo step.
 pub fn grow_rect(
@@ -582,12 +635,24 @@ pub fn grow_rect(
     let old_rect = Rect::new(anchor, old);
     let new_rect = Rect::new(anchor, new);
 
-    // Pre-existing overlaps with the old rect, captured before anything moves.
+    // Everything the growth did **not** newly reach, captured before anything
+    // moves — which is what the cascade must leave alone, and is a stronger
+    // statement than "already overlapped the old rect".
+    //
+    // Both halves matter and each was a real bug on the demolib corpus. A
+    // neighbour 17 px *above* the rect has exactly the same clearance after a
+    // downward growth as before, so a plain "overlaps the new rect within
+    // `VERTICAL_GAP`" first round picks it up and — `grow_rect` forcing `Down`
+    // — shoves it 363 px, straight past the node it was sitting above. A
+    // neighbour 17 px *below* is the mirror case: it never truly overlapped the
+    // old rect, so treating "within the gap" as a pre-existing overlap let the
+    // node grow over it with nothing left to repair the result.
     let ignore: HashSet<u64> = placed_ids(sizes)
         .into_iter()
         .filter(|&id| id != node_id)
         .filter(|&id| {
-            rect_of(network, sizes, id).is_some_and(|r| r.overlaps(&old_rect, VERTICAL_GAP))
+            rect_of(network, sizes, id)
+                .is_some_and(|r| !newly_overlaps_y(&old_rect, &new_rect, &r, VERTICAL_GAP))
         })
         .collect();
 

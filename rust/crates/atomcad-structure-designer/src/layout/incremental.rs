@@ -32,7 +32,7 @@ use crate::layout::common::{
     COMMENT_CLEARANCE, LayoutAlgorithm, START_X, START_Y, VERTICAL_GAP, anchor_placement_box,
     is_comment, surrounding_candidates,
 };
-use crate::layout::delta::{EditDelta, WireKey, diff_scope, scopes_inside_out};
+use crate::layout::delta::{DeltaTotals, EditDelta, WireKey, diff_scope, scopes_inside_out};
 use crate::layout::motion::{
     CascadeDir, GAP, Rect, cascade, grow_rect, measure_scope, shift_half_plane, snap_shift_line,
     upstream_closure,
@@ -1147,6 +1147,20 @@ fn restore_drifted_comments(
 // The inside-out driver
 // ---------------------------------------------------------------------------
 
+/// What one whole run of [`layout_incremental`] did.
+///
+/// The two halves answer different questions and neither substitutes for the
+/// other: `moved` is what the pass *did to the drawing*, `totals` is what the
+/// edit *asked it to do*. A long `moved` against a one-node `totals` is the
+/// signal the AI edit log exists to surface.
+#[derive(Debug, Default, Clone)]
+pub struct IncrementalOutcome {
+    /// `(name path, from, to)` for every node that moved, sorted by path.
+    pub moved: Vec<(NamePath, DVec2, DVec2)>,
+    /// The edit's delta, summed over every scope.
+    pub totals: DeltaTotals,
+}
+
 /// Run the incremental pass over every scope of `network`, deepest first (D12).
 ///
 /// A body is a full `NodeNetwork` with its own coordinates, so Steps 1-5 run on
@@ -1164,17 +1178,20 @@ fn restore_drifted_comments(
 /// `snapshot` and `before_wires` are the pre-edit pair
 /// (`text_format::snapshot_node_positions` and
 /// [`collect_all_wires`](crate::layout::collect_all_wires)), both taken before
-/// the edit ran. Returns `(name path, from, to)` for every node that moved,
-/// sorted by path — the name-path keying every part of this design uses, since a
-/// `--replace` mints fresh ids.
+/// the edit ran. Returns the moves — `(name path, from, to)`, sorted by path,
+/// the name-path keying every part of this design uses since a `--replace`
+/// mints fresh ids — together with the whole edit's [`DeltaTotals`], which the
+/// AI edit log records beside them so a move can be read against whether the
+/// edit had any business touching that scope.
 pub fn layout_incremental(
     network: &mut NodeNetwork,
     registry: &NodeTypeRegistry,
     snapshot: &PositionSnapshot,
     before_wires: &HashSet<WireKey>,
     algorithm: LayoutAlgorithm,
-) -> Vec<(NamePath, DVec2, DVec2)> {
-    let mut moved: Vec<(NamePath, DVec2, DVec2)> = Vec::new();
+) -> IncrementalOutcome {
+    let mut outcome = IncrementalOutcome::default();
+    let moved = &mut outcome.moved;
 
     for (scope_ids, scope_names) in scopes_inside_out(network) {
         let Some(delta) = diff_scope(
@@ -1192,6 +1209,7 @@ pub fn layout_incremental(
         // and the steps run — they are all no-ops on it (D-"wire removal
         // triggers no repair"), and spelling that out here would only give the
         // rule two homes.
+        outcome.totals.add(&delta);
         if delta.is_empty() {
             continue;
         }
@@ -1215,7 +1233,7 @@ pub fn layout_incremental(
     }
 
     moved.sort_by(|a, b| a.0.cmp(&b.0));
-    moved
+    outcome
 }
 
 /// The [`BodyFrame`] for a scope, or `None` if it is the top-level network.

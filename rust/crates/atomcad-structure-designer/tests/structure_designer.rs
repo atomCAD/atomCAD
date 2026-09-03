@@ -116,6 +116,12 @@ mod layout_blocks_test;
 #[path = "structure_designer/layout_repair_test.rs"]
 mod layout_repair_test;
 
+#[path = "structure_designer/layout_ai_edit_test.rs"]
+mod layout_ai_edit_test;
+
+#[path = "structure_designer/layout_corpus_test.rs"]
+mod layout_corpus_test;
+
 #[path = "structure_designer/parameter_wire_preservation_test.rs"]
 mod parameter_wire_preservation_test;
 

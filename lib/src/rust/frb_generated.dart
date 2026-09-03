@@ -19922,7 +19922,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
     return LayoutPreferences(
       layoutAlgorithm: dco_decode_layout_algorithm_preference(arr[0]),
-      autoLayoutAfterEdit: dco_decode_bool(arr[1]),
+      respectHandMovedInReflow: dco_decode_bool(arr[1]),
     );
   }
 
@@ -25164,10 +25164,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_layoutAlgorithm =
         sse_decode_layout_algorithm_preference(deserializer);
-    var var_autoLayoutAfterEdit = sse_decode_bool(deserializer);
+    var var_respectHandMovedInReflow = sse_decode_bool(deserializer);
     return LayoutPreferences(
         layoutAlgorithm: var_layoutAlgorithm,
-        autoLayoutAfterEdit: var_autoLayoutAfterEdit);
+        respectHandMovedInReflow: var_respectHandMovedInReflow);
   }
 
   @protected
@@ -30641,7 +30641,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       LayoutPreferences self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_layout_algorithm_preference(self.layoutAlgorithm, serializer);
-    sse_encode_bool(self.autoLayoutAfterEdit, serializer);
+    sse_encode_bool(self.respectHandMovedInReflow, serializer);
   }
 
   @protected

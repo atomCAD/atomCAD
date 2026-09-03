@@ -18,7 +18,9 @@
 //! `rust/AGENTS.md` says the same thing from the other direction: API wrappers
 //! are thin, and the underlying core function is what gets tested.
 
-use crate::ai_edit_log::{AI_EDIT_COMMAND_DESCRIPTION, AiEditRecord, LayoutOutcome, LayoutPath};
+use crate::ai_edit_log::{
+    AI_EDIT_COMMAND_DESCRIPTION, AiEditRecord, DeltaCounts, LayoutOutcome, LayoutPath,
+};
 use crate::layout;
 use crate::network_validator::validate_network;
 use crate::node_type_registry::NodeTypeRegistry;
@@ -108,11 +110,17 @@ impl StructureDesigner {
         // delta. `snapshot_node_positions` is the editor's own identity walk,
         // shared so the layout measurement and the identity match it measures
         // cannot disagree.
-        let (before_text, before_positions) =
+        let (before_text, before_positions, before_wires) =
             match self.node_type_registry.node_networks.get(&network_name) {
                 Some(network) => (
                     serialize_network(network, &self.node_type_registry, Some(&network_name)),
                     snapshot_node_positions(network, &self.node_type_registry),
+                    // The other half of the incremental pass's "before": a
+                    // wire belongs to neither of its ends, so it cannot live in
+                    // the per-node identity map. Keyed by name path like
+                    // everything else, so a `--replace` does not report the
+                    // whole network as newly wired.
+                    layout::collect_all_wires(network),
                 ),
                 // --- Rejection path 3: the network is gone ---------------
                 None => {
@@ -202,17 +210,35 @@ impl StructureDesigner {
             }
         }
 
-        // Apply auto-layout if enabled in preferences and the edit applied.
-        // This recomputes the entire network layout using the user's preferred
-        // algorithm.
-        let ran_layout = edit_applied && self.preferences.layout_preferences.auto_layout_after_edit;
+        // --- Layout: the incremental pass (D1, D8) -----------------------
+        //
+        // Not a reflow. The pass takes the edit's own delta per scope, lays out
+        // only the nodes it added, fits them into the existing drawing and
+        // repairs locally; every other node keeps the position the user gave
+        // it. That is why it has no preference gating it — it is repair, not
+        // layout, and the thing the old `auto_layout_after_edit` switch existed
+        // to avoid (a human's arrangement destroyed on every edit) is what this
+        // pass does not do. A full reflow is still available, and is now only
+        // ever user-invoked, through `layout_active_network`.
+        //
+        // It runs on **every scope**, inside-out, so a body edit is laid out
+        // like a top-level one and the owning HOF's new footprint is repaired
+        // in its parent afterwards (D12).
+        let mut incremental = layout::IncrementalOutcome::default();
+        let ran_layout = edit_applied;
         if ran_layout {
             let algorithm = self.preferences.layout_preferences.layout_algorithm.into();
             let registry_ptr = &self.node_type_registry as *const NodeTypeRegistry;
             unsafe {
                 if let Some(network) = self.node_type_registry.node_networks.get_mut(&network_name)
                 {
-                    layout::layout_network(network, &*registry_ptr, algorithm);
+                    incremental = layout::layout_incremental(
+                        network,
+                        &*registry_ptr,
+                        &before_positions,
+                        &before_wires,
+                        algorithm,
+                    );
                 }
             }
         }
@@ -222,15 +248,12 @@ impl StructureDesigner {
         // Taken past validation and past layout, so a partially-applied edit
         // shows its real partial effect rather than nothing.
         //
-        // `LayoutPath::FullReflow` describes what the layout pass did to the
-        // **root scope** only. `layout_network` does not descend into
-        // `Node.zone`, so body nodes are never reflowed — yet they still move,
-        // placed at creation time by
-        // `auto_layout::calculate_new_node_position`. A body-only edit
-        // therefore records `None` with a non-empty `moved`, which is correct,
-        // and is why the two are recorded separately.
+        // `LayoutPath::Incremental` now covers **every** scope: the pass walks
+        // bodies as first-class scopes, so unlike the old `FullReflow` reading
+        // it is not a claim about the root scope alone. A body node that moved
+        // was moved by this pass, not left where it was created.
         let layout_path = if ran_layout {
-            LayoutPath::FullReflow
+            LayoutPath::Incremental
         } else {
             LayoutPath::None
         };
@@ -239,14 +262,28 @@ impl StructureDesigner {
                 Some(network) => {
                     let after_positions =
                         snapshot_node_positions(network, &self.node_type_registry);
+                    let mut outcome = LayoutOutcome::compute(
+                        layout_path,
+                        network,
+                        &before_positions,
+                        &after_positions,
+                    );
+                    // The counters the log has carried a slot for since its own
+                    // Phase 1: what the edit *asked* layout to do, against the
+                    // `moved` list of what layout then did.
+                    if ran_layout {
+                        let totals = incremental.totals;
+                        outcome.delta = Some(DeltaCounts {
+                            nodes_added: totals.nodes_added,
+                            nodes_modified: totals.nodes_modified,
+                            nodes_removed: totals.nodes_removed,
+                            wires_added: totals.wires_added,
+                            wires_removed: totals.wires_removed,
+                        });
+                    }
                     (
                         serialize_network(network, &self.node_type_registry, Some(&network_name)),
-                        LayoutOutcome::compute(
-                            layout_path,
-                            network,
-                            &before_positions,
-                            &after_positions,
-                        ),
+                        outcome,
                     )
                 }
                 None => (String::new(), LayoutOutcome::default()),

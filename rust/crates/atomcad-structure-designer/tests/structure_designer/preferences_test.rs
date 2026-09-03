@@ -318,7 +318,7 @@ fn test_default_values_match_documentation() {
         prefs.layout_preferences.layout_algorithm,
         LayoutAlgorithmPreference::Sugiyama
     );
-    assert!(prefs.layout_preferences.auto_layout_after_edit);
+    assert!(!prefs.layout_preferences.respect_hand_moved_in_reflow);
 
     // Simulation defaults
     assert!(prefs.simulation_preferences.use_vdw_cutoff);
@@ -425,7 +425,7 @@ fn test_non_default_values_roundtrip() {
         },
         layout_preferences: LayoutPreferences {
             layout_algorithm: LayoutAlgorithmPreference::TopologicalGrid,
-            auto_layout_after_edit: false,
+            respect_hand_moved_in_reflow: true,
         },
         simulation_preferences: SimulationPreferences {
             use_vdw_cutoff: true,
@@ -590,7 +590,7 @@ fn test_non_default_values_roundtrip() {
         loaded.layout_preferences.layout_algorithm,
         LayoutAlgorithmPreference::TopologicalGrid
     );
-    assert!(!loaded.layout_preferences.auto_layout_after_edit);
+    assert!(loaded.layout_preferences.respect_hand_moved_in_reflow);
 
     assert!(loaded.simulation_preferences.use_vdw_cutoff);
     assert_eq!(

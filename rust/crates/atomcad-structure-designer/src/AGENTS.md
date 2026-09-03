@@ -249,6 +249,15 @@ network"`) and **one entry in `StructureDesigner::ai_edit_log`**
   parsed and landed"); `success` folds in a *whole-network* validation verdict,
   so an already-broken network makes every later edit report `success: false`
   however clean it was. Anything gating on "did the edit work" wants `applied`.
+- **Layout here is `layout::layout_incremental`, and it always runs on an
+  applied edit.** It is repair, not layout: it lays out only the nodes the edit
+  added, fits them into the existing drawing, and leaves every other node where
+  the user put it, in every scope including HOF bodies
+  (`doc/design_incremental_layout.md`). There is no preference gating it —
+  `auto_layout_after_edit` is gone — and a *full* reflow is now only ever
+  user-invoked, through `layout_active_network`. The pre-edit pair it needs
+  (`snapshot_node_positions` **and** `layout::collect_all_wires`) is taken
+  before the first statement runs, beside the log's own snapshots.
 
 **The log is wider than its name** since Phase 5: `AiEditLog` holds a *second*
 ring of `AiActivityRecord`s — every non-edit CLI request (`/query`,

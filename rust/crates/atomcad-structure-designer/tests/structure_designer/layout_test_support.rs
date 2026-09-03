@@ -185,7 +185,8 @@ impl Fixture {
             &self.snapshot,
             &self.wires,
             LayoutAlgorithm::Sugiyama,
-        );
+        )
+        .moved;
         let after = Drawing::of(&self.network, &self.registry);
         let moved_paths: HashSet<NamePath> =
             moved.iter().map(|(path, _, _)| path.clone()).collect();
@@ -282,6 +283,42 @@ impl Outcome {
 /// A name path from its segments.
 pub fn p(segments: &[&str]) -> NamePath {
     segments.iter().map(|s| s.to_string()).collect()
+}
+
+/// The [`Touched`] claim for a pass, derived from the two drawings alone.
+///
+/// The delta half — added, grown, removed — is read off the before/after
+/// geometry rather than taken from `diff_scope`, deliberately: an oracle fed
+/// the pass's own input would be checking the pass against itself. The `moved`
+/// half is the pass's own reported list, which is exactly the claim under test
+/// ("everything else is bit-identical").
+///
+/// Used by the corpus run, where there is no [`Fixture`] to ask.
+pub fn touched_between<I>(before: &Drawing, after: &Drawing, moved: I) -> Touched
+where
+    I: IntoIterator<Item = NamePath>,
+{
+    let mut delta: HashSet<NamePath> = HashSet::new();
+    for path in after.paths() {
+        match before.get(&path) {
+            // Present only after: the edit added it.
+            None => {
+                delta.insert(path);
+            }
+            Some(was) => {
+                let now = after.get(&path).expect("just enumerated");
+                if now.size.x > was.size.x || now.size.y > was.size.y {
+                    delta.insert(path);
+                }
+            }
+        }
+    }
+    for path in before.paths() {
+        if after.get(&path).is_none() {
+            delta.insert(path);
+        }
+    }
+    Touched::new(delta, moved)
 }
 
 pub fn center(rect: Placed) -> DVec2 {

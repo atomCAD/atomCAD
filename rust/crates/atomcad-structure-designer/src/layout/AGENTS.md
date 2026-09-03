@@ -16,13 +16,21 @@ Automatic layout algorithms for repositioning nodes in a network.
 
 ## Entry Points
 
-- `layout_network(network, registry, algorithm)` → applies a full reflow in-place
-- `compute_layout(network, registry, algorithm)` → the same positions without mutating
+- `layout_network(network, registry, algorithm)` → applies a full reflow
+  in-place, **every scope, deepest first**
+- `layout_network_scoped(network, registry, algorithm, respect_hand_moved)` →
+  the same, reporting `Vec<ScopeLayoutMoves>` so the caller can make it undoable
+  per scope. What `StructureDesigner::layout_active_network` calls.
+- `compute_layout(network, registry, algorithm)` → one scope's positions without
+  mutating
 - `layout_subgraph(network, registry, ids, algorithm)` → positions for **only**
   the nodes in `ids`, wired to each other alone (see below)
 - `incremental::layout_incremental(network, registry, snapshot, wires, algorithm)`
-  → the incremental pass over every scope, inside-out. Not wired into
-  `ai_text_edit` yet; Phase 5 does that.
+  → the incremental pass over every scope, inside-out. **This is what an AI edit
+  runs**: `ai_text_edit` calls it unconditionally on an applied edit and records
+  `LayoutPath::Incremental`. There is no preference gating it — the pass is
+  repair, not layout — and `auto_layout_after_edit` is gone
+  (`doc/design_incremental_layout.md`, open question 1).
 
 ## Algorithms
 
@@ -33,12 +41,16 @@ Automatic layout algorithms for repositioning nodes in a network.
 ## Usage
 
 Layout is triggered by:
-- AI text format edits (auto-layout new nodes via `text_format/auto_layout.rs`)
+- **AI text-format edits**, through `layout_incremental` — the repair pass, not
+  a reflow. `text_format/auto_layout.rs` still places a node at creation time,
+  but from Phase 5 that position is a throwaway the block placement overwrites.
 - "Auto-Layout Network" menu action in the UI, through
   `StructureDesigner::layout_active_network()` — **not** `layout_network()`
-  directly. That wrapper diffs old against new positions and records the whole
-  rearrangement as one undoable `MoveNodesCommand` (#270); calling
-  `layout_network()` from a user-facing path would silently bypass undo.
+  directly. That wrapper diffs old against new positions per scope and records
+  the whole rearrangement as one undoable step (#270): a single
+  `MoveNodesCommand` when only one scope moved, a `CompositeCommand` over one
+  per scope when a body moved too. Calling `layout_network()` from a
+  user-facing path would silently bypass undo.
 - Node size estimation uses constants from `node_layout.rs` in the parent directory
 
 ## Comments are not invisible to layout any more
@@ -131,6 +143,26 @@ The pairing is not symmetric by accident: x carries a directional invariant
 (rightward flow) and y carries none, so x gets the operation that provably
 preserves order and y gets the one that moves the least.
 
+**Two rules the demolib corpus run taught the cascade, and both are load-bearing:**
+
+- **"Already overlapping" means a *real* overlap, at zero clearance — never
+  "within `VERTICAL_GAP`".** Hand-drawn networks are full of neighbours a dozen
+  pixels apart, well inside the 30 px clearance. Test the two at one inflated
+  strictness and every such pair reads as a pre-existing overlap, so a moving
+  node slides straight *through* its neighbour and nothing repairs it. Both
+  "did this move newly collide" tests (`newly_overlaps_y` / `newly_collides`)
+  therefore ask the question at **both** strictnesses and take the union. The
+  mirror of the same rule is `grow_rect`'s `ignore` set: it is not "overlapped
+  the old rect" but "the growth did not newly reach it", because a neighbour
+  17 px *above* a downward growth has exactly the clearance it always had and
+  must not be swept along — forcing `Down` on it shoves it past the node it was
+  sitting above (363 px, in the case that found this).
+- **A queued blocker is stored by id and re-read at pop time.** A pusher can
+  itself be pushed again before the node it enqueued is popped; a rect captured
+  at enqueue time then makes that node clear the place its blocker *used to be*.
+  That is a chain, not a corner case, and it left two demolib nodes fully
+  overlapping after a cascade that visited both.
+
 **`grow_rect(node, old, new)` is the one growth operation** (D11) — width delta
 as a shift, height delta as a downward cascade, in that order. Every path where
 a node's footprint grows in place calls it: `reflow_for_footprint_change`,
@@ -214,9 +246,37 @@ already had a free choice, and both sites have a control test with the flag off:
   the pass gives up and pushes. Sliding moves nothing; pushing a node a human
   placed is the most expensive thing this pass can do.
 
-The flag's third documented use — a "respect manually placed nodes" option on
-the *full* reflow — is not implemented: it is a user-facing preference, and it
-lands with the rest of them in Phase 5.
+The flag's third documented use landed in Phase 5 and is the one place it is a
+**hard constraint**: `LayoutPreferences::respect_hand_moved_in_reflow` (off by
+default) makes the *full* reflow lay the movable nodes out among themselves,
+leave the flagged ones bit-identical, and cascade whatever the arrangement
+landed on one. It is a constraint the user asked for, which is what makes it
+different in kind from the two tiebreakers above.
+
+## The corpus run, and a known limit of the window rule
+
+`tests/structure_designer/layout_corpus_test.rs` runs five generated edits
+against every network of `demolib/baselib_with_demos.cnnd` (tracked, so it runs
+in CI) and hands each before/after pair to the oracle. Point it at the
+maintainer's working file with `ATOMCAD_LAYOUT_CORPUS=<path>`. **It is the only
+test that sees real hand-drawn geometry**, and every cascade bug listed above
+came out of it rather than out of a hand-written scenario — a synthetic fixture
+puts nodes 30 px apart because that is the constant in the code, and a person
+does not.
+
+The generator is blind, so `at_least_one_edit_of_every_kind_lands` guards
+against a kind quietly ceasing to produce valid scripts and the run passing
+vacuously. Keep that guard green; without it the whole file can go silent.
+
+**The window rule's snap gives up in dense regions, and that is not a bug in
+the code.** The snap looks at most one node width left of the default for an x
+where no movable node's box straddles the line — and 160 px-wide boxes tile a
+dense drawing, so no such x exists. Every strictly-8 px loose column in demolib
+(`lib_icorner_z_cotahedral{111}`'s four `half_space` nodes are the clearest)
+therefore keeps the default and is cut in two by a shift. The rule works where
+there is whitespace within reach, which
+`a_loose_column_straddling_the_shift_line_moves_as_a_whole` pins; widening its
+reach is a design change, not a fix.
 
 ## `layout_subgraph`: the same algorithms over a subset
 

@@ -665,11 +665,11 @@ largest displacement, and the moved nodes themselves grouped by scope, each with
 its before and after position. This is how you answer "did that edit disturb my
 drawing?" without comparing the canvas against your memory of it.
 
-One reading needs care and the panel says so at the bottom of that tab: the
-layout path describes the **root scope** only. Nodes inside a higher-order
-node's body are never re-laid-out, so a body node that moved was placed there
-when it was created. *No layout pass* together with a non-empty list of moved
-nodes is therefore correct rather than contradictory.
+The pass named there is *Incremental*, and that is the point: an AI edit fits
+its own new nodes into your drawing and repairs what they broke, rather than
+re-laying-out the network. On a well-behaved edit the moved list is **empty**,
+which is the signal to look for. It covers every scope, bodies included, so a
+body node listed as moved was moved by that pass.
 
 ### Keeping a session: the toolbar
 
@@ -836,7 +836,7 @@ Used for loading and saving a design, exporting a design to .xyz or .mol, undo/r
 - *Edit > Undo* (`Ctrl+Z`) / *Edit > Redo* (`Ctrl+Shift+Z` or `Ctrl+Y`): Undo and redo all operations, including node edits, wire connections, atom editing, and more.
 - *Edit > Validate active network*: Validates the active node network and reports any errors. Available in Node Network Mode only.
 - *Edit > Go to next error* (`F8`) / *Edit > Go to previous error* (`Shift+F8`): Steps selection through the active network's errors one at a time, wrapping around, so you can walk its problems without hunting for the red nodes. Each step activates the errored node and scrolls it into view (the same oriented jump the error badge uses). Greyed out when the active network has no errors. Available in Node Network Mode only.
-- *Edit > Auto-Layout Network*: Automatically arranges nodes in the current node network for a clean, readable layout, using whichever algorithm is selected under *Auto-layout algorithm* in [Preferences](#preferences-dialog). The view is refitted around the result. This is a single undoable step — if you don't like the new arrangement, `Ctrl+Z` puts every node back where it was. Comment notes are not laid out as graph nodes: each is placed afterwards, an anchored one beside what it documents and an unanchored one keeping its position relative to the drawing — see [Comment notes and automatic layout](nodes/annotation.md#comment).
+- *Edit > Auto-Layout Network*: Automatically arranges nodes in the current node network for a clean, readable layout, using whichever algorithm is selected under *Auto-layout algorithm* in [Preferences](#preferences-dialog). **This is the only thing that rearranges a whole network, and it only runs when you pick it** — see [Where nodes end up](node_networks.md#where-nodes-end-up-your-arrangement-and-what-may-move-it). It reaches inside higher-order nodes too: each body is arranged in its own right, deepest first, so an expanded `map` ends up neither overlapping its neighbours nor too small for what it holds. Turn on *Auto-Layout keeps manually placed nodes in place* in Preferences to have it leave your own placements alone. The view is refitted around the result. This is a single undoable step — if you don't like the new arrangement, `Ctrl+Z` puts every node back where it was. Comment notes are not laid out as graph nodes: each is placed afterwards, an anchored one beside what it documents and an unanchored one keeping its position relative to the drawing — see [Comment notes and automatic layout](nodes/annotation.md#comment).
 - *Edit > Copy all problems*: Copies every problem in the design — across all networks — to the clipboard as a plain-text report, for pasting into a bug report. Greyed out when the design has no problems. Available in both modes. See [Where is the error?](#node-networks-panel) above.
 - *View > Switch to Horizontal Layout* / *View > Switch to Vertical Layout*: Changes the orientation of the node network editor panel.
 - *View > Show/Hide Console* (**Ctrl + backtick**): Toggles the [Console panel](#console-panel) docked at the bottom of the window.
@@ -888,8 +888,8 @@ The panel's **Isosurface extraction** group governs how an [`isosurface`](nodes/
 
 | Setting | Description |
 |---------|-------------|
-| Auto-layout algorithm | *Topological Grid* or *Sugiyama*. Controls which algorithm is used for automatic node layout. |
-| Auto-layout after AI edit operations | When enabled, the node network is automatically re-laid out after edits made via the CLI or AI assistant. |
+| Auto-layout algorithm | *Topological Grid* or *Sugiyama*. Controls which algorithm is used by *Edit > Auto-Layout Network*, and which one arranges the nodes a new edit adds. |
+| Auto-Layout keeps manually placed nodes in place | When enabled, a full *Auto-Layout Network* leaves every node you have dragged by hand exactly where it is and arranges the rest around them. Off by default: a reflow you asked for is normally meant to be total. |
 
 ### Background
 

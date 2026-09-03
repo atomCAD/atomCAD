@@ -7,7 +7,7 @@ import '../../frb_generated.dart';
 import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `default_auto_layout_after_edit`, `default_background_color`, `default_ball_and_stick_cull_depth`, `default_csg_mesh_cache_mb`, `default_csg_sketch_cache_mb`, `default_drawing_plane_grid_color`, `default_drawing_plane_grid_strong_color`, `default_eval_memo_cache_mb`, `default_grid_color`, `default_grid_size`, `default_grid_strong_color`, `default_hide_coplanar_wireframe_edges`, `default_invisible_node_cache_mb`, `default_isosurface_cell_budget`, `default_isosurface_fallback_spacing`, `default_isosurface_quality_multiplier`, `default_label_scale`, `default_lattice_grid_color`, `default_lattice_grid_strong_color`, `default_max_displacement`, `default_samples_per_unit_cell`, `default_scene_alpha`, `default_settle_steps`, `default_sharpness_angle_threshold`, `default_show_axes`, `default_show_geometry_shell_for_atomic`, `default_show_grid`, `default_show_lattice_axes`, `default_space_filling_cull_depth`, `default_steps_per_frame`, `default_true`, `default_unit_cell_wireframe_color`, `default_wireframe_active_color`, `default_wireframe_inactive_color`
+// These functions are ignored because they are not marked as `pub`: `default_background_color`, `default_ball_and_stick_cull_depth`, `default_csg_mesh_cache_mb`, `default_csg_sketch_cache_mb`, `default_drawing_plane_grid_color`, `default_drawing_plane_grid_strong_color`, `default_eval_memo_cache_mb`, `default_grid_color`, `default_grid_size`, `default_grid_strong_color`, `default_hide_coplanar_wireframe_edges`, `default_invisible_node_cache_mb`, `default_isosurface_cell_budget`, `default_isosurface_fallback_spacing`, `default_isosurface_quality_multiplier`, `default_label_scale`, `default_lattice_grid_color`, `default_lattice_grid_strong_color`, `default_max_displacement`, `default_samples_per_unit_cell`, `default_scene_alpha`, `default_settle_steps`, `default_sharpness_angle_threshold`, `default_show_axes`, `default_show_geometry_shell_for_atomic`, `default_show_grid`, `default_show_lattice_axes`, `default_space_filling_cull_depth`, `default_steps_per_frame`, `default_true`, `default_unit_cell_wireframe_color`, `default_wireframe_active_color`, `default_wireframe_inactive_color`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 enum AtomicRenderingMethod {
@@ -285,10 +285,12 @@ class GeometryVisualizationPreferences {
 ///
 /// These algorithms reorganize the entire network. They are used:
 /// - When "Auto-Layout Network" is triggered from the menu
-/// - After AI edit operations (when auto_layout_after_edit is enabled)
+/// - As the block layout inside the incremental pass that repairs a drawing
+///   after an AI edit (`doc/design_incremental_layout.md`)
 ///
-/// Note: Incremental positioning of new nodes during editing is handled
-/// separately by the auto_layout module, not through this enum.
+/// Note: an AI edit does **not** reflow the whole network any more; it runs the
+/// incremental pass, which uses this algorithm only to arrange the nodes the
+/// edit itself added.
 enum LayoutAlgorithmPreference {
   /// Simple layered layout based on topological depth. Fast and reliable.
   /// Organizes nodes into columns by their depth in the dependency graph.
@@ -304,25 +306,30 @@ enum LayoutAlgorithmPreference {
 }
 
 /// Preferences for auto-layout operations.
+///
+/// `auto_layout_after_edit` used to live here and is gone
+/// (`doc/design_incremental_layout.md`, open question 1): an AI edit runs the
+/// incremental repair pass rather than a full reflow, so there is nothing left
+/// to switch off.
 class LayoutPreferences {
   /// The layout algorithm to use for auto-layout operations.
   LayoutAlgorithmPreference layoutAlgorithm;
 
-  /// Whether to automatically apply layout after AI edit operations.
-  /// When true, the full network layout is recomputed after each edit.
-  /// When false, only new nodes are positioned incrementally.
-  bool autoLayoutAfterEdit;
+  /// Whether an explicit full reflow leaves hand-placed nodes where they are
+  /// and arranges the rest around them. Off by default.
+  bool respectHandMovedInReflow;
 
   LayoutPreferences({
     required this.layoutAlgorithm,
-    required this.autoLayoutAfterEdit,
+    required this.respectHandMovedInReflow,
   });
 
   static Future<LayoutPreferences> default_() => RustLib.instance.api
       .crateApiStructureDesignerStructureDesignerPreferencesLayoutPreferencesDefault();
 
   @override
-  int get hashCode => layoutAlgorithm.hashCode ^ autoLayoutAfterEdit.hashCode;
+  int get hashCode =>
+      layoutAlgorithm.hashCode ^ respectHandMovedInReflow.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -330,7 +337,7 @@ class LayoutPreferences {
       other is LayoutPreferences &&
           runtimeType == other.runtimeType &&
           layoutAlgorithm == other.layoutAlgorithm &&
-          autoLayoutAfterEdit == other.autoLayoutAfterEdit;
+          respectHandMovedInReflow == other.respectHandMovedInReflow;
 }
 
 /// Budgets for the application's memory-bounded caches, in **megabytes**.

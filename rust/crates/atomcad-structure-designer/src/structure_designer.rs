@@ -6473,11 +6473,20 @@ impl StructureDesigner {
         }
     }
 
-    /// Auto-layout the active (top-level) network with the algorithm selected
-    /// in preferences, recorded as a single undoable step (#270).
+    /// Auto-layout the active network — **every scope of it** — with the
+    /// algorithm selected in preferences, recorded as a single undoable step
+    /// (#270).
     ///
-    /// Layout only rewrites `Node::position`, so the whole action is expressible
-    /// as one `MoveNodesCommand` - no dedicated command type is needed.
+    /// Body-aware since Phase 5 of `doc/design_incremental_layout.md`: the
+    /// reflow descends into every HOF body, deepest first, so an expanded HOF's
+    /// contents are arranged before the scope holding it is. Until then a body
+    /// was never laid out at all, which made "the reflow is the cure" (D4)
+    /// false for exactly the networks that needed it most.
+    ///
+    /// Layout only rewrites `Node::position`, so the action is still expressible
+    /// as move commands - one per scope that moved, bundled into a
+    /// `CompositeCommand` when there is more than one so the whole reflow is a
+    /// single `Ctrl+Z`.
     ///
     /// Returns whether anything actually moved, i.e. whether an undo step was
     /// pushed. A layout that moves nothing pushes nothing, so the caller must
@@ -6489,53 +6498,56 @@ impl StructureDesigner {
             None => return false,
         };
         let algorithm = self.preferences.layout_preferences.layout_algorithm.into();
+        let respect_hand_moved = self
+            .preferences
+            .layout_preferences
+            .respect_hand_moved_in_reflow;
 
-        // Two *shared* borrows of the registry (the network lives inside it), so
-        // no raw pointer is needed here - unlike `layout::layout_network`, which
-        // needs `&mut NodeNetwork` and `&NodeTypeRegistry` simultaneously.
-        let network = match self.node_type_registry.node_networks.get(&network_name) {
-            Some(network) => network,
-            None => return false,
+        // The network lives *inside* the registry, so `&mut NodeNetwork` and
+        // `&NodeTypeRegistry` cannot be held at once - take it out for the
+        // duration and put it back (the same split `ai_text_edit` makes).
+        let Some(mut network) = self.node_type_registry.node_networks.remove(&network_name) else {
+            return false;
         };
-        let positions = crate::layout::compute_layout(network, &self.node_type_registry, algorithm);
+        let scoped = crate::layout::layout_network_scoped(
+            &mut network,
+            &self.node_type_registry,
+            algorithm,
+            respect_hand_moved,
+        );
+        self.node_type_registry
+            .node_networks
+            .insert(network_name.clone(), network);
 
-        // (node_id, old_position, new_position), skipping nodes that stay put.
-        let mut moves: Vec<(u64, DVec2, DVec2)> = positions
-            .iter()
-            .filter_map(|(&node_id, &new_pos)| {
-                network
-                    .nodes
-                    .get(&node_id)
-                    .filter(|node| node.position != new_pos)
-                    .map(|node| (node_id, node.position, new_pos))
-            })
-            .collect();
-        if moves.is_empty() {
+        if scoped.is_empty() {
             return false;
         }
-        // `positions` is a HashMap; sort so the recorded command is deterministic.
-        moves.sort_by_key(|&(node_id, _, _)| node_id);
 
-        let network = match self.node_type_registry.node_networks.get_mut(&network_name) {
-            Some(network) => network,
-            None => return false,
-        };
-        for &(node_id, _old_pos, new_pos) in &moves {
-            if let Some(node) = network.nodes.get_mut(&node_id) {
-                node.position = new_pos;
-            }
+        // An explicit reflow is not a hand placement: it moves everything, so it
+        // claims nothing about intent (design doc, open question 2 - the flags
+        // survive a full reflow rather than being cleared by it).
+        const DESCRIPTION: &str = "Auto-Layout Network";
+        let mut commands: Vec<Box<dyn UndoCommand>> = scoped
+            .into_iter()
+            .map(|scope| {
+                Box::new(super::undo::commands::move_nodes::MoveNodesCommand {
+                    network_name: network_name.clone(),
+                    scope_path: scope.scope_path,
+                    moves: scope.moves,
+                    description: DESCRIPTION.to_string(),
+                    hand_moved_before: Vec::new(),
+                }) as Box<dyn UndoCommand>
+            })
+            .collect();
+
+        if commands.len() == 1 {
+            self.undo_stack.push(commands.remove(0));
+        } else {
+            self.push_command(super::undo::commands::composite::CompositeCommand {
+                commands,
+                description: DESCRIPTION.to_string(),
+            });
         }
-
-        self.push_command(super::undo::commands::move_nodes::MoveNodesCommand {
-            network_name,
-            scope_path: Vec::new(),
-            moves,
-            // An explicit reflow is not a hand placement: it moves everything,
-            // so it claims nothing about intent (design doc, open question 2 —
-            // the flags survive a full reflow rather than being cleared by it).
-            description: "Auto-Layout Network".to_string(),
-            hand_moved_before: Vec::new(),
-        });
         self.set_dirty(true);
         true
     }

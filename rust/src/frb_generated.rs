@@ -17332,10 +17332,10 @@ impl SseDecode
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_layoutAlgorithm = <crate::api::structure_designer::structure_designer_preferences::LayoutAlgorithmPreference>::sse_decode(deserializer);
-        let mut var_autoLayoutAfterEdit = <bool>::sse_decode(deserializer);
+        let mut var_respectHandMovedInReflow = <bool>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_preferences::LayoutPreferences {
             layout_algorithm: var_layoutAlgorithm,
-            auto_layout_after_edit: var_autoLayoutAfterEdit,
+            respect_hand_moved_in_reflow: var_respectHandMovedInReflow,
         };
     }
 }
@@ -26214,7 +26214,9 @@ impl flutter_rust_bridge::IntoDart
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.layout_algorithm.into_into_dart().into_dart(),
-            self.auto_layout_after_edit.into_into_dart().into_dart(),
+            self.respect_hand_moved_in_reflow
+                .into_into_dart()
+                .into_dart(),
         ]
         .into_dart()
     }
@@ -29330,7 +29332,7 @@ impl SseEncode
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <crate::api::structure_designer::structure_designer_preferences::LayoutAlgorithmPreference>::sse_encode(self.layout_algorithm, serializer);
-        <bool>::sse_encode(self.auto_layout_after_edit, serializer);
+        <bool>::sse_encode(self.respect_hand_moved_in_reflow, serializer);
     }
 }
 

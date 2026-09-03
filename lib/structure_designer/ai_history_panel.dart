@@ -1325,10 +1325,10 @@ class _LayoutTab extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           color: _stripBackground,
           child: const Text(
-            'The layout path describes the root scope only: body nodes are '
-            'never reflowed, so a move inside a body comes from creation-time '
-            'placement rather than from the layout pass. “No layout pass” with '
-            'a non-empty list is therefore correct, not a contradiction.',
+            'Incremental layout fits an edit’s own new nodes in and repairs '
+            'what they broke, in every scope including bodies — it does not '
+            'reflow the network. An empty moved list is the normal, good '
+            'result. Only Edit ▸ Auto-Layout Network rearranges everything.',
             style: TextStyle(fontSize: 10, color: Colors.white38),
           ),
         ),

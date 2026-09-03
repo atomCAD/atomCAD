@@ -142,6 +142,35 @@ impl EditDelta {
     }
 }
 
+/// The delta of a whole edit, summed over every scope it touched.
+///
+/// One AI text edit is one transaction over an arbitrary number of scopes (a
+/// `m1/x = ...` statement and a root-scope one in the same script), so the edit
+/// log's per-edit counters are a sum rather than any one scope's
+/// [`EditDelta`]. Kept here rather than in `ai_edit_log` so the layout pass
+/// never has to know what a log entry is; `ai_text_edit` converts.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct DeltaTotals {
+    pub nodes_added: usize,
+    /// Nodes whose *footprint* grew (D13) - the delta's `grown`, named the way
+    /// the log words it.
+    pub nodes_modified: usize,
+    pub nodes_removed: usize,
+    pub wires_added: usize,
+    pub wires_removed: usize,
+}
+
+impl DeltaTotals {
+    /// Fold one scope's delta in.
+    pub fn add(&mut self, delta: &EditDelta) {
+        self.nodes_added += delta.added.len();
+        self.nodes_modified += delta.grown.len();
+        self.nodes_removed += delta.removed.len();
+        self.wires_added += delta.added_wires.len();
+        self.wires_removed += delta.removed_wires.len();
+    }
+}
+
 /// Compare one scope of `network` against the pre-edit snapshot.
 ///
 /// The "before" side is two halves taken together before the edit ran:
