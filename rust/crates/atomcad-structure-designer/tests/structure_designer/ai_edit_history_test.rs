@@ -623,3 +623,39 @@ fn the_log_is_absent_from_a_saved_cnnd_and_survives_a_load() {
 
     let _ = std::fs::remove_file(&path);
 }
+
+// ============================================================================
+// A `--replace` that creates nothing still changed the network
+// ============================================================================
+
+/// The editor clears the network before a single statement runs, so a
+/// `--replace` whose script then creates nothing has wiped the drawing while
+/// reporting every change list empty. A comment-only script is exactly what a
+/// `query` printout cut short at its first blank line amounts to, and that
+/// combination emptied a 135-node network with Undo greyed out and no dirty
+/// flag. Both gates key on the text pair now, not on the change lists alone.
+#[test]
+fn a_replace_that_creates_nothing_is_still_dirty_and_undoable() {
+    let mut sd = designer();
+    edit(&mut sd, SPHERE);
+    sd.set_dirty(false);
+
+    let outcome = sd.ai_text_edit("# Network: main\n", true);
+    assert!(outcome.result.success, "{:?}", outcome.result.errors);
+    assert!(
+        outcome.result.nodes_created.is_empty() && outcome.result.nodes_deleted.is_empty(),
+        "the editor reports nothing, which is the whole problem"
+    );
+    assert!(
+        sd.node_type_registry.node_networks["main"].nodes.is_empty(),
+        "and yet the network was cleared"
+    );
+
+    assert!(sd.is_dirty(), "an emptied network is a changed document");
+    assert!(sd.undo(), "and one undo step");
+    assert_eq!(
+        sd.node_type_registry.node_networks["main"].nodes.len(),
+        1,
+        "undo brings the sphere back"
+    );
+}

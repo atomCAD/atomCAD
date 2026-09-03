@@ -289,6 +289,16 @@ impl StructureDesigner {
                 None => (String::new(), LayoutOutcome::default()),
             };
 
+        // The editor's change lists are not the whole story: a `--replace`
+        // clears the network *before* a single statement runs, so a script
+        // that then creates nothing — empty, or comment-only, which is what a
+        // `query` printout cut short at its first blank line amounts to — has
+        // wiped the drawing while reporting every list empty. The text pair
+        // the log carries is the total answer: if the network reads
+        // differently now, something changed. (Text, not positions: layout
+        // only moves a node when the text changed too.)
+        let text_changed = before_text != after_text;
+
         // Push the log entry. Everything from the `EditResult` goes in verbatim
         // (D8) — including `description_set` / `summary_set` / `output_set`,
         // which are easy to drop and are the only trace an `output` re-point
@@ -326,7 +336,8 @@ impl StructureDesigner {
         // Gating on the post-fold `success` would leave the most damaging edits
         // unrecoverable — the opposite of what that phase was for.
         let made_changes = edit_applied
-            && (!result.nodes_created.is_empty()
+            && (text_changed
+                || !result.nodes_created.is_empty()
                 || !result.nodes_updated.is_empty()
                 || !result.nodes_deleted.is_empty()
                 || !result.connections_made.is_empty()

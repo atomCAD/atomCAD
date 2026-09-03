@@ -1061,7 +1061,12 @@ Future<void> _runMultilineEdit(String serverUrl, bool replace) async {
     stdout.writeln("Enter text format (empty line or '.' to send):");
   }
 
-  final lines = _readUntilTerminator(showPrompt: false);
+  // A pipe or a redirected file is sent whole. The empty-line / '.' terminator
+  // is an interactive convenience; applied to piped input it silently cut the
+  // script at the first blank line — a `query` printout has one on line 2, so
+  // a `--replace` fed its own output wiped the network.
+  final lines =
+      isTty ? _readUntilTerminator(showPrompt: false) : _readStdinToEof();
 
   if (lines == null || lines.isEmpty) {
     if (isTty) {
@@ -1072,6 +1077,19 @@ Future<void> _runMultilineEdit(String serverUrl, bool replace) async {
 
   final code = lines.join('\n');
   await _runEdit(serverUrl, code, replace);
+}
+
+/// Read every line of piped stdin, blank lines included.
+List<String>? _readStdinToEof() {
+  final lines = <String>[];
+  while (true) {
+    final line = stdin.readLineSync();
+    if (line == null) {
+      break;
+    }
+    lines.add(line);
+  }
+  return lines.isEmpty ? null : lines;
 }
 
 Future<void> _runRepl(String serverUrl) async {

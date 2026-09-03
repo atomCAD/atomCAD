@@ -339,7 +339,8 @@ atomcad-cli edit --code="sphere1 = sphere { radius: 10 }"
 # Replace entire network (clears first)
 atomcad-cli edit --code="..." --replace
 
-# Multi-line edit (reads stdin until empty line or ".")
+# Multi-line edit (piped stdin is read to EOF, blank lines included;
+# interactively, an empty line or "." sends)
 atomcad-cli edit
 atomcad-cli edit --replace
 ```
