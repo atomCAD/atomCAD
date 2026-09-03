@@ -128,3 +128,25 @@ fn a_one_element_type_list_is_still_a_list_for_type_args() {
 fn applied(sd: &StructureDesigner) -> bool {
     sd.ai_edit_log.last().is_some_and(|record| record.applied)
 }
+
+#[test]
+fn a_function_type_inside_an_expr_parameter_object_literal() {
+    // Object-literal values used to go through a separate mini-parser that
+    // knew no type syntax at all, so `expr { parameters: [{ …, data_type:
+    // (Crystal,Molecule) -> Crystal }] }` — the serializer's own output for
+    // an identity expr over a function value — was a parse error.
+    let mut sd = designer();
+    sd.ai_text_edit(
+        "e = expr { expression: \"x\", parameters: [{ name: \"x\", data_type: (Crystal,Molecule) -> Crystal }] }\n",
+        false,
+    );
+    assert!(applied(&sd), "{:?}", sd.ai_edit_log.last().unwrap().errors);
+    let first = text(&sd);
+    assert!(
+        first.contains("data_type: (Crystal,Molecule) -> Crystal }"),
+        "{first}"
+    );
+    sd.ai_text_edit(&first, true);
+    assert!(applied(&sd), "{:?}", sd.ai_edit_log.last().unwrap().errors);
+    assert_eq!(text(&sd), first);
+}
