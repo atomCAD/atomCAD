@@ -617,6 +617,8 @@ mod text_format_zone_body_edit_test;
 
 #[path = "structure_designer/text_format_identifier_quoting_test.rs"]
 mod text_format_identifier_quoting_test;
+#[path = "structure_designer/text_format_pin_roles_test.rs"]
+mod text_format_pin_roles_test;
 #[path = "structure_designer/text_format_roundtrip_corpus_test.rs"]
 mod text_format_roundtrip_corpus_test;
 #[path = "structure_designer/text_format_type_syntax_test.rs"]

@@ -243,7 +243,8 @@ fn compute_layout_around(
 /// Every scope of `network`, deepest first — the id-only sibling of
 /// [`delta::scopes_inside_out`].
 ///
-/// The delta's walk is keyed by name path and skips a body whose owner has no
+/// The delta's walk is keyed by name path (`text_format::unique_node_names`,
+/// the one naming rule of the text layer) and skips a body whose owner has no
 /// `custom_name`, which is right for it: the snapshot is name-keyed and an
 /// unnamed node cannot be matched. The full reflow has no snapshot and must
 /// reach every body there is, so it walks ids alone.

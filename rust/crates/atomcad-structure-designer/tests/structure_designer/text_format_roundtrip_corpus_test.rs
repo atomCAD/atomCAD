@@ -14,8 +14,12 @@
 
 use std::path::{Path, PathBuf};
 
+use atomcad_structure_designer::node_network::{FunctionPinRole, NodeNetwork};
 use atomcad_structure_designer::structure_designer::StructureDesigner;
-use atomcad_structure_designer::text_format::{serialize_network, snapshot_node_positions};
+use atomcad_structure_designer::text_format::{
+    serialize_network, snapshot_node_positions, unique_node_names,
+};
+use std::collections::BTreeMap;
 
 fn demolib_path() -> PathBuf {
     Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../.."))
@@ -38,6 +42,34 @@ fn load(path: &Path) -> StructureDesigner {
     sd
 }
 
+/// Every node's function-pin roles, by name path, every scope included —
+/// the one piece of node state the text carries that the identity snapshot
+/// does not, so it is compared on its own.
+fn roles_by_path(network: &NodeNetwork) -> BTreeMap<String, BTreeMap<usize, FunctionPinRole>> {
+    fn walk(
+        network: &NodeNetwork,
+        prefix: &str,
+        out: &mut BTreeMap<String, BTreeMap<usize, FunctionPinRole>>,
+    ) {
+        let names = unique_node_names(network);
+        for (id, node) in &network.nodes {
+            let Some(name) = names.get(id) else {
+                continue;
+            };
+            let path = format!("{prefix}{name}");
+            if !node.function_pin_roles.is_empty() {
+                out.insert(path.clone(), node.function_pin_roles.clone());
+            }
+            if let Some(body) = node.zone.as_deref() {
+                walk(body, &format!("{path}/"), out);
+            }
+        }
+    }
+    let mut out = BTreeMap::new();
+    walk(network, "", &mut out);
+    out
+}
+
 fn text_of(sd: &StructureDesigner, name: &str) -> String {
     let network = sd.node_type_registry.node_networks.get(name).unwrap();
     serialize_network(network, &sd.node_type_registry, Some(name))
@@ -58,6 +90,14 @@ fn run_round_trips(path: &Path) {
     for name in &names {
         sd.set_active_node_network_name(Some(name.clone()));
         let before = text_of(&sd, name);
+        // Everything the text cannot spell — positions, body sizes, collapse
+        // state, hand_moved, function pin roles — must survive by the name
+        // match (D14). The text diff alone cannot see any of it.
+        let before_state = snapshot_node_positions(
+            sd.node_type_registry.node_networks.get(name).unwrap(),
+            &sd.node_type_registry,
+        );
+        let before_roles = roles_by_path(sd.node_type_registry.node_networks.get(name).unwrap());
         let outcome = sd.ai_text_edit(&before, true);
         let applied = sd.ai_edit_log.last().is_some_and(|r| r.applied);
         if !applied {
@@ -73,6 +113,61 @@ fn run_round_trips(path: &Path) {
         if after != before {
             failures.push(format!(
                 "{name}: text changed across --replace\n--- before\n{before}\n--- after\n{after}"
+            ));
+            continue;
+        }
+        let after_roles = roles_by_path(sd.node_type_registry.node_networks.get(name).unwrap());
+        if after_roles != before_roles {
+            failures.push(format!(
+                "{name}: function pin roles changed across --replace:\n  before {before_roles:?}\n  after  {after_roles:?}"
+            ));
+        }
+        let after_state = snapshot_node_positions(
+            sd.node_type_registry.node_networks.get(name).unwrap(),
+            &sd.node_type_registry,
+        );
+        let mut drifted: Vec<String> = before_state
+            .iter()
+            .filter(|(path, state)| after_state.get(*path) != Some(state))
+            .map(|(path, state)| {
+                format!(
+                    "  {}: {:?} -> {:?}",
+                    path.join("/"),
+                    state,
+                    after_state.get(path)
+                )
+            })
+            .collect();
+        drifted.sort();
+        if !drifted.is_empty() || after_state.len() != before_state.len() {
+            // What the incremental layout pass thought it was repairing.
+            let record = sd.ai_edit_log.last().unwrap();
+            let moved: Vec<String> = record
+                .layout
+                .moved
+                .iter()
+                .take(12)
+                .map(|m| format!("  {} {:?} -> {:?}", m.path.join("/"), m.before, m.after))
+                .collect();
+            failures.push(format!(
+                "{name}: node state changed across --replace ({} before, {} after)
+                 layout delta: {:?}
+layout moved {} nodes, first:
+{}
+state diffs:
+{}",
+                before_state.len(),
+                after_state.len(),
+                record.layout.delta,
+                record.layout.moved.len(),
+                moved.join(
+                    "
+"
+                ),
+                drifted.join(
+                    "
+"
+                )
             ));
         }
     }

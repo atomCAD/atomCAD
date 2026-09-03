@@ -38,14 +38,16 @@ output result
 - **Multi-output pin refs:** `input: atom_edit.diff` (selects pin by name). Unqualified `input: atom_edit` defaults to pin 0. Serializer emits `.pinname` only for pin index > 0.
 - **Comment anchors:** `on: mybox` (node) or `on: mybox -> union.a` (wire, `->` is a lexer token), or an array mixing both. See `doc/node_network_text_format.md`.
 
-## Network-level properties (`visible`, `on`)
+## Network-level properties (`visible`, `on`, `pin_roles`)
 
-Two properties inside a node's braces are **not** `NodeData` state and so cannot
-go through `get_text_properties` / `set_text_properties` — the latter receives
-only a `HashMap<String, TextValue>` and can resolve neither a node id nor a node
-name. `visible` lives in `NodeNetwork.displayed_nodes`; `on` (comment anchors,
-`doc/design_wire_annotations.md`) is a list of node ids. Both follow the same
-three-site shape, and a third such property must too:
+Three properties inside a node's braces are **not** `NodeData` state and so
+cannot go through `get_text_properties` / `set_text_properties` — the latter
+receives only a `HashMap<String, TextValue>` and can resolve neither a node id
+nor a node name. `visible` lives in `NodeNetwork.displayed_nodes`; `on`
+(comment anchors, `doc/design_wire_annotations.md`) is a list of node ids;
+`pin_roles` (`doc/design_function_pin_roles.md`) is `Node.function_pin_roles`,
+keyed by pin *index* in memory and written by pin *name*. All follow the same
+three-site shape, and a fourth such property must too:
 
 1. **`network_serializer.rs`** — an extra pass in `serialize_node` that emits the
    property from network state, turning ids back into names.
@@ -58,7 +60,9 @@ three-site shape, and a third such property must too:
 
 Anchors additionally resolve **after** `wire_pending_connections`, not with the
 `visible` pass: a wire anchor names a wire, and that is the pass which creates
-it.
+it. Pin roles resolve there too, because an `apply`'s argument pins are derived
+from the `f` wire that pass makes, and `pin_roles: { arg0: delayed }` has to
+find that pin.
 
 ## NetworkEditor (network_editor.rs)
 
@@ -194,7 +198,8 @@ Two things the editor must keep doing:
   format cannot spell.** A rebuilt body node matched by name keeps its node id,
   its position, its stored `body_width` / `body_height`, its `collapse_mode` and
   its `hand_moved` flag (`doc/design_incremental_layout.md` D14); an unmatched
-  name is new. None of those are in the text format — the serializer emits no
+  name is new. (Function pin roles are *not* carried this way: they have a
+  spelling, `pin_roles`, and travel in the text.) None of those are in the text format — the serializer emits no
   coordinates and no body geometry, and `create_node` synthesizes a position —
   so the only way they survive is the Pass 0 snapshot, which must be taken
   *ahead of* `clear_network`. Without it, every `--replace` scrambles the layout

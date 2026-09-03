@@ -49,12 +49,13 @@
 //!    order, scope-qualified.
 
 use serde::Serialize;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use glam::DVec2;
 
 use crate::node_network::{
-    Argument, ArgumentKind, CollapseMode, IncomingWire, NodeNetwork, SourcePin, Wire,
+    Argument, ArgumentKind, CollapseMode, FunctionPinRole, IncomingWire, NodeNetwork, SourcePin,
+    Wire,
 };
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::nodes::comment::{ANCHOR_PROPERTY, CommentAnchor, CommentData, WireAnchor};
@@ -126,6 +127,13 @@ pub type PositionSnapshot = HashMap<NamePath, NodeLayoutState>;
 /// against exactly the identity match [`NetworkEditor`] performs, and
 /// `layout::diff_scope` diffs against exactly the same map. Three
 /// implementations of the same key would drift.
+/// The property that spells a node's function-pin role overrides
+/// (`doc/design_function_pin_roles.md`): `pin_roles: { input: delayed,
+/// translation: supplied }`, keyed by pin name. Like `visible` and `on` it is
+/// `Node` state rather than `NodeData` state, so it follows the same
+/// three-site shape (see AGENTS.md).
+pub const PIN_ROLES_PROPERTY: &str = "pin_roles";
+
 /// The name each node goes by in the text format, per node id.
 ///
 /// Node names are `custom_name`, which the editor keys everything on — and
@@ -367,6 +375,18 @@ struct PendingAnchors {
     targets: Vec<PendingAnchorTarget>,
 }
 
+/// A `pin_roles: { … }` property, resolved after the wire passes: the pin
+/// names it uses are read off the node's resolved type, and an `apply`'s
+/// argument pins only exist once its `f` wire is in place.
+#[derive(Debug, Clone)]
+struct PendingPinRoles {
+    scope: ScopePath,
+    node_name: String,
+    node_path: String,
+    /// `(pin name, role spelling)` in source order; empty means "clear".
+    roles: Vec<(String, String)>,
+}
+
 /// A statement whose effect has to wait until every node exists and every wire
 /// is drawn. Kept in source order so `delete` / `output` interleave exactly as
 /// written.
@@ -423,6 +443,7 @@ pub struct NetworkEditor<'a> {
     visible_nodes: Vec<(ScopePath, String)>,
     /// Comment anchors to resolve after the connection pass
     pending_anchors: Vec<PendingAnchors>,
+    pending_pin_roles: Vec<PendingPinRoles>,
     /// `delete` / `output` statements, in source order.
     deferred: Vec<DeferredOp>,
     /// Pre-edit `(name path) → position`, taken in Pass 0 (D8).
@@ -443,6 +464,7 @@ impl<'a> NetworkEditor<'a> {
             deferred_connections: Vec::new(),
             visible_nodes: Vec::new(),
             pending_anchors: Vec::new(),
+            pending_pin_roles: Vec::new(),
             deferred: Vec::new(),
             positions: HashMap::new(),
             result: EditResult::new(),
@@ -486,6 +508,10 @@ impl<'a> NetworkEditor<'a> {
         // Step 5 (Pass 2): wire connections
         self.wire_pending_connections();
         self.wire_deferred_connections();
+
+        // Step 5a: function pin roles, which need every pin to exist — an
+        // `apply`'s argument pins are derived from the `f` wire just made.
+        self.apply_pending_pin_roles();
 
         // Step 5b: Comment anchors, which need the wires the previous step made
         self.apply_pending_anchors();
@@ -1159,7 +1185,10 @@ impl<'a> NetworkEditor<'a> {
             // lives in `NodeNetwork.displayed_nodes` and `on` (comment anchors)
             // is a list of node ids, so both are handled in the
             // connection-collection pass, which can see the whole network.
-            if prop_name == "visible" || prop_name == ANCHOR_PROPERTY {
+            if prop_name == "visible"
+                || prop_name == ANCHOR_PROPERTY
+                || prop_name == PIN_ROLES_PROPERTY
+            {
                 continue;
             }
 
@@ -1264,6 +1293,13 @@ impl<'a> NetworkEditor<'a> {
             // otherwise try to wire `on` to a parameter that does not exist.
             if prop_name == ANCHOR_PROPERTY {
                 self.collect_anchors(scope, dest_node_name, dest_node_path, node_id, prop_value);
+                continue;
+            }
+
+            // Function pin roles: `Node` state keyed by pin *index*, written
+            // by pin name. Parked until the pins it names are all in place.
+            if prop_name == PIN_ROLES_PROPERTY {
+                self.collect_pin_roles(scope, dest_node_name, dest_node_path, prop_value);
                 continue;
             }
 
@@ -1797,6 +1833,92 @@ impl<'a> NetworkEditor<'a> {
     /// names. An anchor that does not resolve warns and is dropped rather than
     /// re-pointed at whatever is nearby (D6). Anchors inside a body resolve
     /// within that body, which is already how `drop_dangling_anchors` recurses.
+    /// Queue a `pin_roles: { … }` property. The value must be an object whose
+    /// values are the role names; anything else is a warning and the property
+    /// is dropped, never partially applied.
+    fn collect_pin_roles(
+        &mut self,
+        scope: &[u64],
+        node_name: &str,
+        node_path: &str,
+        prop_value: &PropertyValue,
+    ) {
+        let PropertyValue::Literal(TextValue::Object(fields)) = prop_value else {
+            self.result.add_warning(format!(
+                "`{}` on '{}' must be an object like {{ input: delayed, translation: supplied }}; ignored",
+                PIN_ROLES_PROPERTY, node_path
+            ));
+            return;
+        };
+        let mut roles = Vec::with_capacity(fields.len());
+        for (pin, value) in fields {
+            let Some(role) = value.as_string() else {
+                self.result.add_warning(format!(
+                    "`{}` on '{}': role for pin '{}' must be `delayed` or `supplied`; ignored",
+                    PIN_ROLES_PROPERTY, node_path, pin
+                ));
+                return;
+            };
+            roles.push((pin.clone(), role.to_string()));
+        }
+        self.pending_pin_roles.push(PendingPinRoles {
+            scope: scope.to_vec(),
+            node_name: node_name.to_string(),
+            node_path: node_path.to_string(),
+            roles,
+        });
+    }
+
+    /// Resolve the queued `pin_roles` and assign them. A mentioned property
+    /// assigns the whole map — `pin_roles: {}` clears every override — and
+    /// `auto` is the absence of an entry, never stored (the canonical form
+    /// `StructureDesigner::set_function_pin_role` keeps).
+    fn apply_pending_pin_roles(&mut self) {
+        let pending = std::mem::take(&mut self.pending_pin_roles);
+
+        for entry in pending {
+            let Some(node_id) = self.lookup(&entry.scope, &entry.node_name) else {
+                continue;
+            };
+            let Some(node_type) = scope_net(self.network, &entry.scope)
+                .and_then(|network| network.nodes.get(&node_id))
+                .and_then(|node| self.registry.get_node_type_for_node(node))
+            else {
+                continue;
+            };
+
+            let mut roles = BTreeMap::new();
+            for (pin, spelling) in &entry.roles {
+                let Some(index) = node_type.parameters.iter().position(|p| &p.name == pin) else {
+                    self.result.add_warning(format!(
+                        "`{}` on '{}': no input pin named '{}'; that entry was dropped",
+                        PIN_ROLES_PROPERTY, entry.node_path, pin
+                    ));
+                    continue;
+                };
+                let role = match spelling.as_str() {
+                    "delayed" => FunctionPinRole::Delayed,
+                    "supplied" => FunctionPinRole::Supplied,
+                    "auto" => continue,
+                    other => {
+                        self.result.add_warning(format!(
+                            "`{}` on '{}': unknown role '{}' for pin '{}' (expected `delayed` or `supplied`); that entry was dropped",
+                            PIN_ROLES_PROPERTY, entry.node_path, other, pin
+                        ));
+                        continue;
+                    }
+                };
+                roles.insert(index, role);
+            }
+
+            if let Some(node) = scope_net_mut(self.network, &entry.scope)
+                .and_then(|network| network.nodes.get_mut(&node_id))
+            {
+                node.function_pin_roles = roles;
+            }
+        }
+    }
+
     fn apply_pending_anchors(&mut self) {
         let pending = std::mem::take(&mut self.pending_anchors);
 

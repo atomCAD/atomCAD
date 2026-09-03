@@ -41,7 +41,7 @@ use crate::layout::size::{rendered_body_size, rendered_node_size};
 use crate::node_layout::{FIRST_PIN_OFFSET, HOF_BODY_BOTTOM_PADDING, PER_PARAM_HEIGHT};
 use crate::node_network::{NodeNetwork, SourcePin};
 use crate::node_type_registry::NodeTypeRegistry;
-use crate::text_format::{NamePath, PositionSnapshot};
+use crate::text_format::{NamePath, PositionSnapshot, unique_node_names};
 
 /// The node box both hand-drawn corpora were measured at (160 x 83).
 const TYPICAL_NODE_HEIGHT: f64 = 83.0;
@@ -949,10 +949,9 @@ fn repair_backward_wires(
     // Names are unique within a scope, so the last segment of a path is enough
     // to resolve it here — and it is the only handle that survives a
     // `--replace`, which mints fresh ids for everything.
-    let by_name: HashMap<String, u64> = scope
-        .nodes
-        .iter()
-        .filter_map(|(&id, node)| node.custom_name.clone().map(|name| (name, id)))
+    let by_name: HashMap<String, u64> = unique_node_names(scope)
+        .into_iter()
+        .map(|(id, name)| (name, id))
         .collect();
 
     for key in &delta.added_wires {
@@ -1223,12 +1222,10 @@ pub fn layout_incremental(
         let Some(scope) = scope_mut(network, &scope_ids) else {
             continue;
         };
-        for (id, from, to) in layout_scope(scope, registry, &delta, frame.as_ref(), algorithm) {
-            let Some(name) = scope
-                .nodes
-                .get(&id)
-                .and_then(|node| node.custom_name.clone())
-            else {
+        let moves = layout_scope(scope, registry, &delta, frame.as_ref(), algorithm);
+        let unique = unique_node_names(scope);
+        for (id, from, to) in moves {
+            let Some(name) = unique.get(&id).cloned() else {
                 continue;
             };
             let mut path = scope_names.clone();

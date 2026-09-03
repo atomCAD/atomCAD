@@ -30,7 +30,7 @@ use glam::DVec2;
 use crate::layout::size::rendered_node_size;
 use crate::node_network::{ArgumentKind, Node, NodeNetwork, SourcePin};
 use crate::node_type_registry::NodeTypeRegistry;
-use crate::text_format::{NamePath, PositionSnapshot};
+use crate::text_format::{NamePath, PositionSnapshot, unique_node_names};
 
 /// One end of a wire, addressed the way the delta addresses everything: by the
 /// name path of the node from the root of the network.
@@ -204,7 +204,7 @@ pub fn diff_scope(
     ids.sort_unstable();
     for id in ids {
         let node = &scope.nodes[&id];
-        let Some(path) = node_path(scope_names, node) else {
+        let Some(path) = node_path(scope_names, scope, node) else {
             // An unnamed node cannot be matched against the snapshot at all.
             // Name assignment is total in memory, so this is unreachable in
             // practice; treating it as new is the safe reading.
@@ -226,11 +226,7 @@ pub fn diff_scope(
     //
     // Everything the snapshot holds *directly* in this scope (one name deeper
     // than the scope's own path) that the post-edit scope no longer has.
-    let live: HashSet<&str> = scope
-        .nodes
-        .values()
-        .filter_map(|node| node.custom_name.as_deref())
-        .collect();
+    let live: HashSet<String> = unique_node_names(scope).into_values().collect();
     for path in snapshot.keys() {
         if path.len() != scope_names.len() + 1 || path[..scope_names.len()] != *scope_names {
             continue;
@@ -297,7 +293,7 @@ pub fn collect_wires(
     };
 
     for node in scope.nodes.values() {
-        let Some(destination) = node_path(scope_names, node) else {
+        let Some(destination) = node_path(scope_names, scope, node) else {
             continue;
         };
 
@@ -348,7 +344,9 @@ pub fn collect_wires(
                             else {
                                 continue;
                             };
-                            let Some(path) = node_path(&frame_names[..outer], source_node) else {
+                            let Some(path) =
+                                node_path(&frame_names[..outer], source_scope, source_node)
+                            else {
                                 continue;
                             };
                             WireEnd::NodeOutput { path, pin_index }
@@ -367,7 +365,8 @@ pub fn collect_wires(
                             let Some(owner) = owner_scope.nodes.get(&owner_id) else {
                                 continue;
                             };
-                            let Some(path) = node_path(&frame_names[..outer], owner) else {
+                            let Some(path) = node_path(&frame_names[..outer], owner_scope, owner)
+                            else {
                                 continue;
                             };
                             WireEnd::ZoneInput { path, pin_index }
@@ -394,11 +393,13 @@ fn resolve_scope<'n>(root: &'n NodeNetwork, scope_path: &[u64]) -> Option<&'n No
     Some(network)
 }
 
-/// `scope_names` extended by `node`'s own name, or `None` if it has none.
-fn node_path(scope_names: &[String], node: &Node) -> Option<NamePath> {
-    let name = node.custom_name.as_ref()?;
+/// `scope_names` extended by `node`'s own name — the name the text layer
+/// writes it under (`unique_node_names`, so duplicates key apart), or `None`
+/// if it has none. `scope` is the network the node lives in.
+fn node_path(scope_names: &[String], scope: &NodeNetwork, node: &Node) -> Option<NamePath> {
+    let name = unique_node_names(scope).remove(&node.id)?;
     let mut path = scope_names.to_vec();
-    path.push(name.clone());
+    path.push(name);
     Some(path)
 }
 
@@ -418,9 +419,10 @@ pub fn scopes_inside_out(network: &NodeNetwork) -> Vec<(Vec<u64>, Vec<String>)> 
         out.push((ids.clone(), names.clone()));
         let mut child_ids: Vec<u64> = network.nodes.keys().copied().collect();
         child_ids.sort_unstable();
+        let unique = unique_node_names(network);
         for id in child_ids {
             let node = &network.nodes[&id];
-            let (Some(body), Some(name)) = (node.zone.as_deref(), node.custom_name.as_ref()) else {
+            let (Some(body), Some(name)) = (node.zone.as_deref(), unique.get(&id)) else {
                 continue;
             };
             ids.push(id);
@@ -445,8 +447,9 @@ pub fn scopes_inside_out(network: &NodeNetwork) -> Vec<(Vec<u64>, Vec<String>)> 
 /// name paths, the network speaks ids.
 pub fn node_ids_by_path(network: &NodeNetwork) -> HashMap<NamePath, u64> {
     fn walk(network: &NodeNetwork, prefix: &mut NamePath, out: &mut HashMap<NamePath, u64>) {
+        let unique = unique_node_names(network);
         for node in network.nodes.values() {
-            let Some(name) = node.custom_name.as_ref() else {
+            let Some(name) = unique.get(&node.id) else {
                 continue;
             };
             prefix.push(name.clone());

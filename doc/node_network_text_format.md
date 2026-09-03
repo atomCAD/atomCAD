@@ -219,6 +219,27 @@ int1 = int { value: 42 }
 
 **Design rationale**: Defaulting to invisible keeps the format compact. The AI must be deliberate when it wants to display something. This avoids cluttering the viewport with intermediate computation nodes.
 
+## Function Pin Roles
+
+A node's title-bar function pin (`@name`) exposes the node as a function of its
+input pins. By default the wiring decides which pins are parameters (unwired)
+and which are baked in (wired); a per-pin override (see the reference guide's
+*Function output* section) is written as `pin_roles`, keyed by pin name:
+
+```
+sm = structure_move { input: c, translation: (1, 0, 0), pin_roles: { input: delayed, translation: supplied } }
+```
+
+- `delayed` — always a parameter, even if wired (the wire is a preview).
+- `supplied` — always baked in, even if unwired (the stored value applies).
+- `auto` is the default and is never written; a pin absent from the map is
+  `auto`.
+
+`query` writes `pin_roles` only when some pin is overridden. In an edit, a
+mentioned `pin_roles` assigns the whole map — `pin_roles: {}` clears every
+override — and an omitted one leaves the node's roles as they are. An unknown
+pin name or role is a warning; the other entries still apply.
+
 ## Comment Anchors
 
 A `comment` node's `on` property records what the note documents — a node, or a

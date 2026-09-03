@@ -62,6 +62,7 @@ Inputs are specified as key-value pairs inside braces, separated by commas.
 ### Special Inputs
 
 - `visible: true/false` - Controls whether the node's output is rendered in the viewport
+- `pin_roles: { input: delayed, translation: supplied }` - Per-pin overrides of the node's function-pin signature (`delayed` = always a parameter, `supplied` = always baked in; absent = decided by wiring). Written by `query` only when set; `pin_roles: {}` clears
 
 ## Wire Connections
 

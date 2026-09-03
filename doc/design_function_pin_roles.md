@@ -277,9 +277,20 @@ node-snapshot tests green), **no migration, no version bump**. Copy/paste,
 `duplicate_node`, and body snapshots inherit the field automatically
 (`Node::clone` / `SerializableNode`).
 
-Text format: not represented in v1 (precedent: `collapse_mode`). Consequence to
-document: a whole-network text edit that rebuilds nodes will drop roles —
-same caveat as other non-text node state. Follow-up if it bites.
+Text format: not represented in v1 (precedent: `collapse_mode`). It bit
+(2026-09-03): a `--replace` of a working file's own `query` text dropped the
+roles on 24 `structure_move`s and left a type error on every parameter they
+fed. Roles are now spelled in the text as a network-level property, keyed by
+pin name and written only when some pin is overridden:
+
+```
+sm = structure_move { input: c, translation: (1, 0, 0), pin_roles: { input: delayed, translation: supplied } }
+```
+
+`auto` is never written (absence is `Auto`, the canonical form); a mentioned
+`pin_roles` assigns the whole map and `pin_roles: {}` clears it. See
+`doc/node_network_text_format.md` §Function Pin Roles and
+`text_format/AGENTS.md` (network-level properties).
 
 ### Display relaxation (function-mode nodes are displayable)
 

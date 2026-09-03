@@ -19,11 +19,13 @@ use std::collections::HashSet;
 use atomcad_structure_designer::layout::{
     EditDelta, WireEnd, WireKey, collect_all_wires, diff_scope, scopes_inside_out,
 };
+use atomcad_structure_designer::node_network::FunctionPinRole;
 use atomcad_structure_designer::node_network::{CollapseMode, NodeNetwork};
 use atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
 use atomcad_structure_designer::text_format::{
     NamePath, PositionSnapshot, edit_network, snapshot_node_positions,
 };
+use std::collections::BTreeMap;
 
 use super::layout_test_support::{empty_network, id_by_path, node_by_path};
 
@@ -529,4 +531,50 @@ m = map { xs: r, input_type: Int, output_type: Int }
     let node = node_by_path(&fixture.network, &["m"]);
     assert_eq!(node.collapse_mode, CollapseMode::Collapsed);
     assert_eq!((node.body_width, node.body_height), (512.0, 256.0));
+}
+
+#[test]
+fn function_pin_roles_survive_a_replace_round_trip() {
+    // Roles used to have no text-format spelling, and dropping them changes
+    // the node's function type — the maintainer's file had 24 `structure_move`s
+    // with `input` Delayed and the rest Supplied, feeding
+    // `[HasStructure -> HasStructure]` parameters, and a `--replace` of its own
+    // `query` text left every one with a type error. They travel in the text
+    // now (`pin_roles: { … }`), which is what this round-trip exercises.
+    let mut fixture = Fixture::new(
+        r#"
+c = cuboid { extent: (1, 1, 1) }
+sm = structure_move { input: c, translation: (1, 0, 0) }
+"#,
+    );
+    let sm = fixture.id(&["sm"]);
+    let roles: BTreeMap<usize, FunctionPinRole> = [
+        (0, FunctionPinRole::Delayed),
+        (1, FunctionPinRole::Supplied),
+        (2, FunctionPinRole::Supplied),
+    ]
+    .into_iter()
+    .collect();
+    fixture
+        .network
+        .nodes
+        .get_mut(&sm)
+        .unwrap()
+        .function_pin_roles = roles.clone();
+
+    let text = atomcad_structure_designer::text_format::serialize_network(
+        &fixture.network,
+        &fixture.registry,
+        None,
+    );
+    fixture.edit(&text, true);
+
+    let node = node_by_path(&fixture.network, &["sm"]);
+    assert!(
+        text.contains(
+            "pin_roles: { input: delayed, translation: supplied, subdivision: supplied }"
+        ),
+        "{text}"
+    );
+    assert_eq!(node.function_pin_roles, roles, "roles travel in the text");
 }

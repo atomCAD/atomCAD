@@ -50,10 +50,12 @@
 //! The `output` statement inside a block feeds the **parent HOF node's**
 //! `zone_output_arguments`, not the body network's `return_node_id` (D5).
 
-use super::network_editor::unique_node_names;
+use super::network_editor::{PIN_ROLES_PROPERTY, unique_node_names};
 use super::parser::Parser;
 use super::serializer::format_string;
-use crate::node_network::{ArgumentKind, IncomingWire, Node, NodeNetwork, SourcePin};
+use crate::node_network::{
+    ArgumentKind, FunctionPinRole, IncomingWire, Node, NodeNetwork, SourcePin,
+};
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::nodes::comment::{ANCHOR_PROPERTY, CommentAnchor, CommentData};
 use std::borrow::Cow;
@@ -435,7 +437,35 @@ impl<'a> NetworkSerializer<'a> {
             }
         }
 
-        // Fifth pass: the zone body, when this node owns one worth writing.
+        // Fifth pass: function pin roles. `Node` state keyed by pin index;
+        // written by pin name, in pin order, and only when some pin is
+        // overridden — absence is `Auto`, the canonical form, so a network
+        // without overrides prints exactly as before.
+        if !node.function_pin_roles.is_empty()
+            && let Some(node_type) = self.registry.get_node_type_for_node(node)
+        {
+            let entries: Vec<String> = node
+                .function_pin_roles
+                .iter()
+                .filter_map(|(&index, role)| {
+                    let spelling = match role {
+                        FunctionPinRole::Auto => return None,
+                        FunctionPinRole::Delayed => "delayed",
+                        FunctionPinRole::Supplied => "supplied",
+                    };
+                    let name = &node_type.parameters.get(index)?.name;
+                    Some(format!("{}: {}", format_identifier(name), spelling))
+                })
+                .collect();
+            if !entries.is_empty() {
+                properties.push((
+                    PIN_ROLES_PROPERTY.to_string(),
+                    format!("{{ {} }}", entries.join(", ")),
+                ));
+            }
+        }
+
+        // Sixth pass: the zone body, when this node owns one worth writing.
         let body_block = self.serialize_body(stack, node, indent + 1);
 
         // Format the node. The LHS name and the RHS node type are both
