@@ -3852,3 +3852,61 @@ fn undo_redo_of_a_duplicate_restores_the_suffixed_name() {
     assert!(designer.redo());
     assert_eq!(text_of(&designer, "main"), after);
 }
+
+// ===== GUI rename (`doc/design_node_names_in_ui.md` D3) =====
+
+#[test]
+fn undo_redo_of_a_rename_restores_the_old_then_the_new_name() {
+    let mut designer = setup_designer_with_network("main");
+    let float_id = designer.add_node("float", DVec2::ZERO);
+    let sphere_id = designer.add_node("sphere", DVec2::new(200.0, 0.0));
+    designer.connect_nodes(float_id, 0, sphere_id, 1);
+    designer.undo_stack.clear();
+
+    let before = text_of(&designer, "main");
+    designer.rename_node(&[], float_id, "chassis").unwrap();
+    let after = text_of(&designer, "main");
+    assert_ne!(before, after, "precondition: the rename changed the text");
+    assert_eq!(
+        designer.undo_stack.undo_description(),
+        Some("Rename node"),
+        "the rename is one undo step of its own"
+    );
+
+    assert!(designer.undo());
+    assert_eq!(
+        text_of(&designer, "main"),
+        before,
+        "undo restores the old name — and the downstream reference with it"
+    );
+
+    assert!(designer.redo());
+    assert_eq!(text_of(&designer, "main"), after);
+}
+
+/// The rename is scope-aware, so its undo has to be too: a body node's name
+/// must come back in the body, not in the parent network.
+#[test]
+fn undo_redo_of_a_body_node_rename() {
+    let mut designer = setup_designer_with_network("main");
+    let map_id = designer.add_node("map", DVec2::ZERO);
+    let inner = designer.add_node_scoped(&[map_id], "int", DVec2::ZERO, None);
+    let original = designer.get_scope_network(&[map_id]).unwrap().nodes[&inner]
+        .custom_name
+        .clone();
+    designer.undo_stack.clear();
+
+    designer.rename_node(&[map_id], inner, "counter").unwrap();
+    let name_now = |d: &StructureDesigner| {
+        d.get_scope_network(&[map_id]).unwrap().nodes[&inner]
+            .custom_name
+            .clone()
+    };
+    assert_eq!(name_now(&designer), Some("counter".to_string()));
+
+    assert!(designer.undo());
+    assert_eq!(name_now(&designer), original);
+
+    assert!(designer.redo());
+    assert_eq!(name_now(&designer), Some("counter".to_string()));
+}

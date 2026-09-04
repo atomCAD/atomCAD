@@ -565,6 +565,25 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  /// Rename the node identified by ([scopeChain], [nodeId]) — the property
+  /// panel's name strip (`doc/design_node_names_in_ui.md` D3).
+  ///
+  /// The name is what the text format prints and what every AI message spells,
+  /// so validation lives in Rust (the same `is_valid_user_name` the text
+  /// editor applies, plus per-scope uniqueness) and the returned
+  /// `error_message` is rendered inline under the field. A rejection leaves
+  /// the stored name untouched; a rename to the name the node already holds is
+  /// a no-op that pushes no undo entry.
+  APIResult renameNode(List<BigInt> scopeChain, BigInt nodeId, String newName) {
+    final result = structure_designer_api.renameNode(
+      scopePath: scopeChainToBytes(scopeChain),
+      nodeId: nodeId,
+      newName: newName,
+    );
+    refreshFromKernel();
+    return result;
+  }
+
   void setCameraTransform(APITransform transform) {
     common_api.setCameraTransform(transform: transform);
     refreshFromKernel();

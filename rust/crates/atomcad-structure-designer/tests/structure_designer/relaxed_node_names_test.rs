@@ -424,3 +424,30 @@ fn editor_rejects_a_slash_in_a_node_name() {
         .unwrap();
     assert!(network.nodes.is_empty());
 }
+
+/// The GUI rename strip shares the text editor's validator
+/// (`doc/design_node_names_in_ui.md` D3) — a spelling `format_identifier`
+/// could not quote would break `query` round-tripping, so the field must
+/// refuse exactly what `create_node` refuses.
+#[test]
+fn rename_node_rejects_invalid_name() {
+    let mut designer = setup_designer_with_network("net");
+    let id = designer.add_node("sphere", DVec2::ZERO);
+
+    assert!(designer.rename_node(&[], id, "").is_err());
+    assert!(designer.rename_node(&[], id, "bad`name").is_err());
+    assert!(designer.rename_node(&[], id, "a/b").is_err());
+    assert!(designer.rename_node(&[], id, "with\nnewline").is_err());
+    // Sanity: a relaxed-but-valid name is accepted, edge whitespace trimmed.
+    assert!(
+        designer
+            .rename_node(&[], id, "  lib.relaxed name  ")
+            .is_ok()
+    );
+    assert_eq!(
+        designer.get_scope_network(&[]).unwrap().nodes[&id]
+            .custom_name
+            .as_deref(),
+        Some("lib.relaxed name")
+    );
+}

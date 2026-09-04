@@ -1084,6 +1084,91 @@ impl StructureDesigner {
         }
     }
 
+    /// Rename a node's `custom_name` (`doc/design_node_names_in_ui.md` D3).
+    ///
+    /// The name is the one identifier the GUI, the text format and the AI
+    /// agree on (D1), so this is the GUI's write path into it. `scope_path`
+    /// resolves the (possibly nested) body the node lives in, like every other
+    /// node-data setter (`rust/AGENTS.md`).
+    ///
+    /// Validation is exactly what the text editor applies to a created node
+    /// (`is_valid_user_name`: non-empty, no backtick, no control character, no
+    /// `/`, no edge whitespace) plus the D1 uniqueness invariant — the name
+    /// must not already be held by *another* node in the same scope. The name
+    /// is trimmed first; a rejection leaves the stored name untouched and
+    /// pushes no undo entry, and the text is never silently suffixed (the user
+    /// typed it on purpose).
+    ///
+    /// Renaming is an in-memory relabel with no structural consequence: wires,
+    /// comment anchors, displayed pins, selection and the `.cnnd` file all key
+    /// on node id. So this marks the project dirty and asks for a *view*
+    /// refresh only — nothing evaluated depends on a name.
+    ///
+    /// Returns `Err(reason)` on rejection; renaming to the name the node
+    /// already holds is `Ok(())` and a no-op (no undo entry, dirty flag
+    /// untouched).
+    pub fn rename_node(
+        &mut self,
+        scope_path: &[u64],
+        node_id: u64,
+        new_name: &str,
+    ) -> Result<(), String> {
+        let network_name = match &self.active_node_network_name {
+            Some(n) => n.clone(),
+            None => return Err("No active node network".to_string()),
+        };
+        let trimmed = new_name.trim();
+        if let Err(reason) = super::identifier::is_valid_user_name(trimmed) {
+            return Err(format!("Invalid node name: {reason}"));
+        }
+
+        let old_name = {
+            let Some(network) = self.get_scope_network(scope_path) else {
+                return Err("Node scope not found".to_string());
+            };
+            let Some(node) = network.nodes.get(&node_id) else {
+                return Err("Node not found".to_string());
+            };
+            // Uniqueness is per scope, and only *other* nodes count — a rename
+            // to the node's own name is the no-op below, not a collision.
+            if network
+                .nodes
+                .iter()
+                .any(|(id, n)| *id != node_id && n.custom_name.as_deref() == Some(trimmed))
+            {
+                return Err(format!(
+                    "Name `{trimmed}` is already used by another node here"
+                ));
+            }
+            node.custom_name.clone()
+        };
+
+        if old_name.as_deref() == Some(trimmed) {
+            return Ok(()); // no-op; don't push an empty command or dirty the project
+        }
+
+        {
+            let Some(network) = self.get_scope_network_mut(scope_path) else {
+                return Err("Node scope not found".to_string());
+            };
+            let Some(node) = network.nodes.get_mut(&node_id) else {
+                return Err("Node not found".to_string());
+            };
+            node.custom_name = Some(trimmed.to_string());
+        }
+
+        self.push_command(super::undo::commands::rename_node::RenameNodeCommand {
+            network_name,
+            scope_path: scope_path.to_vec(),
+            node_id,
+            old_name,
+            new_name: trimmed.to_string(),
+        });
+        self.set_dirty(true);
+        self.mark_lightweight_refresh();
+        Ok(())
+    }
+
     /// Override one input pin's role in a node's `-1` function-pin view,
     /// capturing the before-state and pushing an undoable command.
     ///

@@ -27,6 +27,7 @@ pub mod promote_to_parameter;
 pub mod rename_helpers;
 pub mod rename_namespace;
 pub mod rename_network;
+pub mod rename_node;
 pub mod rename_record_type_def;
 pub mod set_collapse_mode;
 pub mod set_comment_anchors;

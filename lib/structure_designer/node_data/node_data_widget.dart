@@ -93,6 +93,7 @@ import 'package:flutter_cad/structure_designer/node_data/mat3_rows_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/mat3_cols_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/mat3_diag_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/network_description_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/node_name_strip.dart';
 import 'package:flutter_cad/structure_designer/node_data/comment_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/custom_node_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/function_output_editor.dart';
@@ -194,6 +195,20 @@ class NodeDataWidget extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  // One shared, editable name strip above whichever per-type
+                  // editor is dispatched below — the surface on which every
+                  // node visibly *has* a name, and the only place the GUI can
+                  // change it (`doc/design_node_names_in_ui.md` D3). Keyed by
+                  // the node's identity so switching selection reseeds the
+                  // field rather than carrying a half-typed name across.
+                  NodeNameStrip(
+                    key: ValueKey(
+                        '${nodeNetworkView.name}|${selected.scopeChain.join('/')}|${selected.node.id}'),
+                    model: model,
+                    root: nodeNetworkView,
+                    node: selected.node,
+                    scopeChain: selected.scopeChain,
+                  ),
                   _buildNodeEditor(selected.node, model),
                   // Generic, node-type-agnostic: every node with input pins can
                   // expose itself as a function on its `-1` pin, so the role

@@ -178,6 +178,16 @@ Right-click in the node editor to open the **Add Node** window and add a new nod
 **Move nodes**
 Left-click a node and drag to move it.
 
+**Read a node's name**
+Hovering a node's title bar shows `chassis · union` — the node's own
+**name** first, then its full type name (a [`closure`](./nodes/math_programming.md#closure)
+with a label adds the label as a third part). The name is what the
+[text format](../node_network_text_format.md) prints, what the AI assistant
+refers to a node by, and what the Node Properties panel lets you change. Its
+own right-click menu has **Copy node name**, which puts the exact spelling on
+the clipboard — for a node inside a higher-order function's body that is the
+path form, `map4/e1`, ready to paste into a prompt.
+
 **Edit a comment note in place**
 Double-click a [comment](./nodes/annotation.md#comment) node — the yellow sticky note — to type into it directly on the canvas, rather than going to the Node Properties panel. Double-click its title bar to edit the title, its body to edit the text; the cursor lands on the character you clicked. Click outside to finish, or press `Esc` to discard. The panel fields still work and stay in sync.
 
@@ -727,6 +737,36 @@ x_rect100_centered
 ```
 
 The header stays put whichever node is selected, and the name can be selected with the mouse; the **⧉** button beside it copies the whole qualified name to the clipboard in one click — handy when you need to type it into a dialog, hand it to the command line, or quote it in a bug report.
+
+**Which node am I editing, and what is it called?** Directly above the
+node-specific fields sits a one-line **name strip**: an editable field holding
+the node's name, the node's type greyed beside it, and a **⧉** copy button.
+
+```
+union7                                    union  ⧉
+```
+
+Every node has a name — one is minted when the node is created (`sphere1`,
+`expr49`) — and it is the identifier everything else agrees on: the statement
+name in the [text format](../node_network_text_format.md), the node the AI
+assistant names when it reports what it changed, the path in an error message.
+Renaming it here is how you turn `union7` into `chassis` so that both you and
+the assistant can talk about it by a name that means something.
+
+- **Enter**, or clicking away, commits the new name. **Esc** puts the old one
+  back. Nothing is written while you type.
+- A name must be non-empty, must not contain a backtick, a slash or a line
+  break, and must not already be used by **another node in the same network**
+  (or in the same higher-order-function body — each body counts separately).
+  A rejected name is reported under the field and the node keeps the name it
+  had; the name is never silently changed to something else.
+- Renaming is undoable with `Ctrl+Z` and does not re-compute anything — a name
+  is a label, and wires, visibility and everything else are unaffected.
+- For a node inside a higher-order function's body the strip shows the body
+  path greyed in front of the field (`map4 /`); you edit only the last part.
+- The **⧉** button copies the full name — the path form, `map4/e1`, for a body
+  node — which is the spelling to paste into a prompt for the AI assistant.
+  The same action is on the node's own right-click menu as **Copy node name**.
 
 This is different for each node, we will discuss this in depth at the specific nodes. There are some general features though:
 

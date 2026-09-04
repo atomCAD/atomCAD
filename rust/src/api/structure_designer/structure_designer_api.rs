@@ -8607,6 +8607,41 @@ pub fn set_collapse_mode(scope_path: Vec<u64>, hof_node_id: u64, mode: APICollap
     }
 }
 
+/// Rename a node's custom name. Thin wrapper; the validation, the mutation and
+/// the undo command live on `StructureDesigner::rename_node`. `scope_path`
+/// identifies the (possibly nested) body the node lives in, like every other
+/// node-data setter. Returns the validator's reason on rejection — the strip
+/// renders it inline under the field rather than throwing. See
+/// `doc/design_node_names_in_ui.md` (D3).
+#[flutter_rust_bridge::frb(sync)]
+pub fn rename_node(scope_path: Vec<u64>, node_id: u64, new_name: String) -> APIResult {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let result =
+                    cad_instance
+                        .structure_designer
+                        .rename_node(&scope_path, node_id, &new_name);
+                refresh_structure_designer_auto(cad_instance);
+                match result {
+                    Ok(()) => APIResult {
+                        success: true,
+                        error_message: String::new(),
+                    },
+                    Err(e) => APIResult {
+                        success: false,
+                        error_message: e,
+                    },
+                }
+            },
+            APIResult {
+                success: false,
+                error_message: "CAD instance not available".to_string(),
+            },
+        )
+    }
+}
+
 /// Resize a comment node.
 /// This performs a direct mutation without undo — call begin_edit_comment_node/end_edit_comment_node
 /// around the resize drag to get a single coalesced undo entry.

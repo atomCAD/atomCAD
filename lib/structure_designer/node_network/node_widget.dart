@@ -20,6 +20,7 @@ import 'package:flutter_cad/structure_designer/node_network/node_network_painter
         GRID_MAJOR_SPACING,
         GRID_MINOR_COLOR,
         GRID_MAJOR_COLOR;
+import 'package:flutter_cad/structure_designer/node_network/node_name_path.dart';
 import 'package:flutter_cad/structure_designer/node_network/scope_resolver.dart';
 import 'package:flutter_cad/structure_designer/namespace_utils.dart';
 import 'package:flutter_cad/structure_designer/find_usages_menu.dart';
@@ -1025,7 +1026,7 @@ class NodeWidget extends StatelessWidget {
                   // signature-only title.
                   Expanded(
                     child: Tooltip(
-                      message: node.nodeTypeName,
+                      message: _headerTooltip,
                       waitDuration: const Duration(milliseconds: 500),
                       preferBelow: false,
                       child: node.outputPins.isNotEmpty
@@ -1107,7 +1108,7 @@ class NodeWidget extends StatelessWidget {
                 ] else ...[
                   Expanded(
                     child: Tooltip(
-                      message: node.nodeTypeName,
+                      message: _headerTooltip,
                       waitDuration: const Duration(milliseconds: 500),
                       preferBelow: false,
                       child: Text(
@@ -1574,6 +1575,27 @@ class NodeWidget extends StatelessWidget {
     );
   }
 
+  /// The header hover text: **name first, type second** — `xray1 · xray`
+  /// (`doc/design_node_names_in_ui.md` D2). The name is the one identifier the
+  /// canvas, the Text tab, the AI History panel and every AI message agree on,
+  /// and hover is the zero-cost surface for it: no mode, no click. The *full*
+  /// type name stays, since that is what the tooltip carried before and the
+  /// header itself shows only the simple name.
+  ///
+  /// A closure's user-supplied label is appended as a third segment — the
+  /// header replaces the type with the label + signature, so without this the
+  /// label would be the only thing the hover could not recover.
+  String get _headerTooltip {
+    final custom = node.customName;
+    final label = node.closureCustomLabel ?? '';
+    final parts = <String>[
+      if (custom != null && custom.isNotEmpty) custom,
+      node.nodeTypeName,
+      if (label.isNotEmpty) label,
+    ];
+    return parts.join(' · ');
+  }
+
   /// The node's error packaged for a bug report (issue #359): which network
   /// and node it sits on, then the message.
   ///
@@ -1815,6 +1837,14 @@ class NodeWidget extends StatelessWidget {
           value: 'copy_error',
           child: Text('Copy error message'),
         ),
+      // D9 (`doc/design_node_names_in_ui.md`): the human's half of the
+      // name round-trip — the exact spelling to paste into a prompt, the
+      // reverse of the Phase-3 *Find node* picker. Body nodes copy as the
+      // path form (`map4/e1`), which is what the AI is handed everywhere.
+      const PopupMenuItem(
+        value: 'copy_node_name',
+        child: Text('Copy node name'),
+      ),
     ]);
 
     addSection('Refactor', [
@@ -1912,6 +1942,10 @@ class NodeWidget extends StatelessWidget {
             Provider.of<StructureDesignerModel>(context, listen: false);
         copyTextToClipboard(context, _errorReportForNode(model),
             confirmation: 'Error message copied to clipboard');
+      } else if (value == 'copy_node_name') {
+        final path = nodeNamePath(resolver.root, scopeChain, node);
+        copyTextToClipboard(context, path,
+            confirmation: 'Copied `$path` to clipboard');
       } else if (value == 'inline') {
         final model =
             Provider.of<StructureDesignerModel>(context, listen: false);

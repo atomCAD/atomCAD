@@ -2235,6 +2235,20 @@ void setCollapseMode(
         .crateApiStructureDesignerStructureDesignerApiSetCollapseMode(
             scopePath: scopePath, hofNodeId: hofNodeId, mode: mode);
 
+/// Rename a node's custom name. Thin wrapper; the validation, the mutation and
+/// the undo command live on `StructureDesigner::rename_node`. `scope_path`
+/// identifies the (possibly nested) body the node lives in, like every other
+/// node-data setter. Returns the validator's reason on rejection — the strip
+/// renders it inline under the field rather than throwing. See
+/// `doc/design_node_names_in_ui.md` (D3).
+APIResult renameNode(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required String newName}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiRenameNode(
+            scopePath: scopePath, nodeId: nodeId, newName: newName);
+
 /// Resize a comment node.
 /// This performs a direct mutation without undo — call begin_edit_comment_node/end_edit_comment_node
 /// around the resize drag to get a single coalesced undo entry.
