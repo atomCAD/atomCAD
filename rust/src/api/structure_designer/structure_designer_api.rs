@@ -54,6 +54,8 @@ use super::structure_designer_api_types::APIMotifSubData;
 use super::structure_designer_api_types::APINamespaceRenamePreview;
 use super::structure_designer_api_types::APINetworkUsage;
 use super::structure_designer_api_types::APINodeEvaluationResult;
+use super::structure_designer_api_types::APINodeNameMatch;
+use super::structure_designer_api_types::APINodeRef;
 use super::structure_designer_api_types::APIParameterData;
 use super::structure_designer_api_types::APIPassivateData;
 use super::structure_designer_api_types::APIPatchBuildData;
@@ -1889,6 +1891,64 @@ pub fn get_network_usage_counts() -> HashMap<String, u32> {
         with_cad_instance_or(
             |cad_instance| cad_instance.structure_designer.network_usage_counts(),
             HashMap::new(),
+        )
+    }
+}
+
+/// Find Node: every node whose **name path** contains `query`, ranked
+/// exact → prefix → substring and then by path, with the active network's
+/// matches first (`doc/design_node_names_in_ui.md` D7/D8).
+///
+/// Matching is case-insensitive on the bare path spelling (`map4/e1`), the one
+/// the AI is handed in error paths and the AI History panel — never the
+/// backtick-quoted form the text format prints. Scope is the active network
+/// including its bodies at any depth; `all_networks` widens it to the whole
+/// document. An empty query matches everything, so opening the picker doubles
+/// as a name directory. Read-only: no undo command, no refresh.
+#[flutter_rust_bridge::frb(sync)]
+pub fn find_nodes_by_name(query: String, all_networks: bool) -> Vec<APINodeNameMatch> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                cad_instance
+                    .structure_designer
+                    .find_nodes_by_name(&query, all_networks)
+                    .into_iter()
+                    .map(|m| APINodeNameMatch {
+                        network: m.network,
+                        scope_path: m.scope_path,
+                        node_id: m.node_id,
+                        name_path: m.name_path,
+                        node_type_name: m.node_type_name,
+                    })
+                    .collect()
+            },
+            Vec::new(),
+        )
+    }
+}
+
+/// The exact counterpart of [`find_nodes_by_name`]: resolves one name path
+/// (`map4/e1`) inside `network_name` to the address a jump needs, or `None`
+/// when nothing holds that name *now* (`doc/design_node_names_in_ui.md` D8).
+///
+/// The AI History panel's node links (D12) resolve live against the current
+/// document rather than against the snapshot the entry was recorded from, so a
+/// node renamed or deleted since the edit legitimately misses.
+#[flutter_rust_bridge::frb(sync)]
+pub fn resolve_node_path(network_name: String, path: String) -> Option<APINodeRef> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                cad_instance
+                    .structure_designer
+                    .resolve_node_path(&network_name, &path)
+                    .map(|node_ref| APINodeRef {
+                        scope_path: node_ref.scope_path,
+                        node_id: node_ref.node_id,
+                    })
+            },
+            None,
         )
     }
 }

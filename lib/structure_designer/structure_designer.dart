@@ -11,6 +11,7 @@ import '../common/section.dart';
 import 'error_report.dart';
 import 'structure_designer_model.dart';
 import 'node_network/export_network_image.dart';
+import 'node_network/find_node_picker.dart';
 import 'node_network/node_network.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_preferences.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
@@ -315,6 +316,17 @@ class _StructureDesignerState extends State<StructureDesigner> {
                           ),
                           if (!model.directEditingMode) ...[
                             const Divider(),
+                            // Find node (`doc/design_node_names_in_ui.md` D7).
+                            // The canonical home of the picker; the tab-strip
+                            // search icon opens the same one.
+                            MenuItemButton(
+                              key: const Key('find_node_item'),
+                              onPressed: _showFindNodePicker,
+                              shortcut: const SingleActivator(
+                                  LogicalKeyboardKey.keyF,
+                                  control: true),
+                              child: const Text('Find node…'),
+                            ),
                             MenuItemButton(
                               key: const Key('validate_network_item'),
                               onPressed: () {
@@ -663,6 +675,13 @@ class _StructureDesignerState extends State<StructureDesigner> {
         graphModel.toggleNodeTitleMode();
         return KeyEventResult.handled;
       }
+      // Ctrl+F: Find node by name (`doc/design_node_names_in_ui.md` D7). Node
+      // Network Mode only — Direct Editing Mode has no node canvas to land on.
+      if (event.logicalKey == LogicalKeyboardKey.keyF &&
+          !graphModel.directEditingMode) {
+        _showFindNodePicker();
+        return KeyEventResult.handled;
+      }
       // Ctrl+Shift+S: Save As (issue #99) — always a dialog, whether or not the
       // design already has a file. Must be tested before the quick-save branch,
       // which excludes Shift precisely to leave this combo free.
@@ -703,6 +722,21 @@ class _StructureDesignerState extends State<StructureDesigner> {
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
+  }
+
+  /// *Edit > Find node…* and Ctrl+F — the "go to symbol" picker
+  /// (`doc/design_node_names_in_ui.md` D7).
+  ///
+  /// The picker anchors itself to the node-network editor, which is what
+  /// [nodeNetworkKey] addresses; the tab-strip icon opens the same overlay with
+  /// the same anchor, so both entry points land identically.
+  void _showFindNodePicker() {
+    if (graphModel.directEditingMode) return;
+    showFindNodePicker(
+      context: context,
+      model: graphModel,
+      anchorKey: nodeNetworkKey,
+    );
   }
 
   /// *Edit > Copy all problems* — puts the whole design's unified error list on

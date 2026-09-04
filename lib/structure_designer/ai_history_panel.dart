@@ -43,6 +43,17 @@
 /// edits cannot give. The `⇄` toolbar button hides them when the edits are all
 /// one wants to see.
 ///
+/// **Every node path here is a link** (D12 of `doc/design_node_names_in_ui.md`).
+/// The *Layout* tab's moved-node rows and the *Diff* tab's hunk titles hold the
+/// same path spelling the AI is handed, so they resolve straight back to the
+/// node through `resolve_node_path` and a click jumps there. Resolution is live
+/// rather than recorded, so a node renamed or deleted since the edit misses
+/// with a SnackBar naming the path, the network and the edit number — the
+/// expected outcome for a removed hunk. Because the *Diff* tab renders the
+/// *Text* diff (see above), its titles are `@@ … @@` range headers rather than
+/// node paths today and stay plain text; [NodeNameLink.isLinkable] is the one
+/// rule, so they light up unchanged if the by-node view ever returns.
+///
 /// **PlatformInt64 gotcha**, as in `console_panel.dart`: `timestampMs` is
 /// FRB's `PlatformInt64`, `int` on native and `BigInt` on web. Desktop is this
 /// project's target and the code below uses `int` directly.
@@ -50,9 +61,11 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/common/draggable_dialog.dart';
+import 'package:flutter_cad/common/error_display.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/ai_history_api.dart';
 import 'package:provider/provider.dart';
 import 'ai_history_export.dart';
+import 'node_network/node_name_link.dart';
 import 'structure_designer_model.dart';
 
 // Shared with the Console and Profiler panels so the three read as one dock.
@@ -164,7 +177,7 @@ class _AiHistoryPanelState extends State<AiHistoryPanel>
                     ),
                     const VerticalDivider(
                         width: 1, thickness: 1, color: Colors.black54),
-                    Expanded(child: _buildDetail()),
+                    Expanded(child: _buildDetail(model)),
                   ],
                 ),
               ),
@@ -330,7 +343,27 @@ class _AiHistoryPanelState extends State<AiHistoryPanel>
     });
   }
 
-  Widget _buildDetail() {
+  /// Lands on a node path clicked in the *Diff* or *Layout* tab (D12).
+  ///
+  /// The SnackBar lives here rather than on the model, which has no
+  /// `BuildContext` and no messenger — the same split `goToRootCause` uses. It
+  /// is the neutral copyable bar, not the red error one: a miss is an ordinary
+  /// answer ("that name is nobody's now"), not a failure.
+  void _jumpToNodePath(
+    StructureDesignerModel model,
+    String network,
+    String path,
+    BigInt seq,
+  ) {
+    if (model.jumpToNodePath(network, path)) return;
+    final where = network.isEmpty ? '(no active network)' : '`$network`';
+    showCopyableSnackBar(
+      context,
+      'No node `$path` in $where — renamed or deleted since edit #$seq',
+    );
+  }
+
+  Widget _buildDetail(StructureDesignerModel model) {
     final detail = _detail;
     if (detail == null) {
       return const _Placeholder(
@@ -350,12 +383,19 @@ class _AiHistoryPanelState extends State<AiHistoryPanel>
             children: [
               _DiffTab(
                 diff: _diff,
-                onExpand: () => _showDiffDialog(detail),
+                network: detail.networkName,
+                onExpand: () => _showDiffDialog(detail, model),
+                onJumpToNode: (network, path) =>
+                    _jumpToNodePath(model, network, path, detail.seq),
               ),
               _NetworkTab(detail: detail),
               _RequestTab(detail: detail),
               _ResultTab(detail: detail),
-              _LayoutTab(detail: detail),
+              _LayoutTab(
+                detail: detail,
+                onJumpToNode: (network, path) =>
+                    _jumpToNodePath(model, network, path, detail.seq),
+              ),
             ],
           ),
         ),
@@ -420,7 +460,7 @@ class _AiHistoryPanelState extends State<AiHistoryPanel>
 
   /// The `⤢` expansion of D11: height is the scarce dimension in a docked
   /// panel, and a long diff is what one most wants to read in full.
-  void _showDiffDialog(APIAiEditDetail detail) {
+  void _showDiffDialog(APIAiEditDetail detail, StructureDesignerModel model) {
     final size = MediaQuery.of(context).size;
     showDialog<void>(
       context: context,
@@ -464,7 +504,18 @@ class _AiHistoryPanelState extends State<AiHistoryPanel>
                 ),
                 if (!detail.beforeComplete || !detail.afterComplete)
                   const _IncompleteSnapshotBanner(),
-                Expanded(child: _DiffTab(diff: diff)),
+                Expanded(
+                  child: _DiffTab(
+                    diff: diff,
+                    network: detail.networkName,
+                    // Close the dialog *before* jumping, so the canvas is
+                    // visible when the node is selected and centred (D12).
+                    onJumpToNode: (network, path) {
+                      Navigator.of(dialogContext).pop();
+                      _jumpToNodePath(model, network, path, detail.seq);
+                    },
+                  ),
+                ),
               ],
             ),
           ),
@@ -924,10 +975,21 @@ class _IncompleteSnapshotBanner extends StatelessWidget {
 /// view returned. The kernel still computes it — `ai_history_diff` keeps its
 /// `by_node` flag — so this is a UI decision, not a deletion.
 class _DiffTab extends StatelessWidget {
-  const _DiffTab({required this.diff, this.onExpand});
+  const _DiffTab({
+    required this.diff,
+    required this.network,
+    this.onExpand,
+    this.onJumpToNode,
+  });
 
   final APIAiDiff? diff;
+
+  /// The entry's own network — not necessarily the active one — which is what
+  /// a hunk title's path is relative to (D12).
+  final String network;
+
   final VoidCallback? onExpand;
+  final NodeJumpCallback? onJumpToNode;
 
   @override
   Widget build(BuildContext context) {
@@ -986,8 +1048,11 @@ class _DiffTab extends StatelessWidget {
           child: ListView.builder(
             padding: const EdgeInsets.symmetric(vertical: 4),
             itemCount: current.hunks.length,
-            itemBuilder: (context, index) =>
-                _DiffHunkView(hunk: current.hunks[index]),
+            itemBuilder: (context, index) => AiHistoryDiffHunk(
+              hunk: current.hunks[index],
+              network: network,
+              onJumpToNode: onJumpToNode,
+            ),
           ),
         ),
       ),
@@ -995,10 +1060,23 @@ class _DiffTab extends StatelessWidget {
   }
 }
 
-class _DiffHunkView extends StatelessWidget {
-  const _DiffHunkView({required this.hunk});
+/// One hunk: a title strip and the hunk's own lines.
+///
+/// Public only so `test/ai_history_node_links_test.dart` can pump it — the tabs
+/// themselves stay private, and this leaf needs neither the model nor a kernel
+/// (D12's test note). The title is a [NodeNameLink]; the lines are deliberately
+/// *not*, so a hunk stays selectable and copyable as a block.
+class AiHistoryDiffHunk extends StatelessWidget {
+  const AiHistoryDiffHunk({
+    super.key,
+    required this.hunk,
+    required this.network,
+    this.onJumpToNode,
+  });
 
   final APIDiffHunk hunk;
+  final String network;
+  final NodeJumpCallback? onJumpToNode;
 
   @override
   Widget build(BuildContext context) {
@@ -1020,10 +1098,11 @@ class _DiffHunkView extends StatelessWidget {
                         color: _kindColor(hunk.kind))),
                 const SizedBox(width: 6),
                 Expanded(
-                  child: Text(
-                    _title(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  child: NodeNameLink(
+                    path: hunk.nodePath,
+                    network: network,
+                    onJump: onJumpToNode,
+                    label: '(hunk)',
                     style: TextStyle(
                         fontFamily: 'monospace',
                         fontSize: 11,
@@ -1045,8 +1124,6 @@ class _DiffHunkView extends StatelessWidget {
       ),
     );
   }
-
-  String _title() => hunk.nodePath.isNotEmpty ? hunk.nodePath : '(hunk)';
 }
 
 String _kindGlyph(APIDiffHunkKind kind) => switch (kind) {
@@ -1262,9 +1339,10 @@ class _ResultTab extends StatelessWidget {
 /// What layout did to the drawing (D9) — the one thing neither the text diff
 /// nor the `EditResult` can say.
 class _LayoutTab extends StatelessWidget {
-  const _LayoutTab({required this.detail});
+  const _LayoutTab({required this.detail, this.onJumpToNode});
 
   final APIAiEditDetail detail;
+  final NodeJumpCallback? onJumpToNode;
 
   @override
   Widget build(BuildContext context) {
@@ -1313,7 +1391,11 @@ class _LayoutTab extends StatelessWidget {
                             ),
                           ),
                           for (final moved in groups[scope]!)
-                            _MovedNodeRow(moved: moved),
+                            AiHistoryMovedNodeRow(
+                              moved: moved,
+                              network: detail.networkName,
+                              onJumpToNode: onJumpToNode,
+                            ),
                         ],
                       ],
                     ),
@@ -1337,10 +1419,21 @@ class _LayoutTab extends StatelessWidget {
   }
 }
 
-class _MovedNodeRow extends StatelessWidget {
-  const _MovedNodeRow({required this.moved});
+/// One moved node: its path, where it went, and how far.
+///
+/// Public for the same reason [AiHistoryDiffHunk] is — the widget test pumps it
+/// directly. The path cell is a [NodeNameLink]; the coordinates are not.
+class AiHistoryMovedNodeRow extends StatelessWidget {
+  const AiHistoryMovedNodeRow({
+    super.key,
+    required this.moved,
+    required this.network,
+    this.onJumpToNode,
+  });
 
   final APIMovedNode moved;
+  final String network;
+  final NodeJumpCallback? onJumpToNode;
 
   @override
   Widget build(BuildContext context) {
@@ -1350,10 +1443,12 @@ class _MovedNodeRow extends StatelessWidget {
         children: [
           Expanded(
             flex: 4,
-            child: Text(moved.path,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: _monoStyle),
+            child: NodeNameLink(
+              path: moved.path,
+              network: network,
+              onJump: onJumpToNode,
+              style: _monoStyle,
+            ),
           ),
           Expanded(
             flex: 5,

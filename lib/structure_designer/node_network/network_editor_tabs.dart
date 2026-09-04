@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network.dart';
 import 'package:flutter_cad/structure_designer/node_network/network_text_editor.dart';
+import 'package:flutter_cad/structure_designer/node_network/find_node_picker.dart';
 
 /// Tab container that switches between the visual Graph editor and the Text editor.
 class NetworkEditorTabs extends StatefulWidget {
@@ -124,27 +125,52 @@ class _NetworkEditorTabsState extends State<NetworkEditorTabs>
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // Compact tab bar
+        // Compact tab bar, with the Find Node button parked at its right end.
         SizedBox(
           height: 28,
-          child: TabBar(
-            controller: _tabController,
-            tabs: const [
-              Tab(
-                key: Key('graph_tab'),
-                icon: Icon(Icons.schema, size: 14),
-                iconMargin: EdgeInsets.zero,
-                height: 28,
+          child: Row(
+            children: [
+              Expanded(
+                child: TabBar(
+                  controller: _tabController,
+                  tabs: const [
+                    Tab(
+                      key: Key('graph_tab'),
+                      icon: Icon(Icons.schema, size: 14),
+                      iconMargin: EdgeInsets.zero,
+                      height: 28,
+                    ),
+                    Tab(
+                      key: Key('text_tab'),
+                      icon: Icon(Icons.code, size: 14),
+                      iconMargin: EdgeInsets.zero,
+                      height: 28,
+                    ),
+                  ],
+                  labelPadding: EdgeInsets.zero,
+                  indicatorSize: TabBarIndicatorSize.tab,
+                ),
               ),
-              Tab(
-                key: Key('text_tab'),
-                icon: Icon(Icons.code, size: 14),
-                iconMargin: EdgeInsets.zero,
-                height: 28,
+              // Find Node (`doc/design_node_names_in_ui.md` D7). The Edit menu
+              // is the canonical home and Ctrl+F the fast path; this is the
+              // discoverable one, reachable without knowing either.
+              Tooltip(
+                message: 'Find node by name (Ctrl+F)',
+                child: IconButton(
+                  key: const Key('find_node_button'),
+                  icon: const Icon(Icons.search, size: 14),
+                  padding: EdgeInsets.zero,
+                  constraints:
+                      const BoxConstraints(minWidth: 28, minHeight: 28),
+                  splashRadius: 14,
+                  onPressed: () => showFindNodePicker(
+                    context: context,
+                    model: widget.graphModel,
+                    anchorKey: widget.nodeNetworkKey,
+                  ),
+                ),
               ),
             ],
-            labelPadding: EdgeInsets.zero,
-            indicatorSize: TabBarIndicatorSize.tab,
           ),
         ),
         // Tab content - use IndexedStack to keep both alive

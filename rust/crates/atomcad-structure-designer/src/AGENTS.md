@@ -52,6 +52,7 @@ structure_designer/
 ├── data_type.rs               # DataType enum: type system for pins
 ├── node_type_registry.rs      # Central registry of all node types
 ├── network_usages.rs          # Find Usages: read-only collection of a network's instance nodes
+├── node_name_search.rs        # Find Node: name-path resolution (`map4/e1`) and the ranked name search
 ├── network_validator.rs       # Validates and repairs networks
 ├── node_dependency_analysis.rs    # Computes downstream dependents
 ├── node_display_policy_resolver.rs # Controls node visibility

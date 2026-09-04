@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.10.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1279519646;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -415684676;
 
 // Section: executor
 
@@ -4029,6 +4029,42 @@ fn wire__crate__api__structure_designer__structure_designer_api__factor_selectio
                 transform_result_sse::<_, ()>((move || {
                      let output_ok = Result::<_,()>::Ok(crate::api::structure_designer::structure_designer_api::factor_selection_into_subnetwork(api_request))?;   Ok(output_ok)
                 })()) })
+}
+fn wire__crate__api__structure_designer__structure_designer_api__find_nodes_by_name_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "find_nodes_by_name",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_query = <String>::sse_decode(&mut deserializer);
+            let api_all_networks = <bool>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(
+                    crate::api::structure_designer::structure_designer_api::find_nodes_by_name(
+                        api_query,
+                        api_all_networks,
+                    ),
+                )?;
+                Ok(output_ok)
+            })())
+        },
+    )
 }
 fn wire__crate__api__common_api__gadget_drag_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -10642,6 +10678,42 @@ fn wire__crate__api__structure_designer__structure_designer_api__resize_comment_
         },
     )
 }
+fn wire__crate__api__structure_designer__structure_designer_api__resolve_node_path_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "resolve_node_path",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_network_name = <String>::sse_decode(&mut deserializer);
+            let api_path = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(
+                    crate::api::structure_designer::structure_designer_api::resolve_node_path(
+                        api_network_name,
+                        api_path,
+                    ),
+                )?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__structure_designer__structure_designer_api__run_cli_batch_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -16063,6 +16135,24 @@ impl SseDecode
     }
 }
 
+impl SseDecode for crate::api::structure_designer::structure_designer_api_types::APINodeNameMatch {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_network = <String>::sse_decode(deserializer);
+        let mut var_scopePath = <Vec<u64>>::sse_decode(deserializer);
+        let mut var_nodeId = <u64>::sse_decode(deserializer);
+        let mut var_namePath = <String>::sse_decode(deserializer);
+        let mut var_nodeTypeName = <String>::sse_decode(deserializer);
+        return crate::api::structure_designer::structure_designer_api_types::APINodeNameMatch {
+            network: var_network,
+            scope_path: var_scopePath,
+            node_id: var_nodeId,
+            name_path: var_namePath,
+            node_type_name: var_nodeTypeName,
+        };
+    }
+}
+
 impl SseDecode for crate::api::structure_designer::profiling_api::APINodeProfileRecord {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -16101,6 +16191,18 @@ impl SseDecode for crate::api::structure_designer::profiling_api::APINodeProfile
             evicted: var_evicted,
             self_ms: var_selfMs,
             total_ms: var_totalMs,
+        };
+    }
+}
+
+impl SseDecode for crate::api::structure_designer::structure_designer_api_types::APINodeRef {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_scopePath = <Vec<u64>>::sse_decode(deserializer);
+        let mut var_nodeId = <u64>::sse_decode(deserializer);
+        return crate::api::structure_designer::structure_designer_api_types::APINodeRef {
+            scope_path: var_scopePath,
+            node_id: var_nodeId,
         };
     }
 }
@@ -17685,6 +17787,20 @@ impl SseDecode
     }
 }
 
+impl SseDecode
+    for Vec<crate::api::structure_designer::structure_designer_api_types::APINodeNameMatch>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::structure_designer::structure_designer_api_types::APINodeNameMatch>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<crate::api::structure_designer::profiling_api::APINodeProfileRecord> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -19139,6 +19255,19 @@ impl SseDecode
 }
 
 impl SseDecode
+    for Option<crate::api::structure_designer::structure_designer_api_types::APINodeRef>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::structure_designer::structure_designer_api_types::APINodeRef>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode
     for Option<crate::api::structure_designer::structure_designer_api_types::APIParameterData>
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -20200,21 +20329,21 @@ fn pde_ffi_dispatcher_primary_impl(
 81 => wire__crate__api__structure_designer__structure_designer_preferences__atomic_structure_visualization_default_impl(port, ptr, rust_vec_len, data_len),
 82 => wire__crate__api__structure_designer__structure_designer_preferences__atomic_structure_visualization_preferences_default_impl(port, ptr, rust_vec_len, data_len),
 84 => wire__crate__api__structure_designer__structure_designer_preferences__background_preferences_default_impl(port, ptr, rust_vec_len, data_len),
-143 => wire__crate__api__structure_designer__structure_designer_preferences__geometry_visualization_default_impl(port, ptr, rust_vec_len, data_len),
-144 => wire__crate__api__structure_designer__structure_designer_preferences__geometry_visualization_preferences_default_impl(port, ptr, rust_vec_len, data_len),
-303 => wire__crate__api__common_api__init_app_impl(port, ptr, rust_vec_len, data_len),
-312 => wire__crate__api__structure_designer__structure_designer_preferences__layout_algorithm_preference_default_impl(port, ptr, rust_vec_len, data_len),
-313 => wire__crate__api__structure_designer__structure_designer_preferences__layout_preferences_default_impl(port, ptr, rust_vec_len, data_len),
-316 => wire__crate__api__structure_designer__structure_designer_preferences__memory_preferences_default_impl(port, ptr, rust_vec_len, data_len),
-317 => wire__crate__api__structure_designer__structure_designer_preferences__mesh_smoothing_default_impl(port, ptr, rust_vec_len, data_len),
-331 => wire__crate__api__structure_designer__structure_designer_preferences__node_display_policy_default_impl(port, ptr, rust_vec_len, data_len),
-332 => wire__crate__api__structure_designer__structure_designer_preferences__node_display_preferences_default_impl(port, ptr, rust_vec_len, data_len),
-333 => wire__crate__api__structure_designer__structure_designer_preferences__node_title_mode_default_impl(port, ptr, rust_vec_len, data_len),
-334 => wire__crate__api__structure_designer__structure_designer_api_types__node_type_category_display_name_impl(port, ptr, rust_vec_len, data_len),
-335 => wire__crate__api__structure_designer__structure_designer_api_types__node_type_category_order_impl(port, ptr, rust_vec_len, data_len),
-487 => wire__crate__api__structure_designer__structure_designer_preferences__simulation_preferences_default_impl(port, ptr, rust_vec_len, data_len),
-490 => wire__crate__api__structure_designer__structure_designer_preferences__structure_designer_preferences_default_impl(port, ptr, rust_vec_len, data_len),
-492 => wire__crate__api__structure_designer__structure_designer_preferences__surface_transparency_mode_default_impl(port, ptr, rust_vec_len, data_len),
+144 => wire__crate__api__structure_designer__structure_designer_preferences__geometry_visualization_default_impl(port, ptr, rust_vec_len, data_len),
+145 => wire__crate__api__structure_designer__structure_designer_preferences__geometry_visualization_preferences_default_impl(port, ptr, rust_vec_len, data_len),
+304 => wire__crate__api__common_api__init_app_impl(port, ptr, rust_vec_len, data_len),
+313 => wire__crate__api__structure_designer__structure_designer_preferences__layout_algorithm_preference_default_impl(port, ptr, rust_vec_len, data_len),
+314 => wire__crate__api__structure_designer__structure_designer_preferences__layout_preferences_default_impl(port, ptr, rust_vec_len, data_len),
+317 => wire__crate__api__structure_designer__structure_designer_preferences__memory_preferences_default_impl(port, ptr, rust_vec_len, data_len),
+318 => wire__crate__api__structure_designer__structure_designer_preferences__mesh_smoothing_default_impl(port, ptr, rust_vec_len, data_len),
+332 => wire__crate__api__structure_designer__structure_designer_preferences__node_display_policy_default_impl(port, ptr, rust_vec_len, data_len),
+333 => wire__crate__api__structure_designer__structure_designer_preferences__node_display_preferences_default_impl(port, ptr, rust_vec_len, data_len),
+334 => wire__crate__api__structure_designer__structure_designer_preferences__node_title_mode_default_impl(port, ptr, rust_vec_len, data_len),
+335 => wire__crate__api__structure_designer__structure_designer_api_types__node_type_category_display_name_impl(port, ptr, rust_vec_len, data_len),
+336 => wire__crate__api__structure_designer__structure_designer_api_types__node_type_category_order_impl(port, ptr, rust_vec_len, data_len),
+489 => wire__crate__api__structure_designer__structure_designer_preferences__simulation_preferences_default_impl(port, ptr, rust_vec_len, data_len),
+492 => wire__crate__api__structure_designer__structure_designer_preferences__structure_designer_preferences_default_impl(port, ptr, rust_vec_len, data_len),
+494 => wire__crate__api__structure_designer__structure_designer_preferences__surface_transparency_mode_default_impl(port, ptr, rust_vec_len, data_len),
                         _ => unreachable!(),
                     }
 }
@@ -20361,362 +20490,364 @@ fn pde_ffi_dispatcher_sync_impl(
 136 => wire__crate__api__structure_designer__structure_designer_api__export_visible_atomic_structures_impl(ptr, rust_vec_len, data_len),
 137 => wire__crate__api__structure_designer__structure_designer_api__extract_closure_to_network_impl(ptr, rust_vec_len, data_len),
 138 => wire__crate__api__structure_designer__structure_designer_api__factor_selection_into_subnetwork_impl(ptr, rust_vec_len, data_len),
-139 => wire__crate__api__common_api__gadget_drag_impl(ptr, rust_vec_len, data_len),
-140 => wire__crate__api__common_api__gadget_end_drag_impl(ptr, rust_vec_len, data_len),
-141 => wire__crate__api__common_api__gadget_hit_test_impl(ptr, rust_vec_len, data_len),
-142 => wire__crate__api__common_api__gadget_start_drag_impl(ptr, rust_vec_len, data_len),
-145 => wire__crate__api__structure_designer__atom_edit_api__get_active_atom_edit_tool_impl(ptr, rust_vec_len, data_len),
-146 => wire__crate__api__structure_designer__edit_atom_api__get_active_edit_atom_tool_impl(ptr, rust_vec_len, data_len),
-147 => wire__crate__api__structure_designer__structure_designer_api__get_active_network_canvas_viewport_impl(ptr, rust_vec_len, data_len),
-148 => wire__crate__api__structure_designer__structure_designer_api__get_active_network_description_impl(ptr, rust_vec_len, data_len),
-149 => wire__crate__api__structure_designer__structure_designer_api__get_active_network_summary_impl(ptr, rust_vec_len, data_len),
-150 => wire__crate__api__structure_designer__structure_designer_api__get_active_record_def_name_impl(ptr, rust_vec_len, data_len),
-151 => wire__crate__api__common_api__get_all_elements_impl(ptr, rust_vec_len, data_len),
-152 => wire__crate__api__structure_designer__structure_designer_api__get_all_record_type_def_names_impl(ptr, rust_vec_len, data_len),
-153 => wire__crate__api__structure_designer__structure_designer_api__get_api_data_type_display_name_impl(ptr, rust_vec_len, data_len),
-154 => wire__crate__api__structure_designer__structure_designer_api__get_apply_data_impl(ptr, rust_vec_len, data_len),
-155 => wire__crate__api__structure_designer__structure_designer_api__get_apply_diff_data_impl(ptr, rust_vec_len, data_len),
-156 => wire__crate__api__structure_designer__structure_designer_api__get_array_append_data_impl(ptr, rust_vec_len, data_len),
-157 => wire__crate__api__structure_designer__structure_designer_api__get_array_at_data_impl(ptr, rust_vec_len, data_len),
-158 => wire__crate__api__structure_designer__structure_designer_api__get_array_concat_data_impl(ptr, rust_vec_len, data_len),
-159 => wire__crate__api__structure_designer__structure_designer_api__get_array_element_type_options_impl(ptr, rust_vec_len, data_len),
-160 => wire__crate__api__structure_designer__structure_designer_api__get_array_len_data_impl(ptr, rust_vec_len, data_len),
-161 => wire__crate__api__structure_designer__structure_designer_api__get_array_node_data_impl(ptr, rust_vec_len, data_len),
-162 => wire__crate__api__structure_designer__structure_designer_api__get_atom_composediff_data_impl(ptr, rust_vec_len, data_len),
-163 => wire__crate__api__structure_designer__structure_designer_api__get_atom_cut_data_impl(ptr, rust_vec_len, data_len),
-164 => wire__crate__api__structure_designer__structure_designer_api__get_atom_edit_data_impl(ptr, rust_vec_len, data_len),
-165 => wire__crate__api__structure_designer__structure_designer_api__get_atom_export_formats_impl(ptr, rust_vec_len, data_len),
-166 => wire__crate__api__structure_designer__structure_designer_api__get_atom_replace_data_impl(ptr, rust_vec_len, data_len),
-167 => wire__crate__api__structure_designer__structure_designer_api__get_bool_data_impl(ptr, rust_vec_len, data_len),
-168 => wire__crate__api__structure_designer__structure_designer_api__get_built_in_record_type_def_names_impl(ptr, rust_vec_len, data_len),
-169 => wire__crate__api__common_api__get_camera_impl(ptr, rust_vec_len, data_len),
-170 => wire__crate__api__common_api__get_camera_canonical_view_impl(ptr, rust_vec_len, data_len),
-171 => wire__crate__api__common_api__get_camera_transform_impl(ptr, rust_vec_len, data_len),
-172 => wire__crate__api__structure_designer__structure_designer_api__get_circle_data_impl(ptr, rust_vec_len, data_len),
-173 => wire__crate__api__structure_designer__structure_designer_api__get_cli_access_rules_impl(ptr, rust_vec_len, data_len),
-174 => wire__crate__api__structure_designer__structure_designer_api__get_closure_data_impl(ptr, rust_vec_len, data_len),
-175 => wire__crate__api__structure_designer__structure_designer_api__get_collect_data_impl(ptr, rust_vec_len, data_len),
-176 => wire__crate__api__structure_designer__structure_designer_api__get_comment_data_impl(ptr, rust_vec_len, data_len),
-177 => wire__crate__api__structure_designer__structure_designer_api__get_compatible_node_types_impl(ptr, rust_vec_len, data_len),
-178 => wire__crate__api__structure_designer__structure_designer_api__get_compatible_pins_for_auto_connect_impl(ptr, rust_vec_len, data_len),
-179 => wire__crate__api__structure_designer__structure_designer_api__get_cuboid_data_impl(ptr, rust_vec_len, data_len),
-180 => wire__crate__api__structure_designer__structure_designer_api__get_custom_node_params_impl(ptr, rust_vec_len, data_len),
-181 => wire__crate__api__structure_designer__structure_designer_api__get_design_file_path_impl(ptr, rust_vec_len, data_len),
-182 => wire__crate__api__structure_designer__structure_designer_api__get_direct_editing_mode_impl(ptr, rust_vec_len, data_len),
-183 => wire__crate__api__structure_designer__structure_designer_api__get_drawing_plane_data_impl(ptr, rust_vec_len, data_len),
-184 => wire__crate__api__structure_designer__structure_designer_api__get_edit_atom_data_impl(ptr, rust_vec_len, data_len),
-185 => wire__crate__api__structure_designer__profiling_api__get_eval_memo_enabled_impl(ptr, rust_vec_len, data_len),
-186 => wire__crate__api__structure_designer__profiling_api__get_eval_profiling_enabled_impl(ptr, rust_vec_len, data_len),
-187 => wire__crate__api__structure_designer__profiling_api__get_eval_self_check_enabled_impl(ptr, rust_vec_len, data_len),
-188 => wire__crate__api__structure_designer__structure_designer_api__get_export_atoms_data_impl(ptr, rust_vec_len, data_len),
-189 => wire__crate__api__structure_designer__structure_designer_api__get_expr_data_impl(ptr, rust_vec_len, data_len),
-190 => wire__crate__api__structure_designer__structure_designer_api__get_extrude_data_impl(ptr, rust_vec_len, data_len),
-191 => wire__crate__api__structure_designer__structure_designer_api__get_extrude_drawing_plane_miller_direction_impl(ptr, rust_vec_len, data_len),
-192 => wire__crate__api__structure_designer__facet_shell_api__get_facet_shell_data_impl(ptr, rust_vec_len, data_len),
-193 => wire__crate__api__structure_designer__structure_designer_api__get_factor_selection_info_impl(ptr, rust_vec_len, data_len),
-194 => wire__crate__api__structure_designer__structure_designer_api__get_filter_data_impl(ptr, rust_vec_len, data_len),
-195 => wire__crate__api__structure_designer__structure_designer_api__get_float_data_impl(ptr, rust_vec_len, data_len),
-196 => wire__crate__api__structure_designer__structure_designer_api__get_fold_data_impl(ptr, rust_vec_len, data_len),
-197 => wire__crate__api__structure_designer__structure_designer_api__get_folder_names_impl(ptr, rust_vec_len, data_len),
-198 => wire__crate__api__structure_designer__structure_designer_api__get_foreach_data_impl(ptr, rust_vec_len, data_len),
-199 => wire__crate__api__structure_designer__structure_designer_api__get_free_circle_data_impl(ptr, rust_vec_len, data_len),
-200 => wire__crate__api__structure_designer__structure_designer_api__get_free_move_data_impl(ptr, rust_vec_len, data_len),
-201 => wire__crate__api__structure_designer__structure_designer_api__get_free_rot_data_impl(ptr, rust_vec_len, data_len),
-202 => wire__crate__api__structure_designer__structure_designer_api__get_free_sphere_data_impl(ptr, rust_vec_len, data_len),
-203 => wire__crate__api__structure_designer__structure_designer_api__get_function_pin_roles_impl(ptr, rust_vec_len, data_len),
-204 => wire__crate__api__structure_designer__structure_designer_api__get_geo_trans_data_impl(ptr, rust_vec_len, data_len),
-205 => wire__crate__api__structure_designer__atom_edit_api__get_guideline_tool_view_impl(ptr, rust_vec_len, data_len),
-206 => wire__crate__api__structure_designer__structure_designer_api__get_half_plane_data_impl(ptr, rust_vec_len, data_len),
-207 => wire__crate__api__structure_designer__structure_designer_api__get_half_space_data_impl(ptr, rust_vec_len, data_len),
-208 => wire__crate__api__structure_designer__structure_designer_api__get_if_data_impl(ptr, rust_vec_len, data_len),
-209 => wire__crate__api__structure_designer__structure_designer_api__get_imat2_cols_data_impl(ptr, rust_vec_len, data_len),
-210 => wire__crate__api__structure_designer__structure_designer_api__get_imat2_diag_data_impl(ptr, rust_vec_len, data_len),
-211 => wire__crate__api__structure_designer__structure_designer_api__get_imat2_rows_data_impl(ptr, rust_vec_len, data_len),
-212 => wire__crate__api__structure_designer__structure_designer_api__get_imat3_cols_data_impl(ptr, rust_vec_len, data_len),
-213 => wire__crate__api__structure_designer__structure_designer_api__get_imat3_diag_data_impl(ptr, rust_vec_len, data_len),
-214 => wire__crate__api__structure_designer__structure_designer_api__get_imat3_rows_data_impl(ptr, rust_vec_len, data_len),
-215 => wire__crate__api__structure_designer__structure_designer_api__get_import_cif_data_impl(ptr, rust_vec_len, data_len),
-216 => wire__crate__api__structure_designer__structure_designer_api__get_import_cube_data_impl(ptr, rust_vec_len, data_len),
-217 => wire__crate__api__structure_designer__import_api__get_import_library_file_path_impl(ptr, rust_vec_len, data_len),
-218 => wire__crate__api__structure_designer__structure_designer_api__get_import_xyz_data_impl(ptr, rust_vec_len, data_len),
-219 => wire__crate__api__structure_designer__import_api__get_importable_network_names_impl(ptr, rust_vec_len, data_len),
-220 => wire__crate__api__structure_designer__structure_designer_api__get_infer_bonds_data_impl(ptr, rust_vec_len, data_len),
-221 => wire__crate__api__structure_designer__structure_designer_api__get_int_data_impl(ptr, rust_vec_len, data_len),
-222 => wire__crate__api__structure_designer__field_distribution_api__get_isosurface_color_distribution_impl(ptr, rust_vec_len, data_len),
-223 => wire__crate__api__structure_designer__structure_designer_api__get_isosurface_data_impl(ptr, rust_vec_len, data_len),
-224 => wire__crate__api__structure_designer__field_distribution_api__get_isosurface_level_distribution_impl(ptr, rust_vec_len, data_len),
-225 => wire__crate__api__structure_designer__structure_designer_api__get_ivec2_data_impl(ptr, rust_vec_len, data_len),
-226 => wire__crate__api__structure_designer__structure_designer_api__get_ivec3_data_impl(ptr, rust_vec_len, data_len),
-227 => wire__crate__api__structure_designer__structure_designer_api__get_last_directory_impl(ptr, rust_vec_len, data_len),
-228 => wire__crate__api__structure_designer__profiling_api__get_last_eval_profile_impl(ptr, rust_vec_len, data_len),
-229 => wire__crate__api__structure_designer__profiling_api__get_last_refresh_profile_impl(ptr, rust_vec_len, data_len),
-230 => wire__crate__api__structure_designer__structure_designer_api__get_lattice_symop_data_impl(ptr, rust_vec_len, data_len),
-231 => wire__crate__api__structure_designer__structure_designer_api__get_lattice_vecs_data_impl(ptr, rust_vec_len, data_len),
-232 => wire__crate__api__structure_designer__structure_designer_api__get_map_data_impl(ptr, rust_vec_len, data_len),
-233 => wire__crate__api__structure_designer__structure_designer_api__get_mat3_cols_data_impl(ptr, rust_vec_len, data_len),
-234 => wire__crate__api__structure_designer__structure_designer_api__get_mat3_diag_data_impl(ptr, rust_vec_len, data_len),
-235 => wire__crate__api__structure_designer__structure_designer_api__get_mat3_rows_data_impl(ptr, rust_vec_len, data_len),
-236 => wire__crate__api__structure_designer__structure_designer_api__get_materialize_data_impl(ptr, rust_vec_len, data_len),
-237 => wire__crate__api__structure_designer__structure_designer_api__get_motif_data_impl(ptr, rust_vec_len, data_len),
-238 => wire__crate__api__structure_designer__structure_designer_api__get_motif_sub_data_impl(ptr, rust_vec_len, data_len),
-239 => wire__crate__api__structure_designer__structure_designer_api__get_network_count_impl(ptr, rust_vec_len, data_len),
-240 => wire__crate__api__structure_designer__structure_designer_api__get_network_description_impl(ptr, rust_vec_len, data_len),
-241 => wire__crate__api__structure_designer__structure_designer_api__get_network_usage_counts_impl(ptr, rust_vec_len, data_len),
-242 => wire__crate__api__structure_designer__structure_designer_api__get_network_usages_impl(ptr, rust_vec_len, data_len),
-243 => wire__crate__api__structure_designer__structure_designer_api__get_node_network_names_impl(ptr, rust_vec_len, data_len),
-244 => wire__crate__api__structure_designer__structure_designer_api__get_node_network_view_impl(ptr, rust_vec_len, data_len),
-245 => wire__crate__api__structure_designer__structure_designer_api__get_node_networks_with_validation_impl(ptr, rust_vec_len, data_len),
-246 => wire__crate__api__structure_designer__structure_designer_api__get_node_root_cause_impl(ptr, rust_vec_len, data_len),
-247 => wire__crate__api__structure_designer__structure_designer_api__get_node_type_views_impl(ptr, rust_vec_len, data_len),
-248 => wire__crate__api__common_api__get_ortho_half_height_impl(ptr, rust_vec_len, data_len),
-249 => wire__crate__api__structure_designer__structure_designer_api__get_parameter_data_impl(ptr, rust_vec_len, data_len),
-250 => wire__crate__api__structure_designer__structure_designer_api__get_passivate_data_impl(ptr, rust_vec_len, data_len),
-251 => wire__crate__api__structure_designer__structure_designer_api__get_patch_build_data_impl(ptr, rust_vec_len, data_len),
-252 => wire__crate__api__structure_designer__structure_designer_api__get_patch_latticefill_data_impl(ptr, rust_vec_len, data_len),
-253 => wire__crate__api__structure_designer__structure_designer_api__get_plane_tiling_vectors_data_impl(ptr, rust_vec_len, data_len),
-254 => wire__crate__api__structure_designer__structure_designer_api__get_print_data_impl(ptr, rust_vec_len, data_len),
-255 => wire__crate__api__structure_designer__structure_designer_api__get_product_data_impl(ptr, rust_vec_len, data_len),
-256 => wire__crate__api__structure_designer__structure_designer_api__get_range_data_impl(ptr, rust_vec_len, data_len),
-257 => wire__crate__api__structure_designer__structure_designer_api__get_recent_files_impl(ptr, rust_vec_len, data_len),
-258 => wire__crate__api__structure_designer__structure_designer_api__get_record_construct_data_impl(ptr, rust_vec_len, data_len),
-259 => wire__crate__api__structure_designer__structure_designer_api__get_record_construct_fields_impl(ptr, rust_vec_len, data_len),
-260 => wire__crate__api__structure_designer__structure_designer_api__get_record_destructure_data_impl(ptr, rust_vec_len, data_len),
-261 => wire__crate__api__structure_designer__structure_designer_api__get_record_type_def_impl(ptr, rust_vec_len, data_len),
-262 => wire__crate__api__structure_designer__structure_designer_api__get_record_type_def_names_impl(ptr, rust_vec_len, data_len),
-263 => wire__crate__api__structure_designer__structure_designer_api__get_rect_data_impl(ptr, rust_vec_len, data_len),
-264 => wire__crate__api__structure_designer__profiling_api__get_refresh_profile_history_impl(ptr, rust_vec_len, data_len),
-265 => wire__crate__api__structure_designer__structure_designer_api__get_reg_poly_data_impl(ptr, rust_vec_len, data_len),
-266 => wire__crate__api__structure_designer__relax_api__get_relax_data_impl(ptr, rust_vec_len, data_len),
-267 => wire__crate__api__structure_designer__relax_api__get_relax_message_impl(ptr, rust_vec_len, data_len),
-268 => wire__crate__api__structure_designer__structure_designer_api__get_selected_node_ids_impl(ptr, rust_vec_len, data_len),
-269 => wire__crate__api__structure_designer__structure_designer_api__get_selected_wires_impl(ptr, rust_vec_len, data_len),
-270 => wire__crate__api__structure_designer__structure_designer_api__get_sequence_data_impl(ptr, rust_vec_len, data_len),
-271 => wire__crate__api__structure_designer__structure_designer_api__get_sphere_data_impl(ptr, rust_vec_len, data_len),
-272 => wire__crate__api__structure_designer__structure_designer_api__get_string_data_impl(ptr, rust_vec_len, data_len),
-273 => wire__crate__api__structure_designer__structure_designer_api__get_structure_designer_preferences_impl(ptr, rust_vec_len, data_len),
-274 => wire__crate__api__structure_designer__structure_designer_api__get_structure_invert_data_impl(ptr, rust_vec_len, data_len),
-275 => wire__crate__api__structure_designer__structure_designer_api__get_structure_move_data_impl(ptr, rust_vec_len, data_len),
-276 => wire__crate__api__structure_designer__structure_designer_api__get_structure_rot_data_impl(ptr, rust_vec_len, data_len),
-277 => wire__crate__api__structure_designer__structure_designer_api__get_supercell_data_impl(ptr, rust_vec_len, data_len),
-278 => wire__crate__api__structure_designer__structure_designer_api__get_switch_data_impl(ptr, rust_vec_len, data_len),
-279 => wire__crate__api__structure_designer__tag_api__get_tag_data_impl(ptr, rust_vec_len, data_len),
-280 => wire__crate__api__structure_designer__tag_api__get_untag_data_impl(ptr, rust_vec_len, data_len),
-281 => wire__crate__api__structure_designer__structure_designer_api__get_vec2_data_impl(ptr, rust_vec_len, data_len),
-282 => wire__crate__api__structure_designer__structure_designer_api__get_vec3_data_impl(ptr, rust_vec_len, data_len),
-283 => wire__crate__api__common_api__get_view_up_impl(ptr, rust_vec_len, data_len),
-284 => wire__crate__api__structure_designer__xray_api__get_xray_data_impl(ptr, rust_vec_len, data_len),
-285 => wire__crate__api__structure_designer__structure_designer_api__get_zip_with_data_impl(ptr, rust_vec_len, data_len),
-286 => wire__crate__api__common_api__greet_impl(ptr, rust_vec_len, data_len),
-287 => wire__crate__api__structure_designer__atom_edit_api__guideline_clear_impl(ptr, rust_vec_len, data_len),
-288 => wire__crate__api__structure_designer__atom_edit_api__guideline_create_from_defining_impl(ptr, rust_vec_len, data_len),
-289 => wire__crate__api__structure_designer__atom_edit_api__guideline_place_atom_impl(ptr, rust_vec_len, data_len),
-290 => wire__crate__api__structure_designer__atom_edit_api__guideline_pointer_down_impl(ptr, rust_vec_len, data_len),
-291 => wire__crate__api__structure_designer__atom_edit_api__guideline_pointer_move_impl(ptr, rust_vec_len, data_len),
-292 => wire__crate__api__structure_designer__atom_edit_api__guideline_pointer_up_impl(ptr, rust_vec_len, data_len),
-293 => wire__crate__api__structure_designer__atom_edit_api__guideline_reset_interaction_impl(ptr, rust_vec_len, data_len),
-294 => wire__crate__api__structure_designer__atom_edit_api__guideline_set_entered_direction_impl(ptr, rust_vec_len, data_len),
-295 => wire__crate__api__structure_designer__atom_edit_api__guideline_set_position_impl(ptr, rust_vec_len, data_len),
-296 => wire__crate__api__structure_designer__structure_designer_api__has_clipboard_content_impl(ptr, rust_vec_len, data_len),
-297 => wire__crate__api__structure_designer__import_cif_api__import_cif_impl(ptr, rust_vec_len, data_len),
-298 => wire__crate__api__structure_designer__import_api__import_compute_transitive_dependencies_impl(ptr, rust_vec_len, data_len),
-299 => wire__crate__api__structure_designer__import_cube_api__import_cube_impl(ptr, rust_vec_len, data_len),
-300 => wire__crate__api__structure_designer__import_api__import_networks_and_clear_impl(ptr, rust_vec_len, data_len),
-301 => wire__crate__api__structure_designer__import_xyz_api__import_xyz_impl(ptr, rust_vec_len, data_len),
-302 => wire__crate__api__structure_designer__structure_designer_api__import_xyz_into_atom_edit_impl(ptr, rust_vec_len, data_len),
-304 => wire__crate__api__structure_designer__structure_designer_api__inline_custom_node_impl(ptr, rust_vec_len, data_len),
-305 => wire__crate__api__structure_designer__structure_designer_api__is_cli_write_locked_impl(ptr, rust_vec_len, data_len),
-306 => wire__crate__api__structure_designer__structure_designer_api__is_custom_node_type_impl(ptr, rust_vec_len, data_len),
-307 => wire__crate__api__structure_designer__structure_designer_api__is_design_dirty_impl(ptr, rust_vec_len, data_len),
-308 => wire__crate__api__structure_designer__import_api__is_import_library_loaded_impl(ptr, rust_vec_len, data_len),
-309 => wire__crate__api__structure_designer__structure_designer_api__is_node_type_active_impl(ptr, rust_vec_len, data_len),
-310 => wire__crate__api__common_api__is_orthographic_impl(ptr, rust_vec_len, data_len),
-311 => wire__crate__api__structure_designer__structure_designer_api__layout_active_network_impl(ptr, rust_vec_len, data_len),
-314 => wire__crate__api__structure_designer__import_api__load_import_library_impl(ptr, rust_vec_len, data_len),
-315 => wire__crate__api__structure_designer__structure_designer_api__load_node_networks_impl(ptr, rust_vec_len, data_len),
-318 => wire__crate__api__structure_designer__atom_edit_api__motif_edit_add_parameter_element_impl(ptr, rust_vec_len, data_len),
-319 => wire__crate__api__structure_designer__atom_edit_api__motif_edit_get_neighbor_depth_impl(ptr, rust_vec_len, data_len),
-320 => wire__crate__api__structure_designer__atom_edit_api__motif_edit_remove_parameter_element_impl(ptr, rust_vec_len, data_len),
-321 => wire__crate__api__structure_designer__atom_edit_api__motif_edit_set_neighbor_depth_impl(ptr, rust_vec_len, data_len),
-322 => wire__crate__api__structure_designer__atom_edit_api__motif_edit_update_parameter_element_impl(ptr, rust_vec_len, data_len),
-323 => wire__crate__api__structure_designer__structure_designer_api__move_array_element_impl(ptr, rust_vec_len, data_len),
-324 => wire__crate__api__common_api__move_camera_impl(ptr, rust_vec_len, data_len),
-325 => wire__crate__api__structure_designer__structure_designer_api__move_node_impl(ptr, rust_vec_len, data_len),
-326 => wire__crate__api__structure_designer__structure_designer_api__move_selected_nodes_impl(ptr, rust_vec_len, data_len),
-327 => wire__crate__api__structure_designer__structure_designer_api__navigate_back_impl(ptr, rust_vec_len, data_len),
-328 => wire__crate__api__structure_designer__structure_designer_api__navigate_forward_impl(ptr, rust_vec_len, data_len),
-329 => wire__crate__api__structure_designer__structure_designer_api__new_project_impl(ptr, rust_vec_len, data_len),
-330 => wire__crate__api__structure_designer__structure_designer_api__new_project_direct_editing_impl(ptr, rust_vec_len, data_len),
-336 => wire__crate__api__structure_designer__structure_designer_api__paste_at_position_impl(ptr, rust_vec_len, data_len),
-337 => wire__crate__api__structure_designer__import_api__preview_import_names_impl(ptr, rust_vec_len, data_len),
-338 => wire__crate__api__structure_designer__structure_designer_api__preview_leaf_rename_impl(ptr, rust_vec_len, data_len),
-339 => wire__crate__api__structure_designer__structure_designer_api__preview_namespace_rename_impl(ptr, rust_vec_len, data_len),
-340 => wire__crate__api__structure_designer__profiling_api__profile_full_refresh_impl(ptr, rust_vec_len, data_len),
-341 => wire__crate__api__structure_designer__structure_designer_api__promote_node_to_parameter_impl(ptr, rust_vec_len, data_len),
-342 => wire__crate__api__common_api__provide_texture_impl(ptr, rust_vec_len, data_len),
-343 => wire__crate__api__structure_designer__structure_designer_api__query_hovered_atom_info_impl(ptr, rust_vec_len, data_len),
-344 => wire__crate__api__structure_designer__structure_designer_api__record_last_directory_impl(ptr, rust_vec_len, data_len),
-345 => wire__crate__api__structure_designer__structure_designer_api__redo_impl(ptr, rust_vec_len, data_len),
-346 => wire__crate__api__structure_designer__structure_designer_api__redo_description_impl(ptr, rust_vec_len, data_len),
-347 => wire__crate__api__structure_designer__structure_designer_api__remove_array_element_impl(ptr, rust_vec_len, data_len),
-348 => wire__crate__api__structure_designer__facet_shell_api__remove_facet_impl(ptr, rust_vec_len, data_len),
-349 => wire__crate__api__structure_designer__structure_designer_api__remove_zip_with_lane_impl(ptr, rust_vec_len, data_len),
-350 => wire__crate__api__structure_designer__structure_designer_api__rename_namespace_impl(ptr, rust_vec_len, data_len),
-351 => wire__crate__api__structure_designer__structure_designer_api__rename_node_impl(ptr, rust_vec_len, data_len),
-352 => wire__crate__api__structure_designer__structure_designer_api__rename_node_network_impl(ptr, rust_vec_len, data_len),
-353 => wire__crate__api__structure_designer__structure_designer_api__rename_record_type_def_impl(ptr, rust_vec_len, data_len),
-354 => wire__crate__api__structure_designer__edit_atom_api__replace_selected_atoms_impl(ptr, rust_vec_len, data_len),
-355 => wire__crate__api__common_api__reset_view_up_impl(ptr, rust_vec_len, data_len),
-356 => wire__crate__api__structure_designer__structure_designer_api__resize_comment_node_impl(ptr, rust_vec_len, data_len),
-357 => wire__crate__api__structure_designer__structure_designer_api__run_cli_batch_impl(ptr, rust_vec_len, data_len),
-358 => wire__crate__api__structure_designer__structure_designer_api__run_cli_single_impl(ptr, rust_vec_len, data_len),
-359 => wire__crate__api__structure_designer__structure_designer_api__save_node_networks_impl(ptr, rust_vec_len, data_len),
-360 => wire__crate__api__structure_designer__structure_designer_api__save_node_networks_as_impl(ptr, rust_vec_len, data_len),
-361 => wire__crate__api__structure_designer__edit_atom_api__select_atom_or_bond_by_ray_impl(ptr, rust_vec_len, data_len),
-362 => wire__crate__api__structure_designer__facet_shell_api__select_facet_impl(ptr, rust_vec_len, data_len),
-363 => wire__crate__api__structure_designer__facet_shell_api__select_facet_by_ray_impl(ptr, rust_vec_len, data_len),
-364 => wire__crate__api__structure_designer__structure_designer_api__select_node_impl(ptr, rust_vec_len, data_len),
-365 => wire__crate__api__structure_designer__structure_designer_api__select_nodes_impl(ptr, rust_vec_len, data_len),
-366 => wire__crate__api__structure_designer__structure_designer_api__select_nodes_and_wires_impl(ptr, rust_vec_len, data_len),
-367 => wire__crate__api__structure_designer__structure_designer_api__select_wire_impl(ptr, rust_vec_len, data_len),
-368 => wire__crate__api__structure_designer__structure_designer_api__select_wires_impl(ptr, rust_vec_len, data_len),
-369 => wire__crate__api__structure_designer__structure_designer_api__serialize_active_network_to_text_impl(ptr, rust_vec_len, data_len),
-370 => wire__crate__api__structure_designer__atom_edit_api__set_active_atom_edit_tool_impl(ptr, rust_vec_len, data_len),
-371 => wire__crate__api__structure_designer__edit_atom_api__set_active_edit_atom_tool_impl(ptr, rust_vec_len, data_len),
-372 => wire__crate__api__structure_designer__structure_designer_api__set_active_network_canvas_viewport_impl(ptr, rust_vec_len, data_len),
-373 => wire__crate__api__structure_designer__structure_designer_api__set_active_network_description_impl(ptr, rust_vec_len, data_len),
-374 => wire__crate__api__structure_designer__structure_designer_api__set_active_network_summary_impl(ptr, rust_vec_len, data_len),
-375 => wire__crate__api__structure_designer__structure_designer_api__set_active_node_network_impl(ptr, rust_vec_len, data_len),
-376 => wire__crate__api__structure_designer__structure_designer_api__set_active_record_def_name_impl(ptr, rust_vec_len, data_len),
-377 => wire__crate__api__structure_designer__atom_edit_api__set_add_bond_order_impl(ptr, rust_vec_len, data_len),
-378 => wire__crate__api__structure_designer__structure_designer_api__set_apply_data_impl(ptr, rust_vec_len, data_len),
-379 => wire__crate__api__structure_designer__structure_designer_api__set_apply_diff_data_impl(ptr, rust_vec_len, data_len),
-380 => wire__crate__api__structure_designer__structure_designer_api__set_array_append_data_impl(ptr, rust_vec_len, data_len),
-381 => wire__crate__api__structure_designer__structure_designer_api__set_array_at_data_impl(ptr, rust_vec_len, data_len),
-382 => wire__crate__api__structure_designer__structure_designer_api__set_array_concat_data_impl(ptr, rust_vec_len, data_len),
-383 => wire__crate__api__structure_designer__structure_designer_api__set_array_element_field_literal_impl(ptr, rust_vec_len, data_len),
-384 => wire__crate__api__structure_designer__structure_designer_api__set_array_element_literal_impl(ptr, rust_vec_len, data_len),
-385 => wire__crate__api__structure_designer__structure_designer_api__set_array_element_type_impl(ptr, rust_vec_len, data_len),
-386 => wire__crate__api__structure_designer__structure_designer_api__set_array_len_data_impl(ptr, rust_vec_len, data_len),
-387 => wire__crate__api__structure_designer__structure_designer_api__set_atom_composediff_data_impl(ptr, rust_vec_len, data_len),
-388 => wire__crate__api__structure_designer__structure_designer_api__set_atom_cut_data_impl(ptr, rust_vec_len, data_len),
-389 => wire__crate__api__structure_designer__atom_edit_api__set_atom_edit_selected_element_impl(ptr, rust_vec_len, data_len),
-390 => wire__crate__api__structure_designer__structure_designer_api__set_atom_replace_data_impl(ptr, rust_vec_len, data_len),
-391 => wire__crate__api__structure_designer__structure_designer_api__set_bool_data_impl(ptr, rust_vec_len, data_len),
-392 => wire__crate__api__common_api__set_camera_canonical_view_impl(ptr, rust_vec_len, data_len),
-393 => wire__crate__api__common_api__set_camera_transform_impl(ptr, rust_vec_len, data_len),
-394 => wire__crate__api__structure_designer__structure_designer_api__set_circle_data_impl(ptr, rust_vec_len, data_len),
-395 => wire__crate__api__structure_designer__structure_designer_api__set_cli_access_impl(ptr, rust_vec_len, data_len),
-396 => wire__crate__api__structure_designer__structure_designer_api__set_closure_data_impl(ptr, rust_vec_len, data_len),
-397 => wire__crate__api__structure_designer__structure_designer_api__set_collapse_mode_impl(ptr, rust_vec_len, data_len),
-398 => wire__crate__api__structure_designer__structure_designer_api__set_collect_data_impl(ptr, rust_vec_len, data_len),
-399 => wire__crate__api__structure_designer__structure_designer_api__set_comment_anchors_impl(ptr, rust_vec_len, data_len),
-400 => wire__crate__api__structure_designer__structure_designer_api__set_cuboid_data_impl(ptr, rust_vec_len, data_len),
-401 => wire__crate__api__structure_designer__structure_designer_api__set_custom_node_literal_impl(ptr, rust_vec_len, data_len),
-402 => wire__crate__api__structure_designer__structure_designer_api__set_direct_editing_mode_impl(ptr, rust_vec_len, data_len),
-403 => wire__crate__api__structure_designer__structure_designer_api__set_drawing_plane_data_impl(ptr, rust_vec_len, data_len),
-404 => wire__crate__api__structure_designer__edit_atom_api__set_edit_atom_selected_element_impl(ptr, rust_vec_len, data_len),
-405 => wire__crate__api__structure_designer__profiling_api__set_eval_memo_enabled_impl(ptr, rust_vec_len, data_len),
-406 => wire__crate__api__structure_designer__profiling_api__set_eval_profiling_enabled_impl(ptr, rust_vec_len, data_len),
-407 => wire__crate__api__structure_designer__profiling_api__set_eval_self_check_enabled_impl(ptr, rust_vec_len, data_len),
-408 => wire__crate__api__structure_designer__structure_designer_api__set_export_atoms_data_impl(ptr, rust_vec_len, data_len),
-409 => wire__crate__api__structure_designer__structure_designer_api__set_expr_data_impl(ptr, rust_vec_len, data_len),
-410 => wire__crate__api__structure_designer__structure_designer_api__set_extrude_data_impl(ptr, rust_vec_len, data_len),
-411 => wire__crate__api__structure_designer__facet_shell_api__set_facet_shell_center_impl(ptr, rust_vec_len, data_len),
-412 => wire__crate__api__structure_designer__structure_designer_api__set_filter_data_impl(ptr, rust_vec_len, data_len),
-413 => wire__crate__api__structure_designer__structure_designer_api__set_float_data_impl(ptr, rust_vec_len, data_len),
-414 => wire__crate__api__structure_designer__structure_designer_api__set_fold_data_impl(ptr, rust_vec_len, data_len),
-415 => wire__crate__api__structure_designer__structure_designer_api__set_foreach_data_impl(ptr, rust_vec_len, data_len),
-416 => wire__crate__api__structure_designer__structure_designer_api__set_free_circle_data_impl(ptr, rust_vec_len, data_len),
-417 => wire__crate__api__structure_designer__structure_designer_api__set_free_move_data_impl(ptr, rust_vec_len, data_len),
-418 => wire__crate__api__structure_designer__structure_designer_api__set_free_rot_data_impl(ptr, rust_vec_len, data_len),
-419 => wire__crate__api__structure_designer__structure_designer_api__set_free_sphere_data_impl(ptr, rust_vec_len, data_len),
-420 => wire__crate__api__structure_designer__structure_designer_api__set_function_pin_role_impl(ptr, rust_vec_len, data_len),
-421 => wire__crate__api__structure_designer__structure_designer_api__set_geo_trans_data_impl(ptr, rust_vec_len, data_len),
-422 => wire__crate__api__structure_designer__structure_designer_api__set_half_plane_data_impl(ptr, rust_vec_len, data_len),
-423 => wire__crate__api__structure_designer__structure_designer_api__set_half_space_data_impl(ptr, rust_vec_len, data_len),
-424 => wire__crate__api__structure_designer__structure_designer_api__set_if_data_impl(ptr, rust_vec_len, data_len),
-425 => wire__crate__api__structure_designer__structure_designer_api__set_imat2_cols_data_impl(ptr, rust_vec_len, data_len),
-426 => wire__crate__api__structure_designer__structure_designer_api__set_imat2_diag_data_impl(ptr, rust_vec_len, data_len),
-427 => wire__crate__api__structure_designer__structure_designer_api__set_imat2_rows_data_impl(ptr, rust_vec_len, data_len),
-428 => wire__crate__api__structure_designer__structure_designer_api__set_imat3_cols_data_impl(ptr, rust_vec_len, data_len),
-429 => wire__crate__api__structure_designer__structure_designer_api__set_imat3_diag_data_impl(ptr, rust_vec_len, data_len),
-430 => wire__crate__api__structure_designer__structure_designer_api__set_imat3_rows_data_impl(ptr, rust_vec_len, data_len),
-431 => wire__crate__api__structure_designer__structure_designer_api__set_import_cif_data_impl(ptr, rust_vec_len, data_len),
-432 => wire__crate__api__structure_designer__structure_designer_api__set_import_cube_data_impl(ptr, rust_vec_len, data_len),
-433 => wire__crate__api__structure_designer__structure_designer_api__set_import_xyz_data_impl(ptr, rust_vec_len, data_len),
-434 => wire__crate__api__structure_designer__structure_designer_api__set_infer_bonds_data_impl(ptr, rust_vec_len, data_len),
-435 => wire__crate__api__structure_designer__structure_designer_api__set_int_data_impl(ptr, rust_vec_len, data_len),
-436 => wire__crate__api__structure_designer__structure_designer_api__set_isosurface_data_impl(ptr, rust_vec_len, data_len),
-437 => wire__crate__api__structure_designer__structure_designer_api__set_ivec2_data_impl(ptr, rust_vec_len, data_len),
-438 => wire__crate__api__structure_designer__structure_designer_api__set_ivec3_data_impl(ptr, rust_vec_len, data_len),
-439 => wire__crate__api__structure_designer__structure_designer_api__set_lattice_symop_data_impl(ptr, rust_vec_len, data_len),
-440 => wire__crate__api__structure_designer__structure_designer_api__set_lattice_vecs_data_impl(ptr, rust_vec_len, data_len),
-441 => wire__crate__api__structure_designer__structure_designer_api__set_map_data_impl(ptr, rust_vec_len, data_len),
-442 => wire__crate__api__structure_designer__structure_designer_api__set_mat3_cols_data_impl(ptr, rust_vec_len, data_len),
-443 => wire__crate__api__structure_designer__structure_designer_api__set_mat3_diag_data_impl(ptr, rust_vec_len, data_len),
-444 => wire__crate__api__structure_designer__structure_designer_api__set_mat3_rows_data_impl(ptr, rust_vec_len, data_len),
-445 => wire__crate__api__structure_designer__structure_designer_api__set_materialize_data_impl(ptr, rust_vec_len, data_len),
-446 => wire__crate__api__structure_designer__structure_designer_api__set_motif_data_impl(ptr, rust_vec_len, data_len),
-447 => wire__crate__api__structure_designer__structure_designer_api__set_motif_sub_data_impl(ptr, rust_vec_len, data_len),
-448 => wire__crate__api__structure_designer__structure_designer_api__set_node_display_impl(ptr, rust_vec_len, data_len),
-449 => wire__crate__api__common_api__set_ortho_half_height_impl(ptr, rust_vec_len, data_len),
-450 => wire__crate__api__common_api__set_orthographic_mode_impl(ptr, rust_vec_len, data_len),
-451 => wire__crate__api__structure_designer__structure_designer_api__set_parameter_data_impl(ptr, rust_vec_len, data_len),
-452 => wire__crate__api__structure_designer__structure_designer_api__set_passivate_data_impl(ptr, rust_vec_len, data_len),
-453 => wire__crate__api__structure_designer__structure_designer_api__set_patch_build_data_impl(ptr, rust_vec_len, data_len),
-454 => wire__crate__api__structure_designer__structure_designer_api__set_patch_latticefill_data_impl(ptr, rust_vec_len, data_len),
-455 => wire__crate__api__structure_designer__structure_designer_api__set_plane_tiling_vectors_data_impl(ptr, rust_vec_len, data_len),
-456 => wire__crate__api__structure_designer__structure_designer_api__set_print_data_impl(ptr, rust_vec_len, data_len),
-457 => wire__crate__api__structure_designer__structure_designer_api__set_product_data_impl(ptr, rust_vec_len, data_len),
-458 => wire__crate__api__structure_designer__structure_designer_api__set_range_data_impl(ptr, rust_vec_len, data_len),
-459 => wire__crate__api__structure_designer__structure_designer_api__set_record_construct_data_impl(ptr, rust_vec_len, data_len),
-460 => wire__crate__api__structure_designer__structure_designer_api__set_record_construct_literal_impl(ptr, rust_vec_len, data_len),
-461 => wire__crate__api__structure_designer__structure_designer_api__set_record_destructure_data_impl(ptr, rust_vec_len, data_len),
-462 => wire__crate__api__structure_designer__structure_designer_api__set_rect_data_impl(ptr, rust_vec_len, data_len),
-463 => wire__crate__api__structure_designer__structure_designer_api__set_reg_poly_data_impl(ptr, rust_vec_len, data_len),
-464 => wire__crate__api__structure_designer__relax_api__set_relax_data_impl(ptr, rust_vec_len, data_len),
-465 => wire__crate__api__structure_designer__structure_designer_api__set_return_node_id_impl(ptr, rust_vec_len, data_len),
-466 => wire__crate__api__structure_designer__structure_designer_api__set_sequence_data_impl(ptr, rust_vec_len, data_len),
-467 => wire__crate__api__structure_designer__structure_designer_api__set_sphere_data_impl(ptr, rust_vec_len, data_len),
-468 => wire__crate__api__structure_designer__structure_designer_api__set_string_data_impl(ptr, rust_vec_len, data_len),
-469 => wire__crate__api__structure_designer__structure_designer_api__set_structure_designer_preferences_impl(ptr, rust_vec_len, data_len),
-470 => wire__crate__api__structure_designer__structure_designer_api__set_structure_invert_data_impl(ptr, rust_vec_len, data_len),
-471 => wire__crate__api__structure_designer__structure_designer_api__set_structure_move_data_impl(ptr, rust_vec_len, data_len),
-472 => wire__crate__api__structure_designer__structure_designer_api__set_structure_rot_data_impl(ptr, rust_vec_len, data_len),
-473 => wire__crate__api__structure_designer__structure_designer_api__set_supercell_data_impl(ptr, rust_vec_len, data_len),
-474 => wire__crate__api__structure_designer__structure_designer_api__set_switch_data_impl(ptr, rust_vec_len, data_len),
-475 => wire__crate__api__structure_designer__tag_api__set_tag_data_impl(ptr, rust_vec_len, data_len),
-476 => wire__crate__api__structure_designer__tag_api__set_untag_data_impl(ptr, rust_vec_len, data_len),
-477 => wire__crate__api__structure_designer__structure_designer_api__set_vec2_data_impl(ptr, rust_vec_len, data_len),
-478 => wire__crate__api__structure_designer__structure_designer_api__set_vec3_data_impl(ptr, rust_vec_len, data_len),
-479 => wire__crate__api__common_api__set_view_up_axis_impl(ptr, rust_vec_len, data_len),
-480 => wire__crate__api__common_api__set_view_up_from_active_drawing_plane_impl(ptr, rust_vec_len, data_len),
-481 => wire__crate__api__common_api__set_view_up_from_lattice_direction_impl(ptr, rust_vec_len, data_len),
-482 => wire__crate__api__common_api__set_view_up_from_miller_plane_impl(ptr, rust_vec_len, data_len),
-483 => wire__crate__api__common_api__set_viewport_size_impl(ptr, rust_vec_len, data_len),
-484 => wire__crate__api__structure_designer__xray_api__set_xray_data_impl(ptr, rust_vec_len, data_len),
-485 => wire__crate__api__structure_designer__structure_designer_api__set_zip_with_data_impl(ptr, rust_vec_len, data_len),
-486 => wire__crate__api__structure_designer__structure_designer_api__set_zone_size_impl(ptr, rust_vec_len, data_len),
-488 => wire__crate__api__structure_designer__facet_shell_api__split_symmetry_members_impl(ptr, rust_vec_len, data_len),
-489 => wire__crate__api__structure_designer__structure_designer_preferences__structure_designer_preferences_clone_self_impl(ptr, rust_vec_len, data_len),
-491 => wire__crate__api__structure_designer__structure_designer_preferences__structure_designer_preferences_new_impl(ptr, rust_vec_len, data_len),
-493 => wire__crate__api__common_api__sync_gadget_data_impl(ptr, rust_vec_len, data_len),
-494 => wire__crate__api__structure_designer__structure_designer_api__take_load_param_id_repairs_impl(ptr, rust_vec_len, data_len),
-495 => wire__crate__api__structure_designer__structure_designer_api__take_print_log_impl(ptr, rust_vec_len, data_len),
-496 => wire__crate__api__structure_designer__structure_designer_api__toggle_node_selection_impl(ptr, rust_vec_len, data_len),
-497 => wire__crate__api__structure_designer__structure_designer_api__toggle_nodes_and_wires_selection_impl(ptr, rust_vec_len, data_len),
-498 => wire__crate__api__structure_designer__structure_designer_api__toggle_nodes_selection_impl(ptr, rust_vec_len, data_len),
-499 => wire__crate__api__structure_designer__structure_designer_api__toggle_output_pin_display_impl(ptr, rust_vec_len, data_len),
-500 => wire__crate__api__structure_designer__structure_designer_api__toggle_wire_selection_impl(ptr, rust_vec_len, data_len),
-501 => wire__crate__api__structure_designer__structure_designer_api__toggle_wires_selection_impl(ptr, rust_vec_len, data_len),
-502 => wire__crate__api__structure_designer__edit_atom_api__transform_selected_impl(ptr, rust_vec_len, data_len),
-503 => wire__crate__api__structure_designer__structure_designer_api__undo_impl(ptr, rust_vec_len, data_len),
-504 => wire__crate__api__structure_designer__structure_designer_api__undo_description_impl(ptr, rust_vec_len, data_len),
-505 => wire__crate__api__structure_designer__structure_designer_api__update_comment_node_impl(ptr, rust_vec_len, data_len),
-506 => wire__crate__api__structure_designer__facet_shell_api__update_facet_impl(ptr, rust_vec_len, data_len),
-507 => wire__crate__api__structure_designer__structure_designer_api__update_record_type_def_impl(ptr, rust_vec_len, data_len),
-508 => wire__crate__api__structure_designer__structure_designer_api__validate_active_network_impl(ptr, rust_vec_len, data_len),
-509 => wire__crate__api__structure_designer__structure_designer_api__viewport_pick_impl(ptr, rust_vec_len, data_len),
+139 => wire__crate__api__structure_designer__structure_designer_api__find_nodes_by_name_impl(ptr, rust_vec_len, data_len),
+140 => wire__crate__api__common_api__gadget_drag_impl(ptr, rust_vec_len, data_len),
+141 => wire__crate__api__common_api__gadget_end_drag_impl(ptr, rust_vec_len, data_len),
+142 => wire__crate__api__common_api__gadget_hit_test_impl(ptr, rust_vec_len, data_len),
+143 => wire__crate__api__common_api__gadget_start_drag_impl(ptr, rust_vec_len, data_len),
+146 => wire__crate__api__structure_designer__atom_edit_api__get_active_atom_edit_tool_impl(ptr, rust_vec_len, data_len),
+147 => wire__crate__api__structure_designer__edit_atom_api__get_active_edit_atom_tool_impl(ptr, rust_vec_len, data_len),
+148 => wire__crate__api__structure_designer__structure_designer_api__get_active_network_canvas_viewport_impl(ptr, rust_vec_len, data_len),
+149 => wire__crate__api__structure_designer__structure_designer_api__get_active_network_description_impl(ptr, rust_vec_len, data_len),
+150 => wire__crate__api__structure_designer__structure_designer_api__get_active_network_summary_impl(ptr, rust_vec_len, data_len),
+151 => wire__crate__api__structure_designer__structure_designer_api__get_active_record_def_name_impl(ptr, rust_vec_len, data_len),
+152 => wire__crate__api__common_api__get_all_elements_impl(ptr, rust_vec_len, data_len),
+153 => wire__crate__api__structure_designer__structure_designer_api__get_all_record_type_def_names_impl(ptr, rust_vec_len, data_len),
+154 => wire__crate__api__structure_designer__structure_designer_api__get_api_data_type_display_name_impl(ptr, rust_vec_len, data_len),
+155 => wire__crate__api__structure_designer__structure_designer_api__get_apply_data_impl(ptr, rust_vec_len, data_len),
+156 => wire__crate__api__structure_designer__structure_designer_api__get_apply_diff_data_impl(ptr, rust_vec_len, data_len),
+157 => wire__crate__api__structure_designer__structure_designer_api__get_array_append_data_impl(ptr, rust_vec_len, data_len),
+158 => wire__crate__api__structure_designer__structure_designer_api__get_array_at_data_impl(ptr, rust_vec_len, data_len),
+159 => wire__crate__api__structure_designer__structure_designer_api__get_array_concat_data_impl(ptr, rust_vec_len, data_len),
+160 => wire__crate__api__structure_designer__structure_designer_api__get_array_element_type_options_impl(ptr, rust_vec_len, data_len),
+161 => wire__crate__api__structure_designer__structure_designer_api__get_array_len_data_impl(ptr, rust_vec_len, data_len),
+162 => wire__crate__api__structure_designer__structure_designer_api__get_array_node_data_impl(ptr, rust_vec_len, data_len),
+163 => wire__crate__api__structure_designer__structure_designer_api__get_atom_composediff_data_impl(ptr, rust_vec_len, data_len),
+164 => wire__crate__api__structure_designer__structure_designer_api__get_atom_cut_data_impl(ptr, rust_vec_len, data_len),
+165 => wire__crate__api__structure_designer__structure_designer_api__get_atom_edit_data_impl(ptr, rust_vec_len, data_len),
+166 => wire__crate__api__structure_designer__structure_designer_api__get_atom_export_formats_impl(ptr, rust_vec_len, data_len),
+167 => wire__crate__api__structure_designer__structure_designer_api__get_atom_replace_data_impl(ptr, rust_vec_len, data_len),
+168 => wire__crate__api__structure_designer__structure_designer_api__get_bool_data_impl(ptr, rust_vec_len, data_len),
+169 => wire__crate__api__structure_designer__structure_designer_api__get_built_in_record_type_def_names_impl(ptr, rust_vec_len, data_len),
+170 => wire__crate__api__common_api__get_camera_impl(ptr, rust_vec_len, data_len),
+171 => wire__crate__api__common_api__get_camera_canonical_view_impl(ptr, rust_vec_len, data_len),
+172 => wire__crate__api__common_api__get_camera_transform_impl(ptr, rust_vec_len, data_len),
+173 => wire__crate__api__structure_designer__structure_designer_api__get_circle_data_impl(ptr, rust_vec_len, data_len),
+174 => wire__crate__api__structure_designer__structure_designer_api__get_cli_access_rules_impl(ptr, rust_vec_len, data_len),
+175 => wire__crate__api__structure_designer__structure_designer_api__get_closure_data_impl(ptr, rust_vec_len, data_len),
+176 => wire__crate__api__structure_designer__structure_designer_api__get_collect_data_impl(ptr, rust_vec_len, data_len),
+177 => wire__crate__api__structure_designer__structure_designer_api__get_comment_data_impl(ptr, rust_vec_len, data_len),
+178 => wire__crate__api__structure_designer__structure_designer_api__get_compatible_node_types_impl(ptr, rust_vec_len, data_len),
+179 => wire__crate__api__structure_designer__structure_designer_api__get_compatible_pins_for_auto_connect_impl(ptr, rust_vec_len, data_len),
+180 => wire__crate__api__structure_designer__structure_designer_api__get_cuboid_data_impl(ptr, rust_vec_len, data_len),
+181 => wire__crate__api__structure_designer__structure_designer_api__get_custom_node_params_impl(ptr, rust_vec_len, data_len),
+182 => wire__crate__api__structure_designer__structure_designer_api__get_design_file_path_impl(ptr, rust_vec_len, data_len),
+183 => wire__crate__api__structure_designer__structure_designer_api__get_direct_editing_mode_impl(ptr, rust_vec_len, data_len),
+184 => wire__crate__api__structure_designer__structure_designer_api__get_drawing_plane_data_impl(ptr, rust_vec_len, data_len),
+185 => wire__crate__api__structure_designer__structure_designer_api__get_edit_atom_data_impl(ptr, rust_vec_len, data_len),
+186 => wire__crate__api__structure_designer__profiling_api__get_eval_memo_enabled_impl(ptr, rust_vec_len, data_len),
+187 => wire__crate__api__structure_designer__profiling_api__get_eval_profiling_enabled_impl(ptr, rust_vec_len, data_len),
+188 => wire__crate__api__structure_designer__profiling_api__get_eval_self_check_enabled_impl(ptr, rust_vec_len, data_len),
+189 => wire__crate__api__structure_designer__structure_designer_api__get_export_atoms_data_impl(ptr, rust_vec_len, data_len),
+190 => wire__crate__api__structure_designer__structure_designer_api__get_expr_data_impl(ptr, rust_vec_len, data_len),
+191 => wire__crate__api__structure_designer__structure_designer_api__get_extrude_data_impl(ptr, rust_vec_len, data_len),
+192 => wire__crate__api__structure_designer__structure_designer_api__get_extrude_drawing_plane_miller_direction_impl(ptr, rust_vec_len, data_len),
+193 => wire__crate__api__structure_designer__facet_shell_api__get_facet_shell_data_impl(ptr, rust_vec_len, data_len),
+194 => wire__crate__api__structure_designer__structure_designer_api__get_factor_selection_info_impl(ptr, rust_vec_len, data_len),
+195 => wire__crate__api__structure_designer__structure_designer_api__get_filter_data_impl(ptr, rust_vec_len, data_len),
+196 => wire__crate__api__structure_designer__structure_designer_api__get_float_data_impl(ptr, rust_vec_len, data_len),
+197 => wire__crate__api__structure_designer__structure_designer_api__get_fold_data_impl(ptr, rust_vec_len, data_len),
+198 => wire__crate__api__structure_designer__structure_designer_api__get_folder_names_impl(ptr, rust_vec_len, data_len),
+199 => wire__crate__api__structure_designer__structure_designer_api__get_foreach_data_impl(ptr, rust_vec_len, data_len),
+200 => wire__crate__api__structure_designer__structure_designer_api__get_free_circle_data_impl(ptr, rust_vec_len, data_len),
+201 => wire__crate__api__structure_designer__structure_designer_api__get_free_move_data_impl(ptr, rust_vec_len, data_len),
+202 => wire__crate__api__structure_designer__structure_designer_api__get_free_rot_data_impl(ptr, rust_vec_len, data_len),
+203 => wire__crate__api__structure_designer__structure_designer_api__get_free_sphere_data_impl(ptr, rust_vec_len, data_len),
+204 => wire__crate__api__structure_designer__structure_designer_api__get_function_pin_roles_impl(ptr, rust_vec_len, data_len),
+205 => wire__crate__api__structure_designer__structure_designer_api__get_geo_trans_data_impl(ptr, rust_vec_len, data_len),
+206 => wire__crate__api__structure_designer__atom_edit_api__get_guideline_tool_view_impl(ptr, rust_vec_len, data_len),
+207 => wire__crate__api__structure_designer__structure_designer_api__get_half_plane_data_impl(ptr, rust_vec_len, data_len),
+208 => wire__crate__api__structure_designer__structure_designer_api__get_half_space_data_impl(ptr, rust_vec_len, data_len),
+209 => wire__crate__api__structure_designer__structure_designer_api__get_if_data_impl(ptr, rust_vec_len, data_len),
+210 => wire__crate__api__structure_designer__structure_designer_api__get_imat2_cols_data_impl(ptr, rust_vec_len, data_len),
+211 => wire__crate__api__structure_designer__structure_designer_api__get_imat2_diag_data_impl(ptr, rust_vec_len, data_len),
+212 => wire__crate__api__structure_designer__structure_designer_api__get_imat2_rows_data_impl(ptr, rust_vec_len, data_len),
+213 => wire__crate__api__structure_designer__structure_designer_api__get_imat3_cols_data_impl(ptr, rust_vec_len, data_len),
+214 => wire__crate__api__structure_designer__structure_designer_api__get_imat3_diag_data_impl(ptr, rust_vec_len, data_len),
+215 => wire__crate__api__structure_designer__structure_designer_api__get_imat3_rows_data_impl(ptr, rust_vec_len, data_len),
+216 => wire__crate__api__structure_designer__structure_designer_api__get_import_cif_data_impl(ptr, rust_vec_len, data_len),
+217 => wire__crate__api__structure_designer__structure_designer_api__get_import_cube_data_impl(ptr, rust_vec_len, data_len),
+218 => wire__crate__api__structure_designer__import_api__get_import_library_file_path_impl(ptr, rust_vec_len, data_len),
+219 => wire__crate__api__structure_designer__structure_designer_api__get_import_xyz_data_impl(ptr, rust_vec_len, data_len),
+220 => wire__crate__api__structure_designer__import_api__get_importable_network_names_impl(ptr, rust_vec_len, data_len),
+221 => wire__crate__api__structure_designer__structure_designer_api__get_infer_bonds_data_impl(ptr, rust_vec_len, data_len),
+222 => wire__crate__api__structure_designer__structure_designer_api__get_int_data_impl(ptr, rust_vec_len, data_len),
+223 => wire__crate__api__structure_designer__field_distribution_api__get_isosurface_color_distribution_impl(ptr, rust_vec_len, data_len),
+224 => wire__crate__api__structure_designer__structure_designer_api__get_isosurface_data_impl(ptr, rust_vec_len, data_len),
+225 => wire__crate__api__structure_designer__field_distribution_api__get_isosurface_level_distribution_impl(ptr, rust_vec_len, data_len),
+226 => wire__crate__api__structure_designer__structure_designer_api__get_ivec2_data_impl(ptr, rust_vec_len, data_len),
+227 => wire__crate__api__structure_designer__structure_designer_api__get_ivec3_data_impl(ptr, rust_vec_len, data_len),
+228 => wire__crate__api__structure_designer__structure_designer_api__get_last_directory_impl(ptr, rust_vec_len, data_len),
+229 => wire__crate__api__structure_designer__profiling_api__get_last_eval_profile_impl(ptr, rust_vec_len, data_len),
+230 => wire__crate__api__structure_designer__profiling_api__get_last_refresh_profile_impl(ptr, rust_vec_len, data_len),
+231 => wire__crate__api__structure_designer__structure_designer_api__get_lattice_symop_data_impl(ptr, rust_vec_len, data_len),
+232 => wire__crate__api__structure_designer__structure_designer_api__get_lattice_vecs_data_impl(ptr, rust_vec_len, data_len),
+233 => wire__crate__api__structure_designer__structure_designer_api__get_map_data_impl(ptr, rust_vec_len, data_len),
+234 => wire__crate__api__structure_designer__structure_designer_api__get_mat3_cols_data_impl(ptr, rust_vec_len, data_len),
+235 => wire__crate__api__structure_designer__structure_designer_api__get_mat3_diag_data_impl(ptr, rust_vec_len, data_len),
+236 => wire__crate__api__structure_designer__structure_designer_api__get_mat3_rows_data_impl(ptr, rust_vec_len, data_len),
+237 => wire__crate__api__structure_designer__structure_designer_api__get_materialize_data_impl(ptr, rust_vec_len, data_len),
+238 => wire__crate__api__structure_designer__structure_designer_api__get_motif_data_impl(ptr, rust_vec_len, data_len),
+239 => wire__crate__api__structure_designer__structure_designer_api__get_motif_sub_data_impl(ptr, rust_vec_len, data_len),
+240 => wire__crate__api__structure_designer__structure_designer_api__get_network_count_impl(ptr, rust_vec_len, data_len),
+241 => wire__crate__api__structure_designer__structure_designer_api__get_network_description_impl(ptr, rust_vec_len, data_len),
+242 => wire__crate__api__structure_designer__structure_designer_api__get_network_usage_counts_impl(ptr, rust_vec_len, data_len),
+243 => wire__crate__api__structure_designer__structure_designer_api__get_network_usages_impl(ptr, rust_vec_len, data_len),
+244 => wire__crate__api__structure_designer__structure_designer_api__get_node_network_names_impl(ptr, rust_vec_len, data_len),
+245 => wire__crate__api__structure_designer__structure_designer_api__get_node_network_view_impl(ptr, rust_vec_len, data_len),
+246 => wire__crate__api__structure_designer__structure_designer_api__get_node_networks_with_validation_impl(ptr, rust_vec_len, data_len),
+247 => wire__crate__api__structure_designer__structure_designer_api__get_node_root_cause_impl(ptr, rust_vec_len, data_len),
+248 => wire__crate__api__structure_designer__structure_designer_api__get_node_type_views_impl(ptr, rust_vec_len, data_len),
+249 => wire__crate__api__common_api__get_ortho_half_height_impl(ptr, rust_vec_len, data_len),
+250 => wire__crate__api__structure_designer__structure_designer_api__get_parameter_data_impl(ptr, rust_vec_len, data_len),
+251 => wire__crate__api__structure_designer__structure_designer_api__get_passivate_data_impl(ptr, rust_vec_len, data_len),
+252 => wire__crate__api__structure_designer__structure_designer_api__get_patch_build_data_impl(ptr, rust_vec_len, data_len),
+253 => wire__crate__api__structure_designer__structure_designer_api__get_patch_latticefill_data_impl(ptr, rust_vec_len, data_len),
+254 => wire__crate__api__structure_designer__structure_designer_api__get_plane_tiling_vectors_data_impl(ptr, rust_vec_len, data_len),
+255 => wire__crate__api__structure_designer__structure_designer_api__get_print_data_impl(ptr, rust_vec_len, data_len),
+256 => wire__crate__api__structure_designer__structure_designer_api__get_product_data_impl(ptr, rust_vec_len, data_len),
+257 => wire__crate__api__structure_designer__structure_designer_api__get_range_data_impl(ptr, rust_vec_len, data_len),
+258 => wire__crate__api__structure_designer__structure_designer_api__get_recent_files_impl(ptr, rust_vec_len, data_len),
+259 => wire__crate__api__structure_designer__structure_designer_api__get_record_construct_data_impl(ptr, rust_vec_len, data_len),
+260 => wire__crate__api__structure_designer__structure_designer_api__get_record_construct_fields_impl(ptr, rust_vec_len, data_len),
+261 => wire__crate__api__structure_designer__structure_designer_api__get_record_destructure_data_impl(ptr, rust_vec_len, data_len),
+262 => wire__crate__api__structure_designer__structure_designer_api__get_record_type_def_impl(ptr, rust_vec_len, data_len),
+263 => wire__crate__api__structure_designer__structure_designer_api__get_record_type_def_names_impl(ptr, rust_vec_len, data_len),
+264 => wire__crate__api__structure_designer__structure_designer_api__get_rect_data_impl(ptr, rust_vec_len, data_len),
+265 => wire__crate__api__structure_designer__profiling_api__get_refresh_profile_history_impl(ptr, rust_vec_len, data_len),
+266 => wire__crate__api__structure_designer__structure_designer_api__get_reg_poly_data_impl(ptr, rust_vec_len, data_len),
+267 => wire__crate__api__structure_designer__relax_api__get_relax_data_impl(ptr, rust_vec_len, data_len),
+268 => wire__crate__api__structure_designer__relax_api__get_relax_message_impl(ptr, rust_vec_len, data_len),
+269 => wire__crate__api__structure_designer__structure_designer_api__get_selected_node_ids_impl(ptr, rust_vec_len, data_len),
+270 => wire__crate__api__structure_designer__structure_designer_api__get_selected_wires_impl(ptr, rust_vec_len, data_len),
+271 => wire__crate__api__structure_designer__structure_designer_api__get_sequence_data_impl(ptr, rust_vec_len, data_len),
+272 => wire__crate__api__structure_designer__structure_designer_api__get_sphere_data_impl(ptr, rust_vec_len, data_len),
+273 => wire__crate__api__structure_designer__structure_designer_api__get_string_data_impl(ptr, rust_vec_len, data_len),
+274 => wire__crate__api__structure_designer__structure_designer_api__get_structure_designer_preferences_impl(ptr, rust_vec_len, data_len),
+275 => wire__crate__api__structure_designer__structure_designer_api__get_structure_invert_data_impl(ptr, rust_vec_len, data_len),
+276 => wire__crate__api__structure_designer__structure_designer_api__get_structure_move_data_impl(ptr, rust_vec_len, data_len),
+277 => wire__crate__api__structure_designer__structure_designer_api__get_structure_rot_data_impl(ptr, rust_vec_len, data_len),
+278 => wire__crate__api__structure_designer__structure_designer_api__get_supercell_data_impl(ptr, rust_vec_len, data_len),
+279 => wire__crate__api__structure_designer__structure_designer_api__get_switch_data_impl(ptr, rust_vec_len, data_len),
+280 => wire__crate__api__structure_designer__tag_api__get_tag_data_impl(ptr, rust_vec_len, data_len),
+281 => wire__crate__api__structure_designer__tag_api__get_untag_data_impl(ptr, rust_vec_len, data_len),
+282 => wire__crate__api__structure_designer__structure_designer_api__get_vec2_data_impl(ptr, rust_vec_len, data_len),
+283 => wire__crate__api__structure_designer__structure_designer_api__get_vec3_data_impl(ptr, rust_vec_len, data_len),
+284 => wire__crate__api__common_api__get_view_up_impl(ptr, rust_vec_len, data_len),
+285 => wire__crate__api__structure_designer__xray_api__get_xray_data_impl(ptr, rust_vec_len, data_len),
+286 => wire__crate__api__structure_designer__structure_designer_api__get_zip_with_data_impl(ptr, rust_vec_len, data_len),
+287 => wire__crate__api__common_api__greet_impl(ptr, rust_vec_len, data_len),
+288 => wire__crate__api__structure_designer__atom_edit_api__guideline_clear_impl(ptr, rust_vec_len, data_len),
+289 => wire__crate__api__structure_designer__atom_edit_api__guideline_create_from_defining_impl(ptr, rust_vec_len, data_len),
+290 => wire__crate__api__structure_designer__atom_edit_api__guideline_place_atom_impl(ptr, rust_vec_len, data_len),
+291 => wire__crate__api__structure_designer__atom_edit_api__guideline_pointer_down_impl(ptr, rust_vec_len, data_len),
+292 => wire__crate__api__structure_designer__atom_edit_api__guideline_pointer_move_impl(ptr, rust_vec_len, data_len),
+293 => wire__crate__api__structure_designer__atom_edit_api__guideline_pointer_up_impl(ptr, rust_vec_len, data_len),
+294 => wire__crate__api__structure_designer__atom_edit_api__guideline_reset_interaction_impl(ptr, rust_vec_len, data_len),
+295 => wire__crate__api__structure_designer__atom_edit_api__guideline_set_entered_direction_impl(ptr, rust_vec_len, data_len),
+296 => wire__crate__api__structure_designer__atom_edit_api__guideline_set_position_impl(ptr, rust_vec_len, data_len),
+297 => wire__crate__api__structure_designer__structure_designer_api__has_clipboard_content_impl(ptr, rust_vec_len, data_len),
+298 => wire__crate__api__structure_designer__import_cif_api__import_cif_impl(ptr, rust_vec_len, data_len),
+299 => wire__crate__api__structure_designer__import_api__import_compute_transitive_dependencies_impl(ptr, rust_vec_len, data_len),
+300 => wire__crate__api__structure_designer__import_cube_api__import_cube_impl(ptr, rust_vec_len, data_len),
+301 => wire__crate__api__structure_designer__import_api__import_networks_and_clear_impl(ptr, rust_vec_len, data_len),
+302 => wire__crate__api__structure_designer__import_xyz_api__import_xyz_impl(ptr, rust_vec_len, data_len),
+303 => wire__crate__api__structure_designer__structure_designer_api__import_xyz_into_atom_edit_impl(ptr, rust_vec_len, data_len),
+305 => wire__crate__api__structure_designer__structure_designer_api__inline_custom_node_impl(ptr, rust_vec_len, data_len),
+306 => wire__crate__api__structure_designer__structure_designer_api__is_cli_write_locked_impl(ptr, rust_vec_len, data_len),
+307 => wire__crate__api__structure_designer__structure_designer_api__is_custom_node_type_impl(ptr, rust_vec_len, data_len),
+308 => wire__crate__api__structure_designer__structure_designer_api__is_design_dirty_impl(ptr, rust_vec_len, data_len),
+309 => wire__crate__api__structure_designer__import_api__is_import_library_loaded_impl(ptr, rust_vec_len, data_len),
+310 => wire__crate__api__structure_designer__structure_designer_api__is_node_type_active_impl(ptr, rust_vec_len, data_len),
+311 => wire__crate__api__common_api__is_orthographic_impl(ptr, rust_vec_len, data_len),
+312 => wire__crate__api__structure_designer__structure_designer_api__layout_active_network_impl(ptr, rust_vec_len, data_len),
+315 => wire__crate__api__structure_designer__import_api__load_import_library_impl(ptr, rust_vec_len, data_len),
+316 => wire__crate__api__structure_designer__structure_designer_api__load_node_networks_impl(ptr, rust_vec_len, data_len),
+319 => wire__crate__api__structure_designer__atom_edit_api__motif_edit_add_parameter_element_impl(ptr, rust_vec_len, data_len),
+320 => wire__crate__api__structure_designer__atom_edit_api__motif_edit_get_neighbor_depth_impl(ptr, rust_vec_len, data_len),
+321 => wire__crate__api__structure_designer__atom_edit_api__motif_edit_remove_parameter_element_impl(ptr, rust_vec_len, data_len),
+322 => wire__crate__api__structure_designer__atom_edit_api__motif_edit_set_neighbor_depth_impl(ptr, rust_vec_len, data_len),
+323 => wire__crate__api__structure_designer__atom_edit_api__motif_edit_update_parameter_element_impl(ptr, rust_vec_len, data_len),
+324 => wire__crate__api__structure_designer__structure_designer_api__move_array_element_impl(ptr, rust_vec_len, data_len),
+325 => wire__crate__api__common_api__move_camera_impl(ptr, rust_vec_len, data_len),
+326 => wire__crate__api__structure_designer__structure_designer_api__move_node_impl(ptr, rust_vec_len, data_len),
+327 => wire__crate__api__structure_designer__structure_designer_api__move_selected_nodes_impl(ptr, rust_vec_len, data_len),
+328 => wire__crate__api__structure_designer__structure_designer_api__navigate_back_impl(ptr, rust_vec_len, data_len),
+329 => wire__crate__api__structure_designer__structure_designer_api__navigate_forward_impl(ptr, rust_vec_len, data_len),
+330 => wire__crate__api__structure_designer__structure_designer_api__new_project_impl(ptr, rust_vec_len, data_len),
+331 => wire__crate__api__structure_designer__structure_designer_api__new_project_direct_editing_impl(ptr, rust_vec_len, data_len),
+337 => wire__crate__api__structure_designer__structure_designer_api__paste_at_position_impl(ptr, rust_vec_len, data_len),
+338 => wire__crate__api__structure_designer__import_api__preview_import_names_impl(ptr, rust_vec_len, data_len),
+339 => wire__crate__api__structure_designer__structure_designer_api__preview_leaf_rename_impl(ptr, rust_vec_len, data_len),
+340 => wire__crate__api__structure_designer__structure_designer_api__preview_namespace_rename_impl(ptr, rust_vec_len, data_len),
+341 => wire__crate__api__structure_designer__profiling_api__profile_full_refresh_impl(ptr, rust_vec_len, data_len),
+342 => wire__crate__api__structure_designer__structure_designer_api__promote_node_to_parameter_impl(ptr, rust_vec_len, data_len),
+343 => wire__crate__api__common_api__provide_texture_impl(ptr, rust_vec_len, data_len),
+344 => wire__crate__api__structure_designer__structure_designer_api__query_hovered_atom_info_impl(ptr, rust_vec_len, data_len),
+345 => wire__crate__api__structure_designer__structure_designer_api__record_last_directory_impl(ptr, rust_vec_len, data_len),
+346 => wire__crate__api__structure_designer__structure_designer_api__redo_impl(ptr, rust_vec_len, data_len),
+347 => wire__crate__api__structure_designer__structure_designer_api__redo_description_impl(ptr, rust_vec_len, data_len),
+348 => wire__crate__api__structure_designer__structure_designer_api__remove_array_element_impl(ptr, rust_vec_len, data_len),
+349 => wire__crate__api__structure_designer__facet_shell_api__remove_facet_impl(ptr, rust_vec_len, data_len),
+350 => wire__crate__api__structure_designer__structure_designer_api__remove_zip_with_lane_impl(ptr, rust_vec_len, data_len),
+351 => wire__crate__api__structure_designer__structure_designer_api__rename_namespace_impl(ptr, rust_vec_len, data_len),
+352 => wire__crate__api__structure_designer__structure_designer_api__rename_node_impl(ptr, rust_vec_len, data_len),
+353 => wire__crate__api__structure_designer__structure_designer_api__rename_node_network_impl(ptr, rust_vec_len, data_len),
+354 => wire__crate__api__structure_designer__structure_designer_api__rename_record_type_def_impl(ptr, rust_vec_len, data_len),
+355 => wire__crate__api__structure_designer__edit_atom_api__replace_selected_atoms_impl(ptr, rust_vec_len, data_len),
+356 => wire__crate__api__common_api__reset_view_up_impl(ptr, rust_vec_len, data_len),
+357 => wire__crate__api__structure_designer__structure_designer_api__resize_comment_node_impl(ptr, rust_vec_len, data_len),
+358 => wire__crate__api__structure_designer__structure_designer_api__resolve_node_path_impl(ptr, rust_vec_len, data_len),
+359 => wire__crate__api__structure_designer__structure_designer_api__run_cli_batch_impl(ptr, rust_vec_len, data_len),
+360 => wire__crate__api__structure_designer__structure_designer_api__run_cli_single_impl(ptr, rust_vec_len, data_len),
+361 => wire__crate__api__structure_designer__structure_designer_api__save_node_networks_impl(ptr, rust_vec_len, data_len),
+362 => wire__crate__api__structure_designer__structure_designer_api__save_node_networks_as_impl(ptr, rust_vec_len, data_len),
+363 => wire__crate__api__structure_designer__edit_atom_api__select_atom_or_bond_by_ray_impl(ptr, rust_vec_len, data_len),
+364 => wire__crate__api__structure_designer__facet_shell_api__select_facet_impl(ptr, rust_vec_len, data_len),
+365 => wire__crate__api__structure_designer__facet_shell_api__select_facet_by_ray_impl(ptr, rust_vec_len, data_len),
+366 => wire__crate__api__structure_designer__structure_designer_api__select_node_impl(ptr, rust_vec_len, data_len),
+367 => wire__crate__api__structure_designer__structure_designer_api__select_nodes_impl(ptr, rust_vec_len, data_len),
+368 => wire__crate__api__structure_designer__structure_designer_api__select_nodes_and_wires_impl(ptr, rust_vec_len, data_len),
+369 => wire__crate__api__structure_designer__structure_designer_api__select_wire_impl(ptr, rust_vec_len, data_len),
+370 => wire__crate__api__structure_designer__structure_designer_api__select_wires_impl(ptr, rust_vec_len, data_len),
+371 => wire__crate__api__structure_designer__structure_designer_api__serialize_active_network_to_text_impl(ptr, rust_vec_len, data_len),
+372 => wire__crate__api__structure_designer__atom_edit_api__set_active_atom_edit_tool_impl(ptr, rust_vec_len, data_len),
+373 => wire__crate__api__structure_designer__edit_atom_api__set_active_edit_atom_tool_impl(ptr, rust_vec_len, data_len),
+374 => wire__crate__api__structure_designer__structure_designer_api__set_active_network_canvas_viewport_impl(ptr, rust_vec_len, data_len),
+375 => wire__crate__api__structure_designer__structure_designer_api__set_active_network_description_impl(ptr, rust_vec_len, data_len),
+376 => wire__crate__api__structure_designer__structure_designer_api__set_active_network_summary_impl(ptr, rust_vec_len, data_len),
+377 => wire__crate__api__structure_designer__structure_designer_api__set_active_node_network_impl(ptr, rust_vec_len, data_len),
+378 => wire__crate__api__structure_designer__structure_designer_api__set_active_record_def_name_impl(ptr, rust_vec_len, data_len),
+379 => wire__crate__api__structure_designer__atom_edit_api__set_add_bond_order_impl(ptr, rust_vec_len, data_len),
+380 => wire__crate__api__structure_designer__structure_designer_api__set_apply_data_impl(ptr, rust_vec_len, data_len),
+381 => wire__crate__api__structure_designer__structure_designer_api__set_apply_diff_data_impl(ptr, rust_vec_len, data_len),
+382 => wire__crate__api__structure_designer__structure_designer_api__set_array_append_data_impl(ptr, rust_vec_len, data_len),
+383 => wire__crate__api__structure_designer__structure_designer_api__set_array_at_data_impl(ptr, rust_vec_len, data_len),
+384 => wire__crate__api__structure_designer__structure_designer_api__set_array_concat_data_impl(ptr, rust_vec_len, data_len),
+385 => wire__crate__api__structure_designer__structure_designer_api__set_array_element_field_literal_impl(ptr, rust_vec_len, data_len),
+386 => wire__crate__api__structure_designer__structure_designer_api__set_array_element_literal_impl(ptr, rust_vec_len, data_len),
+387 => wire__crate__api__structure_designer__structure_designer_api__set_array_element_type_impl(ptr, rust_vec_len, data_len),
+388 => wire__crate__api__structure_designer__structure_designer_api__set_array_len_data_impl(ptr, rust_vec_len, data_len),
+389 => wire__crate__api__structure_designer__structure_designer_api__set_atom_composediff_data_impl(ptr, rust_vec_len, data_len),
+390 => wire__crate__api__structure_designer__structure_designer_api__set_atom_cut_data_impl(ptr, rust_vec_len, data_len),
+391 => wire__crate__api__structure_designer__atom_edit_api__set_atom_edit_selected_element_impl(ptr, rust_vec_len, data_len),
+392 => wire__crate__api__structure_designer__structure_designer_api__set_atom_replace_data_impl(ptr, rust_vec_len, data_len),
+393 => wire__crate__api__structure_designer__structure_designer_api__set_bool_data_impl(ptr, rust_vec_len, data_len),
+394 => wire__crate__api__common_api__set_camera_canonical_view_impl(ptr, rust_vec_len, data_len),
+395 => wire__crate__api__common_api__set_camera_transform_impl(ptr, rust_vec_len, data_len),
+396 => wire__crate__api__structure_designer__structure_designer_api__set_circle_data_impl(ptr, rust_vec_len, data_len),
+397 => wire__crate__api__structure_designer__structure_designer_api__set_cli_access_impl(ptr, rust_vec_len, data_len),
+398 => wire__crate__api__structure_designer__structure_designer_api__set_closure_data_impl(ptr, rust_vec_len, data_len),
+399 => wire__crate__api__structure_designer__structure_designer_api__set_collapse_mode_impl(ptr, rust_vec_len, data_len),
+400 => wire__crate__api__structure_designer__structure_designer_api__set_collect_data_impl(ptr, rust_vec_len, data_len),
+401 => wire__crate__api__structure_designer__structure_designer_api__set_comment_anchors_impl(ptr, rust_vec_len, data_len),
+402 => wire__crate__api__structure_designer__structure_designer_api__set_cuboid_data_impl(ptr, rust_vec_len, data_len),
+403 => wire__crate__api__structure_designer__structure_designer_api__set_custom_node_literal_impl(ptr, rust_vec_len, data_len),
+404 => wire__crate__api__structure_designer__structure_designer_api__set_direct_editing_mode_impl(ptr, rust_vec_len, data_len),
+405 => wire__crate__api__structure_designer__structure_designer_api__set_drawing_plane_data_impl(ptr, rust_vec_len, data_len),
+406 => wire__crate__api__structure_designer__edit_atom_api__set_edit_atom_selected_element_impl(ptr, rust_vec_len, data_len),
+407 => wire__crate__api__structure_designer__profiling_api__set_eval_memo_enabled_impl(ptr, rust_vec_len, data_len),
+408 => wire__crate__api__structure_designer__profiling_api__set_eval_profiling_enabled_impl(ptr, rust_vec_len, data_len),
+409 => wire__crate__api__structure_designer__profiling_api__set_eval_self_check_enabled_impl(ptr, rust_vec_len, data_len),
+410 => wire__crate__api__structure_designer__structure_designer_api__set_export_atoms_data_impl(ptr, rust_vec_len, data_len),
+411 => wire__crate__api__structure_designer__structure_designer_api__set_expr_data_impl(ptr, rust_vec_len, data_len),
+412 => wire__crate__api__structure_designer__structure_designer_api__set_extrude_data_impl(ptr, rust_vec_len, data_len),
+413 => wire__crate__api__structure_designer__facet_shell_api__set_facet_shell_center_impl(ptr, rust_vec_len, data_len),
+414 => wire__crate__api__structure_designer__structure_designer_api__set_filter_data_impl(ptr, rust_vec_len, data_len),
+415 => wire__crate__api__structure_designer__structure_designer_api__set_float_data_impl(ptr, rust_vec_len, data_len),
+416 => wire__crate__api__structure_designer__structure_designer_api__set_fold_data_impl(ptr, rust_vec_len, data_len),
+417 => wire__crate__api__structure_designer__structure_designer_api__set_foreach_data_impl(ptr, rust_vec_len, data_len),
+418 => wire__crate__api__structure_designer__structure_designer_api__set_free_circle_data_impl(ptr, rust_vec_len, data_len),
+419 => wire__crate__api__structure_designer__structure_designer_api__set_free_move_data_impl(ptr, rust_vec_len, data_len),
+420 => wire__crate__api__structure_designer__structure_designer_api__set_free_rot_data_impl(ptr, rust_vec_len, data_len),
+421 => wire__crate__api__structure_designer__structure_designer_api__set_free_sphere_data_impl(ptr, rust_vec_len, data_len),
+422 => wire__crate__api__structure_designer__structure_designer_api__set_function_pin_role_impl(ptr, rust_vec_len, data_len),
+423 => wire__crate__api__structure_designer__structure_designer_api__set_geo_trans_data_impl(ptr, rust_vec_len, data_len),
+424 => wire__crate__api__structure_designer__structure_designer_api__set_half_plane_data_impl(ptr, rust_vec_len, data_len),
+425 => wire__crate__api__structure_designer__structure_designer_api__set_half_space_data_impl(ptr, rust_vec_len, data_len),
+426 => wire__crate__api__structure_designer__structure_designer_api__set_if_data_impl(ptr, rust_vec_len, data_len),
+427 => wire__crate__api__structure_designer__structure_designer_api__set_imat2_cols_data_impl(ptr, rust_vec_len, data_len),
+428 => wire__crate__api__structure_designer__structure_designer_api__set_imat2_diag_data_impl(ptr, rust_vec_len, data_len),
+429 => wire__crate__api__structure_designer__structure_designer_api__set_imat2_rows_data_impl(ptr, rust_vec_len, data_len),
+430 => wire__crate__api__structure_designer__structure_designer_api__set_imat3_cols_data_impl(ptr, rust_vec_len, data_len),
+431 => wire__crate__api__structure_designer__structure_designer_api__set_imat3_diag_data_impl(ptr, rust_vec_len, data_len),
+432 => wire__crate__api__structure_designer__structure_designer_api__set_imat3_rows_data_impl(ptr, rust_vec_len, data_len),
+433 => wire__crate__api__structure_designer__structure_designer_api__set_import_cif_data_impl(ptr, rust_vec_len, data_len),
+434 => wire__crate__api__structure_designer__structure_designer_api__set_import_cube_data_impl(ptr, rust_vec_len, data_len),
+435 => wire__crate__api__structure_designer__structure_designer_api__set_import_xyz_data_impl(ptr, rust_vec_len, data_len),
+436 => wire__crate__api__structure_designer__structure_designer_api__set_infer_bonds_data_impl(ptr, rust_vec_len, data_len),
+437 => wire__crate__api__structure_designer__structure_designer_api__set_int_data_impl(ptr, rust_vec_len, data_len),
+438 => wire__crate__api__structure_designer__structure_designer_api__set_isosurface_data_impl(ptr, rust_vec_len, data_len),
+439 => wire__crate__api__structure_designer__structure_designer_api__set_ivec2_data_impl(ptr, rust_vec_len, data_len),
+440 => wire__crate__api__structure_designer__structure_designer_api__set_ivec3_data_impl(ptr, rust_vec_len, data_len),
+441 => wire__crate__api__structure_designer__structure_designer_api__set_lattice_symop_data_impl(ptr, rust_vec_len, data_len),
+442 => wire__crate__api__structure_designer__structure_designer_api__set_lattice_vecs_data_impl(ptr, rust_vec_len, data_len),
+443 => wire__crate__api__structure_designer__structure_designer_api__set_map_data_impl(ptr, rust_vec_len, data_len),
+444 => wire__crate__api__structure_designer__structure_designer_api__set_mat3_cols_data_impl(ptr, rust_vec_len, data_len),
+445 => wire__crate__api__structure_designer__structure_designer_api__set_mat3_diag_data_impl(ptr, rust_vec_len, data_len),
+446 => wire__crate__api__structure_designer__structure_designer_api__set_mat3_rows_data_impl(ptr, rust_vec_len, data_len),
+447 => wire__crate__api__structure_designer__structure_designer_api__set_materialize_data_impl(ptr, rust_vec_len, data_len),
+448 => wire__crate__api__structure_designer__structure_designer_api__set_motif_data_impl(ptr, rust_vec_len, data_len),
+449 => wire__crate__api__structure_designer__structure_designer_api__set_motif_sub_data_impl(ptr, rust_vec_len, data_len),
+450 => wire__crate__api__structure_designer__structure_designer_api__set_node_display_impl(ptr, rust_vec_len, data_len),
+451 => wire__crate__api__common_api__set_ortho_half_height_impl(ptr, rust_vec_len, data_len),
+452 => wire__crate__api__common_api__set_orthographic_mode_impl(ptr, rust_vec_len, data_len),
+453 => wire__crate__api__structure_designer__structure_designer_api__set_parameter_data_impl(ptr, rust_vec_len, data_len),
+454 => wire__crate__api__structure_designer__structure_designer_api__set_passivate_data_impl(ptr, rust_vec_len, data_len),
+455 => wire__crate__api__structure_designer__structure_designer_api__set_patch_build_data_impl(ptr, rust_vec_len, data_len),
+456 => wire__crate__api__structure_designer__structure_designer_api__set_patch_latticefill_data_impl(ptr, rust_vec_len, data_len),
+457 => wire__crate__api__structure_designer__structure_designer_api__set_plane_tiling_vectors_data_impl(ptr, rust_vec_len, data_len),
+458 => wire__crate__api__structure_designer__structure_designer_api__set_print_data_impl(ptr, rust_vec_len, data_len),
+459 => wire__crate__api__structure_designer__structure_designer_api__set_product_data_impl(ptr, rust_vec_len, data_len),
+460 => wire__crate__api__structure_designer__structure_designer_api__set_range_data_impl(ptr, rust_vec_len, data_len),
+461 => wire__crate__api__structure_designer__structure_designer_api__set_record_construct_data_impl(ptr, rust_vec_len, data_len),
+462 => wire__crate__api__structure_designer__structure_designer_api__set_record_construct_literal_impl(ptr, rust_vec_len, data_len),
+463 => wire__crate__api__structure_designer__structure_designer_api__set_record_destructure_data_impl(ptr, rust_vec_len, data_len),
+464 => wire__crate__api__structure_designer__structure_designer_api__set_rect_data_impl(ptr, rust_vec_len, data_len),
+465 => wire__crate__api__structure_designer__structure_designer_api__set_reg_poly_data_impl(ptr, rust_vec_len, data_len),
+466 => wire__crate__api__structure_designer__relax_api__set_relax_data_impl(ptr, rust_vec_len, data_len),
+467 => wire__crate__api__structure_designer__structure_designer_api__set_return_node_id_impl(ptr, rust_vec_len, data_len),
+468 => wire__crate__api__structure_designer__structure_designer_api__set_sequence_data_impl(ptr, rust_vec_len, data_len),
+469 => wire__crate__api__structure_designer__structure_designer_api__set_sphere_data_impl(ptr, rust_vec_len, data_len),
+470 => wire__crate__api__structure_designer__structure_designer_api__set_string_data_impl(ptr, rust_vec_len, data_len),
+471 => wire__crate__api__structure_designer__structure_designer_api__set_structure_designer_preferences_impl(ptr, rust_vec_len, data_len),
+472 => wire__crate__api__structure_designer__structure_designer_api__set_structure_invert_data_impl(ptr, rust_vec_len, data_len),
+473 => wire__crate__api__structure_designer__structure_designer_api__set_structure_move_data_impl(ptr, rust_vec_len, data_len),
+474 => wire__crate__api__structure_designer__structure_designer_api__set_structure_rot_data_impl(ptr, rust_vec_len, data_len),
+475 => wire__crate__api__structure_designer__structure_designer_api__set_supercell_data_impl(ptr, rust_vec_len, data_len),
+476 => wire__crate__api__structure_designer__structure_designer_api__set_switch_data_impl(ptr, rust_vec_len, data_len),
+477 => wire__crate__api__structure_designer__tag_api__set_tag_data_impl(ptr, rust_vec_len, data_len),
+478 => wire__crate__api__structure_designer__tag_api__set_untag_data_impl(ptr, rust_vec_len, data_len),
+479 => wire__crate__api__structure_designer__structure_designer_api__set_vec2_data_impl(ptr, rust_vec_len, data_len),
+480 => wire__crate__api__structure_designer__structure_designer_api__set_vec3_data_impl(ptr, rust_vec_len, data_len),
+481 => wire__crate__api__common_api__set_view_up_axis_impl(ptr, rust_vec_len, data_len),
+482 => wire__crate__api__common_api__set_view_up_from_active_drawing_plane_impl(ptr, rust_vec_len, data_len),
+483 => wire__crate__api__common_api__set_view_up_from_lattice_direction_impl(ptr, rust_vec_len, data_len),
+484 => wire__crate__api__common_api__set_view_up_from_miller_plane_impl(ptr, rust_vec_len, data_len),
+485 => wire__crate__api__common_api__set_viewport_size_impl(ptr, rust_vec_len, data_len),
+486 => wire__crate__api__structure_designer__xray_api__set_xray_data_impl(ptr, rust_vec_len, data_len),
+487 => wire__crate__api__structure_designer__structure_designer_api__set_zip_with_data_impl(ptr, rust_vec_len, data_len),
+488 => wire__crate__api__structure_designer__structure_designer_api__set_zone_size_impl(ptr, rust_vec_len, data_len),
+490 => wire__crate__api__structure_designer__facet_shell_api__split_symmetry_members_impl(ptr, rust_vec_len, data_len),
+491 => wire__crate__api__structure_designer__structure_designer_preferences__structure_designer_preferences_clone_self_impl(ptr, rust_vec_len, data_len),
+493 => wire__crate__api__structure_designer__structure_designer_preferences__structure_designer_preferences_new_impl(ptr, rust_vec_len, data_len),
+495 => wire__crate__api__common_api__sync_gadget_data_impl(ptr, rust_vec_len, data_len),
+496 => wire__crate__api__structure_designer__structure_designer_api__take_load_param_id_repairs_impl(ptr, rust_vec_len, data_len),
+497 => wire__crate__api__structure_designer__structure_designer_api__take_print_log_impl(ptr, rust_vec_len, data_len),
+498 => wire__crate__api__structure_designer__structure_designer_api__toggle_node_selection_impl(ptr, rust_vec_len, data_len),
+499 => wire__crate__api__structure_designer__structure_designer_api__toggle_nodes_and_wires_selection_impl(ptr, rust_vec_len, data_len),
+500 => wire__crate__api__structure_designer__structure_designer_api__toggle_nodes_selection_impl(ptr, rust_vec_len, data_len),
+501 => wire__crate__api__structure_designer__structure_designer_api__toggle_output_pin_display_impl(ptr, rust_vec_len, data_len),
+502 => wire__crate__api__structure_designer__structure_designer_api__toggle_wire_selection_impl(ptr, rust_vec_len, data_len),
+503 => wire__crate__api__structure_designer__structure_designer_api__toggle_wires_selection_impl(ptr, rust_vec_len, data_len),
+504 => wire__crate__api__structure_designer__edit_atom_api__transform_selected_impl(ptr, rust_vec_len, data_len),
+505 => wire__crate__api__structure_designer__structure_designer_api__undo_impl(ptr, rust_vec_len, data_len),
+506 => wire__crate__api__structure_designer__structure_designer_api__undo_description_impl(ptr, rust_vec_len, data_len),
+507 => wire__crate__api__structure_designer__structure_designer_api__update_comment_node_impl(ptr, rust_vec_len, data_len),
+508 => wire__crate__api__structure_designer__facet_shell_api__update_facet_impl(ptr, rust_vec_len, data_len),
+509 => wire__crate__api__structure_designer__structure_designer_api__update_record_type_def_impl(ptr, rust_vec_len, data_len),
+510 => wire__crate__api__structure_designer__structure_designer_api__validate_active_network_impl(ptr, rust_vec_len, data_len),
+511 => wire__crate__api__structure_designer__structure_designer_api__viewport_pick_impl(ptr, rust_vec_len, data_len),
                         _ => unreachable!(),
                     }
 }
@@ -24086,6 +24217,36 @@ impl
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart
+    for crate::api::structure_designer::structure_designer_api_types::APINodeNameMatch
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.network.into_into_dart().into_dart(),
+            self.scope_path.into_into_dart().into_dart(),
+            self.node_id.into_into_dart().into_dart(),
+            self.name_path.into_into_dart().into_dart(),
+            self.node_type_name.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::structure_designer::structure_designer_api_types::APINodeNameMatch
+{
+}
+impl
+    flutter_rust_bridge::IntoIntoDart<
+        crate::api::structure_designer::structure_designer_api_types::APINodeNameMatch,
+    > for crate::api::structure_designer::structure_designer_api_types::APINodeNameMatch
+{
+    fn into_into_dart(
+        self,
+    ) -> crate::api::structure_designer::structure_designer_api_types::APINodeNameMatch {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
     for crate::api::structure_designer::profiling_api::APINodeProfileRecord
 {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
@@ -24121,6 +24282,33 @@ impl
     > for crate::api::structure_designer::profiling_api::APINodeProfileRecord
 {
     fn into_into_dart(self) -> crate::api::structure_designer::profiling_api::APINodeProfileRecord {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
+    for crate::api::structure_designer::structure_designer_api_types::APINodeRef
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.scope_path.into_into_dart().into_dart(),
+            self.node_id.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::structure_designer::structure_designer_api_types::APINodeRef
+{
+}
+impl
+    flutter_rust_bridge::IntoIntoDart<
+        crate::api::structure_designer::structure_designer_api_types::APINodeRef,
+    > for crate::api::structure_designer::structure_designer_api_types::APINodeRef
+{
+    fn into_into_dart(
+        self,
+    ) -> crate::api::structure_designer::structure_designer_api_types::APINodeRef {
         self
     }
 }
@@ -28486,6 +28674,17 @@ impl SseEncode
     }
 }
 
+impl SseEncode for crate::api::structure_designer::structure_designer_api_types::APINodeNameMatch {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.network, serializer);
+        <Vec<u64>>::sse_encode(self.scope_path, serializer);
+        <u64>::sse_encode(self.node_id, serializer);
+        <String>::sse_encode(self.name_path, serializer);
+        <String>::sse_encode(self.node_type_name, serializer);
+    }
+}
+
 impl SseEncode for crate::api::structure_designer::profiling_api::APINodeProfileRecord {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -28506,6 +28705,14 @@ impl SseEncode for crate::api::structure_designer::profiling_api::APINodeProfile
         <bool>::sse_encode(self.evicted, serializer);
         <f64>::sse_encode(self.self_ms, serializer);
         <f64>::sse_encode(self.total_ms, serializer);
+    }
+}
+
+impl SseEncode for crate::api::structure_designer::structure_designer_api_types::APINodeRef {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Vec<u64>>::sse_encode(self.scope_path, serializer);
+        <u64>::sse_encode(self.node_id, serializer);
     }
 }
 
@@ -29679,6 +29886,18 @@ impl SseEncode
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::api::structure_designer::structure_designer_api_types::APINodeCategoryView>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode
+    for Vec<crate::api::structure_designer::structure_designer_api_types::APINodeNameMatch>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::structure_designer::structure_designer_api_types::APINodeNameMatch>::sse_encode(item, serializer);
         }
     }
 }
@@ -30946,6 +31165,20 @@ impl SseEncode
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <crate::api::structure_designer::structure_designer_api_types::APIMotifSubData>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode
+    for Option<crate::api::structure_designer::structure_designer_api_types::APINodeRef>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::structure_designer::structure_designer_api_types::APINodeRef>::sse_encode(
+                value, serializer,
+            );
         }
     }
 }

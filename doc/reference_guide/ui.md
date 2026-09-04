@@ -166,6 +166,15 @@ If you get lost you can use the *View > Reset node network view* menu item.
 
 The node network can be zoomed using the mouse scroll wheel.
 
+**Find a node by name.** Every node has a name — the one shown in the [Node Properties panel](#node-properties-panel), in the Text tab, and in every message the AI assistant writes. *Edit > Find node…* (**Ctrl+F**), or the magnifier button at the right end of the graph/text tab strip, opens a small search box at the top of the canvas that takes you to a node by that name.
+
+- Type any part of a name. Matches are listed best first: an exact name, then names starting with what you typed, then names merely containing it.
+- A node inside a higher-order-function or closure body is named by its path, `map4/e1` — the owner's name, a slash, then the node's own. Typing `e1` finds it; so does typing `map4/e1`. Matching ignores case.
+- **Up** / **Down** move the highlight, **Enter** goes to the highlighted node, a click goes to the node you clicked, **Esc** closes the box without going anywhere. Clicking elsewhere also closes it.
+- Landing activates the node's network if it is not the active one, expands the body it lives in, selects it and scrolls it into view. The zoom level is never changed, and *Back* returns to where you came from.
+- The search covers the active network and its bodies. Switch **All networks** on to search the whole design; rows then carry their network name at the right. The switch is remembered until you close the application.
+- Opening the box with the field empty lists every node of the active network, so it doubles as a directory of names.
+
 Each node network remembers its own canvas view (pan position and zoom level). When you switch between networks — or navigate with *Back* / *Forward* — the editor restores the view you last left for that network instead of re-framing from scratch, so you land where you were looking. A brand-new network (or one saved before this was added) has no stored view, and the editor frames its top-left node instead; *View > Reset node network view* also re-frames to the top-left node. The stored view is saved as part of the `.cnnd` file.
 
 ### Manipulating nodes and wires
@@ -684,6 +693,25 @@ re-laying-out the network. On a well-behaved edit the moved list is **empty**,
 which is the signal to look for. It covers every scope, bodies included, so a
 body node listed as moved was moved by that pass.
 
+### Jumping to a node from the panel
+
+Wherever the panel shows a **node path** — a moved node's path in the *Layout*
+tab, a per-node hunk title in the *Diff* tab — the path is a link. Hover it and
+it underlines; click it and the canvas jumps to that node: the entry's network is
+activated if it is not the active one, the node is selected in its own scope
+with its body expanded if it sits inside one, and it is centred in the view
+without changing the zoom. *Edit > Back* returns to where you were, exactly as
+after a [Find Usages](./node_networks.md) jump.
+
+The path is resolved against the network **as it is now**, not as it was when
+the edit was recorded. That is deliberate: a node's name is the identity the AI
+reasons in, so the link lands on today's holder of that name. A node renamed or
+deleted since the edit therefore reports a miss — *"No node `map4/e1` in `main`
+— renamed or deleted since edit #12"* — which is the expected answer for a hunk
+that records a deletion, and the honest one after a rename. Only the path text
+is a link; the diff lines themselves stay ordinary selectable text, so a hunk
+can still be selected and copied as a block.
+
 ### Keeping a session: the toolbar
 
 The log lives in memory only, so when the application closes it is gone. The
@@ -903,6 +931,7 @@ Used for loading and saving a design, exporting a design to .xyz or .mol, undo/r
 
   So exporting a structure to a renders folder does not move where *Load Design* opens next time. If a remembered folder has since been deleted or lives on a drive that is not mounted, the dialog falls back to the system default.
 - *Edit > Undo* (`Ctrl+Z`) / *Edit > Redo* (`Ctrl+Shift+Z` or `Ctrl+Y`): Undo and redo all operations, including node edits, wire connections, atom editing, and more.
+- *Edit > Find node…* (**Ctrl+F**): Opens a search box at the top of the node network canvas that takes you to a node by its name — the same box the magnifier button on the editor's tab strip opens. See [Navigating in the node network editor panel](#navigating-in-the-node-network-editor-panel) for how it matches and what it does when you pick a row. Available in Node Network Mode only.
 - *Edit > Validate active network*: Validates the active node network and reports any errors. Available in Node Network Mode only.
 - *Edit > Go to next error* (`F8`) / *Edit > Go to previous error* (`Shift+F8`): Steps selection through the active network's errors one at a time, wrapping around, so you can walk its problems without hunting for the red nodes. Each step activates the errored node and scrolls it into view (the same oriented jump the error badge uses). Greyed out when the active network has no errors. Available in Node Network Mode only.
 - *Edit > Auto-Layout Network*: Automatically arranges nodes in the current node network for a clean, readable layout, using whichever algorithm is selected under *Auto-layout algorithm* in [Preferences](#preferences-dialog). **This is the only thing that rearranges a whole network, and it only runs when you pick it** — see [Where nodes end up](node_networks.md#where-nodes-end-up-your-arrangement-and-what-may-move-it). It reaches inside higher-order nodes too: each body is arranged in its own right, deepest first, so an expanded `map` ends up neither overlapping its neighbours nor too small for what it holds. Turn on *Auto-Layout keeps manually placed nodes in place* in Preferences to have it leave your own placements alone. The view is refitted around the result. This is a single undoable step — if you don't like the new arrangement, `Ctrl+Z` puts every node back where it was. Comment notes are not laid out as graph nodes: each is placed afterwards, an anchored one beside what it documents and an unanchored one keeping its position relative to the drawing — see [Comment notes and automatic layout](nodes/annotation.md#comment).

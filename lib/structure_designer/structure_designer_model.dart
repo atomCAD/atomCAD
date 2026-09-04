@@ -1609,6 +1609,52 @@ class StructureDesignerModel extends ChangeNotifier {
         screenAnchor: screenAnchor);
   }
 
+  /// Find Node: the nodes whose **name path** (`map4/e1`) contains [query],
+  /// ranked and with the active network's matches first
+  /// (`doc/design_node_names_in_ui.md` D7/D8).
+  ///
+  /// Everything — the walk, the path spelling, the matching and the ranking —
+  /// is Rust's (`find_nodes_by_name`), so the picker's rows read exactly the
+  /// names the AI, the text format and the error paths use. Read-only: no
+  /// refresh, no undo entry, nothing to notify.
+  List<APINodeNameMatch> findNodesByName(String query,
+      {required bool allNetworks}) {
+    return structure_designer_api.findNodesByName(
+        query: query, allNetworks: allNetworks);
+  }
+
+  /// Lands on a row of the Find Node picker. No screen anchor: the user typed a
+  /// name rather than pointing at a node, so there is no position to preserve
+  /// and a viewport-centered landing is the right one (D7).
+  void jumpToNodeMatch(APINodeNameMatch match) {
+    jumpToNode(match.network, match.scopePath.toList(), match.nodeId);
+  }
+
+  /// Lands on the node named by [path] (`map4/e1`) inside [network] — the AI
+  /// History panel's node links (`doc/design_node_names_in_ui.md` D12).
+  /// Returns whether it landed.
+  ///
+  /// Resolution is **live**: the path is matched against the document as it
+  /// stands *now*, not against the snapshot the entry was recorded from, so a
+  /// node renamed or deleted since that edit legitimately misses and the caller
+  /// reports it. That is the expected outcome for a removed hunk, whose title
+  /// names a node that very edit deleted, and the right one for a renamed node:
+  /// the name is the identity the AI reasons in, so a link that lands on
+  /// *today's* holder of that name is the honest answer.
+  ///
+  /// No screen anchor: the panel is not the canvas, so there is no "where I was
+  /// looking" position to preserve, and the landing is viewport-centred exactly
+  /// as it is from the Find Node picker (D7). Activating the entry's network is
+  /// [jumpToNode]'s job and is recorded in the navigation history, so *Back*
+  /// returns to where the click started.
+  bool jumpToNodePath(String network, String path) {
+    final ref = structure_designer_api.resolveNodePath(
+        networkName: network, path: path);
+    if (ref == null) return false;
+    jumpToNode(network, ref.scopePath.toList(), ref.nodeId);
+    return true;
+  }
+
   /// Jumps to an error's offending node, the same way [jumpToUsage] jumps to an
   /// instance (error-navigation feature). A network-level error with no
   /// anchored node (`nodeId == null`) has nowhere to go, so this is a no-op for

@@ -9,9 +9,14 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
 /// a `/` inside a name is refused at the source so the join stays unambiguous
 /// (`doc/design_node_names_in_ui.md` D1/D8).
 ///
-/// Phase 3 moves the authoritative walk into Rust (`find_nodes_by_name` /
-/// `resolve_node_path`); until then these two helpers are the Flutter side's
-/// only name-path composition, and they must keep composing it the same way.
+/// The **authoritative** walk is Rust's (`find_nodes_by_name` /
+/// `resolve_node_path`, D8): anything that has to *match* a path — the Find
+/// Node picker, a jump from the AI History panel — goes there, so there is one
+/// path rule. These helpers stay for the surfaces that merely *display* a path
+/// for a node they already hold (the property panel's name strip, *Copy node
+/// name*), where a `NodeNetworkView` is in hand and an FFI round trip would buy
+/// nothing. They must keep composing it exactly the way Rust does, or a copied
+/// name would stop finding its node.
 
 /// The node's stored `custom_name`, with `#<id>` standing in for a node that
 /// somehow has none. Every node has one in practice — `add_node` mints one and

@@ -404,7 +404,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APINodeEvaluationResult dco_decode_api_node_evaluation_result(dynamic raw);
 
   @protected
+  APINodeNameMatch dco_decode_api_node_name_match(dynamic raw);
+
+  @protected
   APINodeProfileRecord dco_decode_api_node_profile_record(dynamic raw);
+
+  @protected
+  APINodeRef dco_decode_api_node_ref(dynamic raw);
 
   @protected
   APINodeTypeProfileRecord dco_decode_api_node_type_profile_record(dynamic raw);
@@ -830,6 +836,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIMotifSubData dco_decode_box_autoadd_api_motif_sub_data(dynamic raw);
 
   @protected
+  APINodeRef dco_decode_box_autoadd_api_node_ref(dynamic raw);
+
+  @protected
   APIParameterData dco_decode_box_autoadd_api_parameter_data(dynamic raw);
 
   @protected
@@ -1136,6 +1145,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APINodeCategoryView> dco_decode_list_api_node_category_view(dynamic raw);
+
+  @protected
+  List<APINodeNameMatch> dco_decode_list_api_node_name_match(dynamic raw);
 
   @protected
   List<APINodeProfileRecord> dco_decode_list_api_node_profile_record(
@@ -1478,6 +1490,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIMotifSubData? dco_decode_opt_box_autoadd_api_motif_sub_data(dynamic raw);
+
+  @protected
+  APINodeRef? dco_decode_opt_box_autoadd_api_node_ref(dynamic raw);
 
   @protected
   APIParameterData? dco_decode_opt_box_autoadd_api_parameter_data(dynamic raw);
@@ -2149,8 +2164,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APINodeNameMatch sse_decode_api_node_name_match(SseDeserializer deserializer);
+
+  @protected
   APINodeProfileRecord sse_decode_api_node_profile_record(
       SseDeserializer deserializer);
+
+  @protected
+  APINodeRef sse_decode_api_node_ref(SseDeserializer deserializer);
 
   @protected
   APINodeTypeProfileRecord sse_decode_api_node_type_profile_record(
@@ -2660,6 +2681,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APINodeRef sse_decode_box_autoadd_api_node_ref(SseDeserializer deserializer);
+
+  @protected
   APIParameterData sse_decode_box_autoadd_api_parameter_data(
       SseDeserializer deserializer);
 
@@ -3020,6 +3044,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APINodeCategoryView> sse_decode_list_api_node_category_view(
+      SseDeserializer deserializer);
+
+  @protected
+  List<APINodeNameMatch> sse_decode_list_api_node_name_match(
       SseDeserializer deserializer);
 
   @protected
@@ -3428,6 +3456,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIMotifSubData? sse_decode_opt_box_autoadd_api_motif_sub_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APINodeRef? sse_decode_opt_box_autoadd_api_node_ref(
       SseDeserializer deserializer);
 
   @protected
@@ -4186,8 +4218,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APINodeEvaluationResult self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_node_name_match(
+      APINodeNameMatch self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_node_profile_record(
       APINodeProfileRecord self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_node_ref(APINodeRef self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_node_type_profile_record(
@@ -4714,6 +4753,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIMotifSubData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_api_node_ref(
+      APINodeRef self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_api_parameter_data(
       APIParameterData self, SseSerializer serializer);
 
@@ -5082,6 +5125,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_api_node_category_view(
       List<APINodeCategoryView> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_api_node_name_match(
+      List<APINodeNameMatch> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_api_node_profile_record(
@@ -5497,6 +5544,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_motif_sub_data(
       APIMotifSubData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_node_ref(
+      APINodeRef? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_parameter_data(

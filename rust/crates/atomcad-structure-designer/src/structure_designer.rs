@@ -2611,6 +2611,35 @@ impl StructureDesigner {
         super::network_usages::collect_network_usage_counts(&self.node_type_registry)
     }
 
+    /// Find Node: every node whose name path contains `query`, ranked and with
+    /// the active network's matches first (`doc/design_node_names_in_ui.md`
+    /// D7/D8). Read-only. Scope is the active network including its bodies,
+    /// widened to every network by `all_networks`.
+    pub fn find_nodes_by_name(
+        &self,
+        query: &str,
+        all_networks: bool,
+    ) -> Vec<super::node_name_search::NodeNameMatch> {
+        super::node_name_search::find_nodes_by_name(
+            &self.node_type_registry,
+            self.active_node_network_name.as_deref(),
+            query,
+            all_networks,
+        )
+    }
+
+    /// The exact counterpart of [`Self::find_nodes_by_name`]: resolves one name
+    /// path (`map4/e1`) inside one named network to a `(scope_path, node_id)`
+    /// address, or `None` if nothing holds that name *now* — the AI History
+    /// panel's jump (D12) is a live lookup against a possibly-renamed network.
+    pub fn resolve_node_path(
+        &self,
+        network_name: &str,
+        path: &str,
+    ) -> Option<super::node_name_search::NodeRef> {
+        super::node_name_search::resolve_node_path(&self.node_type_registry, network_name, path)
+    }
+
     /// Check if any network outside `targets` references any network in `targets`.
     /// Returns Ok(()) if safe to delete, or Err with details if blocked.
     ///

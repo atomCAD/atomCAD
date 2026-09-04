@@ -15,7 +15,8 @@ Interactive visual node graph editor widget. Handles rendering, interaction, and
 | `comment_node_widget.dart` | Special rendering for Comment nodes |
 | `add_node_popup.dart` | Node type picker dialog with category filtering (+ the `inZoneBody` filter, below) |
 | `node_title.dart` | What a title bar says under the current `NodeTitleMode` — type name or node name (`doc/design_node_names_in_ui.md` D4/D5). Every node kind goes through it; the size rule deliberately does not |
-| `node_name_path.dart` | Composes a node's **name path** (`map4/e1`) from a `NodeNetworkView` — the spelling the AI is handed in error paths, diff hunk titles and the Layout log. The Flutter side's only name-path composition until Phase 3 of `doc/design_node_names_in_ui.md` moves the walk into Rust |
+| `node_name_path.dart` | Composes a node's **name path** (`map4/e1`) from a `NodeNetworkView` — the spelling the AI is handed in error paths, diff hunk titles and the Layout log. Kept for the surfaces that *display* a path for a node already in hand (the name strip, *Copy node name*); anything that *matches* a path goes through Rust instead (`find_nodes_by_name` / `resolve_node_path`) |
+| `find_node_picker.dart` | **Find Node** (`doc/design_node_names_in_ui.md` D7): the top-of-canvas "go to symbol" overlay and its rows. Matching, ranking and the path spelling are Rust's (`find_nodes_by_name`) — this file is the overlay, the keyboard and the landing |
 
 ## Coordinate System
 

@@ -2994,6 +2994,83 @@ class APINodeEvaluationResult {
           errorMessage == other.errorMessage;
 }
 
+/// One node found by the Find Node picker, addressed by network + scope path +
+/// id (`doc/design_node_names_in_ui.md` D7/D8).
+///
+/// The addressing triple is what Flutter's `jumpToNode` needs; `name_path` and
+/// `node_type_name` are the row's display strings, both resolved Rust-side so
+/// Flutter composes no path of its own.
+class APINodeNameMatch {
+  /// Name of the network holding the node.
+  final String network;
+
+  /// Chain of HOF node ids from that network's top level down to the body the
+  /// node lives in. Empty for a top-level node.
+  final Uint64List scopePath;
+
+  /// Id of the node **within its own scope**.
+  final BigInt nodeId;
+
+  /// The node's name path: `e1` at the top level, `map4/e1` one body down —
+  /// the bare stored names joined by `/`, never the backtick-quoted spelling
+  /// the text format would print.
+  final String namePath;
+
+  /// The node's type name (`expr`, `union`, or a custom network's name).
+  final String nodeTypeName;
+
+  const APINodeNameMatch({
+    required this.network,
+    required this.scopePath,
+    required this.nodeId,
+    required this.namePath,
+    required this.nodeTypeName,
+  });
+
+  @override
+  int get hashCode =>
+      network.hashCode ^
+      scopePath.hashCode ^
+      nodeId.hashCode ^
+      namePath.hashCode ^
+      nodeTypeName.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APINodeNameMatch &&
+          runtimeType == other.runtimeType &&
+          network == other.network &&
+          scopePath == other.scopePath &&
+          nodeId == other.nodeId &&
+          namePath == other.namePath &&
+          nodeTypeName == other.nodeTypeName;
+}
+
+/// A node addressed within one network — the result of an exact name-path
+/// lookup (`doc/design_node_names_in_ui.md` D8), used by the AI History
+/// panel's jump.
+class APINodeRef {
+  final Uint64List scopePath;
+  final BigInt nodeId;
+
+  const APINodeRef({
+    required this.scopePath,
+    required this.nodeId,
+  });
+
+  @override
+  int get hashCode => scopePath.hashCode ^ nodeId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APINodeRef &&
+          runtimeType == other.runtimeType &&
+          scopePath == other.scopePath &&
+          nodeId == other.nodeId;
+}
+
 class APINodeTypeView {
   final String name;
   final String description;

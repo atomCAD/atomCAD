@@ -337,6 +337,35 @@ List<APINetworkUsage> getNetworkUsages({required String networkName}) =>
 Map<String, int> getNetworkUsageCounts() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetNetworkUsageCounts();
 
+/// Find Node: every node whose **name path** contains `query`, ranked
+/// exact → prefix → substring and then by path, with the active network's
+/// matches first (`doc/design_node_names_in_ui.md` D7/D8).
+///
+/// Matching is case-insensitive on the bare path spelling (`map4/e1`), the one
+/// the AI is handed in error paths and the AI History panel — never the
+/// backtick-quoted form the text format prints. Scope is the active network
+/// including its bodies at any depth; `all_networks` widens it to the whole
+/// document. An empty query matches everything, so opening the picker doubles
+/// as a name directory. Read-only: no undo command, no refresh.
+List<APINodeNameMatch> findNodesByName(
+        {required String query, required bool allNetworks}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiFindNodesByName(
+            query: query, allNetworks: allNetworks);
+
+/// The exact counterpart of [`find_nodes_by_name`]: resolves one name path
+/// (`map4/e1`) inside `network_name` to the address a jump needs, or `None`
+/// when nothing holds that name *now* (`doc/design_node_names_in_ui.md` D8).
+///
+/// The AI History panel's node links (D12) resolve live against the current
+/// document rather than against the snapshot the entry was recorded from, so a
+/// node renamed or deleted since the edit legitimately misses.
+APINodeRef? resolveNodePath(
+        {required String networkName, required String path}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiResolveNodePath(
+            networkName: networkName, path: path);
+
 /// Returns the active network's stored node-canvas viewport (pan + zoom), or
 /// `None` if it has none yet (fresh network / old file) — Flutter then falls
 /// back to auto-framing the top-left node. Issue #414 Phase 4,

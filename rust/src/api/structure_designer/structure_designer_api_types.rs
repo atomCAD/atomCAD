@@ -1356,6 +1356,36 @@ pub struct APINetworkUsage {
     pub body_qualifier: Option<String>,
 }
 
+/// One node found by the Find Node picker, addressed by network + scope path +
+/// id (`doc/design_node_names_in_ui.md` D7/D8).
+///
+/// The addressing triple is what Flutter's `jumpToNode` needs; `name_path` and
+/// `node_type_name` are the row's display strings, both resolved Rust-side so
+/// Flutter composes no path of its own.
+pub struct APINodeNameMatch {
+    /// Name of the network holding the node.
+    pub network: String,
+    /// Chain of HOF node ids from that network's top level down to the body the
+    /// node lives in. Empty for a top-level node.
+    pub scope_path: Vec<u64>,
+    /// Id of the node **within its own scope**.
+    pub node_id: u64,
+    /// The node's name path: `e1` at the top level, `map4/e1` one body down —
+    /// the bare stored names joined by `/`, never the backtick-quoted spelling
+    /// the text format would print.
+    pub name_path: String,
+    /// The node's type name (`expr`, `union`, or a custom network's name).
+    pub node_type_name: String,
+}
+
+/// A node addressed within one network — the result of an exact name-path
+/// lookup (`doc/design_node_names_in_ui.md` D8), used by the AI History
+/// panel's jump.
+pub struct APINodeRef {
+    pub scope_path: Vec<u64>,
+    pub node_id: u64,
+}
+
 /// Node-canvas viewport (pan + zoom) for a network's node editor, exchanged
 /// with Flutter so it can be persisted per network and restored on activation
 /// (issue #414 Phase 4, `doc/design_find_usages.md` D7).

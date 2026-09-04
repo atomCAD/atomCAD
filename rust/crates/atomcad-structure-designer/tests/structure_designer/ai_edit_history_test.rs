@@ -659,3 +659,118 @@ fn a_replace_that_creates_nothing_is_still_dirty_and_undoable() {
         "undo brings the sphere back"
     );
 }
+
+// ============================================================================
+// The node links (D12 of `doc/design_node_names_in_ui.md`)
+// ============================================================================
+
+/// The contract the AI History panel's node links rest on: every path an entry
+/// carries is resolvable by `resolve_node_path` against the entry's network.
+///
+/// Nothing enforces this at a type level — the diff composes its paths in
+/// `ai_edit_diff.rs`, the layout record composes its own in the incremental
+/// pass, and the resolver splits a third string in `node_name_search.rs`. All
+/// three agree today only because all three join bare `custom_name`s with `/`
+/// (D1/D8). This is the test that keeps them agreeing if any one of them
+/// changes its joiner or its quoting.
+///
+/// A *removed* hunk is deliberately not exercised: it names a node the edit
+/// deleted, so missing is the correct answer there and the panel says so.
+#[test]
+fn every_node_path_an_entry_records_resolves_through_the_resolver() {
+    let mut sd = designer();
+    edit(&mut sd, MAP_WITH_BODY);
+
+    // An edit that adds one node at the root and one inside the body, so the
+    // recorded paths cover both a bare name and a scoped `m1/…` one.
+    edit(
+        &mut sd,
+        r#"
+extra = int { value: 7 }
+m1 = map {
+  xs: r,
+  input_type: Int,
+  output_type: Int,
+  body {
+    d = expr { a: $element, b: ^scale, expression: "a * b", parameters: [{ name: "a", data_type: Int }, { name: "b", data_type: Int }] }
+    e = expr { a: d, expression: "a + 1", parameters: [{ name: "a", data_type: Int }] }
+    f = expr { a: e, expression: "a + 2", parameters: [{ name: "a", data_type: Int }] }
+    output f
+  }
+}
+"#,
+    );
+
+    let rec = sd.ai_edit_log.last().unwrap().clone();
+    let network = rec.network_name.clone();
+
+    // The *Diff* tab: the by-node view is the one that titles a hunk with a
+    // node path (the Text view titles it with a `@@ … @@` range header, which
+    // the panel keeps as plain text).
+    let diff =
+        atomcad_structure_designer::ai_edit_diff::diff_by_node(&rec.before_text, &rec.after_text);
+    let mut checked = 0;
+    for hunk in &diff.hunks {
+        // The root scope's leftovers bucket (header / description / summary /
+        // output) has no path, and the panel renders it as `(hunk)`.
+        if hunk.node_path.is_empty() {
+            continue;
+        }
+        assert!(
+            hunk.kind != atomcad_structure_designer::ai_edit_diff::DiffHunkKind::Removed,
+            "this edit deletes nothing, so no hunk should be Removed: {}",
+            hunk.node_path
+        );
+        assert!(
+            sd.resolve_node_path(&network, &hunk.node_path).is_some(),
+            "diff hunk path `{}` does not resolve in `{}`",
+            hunk.node_path,
+            network
+        );
+        checked += 1;
+    }
+    assert!(checked > 0, "the edit must produce at least one node hunk");
+    assert!(
+        diff.hunks.iter().any(|h| h.node_path == "m1/f"),
+        "the body node the edit added must appear as its scoped path: {:?}",
+        diff.hunks.iter().map(|h| &h.node_path).collect::<Vec<_>>()
+    );
+
+    // The *Layout* tab: same rule for every moved node, at any depth. The
+    // record keeps a `NamePath`; `path_string` is the joined spelling the API
+    // twin hands the panel, so that is the one the resolver must accept.
+    for moved in &rec.layout.moved {
+        let path = moved.path_string();
+        assert!(
+            sd.resolve_node_path(&network, &path).is_some(),
+            "moved node path `{path}` does not resolve in `{network}`"
+        );
+    }
+}
+
+/// The other half of the contract: a path that no longer holds resolves to
+/// `None` rather than to some other node. That is what turns a stale link into
+/// the panel's "renamed or deleted since edit #N" SnackBar instead of a jump to
+/// the wrong place.
+#[test]
+fn a_path_whose_node_was_renamed_since_the_edit_no_longer_resolves() {
+    let mut sd = designer();
+    edit(&mut sd, MAP_WITH_BODY);
+
+    let network = sd.ai_edit_log.last().unwrap().network_name.clone();
+    let node_ref = sd
+        .resolve_node_path(&network, "m1/d")
+        .expect("the recorded path resolves before the rename");
+
+    sd.rename_node(&node_ref.scope_path, node_ref.node_id, "renamed")
+        .expect("rename should succeed");
+
+    assert!(
+        sd.resolve_node_path(&network, "m1/d").is_none(),
+        "the old path must miss, not land on a neighbour"
+    );
+    assert!(
+        sd.resolve_node_path(&network, "m1/renamed").is_some(),
+        "and the new one must land"
+    );
+}
