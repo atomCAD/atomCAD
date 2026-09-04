@@ -17,7 +17,7 @@ type, the hover tooltips show the type. The name exists on every node and is
 already delivered to Flutter (`NodeView.custom_name`), it is simply never
 drawn — and never editable.
 
-Three gaps, in the order a user hits them:
+Five gaps, in the order a user hits them:
 
 1. **"Which node is `expr49`?"** — no way to read a node's name from the
    canvas or the property panel.
@@ -30,6 +30,10 @@ Three gaps, in the order a user hits them:
 4. **"Call this one `chassis`"** — once the name is visible it is the natural
    thing to want to change, so that both the human and the AI talk about
    `chassis` instead of `union7`.
+5. **"Show me *this* one"** — the AI History panel is where the human reads
+   most of these names: every diff hunk and every moved-node row is titled by
+   a name path. Having read `map4/e1` there, retyping it into a picker is one
+   step too many; the name should be the link.
 
 ## Current state (analysis)
 
@@ -53,17 +57,31 @@ Three gaps, in the order a user hits them:
   and the `.cnnd` loader (`node_networks_serialization.rs` ~787) backfills any
   node that arrives without one. There is no "derived name for a nameless
   node" case to design for.
-- **But names are not unique.** Duplicate and paste (`undo/commands/
-  duplicate_node.rs`, `paste_nodes.rs`) restore the copied `custom_name`
-  verbatim, so a network can hold four nodes stored as `to_degrees`. The text
-  format cannot write four statements with the same left-hand side, so on the
-  way *out* `text_format::unique_node_names` renames the later ones by
-  ascending id (`to_degrees`, `to_degrees_2`, `to_degrees_3`) — without
-  touching the stored names, until a text `--replace` makes the suffixes
-  permanent. `node_inlining.rs::unique_name` already applies the same `_2`
-  rule at inline time. This is the only situation where what the AI says
-  differs from what the node stores. Body nodes are addressed by path,
-  `map4/e1`.
+- **Copies do not keep the name.** `NodeNetwork::duplicate_node` and
+  `copy_nodes_from` (the paste path, run twice: network → clipboard and
+  clipboard → network) do not carry the copied `custom_name` at all; they
+  mint a fresh type-counter name through `generate_unique_display_name`. So
+  duplicating `cuboid1` gives `cuboid2`, and copy-pasting a node the user
+  called `chassis` gives `union8`. Two tests pin the current behaviour:
+  `test_duplicate_node_gets_unique_name` (`node_network_test.rs`) and
+  `test_duplicated_nodes_have_unique_persistent_names` (`text_format_test.rs`).
+  The undo commands (`undo/commands/duplicate_node.rs`, `paste_nodes.rs`) only
+  restore on redo whatever name the copy was given.
+- **And names are not unique.** Parameter nodes minted by
+  promote-to-parameter (`promote_to_parameter.rs`), selection factoring
+  (`selection_factoring.rs`) and closure→network conversion
+  (`closure_network_conversion.rs`) take the parameter name as `custom_name`
+  verbatim with no uniqueness check, and older files carry whatever earlier
+  text-editor versions accepted, so a network can hold four nodes stored as
+  `to_degrees`. The text format cannot write four statements with the same
+  left-hand side, so on the way *out* `text_format::unique_node_names`
+  renames the later ones by ascending id (`to_degrees`, `to_degrees_2`,
+  `to_degrees_3`), skipping any spelling some other node already owns —
+  without touching the stored names, until a text `--replace` makes the
+  suffixes permanent. `node_inlining.rs::unique_name` already applies the
+  same `_2` rule at inline time. This is the only situation where what the
+  AI says differs from what the node stores. Body nodes are addressed by
+  path, `map4/e1`.
 - **Names are not identifiers.** `format_identifier` backtick-quotes any
   spelling the text format cannot write bare, and `x.shape` / `union#1` are
   tested node names (`relaxed_node_names_test.rs`). A name's only rules are
@@ -85,6 +103,16 @@ Three gaps, in the order a user hits them:
   network (recorded in navigation history, so *Back* works), selects the node
   in its scope, scrolls it into view, never changes zoom. Only the *name →
   (network, scope, id)* resolution is missing.
+- **AI History panel** (`ai_history_panel.dart`): the *Diff* tab's
+  `_DiffHunkView` titles each hunk with `hunk.nodePath`, and the *Layout*
+  tab's `_MovedNodeRow` prints `moved.path`; both are plain `Text` inside a
+  `SelectionArea`. Both spellings come from `unique_node_names` at record
+  time, so after D1 they are `custom_name` paths, identical to what
+  `error_node_path` composes. An entry is keyed by its own `networkName`,
+  which need not be the active network, and the expanded diff dialog
+  (`_showDiffDialog`, a `showDialog`) re-renders the same `_DiffTab`.
+  Entries are history: by the time a name is clicked the node may have been
+  renamed (by the AI or by D3), deleted, or re-created under the same name.
 - **Display panel** (`display_panel.dart`, `display_button_group.dart`,
   `node_display_widget.dart`): icon buttons in subject clusters; the node
   display policy is a three-button radio group backed by
@@ -101,9 +129,9 @@ Three gaps, in the order a user hits them:
 - Renaming from the AI side: the text format keeps its "a statement names a
   node" semantics (`doc/design_identity_vs_naming.md`); a rename through text
   is still delete + create. Only the GUI rename (D3) is new.
-- Changing the naming *rule*: the `_2`, `_3` suffixing and the ascending-id
-  order stay exactly as `unique_node_names` defines them; D1 only moves where
-  the rule is applied.
+- Changing the suffix *rule*: `_2`, `_3` and the ascending-id order stay
+  exactly as `unique_node_names` defines them. D1 widens where the rule is
+  applied (copies, parameter minting, the loader) and does not alter it.
 - Showing both name and type in the header at once. The user's explicit
   preference: two states, either/or, cheap to flip.
 - Exposing the title mode through the AI HTTP server / CLI `display`
@@ -119,13 +147,22 @@ AI uses.**
 Rather than deriving a display name in the view, every path that can put a
 taken name into a scope applies the existing suffix rule at write time:
 
-- **Duplicate and paste** (`DuplicateNodeCommand`, `PasteNodesCommand`, and
-  the Rust `duplicate_node` / `paste` entry points they wrap) rename a copied
-  node to the first free `name_2`, `name_3`, … in the destination scope. A
-  paste of a whole selection assigns names in ascending source-id order, the
-  same order `unique_node_names` would have used, so the result is
-  byte-identical to what the text format already printed for such a network.
-  Redo restores the *renamed* spelling.
+- **Duplicate and paste keep the copied name** and rename only on collision,
+  to the first free `name_2`, `name_3`, … in the destination scope. This
+  replaces the type-counter minting in `duplicate_node` and `copy_nodes_from`:
+  a user-chosen `chassis` copies as `chassis_2`, not `union8`, which is what
+  makes D3's rename worth doing. An auto-named `cuboid1` therefore copies as
+  `cuboid1_2` rather than `cuboid2`; the two tests that pin the old spelling
+  change expectation. A paste of a whole selection assigns names in ascending
+  source-id order, the same order `unique_node_names` would have used, so the
+  result is byte-identical to what the text format already printed for such a
+  network. Redo restores the *renamed* spelling. The clipboard is a scope of
+  its own, so the network → clipboard copy is also collision-free by
+  construction.
+- **Parameter minting** (promote-to-parameter, selection factoring,
+  closure→network conversion) passes the parameter name through the same
+  helper before storing it as `custom_name`; `param_name` is a separate field
+  and is untouched.
 - **Load-time normalization**: the loader's existing "assign names to nodes
   without one" pass grows a second step that renames duplicates with the same
   rule. Existing files heal themselves on first open; the migration is
@@ -135,8 +172,8 @@ taken name into a scope applies the existing suffix rule at write time:
   incremental edits create nodes with the name the statement gives, which the
   editor already rejects when taken in that scope.
 - **`unique_node_names` stays** as the serializer's name source and becomes a
-  no-op safety net, guarded by a debug assertion (or a test on the corpus)
-  that it never has to rename anything on a loaded network.
+  no-op safety net, guarded by a debug assertion and by the corpus test,
+  both checking that it never has to rename anything on a loaded network.
 
 The invariant: *within one scope, `custom_name` is unique, and the text
 format prints it verbatim.* With it, the GUI can show and edit
@@ -177,8 +214,8 @@ the node-networks list):
   Ctrl+Z step. It marks the project dirty and triggers a *view* refresh only —
   no re-evaluation, since no evaluated state depends on the name.
 - The Text tab re-renders with the new statement name; the AI's next `query`
-  shows it. The AI History diff of the *next* AI edit shows the node as
-  removed-and-added under its old and new names (D11).
+  shows it. The AI History entry of the *next* AI edit carries the
+  divergence marker, since the network's text changed outside `edit` (D11).
 
 **D4 — Title mode is a persisted preference with exactly two states.**
 `NodeDisplayPreferences` gains `title_mode: NodeTitleMode { Type, Name }`
@@ -224,7 +261,8 @@ The picker is a compact overlay anchored at the top-centre of the canvas (an
 IDE "go to symbol" box, not a modal dialog): a text field that has focus on
 open, a result list below it, Esc closes, Enter jumps to the highlighted
 result, Up/Down move the highlight, a click on a row jumps. Matching is
-case-insensitive substring on the text-format name path; results are sorted
+case-insensitive substring on the name path (`map4/e1`, bare names, never
+the backtick-quoted spelling the text format prints); results are sorted
 exact-match first, then prefix, then substring, then by path. Each row shows
 the name path in monospace, the type in muted text, and — when the
 *all networks* switch is on — the network name as a trailing chip.
@@ -240,11 +278,22 @@ body node `jumpToNode` already selects in-scope and expands the body view.
 Vec<APINodeNameMatch { network: String, scope_path: Vec<u64>, node_id: u64,
 name_path: String, node_type_name: String }>` walks every scope
 (`walk_all_nodes`-style recursion, `rust/AGENTS.md`) reading `custom_name`
-and composing `map4/e1` paths with the same joiner `error_node_path` uses —
-the spelling `query` prints and the AI uses. The active network's matches
+and composing `map4/e1` paths from the bare names with the same joiner
+`error_node_path` uses — the spelling the AI is handed in error paths, the
+Layout tab and the diff. Backtick quoting is a text-format concern and never
+appears in a path. The active network's matches
 come first. Flutter does no name computation of its own. An empty query
 returns every node of the active network, so opening the picker doubles as a
 name directory.
+
+The same walker has an exact form, `resolve_node_path(network: String,
+path: String) -> Option<APINodeRef { scope_path: Vec<u64>, node_id: u64 }>`,
+which D12 uses and the substring search is built over. It matches scope by
+scope against stored names — at each scope, the node whose `custom_name` is
+a prefix of the remaining path followed by `/` or the end — rather than
+splitting on `/`, because a backtick-quoted name may itself contain a slash
+(names are not identifiers, see *Current state*). A network that does not
+exist, or a segment that matches nothing, is `None`.
 
 **D9 — Copy in both directions.**
 The D3 strip's *Copy name* and a *Copy node name* entry in the node context
@@ -261,90 +310,304 @@ uniqueness at the source is smaller and removes a class of "the AI said X,
 the GUI shows Y" reports for good.
 
 **D11 — What a GUI rename does to the AI-side bookkeeping.**
-Two name-keyed structures exist, both in the text world, and a rename is
-visible to both as delete + create of the same node id:
+Two name-keyed structures exist, both in the text world, and neither learns
+of a rename as such:
 - the layout identity snapshot (`doc/design_incremental_layout.md` D14)
   matches nodes by name path *across one text edit*, so a node renamed in the
   GUI and then touched by the next AI edit is "new" to that edit's layout
   pass — the same thing that happens when the AI renames it. Acceptable; the
   layout log makes it visible.
-- the AI History diff (`doc/design_ai_edit_history.md`) is a text diff, so
-  the rename shows as a removed and an added statement. Recording a GUI
-  rename as an activity entry ("renamed `union7` → `chassis`") is a
-  follow-up.
+- the AI History (`doc/design_ai_edit_history.md`) never sees a GUI rename
+  as a diff: an entry's diff compares that edit's own before and after
+  snapshots, and the rename happened between entries. It shows instead as
+  D7's divergence marker on the next AI edit, with the `RenameNodeCommand`
+  description explaining it (`divergedByUndo`). An AI-side rename, which
+  *is* a delete and a create inside one edit, shows as a removed and an
+  added statement; with D12 the added statement's title links to the
+  renamed node and the removed one's title misses. Recording a GUI rename
+  as an activity entry ("renamed `union7` → `chassis`") is a follow-up.
+
+**D12 — Every name path in the AI History panel is a link to the node.**
+The hunk title in the *Diff* tab (docked pane and expanded dialog alike)
+and the path cell of a moved-node row in the *Layout* tab become clickable:
+hover underlines the path and shows a `Go to <path>` tooltip, a click
+jumps. Only the path text is the link; the diff lines stay plain text inside
+the `SelectionArea`, so copying a hunk still works and a click on the path
+does not start a selection.
+
+Resolution is live, not recorded: the click resolves `(entry.networkName,
+path)` through `resolve_node_path` (D8) against the network *as it is now*,
+and lands through `jumpToNode(network, scope_path, node_id)` with no
+`screenAnchor` — viewport-centred, as in D7, because the panel is not the
+canvas and there is no "where I was looking" position to preserve. The
+target network is activated if it is not the active one (recorded in the
+navigation history, so *Back* returns), and a body node is selected in
+scope with its body expanded, exactly as Find Usages lands. From the
+expanded dialog the jump closes the dialog first, so the canvas is visible
+when the node is selected; the docked panel stays open.
+
+Every path is a link regardless of hunk kind, and a miss is a SnackBar:
+*"No node `map4/e1` in `0_styling` — renamed or deleted since edit #12"*.
+This is the expected outcome for a removed hunk (`−`), whose statement names
+a node this very edit deleted, and it is the honest outcome for a node the
+AI or the user renamed afterwards. Greying removed hunks out was
+considered and rejected: a later edit may have re-created the node under
+the same name, and the name is the identity the AI reasons in
+(`doc/design_identity_vs_naming.md`), so a link that resolves to *today's*
+holder of that name is the right answer. A network renamed after the entry
+was recorded misses the same way, with the entry's old network name in the
+message; following network renames through the history is not attempted.
+
+No new record field is stored and the history format does not change: the
+paths the panel already holds are the resolver's input by construction,
+because both were produced by the D1 spelling.
 
 ## Phases
 
+Each phase ends with its Rust tests, `flutter analyze`, the Dart tests under
+`test/` where the phase adds any, and a manual walkthrough run by the
+maintainer. The walkthroughs are the verification for the thin editor UI
+(tooltips, the strip, the header text, the picker), per the project's rule
+that a manual pass on a real design beats a mandated integration test; the
+judgement calls are visual — does the strip crowd the panel, does an
+ellipsized name still read at the default zoom, does the picker land where
+the eye expects. The design used throughout is `layout_test_scratch.cnnd` →
+`0_precursor_tests_incomplete_V5+covers`, the network of the originating
+session, with an AI connected over the HTTP server so `query` can be checked
+against the GUI.
+
 ### Phase 0 — Unique names at the source (D1)
 
-1. A shared `NodeNetwork::unique_name_for(desired, scope)` (or promote
-   `node_inlining::unique_name`) as the one suffixing helper.
-2. Duplicate and paste rename on collision, in ascending source-id order;
-   their undo commands restore the renamed spelling on redo.
-3. Loader normalization of duplicate names, beside the existing backfill.
-4. Tests: duplicate → `x_2`; paste two `x` → `x_2`, `x_3` in the right order;
-   a fixture with duplicates loads unique; and the corpus round-trip test
-   (`text_format_roundtrip_corpus_test.rs`, demolib + private file) asserts
-   `unique_node_names` renames nothing after load. Existing tests that build
-   duplicates on purpose (`duplicate_node_names_are_written_uniquely…`) move
-   to constructing them below the API, or are retired if the state is no
-   longer reachable.
-5. `text_format/AGENTS.md` "Round-trip invariants": the uniqueness bullet
+1. A shared `NodeNetwork::unique_name_for(desired)` (or promote
+   `node_inlining::unique_name`) as the one suffixing helper: first free of
+   `desired`, `desired_2`, `desired_3`, … against the stored names of that
+   scope — the rule `unique_node_names` already implements.
+2. `duplicate_node` and `copy_nodes_from` carry the copied name through the
+   helper instead of minting a type-counter name; a multi-node paste assigns
+   in ascending source-id order. The undo commands need no change — they
+   snapshot the name the copy was given — but the redo expectation is now the
+   suffixed spelling.
+3. Parameter minting (promote-to-parameter, selection factoring,
+   closure→network conversion) goes through the helper.
+4. Loader normalization of duplicate names, beside the existing backfill in
+   `node_networks_serialization.rs`.
+5. `unique_node_names` keeps its signature and gains a debug assertion that
+   it never has to rename anything.
+6. `text_format/AGENTS.md` "Round-trip invariants": the uniqueness bullet
    changes from "the GUI does not keep names unique" to "names are unique at
    the source; `unique_node_names` is the serializer's read and a safety
    net".
 
+*Tests* (Rust; file per bullet):
+
+- `copy_paste_test.rs`: paste one `x` beside `x` → `x_2`; paste a selection
+  of `x` and `x_2` when both already exist → `x_3`, `x_2_2` in ascending
+  source-id order, and the text format prints the stored names verbatim.
+  Copy-paste of a node the user renamed keeps the name (`chassis` →
+  `chassis_2`); paste into a zone body where the *top level* already holds
+  `x` gives `x` unchanged, because uniqueness is per scope.
+- `node_network_test.rs`: `test_duplicate_node_gets_unique_name` and
+  `text_format_test.rs::test_duplicated_nodes_have_unique_persistent_names`
+  change expectation from `cuboid2` / `sphere2` to `cuboid1_2` / `sphere1_2`.
+  Duplicate of `x_2` when `x_2_2` is free → `x_2_2` (pin the spelling so the
+  rule cannot drift).
+- `undo_test.rs`: undo then redo of a paste and of a duplicate restores the
+  suffixed spelling, and the network → text output is identical before undo
+  and after redo.
+- `promote_to_parameter` / `selection_factoring` / `closure_network_conversion`
+  tests: promoting to a parameter named `x` in a scope that already holds a
+  node `x` yields a parameter node `x_2` whose `param_name` is still `x`.
+- Loader: a hand-written fixture with three `to_degrees` nodes under the
+  crate's `tests/fixtures/` loads as `to_degrees`, `to_degrees_2`,
+  `to_degrees_3` in ascending id order, and saving it back writes the
+  suffixed names.
+- `text_format_roundtrip_corpus_test.rs` (demolib + private file): after
+  load, `unique_node_names` returns every node's stored name unchanged — the
+  corpus is the proof that the invariant holds on real files.
+  `duplicate_node_names_are_written_uniquely_and_match_back` keeps building
+  its duplicates below the API (it already writes `custom_name` directly) and
+  becomes the test of the safety net, not of GUI behaviour.
+- The text-format editor's rejection of a taken name in an incremental edit
+  (`x = int {…}` when `x` exists) is a precondition of D1; cite the existing
+  test in `text_format_test.rs` or add one.
+
+*Manual walkthrough:* open a file known to hold duplicate names (the private
+corpus file with the four `to_degrees` nodes) and confirm the Text tab reads
+exactly as it did before the change. Copy-paste a node named `x` twice and
+read `x_2`, `x_3` in the Text tab; Ctrl+Z twice, Ctrl+Y twice, and the names
+come back identical. Duplicate `x` with Ctrl+D and read `x_4`. Save, reopen, and
+confirm the names persisted and no node was renamed on load.
+
 ### Phase 1 — Tooltip; editable property-panel strip; copy
 
 1. Header tooltips (D2), both sites — `custom_name` is already on the view.
-2. `rename_node` API + `RenameNodeCommand` (D3), scope-aware, with tests:
-   rename, reject empty, reject taken-in-scope, allow the same name in a
-   sibling body, undo/redo, dirty flag.
+2. `rename_node(scope_path, node_id, new_name)` API + `RenameNodeCommand`
+   (D3), scope-aware.
 3. Name strip in `node_data_widget.dart` (D3) with the editable field and
    *Copy name*; *Copy node name* in the node context menu (D9).
 4. Reference guide: `doc/reference_guide/ui.md` — *Node network editor
    panel* (hover) and *Node Properties Panel* (strip, rename, copy).
 
+*Tests* (Rust, beside `rename_node_network_rejects_invalid_name` in
+`relaxed_node_names_test.rs`, and in `undo_test.rs` for the command):
+
+- The contract with the AI: rename `union7` → `chassis`, serialize, and the
+  statement reads `chassis = union {…}` while every downstream argument that
+  referenced `union7` now references `chassis`; a `--replace` of that text is
+  a no-op, so wires, comment anchors and displayed pins survived the
+  rename by id.
+- Reject an empty or whitespace-only name; the stored name is untouched and
+  no undo entry is pushed.
+- Reject a name held by another node in the same scope; allow the same name
+  in a sibling body and in the parent scope; rename a body node by scope
+  path.
+- Rename to the identical name is a no-op: no undo entry, dirty flag
+  unchanged. Surrounding whitespace is trimmed before the comparison.
+- A name the text format must quote (`x.shape`) is accepted and round-trips
+  through `query` → `--replace` unchanged.
+- Undo restores the old name, redo the new one; the dirty flag is set by the
+  rename and cleared by undo back to the saved state.
+- After a rename, the corpus invariant still holds (`unique_node_names`
+  renames nothing).
+
+*Manual walkthrough:* hover a header and read `` `xray1` · xray ``; hover a
+labelled closure and read the label as the third segment. Select a node,
+edit the strip to a name another node holds, press Enter, and read the
+inline error with the stored name untouched; press Esc and the field
+reverts. Rename `union7` to `chassis`: the Text tab statement changes, the
+AI's next `query` prints `chassis`, and Ctrl+Z brings `union7` back in both.
+Select a node inside a `map` body and confirm the strip shows `map4 /` as a
+muted prefix and edits only the last segment. Use *Copy node name* from the
+context menu on a body node and paste it into a prompt: it reads `map4/e1`.
+Confirm the rename did not re-evaluate anything (the profiler panel shows no
+new pass).
+
 ### Phase 2 — Title mode
 
 1. `NodeTitleMode` in `NodeDisplayPreferences` (Rust, twin, Dart), persisted
-   (D4). A preferences round-trip test in the existing preferences test file.
+   (D4).
 2. Header rendering honours the mode for every node kind listed in D4;
-   footprint untouched (D5) — assert in a Rust test that the node footprint
-   is identical under both modes, since that is the invariant that keeps the
-   toggle a repaint.
+   footprint untouched (D5).
 3. Display-panel radio group, View-menu checkable item, Ctrl+Shift+N (D6).
 4. Reference guide: *Display Preferences Panel* gets a *Node titles*
    subsection; *Menu Bar* lists the item and shortcut.
 
+*Tests:*
+
+- `preferences_test.rs`: `title_mode` round-trips through JSON, a
+  preferences file without the field loads as `Type`, and the api twin
+  converts both ways.
+- The footprint invariant lives in Dart, not Rust — `rendered_node_size`
+  never sees preferences, so a Rust assertion would pass vacuously. A widget
+  test in `test/` pumps a `NodeWidget` with a 40-character name and the
+  short type name under both modes and asserts the render box size is
+  identical, the header ellipsizes, and no overflow error is reported.
+  `ScopeResolver.effectiveNodeSizeLogical` must not take the mode as an
+  input; `test/layout_size_parity_test.dart` keeps passing unchanged.
+
+*Manual walkthrough:* flip the mode from the display panel, from the View
+menu and with Ctrl+Shift+N; each surface reflects the other two. In Name
+mode walk the D4 list on the test design: a builtin, a custom-network
+instance (reads `0_styling1`), a closure with a label (label replaced), a
+comment, a `map` owner and its collapsed placeholder. Rename a node to a
+40-character name and confirm it ellipsizes without moving any node or wire
+(flip the mode back and forth; nothing on the canvas shifts). Restart the
+app and confirm the mode persisted.
+
 ### Phase 3 — Find node
 
-1. `find_nodes_by_name` in the structure-designer crate + api twin (D8),
-   with tests: active-only vs all-networks, body paths, `_2` names, ordering
-   (exact, prefix, substring), empty query.
+1. `resolve_node_path` and, over it, `find_nodes_by_name` in the
+   structure-designer crate + api twins (D8).
 2. Flutter picker overlay (D7): field, list, keyboard handling, *all
    networks* switch, landing through `jumpToNode`.
 3. Entry points: *Edit → Find node…* (Ctrl+F), tab-strip icon.
-4. Widget test in `test/` for the picker's filtering and keyboard handling
-   (it takes a plain list of matches, so it needs no kernel).
-5. Reference guide: *Navigating in the node network editor panel* and *Menu
+4. Reference guide: *Navigating in the node network editor panel* and *Menu
    Bar*.
 
-### Manual walkthrough (human, after each phase)
+*Tests:*
 
-The judgement calls here are visual: does the name strip crowd the panel,
-does the ellipsized name in Name mode still read at the default zoom, does
-the picker land where the eye expects. Per the project's rule for thin editor
-UI, this is a manual walkthrough on a real design, not an integration test:
-open `layout_test_scratch.cnnd` → `0_precursor_tests_incomplete_V5+covers`,
-have the AI name three nodes, find them with each of the three surfaces,
-rename one of them in the strip and confirm the AI's next `query` uses the
-new name.
+- Rust (`find_nodes_by_name_test.rs`), the exact resolver first: a root
+  node, a body node at depth two, a backtick-quoted name containing `/`
+  (`` `a/b` `` at the root next to a body owner `a` holding `b` — both
+  resolve to their own node), an unknown network, an unknown segment, and a
+  path whose last segment is a body *owner* (resolves to the owner, not
+  into it).
+- Rust, the search: active-only vs all-networks, with the
+  active network's matches first; a body node at depth two reports the
+  `map4/c1/e1` path and the full scope path; nodes inside a *collapsed* body
+  are included; `_2` names match on the stored spelling; matching is
+  case-insensitive on the bare name (never the backtick-quoted spelling
+  `format_identifier` would print); ordering is exact, then prefix, then
+  substring, then by path; an empty query returns every node of the active
+  network.
+- Dart widget test in `test/` for the picker: it takes a plain list of
+  matches, so it needs no kernel. Typing filters and re-sorts; Up/Down move
+  the highlight and wrap at the ends; Enter fires the jump callback with the
+  highlighted match; Esc closes without a jump; the *all networks* switch
+  re-queries and shows the network chip on rows from other networks.
+
+*Manual walkthrough:* press Ctrl+F, type `e1`, and read the ordering:
+`e1`, then `e1…` prefixes, then substrings such as `map4/e1`. Press Enter on
+a body node and confirm the body expands and the node is selected and
+centred, zoom unchanged; press Back and land on the previous network. Toggle
+*all networks*, pick a node from another network, and confirm the chip and
+the landing. Open the picker with an empty field and confirm it lists every
+node of the active network. Open it from the Edit menu and from the
+tab-strip icon; both behave identically.
+
+### Phase 4 — Jump from the AI History panel (D12)
+
+Depends on Phase 3's resolver.
+
+1. `StructureDesignerModel.jumpToNodePath(network, path, {seq})`: resolves
+   through `resolve_node_path`, lands through `jumpToNode` with no anchor,
+   and on a miss shows the D12 SnackBar naming the path, the network and
+   the edit number.
+2. `_DiffHunkView`'s title and `_MovedNodeRow`'s path cell become link
+   widgets (hover underline, `Go to <path>` tooltip, pointer cursor) that
+   call it with the entry's `networkName`. The hunk placeholder `(hunk)` for
+   an empty `nodePath` stays plain text.
+3. The expanded diff dialog passes a callback that pops the dialog before
+   the jump.
+4. Reference guide: `doc/reference_guide/ui.md`, the AI History panel
+   section — the *Diff* and *Layout* tab descriptions gain "click a node
+   path to jump to that node; a node renamed or deleted since the edit
+   reports a miss".
+
+*Tests:*
+
+- Rust: no new kernel behaviour beyond Phase 3's resolver. One test in
+  `ai_edit_history_test.rs` pins the contract the panel relies on: after an
+  AI edit that adds `m1/d`, every `nodePath` in the recorded diff and every
+  `moved.path` in the layout outcome resolves through `resolve_node_path`
+  against the entry's network — the recorded spelling and the resolver's
+  spelling are the same by construction, and this is the test that keeps
+  them so if either side changes its joiner.
+- Dart widget test in `test/`, the first for this panel. The two tabs are
+  private today, so the link is a small public widget (`NodeNameLink(path,
+  network, onJump)`) that the tabs compose and the test pumps directly, and
+  the tabs take an `onJumpToNode(network, path)` callback rather than
+  reaching for the model. The test asserts: a tap reports the path and
+  network; a hunk with an empty `nodePath` renders no link; a diff line is
+  not a link; the dialog variant pops before invoking the callback.
+
+*Manual walkthrough:* have the AI make an edit that adds a node inside a
+`map` body and moves two root nodes. In the *Diff* tab click the added
+hunk's title: the body expands, the node is selected and centred, zoom
+unchanged. Press *Back*. In the *Layout* tab click a moved root node and
+land on it. Open the expanded diff, click a title, and confirm the dialog
+closes before the canvas selects the node. Activate a different network,
+click a path in an older entry, and confirm the entry's network is
+activated and *Back* returns. Rename the added node in the D3 strip, click
+its old title in the diff, and read the miss SnackBar with the edit number;
+Ctrl+Z the rename and click the same title again to land. Have the AI
+rename a node through `edit` (delete and re-create under a new name): in
+that entry's diff the removed title misses and the added title lands.
+Finally select text across a hunk's lines and copy it: clicking the title
+must not have broken selection.
 
 ## Deferred / follow-ups
 
-- Clicking a node name in the AI History *Layout* / *Diff* tabs jumps to that
-  node (D8's resolver makes this a one-liner later).
 - Fuzzy matching and matching on type / expression text in the picker.
 - The picker as a general command palette (networks, actions).
 - A GUI rename recorded as an AI History activity entry, and the layout
