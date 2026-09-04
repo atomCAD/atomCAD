@@ -82,10 +82,22 @@ Five gaps, in the order a user hits them:
   same `_2` rule at inline time. This is the only situation where what the
   AI says differs from what the node stores. Body nodes are addressed by
   path, `map4/e1`.
-- **Names are not identifiers.** `format_identifier` backtick-quotes any
-  spelling the text format cannot write bare, and `x.shape` / `union#1` are
-  tested node names (`relaxed_node_names_test.rs`). A name's only rules are
-  *non-empty* and *unique within its scope*.
+- **Names are not identifiers, but they do have rules.** `format_identifier`
+  backtick-quotes any spelling the text format cannot write bare, and
+  `x.shape` / `union#1` are tested node names (`relaxed_node_names_test.rs`).
+  The rules live in `identifier::is_valid_user_name`, which the text editor
+  applies to every created node (`network_editor.rs::create_node`): non-empty,
+  no backtick (the one character the quoting cannot escape), no control
+  characters, no leading or trailing whitespace. Uniqueness within a scope is
+  the text format's, not the validator's. A slash is allowed today, and that
+  is a problem for paths — see D8.
+- **Paths join bare names with `/` and nothing else.** `error_node_path`
+  (`scoped_validation_errors.rs`), the diff hunk titles (`ai_edit_diff.rs`)
+  and the layout log (`ai_edit_log.rs`) all compose `map4/e1` by joining the
+  stored `custom_name`s with `/`, unquoted. A root node named `a/b` and a
+  body node `b` under an owner `a` therefore record the identical string.
+  Only the text format's own path parser tells them apart, through the
+  backticks it prints.
 - **Nothing identifies a node by name except the text world.** Audit of every
   `custom_name` read outside `text_format/` (2026-09-03): display labels
   (profiler, print log, `network_usages::node_label`, `error_node_path`), the
@@ -154,11 +166,10 @@ taken name into a scope applies the existing suffix rule at write time:
   makes D3's rename worth doing. An auto-named `cuboid1` therefore copies as
   `cuboid1_2` rather than `cuboid2`; the two tests that pin the old spelling
   change expectation. A paste of a whole selection assigns names in ascending
-  source-id order, the same order `unique_node_names` would have used, so the
-  result is byte-identical to what the text format already printed for such a
-  network. Redo restores the *renamed* spelling. The clipboard is a scope of
-  its own, so the network → clipboard copy is also collision-free by
-  construction.
+  source-id order, the order `unique_node_names` uses, so the suffixes fall
+  the way the text format would have assigned them. Redo restores the
+  *renamed* spelling. The clipboard is a scope of its own, so the network →
+  clipboard copy is also collision-free by construction.
 - **Parameter minting** (promote-to-parameter, selection factoring,
   closure→network conversion) passes the parameter name through the same
   helper before storing it as `custom_name`; `param_name` is a separate field
@@ -169,11 +180,22 @@ taken name into a scope applies the existing suffix rule at write time:
   invisible in the text format because the text already showed the suffixed
   names.
 - **Text-format editor**: a `--replace` already assigns the suffixed spelling;
-  incremental edits create nodes with the name the statement gives, which the
-  editor already rejects when taken in that scope.
+  an incremental edit whose statement names a node that already exists in
+  that scope *updates that node in place* (`network_editor.rs::process_assignment`
+  looks the name up before creating), so it can never mint a duplicate. It
+  is an update, not a rejection, and nothing here changes it.
+- **`/` is no longer a legal character in a node name.** `is_valid_user_name`
+  gains the rule, so the text editor and the D3 rename both refuse it; the
+  loader normalization replaces a `/` in a legacy name with `_` before the
+  uniqueness pass. The reason is D8: every path the AI is
+  handed joins bare names with `/`, so a slash inside a name makes the path
+  ambiguous. This is the one visible change to the text format's name
+  rules: a backtick-quoted `` `a/b` `` is rejected where it used to load.
 - **`unique_node_names` stays** as the serializer's name source and becomes a
-  no-op safety net, guarded by a debug assertion and by the corpus test,
-  both checking that it never has to rename anything on a loaded network.
+  no-op on every network built through the API or the loader. The proof is
+  the corpus test (Phase 0), not an assertion inside the function: the
+  function must keep working on a network that holds duplicates, because the
+  safety-net test builds one below the API on purpose.
 
 The invariant: *within one scope, `custom_name` is unique, and the text
 format prints it verbatim.* With it, the GUI can show and edit
@@ -181,7 +203,7 @@ format prints it verbatim.* With it, the GUI can show and edit
 Layout tab and every AI message agree by construction. No new view field.
 
 **D2 — Header tooltip: name first, type second.**
-Both header `Tooltip`s become `` `xray1` · xray `` (text name, middle dot,
+Both header `Tooltip`s become `` `xray1` · xray `` (node name, middle dot,
 full type name; a closure with a label appends ` · <label>`). Hover was the
 zero-cost surface; it needs no mode and no click.
 
@@ -202,11 +224,15 @@ the node-networks list):
 
 - Enter or focus loss commits; Esc reverts to the stored name. Nothing is
   written while typing.
-- Validation is the D1 invariant and nothing more: the trimmed name must be
-  non-empty and not already used by another node in the same scope. A
-  conflict shows an inline error under the field and leaves the stored name
-  untouched; the text is never silently suffixed, since the user typed it on
-  purpose.
+- Validation is exactly what the text editor applies to a created node, plus
+  the D1 invariant: the trimmed name passes `is_valid_user_name` (non-empty,
+  no backtick, no control character, no `/`, no edge whitespace) and is not
+  already used by another node in the same scope. Sharing the validator is
+  what keeps a GUI-typed name printable: a backtick the field let through
+  would be a name `format_identifier` cannot quote, and `query` would stop
+  round-tripping. A rejection shows the validator's reason as an inline
+  error under the field and leaves the stored name untouched; the text is
+  never silently suffixed, since the user typed it on purpose.
 - The rename goes through a new API `rename_node(scope_path, node_id,
   new_name) -> Result<(), String>` (scope-aware like every node-data setter,
   `rust/AGENTS.md`), which validates in Rust, writes `custom_name`, and pushes
@@ -215,7 +241,7 @@ the node-networks list):
   no re-evaluation, since no evaluated state depends on the name.
 - The Text tab re-renders with the new statement name; the AI's next `query`
   shows it. The AI History entry of the *next* AI edit carries the
-  divergence marker, since the network's text changed outside `edit` (D11).
+  *diverged* marker, since the network's text changed outside `edit` (D11).
 
 **D4 — Title mode is a persisted preference with exactly two states.**
 `NodeDisplayPreferences` gains `title_mode: NodeTitleMode { Type, Name }`
@@ -281,19 +307,21 @@ name_path: String, node_type_name: String }>` walks every scope
 and composing `map4/e1` paths from the bare names with the same joiner
 `error_node_path` uses — the spelling the AI is handed in error paths, the
 Layout tab and the diff. Backtick quoting is a text-format concern and never
-appears in a path. The active network's matches
-come first. Flutter does no name computation of its own. An empty query
-returns every node of the active network, so opening the picker doubles as a
-name directory.
+appears in a path. The active network's matches come first. Flutter does no
+name computation of its own. An empty query returns every node of the active
+network, so opening the picker doubles as a name directory.
 
 The same walker has an exact form, `resolve_node_path(network: String,
 path: String) -> Option<APINodeRef { scope_path: Vec<u64>, node_id: u64 }>`,
-which D12 uses and the substring search is built over. It matches scope by
-scope against stored names — at each scope, the node whose `custom_name` is
-a prefix of the remaining path followed by `/` or the end — rather than
-splitting on `/`, because a backtick-quoted name may itself contain a slash
-(names are not identifiers, see *Current state*). A network that does not
-exist, or a segment that matches nothing, is `None`.
+which D12 uses and the substring search is built over. It splits the path
+on `/` and matches each segment against the stored `custom_name`s of the
+current scope, descending into the matched node's body for the next
+segment. Splitting is sound only because D1 bans `/` from names: with a
+slash allowed, a root node `a/b` and a body node `b` under an owner `a`
+record the same string (see *Current state*), and no rule on a single
+string can resolve both. A network that does not exist, a segment that
+matches nothing, or a segment that descends into a node without a body, is
+`None`.
 
 **D9 — Copy in both directions.**
 The D3 strip's *Copy name* and a *Copy node name* entry in the node context
@@ -320,12 +348,16 @@ of a rename as such:
 - the AI History (`doc/design_ai_edit_history.md`) never sees a GUI rename
   as a diff: an entry's diff compares that edit's own before and after
   snapshots, and the rename happened between entries. It shows instead as
-  D7's divergence marker on the next AI edit, with the `RenameNodeCommand`
-  description explaining it (`divergedByUndo`). An AI-side rename, which
-  *is* a delete and a create inside one edit, shows as a removed and an
-  added statement; with D12 the added statement's title links to the
-  renamed node and the removed one's title misses. Recording a GUI rename
-  as an activity entry ("renamed `union7` → `chassis`") is a follow-up.
+  the *diverged* marker on the next AI edit — the plain "the network changed
+  outside `edit`" wording, set by the one before/after string comparison in
+  `ai_edit_log.rs`. The `diverged_by_undo` variant is not involved: it is
+  set only when an AI-edit command itself was undone since the last record,
+  and the `RenameNodeCommand` plays no part in the detection. An AI-side
+  rename, which *is* a delete and a create inside one edit, shows as a
+  removed and an added statement; with D12 the added statement's title links
+  to the renamed node and the removed one's title misses. Recording a GUI
+  rename as an activity entry ("renamed `union7` → `chassis`") is a
+  follow-up.
 
 **D12 — Every name path in the AI History panel is a link to the node.**
 The hunk title in the *Diff* tab (docked pane and expanded dialog alike)
@@ -391,12 +423,14 @@ against the GUI.
    closure→network conversion) goes through the helper.
 4. Loader normalization of duplicate names, beside the existing backfill in
    `node_networks_serialization.rs`.
-5. `unique_node_names` keeps its signature and gains a debug assertion that
-   it never has to rename anything.
+5. `is_valid_user_name` gains the `/` rule (`InvalidNameReason::ContainsSlash`);
+   the loader normalization replaces `/` with `_` before its uniqueness
+   step. `unique_node_names` keeps its signature and its behaviour — no
+   assertion inside it, see D1.
 6. `text_format/AGENTS.md` "Round-trip invariants": the uniqueness bullet
    changes from "the GUI does not keep names unique" to "names are unique at
    the source; `unique_node_names` is the serializer's read and a safety
-   net".
+   net", and the name-rules bullet lists `/` among the rejected characters.
 
 *Tests* (Rust; file per bullet):
 
@@ -420,16 +454,21 @@ against the GUI.
 - Loader: a hand-written fixture with three `to_degrees` nodes under the
   crate's `tests/fixtures/` loads as `to_degrees`, `to_degrees_2`,
   `to_degrees_3` in ascending id order, and saving it back writes the
-  suffixed names.
+  suffixed names. The same fixture holds a node stored as `a/b`, which loads
+  as `a_b`.
+- `relaxed_node_names_test.rs`: `is_valid_user_name` rejects `a/b`, and an
+  incremental text edit `` `a/b` = int {…} `` is refused with that reason,
+  beside the file's existing invalid-name cases.
 - `text_format_roundtrip_corpus_test.rs` (demolib + private file): after
   load, `unique_node_names` returns every node's stored name unchanged — the
   corpus is the proof that the invariant holds on real files.
   `duplicate_node_names_are_written_uniquely_and_match_back` keeps building
   its duplicates below the API (it already writes `custom_name` directly) and
   becomes the test of the safety net, not of GUI behaviour.
-- The text-format editor's rejection of a taken name in an incremental edit
-  (`x = int {…}` when `x` exists) is a precondition of D1; cite the existing
-  test in `text_format_test.rs` or add one.
+- The text-format editor's in-place update of a taken name in an incremental
+  edit (`x = int {…}` when `x` exists edits that node, creates nothing) is a
+  precondition of D1; cite the existing test in `text_format_test.rs` or add
+  one that asserts the node count is unchanged.
 
 *Manual walkthrough:* open a file known to hold duplicate names (the private
 corpus file with the four `to_degrees` nodes) and confirm the Text tab reads
@@ -456,8 +495,9 @@ confirm the names persisted and no node was renamed on load.
   referenced `union7` now references `chassis`; a `--replace` of that text is
   a no-op, so wires, comment anchors and displayed pins survived the
   rename by id.
-- Reject an empty or whitespace-only name; the stored name is untouched and
-  no undo entry is pushed.
+- Reject an empty or whitespace-only name, a name with a backtick, and a
+  name with a `/`, each with the `is_valid_user_name` reason; the stored
+  name is untouched and no undo entry is pushed.
 - Reject a name held by another node in the same scope; allow the same name
   in a sibling body and in the parent scope; rename a body node by scope
   path.
@@ -527,19 +567,20 @@ app and confirm the mode persisted.
 *Tests:*
 
 - Rust (`find_nodes_by_name_test.rs`), the exact resolver first: a root
-  node, a body node at depth two, a backtick-quoted name containing `/`
-  (`` `a/b` `` at the root next to a body owner `a` holding `b` — both
-  resolve to their own node), an unknown network, an unknown segment, and a
-  path whose last segment is a body *owner* (resolves to the owner, not
-  into it).
+  node, a body node at depth two, a backtick-quoted name that is not an
+  identifier (`x.shape`, resolved from the bare spelling), an unknown
+  network, an unknown segment, a segment that descends into a node without
+  a body, and a path whose last segment is a body *owner* (resolves to the
+  owner, not into it).
 - Rust, the search: active-only vs all-networks, with the
   active network's matches first; a body node at depth two reports the
   `map4/c1/e1` path and the full scope path; nodes inside a *collapsed* body
   are included; `_2` names match on the stored spelling; matching is
-  case-insensitive on the bare name (never the backtick-quoted spelling
-  `format_identifier` would print); ordering is exact, then prefix, then
-  substring, then by path; an empty query returns every node of the active
-  network.
+  case-insensitive on the path string (`map4/e1`, bare names joined by `/`,
+  never the backtick-quoted spelling `format_identifier` would print), so
+  `e1` matches `map4/e1` as a substring; ordering is exact, then prefix,
+  then substring, then by path; an empty query returns every node of the
+  active network.
 - Dart widget test in `test/` for the picker: it takes a plain list of
   matches, so it needs no kernel. Typing filters and re-sorts; Up/Down move
   the highlight and wrap at the ends; Enter fires the jump callback with the
