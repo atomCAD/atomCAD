@@ -7,11 +7,13 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_preferences.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
     as sd_api;
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network_painter.dart';
+import 'package:flutter_cad/structure_designer/node_network/node_title.dart';
 import 'package:flutter_cad/structure_designer/node_network/scope_resolver.dart';
 
 const double COMMENT_MIN_WIDTH = 100.0;
@@ -52,6 +54,12 @@ class CommentNodeWidget extends StatefulWidget {
   /// `NodeWidget.hideSelection`.
   final bool hideSelection;
 
+  /// Whether the title bar writes the note's user-supplied label or the node's
+  /// *name* (`doc/design_node_names_in_ui.md` D4). A comment is a node like any
+  /// other and has a name, so in Name mode its header appears even when the
+  /// note is untitled — see [_headerLabel].
+  final NodeTitleMode titleMode;
+
   const CommentNodeWidget({
     super.key,
     required this.node,
@@ -60,6 +68,7 @@ class CommentNodeWidget extends StatefulWidget {
     required this.resolver,
     this.scopeChain = const [],
     this.hideSelection = false,
+    this.titleMode = NodeTitleMode.type,
   });
 
   /// Selection state as it should be **drawn**; interaction handlers keep
@@ -115,6 +124,13 @@ class _CommentNodeWidgetState extends State<CommentNodeWidget> {
   double get _width => widget.node.commentWidth ?? 200.0;
   double get _height => widget.node.commentHeight ?? 100.0;
   String get _label => widget.node.commentLabel ?? '';
+
+  /// What the yellow title bar *shows*: the note's own label in Type mode, the
+  /// node's name in Name mode (D4). Editing is unaffected — the field always
+  /// binds to `_label`, because the label is the only one of the two this
+  /// widget owns; renaming a node is the property panel's strip (D3).
+  String get _headerLabel =>
+      nodeTitleLabel(widget.node, widget.titleMode, _label);
   String get _text => widget.node.commentText ?? '';
 
   /// Byte-encoded scope path for FRB API calls that address this comment node.
@@ -242,8 +258,12 @@ class _CommentNodeWidgetState extends State<CommentNodeWidget> {
                   children: [
                     // The header is normally hidden when there is no label,
                     // but edit mode always shows it — otherwise an unlabelled
-                    // note would have no way to acquire a label in place.
-                    if (_isEditing || _label.isNotEmpty)
+                    // note would have no way to acquire a label in place. In
+                    // Name mode it is always shown: the name it carries is
+                    // never empty. The note's box is a fixed user-set size, so
+                    // showing the header eats into the body rather than
+                    // changing the footprint (D5).
+                    if (_isEditing || _headerLabel.isNotEmpty)
                       _buildHeader(scale, headerFontSize),
                     Expanded(child: _buildBody(scale, fontSize)),
                   ],
@@ -343,7 +363,7 @@ class _CommentNodeWidgetState extends State<CommentNodeWidget> {
               onSubmitted: (_) => _exitEditMode(commit: true),
             )
           : Text(
-              _label,
+              _headerLabel,
               key: _labelTextKey,
               style: style,
               overflow: TextOverflow.ellipsis,
@@ -593,7 +613,10 @@ class _CommentNodeWidgetState extends State<CommentNodeWidget> {
   /// handed to [_enterEditMode], not looked up afterwards.
   void _beginEditAtPointer(Offset globalPosition) {
     final headerBox = _headerKey.currentContext?.findRenderObject();
-    final onHeader = _label.isNotEmpty &&
+    // `_headerLabel`, not `_label`: whatever the header *shows* is the header,
+    // and clicking it always aims the editor at the label field — in Name mode
+    // that is how an untitled note still acquires a title in place.
+    final onHeader = _headerLabel.isNotEmpty &&
         headerBox is RenderBox &&
         headerBox.hasSize &&
         headerBox.globalToLocal(globalPosition).dy <= headerBox.size.height;

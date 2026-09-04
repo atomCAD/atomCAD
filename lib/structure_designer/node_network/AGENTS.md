@@ -14,6 +14,7 @@ Interactive visual node graph editor widget. Handles rendering, interaction, and
 | `scope_resolver.dart` | Per-frame `ScopeResolver` + `LayoutCache` for scope-aware coordinates, hit testing, and pin-position resolution |
 | `comment_node_widget.dart` | Special rendering for Comment nodes |
 | `add_node_popup.dart` | Node type picker dialog with category filtering (+ the `inZoneBody` filter, below) |
+| `node_title.dart` | What a title bar says under the current `NodeTitleMode` — type name or node name (`doc/design_node_names_in_ui.md` D4/D5). Every node kind goes through it; the size rule deliberately does not |
 | `node_name_path.dart` | Composes a node's **name path** (`map4/e1`) from a `NodeNetworkView` — the spelling the AI is handed in error paths, diff hunk titles and the Layout log. The Flutter side's only name-path composition until Phase 3 of `doc/design_node_names_in_ui.md` moves the walk into Rust |
 
 ## Coordinate System

@@ -1239,6 +1239,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   NodeNetworkView dco_decode_node_network_view(dynamic raw);
 
   @protected
+  NodeTitleMode dco_decode_node_title_mode(dynamic raw);
+
+  @protected
   NodeTypeCategory dco_decode_node_type_category(dynamic raw);
 
   @protected
@@ -3138,6 +3141,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   NodeNetworkView sse_decode_node_network_view(SseDeserializer deserializer);
+
+  @protected
+  NodeTitleMode sse_decode_node_title_mode(SseDeserializer deserializer);
 
   @protected
   NodeTypeCategory sse_decode_node_type_category(SseDeserializer deserializer);
@@ -5202,6 +5208,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_node_network_view(
       NodeNetworkView self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_node_title_mode(NodeTitleMode self, SseSerializer serializer);
 
   @protected
   void sse_encode_node_type_category(

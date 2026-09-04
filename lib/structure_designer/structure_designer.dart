@@ -12,6 +12,7 @@ import 'error_report.dart';
 import 'structure_designer_model.dart';
 import 'node_network/export_network_image.dart';
 import 'node_network/node_network.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_preferences.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
     as structure_designer_api;
 import 'display_panel.dart';
@@ -190,6 +191,26 @@ class _StructureDesignerState extends State<StructureDesigner> {
                                 ? 'Hide Console'
                                 : 'Show Console'),
                           ),
+                          // Node titles: type vs name. Checkable rather than a
+                          // pair of items — two states, and the check *is* the
+                          // state readout (D6). Node Network Mode only, like
+                          // the display-panel group it mirrors.
+                          if (!model.directEditingMode)
+                            MenuItemButton(
+                              key: const Key('toggle_node_titles_item'),
+                              onPressed: () => graphModel.toggleNodeTitleMode(),
+                              shortcut: const SingleActivator(
+                                  LogicalKeyboardKey.keyN,
+                                  control: true,
+                                  shift: true),
+                              leadingIcon: Icon(
+                                model.nodeTitleMode == NodeTitleMode.name
+                                    ? Icons.check
+                                    : null,
+                                size: 16,
+                              ),
+                              child: const Text('Node titles: names'),
+                            ),
                           MenuItemButton(
                             key: const Key('toggle_profiler_item'),
                             onPressed: () => graphModel.toggleProfilerPanel(),
@@ -630,6 +651,16 @@ class _StructureDesignerState extends State<StructureDesigner> {
       // Ctrl+`: Toggle Console panel.
       if (event.logicalKey == LogicalKeyboardKey.backquote) {
         graphModel.toggleConsolePanel();
+        return KeyEventResult.handled;
+      }
+      // Ctrl+Shift+N: flip node title bars between type names and node names
+      // (`doc/design_node_names_in_ui.md` D6). Node Network Mode only — Direct
+      // Editing Mode has no canvas to relabel. Ctrl+N alone is deliberately
+      // left free.
+      if (event.logicalKey == LogicalKeyboardKey.keyN &&
+          HardwareKeyboard.instance.isShiftPressed &&
+          !graphModel.directEditingMode) {
+        graphModel.toggleNodeTitleMode();
         return KeyEventResult.handled;
       }
       // Ctrl+Shift+S: Save As (issue #99) — always a dialog, whether or not the

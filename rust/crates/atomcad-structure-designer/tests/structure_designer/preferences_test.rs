@@ -5,7 +5,8 @@ use atomcad_structure_designer::preferences::{
     AtomicRenderingMethod, AtomicStructureVisualizationPreferences, BackgroundPreferences,
     GeometryVisualization, GeometryVisualizationPreferences, LayoutAlgorithmPreference,
     LayoutPreferences, MemoryPreferences, MeshSmoothing, NodeDisplayPolicy, NodeDisplayPreferences,
-    PrefColor, SimulationPreferences, StructureDesignerPreferences, SurfaceTransparencyMode,
+    NodeTitleMode, PrefColor, SimulationPreferences, StructureDesignerPreferences,
+    SurfaceTransparencyMode,
 };
 
 /// Test round-trip serialization: serialize preferences to JSON and deserialize back.
@@ -366,6 +367,7 @@ fn test_non_default_values_roundtrip() {
         },
         node_display_preferences: NodeDisplayPreferences {
             display_policy: NodeDisplayPolicy::PreferFrontier,
+            title_mode: NodeTitleMode::Name,
         },
         atomic_structure_visualization_preferences: AtomicStructureVisualizationPreferences {
             visualization: AtomicStructureVisualization::SpaceFilling,
@@ -529,6 +531,10 @@ fn test_non_default_values_roundtrip() {
     assert_eq!(
         loaded.node_display_preferences.display_policy,
         NodeDisplayPolicy::PreferFrontier
+    );
+    assert_eq!(
+        loaded.node_display_preferences.title_mode,
+        NodeTitleMode::Name
     );
 
     assert_eq!(
@@ -819,5 +825,61 @@ fn test_out_of_range_budgets_are_clamped_on_the_apply_path() {
         sd.last_generated_structure_designer_scene
             .invisible_node_cache_capacity_bytes(),
         1024 * 1024
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Node title mode (`doc/design_node_names_in_ui.md` D4)
+// ---------------------------------------------------------------------------
+
+/// The two states round-trip through JSON under their own spellings — the
+/// serialized form is the compatibility contract, so the variant names are
+/// pinned here rather than left to whatever `serde` derives next.
+#[test]
+fn test_node_title_mode_roundtrips() {
+    for (mode, spelling) in [
+        (NodeTitleMode::Type, "\"Type\""),
+        (NodeTitleMode::Name, "\"Name\""),
+    ] {
+        let json = serde_json::to_string(&mode).expect("Failed to serialize title mode");
+        assert_eq!(json, spelling);
+        let loaded: NodeTitleMode = serde_json::from_str(&json).expect("Failed to deserialize");
+        assert_eq!(loaded, mode);
+    }
+}
+
+/// The tolerant-reader contract for this field: every existing user's
+/// `preferences.json` has a `node_display_preferences` section with a
+/// `display_policy` and no `title_mode`, and it must keep loading with the
+/// policy intact and the mode defaulting to `Type` — the canvas as it was.
+#[test]
+fn test_preferences_without_title_mode_defaults_to_type() {
+    let pre_title_mode_json = r#"{
+        "node_display_preferences": {
+            "display_policy": "PreferSelected"
+        }
+    }"#;
+
+    let loaded: StructureDesignerPreferences = serde_json::from_str(pre_title_mode_json)
+        .expect("A settings file predating title_mode must still load");
+
+    assert_eq!(
+        loaded.node_display_preferences.display_policy,
+        NodeDisplayPolicy::PreferSelected
+    );
+    assert_eq!(
+        loaded.node_display_preferences.title_mode,
+        NodeTitleMode::Type
+    );
+}
+
+/// The default is `Type`: the mode is opt-in, and a user who never touches it
+/// sees exactly the canvas they saw before.
+#[test]
+fn test_node_title_mode_defaults_to_type() {
+    let prefs = StructureDesignerPreferences::default();
+    assert_eq!(
+        prefs.node_display_preferences.title_mode,
+        NodeTitleMode::Type
     );
 }

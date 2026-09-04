@@ -20,6 +20,7 @@ import 'package:provider/provider.dart';
 
 import 'package:flutter_cad/common/offscreen_capture.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_preferences.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_network/comment_node_widget.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network.dart';
@@ -36,6 +37,11 @@ typedef CanvasNodeWidgetBuilder = Widget Function(
 /// bodies); everything else gets [NodeWidget]. Both are scope-aware
 /// (positioning + key + API calls), so the same routing serves the top-level
 /// walk and the recursive body walk.
+///
+/// [titleMode] is required rather than defaulted so a new canvas cannot quietly
+/// render type names while the rest of the editor shows names
+/// (`doc/design_node_names_in_ui.md` D4). Both canvases read it from
+/// `StructureDesignerModel.nodeTitleMode`.
 Widget canvasNodeWidget({
   required NodeView node,
   required List<BigInt> scopeChain,
@@ -43,6 +49,7 @@ Widget canvasNodeWidget({
   required ScopeResolver resolver,
   required Offset panOffset,
   required ZoomLevel zoomLevel,
+  required NodeTitleMode titleMode,
   bool hideSelection = false,
 }) {
   if (node.nodeTypeName == 'Comment') {
@@ -54,6 +61,7 @@ Widget canvasNodeWidget({
       resolver: resolver,
       scopeChain: scopeChain,
       hideSelection: hideSelection,
+      titleMode: titleMode,
     );
   }
   return NodeWidget(
@@ -64,6 +72,7 @@ Widget canvasNodeWidget({
     resolver: resolver,
     scopeChain: scopeChain,
     hideSelection: hideSelection,
+    titleMode: titleMode,
   );
 }
 
@@ -268,6 +277,7 @@ class NodeNetworkCanvasSnapshot extends StatelessWidget {
         panOffset: panOffset,
         zoomLevel: zoomLevel,
         hideSelection: hideSelection,
+        titleMode: model.nodeTitleMode,
       ),
     );
     // Top layer: body wires, which would otherwise be hidden by the HOF node

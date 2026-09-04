@@ -633,6 +633,31 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  /// Whether node title bars write the node's *type* or its *name*
+  /// (`doc/design_node_names_in_ui.md` D4). Reads `Type` before the first
+  /// refresh has delivered the preferences, which is also the persisted
+  /// default, so the canvas never flickers between the two on startup.
+  NodeTitleMode get nodeTitleMode =>
+      preferences?.nodeDisplayPreferences.titleMode ?? NodeTitleMode.type;
+
+  /// Write the title mode through the ordinary preferences round-trip — the
+  /// same path the display panel's policy buttons take. A no-op before the
+  /// first refresh, when there are no preferences to amend.
+  void setNodeTitleMode(NodeTitleMode mode) {
+    final prefs = preferences;
+    if (prefs == null || prefs.nodeDisplayPreferences.titleMode == mode) return;
+    prefs.nodeDisplayPreferences.titleMode = mode;
+    setPreferences(prefs);
+  }
+
+  /// The Ctrl+Shift+N / *View* menu gesture: two states, so the toggle is the
+  /// whole interaction.
+  void toggleNodeTitleMode() {
+    setNodeTitleMode(nodeTitleMode == NodeTitleMode.name
+        ? NodeTitleMode.type
+        : NodeTitleMode.name);
+  }
+
   void selectFacetShellFacetByRay(
       vector_math.Vector3 rayStart, vector_math.Vector3 rayDir) {
     facet_shell_api.selectFacetByRay(

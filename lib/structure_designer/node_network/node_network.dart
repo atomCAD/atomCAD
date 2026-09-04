@@ -1413,6 +1413,7 @@ class NodeNetworkState extends State<NodeNetwork> {
         resolver: resolver,
         panOffset: _panOffset,
         zoomLevel: _zoomLevel,
+        titleMode: widget.graphModel.nodeTitleMode,
       );
 
   /// Resolver for drag-tick rebuilds of drag-affected nodes. The build-time

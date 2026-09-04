@@ -3,8 +3,9 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_p
 import 'display_button_group.dart';
 import 'structure_designer_model.dart';
 
-/// The node-display-policy cluster of the DISPLAY panel: a single radio group
-/// choosing how node output visibility is managed.
+/// The node cluster of the DISPLAY panel: two radio groups, one choosing how
+/// node output visibility is managed, one choosing what a node's title bar says
+/// (`doc/design_node_names_in_ui.md` D6).
 DisplayGroupCluster nodeDisplayCluster(StructureDesignerModel model) {
   final prefs = model.preferences?.nodeDisplayPreferences;
 
@@ -36,6 +37,26 @@ DisplayGroupCluster nodeDisplayCluster(StructureDesignerModel model) {
         tooltip: 'Node display policy: Prefer Frontier Nodes',
         isSelected: prefs?.displayPolicy == NodeDisplayPolicy.preferFrontier,
         onPressed: () => setPolicy(NodeDisplayPolicy.preferFrontier),
+      ),
+    ]),
+    // Node titles: type vs name. A radio group rather than a single toggle
+    // because both states are equally "on" — the canvas always says *something*
+    // in the title bar, and a lit/unlit toggle would imply the type is the
+    // absence of a choice. Flipping it repaints; no node moves (D5).
+    DisplayButtonGroup([
+      DisplayIconButton(
+        key: const Key('node_title_type'),
+        icon: Icons.widgets_outlined,
+        tooltip: 'Node titles: type names',
+        isSelected: model.nodeTitleMode == NodeTitleMode.type,
+        onPressed: () => model.setNodeTitleMode(NodeTitleMode.type),
+      ),
+      DisplayIconButton(
+        key: const Key('node_title_name'),
+        icon: Icons.label_outline,
+        tooltip: 'Node titles: node names (Ctrl+Shift+N)',
+        isSelected: model.nodeTitleMode == NodeTitleMode.name,
+        onPressed: () => model.setNodeTitleMode(NodeTitleMode.name),
       ),
     ]),
   ]);

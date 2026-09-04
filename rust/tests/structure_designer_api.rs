@@ -48,5 +48,8 @@ mod node_type_registry_test;
 #[path = "structure_designer_api/node_type_views_zone_body_test.rs"]
 mod node_type_views_zone_body_test;
 
+#[path = "structure_designer_api/preferences_twin_test.rs"]
+mod preferences_twin_test;
+
 #[path = "structure_designer_api/scoped_validation_errors_test.rs"]
 mod scoped_validation_errors_test;

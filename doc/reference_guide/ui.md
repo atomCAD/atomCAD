@@ -186,7 +186,9 @@ with a label adds the label as a third part). The name is what the
 refers to a node by, and what the Node Properties panel lets you change. Its
 own right-click menu has **Copy node name**, which puts the exact spelling on
 the clipboard — for a node inside a higher-order function's body that is the
-path form, `map4/e1`, ready to paste into a prompt.
+path form, `map4/e1`, ready to paste into a prompt. To read *every* node's name
+at once, switch the title bars over with **Ctrl+Shift+N** — see
+[Node titles](#node-titles).
 
 **Edit a comment note in place**
 Double-click a [comment](./nodes/annotation.md#comment) node — the yellow sticky note — to type into it directly on the canvas, rather than going to the Node Properties panel. Double-click its title bar to edit the title, its body to edit the text; the cursor lands on the character you clicked. Click outside to finish, or press `Esc` to discard. The panel fields still work and stay in sync.
@@ -812,6 +814,32 @@ Choose how node output visibility is managed:
 
 Even when a non-Manual policy is active, you can still toggle a pin's visibility manually using its eye icon; that manual visibility will persist until the selection or policy changes it.
 
+### Node titles
+
+The second group in the node cluster chooses **what a node's title bar says** —
+two alternatives, and one of them is always in force:
+
+- **Type names** *(default)* — the node's type: `expr`, `union`, `xray`, or the
+  name of the subnetwork a custom node instantiates. This is what the canvas has
+  always shown.
+- **Node names** — the node's own name instead: `expr49`, `union7`, `xray1`, and
+  `0_styling1` rather than `0_styling` for a custom node. This is the name the
+  [text format](../node_network_text_format.md) prints, that error messages and
+  the [AI History panel](#ai-history-panel) use, and that the AI assistant refers
+  a node by, so switching to it is the quick way to find the node someone told
+  you about. Every node has one, including comment notes and higher-order
+  function nodes; a [`closure`](./nodes/math_programming.md#closure)'s own label
+  and a comment note's title are replaced by the name while the mode is on (an
+  untitled note grows a title bar it does not otherwise have).
+
+The same switch is on the menu as *View → Node titles: names*, with the shortcut
+**Ctrl+Shift+N**. Flipping it is meant to be cheap and frequent — hold the
+shortcut down and you effectively see both — so **nothing on the canvas moves**:
+a name too long for the node is cut off with an ellipsis rather than widening
+it. The full name is always readable by hovering the title bar and in the
+[Node Properties panel](#node-properties-panel). The setting persists across
+sessions.
+
 ### Atomic visualization
 
 - Ball and stick: atoms are represented with small balls (their radius is half the covalent radius) and bonds are represented as sticks.
@@ -880,6 +908,7 @@ Used for loading and saving a design, exporting a design to .xyz or .mol, undo/r
 - *Edit > Auto-Layout Network*: Automatically arranges nodes in the current node network for a clean, readable layout, using whichever algorithm is selected under *Auto-layout algorithm* in [Preferences](#preferences-dialog). **This is the only thing that rearranges a whole network, and it only runs when you pick it** — see [Where nodes end up](node_networks.md#where-nodes-end-up-your-arrangement-and-what-may-move-it). It reaches inside higher-order nodes too: each body is arranged in its own right, deepest first, so an expanded `map` ends up neither overlapping its neighbours nor too small for what it holds. Turn on *Auto-Layout keeps manually placed nodes in place* in Preferences to have it leave your own placements alone. The view is refitted around the result. This is a single undoable step — if you don't like the new arrangement, `Ctrl+Z` puts every node back where it was. Comment notes are not laid out as graph nodes: each is placed afterwards, an anchored one beside what it documents and an unanchored one keeping its position relative to the drawing — see [Comment notes and automatic layout](nodes/annotation.md#comment).
 - *Edit > Copy all problems*: Copies every problem in the design — across all networks — to the clipboard as a plain-text report, for pasting into a bug report. Greyed out when the design has no problems. Available in both modes. See [Where is the error?](#node-networks-panel) above.
 - *View > Switch to Horizontal Layout* / *View > Switch to Vertical Layout*: Changes the orientation of the node network editor panel.
+- *View > Node titles: names* (**Ctrl+Shift+N**): Switches node title bars between the node's type and the node's own name, and back. Ticked while names are shown. The same setting as the *Node titles* group in the [Display Preferences panel](#node-titles); see there for what it does to each kind of node. Available in Node Network Mode only.
 - *View > Show/Hide Console* (**Ctrl + backtick**): Toggles the [Console panel](#console-panel) docked at the bottom of the window.
 - *View > Show/Hide AI History*: Toggles the [AI History panel](#ai-history-panel) docked at the bottom of the window. A dot and a count on the menu entry say how many AI edits arrived while the panel was closed.
 

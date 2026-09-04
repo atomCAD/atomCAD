@@ -20,7 +20,9 @@ import 'package:flutter_cad/structure_designer/node_network/node_network_painter
         GRID_MAJOR_SPACING,
         GRID_MINOR_COLOR,
         GRID_MAJOR_COLOR;
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_preferences.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_name_path.dart';
+import 'package:flutter_cad/structure_designer/node_network/node_title.dart';
 import 'package:flutter_cad/structure_designer/node_network/scope_resolver.dart';
 import 'package:flutter_cad/structure_designer/namespace_utils.dart';
 import 'package:flutter_cad/structure_designer/find_usages_menu.dart';
@@ -860,6 +862,12 @@ class NodeWidget extends StatelessWidget {
   /// node is still laid out and drawn exactly where it is.
   final bool hideSelection;
 
+  /// Whether the title bar writes the node's *type* or its *name*
+  /// (`doc/design_node_names_in_ui.md` D4). Passed in rather than read from the
+  /// model so the widget stays a pure function of its inputs — and so the size
+  /// rule, which never receives it, cannot start depending on it (D5).
+  final NodeTitleMode titleMode;
+
   NodeWidget({
     required this.node,
     required this.panOffset,
@@ -868,6 +876,7 @@ class NodeWidget extends StatelessWidget {
     required this.resolver,
     this.scopeChain = const [],
     this.hideSelection = false,
+    this.titleMode = NodeTitleMode.type,
   }) : super(key: NodeWidgetKeys.nodeWidget(node.id, scopeChain: scopeChain));
 
   /// Selection / active state as it should be **drawn** — the styling code uses
@@ -938,9 +947,8 @@ class NodeWidget extends StatelessWidget {
           child: Text(
             // A closure's user-supplied label, when present, is a much better
             // identifier at zoomed-out scale than the bare type name "closure".
-            (node.closureCustomLabel ?? '').isNotEmpty
-                ? node.closureCustomLabel!
-                : getSimpleName(node.nodeTypeName),
+            // In Name mode the node's own name replaces both (D4).
+            _compactTitle,
             style: TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.bold,
@@ -1032,10 +1040,9 @@ class NodeWidget extends StatelessWidget {
                       child: node.outputPins.isNotEmpty
                           ? Text.rich(
                               TextSpan(children: [
-                                if ((node.closureCustomLabel ?? '')
-                                    .isNotEmpty) ...[
+                                if (_closureTitleLabel.isNotEmpty) ...[
                                   TextSpan(
-                                    text: node.closureCustomLabel!,
+                                    text: _closureTitleLabel,
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontWeight: FontWeight.bold,
@@ -1079,7 +1086,7 @@ class NodeWidget extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                             )
                           : Text(
-                              getSimpleName(node.nodeTypeName),
+                              nodeTitleText(node, titleMode),
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,
@@ -1112,7 +1119,7 @@ class NodeWidget extends StatelessWidget {
                       waitDuration: const Duration(milliseconds: 500),
                       preferBelow: false,
                       child: Text(
-                        getSimpleName(node.nodeTypeName),
+                        nodeTitleText(node, titleMode),
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
@@ -1585,6 +1592,20 @@ class NodeWidget extends StatelessWidget {
   /// A closure's user-supplied label is appended as a third segment — the
   /// header replaces the type with the label + signature, so without this the
   /// label would be the only thing the hover could not recover.
+  /// The closure header's leading label segment: the user-supplied
+  /// `custom_label` in Type mode, the node's name in Name mode (D4). Empty when
+  /// an unlabelled closure is shown in Type mode, which drops the segment and
+  /// its separator entirely.
+  String get _closureTitleLabel =>
+      nodeTitleLabel(node, titleMode, node.closureCustomLabel ?? '');
+
+  /// The zoomed-out compact node's one line. A label (or, in Name mode, the
+  /// name) beats the type; an unlabelled node in Type mode falls back to it.
+  String get _compactTitle {
+    final label = _closureTitleLabel;
+    return label.isNotEmpty ? label : nodeTitleText(node, titleMode);
+  }
+
   String get _headerTooltip {
     final custom = node.customName;
     final label = node.closureCustomLabel ?? '';

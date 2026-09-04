@@ -37,6 +37,7 @@ NodeView _node(int id, double x, double y, {bool selected = false}) => NodeView(
         ),
       ],
       displayedPins: Int32List(0),
+      commentAnchors: const [],
       functionType: '',
       functionPinConsumed: false,
       selected: selected,

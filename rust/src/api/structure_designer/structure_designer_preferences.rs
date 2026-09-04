@@ -205,12 +205,24 @@ pub enum NodeDisplayPolicy {
     PreferFrontier,
 }
 
+/// Dart-facing twin of [`atomcad_structure_designer::preferences::NodeTitleMode`].
+#[frb]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Default)]
+pub enum NodeTitleMode {
+    #[default]
+    Type,
+    Name,
+}
+
 #[frb]
 #[derive(Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct NodeDisplayPreferences {
     #[frb(non_final)]
     #[serde(default)]
     pub display_policy: NodeDisplayPolicy,
+    #[frb(non_final)]
+    #[serde(default)]
+    pub title_mode: NodeTitleMode,
 }
 
 /// Dart-facing twin of [`atomcad_crystolecule::visualization::AtomicStructureVisualization`].
@@ -834,10 +846,29 @@ impl From<&domain::NodeDisplayPolicy> for NodeDisplayPolicy {
     }
 }
 
+impl From<&NodeTitleMode> for domain::NodeTitleMode {
+    fn from(v: &NodeTitleMode) -> Self {
+        match v {
+            NodeTitleMode::Type => domain::NodeTitleMode::Type,
+            NodeTitleMode::Name => domain::NodeTitleMode::Name,
+        }
+    }
+}
+
+impl From<&domain::NodeTitleMode> for NodeTitleMode {
+    fn from(v: &domain::NodeTitleMode) -> Self {
+        match v {
+            domain::NodeTitleMode::Type => NodeTitleMode::Type,
+            domain::NodeTitleMode::Name => NodeTitleMode::Name,
+        }
+    }
+}
+
 impl From<&NodeDisplayPreferences> for domain::NodeDisplayPreferences {
     fn from(p: &NodeDisplayPreferences) -> Self {
         domain::NodeDisplayPreferences {
             display_policy: (&p.display_policy).into(),
+            title_mode: (&p.title_mode).into(),
         }
     }
 }
@@ -846,6 +877,7 @@ impl From<&domain::NodeDisplayPreferences> for NodeDisplayPreferences {
     fn from(p: &domain::NodeDisplayPreferences) -> Self {
         NodeDisplayPreferences {
             display_policy: (&p.display_policy).into(),
+            title_mode: (&p.title_mode).into(),
         }
     }
 }

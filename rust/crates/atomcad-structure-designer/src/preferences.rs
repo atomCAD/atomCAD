@@ -207,10 +207,27 @@ pub enum NodeDisplayPolicy {
     PreferFrontier,
 }
 
+/// What the canvas writes in a node's title bar.
+///
+/// Two states, either/or: the *type* is what the canvas has always shown, the
+/// *name* is the identifier the text format, the AI and the error paths all
+/// use (`doc/design_node_names_in_ui.md` D4). Flipping between them must never
+/// change a node's footprint — the header ellipsizes inside the existing width
+/// (D5) — so this preference is read by the header text alone and never by the
+/// size rule.
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Default)]
+pub enum NodeTitleMode {
+    #[default]
+    Type,
+    Name,
+}
+
 #[derive(Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct NodeDisplayPreferences {
     #[serde(default)]
     pub display_policy: NodeDisplayPolicy,
+    #[serde(default)]
+    pub title_mode: NodeTitleMode,
 }
 
 #[derive(PartialEq, Clone, Debug, Serialize, Deserialize, Default)]
