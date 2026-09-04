@@ -392,3 +392,35 @@ fn factor_selection_rejects_invalid_subnetwork_name() {
         .unwrap_err();
     assert!(err.contains("Invalid subnetwork name"));
 }
+
+/// `/` is the node-path joiner (`map4/e1`), so it is no longer legal inside a
+/// node name — the one visible narrowing of the relaxed-name rules
+/// (`doc/design_node_names_in_ui.md` D1). A backtick-quoted `` `a/b` `` still
+/// *lexes* as one segment, but the editor's validator refuses it.
+#[test]
+fn editor_rejects_a_slash_in_a_node_name() {
+    let mut designer = setup_designer_with_network("net");
+    let result = edit_designer_network(
+        &mut designer,
+        "net",
+        "`a/b` = int { value: 1 }",
+        false, // incremental: the mode every AI edit uses by default
+    );
+    assert!(!result.success);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|e| e.contains("Invalid node name") && e.contains("slash")),
+        "expected the slash reason, got {:?}",
+        result.errors
+    );
+
+    // Nothing was created.
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get("net")
+        .unwrap();
+    assert!(network.nodes.is_empty());
+}

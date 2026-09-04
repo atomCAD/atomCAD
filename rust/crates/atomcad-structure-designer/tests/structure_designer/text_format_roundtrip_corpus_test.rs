@@ -109,9 +109,52 @@ fn text_of(sd: &StructureDesigner, name: &str) -> String {
     serialize_network(network, &sd.node_type_registry, Some(name))
 }
 
+/// Names are unique at the source (`doc/design_node_names_in_ui.md` D1), so
+/// `unique_node_names` — the serializer's read — must rename nothing on a real
+/// file. This is the proof of the invariant: there is deliberately no
+/// assertion inside the function, which still has to work on a network built
+/// below the API with duplicates in it (see
+/// `duplicate_node_names_are_written_uniquely_and_match_back`).
+fn assert_stored_names_are_already_unique(sd: &StructureDesigner, path: &Path) {
+    fn walk(network: &NodeNetwork, prefix: &str, out: &mut Vec<String>) {
+        for (id, name) in unique_node_names(network) {
+            let stored = network.nodes[&id].custom_name.as_deref().unwrap_or("");
+            if stored != name {
+                out.push(format!("  {prefix}{stored} would be written as `{name}`"));
+            }
+        }
+        for node in network.nodes.values() {
+            if let Some(body) = node.zone.as_deref() {
+                let own = node.custom_name.as_deref().unwrap_or("?");
+                walk(body, &format!("{prefix}{own}/"), out);
+            }
+        }
+    }
+
+    let mut renamed = Vec::new();
+    let mut names: Vec<&String> = sd.node_type_registry.node_networks.keys().collect();
+    names.sort();
+    for name in names {
+        walk(
+            &sd.node_type_registry.node_networks[name],
+            &format!("{name}: "),
+            &mut renamed,
+        );
+    }
+    renamed.sort();
+    assert!(
+        renamed.is_empty(),
+        "`{}` holds {} node(s) whose stored name is not what the text format prints:\n{}",
+        path.display(),
+        renamed.len(),
+        renamed.join("\n")
+    );
+}
+
 /// Replace every network with its own text; collect every way that fails.
 fn run_round_trips(path: &Path) {
     let mut sd = load(path);
+    assert_stored_names_are_already_unique(&sd, path);
     let mut names: Vec<String> = sd
         .node_type_registry
         .node_networks
@@ -343,9 +386,13 @@ fn array_pin_wire_order_survives_a_replace() {
 
 #[test]
 fn duplicate_node_names_are_written_uniquely_and_match_back() {
-    // The GUI does not keep `custom_name` unique (copy/paste carries it), and
-    // the text layer keys everything on the name: four nodes called
-    // `to_degrees` collapsed into one. The shared rule suffixes later holders.
+    // The safety net, not GUI behaviour. Every path *through* the API keeps
+    // `custom_name` unique now (D1), and the corpus assertion above proves it
+    // on real files — but `unique_node_names` must keep working on a network
+    // that holds duplicates anyway, because a caller writing `custom_name`
+    // directly (as this test does) can still build one. The text layer keys
+    // everything on the name, and before the rule existed four nodes called
+    // `to_degrees` collapsed into one.
     let mut sd = designer();
     sd.ai_text_edit("x = int { value: 1 }\ny = int { value: 2 }\n", false);
     assert!(applied(&sd));

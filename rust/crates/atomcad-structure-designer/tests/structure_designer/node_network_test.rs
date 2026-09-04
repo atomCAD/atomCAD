@@ -769,6 +769,35 @@ fn test_duplicate_node_gets_unique_name() {
     let node1 = network.nodes.get(&id1).unwrap();
     let node2 = network.nodes.get(&id2).unwrap();
 
+    // A duplicate keeps the original's name and suffixes on collision (D1 of
+    // `doc/design_node_names_in_ui.md`) — not the old type-counter `cuboid2`.
     assert_eq!(node1.custom_name, Some("cuboid1".to_string()));
-    assert_eq!(node2.custom_name, Some("cuboid2".to_string()));
+    assert_eq!(node2.custom_name, Some("cuboid1_2".to_string()));
+}
+
+/// The suffix rule is "first free counter", not "max + 1", and it applies to
+/// a name that already ends in a suffix. Pinned so the rule cannot drift.
+#[test]
+fn test_duplicate_of_a_suffixed_name_takes_the_next_free_suffix() {
+    let mut designer = setup_designer_with_network("test_network");
+    let id1 = designer.add_node("cuboid", DVec2::ZERO); // cuboid1
+    {
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("test_network")
+            .unwrap();
+        network.nodes.get_mut(&id1).unwrap().custom_name = Some("x_2".to_string());
+    }
+    let id2 = designer.duplicate_node(id1);
+
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get("test_network")
+        .unwrap();
+    assert_eq!(
+        network.nodes.get(&id2).unwrap().custom_name,
+        Some("x_2_2".to_string())
+    );
 }

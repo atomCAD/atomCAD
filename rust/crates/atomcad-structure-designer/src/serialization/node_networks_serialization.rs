@@ -686,6 +686,57 @@ pub fn node_network_to_serializable(
     })
 }
 
+/// Heal one scope's stored `custom_name`s into the D1 invariant: slash-free
+/// and unique. Slashes become `_`; a name a lower-id node already holds gets
+/// the first free `_2`, `_3`, … — the same rule, in the same ascending-id
+/// order, as `text_format::unique_node_names`, which is what makes the
+/// migration a no-op in the text format.
+///
+/// A candidate suffix is skipped when *any* node stores that spelling, so a
+/// duplicate never steals a name a later node holds outright.
+fn normalize_node_names(network: &mut NodeNetwork) {
+    let mut ids: Vec<u64> = network.nodes.keys().copied().collect();
+    ids.sort_unstable();
+
+    // Slash → underscore first, so uniqueness is decided on final spellings.
+    for id in &ids {
+        if let Some(node) = network.nodes.get_mut(id)
+            && let Some(name) = node.custom_name.as_ref()
+            && name.contains('/')
+        {
+            node.custom_name = Some(name.replace('/', "_"));
+        }
+    }
+
+    let taken: std::collections::HashSet<String> = network
+        .nodes
+        .values()
+        .filter_map(|node| node.custom_name.clone())
+        .collect();
+    let mut claimed: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    for id in ids {
+        let Some(name) = network
+            .nodes
+            .get(&id)
+            .and_then(|node| node.custom_name.clone())
+        else {
+            continue;
+        };
+        if claimed.insert(name) {
+            continue;
+        }
+        // `name` was moved into `claimed`; re-read it for the suffix search.
+        let name = network.nodes[&id].custom_name.clone().unwrap();
+        let unique = (2u64..)
+            .map(|k| format!("{name}_{k}"))
+            .find(|candidate| !taken.contains(candidate) && !claimed.contains(candidate))
+            .expect("a free suffixed name exists: the node map is finite");
+        claimed.insert(unique.clone());
+        network.nodes.get_mut(&id).unwrap().custom_name = Some(unique);
+    }
+}
+
 /// Creates a NodeNetwork from a SerializableNodeNetwork
 ///
 /// # Returns
@@ -802,6 +853,19 @@ pub fn serializable_to_node_network(
             node.custom_name = Some(name);
         }
     }
+
+    // Normalization: `custom_name` is unique within a scope and slash-free
+    // (`doc/design_node_names_in_ui.md` D1). Older files predate both rules —
+    // parameter minting used to store the parameter name verbatim, so a
+    // network can hold four nodes called `to_degrees`, and a slash used to be
+    // a legal name character even though `/` is the node-path joiner. Heal
+    // both here, in ascending id order, so the stored names come out exactly
+    // as `text_format::unique_node_names` used to spell them on the way out —
+    // which is why the migration is invisible in the text format.
+    //
+    // This runs per scope: `serializable_to_node` reconstructs a zone body
+    // through this same function, so every body normalizes itself.
+    normalize_node_names(&mut network);
 
     // Convert camera settings if present
     network.camera_settings = serializable.camera_settings.as_ref().map(|scs| {

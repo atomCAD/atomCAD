@@ -912,10 +912,13 @@ fn add_parameter_node(
     };
     network.next_param_id += 1;
 
+    // Unique per scope (D1); `param_name` above keeps the requested spelling.
+    let node_name = network.unique_name_for(name);
+
     let node = Node {
         id: param_id,
         node_type_name: "parameter".to_string(),
-        custom_name: Some(name.to_string()),
+        custom_name: Some(node_name),
         position,
         arguments: vec![Argument::new()],
         data: Box::new(param_data),

@@ -18,6 +18,10 @@ pub enum InvalidNameReason {
     ContainsControl,
     /// The name had leading or trailing whitespace.
     EdgeWhitespace,
+    /// The name contained a forward slash, which is the node *path* joiner
+    /// (`map4/e1`). A slash inside a name makes a path ambiguous, so it is
+    /// reserved. See `doc/design_node_names_in_ui.md` (D1, D8).
+    ContainsSlash,
 }
 
 impl fmt::Display for InvalidNameReason {
@@ -32,6 +36,9 @@ impl fmt::Display for InvalidNameReason {
             }
             InvalidNameReason::EdgeWhitespace => {
                 f.write_str("name cannot start or end with whitespace")
+            }
+            InvalidNameReason::ContainsSlash => {
+                f.write_str("name cannot contain a slash (reserved as the node-path separator)")
             }
         }
     }
@@ -48,6 +55,9 @@ pub fn is_valid_user_name(s: &str) -> Result<(), InvalidNameReason> {
         }
         if c.is_control() {
             return Err(InvalidNameReason::ContainsControl);
+        }
+        if c == '/' {
+            return Err(InvalidNameReason::ContainsSlash);
         }
     }
     if s.starts_with(char::is_whitespace) || s.ends_with(char::is_whitespace) {

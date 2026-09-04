@@ -19,10 +19,16 @@ The text format enables programmatic creation and modification of node networks.
 - Cannot start with a number
 - Case-sensitive
 
-Names come from the nodes' `custom_name`s, which the GUI does not keep
-unique. When several nodes share one, `query` writes the first bare and the
-rest with a numeric suffix (`to_degrees`, `to_degrees_2`, …); use those names
-in edits — they address exactly one node each.
+Names come from the nodes' `custom_name`s, and `query` prints them verbatim:
+a name addresses exactly one node in its scope. Every creation path keeps that
+true — a copy or duplicate carries the source's name and takes the first free
+numeric suffix on collision (`chassis` → `chassis_2`). A legacy file holding
+several nodes called `to_degrees` is healed on open into `to_degrees`,
+`to_degrees_2`, …, so the text reads as it always did.
+
+A name may hold characters an identifier cannot (`x.shape`, `union#1`); `query`
+backtick-quotes those. A backtick and a `/` are the two rejected characters —
+`/` because it separates the segments of a node path (`m1/d`).
 
 ### Examples
 

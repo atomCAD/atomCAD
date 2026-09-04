@@ -2440,6 +2440,49 @@ mod custom_name_tests {
         );
     }
 
+    /// An incremental edit whose statement names a node that already exists in
+    /// that scope **updates that node in place** — it never mints a second
+    /// holder of the name. That is the precondition that lets the text editor
+    /// stay outside `unique_name_for`: it cannot create a duplicate, so there
+    /// is nothing for the suffix rule to fix (`doc/design_node_names_in_ui.md`
+    /// D1).
+    #[test]
+    fn test_incremental_edit_of_a_taken_name_updates_in_place() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        let result = edit_network(
+            &mut network,
+            &registry,
+            "x = sphere { center: (0, 0, 0), radius: 5 }",
+            true,
+        );
+        assert!(result.success, "{:?}", result.errors);
+        assert_eq!(network.nodes.len(), 1);
+        let id = *network.nodes.keys().next().unwrap();
+
+        let result = edit_network(
+            &mut network,
+            &registry,
+            "x = sphere { center: (0, 0, 0), radius: 9 }",
+            false,
+        );
+        assert!(result.success, "{:?}", result.errors);
+        assert_eq!(
+            network.nodes.len(),
+            1,
+            "the statement updated the existing `x`, it did not create a second one"
+        );
+        assert_eq!(
+            *network.nodes.keys().next().unwrap(),
+            id,
+            "and it kept the node's identity"
+        );
+
+        let serialized = serialize_network(&network, &registry, None);
+        assert!(serialized.contains("radius: 9"), "{serialized}");
+    }
+
     #[test]
     fn test_mixed_custom_and_auto_names() {
         let registry = create_test_registry();
@@ -2691,9 +2734,10 @@ mod persistent_node_names_phase6_tests {
         let dup_id = designer.duplicate_node(original_id);
         assert_ne!(dup_id, 0, "Duplication should succeed");
 
-        // Both should be findable by their unique names
+        // Both should be findable by their unique names. The duplicate keeps
+        // the copied name with a `_2` suffix (D1), not a fresh type counter.
         let found_original = designer.find_node_id_by_name("sphere1");
-        let found_dup = designer.find_node_id_by_name("sphere2");
+        let found_dup = designer.find_node_id_by_name("sphere1_2");
 
         assert_eq!(found_original, Some(original_id));
         assert_eq!(found_dup, Some(dup_id));

@@ -241,7 +241,9 @@ outer/inner/n = add { a: $element, b: ^^base }
 The separator is `/`, never `.`: `.` already means pin access in value
 position, so `output m1.d` would be ambiguous. Paths split on the `/` *token*,
 so a backtick-quoted segment containing a slash (`` m1/`a/b` ``) is still one
-segment.
+segment to the parser — but a node can no longer *be* called `a/b`:
+`is_valid_user_name` rejects a slash precisely so a bare-name path is
+unambiguous (`doc/design_node_names_in_ui.md` D1/D8).
 
 Three things follow, and they are the whole semantics:
 
@@ -314,12 +316,19 @@ same file.
   spelling for `None` (`axis_index: -1`, `motif.name: ""`) and must always be
   written. The mirror bug: a node whose *default* is `Some` (motif's
   "cubic zincblende") reads an omitted property back as that default.
-- **Node names are made unique by `network_editor::unique_node_names`, and
-  nothing else names a node.** The GUI does not keep `custom_name` unique
-  (copy/paste carries it), so the serializer, the Pass 0 identity snapshot and
-  the editor's name map all go through the one rule (ascending id; later
-  holders get `_2`, `_3`, …). Because they agree, a `--replace` matches every
-  duplicate back to its own node and renames it to the suffixed form.
+- **Names are unique at the source; `unique_node_names` is the serializer's
+  read and a safety net.** Every path that can put a name into a scope —
+  `add_node`, duplicate, paste, node inlining, parameter minting, the `.cnnd`
+  loader — routes it through `NodeNetwork::unique_name_for` first, so within a
+  scope `custom_name` is already unique and the text prints it verbatim
+  (`doc/design_node_names_in_ui.md` D1). `network_editor::unique_node_names`
+  keeps its signature and the one rule (ascending id; later holders get `_2`,
+  `_3`, …) — the serializer, the Pass 0 identity snapshot and the editor's
+  name map still all read through it, and it must keep working on a network
+  that *does* hold duplicates, because a caller writing `custom_name` below
+  the API can still build one. The corpus test is the proof that it renames
+  nothing on a real file; there is deliberately no assertion inside the
+  function.
 - **Wires an edit cannot make yet are retried, not dropped.** An `apply`'s
   arg pins are derived from its `f` wire, which the same wire pass is
   creating, so `arg0: x` finds no pin the first time; `wire_pending_connections`
@@ -333,7 +342,11 @@ same file.
 - **Every identifier position is quoted by `format_identifier`**: node names,
   node types, property keys (a custom node's parameter named after a dotted
   network), and multi-output pin names (a `record_destructure` pin is a record
-  field, `z-shift`).
+  field, `z-shift`). A backtick-quoted name may hold nearly anything —
+  `x.shape`, `union#1` — but **not** a backtick and **not** a `/`:
+  `identifier::is_valid_user_name` rejects both, the backtick because the
+  quoting cannot escape it and the slash because it is the node-path joiner
+  (`map4/e1`). The loader rewrites a legacy `/` in a stored name to `_`.
 
 ## Auto-Layout (auto_layout.rs)
 

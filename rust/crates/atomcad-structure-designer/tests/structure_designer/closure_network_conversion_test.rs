@@ -2509,3 +2509,55 @@ fn convert_in_body_basic_and_undo() {
     );
     assert_eq!(extract_int(evaluate_node(&designer, "main", fold_id)), 4);
 }
+
+/// Node names are unique within the extracted network
+/// (`doc/design_node_names_in_ui.md` D1). The minted `parameter` node is
+/// created first and keeps the pin's spelling; a body node that happened to
+/// carry the same name is suffixed as it is copied in.
+#[test]
+fn extract_keeps_node_names_unique_in_the_new_network() {
+    let mut designer = setup_designer_with_network("main");
+
+    let closure_id = add_int_closure(&mut designer, "main", "x + 1", &[], -120.0);
+    // Name the single body node after the zone-input pin, which is the name
+    // the extracted parameter node will take.
+    {
+        let body = designer.get_scope_network_mut(&[closure_id]).unwrap();
+        let body_node_id = *body.nodes.keys().next().unwrap();
+        body.nodes.get_mut(&body_node_id).unwrap().custom_name = Some("element".to_string());
+    }
+
+    designer
+        .extract_closure_to_network(vec![], closure_id, "net")
+        .expect("extraction should succeed");
+
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get("net")
+        .unwrap();
+    let mut names: Vec<String> = net
+        .nodes
+        .values()
+        .map(|n| n.custom_name.clone().unwrap())
+        .collect();
+    names.sort();
+    assert_eq!(
+        names,
+        vec!["element".to_string(), "element_2".to_string()],
+        "the parameter keeps `element`; the copied body node is suffixed"
+    );
+
+    // The parameter node is the one holding the un-suffixed name, and its
+    // `param_name` (the network's input pin) is untouched.
+    let param = net
+        .nodes
+        .values()
+        .find(|n| n.node_type_name == "parameter")
+        .unwrap();
+    assert_eq!(param.custom_name, Some("element".to_string()));
+    assert_eq!(
+        param_nodes(&designer, "net"),
+        vec![(0, "element".to_string(), DataType::Int)]
+    );
+}

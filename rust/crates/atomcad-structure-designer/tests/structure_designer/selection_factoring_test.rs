@@ -776,3 +776,40 @@ fn test_get_factor_selection_info_invalid_selection() {
     assert!(!info.can_factor);
     assert!(info.invalid_reason.is_some());
 }
+
+/// The minted `parameter` node's name is unique within the new subnetwork
+/// (`doc/design_node_names_in_ui.md` D1); its `param_name` — the subnetwork's
+/// input pin name — is a separate field and is untouched.
+#[test]
+fn test_factored_parameter_node_name_is_suffixed_on_collision() {
+    let mut network = NodeNetwork::new(create_test_node_type("test"));
+    let registry = create_test_registry();
+
+    let node_a = network.add_node("cuboid", DVec2::new(0.0, 0.0), 0, Box::new(MockNodeData));
+    let node_b = network.add_node("union", DVec2::new(100.0, 0.0), 1, Box::new(MockNodeData));
+    // The selected node already holds the name the parameter would take.
+    network.nodes.get_mut(&node_b).unwrap().custom_name = Some("input_geo".to_string());
+
+    network.connect_nodes(node_a, 0, node_b, 0, false);
+    network.select_node(node_b);
+
+    let analysis = analyze_selection_for_factoring(&network, &registry);
+    assert!(analysis.is_valid);
+
+    let subnetwork = create_subnetwork_from_selection(
+        &network,
+        &analysis,
+        "my_subnetwork",
+        &["input_geo".to_string()],
+        &registry,
+    );
+
+    let param_node = subnetwork
+        .nodes
+        .values()
+        .find(|n| n.node_type_name == "parameter")
+        .expect("a parameter node was minted");
+    assert_eq!(param_node.custom_name, Some("input_geo_2".to_string()));
+    // The pin name is unaffected.
+    assert_eq!(subnetwork.node_type.parameters[0].name, "input_geo");
+}

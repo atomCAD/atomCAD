@@ -39,12 +39,24 @@ name = type { property: value, property: value }
 - **type**: Node type name (e.g., `sphere`, `cuboid`, `union`)
 - **properties**: Key-value pairs for node data and input connections
 
-Node names are the nodes' `custom_name`s. The GUI does not keep those
-unique — copy/paste and duplicate carry the name along — so when several
-nodes in one network share a name, `query` writes the first (lowest id) bare
-and the others with a numeric suffix: `to_degrees`, `to_degrees_2`,
-`to_degrees_3`. Editing through those names is exact, and a `--replace` of
-the printout renames the nodes to the suffixed form for good.
+Node names are the nodes' `custom_name`s, and `query` prints them verbatim:
+within one network (and within one zone body, which is a scope of its own) a
+name identifies exactly one node. Every way of creating a node keeps that
+true — a copy, a paste or a duplicate carries the source's name and takes the
+first free numeric suffix if the destination already holds it, so duplicating
+`chassis` gives `chassis_2`, then `chassis_3`.
+
+A name may hold almost any character — `x.shape` and `union#1` are legal, and
+`query` backtick-quotes anything it cannot write bare — with two exceptions: a
+backtick (the quoting delimiter itself) and a `/` (the separator in a node
+*path* such as `m1/d`).
+
+Files written before this rule existed can hold several nodes called
+`to_degrees`, or a name with a `/` in it. They are healed when the file is
+opened: duplicates get the same ascending-id suffixes the text format always
+printed (`to_degrees`, `to_degrees_2`, `to_degrees_3`) and a `/` becomes `_`.
+The text therefore reads exactly as it did before, and the names are now what
+the nodes actually store.
 
 ### Statements
 
@@ -475,7 +487,9 @@ outer/inner/n = int { value: 2 }     # depth 2
   position, so `output m1.d` would be ambiguous between "scope `m1`, node `d`"
   and "the `d` output pin of `m1`".
 - Paths split on the `/` token only, so a backtick-quoted segment containing a
-  slash (`` m1/`a/b` ``) remains a single segment.
+  slash (`` m1/`a/b` ``) remains a single segment to the parser — but a node
+  cannot *be* named `a/b`: a slash is rejected in a node name precisely so a
+  path is unambiguous.
 - Everything inside a path statement is **relative to the scope it lands on**:
   bare names resolve in that body, `$…` are its zone inputs, `^…` walks outward
   from it. `m1/x = …` means exactly what the same statement means written inside
@@ -761,7 +775,7 @@ Notes on the zone-body productions:
   names a zone input `k + 1` frames out. See
   [Zone Bodies](#referring-outward-from-inside-a-body).
 - A `path` splits on the `/` **token** only, so a backtick-quoted segment may
-  contain a slash.
+  contain a slash — though no node name may, so this never arises in practice.
 
 ## Examples
 

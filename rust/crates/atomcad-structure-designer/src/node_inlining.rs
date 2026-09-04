@@ -79,7 +79,7 @@ pub fn copy_content_into(
         let custom_name = old_node
             .custom_name
             .as_deref()
-            .map(|name| dedup_name(target, name));
+            .map(|name| target.unique_name_for(name));
 
         let new_node = Node {
             id: new_id,
@@ -106,30 +106,6 @@ pub fn copy_content_into(
     }
 
     id_mapping
-}
-
-/// Returns `desired` if no existing node in `target` already uses it as a
-/// `custom_name`; otherwise appends `_2`, `_3`, … until a free name is found.
-fn dedup_name(target: &NodeNetwork, desired: &str) -> String {
-    let taken = |candidate: &str| {
-        target
-            .nodes
-            .values()
-            .any(|n| n.custom_name.as_deref() == Some(candidate))
-    };
-
-    if !taken(desired) {
-        return desired.to_string();
-    }
-
-    let mut suffix = 2;
-    loop {
-        let candidate = format!("{}_{}", desired, suffix);
-        if !taken(&candidate) {
-            return candidate;
-        }
-        suffix += 1;
-    }
 }
 
 /// Rendered (width, height) of `node` within its network.

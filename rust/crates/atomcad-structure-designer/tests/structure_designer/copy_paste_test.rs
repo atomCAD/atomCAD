@@ -1286,3 +1286,134 @@ fn test_paste_scoped_empty_path_matches_top_level() {
         DVec2::new(50.0, 50.0)
     );
 }
+
+// ===== NAMES CARRIED THROUGH A COPY (`doc/design_node_names_in_ui.md` D1) =====
+//
+// A copy keeps the name the user chose and suffixes only on a collision in the
+// destination scope, so `chassis` pastes as `chassis_2` rather than `union8`.
+
+/// Rename `node_id` in `network_name` — the below-the-API stand-in for the
+/// GUI rename Phase 1 adds.
+fn rename(designer: &mut StructureDesigner, network_name: &str, node_id: u64, name: &str) {
+    designer
+        .node_type_registry
+        .node_networks
+        .get_mut(network_name)
+        .unwrap()
+        .nodes
+        .get_mut(&node_id)
+        .unwrap()
+        .custom_name = Some(name.to_string());
+}
+
+fn name_of(designer: &StructureDesigner, network_name: &str, node_id: u64) -> String {
+    designer
+        .node_type_registry
+        .node_networks
+        .get(network_name)
+        .unwrap()
+        .nodes
+        .get(&node_id)
+        .unwrap()
+        .custom_name
+        .clone()
+        .unwrap()
+}
+
+#[test]
+fn test_paste_beside_the_source_suffixes_the_copied_name() {
+    let mut designer = setup_designer_with_network("main");
+    let id = designer.add_node("float", DVec2::ZERO);
+    rename(&mut designer, "main", id, "x");
+
+    designer.select_node_scoped(&[], id);
+    assert!(designer.copy_selection());
+    let pasted = designer.paste_at_position(DVec2::new(100.0, 0.0));
+
+    assert_eq!(name_of(&designer, "main", pasted[0]), "x_2");
+}
+
+#[test]
+fn test_paste_keeps_a_user_chosen_name() {
+    let mut designer = setup_designer_with_network("main");
+    let id = designer.add_node("union", DVec2::ZERO);
+    rename(&mut designer, "main", id, "chassis");
+
+    designer.select_node_scoped(&[], id);
+    assert!(designer.copy_selection());
+    let pasted = designer.paste_at_position(DVec2::new(100.0, 0.0));
+
+    // The old behaviour minted `union2` here, which is what made a rename
+    // worthless — the name did not survive its own copy.
+    assert_eq!(name_of(&designer, "main", pasted[0]), "chassis_2");
+}
+
+#[test]
+fn test_paste_of_a_selection_suffixes_in_ascending_source_id_order() {
+    let mut designer = setup_designer_with_network("main");
+    let a = designer.add_node("float", DVec2::ZERO);
+    let b = designer.add_node("float", DVec2::new(100.0, 0.0));
+    rename(&mut designer, "main", a, "x");
+    rename(&mut designer, "main", b, "x_2");
+
+    designer.select_nodes_scoped(&[], vec![a, b]);
+    assert!(designer.copy_selection());
+    let pasted = designer.paste_at_position(DVec2::new(0.0, 300.0));
+    assert_eq!(pasted.len(), 2);
+
+    // Ascending source-id order — the order `unique_node_names` walks — so
+    // `x` is renamed first and takes `x_3` (`x_2` is held by `b`), then
+    // `x_2` takes `x_2_2`.
+    let names: Vec<String> = pasted
+        .iter()
+        .map(|&id| name_of(&designer, "main", id))
+        .collect();
+    assert_eq!(names, vec!["x_3".to_string(), "x_2_2".to_string()]);
+
+    // The text format prints the stored names verbatim: no renaming is left
+    // for `unique_node_names` to do.
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get("main")
+        .unwrap();
+    let text = atomcad_structure_designer::text_format::serialize_network(
+        network,
+        &designer.node_type_registry,
+        Some("main"),
+    );
+    for name in ["x", "x_2", "x_3", "x_2_2"] {
+        assert!(text.contains(&format!("{name} = float")), "{text}");
+    }
+}
+
+#[test]
+fn test_paste_into_a_body_ignores_a_top_level_name_collision() {
+    // Uniqueness is per scope, so `x` in the body is free even though the top
+    // level holds an `x`.
+    let (mut designer, map_id) = setup_with_map();
+
+    let top = designer.add_node("float", DVec2::ZERO);
+    rename(&mut designer, "main", top, "x");
+
+    let inner = designer.add_node_scoped(&[map_id], "float", DVec2::ZERO, None);
+    designer
+        .get_scope_network_mut(&[map_id])
+        .unwrap()
+        .nodes
+        .get_mut(&inner)
+        .unwrap()
+        .custom_name = Some("y".to_string());
+
+    designer.select_node_scoped(&[], top);
+    assert!(designer.copy_selection());
+    let pasted = designer.paste_at_position_scoped(&[map_id], DVec2::new(0.0, 200.0));
+    assert_eq!(pasted.len(), 1);
+
+    let body = designer.get_scope_network(&[map_id]).unwrap();
+    assert_eq!(
+        body.nodes.get(&pasted[0]).unwrap().custom_name,
+        Some("x".to_string()),
+        "the body scope has no `x`, so the name is kept unchanged"
+    );
+}

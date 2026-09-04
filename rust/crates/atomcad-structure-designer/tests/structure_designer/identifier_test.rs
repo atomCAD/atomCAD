@@ -98,6 +98,27 @@ fn internal_whitespace_is_allowed() {
     assert!(is_valid_user_name("part one part two").is_ok());
 }
 
+/// `/` joins the segments of a node path (`map4/e1`), so it cannot appear
+/// inside a name — see `doc/design_node_names_in_ui.md` D1/D8.
+#[test]
+fn slash_is_rejected() {
+    assert_eq!(
+        is_valid_user_name("a/b"),
+        Err(InvalidNameReason::ContainsSlash)
+    );
+    assert_eq!(
+        is_valid_user_name("/leading"),
+        Err(InvalidNameReason::ContainsSlash)
+    );
+    assert_eq!(
+        is_valid_user_name("trailing/"),
+        Err(InvalidNameReason::ContainsSlash)
+    );
+    // The other relaxed-name characters are still fine.
+    assert!(is_valid_user_name("x.shape").is_ok());
+    assert!(is_valid_user_name("union#1").is_ok());
+}
+
 #[test]
 fn display_messages_are_distinct() {
     let messages = [
@@ -105,6 +126,7 @@ fn display_messages_are_distinct() {
         InvalidNameReason::ContainsBacktick.to_string(),
         InvalidNameReason::ContainsControl.to_string(),
         InvalidNameReason::EdgeWhitespace.to_string(),
+        InvalidNameReason::ContainsSlash.to_string(),
     ];
     let unique: std::collections::HashSet<_> = messages.iter().collect();
     assert_eq!(unique.len(), messages.len());

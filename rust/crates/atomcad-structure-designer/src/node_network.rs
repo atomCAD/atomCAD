@@ -1286,7 +1286,10 @@ impl NodeNetwork {
     ///
     /// Internal connections between copied nodes are preserved (with remapped IDs).
     /// External connections (to nodes not in source_node_ids) are dropped.
-    /// Each pasted node gets a fresh ID, a unique display name, and is set to displayed.
+    /// Each pasted node gets a fresh ID and keeps its source `custom_name`,
+    /// suffixed `_2`, `_3`, … only where the destination scope already holds
+    /// that name (`doc/design_node_names_in_ui.md` D1) — a node the user named
+    /// `chassis` pastes as `chassis_2`, not `union8`.
     ///
     /// Returns the list of newly created node IDs.
     pub fn copy_nodes_from(
@@ -1298,8 +1301,15 @@ impl NodeNetwork {
         let mut old_to_new: HashMap<u64, u64> = HashMap::new();
         let mut new_ids: Vec<u64> = Vec::new();
 
-        // Step 1 — Create all nodes
-        for &old_id in source_node_ids {
+        // Step 1 — Create all nodes.
+        //
+        // Ascending source-id order, which is the order `unique_node_names`
+        // walks: a multi-node paste therefore assigns the same suffixes the
+        // text format would have (D1). Iterating the `HashSet` directly would
+        // make them depend on hash order.
+        let mut ordered_source_ids: Vec<u64> = source_node_ids.iter().copied().collect();
+        ordered_source_ids.sort_unstable();
+        for old_id in ordered_source_ids {
             let source_node = match source.nodes.get(&old_id) {
                 Some(node) => node,
                 None => continue,
@@ -1316,7 +1326,11 @@ impl NodeNetwork {
             let custom_node_type = source_node.custom_node_type.clone();
             let node_type_name = source_node.node_type_name.clone();
             let new_position = source_node.position + position_offset;
-            let display_name = self.generate_unique_display_name(&node_type_name);
+            // Keep the copied name; suffix only on a collision in this scope.
+            let display_name = match source_node.custom_name.as_deref() {
+                Some(name) => self.unique_name_for(name),
+                None => self.generate_unique_display_name(&node_type_name),
+            };
 
             let new_node = Node {
                 id: new_id,
@@ -1495,6 +1509,30 @@ impl NodeNetwork {
             }
         }
         format!("{}{}", node_type, max_counter + 1)
+    }
+
+    /// The one suffixing helper: returns `desired` if no node of *this* scope
+    /// already holds it, else the first free of `desired_2`, `desired_3`, …
+    ///
+    /// This is the rule `text_format::unique_node_names` applies on the way
+    /// out; applying it at every write site instead is what makes
+    /// `custom_name` the name the AI, the text format and the GUI all agree
+    /// on (`doc/design_node_names_in_ui.md` D1). Uniqueness is **per scope**:
+    /// a zone body is its own scope, so a body node may share a name with a
+    /// top-level one.
+    pub fn unique_name_for(&self, desired: &str) -> String {
+        let taken = |candidate: &str| {
+            self.nodes
+                .values()
+                .any(|n| n.custom_name.as_deref() == Some(candidate))
+        };
+        if !taken(desired) {
+            return desired.to_string();
+        }
+        (2u64..)
+            .map(|counter| format!("{}_{}", desired, counter))
+            .find(|candidate| !taken(candidate))
+            .expect("a free suffixed name exists: the node map is finite")
     }
 
     pub fn add_node(
@@ -2459,8 +2497,13 @@ impl NodeNetwork {
         let cloned_zone = original_node.zone.clone();
         let cloned_zone_output_arguments = original_node.zone_output_arguments.clone();
 
-        // Generate a unique display name for the duplicated node
-        let display_name = self.generate_unique_display_name(&node_type_name);
+        // Keep the original's name, suffixed on collision (`cuboid1` →
+        // `cuboid1_2`, `chassis` → `chassis_2`). See
+        // `doc/design_node_names_in_ui.md` D1.
+        let display_name = match original_node.custom_name.as_deref() {
+            Some(name) => self.unique_name_for(name),
+            None => self.generate_unique_display_name(&node_type_name),
+        };
 
         // Create the duplicated node
         let duplicated_node = Node {

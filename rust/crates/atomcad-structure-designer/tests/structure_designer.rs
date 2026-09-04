@@ -31,6 +31,9 @@ mod network_validator_test;
 #[path = "structure_designer/node_network_test.rs"]
 mod node_network_test;
 
+#[path = "structure_designer/node_name_normalization_test.rs"]
+mod node_name_normalization_test;
+
 #[path = "structure_designer/network_evaluator_test.rs"]
 mod network_evaluator_test;
 

@@ -492,10 +492,14 @@ pub fn create_subnetwork_from_selection(
         };
         new_network.next_param_id += 1;
 
+        // Unique per scope (D1) — the copied nodes above may already hold this
+        // spelling. `param_name` (the pin name) is untouched.
+        let node_name = new_network.unique_name_for(&param_names[i]);
+
         let param_node = Node {
             id: param_id,
             node_type_name: "parameter".to_string(),
-            custom_name: Some(param_names[i].clone()),
+            custom_name: Some(node_name),
             position: param_position,
             arguments: vec![Argument::new()], // Default input
             data: Box::new(param_data),

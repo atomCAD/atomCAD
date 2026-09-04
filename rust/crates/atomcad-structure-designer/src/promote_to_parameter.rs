@@ -117,10 +117,14 @@ pub fn promote_node_to_parameter(
         .ok_or_else(|| "parameter node type not registered".to_string())?;
     let custom_type = param_data.calculate_custom_node_type(base_param_type);
 
+    // The node name is unique per scope (D1); `param_name` — the pin name —
+    // is a separate field and stays exactly as the user asked for it.
+    let node_name = network.unique_name_for(&param_name);
+
     let mut param_node = Node {
         id: new_id,
         node_type_name: "parameter".to_string(),
-        custom_name: Some(param_name),
+        custom_name: Some(node_name),
         position: param_position,
         arguments: vec![Argument::new()],
         data: Box::new(param_data),

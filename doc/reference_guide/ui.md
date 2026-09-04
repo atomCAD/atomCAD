@@ -226,6 +226,7 @@ Selected nodes can be copied, cut, and pasted:
 - Internal wires between copied nodes are preserved; external connections (wires to nodes outside the selection) are dropped.
 - Pasted nodes are placed at the mouse cursor position.
 - You can copy nodes in one network and paste into a different network.
+- A copy keeps the source node's name, adding the first free numeric suffix when the destination already holds that name: duplicating `chassis` gives `chassis_2`, then `chassis_3`. Names only have to be unique within one network (and within one higher-order function's body, which counts separately), so pasting into a body where the name is free keeps it unchanged. The names are what the [text format](../node_network_text_format.md) prints.
 
 **Factor selection into subnetwork**
 You can convert a group of selected nodes into a reusable custom node type:

@@ -3756,3 +3756,99 @@ fn ai_and_text_edits_carry_distinct_undo_descriptions() {
         Some("Text edit network")
     );
 }
+
+// ===== Copied names survive undo/redo (`doc/design_node_names_in_ui.md` D1) =====
+
+fn text_of(designer: &StructureDesigner, network_name: &str) -> String {
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get(network_name)
+        .unwrap();
+    atomcad_structure_designer::text_format::serialize_network(
+        network,
+        &designer.node_type_registry,
+        Some(network_name),
+    )
+}
+
+fn set_name(designer: &mut StructureDesigner, network_name: &str, node_id: u64, name: &str) {
+    designer
+        .node_type_registry
+        .node_networks
+        .get_mut(network_name)
+        .unwrap()
+        .nodes
+        .get_mut(&node_id)
+        .unwrap()
+        .custom_name = Some(name.to_string());
+}
+
+#[test]
+fn undo_redo_of_a_paste_restores_the_suffixed_name() {
+    let mut designer = setup_designer_with_network("main");
+    let id = designer.add_node("float", DVec2::ZERO);
+    set_name(&mut designer, "main", id, "chassis");
+    designer.select_node_scoped(&[], id);
+    designer.copy_selection();
+    designer.undo_stack.clear();
+
+    let pasted = designer.paste_at_position(DVec2::new(100.0, 0.0));
+    assert_eq!(
+        designer
+            .node_type_registry
+            .node_networks
+            .get("main")
+            .unwrap()
+            .nodes
+            .get(&pasted[0])
+            .unwrap()
+            .custom_name,
+        Some("chassis_2".to_string())
+    );
+    let after = text_of(&designer, "main");
+
+    assert!(designer.undo());
+    let after_undo = text_of(&designer, "main");
+    assert!(
+        !after_undo.contains("chassis_2"),
+        "undo removed the paste: {after_undo}"
+    );
+
+    assert!(designer.redo());
+    assert_eq!(
+        text_of(&designer, "main"),
+        after,
+        "redo restores the *suffixed* spelling, not a freshly minted one"
+    );
+}
+
+#[test]
+fn undo_redo_of_a_duplicate_restores_the_suffixed_name() {
+    let mut designer = setup_designer_with_network("main");
+    let id = designer.add_node("float", DVec2::ZERO);
+    set_name(&mut designer, "main", id, "chassis");
+    designer.undo_stack.clear();
+
+    let before = text_of(&designer, "main");
+    let dup = designer.duplicate_node(id);
+    assert_eq!(
+        designer
+            .node_type_registry
+            .node_networks
+            .get("main")
+            .unwrap()
+            .nodes
+            .get(&dup)
+            .unwrap()
+            .custom_name,
+        Some("chassis_2".to_string())
+    );
+    let after = text_of(&designer, "main");
+
+    assert!(designer.undo());
+    assert_eq!(text_of(&designer, "main"), before);
+
+    assert!(designer.redo());
+    assert_eq!(text_of(&designer, "main"), after);
+}

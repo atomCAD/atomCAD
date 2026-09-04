@@ -342,3 +342,45 @@ fn test_promote_redo_reapplies() {
         Some(&0)
     );
 }
+
+// =============================================================================
+// Node names are unique at the source (`doc/design_node_names_in_ui.md` D1)
+// =============================================================================
+
+#[test]
+fn test_promoted_parameter_node_name_is_suffixed_on_collision() {
+    let mut designer = setup_designer("net");
+    let float_id = designer.add_node("float", DVec2::new(100.0, 100.0));
+
+    // Something in the scope already holds the name the parameter would take.
+    let squatter = designer.add_node("int", DVec2::new(0.0, 300.0));
+    designer
+        .node_type_registry
+        .node_networks
+        .get_mut("net")
+        .unwrap()
+        .nodes
+        .get_mut(&squatter)
+        .unwrap()
+        .custom_name = Some("param0".to_string());
+
+    let new_id = designer
+        .promote_node_to_parameter(float_id)
+        .expect("promotion should succeed");
+
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get("net")
+        .unwrap();
+    assert_eq!(
+        network.nodes.get(&new_id).unwrap().custom_name,
+        Some("param0_2".to_string()),
+        "the node name is deduplicated within the scope"
+    );
+
+    // `param_name` — the network's input *pin* name — is a separate field and
+    // keeps the requested spelling.
+    let param = parameter_data(&designer, "net", new_id).unwrap();
+    assert_eq!(param.param_name, "param0");
+}
