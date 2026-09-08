@@ -1,0 +1,228 @@
+<title>Seeing Electrons in atomCAD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bitter:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{--bg:#F4F6F9;--panel:#E9EDF3;--panel2:#DFE4EC;--ink:#1A2230;--muted:#647082;--rule:#D3D9E2;--accent:#2E5C8C;--accent-soft:#DCE7F3;--amber:#B8791F;--amber-soft:#F5E9D3;--red:#B5432E;--pos:#3B6FB6;--neg:#C9503C;--si:#8A94A6;--c:#3A3F48;--h:#E6EAF0;--hstroke:#9AA3B2;
+--display:'Bitter',Georgia,'Times New Roman',serif;--body:'Source Sans 3','Segoe UI',Helvetica,Arial,sans-serif;--mono:'IBM Plex Mono',Consolas,'Courier New',monospace;}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#12161D;--panel:#1A2029;--panel2:#242B36;--ink:#E4E8EE;--muted:#98A2B3;--rule:#2A3240;--accent:#82B4E4;--accent-soft:#1E2F42;--amber:#E2A84E;--amber-soft:#3A2D18;--red:#E07A66;--pos:#7FAEE8;--neg:#E8846E;--si:#6E7888;--c:#C9CFD8;--h:#2A3240;--hstroke:#6E7888;}}
+:root[data-theme="dark"]{--bg:#12161D;--panel:#1A2029;--panel2:#242B36;--ink:#E4E8EE;--muted:#98A2B3;--rule:#2A3240;--accent:#82B4E4;--accent-soft:#1E2F42;--amber:#E2A84E;--amber-soft:#3A2D18;--red:#E07A66;--pos:#7FAEE8;--neg:#E8846E;--si:#6E7888;--c:#C9CFD8;--h:#2A3240;--hstroke:#6E7888;}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:17px;line-height:1.55;margin:0}
+.page{max-width:76ch;margin:0 auto;padding:48px 24px 96px}
+header.mast{border-bottom:2px solid var(--ink);padding-bottom:20px;margin-bottom:32px}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);display:flex;gap:1.2em;flex-wrap:wrap;margin-bottom:14px}
+h1{font-family:var(--display);font-weight:700;font-size:clamp(30px,5vw,42px);line-height:1.12;margin:0 0 14px;text-wrap:balance;letter-spacing:-.01em}
+.subtitle{font-family:var(--display);font-weight:500;font-size:clamp(19px,2.6vw,24px);color:var(--muted);margin:-6px 0 16px;letter-spacing:-.005em}
+.subtitle code{font-family:var(--mono);font-size:.85em;background:none;padding:0;color:var(--accent)}
+.lede{font-size:19px;color:var(--ink);max-width:62ch;margin:0}
+h2{font-family:var(--display);font-weight:600;font-size:25px;line-height:1.2;margin:52px 0 12px;text-wrap:balance}
+h3{font-family:var(--display);font-weight:600;font-size:18px;margin:26px 0 8px}
+p{margin:0 0 14px;max-width:65ch}
+ul{padding-left:1.3em;margin:0 0 16px;max-width:65ch} li{margin:6px 0}
+strong{font-weight:600}
+.muted{color:var(--muted)}
+figure{margin:20px 0 28px;padding:0}
+figure svg{width:100%;height:auto;display:block;font-family:var(--body)}
+figcaption{color:var(--muted);font-size:14px;margin-top:8px;max-width:65ch}
+.mock rect.frame{fill:var(--panel);stroke:var(--rule)}
+.mock .bar{fill:var(--panel2)}
+.mock text{fill:var(--ink);font-size:12px}
+.mock text.small{font-size:10.5px;fill:var(--muted);font-family:var(--mono)}
+.mock text.h{font-size:12px;font-weight:600}
+.mock .bond{stroke:var(--si);stroke-width:3;stroke-linecap:round}
+.mock .bond.missing{stroke:var(--amber);stroke-width:1.5;stroke-dasharray:4 3}
+.mock .bond.unexpected{stroke:var(--red);stroke-width:3}
+.mock .si{fill:var(--si)} .mock .c{fill:var(--c)} .mock .hy{fill:var(--h);stroke:var(--hstroke);stroke-width:1}
+.mock .lobe-pos{fill:var(--pos);opacity:.55} .mock .lobe-neg{fill:var(--neg);opacity:.55}
+.mock .row{fill:none;stroke:var(--rule)}
+.mock .check{fill:none;stroke:var(--muted);stroke-width:1.2}
+.mock .checked{fill:var(--accent)}
+.mock .pop{fill:var(--accent)} .mock .pop2{fill:var(--amber)}
+.mock .btn{fill:var(--accent)} .mock text.btn{fill:#fff;font-weight:600}
+.mock .btn2{fill:none;stroke:var(--accent);stroke-width:1.2} .mock text.btn2{fill:var(--accent);font-weight:600}
+.mock .farrow{stroke:var(--amber);stroke-width:2.2;stroke-linecap:round;fill:none} .mock .farrow.max{stroke:var(--red)}
+.mock .farrow.tiny{stroke-width:1.4}
+.mock .cap{opacity:.45}
+.mock .readout{fill:var(--panel);stroke:var(--rule)}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:18px 0 26px}
+.step{background:var(--panel);padding:14px 16px;border-top:3px solid var(--accent)}
+.step .k{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:6px}
+.step .t{font-family:var(--display);font-weight:600;font-size:17px;margin-bottom:6px}
+.step p{font-size:15px;margin:0}
+.ask{background:var(--amber-soft);border-left:3px solid var(--amber);padding:14px 18px;margin:18px 0 8px}
+.ask ul{margin:6px 0 0} .ask li{margin:6px 0}
+code{font-family:var(--mono);font-size:.86em;background:var(--panel);padding:1px 5px;border-radius:3px}
+.legend{display:grid;grid-template-columns:auto 1fr;gap:8px 14px;align-items:center;margin:10px 0 18px;max-width:65ch}
+.legend svg{width:64px;height:18px;display:block}
+.legend span{font-size:15px}
+@media (max-width:640px){.steps{grid-template-columns:1fr} body{font-size:16px} .page{padding:32px 16px 64px}}
+</style>
+<div class="page">
+<header class="mast">
+<div class="eyebrow"><span>Concept for discussion</span><span>2026-09-08</span><span>atomCAD</span></div>
+<h1>Seeing Electrons in atomCAD</h1>
+<p class="subtitle">The <code>orbitals</code> node</p>
+<p class="lede">A planned feature that shows the electronic structure of a design directly on the atoms: intrinsic bond orbitals, canonical frontier orbitals, spin density and potential maps, bond orders and energies, and a check of whether the electrons agree with the bonds we drew. This page is about <em>what</em> you would get and how it would feel to use. The engineering detail lives elsewhere.</p>
+</header>
+
+<h2>What you would see</h2>
+<p>You build or carve a structure in atomCAD as today, for example a small silicon cluster around a defect. You mark the atoms you care about with a tag, by clicking them in the atom editor. After a calculation, the same structure carries its orbitals, and you choose which ones to draw from a list that is organised by atoms and bonds. All of this lives in one new node, <code>orbitals</code>: wire the structure into it, and the calculation settings, the orbital list and the display toggles are its panel.</p>
+
+<figure>
+<svg class="mock" viewBox="0 0 720 346" role="img" aria-label="Mockup: viewport with a silicon cluster, two orbital lobes on the defect carbon, and the orbital list panel beside it">
+  <rect class="frame" x="0" y="0" width="720" height="346" rx="4"/>
+  <rect class="bar" x="0" y="0" width="720" height="26"/>
+  <text x="12" y="17" class="h">orbitals · T-center cluster · UKS/PBE def2-SVP · matches current geometry</text>
+  <!-- viewport -->
+  <rect x="12" y="38" width="430" height="294" fill="var(--bg)" stroke="var(--rule)"/>
+  <!-- bonds -->
+  <g class="bond">
+    <line x1="120" y1="120" x2="180" y2="160"/><line x1="180" y1="160" x2="240" y2="120"/>
+    <line x1="180" y1="160" x2="180" y2="230"/><line x1="120" y1="120" x2="90" y2="70"/>
+    <line x1="240" y1="120" x2="270" y2="70"/><line x1="180" y1="230" x2="130" y2="270"/>
+    <line x1="180" y1="230" x2="240" y2="270"/><line x1="240" y1="120" x2="300" y2="150"/>
+    <line x1="300" y1="150" x2="350" y2="110"/><line x1="300" y1="150" x2="332" y2="212"/>
+    <line x1="350" y1="110" x2="392" y2="82"/><line x1="350" y1="110" x2="406" y2="136"/>
+    <line x1="120" y1="120" x2="60" y2="150"/><line x1="240" y1="270" x2="300" y2="290"/>
+  </g>
+  <!-- dangling-bond orbital on the defect carbon (300,150): large lobe pointing
+       away from its three bonds (down-left), small back-lobe of opposite sign
+       between the bonds; both lobes touch the nucleus, where the sign changes -->
+  <ellipse class="lobe-pos" cx="278" cy="161" rx="29" ry="18" transform="rotate(-27 278 161)"/>
+  <ellipse class="lobe-neg" cx="307" cy="146" rx="10" ry="7" transform="rotate(-27 307 146)"/>
+  <!-- atoms -->
+  <g>
+    <circle class="si" cx="120" cy="120" r="11"/><circle class="si" cx="180" cy="160" r="11"/>
+    <circle class="si" cx="240" cy="120" r="11"/><circle class="si" cx="180" cy="230" r="11"/>
+    <circle class="hy" cx="90" cy="70" r="6"/><circle class="hy" cx="270" cy="70" r="6"/>
+    <circle class="hy" cx="130" cy="270" r="6"/><circle class="hy" cx="60" cy="150" r="6"/>
+    <circle class="si" cx="240" cy="270" r="11"/><circle class="hy" cx="300" cy="290" r="6"/>
+    <circle class="si" cx="332" cy="212" r="11"/><circle class="si" cx="406" cy="136" r="11"/>
+    <circle class="c" cx="300" cy="150" r="9"/><circle class="c" cx="350" cy="110" r="9"/>
+    <circle class="hy" cx="392" cy="82" r="6"/>
+  </g>
+  <text x="296" y="140" class="small">C41·</text><text x="356" y="127" class="small">C42</text>
+  <text x="20" y="322" class="small">shown: unpaired electron on C41 · encloses 72 %</text>
+  <!-- panel -->
+  <rect x="456" y="38" width="252" height="294" fill="var(--panel)" stroke="var(--rule)"/>
+  <text x="468" y="58" class="h">Orbitals touching tag</text>
+  <rect x="612" y="46" width="86" height="18" rx="3" fill="var(--bg)" stroke="var(--rule)"/>
+  <text x="620" y="59">focus ▾</text>
+  <!-- rows -->
+  <g>
+    <rect class="row" x="464" y="72" width="236" height="26"/>
+    <rect class="checked" x="470" y="79" width="12" height="12" rx="2"/>
+    <text x="490" y="89">unpaired · C41</text>
+    <rect class="pop" x="612" y="82" width="70" height="6"/>
+    <rect class="row" x="464" y="98" width="236" height="26"/>
+    <rect class="check" x="470" y="105" width="12" height="12" rx="2"/>
+    <text x="490" y="115">bond · C41 – C42 · 0.98</text>
+    <rect class="pop" x="612" y="108" width="40" height="6"/><rect class="pop2" x="652" y="108" width="36" height="6"/>
+    <rect class="row" x="464" y="124" width="236" height="26"/>
+    <rect class="check" x="470" y="131" width="12" height="12" rx="2"/>
+    <text x="490" y="141">bond · C42 – H90 · 0.96</text>
+    <rect class="pop" x="612" y="134" width="46" height="6"/><rect class="pop2" x="658" y="134" width="22" height="6"/>
+    <rect class="row" x="464" y="150" width="236" height="26"/>
+    <rect class="check" x="470" y="157" width="12" height="12" rx="2"/>
+    <text x="490" y="167">bond · C41 – Si17 · 0.94</text>
+    <rect class="pop" x="612" y="160" width="44" height="6"/><rect class="pop2" x="656" y="160" width="30" height="6"/>
+    <rect class="row" x="464" y="176" width="236" height="26"/>
+    <rect class="check" x="470" y="183" width="12" height="12" rx="2"/>
+    <text x="490" y="193" fill="var(--muted)">bond · C41 – Si23 · 0.93 · no lobe yet</text>
+  </g>
+  <text x="468" y="222" class="h">Frontier (canonical)</text>
+  <text x="468" y="240">SOMO −5.21 eV  HOMO −5.60 eV  LUMO −3.02 eV</text>
+  <text x="468" y="256">gap 2.19 eV  ·  total energy −278 494.63 eV</text>
+  <rect class="check" x="466" y="266" width="12" height="12" rx="2"/><text x="484" y="277">spin density</text>
+  <rect class="check" x="592" y="266" width="12" height="12" rx="2"/><text x="610" y="277">ESP map</text>
+  <rect class="check" x="466" y="284" width="12" height="12" rx="2"/><text x="484" y="295">force arrows</text>
+  <text x="592" y="295">labels: none ▾</text>
+  <rect class="btn2" x="464" y="306" width="118" height="22" rx="3"/><text class="btn2" x="480" y="321">Export job</text>
+  <rect class="btn" x="590" y="306" width="108" height="22" rx="3"/><text class="btn" x="600" y="321">Load results</text>
+</svg>
+<figcaption>Mockup. Left: the cluster with the unpaired-electron orbital drawn on the radical carbon. Right: the orbitals that touch the tagged atoms, named by what they are and which atoms they join. The bars show how the orbital is shared between its two atoms; the number after a bond is its computed bond order. A row marked "no lobe yet" has its numbers but no picture; tick it and press Export job again, and the next run adds only that picture without redoing the calculation.</figcaption>
+</figure>
+
+<h3>What one calculation gives</h3>
+<ul>
+  <li><strong>Bond orbitals (intrinsic bond orbitals, IBOs).</strong> The occupied orbitals localized by the IAO/IBO scheme: one per bond, lone pair or unpaired electron, each on one or two atoms. Selecting an atom or a tag lists only the orbitals on it.</li>
+  <li><strong>Frontier orbitals (canonical).</strong> HOMO, LUMO and the singly occupied orbital as the SCF produces them, with their energies, for the questions that need energies.</li>
+  <li><strong>Spin density.</strong> Where the unpaired electron lives and how far it reaches into the lattice.</li>
+  <li><strong>Electrostatic potential map.</strong> The molecule's surface coloured by potential, red where it is negative and blue where it is positive. One toggle.</li>
+  <li><strong>Bond orders.</strong> A number on every bond in the list (0.98, 1.87) and a free-valence number on every atom, how many bonds it is short of. Both come free with the orbitals.</li>
+  <li><strong>Energy.</strong> The total energy leaves the node as a number the network can subtract: adsorbed minus free, after minus before.</li>
+</ul>
+
+<h2>The check: do the electrons agree with the drawing?</h2>
+<p>atomCAD is unusual in that its bonds are drawn by the designer. A localized-orbital calculation produces its own bonding picture. The feature overlays the two on the structure, so a disagreement is visible at a glance instead of buried in a table.</p>
+<div class="legend">
+  <svg class="mock" viewBox="0 0 64 18"><line class="bond" x1="4" y1="9" x2="60" y2="9"/></svg><span>drawn bond, confirmed by an orbital</span>
+  <svg class="mock" viewBox="0 0 64 18"><line class="bond missing" x1="4" y1="9" x2="60" y2="9"/></svg><span>drawn bond with <strong>no</strong> orbital behind it</span>
+  <svg class="mock" viewBox="0 0 64 18"><line class="bond unexpected" x1="4" y1="9" x2="60" y2="9"/></svg><span>orbital bond that was <strong>not</strong> drawn</span>
+  <svg class="mock" viewBox="0 0 64 18"><circle class="c" cx="32" cy="9" r="6"/><circle cx="41" cy="4" r="2.2" fill="var(--amber)"/></svg><span>unpaired electron or lone pair on an atom</span>
+</div>
+<p>For a process step this is the question that matters: after the tool operation, are the bonds we intended the bonds that formed, and did a radical end up where we expect it?</p>
+
+<h3>The check has two halves</h3>
+<p>The bond comparison judges the electrons <em>at the positions we drew</em>. It catches wrong bonds, missing bonds, wrong bond orders and misplaced unpaired electrons. It cannot catch a structure that is consistent as drawn but not what the atoms would do: an unreconstructed surface with no dimer bonds in the drawing passes.</p>
+<p>The <strong>forces</strong>, which the same calculation gives almost for free, answer that second question. atomCAD names the largest force and draws an arrow on every atom. Large arrows on a surface say "these atoms want to move", the signature of a reconstruction that was not applied or a strained cover. Where they would end up needs a relaxation, which stays with the simulation tools.</p>
+
+
+<figure>
+<svg class="mock" viewBox="0 0 720 300" role="img" aria-label="Mockup: side view of an unreconstructed silicon (100) surface slab with force arrows on the surface atoms pointing toward their dimer partners">
+  <defs>
+    <marker id="fa" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--amber)"/></marker>
+    <marker id="fa-max" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--red)"/></marker>
+    <marker id="fa-s" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--amber)"/></marker>
+  </defs>
+  <rect class="frame" x="0" y="0" width="720" height="300" rx="4"/>
+  <rect class="bar" x="0" y="0" width="720" height="26"/>
+  <text x="12" y="17" class="h">orbitals · Si(100) slab, unreconstructed · UKS/PBE def2-SVP · bonds: all confirmed · forces shown</text>
+  <rect x="12" y="38" width="580" height="250" fill="var(--bg)" stroke="var(--rule)"/>
+  <g class="bond"><line x1="100" y1="100" x2="140" y2="158"/><line x1="180" y1="100" x2="140" y2="158"/><line x1="180" y1="100" x2="220" y2="158"/><line x1="260" y1="100" x2="220" y2="158"/><line x1="260" y1="100" x2="300" y2="158"/><line x1="340" y1="100" x2="300" y2="158"/><line x1="340" y1="100" x2="380" y2="158"/><line x1="420" y1="100" x2="380" y2="158"/><line x1="420" y1="100" x2="460" y2="158"/><line x1="500" y1="100" x2="460" y2="158"/><line x1="140" y1="158" x2="100" y2="214"/><line x1="140" y1="158" x2="180" y2="214"/><line x1="220" y1="158" x2="180" y2="214"/><line x1="220" y1="158" x2="260" y2="214"/><line x1="300" y1="158" x2="260" y2="214"/><line x1="300" y1="158" x2="340" y2="214"/><line x1="380" y1="158" x2="340" y2="214"/><line x1="380" y1="158" x2="420" y2="214"/><line x1="460" y1="158" x2="420" y2="214"/><line x1="460" y1="158" x2="500" y2="214"/></g>
+  <g class="bond cap"><line x1="100" y1="214" x2="100" y2="252"/><line x1="180" y1="214" x2="180" y2="252"/><line x1="260" y1="214" x2="260" y2="252"/><line x1="340" y1="214" x2="340" y2="252"/><line x1="420" y1="214" x2="420" y2="252"/><line x1="500" y1="214" x2="500" y2="252"/></g>
+  <line class="farrow" x1="100" y1="100" x2="140" y2="106" marker-end="url(#fa)"/><line class="farrow" x1="180" y1="100" x2="140" y2="106" marker-end="url(#fa)"/><line class="farrow max" x1="260" y1="100" x2="300" y2="106" marker-end="url(#fa-max)"/><line class="farrow" x1="340" y1="100" x2="300" y2="106" marker-end="url(#fa)"/><line class="farrow" x1="420" y1="100" x2="460" y2="106" marker-end="url(#fa)"/><line class="farrow" x1="500" y1="100" x2="460" y2="106" marker-end="url(#fa)"/><line class="farrow tiny" x1="140" y1="158" x2="140" y2="149" marker-end="url(#fa-s)"/><line class="farrow tiny" x1="220" y1="158" x2="220" y2="149" marker-end="url(#fa-s)"/><line class="farrow tiny" x1="300" y1="158" x2="300" y2="149" marker-end="url(#fa-s)"/><line class="farrow tiny" x1="380" y1="158" x2="380" y2="149" marker-end="url(#fa-s)"/><line class="farrow tiny" x1="460" y1="158" x2="460" y2="149" marker-end="url(#fa-s)"/>
+  <g><circle class="si" cx="100" cy="100" r="11"/><circle class="si" cx="180" cy="100" r="11"/><circle class="si" cx="260" cy="100" r="11"/><circle class="si" cx="340" cy="100" r="11"/><circle class="si" cx="420" cy="100" r="11"/><circle class="si" cx="500" cy="100" r="11"/><circle class="si" cx="140" cy="158" r="11"/><circle class="si" cx="220" cy="158" r="11"/><circle class="si" cx="300" cy="158" r="11"/><circle class="si" cx="380" cy="158" r="11"/><circle class="si" cx="460" cy="158" r="11"/><circle class="si" cx="100" cy="214" r="11"/><circle class="si" cx="180" cy="214" r="11"/><circle class="si" cx="260" cy="214" r="11"/><circle class="si" cx="340" cy="214" r="11"/><circle class="si" cx="420" cy="214" r="11"/><circle class="si" cx="500" cy="214" r="11"/></g>
+  <g class="cap"><circle class="hy" cx="100" cy="252" r="6"/><circle class="hy" cx="180" cy="252" r="6"/><circle class="hy" cx="260" cy="252" r="6"/><circle class="hy" cx="340" cy="252" r="6"/><circle class="hy" cx="420" cy="252" r="6"/><circle class="hy" cx="500" cy="252" r="6"/></g>
+  <text x="248" y="86" class="small">Si23</text>
+  <text x="20" y="278" class="small">surface, side view · caps dimmed and excluded from the maximum</text>
+  <rect class="readout" x="606" y="38" width="102" height="250"/>
+  <text x="614" y="58" class="h">Forces</text>
+  <text x="614" y="80">largest</text>
+  <text x="614" y="96" class="h">1.42 eV/Å</text>
+  <text x="614" y="112">on Si23</text>
+  <text x="614" y="140" class="small">relaxed ≈ 0.05</text>
+  <text x="614" y="170">arrow scale</text>
+  <rect x="614" y="178" width="86" height="4" rx="2" fill="var(--rule)"/><circle cx="660" cy="180" r="5" fill="var(--accent)"/>
+  <rect class="checked" x="614" y="200" width="12" height="12" rx="2"/><text x="632" y="211">arrows</text>
+  <rect class="check" x="614" y="222" width="12" height="12" rx="2"/><text x="632" y="233">on caps</text>
+</svg>
+<figcaption>Mockup. A silicon (100) slab drawn without its surface reconstruction. Every drawn bond is confirmed by an orbital, so the bond check is green, yet the surface atoms carry large forces pulling each neighbouring pair together: they want to form the dimers the drawing left out. The largest force is named and highlighted; the hydrogen caps at the bottom are artefacts of the cluster and are left out of it.</figcaption>
+</figure>
+
+<h2>How it would be used</h2>
+<div class="steps">
+  <div class="step"><div class="k">Step 1 · in atomCAD</div><div class="t">Tag and export</div><p>Tag the atoms of interest, pick a method and basis from a short list, press <strong>Export job</strong> in the <code>orbitals</code> node. atomCAD writes a job folder.</p></div>
+  <div class="step"><div class="k">Step 2 · one command</div><div class="t">Run the calculation</div><p>One PySCF command on the job folder. A 70-atom cluster takes on the order of ten minutes on a laptop. Nothing to install in atomCAD.</p></div>
+  <div class="step"><div class="k">Step 3 · in atomCAD</div><div class="t">Load and look</div><p>Press <strong>Load results</strong>. The orbitals appear on the structure. If the structure changed since the job, atomCAD says so. Want more orbitals drawn? Tick them, Export job, run, Load again: seconds, not minutes.</p></div>
+</div>
+<p class="muted">Later, the simulation team's compute could replace step 2 without changing steps 1 and 3; the job folder is the interface.</p>
+
+<h2>What comes first, and what later</h2>
+<ul>
+  <li><strong>First:</strong> the calculation loop, the orbital list by tag with bond orders, the lobes, the frontier energies, spin density and the potential map, the energy as a number, the forces.</li>
+  <li><strong>Then:</strong> the drawn-versus-computed bond overlay, atomic charges and spin populations on the atoms.</li>
+  <li><strong>Then:</strong> clicking atoms and bonds in the 3D view to filter the list, and following one orbital across the steps of a process.</li>
+</ul>
+
+<div class="ask">
+<strong>Where your opinion decides the design</strong>
+<ul>
+  <li>Which of the three pictures (bond orbitals, frontier orbitals, spin density) do you reach for first, and on which structures: the finished defect, the chemisorbed precursor, or the tool at the surface?</li>
+  <li>Is the drawn-versus-computed bond check useful, or do you already know the bonding and want only shapes and energies?</li>
+  <li>Which method and basis should the defaults be, and is a GGA functional acceptable for pictures or do you want a hybrid quoted?</li>
+  <li>For an unpaired electron, do you want separate alpha and beta orbitals, or one picture per bond with the unpaired one singled out?</li>
+  <li>What is missing from the mockup that you would need before trusting a picture from it?</li>
+</ul>
+</div>
+</div>

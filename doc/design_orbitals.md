@@ -1,6 +1,8 @@
 # Orbital analysis (`orbitals` node + PySCF script) — design
 
 > **Status:** draft for review (2026-09-08). Nothing implemented.
+> Companion page for chemists (what the feature offers, no engineering
+> detail): `doc/orbitals_for_chemists.html`.
 
 ## 1. Goal
 
@@ -124,6 +126,32 @@ Forces say nothing about where the atoms would end up; that is a relaxation
 and remains the simulation team's job. `produce.forces` defaults to `true`
 and can be switched off for speed.
 
+**D4c — Three cheap extras ride on the same checkpoint: ESP map, energy
+pin, bond orders.** None of them adds a calculation of its own.
+
+- *ESP map.* `produce.densities` may include `total` and `esp`. The
+  electrostatic potential is one more cube from the checkpoint, written on
+  its own coarser grid (`grid.esp_spacing`, default `0.4 Å`, because the ESP
+  evaluation scales as grid points × basis functions²). The display group
+  gets a single **ESP map** toggle that draws the total density at the
+  `0.002` density convention coloured by the ESP through the existing
+  `color_field` path of `IsosurfaceData` — the standard reactivity picture,
+  with no new node or pin. **Prerequisite:** the blue-white-red colormap is
+  currently inverted relative to the ESP convention (red = negative
+  potential); fix that first or the picture is wrong for chemists.
+- *Energy pin.* Pin 2 `energy: Float`, the converged SCF energy in eV. It
+  costs nothing and turns the node into a source of numbers: `expr` can
+  subtract two nodes' energies (adsorbed − free, after − before). Errors
+  when there are no results or the SCF did not converge.
+- *Bond orders and free valence.* Mayer bond orders in the orthonormal IAO
+  basis (unrestricted formula) for every atom pair, kept sparse above
+  `0.05`, and per-atom free valence (bonding capacity not used). They enter
+  the manifest as `bonds[]` and `atoms[].free_valence`, decorate every bond
+  row in the panel with its order (`bond · C41 – C42 · 0.98`), give a
+  *free valence* label mode, and attach `order` to each `lewis` entry so
+  the check reads "0.9 versus 1.8" instead of yes/no. Radical sites are
+  atoms with free valence above `0.5`.
+
 **D5 — Staleness is detected by geometry hash.** Both files carry a
 `geometry_hash` computed identically on both sides (§5.3). At `eval` the node
 recomputes the hash of its current input and compares it with the loaded
@@ -211,10 +239,10 @@ geometry hash matches the request (§7.3). `--force` discards the checkpoint.
   "produce": {
     "canonical": {"frontier": 3},
     "ibo": {"touching_focus": true, "keys": []},
-    "densities": ["spin"],
+    "densities": ["spin", "total", "esp"],
     "forces": true
   },
-  "grid": {"spacing": 0.25, "margin": 3.0}
+  "grid": {"spacing": 0.25, "margin": 3.0, "esp_spacing": 0.4}
 }
 ```
 
@@ -233,9 +261,9 @@ geometry hash matches the request (§7.3). `--force` discards the checkpoint.
 | `produce.canonical.frontier` | N: write cubes for the N highest occupied and N lowest virtual canonical orbitals **per spin set**, plus the singly occupied one if present. |
 | `produce.ibo.touching_focus` | Write cubes for every IBO whose population on any focus atom ≥ `IBO_TOUCH_THRESHOLD` (0.15). |
 | `produce.ibo.keys`, `produce.canonical.keys` | Explicit orbital keys (§6.4): every key the user has ticked in the panel whose cube is still missing. Written by *Export job* from the node's `shown` list. |
-| `produce.densities` | Any of `spin`, `total`. |
+| `produce.densities` | Any of `spin`, `total`, `esp`. The ESP map needs both `total` and `esp`; the node adds them together. |
 | `produce.forces` | Compute the nuclear gradient and write per-atom forces (D4b). Default `true`. |
-| `grid.spacing` | Cube grid step, Å. `margin` is padding around the atoms, Å. |
+| `grid.spacing` | Cube grid step, Å. `margin` is padding around the atoms, Å. `esp_spacing` is the coarser step for the ESP cube (D4c). |
 
 ### 5.3 `geometry_hash`
 
@@ -262,7 +290,7 @@ without a warning.
     "program": "pyscf 2.6.2", "script": "atomcad_orbitals.py 1",
     "method": "UKS/PBE", "basis": "def2-SVP", "density_fitting": true,
     "charge": 0, "spin": 1, "n_electrons": 297,
-    "converged": true, "scf_energy_hartree": -10234.5678, "wall_s": 612.4,
+    "converged": true, "scf_energy_hartree": -10234.5678, "scf_energy_ev": -278494.63, "wall_s": 612.4,
     "n_atoms": 76, "cap_atoms": 36,
     "max_force_ev_per_a": 1.42, "max_force_atom": 23
   },
@@ -279,18 +307,21 @@ without a warning.
      "populations": {"41": 0.83, "17": 0.06}, "touches_cap": false, "cube": null}
   ],
   "atoms": [
-    {"id": 41, "iao_charge": -0.12, "spin_pop": 0.79, "force": [0.03, -0.11, 0.05]},
-    {"id": 23, "iao_charge": 0.04, "spin_pop": 0.00, "force": [1.39, 0.20, -0.22]}
+    {"id": 41, "iao_charge": -0.12, "spin_pop": 0.79, "free_valence": 0.91, "force": [0.03, -0.11, 0.05]},
+    {"id": 23, "iao_charge": 0.04, "spin_pop": 0.00, "free_valence": 0.03, "force": [1.39, 0.20, -0.22]}
+  ],
+  "bonds": [
+    {"atoms": [41, 42], "order": 0.98}, {"atoms": [17, 41], "order": 0.94}, {"atoms": [17, 23], "order": 0.11}
   ],
   "lewis": {
-    "confirmed": [[41, 42], [17, 41]],
-    "missing": [[17, 23]],
-    "unexpected": [[23, 29]],
+    "confirmed": [{"atoms": [41, 42], "order": 0.98}, {"atoms": [17, 41], "order": 0.94}],
+    "missing": [{"atoms": [17, 23], "order": 0.11}],
+    "unexpected": [{"atoms": [23, 29], "order": 0.87}],
     "order_mismatch": [{"atoms": [41, 42], "drawn": 1, "computed": 2}],
     "unpaired": [41],
     "lone": []
   },
-  "densities": {"spin": "cubes/spin.cube"}
+  "densities": {"spin": "cubes/spin.cube", "total": "cubes/total.cube", "esp": "cubes/esp.cube"}
 }
 ```
 
@@ -324,6 +355,12 @@ without a warning.
   `provenance.max_force_ev_per_a` and `max_force_atom` summarise them. Forces
   on cap-tagged atoms are reported but excluded from the maximum, since caps
   are artefacts of the carving.
+- **Bond orders** (D4c): Mayer bond orders in the orthonormal IAO basis,
+  `B_AB = Σ_{μ∈A,ν∈B} [(PᵅS)_{μν}(PᵅS)_{νμ} + (PᵝS)_{μν}(PᵝS)_{νμ}] · 2`,
+  written for pairs with `B_AB ≥ 0.05`; free valence `F_A` from Mayer's
+  unrestricted definition. Each `lewis` entry carries the pair's order. The
+  Lewis classification itself stays IBO-based; orders are the numbers next
+  to it.
 - **Labels** per spin set: `HOMO`, `LUMO`, `HOMO-1`, `LUMO+1`, …; in an
   unrestricted calculation the alpha HOMO with no beta partner is also
   `SOMO`.
@@ -340,7 +377,9 @@ without a warning.
 ### 6.3 Units
 
 Energies in eV in the manifest (Hartree only for the total SCF energy, which
-chemists quote that way); forces in eV/Å. Positions in the cubes are whatever `cubegen`
+chemists quote that way, and duplicated in eV for the energy pin); forces
+in eV/Å; ESP values in the cube's atomic units, as `cubegen.mep` writes
+them. Positions in the cubes are whatever `cubegen`
 writes (Bohr), which `load_cube` already converts.
 
 ### 6.4 Orbital keys
@@ -374,12 +413,15 @@ option that sets `OMP_NUM_THREADS` before importing PySCF.
    above; kinds and cap flag per §6.2; Lewis diff.
 6. Atom table: IAO charges (`Z − Σ populations`) and spin populations
    (alpha − beta).
+6a. Bond orders and free valences from the IAO-basis density matrices
+   (D4c); sparse table.
 6b. Forces (when requested): `mf.nuc_grad_method().kernel()` (density-fitted
    gradient for DF SCF), negated and converted from Hartree/Bohr to eV/Å;
    maximum over non-cap atoms. Skipped, with a log line, if the SCF did not
    converge.
-7. Cubes for the produced set via `tools.cubegen.orbital` / `.density` with
-   `resolution = grid.spacing / BOHR` and `margin`. File names as in §6.1.
+7. Cubes for the produced set via `tools.cubegen.orbital` / `.density` /
+   `.mep` with `resolution = grid.spacing / BOHR` (`grid.esp_spacing` for
+   the ESP) and `margin`. File names as in §6.1.
    The two comment lines carry `atomcad {key} {label}` and the request hash,
    so a stray cube is still identifiable in `import_cube`.
 8. Write `manifest.json` atomically (write to a temp file, rename).
@@ -423,7 +465,8 @@ pub struct OrbitalEntry { key: OrbitalKey, spin: Spin, index: u32, kind: Orbital
                           atoms: Vec<u32>, populations: Vec<(u32, f32)>,
                           energy_ev: Option<f64>, occ: Option<f32>, label: Option<String>,
                           touches_cap: bool, cube: Option<PathBuf> }
-pub struct AtomAnalysis { id: u32, iao_charge: f32, spin_pop: f32, force: Option<Vec3> }
+pub struct AtomAnalysis { id: u32, iao_charge: f32, spin_pop: f32, free_valence: f32, force: Option<Vec3> }
+pub struct BondOrder { atoms: [u32; 2], order: f32 }
 pub struct OrbitalSet {
     pub dir: PathBuf,
     pub manifest: OrbitalManifest,          // includes atoms: Vec<AtomAnalysis>
@@ -452,7 +495,8 @@ crate sees only `IsosurfaceData` per shown lobe.
 | `molecule` | `HasAtoms` | required; the structure to analyse (already carved and capped by upstream nodes) |
 | `job_dir` | `String` | optional pin **and** property; wired value wins, as `export_atoms.file_name` |
 
-Outputs: `orbitals: OrbitalSet` (pin 0), `molecule` same-as-input (pin 1).
+Outputs: `orbitals: OrbitalSet` (pin 0), `molecule` same-as-input (pin 1),
+`energy: Float` (pin 2, eV; error until converged results are loaded).
 Category: `Atomic`.
 
 ### 9.2 Properties (all in the text format, `get_text_properties`)
@@ -464,20 +508,21 @@ Category: `Atomic`.
 | `charge`, `spin` | `0`, `auto` | job |
 | `focus_tag`, `cap_tag` | `focus`, `cap` | job |
 | `frontier` | `3` | job |
-| `densities` | `[spin]` | job |
-| `grid_spacing`, `grid_margin` | `0.25`, `3.0` | job |
+| `densities` | `[spin, total, esp]` | job |
+| `grid_spacing`, `grid_margin`, `esp_spacing` | `0.25`, `3.0`, `0.4` | job |
 | `shown` | `[]` | orbital keys the user ticked; drawn when their cube exists, exported as `produce.*.keys` when it does not |
 | `level_fraction` | `0.72` | shared level, D7 |
 | `opacity` | `0.4` | lobes |
 | `forces` | `true` | job: compute forces (D4b) |
-| `show_lewis`, `show_forces`, `show_spin_density`, `show_caps` | `true`, `false`, `false`, `true` | overlay toggles (`show_forces` in phase 1, the rest phase 2) |
+| `show_lewis`, `show_forces`, `show_spin_density`, `show_esp_map`, `show_caps` | `true`, `false`, `false`, `false`, `true` | overlay toggles (`show_forces`, `show_spin_density`, `show_esp_map` in phase 1, the rest phase 2) |
+| `label_mode` | `none` | atom labels: `none`, `charge`, `spin`, `free_valence` |
 | `loaded_mtime` | — | mtime of the manifest last loaded (for the "newer results" nudge) |
 
 `#[serde(skip)] loaded: Option<Arc<OrbitalSet>>`.
 
 ### 9.3 `eval`
 
-1. Evaluate `molecule` (forward errors verbatim on **both** pins).
+1. Evaluate `molecule` (forward errors verbatim on **all three** pins).
 2. If `loaded` is `None`, try to load `<job_dir>/manifest.json` (the loader
    also does this after deserialisation, so a saved design comes back with
    results). No manifest → pin 0 is a localized error "no results in
@@ -487,8 +532,9 @@ Category: `Atomic`.
 3. Staleness: compare `OrbitalSet::geometry_hash(input, charge, spin)` with
    the manifest's; mismatch → `NodeDataError::warning` (non-blocking, D5).
    `converged == false` → blocking error on pin 0 only.
-4. Build the `OrbitalSet` result (Arc clone) and the pass-through molecule
-   (phase 2: with per-atom charge/spin/force properties and Lewis styling).
+4. Build the `OrbitalSet` result (Arc clone), the pass-through molecule
+   (phase 2: with per-atom charge/spin/force/free-valence properties and
+   Lewis styling), and `NetworkResult::Float(scf_energy_ev)` on pin 2.
 
 ### 9.4 Display conversion
 
@@ -498,7 +544,11 @@ level (via `auto_level`'s fraction path), phase colours and opacity, extracts
 each surface, and concatenates the `SurfaceMesh`es (components appended) into
 one `NodeOutput::Isosurface`. A key in `shown` whose cube is missing is
 skipped silently here and reported in the panel (it is the normal state
-between ticking a row and the next export + run).
+between ticking a row and the next export + run). Two whole-structure
+surfaces join the same merged mesh when toggled: the spin density (signed,
+phase-coloured, at the shared fraction level) and the ESP map (total
+density at absolute `0.002`, coloured by the ESP field through
+`IsosurfaceColoring::ColorField` with the ESP colormap convention).
 
 ### 9.5 Subtitle and readouts
 
@@ -509,7 +559,8 @@ which includes the largest force when forces were computed.
 ## 10. The `orbital_field` node
 
 `(orbitals: OrbitalSet) → field: ScalarField`. Selector properties: `key`
-(explicit orbital key) **or** `pick = {set, spin, atoms_tag_a, atoms_tag_b}`
+(explicit orbital key, including `den:spin` / `den:total` / `den:esp`) **or**
+`pick = {set, spin, atoms_tag_a, atoms_tag_b}`
 resolved at eval as "the first `bond`-kind IBO whose two atoms carry the two
 tags". Missing cube → localized error naming the key and telling the user to
 tick it and export the job again. This node is what keeps `isosurface`, `sample_field` and
@@ -528,8 +579,10 @@ All take `scope_path`. Register the module in `flutter_rust_bridge.yaml`.
 | `orbitals_set_shown(scope_path, node_id, keys)` / `orbitals_set_property(...)` | property setters; all preserve `loaded` |
 
 `APIOrbitalsView` rows: key, set, spin, kind, label, energy, partner atom
-labels (element + id), population bars as `Vec<(String, f64)>`, `has_cube`,
-`touches_cap`, `shown`.
+labels (element + id), bond order for bond-kind rows, population bars as
+`Vec<(String, f64)>`, `has_cube`, `touches_cap`, `shown`. The view also
+carries the SCF energy, the atom table (charge, spin, free valence) and
+the sparse bond-order table for the label modes.
 
 ## 12. Flutter panel (`lib/structure_designer/node_data/orbitals_editor.dart`)
 
@@ -550,7 +603,8 @@ Four groups, top to bottom.
   built and when the app regains focus; no file watcher.
 - **Orbitals.** Filter row: tag dropdown ("touching tag …", default the
   focus tag), set toggle (IBO / canonical / both), show-core checkbox. Rows
-  as in §11, sorted IBOs by kind then atoms, canonical by energy. Each row
+  as in §11, sorted IBOs by kind then atoms, canonical by energy; bond rows
+  end with their Mayer order. Each row
   has a *show* checkbox (writes `shown`) and, when `has_cube` is false, a
   greyed "no lobe yet" marker that becomes "in next export" once ticked. The
   next **Export job** carries those keys and the next `run` produces only
@@ -558,8 +612,12 @@ Four groups, top to bottom.
   missing / unexpected / unpaired) sits at the bottom of the group in
   phase 2 and is clickable to filter the list to the offending orbitals.
 - **Display.** Fraction slider (reuse `isosurface_editor`'s slider and
-  readout, one for all lobes), opacity, phase colours, overlay toggles
-  including *Force arrows* (scale slider, caps excluded by default).
+  readout, one for all lobes), opacity, phase colours, one row of
+  whole-structure toggles — *Spin density*, *ESP map*, *Force arrows*
+  (scale slider, caps excluded by default) — and a *Labels* dropdown
+  (none / charge / spin / free valence). A toggle whose cubes are not in
+  the manifest is greyed with "add to next export" and ticking it adds the
+  densities to the request, the same way a cube-less orbital row does.
 
 Model methods follow the standard pattern: call API → `refreshFromKernel()`
 → `notifyListeners()`. Property edits go through the generic node-data
@@ -579,9 +637,10 @@ pipelines unchanged. Phase 2 overlay on the pass-through molecule:
   label pipeline, plus a colour ring via the per-atom style map.
 - Caps: rendered at reduced opacity through the style map when `show_caps`
   is on, hidden otherwise.
-- Charges / spin populations: attached as per-atom properties for
-  `apply_style` colour-by once the property channel exists; until then a
-  label mode shows the number.
+- Charges / spin populations / free valence: attached as per-atom
+  properties for `apply_style` colour-by once the property channel exists;
+  the `label_mode` dropdown shows the chosen number through the existing
+  label pipeline from phase 1.
 - Force arrows (phase 1): one line segment per atom from the nucleus along
   the force, length `scale · |f|` clamped to a maximum, drawn through the
   existing bond/line tessellation in a fixed arrow colour, with the largest
@@ -591,7 +650,8 @@ pipelines unchanged. Phase 2 overlay on the pass-through molecule:
 ## 14. Text format
 
 Properties of §9.2 in the usual `name = orbitals { molecule: $x, job_dir:
-"jobs/tcenter", method: "pbe", shown: ["ibo:a:3", "can:a:148"] }` form.
+"jobs/tcenter", method: "pbe", shown: ["ibo:a:3", "can:a:148"],
+show_esp_map: true }` form.
 `shown` round-trips as a string array. `get_text_properties` must be total
 (the round-trip corpus test requires it).
 
@@ -600,8 +660,9 @@ Properties of §9.2 in the usual `name = orbitals { molecule: $x, job_dir:
 - **Rust unit tests** (`tests/crystolecule/orbitals/`): manifest parsing
   including `cube: null`, key parsing, `geometry_hash` against the shared
   test vector, `entries_touching`, lazy field loading, staleness detection,
-  `orbital_field` selection by key and by tag pair, force parsing and the
-  cap-excluded maximum.
+  `orbital_field` selection by key and by tag pair (including density
+  keys), force parsing and the cap-excluded maximum, bond-order and
+  free-valence parsing, the energy pin value and its error state.
 - **Node tests** (`tests/structure_designer/orbitals_test.rs`): eval with no
   manifest (error on pin 0, molecule on pin 1), with a fixture manifest,
   stale warning, shown-key display conversion, cnnd round trip, text-format
@@ -615,17 +676,26 @@ Properties of §9.2 in the usual `name = orbitals { molecule: $x, job_dir:
   incremental run (second `run` with extra keys writes only new cubes and
   skips the SCF), kind classification on hand-built population vectors,
   Lewis diff including order mismatch, force units (a stretched H₂ gives a
-  force along the bond of the expected sign and magnitude).
-- **Manual walkthrough** in the reference guide: carve a Si cluster around a
-  tagged defect, export, run, load, show the unpaired IBO.
+  force along the bond of the expected sign and magnitude), Mayer orders
+  (H₂ ≈ 1, ethylene C=C ≈ 2, CH₃• free valence ≈ 1), ESP cube written on
+  the coarse grid with the right sign at a lone pair.
+- **Manual walkthrough** in the reference guide: carve and cap a Si cluster
+  around a defect, tag it, export, run, load, show the unpaired IBO. The
+  walkthrough authors the tags in `atom_edit` (Default tool → *Tags* →
+  *Tag selected…*, `doc/reference_guide/direct_editing.md`): click the
+  defect atoms → `focus`, click the cap hydrogens → `cap`. The `tag` node
+  with a `region` is the parametric alternative. Either way the tagging
+  node must sit **after** `materialize`, because rebuilt atoms are untagged.
 
 ## 16. Phases
 
 1. **P1 — Loop closed.** `OrbitalSet` type; `orbitals` node with job
    properties, Export job, Load results, staleness, orbital list with tag
-   filter and show checkboxes, lobes at the shared fraction level; forces
-   with the largest-force readout and force arrows; `orbital_field`; the
-   script's `run` with checkpoint reuse; tests; reference-guide page. Deliverable: the unpaired electron and the bonds around the focus
+   filter and show checkboxes with bond orders, lobes at the shared
+   fraction level; spin density and ESP map toggles (ESP gated on the
+   colormap fix); the energy pin; forces with the largest-force readout and
+   force arrows; label modes; `orbital_field`; the script's `run` with
+   checkpoint reuse; tests; reference-guide page. Deliverable: the unpaired electron and the bonds around the focus
    atoms of a defect cluster on screen from one export, one command, one
    load.
 2. **P2 — Lewis overlay.** `lewis` rendering (presence and order mismatch)
@@ -661,6 +731,12 @@ Properties of §9.2 in the usual `name = orbitals { molecule: $x, job_dir:
    argument for the default is that the question they answer ("would these
    atoms stay put") is the one the bonding check cannot, and a user who
    wants speed can untick one box.
+9. Energy pin unit: eV (one unit across the node, `expr` differences in eV)
+   or Hartree (what total energies are quoted in)? Proposed: eV, with the
+   Hartree value in the provenance strip.
+10. ESP default on? The cube is cheap at `0.4 Å` but not free; proposed on,
+   since the ESP map is the picture chemists ask for first on precursors and
+   tooltips.
 
 ## 18. Documentation to update with the implementation
 
