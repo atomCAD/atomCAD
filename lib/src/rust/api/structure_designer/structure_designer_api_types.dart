@@ -2657,6 +2657,79 @@ sealed class APIMeasurement with _$APIMeasurement {
   }) = APIMeasurement_AtomInfo;
 }
 
+/// The three stored properties of a `mechanosynth` node. The parsed library and
+/// script are `#[serde(skip)]` payload and never cross the bridge.
+class APIMechanosynthData {
+  final String? opsFile;
+  final String? buildFile;
+
+  /// Negative means "every step"; the panel writes the slider value instead.
+  final int step;
+
+  const APIMechanosynthData({
+    this.opsFile,
+    this.buildFile,
+    required this.step,
+  });
+
+  @override
+  int get hashCode => opsFile.hashCode ^ buildFile.hashCode ^ step.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIMechanosynthData &&
+          runtimeType == other.runtimeType &&
+          opsFile == other.opsFile &&
+          buildFile == other.buildFile &&
+          step == other.step;
+}
+
+/// What the `mechanosynth` panel needs beyond the stored properties: the loaded
+/// script's length, how many steps the stored `step` actually applies (the
+/// clamp a negative or out-of-range value goes through), and the current step's
+/// readout.
+///
+/// `count` is 0 and both strings empty when no script is loaded, which is also
+/// the state a load failure leaves — the failure itself surfaces on the result
+/// pin, not here.
+class APIMechanosynthInfo {
+  final int count;
+
+  /// The clamped number of steps applied, i.e. `steps_applied(step, count)`.
+  final int applied;
+
+  /// The `op` name of the current (last applied) step; empty at `applied = 0`.
+  final String currentOp;
+
+  /// The current step's `note`; empty when it has none.
+  final String currentNote;
+
+  const APIMechanosynthInfo({
+    required this.count,
+    required this.applied,
+    required this.currentOp,
+    required this.currentNote,
+  });
+
+  @override
+  int get hashCode =>
+      count.hashCode ^
+      applied.hashCode ^
+      currentOp.hashCode ^
+      currentNote.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIMechanosynthInfo &&
+          runtimeType == other.runtimeType &&
+          count == other.count &&
+          applied == other.applied &&
+          currentOp == other.currentOp &&
+          currentNote == other.currentNote;
+}
+
 /// Freeze mode for atom_edit energy minimization.
 enum APIMinimizeFreezeMode {
   /// Only diff atoms move; base atoms are frozen.

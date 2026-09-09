@@ -1529,6 +1529,33 @@ pub struct APIImportCubeData {
     pub file_name: Option<String>,
 }
 
+/// The three stored properties of a `mechanosynth` node. The parsed library and
+/// script are `#[serde(skip)]` payload and never cross the bridge.
+pub struct APIMechanosynthData {
+    pub ops_file: Option<String>,
+    pub build_file: Option<String>,
+    /// Negative means "every step"; the panel writes the slider value instead.
+    pub step: i32,
+}
+
+/// What the `mechanosynth` panel needs beyond the stored properties: the loaded
+/// script's length, how many steps the stored `step` actually applies (the
+/// clamp a negative or out-of-range value goes through), and the current step's
+/// readout.
+///
+/// `count` is 0 and both strings empty when no script is loaded, which is also
+/// the state a load failure leaves — the failure itself surfaces on the result
+/// pin, not here.
+pub struct APIMechanosynthInfo {
+    pub count: i32,
+    /// The clamped number of steps applied, i.e. `steps_applied(step, count)`.
+    pub applied: i32,
+    /// The `op` name of the current (last applied) step; empty at `applied = 0`.
+    pub current_op: String,
+    /// The current step's `note`; empty when it has none.
+    pub current_note: String,
+}
+
 pub struct APIImportCIFData {
     pub file_name: Option<String>,
     pub block_name: Option<String>,

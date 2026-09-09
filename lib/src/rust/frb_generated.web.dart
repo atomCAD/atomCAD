@@ -19,6 +19,7 @@ import 'api/structure_designer/import_api.dart';
 import 'api/structure_designer/import_cif_api.dart';
 import 'api/structure_designer/import_cube_api.dart';
 import 'api/structure_designer/import_xyz_api.dart';
+import 'api/structure_designer/mechanosynth_api.dart';
 import 'api/structure_designer/profiling_api.dart';
 import 'api/structure_designer/relax_api.dart';
 import 'api/structure_designer/structure_designer_api.dart';
@@ -366,6 +367,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIMeasurement dco_decode_api_measurement(dynamic raw);
+
+  @protected
+  APIMechanosynthData dco_decode_api_mechanosynth_data(dynamic raw);
+
+  @protected
+  APIMechanosynthInfo dco_decode_api_mechanosynth_info(dynamic raw);
 
   @protected
   APIMemoCounts dco_decode_api_memo_counts(dynamic raw);
@@ -830,6 +837,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIMeasurement dco_decode_box_autoadd_api_measurement(dynamic raw);
+
+  @protected
+  APIMechanosynthData dco_decode_box_autoadd_api_mechanosynth_data(dynamic raw);
+
+  @protected
+  APIMechanosynthInfo dco_decode_box_autoadd_api_mechanosynth_info(dynamic raw);
 
   @protected
   APIMotifData dco_decode_box_autoadd_api_motif_data(dynamic raw);
@@ -1488,6 +1501,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIMeasurement? dco_decode_opt_box_autoadd_api_measurement(dynamic raw);
 
   @protected
+  APIMechanosynthData? dco_decode_opt_box_autoadd_api_mechanosynth_data(
+      dynamic raw);
+
+  @protected
+  APIMechanosynthInfo? dco_decode_opt_box_autoadd_api_mechanosynth_info(
+      dynamic raw);
+
+  @protected
   APIMotifData? dco_decode_opt_box_autoadd_api_motif_data(dynamic raw);
 
   @protected
@@ -2123,6 +2144,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIMeasurement sse_decode_api_measurement(SseDeserializer deserializer);
 
   @protected
+  APIMechanosynthData sse_decode_api_mechanosynth_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIMechanosynthInfo sse_decode_api_mechanosynth_info(
+      SseDeserializer deserializer);
+
+  @protected
   APIMemoCounts sse_decode_api_memo_counts(SseDeserializer deserializer);
 
   @protected
@@ -2672,6 +2701,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIMeasurement sse_decode_box_autoadd_api_measurement(
+      SseDeserializer deserializer);
+
+  @protected
+  APIMechanosynthData sse_decode_box_autoadd_api_mechanosynth_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIMechanosynthInfo sse_decode_box_autoadd_api_mechanosynth_info(
       SseDeserializer deserializer);
 
   @protected
@@ -3453,6 +3490,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIMechanosynthData? sse_decode_opt_box_autoadd_api_mechanosynth_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIMechanosynthInfo? sse_decode_opt_box_autoadd_api_mechanosynth_info(
+      SseDeserializer deserializer);
+
+  @protected
   APIMotifData? sse_decode_opt_box_autoadd_api_motif_data(
       SseDeserializer deserializer);
 
@@ -4175,6 +4220,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIMeasurement self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_mechanosynth_data(
+      APIMechanosynthData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_mechanosynth_info(
+      APIMechanosynthInfo self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_memo_counts(APIMemoCounts self, SseSerializer serializer);
 
   @protected
@@ -4745,6 +4798,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_measurement(
       APIMeasurement self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_mechanosynth_data(
+      APIMechanosynthData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_mechanosynth_info(
+      APIMechanosynthInfo self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_motif_data(
@@ -5538,6 +5599,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_measurement(
       APIMeasurement? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_mechanosynth_data(
+      APIMechanosynthData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_mechanosynth_info(
+      APIMechanosynthInfo? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_motif_data(

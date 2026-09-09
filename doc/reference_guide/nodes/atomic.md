@@ -788,6 +788,131 @@ Bonds connected to removed atoms are automatically deleted.
 
 `atom_cut` also exposes a `diff` output pin — since the operation is delete-only, the diff is a set of delete markers for the removed atoms — see [Diff output pins on atom-manipulating nodes](#diff-output-pins-on-atom-manipulating-nodes).
 
+## mechanosynth
+
+Replays a **mechanosynthetic build sequence** onto a workpiece: the structure
+after the first `step` positionally controlled reactions of a build script.
+Scrubbing `step` from 0 up to the script's length shows the structure being
+built, one reaction at a time.
+
+Where the rest of atomCAD describes *what* a structure is, this node describes
+*how* it gets made — the ordered sequence of hydrogen abstractions, hydrogen
+donations, group placements and dimer manipulations a scanning-probe
+mechanosynthesis process would run to grow the structure from a seed.
+
+**Input pins**
+
+- `base: HasAtoms` — the workpiece at step 0. Required. The output preserves the
+  concrete input type (a `Crystal` in, a `Crystal` out; its geometry shell is
+  passed through untouched — the node only edits atoms).
+- `ops_file: String` (optional) — overrides the stored operation-library path.
+- `build_file: String` (optional) — overrides the stored build-script path.
+- `step: Int` (optional) — overrides the stored step number.
+
+**Properties**
+
+- `ops_file` — path to the operation library (JSON).
+- `build_file` — path to the build script (JSON).
+- `step` — how many steps to apply. `0` is the untouched base, `k` means "the
+  first `k` steps", and anything past the end of the script — including the
+  default `-1` — means the whole build.
+
+Both paths are stored relative to the project file whenever possible, so a
+copied or moved project keeps working. The files are read when the project is
+loaded and whenever the path changes; there is no file watching, so re-set the
+path to pick up an edited file.
+
+### The two files
+
+An **operation** is a named before/after pair of small atom lists with concrete
+positions in a local frame. Comparing the two halves by *pattern id* is the
+rewrite — there is no separate diff syntax:
+
+| Situation | Effect on the workpiece |
+|---|---|
+| id in both, same position and element | atom kept, untouched |
+| id in both, different position | atom moved |
+| id in both, different element | atom replaced in place |
+| id only in `before` | atom deleted, along with every bond it had |
+| id only in `after` | atom added |
+| bond only in `after` | bond added |
+| bond only in `before` | bond deleted |
+
+The element `"*"` means "don't compare elements": in `before` it matches any
+element (so one `habst` serves carbon, germanium and silicon hosts), and in
+`after` on a kept atom it leaves the element alone. It is rejected on an atom
+that only `after` has — an added atom needs a real element.
+
+```json
+{
+  "format": "atomcad-msops/1",
+  "tolerance": 0.3,
+  "ops": [
+    {
+      "name": "habst",
+      "before": { "atoms": [ {"id": 1, "el": "H", "pos": [0, 0, 0]} ], "bonds": [] },
+      "after":  { "atoms": [], "bonds": [] }
+    }
+  ]
+}
+```
+
+A **build script** lists steps, each naming an operation and a rigid transform
+that places the operation's local frame into workpiece coordinates
+(`p_workpiece = r · p_local + t`; `r` defaults to the identity, and improper
+rotations are allowed because they are lattice symmetry operations a generator
+may want). The optional `note` is free text describing the step.
+
+```json
+{
+  "format": "atomcad-msbuild/1",
+  "tolerance": 0.3,
+  "steps": [
+    { "op": "habst", "t": [3.567, 0.892, 12.40], "note": "layer 1, dimer 3, left H" }
+  ]
+}
+```
+
+The script's `tolerance` wins over the library's; if neither states one the node
+uses 0.3 Å. Unknown keys are ignored everywhere, so generators are free to add
+provenance fields (`"basis": "Freitas & Merkle 2008, RS7"`).
+
+Both files are meant to be written by a **generator** that already knows every
+coordinate, not by hand.
+
+### How a step is applied
+
+Each `before` atom is matched to the nearest workpiece atom within the tolerance
+that has a compatible element; every `before` atom must match a *distinct* atom.
+Matching ignores bonds entirely — position plus element is sufficient on a
+lattice, and checking bonds would only add a way for a correct script to fail.
+A `before` pattern's bonds therefore exist only to express deletions and bond
+order changes.
+
+Added atoms land exactly where the operation says. **The node never relaxes**,
+so coordinates stay ideal, tolerances stay tight, and every intermediate state
+is reproducible. Wire `relax` downstream if you want a settled geometry.
+
+A step that cannot match aborts evaluation with a message naming the step, the
+operation, the transform, the pattern atom it was looking for and what was
+actually nearest:
+
+```
+mechanosynth: step 17 (gm_methylate @ (3.567, 0.892, 11.31)) — before atom
+id 1 (*) not found within 0.30 Å; nearest atom is H at 0.91 Å
+```
+
+The partial state is reachable by setting `step` one lower, which is usually the
+quickest way to see what the script expected.
+
+### Seeing the current step
+
+The atoms the current step touched and left in place — matched, moved, replaced
+or added — carry the `ms_current` [atom tag](#tag). Wire an `apply_style` node
+downstream and colour that tag to make the reaction site pop out as you scrub.
+Any `ms_current` tag already on the base (from an upstream `mechanosynth`, say)
+is cleared first, so only one step is ever highlighted.
+
 ## Surface reconstruction patches (`patch_build` + `patch_latticefill`)
 
 A surface reconstruction is periodic: a small per-cell rearrangement (form a dimer, add an adatom, depassivate/repassivate, remove or substitute surface atoms) repeats across a crystal face. The `materialize` node has a *Surface reconstruction* checkbox for the one hard-coded case (cubic-diamond (100) 2×1), but the **patch** nodes let you author *any* reconstruction once and tile it across a region.

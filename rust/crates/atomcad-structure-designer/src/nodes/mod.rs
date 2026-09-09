@@ -69,6 +69,7 @@ pub mod mat3_cols;
 pub mod mat3_diag;
 pub mod mat3_rows;
 pub mod materialize;
+pub mod mechanosynth;
 pub mod motif;
 pub mod motif_sub;
 pub mod parameter;

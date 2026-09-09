@@ -42,6 +42,9 @@ mod isosurface_color_distribution_test;
 #[path = "structure_designer_api/isosurface_distribution_test.rs"]
 mod isosurface_distribution_test;
 
+#[path = "structure_designer_api/mechanosynth_api_test.rs"]
+mod mechanosynth_api_test;
+
 #[path = "structure_designer_api/node_type_registry_test.rs"]
 mod node_type_registry_test;
 

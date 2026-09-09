@@ -1,0 +1,8 @@
+{
+  "comment": "Runs against methylate_ops.json on a methane. Step 1 takes the +z hydrogen; step 2 asks for it again, so it cannot match and the whole replay fails. Used by the node tests to prove the engine's message reaches the result pin.",
+  "format": "atomcad-msbuild/1",
+  "steps": [
+    { "op": "habst", "t": [0.0, 0.0, 1.09], "note": "take the +z hydrogen" },
+    { "op": "habst", "t": [0.0, 0.0, 1.09], "note": "take it again - nothing is there any more" }
+  ]
+}

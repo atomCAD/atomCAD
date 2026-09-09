@@ -333,6 +333,9 @@ mod network_result_test;
 #[path = "structure_designer/crystal_molecule_split_validation_test.rs"]
 mod crystal_molecule_split_validation_test;
 
+#[path = "structure_designer/mechanosynth_test.rs"]
+mod mechanosynth_test;
+
 #[path = "structure_designer/materialize_test.rs"]
 mod materialize_test;
 
