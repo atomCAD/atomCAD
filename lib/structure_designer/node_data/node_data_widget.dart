@@ -30,6 +30,9 @@ import 'package:flutter_cad/structure_designer/node_data/relax_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/passivate_editor.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/relax_api.dart'
     as relax_api;
+import 'package:flutter_cad/structure_designer/node_data/mechanosynth_editor.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/mechanosynth_api.dart'
+    as mechanosynth_api;
 import 'package:flutter_cad/structure_designer/node_data/xray_editor.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/xray_api.dart'
     as xray_api;
@@ -565,6 +568,33 @@ class NodeDataWidget extends StatelessWidget {
         return FacetShellEditor(
           nodeId: selectedNode.id,
           data: facetShellData,
+          model: model,
+        );
+      case 'mechanosynth':
+        final mechanosynthData = mechanosynth_api.getMechanosynthData(
+          scopePath: scopePath,
+          nodeId: selectedNode.id,
+        );
+        // Fetched here, on every rebuild, rather than cached in the editor:
+        // the step count and the current step's readout live in the parsed
+        // script, so loading a file or rewiring `build_file` must invalidate
+        // them.
+        final mechanosynthInfo = mechanosynth_api.getMechanosynthInfo(
+          scopePath: scopePath,
+          nodeId: selectedNode.id,
+        );
+        // Pins: base = 0, ops_file = 1, build_file = 2, step = 3. A wire on
+        // any of the last three overrides the stored property.
+        bool wired(int pin) =>
+            selectedNode.inputPins.length > pin &&
+            selectedNode.inputPins[pin].connected;
+        return MechanosynthEditor(
+          nodeId: selectedNode.id,
+          data: mechanosynthData,
+          info: mechanosynthInfo,
+          opsFileConnected: wired(1),
+          buildFileConnected: wired(2),
+          stepConnected: wired(3),
           model: model,
         );
       case 'relax':

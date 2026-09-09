@@ -800,6 +800,8 @@ Where the rest of atomCAD describes *what* a structure is, this node describes
 donations, group placements and dimer manipulations a scanning-probe
 mechanosynthesis process would run to grow the structure from a seed.
 
+![TODO(image): the `mechanosynth` node selected, its properties panel showing the two file paths and the step slider, with the workpiece part-built in the viewport](TODO)
+
 **Input pins**
 
 - `base: HasAtoms` — the workpiece at step 0. Required. The output preserves the
@@ -821,6 +823,31 @@ Both paths are stored relative to the project file whenever possible, so a
 copied or moved project keeps working. The files are read when the project is
 loaded and whenever the path changes; there is no file watching, so re-set the
 path to pick up an edited file.
+
+### The properties panel
+
+Two path fields, each with a **Browse** button filtered to `.json`, and a **step
+scrubber**: a slider spanning `0` to the length of the loaded script, with a
+numeric box beside it for typing an exact step. Under them, a line names what
+the current step did — `Step 12 of 47: gm_methylate`, followed by that step's
+`note` when it has one. "Current" means the last step applied, so at step 0 the
+line says only that this is the untouched base.
+
+The slider **applies on release**, not on every tick: each intermediate value
+would be a full replay plus a re-render of the workpiece, and those frames are
+never painted anyway. Drag to the step you want and let go. One drag is one undo
+entry, so Ctrl+Z steps back to where the scrub started rather than walking
+through it.
+
+The stored `-1` ("every step") shows at the far end of the travel, and touching
+the control replaces it with a concrete number. Leave the control alone if you
+want the node to keep following a script that is still growing — a regenerated,
+longer `build.json` then shows its full build without you moving the slider.
+
+With no script loaded the slider is disabled rather than parked at a
+meaningless stop. A wire into `ops_file`, `build_file` or `step` overrides the
+field below it, which is said in a line under that field; the stored value stays
+put and comes back when the wire goes.
 
 ### The two files
 

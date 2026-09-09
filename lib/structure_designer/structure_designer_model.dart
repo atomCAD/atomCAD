@@ -27,6 +27,8 @@ import 'package:flutter_cad/src/rust/api/structure_designer/relax_api.dart'
     as relax_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/xray_api.dart'
     as xray_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/mechanosynth_api.dart'
+    as mechanosynth_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/tag_api.dart'
     as tag_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/profiling_api.dart'
@@ -3036,6 +3038,17 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setXrayData(BigInt nodeId, APIXrayData data) {
     xray_api.setXrayData(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
+    refreshFromKernel();
+  }
+
+  /// Writes the `mechanosynth` node's three properties. The kernel re-reads
+  /// whichever of the two files actually changed name, so a step-only edit
+  /// costs no parsing.
+  void setMechanosynthData(BigInt nodeId, APIMechanosynthData data) {
+    mechanosynth_api.setMechanosynthNodeData(
         scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
