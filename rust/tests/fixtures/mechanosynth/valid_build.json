@@ -1,0 +1,13 @@
+{
+  "format": "atomcad-msbuild/1",
+  "tolerance": 0.15,
+  "unknown_key": 42,
+  "steps": [
+    { "op": "keep_only", "t": [1.0, 2.0, 3.0], "note": "first" },
+    {
+      "op": "add_chain",
+      "t": [0.0, 0.0, 0.0],
+      "r": [ [0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0] ]
+    }
+  ]
+}

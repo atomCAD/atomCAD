@@ -1,0 +1,18 @@
+{
+  "comment": "One op that plants two markers on the local +x and +y axes, so a step's rotation is readable off the result.",
+  "format": "atomcad-msops/1",
+  "ops": [
+    {
+      "name": "plant",
+      "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
+      "after": {
+        "atoms": [
+          { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] },
+          { "id": 2, "el": "O", "pos": [1.0, 0.0, 0.0] },
+          { "id": 3, "el": "N", "pos": [0.0, 1.0, 0.0] }
+        ],
+        "bonds": [ [1, 2], [1, 3] ]
+      }
+    }
+  ]
+}

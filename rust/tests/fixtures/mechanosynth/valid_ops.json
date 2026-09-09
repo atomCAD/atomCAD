@@ -1,0 +1,35 @@
+{
+  "comment": "Field-coverage library for the parsing tests. Unknown keys at every level are ignored.",
+  "format": "atomcad-msops/1",
+  "tolerance": 0.25,
+  "ops": [
+    {
+      "name": "keep_only",
+      "basis": "provenance field, never read by the engine",
+      "before": {
+        "atoms": [ { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0], "label": "ignored" } ],
+        "bonds": []
+      },
+      "after": {
+        "atoms": [ { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] } ],
+        "bonds": []
+      }
+    },
+    {
+      "name": "add_chain",
+      "note": "exercises the wildcard, an added atom, a default bond order and an explicit one",
+      "before": {
+        "atoms": [ { "id": 1, "el": "*", "pos": [0.0, 0.0, 0.0] } ],
+        "bonds": []
+      },
+      "after": {
+        "atoms": [
+          { "id": 1, "el": "*", "pos": [0.0, 0.0, 0.0] },
+          { "id": 2, "el": "O", "pos": [0.0, 0.0, 1.4] },
+          { "id": 3, "el": "N", "pos": [0.0, 0.0, 2.8] }
+        ],
+        "bonds": [ [1, 2], [2, 3, 2] ]
+      }
+    }
+  ]
+}

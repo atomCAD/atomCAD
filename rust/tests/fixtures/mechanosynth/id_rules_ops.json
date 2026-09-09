@@ -1,0 +1,120 @@
+{
+  "comment": "One operation per row of the id-rule table. Each is applied on its own by the id-rule tests, which build the step in code.",
+  "format": "atomcad-msops/1",
+  "ops": [
+    {
+      "name": "keep",
+      "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
+      "after":  { "atoms": [ { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] }
+    },
+    {
+      "name": "move",
+      "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
+      "after":  { "atoms": [ { "id": 1, "el": "C", "pos": [0.0, 0.0, 2.0] } ], "bonds": [] }
+    },
+    {
+      "name": "replace",
+      "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
+      "after":  { "atoms": [ { "id": 1, "el": "N", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] }
+    },
+    {
+      "name": "delete",
+      "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
+      "after":  { "atoms": [], "bonds": [] }
+    },
+    {
+      "name": "add",
+      "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
+      "after": {
+        "atoms": [
+          { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] },
+          { "id": 2, "el": "H", "pos": [0.0, 0.0, 1.09] }
+        ],
+        "bonds": [ [1, 2] ]
+      }
+    },
+    {
+      "name": "bond_add",
+      "before": {
+        "atoms": [
+          { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] },
+          { "id": 2, "el": "C", "pos": [0.0, 0.0, 1.54] }
+        ],
+        "bonds": []
+      },
+      "after": {
+        "atoms": [
+          { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] },
+          { "id": 2, "el": "C", "pos": [0.0, 0.0, 1.54] }
+        ],
+        "bonds": [ [1, 2] ]
+      }
+    },
+    {
+      "name": "bond_delete",
+      "before": {
+        "atoms": [
+          { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] },
+          { "id": 2, "el": "C", "pos": [0.0, 0.0, 1.54] }
+        ],
+        "bonds": [ [1, 2] ]
+      },
+      "after": {
+        "atoms": [
+          { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] },
+          { "id": 2, "el": "C", "pos": [0.0, 0.0, 1.54] }
+        ],
+        "bonds": []
+      }
+    },
+    {
+      "name": "bond_order",
+      "before": {
+        "atoms": [
+          { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] },
+          { "id": 2, "el": "C", "pos": [0.0, 0.0, 1.54] }
+        ],
+        "bonds": [ [1, 2] ]
+      },
+      "after": {
+        "atoms": [
+          { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] },
+          { "id": 2, "el": "C", "pos": [0.0, 0.0, 1.54] }
+        ],
+        "bonds": [ [1, 2, 2] ]
+      }
+    },
+    {
+      "name": "bond_unchanged",
+      "before": {
+        "atoms": [
+          { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] },
+          { "id": 2, "el": "C", "pos": [0.0, 0.0, 1.54] }
+        ],
+        "bonds": [ [1, 2] ]
+      },
+      "after": {
+        "atoms": [
+          { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] },
+          { "id": 2, "el": "C", "pos": [0.0, 0.0, 1.54] }
+        ],
+        "bonds": [ [1, 2] ]
+      }
+    },
+    {
+      "name": "move_and_delete",
+      "comment": "id 1 moves, id 2 goes; used to check that bonds to atoms outside the pattern follow their atom",
+      "before": {
+        "atoms": [
+          { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] },
+          { "id": 2, "el": "H", "pos": [0.0, 0.0, 1.09] }
+        ],
+        "bonds": []
+      },
+      "after": {
+        "atoms": [ { "id": 1, "el": "C", "pos": [3.0, 0.0, 0.0] } ],
+        "bonds": []
+      }
+    }
+  ]
+}

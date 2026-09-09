@@ -19,6 +19,8 @@ indexmap = { workspace = true }
 lazy_static = { workspace = true }
 rustc-hash = { workspace = true }
 serde = { workspace = true }
+# `mechanosynth` parses its two JSON files (operation library, build script).
+serde_json = { workspace = true }
 smallvec = { workspace = true }
 thiserror = { workspace = true }
 
@@ -28,9 +30,8 @@ thiserror = { workspace = true }
 # loop and it is not an error. Do not "fix" it by inlining the helper (D5.2).
 [dev-dependencies]
 atomcad-test-support = { path = "../atomcad-test-support" }
-# Test-only: the UFF suite deserializes `tests/crystolecule/simulation/test_data/
-# uff_reference.json` (serde_json) and one minimize test does an SVD (nalgebra);
-# the io roundtrips write into a temp dir (tempfile).
+# Test-only: one minimize test does an SVD (nalgebra) and the io roundtrips
+# write into a temp dir (tempfile). `serde_json` is a regular dependency now
+# (mechanosynth), so the UFF suite's `uff_reference.json` needs no entry here.
 nalgebra = { workspace = true }
-serde_json = { workspace = true }
 tempfile = { workspace = true }

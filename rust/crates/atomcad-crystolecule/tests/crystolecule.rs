@@ -154,3 +154,6 @@ mod patch_build_test;
 
 #[path = "crystolecule/miller_test.rs"]
 mod miller_test;
+
+#[path = "crystolecule/mechanosynth_test.rs"]
+mod mechanosynth_test;

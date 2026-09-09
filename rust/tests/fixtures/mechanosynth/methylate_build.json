@@ -1,0 +1,9 @@
+{
+  "comment": "Methylates the +z bridgehead of a methane: abstract its hydrogen, add a CH2, cap the radical. Every frame is already +z aligned, so no step needs a rotation.",
+  "format": "atomcad-msbuild/1",
+  "steps": [
+    { "op": "habst", "t": [0.0, 0.0, 1.09], "note": "take the +z hydrogen" },
+    { "op": "gm_methylate", "t": [0.0, 0.0, 0.0], "note": "CH2 onto the bare carbon" },
+    { "op": "hdon", "t": [0.0, 0.0, 1.54], "note": "cap the new radical" }
+  ]
+}

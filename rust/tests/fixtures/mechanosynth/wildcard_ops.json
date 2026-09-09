@@ -1,0 +1,21 @@
+{
+  "comment": "The four wildcard cases. Every op moves its atom by 1 Å so a test can tell the step ran.",
+  "format": "atomcad-msops/1",
+  "ops": [
+    {
+      "name": "star_to_star",
+      "before": { "atoms": [ { "id": 1, "el": "*", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
+      "after":  { "atoms": [ { "id": 1, "el": "*", "pos": [0.0, 0.0, 1.0] } ], "bonds": [] }
+    },
+    {
+      "name": "star_to_carbon",
+      "before": { "atoms": [ { "id": 1, "el": "*", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
+      "after":  { "atoms": [ { "id": 1, "el": "C", "pos": [0.0, 0.0, 1.0] } ], "bonds": [] }
+    },
+    {
+      "name": "carbon_to_star",
+      "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
+      "after":  { "atoms": [ { "id": 1, "el": "*", "pos": [0.0, 0.0, 1.0] } ], "bonds": [] }
+    }
+  ]
+}

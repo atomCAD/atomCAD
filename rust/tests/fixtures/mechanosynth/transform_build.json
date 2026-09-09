@@ -1,0 +1,17 @@
+{
+  "comment": "Three plantings on three separate carbons: identity, a +90 deg turn about z, and a mirror through the yz plane (det -1).",
+  "format": "atomcad-msbuild/1",
+  "steps": [
+    { "op": "plant", "t": [0.0, 0.0, 0.0] },
+    {
+      "op": "plant",
+      "t": [10.0, 0.0, 0.0],
+      "r": [ [0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0] ]
+    },
+    {
+      "op": "plant",
+      "t": [20.0, 0.0, 0.0],
+      "r": [ [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0] ]
+    }
+  ]
+}

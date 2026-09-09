@@ -69,6 +69,12 @@ crates/atomcad-crystolecule/src/
 │       ├── structure.rs            # Extract crystallographic data from parsed CIF
 │       ├── symmetry.rs             # Symmetry operation parsing and expansion
 │       └── space_groups.rs         # Lookup table for 230 space groups (symmetry ops)
+├── mechanosynth/
+│   ├── mod.rs                      # Build-sequence replay: re-exports
+│   ├── schema.rs                   # OpLibrary/Operation/Pattern/BuildScript/Step + MechanosynthError
+│   ├── parse.rs                    # JSON parse + validation of both files
+│   ├── apply.rs                    # apply_step, replay (with the highlight tag)
+│   └── compare.rs                  # compare_structures: position-tolerant Vec<Mismatch>
 ├── lattice_fill/
 │   ├── concave_rebond.rs           # Concave-corner clash → host-host bond rewrite
 │   ├── config.rs                   # LatticeFillConfig, Options, Result, Statistics
@@ -128,6 +134,9 @@ crates/atomcad-crystolecule/src/
 | `IsosurfaceData` | `field/isosurface.rs` | A surface to extract at display time: field + level + coloring + alpha, plus the `LevelBasis` the level came from. Carries no mesh |
 | `LevelBasis` / `AutoBasis` | `field/isosurface.rs` | How a resolved level was arrived at — absolute, an enclosed fraction, or one of the four `Auto` outcomes. Readout only, never persisted |
 | `CubeFile` | `io/cube_loader.rs` | Parsed `.cube`: `atoms`, `fields`, and an advisory `units_warning` |
+| `OpLibrary` / `Operation` / `Pattern` | `mechanosynth/schema.rs` | A named before/after rewrite in a local frame; comparing the two patterns *by pattern id* is the rewrite, there is no diff syntax |
+| `BuildScript` / `Step` | `mechanosynth/schema.rs` | An ordered list of (operation name, translation, rotation); `p_workpiece = r · p_local + t` |
+| `Mismatch` | `mechanosynth/compare.rs` | One difference found by `compare_structures` — unmatched atom, element, bond presence or bond order |
 
 ## Core Concepts
 
@@ -246,6 +255,37 @@ Three invariants this half depends on:
 
 Design docs: `doc/design_isosurface_node.md`, `doc/design_isosurface_level.md`.
 
+**Mechanosynthesis replay** (`mechanosynth/`): replays an ordered build script
+— positionally controlled reactions — onto a workpiece, so that "the structure
+after the first `k` steps" is a value the caller can ask for. An **operation** is
+a before/after pair of small atom lists in a local frame; a **step** names one
+and gives a rigid transform into workpiece coordinates. Three properties are
+load-bearing:
+
+- **Coordinates, not graphs.** Matching is nearest-atom-within-tolerance on
+  position and element, through the spatial grid, and *ignores bonds entirely* —
+  a `before` pattern's bonds exist only to express deletions and order changes.
+  No subgraph isomorphism, no chemical perception. Adding a bond check would only
+  add a way for a correct script to fail.
+- **Ideal geometry.** Added atoms land exactly where the operation says, and
+  nothing here relaxes anything. That is what keeps tolerances tight (0.3 Å, far
+  below half a bond length) and every intermediate state deterministic. Wire
+  `relax` downstream if a settled geometry is wanted.
+- **A kept atom is never snapped.** Position and element are compared between the
+  two *patterns*, not against the workpiece: an id in both patterns at the same
+  position stays exactly where the workpiece has it, while a *moved* one lands at
+  `r · after.pos + t`. Snapping would quietly rewrite a reconstructed surface
+  every time an operation touched it.
+
+Deliberately independent of `atomic_structure_diff` / `apply_diff`, which solve
+the more general problem of anchoring arbitrary diffs across bases; nothing is
+shared beyond `AtomicStructure`. `compare_structures` is the position-tolerant
+comparison the generators verify with — it returns a *list* of differences rather
+than a bool, because a bare `false` leaves the caller nothing to print, and it is
+not `atomcad_test_support::assert_structures_equivalent` (test-only, panics,
+O(n²), compares flags and tag names). Design doc:
+`design_mechanosynth_node.md`, in the external mechanosynth working folder.
+
 ## Important Constants (`crystolecule_constants.rs`)
 
 - `DIAMOND_UNIT_CELL_SIZE_ANGSTROM`: 3.567 Å
@@ -265,6 +305,9 @@ Design docs: `doc/design_isosurface_node.md`, `doc/design_isosurface_level.md`.
 - `CubeError` (io/cube_loader) — Io / Parse / Unsupported / Field variants
 - `FieldError` (field) — grid description problems (zero dimension, sample-count
   mismatch, degenerate axes, non-finite sample)
+- `MechanosynthError` (mechanosynth/schema) — Io / Json / Invalid (a validation
+  failure naming the file, the operation or step, and the field) / NoMatch (a
+  `before` atom that found nothing within tolerance)
 
 All use `thiserror` derive macros.
 
@@ -282,6 +325,7 @@ field         →  glam only (no crystolecule types at all)
 motif_bond_inference → Motif, UnitCellStruct, atomic_constants
 miller        →  glam only (no crystolecule types at all)
 patch         →  AtomicStructure, UnitCellStruct, weld, hydrogen_passivation, guided_placement, GeoNode
+mechanosynth  →  AtomicStructure, atomic_constants (serde_json for the two JSON files)
 guided_placement → AtomicStructure, simulation/uff (typer, params)
 hydrogen_passivation → AtomicStructure, atomic_constants, guided_placement
 ```
@@ -308,6 +352,7 @@ tests/crystolecule/
 ├── motif_parser_test.rs           # Tokenization, all commands, error cases
 ├── motif_bond_inference_test.rs   # Bond inference on fractional coords, cross-cell bonds
 ├── miller_test.rs                 # Index reduction, enumeration, {hkl} symmetry families
+├── mechanosynth_test.rs           # Parse/validate, id-rule matrix, matching, replay, highlight, compare
 ├── field_test.rs                  # ScalarField contract: bounds, interpolation, gradients
 ├── patch_test.rs                  # Cell selection, region depths, apply_patch pipeline
 ├── patch_build_test.rs            # Tiling-vector validation, tile extraction

@@ -1,0 +1,38 @@
+{
+  "comment": "The three-operation library the multi-step fixture uses. Shapes follow the diamond sketch in the design doc, but the geometry is a free methane, not a lattice.",
+  "format": "atomcad-msops/1",
+  "ops": [
+    {
+      "name": "habst",
+      "basis": "Freitas & Merkle 2008, RS1 (hydrogen abstraction)",
+      "before": { "atoms": [ { "id": 1, "el": "H", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
+      "after":  { "atoms": [], "bonds": [] }
+    },
+    {
+      "name": "gm_methylate",
+      "basis": "Freitas & Merkle 2008, RS7/RS9/RS12/RS14 folded into one product",
+      "before": { "atoms": [ { "id": 1, "el": "*", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
+      "after": {
+        "atoms": [
+          { "id": 1, "el": "*", "pos": [0.0, 0.0, 0.0] },
+          { "id": 2, "el": "C", "pos": [0.0, 0.0, 1.54] },
+          { "id": 3, "el": "H", "pos": [0.89, 0.0, 2.17] },
+          { "id": 4, "el": "H", "pos": [-0.89, 0.0, 2.17] }
+        ],
+        "bonds": [ [1, 2], [2, 3], [2, 4] ]
+      }
+    },
+    {
+      "name": "hdon",
+      "basis": "Freitas & Merkle 2008, RS2 (hydrogen donation)",
+      "before": { "atoms": [ { "id": 1, "el": "*", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
+      "after": {
+        "atoms": [
+          { "id": 1, "el": "*", "pos": [0.0, 0.0, 0.0] },
+          { "id": 2, "el": "H", "pos": [0.0, 0.0, 1.09] }
+        ],
+        "bonds": [ [1, 2] ]
+      }
+    }
+  ]
+}
