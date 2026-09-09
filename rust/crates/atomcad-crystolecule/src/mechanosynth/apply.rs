@@ -53,9 +53,11 @@ pub fn steps_applied(step: i32, step_count: usize) -> usize {
 /// Applies one step to `workpiece` in place.
 ///
 /// Returns the ids of the atoms this step touched *and left in place*: matched
-/// atoms that were kept, moved or replaced, plus the atoms it added. Deleted
-/// atoms are not in the list — they no longer exist. This is what the highlight
-/// tag is painted on.
+/// atoms that were kept, moved or replaced, the atoms it added, and the
+/// surviving atoms that were bonded to an atom it deleted. Deleted atoms are
+/// not in the list — they no longer exist — but their bonded neighbours stand
+/// in for them, so a pure abstraction still points at the site it acted on.
+/// This is what the highlight tag is painted on.
 ///
 /// `step_number` is 1-based and appears in the failure message only.
 pub fn apply_step(
@@ -116,12 +118,19 @@ pub fn apply_step(
     let mut touched: Vec<u32> = Vec::new();
 
     // Ids only in `before`: delete. Every bond the atom had — to pattern atoms
-    // or to any other workpiece atom — goes with it.
+    // or to any other workpiece atom — goes with it. The neighbours are noted
+    // first: a deletion's footprint is the atoms it was bonded to, which is all
+    // that is left to highlight after an abstraction.
+    let mut deletion_neighbours: Vec<u32> = Vec::new();
     for pattern_atom in &op.before.atoms {
         if op.after.has(pattern_atom.id) {
             continue;
         }
-        workpiece.delete_atom(matched[&pattern_atom.id]);
+        let atom_id = matched[&pattern_atom.id];
+        if let Some(atom) = workpiece.get_atom(atom_id) {
+            deletion_neighbours.extend(atom.bonds.iter().map(|bond| bond.other_atom_id()));
+        }
+        workpiece.delete_atom(atom_id);
     }
 
     // Ids in both: keep, move and/or replace. Position and element are compared
@@ -188,6 +197,14 @@ pub fn apply_step(
         workpiece.add_bond_checked(a, b, order);
     }
 
+    // A neighbour may itself have been deleted by this step, or already be in
+    // the list as a kept atom; only survivors are reported, each once.
+    for neighbour_id in deletion_neighbours {
+        if workpiece.get_atom(neighbour_id).is_some() && !touched.contains(&neighbour_id) {
+            touched.push(neighbour_id);
+        }
+    }
+
     Ok(touched)
 }
 
@@ -216,8 +233,9 @@ fn describe_nearest(workpiece: &AtomicStructure, target: DVec3) -> String {
 /// numbered from 1 in messages, so "step 17" is `steps[16]`.
 ///
 /// When `highlight_tag` is `Some`, that atom tag is cleared from every atom and
-/// then painted on the atoms of the last applied step that still exist. With
-/// `None` no tag is touched or interned at all.
+/// then painted on the atoms of the last applied step that still exist, plus
+/// the surviving neighbours of any atom that step deleted (see [`apply_step`]).
+/// With `None` no tag is touched or interned at all.
 ///
 /// A step that fails to match aborts the whole replay; the partial state is
 /// reachable by asking for one step fewer.

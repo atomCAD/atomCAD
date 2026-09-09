@@ -437,12 +437,56 @@ fn a_deleted_atom_takes_its_outside_bonds_with_it() {
     s.add_bond(target, outsider, 1);
     assert_eq!(s.get_num_of_bonds(), 1);
 
-    apply_named(&mut s, &lib, "delete", DVec3::ZERO, 0.3);
+    let touched = apply_named(&mut s, &lib, "delete", DVec3::ZERO, 0.3);
 
     assert_eq!(s.get_num_of_atoms(), 1);
     assert_eq!(s.get_num_of_bonds(), 0);
     assert!(s.get_atom(target).is_none());
     assert!(s.get_atom(outsider).is_some());
+    // The deleted atom is gone, so its bonded neighbour stands in for it.
+    assert_eq!(touched, vec![outsider]);
+}
+
+#[test]
+fn a_deletions_touched_list_is_its_surviving_neighbours_each_once() {
+    let lib = library("id_rules_ops.json");
+
+    // `move_and_delete` keeps id 1 (the carbon) and deletes id 2 (the +z
+    // hydrogen), which is bonded to the carbon and to an outside atom. The
+    // carbon is already touched as a kept atom and must not be listed twice;
+    // the outsider joins as a deletion neighbour; the deleted atom itself is
+    // absent.
+    let mut s = AtomicStructure::new();
+    let c = s.add_atom(C, DVec3::ZERO);
+    let doomed = s.add_atom(H, DVec3::new(0.0, 0.0, 1.09));
+    let outsider = s.add_atom(C, DVec3::new(0.0, 0.0, 2.63));
+    let bystander = s.add_atom(H, DVec3::new(0.0, 1.09, 0.0));
+    s.add_bond(c, doomed, 1);
+    s.add_bond(doomed, outsider, 1);
+    s.add_bond(c, bystander, 1);
+
+    let touched = apply_named(&mut s, &lib, "move_and_delete", DVec3::ZERO, 0.3);
+
+    let mut sorted = touched.clone();
+    sorted.sort_unstable();
+    sorted.dedup();
+    assert_eq!(sorted.len(), touched.len(), "no id is reported twice");
+    assert!(touched.contains(&c), "the kept atom is touched");
+    assert!(
+        touched.contains(&outsider),
+        "the deleted atom's neighbour is touched"
+    );
+    assert!(!touched.contains(&doomed), "a deleted atom is not touched");
+    assert!(
+        !touched.contains(&bystander),
+        "an atom bonded only to a kept atom is not a deletion neighbour"
+    );
+    assert_eq!(touched.len(), 2);
+
+    // A deletion with no bonds touches nothing at all.
+    let mut s = AtomicStructure::new();
+    s.add_atom(C, DVec3::ZERO);
+    assert!(apply_named(&mut s, &lib, "delete", DVec3::ZERO, 0.3).is_empty());
 }
 
 #[test]
@@ -862,9 +906,12 @@ fn the_highlight_marks_exactly_the_current_steps_surviving_atoms() {
         );
     }
 
-    // Step 1 (`habst`) deletes its only atom, so nothing survives to carry it.
+    // Step 1 (`habst`) deletes its only atom. The hydrogen is gone, so the
+    // highlight falls on the carbon it was bonded to — the radical site the
+    // abstraction produced — and on nothing else.
     let result = replay(&base, &lib, &build, 1, Some(HIGHLIGHT)).unwrap();
-    assert!(result.atoms_with_tag(HIGHLIGHT).is_empty());
+    let tagged = result.atoms_with_tag(HIGHLIGHT);
+    assert_eq!(tagged, vec![atom_at(&result, DVec3::ZERO)]);
 }
 
 #[test]

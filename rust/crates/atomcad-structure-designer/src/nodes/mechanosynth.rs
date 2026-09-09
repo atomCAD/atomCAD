@@ -522,7 +522,8 @@ pub fn get_node_type() -> NodeType {
             so wire `relax` downstream if a settled geometry is wanted.\n\
             \n\
             The atoms of the current step carry the `ms_current` tag, which `apply_style` can \
-            colour. File paths are stored relative to the project file whenever possible so a \
+            colour; when a step deletes an atom, the atoms it was bonded to carry the tag in its \
+            place. File paths are stored relative to the project file whenever possible so a \
             copied project keeps working."
             .to_string(),
         summary: Some("Replay a build sequence".to_string()),

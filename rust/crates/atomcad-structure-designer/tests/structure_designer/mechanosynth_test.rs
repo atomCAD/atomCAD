@@ -327,6 +327,26 @@ fn the_output_carries_ms_current_on_the_current_steps_atoms() {
 }
 
 #[test]
+fn an_abstraction_step_highlights_the_atom_it_left_a_radical_on() {
+    // Step 1 (`habst`) only deletes a hydrogen. The output must still show
+    // where the reaction happened: on the carbon the hydrogen was bonded to.
+    let mut designer = setup_designer();
+    let base_id = add_value_node(&mut designer, molecule_value(methane()));
+    let node_id = add_mechanosynth(
+        &mut designer,
+        base_id,
+        loaded_data("methylate_ops.json", "methylate_build.json", 1),
+    );
+
+    let result = expect_atoms(evaluate_pin(&designer, node_id, 0));
+    assert_eq!(
+        result.atoms_with_tag(MS_CURRENT_TAG),
+        vec![atom_at(&result, DVec3::ZERO)],
+        "the abstracted hydrogen's carbon should be the only tagged atom"
+    );
+}
+
+#[test]
 fn step_zero_clears_a_highlight_the_base_already_carried() {
     // An upstream `mechanosynth` leaves `ms_current` on the base; a downstream
     // one at step 0 must hand back a clean structure rather than two overlapping

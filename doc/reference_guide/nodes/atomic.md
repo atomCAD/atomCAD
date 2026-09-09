@@ -935,10 +935,13 @@ quickest way to see what the script expected.
 ### Seeing the current step
 
 The atoms the current step touched and left in place — matched, moved, replaced
-or added — carry the `ms_current` [atom tag](#tag). Wire an `apply_style` node
-downstream and colour that tag to make the reaction site pop out as you scrub.
-Any `ms_current` tag already on the base (from an upstream `mechanosynth`, say)
-is cleared first, so only one step is ever highlighted.
+or added — carry the `ms_current` [atom tag](#tag). When a step deletes an atom,
+the atoms that were bonded to it carry the tag in its place, so a hydrogen
+abstraction highlights the radical site it created rather than nothing at all.
+Wire an `apply_style` node downstream and colour that tag to make the reaction
+site pop out as you scrub. Any `ms_current` tag already on the base (from an
+upstream `mechanosynth`, say) is cleared first, so only one step is ever
+highlighted.
 
 ## Surface reconstruction patches (`patch_build` + `patch_latticefill`)
 
