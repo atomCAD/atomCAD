@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/common/error_display.dart';
 import 'package:flutter_cad/common/file_dialog_directory.dart';
+import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/inputs/int_input.dart';
 import 'package:flutter_cad/inputs/string_input.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
@@ -66,9 +67,10 @@ class MechanosynthEditor extends StatefulWidget {
 }
 
 class _MechanosynthEditorState extends State<MechanosynthEditor> {
-  /// Width of the label column on the step row, and of its numeric box.
+  /// Width of the label column on the step row, and of its numeric box —
+  /// a 72 px digit box plus the `−` / `+` buttons around it.
   static const double _STEP_LABEL_WIDTH = 40.0;
-  static const double _STEP_BOX_WIDTH = 72.0;
+  static const double _STEP_BOX_WIDTH = 72.0 + AppSpacing.intSpinChromeWidth;
 
   /// The step under the pointer while a slider drag is in flight. While set,
   /// the panel renders from it and nothing is written to the kernel.

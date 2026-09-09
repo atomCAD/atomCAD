@@ -800,8 +800,12 @@ the assistant can talk about it by a name that means something.
 
 This is different for each node, we will discuss this in depth at the specific nodes. There are some general features though:
 
-- When dragging the mouse on integer number editor fields the number can be
-incremented or decremented using the mouse wheel. Shift + mouse wheel works in 10 increments.
+- Integer number fields can be stepped without retyping the value: click the
+  **−** / **+** buttons beside the field (hold one to auto-repeat), press
+  **↑** / **↓** while the field has focus, or turn the mouse wheel over it.
+  Hold **Shift** with any of these to step by 10. Stepping never leaves the
+  field's allowed range. The X/Y/Z boxes of integer vector fields have no
+  buttons (three would not fit the panel) but take the wheel and arrow keys.
 - Selecting a **custom node** (a node defined by a subnetwork) shows an auto-generated panel with one editable field per simple-typed parameter pin — see [Editing custom node parameters](./node_networks.md#editing-custom-node-parameters).
 
 In case no node is selected the description of the active node network can be edited in the node properties panel:

@@ -12,6 +12,7 @@ import 'package:flutter_cad/inputs/vec2_input.dart';
 import 'package:flutter_cad/inputs/vec3_input.dart';
 import 'package:flutter_cad/common/color_field_widget.dart';
 import 'package:flutter_cad/common/select_element_widget.dart';
+import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/structure_designer/node_data/matrix_cell.dart';
 
 /// Auto-generated property panel for a list of typed literal-valued fields.
@@ -394,7 +395,8 @@ class LiteralFieldsEditor extends StatelessWidget {
           ),
         ),
         SizedBox(
-          width: 80,
+          // An 80 px digit box plus the `−` / `+` buttons around it.
+          width: 80 + AppSpacing.intSpinChromeWidth,
           child: IntInput(
             label: '',
             inputKey: inputKey,

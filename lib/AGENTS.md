@@ -121,6 +121,17 @@ one problem. It is pure Dart over the generated API data classes — unit-tested
 in `test/error_report_test.dart`, which is the only thing in `test/` and runs in
 well under a second (unlike `integration_test/`, which agents must not run).
 
+### Integer Fields Go Through `IntSpinField`
+
+`lib/inputs/int_spin_field.dart` is the single implementation of an integer
+text box: parsing, range clamping, mouse-wheel / arrow-key stepping, SHIFT ×10,
+and the optional hold-to-repeat `−` / `+` buttons. `IntInput`, `IVec2Input` and
+`IVec3Input` are thin layouts over it. A new integer editor composes it (or one
+of those three) — never a fourth copy of the increment logic, which is exactly
+how the three used to drift. The buttons are on for single-int fields and off
+for the vector axes (three boxes already fill the 300 px panel); a caller that
+pins an `IntInput`'s width must budget `AppSpacing.intSpinChromeWidth` for them.
+
 ### Showing a Number in a Readout
 
 Never reach for `toStringAsExponential` (or a bare `toString`) to print a

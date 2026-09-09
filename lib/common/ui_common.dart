@@ -81,6 +81,24 @@ class AppSpacing {
     minWidth: inputFieldMinWidth,
     maxWidth: inputFieldMaxWidth,
   );
+
+  // Integer spin field (`lib/inputs/int_spin_field.dart`): the text box is
+  // 18 px narrower than a plain field so that, with a 24 px button on each
+  // side, a single-int input grows by 32 px net rather than 50.
+  static const intSpinFieldMinWidth = inputFieldMinWidth - 18;
+  static const intSpinFieldMaxWidth = inputFieldMaxWidth - 18;
+  static const intSpinFieldConstraints = BoxConstraints(
+    minWidth: intSpinFieldMinWidth,
+    maxWidth: intSpinFieldMaxWidth,
+  );
+  static const intSpinButtonWidth = 24.0;
+  static const intSpinButtonGap = 2.0;
+
+  /// Width the two buttons and their gaps add around the text box. A caller
+  /// that pins an `IntInput`'s width must allow at least
+  /// [intSpinFieldMinWidth] + this, or the row overflows.
+  static const intSpinChromeWidth =
+      2 * intSpinButtonWidth + 2 * intSpinButtonGap;
 }
 
 /// Button Styles
