@@ -1,8 +1,9 @@
 //! Kernel seam for the `mechanosynth` node's property panel.
 //!
 //! Three properties (two file names and a step number) plus one read-only
-//! readout the panel cannot compute for itself, because the step count lives in
-//! the parsed build script — payload that never crosses the bridge. The readout
+//! readout the panel cannot compute for itself, because the step count, the
+//! current step's metadata and the script's chapter structure all live in the
+//! parsed build script — payload that never crosses the bridge. The readout
 //! follows the wired `build_file` and `step` pins when they are connected, so
 //! it describes what the node evaluates rather than what it stores.
 //!
@@ -15,9 +16,9 @@ use crate::api::api_common::{
     with_mut_cad_instance_or,
 };
 use crate::api::structure_designer::structure_designer_api_types::{
-    APIMechanosynthData, APIMechanosynthInfo,
+    APIMechanosynthChapter, APIMechanosynthData, APIMechanosynthInfo,
 };
-use atomcad_crystolecule::mechanosynth::{BuildScript, steps_applied};
+use atomcad_crystolecule::mechanosynth::{BuildScript, NO_LAYER, NO_SITE, steps_applied};
 use atomcad_structure_designer::evaluator::network_result::NetworkResult;
 use atomcad_structure_designer::nodes::mechanosynth::{MechanosynthData, load_script_at};
 use atomcad_structure_designer::structure_designer::StructureDesigner;
@@ -142,6 +143,11 @@ pub fn mechanosynth_info(
             applied: 0,
             current_op: String::new(),
             current_note: String::new(),
+            current_method: String::new(),
+            current_phase: String::new(),
+            current_layer: NO_LAYER,
+            current_site: NO_SITE,
+            chapters: Vec::new(),
         });
     };
     let count = script.steps.len();
@@ -160,7 +166,40 @@ pub fn mechanosynth_info(
         current_note: current
             .and_then(|step| step.note.clone())
             .unwrap_or_default(),
+        current_method: current.map(|step| step.method.clone()).unwrap_or_default(),
+        current_phase: current.map(|step| step.phase.clone()).unwrap_or_default(),
+        current_layer: current.map_or(NO_LAYER, |step| step.layer),
+        current_site: current.map_or(NO_SITE, |step| step.site),
+        chapters: chapters(&script),
     })
+}
+
+/// Splits a script into chapters: maximal runs of consecutive steps sharing a
+/// `(phase, layer)`.
+///
+/// Computed from the cached script on every info call, which is one pass over a
+/// few hundred steps — cheaper than the two argument evaluations the caller has
+/// already done. Steps that name no phase and no layer are chapters too, so the
+/// result always covers the whole script and the panel never has to reason
+/// about gaps.
+#[flutter_rust_bridge::frb(ignore)]
+pub fn chapters(script: &BuildScript) -> Vec<APIMechanosynthChapter> {
+    let mut chapters: Vec<APIMechanosynthChapter> = Vec::new();
+    for (index, step) in script.steps.iter().enumerate() {
+        let number = index as i32 + 1;
+        match chapters.last_mut() {
+            Some(open) if open.phase == step.phase && open.layer == step.layer => {
+                open.last_step = number;
+            }
+            _ => chapters.push(APIMechanosynthChapter {
+                phase: step.phase.clone(),
+                layer: step.layer,
+                first_step: number,
+                last_step: number,
+            }),
+        }
+    }
+    chapters
 }
 
 // ============================================================================

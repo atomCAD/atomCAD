@@ -289,3 +289,126 @@ fn a_wired_build_file_that_fails_to_load_reads_as_no_script() {
     let info = mechanosynth_info(&mut designer, &[], node_id).expect("the node is a mechanosynth");
     assert_eq!((info.count, info.applied), (0, 0));
 }
+
+// ============================================================================
+// Step metadata and chapters
+// (`doc/design_mechanosynth_step_metadata.md`)
+// ============================================================================
+
+/// The metadata fixtures instead of the methylate ones: five steps whose
+/// `(phase, layer)` pairs form three chapters, the first of them untitled.
+fn add_metadata_node(designer: &mut StructureDesigner, step: i32) -> u64 {
+    let node_id = designer.add_node("mechanosynth", DVec2::ZERO);
+    let mut data = MechanosynthData {
+        ops_file: Some(fixture("metadata_ops.json")),
+        build_file: Some(fixture("metadata_build.json")),
+        step,
+        ..MechanosynthData::new()
+    };
+    data.reload_missing(None);
+    designer.set_node_network_data_scoped(&[], node_id, Box::new(data));
+    node_id
+}
+
+#[test]
+fn info_reports_the_current_steps_metadata() {
+    let mut designer = setup_designer();
+    let node_id = add_metadata_node(&mut designer, 3);
+
+    let info = mechanosynth_info(&mut designer, &[], node_id).expect("the node is a mechanosynth");
+    assert_eq!(info.current_method, "probe");
+    assert_eq!(info.current_phase, "layer1");
+    assert_eq!(info.current_layer, 1);
+    assert_eq!(info.current_site, 1);
+
+    // A step that states nothing reports the defaults the panel omits chips for.
+    let node_id = add_metadata_node(&mut designer, 1);
+    let info = mechanosynth_info(&mut designer, &[], node_id).expect("the node is a mechanosynth");
+    assert_eq!(info.current_method, "");
+    assert_eq!(info.current_phase, "");
+    assert_eq!(info.current_layer, -1);
+    assert_eq!(info.current_site, -1);
+
+    // At step 0 nothing has been applied, so there is nothing to describe.
+    let node_id = add_metadata_node(&mut designer, 0);
+    let info = mechanosynth_info(&mut designer, &[], node_id).expect("the node is a mechanosynth");
+    assert_eq!(info.applied, 0);
+    assert_eq!(info.current_phase, "");
+    assert_eq!(info.current_layer, -1);
+}
+
+#[test]
+fn the_chapter_list_covers_the_whole_script() {
+    let mut designer = setup_designer();
+    let node_id = add_metadata_node(&mut designer, -1);
+
+    let info = mechanosynth_info(&mut designer, &[], node_id).expect("the node is a mechanosynth");
+    let chapters: Vec<(&str, i32, i32, i32)> = info
+        .chapters
+        .iter()
+        .map(|c| (c.phase.as_str(), c.layer, c.first_step, c.last_step))
+        .collect();
+
+    // Step 1 names no phase and no layer, and is still a chapter, so the list
+    // covers every step. Steps 2-3 and 4-5 share a layer but not a phase, so
+    // the run breaks on the pair, not on the layer alone.
+    assert_eq!(
+        chapters,
+        vec![("", -1, 1, 1), ("layer1", 1, 2, 3), ("cleanup", 1, 4, 5)]
+    );
+
+    // No gaps and no overlaps, whatever the script says.
+    let mut expected_next = 1;
+    for chapter in &info.chapters {
+        assert_eq!(chapter.first_step, expected_next);
+        assert!(chapter.last_step >= chapter.first_step);
+        expected_next = chapter.last_step + 1;
+    }
+    assert_eq!(expected_next - 1, info.count);
+}
+
+#[test]
+fn the_chapter_list_does_not_depend_on_the_step_number() {
+    // The chapters describe the script, not the scrub position, so the panel
+    // can draw the same tick marks wherever the slider stands.
+    let mut designer = setup_designer();
+    let end_id = add_metadata_node(&mut designer, -1);
+    let at_end = mechanosynth_info(&mut designer, &[], end_id)
+        .expect("the node is a mechanosynth")
+        .chapters
+        .len();
+    let start_id = add_metadata_node(&mut designer, 0);
+    let at_start = mechanosynth_info(&mut designer, &[], start_id)
+        .expect("the node is a mechanosynth")
+        .chapters
+        .len();
+    assert_eq!((at_end, at_start), (3, 3));
+}
+
+#[test]
+fn a_script_with_no_metadata_at_all_is_one_untitled_chapter() {
+    // The pre-metadata fixture: three steps, none of which says anything.
+    let mut designer = setup_designer();
+    let node_id = add_loaded_node(&mut designer, &[], -1);
+
+    let info = mechanosynth_info(&mut designer, &[], node_id).expect("the node is a mechanosynth");
+    assert_eq!(info.chapters.len(), 1);
+    assert_eq!(info.chapters[0].phase, "");
+    assert_eq!(info.chapters[0].layer, -1);
+    assert_eq!(
+        (info.chapters[0].first_step, info.chapters[0].last_step),
+        (1, 3)
+    );
+}
+
+#[test]
+fn no_script_means_no_chapters() {
+    let mut designer = setup_designer();
+    let node_id = designer.add_node("mechanosynth", DVec2::ZERO);
+
+    let info = mechanosynth_info(&mut designer, &[], node_id).expect("the node is a mechanosynth");
+    assert_eq!(info.count, 0);
+    assert!(info.chapters.is_empty());
+    assert_eq!(info.current_layer, -1);
+    assert_eq!(info.current_site, -1);
+}

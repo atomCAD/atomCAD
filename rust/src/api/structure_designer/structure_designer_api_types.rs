@@ -1554,6 +1554,36 @@ pub struct APIMechanosynthInfo {
     pub current_op: String,
     /// The current step's `note`; empty when it has none.
     pub current_note: String,
+    /// The current step's `method` — which instrument or process performs it.
+    /// Empty when the script says nothing, which is also the state at
+    /// `applied = 0`.
+    pub current_method: String,
+    /// The current step's `phase` — the chapter of the process it belongs to.
+    pub current_phase: String,
+    /// The current step's `layer`; `-1` for "no particular layer".
+    pub current_layer: i32,
+    /// The current step's `site`; `-1` for "all sites, or none".
+    pub current_site: i32,
+    /// The script's chapters, in order, covering every step exactly once.
+    /// Empty when no script is loaded.
+    pub chapters: Vec<APIMechanosynthChapter>,
+}
+
+/// A maximal run of consecutive steps sharing a `(phase, layer)` — the unit the
+/// panel navigates a long script by. A 450-step script gives a dozen or so.
+///
+/// Steps with an empty `phase` and no `layer` form chapters too, so the list
+/// always covers the whole script and the panel can show any script's structure
+/// (an unannotated one as a single "untitled" chapter).
+pub struct APIMechanosynthChapter {
+    /// The chapter's `phase`; empty when its steps name none.
+    pub phase: String,
+    /// The chapter's `layer`; `-1` when its steps name none.
+    pub layer: i32,
+    /// 1-based index of the chapter's first step.
+    pub first_step: i32,
+    /// 1-based index of the chapter's last step, inclusive.
+    pub last_step: i32,
 }
 
 pub struct APIImportCIFData {

@@ -17,6 +17,7 @@
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::mechanosynth::{compare_structures, describe_mismatches};
 use atomcad_crystolecule::structure::Structure;
+use atomcad_structure_designer::data_type::{DataType, RecordType};
 use atomcad_structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
@@ -864,4 +865,206 @@ fn property_edits_are_undoable_and_undo_restores_the_caches() {
 
     let result = expect_atoms(evaluate_pin(&designer, node_id, 0));
     assert_same(&result, &methylate_expected(1), "after undo");
+}
+
+// ============================================================================
+// The `step` output pin (`doc/design_mechanosynth_step_metadata.md`)
+// ============================================================================
+
+/// The three carbons `metadata_build.json` is written against.
+fn three_carbons() -> AtomicStructure {
+    let mut s = AtomicStructure::new();
+    for x in [0.0, 5.0, 10.0] {
+        s.add_atom(C, DVec3::new(x, 0.0, 0.0));
+    }
+    s
+}
+
+/// A `mechanosynth` node over the metadata fixtures, and the record its `step`
+/// pin carries at the given step.
+fn step_record(step: i32) -> Vec<(String, NetworkResult)> {
+    let mut designer = setup_designer();
+    let base = add_value_node(&mut designer, molecule_value(three_carbons()));
+    let node_id = add_mechanosynth(
+        &mut designer,
+        base,
+        loaded_data("metadata_ops.json", "metadata_build.json", step),
+    );
+    match evaluate_pin(&designer, node_id, 1) {
+        NetworkResult::Record(fields) => fields,
+        other => panic!("expected a record, got {}", other.to_display_string()),
+    }
+}
+
+fn field(record: &[(String, NetworkResult)], name: &str) -> NetworkResult {
+    record
+        .iter()
+        .find(|(field_name, _)| field_name == name)
+        .unwrap_or_else(|| panic!("the record has a {name} field"))
+        .1
+        .clone()
+}
+
+fn int_field(record: &[(String, NetworkResult)], name: &str) -> i32 {
+    match field(record, name) {
+        NetworkResult::Int(value) => value,
+        other => panic!("{name} should be an Int, got {}", other.to_display_string()),
+    }
+}
+
+fn vec3_field(record: &[(String, NetworkResult)], name: &str) -> DVec3 {
+    match field(record, name) {
+        NetworkResult::Vec3(value) => value,
+        other => panic!("{name} should be a Vec3, got {}", other.to_display_string()),
+    }
+}
+
+fn string_field(record: &[(String, NetworkResult)], name: &str) -> String {
+    match field(record, name) {
+        NetworkResult::String(value) => value,
+        other => panic!(
+            "{name} should be a String, got {}",
+            other.to_display_string()
+        ),
+    }
+}
+
+#[test]
+fn the_step_pin_describes_the_last_applied_step() {
+    // Step 3 of the fixture: a `grow` on the second carbon, layer 1, site 1.
+    let record = step_record(3);
+    assert_eq!(int_field(&record, "index"), 3);
+    assert_eq!(int_field(&record, "count"), 5);
+    assert_eq!(string_field(&record, "op"), "grow");
+    assert_eq!(string_field(&record, "method"), "probe");
+    assert_eq!(string_field(&record, "phase"), "layer1");
+    assert_eq!(int_field(&record, "layer"), 1);
+    assert_eq!(int_field(&record, "site"), 1);
+    assert!(string_field(&record, "note").contains("second carbon"));
+    assert_eq!(vec3_field(&record, "t"), DVec3::new(5.0, 0.0, 0.0));
+
+    // A step that states no metadata reports the absent-field defaults, not
+    // whatever the neighbouring steps said.
+    let record = step_record(1);
+    assert_eq!(int_field(&record, "index"), 1);
+    assert_eq!(string_field(&record, "method"), "");
+    assert_eq!(string_field(&record, "phase"), "");
+    assert_eq!(int_field(&record, "layer"), -1);
+    assert_eq!(int_field(&record, "site"), -1);
+}
+
+#[test]
+fn the_step_pin_at_step_zero_names_no_step_at_all() {
+    // Nothing has run, so the record must not describe `steps[0]` — which has
+    // *not* been applied — but say so with the defaults.
+    let record = step_record(0);
+    assert_eq!(int_field(&record, "index"), 0);
+    assert_eq!(int_field(&record, "count"), 5);
+    assert_eq!(string_field(&record, "op"), "");
+    assert_eq!(string_field(&record, "note"), "");
+    assert_eq!(string_field(&record, "method"), "");
+    assert_eq!(string_field(&record, "phase"), "");
+    assert_eq!(int_field(&record, "layer"), -1);
+    assert_eq!(int_field(&record, "site"), -1);
+    assert_eq!(vec3_field(&record, "t"), DVec3::ZERO);
+}
+
+#[test]
+fn the_step_pin_follows_the_same_clamp_as_the_result_pin() {
+    // `-1` and anything past the end mean the whole build.
+    for step in [-1, 5, 99] {
+        let record = step_record(step);
+        assert_eq!(int_field(&record, "index"), 5, "step {step}");
+        assert_eq!(string_field(&record, "op"), "nudge", "step {step}");
+        assert_eq!(string_field(&record, "phase"), "cleanup", "step {step}");
+    }
+}
+
+#[test]
+fn both_output_pins_carry_the_same_failure() {
+    // A missing library: the record would have nothing true to say, and `None`
+    // on the pin would say nothing at all.
+    let mut designer = setup_designer();
+    let base = add_value_node(&mut designer, molecule_value(methane()));
+    let node_id = add_mechanosynth(
+        &mut designer,
+        base,
+        MechanosynthData {
+            build_file: Some(fixture("methylate_build.json")),
+            ..MechanosynthData::new()
+        },
+    );
+    let on_result = expect_error(evaluate_pin(&designer, node_id, 0));
+    let on_step = expect_error(evaluate_pin(&designer, node_id, 1));
+    assert_eq!(on_result, on_step);
+    assert!(on_result.contains("ops_file"), "{on_result}");
+
+    // And a match failure, which happens after both files parse.
+    let mut designer = setup_designer();
+    let base = add_value_node(&mut designer, molecule_value(AtomicStructure::new()));
+    let node_id = add_mechanosynth(
+        &mut designer,
+        base,
+        loaded_data("methylate_ops.json", "methylate_build.json", -1),
+    );
+    let on_result = expect_error(evaluate_pin(&designer, node_id, 0));
+    let on_step = expect_error(evaluate_pin(&designer, node_id, 1));
+    assert_eq!(on_result, on_step);
+    assert!(on_result.contains("not found within"), "{on_result}");
+}
+
+#[test]
+fn the_result_pin_still_carries_the_workpiece_beside_the_record() {
+    // The second pin is additive: pin 0 is what it always was, and the two
+    // agree about how far the build has gone.
+    let mut designer = setup_designer();
+    let base = add_value_node(&mut designer, crystal_value(three_carbons()));
+    let node_id = add_mechanosynth(
+        &mut designer,
+        base,
+        loaded_data("metadata_ops.json", "metadata_build.json", 2),
+    );
+
+    let atoms = expect_atoms(evaluate_pin(&designer, node_id, 0));
+    assert_eq!(
+        atoms.get_num_of_atoms(),
+        5,
+        "three carbons plus two grown H"
+    );
+    assert!(atoms.atom_has_tag(atom_at(&atoms, DVec3::new(0.0, 0.0, 1.09)), "ms_added"));
+
+    let record = match evaluate_pin(&designer, node_id, 1) {
+        NetworkResult::Record(fields) => fields,
+        other => panic!("expected a record, got {}", other.to_display_string()),
+    };
+    assert_eq!(int_field(&record, "index"), 2);
+}
+
+#[test]
+fn the_step_pin_declares_the_built_in_record_type() {
+    // Pin 1 is *appended*, so pin 0 keeps its index and existing wires; and its
+    // type must be the registered built-in, or a `record_destructure` could not
+    // pick the schema out of its dropdown.
+    let registry = NodeTypeRegistry::new();
+    let node_type = registry.get_node_type("mechanosynth").unwrap();
+    assert_eq!(node_type.output_pins.len(), 2);
+    assert_eq!(node_type.output_pins[0].name, "result");
+    assert_eq!(node_type.output_pins[1].name, "step");
+    assert_eq!(
+        node_type.output_pins[1].data_type,
+        atomcad_structure_designer::node_type::PinOutputType::Fixed(DataType::Record(
+            RecordType::Named("MechanosynthStep".to_string())
+        ))
+    );
+
+    let def = registry
+        .lookup_record_type_def("MechanosynthStep")
+        .expect("MechanosynthStep is a built-in record type");
+    let names: Vec<&str> = def.fields.iter().map(|f| f.name.as_str()).collect();
+    assert_eq!(
+        names,
+        vec![
+            "index", "count", "op", "note", "method", "phase", "layer", "site", "t"
+        ]
+    );
 }

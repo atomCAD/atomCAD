@@ -367,6 +367,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIMeasurement dco_decode_api_measurement(dynamic raw);
 
   @protected
+  APIMechanosynthChapter dco_decode_api_mechanosynth_chapter(dynamic raw);
+
+  @protected
   APIMechanosynthData dco_decode_api_mechanosynth_data(dynamic raw);
 
   @protected
@@ -1137,6 +1140,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APILiteralField> dco_decode_list_api_literal_field(dynamic raw);
+
+  @protected
+  List<APIMechanosynthChapter> dco_decode_list_api_mechanosynth_chapter(
+      dynamic raw);
 
   @protected
   List<APIMotifParameterInfo> dco_decode_list_api_motif_parameter_info(
@@ -2142,6 +2149,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIMeasurement sse_decode_api_measurement(SseDeserializer deserializer);
 
   @protected
+  APIMechanosynthChapter sse_decode_api_mechanosynth_chapter(
+      SseDeserializer deserializer);
+
+  @protected
   APIMechanosynthData sse_decode_api_mechanosynth_data(
       SseDeserializer deserializer);
 
@@ -3056,6 +3067,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APILiteralField> sse_decode_list_api_literal_field(
+      SseDeserializer deserializer);
+
+  @protected
+  List<APIMechanosynthChapter> sse_decode_list_api_mechanosynth_chapter(
       SseDeserializer deserializer);
 
   @protected
@@ -4218,6 +4233,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIMeasurement self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_mechanosynth_chapter(
+      APIMechanosynthChapter self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_mechanosynth_data(
       APIMechanosynthData self, SseSerializer serializer);
 
@@ -5162,6 +5181,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_api_literal_field(
       List<APILiteralField> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_api_mechanosynth_chapter(
+      List<APIMechanosynthChapter> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_api_motif_parameter_info(

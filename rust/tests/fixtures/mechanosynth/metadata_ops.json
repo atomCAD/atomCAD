@@ -1,0 +1,30 @@
+{
+  "comment": "Three minimal operations for the step-metadata tests: one that creates an atom, one that deletes one, one that only moves one. Together they cover the three ways an atom can relate to a layer — created by it, removed after it, merely nudged by it.",
+  "format": "atomcad-msops/1",
+  "ops": [
+    {
+      "name": "grow",
+      "comment": "Adds a hydrogen onto a carbon. The only op here that creates an atom.",
+      "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
+      "after": {
+        "atoms": [
+          { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] },
+          { "id": 2, "el": "H", "pos": [0.0, 0.0, 1.09] }
+        ],
+        "bonds": [ [1, 2] ]
+      }
+    },
+    {
+      "name": "strip",
+      "comment": "Abstracts a hydrogen. Used to delete an atom an earlier step created.",
+      "before": { "atoms": [ { "id": 1, "el": "H", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
+      "after": { "atoms": [], "bonds": [] }
+    },
+    {
+      "name": "nudge",
+      "comment": "Moves a carbon half an Angstrom along +x. Creates nothing, so a nudged atom must never join a layer set.",
+      "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
+      "after":  { "atoms": [ { "id": 1, "el": "C", "pos": [0.5, 0.0, 0.0] } ], "bonds": [] }
+    }
+  ]
+}

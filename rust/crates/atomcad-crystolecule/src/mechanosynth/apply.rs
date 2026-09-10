@@ -7,7 +7,7 @@
 //! fail.
 
 use super::schema::{
-    BuildScript, DEFAULT_TOLERANCE, MechanosynthError, OpLibrary, Operation,
+    BuildScript, DEFAULT_TOLERANCE, MechanosynthError, NO_LAYER, OpLibrary, Operation,
     PATTERN_POSITION_EPSILON, PatternElement, Step,
 };
 use crate::atomic_constants::ATOM_INFO;
@@ -50,14 +50,24 @@ pub fn steps_applied(step: i32, step_count: usize) -> usize {
     }
 }
 
+/// What one step did to the workpiece, in atom ids.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct StepEffect {
+    /// The atoms this step touched *and left in place*: matched atoms that were
+    /// kept, moved or replaced, the atoms it added, and the surviving atoms
+    /// that were bonded to an atom it deleted. Deleted atoms are not in the
+    /// list — they no longer exist — but their bonded neighbours stand in for
+    /// them, so a pure abstraction still points at the site it acted on. This
+    /// is what [`HighlightTags::current`] is painted on.
+    pub touched: Vec<u32>,
+    /// The atoms this step **created** — the ids only `after` names. A subset
+    /// of `touched`, split out because "which layer built this atom" is a
+    /// question only about creation: an atom a step merely *moved* belongs to
+    /// the layer that made it, not to the one that nudged it.
+    pub added: Vec<u32>,
+}
+
 /// Applies one step to `workpiece` in place.
-///
-/// Returns the ids of the atoms this step touched *and left in place*: matched
-/// atoms that were kept, moved or replaced, the atoms it added, and the
-/// surviving atoms that were bonded to an atom it deleted. Deleted atoms are
-/// not in the list — they no longer exist — but their bonded neighbours stand
-/// in for them, so a pure abstraction still points at the site it acted on.
-/// This is what the highlight tag is painted on.
 ///
 /// `step_number` is 1-based and appears in the failure message only.
 pub fn apply_step(
@@ -66,7 +76,7 @@ pub fn apply_step(
     step: &Step,
     step_number: usize,
     tolerance: f64,
-) -> Result<Vec<u32>, MechanosynthError> {
+) -> Result<StepEffect, MechanosynthError> {
     // --- 1. match -----------------------------------------------------------
     // Every `before` atom must match a distinct workpiece atom. With ideal
     // coordinates a 0.3 Å tolerance is far below half a bond length, so
@@ -116,6 +126,7 @@ pub fn apply_step(
 
     // --- 2. apply -----------------------------------------------------------
     let mut touched: Vec<u32> = Vec::new();
+    let mut added: Vec<u32> = Vec::new();
 
     // Ids only in `before`: delete. Every bond the atom had — to pattern atoms
     // or to any other workpiece atom — goes with it. The neighbours are noted
@@ -163,6 +174,7 @@ pub fn apply_step(
         let atom_id = workpiece.add_atom(z, step.place(after_atom.pos));
         matched.insert(after_atom.id, atom_id);
         touched.push(atom_id);
+        added.push(atom_id);
     }
 
     // --- 3. bonds -----------------------------------------------------------
@@ -205,7 +217,7 @@ pub fn apply_step(
         }
     }
 
-    Ok(touched)
+    Ok(StepEffect { touched, added })
 }
 
 /// The tail of a match-failure message: what *is* near the position the step
@@ -226,16 +238,37 @@ fn describe_nearest(workpiece: &AtomicStructure, target: DVec3) -> String {
     }
 }
 
+/// The atom tags [`replay`] paints, each optional. `None` everywhere paints
+/// nothing and interns no tag name, which is what the engine tests and any
+/// non-UI caller want.
+///
+/// Every tag is cleared from the base clone before anything is applied, so an
+/// upstream `mechanosynth` node's highlights never leak into a downstream
+/// one's.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct HighlightTags<'a> {
+    /// Painted on the last applied step's [`StepEffect::touched`] atoms.
+    pub current: Option<&'a str>,
+    /// Painted on every atom **created** by an applied step that still exists.
+    pub added: Option<&'a str>,
+    /// Painted on every atom created by an applied step whose `layer` equals
+    /// the last applied step's `layer`. Empty when that layer is
+    /// [`NO_LAYER`](super::schema::NO_LAYER), because "no particular layer" is
+    /// not a layer to highlight.
+    pub layer: Option<&'a str>,
+}
+
 /// Replays the first `step` steps of `script` onto a copy of `base`.
 ///
 /// `step = k` means "the first `k` steps applied", `step = 0` is the untouched
 /// base, a negative `step` or one past the end means the full build. Steps are
 /// numbered from 1 in messages, so "step 17" is `steps[16]`.
 ///
-/// When `highlight_tag` is `Some`, that atom tag is cleared from every atom and
-/// then painted on the atoms of the last applied step that still exist, plus
-/// the surviving neighbours of any atom that step deleted (see [`apply_step`]).
-/// With `None` no tag is touched or interned at all.
+/// `tags` selects which highlights to paint; see [`HighlightTags`]. Membership
+/// of the `added` and `layer` sets is decided by **the script's own metadata**,
+/// never by geometry — an atom a step *moved* was not created by it, so it
+/// stays out of that step's layer, which is right: it belongs to the layer
+/// below.
 ///
 /// A step that fails to match aborts the whole replay; the partial state is
 /// reachable by asking for one step fewer.
@@ -244,37 +277,66 @@ pub fn replay(
     library: &OpLibrary,
     script: &BuildScript,
     step: i32,
-    highlight_tag: Option<&str>,
+    tags: HighlightTags<'_>,
 ) -> Result<AtomicStructure, MechanosynthError> {
     super::parse::validate_script_ops(script, library)?;
 
     let tolerance = resolve_tolerance(library, script);
     let n = steps_applied(step, script.steps.len());
 
+    // The layer under construction is the last applied step's, read up front so
+    // the loop below can filter as it goes. `NO_LAYER` disables the layer set
+    // entirely.
+    let active_layer = n
+        .checked_sub(1)
+        .and_then(|index| script.steps.get(index))
+        .map(|last| last.layer)
+        .filter(|layer| *layer != NO_LAYER);
+
     let mut workpiece = base.clone();
     let mut last_touched: Vec<u32> = Vec::new();
+    let mut created: Vec<u32> = Vec::new();
+    let mut created_in_layer: Vec<u32> = Vec::new();
 
     for (i, script_step) in script.steps.iter().take(n).enumerate() {
         let op = library
             .get(&script_step.op)
             .expect("validate_script_ops checked every op name");
-        last_touched = apply_step(&mut workpiece, op, script_step, i + 1, tolerance)?;
+        let effect = apply_step(&mut workpiece, op, script_step, i + 1, tolerance)?;
+        if tags.added.is_some() {
+            created.extend(effect.added.iter().copied());
+        }
+        if tags.layer.is_some() && active_layer == Some(script_step.layer) {
+            created_in_layer.extend(effect.added.iter().copied());
+        }
+        last_touched = effect.touched;
     }
 
-    if let Some(tag) = highlight_tag {
-        // Any pre-existing tag on the base — e.g. from an upstream mechanosynth
-        // node — is cleared whenever a highlight is requested, including at
-        // n = 0. `atoms_with_tag` is empty when the name is not interned, so
-        // this is a no-op on a structure that has never seen the tag.
-        for atom_id in workpiece.atoms_with_tag(tag) {
-            workpiece.remove_atom_tag(atom_id, tag);
-        }
-        for atom_id in last_touched {
-            // The tag table is 32 slots wide and may be full; a highlight is
-            // cosmetic, so losing it is not worth failing a replay over.
-            let _ = workpiece.add_atom_tag(atom_id, tag);
-        }
-    }
+    // Ids are never reused, so a created atom a later step deleted is simply
+    // gone; the sets are filtered against the finished workpiece rather than
+    // bookkept step by step.
+    paint(&mut workpiece, tags.current, last_touched);
+    paint(&mut workpiece, tags.added, created);
+    paint(&mut workpiece, tags.layer, created_in_layer);
 
     Ok(workpiece)
+}
+
+/// Clears `tag` from every atom and paints it on the surviving ids of `atoms`.
+///
+/// The clear happens whenever a tag is requested, including at step 0 and for
+/// an empty set: any pre-existing value on the base — e.g. from an upstream
+/// `mechanosynth` node — is not this replay's. `atoms_with_tag` is empty when
+/// the name is not interned, so this is a no-op on a structure that has never
+/// seen the tag.
+fn paint(workpiece: &mut AtomicStructure, tag: Option<&str>, atoms: Vec<u32>) {
+    let Some(tag) = tag else { return };
+    for atom_id in workpiece.atoms_with_tag(tag) {
+        workpiece.remove_atom_tag(atom_id, tag);
+    }
+    for atom_id in atoms {
+        // The tag table is 32 slots wide and may be full; a highlight is
+        // cosmetic, so losing it is not worth failing a replay over.
+        let _ = workpiece.add_atom_tag(atom_id, tag);
+    }
 }

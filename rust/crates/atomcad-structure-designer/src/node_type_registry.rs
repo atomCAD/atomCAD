@@ -765,6 +765,40 @@ impl NodeTypeRegistry {
             ),
         );
 
+        // `MechanosynthStep` — what the `mechanosynth` node's second output pin
+        // says about the last step it applied: where the scrub stands
+        // (`index` / `count`), what that step was (`op`, `note`, `t`) and the
+        // generator's own metadata about it (`method`, `phase`, `layer`,
+        // `site`). A `switch` on `method`, an `expr` building a caption or an
+        // `if` gating a branch reads typed fields here instead of parsing prose
+        // out of a note.
+        //
+        // The schema is **fixed**, not derived from the loaded build file: a
+        // pin's type must be known at validation time, and a type that changed
+        // with a file's contents would disconnect downstream wires the way a
+        // record field rename does — and would be unknown entirely on a
+        // text-format round trip, where the node has no design directory to
+        // load the file from. Plain defaults rather than `Optional[T]` keep the
+        // record usable in `expr` without unwrapping. See
+        // `doc/design_mechanosynth_step_metadata.md`.
+        ret.built_in_record_type_defs.insert(
+            "MechanosynthStep".to_string(),
+            RecordTypeDef::from_named_fields(
+                "MechanosynthStep",
+                vec![
+                    ("index".to_string(), DataType::Int),
+                    ("count".to_string(), DataType::Int),
+                    ("op".to_string(), DataType::String),
+                    ("note".to_string(), DataType::String),
+                    ("method".to_string(), DataType::String),
+                    ("phase".to_string(), DataType::String),
+                    ("layer".to_string(), DataType::Int),
+                    ("site".to_string(), DataType::Int),
+                    ("t".to_string(), DataType::Vec3),
+                ],
+            ),
+        );
+
         // Annotation nodes
         ret.add_node_type(comment_get_node_type());
 

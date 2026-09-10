@@ -21,11 +21,18 @@
 //!   cache without a design directory to reload from, so this fallback is what
 //!   keeps a `query`/`edit` round trip evaluating.
 //!
-//! The highlight tag is passed in from here rather than baked into the engine:
-//! `replay`'s `highlight_tag` argument is `Some(MS_CURRENT_TAG)` for the node
-//! and `None` for the engine tests and the CLI.
+//! The highlight tags are passed in from here rather than baked into the
+//! engine: `replay`'s [`HighlightTags`] argument names all three for the node
+//! and is `HighlightTags::default()` — nothing painted, no tag name interned —
+//! for the engine tests and any non-UI caller.
+//!
+//! The node has **two** output pins: the workpiece, and a `MechanosynthStep`
+//! record describing the last step applied. They are one evaluation, so an
+//! error reaches both (`both`), and the record is read off the same script and
+//! the same clamp the replay used rather than replaying a second time. See
+//! `doc/design_mechanosynth_step_metadata.md`.
 
-use crate::data_type::DataType;
+use crate::data_type::{DataType, RecordType};
 use crate::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
@@ -38,10 +45,11 @@ use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
 use atomcad_crystolecule::mechanosynth::{
-    BuildScript, MechanosynthError, OpLibrary, load_build_script, load_library, replay,
-    steps_applied,
+    BuildScript, HighlightTags, MechanosynthError, NO_LAYER, NO_SITE, OpLibrary, load_build_script,
+    load_library, replay, steps_applied,
 };
 use atomcad_util::path_utils::{get_parent_directory, resolve_path, try_make_relative};
+use glam::DVec3;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::borrow::Cow;
@@ -53,6 +61,24 @@ use std::path::Path;
 /// tag (`doc/design_atom_tags.md`), so `apply_style` can colour it and the tag
 /// panel lists it — at the cost of one of the 32 tag slots.
 pub const MS_CURRENT_TAG: &str = "ms_current";
+
+/// The atom tag the node paints on every atom *created* by an applied step —
+/// "what this build has put down so far", as against the base it started from.
+pub const MS_ADDED_TAG: &str = "ms_added";
+
+/// The atom tag the node paints on the atoms created by the terrace under
+/// construction: every atom an applied step whose `layer` matches the current
+/// step's created. Empty when the current step names no layer.
+pub const MS_LAYER_TAG: &str = "ms_layer";
+
+/// The named record type of the `step` output pin. Registered in
+/// `node_type_registry.rs` beside `Patch` and `MaterializeRegion`.
+pub const MECHANOSYNTH_STEP_RECORD: &str = "MechanosynthStep";
+
+/// Index of the `step` output pin. **Appended** (pin 1), never inserted, so
+/// saved projects and existing wires keep their pin indices
+/// (`doc/design_multi_output_pins.md`).
+pub const STEP_OUTPUT_PIN: usize = 1;
 
 /// `step = -1` means "every step", which is the useful default: a freshly wired
 /// node shows the finished build.
@@ -287,12 +313,12 @@ impl NodeData for MechanosynthData {
         let input_val =
             network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
         if input_val.is_error() {
-            return EvalOutput::single(input_val);
+            return both(input_val);
         }
         let mut wrapper = match input_val {
             NetworkResult::Crystal(_) | NetworkResult::Molecule(_) => input_val,
             other => {
-                return EvalOutput::single(error(format!(
+                return both(error(format!(
                     "expected atomic input, got {:?}",
                     other.infer_data_type()
                 )));
@@ -313,7 +339,7 @@ impl NodeData for MechanosynthData {
             1,
         ) {
             Ok(name) => name,
-            Err(propagated) => return EvalOutput::single(propagated),
+            Err(propagated) => return both(propagated),
         };
         let wired_build = match wired_name(
             network_evaluator,
@@ -324,7 +350,7 @@ impl NodeData for MechanosynthData {
             2,
         ) {
             Ok(name) => name,
-            Err(propagated) => return EvalOutput::single(propagated),
+            Err(propagated) => return both(propagated),
         };
         let step = match network_evaluator.evaluate_or_default(
             network_stack,
@@ -336,16 +362,16 @@ impl NodeData for MechanosynthData {
             NetworkResult::extract_int,
         ) {
             Ok(step) => step,
-            Err(propagated) => return EvalOutput::single(propagated),
+            Err(propagated) => return both(propagated),
         };
 
         let library = match self.resolve_library(wired_ops, design_dir.as_deref()) {
             Ok(library) => library,
-            Err(message) => return EvalOutput::single(error(message)),
+            Err(message) => return both(error(message)),
         };
         let script = match self.resolve_script(wired_build, design_dir.as_deref()) {
             Ok(script) => script,
-            Err(message) => return EvalOutput::single(error(message)),
+            Err(message) => return both(error(message)),
         };
 
         let atoms = match &mut wrapper {
@@ -353,12 +379,21 @@ impl NodeData for MechanosynthData {
             NetworkResult::Molecule(molecule) => &mut molecule.atoms,
             _ => unreachable!("the match above admitted only these two"),
         };
-        match replay(atoms, &library, &script, step, Some(MS_CURRENT_TAG)) {
+        let tags = HighlightTags {
+            current: Some(MS_CURRENT_TAG),
+            added: Some(MS_ADDED_TAG),
+            layer: Some(MS_LAYER_TAG),
+        };
+        match replay(atoms, &library, &script, step, tags) {
             Ok(result) => {
                 *atoms = result;
-                EvalOutput::single(wrapper)
+                // The record is built from the same script and the same clamp
+                // the replay just used, so the second pin costs no second
+                // replay.
+                let record = step_record(&script, step);
+                EvalOutput::multi(vec![wrapper, record])
             }
-            Err(failure) => EvalOutput::single(error(failure.to_string())),
+            Err(failure) => both(error(failure.to_string())),
         }
     }
 
@@ -462,6 +497,57 @@ fn error(message: impl std::fmt::Display) -> NetworkResult {
     NetworkResult::Error(format!("mechanosynth: {message}"))
 }
 
+/// The same result on both output pins.
+///
+/// The two outputs are one evaluation, so whatever stops the workpiece from
+/// being produced stops the record too: a `MechanosynthStep` whose `index`
+/// described a replay that failed would be a lie, and `None` on the pin would
+/// be a silent one.
+fn both(result: NetworkResult) -> EvalOutput {
+    EvalOutput::multi(vec![result.clone(), result])
+}
+
+/// The `MechanosynthStep` record describing the **last step applied** — the
+/// same "current step" the property panel names.
+///
+/// At `index = 0` nothing has run, so the step-specific fields take their
+/// absent-field defaults rather than describing `steps[0]`, which has *not*
+/// been applied yet.
+fn step_record(script: &BuildScript, step: i32) -> NetworkResult {
+    let count = script.steps.len();
+    let index = steps_applied(step, count);
+    let current = index.checked_sub(1).and_then(|last| script.steps.get(last));
+
+    let text = |value: Option<&str>| NetworkResult::String(value.unwrap_or_default().to_string());
+
+    NetworkResult::record(vec![
+        ("index".to_string(), NetworkResult::Int(index as i32)),
+        ("count".to_string(), NetworkResult::Int(count as i32)),
+        ("op".to_string(), text(current.map(|s| s.op.as_str()))),
+        (
+            "note".to_string(),
+            text(current.and_then(|s| s.note.as_deref())),
+        ),
+        (
+            "method".to_string(),
+            text(current.map(|s| s.method.as_str())),
+        ),
+        ("phase".to_string(), text(current.map(|s| s.phase.as_str()))),
+        (
+            "layer".to_string(),
+            NetworkResult::Int(current.map_or(NO_LAYER, |s| s.layer)),
+        ),
+        (
+            "site".to_string(),
+            NetworkResult::Int(current.map_or(NO_SITE, |s| s.site)),
+        ),
+        (
+            "t".to_string(),
+            NetworkResult::Vec3(current.map_or(DVec3::ZERO, |s| s.t)),
+        ),
+    ])
+}
+
 /// Pre-parses both files after deserializing, mirroring
 /// `import_xyz_data_loader`.
 ///
@@ -526,7 +612,14 @@ pub fn get_node_type() -> NodeType {
             \n\
             The atoms of the current step carry the `ms_current` tag, which `apply_style` can \
             colour; when a step deletes an atom, the atoms it was bonded to carry the tag in its \
-            place. File paths are stored relative to the project file whenever possible so a \
+            place. Every atom the applied steps created carries `ms_added`, and those created by \
+            the terrace under construction carry `ms_layer`.\n\
+            \n\
+            The second output pin, `step`, carries a `MechanosynthStep` record describing the \
+            **last step applied** — `index`, `count`, `op`, `note`, the script's own `method`, \
+            `phase`, `layer` and `site` metadata, and the placement point `t` — so a `switch`, an \
+            `expr` or a `record_destructure` downstream can act on the step rather than parse its \
+            note. File paths are stored relative to the project file whenever possible so a \
             copied project keeps working."
             .to_string(),
         summary: Some("Replay a build sequence".to_string()),
@@ -553,7 +646,15 @@ pub fn get_node_type() -> NodeType {
                 data_type: DataType::Int,
             },
         ],
-        output_pins: vec![OutputPinDefinition::same_as_input("result", "base")],
+        output_pins: vec![
+            OutputPinDefinition::same_as_input("result", "base"),
+            // Appended, never inserted: pin 0 stays the workpiece so saved
+            // projects keep their wires (`doc/design_multi_output_pins.md`).
+            OutputPinDefinition::fixed(
+                "step",
+                DataType::Record(RecordType::Named(MECHANOSYNTH_STEP_RECORD.to_string())),
+            ),
+        ],
         zone_input_pins: vec![],
         zone_output_pins: vec![],
         public: true,

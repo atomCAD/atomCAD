@@ -10,9 +10,10 @@
 
 use atomcad_crystolecule::atomic_structure::{AtomicStructure, BondReference};
 use atomcad_crystolecule::mechanosynth::{
-    BuildScript, DEFAULT_TOLERANCE, Mismatch, OpLibrary, PatternElement, Step, apply_step,
-    compare_structures, describe_mismatches, load_build_script, load_library, parse_build_script,
-    parse_library, replay, resolve_tolerance, steps_applied, validate_script_ops,
+    BuildScript, DEFAULT_TOLERANCE, HighlightTags, Mismatch, NO_LAYER, NO_SITE, OpLibrary,
+    PatternElement, Step, apply_step, compare_structures, describe_mismatches, load_build_script,
+    load_library, parse_build_script, parse_library, replay, resolve_tolerance, steps_applied,
+    validate_script_ops,
 };
 use atomcad_test_support::fixture_path;
 use glam::{DMat3, DVec3};
@@ -51,7 +52,17 @@ fn apply_named(
 ) -> Vec<u32> {
     let op = lib.get(op_name).expect("op in fixture");
     let step = Step::new(op_name, t);
-    apply_step(workpiece, op, &step, 1, tolerance).expect("step should apply")
+    apply_step(workpiece, op, &step, 1, tolerance)
+        .expect("step should apply")
+        .touched
+}
+
+/// The pre-metadata highlight request: the current-step tag alone.
+fn current_only(tag: &str) -> HighlightTags<'_> {
+    HighlightTags {
+        current: Some(tag),
+        ..HighlightTags::default()
+    }
 }
 
 fn assert_same(a: &AtomicStructure, b: &AtomicStructure) {
@@ -361,7 +372,7 @@ fn a_step_naming_an_unknown_operation_is_rejected_against_the_library() {
     assert!(message.contains("no_such_op"), "{message}");
 
     // And the same check fires from `replay`, before anything is applied.
-    let message = replay(&methane(), &lib, &build, -1, None)
+    let message = replay(&methane(), &lib, &build, -1, HighlightTags::default())
         .expect_err("unknown op")
         .to_string();
     assert!(message.contains("no_such_op"), "{message}");
@@ -751,7 +762,7 @@ fn steps_place_added_atoms_at_r_times_pos_plus_t() {
         base.add_atom(C, DVec3::new(x, 0.0, 0.0));
     }
 
-    let result = replay(&base, &lib, &build, -1, None).expect("replays");
+    let result = replay(&base, &lib, &build, -1, HighlightTags::default()).expect("replays");
 
     // Step 1, identity: local +x and +y stay put.
     assert_eq!(element_at(&result, DVec3::new(1.0, 0.0, 0.0)), O);
@@ -805,7 +816,7 @@ fn replaying_the_multi_step_fixture_matches_a_hand_built_result() {
     let base = methane();
 
     for step in 0..=3 {
-        let result = replay(&base, &lib, &build, step as i32, None)
+        let result = replay(&base, &lib, &build, step as i32, HighlightTags::default())
             .unwrap_or_else(|e| panic!("step {step} should replay: {e}"));
         let expected = methylate_expected(step);
         let mismatches = compare_structures(&result, &expected, EXACT);
@@ -823,11 +834,17 @@ fn step_zero_is_the_untouched_base_and_out_of_range_clamps_to_the_full_build() {
     let build = script("methylate_build.json");
     let base = methane();
 
-    assert_same(&replay(&base, &lib, &build, 0, None).unwrap(), &base);
+    assert_same(
+        &replay(&base, &lib, &build, 0, HighlightTags::default()).unwrap(),
+        &base,
+    );
 
     let full = methylate_expected(3);
     for step in [3, 4, 99, -1, -7] {
-        assert_same(&replay(&base, &lib, &build, step, None).unwrap(), &full);
+        assert_same(
+            &replay(&base, &lib, &build, step, HighlightTags::default()).unwrap(),
+            &full,
+        );
     }
 
     assert_eq!(steps_applied(-1, 3), 3);
@@ -843,7 +860,7 @@ fn the_base_is_never_mutated() {
     let base = methane();
     let pristine = methane();
 
-    replay(&base, &lib, &build, -1, Some("ms_current")).expect("replays");
+    replay(&base, &lib, &build, -1, current_only("ms_current")).expect("replays");
     assert_same(&base, &pristine);
     assert!(base.tag_names().is_empty());
 }
@@ -860,14 +877,15 @@ fn a_failing_step_aborts_the_replay_and_names_its_one_based_index() {
     )
     .expect("parses");
 
-    let message = replay(&methane(), &lib, &build, -1, None)
+    let message = replay(&methane(), &lib, &build, -1, HighlightTags::default())
         .expect_err("second abstraction has nothing to take")
         .to_string();
     assert!(message.contains("step 2"), "{message}");
     assert!(message.contains("habst"), "{message}");
 
     // The partial state is reachable by asking for one step fewer.
-    let partial = replay(&methane(), &lib, &build, 1, None).expect("step 1 alone replays");
+    let partial = replay(&methane(), &lib, &build, 1, HighlightTags::default())
+        .expect("step 1 alone replays");
     assert_same(&partial, &methyl_radical());
 }
 
@@ -884,14 +902,14 @@ fn the_highlight_marks_exactly_the_current_steps_surviving_atoms() {
     let base = methane();
 
     // Step 3 (`hdon`): the carbon it matched plus the hydrogen it added.
-    let result = replay(&base, &lib, &build, 3, Some(HIGHLIGHT)).unwrap();
+    let result = replay(&base, &lib, &build, 3, current_only(HIGHLIGHT)).unwrap();
     let tagged = result.atoms_with_tag(HIGHLIGHT);
     assert_eq!(tagged.len(), 2);
     assert!(result.atom_has_tag(atom_at(&result, DVec3::new(0.0, 0.0, 1.54)), HIGHLIGHT));
     assert!(result.atom_has_tag(atom_at(&result, DVec3::new(0.0, 0.0, 2.63)), HIGHLIGHT));
 
     // Step 2 (`gm_methylate`): the host carbon plus the three atoms it added.
-    let result = replay(&base, &lib, &build, 2, Some(HIGHLIGHT)).unwrap();
+    let result = replay(&base, &lib, &build, 2, current_only(HIGHLIGHT)).unwrap();
     let tagged = result.atoms_with_tag(HIGHLIGHT);
     assert_eq!(tagged.len(), 4);
     for pos in [
@@ -909,7 +927,7 @@ fn the_highlight_marks_exactly_the_current_steps_surviving_atoms() {
     // Step 1 (`habst`) deletes its only atom. The hydrogen is gone, so the
     // highlight falls on the carbon it was bonded to — the radical site the
     // abstraction produced — and on nothing else.
-    let result = replay(&base, &lib, &build, 1, Some(HIGHLIGHT)).unwrap();
+    let result = replay(&base, &lib, &build, 1, current_only(HIGHLIGHT)).unwrap();
     let tagged = result.atoms_with_tag(HIGHLIGHT);
     assert_eq!(tagged, vec![atom_at(&result, DVec3::ZERO)]);
 }
@@ -927,11 +945,11 @@ fn a_pre_existing_highlight_on_the_base_is_cleared() {
     assert_eq!(base.atoms_with_tag(HIGHLIGHT).len(), 5);
 
     // Cleared even at n = 0, where no step contributes a replacement.
-    let result = replay(&base, &lib, &build, 0, Some(HIGHLIGHT)).unwrap();
+    let result = replay(&base, &lib, &build, 0, current_only(HIGHLIGHT)).unwrap();
     assert!(result.atoms_with_tag(HIGHLIGHT).is_empty());
 
     // And at n > 0 only the current step's atoms carry it.
-    let result = replay(&base, &lib, &build, 3, Some(HIGHLIGHT)).unwrap();
+    let result = replay(&base, &lib, &build, 3, current_only(HIGHLIGHT)).unwrap();
     assert_eq!(result.atoms_with_tag(HIGHLIGHT).len(), 2);
 }
 
@@ -940,10 +958,10 @@ fn no_tag_is_interned_when_no_highlight_is_requested() {
     let lib = library("methylate_ops.json");
     let build = script("methylate_build.json");
 
-    let result = replay(&methane(), &lib, &build, 3, None).unwrap();
+    let result = replay(&methane(), &lib, &build, 3, HighlightTags::default()).unwrap();
     assert!(result.tag_names().is_empty());
 
-    let result = replay(&methane(), &lib, &build, 3, Some(HIGHLIGHT)).unwrap();
+    let result = replay(&methane(), &lib, &build, 3, current_only(HIGHLIGHT)).unwrap();
     assert_eq!(result.tag_names(), &[HIGHLIGHT.to_string()]);
 }
 
@@ -1106,4 +1124,236 @@ fn a_bare_workpiece_and_a_bare_target_compare_equal() {
     let empty = AtomicStructure::new();
     assert!(compare_structures(&empty, &empty, 0.1).is_empty());
     assert!(has_atom_at(&methane(), DVec3::ZERO));
+}
+
+// ============================================================================
+// Step metadata: the four optional fields and the two derived tags
+// (`doc/design_mechanosynth_step_metadata.md`)
+// ============================================================================
+
+const ADDED: &str = "ms_added";
+const LAYER: &str = "ms_layer";
+
+/// Every tag the node asks for, under the test's own names.
+fn all_tags() -> HighlightTags<'static> {
+    HighlightTags {
+        current: Some(HIGHLIGHT),
+        added: Some(ADDED),
+        layer: Some(LAYER),
+    }
+}
+
+/// The base of `metadata_build.json`: three carbons on the x axis, unbonded.
+/// Steps address them by position, so nothing else is needed.
+fn three_carbons() -> AtomicStructure {
+    let mut s = AtomicStructure::new();
+    for x in [0.0, 5.0, 10.0] {
+        s.add_atom(C, DVec3::new(x, 0.0, 0.0));
+    }
+    s
+}
+
+#[test]
+fn absent_metadata_fields_take_their_defaults() {
+    // Step 1 of the fixture states none of the four; the pre-metadata fixtures
+    // state none anywhere, and both must read the same.
+    let s = script("metadata_build.json");
+    assert_eq!(s.steps[0].method, "");
+    assert_eq!(s.steps[0].phase, "");
+    assert_eq!(s.steps[0].layer, NO_LAYER);
+    assert_eq!(s.steps[0].site, NO_SITE);
+    assert_eq!(NO_LAYER, -1);
+    assert_eq!(NO_SITE, -1);
+
+    let old = script("valid_build.json");
+    assert_eq!(old.steps[0].method, "");
+    assert_eq!(old.steps[0].layer, NO_LAYER);
+
+    // And a step built in code carries the same defaults.
+    let step = Step::new("habst", DVec3::ZERO);
+    assert_eq!(step.phase, "");
+    assert_eq!(step.site, NO_SITE);
+}
+
+#[test]
+fn present_metadata_fields_land_where_the_schema_says() {
+    let s = script("metadata_build.json");
+    assert_eq!(s.steps[1].method, "probe");
+    assert_eq!(s.steps[1].phase, "layer1");
+    assert_eq!(s.steps[1].layer, 1);
+    assert_eq!(s.steps[1].site, 0);
+    assert_eq!(s.steps[2].site, 1);
+    assert_eq!(s.steps[3].phase, "cleanup");
+    assert_eq!(s.steps[4].site, 2);
+}
+
+#[test]
+fn a_metadata_field_of_the_wrong_type_names_the_step_and_the_field() {
+    // A wrong type is an `Invalid` error like any other malformed step — not a
+    // serde message about the whole document.
+    for (field, value) in [
+        ("method", "7"),
+        ("phase", "[\"a\"]"),
+        ("layer", "\"one\""),
+        ("site", "1.5"),
+    ] {
+        let text = format!(
+            r#"{{ "format": "atomcad-msbuild/1", "steps": [
+                 {{ "op": "a", "t": [0, 0, 0] }},
+                 {{ "op": "b", "t": [0, 0, 0], "{field}": {value} }}
+               ] }}"#
+        );
+        let message = parse_build_script(&text, "build.json")
+            .expect_err("a wrong-typed metadata field is rejected")
+            .to_string();
+        assert!(message.contains("build.json"), "{message}");
+        assert!(message.contains("step 2"), "{message}");
+        assert!(message.contains(field), "{message}");
+    }
+
+    // An explicit null is "absent", so it takes the default rather than failing.
+    let nulled = parse_build_script(
+        r#"{ "format": "atomcad-msbuild/1", "steps": [
+             { "op": "a", "t": [0, 0, 0], "phase": null, "layer": null }
+           ] }"#,
+        "build.json",
+    )
+    .expect("an explicit null is absent");
+    assert_eq!(nulled.steps[0].phase, "");
+    assert_eq!(nulled.steps[0].layer, NO_LAYER);
+}
+
+#[test]
+fn ms_added_holds_every_surviving_created_atom_and_nothing_else() {
+    let lib = library("metadata_ops.json");
+    let build = script("metadata_build.json");
+    let result = replay(&three_carbons(), &lib, &build, -1, all_tags()).unwrap();
+
+    // Steps 1-3 each created one hydrogen; step 4 deleted the one step 2 made.
+    let added = result.atoms_with_tag(ADDED);
+    assert_eq!(added.len(), 2, "the deleted hydrogen is not in the set");
+    for pos in [DVec3::new(10.0, 0.0, 1.09), DVec3::new(5.0, 0.0, 1.09)] {
+        assert!(
+            result.atom_has_tag(atom_at(&result, pos), ADDED),
+            "expected ms_added at {pos:?}"
+        );
+    }
+    // No base atom is in it, including the one step 5 moved.
+    assert!(!has_atom_at(&result, DVec3::new(0.0, 0.0, 1.09)));
+    for pos in [
+        DVec3::ZERO,
+        DVec3::new(5.0, 0.0, 0.0),
+        DVec3::new(10.5, 0.0, 0.0),
+    ] {
+        assert!(
+            !result.atom_has_tag(atom_at(&result, pos), ADDED),
+            "a base atom is not created at {pos:?}"
+        );
+    }
+}
+
+#[test]
+fn ms_layer_holds_what_the_current_layer_created() {
+    let lib = library("metadata_ops.json");
+    let build = script("metadata_build.json");
+    let result = replay(&three_carbons(), &lib, &build, -1, all_tags()).unwrap();
+
+    // The last applied step is in layer 1, so the set is what steps 2 and 3
+    // created — minus the hydrogen step 4 took back. Step 1's hydrogen belongs
+    // to no layer and step 5's carbon was moved, not created.
+    let tagged = result.atoms_with_tag(LAYER);
+    assert_eq!(
+        tagged,
+        vec![atom_at(&result, DVec3::new(5.0, 0.0, 1.09))],
+        "only the surviving layer-1 creation"
+    );
+    assert!(
+        !result.atom_has_tag(atom_at(&result, DVec3::new(10.0, 0.0, 1.09)), LAYER),
+        "a creation of another layer stays out"
+    );
+    assert!(
+        !result.atom_has_tag(atom_at(&result, DVec3::new(10.5, 0.0, 0.0)), LAYER),
+        "an atom the layer merely moved stays out"
+    );
+
+    // `ms_current` still means the last step alone: the carbon step 5 moved.
+    assert_eq!(
+        result.atoms_with_tag(HIGHLIGHT),
+        vec![atom_at(&result, DVec3::new(10.5, 0.0, 0.0))]
+    );
+}
+
+#[test]
+fn ms_layer_is_empty_when_the_current_step_names_no_layer() {
+    let lib = library("metadata_ops.json");
+    let build = script("metadata_build.json");
+
+    // Step 1 states no layer, so there is no terrace to highlight — even though
+    // it created an atom, which `ms_added` does pick up.
+    let result = replay(&three_carbons(), &lib, &build, 1, all_tags()).unwrap();
+    assert!(result.atoms_with_tag(LAYER).is_empty());
+    assert_eq!(result.atoms_with_tag(ADDED).len(), 1);
+
+    // Same at step 0: nothing has run at all.
+    let result = replay(&three_carbons(), &lib, &build, 0, all_tags()).unwrap();
+    assert!(result.atoms_with_tag(LAYER).is_empty());
+    assert!(result.atoms_with_tag(ADDED).is_empty());
+}
+
+#[test]
+fn the_derived_tags_are_cleared_from_a_pre_tagged_base() {
+    let lib = library("metadata_ops.json");
+    let build = script("metadata_build.json");
+
+    // As if an upstream `mechanosynth` node had painted all three.
+    let mut base = three_carbons();
+    for id in base.atom_ids().copied().collect::<Vec<_>>() {
+        for tag in [HIGHLIGHT, ADDED, LAYER] {
+            base.add_atom_tag(id, tag).expect("intern ok");
+        }
+    }
+
+    // Cleared even at n = 0, where no step contributes a replacement.
+    let result = replay(&base, &lib, &build, 0, all_tags()).unwrap();
+    for tag in [HIGHLIGHT, ADDED, LAYER] {
+        assert!(result.atoms_with_tag(tag).is_empty(), "{tag} not cleared");
+    }
+
+    // And at n > 0 no base atom keeps one it was given upstream.
+    let result = replay(&base, &lib, &build, -1, all_tags()).unwrap();
+    assert!(!result.atom_has_tag(atom_at(&result, DVec3::ZERO), ADDED));
+    assert!(!result.atom_has_tag(atom_at(&result, DVec3::ZERO), LAYER));
+}
+
+#[test]
+fn the_default_highlight_request_interns_none_of_the_three_tags() {
+    let lib = library("metadata_ops.json");
+    let build = script("metadata_build.json");
+
+    let result = replay(&three_carbons(), &lib, &build, -1, HighlightTags::default()).unwrap();
+    assert!(result.tag_names().is_empty());
+
+    // Asking for one does not intern the other two.
+    let result = replay(&three_carbons(), &lib, &build, -1, current_only(HIGHLIGHT)).unwrap();
+    assert_eq!(result.tag_names(), &[HIGHLIGHT.to_string()]);
+}
+
+#[test]
+fn a_steps_effect_separates_what_it_created_from_what_it_touched() {
+    let lib = library("metadata_ops.json");
+    let mut s = three_carbons();
+    let host = atom_at(&s, DVec3::ZERO);
+
+    let op = lib.get("grow").expect("op in fixture");
+    let effect = apply_step(&mut s, op, &Step::new("grow", DVec3::ZERO), 1, 0.3).unwrap();
+
+    let hydrogen = atom_at(&s, DVec3::new(0.0, 0.0, 1.09));
+    assert_eq!(effect.added, vec![hydrogen], "only the new atom is created");
+    assert_eq!(effect.touched, vec![host, hydrogen]);
+
+    // A move creates nothing, however much it touches.
+    let op = lib.get("nudge").expect("op in fixture");
+    let effect = apply_step(&mut s, op, &Step::new("nudge", DVec3::ZERO), 2, 0.3).unwrap();
+    assert!(effect.added.is_empty());
+    assert_eq!(effect.touched.len(), 1);
 }

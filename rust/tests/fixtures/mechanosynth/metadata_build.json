@@ -1,0 +1,21 @@
+{
+  "comment": "Five steps over three carbons at x = 0, 5 and 10, carrying the four metadata fields. Step 1 states none of them (so it exercises the defaults and forms an untitled chapter); steps 2-3 and 4-5 differ in phase but share a layer, so they are two chapters rather than one. Step 4 deletes what step 2 created and step 5 only moves a base atom, which is what makes the ms_added / ms_layer membership rules observable.",
+  "format": "atomcad-msbuild/1",
+  "steps": [
+    { "op": "grow", "t": [10.0, 0.0, 0.0], "note": "seed hydrogen, no metadata at all" },
+
+    { "op": "grow", "t": [0.0, 0.0, 0.0],
+      "note": "layer-1 hydrogen on the first carbon",
+      "method": "probe", "phase": "layer1", "layer": 1, "site": 0 },
+    { "op": "grow", "t": [5.0, 0.0, 0.0],
+      "note": "layer-1 hydrogen on the second carbon",
+      "method": "probe", "phase": "layer1", "layer": 1, "site": 1 },
+
+    { "op": "strip", "t": [0.0, 0.0, 1.09],
+      "note": "take back the hydrogen step 2 put down",
+      "method": "probe", "phase": "cleanup", "layer": 1, "site": 0 },
+    { "op": "nudge", "t": [10.0, 0.0, 0.0],
+      "note": "move a base carbon; creates nothing",
+      "method": "probe", "phase": "cleanup", "layer": 1, "site": 2 }
+  ]
+}

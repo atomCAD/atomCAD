@@ -18088,6 +18088,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIMechanosynthChapter dco_decode_api_mechanosynth_chapter(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return APIMechanosynthChapter(
+      phase: dco_decode_String(arr[0]),
+      layer: dco_decode_i_32(arr[1]),
+      firstStep: dco_decode_i_32(arr[2]),
+      lastStep: dco_decode_i_32(arr[3]),
+    );
+  }
+
+  @protected
   APIMechanosynthData dco_decode_api_mechanosynth_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -18104,13 +18118,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIMechanosynthInfo dco_decode_api_mechanosynth_info(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
     return APIMechanosynthInfo(
       count: dco_decode_i_32(arr[0]),
       applied: dco_decode_i_32(arr[1]),
       currentOp: dco_decode_String(arr[2]),
       currentNote: dco_decode_String(arr[3]),
+      currentMethod: dco_decode_String(arr[4]),
+      currentPhase: dco_decode_String(arr[5]),
+      currentLayer: dco_decode_i_32(arr[6]),
+      currentSite: dco_decode_i_32(arr[7]),
+      chapters: dco_decode_list_api_mechanosynth_chapter(arr[8]),
     );
   }
 
@@ -20332,6 +20351,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   List<APILiteralField> dco_decode_list_api_literal_field(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_api_literal_field).toList();
+  }
+
+  @protected
+  List<APIMechanosynthChapter> dco_decode_list_api_mechanosynth_chapter(
+      dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_api_mechanosynth_chapter)
+        .toList();
   }
 
   @protected
@@ -23373,6 +23401,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIMechanosynthChapter sse_decode_api_mechanosynth_chapter(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_phase = sse_decode_String(deserializer);
+    var var_layer = sse_decode_i_32(deserializer);
+    var var_firstStep = sse_decode_i_32(deserializer);
+    var var_lastStep = sse_decode_i_32(deserializer);
+    return APIMechanosynthChapter(
+        phase: var_phase,
+        layer: var_layer,
+        firstStep: var_firstStep,
+        lastStep: var_lastStep);
+  }
+
+  @protected
   APIMechanosynthData sse_decode_api_mechanosynth_data(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -23391,11 +23434,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_applied = sse_decode_i_32(deserializer);
     var var_currentOp = sse_decode_String(deserializer);
     var var_currentNote = sse_decode_String(deserializer);
+    var var_currentMethod = sse_decode_String(deserializer);
+    var var_currentPhase = sse_decode_String(deserializer);
+    var var_currentLayer = sse_decode_i_32(deserializer);
+    var var_currentSite = sse_decode_i_32(deserializer);
+    var var_chapters = sse_decode_list_api_mechanosynth_chapter(deserializer);
     return APIMechanosynthInfo(
         count: var_count,
         applied: var_applied,
         currentOp: var_currentOp,
-        currentNote: var_currentNote);
+        currentNote: var_currentNote,
+        currentMethod: var_currentMethod,
+        currentPhase: var_currentPhase,
+        currentLayer: var_currentLayer,
+        currentSite: var_currentSite,
+        chapters: var_chapters);
   }
 
   @protected
@@ -25774,6 +25827,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <APILiteralField>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_api_literal_field(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<APIMechanosynthChapter> sse_decode_list_api_mechanosynth_chapter(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <APIMechanosynthChapter>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_api_mechanosynth_chapter(deserializer));
     }
     return ans_;
   }
@@ -29288,6 +29354,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_api_mechanosynth_chapter(
+      APIMechanosynthChapter self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.phase, serializer);
+    sse_encode_i_32(self.layer, serializer);
+    sse_encode_i_32(self.firstStep, serializer);
+    sse_encode_i_32(self.lastStep, serializer);
+  }
+
+  @protected
   void sse_encode_api_mechanosynth_data(
       APIMechanosynthData self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -29304,6 +29380,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.applied, serializer);
     sse_encode_String(self.currentOp, serializer);
     sse_encode_String(self.currentNote, serializer);
+    sse_encode_String(self.currentMethod, serializer);
+    sse_encode_String(self.currentPhase, serializer);
+    sse_encode_i_32(self.currentLayer, serializer);
+    sse_encode_i_32(self.currentSite, serializer);
+    sse_encode_list_api_mechanosynth_chapter(self.chapters, serializer);
   }
 
   @protected
@@ -31321,6 +31402,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_api_literal_field(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_api_mechanosynth_chapter(
+      List<APIMechanosynthChapter> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_api_mechanosynth_chapter(item, serializer);
     }
   }
 

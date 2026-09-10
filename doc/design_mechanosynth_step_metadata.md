@@ -1,6 +1,6 @@
 # Design: `mechanosynth` step metadata — the `step` record, layer tags and chapter navigation
 
-Status: **drafted 2026-09-10, not implemented.** Extends the `mechanosynth`
+Status: **implemented 2026-09-10** (all four phases). Extends the `mechanosynth`
 node (`rust/crates/atomcad-crystolecule/src/mechanosynth/`,
 `rust/crates/atomcad-structure-designer/src/nodes/mechanosynth.rs`,
 `lib/structure_designer/node_data/mechanosynth_editor.dart`, reference guide
@@ -270,13 +270,37 @@ three chapters including an untitled one.
 
 1. **Format and record.** `schema.rs` / `parse.rs` fields; the built-in
    record type; the `step` pin and its value in `eval`; node and parse tests.
+   **Done.**
 2. **Tags.** `HighlightTags`, the two derived tags, engine tests; node
-   constants.
+   constants. **Done.**
 3. **Panel.** Info struct fields and chapters, FRB regeneration, chips,
-   chapter list, step buttons, ticks.
+   chapter list, step buttons, ticks. **Done.**
 4. **Guide.** The reference-guide updates above, with a screenshot slot.
+   **Done.**
 
 Phases 1 and 2 are independent of the panel and can ship first.
+
+### What the implementation decided differently
+
+- **`apply_step` returns a `StepEffect { touched, added }`** rather than a bare
+  `Vec<u32>`. The design said the engine "knows the split because it builds the
+  list"; making the split part of the return type is how `replay` gets at it
+  without re-deriving it from `after`-pattern order.
+- **The step buttons were already there.** `IntSpinField` grew hold-to-repeat
+  `−` / `+` buttons and arrow-key stepping between this design being drafted and
+  being implemented, and the step box composes it, so the panel needed no
+  buttons of its own. The keys are **↑ / ↓**, not Left / Right, because that is
+  now the app-wide convention for every integer box; a second convention for one
+  field would be worse than the design's original wording.
+- **The slider's ticks are a `SliderTickMarkShape`, not a strip.** Flutter
+  *skips tick marks entirely* when they would be dense — which is exactly the
+  450-step script the feature is for — so the shape reports a zero width to opt
+  out of that gate and recovers each tick's step number by inverting Flutter's
+  own placement formula. The alternative, a `CustomPaint` strip beneath the
+  slider, would have to guess the track insets and would drift out of alignment
+  with the thumb.
+- **The chapter list and the ticks are hidden for a single-chapter script**, not
+  just the ticks: a list of one row is navigation the slider already provides.
 
 ## Considered and rejected
 

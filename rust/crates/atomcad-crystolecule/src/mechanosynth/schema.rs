@@ -160,16 +160,43 @@ pub struct Step {
     pub r: DMat3,
     /// Free text; the property panel shows it for the current step.
     pub note: Option<String>,
+    /// Which instrument or process performs the step — a positional tool, area
+    /// lithography, a gas exposure, a bulk photochemical or thermal step. The
+    /// generator chooses the vocabulary; nothing here interprets it. Empty when
+    /// the file says nothing.
+    pub method: String,
+    /// The chapter of the process the step belongs to. Many steps, possibly of
+    /// mixed methods; the unit of the panel's chapter navigation. Empty when
+    /// the file says nothing.
+    pub phase: String,
+    /// The terrace the step builds, counted by the generator (e.g. `1` for the
+    /// first new layer over the seed). [`NO_LAYER`] means "no particular
+    /// layer" — substrate work, bulk steps.
+    pub layer: i32,
+    /// Which of several structures built in one script the step serves.
+    /// [`NO_SITE`] means "all" or "none" — a bulk step acts on every site at
+    /// once.
+    pub site: i32,
 }
 
+/// A step's `layer` when the file states none: "no particular layer".
+pub const NO_LAYER: i32 = -1;
+
+/// A step's `site` when the file states none: "all sites, or none".
+pub const NO_SITE: i32 = -1;
+
 impl Step {
-    /// A step with the identity rotation and no note.
+    /// A step with the identity rotation, no note and no metadata.
     pub fn new(op: impl Into<String>, t: DVec3) -> Self {
         Self {
             op: op.into(),
             t,
             r: DMat3::IDENTITY,
             note: None,
+            method: String::new(),
+            phase: String::new(),
+            layer: NO_LAYER,
+            site: NO_SITE,
         }
     }
 

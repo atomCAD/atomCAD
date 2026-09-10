@@ -811,6 +811,11 @@ mechanosynthesis process would run to grow the structure from a seed.
 - `build_file: String` (optional) — overrides the stored build-script path.
 - `step: Int` (optional) — overrides the stored step number.
 
+**Output pins**
+
+- `result` — the workpiece after the first `step` reactions. Preserves the concrete input type.
+- `step` — a [`MechanosynthStep`](./math_programming.md#record-types) record describing the **last step applied**. Shown on demand like any extra output pin (click its eye), and wired downstream like any record. See [*The `step` output pin*](#the-step-output-pin).
+
 **Properties**
 
 - `ops_file` — path to the operation library (JSON).
@@ -828,10 +833,16 @@ path to pick up an edited file.
 
 Two path fields, each with a **Browse** button filtered to `.json`, and a **step
 scrubber**: a slider spanning `0` to the length of the loaded script, with a
-numeric box beside it for typing an exact step. Under them, a line names what
-the current step did — `Step 12 of 47: gm_methylate`, followed by that step's
-`note` when it has one. "Current" means the last step applied, so at step 0 the
-line says only that this is the untouched base.
+numeric box beside it for typing an exact step. The box's `−` / `+` buttons step
+one reaction at a time, as do the ↑ / ↓ arrow keys while it has focus (hold
+Shift for ten); each press is one undo entry. Under them, a line names what the
+current step did — `Step 12 of 47: gm_methylate`, followed by that step's `note`
+when it has one. "Current" means the last step applied, so at step 0 the line
+says only that this is the untouched base.
+
+Below the note, small **chips** show the current step's `method`, `phase`,
+`layer` and `site`. Each chip is omitted when the script says nothing about it,
+so an unannotated build shows no chips rather than a row of placeholders.
 
 The slider **applies on release**, not on every tick: each intermediate value
 would be a full replay plus a re-render of the workpiece, and those frames are
@@ -851,6 +862,30 @@ put and comes back when the wire goes. The slider's range and the readout follow
 the wired file and step, so a build script that is switched in by wire (one
 `mechanosynth` node fed by a `switch` between two `string` nodes, say) scrubs
 exactly like one typed into the field.
+
+### Navigating a long script by chapter
+
+A 450-step build is not scrubbed step by step. atomCAD splits the script into
+**chapters** — maximal runs of consecutive steps sharing a `(phase, layer)` —
+and lists them under the scrubber, the current one highlighted. A run of steps
+that names neither shows as *untitled*, so the list always covers the whole
+script.
+
+Clicking a chapter's row jumps to its **last** step: its finished state, which
+is usually what you want to look at. The `⇤` button at the left of the row jumps
+to just before its first step instead, so the next `+` applies that chapter's
+first reaction — the starting point for scrubbing through it.
+
+The slider carries a **tick mark at each chapter boundary**, at the same
+positions the rows jump to. A script with only one chapter gets neither the list
+nor the ticks: there is nothing there the slider does not already say.
+
+The chapter list is derived from the file, so a regenerated script re-chapters
+itself with nothing to keep in sync by hand. When the `step` pin is wired the
+list still shows where the build stands, but its rows are inert, like the
+slider.
+
+![TODO(image): the properties panel of a long build — the step slider with accent ticks at the chapter boundaries, the method/phase/layer chips, and the chapter list with the current chapter highlighted](TODO)
 
 ### The two files
 
@@ -898,10 +933,34 @@ may want). The optional `note` is free text describing the step.
   "format": "atomcad-msbuild/1",
   "tolerance": 0.3,
   "steps": [
-    { "op": "habst", "t": [3.567, 0.892, 12.40], "note": "layer 1, dimer 3, left H" }
+    {
+      "op": "habst",
+      "t": [3.567, 0.892, 12.40],
+      "note": "layer 1, dimer 3, left H",
+      "method": "probe",
+      "phase": "layer1",
+      "layer": 1,
+      "site": 0
+    }
   ]
 }
 ```
+
+A step may also carry four **optional metadata fields**. They change nothing
+about what the step *does*; they are what the node can say about it, to the
+network and to you:
+
+| Field | Type | Absent | Meaning |
+|---|---|---|---|
+| `method` | string | `""` | which instrument or process performs the step — a positional tool, area lithography, a gas exposure, a bulk thermal or photochemical step. The generator picks the vocabulary; the node never interprets it. |
+| `phase` | string | `""` | the chapter of the process the step belongs to. Many steps, possibly of mixed methods. This is what the panel's chapter navigation groups by. |
+| `layer` | integer | `-1` | the terrace the step builds, counted by the generator (`1` for the first new layer over the seed, say). `-1` means "no particular layer" — substrate work, bulk steps. |
+| `site` | integer | `-1` | which of several structures built by one script the step serves. `-1` means "all" or "none" — a bulk step acts on every site at once. |
+
+They are additive, so a script written for this version loads in an older one
+and vice versa; the `format` string does not change. A present field of the
+wrong JSON type is rejected with a message naming the step and the field, like
+any other malformed step.
 
 The script's `tolerance` wins over the library's; if neither states one the node
 uses 0.3 Å. Unknown keys are ignored everywhere, so generators are free to add
@@ -935,16 +994,66 @@ id 1 (*) not found within 0.30 Å; nearest atom is H at 0.91 Å
 The partial state is reachable by setting `step` one lower, which is usually the
 quickest way to see what the script expected.
 
-### Seeing the current step
+### Seeing the build: three atom tags
 
-The atoms the current step touched and left in place — matched, moved, replaced
-or added — carry the `ms_current` [atom tag](#tag). When a step deletes an atom,
-the atoms that were bonded to it carry the tag in its place, so a hydrogen
-abstraction highlights the radical site it created rather than nothing at all.
-Wire an `apply_style` node downstream and colour that tag to make the reaction
-site pop out as you scrub. Any `ms_current` tag already on the base (from an
-upstream `mechanosynth`, say) is cleared first, so only one step is ever
-highlighted.
+The node paints three ordinary [atom tags](#tag), so an `apply_style` node
+downstream can colour any of them — at the cost of three of the 32 tag slots.
+All three describe the state at the current step and are cleared from the base
+before anything is applied, so tags left by an upstream `mechanosynth` never
+leak into a downstream one's.
+
+| Tag | Atoms |
+|---|---|
+| `ms_current` | the atoms the current step touched and left in place — matched, moved, replaced or added. When a step *deletes* an atom, the atoms it was bonded to carry the tag in its place, so a hydrogen abstraction highlights the radical site it created rather than nothing at all. |
+| `ms_added` | every atom **created** by an applied step that still exists — what this build has put down so far, as against the base it started from. |
+| `ms_layer` | every atom created by an applied step whose `layer` matches the *current* step's — the terrace under construction. Empty when the current step names no layer. |
+
+**Membership comes from the script's metadata, never from geometry.** An atom a
+step merely *moved* was not created by it, so it stays out of that step's layer
+— which is right: it belongs to the layer below. An atom a later step deleted no
+longer exists and simply drops out of both sets.
+
+Colour `ms_current` to make the reaction site pop out as you scrub, `ms_added`
+to separate the build from its seed, and `ms_layer` to watch one terrace fill in.
+
+### The `step` output pin
+
+Everything the build script knows about the current step, as a record the rest
+of the network can act on. Wire the pin into a
+[`record_destructure`](./math_programming.md#record_destructure) (schema
+`MechanosynthStep`), or read a field with [`expr`](./math_programming.md#expr).
+
+| Field | Type | Value |
+|---|---|---|
+| `index` | Int | how many steps have been applied — the same number the panel shows, so a stored `-1` reads here as the script's length |
+| `count` | Int | the script's step count |
+| `op` | String | the last applied step's operation name |
+| `note` | String | its `note` |
+| `method` | String | its `method` |
+| `phase` | String | its `phase` |
+| `layer` | Int | its `layer` (`-1` for none) |
+| `site` | Int | its `site` (`-1` for none) |
+| `t` | Vec3 | its placement point, in workpiece coordinates |
+
+"Current" means the **last step applied**, matching the panel's wording. At step
+0 nothing has run, so the record reads
+`{index: 0, count, op: "", note: "", method: "", phase: "", layer: -1, site: -1, t: (0, 0, 0)}`
+— it does not describe step 1, which has not happened yet.
+
+The schema is fixed rather than read from your file: a pin's type has to be
+known before anything is evaluated, and a type that changed with a file's
+contents would disconnect downstream wires every time the generator was re-run.
+If you need a field that is not here, ask for it to be added.
+
+The two output pins are **one evaluation**. When the result pin carries an error
+— a missing file, a step that failed to match — the `step` pin carries the same
+error, because a record whose `index` described a replay that did not finish
+would be a lie.
+
+A typical use: a [`switch`](./math_programming.md#switch) on `step.method`
+picking one style rule set per instrument, so probe steps and lithography steps
+are coloured differently as you scrub; or an `expr` building a caption out of
+`phase`, `layer` and `index`.
 
 ## Surface reconstruction patches (`patch_build` + `patch_latticefill`)
 

@@ -8,7 +8,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'structure_designer_api_types.dart';
 
 // These functions are ignored because they are not marked as `pub`: `design_dir`
-// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `mechanosynth_data`, `mechanosynth_info`, `set_mechanosynth_data`
+// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `chapters`, `mechanosynth_data`, `mechanosynth_info`, `set_mechanosynth_data`
 
 APIMechanosynthData? getMechanosynthData(
         {required Uint64List scopePath, required BigInt nodeId}) =>

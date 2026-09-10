@@ -2657,6 +2657,47 @@ sealed class APIMeasurement with _$APIMeasurement {
   }) = APIMeasurement_AtomInfo;
 }
 
+/// A maximal run of consecutive steps sharing a `(phase, layer)` — the unit the
+/// panel navigates a long script by. A 450-step script gives a dozen or so.
+///
+/// Steps with an empty `phase` and no `layer` form chapters too, so the list
+/// always covers the whole script and the panel can show any script's structure
+/// (an unannotated one as a single "untitled" chapter).
+class APIMechanosynthChapter {
+  /// The chapter's `phase`; empty when its steps name none.
+  final String phase;
+
+  /// The chapter's `layer`; `-1` when its steps name none.
+  final int layer;
+
+  /// 1-based index of the chapter's first step.
+  final int firstStep;
+
+  /// 1-based index of the chapter's last step, inclusive.
+  final int lastStep;
+
+  const APIMechanosynthChapter({
+    required this.phase,
+    required this.layer,
+    required this.firstStep,
+    required this.lastStep,
+  });
+
+  @override
+  int get hashCode =>
+      phase.hashCode ^ layer.hashCode ^ firstStep.hashCode ^ lastStep.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIMechanosynthChapter &&
+          runtimeType == other.runtimeType &&
+          phase == other.phase &&
+          layer == other.layer &&
+          firstStep == other.firstStep &&
+          lastStep == other.lastStep;
+}
+
 /// The three stored properties of a `mechanosynth` node. The parsed library and
 /// script are `#[serde(skip)]` payload and never cross the bridge.
 class APIMechanosynthData {
@@ -2705,11 +2746,34 @@ class APIMechanosynthInfo {
   /// The current step's `note`; empty when it has none.
   final String currentNote;
 
+  /// The current step's `method` — which instrument or process performs it.
+  /// Empty when the script says nothing, which is also the state at
+  /// `applied = 0`.
+  final String currentMethod;
+
+  /// The current step's `phase` — the chapter of the process it belongs to.
+  final String currentPhase;
+
+  /// The current step's `layer`; `-1` for "no particular layer".
+  final int currentLayer;
+
+  /// The current step's `site`; `-1` for "all sites, or none".
+  final int currentSite;
+
+  /// The script's chapters, in order, covering every step exactly once.
+  /// Empty when no script is loaded.
+  final List<APIMechanosynthChapter> chapters;
+
   const APIMechanosynthInfo({
     required this.count,
     required this.applied,
     required this.currentOp,
     required this.currentNote,
+    required this.currentMethod,
+    required this.currentPhase,
+    required this.currentLayer,
+    required this.currentSite,
+    required this.chapters,
   });
 
   @override
@@ -2717,7 +2781,12 @@ class APIMechanosynthInfo {
       count.hashCode ^
       applied.hashCode ^
       currentOp.hashCode ^
-      currentNote.hashCode;
+      currentNote.hashCode ^
+      currentMethod.hashCode ^
+      currentPhase.hashCode ^
+      currentLayer.hashCode ^
+      currentSite.hashCode ^
+      chapters.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -2727,7 +2796,12 @@ class APIMechanosynthInfo {
           count == other.count &&
           applied == other.applied &&
           currentOp == other.currentOp &&
-          currentNote == other.currentNote;
+          currentNote == other.currentNote &&
+          currentMethod == other.currentMethod &&
+          currentPhase == other.currentPhase &&
+          currentLayer == other.currentLayer &&
+          currentSite == other.currentSite &&
+          chapters == other.chapters;
 }
 
 /// Freeze mode for atom_edit energy minimization.

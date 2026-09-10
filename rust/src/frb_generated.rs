@@ -16020,6 +16020,19 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
 }
 
 impl SseDecode
+    for crate::api::structure_designer::structure_designer_api_types::APIMechanosynthChapter
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_phase = <String>::sse_decode(deserializer);
+        let mut var_layer = <i32>::sse_decode(deserializer);
+        let mut var_firstStep = <i32>::sse_decode(deserializer);
+        let mut var_lastStep = <i32>::sse_decode(deserializer);
+        return crate::api::structure_designer::structure_designer_api_types::APIMechanosynthChapter{phase: var_phase, layer: var_layer, first_step: var_firstStep, last_step: var_lastStep};
+    }
+}
+
+impl SseDecode
     for crate::api::structure_designer::structure_designer_api_types::APIMechanosynthData
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -16044,11 +16057,23 @@ impl SseDecode
         let mut var_applied = <i32>::sse_decode(deserializer);
         let mut var_currentOp = <String>::sse_decode(deserializer);
         let mut var_currentNote = <String>::sse_decode(deserializer);
+        let mut var_currentMethod = <String>::sse_decode(deserializer);
+        let mut var_currentPhase = <String>::sse_decode(deserializer);
+        let mut var_currentLayer = <i32>::sse_decode(deserializer);
+        let mut var_currentSite = <i32>::sse_decode(deserializer);
+        let mut var_chapters = <Vec<
+            crate::api::structure_designer::structure_designer_api_types::APIMechanosynthChapter,
+        >>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIMechanosynthInfo {
             count: var_count,
             applied: var_applied,
             current_op: var_currentOp,
             current_note: var_currentNote,
+            current_method: var_currentMethod,
+            current_phase: var_currentPhase,
+            current_layer: var_currentLayer,
+            current_site: var_currentSite,
+            chapters: var_chapters,
         };
     }
 }
@@ -17823,6 +17848,20 @@ impl SseDecode
         let mut ans_ = vec![];
         for idx_ in 0..len_ {
             ans_.push(<crate::api::structure_designer::structure_designer_api_types::APILiteralField>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode
+    for Vec<crate::api::structure_designer::structure_designer_api_types::APIMechanosynthChapter>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::structure_designer::structure_designer_api_types::APIMechanosynthChapter>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -24020,6 +24059,35 @@ impl
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart
+    for crate::api::structure_designer::structure_designer_api_types::APIMechanosynthChapter
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.phase.into_into_dart().into_dart(),
+            self.layer.into_into_dart().into_dart(),
+            self.first_step.into_into_dart().into_dart(),
+            self.last_step.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::structure_designer::structure_designer_api_types::APIMechanosynthChapter
+{
+}
+impl
+    flutter_rust_bridge::IntoIntoDart<
+        crate::api::structure_designer::structure_designer_api_types::APIMechanosynthChapter,
+    > for crate::api::structure_designer::structure_designer_api_types::APIMechanosynthChapter
+{
+    fn into_into_dart(
+        self,
+    ) -> crate::api::structure_designer::structure_designer_api_types::APIMechanosynthChapter {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
     for crate::api::structure_designer::structure_designer_api_types::APIMechanosynthData
 {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
@@ -24056,6 +24124,11 @@ impl flutter_rust_bridge::IntoDart
             self.applied.into_into_dart().into_dart(),
             self.current_op.into_into_dart().into_dart(),
             self.current_note.into_into_dart().into_dart(),
+            self.current_method.into_into_dart().into_dart(),
+            self.current_phase.into_into_dart().into_dart(),
+            self.current_layer.into_into_dart().into_dart(),
+            self.current_site.into_into_dart().into_dart(),
+            self.chapters.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -28739,6 +28812,18 @@ crate::api::structure_designer::structure_designer_api_types::APIMeasurement::At
 }
 
 impl SseEncode
+    for crate::api::structure_designer::structure_designer_api_types::APIMechanosynthChapter
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.phase, serializer);
+        <i32>::sse_encode(self.layer, serializer);
+        <i32>::sse_encode(self.first_step, serializer);
+        <i32>::sse_encode(self.last_step, serializer);
+    }
+}
+
+impl SseEncode
     for crate::api::structure_designer::structure_designer_api_types::APIMechanosynthData
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -28758,6 +28843,11 @@ impl SseEncode
         <i32>::sse_encode(self.applied, serializer);
         <String>::sse_encode(self.current_op, serializer);
         <String>::sse_encode(self.current_note, serializer);
+        <String>::sse_encode(self.current_method, serializer);
+        <String>::sse_encode(self.current_phase, serializer);
+        <i32>::sse_encode(self.current_layer, serializer);
+        <i32>::sse_encode(self.current_site, serializer);
+        <Vec<crate::api::structure_designer::structure_designer_api_types::APIMechanosynthChapter>>::sse_encode(self.chapters, serializer);
     }
 }
 
@@ -30050,6 +30140,18 @@ impl SseEncode
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::api::structure_designer::structure_designer_api_types::APILiteralField>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode
+    for Vec<crate::api::structure_designer::structure_designer_api_types::APIMechanosynthChapter>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::structure_designer::structure_designer_api_types::APIMechanosynthChapter>::sse_encode(item, serializer);
         }
     }
 }
