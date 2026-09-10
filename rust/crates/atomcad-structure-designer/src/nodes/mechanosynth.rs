@@ -225,8 +225,11 @@ fn load_library_at(name: &str, design_dir: Option<&str>) -> Result<OpLibrary, St
     load_library(Path::new(&path)).map_err(|e: MechanosynthError| e.to_string())
 }
 
-/// The build-script counterpart of [`load_library_at`].
-fn load_script_at(name: &str, design_dir: Option<&str>) -> Result<BuildScript, String> {
+/// The build-script counterpart of [`load_library_at`]. Public because the
+/// property panel's readout (`mechanosynth_api::mechanosynth_info`) must read
+/// a script that arrives on the wired `build_file` pin exactly the way `eval`
+/// does, or the slider has no range whenever the file name is switched in.
+pub fn load_script_at(name: &str, design_dir: Option<&str>) -> Result<BuildScript, String> {
     let path = resolve(name, design_dir)?;
     load_build_script(Path::new(&path)).map_err(|e: MechanosynthError| e.to_string())
 }

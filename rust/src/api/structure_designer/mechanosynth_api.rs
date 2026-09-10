@@ -2,7 +2,9 @@
 //!
 //! Three properties (two file names and a step number) plus one read-only
 //! readout the panel cannot compute for itself, because the step count lives in
-//! the parsed build script — payload that never crosses the bridge.
+//! the parsed build script — payload that never crosses the bridge. The readout
+//! follows the wired `build_file` and `step` pins when they are connected, so
+//! it describes what the node evaluates rather than what it stores.
 //!
 //! Each entry point is a thin FRB wrapper over an `#[frb(ignore)]` function
 //! taking an explicit `&StructureDesigner`, so the logic is testable without
@@ -10,11 +12,14 @@
 
 use crate::api::api_common::{
     refresh_structure_designer_auto, with_cad_instance_or, with_mut_cad_instance,
+    with_mut_cad_instance_or,
 };
 use crate::api::structure_designer::structure_designer_api_types::{
     APIMechanosynthData, APIMechanosynthInfo,
 };
-use atomcad_structure_designer::nodes::mechanosynth::MechanosynthData;
+use atomcad_crystolecule::mechanosynth::{BuildScript, steps_applied};
+use atomcad_structure_designer::evaluator::network_result::NetworkResult;
+use atomcad_structure_designer::nodes::mechanosynth::{MechanosynthData, load_script_at};
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 use atomcad_util::path_utils::get_parent_directory;
 
@@ -84,18 +89,54 @@ pub fn set_mechanosynth_data(
 }
 
 /// The panel's read-only readout, against an explicit designer.
+///
+/// Reports what the node **evaluates**, not only what it stores: a build
+/// script arriving on the wired `build_file` pin and a step arriving on the
+/// wired `step` pin win over the stored properties, exactly as in the node's
+/// `eval`. Without this a demo that switches the file name in by wire (one
+/// `mechanosynth` node fed by a `switch` on two `string` nodes) replays fine
+/// but shows "no build script loaded", a slider with no range and no step
+/// readout. The two argument evaluations walk the upstream cone on every
+/// panel rebuild, which for a file-name wire is a string or a switch and for
+/// the step an int — see `StructureDesigner::evaluate_node_argument` for why
+/// there is no memo to lean on. A wired file that fails to load reports the
+/// all-zero readout; the failure itself reaches the user on the result pin.
 #[flutter_rust_bridge::frb(ignore)]
 pub fn mechanosynth_info(
-    designer: &StructureDesigner,
+    designer: &mut StructureDesigner,
     scope_path: &[u64],
     node_id: u64,
 ) -> Option<APIMechanosynthInfo> {
-    let data = designer
+    let design_dir = design_dir(designer);
+    // Cloned out rather than borrowed: the two argument evaluations below need
+    // the designer mutably.
+    let stored = designer
         .get_node_network_data_scoped(scope_path, node_id)?
         .as_any_ref()
-        .downcast_ref::<MechanosynthData>()?;
+        .downcast_ref::<MechanosynthData>()?
+        .clone();
 
-    let Some((applied, count)) = data.step_counts() else {
+    // Pin 2 is `build_file`. `None` means nothing is wired, so the stored
+    // property applies: the parsed cache, else the stored name re-read (the
+    // text-format edit path drops the cache, as `eval` knows).
+    let script: Option<BuildScript> = match designer.evaluate_node_argument(scope_path, node_id, 2)
+    {
+        NetworkResult::None => stored.script.clone().or_else(|| {
+            stored
+                .build_file
+                .as_deref()
+                .and_then(|name| load_script_at(name, design_dir.as_deref()).ok())
+        }),
+        NetworkResult::String(name) => load_script_at(&name, design_dir.as_deref()).ok(),
+        _ => None,
+    };
+    // Pin 3 is `step`.
+    let step = match designer.evaluate_node_argument(scope_path, node_id, 3) {
+        NetworkResult::Int(step) => step,
+        _ => stored.step,
+    };
+
+    let Some(script) = script else {
         return Some(APIMechanosynthInfo {
             count: 0,
             applied: 0,
@@ -103,12 +144,14 @@ pub fn mechanosynth_info(
             current_note: String::new(),
         });
     };
+    let count = script.steps.len();
+    let applied = steps_applied(step, count);
 
     // "The current step" is the last one applied, `steps[applied - 1]`. At
     // `applied = 0` nothing has run, so there is nothing to name.
     let current = applied
         .checked_sub(1)
-        .and_then(|index| data.script.as_ref()?.steps.get(index));
+        .and_then(|index| script.steps.get(index));
 
     Some(APIMechanosynthInfo {
         count: count as i32,
@@ -157,9 +200,9 @@ pub fn set_mechanosynth_node_data(scope_path: Vec<u64>, node_id: u64, data: APIM
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_mechanosynth_info(scope_path: Vec<u64>, node_id: u64) -> Option<APIMechanosynthInfo> {
     unsafe {
-        with_cad_instance_or(
+        with_mut_cad_instance_or(
             |cad_instance| {
-                mechanosynth_info(&cad_instance.structure_designer, &scope_path, node_id)
+                mechanosynth_info(&mut cad_instance.structure_designer, &scope_path, node_id)
             },
             None,
         )

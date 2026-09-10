@@ -847,7 +847,10 @@ longer `build.json` then shows its full build without you moving the slider.
 With no script loaded the slider is disabled rather than parked at a
 meaningless stop. A wire into `ops_file`, `build_file` or `step` overrides the
 field below it, which is said in a line under that field; the stored value stays
-put and comes back when the wire goes.
+put and comes back when the wire goes. The slider's range and the readout follow
+the wired file and step, so a build script that is switched in by wire (one
+`mechanosynth` node fed by a `switch` between two `string` nodes, say) scrubs
+exactly like one typed into the field.
 
 ### The two files
 

@@ -11,7 +11,9 @@
 //! `get_mechanosynth_info`, which is the only way the panel can learn the step
 //! count — the parsed script never crosses the bridge.
 
+use atomcad_structure_designer::nodes::int::IntData;
 use atomcad_structure_designer::nodes::mechanosynth::MechanosynthData;
+use atomcad_structure_designer::nodes::string::StringData;
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 use atomcad_test_support::fixture_path_str;
 use glam::f64::DVec2;
@@ -73,7 +75,7 @@ fn the_getter_returns_none_for_a_node_of_another_type() {
     let mut designer = setup_designer();
     let other = designer.add_node("float", DVec2::ZERO);
     assert!(mechanosynth_data(&designer, &[], other).is_none());
-    assert!(mechanosynth_info(&designer, &[], other).is_none());
+    assert!(mechanosynth_info(&mut designer, &[], other).is_none());
 }
 
 #[test]
@@ -130,7 +132,7 @@ fn the_setter_keeps_the_caches_on_a_no_op_write_and_reloads_on_a_real_one() {
             step: 1,
         },
     );
-    let info = mechanosynth_info(&designer, &[], node_id).expect("the script is still loaded");
+    let info = mechanosynth_info(&mut designer, &[], node_id).expect("the script is still loaded");
     assert_eq!((info.count, info.applied), (3, 1));
 
     // Pointing `build_file` at another script re-reads it, so the count moves.
@@ -144,7 +146,7 @@ fn the_setter_keeps_the_caches_on_a_no_op_write_and_reloads_on_a_real_one() {
             step: -1,
         },
     );
-    let info = mechanosynth_info(&designer, &[], node_id).expect("the new script loaded");
+    let info = mechanosynth_info(&mut designer, &[], node_id).expect("the new script loaded");
     assert_eq!(
         info.count, 2,
         "the two-step script should have been re-read"
@@ -161,7 +163,7 @@ fn info_names_the_current_step() {
     let mut designer = setup_designer();
     let node_id = add_loaded_node(&mut designer, &[], 2);
 
-    let info = mechanosynth_info(&designer, &[], node_id).expect("the node is a mechanosynth");
+    let info = mechanosynth_info(&mut designer, &[], node_id).expect("the node is a mechanosynth");
     assert_eq!(info.count, 3);
     assert_eq!(info.applied, 2);
     // "The current step" is the last one applied, `steps[1]` of the fixture.
@@ -174,7 +176,7 @@ fn info_at_step_zero_keeps_the_count_and_names_nothing() {
     let mut designer = setup_designer();
     let node_id = add_loaded_node(&mut designer, &[], 0);
 
-    let info = mechanosynth_info(&designer, &[], node_id).expect("the node is a mechanosynth");
+    let info = mechanosynth_info(&mut designer, &[], node_id).expect("the node is a mechanosynth");
     assert_eq!(info.count, 3);
     assert_eq!(info.applied, 0);
     assert!(info.current_op.is_empty() && info.current_note.is_empty());
@@ -185,7 +187,105 @@ fn info_with_no_script_loaded_is_all_zeroes() {
     let mut designer = setup_designer();
     let node_id = designer.add_node("mechanosynth", DVec2::ZERO);
 
-    let info = mechanosynth_info(&designer, &[], node_id).expect("the node is a mechanosynth");
+    let info = mechanosynth_info(&mut designer, &[], node_id).expect("the node is a mechanosynth");
     assert_eq!((info.count, info.applied), (0, 0));
     assert!(info.current_op.is_empty() && info.current_note.is_empty());
+}
+
+// ============================================================================
+// The readout follows the wired pins
+// ============================================================================
+
+/// The demo that switches between two libraries by wire feeds one
+/// `mechanosynth` node from a `switch` on `string` nodes; nothing is stored on
+/// the node, yet the slider must have the script's range and the readout must
+/// name the current step.
+#[test]
+fn info_follows_a_build_file_arriving_on_the_wire() {
+    let mut designer = setup_designer();
+    let node_id = designer.add_node("mechanosynth", DVec2::ZERO);
+    let mut data = MechanosynthData {
+        ops_file: Some(fixture("methylate_ops.json")),
+        build_file: None,
+        step: 2,
+        ..MechanosynthData::new()
+    };
+    data.reload_missing(None);
+    designer.set_node_network_data_scoped(&[], node_id, Box::new(data));
+
+    let name_id = designer.add_node("string", DVec2::ZERO);
+    designer.set_node_network_data_scoped(
+        &[],
+        name_id,
+        Box::new(StringData {
+            value: fixture("methylate_build.json"),
+        }),
+    );
+    // Pin 2 is `build_file`.
+    designer.connect_nodes(name_id, 0, node_id, 2);
+
+    let info = mechanosynth_info(&mut designer, &[], node_id).expect("the node is a mechanosynth");
+    assert_eq!((info.count, info.applied), (3, 2));
+    assert_eq!(info.current_op, "gm_methylate");
+    assert_eq!(info.current_note, "CH2 onto the bare carbon");
+}
+
+/// The wire wins over a stored name, as it does in `eval`.
+#[test]
+fn a_wired_build_file_wins_over_the_stored_one() {
+    let mut designer = setup_designer();
+    let node_id = add_loaded_node(&mut designer, &[], -1);
+
+    let name_id = designer.add_node("string", DVec2::ZERO);
+    designer.set_node_network_data_scoped(
+        &[],
+        name_id,
+        Box::new(StringData {
+            value: fixture("unmatched_build.json"),
+        }),
+    );
+    designer.connect_nodes(name_id, 0, node_id, 2);
+
+    let info = mechanosynth_info(&mut designer, &[], node_id).expect("the node is a mechanosynth");
+    assert_eq!(
+        (info.count, info.applied),
+        (2, 2),
+        "the two-step wired script, not the stored three-step one"
+    );
+}
+
+#[test]
+fn info_follows_a_step_arriving_on_the_wire() {
+    let mut designer = setup_designer();
+    let node_id = add_loaded_node(&mut designer, &[], -1);
+
+    let step_id = designer.add_node("int", DVec2::ZERO);
+    designer.set_node_network_data_scoped(&[], step_id, Box::new(IntData { value: 1 }));
+    // Pin 3 is `step`.
+    designer.connect_nodes(step_id, 0, node_id, 3);
+
+    let info = mechanosynth_info(&mut designer, &[], node_id).expect("the node is a mechanosynth");
+    assert_eq!((info.count, info.applied), (3, 1));
+    assert_eq!(info.current_op, "habst");
+}
+
+/// A wired name that does not resolve gives the all-zero readout; the error
+/// itself is the result pin's business.
+#[test]
+fn a_wired_build_file_that_fails_to_load_reads_as_no_script() {
+    let mut designer = setup_designer();
+    let node_id = add_loaded_node(&mut designer, &[], -1);
+
+    let name_id = designer.add_node("string", DVec2::ZERO);
+    designer.set_node_network_data_scoped(
+        &[],
+        name_id,
+        Box::new(StringData {
+            value: fixture("does_not_exist.json"),
+        }),
+    );
+    designer.connect_nodes(name_id, 0, node_id, 2);
+
+    let info = mechanosynth_info(&mut designer, &[], node_id).expect("the node is a mechanosynth");
+    assert_eq!((info.count, info.applied), (0, 0));
 }
