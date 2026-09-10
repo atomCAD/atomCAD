@@ -863,29 +863,41 @@ the wired file and step, so a build script that is switched in by wire (one
 `mechanosynth` node fed by a `switch` between two `string` nodes, say) scrubs
 exactly like one typed into the field.
 
-### Navigating a long script by chapter
+### Navigating a long script by phase
 
-A 450-step build is not scrubbed step by step. atomCAD splits the script into
-**chapters** — maximal runs of consecutive steps sharing a `(phase, layer)` —
-and lists them under the scrubber, the current one highlighted. A run of steps
-that names neither shows as *untitled*, so the list always covers the whole
-script.
+A 450-step build is not scrubbed step by step. The panel lists the script's
+**phases** under the scrubber, one row per run of consecutive steps that share
+a `phase` and a `layer`, each row naming the phase, the layer and the step
+range it covers. A phase name that recurs on several layers therefore gets one
+row per layer, and a phase that is interrupted and resumed gets one row per
+stretch. A run of steps that names neither a phase nor a layer shows as
+*untitled*, so the list always covers the whole script.
 
-Clicking a chapter's row jumps to its **last** step: its finished state, which
-is usually what you want to look at. The `⇤` button at the left of the row jumps
-to just before its first step instead, so the next `+` applies that chapter's
-first reaction — the starting point for scrubbing through it.
+Clicking a phase's row jumps to just **before its first step**: the workpiece
+as it stands when the phase is about to begin. From there each `+` on the step
+field applies the phase's next reaction, so a row is the starting point for
+scrubbing through its phase. A phase's finished state is where the *next* row
+lands; the end of the last phase is the end of the slider.
 
-The slider carries a **tick mark at each chapter boundary**, at the same
-positions the rows jump to. A script with only one chapter gets neither the list
-nor the ticks: there is nothing there the slider does not already say.
+The highlighted row is the phase whose step comes **next**, not the one that
+produced the current state. Right after clicking a row that row is highlighted;
+at step 0 the first phase is; on the last step of a phase the following phase
+is already highlighted, because a `+` from there starts it; and with every step
+applied nothing is. The chips above the list still describe the last applied
+step, so at a phase boundary they name the phase just finished while the
+highlight names the one about to start.
 
-The chapter list is derived from the file, so a regenerated script re-chapters
+The slider carries a **tick mark at each phase boundary** — the position a
+row jumps to for the phase that follows it. A script with only one phase gets
+neither the list nor the ticks: there is nothing there the slider does not
+already say.
+
+The phase list is derived from the file, so a regenerated script re-lists
 itself with nothing to keep in sync by hand. When the `step` pin is wired the
 list still shows where the build stands, but its rows are inert, like the
 slider.
 
-![TODO(image): the properties panel of a long build — the step slider with accent ticks at the chapter boundaries, the method/phase/layer chips, and the chapter list with the current chapter highlighted](TODO)
+![TODO(image): the properties panel of a long build — the step slider with accent ticks at the phase boundaries, the method/phase/layer chips, and the phase list with the current phase highlighted](TODO)
 
 ### The two files
 
@@ -953,7 +965,7 @@ network and to you:
 | Field | Type | Absent | Meaning |
 |---|---|---|---|
 | `method` | string | `""` | which instrument or process performs the step — a positional tool, area lithography, a gas exposure, a bulk thermal or photochemical step. The generator picks the vocabulary; the node never interprets it. |
-| `phase` | string | `""` | the chapter of the process the step belongs to. Many steps, possibly of mixed methods. This is what the panel's chapter navigation groups by. |
+| `phase` | string | `""` | the phase of the process the step belongs to. Many steps, possibly of mixed methods. This is what the panel's phase list groups by (together with `layer`). |
 | `layer` | integer | `-1` | the terrace the step builds, counted by the generator (`1` for the first new layer over the seed, say). `-1` means "no particular layer" — substrate work, bulk steps. |
 | `site` | integer | `-1` | which of several structures built by one script the step serves. `-1` means "all" or "none" — a bulk step acts on every site at once. |
 

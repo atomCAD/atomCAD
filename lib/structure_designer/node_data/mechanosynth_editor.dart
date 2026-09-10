@@ -28,12 +28,17 @@ import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 /// replaces it with a concrete number. Leaving the control alone keeps the
 /// auto-following default.
 ///
-/// **A long script is scrubbed by chapter, not by step.** A 450-step build has
+/// **A long script is scrubbed by phase, not by step.** A 450-step build has
 /// a dozen or so runs of consecutive steps sharing a `(phase, layer)`, and the
 /// kernel hands them over ready-made in [APIMechanosynthInfo.chapters] — the
 /// panel never re-derives them, because the parsed script never crosses the
-/// bridge. They drive two things: the chapter list under the scrubber, and the
-/// accent tick marks on the slider ([_ChapterTickMarkShape]).
+/// bridge. The kernel calls these runs *chapters* to keep them distinct from
+/// the step's `phase` field (a phase name that recurs on several layers, or
+/// resumes after a break, is several runs); the panel calls them **phases**,
+/// because that is the word the user already knows from the script and from
+/// the chip above the list, and the layer printed on each row disambiguates
+/// the rest. They drive two things: the phase list under the scrubber, and the
+/// accent tick marks on the slider ([_PhaseTickMarkShape]).
 ///
 /// Load failures are deliberately not repeated here. A bad library or script
 /// surfaces on the result pin and reaches the user through the unified error
@@ -219,10 +224,10 @@ class _MechanosynthEditorState extends State<MechanosynthEditor> {
             Expanded(
               child: SliderTheme(
                 // The default tick shape would draw one dot per step, which on
-                // a 450-step script is a grey smear. The chapter boundaries are
-                // the marks worth having; a single-chapter script has none.
+                // a 450-step script is a grey smear. The phase boundaries are
+                // the marks worth having; a single-phase script has none.
                 data: SliderTheme.of(context).copyWith(
-                  tickMarkShape: _chapterTicks(count),
+                  tickMarkShape: _phaseTicks(count),
                 ),
                 child: Slider(
                   key: const Key('mechanosynth_step_slider'),
@@ -260,18 +265,18 @@ class _MechanosynthEditorState extends State<MechanosynthEditor> {
     );
   }
 
-  /// The slider's tick shape: an accent mark at the end of every chapter, or
+  /// The slider's tick shape: an accent mark at the end of every phase, or
   /// no marks at all when the script has fewer than two of them (a boundary at
-  /// the end of the only chapter says nothing).
-  SliderTickMarkShape _chapterTicks(int count) {
-    final chapters = widget.info?.chapters ?? const <APIMechanosynthChapter>[];
-    if (count <= 0 || chapters.length < 2) {
+  /// the end of the only phase says nothing).
+  SliderTickMarkShape _phaseTicks(int count) {
+    final phases = widget.info?.chapters ?? const <APIMechanosynthChapter>[];
+    if (count <= 0 || phases.length < 2) {
       return SliderTickMarkShape.noTickMark;
     }
-    // A chapter covering steps a..b ends at slider value b — which is both the
-    // state the chapter list jumps to and where the next chapter begins.
-    return _ChapterTickMarkShape(
-      boundaries: chapters.map((c) => c.lastStep).toSet(),
+    // A phase covering steps a..b ends at slider value b — which is where
+    // the next phase begins, and so where clicking its row lands.
+    return _PhaseTickMarkShape(
+      boundaries: phases.map((c) => c.lastStep).toSet(),
       steps: count,
     );
   }
@@ -317,21 +322,29 @@ class _MechanosynthEditorState extends State<MechanosynthEditor> {
     );
   }
 
-  /// One row per chapter. The body jumps to the chapter's **last** step — its
-  /// finished state, which is what one wants to look at — and the leading
-  /// button jumps to the step just before its first, for scrubbing through it.
+  /// One row per phase. Clicking a row jumps to the step just *before* the
+  /// phase's first, so the next `+` applies its first reaction: the row is a
+  /// starting point for scrubbing through the phase, not a bookmark of its
+  /// finished state. (That state is where the *next* row lands, and the end of
+  /// the last phase is the end of the slider.)
   ///
-  /// Hidden for a script with a single chapter: a list of one is navigation
+  /// The highlight follows the same cursor: the phase whose first step is
+  /// next, i.e. `first - 1 <= applied <= last - 1`. So clicking a row highlights
+  /// that row, step 0 highlights the first phase, the last step of a phase
+  /// already highlights the following one, and a fully applied script
+  /// highlights nothing. This differs from the metadata chips on purpose —
+  /// they describe the last applied step, the highlight describes what comes
+  /// next.
+  ///
+  /// Hidden for a script with a single phase: a list of one is navigation
   /// the slider already provides.
-  Widget _buildChapterList(BuildContext context) {
+  Widget _buildPhaseList(BuildContext context) {
     final info = widget.info;
-    final chapters = info?.chapters ?? const <APIMechanosynthChapter>[];
-    if (info == null || chapters.length < 2) return const SizedBox.shrink();
+    final phases = info?.chapters ?? const <APIMechanosynthChapter>[];
+    if (info == null || phases.length < 2) return const SizedBox.shrink();
 
     final scheme = Theme.of(context).colorScheme;
     final captionStyle = Theme.of(context).textTheme.bodySmall;
-    // "Current" follows the same rule as the readout: the chapter holding the
-    // last applied step. At step 0 nothing is current.
     final applied = _previewStep ?? info.applied;
 
     return Padding(
@@ -339,14 +352,14 @@ class _MechanosynthEditorState extends State<MechanosynthEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Chapters', style: captionStyle),
+          Text('Phases', style: captionStyle),
           const SizedBox(height: 4.0),
-          for (final chapter in chapters)
-            _buildChapterRow(
+          for (final phase in phases)
+            _buildPhaseRow(
               context,
-              chapter,
-              isCurrent:
-                  applied >= chapter.firstStep && applied <= chapter.lastStep,
+              phase,
+              isCurrent: applied >= phase.firstStep - 1 &&
+                  applied <= phase.lastStep - 1,
               enabled: !widget.stepConnected,
               scheme: scheme,
             ),
@@ -355,16 +368,16 @@ class _MechanosynthEditorState extends State<MechanosynthEditor> {
     );
   }
 
-  Widget _buildChapterRow(BuildContext context, APIMechanosynthChapter chapter,
+  Widget _buildPhaseRow(BuildContext context, APIMechanosynthChapter phase,
       {required bool isCurrent,
       required bool enabled,
       required ColorScheme scheme}) {
     final parts = <String>[
-      chapter.phase.isEmpty ? 'untitled' : chapter.phase,
-      if (chapter.layer >= 0) 'layer ${chapter.layer}',
-      chapter.firstStep == chapter.lastStep
-          ? 'step ${chapter.firstStep}'
-          : 'steps ${chapter.firstStep}–${chapter.lastStep}',
+      phase.phase.isEmpty ? 'untitled' : phase.phase,
+      if (phase.layer >= 0) 'layer ${phase.layer}',
+      phase.firstStep == phase.lastStep
+          ? 'step ${phase.firstStep}'
+          : 'steps ${phase.firstStep}–${phase.lastStep}',
     ];
     final color = enabled
         ? (isCurrent ? scheme.onSurface : scheme.onSurfaceVariant)
@@ -372,47 +385,26 @@ class _MechanosynthEditorState extends State<MechanosynthEditor> {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 2.0),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 24.0,
-            height: 24.0,
-            child: IconButton(
-              padding: EdgeInsets.zero,
-              iconSize: 14.0,
-              icon: const Icon(Icons.first_page),
-              tooltip: 'Jump to the start of this chapter',
-              // One step *before* the chapter's first, so the next scrub tick
-              // applies that first step rather than skipping past it.
-              onPressed:
-                  enabled ? () => _update(step: chapter.firstStep - 1) : null,
-            ),
+      child: InkWell(
+        // One step *before* the phase's first, so the next scrub tick
+        // applies that first step rather than skipping past it.
+        onTap: enabled ? () => _update(step: phase.firstStep - 1) : null,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 3.0),
+          decoration: BoxDecoration(
+            color: isCurrent ? scheme.primary.withValues(alpha: 0.12) : null,
+            borderRadius: BorderRadius.circular(3.0),
           ),
-          const SizedBox(width: 2.0),
-          Expanded(
-            child: InkWell(
-              onTap: enabled ? () => _update(step: chapter.lastStep) : null,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 4.0, vertical: 3.0),
-                decoration: BoxDecoration(
-                  color:
-                      isCurrent ? scheme.primary.withValues(alpha: 0.12) : null,
-                  borderRadius: BorderRadius.circular(3.0),
-                ),
-                child: Text(
-                  parts.join(' · '),
-                  style: TextStyle(
-                    fontSize: 12.0,
-                    color: color,
-                    fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
+          child: Text(
+            parts.join(' · '),
+            style: TextStyle(
+              fontSize: 12.0,
+              color: color,
+              fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
             ),
+            overflow: TextOverflow.ellipsis,
           ),
-        ],
+        ),
       ),
     );
   }
@@ -509,7 +501,7 @@ class _MechanosynthEditorState extends State<MechanosynthEditor> {
           const SizedBox(height: 4),
           _buildCurrentStep(context),
           _buildMetadataChips(context),
-          _buildChapterList(context),
+          _buildPhaseList(context),
           if (_errorMessage != null)
             Padding(
               padding: const EdgeInsets.only(top: 16.0),
@@ -526,7 +518,7 @@ class _MechanosynthEditorState extends State<MechanosynthEditor> {
 /// plain `null` default could not mean "leave this one alone".
 const Object _unset = Object();
 
-/// Paints one accent mark per chapter boundary and nothing at the other steps.
+/// Paints one accent mark per phase boundary and nothing at the other steps.
 ///
 /// Two things about `Slider`'s tick-mark protocol make this shape look odd, and
 /// both are load-bearing:
@@ -534,7 +526,7 @@ const Object _unset = Object();
 /// **The reported width is zero, and it is a density budget rather than a
 /// size.** `_RenderSlider.paint` skips tick marks altogether unless
 /// `trackWidth / divisions >= 3 * reportedWidth` — so a 450-step script, which
-/// is precisely the script that needs chapter marks, would get none at all.
+/// is precisely the script that needs phase marks, would get none at all.
 /// Reporting zero opts out of that gate, and the marks are then drawn at
 /// [_MARK_WIDTH] regardless. That is honest rather than a cheat: the gate asks
 /// "would *every* division fit?", and this shape draws a dozen marks whatever
@@ -545,7 +537,7 @@ const Object _unset = Object();
 /// Inverting Flutter's own placement formula (below) is exact, and it is what
 /// keeps the marks aligned with the thumb — a strip laid out separately beneath
 /// the slider would have to guess the track insets and would drift.
-class _ChapterTickMarkShape extends SliderTickMarkShape {
+class _PhaseTickMarkShape extends SliderTickMarkShape {
   /// A mark's drawn width, and the height it reserves on the track.
   static const double _MARK_WIDTH = 2.0;
   static const double _MARK_HEIGHT = 10.0;
@@ -556,7 +548,7 @@ class _ChapterTickMarkShape extends SliderTickMarkShape {
   /// The slider's division count, i.e. the script's step count.
   final int steps;
 
-  const _ChapterTickMarkShape({required this.boundaries, required this.steps});
+  const _PhaseTickMarkShape({required this.boundaries, required this.steps});
 
   @override
   Size getPreferredSize({
