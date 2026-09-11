@@ -67,7 +67,7 @@ A step may carry, beside `op`, `t`, `r` and `note`:
 |---|---|---|---|
 | `method` | string | `""` | which instrument or process performs the step — a positional tool, area lithography, a gas exposure, a bulk photochemical or thermal step. The generator chooses the vocabulary; the node never interprets it. |
 | `phase` | string | `""` | the chapter of the process the step belongs to. Many steps, possibly of mixed methods. The unit of the panel's chapter navigation. |
-| `layer` | integer | `-1` | the terrace the step builds, counted by the generator (e.g. `1` for the first new layer over the seed). `-1` means "no particular layer" — substrate work, bulk steps. |
+| `layer` | integer | `-1` | the terrace the step works on, counted by the generator (e.g. `1` for the first new layer over the seed, `0` for work on the substrate surface). `-1` means "no particular layer". A viewer that keys a slab or a highlight on this field wants a real level on every step, so a generator should reserve `-1` for steps that genuinely have none and give a bulk step the level of the atom it touches, sorted so that consecutive steps share it. |
 | `site` | integer | `-1` | which of several structures built in one script the step serves. `-1` means "all" or "none" — a bulk step acts on every site at once. |
 
 Validation in `parse.rs`: a present field of the wrong JSON type is an
