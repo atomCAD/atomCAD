@@ -1,8 +1,8 @@
 # Design: build scripts as network values and the `mechanosynth_edit` node
 
 Status: **draft 2026-09-11, revised 2026-09-14** (clicked-atom role rule,
-tests moved into phases). **Phase 1 implemented 2026-09-14**; Phases 2–5 not
-started. Extends the `mechanosynth` subsystem
+tests moved into phases). **Phases 1 and 2 implemented 2026-09-14**; Phases 3–5
+not started. Extends the `mechanosynth` subsystem
 (`rust/crates/atomcad-crystolecule/src/mechanosynth/`,
 `rust/crates/atomcad-structure-designer/src/nodes/mechanosynth.rs`,
 `lib/structure_designer/node_data/mechanosynth_editor.dart`, reference guide
@@ -803,9 +803,45 @@ a `mechanosynth` with legacy properties still round-trips; the node
 registry snapshot gains the three node types; a fixture `.cnnd` with the
 wired form joins the `node_snapshots` set.
 
-### Phase 2 — Placement engine
+### Phase 2 — Placement engine — **DONE**
 
-`place.rs` and its tests. No UI, no node.
+`place.rs` and its tests. No UI, no node. Seven deviations from the plan below,
+each recorded where it bites:
+
+- **A fourth error variant, `NoSuchAtom { atom_id }`.** A stale atom id has to
+  be an error rather than a panic, and none of the three planned variants says
+  that. `UnknownOp` additionally carries the library's file label, so the
+  message names the library that lacks the operation.
+- **The shared *every candidate replays* assertion is stated against the
+  replay's match map, not `StepEffect::touched`.** The plan said "the atoms it
+  touches are exactly the workpiece atoms in `roles`"; since P1 made `touched`
+  effect-derived that is simply false — a frame atom is in `roles` and is not
+  touched, and a deletion's bonded neighbour is touched and is not in `roles`.
+  The invariant that was meant is that `roles` is what the replay will match,
+  and that is what the test asserts.
+- **Ranking compares residuals in 1e-6 Å buckets** (`RESIDUAL_RANK_EPSILON`).
+  With a raw comparison, two exact fits at 1e-16 and 3e-16 order by whichever
+  the arithmetic happened to favour and "proper before mirrored" never gets a
+  say — so `land4`'s mirrored candidate could rank first. A residual difference
+  below the file rounding is not a ranking signal.
+- **Rank-deficient fits are resolved explicitly, and offer no mirrored
+  candidate.** A one-atom pattern fits with the identity, a collinear pair with
+  the shortest arc between the two axes. Handing either to the eigen solver
+  would answer an undetermined question with whichever vector its sweeps
+  produced, and an improper fit of a point or a line differs from the proper one
+  only in the part that was undetermined anyway.
+- **The bond-derived fallback replaces the one-atom fit rather than joining
+  it.** The plan's step 4 would have produced a residual-zero candidate with
+  `r = identity` — an orientation the library never stated — which would then
+  rank first and be committed by the one-click rule.
+- **The fallback declines a continuum.** A bare atom (free sphere) and a single
+  bond with no dihedral reference (free ring) offer no *set* of directions, so
+  they yield `Err(NoPlacement)` saying no orientation can be derived, rather
+  than an arbitrary sample of a ring dressed up as candidates. It dispatches on
+  the detected hybridization through `guided_placement`, which was already in
+  `crystolecule`, so nothing had to move down.
+- **The real-library round-trip test is not written**, as planned: its fixtures
+  do not exist in the repository yet. See the last test heading below.
 
 *Tests — role rule:* clicking the H of an abstraction (origin atom is C, so
 H admits only role 2) yields the same step as clicking the C; on the
@@ -869,7 +905,8 @@ the candidate whose `r` matches the gold `r`, assert every residual
 atom to 1e-6 Å. This is the test that makes §Exactness a checked
 requirement, and it does not wait on the generator.
 
-*Tests — round-trip exactness, real library:* the same test against a copy
+*Tests — round-trip exactness, real library (not written; P2's one deferred
+item):* the same test against a copy
 of the public diamond library and one of its generated builds, checked into
 `rust/tests/fixtures/mechanosynth/` once the generator emits frame atoms
 and `tolerance: 0.05`. Those files live outside the repository today, so

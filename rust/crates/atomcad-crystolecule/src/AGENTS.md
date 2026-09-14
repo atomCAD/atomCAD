@@ -75,6 +75,7 @@ crates/atomcad-crystolecule/src/
 │   ├── schema.rs                   # OpLibrary/Operation/Pattern/BuildScript/Step + MechanosynthError
 │   ├── parse.rs                    # JSON parse + validation of both files
 │   ├── apply.rs                    # apply_step, replay (with the highlight tag)
+│   ├── place.rs                    # placement engine: click -> candidate steps (Kabsch fit)
 │   └── compare.rs                  # compare_structures: position-tolerant Vec<Mismatch>
 ├── lattice_fill/
 │   ├── concave_rebond.rs           # Concave-corner clash → host-host bond rewrite
@@ -139,6 +140,7 @@ crates/atomcad-crystolecule/src/
 | `OpLibrary` / `Operation` / `Pattern` | `mechanosynth/schema.rs` | A named before/after rewrite in a local frame; comparing the two patterns *by pattern id* is the rewrite, there is no diff syntax |
 | `BuildScript` / `Step` | `mechanosynth/schema.rs` | An ordered list of (operation name, translation, rotation); `p_workpiece = r · p_local + t` |
 | `Mismatch` | `mechanosynth/compare.rs` | One difference found by `compare_structures` — unmatched atom, element, bond presence or bond order |
+| `Candidate` | `mechanosynth/place.rs` | One way of placing an operation at a clicked atom: the `Step`, the pattern-id → atom-id assignment, the fit residual, and the `mirrored` / `approximate` flags |
 
 ## Core Concepts
 
@@ -162,6 +164,38 @@ lower atom id** (grid iteration order is an implementation detail, and a
 symmetric site would otherwise make "which one matched" move with an unrelated
 edit), and the claim set is a **predicate** rather than a set, so a caller
 holding a map, a set or nothing at all uses the same function.
+
+**Mechanosynthesis placement** (`mechanosynth/place.rs`): the inverse of
+`apply_step` — given a clicked workpiece atom it produces the steps that could
+place an operation there. Four rules are load-bearing and each has tests in
+`mechanosynth_place_test.rs`:
+
+- **The clicked atom's role is decided before the search and never revisited.**
+  An atom usually admits several `before` slots (`"*"` admits every element),
+  and the rule picks the slot at the origin of the operation's frame, else the
+  smallest id. A fit that fails in the assigned role is an `Err` naming that
+  role — *not* a retry in another one, which would place the reaction on a
+  different atom from the one the user clicked.
+- **Orientation comes from the library.** A one-atom `before` pattern carries
+  none, so a library states it by naming *frame atoms* (kept, unmoved, no bond
+  change) and the Kabsch fit recovers the rotation exactly. Deriving the
+  direction from the host's bonds is the labelled fallback, and every candidate
+  it produces is flagged `approximate`.
+- **The tolerance never reaches a coordinate.** It gates acceptance; the step
+  places atoms at exactly `r · p + t`. `Candidate::residual` is the *max*
+  per-atom distance of the fit, never the RMS.
+- **Two candidates are one when they produce the same after state**, not when
+  they share `(r, t)` — three interchangeable frame atoms admit six transforms
+  and one reaction. Ranking compares residuals in 1e-6 Å buckets, so
+  floating-point noise between two exact fits does not outvote "proper before
+  mirrored".
+
+Rank-deficient fits (a one-atom pattern, a collinear pair) are resolved
+explicitly rather than handed to the eigen solver, which would answer an
+undetermined question with whichever vector its sweeps produced; they offer no
+mirrored candidate, because reflecting a point or a line only changes the
+rotation that was undetermined anyway. Design doc:
+`doc/design_mechanosynth_editor.md`.
 
 **Memory Layout**: `InlineBond` packs atom_id (29 bits) + bond_order (3 bits) into 4 bytes. `SmallVec<[InlineBond; 4]>` keeps up to 4 bonds inline per atom. Spatial grid (FxHashMap, cell size 4.0 Å) enables O(1) neighbor queries. `AtomicStructure` no longer carries a `frame_transform` — movement nodes bake transforms directly into atom positions (see `doc/design_lattice_space_refactoring.md` Appendix B).
 

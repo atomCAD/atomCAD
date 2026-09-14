@@ -343,6 +343,45 @@ pub enum MechanosynthError {
         message: String,
     },
 
+    /// The library names no operation the caller asked for. A placement-time
+    /// error: a *step* naming an unknown operation is caught by
+    /// [`validate_script_ops`](super::validate_script_ops) instead, which can
+    /// say which step it was.
+    #[error("{library}: unknown operation '{op}'")]
+    UnknownOp { library: String, op: String },
+
+    /// The clicked atom is not in the workpiece at all — a stale id.
+    #[error("atom {atom_id} is not in the workpiece")]
+    NoSuchAtom { atom_id: u32 },
+
+    /// No `before` atom of the operation admits the clicked atom's element, so
+    /// the clicked atom cannot play any role in it.
+    #[error("{op} does not act on {element}; its before pattern accepts {accepted}")]
+    NoRole {
+        op: String,
+        /// The clicked atom's element symbol.
+        element: String,
+        /// The element symbols the `before` pattern accepts, comma-separated;
+        /// `*` when a slot accepts anything.
+        accepted: String,
+    },
+
+    /// The clicked atom's assigned role found no congruent assignment. The role
+    /// is named because it is decided by rule and never revisited: a click on
+    /// the wrong atom of an asymmetric operation has to explain itself rather
+    /// than silently place the reaction somewhere else.
+    #[error("cannot place {op} with the clicked {element} as before atom {role}: {nearest}")]
+    NoPlacement {
+        op: String,
+        /// The `before` pattern id the clicked atom was given.
+        role: i64,
+        /// The clicked atom's element symbol.
+        element: String,
+        /// What *is* there, in the words [`describe_nearest`](super::describe_nearest)
+        /// uses — or why no orientation could be derived.
+        nearest: String,
+    },
+
     /// A `before` atom found no workpiece atom within tolerance.
     #[error(
         "step {step} ({op} @ ({t_x:.3}, {t_y:.3}, {t_z:.3})) — before atom id {atom_id} ({element}) \
@@ -371,7 +410,11 @@ impl MechanosynthError {
             MechanosynthError::Io { file, .. }
             | MechanosynthError::Json { file, .. }
             | MechanosynthError::Invalid { file, .. } => Some(file),
-            MechanosynthError::NoMatch { .. } => None,
+            MechanosynthError::UnknownOp { library, .. } => Some(library),
+            MechanosynthError::NoMatch { .. }
+            | MechanosynthError::NoSuchAtom { .. }
+            | MechanosynthError::NoRole { .. }
+            | MechanosynthError::NoPlacement { .. } => None,
         }
     }
 }

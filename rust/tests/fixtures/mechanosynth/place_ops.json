@@ -1,0 +1,918 @@
+{
+  "comment": "Synthetic library for the placement-engine tests: one operation per shape the engine has to distinguish. place_workpiece.xyz hosts every one of them exactly.",
+  "format": "atomcad-msops/1",
+  "ops": [
+    {
+      "name": "habst",
+      "note": "one-atom abstraction: the whole pattern is the atom to remove",
+      "before": {
+        "atoms": [
+          {
+            "id": 1,
+            "el": "H",
+            "pos": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          }
+        ],
+        "bonds": []
+      },
+      "after": {
+        "atoms": [],
+        "bonds": []
+      }
+    },
+    {
+      "name": "recolor",
+      "note": "one-atom rewrite that adds nothing off the origin, so nothing needs orienting",
+      "before": {
+        "atoms": [
+          {
+            "id": 1,
+            "el": "Si",
+            "pos": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          }
+        ],
+        "bonds": []
+      },
+      "after": {
+        "atoms": [
+          {
+            "id": 1,
+            "el": "Ge",
+            "pos": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          }
+        ],
+        "bonds": []
+      }
+    },
+    {
+      "name": "hdon_frame",
+      "note": "donation oriented by three wildcard frame atoms on a tetrahedral host",
+      "before": {
+        "atoms": [
+          {
+            "id": 1,
+            "el": "Si",
+            "pos": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "id": 2,
+            "el": "*",
+            "pos": [
+              1.357928,
+              1.357928,
+              1.357928
+            ]
+          },
+          {
+            "id": 3,
+            "el": "*",
+            "pos": [
+              1.357928,
+              -1.357928,
+              -1.357928
+            ]
+          },
+          {
+            "id": 4,
+            "el": "*",
+            "pos": [
+              -1.357928,
+              1.357928,
+              -1.357928
+            ]
+          }
+        ],
+        "bonds": []
+      },
+      "after": {
+        "atoms": [
+          {
+            "id": 1,
+            "el": "Si",
+            "pos": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "id": 2,
+            "el": "*",
+            "pos": [
+              1.357928,
+              1.357928,
+              1.357928
+            ]
+          },
+          {
+            "id": 3,
+            "el": "*",
+            "pos": [
+              1.357928,
+              -1.357928,
+              -1.357928
+            ]
+          },
+          {
+            "id": 4,
+            "el": "*",
+            "pos": [
+              -1.357928,
+              1.357928,
+              -1.357928
+            ]
+          },
+          {
+            "id": 5,
+            "el": "H",
+            "pos": [
+              -0.854478,
+              -0.854478,
+              0.854478
+            ]
+          }
+        ],
+        "bonds": [
+          [
+            1,
+            5
+          ]
+        ]
+      }
+    },
+    {
+      "name": "hdon_frame_wide",
+      "note": "the same donation in a second host environment: back-bonds 0.12 A longer",
+      "before": {
+        "atoms": [
+          {
+            "id": 1,
+            "el": "Si",
+            "pos": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "id": 2,
+            "el": "*",
+            "pos": [
+              1.42721,
+              1.42721,
+              1.42721
+            ]
+          },
+          {
+            "id": 3,
+            "el": "*",
+            "pos": [
+              1.42721,
+              -1.42721,
+              -1.42721
+            ]
+          },
+          {
+            "id": 4,
+            "el": "*",
+            "pos": [
+              -1.42721,
+              1.42721,
+              -1.42721
+            ]
+          }
+        ],
+        "bonds": []
+      },
+      "after": {
+        "atoms": [
+          {
+            "id": 1,
+            "el": "Si",
+            "pos": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "id": 2,
+            "el": "*",
+            "pos": [
+              1.42721,
+              1.42721,
+              1.42721
+            ]
+          },
+          {
+            "id": 3,
+            "el": "*",
+            "pos": [
+              1.42721,
+              -1.42721,
+              -1.42721
+            ]
+          },
+          {
+            "id": 4,
+            "el": "*",
+            "pos": [
+              -1.42721,
+              1.42721,
+              -1.42721
+            ]
+          },
+          {
+            "id": 5,
+            "el": "H",
+            "pos": [
+              -0.854478,
+              -0.854478,
+              0.854478
+            ]
+          }
+        ],
+        "bonds": [
+          [
+            1,
+            5
+          ]
+        ]
+      }
+    },
+    {
+      "name": "hdon_uniq",
+      "note": "frame atoms of three different elements, so the assignment is unique",
+      "before": {
+        "atoms": [
+          {
+            "id": 1,
+            "el": "Si",
+            "pos": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "id": 2,
+            "el": "C",
+            "pos": [
+              1.357928,
+              1.357928,
+              1.357928
+            ]
+          },
+          {
+            "id": 3,
+            "el": "N",
+            "pos": [
+              1.357928,
+              -1.357928,
+              -1.357928
+            ]
+          },
+          {
+            "id": 4,
+            "el": "O",
+            "pos": [
+              -1.357928,
+              1.357928,
+              -1.357928
+            ]
+          }
+        ],
+        "bonds": []
+      },
+      "after": {
+        "atoms": [
+          {
+            "id": 1,
+            "el": "Si",
+            "pos": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "id": 2,
+            "el": "C",
+            "pos": [
+              1.357928,
+              1.357928,
+              1.357928
+            ]
+          },
+          {
+            "id": 3,
+            "el": "N",
+            "pos": [
+              1.357928,
+              -1.357928,
+              -1.357928
+            ]
+          },
+          {
+            "id": 4,
+            "el": "O",
+            "pos": [
+              -1.357928,
+              1.357928,
+              -1.357928
+            ]
+          },
+          {
+            "id": 5,
+            "el": "H",
+            "pos": [
+              -0.854478,
+              -0.854478,
+              0.854478
+            ]
+          }
+        ],
+        "bonds": [
+          [
+            1,
+            5
+          ]
+        ]
+      }
+    },
+    {
+      "name": "hdon_bare",
+      "note": "a donation that names no frame atoms: the orientation has to be derived from the host's bonds",
+      "before": {
+        "atoms": [
+          {
+            "id": 1,
+            "el": "Si",
+            "pos": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          }
+        ],
+        "bonds": []
+      },
+      "after": {
+        "atoms": [
+          {
+            "id": 1,
+            "el": "Si",
+            "pos": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "id": 2,
+            "el": "H",
+            "pos": [
+              0.0,
+              0.0,
+              1.48
+            ]
+          }
+        ],
+        "bonds": [
+          [
+            1,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "name": "dimerize",
+      "note": "two bare Si pulled together; symmetric, so either atom can be the clicked one",
+      "before": {
+        "atoms": [
+          {
+            "id": 1,
+            "el": "Si",
+            "pos": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "id": 2,
+            "el": "Si",
+            "pos": [
+              3.5,
+              0.0,
+              0.0
+            ]
+          }
+        ],
+        "bonds": []
+      },
+      "after": {
+        "atoms": [
+          {
+            "id": 1,
+            "el": "Si",
+            "pos": [
+              0.55,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "id": 2,
+            "el": "Si",
+            "pos": [
+              2.95,
+              0.0,
+              0.0
+            ]
+          }
+        ],
+        "bonds": [
+          [
+            1,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "name": "asym_add",
+      "note": "two Si, but only atom 1 reacts: the clicked atom is always the one that gets the H",
+      "before": {
+        "atoms": [
+          {
+            "id": 1,
+            "el": "Si",
+            "pos": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "id": 2,
+            "el": "Si",
+            "pos": [
+              3.5,
+              0.0,
+              0.0
+            ]
+          }
+        ],
+        "bonds": []
+      },
+      "after": {
+        "atoms": [
+          {
+            "id": 1,
+            "el": "Si",
+            "pos": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "id": 2,
+            "el": "Si",
+            "pos": [
+              3.5,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "id": 3,
+            "el": "H",
+            "pos": [
+              0.0,
+              0.0,
+              1.48
+            ]
+          }
+        ],
+        "bonds": [
+          [
+            1,
+            3
+          ]
+        ]
+      }
+    },
+    {
+      "name": "planar3",
+      "note": "planar before and planar after: the mirrored fit reaches the same after state",
+      "before": {
+        "atoms": [
+          {
+            "id": 1,
+            "el": "C",
+            "pos": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "id": 2,
+            "el": "O",
+            "pos": [
+              1.4,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "id": 3,
+            "el": "N",
+            "pos": [
+              0.0,
+              1.4,
+              0.0
+            ]
+          }
+        ],
+        "bonds": []
+      },
+      "after": {
+        "atoms": [
+          {
+            "id": 1,
+            "el": "C",
+            "pos": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "id": 2,
+            "el": "O",
+            "pos": [
+              1.4,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "id": 3,
+            "el": "N",
+            "pos": [
+              0.0,
+              1.4,
+              0.0
+            ]
+          },
+          {
+            "id": 4,
+            "el": "H",
+            "pos": [
+              -0.77,
+              -0.77,
+              0.0
+            ]
+          }
+        ],
+        "bonds": [
+          [
+            1,
+            4
+          ]
+        ]
+      }
+    },
+    {
+      "name": "land4",
+      "note": "planar before, out-of-plane after: the two sides of the plane are two reactions",
+      "before": {
+        "atoms": [
+          {
+            "id": 1,
+            "el": "Si",
+            "pos": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "id": 2,
+            "el": "C",
+            "pos": [
+              2.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "id": 3,
+            "el": "N",
+            "pos": [
+              0.0,
+              2.2,
+              0.0
+            ]
+          },
+          {
+            "id": 4,
+            "el": "O",
+            "pos": [
+              1.5,
+              1.5,
+              0.0
+            ]
+          }
+        ],
+        "bonds": []
+      },
+      "after": {
+        "atoms": [
+          {
+            "id": 1,
+            "el": "Si",
+            "pos": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "id": 2,
+            "el": "C",
+            "pos": [
+              2.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "id": 3,
+            "el": "N",
+            "pos": [
+              0.0,
+              2.2,
+              0.0
+            ]
+          },
+          {
+            "id": 4,
+            "el": "O",
+            "pos": [
+              1.5,
+              1.5,
+              0.0
+            ]
+          },
+          {
+            "id": 5,
+            "el": "H",
+            "pos": [
+              0.8,
+              0.8,
+              1.2
+            ]
+          }
+        ],
+        "bonds": [
+          [
+            1,
+            5
+          ]
+        ]
+      }
+    },
+    {
+      "name": "land4_chiral",
+      "note": "planar before, out-of-plane after: the two sides of the plane are two reactions",
+      "before": {
+        "atoms": [
+          {
+            "id": 1,
+            "el": "Si",
+            "pos": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "id": 2,
+            "el": "C",
+            "pos": [
+              2.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "id": 3,
+            "el": "N",
+            "pos": [
+              0.0,
+              2.2,
+              0.0
+            ]
+          },
+          {
+            "id": 4,
+            "el": "O",
+            "pos": [
+              1.5,
+              1.5,
+              0.0
+            ]
+          }
+        ],
+        "bonds": []
+      },
+      "after": {
+        "atoms": [
+          {
+            "id": 1,
+            "el": "Si",
+            "pos": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "id": 2,
+            "el": "C",
+            "pos": [
+              2.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "id": 3,
+            "el": "N",
+            "pos": [
+              0.0,
+              2.2,
+              0.0
+            ]
+          },
+          {
+            "id": 4,
+            "el": "O",
+            "pos": [
+              1.5,
+              1.5,
+              0.0
+            ]
+          },
+          {
+            "id": 5,
+            "el": "H",
+            "pos": [
+              0.8,
+              0.8,
+              1.2
+            ]
+          }
+        ],
+        "bonds": [
+          [
+            1,
+            5
+          ]
+        ]
+      },
+      "chiral": true
+    },
+    {
+      "name": "habst_pair",
+      "note": "abstraction that names its host: the H admits only role 2, the C only role 1",
+      "before": {
+        "atoms": [
+          {
+            "id": 1,
+            "el": "C",
+            "pos": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "id": 2,
+            "el": "H",
+            "pos": [
+              0.629312,
+              0.629312,
+              0.629312
+            ]
+          }
+        ],
+        "bonds": [
+          [
+            1,
+            2
+          ]
+        ]
+      },
+      "after": {
+        "atoms": [
+          {
+            "id": 1,
+            "el": "C",
+            "pos": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          }
+        ],
+        "bonds": []
+      }
+    },
+    {
+      "name": "off_origin_all",
+      "note": "no before atom sits at the origin, so the role falls to the smallest eligible id",
+      "before": {
+        "atoms": [
+          {
+            "id": 2,
+            "el": "Si",
+            "pos": [
+              5.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "id": 3,
+            "el": "Si",
+            "pos": [
+              8.5,
+              0.0,
+              0.0
+            ]
+          }
+        ],
+        "bonds": []
+      },
+      "after": {
+        "atoms": [
+          {
+            "id": 2,
+            "el": "Si",
+            "pos": [
+              5.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "id": 3,
+            "el": "Si",
+            "pos": [
+              8.5,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "id": 4,
+            "el": "H",
+            "pos": [
+              5.0,
+              0.0,
+              1.48
+            ]
+          }
+        ],
+        "bonds": [
+          [
+            2,
+            4
+          ]
+        ]
+      }
+    }
+  ]
+}

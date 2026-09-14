@@ -35,6 +35,7 @@
 pub mod apply;
 pub mod compare;
 pub mod parse;
+pub mod place;
 pub mod schema;
 
 pub use apply::{
@@ -44,6 +45,9 @@ pub use apply::{
 pub use compare::{Mismatch, compare_structures, describe_mismatches};
 pub use parse::{
     load_build_script, load_library, parse_build_script, parse_library, validate_script_ops,
+};
+pub use place::{
+    Candidate, EXACT_FIT_RESIDUAL, PlaceStats, RESIDUAL_RANK_EPSILON, place, place_with_stats,
 };
 pub use schema::{
     BUILD_FORMAT, BuildScript, DEFAULT_TOLERANCE, LIBRARY_FORMAT, MechanosynthError, NO_LAYER,

@@ -1,0 +1,59 @@
+{
+  "comment": "Hand-written against place_ops.json / place_workpiece.xyz with known (r, t): the in-repo stand-in for a generator's output.",
+  "format": "atomcad-msbuild/1",
+  "steps": [
+    {
+      "op": "habst",
+      "t": [
+        0.854478,
+        0.854478,
+        20.854478
+      ],
+      "note": "abstract one terminator"
+    },
+    {
+      "op": "hdon_uniq",
+      "t": [
+        0.0,
+        0.0,
+        -20.0
+      ],
+      "r": [
+        [
+          0,
+          -1,
+          0
+        ],
+        [
+          1,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          1
+        ]
+      ],
+      "note": "the host is rotated a quarter turn about z, so the fit has to find it"
+    },
+    {
+      "op": "planar3",
+      "t": [
+        0.0,
+        20.0,
+        0.0
+      ],
+      "note": "in-plane addition"
+    },
+    {
+      "op": "land4",
+      "t": [
+        20.0,
+        20.0,
+        0.0
+      ],
+      "note": "out-of-plane addition, the proper side"
+    }
+  ]
+}
