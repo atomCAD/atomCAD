@@ -318,6 +318,18 @@ fn tessellate_non_lightweight_content(
                             visuals,
                         );
                     }
+
+                    // The `mechanosynth_edit` placement preview, likewise shared
+                    // between rendering methods. Transparent, so it goes in the
+                    // transparent pass and is depth-tested against the
+                    // workpiece rather than painted over it.
+                    if let Some(visuals) = &atomic_structure.decorator().mechanosynth_ghost_visuals
+                    {
+                        atomic_tessellator::tessellate_mechanosynth_ghosts_impostors(
+                            &mut transparent_impostor_mesh,
+                            visuals,
+                        );
+                    }
                 }
 
                 NodeOutput::SurfacePointCloud(point_cloud) => {

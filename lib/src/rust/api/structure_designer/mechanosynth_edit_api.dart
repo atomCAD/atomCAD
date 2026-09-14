@@ -37,24 +37,51 @@ APIMechanosynthOffers mechanosynthEditOffers(
         .crateApiStructureDesignerMechanosynthEditApiMechanosynthEditOffers(
             scopePath: scopePath, nodeId: nodeId, atomId: atomId);
 
-String? mechanosynthEditArm(
+/// Which atom of this node's workpiece a viewport ray hits, or `None`.
+///
+/// The placement entry points take an atom id; this is what turns a click into
+/// one. Scoped to the editor's own node on purpose — an atom belonging to some
+/// other displayed structure is not a host this tool may place on.
+///
+/// The position and element come back with it because the popup is anchored to
+/// the atom and has to follow it as the camera moves, and the path that opens a
+/// candidate list has no offer sweep to take them from.
+APIMechanosynthAnchor? mechanosynthEditAnchorAtRay(
         {required Uint64List scopePath,
         required BigInt nodeId,
-        required String op}) =>
+        required APIVec3 rayOrigin,
+        required APIVec3 rayDirection}) =>
     RustLib.instance.api
-        .crateApiStructureDesignerMechanosynthEditApiMechanosynthEditArm(
-            scopePath: scopePath, nodeId: nodeId, op: op);
+        .crateApiStructureDesignerMechanosynthEditApiMechanosynthEditAnchorAtRay(
+            scopePath: scopePath,
+            nodeId: nodeId,
+            rayOrigin: rayOrigin,
+            rayDirection: rayDirection);
 
-APIMechanosynthPickResult mechanosynthEditPick(
+/// Selects one row of the open list for **preview**, so the next evaluation
+/// ghosts it on the workpiece.
+///
+/// Taken on a click, never on hover: the preview goes through the decorator and
+/// the tessellator like guided placement, so it costs one evaluation. That is
+/// the trade the click-to-activate row list buys.
+String? mechanosynthEditSelectPreview(
         {required Uint64List scopePath,
         required BigInt nodeId,
-        required int atomId}) =>
+        required String op,
+        required int index}) =>
     RustLib.instance.api
-        .crateApiStructureDesignerMechanosynthEditApiMechanosynthEditPick(
-            scopePath: scopePath, nodeId: nodeId, atomId: atomId);
+        .crateApiStructureDesignerMechanosynthEditApiMechanosynthEditSelectPreview(
+            scopePath: scopePath, nodeId: nodeId, op: op, index: index);
 
-/// Commits candidate `index` of operation `op`, from whatever the last click
-/// produced. Refuses an operation the last offer list reported as a near miss.
+/// Drops the preview without closing the list.
+void mechanosynthEditClearPreview(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerMechanosynthEditApiMechanosynthEditClearPreview(
+            scopePath: scopePath, nodeId: nodeId);
+
+/// Commits candidate `index` of operation `op` from the open offer list.
+/// Refuses an operation the list reported as a near miss.
 String? mechanosynthEditChoose(
         {required Uint64List scopePath,
         required BigInt nodeId,
@@ -121,6 +148,19 @@ String? setMechanosynthEditStepMetadata(
             field: field,
             text: text,
             number: number);
+
+/// Where the placement tool stands: the two fields the viewport needs on every
+/// frame, and nothing else.
+///
+/// Deliberately **not** a projection of [`get_mechanosynth_edit_data`]: that one
+/// evaluates two input pins to report the prefix length and the library's
+/// operation names, and the viewport is rebuilt on every pointer move. This
+/// reads stored transient state and evaluates nothing.
+APIMechanosynthToolStatus? mechanosynthEditToolStatus(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerMechanosynthEditApiMechanosynthEditToolStatus(
+            scopePath: scopePath, nodeId: nodeId);
 
 /// Whether the address names a `mechanosynth_edit` node at all — the panel's
 /// cheap existence check, and the only read here that needs no evaluation.

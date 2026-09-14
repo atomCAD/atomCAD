@@ -1524,3 +1524,114 @@ pub fn tessellate_guideline_impostors(
         &NO_RIM,
     );
 }
+
+// ---------------------------------------------------------------------------
+// `mechanosynth_edit` ghost preview
+// ---------------------------------------------------------------------------
+
+/// Ghost colours, by what the step would do to the atom.
+const MS_GHOST_ADDED: Vec3 = Vec3::new(0.36, 0.84, 0.36);
+const MS_GHOST_DELETED: Vec3 = Vec3::new(0.88, 0.32, 0.32);
+const MS_GHOST_MOVED: Vec3 = Vec3::new(0.31, 0.76, 0.97);
+const MS_GHOST_CHANGED: Vec3 = Vec3::new(0.90, 0.64, 0.24);
+/// A near miss overrides all four: it is for looking at, not for placing.
+const MS_GHOST_NEAR_MISS: Vec3 = Vec3::new(0.90, 0.64, 0.24);
+
+/// Translucent enough to read as "not there yet", solid enough to see against
+/// the workpiece. Raised from 0.55 after use: against a dense beige slab the
+/// ghost has to compete with everything behind it, and at 0.55 it read as a
+/// haze rather than as an atom.
+const MS_GHOST_ALPHA: f32 = 0.78;
+
+/// The trail a moved atom leaves, from where it is to where it would go.
+const MS_GHOST_TRAIL_RADIUS: f64 = 0.06;
+
+/// A ghost bond, drawn fatter than a trail so it reads as a bond rather than as
+/// an annotation — for `bridge` it is the *only* thing the preview has to show.
+const MS_GHOST_BOND_RADIUS: f64 = 0.14;
+
+/// Tessellate the `mechanosynth_edit` placement preview as **transparent
+/// impostors**, so a ghost is depth-tested against the workpiece and hidden by
+/// the atoms in front of it.
+///
+/// Everything goes in the transparent pass at one alpha — spheres, bonds and
+/// the trail a moved atom leaves. A single element drawn opaque reads as the
+/// only real thing in the preview.
+///
+/// Ghosts are drawn at the ball-and-stick radius of the element they preview
+/// whatever the global visualization: the preview answers "what would appear
+/// here", and a space-filling ghost would bury the site it is describing.
+///
+/// **Bonds are half the preview, not a garnish.** An operation whose whole
+/// effect is a bond — `bridge` and `bridge_c` in the silicon library have
+/// identical `before` and `after` atom lists — has no ghost *atoms* at all, and
+/// without the bond pass it previews as an empty scene.
+pub fn tessellate_mechanosynth_ghosts_impostors(
+    transparent_impostor_mesh: &mut TransparentImpostorMesh,
+    visuals: &atomcad_crystolecule::atomic_structure::atomic_structure_decorator::MechanosynthGhostVisuals,
+) {
+    use atomcad_crystolecule::mechanosynth::place::{GhostBondKind, GhostKind};
+
+    // Bonds first, so an added atom's sphere draws over the stick reaching it
+    // rather than the other way round.
+    for bond in &visuals.bonds {
+        let color = if visuals.near_miss {
+            MS_GHOST_NEAR_MISS
+        } else {
+            match bond.kind {
+                GhostBondKind::Added => MS_GHOST_ADDED,
+                GhostBondKind::Deleted => MS_GHOST_DELETED,
+                GhostBondKind::Changed => MS_GHOST_CHANGED,
+            }
+        };
+        transparent_impostor_mesh.add_bond_quad(
+            &bond.from.as_vec3(),
+            &bond.to.as_vec3(),
+            MS_GHOST_BOND_RADIUS as f32,
+            &color.to_array(),
+            MS_GHOST_ALPHA,
+        );
+    }
+
+    for ghost in &visuals.ghosts {
+        let color = if visuals.near_miss {
+            MS_GHOST_NEAR_MISS
+        } else {
+            match ghost.kind {
+                GhostKind::Added => MS_GHOST_ADDED,
+                GhostKind::Deleted => MS_GHOST_DELETED,
+                GhostKind::Moved => MS_GHOST_MOVED,
+                GhostKind::Changed => MS_GHOST_CHANGED,
+            }
+        };
+
+        let atom_info = ATOM_INFO
+            .get(&(ghost.atomic_number as i32))
+            .unwrap_or(&DEFAULT_ATOM_INFO);
+        let radius = (atom_info.van_der_waals_radius * BAS_VDW_FACTOR)
+            .min(atom_info.covalent_radius * BAS_COVALENT_CAP);
+
+        // A moved atom is two ghosts joined by a trail, not one: "it goes
+        // there" needs both ends to be visible, and the tail is where the atom
+        // actually is right now.
+        if ghost.kind == GhostKind::Moved && ghost.from.distance(ghost.position) > 1e-3 {
+            transparent_impostor_mesh.add_bond_quad(
+                &ghost.from.as_vec3(),
+                &ghost.position.as_vec3(),
+                MS_GHOST_TRAIL_RADIUS as f32,
+                &color.to_array(),
+                MS_GHOST_ALPHA,
+            );
+        }
+
+        transparent_impostor_mesh.add_atom_quad(
+            &ghost.position.as_vec3(),
+            radius as f32,
+            &color.to_array(),
+            0.35,
+            0.0,
+            &NO_RIM,
+            MS_GHOST_ALPHA,
+        );
+    }
+}

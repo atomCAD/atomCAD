@@ -1674,10 +1674,8 @@ pub struct APIMechanosynthEditData {
     pub approximate_count: i32,
     /// The most recent evaluation failure, if the last evaluation failed.
     pub last_error: Option<String>,
-    /// `"idle"` / `"armed"` / `"offers"` / `"candidates"`.
+    /// `"idle"` / `"offers"` / `"candidates"`.
     pub tool_state: String,
-    /// The armed operation, when the tool has one.
-    pub armed_op: Option<String>,
     /// The atom the open popup is anchored to.
     pub anchor_atom_id: Option<u32>,
     /// The authored block's chapters — maximal runs sharing a `(phase, layer)`.
@@ -1730,9 +1728,33 @@ pub struct APIMechanosynthOffer {
     pub mirrored: bool,
     pub approximate: bool,
     /// The ghost atoms of the row's first candidate (a near-miss row's come
-    /// from its best rejected fit), so highlighting the row previews it with no
+    /// from its best rejected fit), so selecting the row previews it with no
     /// second call.
     pub ghost: Vec<APIGhostAtom>,
+    /// Every way of placing this operation here. The popup lists them inline
+    /// under the operation's name — one row per orientation — so there is no
+    /// second list to open.
+    pub candidates: Vec<APIMechanosynthCandidate>,
+}
+
+/// Where the placement tool stands, evaluated from nothing — the viewport reads
+/// it on every frame to notice that the popup it is holding has been dropped by
+/// something else (a cursor move, an undo).
+pub struct APIMechanosynthToolStatus {
+    /// `"idle"` / `"offers"` / `"candidates"`.
+    pub tool_state: String,
+}
+
+/// The atom a placement click landed on — what the offer popup hangs off and
+/// heads itself with.
+///
+/// Carried separately from [`APIMechanosynthOffers`] because the path that opens
+/// straight into a candidate list has no sweep to take it from, and an overlay
+/// pinned to a projected 3D point needs the position on every frame.
+pub struct APIMechanosynthAnchor {
+    pub atom_id: u32,
+    pub position: APIVec3,
+    pub atomic_number: i32,
 }
 
 /// An applicability sweep: what the library can do at one atom, plus what the
@@ -1753,24 +1775,6 @@ pub struct APIMechanosynthCandidate {
     pub mirrored: bool,
     pub approximate: bool,
     pub ghost: Vec<APIGhostAtom>,
-}
-
-/// What a pick did.
-///
-/// Exactly one of the three shapes is populated: a single candidate is
-/// committed on the spot (`committed`), several wait for a choice
-/// (`candidates`), and a failure carries both its message and the offers for
-/// the same atom, so a click with the wrong operation armed self-corrects in
-/// one more click.
-pub struct APIMechanosynthPickResult {
-    pub committed: bool,
-    /// Where the committed step landed in the authored block; `-1` otherwise.
-    pub inserted_index: i32,
-    /// The failure, when the armed operation does not fit here.
-    pub message: Option<String>,
-    pub candidates: Vec<APIMechanosynthCandidate>,
-    /// The offers for the clicked atom, populated only on a failure.
-    pub offers: Option<APIMechanosynthOffers>,
 }
 
 pub struct APIImportCIFData {

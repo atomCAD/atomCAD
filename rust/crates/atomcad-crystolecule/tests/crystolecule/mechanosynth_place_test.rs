@@ -12,10 +12,11 @@
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::io::xyz_loader::load_xyz;
 use atomcad_crystolecule::mechanosynth::{
-    Applicability, BuildScript, Candidate, EXACT_FIT_RESIDUAL, GhostKind, HighlightTags,
-    MechanosynthError, NEAR_MISS_FACTOR, OpLibrary, Operation, RESIDUAL_RANK_EPSILON, Step,
-    applicable_ops, apply_step, compare_structures, describe_mismatches, load_build_script,
-    load_library, place, place_with_stats, preview_atoms, replay, resolve_tolerance,
+    Applicability, BuildScript, Candidate, EXACT_FIT_RESIDUAL, GhostBondKind, GhostKind,
+    HighlightTags, MechanosynthError, NEAR_MISS_FACTOR, OpLibrary, Operation,
+    RESIDUAL_RANK_EPSILON, Step, applicable_ops, apply_step, compare_structures,
+    describe_mismatches, load_build_script, load_library, place, place_with_stats, preview_atoms,
+    preview_bonds, replay, resolve_tolerance,
 };
 use atomcad_test_support::{fixture_path, fixture_path_str};
 use glam::{DMat3, DQuat, DVec3};
@@ -1286,15 +1287,108 @@ fn an_element_swap_previews_the_atom_it_would_change() {
 }
 
 #[test]
+fn a_bond_only_operation_previews_the_bond_it_would_add() {
+    // The case the atoms-only preview missed entirely: `bridge` has identical
+    // `before` and `after` atom lists, so it draws no ghost *atom* and used to
+    // preview as an empty scene — indistinguishable from a broken tool.
+    let lib = library();
+    let workpiece = workpiece();
+    let host = at(&workpiece, B);
+    let operation = op(&lib, "bridge");
+    // Two partners are in reach, exactly as for `dimerize`, whose hosts it
+    // shares; either candidate previews the same way.
+    let candidate = place(&workpiece, &lib, "bridge", host, TOL)
+        .expect("bridge fits")
+        .into_iter()
+        .next()
+        .expect("at least one candidate");
+
+    assert!(
+        preview_atoms(&workpiece, operation, &candidate).is_empty(),
+        "nothing moves, so there is no atom to draw"
+    );
+
+    let bonds = preview_bonds(&workpiece, operation, &candidate);
+    assert_eq!(bonds.len(), 1, "{bonds:?}");
+    assert_eq!(bonds[0].kind, GhostBondKind::Added);
+    // Drawn between the two atoms as they are: a kept atom is never snapped.
+    let span = bonds[0].from.distance(bonds[0].to);
+    assert!((span - DIMER_D).abs() < TOL, "{span}");
+    assert!(
+        bonds[0].from.abs_diff_eq(position(&workpiece, host), EXACT)
+            || bonds[0].to.abs_diff_eq(position(&workpiece, host), EXACT),
+        "one end is the clicked atom"
+    );
+}
+
+#[test]
+fn a_bond_deletion_previews_against_the_current_geometry() {
+    let lib = library();
+    let workpiece = workpiece();
+    // Sub-cluster F is the one `habst_pair` is hosted on; its C-H is 1.09 A.
+    let terminator = at(&workpiece, F + tetra(0) * 1.09);
+    let operation = op(&lib, "habst_pair");
+    let candidate =
+        only(place(&workpiece, &lib, "habst_pair", terminator, TOL).expect("habst_pair fits"));
+
+    let bonds = preview_bonds(&workpiece, operation, &candidate);
+    assert_eq!(bonds.len(), 1, "{bonds:?}");
+    assert_eq!(bonds[0].kind, GhostBondKind::Deleted);
+    assert!(
+        bonds[0]
+            .from
+            .abs_diff_eq(position(&workpiece, terminator), EXACT)
+            || bonds[0]
+                .to
+                .abs_diff_eq(position(&workpiece, terminator), EXACT)
+    );
+}
+
+#[test]
+fn an_added_bond_reaching_a_moved_atom_is_drawn_where_the_atom_ends_up() {
+    // `dimerize` moves both partners *and* bonds them. The stick must span the
+    // after positions, not the ones the atoms are leaving.
+    let lib = library();
+    let workpiece = workpiece();
+    let operation = op(&lib, "dimerize");
+    let candidate = place(&workpiece, &lib, "dimerize", at(&workpiece, B), TOL)
+        .expect("dimerize fits")
+        .into_iter()
+        .next()
+        .expect("at least one candidate");
+
+    let bonds = preview_bonds(&workpiece, operation, &candidate);
+    assert_eq!(bonds.len(), 1, "{bonds:?}");
+    assert_eq!(bonds[0].kind, GhostBondKind::Added);
+
+    let ghosts = preview_atoms(&workpiece, operation, &candidate);
+    for end in [bonds[0].from, bonds[0].to] {
+        assert!(
+            ghosts.iter().any(|g| g.position.abs_diff_eq(end, EXACT)),
+            "each end sits on a moved ghost's destination: {end:?} vs {ghosts:?}"
+        );
+        assert!(
+            !ghosts.iter().any(|g| g.from.abs_diff_eq(end, EXACT)),
+            "and not on where it came from"
+        );
+    }
+}
+
+#[test]
 fn every_offer_row_previews_itself() {
     let lib = library();
     let workpiece = workpiece();
     for atom_id in workpiece.atom_ids().cloned().collect::<Vec<u32>>() {
         for row in applicable_ops(&workpiece, &lib, atom_id, TOL) {
             let operation = op(&lib, &row.op);
+            // Atoms **or** bonds: an operation whose whole effect is a bond has
+            // nothing in the atom list, and `bridge` is in the fixture to keep
+            // this assertion honest about that.
+            let atoms = preview_atoms(&workpiece, operation, row.preview());
+            let bonds = preview_bonds(&workpiece, operation, row.preview());
             assert!(
-                !preview_atoms(&workpiece, operation, row.preview()).is_empty(),
-                "{} has nothing to draw on atom {atom_id}, so highlighting its row \
+                !atoms.is_empty() || !bonds.is_empty(),
+                "{} has nothing to draw on atom {atom_id}, so selecting its row \
                  would look like a no-op",
                 row.op
             );

@@ -59,9 +59,14 @@ impl MechanosynthEditBlockCommand {
         };
         data.authored = state.0.clone();
         data.cursor = state.1;
-        // The tool's pending candidates were computed against a workpiece the
-        // restored block no longer produces, so they are stale by construction.
-        data.placement.clear_query();
+        // The tool's pending candidates and its preview ghosts were computed
+        // against a workpiece the restored block no longer produces, so they
+        // are stale by construction.
+        data.placement.reset();
+        // This reaches into the node's data directly rather than through a
+        // refresh, so it owes the input cache the invalidation the refresh
+        // system would otherwise have done.
+        data.invalidate_input_cache();
     }
 }
 

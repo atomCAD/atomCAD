@@ -35,7 +35,9 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
     show Uint64List;
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_cad/common/error_display.dart';
 import 'package:flutter_cad/src/rust/api/common_api.dart' as common_api;
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
@@ -44,6 +46,8 @@ import 'package:flutter_cad/common/api_utils.dart';
 import 'package:flutter_cad/common/atom_tooltip.dart';
 import 'package:flutter_cad/common/element_symbol_input.dart';
 import 'package:flutter_cad/common/ui_common.dart';
+import 'package:flutter_cad/structure_designer/mechanosynth_ghost_painter.dart';
+import 'package:flutter_cad/structure_designer/mechanosynth_offer_popup.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/edit_atom_api.dart'
     as edit_atom_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/atom_edit_api.dart'
@@ -468,6 +472,49 @@ class _StructureDesignerViewportState
   late final ElementSymbolAccumulator _elementAccumulator =
       ElementSymbolAccumulator(onMatch: _onElementSymbolMatch);
 
+  // ------------------------------------------------------------------
+  // `mechanosynth_edit` placement tool (doc/design_mechanosynth_editor.md).
+  //
+  // Only the *presentation* lives here: the tool's real state machine is the
+  // node's transient `PlacementState` in the kernel, and every one of these
+  // fields is the answer to the last call rather than a second copy of it. The
+  // popup is mounted inside this widget's own Stack rather than in a global
+  // `Overlay` so it is clamped by the viewport's constraints and re-anchored
+  // from the atom's projected position on every build.
+  // ------------------------------------------------------------------
+
+  /// The atom the popup hangs off: its id, world position and element. Kept
+  /// separately from the sweep because the popup outlives it — choosing a row
+  /// swaps the offer list for a candidate list without a second click, and the
+  /// list must stay on the same atom.
+  APIMechanosynthAnchor? _msAnchor;
+
+  /// The last applicability sweep. Non-null means the popup is open in offer
+  /// mode.
+  APIMechanosynthOffers? _msOffers;
+
+  /// The highlighted row's preview, ghosted on the workpiece. Nothing about it
+  /// is committed; a near-miss preview is drawn in a warning colour.
+  MechanosynthPreview? _msPreview;
+
+  /// Set while a popup is open so a camera move re-lays-out the anchor.
+  /// `renderingNeeded()` only schedules a *frame*; the widget tree is rebuilt
+  /// only by `setState`, and a popup pinned to a projected 3D point has to move
+  /// with it.
+  bool _msReanchorScheduled = false;
+
+  /// How far the user has dragged the popup from where the automatic placement
+  /// put it. A *delta*, not an absolute position, so the list still tracks its
+  /// atom as the camera orbits — it just tracks it from wherever the user
+  /// parked it. Cleared with the query, so each new click starts from the
+  /// automatic placement again.
+  Offset _msDragOffset = Offset.zero;
+
+  /// The last layout `build` computed, so the header drag can clamp against the
+  /// position the popup is actually at. Written during build, read only by the
+  /// drag handler.
+  MechanosynthLayout? _msLayout;
+
   // Hover tooltip state
   Timer? _hoverDebounceTimer;
   APIHoveredAtomInfo? _hoveredAtomInfo;
@@ -496,10 +543,39 @@ class _StructureDesignerViewportState
     setState(() => _addBondPreview = result);
   }
 
+  /// `renderingNeeded()` schedules a *frame*, which repaints the 3D texture but
+  /// does not rebuild the widget tree — and the placement popup and its ghosts
+  /// are laid out from world positions projected during `build`. So while
+  /// either is on screen, a camera move has to drag a rebuild along with it or
+  /// the popup stays pinned to where the atom used to be.
+  ///
+  /// The rebuild is deferred to a post-frame callback (a camera drag calls this
+  /// from a pointer handler, sometimes several times per frame) and guarded, so
+  /// one frame costs at most one extra rebuild.
+  @override
+  void renderingNeeded() {
+    super.renderingNeeded();
+    final anchored = _msOffers != null || _msPreview != null;
+    if (!anchored || _msReanchorScheduled) return;
+    _msReanchorScheduled = true;
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      _msReanchorScheduled = false;
+      if (mounted) setState(() {});
+    });
+  }
+
   /// Project a 3D world position to 2D screen coordinates.
   Offset? _projectWorldToScreen(double wx, double wy, double wz) {
     final camera = common_api.getCamera();
-    final ct = getCameraTransform(camera);
+    return _projectWithCamera(camera, getCameraTransform(camera), wx, wy, wz);
+  }
+
+  /// The same projection with the camera already in hand. Every fetch is an FFI
+  /// call, and the placement tool projects a few hundred points per build (the
+  /// preview's ghosts, plus every row's, to know where not to put the list) —
+  /// one fetch for the lot, not one per atom.
+  Offset? _projectWithCamera(
+      APICamera? camera, CameraTransform? ct, double wx, double wy, double wz) {
     if (ct == null || camera == null) return null;
 
     final dx = wx - ct.eye.x;
@@ -511,8 +587,11 @@ class _StructureDesignerViewportState
     final zView = dx * ct.forward.x + dy * ct.forward.y + dz * ct.forward.z;
 
     if (camera.orthographic) {
-      final orthoHalfWidth =
-          camera.orthoHalfHeight * (viewportWidth / viewportHeight);
+      // `camera.aspect`, not `viewportWidth / viewportHeight`: the renderer
+      // builds its orthographic projection from the former, and the two differ
+      // by the integer truncation in `setViewportSize`. `getRayFromPointerPos`
+      // already uses `camera.aspect`, and this is its inverse.
+      final orthoHalfWidth = camera.orthoHalfHeight * camera.aspect;
       final sx = (xView / orthoHalfWidth) * (viewportWidth * 0.5) +
           viewportWidth * 0.5;
       final sy = -(yView / camera.orthoHalfHeight) * (viewportHeight * 0.5) +
@@ -528,6 +607,17 @@ class _StructureDesignerViewportState
   }
 
   KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
+    // Escape stops the placement tool. The popup handles its own Escape while
+    // it holds focus; this is the case where it does not — focus back on the
+    // viewport — and it comes before the atom_edit gate because
+    // `mechanosynth_edit` is not an atom_edit-like node.
+    if (event is KeyDownEvent &&
+        event.logicalKey == LogicalKeyboardKey.escape &&
+        _mechanosynthEditNodeId != null) {
+      _mechanosynthCancel();
+      return KeyEventResult.handled;
+    }
+
     if (!widget.graphModel.isAtomEditLikeActive) {
       return KeyEventResult.ignored;
     }
@@ -794,6 +884,19 @@ class _StructureDesignerViewportState
     }
   }
 
+  /// Whether the pointer is over an overlay this widget stacks *on* the
+  /// viewport rather than over the viewport itself.
+  ///
+  /// The hover machinery hangs off one `MouseRegion` around the whole stack, so
+  /// a pointer resting on the placement popup is still "hovering the viewport"
+  /// as far as Flutter is concerned — and the atom tooltip would pop up behind
+  /// the list the user is actually reading, over whatever atom happens to lie
+  /// under it. Anything else stacked over the viewport belongs in this test.
+  bool _pointerIsOverOverlay(Offset pos) {
+    final popup = _msLayout?.rect;
+    return popup != null && popup.contains(pos);
+  }
+
   void _scheduleHoverHitTest(Offset pos) {
     _hoverDebounceTimer?.cancel();
 
@@ -802,6 +905,8 @@ class _StructureDesignerViewportState
         widget.graphModel.activeAtomEditTool == APIAtomEditTool.addAtom) {
       return;
     }
+
+    if (_pointerIsOverOverlay(pos)) return;
 
     _lastHoverPos = pos;
     _hoverDebounceTimer = Timer(const Duration(milliseconds: 100), () {
@@ -823,6 +928,11 @@ class _StructureDesignerViewportState
   void _onHover(PointerHoverEvent event) {
     final pos = event.localPosition;
     setState(() => _cursorPosition = pos);
+
+    if (_pointerIsOverOverlay(pos)) {
+      _clearHoverTooltip();
+      return;
+    }
 
     // Movement threshold: suppress flicker from micro-movements (< 4 px).
     final moved = _lastHoverPos != null
@@ -1008,7 +1118,373 @@ class _StructureDesignerViewportState
       onAtomEditClick(pointerPos);
     } else if (widget.graphModel.isNodeTypeActive("edit_atom")) {
       onEditAtomClick(pointerPos);
+    } else if (widget.graphModel.isNodeTypeActive("mechanosynth_edit")) {
+      onMechanosynthEditClick(pointerPos);
     }
+  }
+
+  // ======================================================================
+  // `mechanosynth_edit` placement tool
+  // ======================================================================
+
+  /// The selected `mechanosynth_edit` node, when the tool owns viewport picks:
+  /// the node is the active, displayed one (`isNodeTypeActive`, the rule
+  /// `atom_edit` uses) and is the selected one, so the property panel is
+  /// showing it and `propertyEditorScopeChain` addresses it.
+  BigInt? get _mechanosynthEditNodeId {
+    if (!widget.graphModel.isNodeTypeActive('mechanosynth_edit')) return null;
+    final selected = widget.graphModel.nodeNetworkView?.nodes.values
+        .where(
+            (node) => node.selected && node.nodeTypeName == 'mechanosynth_edit')
+        .firstOrNull;
+    return selected?.id;
+  }
+
+  /// Closes the popup and returns the kernel's tool to Idle.
+  void _mechanosynthCancel({bool tellKernel = true}) {
+    final nodeId = _mechanosynthEditNodeId;
+    if (tellKernel && nodeId != null) {
+      widget.graphModel.mechanosynthEditCancel(nodeId);
+    }
+    _mechanosynthClearPopup();
+  }
+
+  /// Clears the popup state this widget holds, without telling the kernel —
+  /// for the transitions where the kernel has already moved on (a commit
+  /// leaves the tool Armed, a choose clears the query itself).
+  void _mechanosynthClearPopup() {
+    setState(() {
+      _msAnchor = null;
+      _msOffers = null;
+      _msPreview = null;
+      _msDragOffset = Offset.zero;
+    });
+    renderingNeeded();
+  }
+
+  /// A click on the workpiece while a `mechanosynth_edit` node is active.
+  ///
+  /// The click is always a **question**: what can be done at this atom. There
+  /// is no armed mode in which the same click means "place the last operation
+  /// again" — the library splits a reaction into one operation per host
+  /// environment, so the previous operation is usually the wrong one at the
+  /// next site, and a click whose meaning depends on invisible state is worse
+  /// than a click that always asks. Fast repetition is a real need and wants
+  /// its own design (a family applied over a selection, a family armed as a
+  /// tool with the atoms it fits highlighted); it is not this.
+  void onMechanosynthEditClick(Offset pointerPos) {
+    final nodeId = _mechanosynthEditNodeId;
+    if (nodeId == null) return;
+    final model = widget.graphModel;
+
+    final ray = getRayFromPointerPos(pointerPos);
+    final anchor =
+        model.mechanosynthEditAnchorAtRay(nodeId, ray.start, ray.direction);
+    if (anchor == null) {
+      // Empty space closes the popup. The click does not change the app's atom
+      // selection either way: the anchor is the tool's own transient state.
+      if (_msOffers != null) _mechanosynthCancel();
+      return;
+    }
+
+    final outcome = model.mechanosynthEditOffers(nodeId, anchor.atomId);
+    if (outcome.value == null) {
+      // No library wired, or a stale atom id — not "nothing applies here",
+      // which is an empty row list rather than a failure.
+      showErrorSnackBar(context, outcome.error ?? 'no offers');
+      return;
+    }
+    setState(() {
+      _msAnchor = anchor;
+      _msOffers = outcome.value;
+      _msPreview = null;
+    });
+    renderingNeeded();
+  }
+
+  /// Places one row of the popup.
+  ///
+  /// Every row already names a single placement — an operation that fits more
+  /// than one way is listed as one row per orientation — so this commits and
+  /// never opens a second list.
+  void _mechanosynthChoose(String op, int candidateIndex) {
+    final nodeId = _mechanosynthEditNodeId;
+    if (nodeId == null) return;
+    final model = widget.graphModel;
+
+    final error = model.mechanosynthEditChoose(nodeId, op, candidateIndex);
+    if (error != null) {
+      showErrorSnackBar(context, error);
+      return;
+    }
+    _mechanosynthClearPopup();
+  }
+
+  /// Where the popup and its anchor sit this frame, computed once so the
+  /// popup, the anchor ring and the leader line between them agree.
+  /// Returns null when nothing is open.
+  MechanosynthLayout? _mechanosynthLayout(BoxConstraints constraints) {
+    final offers = _msOffers;
+    final anchor = _msAnchor;
+    if (anchor == null || offers == null) return null;
+
+    // The kernel is the authority on whether a query is still live. Anything
+    // that drops it without going through this widget — a cursor move from the
+    // panel, an undo, a re-arm — leaves these fields holding candidates that
+    // were fitted against a workpiece the node no longer shows, so the popup
+    // goes with the query rather than waiting to be refused.
+    final nodeId = _mechanosynthEditNodeId;
+    final state = nodeId == null
+        ? null
+        : widget.graphModel.mechanosynthEditToolStatus(nodeId)?.toolState;
+    if (state != 'offers' && state != 'candidates') return null;
+
+    // Re-projected on every build, which is why `renderingNeeded` forces one
+    // while the popup is open: the list has to stay on its atom as the camera
+    // orbits. One camera fetch for every projection below.
+    final camera = common_api.getCamera();
+    final ct = getCameraTransform(camera);
+    final anchorScreen = _projectWithCamera(
+        camera, ct, anchor.position.x, anchor.position.y, anchor.position.z);
+
+    // What gets *drawn*: the highlighted row only.
+    final ghosts = _projectGhosts(_msPreview?.ghost ?? const [], camera, ct);
+
+    // What the popup is placed clear of: **every** row's preview, not the
+    // highlighted one's. Keying the placement on the highlight made the list
+    // jump across the viewport each time the highlight moved — which is on
+    // every hover and every arrow key, i.e. exactly while the user is reading
+    // it. The union is fixed for a query, so the list holds still, and it is
+    // the right region anyway: it is where a preview can appear, so it is
+    // where the list must not be.
+    final reach = <APIGhostAtom>[
+      for (final row in offers.rows)
+        for (final candidate in row.candidates) ...candidate.ghost,
+    ];
+
+    // One row per placement, plus a header line for each operation that has
+    // more than one — the same shape the popup builds.
+    final rowCount = offers.rows.fold<int>(
+        0,
+        (total, row) =>
+            total +
+            (row.fits && row.candidates.length > 1
+                ? row.candidates.length + 1
+                : 1));
+    final size =
+        Size(MECHANOSYNTH_POPUP_WIDTH, _mechanosynthPopupHeight(rowCount));
+    final viewportSize = Size(constraints.maxWidth, constraints.maxHeight);
+
+    final position = mechanosynthPopupPosition(
+      box: mechanosynthActionBox(
+        anchor: anchorScreen,
+        ghosts: _projectGhosts(reach, camera, ct),
+        fallbackCentre:
+            Offset(constraints.maxWidth / 2, constraints.maxHeight / 2),
+      ),
+      size: size,
+      viewportSize: viewportSize,
+      drag: _msDragOffset,
+    );
+
+    return MechanosynthLayout(
+      anchor: anchorScreen,
+      ghosts: ghosts,
+      rect: position & size,
+      viewportSize: viewportSize,
+    );
+  }
+
+  /// Moves the popup by a header drag.
+  ///
+  /// The stored offset is the movement that **actually happened**, not the
+  /// pointer's travel: applying the raw delta and clamping afterwards lets the
+  /// offset run away past the viewport edge, and the user then has to drag all
+  /// of that invisible slack back before the list moves at all — which reads as
+  /// the popup refusing to move on one axis.
+  void _mechanosynthDragPopup(Offset delta) {
+    final layout = _msLayout;
+    if (layout == null) return;
+    final moved = mechanosynthClampInto(
+          layout.rect.topLeft + delta,
+          layout.rect.size,
+          layout.viewportSize,
+        ) -
+        layout.rect.topLeft;
+    if (moved == Offset.zero) return;
+    setState(() => _msDragOffset += moved);
+  }
+
+  /// Close enough to place with. The header is one or two lines and the list is
+  /// capped, so this only has to bracket the truth — the flat 320 px it
+  /// replaced over-estimated a short list by 200 px, which pinned the popup to
+  /// the bottom of its clamp range with no visible relation to the atom at all.
+  double _mechanosynthPopupHeight(int rowCount) {
+    const headerHeight = 30.0;
+    const rowHeight = 36.0;
+    final list = (rowCount * rowHeight)
+        .clamp(0.0, MECHANOSYNTH_POPUP_MAX_LIST_HEIGHT)
+        .toDouble();
+    return headerHeight + list + 8.0;
+  }
+
+  /// How long the pointer must rest on a row before it previews.
+  ///
+  /// A preview is a synchronous evaluation on the UI thread, so the honest
+  /// delay is "about as long as the last one took": on a small molecule the
+  /// list feels immediate, and on a slab where a refresh costs a third of a
+  /// second it backs off instead of stuttering under the pointer. The app
+  /// already measures every refresh for the profile strip, so this costs a
+  /// field read rather than an instrument.
+  ///
+  /// The floor keeps a fast structure from previewing rows the pointer is only
+  /// crossing; the ceiling keeps a slow one from feeling broken, on the grounds
+  /// that a user who has waited half a second has stopped moving on purpose.
+  Duration get _mechanosynthPreviewDelay {
+    const floorMs = 90.0;
+    const ceilingMs = 500.0;
+    final last = widget.graphModel.refreshProfile.value?.kernel?.totalMs ?? 0.0;
+    return Duration(milliseconds: last.clamp(floorMs, ceilingMs).round());
+  }
+
+  /// Which way a placement goes, in screen space, as an angle in radians.
+  ///
+  /// The direction from the clicked atom to the centroid of what the placement
+  /// would put there, projected with the **live** camera — so the arrow in the
+  /// list points the way the reaction goes on screen, and re-aims as the user
+  /// orbits. `null` when there is nothing to take a centroid of (a bond-only
+  /// operation) or when either end is behind the camera.
+  double? _mechanosynthArrowAngle(List<APIGhostAtom> ghost) {
+    if (ghost.isEmpty) return null;
+    final anchor = _msAnchor;
+    if (anchor == null) return null;
+
+    var cx = 0.0, cy = 0.0, cz = 0.0;
+    for (final atom in ghost) {
+      cx += atom.position.x;
+      cy += atom.position.y;
+      cz += atom.position.z;
+    }
+    final n = ghost.length;
+
+    final from = _projectWorldToScreen(
+        anchor.position.x, anchor.position.y, anchor.position.z);
+    final to = _projectWorldToScreen(cx / n, cy / n, cz / n);
+    if (from == null || to == null) return null;
+    final delta = to - from;
+    // Below this the two points are on top of each other on screen and the
+    // angle is noise, not a direction.
+    if (delta.distance < 2.0) return null;
+    return atan2(delta.dy, delta.dx);
+  }
+
+  /// The popup, placed clear of the reaction and clamped inside the viewport.
+  Widget? _buildMechanosynthPopup(MechanosynthLayout? layout) {
+    if (layout == null) return null;
+    final anchor = _msAnchor;
+    final offers = _msOffers;
+    if (anchor == null || offers == null) return null;
+
+    return Positioned(
+      left: layout.rect.left,
+      top: layout.rect.top,
+      child: MechanosynthOfferPopup(
+        moved: _msDragOffset != Offset.zero,
+        arrowAngleFor: _mechanosynthArrowAngle,
+        previewDelay: _mechanosynthPreviewDelay,
+        onDrag: _mechanosynthDragPopup,
+        onResetPosition: () => setState(() => _msDragOffset = Offset.zero),
+        // A new sweep is a new popup: keying on the anchor atom resets the
+        // selection and the filter without the widget having to notice.
+        key: ValueKey('ms_popup_${anchor.atomId}'),
+        anchorAtomicNumber: anchor.atomicNumber,
+        offers: offers.rows,
+        onChoose: _mechanosynthChoose,
+        // Selecting a row is a round trip to the kernel: the ghosts go into the
+        // node's transient state and the next evaluation tessellates them with
+        // the workpiece. That is why the popup selects on a click and not on
+        // hover.
+        onPreview: (preview) {
+          setState(() => _msPreview = preview);
+          final id = _mechanosynthEditNodeId;
+          if (id == null) return;
+          if (preview == null) {
+            widget.graphModel.mechanosynthEditClearPreview(id);
+            return;
+          }
+          final error = widget.graphModel.mechanosynthEditSelectPreview(
+              id, preview.op, preview.candidateIndex);
+          if (error != null) showErrorSnackBar(context, error);
+        },
+        onCancel: _mechanosynthCancel,
+      ),
+    );
+  }
+
+  /// The highlighted row's ghost atoms, projected. A fixed world radius is
+  /// projected at each atom's own depth, so a ghost shrinks with distance like
+  /// the atoms around it.
+  ///
+  /// Separate from the widget because the popup placement needs these *before*
+  /// the overlay is built: the list is placed clear of the reaction, and the
+  /// reaction is these atoms.
+  List<ProjectedGhost> _projectGhosts(
+      List<APIGhostAtom> atoms, APICamera? camera, CameraTransform? ct) {
+    if (atoms.isEmpty || ct == null || camera == null) return const [];
+
+    const worldRadius = 0.35;
+    final projected = <ProjectedGhost>[];
+    for (final atom in atoms) {
+      final centre = _projectWithCamera(
+          camera, ct, atom.position.x, atom.position.y, atom.position.z);
+      if (centre == null) continue;
+      final edge = _projectWithCamera(
+        camera,
+        ct,
+        atom.position.x + ct.right.x * worldRadius,
+        atom.position.y + ct.right.y * worldRadius,
+        atom.position.z + ct.right.z * worldRadius,
+      );
+      final tail = _projectWithCamera(
+              camera, ct, atom.from.x, atom.from.y, atom.from.z) ??
+          centre;
+      projected.add(ProjectedGhost(
+        kind: atom.kind,
+        position: centre,
+        from: tail,
+        radius: edge == null ? 6.0 : (edge - centre).distance.clamp(3.0, 60.0),
+      ));
+    }
+    return projected;
+  }
+
+  /// The anchor ring and the leader line joining it to the popup.
+  ///
+  /// The **ghost atoms are not here** — they are decorator geometry now,
+  /// tessellated with the workpiece and depth-tested against it. What is left
+  /// is annotation about the *question*: which atom was asked about, and which
+  /// list is answering. Those are deliberately 2D — constant size, never
+  /// occluded, drawn even when the atom is behind something.
+  ///
+  /// Wrapped in a `ClipRect` because a `CustomPainter` is not bounded by its
+  /// widget: it paints wherever it is told, and an anchor that projects outside
+  /// the viewport used to put the annotation over the node editor and the
+  /// property panel.
+  Widget? _buildMechanosynthAnnotations(MechanosynthLayout? layout) {
+    if (layout == null || layout.anchor == null) return null;
+
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: ClipRect(
+          child: CustomPaint(
+            painter: MechanosynthGhostPainter(
+              anchor: layout.anchor,
+              leaderEnd: layout.leaderEnd,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   void onFacetShellClick(Offset pointerPos) {
@@ -1256,7 +1732,13 @@ class _StructureDesignerViewportState
       focusNode: _focusNode,
       onKeyEvent: _onKeyEvent,
       child: MouseRegion(
-        onEnter: (_) => _focusNode.requestFocus(),
+        // The placement popup holds keyboard focus while it is open, so the
+        // viewport must not take it back when the pointer re-enters.
+        onEnter: (_) {
+          if (_msOffers == null) {
+            _focusNode.requestFocus();
+          }
+        },
         onHover: _onHover,
         onExit: (_) {
           _clearHoverTooltip();
@@ -1296,6 +1778,14 @@ class _StructureDesignerViewportState
               }
             }
 
+            // The placement tool's three overlays, from one layout pass so the
+            // ring, the leader line and the list agree. The ghosts go under the
+            // popup so a preview never hides the list that produced it.
+            final msLayout = _mechanosynthLayout(constraints);
+            _msLayout = msLayout;
+            final ghostOverlay = _buildMechanosynthAnnotations(msLayout);
+            final offerPopup = _buildMechanosynthPopup(msLayout);
+
             return Stack(
               children: [
                 super.build(context),
@@ -1310,6 +1800,8 @@ class _StructureDesignerViewportState
                 if (addBondOverlay != null) addBondOverlay,
                 if (elementSymbolOverlay != null) elementSymbolOverlay,
                 if (atomTooltipOverlay != null) atomTooltipOverlay,
+                if (ghostOverlay != null) ghostOverlay,
+                if (offerPopup != null) offerPopup,
               ],
             );
           },

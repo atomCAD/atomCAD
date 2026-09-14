@@ -881,10 +881,25 @@ impl Applicability {
     /// The candidate a row is previewed by: its first real one, else its
     /// near miss. Never `None` — a row always holds one or the other.
     pub fn preview(&self) -> &Candidate {
-        self.candidates
-            .first()
-            .or(self.near_miss.as_ref())
+        self.preview_at(0)
             .expect("an Applicability row holds candidates or a near miss")
+    }
+
+    /// The `index`-th candidate a row can be previewed by.
+    ///
+    /// A **near miss** has no `candidates` at all — its one rejected fit lives
+    /// in `near_miss`, deliberately kept out of the placeable list — so for
+    /// such a row only index 0 exists. Indexing `candidates` directly would
+    /// make a near-miss row unpreviewable, which is the one thing it is for.
+    pub fn preview_at(&self, index: usize) -> Option<&Candidate> {
+        if self.candidates.is_empty() {
+            return if index == 0 {
+                self.near_miss.as_ref()
+            } else {
+                None
+            };
+        }
+        self.candidates.get(index)
     }
 }
 
@@ -1008,6 +1023,32 @@ pub struct GhostAtom {
     pub atomic_number: i16,
 }
 
+/// What a step would do to one **bond**.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GhostBondKind {
+    /// The step creates it.
+    Added,
+    /// The step removes it.
+    Deleted,
+    /// The step keeps it and changes its order.
+    Changed,
+}
+
+/// One bond of a candidate's ghost preview, its endpoints in workpiece
+/// coordinates.
+///
+/// Without these a **bond-only operation previews as nothing at all**, which
+/// reads as a broken preview rather than as "this adds a bond". Several
+/// operations in a real library are exactly that: `bridge` and `bridge_c` in
+/// the silicon set have identical `before` and `after` atom lists and differ
+/// only in that `after` carries the bond.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GhostBond {
+    pub kind: GhostBondKind,
+    pub from: DVec3,
+    pub to: DVec3,
+}
+
 /// The ghost preview of one candidate: what the step would add, delete and
 /// move, ready to be drawn over the workpiece.
 ///
@@ -1080,6 +1121,82 @@ pub fn preview_atoms(
     }
 
     ghosts
+}
+
+/// The bond half of a candidate's ghost preview.
+///
+/// Separate from [`preview_atoms`] rather than folded into it because the two
+/// answer different questions and most callers want both; keeping them apart
+/// leaves the atom list exactly what it was for consumers that only place a
+/// popup by it.
+///
+/// **A bond-only operation has nothing in `preview_atoms` at all.** `bridge`
+/// and `bridge_c` have identical `before` and `after` atom lists — same ids,
+/// same positions, same elements — and differ only in that `after` carries the
+/// bond. Without this function such a row previews as an empty scene, which
+/// reads as a broken tool rather than as "this adds a bond".
+pub fn preview_bonds(
+    workpiece: &AtomicStructure,
+    op: &Operation,
+    candidate: &Candidate,
+) -> Vec<GhostBond> {
+    let matched = |pattern_id: i64| {
+        candidate
+            .roles
+            .iter()
+            .find(|(id, _)| *id == pattern_id)
+            .and_then(|(_, atom_id)| workpiece.get_atom(*atom_id))
+    };
+
+    // Where an endpoint is *now*: a kept atom stays where the workpiece has it
+    // (the engine never snaps one), so a deletion is drawn against the current
+    // geometry.
+    let current_position = |id: i64| matched(id).map(|atom| atom.position);
+    // Where an endpoint *ends up*: an added or moved atom lands at `r · p + t`,
+    // a kept one does not move. So an addition is drawn against the geometry
+    // the step produces.
+    let after_position = |id: i64| {
+        let after = op.after.atom(id)?;
+        match op.before.atom(id) {
+            Some(before) if before.pos.distance(after.pos) <= PATTERN_POSITION_EPSILON => {
+                current_position(id)
+            }
+            _ => Some(candidate.step.place(after.pos)),
+        }
+    };
+
+    let mut bonds = Vec::new();
+
+    for bond in &op.after.bonds {
+        let existing = op
+            .before
+            .bonds
+            .iter()
+            .find(|other| other.key() == bond.key());
+        let kind = match existing {
+            None => GhostBondKind::Added,
+            Some(before) if before.order != bond.order => GhostBondKind::Changed,
+            Some(_) => continue,
+        };
+        if let (Some(from), Some(to)) = (after_position(bond.a), after_position(bond.b)) {
+            bonds.push(GhostBond { kind, from, to });
+        }
+    }
+
+    for bond in &op.before.bonds {
+        if op.after.bonds.iter().any(|other| other.key() == bond.key()) {
+            continue;
+        }
+        if let (Some(from), Some(to)) = (current_position(bond.a), current_position(bond.b)) {
+            bonds.push(GhostBond {
+                kind: GhostBondKind::Deleted,
+                from,
+                to,
+            });
+        }
+    }
+
+    bonds
 }
 
 /// A pattern slot's element, with `"*"` falling back to whatever the workpiece

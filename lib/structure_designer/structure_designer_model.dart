@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
-    show Uint64List;
+    show AnyhowException, Uint64List;
 import 'package:vector_math/vector_math.dart' as vector_math;
 import 'package:flutter_cad/common/api_utils.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/edit_atom_api.dart'
@@ -29,6 +29,8 @@ import 'package:flutter_cad/src/rust/api/structure_designer/xray_api.dart'
     as xray_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/mechanosynth_api.dart'
     as mechanosynth_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/mechanosynth_edit_api.dart'
+    as mechanosynth_edit_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/tag_api.dart'
     as tag_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/profiling_api.dart'
@@ -199,6 +201,20 @@ class RefreshProfileSample {
 }
 
 /// Manages the entire node graph.
+/// The outcome of one `mechanosynth_edit` placement call: the value the kernel
+/// produced, or the message it refused with. Exactly one is non-null.
+///
+/// The two placement entry points return `Result<_, String>` in Rust, which
+/// flutter_rust_bridge turns into a *thrown* `AnyhowException`. A viewport
+/// click is not a place to let one escape, so the model catches it and hands
+/// the caller a value it can branch on.
+class MechanosynthToolResult<T> {
+  final T? value;
+  final String? error;
+
+  const MechanosynthToolResult({this.value, this.error});
+}
+
 class StructureDesignerModel extends ChangeNotifier {
   List<APINetworkWithValidationErrors> nodeNetworkNames = [];
 
@@ -3107,6 +3123,163 @@ class StructureDesignerModel extends ChangeNotifier {
   String? convertMechanosynthFilesToNodes(BigInt nodeId) {
     final error = mechanosynth_api.mechanosynthConvertFilesToNodes(
         scopePath: scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId);
+    refreshFromKernel();
+    return error;
+  }
+
+  // ==========================================================================
+  // `mechanosynth_edit` — the panel and the viewport placement tool
+  // ==========================================================================
+  //
+  // Every method here forwards `propertyEditorScopeChain`, including the ones
+  // the viewport calls: the placement tool is active only while the editor node
+  // is the selected, displayed one, which is exactly when the property panel is
+  // showing it, so the two scopes are the same by construction. See
+  // `doc/design_mechanosynth_editor.md` §Placement tool.
+
+  APIMechanosynthEditData? getMechanosynthEditData(BigInt nodeId) {
+    return mechanosynth_edit_api.getMechanosynthEditData(
+        scopePath: propertyEditorScopePath, nodeId: nodeId);
+  }
+
+  /// Where the placement tool stands — the two fields the viewport needs on
+  /// every frame.
+  ///
+  /// Deliberately **not** read off [getMechanosynthEditData], which evaluates
+  /// two input pins: the viewport is rebuilt on every pointer move, and this
+  /// read evaluates nothing.
+  APIMechanosynthToolStatus? mechanosynthEditToolStatus(BigInt nodeId) {
+    return mechanosynth_edit_api.mechanosynthEditToolStatus(
+        scopePath: propertyEditorScopePath, nodeId: nodeId);
+  }
+
+  /// Moves the cursor. **Not** an undo entry — the replayer's slider behaves
+  /// the same way.
+  void setMechanosynthEditCursor(BigInt nodeId, int cursor) {
+    mechanosynth_edit_api.setMechanosynthEditCursor(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        cursor: cursor);
+    refreshFromKernel();
+  }
+
+  /// Which atom of the editor's own workpiece a viewport ray hits — its id,
+  /// position and element — or `null`. Deliberately scoped to the node: an atom
+  /// of some other displayed structure is not a host this tool may place on.
+  APIMechanosynthAnchor? mechanosynthEditAnchorAtRay(BigInt nodeId,
+      vector_math.Vector3 rayOrigin, vector_math.Vector3 rayDirection) {
+    return mechanosynth_edit_api.mechanosynthEditAnchorAtRay(
+      scopePath: propertyEditorScopePath,
+      nodeId: nodeId,
+      rayOrigin: vector3ToApiVec3(rayOrigin),
+      rayDirection: vector3ToApiVec3(rayDirection),
+    );
+  }
+
+  /// The atom-first entry point: what the wired library can do at `atomId`.
+  /// An empty row list is an answer, not an error; a *missing library* or a
+  /// stale atom id is one, and arrives as a thrown `AnyhowException` because
+  /// the kernel function returns `Result`. Caught here rather than at the call
+  /// site: a viewport click must not become an unhandled exception.
+  MechanosynthToolResult<APIMechanosynthOffers> mechanosynthEditOffers(
+      BigInt nodeId, int atomId) {
+    try {
+      return MechanosynthToolResult(
+          value: mechanosynth_edit_api.mechanosynthEditOffers(
+              scopePath: propertyEditorScopePath,
+              nodeId: nodeId,
+              atomId: atomId));
+    } on AnyhowException catch (e) {
+      return MechanosynthToolResult(error: e.message);
+    }
+  }
+
+  /// Selects one row of the open list for preview, ghosting it on the
+  /// workpiece.
+  ///
+  /// This costs an evaluation and a re-tessellation: the ghosts are real
+  /// objects in the scene, not a projected overlay, which is why the row list
+  /// activates on a **click** and not on hover.
+  String? mechanosynthEditSelectPreview(BigInt nodeId, String op, int index) {
+    final error = mechanosynth_edit_api.mechanosynthEditSelectPreview(
+        scopePath: propertyEditorScopePath,
+        nodeId: nodeId,
+        op: op,
+        index: index);
+    refreshFromKernel();
+    return error;
+  }
+
+  /// Drops the preview without closing the list.
+  void mechanosynthEditClearPreview(BigInt nodeId) {
+    mechanosynth_edit_api.mechanosynthEditClearPreview(
+        scopePath: propertyEditorScopePath, nodeId: nodeId);
+    refreshFromKernel();
+  }
+
+  /// Commits candidate `index` of `op`. Refuses an operation the last offer
+  /// list reported as a near miss, returning the reason.
+  String? mechanosynthEditChoose(BigInt nodeId, String op, int index) {
+    final error = mechanosynth_edit_api.mechanosynthEditChoose(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        op: op,
+        index: index);
+    refreshFromKernel();
+    return error;
+  }
+
+  void mechanosynthEditCancel(BigInt nodeId) {
+    mechanosynth_edit_api.mechanosynthEditCancel(
+        scopePath: propertyEditorScopePath, nodeId: nodeId);
+    notifyListeners();
+  }
+
+  String? mechanosynthEditDuplicateStep(BigInt nodeId, int index) {
+    final error = mechanosynth_edit_api.mechanosynthEditDuplicateStep(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        index: index);
+    refreshFromKernel();
+    return error;
+  }
+
+  String? mechanosynthEditDeleteStep(BigInt nodeId, int index) {
+    final error = mechanosynth_edit_api.mechanosynthEditDeleteStep(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        index: index);
+    refreshFromKernel();
+    return error;
+  }
+
+  String? mechanosynthEditMoveStep(BigInt nodeId, int from, int to) {
+    final error = mechanosynth_edit_api.mechanosynthEditMoveStep(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        from: from,
+        to: to);
+    refreshFromKernel();
+    return error;
+  }
+
+  /// Writes one metadata field of one authored step. `field` is one of `note`,
+  /// `method`, `phase`, `layer`, `site`; consecutive writes to the same field
+  /// of the same step coalesce into one undo entry.
+  String? setMechanosynthEditStepMetadata(
+    BigInt nodeId,
+    int index,
+    String field, {
+    String text = '',
+    int number = -1,
+  }) {
+    final error = mechanosynth_edit_api.setMechanosynthEditStepMetadata(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        index: index,
+        field: field,
+        text: text,
+        number: number);
     refreshFromKernel();
     return error;
   }

@@ -31,6 +31,7 @@ import 'package:flutter_cad/structure_designer/node_data/relax_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/passivate_editor.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/relax_api.dart'
     as relax_api;
+import 'package:flutter_cad/structure_designer/node_data/mechanosynth_edit_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/mechanosynth_editor.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/mechanosynth_api.dart'
     as mechanosynth_api;
@@ -622,6 +623,20 @@ class NodeDataWidget extends StatelessWidget {
           opsConnected: wired(1),
           stepsConnected: wired(2),
           stepConnected: wired(3),
+          model: model,
+        );
+      case 'mechanosynth_edit':
+        // Pins: base = 0, ops = 1, steps = 2. Fetched on every rebuild rather
+        // than cached: the prefix length and the library's operation names come
+        // from evaluating those wires, not from stored data.
+        bool editWired(int pin) =>
+            selectedNode.inputPins.length > pin &&
+            selectedNode.inputPins[pin].connected;
+        return MechanosynthEditEditor(
+          nodeId: selectedNode.id,
+          data: model.getMechanosynthEditData(selectedNode.id),
+          opsConnected: editWired(1),
+          stepsConnected: editWired(2),
           model: model,
         );
       case 'relax':

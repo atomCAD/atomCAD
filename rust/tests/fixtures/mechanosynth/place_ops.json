@@ -458,6 +458,61 @@
       }
     },
     {
+      "name": "bridge",
+      "note": "bond only: the two atoms stay exactly where they are and one bond appears between them",
+      "before": {
+        "atoms": [
+          {
+            "id": 1,
+            "el": "Si",
+            "pos": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "id": 2,
+            "el": "Si",
+            "pos": [
+              3.5,
+              0.0,
+              0.0
+            ]
+          }
+        ],
+        "bonds": []
+      },
+      "after": {
+        "atoms": [
+          {
+            "id": 1,
+            "el": "Si",
+            "pos": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "id": 2,
+            "el": "Si",
+            "pos": [
+              3.5,
+              0.0,
+              0.0
+            ]
+          }
+        ],
+        "bonds": [
+          [
+            1,
+            2
+          ]
+        ]
+      }
+    },
+    {
       "name": "asym_add",
       "note": "two Si, but only atom 1 reacts: the clicked atom is always the one that gets the H",
       "before": {

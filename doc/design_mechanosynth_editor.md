@@ -4,8 +4,9 @@ Status: **draft 2026-09-11, revised 2026-09-14** (clicked-atom role rule,
 tests moved into phases; then atom-first placement, the first-shell frame
 rule and the environment-variant convention — §Applicability and the last
 subsection of §Decisions, all landing in Phases 3–5 because Phase 2 is
-closed). **Phases 1–3 implemented 2026-09-14**; Phases 4 and 5
-not started. Extends the `mechanosynth` subsystem
+closed). **All five phases implemented 2026-09-14**, with Phase 4's UI revised
+twice after use — see §Revised for the removal of the armed mode, the move of
+the ghost preview into the scene, and the inlining of the orientation variants. Extends the `mechanosynth` subsystem
 (`rust/crates/atomcad-crystolecule/src/mechanosynth/`,
 `rust/crates/atomcad-structure-designer/src/nodes/mechanosynth.rs`,
 `lib/structure_designer/node_data/mechanosynth_editor.dart`, reference guide
@@ -675,6 +676,24 @@ clamped to stay wholly inside the viewport, closed when the anchor atom is no
 longer in `result`. It holds keyboard focus while open. About 300 px wide,
 eight rows before it scrolls.
 
+**Revised after first use (2026-09-14), twice.** The second round is §Revised
+below; this first one is the placement of the list. "Offset up and to the right" from the
+anchor is wrong, and the clamp made it worse. A preview is not a point: a
+`precursor_chemisorb` row ghosts six added atoms across two dimers, so a 300 px
+list pinned 18 px off the host sits on top of the reaction it describes — and
+when the clamp bites, the list stops indicating its atom at all. Three changes,
+all in Flutter:
+
+- the list is placed clear of an **action box** — the anchor *plus* the
+  highlighted row's ghost atoms — taking the first free side, right first;
+- the anchor atom is **ringed** (the state-Idle "query anchor" ring, which
+  Phase 4 had not implemented) and a dashed **leader line** joins ring to list
+  whenever they are apart, so the relation survives the list moving;
+- the **header drags**, because the automatic placement knows the anchor and
+  the ghosts and not what the user is actually looking at. The drag is stored
+  as a delta from the automatic position, so the list still follows the atom;
+  a button in the header clears it.
+
 ```
 ┌──────────────────────────────────────────┐
 │ 3 operations apply to this Si            │  header: count, clicked element
@@ -713,6 +732,51 @@ is not optional polish.
 
 Typing filters the rows by prefix against the operation name. The sweep is not
 re-run; the filter only hides rows.
+
+#### Revised after first use (2026-09-14): no armed mode, ghosts in the scene
+
+Two of Phase 4's decisions did not survive contact with the silicon library.
+Both are recorded here rather than rewritten above, because the reasoning that
+produced them is still the reasoning a reader needs.
+
+**The armed mode is gone.** §States 3 and 5 gave a commit the side effect of
+arming the operation it just placed, so that a run of identical placements was
+one click each. That assumed the repeated thing is an *operation*; in a library
+that splits one reaction into one operation per host environment
+(`si_donate_dimer`, `si_donate_site`, `si_donate_core`, …) the repeated thing is
+a **family**, and the specific operation just placed is usually the wrong one at
+the next site. The cost was a click whose meaning depended on invisible state.
+So: a viewport click is always the atom-first question, and a commit returns the
+tool to Idle. The palette lists the library and arms nothing. `arm` and `pick`
+are gone from the kernel, the API and the UI, along with `ToolState::Armed`,
+`PlacementState::armed` and the `NoFit`-falls-back-to-offers path that only an
+armed pick could reach.
+
+Fast repetition is still wanted, and is deferred to its own design rather than
+approximated here. The two shapes worth considering, both from the T2
+area-apply machinery: apply a whole *family* automatically to a chosen set of
+hosts, letting the fit pick the variant per host; or arm a family as a tool and
+**highlight every atom it fits**, which is the affordance §Placement tool
+deliberately declined to build for a single operation.
+
+**The ghosts moved into the scene.** Phase 4 implemented the preview as a
+projected 2D overlay in Flutter, on the grounds that the decorator route means a
+full evaluation and re-tessellation per redraw and the preview follows the
+*highlight*, which moves on every hover and every arrow key. The premise was
+right and the conclusion was wrong: what to fix was the highlight, not the
+drawing. A 2D overlay is not depth-tested, so a ghost behind an atom draws in
+front of it; it is not shaded, so it does not read as an atom; and a
+`CustomPainter` paints outside its widget, so ghosts near the viewport edge
+landed on the node editor and the property panel.
+
+So the preview is `MechanosynthGhostVisuals` on the decorator, tessellated into
+the transparent impostor pass, and **the popup activates a row on a click
+instead of a hover**. A row also carries its own **apply** button, so a user who
+already knows the operation places it in one click and pays for no preview at
+all. Hovering does nothing; opening the list previews nothing; filtering clears
+the selection rather than picking a new row. What stays in Flutter is the
+annotation about the *question* — the anchor ring and the leader line — clipped
+to the viewport.
 
 #### States
 
@@ -1304,7 +1368,66 @@ sets `authored` validates, refreshes, marks dirty and is one undo entry; a
 step literal with an unknown field is a parse error naming the field; the
 corpus test gains a fixture with an editor node and a wired prefix.
 
-### Phase 4 — Panel and tool
+### Phase 4 — Panel and tool — **DONE**
+
+Six deviations from the plan below, each recorded where it bites:
+
+- **Ghost previews are a projected 2D overlay, not a decorator visual.** The
+  plan said "the same path the guideline tool and guided placement use for
+  transient viewport overlays"; that path puts visuals on
+  `AtomicStructureDecorator` and tessellates them during `eval(decorate: true)`,
+  which means a full evaluation and re-tessellation of the workpiece **per
+  redraw** — here, on every arrow key, to move a dozen spheres. The API shape
+  this design already specified hands Flutter the ghost atoms (`APIGhostAtom`:
+  position, element, kind), which is exactly what a projected overlay needs and
+  nothing the renderer needs, so they are drawn with a `CustomPainter`, the
+  `AddBondPreviewPainter` shape. The cost is that a ghost is a flat disc rather
+  than a lit sphere and is not depth-tested against the workpiece; the benefit
+  is that §Placement tool's "this is free" is true.
+- **The popup is mounted in the viewport's own `Stack`, not a global
+  `Overlay` entry.** A global entry positions in screen coordinates and would
+  have to re-derive the viewport rect to clamp against it; the viewport's own
+  `LayoutBuilder` hands over both the origin and the constraints. Same result,
+  less machinery.
+- **`renderingNeeded()` had to be overridden to re-anchor.** The plan budgeted
+  the re-anchor work without naming the trap: `renderingNeeded()` schedules a
+  *frame*, which repaints the 3D texture but does **not** rebuild the widget
+  tree — and an overlay laid out from a projected world position only moves when
+  `build` runs again. The override schedules one guarded post-frame `setState`
+  while a popup or a ghost is on screen.
+- **Three kernel entry points were missing and were added here.**
+  `mechanosynth_edit_anchor_at_ray` turns a viewport ray into an atom (scoped to
+  the editor's *own* displayed outputs, so an atom of an unrelated structure in
+  front is not reported), and carries the atom's position and element because
+  the popup is anchored to it and the candidate-list path has no sweep to take
+  them from. `mechanosynth_edit_open_offer` opens one offer row into its
+  candidate list — the plan says "`place` is not run a second time", and Phase
+  3's API had no entry point for that: `choose` commits and `pick` re-fits, and
+  re-picking would additionally *arm* the operation, which only a commit may do.
+  And `mechanosynth_edit_tool_status` reads the tool's state and armed operation
+  with **no evaluation**: the viewport is rebuilt on every pointer move, and
+  `get_mechanosynth_edit_data` evaluates two input pins to report the prefix
+  length and the library's operation names. The viewport reads it on every frame
+  for a second reason too — the kernel is the authority on whether a query is
+  still live, so a cursor move or an undo from the panel drops the popup instead
+  of leaving it offering candidates fitted against a workpiece the node no
+  longer shows.
+- **Offers and pick are throwing calls on the Dart side.** They return
+  `Result<_, String>`, which flutter_rust_bridge turns into a thrown
+  `AnyhowException`; a viewport click is not a place to let one escape, so the
+  model wraps them in a `MechanosynthToolResult` the caller branches on. Note
+  what is *not* on that channel: an armed operation that does not fit is a
+  successful pick carrying the failure and the offers, which is what makes the
+  self-correcting second click work.
+- **The extracted scrubber owns the drag preview, so it reports it back.** Both
+  panels suppress a readout they cannot recompute mid-drag (the dragged step's
+  op name lives in the kernel's parsed script); with the preview moved inside
+  the shared widget they would have shown the step the slider had just left.
+  One `onPreview` callback restores it.
+
+One smaller shape choice worth knowing: the cursor scrubber's travel is the
+**authored block alone**, not prefix + block. The cursor can only sit inside the
+block, so including a 142-step prefix would make most of the slider dead.
 
 Scrubber and chapter list extracted from `mechanosynth_editor.dart` into a
 shared widget; palette, prompt, steps list, chips; the **offer popup** — a
@@ -1319,7 +1442,9 @@ overlays, but none that is interactive and pinned to a projected 3D point, so
 budget the re-anchor-on-camera-change and viewport-clamping work rather than
 assuming an existing affordance covers it.
 
-*Tests:* two widget tests. The extracted scrubber — it builds from the
+*Tests:* two widget tests (`test/mechanosynth_scrubber_test.dart`,
+`test/mechanosynth_offer_popup_test.dart`, both written). The extracted
+scrubber — it builds from the
 replayer's info and from the editor's, reports cursor changes through the
 callback, and the chapter list jumps. The offer popup, from a canned
 applicability list, because its rules are decidable without a viewport:
@@ -1328,7 +1453,14 @@ does not report a choice through the callback and shows its reason instead;
 Up/Down move the highlight and each move reports the previewed row exactly
 once; typing filters by prefix without re-querying; Escape reports a cancel;
 an empty list renders the "nothing applies" header and no rows. Plus
-`flutter analyze` clean of new warnings. Nothing else automated: the rest is
+`flutter analyze` clean of new warnings.
+
+Three Rust tests joined `mechanosynth_edit_placement_test.rs` for
+`mechanosynth_edit_open_offer`, the entry point this phase added: opening an
+applicable row hands over the candidates the sweep already found, leaves the
+tool in Candidates **without arming**, inserts nothing and records no undo
+entry; opening a near miss is refused with its residual; opening an operation
+the offer list does not hold is an error. Nothing else automated: the rest is
 thin editor UI and the rule
 from `feedback_manual_test_for_editor_ui` applies. The **manual
 walkthrough** (human) is: palette filter and type-to-select; a click on an
@@ -1346,13 +1478,60 @@ duplicate in the list with undo after each; chip edits; arrow-key scrub and
 its non-undoability; Convert to nodes on the demo project (outside the
 repository). The Flutter smoke test is not run by agents.
 
-### Phase 5 — Guide and walkthrough
+### Phase 5 — Guide and walkthrough — **DONE**
 
 Remaining guide pages, screenshot slot, the manual checklist.
 
 *Tests:* none automated beyond the cross-cutting regressions; the guide's
 text-format examples are pasted through `edit` once by the human to confirm
 they parse.
+
+**Delivered.** `doc/reference_guide/nodes/atomic.md` carries the
+`mechanosynth_edit`, `ops_library`, `build_script` and `export_build_script`
+sections, the updated `mechanosynth` one, and the two-files section now states
+the frame-atom conventions the placement tool depends on — the **first-shell
+rule** and the `<operation>_<environment>` naming with the silicon library's
+five-name vocabulary. `math_programming.md` carries `BuildStep` beside
+`MechanosynthStep`. Two screenshot slots are marked `TODO(image)`, in the
+node's opening and in §The offer popup.
+
+#### The manual walkthrough
+
+The human's, not an agent's (`rust/AGENTS.md`: agents must not run
+`flutter test integration_test/`). The bench is the `edit_sandbox` network in
+the silicon demo project — slab → `ops_library` / `build_script` →
+`mechanosynth` at `start_step` → `mechanosynth_edit` — which is deliberately
+small enough that a failure is attributable.
+
+1. **Click a bare support Si of a stripped footprint.** The popup opens beside
+   the atom, the atom is ringed in orange, and the header counts the operations
+   that fit. `si_donate_dimer` is among them; `si_donate_site` and the other
+   environment variants are below the rule with how far off they are.
+2. **Rest on a row.** After a beat its ghosts appear *in the scene* — depth
+   tested, hidden behind the atoms in front of them. Crossing several rows
+   quickly previews none of them.
+3. **Hover `bridge`.** Its preview is a single green stick and no ghost atoms:
+   a bond-only operation. Nothing about that reads as a failure.
+4. **Click a near miss.** It previews in amber and the row is replaced by the
+   reason; nothing is placed.
+5. **Click an applicable row.** The step lands at the cursor, the popup closes,
+   and the tool returns to Idle — the *next* click is another question, not a
+   repeat.
+6. **An operation with two placements** shows one header and two indented rows
+   with direction arrows that re-aim as the camera orbits. Each places its own
+   orientation.
+7. **Drag the popup by its header**, orbit, and confirm it still tracks its
+   atom from where it was parked; the ⌖ button snaps it back.
+8. **Scrub the cursor**, undo, redo: the block and the cursor come back
+   together, and the tool drops any open list.
+9. **Wire the `steps` output into `export_build_script`** and execute it; the
+   file replays through `mechanosynth` to the same structure.
+10. **Round-trip the project**: save, reload, and confirm the authored block,
+    its residual chips and the cursor survive — then paste the guide's
+    text-format example through `atomcad-cli edit` to confirm it parses.
+
+Then the P1/P5 regression the design asks for: the demo projects in the
+maintainer's `mechanosynth/` folder still evaluate to the same structures.
 
 Outside the repository, a prerequisite for one-click donations on the real
 libraries: the generator emits frame atoms and environment variants for

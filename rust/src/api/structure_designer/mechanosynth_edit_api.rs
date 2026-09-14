@@ -24,14 +24,14 @@ use crate::api::api_common::{
 };
 use crate::api::common_api_types::APIVec3;
 use crate::api::structure_designer::structure_designer_api_types::{
-    APIAuthoredStep, APIGhostAtom, APIMechanosynthCandidate, APIMechanosynthChapter,
-    APIMechanosynthEditData, APIMechanosynthOffer, APIMechanosynthOffers,
-    APIMechanosynthPickResult,
+    APIAuthoredStep, APIGhostAtom, APIMechanosynthAnchor, APIMechanosynthCandidate,
+    APIMechanosynthChapter, APIMechanosynthEditData, APIMechanosynthOffer, APIMechanosynthOffers,
+    APIMechanosynthToolStatus,
 };
 use atomcad_crystolecule::mechanosynth::{BuildScript, GhostAtom, GhostKind};
 use atomcad_structure_designer::evaluator::network_result::NetworkResult;
 use atomcad_structure_designer::mechanosynth_edit_ops::{
-    CandidateRow, OfferSweep, PickOutcome, StepMetadataField,
+    CandidateRow, OfferSweep, StepMetadataField,
 };
 use atomcad_structure_designer::nodes::build_step::steps_from_array;
 use atomcad_structure_designer::nodes::mechanosynth_edit::{AuthoredStep, OPS_PIN, STEPS_PIN};
@@ -79,6 +79,7 @@ fn offers_view(sweep: &OfferSweep) -> APIMechanosynthOffers {
                 mirrored: row.mirrored,
                 approximate: row.approximate,
                 ghost: row.ghost.iter().map(ghost).collect(),
+                candidates: candidates_view(&row.candidates),
             })
             .collect(),
     }
@@ -160,7 +161,6 @@ pub fn mechanosynth_edit_data(
         approximate_count: approximate_count as i32,
         last_error: data.last_error(),
         tool_state: data.placement.state().as_str().to_string(),
-        armed_op: data.placement.armed.clone(),
         anchor_atom_id: data.placement.anchor,
         chapters,
     })
@@ -223,71 +223,105 @@ pub fn mechanosynth_edit_offers(
     }
 }
 
+/// Which atom of this node's workpiece a viewport ray hits, or `None`.
+///
+/// The placement entry points take an atom id; this is what turns a click into
+/// one. Scoped to the editor's own node on purpose — an atom belonging to some
+/// other displayed structure is not a host this tool may place on.
+///
+/// The position and element come back with it because the popup is anchored to
+/// the atom and has to follow it as the camera moves, and the path that opens a
+/// candidate list has no offer sweep to take them from.
 #[flutter_rust_bridge::frb(sync)]
-pub fn mechanosynth_edit_arm(scope_path: Vec<u64>, node_id: u64, op: String) -> Option<String> {
+pub fn mechanosynth_edit_anchor_at_ray(
+    scope_path: Vec<u64>,
+    node_id: u64,
+    ray_origin: APIVec3,
+    ray_direction: APIVec3,
+) -> Option<APIMechanosynthAnchor> {
     unsafe {
-        with_mut_cad_instance_or(
+        with_cad_instance_or(
             |cad_instance| {
                 cad_instance
                     .structure_designer
-                    .mechanosynth_edit_arm(&scope_path, node_id, &op)
-                    .err()
+                    .mechanosynth_edit_anchor_at_ray(
+                        &scope_path,
+                        node_id,
+                        DVec3::new(ray_origin.x, ray_origin.y, ray_origin.z),
+                        DVec3::new(ray_direction.x, ray_direction.y, ray_direction.z),
+                    )
+                    .map(|anchor| APIMechanosynthAnchor {
+                        atom_id: anchor.atom_id,
+                        position: vec3(anchor.position),
+                        atomic_number: anchor.atomic_number as i32,
+                    })
+            },
+            None,
+        )
+    }
+}
+
+/// Selects one row of the open list for **preview**, so the next evaluation
+/// ghosts it on the workpiece.
+///
+/// The preview goes through the decorator and the tessellator like guided
+/// placement, so it costs an evaluation of *this* node. It must not cost one of
+/// the chain above it — `base` reaches back through a `mechanosynth` replaying
+/// a hundred steps over a few thousand atoms, and nothing upstream has changed.
+/// So this is the `atom_edit` drag pattern: `mark_skip_downstream` keeps the
+/// refresh from clearing the node's input cache (and from walking the
+/// downstream cone), and the node's `eval` then reuses its cached inputs. Safe
+/// here for the same reason it is safe there — the tool only owns picks while
+/// this node's own pin is the displayed one, so there is no downstream node
+/// whose display could go stale.
+#[flutter_rust_bridge::frb(sync)]
+pub fn mechanosynth_edit_select_preview(
+    scope_path: Vec<u64>,
+    node_id: u64,
+    op: String,
+    index: u32,
+) -> Option<String> {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let outcome = cad_instance
+                    .structure_designer
+                    .mechanosynth_edit_select_preview(&scope_path, node_id, &op, index as usize);
+                if outcome.is_ok() {
+                    cad_instance.structure_designer.mark_skip_downstream();
+                    refresh_structure_designer_auto(cad_instance);
+                }
+                outcome.err()
             },
             Some("no CAD instance".to_string()),
         )
     }
 }
 
+/// Drops the preview without closing the list.
 #[flutter_rust_bridge::frb(sync)]
-pub fn mechanosynth_edit_pick(
-    scope_path: Vec<u64>,
-    node_id: u64,
-    atom_id: u32,
-) -> Result<APIMechanosynthPickResult, String> {
+pub fn mechanosynth_edit_clear_preview(scope_path: Vec<u64>, node_id: u64) {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
-                let outcome = cad_instance.structure_designer.mechanosynth_edit_pick(
-                    &scope_path,
-                    node_id,
-                    atom_id,
-                )?;
-                // A commit changed the block, so the scene owes a refresh; the
-                // other two outcomes changed only transient tool state.
-                if matches!(outcome, PickOutcome::Committed { .. }) {
+                if cad_instance
+                    .structure_designer
+                    .mechanosynth_edit_clear_preview(&scope_path, node_id)
+                    .is_ok()
+                {
+                    // Dropping a preview is the same shape of change as taking
+                    // one: this node only, nothing upstream.
+                    cad_instance.structure_designer.mark_skip_downstream();
                     refresh_structure_designer_auto(cad_instance);
                 }
-                Ok(match outcome {
-                    PickOutcome::Committed { index } => APIMechanosynthPickResult {
-                        committed: true,
-                        inserted_index: index as i32,
-                        message: None,
-                        candidates: Vec::new(),
-                        offers: None,
-                    },
-                    PickOutcome::Candidates(rows) => APIMechanosynthPickResult {
-                        committed: false,
-                        inserted_index: -1,
-                        message: None,
-                        candidates: candidates_view(&rows),
-                        offers: None,
-                    },
-                    PickOutcome::NoFit { message, offers } => APIMechanosynthPickResult {
-                        committed: false,
-                        inserted_index: -1,
-                        message: Some(message),
-                        candidates: Vec::new(),
-                        offers: Some(offers_view(&offers)),
-                    },
-                })
             },
-            Err("no CAD instance".to_string()),
+            (),
         )
     }
 }
 
-/// Commits candidate `index` of operation `op`, from whatever the last click
-/// produced. Refuses an operation the last offer list reported as a near miss.
+/// Commits candidate `index` of operation `op` from the open offer list.
+/// Refuses an operation the list reported as a near miss.
 #[flutter_rust_bridge::frb(sync)]
 pub fn mechanosynth_edit_choose(
     scope_path: Vec<u64>,
@@ -319,9 +353,16 @@ pub fn mechanosynth_edit_cancel(scope_path: Vec<u64>, node_id: u64) {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
-                let _ = cad_instance
+                if cad_instance
                     .structure_designer
-                    .mechanosynth_edit_cancel(&scope_path, node_id);
+                    .mechanosynth_edit_cancel(&scope_path, node_id)
+                    .is_ok()
+                {
+                    // Closing the list drops the preview, and the preview is in
+                    // the scene now — so this owes a repaint that the
+                    // Flutter-overlay version did not.
+                    refresh_structure_designer_auto(cad_instance);
+                }
             },
             (),
         )
@@ -448,6 +489,33 @@ pub fn set_mechanosynth_edit_step_metadata(
                 outcome.err()
             },
             Some("no CAD instance".to_string()),
+        )
+    }
+}
+
+/// Where the placement tool stands: the two fields the viewport needs on every
+/// frame, and nothing else.
+///
+/// Deliberately **not** a projection of [`get_mechanosynth_edit_data`]: that one
+/// evaluates two input pins to report the prefix length and the library's
+/// operation names, and the viewport is rebuilt on every pointer move. This
+/// reads stored transient state and evaluates nothing.
+#[flutter_rust_bridge::frb(sync)]
+pub fn mechanosynth_edit_tool_status(
+    scope_path: Vec<u64>,
+    node_id: u64,
+) -> Option<APIMechanosynthToolStatus> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                cad_instance
+                    .structure_designer
+                    .mechanosynth_edit_data(&scope_path, node_id)
+                    .map(|data| APIMechanosynthToolStatus {
+                        tool_state: data.placement.state().as_str().to_string(),
+                    })
+            },
+            None,
         )
     }
 }

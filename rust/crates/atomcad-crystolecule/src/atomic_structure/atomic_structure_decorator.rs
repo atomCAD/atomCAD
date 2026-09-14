@@ -74,6 +74,30 @@ pub struct GuidelineVisuals {
     pub marker_t: f64,
 }
 
+/// Visual data for the `mechanosynth_edit` placement tool's **ghost preview**:
+/// what the selected offer or candidate would do to the workpiece, drawn over
+/// it before anything is committed.
+///
+/// Goes through the decorator and the tessellator, like guided placement and
+/// the guideline, rather than through a projected 2D overlay in Flutter. Phase 4
+/// drew it in Flutter to keep a *hover* preview free; the preview is now taken
+/// on a click, so it can pay for one evaluation and be a real object in the
+/// scene — depth-tested, occluded by the atoms in front of it, and incapable of
+/// painting over the rest of the application.
+#[derive(Debug, Clone)]
+pub struct MechanosynthGhostVisuals {
+    pub ghosts: Vec<crate::mechanosynth::place::GhostAtom>,
+    /// The bonds the step would add, delete or re-order. Not folded into
+    /// `ghosts` because a bond is not an atom — and load-bearing on its own: a
+    /// bond-only operation (`bridge`) has an empty `ghosts` and would otherwise
+    /// preview as nothing at all.
+    pub bonds: Vec<crate::mechanosynth::place::GhostBond>,
+    /// A near miss is drawn in one warning colour: the point of showing it is
+    /// that it does *not* apply here, and colouring it like a placement would
+    /// say the opposite.
+    pub near_miss: bool,
+}
+
 #[derive(Debug, Clone)]
 pub struct AtomicStructureDecorator {
     pub atom_display_states: FxHashMap<u32, AtomDisplayState>,
@@ -86,6 +110,16 @@ pub struct AtomicStructureDecorator {
     pub guide_placement_visuals: Option<GuidePlacementVisuals>,
     /// Transient rendering hint: atom-placement guideline visuals (issue #368).
     pub guideline_visuals: Option<GuidelineVisuals>,
+    /// Transient rendering hint: the `mechanosynth_edit` placement preview.
+    ///
+    /// **Boxed**, unlike its neighbours, and deliberately: every
+    /// `AtomicStructure` carries a decorator by value, and the evaluator holds
+    /// one per stack frame while it walks a node chain. Inline, this payload's
+    /// two `Vec`s and a flag added 56 bytes to every structure on the stack and
+    /// tipped a 33-node chain test into a stack overflow in a debug build. A
+    /// preview is set on at most one node at a time, so the pointer costs
+    /// nothing in practice.
+    pub mechanosynth_ghost_visuals: Option<Box<MechanosynthGhostVisuals>>,
     /// Display name overrides by atomic number. When present, hover tooltips
     /// and other UI consumers use these instead of the standard element names.
     /// Used by motif_edit to label parameter element atoms with user-defined names.
@@ -127,6 +161,7 @@ impl AtomicStructureDecorator {
             show_anchor_arrows: false,
             guide_placement_visuals: None,
             guideline_visuals: None,
+            mechanosynth_ghost_visuals: None,
             element_name_overrides: FxHashMap::default(),
             ghost_atom_metadata: FxHashMap::default(),
             atom_alpha: FxHashMap::default(),

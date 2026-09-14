@@ -1,5 +1,7 @@
-//! Phase 3 of `doc/design_mechanosynth_editor.md` — the placement flow of
-//! `mechanosynth_edit`: arm, pick, choose, cancel, and the atom-first offers.
+//! The placement flow of `mechanosynth_edit`: the atom-first sweep, previewing
+//! a row, choosing one, and cancelling. See `doc/design_mechanosynth_editor.md`
+//! — Phase 3 for the flow, and §Revised for why there is no armed mode and no
+//! second list of orientations.
 //!
 //! These are the `StructureDesigner` methods the api layer wraps. They live
 //! down here rather than in `rust/tests/structure_designer_api/` because the
@@ -13,7 +15,7 @@
 
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::io::xyz_loader::load_xyz;
-use atomcad_structure_designer::mechanosynth_edit_ops::{PickOutcome, StepMetadataField};
+use atomcad_structure_designer::mechanosynth_edit_ops::StepMetadataField;
 use atomcad_structure_designer::nodes::import_xyz::ImportXYZData;
 use atomcad_structure_designer::nodes::mechanosynth_edit::{MechanosynthEditData, ToolState};
 use atomcad_structure_designer::nodes::ops_library::OpsLibraryData;
@@ -97,128 +99,312 @@ fn tool_state(designer: &StructureDesigner, node_id: u64) -> ToolState {
 }
 
 // ============================================================================
-// Arm → pick → commit
+// Atom-first offers — the only placement flow there is
 // ============================================================================
+//
+// There is no "armed" mode: a viewport click is always the question "what can
+// be done at this atom", and a commit returns the tool to Idle rather than
+// leaving the last operation loaded for the next click. The library names one
+// operation per host *environment*, so the operation just placed is usually
+// the wrong one at the next site.
 
 #[test]
-fn arming_and_picking_a_single_candidate_commits_it_and_leaves_one_undo_entry() {
+fn a_sweep_carries_every_placement_of_every_row() {
+    // The popup lists each orientation as its own row, so the sweep has to hand
+    // over all of them — with their own ghosts — in one call. There is no
+    // second list to open and no second `place` to run.
     let (mut designer, node_id) = setup();
-    designer
-        .mechanosynth_edit_arm(&[], node_id, "hdon_frame")
-        .expect("the op is in the wired library");
-    assert_eq!(tool_state(&designer, node_id), ToolState::Armed);
+    let sweep = designer
+        .mechanosynth_edit_offers(&[], node_id, at(B))
+        .expect("the atom exists");
+    let row = sweep
+        .rows
+        .iter()
+        .find(|row| row.op == "dimerize")
+        .expect("dimerize fits this host");
 
-    let outcome = designer
-        .mechanosynth_edit_pick(&[], node_id, at(A))
-        .expect("the host fits");
-    assert_eq!(outcome, PickOutcome::Committed { index: 0 });
-
-    let stored = data(&designer, node_id);
-    assert_eq!(stored.authored.len(), 1);
-    assert_eq!(stored.authored[0].step.op, "hdon_frame");
-    assert!(stored.authored[0].is_exact());
-    assert_eq!(stored.cursor, 1, "the cursor lands on the new step");
-    assert_eq!(designer.undo_stack.history_len(), 1);
-
-    // …and the tool stays armed with the same operation, so a run of identical
-    // placements is one click each.
-    assert_eq!(tool_state(&designer, node_id), ToolState::Armed);
-    assert_eq!(
-        data(&designer, node_id).placement.armed.as_deref(),
-        Some("hdon_frame")
-    );
-}
-
-#[test]
-fn a_pick_with_several_candidates_waits_for_a_choice() {
-    let (mut designer, node_id) = setup();
-    designer
-        .mechanosynth_edit_arm(&[], node_id, "dimerize")
-        .expect("armed");
-    let outcome = designer
-        .mechanosynth_edit_pick(&[], node_id, at(B))
-        .expect("two partners are in reach");
-    let PickOutcome::Candidates(rows) = outcome else {
-        panic!("two partners must yield two candidates, not a commit");
-    };
-    assert_eq!(rows.len(), 2);
+    assert_eq!(row.candidates.len(), 2, "two partners are in reach");
+    assert_eq!(row.candidates.len(), row.candidate_count);
     assert!(
-        rows.iter().all(|row| !row.ghost.is_empty()),
-        "every candidate carries the atoms it would draw"
+        row.candidates.iter().all(|c| !c.ghost.is_empty()),
+        "every placement carries the atoms it would draw"
+    );
+    assert_eq!(
+        row.candidates.iter().map(|c| c.index).collect::<Vec<_>>(),
+        vec![0, 1],
+        "indexed as `choose` and `select_preview` take them"
     );
     assert!(data(&designer, node_id).authored.is_empty());
     assert_eq!(designer.undo_stack.history_len(), 0);
-    assert_eq!(tool_state(&designer, node_id), ToolState::Candidates);
 
+    // Each is placeable by its own index, straight from the offer list.
     designer
         .mechanosynth_edit_choose(&[], node_id, "dimerize", 1)
-        .expect("the second candidate");
+        .expect("the second placement");
     assert_eq!(data(&designer, node_id).authored.len(), 1);
     assert_eq!(designer.undo_stack.history_len(), 1);
 }
 
 #[test]
-fn a_pick_while_idle_is_an_error() {
+fn a_near_miss_carries_its_one_rejected_fit_and_is_never_a_choice() {
+    // It previews like anything else — that is what makes a library of
+    // environment variants learnable — but it is never expanded into an
+    // orientation choice, and it still cannot be placed.
     let (mut designer, node_id) = setup();
-    let error = designer
-        .mechanosynth_edit_pick(&[], node_id, at(A))
-        .expect_err("nothing is armed");
-    assert!(error.contains("armed"), "{error}");
-}
+    let sweep = designer
+        .mechanosynth_edit_offers(&[], node_id, at(A))
+        .expect("the atom exists");
+    let miss = sweep
+        .rows
+        .iter()
+        .find(|row| !row.fits)
+        .expect("the wide variant is a near miss on this host");
 
-#[test]
-fn arming_an_operation_the_library_does_not_have_is_an_error_naming_it() {
-    let (mut designer, node_id) = setup();
-    let error = designer
-        .mechanosynth_edit_arm(&[], node_id, "no_such_op")
-        .expect_err("the library has no such operation");
-    assert!(error.contains("no_such_op"), "{error}");
-}
-
-#[test]
-fn a_failed_pick_reports_the_reason_and_the_offers_for_the_same_atom() {
-    let (mut designer, node_id) = setup();
-    // `habst` acts on hydrogen; this is a silicon.
-    designer
-        .mechanosynth_edit_arm(&[], node_id, "habst")
-        .expect("armed");
-    let outcome = designer
-        .mechanosynth_edit_pick(&[], node_id, at(A))
-        .expect("a failed pick is an outcome, not an error");
-    let PickOutcome::NoFit { message, offers } = outcome else {
-        panic!("habst cannot act on a silicon");
-    };
-    assert!(message.contains("habst"), "{message}");
+    assert_eq!(miss.candidates.len(), 1);
+    assert!(!miss.candidates[0].ghost.is_empty());
+    assert_eq!(miss.candidate_count, 0, "a near miss offers no placement");
     assert!(
-        offers.rows.iter().any(|row| row.op == "hdon_frame"),
-        "the popup opens on what does fit: {:?}",
-        offers.rows.iter().map(|row| &row.op).collect::<Vec<_>>()
+        designer
+            .mechanosynth_edit_choose(&[], node_id, &miss.op, 0)
+            .is_err()
     );
-    assert_eq!(offers.anchor_atom_id, at(A));
-    assert_eq!(offers.anchor_atomic_number, 14);
-    assert!(data(&designer, node_id).authored.is_empty());
+}
+
+// ============================================================================
+// The input cache
+// ============================================================================
+//
+// `eval` reuses the node's evaluated inputs so that an interaction touching
+// only this node — a hover preview — does not re-evaluate the chain above it.
+// The refresh system drops the cache through `NodeData::clear_input_cache`
+// whenever upstream may have changed; the danger is reading a stale one, so
+// what these pin is that the invalidation reaches it.
+
+#[test]
+fn the_input_cache_is_filled_by_an_evaluation_and_dropped_on_demand() {
+    use atomcad_structure_designer::node_data::NodeData;
+
+    let (mut designer, node_id) = setup();
+    assert!(
+        !data(&designer, node_id).has_cached_input(),
+        "nothing is cached before the node has been evaluated"
+    );
+
+    // Any operation that needs the workpiece evaluates the node.
+    designer
+        .mechanosynth_edit_offers(&[], node_id, at(A))
+        .expect("the atom exists");
+    assert!(
+        data(&designer, node_id).has_cached_input(),
+        "a completed evaluation leaves its inputs behind"
+    );
+
+    // The hook the refresh system uses.
+    NodeData::clear_input_cache(data(&designer, node_id));
+    assert!(!data(&designer, node_id).has_cached_input());
 }
 
 #[test]
-fn a_stale_atom_id_is_an_error_from_both_entry_points() {
+fn a_cached_evaluation_produces_the_same_workpiece_as_a_cold_one() {
+    // The cache holds the *unmutated* inputs and `eval` replays into a clone of
+    // them. Getting that wrong would make the second placement of a session fit
+    // against a workpiece that already had the first one applied.
+    use atomcad_structure_designer::node_data::NodeData;
+
+    let (mut designer, node_id) = setup();
+    let cold = designer
+        .mechanosynth_edit_offers(&[], node_id, at(A))
+        .expect("the atom exists");
+
+    // …and again, now that the inputs are cached.
+    let warm = designer
+        .mechanosynth_edit_offers(&[], node_id, at(A))
+        .expect("the atom exists");
+    assert_eq!(
+        cold.rows.iter().map(|r| &r.op).collect::<Vec<_>>(),
+        warm.rows.iter().map(|r| &r.op).collect::<Vec<_>>()
+    );
+    assert_eq!(cold.anchor_position, warm.anchor_position);
+
+    // A placement, then a cold evaluation of the same node: the block is
+    // applied exactly once, not twice.
+    designer
+        .mechanosynth_edit_choose(&[], node_id, "hdon_frame", 0)
+        .expect("an applicable row");
+    NodeData::clear_input_cache(data(&designer, node_id));
+    let after_cold = designer
+        .mechanosynth_edit_offers(&[], node_id, at(A))
+        .expect("the atom exists");
+    designer
+        .mechanosynth_edit_offers(&[], node_id, at(A))
+        .expect("the atom exists");
+    let after_warm = designer
+        .mechanosynth_edit_offers(&[], node_id, at(A))
+        .expect("the atom exists");
+    assert_eq!(
+        after_cold.rows.iter().map(|r| &r.op).collect::<Vec<_>>(),
+        after_warm.rows.iter().map(|r| &r.op).collect::<Vec<_>>(),
+        "a warm evaluation must not replay the authored block twice"
+    );
+}
+
+#[test]
+fn undoing_a_block_edit_drops_the_input_cache() {
+    // The undo command reaches into the node's data directly rather than
+    // through a refresh, so it owes the cache the invalidation the refresh
+    // system would have done.
+    let (mut designer, node_id) = setup();
+    designer
+        .mechanosynth_edit_offers(&[], node_id, at(A))
+        .expect("the atom exists");
+    designer
+        .mechanosynth_edit_choose(&[], node_id, "hdon_frame", 0)
+        .expect("an applicable row");
+    designer
+        .mechanosynth_edit_offers(&[], node_id, at(A))
+        .expect("the atom exists");
+    assert!(data(&designer, node_id).has_cached_input());
+
+    designer.undo();
+    assert!(
+        !data(&designer, node_id).has_cached_input(),
+        "the restored block evaluates against freshly read inputs"
+    );
+}
+
+#[test]
+fn a_stale_atom_id_is_an_error() {
     let (mut designer, node_id) = setup();
     assert!(
         designer
             .mechanosynth_edit_offers(&[], node_id, 9999)
             .is_err()
     );
+}
+
+#[test]
+fn a_commit_returns_the_tool_to_idle_rather_than_arming_the_operation() {
+    // The invariant the removed "armed" mode broke. A click after a placement
+    // must be another question, not a silent repeat of the last answer.
+    let (mut designer, node_id) = setup();
     designer
-        .mechanosynth_edit_arm(&[], node_id, "hdon_frame")
-        .expect("armed");
-    assert!(designer.mechanosynth_edit_pick(&[], node_id, 9999).is_err());
+        .mechanosynth_edit_offers(&[], node_id, at(A))
+        .expect("the atom exists");
+    designer
+        .mechanosynth_edit_choose(&[], node_id, "hdon_frame", 0)
+        .expect("an applicable row");
+
+    assert_eq!(data(&designer, node_id).authored.len(), 1);
+    assert_eq!(tool_state(&designer, node_id), ToolState::Idle);
+    let placement = &data(&designer, node_id).placement;
+    assert!(placement.anchor.is_none());
+    assert!(placement.offers.is_empty());
+    assert!(
+        placement.preview_ghosts.is_empty(),
+        "a commit drops the preview with the list"
+    );
 }
 
 // ============================================================================
-// Atom-first offers
+// Preview selection
 // ============================================================================
+//
+// Selecting a row puts its ghost atoms into the transient state; the node's
+// `eval(decorate)` hands them to the decorator and the tessellator draws them
+// with the workpiece. Taken on a click, never on hover — it costs an
+// evaluation.
 
 #[test]
-fn the_offers_to_choose_sequence_inserts_the_same_step_as_arm_to_pick() {
+fn selecting_an_offer_row_stages_its_ghosts() {
+    let (mut designer, node_id) = setup();
+    designer
+        .mechanosynth_edit_offers(&[], node_id, at(A))
+        .expect("the atom exists");
+    assert!(
+        data(&designer, node_id).placement.preview_ghosts.is_empty(),
+        "opening the list previews nothing"
+    );
+
+    designer
+        .mechanosynth_edit_select_preview(&[], node_id, "hdon_frame", 0)
+        .expect("an applicable row");
+    let placement = &data(&designer, node_id).placement;
+    assert!(!placement.preview_ghosts.is_empty());
+    assert!(!placement.preview_near_miss);
+    assert!(
+        data(&designer, node_id).authored.is_empty(),
+        "previewing places nothing"
+    );
+    assert_eq!(designer.undo_stack.history_len(), 0);
+}
+
+#[test]
+fn selecting_a_near_miss_row_previews_it_and_flags_it() {
+    // A near miss keeps its one rejected fit outside the placeable list, so
+    // previewing it has to look there — and it must be flagged, because it is
+    // drawn in a warning colour and can never be placed.
+    let (mut designer, node_id) = setup();
+    let sweep = designer
+        .mechanosynth_edit_offers(&[], node_id, at(A))
+        .expect("the atom exists");
+    let near_miss = sweep
+        .rows
+        .iter()
+        .find(|row| !row.fits)
+        .expect("this fixture has a near miss")
+        .op
+        .clone();
+
+    designer
+        .mechanosynth_edit_select_preview(&[], node_id, &near_miss, 0)
+        .expect("a near miss previews");
+    let placement = &data(&designer, node_id).placement;
+    assert!(!placement.preview_ghosts.is_empty());
+    assert!(placement.preview_near_miss);
+
+    // …and still cannot be placed.
+    assert!(
+        designer
+            .mechanosynth_edit_choose(&[], node_id, &near_miss, 0)
+            .is_err()
+    );
+}
+
+#[test]
+fn clearing_the_preview_leaves_the_list_open() {
+    let (mut designer, node_id) = setup();
+    designer
+        .mechanosynth_edit_offers(&[], node_id, at(A))
+        .expect("the atom exists");
+    designer
+        .mechanosynth_edit_select_preview(&[], node_id, "hdon_frame", 0)
+        .expect("an applicable row");
+    designer
+        .mechanosynth_edit_clear_preview(&[], node_id)
+        .expect("the node exists");
+
+    assert!(data(&designer, node_id).placement.preview_ghosts.is_empty());
+    assert_eq!(
+        tool_state(&designer, node_id),
+        ToolState::Offers,
+        "dropping the preview must not close the list"
+    );
+}
+
+#[test]
+fn selecting_an_operation_the_list_does_not_hold_is_an_error() {
+    let (mut designer, node_id) = setup();
+    designer
+        .mechanosynth_edit_offers(&[], node_id, at(A))
+        .expect("the atom exists");
+    let error = designer
+        .mechanosynth_edit_select_preview(&[], node_id, "no_such_op", 0)
+        .expect_err("the library has no such operation");
+    assert!(error.contains("no_such_op"), "{error}");
+}
+
+#[test]
+fn the_offers_to_choose_sequence_inserts_the_step_the_fit_found() {
     let (mut designer, node_id) = setup();
     let sweep = designer
         .mechanosynth_edit_offers(&[], node_id, at(A))
@@ -232,17 +418,11 @@ fn the_offers_to_choose_sequence_inserts_the_same_step_as_arm_to_pick() {
         .mechanosynth_edit_choose(&[], node_id, "hdon_frame", 0)
         .expect("an applicable row");
 
-    let from_offers = data(&designer, node_id).authored[0].clone();
+    let step = &data(&designer, node_id).authored[0];
+    assert_eq!(step.step.op, "hdon_frame");
+    assert!(step.is_exact());
+    assert_eq!(data(&designer, node_id).cursor, 1, "the cursor lands on it");
     assert_eq!(designer.undo_stack.history_len(), 1);
-
-    let (mut other, other_id) = setup();
-    other
-        .mechanosynth_edit_arm(&[], other_id, "hdon_frame")
-        .expect("armed");
-    other
-        .mechanosynth_edit_pick(&[], other_id, at(A))
-        .expect("fits");
-    assert_eq!(from_offers, data(&other, other_id).authored[0]);
 }
 
 #[test]
@@ -297,11 +477,11 @@ fn choosing_an_out_of_range_index_is_an_error_that_inserts_nothing() {
 fn cancel_inserts_nothing_and_returns_to_idle() {
     let (mut designer, node_id) = setup();
     designer
-        .mechanosynth_edit_arm(&[], node_id, "dimerize")
-        .expect("armed");
+        .mechanosynth_edit_offers(&[], node_id, at(B))
+        .expect("the atom exists");
     designer
-        .mechanosynth_edit_pick(&[], node_id, at(B))
-        .expect("two candidates");
+        .mechanosynth_edit_select_preview(&[], node_id, "dimerize", 1)
+        .expect("the second placement previews");
     designer
         .mechanosynth_edit_cancel(&[], node_id)
         .expect("a real node");
@@ -318,10 +498,10 @@ fn cancel_inserts_nothing_and_returns_to_idle() {
 fn a_commit_inherits_the_previous_steps_metadata_but_not_its_note() {
     let (mut designer, node_id) = setup();
     designer
-        .mechanosynth_edit_arm(&[], node_id, "hdon_frame")
-        .expect("armed");
+        .mechanosynth_edit_offers(&[], node_id, at(A))
+        .expect("the atom exists");
     designer
-        .mechanosynth_edit_pick(&[], node_id, at(A))
+        .mechanosynth_edit_choose(&[], node_id, "hdon_frame", 0)
         .expect("fits");
 
     for (field, text, number) in [
@@ -339,10 +519,10 @@ fn a_commit_inherits_the_previous_steps_metadata_but_not_its_note() {
     // A second placement, on the cluster-G host this time, so it is a real
     // second reaction rather than a repeat of the first.
     designer
-        .mechanosynth_edit_arm(&[], node_id, "hdon_uniq")
-        .expect("armed");
+        .mechanosynth_edit_offers(&[], node_id, at(DVec3::new(0.0, 0.0, -20.0)))
+        .expect("the atom exists");
     designer
-        .mechanosynth_edit_pick(&[], node_id, at(DVec3::new(0.0, 0.0, -20.0)))
+        .mechanosynth_edit_choose(&[], node_id, "hdon_uniq", 0)
         .expect("the rotated host fits");
 
     let stored = data(&designer, node_id);
@@ -364,12 +544,12 @@ fn an_approximate_placement_is_flagged_in_the_stored_block() {
     // `hdon_bare` names no frame atoms, so its orientation comes from the
     // host's bonds — coordinates from the application, not from the library.
     designer
-        .mechanosynth_edit_arm(&[], node_id, "hdon_bare")
-        .expect("armed");
-    let outcome = designer
-        .mechanosynth_edit_pick(&[], node_id, at(A))
+        .mechanosynth_edit_offers(&[], node_id, at(A))
+        .expect("the atom exists");
+    let index = designer
+        .mechanosynth_edit_choose(&[], node_id, "hdon_bare", 0)
         .expect("one free direction, so one candidate");
-    assert_eq!(outcome, PickOutcome::Committed { index: 0 });
+    assert_eq!(index, 0);
     let step = &data(&designer, node_id).authored[0];
     assert!(step.approximate);
     assert_eq!(data(&designer, node_id).inexact_counts().1, 1);
@@ -379,10 +559,10 @@ fn an_approximate_placement_is_flagged_in_the_stored_block() {
 fn a_commit_is_undoable_and_the_undo_empties_the_block() {
     let (mut designer, node_id) = setup();
     designer
-        .mechanosynth_edit_arm(&[], node_id, "hdon_frame")
-        .expect("armed");
+        .mechanosynth_edit_offers(&[], node_id, at(A))
+        .expect("the atom exists");
     designer
-        .mechanosynth_edit_pick(&[], node_id, at(A))
+        .mechanosynth_edit_choose(&[], node_id, "hdon_frame", 0)
         .expect("fits");
     assert!(designer.undo());
     let stored = data(&designer, node_id);
@@ -395,20 +575,20 @@ fn a_commit_is_undoable_and_the_undo_empties_the_block() {
 #[test]
 fn a_run_of_placements_appends_in_order() {
     let (mut designer, node_id) = setup();
-    designer
-        .mechanosynth_edit_arm(&[], node_id, "habst")
-        .expect("armed");
-    // The three terminators of sub-cluster E, abstracted one after another.
+    // The three terminators of sub-cluster E, abstracted one after another —
+    // each one a fresh question, since a commit no longer arms anything.
     let e = DVec3::new(0.0, 0.0, 20.0);
     for offset in [
         DVec3::new(0.854478, 0.854478, 0.854478),
         DVec3::new(0.854478, -0.854478, -0.854478),
         DVec3::new(-0.854478, 0.854478, -0.854478),
     ] {
-        let outcome = designer
-            .mechanosynth_edit_pick(&[], node_id, at(e + offset))
+        designer
+            .mechanosynth_edit_offers(&[], node_id, at(e + offset))
+            .expect("the atom exists");
+        designer
+            .mechanosynth_edit_choose(&[], node_id, "habst", 0)
             .expect("each terminator is abstractable");
-        assert!(matches!(outcome, PickOutcome::Committed { .. }));
     }
     let stored = data(&designer, node_id);
     assert_eq!(stored.authored.len(), 3);

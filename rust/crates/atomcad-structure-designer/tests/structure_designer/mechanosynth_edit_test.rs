@@ -844,7 +844,6 @@ fn the_placement_state_is_never_serialized() {
     let base_id = add_value_node(&mut designer, molecule_value(methane()));
     let node_id = add_editor(&mut designer, base_id, methylate_steps(), -1);
     with_data::<MechanosynthEditData, _>(&mut designer, node_id, |data| {
-        data.placement.armed = Some("habst".to_string());
         data.placement.anchor = Some(7);
     });
 

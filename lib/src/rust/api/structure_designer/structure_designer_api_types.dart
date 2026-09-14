@@ -2805,6 +2805,37 @@ sealed class APIMeasurement with _$APIMeasurement {
   }) = APIMeasurement_AtomInfo;
 }
 
+/// The atom a placement click landed on — what the offer popup hangs off and
+/// heads itself with.
+///
+/// Carried separately from [`APIMechanosynthOffers`] because the path that opens
+/// straight into a candidate list has no sweep to take it from, and an overlay
+/// pinned to a projected 3D point needs the position on every frame.
+class APIMechanosynthAnchor {
+  final int atomId;
+  final APIVec3 position;
+  final int atomicNumber;
+
+  const APIMechanosynthAnchor({
+    required this.atomId,
+    required this.position,
+    required this.atomicNumber,
+  });
+
+  @override
+  int get hashCode =>
+      atomId.hashCode ^ position.hashCode ^ atomicNumber.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIMechanosynthAnchor &&
+          runtimeType == other.runtimeType &&
+          atomId == other.atomId &&
+          position == other.position &&
+          atomicNumber == other.atomicNumber;
+}
+
 /// One way of placing the chosen operation at the clicked atom.
 class APIMechanosynthCandidate {
   /// What `mechanosynth_edit_choose` takes alongside the operation name.
@@ -2963,11 +2994,8 @@ class APIMechanosynthEditData {
   /// The most recent evaluation failure, if the last evaluation failed.
   final String? lastError;
 
-  /// `"idle"` / `"armed"` / `"offers"` / `"candidates"`.
+  /// `"idle"` / `"offers"` / `"candidates"`.
   final String toolState;
-
-  /// The armed operation, when the tool has one.
-  final String? armedOp;
 
   /// The atom the open popup is anchored to.
   final int? anchorAtomId;
@@ -2985,7 +3013,6 @@ class APIMechanosynthEditData {
     required this.approximateCount,
     this.lastError,
     required this.toolState,
-    this.armedOp,
     this.anchorAtomId,
     required this.chapters,
   });
@@ -3001,7 +3028,6 @@ class APIMechanosynthEditData {
       approximateCount.hashCode ^
       lastError.hashCode ^
       toolState.hashCode ^
-      armedOp.hashCode ^
       anchorAtomId.hashCode ^
       chapters.hashCode;
 
@@ -3019,7 +3045,6 @@ class APIMechanosynthEditData {
           approximateCount == other.approximateCount &&
           lastError == other.lastError &&
           toolState == other.toolState &&
-          armedOp == other.armedOp &&
           anchorAtomId == other.anchorAtomId &&
           chapters == other.chapters;
 }
@@ -3122,9 +3147,14 @@ class APIMechanosynthOffer {
   final bool approximate;
 
   /// The ghost atoms of the row's first candidate (a near-miss row's come
-  /// from its best rejected fit), so highlighting the row previews it with no
+  /// from its best rejected fit), so selecting the row previews it with no
   /// second call.
   final List<APIGhostAtom> ghost;
+
+  /// Every way of placing this operation here. The popup lists them inline
+  /// under the operation's name — one row per orientation — so there is no
+  /// second list to open.
+  final List<APIMechanosynthCandidate> candidates;
 
   const APIMechanosynthOffer({
     required this.op,
@@ -3136,6 +3166,7 @@ class APIMechanosynthOffer {
     required this.mirrored,
     required this.approximate,
     required this.ghost,
+    required this.candidates,
   });
 
   @override
@@ -3148,7 +3179,8 @@ class APIMechanosynthOffer {
       exact.hashCode ^
       mirrored.hashCode ^
       approximate.hashCode ^
-      ghost.hashCode;
+      ghost.hashCode ^
+      candidates.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -3163,7 +3195,8 @@ class APIMechanosynthOffer {
           exact == other.exact &&
           mirrored == other.mirrored &&
           approximate == other.approximate &&
-          ghost == other.ghost;
+          ghost == other.ghost &&
+          candidates == other.candidates;
 }
 
 /// An applicability sweep: what the library can do at one atom, plus what the
@@ -3199,52 +3232,26 @@ class APIMechanosynthOffers {
           rows == other.rows;
 }
 
-/// What a pick did.
-///
-/// Exactly one of the three shapes is populated: a single candidate is
-/// committed on the spot (`committed`), several wait for a choice
-/// (`candidates`), and a failure carries both its message and the offers for
-/// the same atom, so a click with the wrong operation armed self-corrects in
-/// one more click.
-class APIMechanosynthPickResult {
-  final bool committed;
+/// Where the placement tool stands, evaluated from nothing — the viewport reads
+/// it on every frame to notice that the popup it is holding has been dropped by
+/// something else (a cursor move, an undo).
+class APIMechanosynthToolStatus {
+  /// `"idle"` / `"offers"` / `"candidates"`.
+  final String toolState;
 
-  /// Where the committed step landed in the authored block; `-1` otherwise.
-  final int insertedIndex;
-
-  /// The failure, when the armed operation does not fit here.
-  final String? message;
-  final List<APIMechanosynthCandidate> candidates;
-
-  /// The offers for the clicked atom, populated only on a failure.
-  final APIMechanosynthOffers? offers;
-
-  const APIMechanosynthPickResult({
-    required this.committed,
-    required this.insertedIndex,
-    this.message,
-    required this.candidates,
-    this.offers,
+  const APIMechanosynthToolStatus({
+    required this.toolState,
   });
 
   @override
-  int get hashCode =>
-      committed.hashCode ^
-      insertedIndex.hashCode ^
-      message.hashCode ^
-      candidates.hashCode ^
-      offers.hashCode;
+  int get hashCode => toolState.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is APIMechanosynthPickResult &&
+      other is APIMechanosynthToolStatus &&
           runtimeType == other.runtimeType &&
-          committed == other.committed &&
-          insertedIndex == other.insertedIndex &&
-          message == other.message &&
-          candidates == other.candidates &&
-          offers == other.offers;
+          toolState == other.toolState;
 }
 
 /// Freeze mode for atom_edit energy minimization.

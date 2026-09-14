@@ -116,6 +116,148 @@ A **guideline** is a transient line that constrains atom placement to hard-to-hi
 
 The three-phase panel, the model methods, and the viewport delegate are documented at `node_data/atom_edit_editor.dart::_buildGuidelinePanel`. Design doc: `doc/atom_edit/design_atom_guidelines.md`.
 
+## Mechanosynthesis placement tool (in viewport)
+
+The `mechanosynth_edit` node owns viewport picks the way `atom_edit` does —
+`isNodeTypeActive('mechanosynth_edit')`, i.e. the node is the active, displayed,
+selected one, which is also when the property panel is showing it, so the
+viewport and the panel address the same node with the same
+`propertyEditorScopeChain`. Design doc: `doc/design_mechanosynth_editor.md`
+(Phase 4).
+
+- **The state machine is the kernel's**, not the widget's. `PlacementState` on
+  the node answers "armed / offers / candidates / idle"; the viewport's `_ms*`
+  fields hold the *answer to the last call* so the popup can render, and are
+  cleared, never consulted as a second source of truth.
+- **The click turns into an atom id in Rust** (`mechanosynthEditHitTest`), which
+  hit-tests **only that node's** displayed outputs. The scene-wide hit test
+  would hand back an id belonging to some other structure that this node's
+  `result` also happens to contain.
+- **The popup is mounted in the viewport's own `Stack`**, not a global
+  `Overlay`: it is placed from the clicked atom's *projected* world position and
+  clamped by the viewport's `LayoutBuilder` constraints. That is why
+  `renderingNeeded()` is overridden here — it only schedules a frame, and a
+  popup pinned to a projected point needs a **rebuild** when the camera moves.
+  The override defers one `setState` per frame behind a guard.
+- **It is placed clear of the *action box*, not beside the anchor.** The design
+  said "offset up and to the right" from the clicked atom; in use that put a
+  300 px list on top of the reaction — a `precursor_chemisorb` preview is six
+  added atoms spread over two dimers — and once the clamp bit, the list had no
+  visible relation to the atom at all. `mechanosynthActionBox` /
+  `mechanosynthPopupPosition` (pure functions in
+  `mechanosynth_ghost_painter.dart`, unit-tested in
+  `test/mechanosynth_popup_layout_test.dart`) pick the first free side, right
+  first. The anchor ring and the dashed leader line carry the "this list is
+  about that atom" relation once the list is no longer on the atom, so don't
+  drop them if you re-tune the placement.
+- **The box is the union over *every* row's ghosts, not the highlighted row's**
+  — the invariant to preserve is that the list **holds still for the life of a
+  query**. Keying it on the highlight re-placed the popup on every hover and
+  every arrow key, i.e. exactly while it was being read. The union is also the
+  right region on its own terms: it is where a preview *can* appear, so it is
+  where the list must not be. `MechanosynthLayout.ghosts` is the highlighted
+  row's (what gets drawn) and is deliberately not what the placement sees.
+- **A header drag accumulates realised movement, not pointer travel.**
+  `_mechanosynthDragPopup` clamps against the popup's current rect and adds
+  only what actually moved. Adding the raw delta and clamping on the way out
+  banks invisible slack at a viewport edge, and the list then refuses to come
+  back until all of it has been dragged off — which reads as one axis being
+  stuck. The offset is a **delta** from the automatic position (so the list
+  still tracks the atom as the camera orbits) and is cleared with the query.
+- **Project with the camera in hand.** `_projectWorldToScreen` fetches the
+  camera over FFI per call; the placement projects the preview's ghosts *and*
+  every row's, a few hundred points per build. Use `_projectWithCamera` with
+  one `getCamera()` for a batch.
+- **One layout pass feeds all three overlays.** `_mechanosynthLayout` runs once
+  per build and hands the same `MechanosynthLayout` to the ghost painter and
+  the popup, so the ring, the leader line and the list cannot disagree about
+  where anything is. The popup height is *estimated* for placement; keep the
+  estimate honest, because an over-estimate is what made the old flat 320 px
+  clamp the popup for nothing.
+- **Ghost previews are decorator geometry**, the same route the guideline tool
+  and guided placement take — `MechanosynthGhostVisuals` on the decorator,
+  `tessellate_mechanosynth_ghosts_impostors` into the *transparent* impostor
+  pass. Phase 4 drew them as a projected 2D overlay to keep a **hover** preview
+  free; the preview is taken on a click now, so it can afford the evaluation,
+  and the overlay had three faults nothing else fixes: no depth test (a ghost
+  behind an atom drew in front of it), no shading, and a `CustomPainter` is not
+  bounded by its widget, so ghosts projected outside the viewport painted over
+  the node editor and the property panel.
+- **A preview is atoms *and* bonds.** `MechanosynthGhostVisuals` carries both,
+  and `PlacementState::has_preview()` is the emptiness test — not
+  `preview_ghosts.is_empty()`. A bond-only operation (`bridge`) has no ghost
+  atoms whatever, and previewed as an empty scene until `preview_bonds` existed.
+- **`mechanosynth_ghost_painter.dart` keeps only the 2D *annotations*** — the
+  anchor ring and the leader line to the popup — plus the pure popup-layout
+  arithmetic. Those stay 2D on purpose (constant size, never occluded, drawn
+  even when the anchor atom is hidden) and the overlay is now inside a
+  `ClipRect`.
+- **There is no armed mode.** A viewport click is always the atom-first
+  question; a commit returns the tool to Idle. The library names one operation
+  per host *environment* (`si_donate_dimer`, `si_donate_site`, …), so "the same
+  operation again" is usually wrong at the next site, and a click whose meaning
+  depends on invisible state costs more than the clicks it saves. Fast
+  repetition is a real need and wants its own design (a family applied over a
+  selection; a family armed as a tool with the atoms it fits highlighted) —
+  don't reintroduce this one as a stopgap. The panel's **Operations** list is a
+  reference list, not a tool.
+- **Orientation variants are rows, not a second list.** An offer carries *all*
+  its candidates (`APIMechanosynthOffer.candidates`), and the popup expands any
+  operation with more than one into a `_RowKind.group` header plus one
+  `_RowKind.variant` per placement. A header is a label: not selectable, no
+  apply button, and the arrow keys walk past it. `mechanosynth_edit_choose` and
+  `..._select_preview` already keyed on `(op, index)`, so nothing below the
+  popup changed — `open_offer`, `ToolState::Candidates` and
+  `PlacementState::candidates` are gone.
+- **The direction arrow comes from the host, not the widget.** The popup takes
+  an `arrowAngleFor` callback because the angle needs the live camera: it is the
+  screen-space direction from the anchor to the centroid of that placement's
+  ghosts. Two placements symmetric about the view axis project to the *same*
+  arrow, so the ordinal beside it is the discriminator of last resort and must
+  not be dropped.
+- **The popup previews on hover and places on click.** Previewing re-evaluates
+  the node and re-tessellates the scene, so hover *arms* a timer rather than
+  firing: every pointer move cancels the pending one, and a pointer crossing the
+  list leaves no evaluations behind it. The delay is the host's
+  (`previewDelay`), sized from the last measured refresh
+  (`model.refreshProfile.value?.kernel?.totalMs`, clamped to 90–500 ms) — the
+  app already measures every refresh for the profile strip, so this is a field
+  read rather than an instrument. Opening the popup and filtering it must
+  likewise spend no evaluation: `_highlight == -1` is "nothing selected" and is
+  where every new list starts.
+- **A preview re-evaluates this node but not the chain above it**, via the
+  `atom_edit` drag pattern — two pieces that only work together:
+  1. `MechanosynthEditData` caches its three evaluated inputs (`CachedInputs`:
+     the `base` wrapper, the library, the prefix steps) and implements
+     `NodeData::clear_input_cache`, the trait hook the refresh system calls
+     whenever upstream *may* have changed. That hook is what makes reading the
+     cache safe; anything reaching into the node's data outside a refresh owes
+     it an `invalidate_input_cache()` (the undo command does).
+  2. The preview API calls `mark_skip_downstream()` before its refresh.
+     Without it `refresh_partial` clears the input cache of every node in the
+     downstream cone — **including the changed node itself** — and the cache
+     buys nothing. There were exactly two callers of that flag before this one,
+     both `atom_edit` drags.
+
+  Safe here because the tool only owns picks while this node's own pin is the
+  displayed one, so skipping the downstream cone cannot leave a visible node
+  stale. The evaluator's memo does **not** substitute: it is scoped to one
+  evaluation pass, not across them.
+- **`get_atom_edit_data_mut_transient` is not the lever it looks like.** It
+  still marks the node's data changed — `get_node_network_data_mut` does that
+  itself — so guided placement re-evaluates on every pointer move like anything
+  else, and with no debounce. The name refers to the *data* being transient tool
+  state, not to skipping the dirty mark.
+- **The popup holds keyboard focus while open**, so the viewport's
+  `MouseRegion.onEnter` must not take it back — and the viewport's own Escape
+  handler is the fallback for the case where the popup does not hold focus,
+  placed *before* the `isAtomEditLikeActive` gate because `mechanosynth_edit`
+  is not an atom_edit-like node.
+
+The popup widget itself (`mechanosynth_offer_popup.dart`) takes plain data and
+callbacks and is unit-tested in `test/mechanosynth_offer_popup_test.dart`; the
+panel is `node_data/mechanosynth_edit_editor.dart`.
+
 ## Click-to-Activate (in viewport)
 
 Clicking a non-active node's rendered output activates that node (two-step: first click activates, second performs the normal action), via a `viewport_pick()` interception in `onPointerDown` before delegate dispatch. Overlapping outputs raise a disambiguation overlay.

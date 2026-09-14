@@ -7563,6 +7563,58 @@ impl StructureDesigner {
         closest.map(|(id, structure, _)| (id, structure))
     }
 
+    /// Hit-test the atoms of **one** node's displayed outputs.
+    ///
+    /// The scene-wide variants above answer "what did the user click on";
+    /// a tool that owns the viewport asks the narrower question "did the user
+    /// click on *my* workpiece", and must get `None` for an atom belonging to
+    /// some other displayed node — otherwise a click on an unrelated structure
+    /// in front would be reported as an atom id that the tool's own `result`
+    /// also happens to contain.
+    pub fn hit_test_node_atomic_structure(
+        &self,
+        node_ref: &NodeRef,
+        ray_origin: &DVec3,
+        ray_direction: &DVec3,
+    ) -> Option<(u32, &AtomicStructure)> {
+        use crate::structure_designer_scene::NodeOutput;
+        use atomcad_crystolecule::atomic_structure::HitTestResult;
+
+        let display_visualization = self
+            .preferences
+            .atomic_structure_visualization_preferences
+            .visualization
+            .clone();
+
+        let node_data = self
+            .last_generated_structure_designer_scene
+            .node_data
+            .get(node_ref)?;
+
+        let mut closest: Option<(u32, &AtomicStructure, f64)> = None;
+        for (_pin_index, pin_output, _pin_geo_tree) in node_data.displayed_outputs() {
+            if let NodeOutput::Atomic(atomic_structure, _) = pin_output
+                && let HitTestResult::Atom(atom_id, distance) = atomic_structure.hit_test(
+                    ray_origin,
+                    ray_direction,
+                    &display_visualization,
+                    |atom| {
+                        effective_displayed_atom_radius(
+                            atomic_structure,
+                            atom,
+                            &display_visualization,
+                        )
+                    },
+                    BAS_STICK_RADIUS,
+                )
+                && closest.as_ref().is_none_or(|c| distance < c.2)
+            {
+                closest = Some((atom_id, atomic_structure, distance));
+            }
+        }
+        closest.map(|(id, structure, _)| (id, structure))
+    }
+
     /// Like `hit_test_all_atomic_structures`, but also returns the node ID
     /// and distance of the closest hit. Used by hover tooltip to show which
     /// node produced the hovered atom.

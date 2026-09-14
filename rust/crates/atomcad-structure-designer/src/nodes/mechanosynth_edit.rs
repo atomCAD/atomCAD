@@ -46,9 +46,10 @@ use crate::nodes::build_step::{
 use crate::nodes::mechanosynth::MS_CURRENT_TAG;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
+use atomcad_crystolecule::atomic_structure::atomic_structure_decorator::MechanosynthGhostVisuals;
 use atomcad_crystolecule::mechanosynth::{
-    Applicability, BuildScript, Candidate, EXACT_FIT_RESIDUAL, HighlightTags, NO_LAYER, NO_SITE,
-    OpLibrary, Step, replay, steps_applied,
+    Applicability, BuildScript, Candidate, EXACT_FIT_RESIDUAL, GhostAtom, GhostBond, HighlightTags,
+    NO_LAYER, NO_SITE, OpLibrary, Step, replay, steps_applied,
 };
 use glam::{DMat3, DVec3};
 use serde::{Deserialize, Serialize};
@@ -207,18 +208,14 @@ impl From<AuthoredStepJson> for AuthoredStep {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToolState {
     Idle,
-    Armed,
     Offers,
-    Candidates,
 }
 
 impl ToolState {
     pub fn as_str(self) -> &'static str {
         match self {
             ToolState::Idle => "idle",
-            ToolState::Armed => "armed",
             ToolState::Offers => "offers",
-            ToolState::Candidates => "candidates",
         }
     }
 }
@@ -227,47 +224,87 @@ impl ToolState {
 /// carries the authored block and the cursor, and nothing about a click.
 #[derive(Debug, Clone, Default)]
 pub struct PlacementState {
-    /// The operation the tool is armed with, so a run of identical placements
-    /// is one click each.
-    pub armed: Option<String>,
     /// The atom the current offer list or candidate list was taken on — the
     /// popup's anchor.
     pub anchor: Option<u32>,
-    /// The last applicability sweep, kept whole so highlighting a row previews
-    /// it without a second `place` call.
+    /// The last applicability sweep, kept whole: every row carries **all** its
+    /// candidates, so the popup lists each orientation inline and choosing one
+    /// costs a lookup rather than a second `place` call.
     pub offers: Vec<Applicability>,
-    /// The candidates of the chosen row, awaiting a choice.
-    pub candidates: Vec<Candidate>,
-    /// Which operation [`Self::candidates`] belongs to.
-    pub candidates_op: Option<String>,
+    /// The ghost atoms of the row the user has **selected** for preview, ready
+    /// for `eval(decorate)` to hand to the decorator.
+    ///
+    /// Held as atoms rather than as a (row, index) reference because they are
+    /// computed against the workpiece the sweep ran on, and `eval` must not
+    /// re-derive them: that would put a `place`-shaped cost on every
+    /// evaluation, and the whole point of selecting on a *click* rather than on
+    /// hover is that the preview is paid for once.
+    pub preview_ghosts: Vec<GhostAtom>,
+    /// The bonds the selected row would add, delete or re-order. Kept beside
+    /// the atoms rather than folded in: a **bond-only** operation has no ghost
+    /// atoms at all, and with nothing here it would preview as an empty scene.
+    pub preview_bonds: Vec<GhostBond>,
+    /// Whether [`Self::preview_ghosts`] previews a near miss, which is drawn in
+    /// a warning colour and can never be placed.
+    pub preview_near_miss: bool,
 }
 
 impl PlacementState {
     pub fn state(&self) -> ToolState {
-        if !self.candidates.is_empty() {
-            ToolState::Candidates
-        } else if !self.offers.is_empty() {
-            ToolState::Offers
-        } else if self.armed.is_some() {
-            ToolState::Armed
-        } else {
+        if self.offers.is_empty() {
             ToolState::Idle
+        } else {
+            ToolState::Offers
         }
     }
 
-    /// Back to Idle: no anchor, no offers, no pending candidates. The armed
-    /// operation is cleared too, because Escape means "stop".
+    /// Back to Idle: no anchor, no offers, no preview.
     pub fn reset(&mut self) {
         *self = Self::default();
     }
 
-    /// Clears everything a click produced but keeps the armed operation, which
-    /// is what a commit does.
-    pub fn clear_query(&mut self) {
-        self.anchor = None;
-        self.offers.clear();
-        self.candidates.clear();
-        self.candidates_op = None;
+    /// Drops the preview alone, leaving the list open.
+    pub fn clear_preview(&mut self) {
+        self.preview_ghosts.clear();
+        self.preview_bonds.clear();
+        self.preview_near_miss = false;
+    }
+
+    /// Whether a row is selected for preview. Not `preview_ghosts.is_empty()`:
+    /// a bond-only operation previews with no atoms at all.
+    pub fn has_preview(&self) -> bool {
+        !self.preview_ghosts.is_empty() || !self.preview_bonds.is_empty()
+    }
+}
+
+/// The node's three evaluated inputs, kept so an interaction that changes only
+/// *this* node does not re-evaluate the chain above it.
+///
+/// The placement tool's preview is the case that needs it: hovering a row
+/// changes nothing upstream, but `base` reaches back through a `mechanosynth`
+/// replaying a hundred steps over a few thousand atoms, and paying for that on
+/// every hover is what makes the list feel heavy. The evaluator's memo does not
+/// help — it is scoped to a single evaluation pass, not across them.
+///
+/// The same `NodeData::clear_input_cache` contract `atom_edit` uses: the
+/// refresh system drops this whenever upstream *may* have changed, so the cache
+/// is only ever read when the refresh has vouched for it.
+#[derive(Clone)]
+struct CachedInputs {
+    /// The `base` pin's value, atoms included and **unmutated** — `eval` clones
+    /// it and replays into the clone.
+    wrapper: NetworkResult,
+    library: Arc<OpLibrary>,
+    prefix: Vec<Step>,
+}
+
+impl std::fmt::Debug for CachedInputs {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // `NetworkResult` has no `Debug`, and a structure's worth of atoms is
+        // not something a debug line wants anyway.
+        f.debug_struct("CachedInputs")
+            .field("prefix_steps", &self.prefix.len())
+            .finish_non_exhaustive()
     }
 }
 
@@ -285,6 +322,10 @@ pub struct MechanosynthEditData {
 
     #[serde(skip)]
     pub placement: PlacementState,
+    /// The node's evaluated inputs, reused while the refresh system says
+    /// upstream cannot have changed. See [`CachedInputs`].
+    #[serde(skip)]
+    cached_input: Mutex<Option<CachedInputs>>,
     /// The most recent evaluation failure, for the panel. Behind a `Mutex`
     /// because `eval` takes `&self` (the `atom_edit` cache pattern).
     #[serde(skip)]
@@ -307,6 +348,7 @@ impl Default for MechanosynthEditData {
             authored: Vec::new(),
             cursor: default_cursor(),
             placement: PlacementState::default(),
+            cached_input: Mutex::new(None),
             last_error: Mutex::new(None),
         }
     }
@@ -318,6 +360,7 @@ impl Clone for MechanosynthEditData {
             authored: self.authored.clone(),
             cursor: self.cursor,
             placement: self.placement.clone(),
+            cached_input: Mutex::new(self.cached_input.lock().ok().and_then(|slot| slot.clone())),
             last_error: Mutex::new(self.last_error.lock().ok().and_then(|slot| slot.clone())),
         }
     }
@@ -326,6 +369,28 @@ impl Clone for MechanosynthEditData {
 impl MechanosynthEditData {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Whether the node's inputs are cached — i.e. whether the next `eval`
+    /// will reuse them instead of evaluating the chain above. The predicate the
+    /// tests assert on, so `CachedInputs` itself stays private.
+    pub fn has_cached_input(&self) -> bool {
+        self.cached_input
+            .lock()
+            .map(|slot| slot.is_some())
+            .unwrap_or(false)
+    }
+
+    /// Drops the cached inputs, so the next `eval` goes back to the chain.
+    ///
+    /// The refresh system calls this through
+    /// [`NodeData::clear_input_cache`] whenever upstream may have changed;
+    /// anything that reaches into this node's data *without* going through a
+    /// refresh must call it too.
+    pub fn invalidate_input_cache(&self) {
+        if let Ok(mut slot) = self.cached_input.lock() {
+            *slot = None;
+        }
     }
 
     /// How many authored steps the stored cursor applies.
@@ -432,63 +497,87 @@ impl NodeData for MechanosynthEditData {
         network_stack: &[NetworkStackElement<'a>],
         node_id: u64,
         registry: &NodeTypeRegistry,
-        _decorate: bool,
+        decorate: bool,
         context: &mut NetworkEvaluationContext,
     ) -> EvalOutput {
-        let input_val = network_evaluator.evaluate_arg_required(
-            network_stack,
-            node_id,
-            registry,
-            context,
-            BASE_PIN,
-        );
-        if input_val.is_error() {
-            return both(input_val);
-        }
-        let mut wrapper = match input_val {
-            NetworkResult::Crystal(_) | NetworkResult::Molecule(_) => input_val,
-            other => {
-                return self.fail(format!(
-                    "expected atomic input, got {:?}",
-                    other.infer_data_type()
-                ));
+        // The three inputs, from the cache when the refresh system has vouched
+        // for it (see `CachedInputs`) and from the chain above otherwise. Only
+        // a *complete* evaluation is cached: an error path leaves the slot
+        // empty rather than storing half of one.
+        let cached = self.cached_input.lock().ok().and_then(|slot| slot.clone());
+
+        let (wrapper_source, library, prefix) = match cached {
+            Some(cached) => (cached.wrapper, cached.library, cached.prefix),
+            None => {
+                let input_val = network_evaluator.evaluate_arg_required(
+                    network_stack,
+                    node_id,
+                    registry,
+                    context,
+                    BASE_PIN,
+                );
+                if input_val.is_error() {
+                    return both(input_val);
+                }
+                let wrapper_source = match input_val {
+                    NetworkResult::Crystal(_) | NetworkResult::Molecule(_) => input_val,
+                    other => {
+                        return self.fail(format!(
+                            "expected atomic input, got {:?}",
+                            other.infer_data_type()
+                        ));
+                    }
+                };
+
+                let library: Arc<OpLibrary> = match network_evaluator.evaluate_arg(
+                    network_stack,
+                    node_id,
+                    registry,
+                    context,
+                    OPS_PIN,
+                ) {
+                    NetworkResult::OpLibrary(library) => library,
+                    NetworkResult::None => {
+                        return self.fail("no operation library (wire the ops pin)".to_string());
+                    }
+                    propagated @ NetworkResult::Error(_) => return both(propagated),
+                    other => {
+                        return self.fail(format!(
+                            "expected an OpLibrary on the ops pin, got {:?}",
+                            other.infer_data_type()
+                        ));
+                    }
+                };
+
+                let prefix = match network_evaluator.evaluate_arg(
+                    network_stack,
+                    node_id,
+                    registry,
+                    context,
+                    STEPS_PIN,
+                ) {
+                    NetworkResult::None => Vec::new(),
+                    propagated @ NetworkResult::Error(_) => return both(propagated),
+                    array => match steps_from_array(&array) {
+                        Ok(steps) => steps,
+                        Err(message) => return self.fail(message),
+                    },
+                };
+
+                if let Ok(mut slot) = self.cached_input.lock() {
+                    *slot = Some(CachedInputs {
+                        wrapper: wrapper_source.clone(),
+                        library: library.clone(),
+                        prefix: prefix.clone(),
+                    });
+                }
+                (wrapper_source, library, prefix)
             }
         };
 
-        let library: Arc<OpLibrary> = match network_evaluator.evaluate_arg(
-            network_stack,
-            node_id,
-            registry,
-            context,
-            OPS_PIN,
-        ) {
-            NetworkResult::OpLibrary(library) => library,
-            NetworkResult::None => {
-                return self.fail("no operation library (wire the ops pin)".to_string());
-            }
-            propagated @ NetworkResult::Error(_) => return both(propagated),
-            other => {
-                return self.fail(format!(
-                    "expected an OpLibrary on the ops pin, got {:?}",
-                    other.infer_data_type()
-                ));
-            }
-        };
-
-        let prefix = match network_evaluator.evaluate_arg(
-            network_stack,
-            node_id,
-            registry,
-            context,
-            STEPS_PIN,
-        ) {
-            NetworkResult::None => Vec::new(),
-            propagated @ NetworkResult::Error(_) => return both(propagated),
-            array => match steps_from_array(&array) {
-                Ok(steps) => steps,
-                Err(message) => return self.fail(message),
-            },
-        };
+        // The replay mutates the atoms, so it works on a copy and the cache
+        // keeps the pristine input.
+        let mut wrapper = wrapper_source;
 
         let atoms = match &mut wrapper {
             NetworkResult::Crystal(crystal) => &mut crystal.atoms,
@@ -508,11 +597,29 @@ impl NodeData for MechanosynthEditData {
         match replay_prefix_and_block(atoms, &library, prefix, self.authored_steps(), self.cursor) {
             Ok(result) => {
                 *atoms = result;
+                // The placement preview is display-only, so it rides on the
+                // decorator and never on the atoms — the same channel guided
+                // placement and the guideline use. The ghosts were computed
+                // when the row was selected; this only hands them over.
+                if decorate && self.placement.has_preview() {
+                    atoms.decorator_mut().mechanosynth_ghost_visuals =
+                        Some(Box::new(MechanosynthGhostVisuals {
+                            ghosts: self.placement.preview_ghosts.clone(),
+                            bonds: self.placement.preview_bonds.clone(),
+                            near_miss: self.placement.preview_near_miss,
+                        }));
+                }
                 self.record_error(None);
                 EvalOutput::multi(vec![wrapper, steps_output])
             }
             Err(message) => self.fail(message),
         }
+    }
+
+    /// Drops the cached inputs. The refresh system calls this whenever upstream
+    /// may have changed, which is what makes reading the cache safe.
+    fn clear_input_cache(&self) {
+        self.invalidate_input_cache();
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

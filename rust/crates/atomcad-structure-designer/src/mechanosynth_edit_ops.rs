@@ -32,8 +32,8 @@ use crate::undo::commands::mechanosynth_edit_block::{
 };
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::mechanosynth::{
-    Applicability, Candidate, GhostAtom, OpLibrary, Step, applicable_ops, place, preview_atoms,
-    resolve_tolerance, steps_applied,
+    Applicability, Candidate, GhostAtom, OpLibrary, Step, applicable_ops, preview_atoms,
+    preview_bonds, resolve_tolerance, steps_applied,
 };
 use glam::DVec3;
 
@@ -72,6 +72,13 @@ pub struct OfferRow {
     pub mirrored: bool,
     pub approximate: bool,
     pub ghost: Vec<GhostAtom>,
+    /// **Every** way of placing this operation here, each with its own ghosts.
+    ///
+    /// The popup lists them inline, under the operation's name, so choosing an
+    /// orientation is one click rather than a click into a second list. A near
+    /// miss carries its one rejected fit here too, so it previews like
+    /// anything else.
+    pub candidates: Vec<CandidateRow>,
 }
 
 /// One row of the candidate list: which way of placing the chosen operation,
@@ -100,19 +107,14 @@ pub struct OfferSweep {
     pub rows: Vec<OfferRow>,
 }
 
-/// What a pick did. The single-candidate case commits on the spot, because
-/// asking a user to confirm the only possibility is a click for nothing.
-#[derive(Debug, Clone, PartialEq)]
-pub enum PickOutcome {
-    /// One candidate; the step is already in the block at `index`.
-    Committed { index: usize },
-    /// Several candidates, held in the node's transient state awaiting a
-    /// choice.
-    Candidates(Vec<CandidateRow>),
-    /// The armed operation does not fit here. The offers are what *does*, so a
-    /// click on the wrong atom self-corrects in one more click rather than
-    /// becoming a message to interpret.
-    NoFit { message: String, offers: OfferSweep },
+/// The atom a click landed on: what the popup hangs off and heads itself with.
+/// Carried separately from [`OfferSweep`] because the candidate-list path has no
+/// sweep of its own and still has to be anchored.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AnchorInfo {
+    pub atom_id: u32,
+    pub position: DVec3,
+    pub atomic_number: i16,
 }
 
 /// Builds the popup's view of a sweep. `workpiece` and `library` are the ones
@@ -135,6 +137,22 @@ fn offer_sweep(
             .iter()
             .map(|row| {
                 let preview = row.preview();
+                let operation = library.get(&row.op);
+                let candidates = (0..row.candidates.len().max(1))
+                    .filter_map(|index| {
+                        let candidate = row.preview_at(index)?;
+                        Some(CandidateRow {
+                            index,
+                            residual: candidate.residual,
+                            exact: candidate.exact,
+                            mirrored: candidate.mirrored,
+                            approximate: candidate.approximate,
+                            ghost: operation
+                                .map(|op| preview_atoms(workpiece, op, candidate))
+                                .unwrap_or_default(),
+                        })
+                    })
+                    .collect();
                 OfferRow {
                     op: row.op.clone(),
                     note: library
@@ -147,38 +165,14 @@ fn offer_sweep(
                     exact: preview.exact,
                     mirrored: preview.mirrored,
                     approximate: row.approximate,
-                    ghost: library
-                        .get(&row.op)
+                    ghost: operation
                         .map(|op| preview_atoms(workpiece, op, preview))
                         .unwrap_or_default(),
+                    candidates,
                 }
             })
             .collect(),
     }
-}
-
-/// Builds the candidate list's view. Same contract as [`offer_sweep`].
-fn candidate_rows(
-    workpiece: &AtomicStructure,
-    library: &OpLibrary,
-    op: &str,
-    candidates: &[Candidate],
-) -> Vec<CandidateRow> {
-    let operation = library.get(op);
-    candidates
-        .iter()
-        .enumerate()
-        .map(|(index, candidate)| CandidateRow {
-            index,
-            residual: candidate.residual,
-            exact: candidate.exact,
-            mirrored: candidate.mirrored,
-            approximate: candidate.approximate,
-            ghost: operation
-                .map(|operation| preview_atoms(workpiece, operation, candidate))
-                .unwrap_or_default(),
-        })
-        .collect()
 }
 
 /// Which metadata field a chip edit writes.
@@ -506,7 +500,7 @@ impl StructureDesigner {
         data.cursor = cursor;
         // A move invalidates the pending candidates: they were fitted against a
         // workpiece the new cursor no longer shows.
-        data.placement.clear_query();
+        data.placement.reset();
         self.set_dirty(true);
         // A scrub must not merge into the next chip edit.
         self.pending_step_metadata_edit = None;
@@ -538,89 +532,41 @@ impl StructureDesigner {
             .ok_or("Not a mechanosynth_edit node")?;
         data.placement.anchor = Some(atom_id);
         data.placement.offers = offers;
-        data.placement.candidates.clear();
-        data.placement.candidates_op = None;
         Ok(sweep)
     }
 
-    /// Arms the tool with one operation, for the repeat flow.
-    pub fn mechanosynth_edit_arm(
-        &mut self,
+    /// Which atom of *this* node's displayed workpiece a viewport ray hits, and
+    /// where it is.
+    ///
+    /// The tool's entry points take an atom id, so this is the step that turns
+    /// a click into one. It is deliberately scoped to the editor's own node: an
+    /// atom of some other displayed structure is not a host the tool may place
+    /// on, and the scene-wide hit test would hand back an id that means
+    /// something else in this node's `result`.
+    ///
+    /// The **position and element travel with the id** because the popup is
+    /// anchored to the atom and has to follow it as the camera moves — and the
+    /// path that opens the popup with a candidate list has no offer sweep to
+    /// take them from.
+    pub fn mechanosynth_edit_anchor_at_ray(
+        &self,
         scope_path: &[u64],
         node_id: u64,
-        op: &str,
-    ) -> Result<(), String> {
-        let library = self.mechanosynth_edit_library(scope_path, node_id)?;
-        if library.get(op).is_none() {
-            return Err(format!("{}: unknown operation '{op}'", library.file));
-        }
-        let op = op.to_string();
-        let data = self
-            .mechanosynth_edit_data_mut(scope_path, node_id)
-            .ok_or("Not a mechanosynth_edit node")?;
-        data.placement.clear_query();
-        data.placement.armed = Some(op);
-        Ok(())
-    }
-
-    /// Places the armed operation at `atom_id`.
-    pub fn mechanosynth_edit_pick(
-        &mut self,
-        scope_path: &[u64],
-        node_id: u64,
-        atom_id: u32,
-    ) -> Result<PickOutcome, String> {
-        let op = self
-            .mechanosynth_edit_data(scope_path, node_id)
-            .ok_or("Not a mechanosynth_edit node")?
-            .placement
-            .armed
-            .clone()
-            .ok_or("no operation is armed — click an atom to see what applies")?;
-
-        let workpiece = self.mechanosynth_edit_workpiece(scope_path, node_id)?;
-        if workpiece.get_atom(atom_id).is_none() {
-            return Err(format!("atom {atom_id} is not in the workpiece"));
-        }
-        let library = self.mechanosynth_edit_library(scope_path, node_id)?;
-        let tolerance = resolve_tolerance(&library);
-
-        match place(&workpiece, &library, &op, atom_id, tolerance) {
-            Ok(candidates) => {
-                if candidates.len() == 1 {
-                    let index = self.commit_candidate(scope_path, node_id, &candidates[0])?;
-                    return Ok(PickOutcome::Committed { index });
-                }
-                let rows = candidate_rows(&workpiece, &library, &op, &candidates);
-                let data = self
-                    .mechanosynth_edit_data_mut(scope_path, node_id)
-                    .ok_or("Not a mechanosynth_edit node")?;
-                data.placement.anchor = Some(atom_id);
-                data.placement.offers.clear();
-                data.placement.candidates = candidates;
-                data.placement.candidates_op = Some(op);
-                Ok(PickOutcome::Candidates(rows))
-            }
-            // A failed pick is not the end of the interaction: the same click
-            // becomes the atom-first query, so the popup that opens is headed
-            // by the failure and lists what does fit beneath it.
-            Err(failure) => {
-                let message = failure.to_string();
-                let offers = applicable_ops(&workpiece, &library, atom_id, tolerance);
-                let sweep = offer_sweep(&workpiece, &library, atom_id, &offers);
-                let data = self
-                    .mechanosynth_edit_data_mut(scope_path, node_id)
-                    .ok_or("Not a mechanosynth_edit node")?;
-                data.placement.anchor = Some(atom_id);
-                data.placement.offers = offers;
-                data.placement.candidates.clear();
-                data.placement.candidates_op = None;
-                Ok(PickOutcome::NoFit {
-                    message,
-                    offers: sweep,
-                })
-            }
-        }
+        ray_origin: DVec3,
+        ray_direction: DVec3,
+    ) -> Option<AnchorInfo> {
+        self.mechanosynth_edit_data(scope_path, node_id)?;
+        let (atom_id, structure) = self.hit_test_node_atomic_structure(
+            &crate::node_network::NodeRef::scoped(scope_path, node_id),
+            &ray_origin,
+            &ray_direction,
+        )?;
+        let atom = structure.get_atom(atom_id)?;
+        Some(AnchorInfo {
+            atom_id,
+            position: atom.position,
+            atomic_number: atom.atomic_number,
+        })
     }
 
     /// Takes one candidate — `index` of `op`'s list — from whatever the last
@@ -642,41 +588,104 @@ impl StructureDesigner {
             let data = self
                 .mechanosynth_edit_data(scope_path, node_id)
                 .ok_or("Not a mechanosynth_edit node")?;
-            let placement = &data.placement;
-            let from_candidates = (placement.candidates_op.as_deref() == Some(op))
-                .then(|| placement.candidates.get(index))
-                .flatten();
-            match from_candidates {
-                Some(candidate) => candidate.clone(),
-                None => {
-                    let row = placement
-                        .offers
-                        .iter()
-                        .find(|row| row.op == op)
-                        .ok_or_else(|| format!("'{op}' is not in the current offer list"))?;
-                    if !row.fits {
-                        return Err(format!(
-                            "'{op}' is {:.2} Å off here; this host is not an environment it was \
-                             calculated for. Add the variant, or loosen the library's tolerance.",
-                            row.best_residual
-                        ));
-                    }
-                    row.candidates
-                        .get(index)
-                        .ok_or_else(|| {
-                            format!(
-                                "'{op}' has {} candidates here, so index {index} is out of range",
-                                row.candidates.len()
-                            )
-                        })?
-                        .clone()
-                }
+            let row = data
+                .placement
+                .offers
+                .iter()
+                .find(|row| row.op == op)
+                .ok_or_else(|| format!("'{op}' is not in the current offer list"))?;
+            if !row.fits {
+                return Err(format!(
+                    "'{op}' is {:.2} Å off here; this host is not an environment it was \
+                     calculated for. Add the variant, or loosen the library's tolerance.",
+                    row.best_residual
+                ));
             }
+            row.candidates
+                .get(index)
+                .ok_or_else(|| {
+                    format!(
+                        "'{op}' has {} candidates here, so index {index} is out of range",
+                        row.candidates.len()
+                    )
+                })?
+                .clone()
         };
         self.commit_candidate(scope_path, node_id, &candidate)
     }
 
-    /// Back to Idle: nothing inserted, nothing armed.
+    /// Selects one row of the open list for **preview**: its ghost atoms go
+    /// into the transient state, and the next `eval(decorate)` hands them to
+    /// the decorator.
+    ///
+    /// Taken on a *click*, never on hover. The preview is a real object in the
+    /// scene rather than a projected overlay, so showing it costs one
+    /// evaluation and one re-tessellation of the workpiece — cheap once per
+    /// deliberate choice, ruinous once per mouse-move. That trade is the whole
+    /// reason the row list activates on click.
+    ///
+    /// A **near miss** previews like anything else and is flagged, because
+    /// seeing why a variant does not fit here is exactly what makes a library
+    /// of environment variants learnable. Placing it stays refused.
+    pub fn mechanosynth_edit_select_preview(
+        &mut self,
+        scope_path: &[u64],
+        node_id: u64,
+        op: &str,
+        index: usize,
+    ) -> Result<(), String> {
+        let workpiece = self.mechanosynth_edit_workpiece(scope_path, node_id)?;
+        let library = self.mechanosynth_edit_library(scope_path, node_id)?;
+        let operation = library
+            .get(op)
+            .ok_or_else(|| format!("{}: unknown operation '{op}'", library.file))?;
+
+        let (candidate, near_miss) = {
+            let data = self
+                .mechanosynth_edit_data(scope_path, node_id)
+                .ok_or("Not a mechanosynth_edit node")?;
+            {
+                let row = data
+                    .placement
+                    .offers
+                    .iter()
+                    .find(|row| row.op == op)
+                    .ok_or_else(|| format!("'{op}' is not in the current offer list"))?;
+                // A near miss keeps its best rejected fit in `near_miss`
+                // rather than mixed in with placeable candidates, so the
+                // preview has to look there for it.
+                match row.preview_at(index) {
+                    Some(candidate) => (candidate.clone(), !row.fits),
+                    None => return Err(format!("'{op}' has no candidate {index} here")),
+                }
+            }
+        };
+
+        let ghosts = preview_atoms(&workpiece, operation, &candidate);
+        let bonds = preview_bonds(&workpiece, operation, &candidate);
+        let data = self
+            .mechanosynth_edit_data_mut(scope_path, node_id)
+            .ok_or("Not a mechanosynth_edit node")?;
+        data.placement.preview_ghosts = ghosts;
+        data.placement.preview_bonds = bonds;
+        data.placement.preview_near_miss = near_miss;
+        Ok(())
+    }
+
+    /// Drops the preview without closing the list.
+    pub fn mechanosynth_edit_clear_preview(
+        &mut self,
+        scope_path: &[u64],
+        node_id: u64,
+    ) -> Result<(), String> {
+        let data = self
+            .mechanosynth_edit_data_mut(scope_path, node_id)
+            .ok_or("Not a mechanosynth_edit node")?;
+        data.placement.clear_preview();
+        Ok(())
+    }
+
+    /// Back to Idle: nothing inserted, no list, no preview.
     pub fn mechanosynth_edit_cancel(
         &mut self,
         scope_path: &[u64],
@@ -703,8 +712,16 @@ impl StructureDesigner {
     }
 
     /// Inserts a candidate's step after the cursor, inheriting the build
-    /// metadata of the step before it, and leaves the tool armed with the same
-    /// operation so a run of identical placements is one click each.
+    /// metadata of the step before it, and returns the tool to Idle.
+    ///
+    /// It deliberately does **not** leave the operation armed for the next
+    /// click. The library splits a reaction into one operation per host
+    /// environment (`si_donate_dimer`, `si_donate_site`, …), so the *same*
+    /// operation is usually the wrong one at the next site, and a mode that
+    /// silently changes what the next click means costs more than the clicks it
+    /// saves. Fast repetition is a real need and wants its own design — a
+    /// family applied automatically, or a family armed as a tool with the atoms
+    /// it fits highlighted — not this.
     fn commit_candidate(
         &mut self,
         scope_path: &[u64],
@@ -735,14 +752,12 @@ impl StructureDesigner {
         if let Some(previous) = &previous {
             step.inherit_metadata_from(previous);
         }
-        let op = step.step.op.clone();
         self.mechanosynth_edit_insert_step(scope_path, node_id, index, step)?;
 
         let data = self
             .mechanosynth_edit_data_mut(scope_path, node_id)
             .ok_or("Not a mechanosynth_edit node")?;
-        data.placement.clear_query();
-        data.placement.armed = Some(op);
+        data.placement.reset();
         Ok(index)
     }
 }

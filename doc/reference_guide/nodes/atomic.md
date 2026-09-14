@@ -1020,6 +1020,28 @@ rotation and nothing else — and because "what a step touched" is decided from
 *effect* rather than from pattern membership, they never light up under
 `ms_current` and need no flag to keep them out of it.
 
+Two conventions go with them, and a library that follows both is one the
+placement tool can offer correctly without being told anything else:
+
+- **First shell only.** The frame is the host's *bonded* neighbours, not a
+  radius. Reaching past the first shell makes the pattern describe more of the
+  surface than the reaction depends on, and the operation then fails to fit
+  hosts it should serve.
+- **One operation per environment, named `<operation>_<environment>`.** Frame
+  atoms make a pattern mirror- and distance-sensitive, so one reaction on two
+  different hosts is two operations rather than one loose one. The silicon
+  library uses five environment names across every donation family — `_dimer`
+  (a reconstructed dimer atom), `_site` (an unstrained lattice site),
+  `_site_relaxed` (a lattice site with a displaced neighbour), `_core` (bonded
+  to the T-centre carbon) and `_edge` (a two-coordinate row end) — so a reader
+  learns the vocabulary once and `si_donate_dimer` reads the same way as
+  `cl_donate_dimer`. Every variant of a family places its added atom at
+  *exactly* the same local position; they differ only in what they require.
+
+That is what makes a click work: you click a host, and the fit decides which
+variant applies. The ones that do not appear in the popup as near misses with
+how far off they are, which is also how a missing variant announces itself.
+
 Both files are meant to be written by a **generator** that already knows every
 coordinate, not by hand.
 
@@ -1117,6 +1139,10 @@ Authors a build script by clicking atoms, and replays it like
 replayer plays a script a generator wrote, this node is where a script is
 written by hand.
 
+![TODO(image): the placement popup open on a clicked silicon, listing the
+operations that fit with an expanded two-placement group, and the highlighted
+row's ghost atoms drawn on the workpiece](TODO)
+
 **Input pins**
 
 - `base: HasAtoms` — the workpiece to build on. Required.
@@ -1184,6 +1210,89 @@ or to loosen the library's own `tolerance`.
 
 The tool is available while the node is selected and its `result` pin is the one
 being displayed.
+
+### The offer popup
+
+![TODO(image): the popup's anatomy — header, an applicable row with its badge
+and info icon, a group header with two indented variant rows carrying direction
+arrows, and the near-miss rows below the rule](TODO)
+
+The answer to a click opens **beside the atom you clicked**, not in the property
+panel — the list follows the atom as you orbit, and clamps to the viewport edge
+rather than sliding off it.
+
+The atom you asked about is **ringed in orange**, and the list is placed clear
+of the ring and of the ghosted preview, so it never covers the reaction it is
+describing. When the list ends up far from its atom — a reaction near the edge
+of the viewport, or one you have moved the list away from — a dashed line joins
+the two. **Drag the list by its header** to put it anywhere you like; it goes on
+following the atom from there, and the ⌖ button in the header snaps it back.
+
+**Resting the pointer on a row ghosts it on the workpiece; clicking one places
+it.** The ghost is translucent atoms *and bonds* in the scene itself, behind
+whatever is in front of them: added green, deleted red, moved blue with a trail from where they
+were, an element swap amber. A near-miss row is ghosted in amber throughout,
+because it is for looking at, not for placing.
+
+Some operations move no atom at all. `bridge` and `bridge_c` in the silicon
+library have identical before and after atom lists and differ only in the bond
+between them — the crystal coupling two radicals that are already in place — so
+their preview is a single green stick, and applying one adds a bond and nothing
+else. A row whose preview looks empty is worth a second look at its note: the
+library says what it does there.
+
+The preview waits a moment before appearing, so a pointer crossing the list
+previews only the row it comes to rest on. The ghosts are real geometry and
+drawing them costs a redraw, so that wait is sized from how long the last redraw
+actually took — immediate on a small molecule, a little longer on a large slab.
+
+- **Up / Down** move the selection, previewing each one. **Enter** places the
+  selected row.
+- **Clicking a near-miss row** previews it in amber *and* replaces the row with
+  the reason it does not fit; it places nothing, and neither does Enter on it.
+- **Typing** filters the rows by the start of the operation name; **Backspace**
+  undoes a letter. Filtering only hides rows — the library is not searched
+  again, so it is instant however long the list, and it clears the selection
+  rather than picking a new row for you.
+- **Esc**, or a click on empty space, closes the popup.
+
+An operation that fits **in more than one way** is listed as one row per
+placement, indented under its name with a rule down the side — there is no
+second list to open. Each variant carries an arrow pointing the way that
+placement goes *as you are currently looking at it* (it re-aims as you orbit), a
+number, and its own badge, so a mirrored placement says `exact · mirrored`. The
+number is what tells two apart when their arrows agree, which happens when they
+are symmetric about the view axis; clicking one previews it either way.
+
+The operation's note lives on the ⓘ beside its name — hover it. The row itself
+stays short, which is what makes room for the variants.
+
+A placement returns the tool to the start: the next viewport click is another
+question, not a repeat of the last answer. That is deliberate. A library names
+one operation per host *environment* (`si_donate_dimer`, `si_donate_site`, …),
+so the operation you just placed is usually the wrong one at the next site, and
+a click whose meaning depended on invisible state would place it there anyway.
+
+### The panel
+
+- **The prompt** at the top says what a click will do: "Click an atom to see
+  what can be done there", or that the popup is waiting for a choice. With no
+  library wired it says that instead — there is nothing to place without one.
+- **Operations** lists what the wired library contains, behind a filter box. It
+  is a reference list, not a tool: placement is always atom-first.
+- **The prefix** is one read-only row ("142 steps from the steps pin"), because
+  it is not editable here.
+- **The cursor** is the same scrubber the replayer has, over the authored block
+  alone, with the same phase rows beneath it. Moving it is navigation and is not
+  undoable.
+- **The step list** numbers the block from 1. A row shows its operation, its
+  note, a dot in its method's colour and a warning triangle when the step is
+  inexact or approximate. Drag the handle to reorder, and each row has
+  **Duplicate** and **Delete**. Clicking a row moves the cursor to it and opens
+  its `note` / `method` / `phase` / `layer` / `site` fields; typing into one of
+  them costs a single undo step, not one per keystroke.
+- **A summary line** above the list counts the inexact and approximate steps, so
+  a block that is not exact says so without scrolling.
 
 ### Exactness, and the two chips
 

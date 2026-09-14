@@ -2,10 +2,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/common/error_display.dart';
 import 'package:flutter_cad/common/file_dialog_directory.dart';
-import 'package:flutter_cad/common/ui_common.dart';
-import 'package:flutter_cad/inputs/int_input.dart';
 import 'package:flutter_cad/inputs/string_input.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
+import 'package:flutter_cad/structure_designer/node_data/mechanosynth_scrubber.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
@@ -21,33 +20,11 @@ import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 /// nodes** button is the one-press migration; nothing converts automatically.
 /// See `doc/design_mechanosynth_editor.md`.
 ///
-/// **The step slider commits on release.** Every write goes through
-/// `refresh_structure_designer_auto` on the UI thread, and a full replay plus
-/// the tessellation of a workpiece is not free at 60 Hz, so the dragged value
-/// is held in [_previewStep], the panel renders from it, and the kernel is
-/// written once in `onChangeEnd` — the rule from
-/// `lib/structure_designer/AGENTS.md`, whose reference implementation is
-/// `isosurface_editor.dart`. The drag is bracketed in
-/// `beginNodeDataDrag` / `endNodeDataDrag` so Ctrl+Z undoes the whole scrub
-/// rather than walking back through it tick by tick.
-///
-/// The panel never writes the stored `-1` ("every step") back: a slider that
-/// reaches the end of the script cannot express "and keep following it as the
-/// script grows", so `-1` is *shown* at the end of the travel and any edit
-/// replaces it with a concrete number. Leaving the control alone keeps the
-/// auto-following default.
-///
-/// **A long script is scrubbed by phase, not by step.** A 450-step build has
-/// a dozen or so runs of consecutive steps sharing a `(phase, layer)`, and the
-/// kernel hands them over ready-made in [APIMechanosynthInfo.chapters] — the
-/// panel never re-derives them, because the parsed script never crosses the
-/// bridge. The kernel calls these runs *chapters* to keep them distinct from
-/// the step's `phase` field (a phase name that recurs on several layers, or
-/// resumes after a break, is several runs); the panel calls them **phases**,
-/// because that is the word the user already knows from the script and from
-/// the chip above the list, and the layer printed on each row disambiguates
-/// the rest. They drive two things: the phase list under the scrubber, and the
-/// accent tick marks on the slider ([_PhaseTickMarkShape]).
+/// **The scrubber and the phase list are not this panel's**, since Phase 4:
+/// they are [MechanosynthScrubber] / [MechanosynthChapterList], shared with the
+/// `mechanosynth_edit` panel, and everything about their behaviour — the
+/// commit-on-release rule, the `-1` convention, the phase tick marks — is
+/// documented there.
 ///
 /// Load failures are deliberately not repeated here. A bad library or script
 /// surfaces on the result pin and reaches the user through the unified error
@@ -88,27 +65,16 @@ class MechanosynthEditor extends StatefulWidget {
 }
 
 class _MechanosynthEditorState extends State<MechanosynthEditor> {
-  /// Width of the label column on the step row, and of its numeric box —
-  /// a 72 px digit box plus the `−` / `+` buttons around it.
-  static const double _STEP_LABEL_WIDTH = 40.0;
-  static const double _STEP_BOX_WIDTH = 72.0 + AppSpacing.intSpinChromeWidth;
-
-  /// The step under the pointer while a slider drag is in flight. While set,
-  /// the panel renders from it and nothing is written to the kernel.
-  int? _previewStep;
-
   /// A failure of one of the two file dialogs, or of **Convert to nodes**;
   /// nothing else lands here.
   String? _errorMessage;
 
-  @override
-  void dispose() {
-    // A drag whose end never arrives — the node deselected mid-gesture —
-    // would otherwise leave the kernel's coalescing session open and swallow
-    // the next node-data undo entry for this node.
-    if (_previewStep != null) widget.model.endNodeDataDrag();
-    super.dispose();
-  }
+  /// The step under the pointer while the scrubber is being dragged. The
+  /// readout and the chips are suppressed while it is set: naming the step the
+  /// slider has just left would be worse than naming none, and the dragged
+  /// step's op name lives in the kernel's parsed script, which the panel cannot
+  /// read mid-drag.
+  int? _previewStep;
 
   void _update({
     Object? opsFile = _unset,
@@ -267,85 +233,6 @@ class _MechanosynthEditorState extends State<MechanosynthEditor> {
     );
   }
 
-  /// The step scrubber. The slider spans `0..count` and is disabled — rather
-  /// than parked at a meaningless stop — while no script is loaded.
-  Widget _buildStepGroup(BuildContext context, APIMechanosynthData data) {
-    final info = widget.info;
-    final count = info?.count ?? 0;
-    // `applied` is the kernel's own clamp of the stored `step`, so a stored
-    // `-1` reads as `count` here without the panel re-deriving the rule.
-    final shown =
-        _previewStep ?? (count > 0 ? (info?.applied ?? 0) : data.step);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            SizedBox(
-              width: _STEP_LABEL_WIDTH,
-              child: Text('Step', style: Theme.of(context).textTheme.bodySmall),
-            ),
-            Expanded(
-              child: SliderTheme(
-                // The default tick shape would draw one dot per step, which on
-                // a 450-step script is a grey smear. The phase boundaries are
-                // the marks worth having; a single-phase script has none.
-                data: SliderTheme.of(context).copyWith(
-                  tickMarkShape: _phaseTicks(count),
-                ),
-                child: Slider(
-                  key: const Key('mechanosynth_step_slider'),
-                  value: count > 0 ? shown.clamp(0, count).toDouble() : 0.0,
-                  min: 0.0,
-                  max: count > 0 ? count.toDouble() : 1.0,
-                  divisions: count > 0 ? count : null,
-                  label: '$shown',
-                  onChanged: count > 0
-                      ? (value) => setState(() => _previewStep = value.round())
-                      : null,
-                  onChangeStart: (value) {
-                    widget.model.beginNodeDataDrag(widget.nodeId);
-                    setState(() => _previewStep = value.round());
-                  },
-                  onChangeEnd: (_) => _endDrag(),
-                ),
-              ),
-            ),
-            SizedBox(
-              width: _STEP_BOX_WIDTH,
-              child: IntInput(
-                label: '',
-                value: shown,
-                minimumValue: count > 0 ? 0 : null,
-                maximumValue: count > 0 ? count : null,
-                onChanged: (value) => _update(step: value),
-              ),
-            ),
-          ],
-        ),
-        if (widget.stepConnected)
-          _buildWiredHint('The wired pin supplies the step number.'),
-      ],
-    );
-  }
-
-  /// The slider's tick shape: an accent mark at the end of every phase, or
-  /// no marks at all when the script has fewer than two of them (a boundary at
-  /// the end of the only phase says nothing).
-  SliderTickMarkShape _phaseTicks(int count) {
-    final phases = widget.info?.chapters ?? const <APIMechanosynthChapter>[];
-    if (count <= 0 || phases.length < 2) {
-      return SliderTickMarkShape.noTickMark;
-    }
-    // A phase covering steps a..b ends at slider value b — which is where
-    // the next phase begins, and so where clicking its row lands.
-    return _PhaseTickMarkShape(
-      boundaries: phases.map((c) => c.lastStep).toSet(),
-      steps: count,
-    );
-  }
-
   /// The current step's metadata as chips. Each is omitted when the script says
   /// nothing about it, so an unannotated build shows no row at all rather than
   /// a line of placeholders.
@@ -385,103 +272,6 @@ class _MechanosynthEditorState extends State<MechanosynthEditor> {
         ],
       ),
     );
-  }
-
-  /// One row per phase. Clicking a row jumps to the step just *before* the
-  /// phase's first, so the next `+` applies its first reaction: the row is a
-  /// starting point for scrubbing through the phase, not a bookmark of its
-  /// finished state. (That state is where the *next* row lands, and the end of
-  /// the last phase is the end of the slider.)
-  ///
-  /// The highlight follows the same cursor: the phase whose first step is
-  /// next, i.e. `first - 1 <= applied <= last - 1`. So clicking a row highlights
-  /// that row, step 0 highlights the first phase, the last step of a phase
-  /// already highlights the following one, and a fully applied script
-  /// highlights nothing. This differs from the metadata chips on purpose —
-  /// they describe the last applied step, the highlight describes what comes
-  /// next.
-  ///
-  /// Hidden for a script with a single phase: a list of one is navigation
-  /// the slider already provides.
-  Widget _buildPhaseList(BuildContext context) {
-    final info = widget.info;
-    final phases = info?.chapters ?? const <APIMechanosynthChapter>[];
-    if (info == null || phases.length < 2) return const SizedBox.shrink();
-
-    final scheme = Theme.of(context).colorScheme;
-    final captionStyle = Theme.of(context).textTheme.bodySmall;
-    final applied = _previewStep ?? info.applied;
-
-    return Padding(
-      padding: const EdgeInsets.only(top: 12.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Phases', style: captionStyle),
-          const SizedBox(height: 4.0),
-          for (final phase in phases)
-            _buildPhaseRow(
-              context,
-              phase,
-              isCurrent: applied >= phase.firstStep - 1 &&
-                  applied <= phase.lastStep - 1,
-              enabled: !widget.stepConnected,
-              scheme: scheme,
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPhaseRow(BuildContext context, APIMechanosynthChapter phase,
-      {required bool isCurrent,
-      required bool enabled,
-      required ColorScheme scheme}) {
-    final parts = <String>[
-      phase.phase.isEmpty ? 'untitled' : phase.phase,
-      if (phase.layer >= 0) 'layer ${phase.layer}',
-      phase.firstStep == phase.lastStep
-          ? 'step ${phase.firstStep}'
-          : 'steps ${phase.firstStep}–${phase.lastStep}',
-    ];
-    final color = enabled
-        ? (isCurrent ? scheme.onSurface : scheme.onSurfaceVariant)
-        : scheme.onSurfaceVariant.withValues(alpha: 0.5);
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 2.0),
-      child: InkWell(
-        // One step *before* the phase's first, so the next scrub tick
-        // applies that first step rather than skipping past it.
-        onTap: enabled ? () => _update(step: phase.firstStep - 1) : null,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 3.0),
-          decoration: BoxDecoration(
-            color: isCurrent ? scheme.primary.withValues(alpha: 0.12) : null,
-            borderRadius: BorderRadius.circular(3.0),
-          ),
-          child: Text(
-            parts.join(' · '),
-            style: TextStyle(
-              fontSize: 12.0,
-              color: color,
-              fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-            ),
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// Commit the scrub: one write, one evaluation, one undo entry. The preview
-  /// is cleared *before* the write, which notifies listeners synchronously —
-  /// the rebuild that follows must read the node data, not a stale preview.
-  void _endDrag() {
-    final step = _previewStep;
-    setState(() => _previewStep = null);
-    if (step != null) _update(step: step);
-    widget.model.endNodeDataDrag();
   }
 
   /// The read-only line naming what the current step did. "Current" is the
@@ -537,6 +327,7 @@ class _MechanosynthEditorState extends State<MechanosynthEditor> {
     if (data == null) {
       return const Center(child: CircularProgressIndicator());
     }
+    final info = widget.info;
 
     return Padding(
       padding: const EdgeInsets.all(8.0),
@@ -549,11 +340,25 @@ class _MechanosynthEditorState extends State<MechanosynthEditor> {
           ),
           const SizedBox(height: 16),
           _buildLegacyGroup(context, data),
-          _buildStepGroup(context, data),
+          MechanosynthScrubber.fromInfo(
+            info,
+            enabled: !widget.stepConnected,
+            onChanged: (step) => _update(step: step),
+            onDragStart: () => widget.model.beginNodeDataDrag(widget.nodeId),
+            onDragEnd: widget.model.endNodeDataDrag,
+            onPreview: (step) => setState(() => _previewStep = step),
+          ),
+          if (widget.stepConnected)
+            _buildWiredHint('The wired pin supplies the step number.'),
           const SizedBox(height: 4),
           _buildCurrentStep(context),
           _buildMetadataChips(context),
-          _buildPhaseList(context),
+          MechanosynthChapterList(
+            chapters: info?.chapters ?? const <APIMechanosynthChapter>[],
+            applied: _previewStep ?? info?.applied ?? 0,
+            enabled: !widget.stepConnected,
+            onJump: (step) => _update(step: step),
+          ),
           if (_errorMessage != null)
             Padding(
               padding: const EdgeInsets.only(top: 16.0),
@@ -569,84 +374,3 @@ class _MechanosynthEditorState extends State<MechanosynthEditor> {
 /// parameters: `null` is a legal value there (it clears the file name), so a
 /// plain `null` default could not mean "leave this one alone".
 const Object _unset = Object();
-
-/// Paints one accent mark per phase boundary and nothing at the other steps.
-///
-/// Two things about `Slider`'s tick-mark protocol make this shape look odd, and
-/// both are load-bearing:
-///
-/// **The reported width is zero, and it is a density budget rather than a
-/// size.** `_RenderSlider.paint` skips tick marks altogether unless
-/// `trackWidth / divisions >= 3 * reportedWidth` — so a 450-step script, which
-/// is precisely the script that needs phase marks, would get none at all.
-/// Reporting zero opts out of that gate, and the marks are then drawn at
-/// [_MARK_WIDTH] regardless. That is honest rather than a cheat: the gate asks
-/// "would *every* division fit?", and this shape draws a dozen marks whatever
-/// the division count.
-///
-/// **Which step a mark belongs to is recovered from where Flutter puts it**,
-/// not passed in: `paint` is called once per division with only a centre point.
-/// Inverting Flutter's own placement formula (below) is exact, and it is what
-/// keeps the marks aligned with the thumb — a strip laid out separately beneath
-/// the slider would have to guess the track insets and would drift.
-class _PhaseTickMarkShape extends SliderTickMarkShape {
-  /// A mark's drawn width, and the height it reserves on the track.
-  static const double _MARK_WIDTH = 2.0;
-  static const double _MARK_HEIGHT = 10.0;
-
-  /// Slider values (= "steps applied") to mark.
-  final Set<int> boundaries;
-
-  /// The slider's division count, i.e. the script's step count.
-  final int steps;
-
-  const _PhaseTickMarkShape({required this.boundaries, required this.steps});
-
-  @override
-  Size getPreferredSize({
-    required SliderThemeData sliderTheme,
-    required bool isEnabled,
-  }) =>
-      const Size(0.0, _MARK_HEIGHT);
-
-  @override
-  void paint(
-    PaintingContext context,
-    Offset center, {
-    required RenderBox parentBox,
-    required SliderThemeData sliderTheme,
-    required Animation<double> enableAnimation,
-    required Offset thumbCenter,
-    bool? isEnabled,
-    required TextDirection textDirection,
-  }) {
-    final enabled = isEnabled ?? false;
-    final track = sliderTheme.trackShape?.getPreferredRect(
-      parentBox: parentBox,
-      sliderTheme: sliderTheme,
-      isEnabled: enabled,
-      isDiscrete: true,
-    );
-    if (track == null || steps <= 0) return;
-
-    // Flutter places tick `i` at
-    //   left + (i / divisions) * (width - padding) + padding / 2
-    // with `padding == trackRect.height` on a discrete slider. Inverted:
-    final padding = track.height;
-    final span = track.width - padding;
-    if (span <= 0) return;
-    var fraction = (center.dx - track.left - padding / 2) / span;
-    if (textDirection == TextDirection.rtl) fraction = 1.0 - fraction;
-    if (!boundaries.contains((fraction * steps).round())) return;
-
-    final color = enabled
-        ? (sliderTheme.activeTickMarkColor ?? sliderTheme.activeTrackColor)
-        : sliderTheme.disabledActiveTickMarkColor;
-    if (color == null) return;
-
-    context.canvas.drawRect(
-      Rect.fromCenter(center: center, width: _MARK_WIDTH, height: _MARK_HEIGHT),
-      Paint()..color = color,
-    );
-  }
-}
