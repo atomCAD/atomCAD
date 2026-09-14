@@ -18,6 +18,7 @@ import 'package:flutter_cad/structure_designer/node_data/structure_rot_editor.da
 import 'package:flutter_cad/structure_designer/node_data/free_move_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/free_rot_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/free_sphere_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/build_file_editors.dart';
 import 'package:flutter_cad/structure_designer/node_data/isosurface_editor.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/field_distribution_api.dart';
 import 'package:flutter_cad/structure_designer/node_data/free_circle_editor.dart';
@@ -570,6 +571,32 @@ class NodeDataWidget extends StatelessWidget {
           data: facetShellData,
           model: model,
         );
+      case 'ops_library':
+        // The only pin is `file` (0); a wire overrides the stored property.
+        return OpsLibraryEditor(
+          nodeId: selectedNode.id,
+          data: model.getOpsLibraryData(selectedNode.id),
+          fileConnected: selectedNode.inputPins.isNotEmpty &&
+              selectedNode.inputPins[0].connected,
+          model: model,
+        );
+      case 'build_script':
+        return BuildScriptEditor(
+          nodeId: selectedNode.id,
+          data: model.getBuildScriptData(selectedNode.id),
+          fileConnected: selectedNode.inputPins.isNotEmpty &&
+              selectedNode.inputPins[0].connected,
+          model: model,
+        );
+      case 'export_build_script':
+        // Pins: steps = 0, file_name = 1, metadata = 2.
+        return ExportBuildScriptEditor(
+          nodeId: selectedNode.id,
+          data: model.getExportBuildScriptData(selectedNode.id),
+          fileNameConnected: selectedNode.inputPins.length > 1 &&
+              selectedNode.inputPins[1].connected,
+          model: model,
+        );
       case 'mechanosynth':
         final mechanosynthData = mechanosynth_api.getMechanosynthData(
           scopePath: scopePath,
@@ -583,8 +610,8 @@ class NodeDataWidget extends StatelessWidget {
           scopePath: scopePath,
           nodeId: selectedNode.id,
         );
-        // Pins: base = 0, ops_file = 1, build_file = 2, step = 3. A wire on
-        // any of the last three overrides the stored property.
+        // Pins: base = 0, ops = 1, steps = 2, step = 3. A wire on any of the
+        // last three overrides the stored property.
         bool wired(int pin) =>
             selectedNode.inputPins.length > pin &&
             selectedNode.inputPins[pin].connected;
@@ -592,8 +619,8 @@ class NodeDataWidget extends StatelessWidget {
           nodeId: selectedNode.id,
           data: mechanosynthData,
           info: mechanosynthInfo,
-          opsFileConnected: wired(1),
-          buildFileConnected: wired(2),
+          opsConnected: wired(1),
+          stepsConnected: wired(2),
           stepConnected: wired(3),
           model: model,
         );

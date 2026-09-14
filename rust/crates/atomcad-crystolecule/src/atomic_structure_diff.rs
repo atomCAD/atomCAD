@@ -323,32 +323,21 @@ fn match_diff_atoms(
 
     let mut candidates: Vec<DiffCandidate> = Vec::new();
 
+    let tolerance = tolerance_sq.sqrt();
     for (_, diff_atom) in diff.iter_atoms() {
         let match_pos = diff
             .anchor_position(diff_atom.id)
             .copied()
             .unwrap_or(diff_atom.position);
 
-        // Find nearest base atom to match position using spatial grid
-        let nearby = base.get_atoms_in_radius(&match_pos, tolerance_sq.sqrt());
-        let mut best_dist_sq = f64::MAX;
-        let mut best_base_id = None;
-
-        for &base_id in &nearby {
-            if let Some(base_atom) = base.get_atom(base_id) {
-                let dist_sq = match_pos.distance_squared(base_atom.position);
-                if dist_sq <= tolerance_sq && dist_sq < best_dist_sq {
-                    best_dist_sq = dist_sq;
-                    best_base_id = Some(base_id);
-                }
-            }
-        }
+        // Nothing is claimed yet on this pass — it only ranks the candidates.
+        let found = base.nearest_unclaimed_atom(match_pos, tolerance, None, |_| false);
 
         candidates.push(DiffCandidate {
             diff_id: diff_atom.id,
             match_pos,
-            best_dist_sq,
-            best_base_id,
+            best_dist_sq: found.map_or(f64::MAX, |m| m.distance * m.distance),
+            best_base_id: found.map(|m| m.atom_id),
         });
     }
 
@@ -374,30 +363,15 @@ fn match_diff_atoms(
         }
 
         // Best match was already claimed or no match at all — re-search excluding claimed atoms
-        let nearby = base.get_atoms_in_radius(&candidate.match_pos, tolerance_sq.sqrt());
-        let mut found = false;
-        let mut best_dist_sq = f64::MAX;
-        let mut best_base_id = 0u32;
+        let found = base.nearest_unclaimed_atom(candidate.match_pos, tolerance, None, |base_id| {
+            matched_base_ids.contains(&base_id)
+        });
 
-        for &base_id in &nearby {
-            if matched_base_ids.contains(&base_id) {
-                continue;
-            }
-            if let Some(base_atom) = base.get_atom(base_id) {
-                let dist_sq = candidate.match_pos.distance_squared(base_atom.position);
-                if dist_sq <= tolerance_sq && dist_sq < best_dist_sq {
-                    best_dist_sq = dist_sq;
-                    best_base_id = base_id;
-                    found = true;
-                }
-            }
-        }
-
-        if found {
-            matched_base_ids.insert(best_base_id);
+        if let Some(found) = found {
+            matched_base_ids.insert(found.atom_id);
             matches.push(DiffMatch {
                 diff_id: candidate.diff_id,
-                base_id: best_base_id,
+                base_id: found.atom_id,
             });
         } else {
             unmatched_diff_ids.push(candidate.diff_id);

@@ -153,6 +153,13 @@ pub enum DataType {
     /// the display conversion at a resolution taken from preferences. See
     /// `doc/design_isosurface_node.md`.
     Isosurface,
+    /// A parsed mechanosynthesis **operation library**: the named before/after
+    /// rewrites a build script's steps refer to. Opaque to the network — no
+    /// field access, no construction from the network, no `expr` support. A
+    /// value like `Structure` or `Motif`: produced by one node (`ops_library`),
+    /// accepted by pins typed `OpLibrary`, shown in the text format only as a
+    /// wire. See `doc/design_mechanosynth_editor.md`.
+    OpLibrary,
     /// The type with exactly one value — return type of effect nodes
     /// (`export_atoms`, `foreach`, …). A universal `T → Unit` widening is
     /// added at field-level so any sub-network output can be consumed by an
@@ -352,6 +359,7 @@ impl fmt::Display for DataType {
             DataType::Structure => write!(f, "Structure"),
             DataType::ScalarField => write!(f, "ScalarField"),
             DataType::Isosurface => write!(f, "Isosurface"),
+            DataType::OpLibrary => write!(f, "OpLibrary"),
             DataType::Unit => write!(f, "Unit"),
             DataType::Array(element_type) => {
                 write!(f, "[{}]", element_type)
@@ -1452,6 +1460,7 @@ impl DataTypeParser {
                     "Structure" => Ok(DataType::Structure),
                     "ScalarField" => Ok(DataType::ScalarField),
                     "Isosurface" => Ok(DataType::Isosurface),
+                    "OpLibrary" => Ok(DataType::OpLibrary),
                     "Unit" => Ok(DataType::Unit),
                     // Plain unknown identifiers are NOT silently treated as
                     // record names: the text-format parser uses this as a

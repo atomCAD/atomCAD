@@ -8,7 +8,7 @@ use atomcad_structure_designer::node_type::{NodeType, OutputPinDefinition};
 use atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
 use atomcad_structure_designer::nodes::sphere::SphereData;
 use atomcad_structure_designer::serialization::node_networks_serialization::load_node_networks_from_file;
-use atomcad_test_support::sample_path_str;
+use atomcad_test_support::{fixture_path_str, sample_path_str};
 use glam::f64::DVec2;
 use glam::i32::IVec3;
 use serde::Serialize;
@@ -115,6 +115,27 @@ fn test_rotation_demo_evaluation() {
 #[test]
 fn test_pattern_evaluation() {
     let snapshot = evaluate_cnnd_file(&sample_path_str("pattern.cnnd"));
+    insta::assert_json_snapshot!(snapshot);
+}
+
+/// The legacy `mechanosynth` path: a node driven by the deprecated
+/// `ops_file` / `build_file` **properties**, with nothing on the `ops` and
+/// `steps` pins. It is the regression that guards the wired-value conversion
+/// (`doc/design_mechanosynth_editor.md` Phase 1): whatever else changes, a
+/// project saved before the pins existed must replay to the same atoms.
+#[test]
+fn test_mechanosynth_legacy_evaluation() {
+    let snapshot = evaluate_cnnd_file(&fixture_path_str("mechanosynth/mechanosynth_legacy.cnnd"));
+    insta::assert_json_snapshot!(snapshot);
+}
+
+/// The same replay driven by wires: `ops_library` and `build_script` feeding
+/// `mechanosynth`'s `ops` and `steps` pins, with both deprecated properties
+/// cleared. Its atoms must match the legacy fixture's exactly — that equality
+/// is what makes **Convert to nodes** safe.
+#[test]
+fn test_mechanosynth_wired_evaluation() {
+    let snapshot = evaluate_cnnd_file(&fixture_path_str("mechanosynth/mechanosynth_wired.cnnd"));
     insta::assert_json_snapshot!(snapshot);
 }
 

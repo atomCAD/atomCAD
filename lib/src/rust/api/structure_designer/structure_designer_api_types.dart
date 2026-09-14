@@ -614,6 +614,31 @@ class APIBoolData {
           value == other.value;
 }
 
+/// The stored data of a `build_script` node plus the loaded script's length,
+/// which the panel cannot compute (the parsed script never crosses the bridge).
+class APIBuildScriptData {
+  final String? file;
+
+  /// `0` when nothing is loaded, which is also what a load failure leaves.
+  final int stepCount;
+
+  const APIBuildScriptData({
+    this.file,
+    required this.stepCount,
+  });
+
+  @override
+  int get hashCode => file.hashCode ^ stepCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIBuildScriptData &&
+          runtimeType == other.runtimeType &&
+          file == other.file &&
+          stepCount == other.stepCount;
+}
+
 /// A candidate node in a viewport pick disambiguation.
 class APICandidateNode {
   final BigInt nodeId;
@@ -1001,6 +1026,11 @@ enum APIDataTypeBase {
   /// `doc/design_isosurface_node.md`.
   isosurface,
 
+  /// A parsed mechanosynthesis operation library. Opaque to the network:
+  /// produced by `ops_library`, consumed by `mechanosynth`. See
+  /// `doc/design_mechanosynth_editor.md`.
+  opLibrary,
+
   /// The type with exactly one value. Produced by effect nodes; carries no
   /// payload. See `doc/design_node_execution.md`.
   unit,
@@ -1372,6 +1402,25 @@ class APIExportAtomsData {
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is APIExportAtomsData &&
+          runtimeType == other.runtimeType &&
+          fileName == other.fileName;
+}
+
+/// The stored data of an `export_build_script` node.
+class APIExportBuildScriptData {
+  final String fileName;
+
+  const APIExportBuildScriptData({
+    required this.fileName,
+  });
+
+  @override
+  int get hashCode => fileName.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIExportBuildScriptData &&
           runtimeType == other.runtimeType &&
           fileName == other.fileName;
 }
@@ -2701,20 +2750,35 @@ class APIMechanosynthChapter {
 /// The three stored properties of a `mechanosynth` node. The parsed library and
 /// script are `#[serde(skip)]` payload and never cross the bridge.
 class APIMechanosynthData {
+  /// Deprecated: superseded by the `ops` pin. Kept so a project saved before
+  /// the pins existed keeps replaying, and so the panel can offer **Convert
+  /// to nodes**. See `doc/design_mechanosynth_editor.md`.
   final String? opsFile;
+
+  /// Deprecated: superseded by the `steps` pin.
   final String? buildFile;
 
   /// Negative means "every step"; the panel writes the slider value instead.
   final int step;
 
+  /// Whether either deprecated file property is set — the condition for
+  /// showing the **Convert to nodes** button. Read-only; the setter ignores
+  /// it.
+  final bool hasLegacyFiles;
+
   const APIMechanosynthData({
     this.opsFile,
     this.buildFile,
     required this.step,
+    required this.hasLegacyFiles,
   });
 
   @override
-  int get hashCode => opsFile.hashCode ^ buildFile.hashCode ^ step.hashCode;
+  int get hashCode =>
+      opsFile.hashCode ^
+      buildFile.hashCode ^
+      step.hashCode ^
+      hasLegacyFiles.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -2723,7 +2787,8 @@ class APIMechanosynthData {
           runtimeType == other.runtimeType &&
           opsFile == other.opsFile &&
           buildFile == other.buildFile &&
-          step == other.step;
+          step == other.step &&
+          hasLegacyFiles == other.hasLegacyFiles;
 }
 
 /// What the `mechanosynth` panel needs beyond the stored properties: the loaded
@@ -3257,6 +3322,91 @@ class APINodeTypeView {
           summary == other.summary &&
           category == other.category &&
           allowedInZoneBody == other.allowedInZoneBody;
+}
+
+/// The stored data of an `ops_library` node plus what the panel cannot compute
+/// for itself: the parsed library's contents. The parsed library is payload and
+/// never crosses the bridge, so the summary below is the only view of it.
+///
+/// Every field but `file` reads as empty / zero when no library is loaded —
+/// which is also the state a load failure leaves. The failure itself surfaces
+/// on the output pin, not here. See `doc/design_mechanosynth_editor.md`.
+class APIOpsLibraryData {
+  final String? file;
+
+  /// The match tolerance in force for a replay against this library
+  /// (Ångström): the file's own, else the engine default.
+  final double tolerance;
+
+  /// Whether the file states a `tolerance` of its own — the panel says
+  /// "default" rather than repeating the number when it does not.
+  final bool toleranceStated;
+
+  /// Load-time advisories, today the origin convention. Never errors.
+  final List<String> warnings;
+  final List<APIOpsLibraryEntry> ops;
+
+  const APIOpsLibraryData({
+    this.file,
+    required this.tolerance,
+    required this.toleranceStated,
+    required this.warnings,
+    required this.ops,
+  });
+
+  @override
+  int get hashCode =>
+      file.hashCode ^
+      tolerance.hashCode ^
+      toleranceStated.hashCode ^
+      warnings.hashCode ^
+      ops.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIOpsLibraryData &&
+          runtimeType == other.runtimeType &&
+          file == other.file &&
+          tolerance == other.tolerance &&
+          toleranceStated == other.toleranceStated &&
+          warnings == other.warnings &&
+          ops == other.ops;
+}
+
+/// One operation of a loaded library, as the panel lists it.
+class APIOpsLibraryEntry {
+  final String name;
+  final int beforeAtoms;
+  final int afterAtoms;
+
+  /// The operation states `"chiral": true`: a mirrored placement is a
+  /// different reaction, so the placement tool drops mirrored fits.
+  final bool chiral;
+
+  const APIOpsLibraryEntry({
+    required this.name,
+    required this.beforeAtoms,
+    required this.afterAtoms,
+    required this.chiral,
+  });
+
+  @override
+  int get hashCode =>
+      name.hashCode ^
+      beforeAtoms.hashCode ^
+      afterAtoms.hashCode ^
+      chiral.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIOpsLibraryEntry &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          beforeAtoms == other.beforeAtoms &&
+          afterAtoms == other.afterAtoms &&
+          chiral == other.chiral;
 }
 
 class APIParameterData {

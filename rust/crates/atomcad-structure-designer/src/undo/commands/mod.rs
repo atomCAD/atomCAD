@@ -7,6 +7,7 @@ pub mod atom_edit_set_tolerance;
 pub mod atom_edit_toggle_flag;
 pub mod composite;
 pub mod connect_wire;
+pub mod convert_files_to_nodes;
 pub mod convert_to_closure;
 pub mod delete_namespace;
 pub mod delete_network;

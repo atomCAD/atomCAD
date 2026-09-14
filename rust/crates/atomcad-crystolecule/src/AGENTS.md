@@ -52,6 +52,7 @@ crates/atomcad-crystolecule/src/
 │   ├── atom.rs                     # Atom struct (position, element, bonds)
 │   ├── bond_reference.rs           # Order-insensitive bond pair ID
 │   ├── inline_bond.rs              # 4-byte compact bond (29-bit id + 3-bit order)
+│   ├── matching.rs                 # nearest_unclaimed_atom / nearest_atom / bond_order_between
 │   └── atomic_structure_decorator.rs  # Display/selection metadata
 ├── motif_bond_inference.rs          # Bond inference on motif fractional coords (cross-cell)
 ├── field/
@@ -103,6 +104,7 @@ crates/atomcad-crystolecule/src/
 | `AtomicStructureVisualization` | `visualization.rs` | BallAndStick / SpaceFilling. Needed here only so `hit_test` can decide bond pickability; `display::preferences` re-exports it and `api/` keeps the Dart-facing twin |
 | `Atom` | `atomic_structure/atom.rs` | id(u32), position(DVec3), atomic_number(i16), bonds(SmallVec<[InlineBond;4]>), flags(u16). Flags layout: bit 0 selected, bit 1 hydrogen_passivation, bit 2 frozen, bits 3-4 hybridization override (0=Auto, 1=Sp3, 2=Sp2, 3=Sp1), bit 5 display-ghost (`is_ghost`/`set_ghost` — transient motif_edit neighbour-cell render state), bit 6 patch-ghost (`is_patch_ghost`/`set_patch_ghost` — durable surface-patch flag; survives serialization, drives weld survivorship; distinct from bit 5) |
 | `InlineBond` | `atomic_structure/inline_bond.rs` | 4-byte bond: 29-bit atom_id + 3-bit order. Supports 7 bond types |
+| `AtomMatch` | `atomic_structure/matching.rs` | One atom found by a position match, with the distance that found it. See **Position matching** below |
 | `BondReference` | `atomic_structure/bond_reference.rs` | Unordered (atom_id1, atom_id2) pair, hashable |
 | `UnitCellStruct` | `unit_cell_struct.rs` | Basis vectors (a,b,c), lattice↔real coordinate conversion |
 | `Structure` | `structure.rs` | Bundles `lattice_vecs: UnitCellStruct` + `motif: Motif` + `motif_offset: DVec3`. Factories: `Structure::diamond()` (cubic diamond + zincblende motif + zero offset), `Structure::from_lattice_vecs(...)` (default motif + zero offset). Carried by `BlueprintData` and `CrystalData` as a first-class value |
@@ -147,6 +149,19 @@ crates/atomcad-crystolecule/src/
 **Lattice Filling**: `fill_lattice()` recursively subdivides a bounding box, evaluates an SDF geometry at motif sites, places atoms where SDF ≤ 0.01, creates bonds from the motif template, then applies cleanup → surface reconstruction → hydrogen passivation → concave rebonding.
 
 The last step must stay last. `hydrogen_passivate` decides whether a bond is dangling from the **motif**, not from an atom's actual bonds, so any pass that adds a non-lattice bond before it runs will not stop it placing a terminator on that same direction as well — leaving the host over-coordinated. `concave_rebond` therefore runs *after* passivation and repairs the result rather than pre-empting it. `reconstruct_surface` hands it the set of {100} surface atoms it classified but could not pair, and an empty set makes the pass a no-op — which is what gates it on `surf_recon` without a second flag. See `doc/design_concave_rebonding.md`.
+
+**Position matching** (`atomic_structure/matching.rs`): four subsystems ask
+"which atom is *here*" — `apply_diff`'s `match_diff_atoms`, mechanosynth's
+`apply_step` and `compare_structures`, and the placement engine — and each used
+to carry its own copy of the grid walk. The loop lives in one place now:
+`AtomicStructure::nearest_unclaimed_atom(target, tolerance, element, is_claimed)`,
+with `nearest_atom` as the whole-structure companion scan every "not found within
+tolerance" diagnostic ends with, and `bond_order_between` beside them. Two rules
+the copies did not all have and that a new caller inherits: **ties break by the
+lower atom id** (grid iteration order is an implementation detail, and a
+symmetric site would otherwise make "which one matched" move with an unrelated
+edit), and the claim set is a **predicate** rather than a set, so a caller
+holding a map, a set or nothing at all uses the same function.
 
 **Memory Layout**: `InlineBond` packs atom_id (29 bits) + bond_order (3 bits) into 4 bytes. `SmallVec<[InlineBond; 4]>` keeps up to 4 bonds inline per atom. Spatial grid (FxHashMap, cell size 4.0 Å) enables O(1) neighbor queries. `AtomicStructure` no longer carries a `frame_transform` — movement nodes bake transforms directly into atom positions (see `doc/design_lattice_space_refactoring.md` Appendix B).
 
@@ -268,14 +283,37 @@ load-bearing:
   No subgraph isomorphism, no chemical perception. Adding a bond check would only
   add a way for a correct script to fail.
 - **Ideal geometry.** Added atoms land exactly where the operation says, and
-  nothing here relaxes anything. That is what keeps tolerances tight (0.3 Å, far
-  below half a bond length) and every intermediate state deterministic. Wire
-  `relax` downstream if a settled geometry is wanted.
+  nothing here relaxes anything. That is what keeps tolerances tight and every
+  intermediate state deterministic. Wire `relax` downstream if a settled
+  geometry is wanted. `DEFAULT_TOLERANCE` is **0.05 Å** — an order of magnitude
+  below the smallest *environment* difference known (0.12 Å, an ideal-site host
+  against a reconstructed dimer atom), so a wrong operation variant fails to fit
+  instead of placing an atom 0.11 Å off. `resolve_tolerance` takes the
+  **library** alone: a build script's `tolerance` is parsed and ignored, because
+  steps travel as a `[BuildStep]` array and an array has no header.
 - **A kept atom is never snapped.** Position and element are compared between the
   two *patterns*, not against the workpiece: an id in both patterns at the same
   position stays exactly where the workpiece has it, while a *moved* one lands at
   `r · after.pos + t`. Snapping would quietly rewrite a reconstructed surface
   every time an operation touched it.
+- **`StepEffect::touched` is derived from *effect*, not from pattern
+  membership.** An atom is touched when the step added it, moved it, changed its
+  element *compared against the workpiece's current one*, added/deleted/reordered
+  a bond it is an endpoint of, or deleted an atom it was bonded to. This is what
+  keeps a donation's **frame atoms** — the `"*"` neighbours an operation names
+  only to fix its orientation, recognised by `Operation::is_frame_atom` — out of
+  `ms_current` with no flag in the file and no exclusion pass in the code. The
+  bond half of the rule is computed **before** anything is mutated (§2 of
+  `apply_step`), because "did this bond change" is a question about the workpiece
+  as the step found it.
+
+`OpLibrary::warnings` carries load-time advisories — today the **origin
+convention**, that `before` atom `ORIGIN_PATTERN_ATOM_ID` (1) sits at the origin
+and is the atom the operation acts on. A violation is never an error: a foreign
+library still replays and still places, since `t` falls out of the fit. An
+operation's optional `chiral` flag is likewise inert here and read only by the
+placement engine. Both are additive keys — the parser has always ignored what it
+does not know, so a file carrying them loads on an older build.
 
 Deliberately independent of `atomic_structure_diff` / `apply_diff`, which solve
 the more general problem of anchoring arbitrary diffs across bases; nothing is

@@ -330,6 +330,8 @@ class _DataTypeInputState extends State<DataTypeInput> {
         return 'ScalarField';
       case APIDataTypeBase.isosurface:
         return 'Isosurface';
+      case APIDataTypeBase.opLibrary:
+        return 'OpLibrary';
       case APIDataTypeBase.unit:
         return 'Unit';
       case APIDataTypeBase.record:

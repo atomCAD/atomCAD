@@ -10,6 +10,7 @@ use atomcad_crystolecule::atomic_structure::{
 use atomcad_crystolecule::drawing_plane::DrawingPlane;
 use atomcad_crystolecule::field::ScalarField;
 use atomcad_crystolecule::field::isosurface::{IsosurfaceColoring, IsosurfaceData, LevelBasis};
+use atomcad_crystolecule::mechanosynth::OpLibrary;
 use atomcad_crystolecule::motif::Motif;
 use atomcad_crystolecule::structure::Structure;
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
@@ -264,6 +265,13 @@ pub enum NetworkResult {
     /// `Arc`-wrapped: the payload is two `Arc`s plus scalars, so cloning is
     /// already cheap. See `doc/design_isosurface_node.md`.
     Isosurface(IsosurfaceData),
+    /// A parsed mechanosynthesis operation library, opaque to the network.
+    ///
+    /// `Arc` because the replayer and the editor share one parsed library and
+    /// the evaluator clones results freely; the payload is a few hundred small
+    /// patterns, which is cheap to hold once and expensive to copy per wire.
+    /// See `doc/design_mechanosynth_editor.md`.
+    OpLibrary(Arc<OpLibrary>),
     Array(Vec<NetworkResult>),
     /// Lazy stream value (`Iter[T]`). The enclosed `Walker` is the runtime
     /// state machine produced by iterator-aware nodes (`range`, `map`,
@@ -344,6 +352,7 @@ impl NetworkResult {
             NetworkResult::Structure(_) => Some(DataType::Structure),
             NetworkResult::ScalarField(_) => Some(DataType::ScalarField),
             NetworkResult::Isosurface(_) => Some(DataType::Isosurface),
+            NetworkResult::OpLibrary(_) => Some(DataType::OpLibrary),
             NetworkResult::Function(closure) => Some(DataType::Function(closure.function_type())),
             NetworkResult::Unit => Some(DataType::Unit),
             NetworkResult::Record(fields) => {
@@ -948,6 +957,18 @@ impl NetworkResult {
                     describe_field_dims(&*data.field),
                 )
             }
+            // Opaque to the network, so the readout is the one thing a user
+            // can act on: which file it came from and what is in it. The op
+            // names go in `to_detailed_string`, where there is room.
+            NetworkResult::OpLibrary(library) => format!(
+                "OpLibrary\n  file:  {}\n  ops:   {}\n  tol:   {} Å",
+                short_file_name(&library.file),
+                library.ops.len(),
+                format_natural(
+                    atomcad_crystolecule::mechanosynth::resolve_tolerance(library),
+                    4
+                ),
+            ),
             NetworkResult::Record(fields) => {
                 let field_strings: Vec<String> = fields
                     .iter()
@@ -1066,6 +1087,21 @@ impl NetworkResult {
                 }
                 out
             }
+            NetworkResult::OpLibrary(library) => {
+                let mut out = self.to_display_string();
+                for op in &library.ops {
+                    out.push_str(&format!(
+                        "\n  {} ({} -> {})",
+                        op.name,
+                        op.before.atoms.len(),
+                        op.after.atoms.len()
+                    ));
+                }
+                for warning in &library.warnings {
+                    out.push_str(&format!("\n  warning: {warning}"));
+                }
+                out
+            }
             NetworkResult::Error(msg) => {
                 format!("Error: {}", msg)
             }
@@ -1175,6 +1211,13 @@ impl NetworkResult {
             _ => Err(format!("Unsupported CLI parameter type: {}", data_type)),
         }
     }
+}
+
+/// The final path component of a file label, for a readout that has one narrow
+/// line to spend on it. Falls back to the whole label when there is no
+/// separator (the in-memory labels the parse tests pass).
+fn short_file_name(file: &str) -> &str {
+    file.rsplit(['/', '\\']).next().unwrap_or(file)
 }
 
 /// The `ScalarField` readout, shared by `to_display_string` (the pin-hover
@@ -1679,6 +1722,12 @@ impl NetworkResult {
 
             NetworkResult::Motif(m) => heap_of(m),
             NetworkResult::Structure(s) => heap_of(s),
+
+            // Pointer tier: every clone of this value shares one parsed
+            // library, so deep-counting would charge the same patterns once
+            // per wire carrying it. A library is small in any case — a few
+            // hundred atoms across all its patterns.
+            NetworkResult::OpLibrary(_) => 0,
 
             // Deep tier: the whole `Arc` pointee, which is heap by definition.
             NetworkResult::ScalarField(field) => field.estimate_memory_bytes(),

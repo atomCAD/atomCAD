@@ -6,8 +6,9 @@
 //! rejection names the file, the operation or step, and the field.
 
 use super::schema::{
-    BUILD_FORMAT, BuildScript, LIBRARY_FORMAT, MechanosynthError, NO_LAYER, NO_SITE, OpLibrary,
-    Operation, Pattern, PatternAtom, PatternBond, PatternElement, Step,
+    BUILD_FORMAT, BuildScript, LIBRARY_FORMAT, MechanosynthError, NO_LAYER, NO_SITE,
+    ORIGIN_PATTERN_ATOM_ID, OpLibrary, Operation, PATTERN_POSITION_EPSILON, Pattern, PatternAtom,
+    PatternBond, PatternElement, Step,
 };
 use crate::atomic_constants::CHEMICAL_ELEMENTS;
 use glam::{DMat3, DVec3};
@@ -31,6 +32,10 @@ struct RawOp {
     name: Option<String>,
     before: Option<RawPattern>,
     after: Option<RawPattern>,
+    /// Absent means false. Unknown to the pre-editor engine, which ignored it
+    /// with every other unknown key — the key set is additive, so a file
+    /// carrying it loads on an old build.
+    chiral: Option<bool>,
 }
 
 #[derive(Deserialize)]
@@ -121,6 +126,7 @@ pub fn parse_library(text: &str, file: &str) -> Result<OpLibrary, MechanosynthEr
 
     let mut seen: HashSet<String> = HashSet::new();
     let mut ops = Vec::with_capacity(raw_ops.len());
+    let mut warnings: Vec<String> = Vec::new();
     for (i, raw_op) in raw_ops.into_iter().enumerate() {
         let name = raw_op.name.ok_or_else(|| {
             invalid(
@@ -170,14 +176,35 @@ pub fn parse_library(text: &str, file: &str) -> Result<OpLibrary, MechanosynthEr
             }
         }
 
+        // The origin convention: `before` atom 1 sits at the origin. A
+        // violation is advisory (see `OpLibrary::warnings`), never an error.
+        match before.atom(ORIGIN_PATTERN_ATOM_ID) {
+            None => warnings.push(format!(
+                "operation '{name}': the before pattern has no atom id \
+                 {ORIGIN_PATTERN_ATOM_ID}, so it does not name the atom to click"
+            )),
+            Some(atom) if atom.pos.length() > PATTERN_POSITION_EPSILON => warnings.push(format!(
+                "operation '{name}': before atom id {ORIGIN_PATTERN_ATOM_ID} is at \
+                     ({:.3}, {:.3}, {:.3}), not at the origin",
+                atom.pos.x, atom.pos.y, atom.pos.z
+            )),
+            Some(_) => {}
+        }
+
         ops.push(Operation {
             name,
             before,
             after,
+            chiral: raw_op.chiral.unwrap_or(false),
         });
     }
 
-    Ok(OpLibrary::new(file.to_string(), raw.tolerance, ops))
+    Ok(OpLibrary::new(
+        file.to_string(),
+        raw.tolerance,
+        ops,
+        warnings,
+    ))
 }
 
 fn convert_pattern(

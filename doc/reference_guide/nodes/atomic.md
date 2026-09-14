@@ -807,8 +807,11 @@ mechanosynthesis process would run to grow the structure from a seed.
 - `base: HasAtoms` — the workpiece at step 0. Required. The output preserves the
   concrete input type (a `Crystal` in, a `Crystal` out; its geometry shell is
   passed through untouched — the node only edits atoms).
-- `ops_file: String` (optional) — overrides the stored operation-library path.
-- `build_file: String` (optional) — overrides the stored build-script path.
+- `ops: OpLibrary` — the operation library the steps refer to, from
+  [`ops_library`](#ops_library).
+- `steps: [BuildStep]` — the steps to replay, from
+  [`build_script`](#build_script), from the array nodes, or from both
+  concatenated. With nothing wired the node replays nothing and emits the base.
 - `step: Int` (optional) — overrides the stored step number.
 
 **Output pins**
@@ -818,21 +821,35 @@ mechanosynthesis process would run to grow the structure from a seed.
 
 **Properties**
 
-- `ops_file` — path to the operation library (JSON).
-- `build_file` — path to the build script (JSON).
 - `step` — how many steps to apply. `0` is the untouched base, `k` means "the
   first `k` steps", and anything past the end of the script — including the
   default `-1` — means the whole build.
+- `ops_file`, `build_file` — **deprecated**; see below.
 
-Both paths are stored relative to the project file whenever possible, so a
-copied or moved project keeps working. The files are read when the project is
-loaded and whenever the path changes; there is no file watching, so re-set the
-path to pick up an edited file.
+The match tolerance is the **library's**, so it is pinned in one place for a
+whole replay. A build file's own `tolerance` is still read but no longer used:
+steps travel as an array now, and an array has no header to carry a second
+value.
+
+### The deprecated file properties
+
+`mechanosynth` used to read both files itself, through an `ops_file` and a
+`build_file` property. A project saved that way keeps replaying: with the
+matching pin unwired and the property set, the node reads the file exactly as
+it used to, and the path is still stored relative to the project file.
+
+Nothing converts automatically — that would rewrite a design nobody asked to
+have rewritten. Instead the panel shows a **Convert to nodes** button while
+either property is set: one press builds the `ops_library` and `build_script`
+nodes with the same paths, wires them in and clears the properties, as a single
+undo entry. The result is atom-for-atom identical.
+
+A wired pin always wins over its property, and the panel then hides that
+property's field rather than leaving it editing something the node ignores.
 
 ### The properties panel
 
-Two path fields, each with a **Browse** button filtered to `.json`, and a **step
-scrubber**: a slider spanning `0` to the length of the loaded script, with a
+A **step scrubber**: a slider spanning `0` to the length of the loaded script, with a
 numeric box beside it for typing an exact step. The box's `−` / `+` buttons step
 one reaction at a time, as do the ↑ / ↓ arrow keys while it has focus (hold
 Shift for ten); each press is one undo entry. Under them, a line names what the
@@ -855,13 +872,12 @@ the control replaces it with a concrete number. Leave the control alone if you
 want the node to keep following a script that is still growing — a regenerated,
 longer `build.json` then shows its full build without you moving the slider.
 
-With no script loaded the slider is disabled rather than parked at a
-meaningless stop. A wire into `ops_file`, `build_file` or `step` overrides the
-field below it, which is said in a line under that field; the stored value stays
-put and comes back when the wire goes. The slider's range and the readout follow
-the wired file and step, so a build script that is switched in by wire (one
-`mechanosynth` node fed by a `switch` between two `string` nodes, say) scrubs
-exactly like one typed into the field.
+With no steps loaded the slider is disabled rather than parked at a
+meaningless stop. The slider's range and the readout follow the **wired** steps
+and step number, so a build assembled on the wire — two generated blocks joined
+with `array_concat`, or one picked by a `switch` — scrubs exactly like one read
+from a single file. A wire into `step` makes the slider and the phase rows
+inert, which is said in a line under the field.
 
 ### Navigating a long script by phase
 
@@ -974,9 +990,35 @@ and vice versa; the `format` string does not change. A present field of the
 wrong JSON type is rejected with a message naming the step and the field, like
 any other malformed step.
 
-The script's `tolerance` wins over the library's; if neither states one the node
-uses 0.3 Å. Unknown keys are ignored everywhere, so generators are free to add
-provenance fields (`"basis": "Freitas & Merkle 2008, RS7"`).
+The **library's** `tolerance` is the match tolerance for every replay against
+it; a library that states none gets the default, **0.05 Å**. That is tight on
+purpose: a generated library's patterns are congruent to the workpiece to
+floating-point precision, and the smallest difference between two *environments*
+known — an ideal-site host against a reconstructed dimer atom — is 0.12 Å, so a
+gate an order of magnitude below that admits the right variant of an operation
+and rejects the wrong one. A hand-written library that needs slack states its
+own value. A build file's `tolerance` is read and ignored.
+
+Unknown keys are ignored everywhere, so generators are free to add provenance
+fields (`"basis": "Freitas & Merkle 2008, RS7"`).
+
+An operation may state **`"chiral": true`**, meaning a mirrored placement is a
+different reaction rather than the same one seen from the other side. Replay
+ignores it — a build file states the rotation it wants — and the interactive
+placement tool reads it as "do not offer the mirrored fit".
+
+By convention the `before` atom with **id 1 sits at the origin** and is the atom
+the operation acts on. A library that breaks the convention still loads and
+still replays; `ops_library` shows a warning naming the operation. Following it
+is what makes "click the atom the operation acts on" true for every operation
+in a library.
+
+**Frame atoms.** A one-atom `before` pattern carries no orientation, so a
+donation that must land in a particular direction lists the host's bonded
+neighbours as `"*"` atoms that appear unchanged in `after`. They fix the
+rotation and nothing else — and because "what a step touched" is decided from
+*effect* rather than from pattern membership, they never light up under
+`ms_current` and need no flag to keep them out of it.
 
 Both files are meant to be written by a **generator** that already knows every
 coordinate, not by hand.
@@ -1000,7 +1042,7 @@ actually nearest:
 
 ```
 mechanosynth: step 17 (gm_methylate @ (3.567, 0.892, 11.31)) — before atom
-id 1 (*) not found within 0.30 Å; nearest atom is H at 0.91 Å
+id 1 (*) not found within 0.05 Å; nearest atom is H at 0.91 Å
 ```
 
 The partial state is reachable by setting `step` one lower, which is usually the
@@ -1016,7 +1058,7 @@ leak into a downstream one's.
 
 | Tag | Atoms |
 |---|---|
-| `ms_current` | the atoms the current step touched and left in place — matched, moved, replaced or added. When a step *deletes* an atom, the atoms it was bonded to carry the tag in its place, so a hydrogen abstraction highlights the radical site it created rather than nothing at all. |
+| `ms_current` | the atoms the current step **changed** and left in place: the ones it added, moved, gave a different element, gave or took a bond from, or whose bonded partner it deleted. So a hydrogen abstraction highlights the radical site it created rather than nothing at all, while an operation's frame atoms — named only to fix its orientation — never light up. |
 | `ms_added` | every atom **created** by an applied step that still exists — what this build has put down so far, as against the base it started from. |
 | `ms_layer` | every atom created by an applied step whose `layer` matches the *current* step's — the terrace under construction. Empty when the current step names no layer. |
 
@@ -1046,10 +1088,11 @@ of the network can act on. Wire the pin into a
 | `layer` | Int | its `layer` (`-1` for none) |
 | `site` | Int | its `site` (`-1` for none) |
 | `t` | Vec3 | its placement point, in workpiece coordinates |
+| `r` | Mat3 | its rotation — so a downstream network can *orient* a gadget at the reaction site, not only place it. The identity when the step states none |
 
 "Current" means the **last step applied**, matching the panel's wording. At step
 0 nothing has run, so the record reads
-`{index: 0, count, op: "", note: "", method: "", phase: "", layer: -1, site: -1, t: (0, 0, 0)}`
+`{index: 0, count, op: "", note: "", method: "", phase: "", layer: -1, site: -1, t: (0, 0, 0), r: identity}`
 — it does not describe step 1, which has not happened yet.
 
 The schema is fixed rather than read from your file: a pin's type has to be
@@ -1066,6 +1109,99 @@ A typical use: a [`switch`](./math_programming.md#switch) on `step.method`
 picking one style rule set per instrument, so probe steps and lithography steps
 are coloured differently as you scrub; or an `expr` building a caption out of
 `phase`, `layer` and `index`.
+
+## ops_library
+
+Loads a mechanosynthesis **operation library** from a JSON file and emits it as
+a value, for [`mechanosynth`](#mechanosynth)'s `ops` pin.
+
+**Input pins**
+
+- `file: String` (optional) — overrides the stored path.
+
+**Output pins**
+
+- `ops: OpLibrary` — the parsed library.
+
+**Properties**
+
+- `file` — path to the library (JSON), stored relative to the project file
+  whenever possible.
+
+`OpLibrary` is an **opaque** value: there is nothing inside it the network can
+read, no way to build one from nodes, and no `expr` support. It is a value the
+way a `Motif` is — produced by one node, consumed by pins that ask for it. Wire
+one library node into as many consumers as you like; it is parsed once and
+shared.
+
+The panel lists what the file holds — each operation's name, how many atoms its
+`before` and `after` patterns have, and whether it is `chiral` — above the
+tolerance in force. That listing is the only view of a parsed library from
+inside the application, and it is where you read the operation names a build
+script refers to. A **Reload** button beside Browse re-reads a file that changed
+on disk; there is no file watching.
+
+A library that breaks the origin convention (§*The two files*) loads with a
+warning naming the operation, shown in the panel and in the problems list. A
+parse failure is an error on the output pin naming the file and the offending
+operation.
+
+## build_script
+
+Loads a mechanosynthesis **build script** from a JSON file and emits its steps
+as an array of [`BuildStep`](./math_programming.md#record-types) records.
+
+**Input pins**
+
+- `file: String` (optional) — overrides the stored path.
+
+**Output pins**
+
+- `steps: [BuildStep]` — the file's steps, in order.
+
+**Properties**
+
+- `file` — path to the build script (JSON), stored relative to the project file
+  whenever possible.
+
+Because the steps are an ordinary array, a loaded block behaves like any other:
+join two with [`array_concat`](./math_programming.md#array_concat), append one
+authored step with `array_append`, reshape with `map` and `filter`, pick between
+two with `switch`. That is the whole reason a build script is a value rather
+than a file name on the replayer.
+
+Absent per-step fields take the file format's own defaults — an identity
+rotation, empty `note` / `method` / `phase`, `-1` for `layer` and `site` — so a
+step stating only `op` and `t` reads out the same way whether it came from a
+file or was written by hand.
+
+Whether a step names an operation that exists cannot be checked here: this node
+sees no library. An unknown operation passes through and is reported by whatever
+consumes the steps, naming the step index and the operation.
+
+## export_build_script
+
+Writes a `[BuildStep]` array back out as a build JSON file — the format
+[`build_script`](#build_script) reads, and the way an assembled or reshaped
+block leaves the application.
+
+**Input pins**
+
+- `steps: [BuildStep]` — the steps to write. Required.
+- `file_name: String` (optional) — overrides the stored path.
+- `metadata` (optional) — any record; written into the file's header.
+
+**Output pin**
+
+- `Unit`.
+
+Like [`export_atoms`](#export_atoms) this node exists for its **side effect**:
+it writes only when you right-click it and choose **Execute**, so an ordinary
+evaluation never touches the disk.
+
+Per-step fields holding their default are **omitted**, which is what makes a
+load and a re-export a round trip rather than a re-write: an identity rotation,
+an empty `note`, `method` or `phase`, and a `layer` or `site` of `-1`.
 
 ## Surface reconstruction patches (`patch_build` + `patch_latticefill`)
 

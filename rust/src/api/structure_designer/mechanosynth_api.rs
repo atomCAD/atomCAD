@@ -1,11 +1,13 @@
-//! Kernel seam for the `mechanosynth` node's property panel.
+//! Kernel seam for the `mechanosynth` node's property panel, and for the
+//! `ops_library` / `build_script` / `export_build_script` panels beside it.
 //!
-//! Three properties (two file names and a step number) plus one read-only
-//! readout the panel cannot compute for itself, because the step count, the
+//! Three properties (the two deprecated file names and a step number), one
+//! read-only readout the panel cannot compute for itself — the step count, the
 //! current step's metadata and the script's chapter structure all live in the
-//! parsed build script — payload that never crosses the bridge. The readout
-//! follows the wired `build_file` and `step` pins when they are connected, so
-//! it describes what the node evaluates rather than what it stores.
+//! parsed steps, which never cross the bridge — and the one-shot **Convert to
+//! nodes** migration. The readout follows the wired `steps` and `step` pins
+//! when they are connected, so it describes what the node evaluates rather
+//! than what it stores.
 //!
 //! Each entry point is a thin FRB wrapper over an `#[frb(ignore)]` function
 //! taking an explicit `&StructureDesigner`, so the logic is testable without
@@ -16,11 +18,19 @@ use crate::api::api_common::{
     with_mut_cad_instance_or,
 };
 use crate::api::structure_designer::structure_designer_api_types::{
-    APIMechanosynthChapter, APIMechanosynthData, APIMechanosynthInfo,
+    APIBuildScriptData, APIExportBuildScriptData, APIMechanosynthChapter, APIMechanosynthData,
+    APIMechanosynthInfo, APIOpsLibraryData, APIOpsLibraryEntry,
 };
+use atomcad_crystolecule::mechanosynth::resolve_tolerance;
 use atomcad_crystolecule::mechanosynth::{BuildScript, NO_LAYER, NO_SITE, steps_applied};
 use atomcad_structure_designer::evaluator::network_result::NetworkResult;
-use atomcad_structure_designer::nodes::mechanosynth::{MechanosynthData, load_script_at};
+use atomcad_structure_designer::nodes::build_script::BuildScriptData;
+use atomcad_structure_designer::nodes::build_step::steps_from_array;
+use atomcad_structure_designer::nodes::export_build_script::ExportBuildScriptData;
+use atomcad_structure_designer::nodes::mechanosynth::{
+    MechanosynthData, STEP_PIN, STEPS_PIN, load_script_at,
+};
+use atomcad_structure_designer::nodes::ops_library::OpsLibraryData;
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 use atomcad_util::path_utils::get_parent_directory;
 
@@ -48,6 +58,7 @@ pub fn mechanosynth_data(
         ops_file: data.ops_file.clone(),
         build_file: data.build_file.clone(),
         step: data.step,
+        has_legacy_files: data.has_legacy_files(),
     })
 }
 
@@ -117,22 +128,25 @@ pub fn mechanosynth_info(
         .downcast_ref::<MechanosynthData>()?
         .clone();
 
-    // Pin 2 is `build_file`. `None` means nothing is wired, so the stored
+    // The `steps` pin. `None` means nothing is wired, so the deprecated
     // property applies: the parsed cache, else the stored name re-read (the
     // text-format edit path drops the cache, as `eval` knows).
-    let script: Option<BuildScript> = match designer.evaluate_node_argument(scope_path, node_id, 2)
-    {
-        NetworkResult::None => stored.script.clone().or_else(|| {
-            stored
-                .build_file
-                .as_deref()
-                .and_then(|name| load_script_at(name, design_dir.as_deref()).ok())
-        }),
-        NetworkResult::String(name) => load_script_at(&name, design_dir.as_deref()).ok(),
-        _ => None,
-    };
-    // Pin 3 is `step`.
-    let step = match designer.evaluate_node_argument(scope_path, node_id, 3) {
+    let script: Option<BuildScript> =
+        match designer.evaluate_node_argument(scope_path, node_id, STEPS_PIN) {
+            NetworkResult::None => stored.script.clone().or_else(|| {
+                stored
+                    .build_file
+                    .as_deref()
+                    .and_then(|name| load_script_at(name, design_dir.as_deref()).ok())
+            }),
+            NetworkResult::Error(_) => None,
+            array => steps_from_array(&array).ok().map(|steps| BuildScript {
+                file: "steps".to_string(),
+                tolerance: None,
+                steps,
+            }),
+        };
+    let step = match designer.evaluate_node_argument(scope_path, node_id, STEP_PIN) {
         NetworkResult::Int(step) => step,
         _ => stored.step,
     };
@@ -203,8 +217,235 @@ pub fn chapters(script: &BuildScript) -> Vec<APIMechanosynthChapter> {
 }
 
 // ============================================================================
+// `ops_library`, `build_script`, `export_build_script`
+// ============================================================================
+
+/// Reads a node's data, downcast to `T`.
+#[flutter_rust_bridge::frb(ignore)]
+fn node_data<T: atomcad_structure_designer::node_data::NodeData + Clone + 'static>(
+    designer: &StructureDesigner,
+    scope_path: &[u64],
+    node_id: u64,
+) -> Option<T> {
+    designer
+        .get_node_network_data_scoped(scope_path, node_id)?
+        .as_any_ref()
+        .downcast_ref::<T>()
+        .cloned()
+}
+
+#[flutter_rust_bridge::frb(ignore)]
+pub fn ops_library_data(
+    designer: &StructureDesigner,
+    scope_path: &[u64],
+    node_id: u64,
+) -> Option<APIOpsLibraryData> {
+    let data: OpsLibraryData = node_data(designer, scope_path, node_id)?;
+    let library = data.library.as_ref();
+    Some(APIOpsLibraryData {
+        file: data.file.clone(),
+        tolerance: library.map_or(0.0, |library| resolve_tolerance(library)),
+        tolerance_stated: library.is_some_and(|library| library.tolerance.is_some()),
+        warnings: library
+            .map(|library| library.warnings.clone())
+            .unwrap_or_default(),
+        ops: library
+            .map(|library| {
+                library
+                    .ops
+                    .iter()
+                    .map(|op| APIOpsLibraryEntry {
+                        name: op.name.clone(),
+                        before_atoms: op.before.atoms.len() as i32,
+                        after_atoms: op.after.atoms.len() as i32,
+                        chiral: op.chiral,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
+    })
+}
+
+/// Writes an `ops_library` node's file name.
+///
+/// `reload` forces a re-read even when the name did not change — the panel's
+/// Reload button, for a file edited outside the application. Without it the
+/// name-unchanged path deliberately keeps the parsed cache
+/// (`project_import_node_payload_wipe`), which is right for the focus-loss
+/// writes the path field produces and wrong for an explicit Reload.
+#[flutter_rust_bridge::frb(ignore)]
+pub fn set_ops_library_file(
+    designer: &mut StructureDesigner,
+    scope_path: &[u64],
+    node_id: u64,
+    file: Option<String>,
+    reload: bool,
+) {
+    let design_dir = design_dir(designer);
+    let Some(current) = node_data::<OpsLibraryData>(designer, scope_path, node_id) else {
+        return;
+    };
+    let mut updated = current.with_file(file);
+    if reload {
+        updated.library = None;
+        updated.load_error = None;
+    }
+    updated.reload_missing(design_dir.as_deref());
+    designer.set_node_network_data_scoped(scope_path, node_id, Box::new(updated));
+}
+
+#[flutter_rust_bridge::frb(ignore)]
+pub fn build_script_data(
+    designer: &StructureDesigner,
+    scope_path: &[u64],
+    node_id: u64,
+) -> Option<APIBuildScriptData> {
+    let data: BuildScriptData = node_data(designer, scope_path, node_id)?;
+    Some(APIBuildScriptData {
+        file: data.file.clone(),
+        step_count: data
+            .script
+            .as_ref()
+            .map_or(0, |script| script.steps.len() as i32),
+    })
+}
+
+/// The `build_script` counterpart of [`set_ops_library_file`].
+#[flutter_rust_bridge::frb(ignore)]
+pub fn set_build_script_file(
+    designer: &mut StructureDesigner,
+    scope_path: &[u64],
+    node_id: u64,
+    file: Option<String>,
+    reload: bool,
+) {
+    let design_dir = design_dir(designer);
+    let Some(current) = node_data::<BuildScriptData>(designer, scope_path, node_id) else {
+        return;
+    };
+    let mut updated = current.with_file(file);
+    if reload {
+        updated.script = None;
+        updated.load_error = None;
+    }
+    updated.reload_missing(design_dir.as_deref());
+    designer.set_node_network_data_scoped(scope_path, node_id, Box::new(updated));
+}
+
+// ============================================================================
 // Flutter entry points
 // ============================================================================
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_ops_library_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIOpsLibraryData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| ops_library_data(&cad_instance.structure_designer, &scope_path, node_id),
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_ops_library_data(
+    scope_path: Vec<u64>,
+    node_id: u64,
+    file: Option<String>,
+    reload: bool,
+) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            set_ops_library_file(
+                &mut cad_instance.structure_designer,
+                &scope_path,
+                node_id,
+                file,
+                reload,
+            );
+            // The refresh paths do not validate, so a stale error would linger
+            // until an unrelated edit (`project_refresh_does_not_validate`).
+            cad_instance.structure_designer.validate_active_network();
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_build_script_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIBuildScriptData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                build_script_data(&cad_instance.structure_designer, &scope_path, node_id)
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_build_script_data(
+    scope_path: Vec<u64>,
+    node_id: u64,
+    file: Option<String>,
+    reload: bool,
+) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            set_build_script_file(
+                &mut cad_instance.structure_designer,
+                &scope_path,
+                node_id,
+                file,
+                reload,
+            );
+            cad_instance.structure_designer.validate_active_network();
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_export_build_script_data(
+    scope_path: Vec<u64>,
+    node_id: u64,
+) -> Option<APIExportBuildScriptData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let data: ExportBuildScriptData =
+                    node_data(&cad_instance.structure_designer, &scope_path, node_id)?;
+                Some(APIExportBuildScriptData {
+                    file_name: data.file_name,
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_export_build_script_data(
+    scope_path: Vec<u64>,
+    node_id: u64,
+    data: APIExportBuildScriptData,
+) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let designer = &mut cad_instance.structure_designer;
+            if node_data::<ExportBuildScriptData>(designer, &scope_path, node_id).is_some() {
+                designer.set_node_network_data_scoped(
+                    &scope_path,
+                    node_id,
+                    Box::new(ExportBuildScriptData {
+                        file_name: data.file_name,
+                    }),
+                );
+                designer.validate_active_network();
+            }
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_mechanosynth_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIMechanosynthData> {
@@ -233,6 +474,26 @@ pub fn set_mechanosynth_node_data(scope_path: Vec<u64>, node_id: u64, data: APIM
             cad_instance.structure_designer.validate_active_network();
             refresh_structure_designer_auto(cad_instance);
         });
+    }
+}
+
+/// **Convert to nodes**: replaces a `mechanosynth` node's deprecated
+/// `ops_file` / `build_file` properties with wired `ops_library` /
+/// `build_script` nodes. One undo entry; returns the failure message, if any,
+/// for the panel to show.
+#[flutter_rust_bridge::frb(sync)]
+pub fn mechanosynth_convert_files_to_nodes(scope_path: Vec<u64>, node_id: u64) -> Option<String> {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let outcome = cad_instance
+                    .structure_designer
+                    .convert_mechanosynth_files_to_nodes(&scope_path, node_id);
+                refresh_structure_designer_auto(cad_instance);
+                outcome.err()
+            },
+            Some("no CAD instance".to_string()),
+        )
     }
 }
 

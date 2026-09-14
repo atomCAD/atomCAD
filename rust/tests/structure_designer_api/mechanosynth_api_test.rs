@@ -11,9 +11,9 @@
 //! `get_mechanosynth_info`, which is the only way the panel can learn the step
 //! count — the parsed script never crosses the bridge.
 
+use atomcad_structure_designer::nodes::build_script::BuildScriptData;
 use atomcad_structure_designer::nodes::int::IntData;
 use atomcad_structure_designer::nodes::mechanosynth::MechanosynthData;
-use atomcad_structure_designer::nodes::string::StringData;
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 use atomcad_test_support::fixture_path_str;
 use glam::f64::DVec2;
@@ -52,6 +52,18 @@ fn add_loaded_node(designer: &mut StructureDesigner, scope_path: &[u64], step: i
     };
     data.reload_missing(None);
     designer.set_node_network_data_scoped(scope_path, node_id, Box::new(data));
+    node_id
+}
+
+/// A `build_script` node loaded from a fixture, at the top level.
+fn add_build_script_node(designer: &mut StructureDesigner, name: &str) -> u64 {
+    let node_id = designer.add_node("build_script", DVec2::new(-300.0, 0.0));
+    let mut data = BuildScriptData {
+        file: Some(fixture(name)),
+        ..BuildScriptData::new()
+    };
+    data.reload_missing(None);
+    designer.set_node_network_data_scoped(&[], node_id, Box::new(data));
     node_id
 }
 
@@ -103,6 +115,7 @@ fn a_node_inside_a_closure_body_is_reachable_and_a_colliding_root_id_is_not_conf
             ops_file: scoped.ops_file.clone(),
             build_file: scoped.build_file.clone(),
             step: 0,
+            has_legacy_files: true,
         },
     );
     assert_eq!(
@@ -130,6 +143,7 @@ fn the_setter_keeps_the_caches_on_a_no_op_write_and_reloads_on_a_real_one() {
             ops_file: stored.ops_file.clone(),
             build_file: stored.build_file.clone(),
             step: 1,
+            has_legacy_files: true,
         },
     );
     let info = mechanosynth_info(&mut designer, &[], node_id).expect("the script is still loaded");
@@ -144,6 +158,7 @@ fn the_setter_keeps_the_caches_on_a_no_op_write_and_reloads_on_a_real_one() {
             ops_file: stored.ops_file.clone(),
             build_file: Some(fixture("unmatched_build.json")),
             step: -1,
+            has_legacy_files: true,
         },
     );
     let info = mechanosynth_info(&mut designer, &[], node_id).expect("the new script loaded");
@@ -199,9 +214,10 @@ fn info_with_no_script_loaded_is_all_zeroes() {
 /// The demo that switches between two libraries by wire feeds one
 /// `mechanosynth` node from a `switch` on `string` nodes; nothing is stored on
 /// the node, yet the slider must have the script's range and the readout must
-/// name the current step.
+/// name the current step. The steps now arrive as a `[BuildStep]` array rather
+/// than as a file name, so the wire is a `build_script` node.
 #[test]
-fn info_follows_a_build_file_arriving_on_the_wire() {
+fn info_follows_steps_arriving_on_the_wire() {
     let mut designer = setup_designer();
     let node_id = designer.add_node("mechanosynth", DVec2::ZERO);
     let mut data = MechanosynthData {
@@ -213,16 +229,9 @@ fn info_follows_a_build_file_arriving_on_the_wire() {
     data.reload_missing(None);
     designer.set_node_network_data_scoped(&[], node_id, Box::new(data));
 
-    let name_id = designer.add_node("string", DVec2::ZERO);
-    designer.set_node_network_data_scoped(
-        &[],
-        name_id,
-        Box::new(StringData {
-            value: fixture("methylate_build.json"),
-        }),
-    );
-    // Pin 2 is `build_file`.
-    designer.connect_nodes(name_id, 0, node_id, 2);
+    // Pin 2 is `steps`.
+    let steps_id = add_build_script_node(&mut designer, "methylate_build.json");
+    designer.connect_nodes(steps_id, 0, node_id, 2);
 
     let info = mechanosynth_info(&mut designer, &[], node_id).expect("the node is a mechanosynth");
     assert_eq!((info.count, info.applied), (3, 2));
@@ -230,21 +239,14 @@ fn info_follows_a_build_file_arriving_on_the_wire() {
     assert_eq!(info.current_note, "CH2 onto the bare carbon");
 }
 
-/// The wire wins over a stored name, as it does in `eval`.
+/// The wire wins over the deprecated property, as it does in `eval`.
 #[test]
-fn a_wired_build_file_wins_over_the_stored_one() {
+fn wired_steps_win_over_the_stored_build_file() {
     let mut designer = setup_designer();
     let node_id = add_loaded_node(&mut designer, &[], -1);
 
-    let name_id = designer.add_node("string", DVec2::ZERO);
-    designer.set_node_network_data_scoped(
-        &[],
-        name_id,
-        Box::new(StringData {
-            value: fixture("unmatched_build.json"),
-        }),
-    );
-    designer.connect_nodes(name_id, 0, node_id, 2);
+    let steps_id = add_build_script_node(&mut designer, "unmatched_build.json");
+    designer.connect_nodes(steps_id, 0, node_id, 2);
 
     let info = mechanosynth_info(&mut designer, &[], node_id).expect("the node is a mechanosynth");
     assert_eq!(
@@ -272,19 +274,12 @@ fn info_follows_a_step_arriving_on_the_wire() {
 /// A wired name that does not resolve gives the all-zero readout; the error
 /// itself is the result pin's business.
 #[test]
-fn a_wired_build_file_that_fails_to_load_reads_as_no_script() {
+fn a_wired_loader_that_fails_to_load_reads_as_no_script() {
     let mut designer = setup_designer();
     let node_id = add_loaded_node(&mut designer, &[], -1);
 
-    let name_id = designer.add_node("string", DVec2::ZERO);
-    designer.set_node_network_data_scoped(
-        &[],
-        name_id,
-        Box::new(StringData {
-            value: fixture("does_not_exist.json"),
-        }),
-    );
-    designer.connect_nodes(name_id, 0, node_id, 2);
+    let steps_id = add_build_script_node(&mut designer, "does_not_exist.json");
+    designer.connect_nodes(steps_id, 0, node_id, 2);
 
     let info = mechanosynth_info(&mut designer, &[], node_id).expect("the node is a mechanosynth");
     assert_eq!((info.count, info.applied), (0, 0));

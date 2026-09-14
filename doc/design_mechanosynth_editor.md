@@ -1,7 +1,8 @@
 # Design: build scripts as network values and the `mechanosynth_edit` node
 
-Status: **draft 2026-09-11**, discussed and agreed in principle; not
-implemented. Extends the `mechanosynth` subsystem
+Status: **draft 2026-09-11, revised 2026-09-14** (clicked-atom role rule,
+tests moved into phases). **Phase 1 implemented 2026-09-14**; Phases 2–5 not
+started. Extends the `mechanosynth` subsystem
 (`rust/crates/atomcad-crystolecule/src/mechanosynth/`,
 `rust/crates/atomcad-structure-designer/src/nodes/mechanosynth.rs`,
 `lib/structure_designer/node_data/mechanosynth_editor.dart`, reference guide
@@ -128,11 +129,46 @@ have.
 
 ### Placement is click, translate, rigid fit
 
-One click on a workpiece atom. The clicked atom may play any role in the
-operation's `before` pattern that its element allows; the remaining roles
-are found by a congruent search in the neighbourhood; the rigid transform
+One click on a workpiece atom. The clicked atom is assigned one role in the
+operation's `before` pattern (next subsection); the remaining roles are
+found by a congruent search in the neighbourhood; the rigid transform
 `(r, t)` comes from the fit. Candidates are whatever the environment admits;
 the operation hardcodes none of them.
+
+### The clicked atom's role is fixed by rule, never chosen in the UI
+
+An atom can often stand for more than one `before` atom: both ends of
+`dimerize` are bare Si, a donation host and its `*` frame neighbours all
+admit a Si click, and any atom admits a `*` role. Orientation candidates
+are already a choice the user sometimes has to make; a second choice —
+"which pattern atom did you mean" — layered on top would turn a one-click
+tool into a dialog. So the role is decided by a fixed rule before the
+search runs:
+
+1. Among the `before` atoms whose element admits the clicked atom (`*`
+   admits all), take the one at the origin of the operation's coordinate
+   system (position within 1e-6 Å of `(0, 0, 0)`).
+2. If none of the eligible atoms is at the origin, take the eligible atom
+   with the smallest id.
+
+The rule is deterministic and learnable. For every operation whose origin
+atom is the reacting atom — the convention the loader already warns about —
+"click the atom the operation acts on" is the whole instruction, and the
+Armed prompt says which element that is. Clicking an atom that cannot be
+the origin atom (the H of an abstraction, whose origin atom is the C) still
+works, through the fallback, because only one role admits it.
+
+The rule is strict: if the search finds no congruent assignment with the
+clicked atom in its assigned role, the result is "no match", not a retry in
+another role. A silent role change would place the reaction on a different
+atom from the one the user clicked, which is exactly the surprise the rule
+exists to remove. The diagnostic names the role it tried.
+
+Rejected: **offering the roles as candidates** beside the orientation
+candidates. Every asymmetric op with two same-element atoms would then
+always produce at least two candidates, and the common case would need a
+second interaction. Also rejected: **falling through to the next eligible
+role when the fit fails**, for the reason above.
 
 ### Orientation comes from frame atoms in the operation
 
@@ -213,7 +249,8 @@ types; a `record_destructure` on either works as today.
 ### `mechanosynth` node changes
 
 Pins become `base: HasAtoms`, `ops: OpLibrary`, `steps: [BuildStep]`,
-`step: Int`. Outputs unchanged. Behaviour:
+`step: Int`. Output pins unchanged (the `step` record gains `r`, §`BuildStep`
+record). Behaviour:
 
 - **Tolerance.** With `ops` wired the replay tolerance is the library's
   (`library.tolerance`, else the default, now 0.05 Å). The per-file build tolerance
@@ -238,7 +275,9 @@ Pins become `base: HasAtoms`, `ops: OpLibrary`, `steps: [BuildStep]`,
 Writes the current JSON build format from the array; `format` is set,
 per-step `r` is written only when it is not the identity, `note`/`method`/
 `phase` only when non-empty, `layer`/`site` only when not `-1`. Like
-`export_atoms` it is an action, not part of evaluation.
+`export_atoms` it is a `Unit`-returning node whose `eval` runs only under the
+execute flag (`doc/design_node_execution.md`, the central skip rule), so an
+ordinary evaluation never writes a file.
 
 ### Operation-library schema extensions
 
@@ -266,8 +305,11 @@ rewritten to assert the clause that makes it so.
 One convention is validated: `before` atom with id 1 sits at the origin.
 A violation is a load-time **warning** attached to the library (the panel
 shows it), never an error — foreign libraries may not follow it, and the
-placement engine does not depend on it (`t` falls out of the fit). The
-convention only names the natural atom to click.
+placement engine does not need it: `t` falls out of the fit, and the role
+rule (§Decisions) uses the origin atom when there is one and the smallest
+eligible id when there is not. The convention names the natural atom to
+click; following it is what makes "click the atom the operation acts on"
+true for every op in a library.
 
 ### Engine
 
@@ -287,6 +329,7 @@ function so it is testable without a node:
 ```rust
 pub struct Candidate {
     pub step: Step,          // op, r, t; metadata empty
+    pub role: i64,           // before-pattern id the clicked atom plays (same for every candidate)
     pub roles: Vec<(i64, u32)>, // pattern id → workpiece atom id, frame atoms included
     pub residual: f64,       // max per-atom distance of the fit, Å
     pub exact: bool,         // residual < EXACT_FIT_RESIDUAL (1e-4 Å)
@@ -299,19 +342,34 @@ pub fn place(
     library: &OpLibrary,
     op: &str,
     clicked: u32,
-    tolerance: f64,
+    tolerance: f64,   // the caller passes resolve_tolerance(library); a parameter so tests can vary it
 ) -> Result<Vec<Candidate>, MechanosynthError>;
 ```
 
+`Ok` always holds at least one candidate. Every way of ending with none is
+an `Err`, so the diagnostic travels with the failure instead of beside an
+empty list. Three new `MechanosynthError` variants carry them:
+`UnknownOp { op }` when the library has no such operation;
+`NoRole { op, element, accepted }` when no `before` atom admits the clicked
+element; and `NoPlacement { op, role, element, nearest }` when the assigned
+role finds no congruent assignment — `role` is the pattern id the click was
+given, `nearest` the same "nearest bare Si at 4.59 Å" string `NoMatch`
+already builds. The existing `NoMatch` stays the replay error; it is about
+a step, not a click.
+
 Algorithm:
 
-1. **Roles the click can play.** Every `before` atom whose element matches
-   the clicked atom's element (`*` matches all). Frame atoms (kept,
-   unchanged, no bond change) are eligible roles too, but ranked after the
-   atoms the op changes.
+1. **Role of the clicked atom.** The eligible `before` atoms are those
+   whose element matches the clicked atom's element (`*` matches all),
+   frame atoms included. Exactly one is chosen by the rule in §Decisions:
+   the eligible atom at the origin, else the eligible atom with the
+   smallest id. No eligible atom → an error naming the clicked element and
+   the elements the op accepts. The role is fixed for the rest of the
+   algorithm; it is never revisited.
 2. **Neighbourhood.** Atoms within `extent + tolerance` of the clicked atom,
    where `extent` is the pattern's largest distance from the role atom.
-3. **Assignment search.** For each role, recursively assign the remaining
+3. **Assignment search.** With the clicked atom fixed in its role,
+   recursively assign the remaining
    `before` atoms to distinct neighbourhood atoms with matching elements,
    pruning on pairwise distance (`|d_workpiece − d_pattern| ≤ 2·tolerance`).
    Patterns are small (at most five atoms plus frames), so this is cheap.
@@ -330,10 +388,11 @@ Algorithm:
    them `approximate`.
 6. **Dedupe and rank.** Two candidates are one when they produce the same
    after state — the same set of placed positions and elements within
-   1e-6 Å — not when they share `(r, t)`: a symmetric pattern (either end
-   of `dimerize`, the permutations of three tetrahedral `*` frame atoms)
-   yields several transforms for one reaction. Sort by residual, then proper before mirrored, then
-   exact before approximate.
+   1e-6 Å — not when they share `(r, t)`: a symmetric pattern (the
+   permutations of three tetrahedral `*` frame atoms around a fixed host)
+   yields several transforms for one reaction. Two `dimerize` partners, by
+   contrast, are two reactions and stay two candidates. Sort by residual,
+   then proper before mirrored, then exact before approximate.
 
 What the engine guarantees, against the two libraries in use: abstractions
 commit with one click; donations with frame atoms commit with one click;
@@ -406,11 +465,13 @@ Therefore:
   below `EXACT_FIT_RESIDUAL = 1e-4 Å`, the generator's own congruence
   threshold; otherwise *inexact*. Fallback candidates are *approximate*.
 - Inexact and approximate steps show a warning chip in the steps list with
-  the residual, and `export_build_script` reports their count. A design with
-  no chips is exact to file rounding.
+  the residual, and the editor's panel reports their count above the list.
+  The residual is node data; it does not travel on the `steps` wire, so
+  `export_build_script` cannot see it and does not try to. A design with no
+  chips is exact to file rounding.
 - The placement engine ranks by residual before anything else, so an exact
   candidate always outranks an inexact one.
-- One test pins the claim (§Tests, *round-trip exactness*): re-author a
+- One test pins the claim (Phase 2, *round-trip exactness*): re-author a
   generated build by driving `place()` with each step's origin atom in
   order, choose the candidate whose `r` matches the generator's, and require
   every residual below 1e-4 Å and the final structure equal to the
@@ -431,7 +492,7 @@ should warn on such patterns.
 | inputs | `base: HasAtoms` (required), `ops: OpLibrary` (required), `steps: [BuildStep]` (optional prefix) |
 | output 0 | `result` — the workpiece after the prefix and the authored steps up to the cursor; same concrete type as `base` |
 | output 1 | `steps: [BuildStep]` — prefix followed by the whole authored block, cursor ignored |
-| stored | `authored: Vec<AuthoredStep>` (a `Step` plus its fit `residual` and `approximate` flag), `cursor: i32` (index into the authored block, `0` = none of it, `-1` = all, the replayer's clamp) |
+| stored | `authored: Vec<AuthoredStep>` (a `Step` plus its fit `residual` and `approximate` flag), `cursor: i32` (number of authored steps applied, `-1` = all; §Cursor) |
 | transient (`#[serde(skip)]`) | placement state (chosen op, pending candidates), the prefix snapshot, last replay error |
 
 `result` is painted with `ms_current` on the cursor step's touched atoms and
@@ -447,10 +508,15 @@ move replays only the authored block. That is the only cache; the rule from
 
 ### Cursor
 
-One integer: "the state after authored step k". The scrubber is the cursor.
-Placing a step inserts it at `k+1` and moves the cursor to it. Selecting a
-row in the steps list moves the cursor there. The cursor is node data but
-its changes are **not** undo commands, like the replayer's slider.
+One integer `k`, the number of authored steps applied: `result` is the
+state after `authored[..k]`, so `0` shows the prefix alone, `authored.len()`
+shows everything, and `-1` means "all" and follows the block as it grows
+(the replayer's clamp; any value beyond the length also clamps). Rows in the
+steps list are numbered from 1, so row `k` is the step the cursor has just
+applied. The scrubber is the cursor. Placing a step inserts it at index `k`
+(right after the last applied step) and sets the cursor to `k+1`. Selecting
+a row moves the cursor to that row's number. The cursor is node data but its
+changes are **not** undo commands, like the replayer's slider.
 
 ### Placement tool
 
@@ -462,10 +528,13 @@ one (the same rule `atom_edit` uses to own viewport picks). States:
 2. **Armed.** The prompt reads "click the *host* atom" (the origin atom's
    element and, when present, the op `note`). A viewport click on an atom
    calls `place`; a click elsewhere or Escape returns to Idle.
-3. **Candidates.** Zero: the engine's message is shown in place ("no
-   `dimerize` partner within tolerance of the clicked atom; nearest bare Si
-   at 4.59 Å") and the tool stays Armed. One: commit immediately. Several:
-   every candidate's after state is drawn as ghosts at once (added atoms
+3. **Candidates.** An `Err` from `place` (`NoRole`, `NoPlacement`) is
+   shown in place ("no `dimerize` partner within tolerance of the clicked
+   atom, taken as pattern atom 1; nearest bare Si at 4.59 Å") and the tool
+   stays Armed. The message always names the role the clicked atom was
+   given, so a click on the wrong atom of an asymmetric op explains itself.
+   One candidate: commit immediately. Several: every candidate's after
+   state is drawn as ghosts at once (added atoms
    green, deleted red, moved with an arrow, at 40 % alpha, the
    `xray`-style ghosting), the panel lists them ("2 of 2: mirrored, residual
    0.00 Å"), Tab cycles, clicking a ghost atom that belongs to exactly one
@@ -483,7 +552,9 @@ came from the application, not the library.
 
 The panel shows the prefix as a read-only, collapsed block ("142 steps from
 `build_script`") and the authored block as rows: index, op, method colour,
-note. Rows drag to reorder, delete, duplicate; each is one undo command.
+note. Rows drag to reorder, delete, duplicate; each is one undo command
+(duplicate is an `InsertStepCommand` carrying a copy of the row, residual
+and flag included).
 The chapter list from the replayer's panel appears above the rows and jumps
 the cursor. Chips edit `method`, `phase`, `layer`, `site`, `note` per step;
 one undo command per edit, coalesced while the same chip has focus.
@@ -507,7 +578,8 @@ over `#[frb(ignore)]` functions on `&StructureDesigner` so the tests need no
 - `mechanosynth_edit_arm(op)`, `mechanosynth_edit_pick(atom_id)` →
   candidate list (indices, residual, mirrored, approximate, ghost atoms for
   rendering), `mechanosynth_edit_choose(index)`, `mechanosynth_edit_cancel`.
-- `mechanosynth_edit_insert/delete/move_step`, `set_step_metadata`.
+- `mechanosynth_edit_insert_step`, `mechanosynth_edit_delete_step`,
+  `mechanosynth_edit_move_step`, `set_mechanosynth_edit_step_metadata`.
 - `mechanosynth_convert_files_to_nodes` on the replayer.
 
 Ghost rendering goes through the same path the guideline tool and guided
@@ -516,27 +588,33 @@ elements and kinds, and Flutter never sees the engine's structures.
 
 ### Text format
 
-The authored block serialises as a `steps` property of record literals, one
-per line, and `cursor` as an int:
+The authored block serialises as an `authored` property holding one record
+literal per line, and `cursor` as an int (`steps: gen` below is the wired
+prefix pin, not the block):
 
 ```
-edit = mechanosynth_edit { base: slab, ops: lib, steps: gen, cursor: 3, authored: [
+edit = mechanosynth_edit { base: slab, ops: lib, steps: gen, cursor: 2, authored: [
   { op: "habst", t: (12.71, 9.53, 8.02), method: "probe", phase: "layer1", layer: 1, site: 0 },
-  { op: "dimerize", t: (14.27, 9.53, 8.02), r: ((0, 1, 0), (-1, 0, 0), (0, 0, 1)), method: "relax" },
+  { op: "dimerize", t: (14.27, 9.53, 8.02), r: ((0, 1, 0), (-1, 0, 0), (0, 0, 1)), method: "relax", residual: 0.0213 },
 ] }
 ```
 
-Identity `r` and empty/`-1` metadata are omitted on output and defaulted on
-input, so a short step stays short. `get_text_properties` must stay total
-(an empty `authored` is `[]`), the rule learned on the replayer. The
-round-trip corpus test (`project_text_format_roundtrip`) gains a fixture
-with an editor node.
+Each literal has the `BuildStep` fields plus two that belong to the editor
+only: `residual: Float` and `approximate: Bool`. Identity `r`, empty/`-1`
+metadata, a residual below `EXACT_FIT_RESIDUAL` and `approximate: false`
+are omitted on output and defaulted on input, so a short step stays short
+and a step typed by hand counts as exact — the author's assertion, the same
+standing a generated file's step has. `r` uses the existing 3×3 literal;
+an all-integer matrix lexes as `IMat3` and coerces to `Mat3` through the
+existing rule. `get_text_properties` must stay total (an empty `authored`
+is `[]`), the rule learned on the replayer. The round-trip corpus test
+(`project_text_format_roundtrip`) gains a fixture with an editor node.
 
 ### Reference guide
 
 - `doc/reference_guide/nodes/atomic.md`: a new `## mechanosynth_edit`
-  section (pins, the placement tool, candidates, the steps list, the text
-  format), new `## ops_library`, `## build_script`, `## export_build_script`
+  section (pins, the placement tool and its "click the atom the operation
+  acts on" rule, candidates, the steps list, the text format), new `## ops_library`, `## build_script`, `## export_build_script`
   sections, and the `## mechanosynth` section updated for the `ops`/`steps`
   pins, the deprecated file properties and Convert to nodes.
 - `doc/reference_guide/nodes/math_programming.md`: the `BuildStep` record
@@ -565,87 +643,349 @@ with an editor node.
   library file. Needs the op ⇄ diff lowering described in the 2026-09-11
   assessment.
 
-## Tests
+## Testing
 
 Conventions as in the crate `AGENTS.md` files: tests in the owning crate's
-`tests/` directory, fixtures under `rust/tests/fixtures/mechanosynth/`,
-synthetic and small.
+`tests/` directory, never inline; fixtures under
+`rust/tests/fixtures/mechanosynth/`, synthetic and small; test names are
+sentences (`the_result_pin_carries_the_workpiece_at_every_step`). The
+per-phase tests are listed under each phase below; this section names what
+they share.
 
-- **Schema/engine** (`crystolecule/tests/crystolecule/mechanosynth_test.rs`):
-  `touched` derived from effect — a kept atom with no change and no bond
-  change is not touched, a kept atom with an added, deleted or re-ordered
-  bond is, an element set to its current value is not a change; the two
-  existing kept-atom assertions rewritten; `chiral` parsed and ignored by
-  replay; the default tolerance is 0.05 — the engine tests that rely on the
-  old default through fixtures without a `tolerance` key (only
-  `valid_ops.json`/`valid_build.json` state one) are checked one by one
-  and either keep passing at 0.05 or state 0.3 in the fixture where the
-  test is about slack, never by loosening the default; origin-convention warning; a file with the new keys
-  loads on the old code path unchanged.
-- **Placement** (`crystolecule/tests/crystolecule/mechanosynth_place_test.rs`,
-  new fixture `place_ops.json`): one-atom abstraction → one exact candidate;
-  donation with three frame atoms on a tetrahedral host → one candidate,
-  `r` recovered to 1e-9 from a host rotated by a random proper rotation;
-  the two environment variants of a donation → the wrong one rejected at
-  the 0.05 Å default and accepted-but-inexact when the library states 0.3; two-atom `dimerize` with two bare neighbours → two candidates;
-  planar three-atom op → one candidate (mirror deduped); planar four-atom
-  op with out-of-plane `after` → two candidates, one mirrored, and only one
-  with `chiral`; clicked atom in a non-origin role → same step as clicking
-  the origin atom; one-atom op without frame atoms and an off-origin `after`
-  → approximate candidates, one per free direction; no fit → empty list and
-  a `NoMatch`-style diagnostic naming the nearest atom.
-- **Round-trip exactness** (same file, fixture = the public diamond
-  library once it carries frame atoms): drive `place()` with each generated
-  step's origin atom in order on a workpiece built by the same engine,
-  choose the candidate whose `r` matches the generator's, assert every
-  residual `< 1e-4 Å`, and assert the final structure equals the
-  generator's replay atom for atom to 1e-6 Å. This is the test that makes
-  §Exactness a checked requirement rather than a claim.
-- **Nodes** (`structure-designer/tests/structure_designer/`): `ops_library`
-  and `build_script` load, relativise and reload; `mechanosynth` with wired
-  `ops`/`steps` equals the file-driven replay atom for atom; unknown op →
-  validation error naming the step; legacy properties still evaluate;
-  Convert to nodes produces the same result and is undoable;
-  `mechanosynth_edit` eval equals `mechanosynth` on `prefix ++ authored` at
-  every cursor; insert/delete/move/metadata commands and their undo restore
-  `authored` and `cursor`; text-format round trip of an editor node.
-- **API** (`rust/tests/structure_designer_api/`): the pick → candidates →
-  choose sequence inserts one step and one undo entry; cancel inserts
-  nothing.
-- **Manual walkthrough** (human): palette, click-to-place on a diamond
-  library build, a two-candidate pick with ghosts, reorder in the list,
-  arrow-key scrub, Convert to nodes on the demo project. The Flutter smoke
-  test is not run by agents.
+**Files.** Engine and schema tests extend
+`crystolecule/tests/crystolecule/mechanosynth_test.rs`; the placement engine
+gets `mechanosynth_place_test.rs` beside it. Node tests extend
+`structure-designer/tests/structure_designer/mechanosynth_test.rs` and add
+`mechanosynth_edit_test.rs` and `mechanosynth_text_format_test.rs`; API
+tests extend `rust/tests/structure_designer_api/mechanosynth_api_test.rs`
+and add `mechanosynth_edit_api_test.rs`. The existing helpers in those files
+(`methane()`, `methylate_expected(step)`, `assert_same`, `expect_error`,
+`add_value_node`) are reused, not duplicated.
 
-## Implementation phases
+**Fixtures.** `place_ops.json` — a synthetic library written for the
+placement tests: a one-atom abstraction, a donation with three `*` frame
+atoms on a tetrahedral host, the same donation in a second environment
+variant, a two-atom `dimerize`, an asymmetric two-Si op (adds to atom 1
+only), a planar three-atom op, a planar four-atom op with an out-of-plane
+`after` (once plain, once `chiral`), a one-atom donation without frame
+atoms, and an op whose atoms all sit off the origin. `place_workpiece.xyz`
+— a small tetrahedral cluster the ops fit exactly, with two bare Si
+neighbours around one site and one around another. `gold_build.json` — a
+build written by hand against `place_ops.json`/`place_workpiece.xyz` with
+known `(r, t)`, the in-repo stand-in for the generator's output.
 
-1. **P1 — values and loaders.** Matcher primitive extraction; schema
-   extensions; `OpLibrary` type and result; `BuildStep` record and `r` on
-   `MechanosynthStep`; `ops_library`, `build_script`, `export_build_script`
-   nodes; `mechanosynth` pins, legacy fallback, Convert to nodes; FRB
-   regenerated; guide sections. Baseline: the demo projects replay
-   unchanged before and after conversion.
-2. **P2 — placement engine.** `place.rs` and its tests, including the
-   round-trip exactness test. No UI.
-3. **P3 — the editor node.** Node, data, eval with the shared helper and
-   prefix snapshot, undo commands, API, text format, round-trip fixture.
-4. **P4 — panel and tool.** Scrubber and chapter list extracted from
-   `mechanosynth_editor.dart` into a shared widget; palette, prompt,
-   candidate list, ghosts, steps list, chips; the placement tool wired into
-   viewport picking.
-5. **P5 — guide and walkthrough.** Remaining guide pages, screenshots slot,
-   the manual checklist.
+**Shared assertions.**
+
+- *Every candidate replays.* For any candidate `place()` returns,
+  `apply_step` with the candidate's step and the library tolerance succeeds
+  on the same workpiece, and the atoms it touches are exactly the workpiece
+  atoms in `candidate.roles`. This is the contract between the two halves of
+  the engine and every placement test asserts it on every candidate it
+  looks at.
+- *Same result, both nodes.* A `mechanosynth_edit` at cursor `k` equals a
+  `mechanosynth` fed `prefix ++ authored[..k]` on a wire, atom for atom to
+  1e-6 Å with the same tags. Every editor eval test is stated as an
+  equality against the replayer, never against hand-written coordinates.
+- *Undo restores the tuple.* For every editor command, undo restores
+  `(authored, cursor)` to the pre-command value and redo re-applies it,
+  compared structurally. One helper, used by every command test.
+
+**Cross-cutting regressions,** run at the end of every phase:
+
+- Every `.cnnd` under `rust/tests/fixtures/` that carries a `mechanosynth`
+  node evaluates to the same atoms before and after the phase, through the
+  `node_snapshots` suite. **No such file exists today** — the demo projects
+  live outside the repository, in the maintainer's `mechanosynth/` folder —
+  so Phase 1 starts by adding one (`mechanosynth_legacy.cnnd`, a
+  `mechanosynth` with `ops_file`/`build_file` pointing at
+  `methylate_ops.json`/`methylate_build.json`) and snapshotting it before
+  any other change. The demo projects are the human's regression, checked
+  at the end of P1 and P5.
+- The text-format round-trip corpus (`text_format_roundtrip_corpus_test.rs`)
+  stays a no-op on every file, with the new fixtures added as they appear.
+- The manual walkthrough at the end of P4 and P5 is the human's; agents run
+  the Rust suite and `flutter analyze` and list the walkthrough as pending.
+
+## Phases
+
+### Phase 1 — Values and loaders — **DONE**
+
+Two deviations from the plan below, both recorded where they bite:
+
+- **Unknown op is an evaluation error, not a validation error.** The steps are a
+  runtime array on a wire; the validator sees stored node data, so there is
+  nothing for a rule to inspect. `replay` calls `validate_script_ops` before
+  applying anything, so the message still names the step index and the operation
+  and the replay still does not run — it just arrives on the pin rather than as
+  a badge.
+- **`ops_library` and `build_script` each gained a Reload button**, not only
+  `ops_library`. The staleness is identical and the affordance is two lines.
+
+Matcher primitive extraction; schema extensions (`chiral`, effect-derived
+`touched`, origin-convention warning, `DEFAULT_TOLERANCE` 0.05); the
+`OpLibrary` type and result; the `BuildStep` record and `r` on
+`MechanosynthStep`; the `BuildStep` ⇄ `Step` conversion; `ops_library`,
+`build_script` and `export_build_script` nodes; `mechanosynth` pins, legacy
+fallback and Convert to nodes; FRB regenerated; the first guide sections.
+First commit of the phase: the `mechanosynth_legacy.cnnd` fixture and its
+snapshot (§Testing), so the legacy path has a regression before it is
+touched. Baseline at the end: that snapshot unchanged, and the demo projects
+(human) replay unchanged before and after Convert to nodes.
+
+*Tests — matcher primitive:* nearest unclaimed atom within tolerance is
+returned; an already-claimed atom is skipped in favour of the next nearest;
+the element filter rejects a nearer atom of the wrong element; two atoms at
+equal distance resolve by lower id, so results are deterministic; nothing
+within tolerance → `None` with the nearest distance available for the
+diagnostic. The three existing callers are covered by the existing suite,
+which must pass unchanged after the extraction — no test is edited in this
+step.
+
+*Tests — schema and engine:* `touched` derived from effect — a kept atom
+with no change and no bond change is not touched; a kept atom with an
+added, deleted or re-ordered bond is; a kept atom whose bonded partner was
+deleted is; an element set to its current value is not a change, an element
+set to a different one is; the two existing kept-atom assertions rewritten
+to name the clause that makes them true. Frame atoms are recognised from
+the two patterns alone (kept, same position, same element, no bond change)
+and a kept atom with a bond change is not a frame atom. `chiral` parses,
+defaults to false, and replay ignores it. The default tolerance is 0.05:
+every engine test that relied on the old default through a fixture without
+a `tolerance` key (only `valid_ops.json`/`valid_build.json` state one) is
+checked one by one and either keeps passing at 0.05 or states 0.3 in the
+fixture where the test is about slack, never by loosening the default. The
+build file's `tolerance` no longer overrides the library's — a build stating
+`0.3` against a library stating `0.05` replays at `0.05`. Origin convention:
+a library whose `before` atom 1 is off the origin loads with a warning
+naming the op, and a library with no atom 1 at all loads with a warning,
+not an error. A file with every new key loads and replays identically on
+the old code path (the key set is additive).
+
+*Tests — types and records:* `OpLibrary` is a distinct `DataType`: an
+`ops_library` output wires to an `OpLibrary` pin and is rejected by a
+`HasAtoms` pin and by `expr`; `record_destructure` on a `BuildStep` yields
+the eight fields with the documented defaults for a step parsed from JSON
+that states only `op` and `t`; `BuildStep → Step → BuildStep` is the
+identity, including an identity `r`; `MechanosynthStep.r` equals the
+replayed step's rotation and is the identity when the file has none (the
+existing `step` pin tests gain the assertion rather than a new test).
+
+*Tests — loader nodes:* `ops_library` and `build_script` load a fixture,
+store the path relative to the project on save, and re-parse on load (the
+`import_cif` pattern's tests, applied to both); the `file` pin overrides the
+property and is not cached into it (the existing "wired file names override
+the stored ones without being cached" test, ported); a parse failure is an
+evaluation error naming the file and the location; a missing file is an
+error naming the file; `build_script` passes an unknown op through
+unchanged and the consumer reports it. `export_build_script`: the JSON it
+writes re-parses with `parse_build_script` to the same steps; an identity
+`r` is omitted and a non-identity one written; empty `note`/`method`/`phase`
+and `-1` `layer`/`site` are omitted; `format` is set; an evaluation with
+`execute == false` writes nothing and an execute run writes once (the
+`execute_node_test.rs` pattern).
+
+*Tests — `mechanosynth` with wires:* wired `ops`/`steps` equals the
+file-driven replay atom for atom, tags included, at every step; an unknown
+op in the array is a validation error naming the step index and op, and
+the replay does not run; `steps` unwired with no `build_file` emits the
+base and no error; a wired pin wins over the legacy property and the panel
+info reports the wired source; every existing `.cnnd` with `ops_file`/
+`build_file` loads and evaluates identically (the existing tests are the
+regression). Convert to nodes: creates one `ops_library` and one
+`build_script`, wires them, clears both properties, and the result is
+atom-identical before and after; with only one property set it creates one
+node; undo restores the properties and removes the nodes, redo re-applies;
+the command is a single undo entry.
+
+*Tests — text format and snapshots:* `ops_library`, `build_script` and
+`export_build_script` statements round-trip through `query` → `--replace`;
+a `mechanosynth` with legacy properties still round-trips; the node
+registry snapshot gains the three node types; a fixture `.cnnd` with the
+wired form joins the `node_snapshots` set.
+
+### Phase 2 — Placement engine
+
+`place.rs` and its tests. No UI, no node.
+
+*Tests — role rule:* clicking the H of an abstraction (origin atom is C, so
+H admits only role 2) yields the same step as clicking the C; on the
+asymmetric two-Si op, clicking the partner makes the clicked atom the
+origin role, so the added atom lands on the clicked atom and not on its
+neighbour; a Si click on the donation with `*` frame roles is always role
+1; the op with no atom at the origin falls to the smallest eligible id; a
+fit that fails in the assigned role is `Err(NoPlacement)` naming the role
+rather than a retry in another role; `candidate.role` is the same on every
+candidate of one call.
+
+*Tests — fit:* one-atom abstraction → one exact candidate with `r =
+identity`, `t =` the clicked position; donation with three frame atoms on a
+tetrahedral host → one candidate, `r` recovered to 1e-9 from a host rotated
+by a random proper rotation and translated, `mirrored = false`; the same
+under a random improper transform → one candidate, `mirrored = true`,
+dropped when the op is `chiral`; the two environment variants of the
+donation → the wrong one rejected at the 0.05 Å default and
+accepted-but-inexact (residual reported, `exact = false`) when the library
+states 0.3; the gate is the **max** per-atom residual, not the RMS — a fit
+with one atom off by 1.5·tolerance and the rest exact is rejected; two-atom
+`dimerize` with two bare neighbours → two candidates, two different after
+states; with one bare neighbour → one; planar three-atom op → one candidate
+(the mirror fit yields the same after state and is deduped); planar
+four-atom op with out-of-plane `after` → two candidates, one mirrored, one
+with `chiral`.
+
+*Tests — search bounds:* a partner at `extent + tolerance − ε` is found and
+one at `extent + tolerance + ε` is not; no two roles are assigned the same
+workpiece atom; `place_with_stats`, a test-facing variant that also
+returns the number of partial assignments visited, stays under a fixed
+bound on the largest fixture op against a 200-atom neighbourhood, so a
+pruning regression shows up as a number, not a slow test.
+
+*Tests — fallback:* the one-atom donation without frame atoms and an
+off-origin `after` → one candidate per free direction, each `approximate`,
+each `r` proper with `+z` along the direction; the same op with frame atoms
+added produces no approximate candidate; a one-atom op whose `after` adds
+nothing off the origin produces no fallback (nothing to orient).
+
+*Tests — dedupe and rank:* two transforms that produce the same after state
+collapse to one candidate and the survivor is the proper one; candidates
+sort by residual, then proper before mirrored, then exact before
+approximate; the order is stable across two calls on the same input.
+
+*Tests — diagnostics:* `Ok` never holds an empty list; no fit →
+`Err(NoPlacement)` naming the op, the role, and the nearest atom of the
+missing element with its distance (the "nearest bare Si at 4.59 Å" message
+in §Placement tool is built from this); an op not in the library →
+`Err(UnknownOp)`; an inadmissible element → `Err(NoRole)` listing the
+accepted elements.
+
+*Tests — every candidate replays:* the shared assertion, run over every op
+in `place_ops.json` against `place_workpiece.xyz` at every atom that admits
+a click.
+
+*Tests — round-trip exactness, in-repo:* drive `place()` with each step of
+`gold_build.json` in order on a workpiece built by the same engine, choose
+the candidate whose `r` matches the gold `r`, assert every residual
+`< 1e-4 Å`, and assert the final structure equals the gold replay atom for
+atom to 1e-6 Å. This is the test that makes §Exactness a checked
+requirement, and it does not wait on the generator.
+
+*Tests — round-trip exactness, real library:* the same test against a copy
+of the public diamond library and one of its generated builds, checked into
+`rust/tests/fixtures/mechanosynth/` once the generator emits frame atoms
+and `tolerance: 0.05`. Those files live outside the repository today, so
+this test is not written in Phase 2; adding the fixtures and the test is the
+first task of the generator work, and its passing is that work's acceptance
+check.
+
+### Phase 3 — The editor node
+
+Node, data, eval with the shared helper and prefix snapshot, undo commands,
+API, text format, round-trip fixture.
+
+*Tests — eval:* the shared assertion *same result, both nodes* at cursor
+`0`, `1`, `authored.len()` and `-1`, with and without a wired prefix; a
+cursor beyond the authored length clamps as the replayer's slider does; the
+`steps` output is `prefix ++ authored` whatever the cursor; `result` keeps
+the input's variant (`Molecule` in, `Molecule` out; the existing replayer
+test, ported); `ms_current` marks exactly the cursor step's touched atoms,
+nothing at cursor `0`, and no `ms_added`/`ms_layer`; an authored step whose
+`before` no longer matches (a step reordered ahead of its prerequisite) is
+an evaluation error naming the step index and the engine's message, and
+the transient last-error field carries it; an unknown op in the authored
+block is a validation error naming the step.
+
+*Tests — prefix snapshot:* changing the `base` upstream (a new `env_epoch`)
+changes `result` on the next eval — the snapshot is never stale; changing
+the `steps` prefix likewise; a cursor move or an authored insert does not
+replay the prefix, asserted through the eval profiler's per-node counters
+on the upstream `build_script` node (one eval of the prefix across ten
+cursor moves); the snapshot is `#[serde(skip)]` and a saved file carries
+none of it.
+
+*Tests — commands:* `InsertStepCommand`, `DeleteStepCommand`,
+`MoveStepCommand`, `SetStepMetadataCommand` each pass the shared *undo
+restores the tuple* assertion; insert after the cursor moves the cursor to
+the new step and undo restores the old cursor; delete of the cursor step
+moves the cursor to the previous step; move preserves the step's own
+residual and `approximate` flag; consecutive metadata edits to the same
+step and field coalesce into one undo entry while edits to a different
+field do not; cursor changes are **not** undo entries (setting the cursor
+ten times adds nothing to the stack); every API mutator except the cursor
+setter adds exactly one undo entry (the `feedback_persisted_mutations_must_be_undoable`
+rule, checked mechanically).
+
+*Tests — placement API:* the arm → pick → choose sequence inserts one step
+and one undo entry; pick with a single candidate commits immediately and
+reports so; cancel inserts nothing and returns to Idle; pick while Idle is
+an error; arm with an op not in the wired library is an error naming the
+op; choose with an out-of-range index is an error and inserts nothing; pick
+on an atom id not present in `result` is an error; after a commit the tool
+is Armed with the same op; the inserted step copies `method`/`phase`/
+`layer`/`site` from the previous authored step, or from the last prefix
+step when the block is empty, and `note` from neither; the candidate list
+returned by pick carries residual, mirrored, approximate and the ghost
+atoms (positions, elements, added/deleted/moved kinds) for each candidate,
+and an approximate candidate's inserted step is flagged `approximate` in
+the stored block.
+
+*Tests — persistence and copy:* `authored` with residuals and flags
+round-trips through `.cnnd` and evaluates identically after reload;
+copy/paste and duplicate-network carry the authored block and cursor and
+none of the transient state; a body-scoped editor (inside a `map`) is
+reachable by `scope_path` and a colliding root id is not confused (the
+existing replayer API test, ported).
+
+*Tests — text format:* an editor node round-trips through `query` →
+`--replace` with byte-identical output; identity `r`, empty/`-1`
+metadata, an exact residual and `approximate: false` are omitted on output
+and defaulted on input, while an inexact residual and `approximate: true`
+survive the round trip; `authored: []`
+round-trips (the totality rule on `get_text_properties`); a text edit that
+sets `authored` validates, refreshes, marks dirty and is one undo entry; a
+step literal with an unknown field is a parse error naming the field; the
+corpus test gains a fixture with an editor node and a wired prefix.
+
+### Phase 4 — Panel and tool
+
+Scrubber and chapter list extracted from `mechanosynth_editor.dart` into a
+shared widget; palette, prompt, candidate list, ghosts, steps list, chips;
+the placement tool wired into viewport picking.
+
+*Tests:* a widget test for the extracted scrubber — it builds from the
+replayer's info and from the editor's, reports cursor changes through the
+callback, and the chapter list jumps; `flutter analyze` clean of new
+warnings. Nothing else automated: the panel is thin editor UI and the rule
+from `feedback_manual_test_for_editor_ui` applies. The **manual
+walkthrough** (human) is: palette filter and type-to-select; click-to-place
+on a diamond library build with an exact residual; a two-candidate pick
+with ghosts, Tab, click-a-ghost and Enter; an approximate placement and its
+chip; a failed pick and its message naming the role; reorder, delete and
+duplicate in the list with undo after each; chip edits; arrow-key scrub and
+its non-undoability; Convert to nodes on the demo project (outside the
+repository). The Flutter smoke test is not run by agents.
+
+### Phase 5 — Guide and walkthrough
+
+Remaining guide pages, screenshot slot, the manual checklist.
+
+*Tests:* none automated beyond the cross-cutting regressions; the guide's
+text-format examples are pasted through `edit` once by the human to confirm
+they parse.
 
 Outside the repository, a prerequisite for one-click donations on the real
 libraries: the generator emits frame atoms and environment variants for
-its donation and dimerization ops, and writes `tolerance: 0.05`. The diamond output
-stays the regression reference for everything else.
+its donation and dimerization ops, and writes `tolerance: 0.05`. The
+diamond output stays the regression reference for everything else, and the
+real-library exactness test (P2) is the acceptance check for that work.
 
 ## Considered and rejected
 
 - Global op registry, `BuildScript` product type, ops in steps, ops on the
   workpiece — see §Decisions.
 - Editing inside `mechanosynth`; an edit list over the wired prefix — see
+  §Decisions.
+- Role candidates in the UI when the clicked atom fits several `before`
+  atoms, and falling through to another role on a failed fit — see
   §Decisions.
 - A `frame: true` flag on pattern atoms, to keep frame atoms out of
   `ms_current` and the pick prompt. Redundant: whether a step changed an

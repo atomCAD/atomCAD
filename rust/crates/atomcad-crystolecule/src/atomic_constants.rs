@@ -54,6 +54,18 @@ lazy_static! {
     };
 }
 
+/// The element symbol for a readout, falling back to `Z=<n>` for the
+/// non-physical atomic numbers (parameter elements, the debug colours above).
+///
+/// Every user-facing message that names an element goes through this, so a
+/// parameter element reads the same way wherever it surfaces.
+pub fn element_symbol(atomic_number: i16) -> String {
+    ATOM_INFO
+        .get(&(atomic_number as i32))
+        .map(|info| info.symbol.clone())
+        .unwrap_or_else(|| format!("Z={atomic_number}"))
+}
+
 /// Creates a new AtomInfo with all the necessary information
 pub fn create_atom_info(
     atomic_number: i32,

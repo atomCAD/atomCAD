@@ -176,31 +176,33 @@ fn valid_script_lands_where_the_schema_says() {
 }
 
 #[test]
-fn script_tolerance_overrides_library_tolerance() {
+fn a_build_files_tolerance_no_longer_overrides_the_librarys() {
+    // `valid_build.json` states 0.15 and `valid_ops.json` states 0.25. A step
+    // array on a wire has no header to carry a second tolerance, so the
+    // library's is the one value per replay; the build's is still parsed so
+    // that a file stating it keeps loading.
     let lib = library("valid_ops.json");
     let build = script("valid_build.json");
-    assert_eq!(resolve_tolerance(&lib, &build), 0.15);
+    assert_eq!(build.tolerance, Some(0.15));
+    assert_eq!(resolve_tolerance(&lib), 0.25);
 }
 
 #[test]
-fn absent_tolerances_fall_back_to_the_default() {
+fn an_absent_library_tolerance_falls_back_to_the_tight_default() {
     let lib = library("methylate_ops.json");
-    let build = script("methylate_build.json");
     assert_eq!(lib.tolerance, None);
-    assert_eq!(build.tolerance, None);
-    assert_eq!(resolve_tolerance(&lib, &build), DEFAULT_TOLERANCE);
-    assert_eq!(DEFAULT_TOLERANCE, 0.3);
+    assert_eq!(resolve_tolerance(&lib), DEFAULT_TOLERANCE);
+    assert_eq!(
+        DEFAULT_TOLERANCE, 0.05,
+        "the gate is an order of magnitude below the smallest environment \
+         difference known (0.12 Angstrom); see design_mechanosynth_editor.md"
+    );
 }
 
 #[test]
-fn library_tolerance_applies_when_the_script_states_none() {
+fn the_library_tolerance_is_used_when_it_states_one() {
     let lib = library("valid_ops.json");
-    let build = parse_build_script(
-        r#"{ "format": "atomcad-msbuild/1", "steps": [] }"#,
-        "build.json",
-    )
-    .expect("parses");
-    assert_eq!(resolve_tolerance(&lib, &build), 0.25);
+    assert_eq!(resolve_tolerance(&lib), 0.25);
 }
 
 /// Every validation error names the file, the operation (or step) and the
@@ -482,7 +484,10 @@ fn a_deletions_touched_list_is_its_surviving_neighbours_each_once() {
     sorted.sort_unstable();
     sorted.dedup();
     assert_eq!(sorted.len(), touched.len(), "no id is reported twice");
-    assert!(touched.contains(&c), "the kept atom is touched");
+    assert!(
+        touched.contains(&c),
+        "the kept atom is touched because the step moved it"
+    );
     assert!(
         touched.contains(&outsider),
         "the deleted atom's neighbour is touched"
@@ -511,7 +516,8 @@ fn an_added_atom_arrives_bonded() {
     let added = atom_at(&s, DVec3::new(0.0, 0.0, 1.09));
     assert_eq!(s.get_atom(added).unwrap().atomic_number, H);
     assert_eq!(bond_order(&s, host, added), Some(1));
-    // The step touched both the kept host and the new hydrogen.
+    // The new hydrogen was added; the host is touched because the step gave it
+    // a bond, not because it appears in both patterns.
     assert_eq!(touched.len(), 2);
     assert!(touched.contains(&host) && touched.contains(&added));
 }
@@ -1356,4 +1362,245 @@ fn a_steps_effect_separates_what_it_created_from_what_it_touched() {
     let effect = apply_step(&mut s, op, &Step::new("nudge", DVec3::ZERO), 2, 0.3).unwrap();
     assert!(effect.added.is_empty());
     assert_eq!(effect.touched.len(), 1);
+}
+
+// ============================================================================
+// The effect-derived `touched` rule, frame atoms, `chiral`
+// (doc/design_mechanosynth_editor.md, Phase 1)
+// ============================================================================
+
+/// A tetrahedral host at `centre` with its three lower neighbours — the
+/// environment `donate` and `inert` are written against.
+fn tetrahedral_host(centre: DVec3, host_element: i16) -> AtomicStructure {
+    let mut s = AtomicStructure::new();
+    let host = s.add_atom(host_element, centre);
+    for offset in [
+        DVec3::new(1.027662, 0.0, -0.363333),
+        DVec3::new(-0.513831, 0.889981, -0.363333),
+        DVec3::new(-0.513831, -0.889981, -0.363333),
+    ] {
+        let neighbour = s.add_atom(H, centre + offset);
+        s.add_bond(host, neighbour, 1);
+    }
+    s
+}
+
+#[test]
+fn a_kept_atom_that_nothing_happened_to_is_not_touched() {
+    // The whole point of deriving `touched` from effect: pattern membership is
+    // not enough, or a donation's frame atoms would light up on every step.
+    let lib = library("effect_ops.json");
+    let mut s = AtomicStructure::new();
+    s.add_atom(C, DVec3::ZERO);
+
+    let touched = apply_named(&mut s, &lib, "inert", DVec3::ZERO, 0.3);
+    assert!(touched.is_empty());
+}
+
+#[test]
+fn a_donations_frame_atoms_are_not_touched_but_its_host_is() {
+    let lib = library("effect_ops.json");
+    let mut s = tetrahedral_host(DVec3::ZERO, SI);
+    let host = atom_at(&s, DVec3::ZERO);
+
+    let touched = apply_named(&mut s, &lib, "donate", DVec3::ZERO, 0.3);
+
+    let added = atom_at(&s, DVec3::new(0.0, 0.0, 1.09));
+    assert!(
+        touched.contains(&host),
+        "the host gained a bond, so the bond clause touches it"
+    );
+    assert!(touched.contains(&added), "an added atom is always touched");
+    assert_eq!(
+        touched.len(),
+        2,
+        "the three frame atoms are kept unchanged and drop out by construction"
+    );
+}
+
+#[test]
+fn a_kept_atom_with_a_bond_order_change_is_touched() {
+    let lib = library("effect_ops.json");
+    let mut s = AtomicStructure::new();
+    let a = s.add_atom(C, DVec3::ZERO);
+    let b = s.add_atom(C, DVec3::new(0.0, 0.0, 1.54));
+    s.add_bond(a, b, 1);
+
+    // Neither atom moves and neither changes element; only the order does.
+    let touched = apply_named(&mut s, &lib, "reorder_bond", DVec3::ZERO, 0.3);
+    assert_eq!(bond_order(&s, a, b), Some(2));
+    assert_eq!(touched.len(), 2);
+    assert!(touched.contains(&a) && touched.contains(&b));
+}
+
+#[test]
+fn a_bond_rule_that_changes_nothing_touches_nobody() {
+    let lib = library("id_rules_ops.json");
+
+    // `bond_delete`'s `before` claims a bond the workpiece does not have, so
+    // the deletion is a no-op — and a no-op is not a change.
+    let mut s = AtomicStructure::new();
+    s.add_atom(C, DVec3::ZERO);
+    s.add_atom(C, DVec3::new(0.0, 0.0, 1.54));
+    assert!(apply_named(&mut s, &lib, "bond_delete", DVec3::ZERO, 0.3).is_empty());
+
+    // A bond present in both patterns at the same order is not even a rule.
+    let mut s = AtomicStructure::new();
+    let a = s.add_atom(C, DVec3::ZERO);
+    let b = s.add_atom(C, DVec3::new(0.0, 0.0, 1.54));
+    s.add_bond(a, b, 2);
+    assert!(apply_named(&mut s, &lib, "bond_unchanged", DVec3::ZERO, 0.3).is_empty());
+}
+
+#[test]
+fn a_kept_atom_whose_bonded_partner_was_deleted_is_touched() {
+    let lib = library("id_rules_ops.json");
+    let mut s = AtomicStructure::new();
+    let doomed = s.add_atom(C, DVec3::ZERO);
+    let neighbour = s.add_atom(C, DVec3::new(0.0, 0.0, 1.54));
+    s.add_bond(doomed, neighbour, 1);
+
+    let touched = apply_named(&mut s, &lib, "delete", DVec3::ZERO, 0.3);
+    assert_eq!(touched, vec![neighbour]);
+}
+
+#[test]
+fn setting_an_element_to_the_one_the_atom_already_has_is_not_a_change() {
+    let lib = library("effect_ops.json");
+
+    // `recolor` writes carbon and moves nothing.
+    let mut s = AtomicStructure::new();
+    s.add_atom(C, DVec3::ZERO);
+    assert!(
+        apply_named(&mut s, &lib, "recolor", DVec3::ZERO, 0.3).is_empty(),
+        "the comparison is against the workpiece, not against the before slot"
+    );
+
+    // The same op on a silicon does change it.
+    let mut s = AtomicStructure::new();
+    let atom = s.add_atom(SI, DVec3::ZERO);
+    assert_eq!(
+        apply_named(&mut s, &lib, "recolor", DVec3::ZERO, 0.3),
+        vec![atom]
+    );
+    assert_eq!(element_at(&s, DVec3::ZERO), C);
+}
+
+#[test]
+fn frame_atoms_are_recognisable_from_the_two_patterns_alone() {
+    let lib = library("effect_ops.json");
+
+    let donate = lib.get("donate").expect("op in fixture");
+    for frame_id in [2, 3, 4] {
+        assert!(
+            donate.is_frame_atom(frame_id),
+            "id {frame_id} is kept, unmoved, same element, no bond change"
+        );
+    }
+    assert!(
+        !donate.is_frame_atom(1),
+        "the host gains a bond, so it is not a frame atom"
+    );
+    assert!(
+        !donate.is_frame_atom(5),
+        "an added atom is in no sense a frame atom"
+    );
+
+    // A kept atom whose only difference is a bond order is not a frame atom.
+    let reorder = lib.get("reorder_bond").expect("op in fixture");
+    assert!(!reorder.is_frame_atom(1) && !reorder.is_frame_atom(2));
+
+    // A deleted atom is not kept, so it is not a frame atom either.
+    let strip = library("metadata_ops.json");
+    assert!(!strip.get("strip").expect("op in fixture").is_frame_atom(1));
+}
+
+#[test]
+fn chiral_parses_defaults_to_false_and_the_replay_ignores_it() {
+    let lib = library("effect_ops.json");
+    assert!(lib.get("handed").expect("op in fixture").chiral);
+    assert!(!lib.get("donate").expect("op in fixture").chiral);
+
+    // Replay is unaffected: a build file states the rotation it wants, and a
+    // mirrored one is as applicable to a chiral op as to any other.
+    let mut s = AtomicStructure::new();
+    s.add_atom(C, DVec3::ZERO);
+    let op = lib.get("handed").expect("op in fixture");
+    let mirror = DMat3::from_cols(
+        DVec3::new(-1.0, 0.0, 0.0),
+        DVec3::new(0.0, 1.0, 0.0),
+        DVec3::new(0.0, 0.0, 1.0),
+    );
+    let step = Step {
+        r: mirror,
+        ..Step::new("handed", DVec3::ZERO)
+    };
+    apply_step(&mut s, op, &step, 1, 0.3).expect("a chiral op replays like any other");
+    assert!(has_atom_at(&s, DVec3::new(0.0, 0.0, 1.43)));
+}
+
+#[test]
+fn every_new_key_is_additive_so_an_old_build_still_reads_the_file() {
+    // `chiral` is the only key this phase adds, and the parser has always
+    // ignored what it does not know. So the same file parses to the same
+    // operations with the key removed — which is what "loads on an old build"
+    // means in practice.
+    let with_key = parse_library(
+        r#"{ "format": "atomcad-msops/1", "ops": [ {
+            "name": "handed", "chiral": true,
+            "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0, 0, 0] } ] },
+            "after":  { "atoms": [ { "id": 1, "el": "N", "pos": [0, 0, 0] } ] }
+        } ] }"#,
+        "ops.json",
+    )
+    .expect("parses");
+    let without_key = parse_library(
+        r#"{ "format": "atomcad-msops/1", "ops": [ {
+            "name": "handed",
+            "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0, 0, 0] } ] },
+            "after":  { "atoms": [ { "id": 1, "el": "N", "pos": [0, 0, 0] } ] }
+        } ] }"#,
+        "ops.json",
+    )
+    .expect("parses");
+    let handed = with_key.get("handed").expect("op");
+    let plain = without_key.get("handed").expect("op");
+    assert!(handed.chiral && !plain.chiral);
+    assert_eq!(handed.before, plain.before);
+    assert_eq!(handed.after, plain.after);
+}
+
+#[test]
+fn the_origin_convention_is_a_warning_never_an_error() {
+    let lib = library("off_origin_ops.json");
+
+    assert_eq!(lib.warnings.len(), 2, "one per offending op, and no more");
+    let displaced = lib
+        .warnings
+        .iter()
+        .find(|w| w.contains("'displaced'"))
+        .expect("the off-origin op is named");
+    assert!(displaced.contains("not at the origin"));
+    assert!(displaced.contains("1.500"), "the position is reported");
+
+    let missing = lib
+        .warnings
+        .iter()
+        .find(|w| w.contains("'no_atom_one'"))
+        .expect("the op with no atom 1 is named");
+    assert!(missing.contains("no atom id 1"));
+
+    assert!(
+        !lib.warnings.iter().any(|w| w.contains("'conventional'")),
+        "an op that follows the convention contributes nothing"
+    );
+
+    // And the library still works: a warning is advisory.
+    let mut s = AtomicStructure::new();
+    s.add_atom(C, DVec3::new(1.5, 0.0, 0.0));
+    apply_named(&mut s, &lib, "displaced", DVec3::ZERO, 0.3);
+    assert_eq!(element_at(&s, DVec3::new(1.5, 0.0, 0.0)), N);
+
+    // A conventional library carries none at all.
+    assert!(library("methylate_ops.json").warnings.is_empty());
 }

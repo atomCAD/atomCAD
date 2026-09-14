@@ -1,0 +1,24 @@
+{
+  "comment": "Both ways of breaking the origin convention, in one file. Loads with warnings, never an error: a foreign library that does not follow the convention still replays and still places.",
+  "format": "atomcad-msops/1",
+  "ops": [
+    {
+      "name": "displaced",
+      "comment": "Has a before atom id 1, but it does not sit at the origin.",
+      "before": { "atoms": [ { "id": 1, "el": "C", "pos": [1.5, 0.0, 0.0] } ], "bonds": [] },
+      "after":  { "atoms": [ { "id": 1, "el": "N", "pos": [1.5, 0.0, 0.0] } ], "bonds": [] }
+    },
+    {
+      "name": "no_atom_one",
+      "comment": "Numbers its before atoms from 2, so nothing names the atom to click.",
+      "before": { "atoms": [ { "id": 2, "el": "C", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
+      "after":  { "atoms": [ { "id": 2, "el": "N", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] }
+    },
+    {
+      "name": "conventional",
+      "comment": "Follows the convention, so it contributes no warning.",
+      "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
+      "after":  { "atoms": [ { "id": 1, "el": "N", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] }
+    }
+  ]
+}

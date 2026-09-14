@@ -1,0 +1,73 @@
+{
+  "comment": "Library for the effect-derived `touched` rule, frame-atom recognition, `chiral` and the origin convention. Every op here exists to make one clause of those rules observable on its own.",
+  "format": "atomcad-msops/1",
+  "tolerance": 0.3,
+  "ops": [
+    {
+      "name": "donate",
+      "comment": "A donation with frame atoms: the host at the origin plus its three bonded neighbours, all kept exactly as they are so they fix the orientation and nothing else. Only the host and the new hydrogen may be touched.",
+      "before": {
+        "atoms": [
+          { "id": 1, "el": "*", "pos": [0.0, 0.0, 0.0] },
+          { "id": 2, "el": "*", "pos": [1.027662, 0.0, -0.363333] },
+          { "id": 3, "el": "*", "pos": [-0.513831, 0.889981, -0.363333] },
+          { "id": 4, "el": "*", "pos": [-0.513831, -0.889981, -0.363333] }
+        ],
+        "bonds": [ [1, 2], [1, 3], [1, 4] ]
+      },
+      "after": {
+        "atoms": [
+          { "id": 1, "el": "*", "pos": [0.0, 0.0, 0.0] },
+          { "id": 2, "el": "*", "pos": [1.027662, 0.0, -0.363333] },
+          { "id": 3, "el": "*", "pos": [-0.513831, 0.889981, -0.363333] },
+          { "id": 4, "el": "*", "pos": [-0.513831, -0.889981, -0.363333] },
+          { "id": 5, "el": "H", "pos": [0.0, 0.0, 1.09] }
+        ],
+        "bonds": [ [1, 2], [1, 3], [1, 4], [1, 5] ]
+      }
+    },
+    {
+      "name": "recolor",
+      "comment": "Sets the element without moving anything. On an atom that already carries it this changes nothing, which is the point: the comparison is against the workpiece, not against the before pattern's slot.",
+      "before": { "atoms": [ { "id": 1, "el": "*", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
+      "after":  { "atoms": [ { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] }
+    },
+    {
+      "name": "reorder_bond",
+      "comment": "Keeps both atoms exactly where they are and only changes the bond order, so the bond clause is the only reason either can be touched.",
+      "before": {
+        "atoms": [
+          { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] },
+          { "id": 2, "el": "C", "pos": [0.0, 0.0, 1.54] }
+        ],
+        "bonds": [ [1, 2, 1] ]
+      },
+      "after": {
+        "atoms": [
+          { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] },
+          { "id": 2, "el": "C", "pos": [0.0, 0.0, 1.54] }
+        ],
+        "bonds": [ [1, 2, 2] ]
+      }
+    },
+    {
+      "name": "inert",
+      "comment": "Names an atom and does nothing to it at all. Nothing may be touched.",
+      "before": { "atoms": [ { "id": 1, "el": "*", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
+      "after":  { "atoms": [ { "id": 1, "el": "*", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] }
+    },
+    {
+      "name": "handed",
+      "comment": "The only op here that states `chiral`. The replay engine ignores it; the placement engine drops mirrored fits for it.",
+      "chiral": true,
+      "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
+      "after": {
+        "atoms": [
+          { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] },
+          { "id": 2, "el": "O", "pos": [0.0, 0.0, 1.43] }
+        ],
+        "bonds": [ [1, 2] ]
+      }
+    }
+  ]
+}

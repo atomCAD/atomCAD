@@ -17,13 +17,29 @@ pub const LIBRARY_FORMAT: &str = "atomcad-msops/1";
 /// The `format` string a build script must carry.
 pub const BUILD_FORMAT: &str = "atomcad-msbuild/1";
 
-/// Match tolerance used when neither file states one, in Ångström.
-pub const DEFAULT_TOLERANCE: f64 = 0.3;
+/// Match tolerance used when a library states none, in Ångström.
+///
+/// Tight on purpose. A generated library's patterns are congruent to the
+/// workpiece to floating-point precision (the frame atoms carry the
+/// orientation, so nothing is derived from bonds), the files round to 1e-6, and
+/// the smallest *environment* difference known — an ideal-site host against a
+/// reconstructed dimer atom — is 0.12 Å. A gate an order of magnitude below
+/// that admits the right variant and rejects the wrong one, where the old
+/// 0.3 Å admitted both and placed an atom 0.11 Å off. A hand-written library
+/// that needs slack states its own `tolerance`. See
+/// `doc/design_mechanosynth_editor.md` §Exactness.
+pub const DEFAULT_TOLERANCE: f64 = 0.05;
 
 /// Below this distance (Å) two pattern positions are "the same position", so an
 /// id present in both `before` and `after` is *kept* rather than *moved*.
 /// Patterns are machine-written, so this is a constant rather than a knob.
 pub const PATTERN_POSITION_EPSILON: f64 = 1e-6;
+
+/// By convention the `before` atom with this id sits at the origin of the
+/// operation's local frame, and is the atom the operation acts on — the one to
+/// click. Validated as a **warning** at load time, never an error: a foreign
+/// library that does not follow it still replays and still places.
+pub const ORIGIN_PATTERN_ATOM_ID: i64 = 1;
 
 /// The element slot of a pattern atom.
 ///
@@ -44,6 +60,17 @@ impl PatternElement {
         match self {
             PatternElement::Any => true,
             PatternElement::Element(z) => *z == atomic_number,
+        }
+    }
+
+    /// The element filter this slot imposes on a position match: `None` for
+    /// `"*"`, which imposes none. The shape
+    /// [`AtomicStructure::nearest_unclaimed_atom`](crate::atomic_structure::AtomicStructure::nearest_unclaimed_atom)
+    /// takes.
+    pub fn required_atomic_number(&self) -> Option<i16> {
+        match self {
+            PatternElement::Any => None,
+            PatternElement::Element(z) => Some(*z),
         }
     }
 }
@@ -106,6 +133,63 @@ pub struct Operation {
     pub name: String,
     pub before: Pattern,
     pub after: Pattern,
+    /// The reaction has a handedness: a mirrored placement is a *different*
+    /// reaction, not the same one seen from the other side. The placement
+    /// engine drops fits with `det r = −1` for such an operation.
+    ///
+    /// Defaults to false, because the existing libraries need mirrored fits —
+    /// a chemisorption landing is placed with `det −1`. The replay engine
+    /// ignores this entirely: a build file states the rotation it wants.
+    pub chiral: bool,
+}
+
+impl Operation {
+    /// Whether pattern id `id` is a **frame atom**: one the operation names
+    /// only to fix its orientation, and does not react with.
+    ///
+    /// Recognisable from the two patterns alone — kept, at the same position,
+    /// with the same element, taking part in no bond change — so no flag is
+    /// needed in the file. A one-atom `before` carries no orientation, and
+    /// Kabsch on four non-planar atoms gives the rotation exactly, which is why
+    /// a donation lists the host's bonded neighbours as `"*"` atoms that appear
+    /// unchanged in `after`.
+    ///
+    /// This is the *pattern* half of the story. Whether a step actually touched
+    /// an atom is decided by effect at apply time
+    /// ([`StepEffect::touched`](super::StepEffect::touched)), and a frame atom
+    /// fails every clause of that rule by construction — which is why there is
+    /// no "exclude the frame atoms" step anywhere.
+    pub fn is_frame_atom(&self, id: i64) -> bool {
+        let (Some(before), Some(after)) = (self.before.atom(id), self.after.atom(id)) else {
+            return false;
+        };
+        if before.pos.distance(after.pos) > PATTERN_POSITION_EPSILON {
+            return false;
+        }
+        if after.element != PatternElement::Any && after.element != before.element {
+            return false;
+        }
+        !self.has_bond_change_at(id)
+    }
+
+    /// Whether either pattern names a bond at `id` that the other does not, or
+    /// names it with a different order.
+    pub fn has_bond_change_at(&self, id: i64) -> bool {
+        let order_in = |pattern: &Pattern, key: (i64, i64)| {
+            pattern
+                .bonds
+                .iter()
+                .find(|bond| bond.key() == key)
+                .map(|bond| bond.order)
+        };
+        self.before
+            .bonds
+            .iter()
+            .map(|bond| bond.key())
+            .chain(self.after.bonds.iter().map(|bond| bond.key()))
+            .filter(|key| key.0 == id || key.1 == id)
+            .any(|key| order_in(&self.before, key) != order_in(&self.after, key))
+    }
 }
 
 /// A parsed operation library. `file` is the label errors name; it is the path
@@ -114,10 +198,20 @@ pub struct Operation {
 #[derive(Debug, Clone, PartialEq)]
 pub struct OpLibrary {
     pub file: String,
-    /// The library's default match tolerance; a build script's own `tolerance`
-    /// wins over it.
+    /// The match tolerance for every replay against this library;
+    /// [`DEFAULT_TOLERANCE`] when the file states none. One value per library,
+    /// because a step array has no header to carry a second one.
     pub tolerance: Option<f64>,
     pub ops: Vec<Operation>,
+    /// Advisory problems found at load time, each naming its operation.
+    ///
+    /// Never errors: a foreign library that does not follow the origin
+    /// convention still replays and still places, since `t` falls out of the
+    /// fit and the role rule falls back to the smallest eligible id. The
+    /// convention names the natural atom to click, which is what makes "click
+    /// the atom the operation acts on" true for every op in a library — worth
+    /// telling the author about, not worth refusing the file over.
+    pub warnings: Vec<String>,
     /// `name` → index into `ops`. Built at parse time; names are unique.
     index: FxHashMap<String, usize>,
 }
@@ -125,7 +219,12 @@ pub struct OpLibrary {
 impl OpLibrary {
     /// Builds the name index. `ops` must already have unique names (the parser
     /// checks that before calling this).
-    pub(super) fn new(file: String, tolerance: Option<f64>, ops: Vec<Operation>) -> Self {
+    pub(super) fn new(
+        file: String,
+        tolerance: Option<f64>,
+        ops: Vec<Operation>,
+        warnings: Vec<String>,
+    ) -> Self {
         let index = ops
             .iter()
             .enumerate()
@@ -135,6 +234,7 @@ impl OpLibrary {
             file,
             tolerance,
             ops,
+            warnings,
             index,
         }
     }
@@ -210,7 +310,10 @@ impl Step {
 #[derive(Debug, Clone, PartialEq)]
 pub struct BuildScript {
     pub file: String,
-    /// Match tolerance for every step; overrides the library's.
+    /// Parsed and **ignored**. A build used to be able to override the
+    /// library's tolerance; since build scripts became a network value
+    /// (`[BuildStep]`, which has no header) the library's is the one value per
+    /// replay. Still read so that a file stating it keeps loading.
     pub tolerance: Option<f64>,
     pub steps: Vec<Step>,
 }

@@ -10,19 +10,10 @@ use super::schema::{
     BuildScript, DEFAULT_TOLERANCE, MechanosynthError, NO_LAYER, OpLibrary, Operation,
     PATTERN_POSITION_EPSILON, PatternElement, Step,
 };
-use crate::atomic_constants::ATOM_INFO;
+use crate::atomic_constants::element_symbol;
 use crate::atomic_structure::{AtomicStructure, BondReference};
 use glam::DVec3;
 use rustc_hash::{FxHashMap, FxHashSet};
-
-/// The element symbol for a readout, falling back to the atomic number for the
-/// non-physical ones (parameter elements, debug colours).
-fn element_symbol(atomic_number: i16) -> String {
-    ATOM_INFO
-        .get(&(atomic_number as i32))
-        .map(|info| info.symbol.clone())
-        .unwrap_or_else(|| format!("Z={atomic_number}"))
-}
 
 fn pattern_element_symbol(element: PatternElement) -> String {
     match element {
@@ -31,13 +22,15 @@ fn pattern_element_symbol(element: PatternElement) -> String {
     }
 }
 
-/// The tolerance in force for a replay: the script's, else the library's, else
+/// The tolerance in force for a replay: the library's, else
 /// [`DEFAULT_TOLERANCE`]. There is exactly one for a whole replay.
-pub fn resolve_tolerance(library: &OpLibrary, script: &BuildScript) -> f64 {
-    script
-        .tolerance
-        .or(library.tolerance)
-        .unwrap_or(DEFAULT_TOLERANCE)
+///
+/// A build script's own `tolerance` used to win over the library's. It no
+/// longer does: a build script is an array of records on a wire now, and an
+/// array has no header to carry a second value. See
+/// `doc/design_mechanosynth_editor.md`.
+pub fn resolve_tolerance(library: &OpLibrary) -> f64 {
+    library.tolerance.unwrap_or(DEFAULT_TOLERANCE)
 }
 
 /// How many steps `step` asks for: `k` means "the first `k` steps applied",
@@ -53,12 +46,28 @@ pub fn steps_applied(step: i32, step_count: usize) -> usize {
 /// What one step did to the workpiece, in atom ids.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct StepEffect {
-    /// The atoms this step touched *and left in place*: matched atoms that were
-    /// kept, moved or replaced, the atoms it added, and the surviving atoms
-    /// that were bonded to an atom it deleted. Deleted atoms are not in the
-    /// list — they no longer exist — but their bonded neighbours stand in for
-    /// them, so a pure abstraction still points at the site it acted on. This
-    /// is what [`HighlightTags::current`] is painted on.
+    /// The atoms this step **changed** and left in place. An atom is in the
+    /// list when the step
+    ///
+    /// - added it,
+    /// - moved it,
+    /// - changed its element (compared against the workpiece's *current*
+    ///   element, not against the `before` pattern's slot),
+    /// - added, deleted or re-ordered a bond it is an endpoint of, or
+    /// - deleted an atom it was bonded to.
+    ///
+    /// Deleted atoms are not in the list — they no longer exist — but their
+    /// bonded neighbours stand in for them, so a pure abstraction still points
+    /// at the site it acted on. This is what [`HighlightTags::current`] is
+    /// painted on.
+    ///
+    /// **Derived from effect, not from pattern membership.** Listing every id
+    /// present in both patterns would light up a donation's frame atoms — the
+    /// host's bonded neighbours, named only to fix the orientation — on every
+    /// step. Those fail every clause above by construction, so they drop out
+    /// with no flag in the file and no exclusion pass here, while the reacting
+    /// atoms of every existing operation pass one. See
+    /// `doc/design_mechanosynth_editor.md`.
     pub touched: Vec<u32>,
     /// The atoms this step **created** — the ids only `after` names. A subset
     /// of `touched`, split out because "which layer built this atom" is a
@@ -79,34 +88,23 @@ pub fn apply_step(
 ) -> Result<StepEffect, MechanosynthError> {
     // --- 1. match -----------------------------------------------------------
     // Every `before` atom must match a distinct workpiece atom. With ideal
-    // coordinates a 0.3 Å tolerance is far below half a bond length, so
-    // ambiguity does not arise; if two candidates are within tolerance the
-    // nearest wins.
+    // coordinates the tolerance is far below half a bond length, so ambiguity
+    // does not arise; if two candidates are within tolerance the nearest wins.
     let mut matched: FxHashMap<i64, u32> = FxHashMap::default();
     let mut claimed: FxHashSet<u32> = FxHashSet::default();
 
     for pattern_atom in &op.before.atoms {
         let target = step.place(pattern_atom.pos);
-        let mut best: Option<(u32, f64)> = None;
-        for candidate_id in workpiece.get_atoms_in_radius(&target, tolerance) {
-            if claimed.contains(&candidate_id) {
-                continue;
-            }
-            let Some(atom) = workpiece.get_atom(candidate_id) else {
-                continue;
-            };
-            if !pattern_atom.element.matches(atom.atomic_number) {
-                continue;
-            }
-            let distance = atom.position.distance(target);
-            if best.is_none_or(|(_, best_distance)| distance < best_distance) {
-                best = Some((candidate_id, distance));
-            }
-        }
-        match best {
-            Some((atom_id, _)) => {
-                matched.insert(pattern_atom.id, atom_id);
-                claimed.insert(atom_id);
+        let found = workpiece.nearest_unclaimed_atom(
+            target,
+            tolerance,
+            pattern_atom.element.required_atomic_number(),
+            |atom_id| claimed.contains(&atom_id),
+        );
+        match found {
+            Some(found) => {
+                matched.insert(pattern_atom.id, found.atom_id);
+                claimed.insert(found.atom_id);
             }
             None => {
                 return Err(MechanosynthError::NoMatch {
@@ -124,9 +122,57 @@ pub fn apply_step(
         }
     }
 
-    // --- 2. apply -----------------------------------------------------------
+    // --- 2. what the step will change ---------------------------------------
+    // Read before anything is mutated, because "did this bond change" is a
+    // question about the workpiece as the step found it.
+    let before_bonds: FxHashMap<(i64, i64), u8> =
+        op.before.bonds.iter().map(|b| (b.key(), b.order)).collect();
+    let after_bonds: FxHashMap<(i64, i64), u8> =
+        op.after.bonds.iter().map(|b| (b.key(), b.order)).collect();
+
+    // Pattern ids at either end of a bond this step actually rewrites. A bond
+    // rule that is a no-op on this workpiece — deleting one that is not there,
+    // adding one it already has at the same order — changes nothing and so
+    // touches nobody.
+    let mut bond_changed: FxHashSet<i64> = FxHashSet::default();
+    let note_bond_change = |bond_changed: &mut FxHashSet<i64>, key: (i64, i64)| {
+        bond_changed.insert(key.0);
+        bond_changed.insert(key.1);
+    };
+    for key in before_bonds.keys() {
+        if after_bonds.contains_key(key) {
+            continue;
+        }
+        let (Some(&a), Some(&b)) = (matched.get(&key.0), matched.get(&key.1)) else {
+            continue;
+        };
+        if workpiece.bond_order_between(a, b).is_some() {
+            note_bond_change(&mut bond_changed, *key);
+        }
+    }
+    for (key, &order) in after_bonds.iter() {
+        if before_bonds.get(key) == Some(&order) {
+            continue; // present in both with the same order: untouched
+        }
+        // An endpoint only `after` names has not been added yet, so there is
+        // no current bond and the rule certainly changes something.
+        let current = match (matched.get(&key.0), matched.get(&key.1)) {
+            (Some(&a), Some(&b)) => workpiece.bond_order_between(a, b),
+            _ => None,
+        };
+        if current != Some(order) {
+            note_bond_change(&mut bond_changed, *key);
+        }
+    }
+
+    // --- 3. apply -----------------------------------------------------------
     let mut touched: Vec<u32> = Vec::new();
     let mut added: Vec<u32> = Vec::new();
+    fn mark(touched: &mut Vec<u32>, atom_id: u32) {
+        if !touched.contains(&atom_id) {
+            touched.push(atom_id);
+        }
+    }
 
     // Ids only in `before`: delete. Every bond the atom had — to pattern atoms
     // or to any other workpiece atom — goes with it. The neighbours are noted
@@ -153,14 +199,24 @@ pub fn apply_step(
             continue;
         };
         let atom_id = matched[&after_atom.id];
+        let mut changed = bond_changed.contains(&after_atom.id);
         if before_atom.pos.distance(after_atom.pos) > PATTERN_POSITION_EPSILON {
             workpiece.set_atom_position(atom_id, step.place(after_atom.pos));
+            changed = true;
         }
         // `*` on the `after` side keeps the workpiece atom's current element.
-        if let PatternElement::Element(z) = after_atom.element {
+        // A concrete element that the atom already has is not a change either:
+        // the comparison is against the workpiece, so `"*" → "C"` on a carbon
+        // leaves a frame atom untouched.
+        if let PatternElement::Element(z) = after_atom.element
+            && workpiece.get_atom(atom_id).map(|atom| atom.atomic_number) != Some(z)
+        {
             workpiece.set_atomic_number(atom_id, z);
+            changed = true;
         }
-        touched.push(atom_id);
+        if changed {
+            mark(&mut touched, atom_id);
+        }
     }
 
     // Ids only in `after`: add. Validation guarantees a concrete element here.
@@ -173,20 +229,15 @@ pub fn apply_step(
         };
         let atom_id = workpiece.add_atom(z, step.place(after_atom.pos));
         matched.insert(after_atom.id, atom_id);
-        touched.push(atom_id);
+        mark(&mut touched, atom_id);
         added.push(atom_id);
     }
 
-    // --- 3. bonds -----------------------------------------------------------
+    // --- 4. bonds -----------------------------------------------------------
     // Bond rules apply to the surviving atoms only and are idempotent: a bond
     // whose endpoint was deleted went with the atom, deleting an absent bond is
     // a no-op, and adding one the workpiece already has just sets its order.
-    let before_bonds: FxHashMap<(i64, i64), u8> =
-        op.before.bonds.iter().map(|b| (b.key(), b.order)).collect();
-    let after_bonds: FxHashMap<(i64, i64), u8> =
-        op.after.bonds.iter().map(|b| (b.key(), b.order)).collect();
-
-    for (key, _) in before_bonds.iter() {
+    for key in before_bonds.keys() {
         if after_bonds.contains_key(key) {
             continue;
         }
@@ -210,10 +261,10 @@ pub fn apply_step(
     }
 
     // A neighbour may itself have been deleted by this step, or already be in
-    // the list as a kept atom; only survivors are reported, each once.
+    // the list as a changed atom; only survivors are reported, each once.
     for neighbour_id in deletion_neighbours {
-        if workpiece.get_atom(neighbour_id).is_some() && !touched.contains(&neighbour_id) {
-            touched.push(neighbour_id);
+        if workpiece.get_atom(neighbour_id).is_some() {
+            mark(&mut touched, neighbour_id);
         }
     }
 
@@ -221,19 +272,17 @@ pub fn apply_step(
 }
 
 /// The tail of a match-failure message: what *is* near the position the step
-/// looked at. A whole-structure scan, which is affordable because the replay is
-/// over either way.
-fn describe_nearest(workpiece: &AtomicStructure, target: DVec3) -> String {
-    let nearest = workpiece
-        .atoms_values()
-        .map(|atom| (atom.atomic_number, atom.position.distance(target)))
-        .min_by(|a, b| a.1.total_cmp(&b.1));
-    match nearest {
-        Some((atomic_number, distance)) => format!(
-            "nearest atom is {} at {:.2} Å",
-            element_symbol(atomic_number),
-            distance
-        ),
+/// looked at. The placement engine builds the same sentence, so both halves of
+/// the engine fail in the same words.
+pub fn describe_nearest(workpiece: &AtomicStructure, target: DVec3) -> String {
+    match workpiece.nearest_atom(target) {
+        Some(found) => {
+            let element = workpiece.get_atom(found.atom_id).map_or_else(
+                || "?".to_string(),
+                |atom| element_symbol(atom.atomic_number),
+            );
+            format!("nearest atom is {} at {:.2} Å", element, found.distance)
+        }
         None => "the workpiece has no atoms".to_string(),
     }
 }
@@ -281,7 +330,7 @@ pub fn replay(
 ) -> Result<AtomicStructure, MechanosynthError> {
     super::parse::validate_script_ops(script, library)?;
 
-    let tolerance = resolve_tolerance(library, script);
+    let tolerance = resolve_tolerance(library);
     let n = steps_applied(step, script.steps.len());
 
     // The layer under construction is the last applied step's, read up front so

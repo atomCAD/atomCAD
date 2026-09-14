@@ -14,6 +14,7 @@ use super::nodes::atom_edit::atom_edit::get_node_type_motif_edit as motif_edit_g
 use super::nodes::atom_replace::get_node_type as atom_replace_get_node_type;
 use super::nodes::atom_union::get_node_type as atom_union_get_node_type;
 use super::nodes::bool::get_node_type as bool_get_node_type;
+use super::nodes::build_script::get_node_type as build_script_get_node_type;
 use super::nodes::circle::get_node_type as circle_get_node_type;
 use super::nodes::closure::get_node_type as closure_get_node_type;
 use super::nodes::collect::get_node_type as collect_get_node_type;
@@ -29,6 +30,7 @@ use super::nodes::empty_2d::get_node_type as empty_2d_get_node_type;
 use super::nodes::enter_structure::get_node_type as enter_structure_get_node_type;
 use super::nodes::exit_structure::get_node_type as exit_structure_get_node_type;
 use super::nodes::export_atoms::get_node_type as export_atoms_get_node_type;
+use super::nodes::export_build_script::get_node_type as export_build_script_get_node_type;
 use super::nodes::expr::get_node_type as expr_get_node_type;
 use super::nodes::extrude::get_node_type as extrude_get_node_type;
 use super::nodes::facet_shell::get_node_type as facet_shell_get_node_type;
@@ -74,6 +76,7 @@ use super::nodes::materialize::get_node_type as materialize_get_node_type;
 use super::nodes::mechanosynth::get_node_type as mechanosynth_get_node_type;
 use super::nodes::motif::get_node_type as motif_get_node_type;
 use super::nodes::motif_sub::get_node_type as motif_sub_get_node_type;
+use super::nodes::ops_library::get_node_type as ops_library_get_node_type;
 use super::nodes::parameter::get_node_type as parameter_get_node_type;
 use super::nodes::passivate::get_node_type as passivate_get_node_type;
 use super::nodes::patch_build::get_node_type as patch_build_get_node_type;
@@ -795,6 +798,44 @@ impl NodeTypeRegistry {
                     ("layer".to_string(), DataType::Int),
                     ("site".to_string(), DataType::Int),
                     ("t".to_string(), DataType::Vec3),
+                    // Appended last so existing `record_construct`
+                    // MechanosynthStep nodes keep their positional wires. With
+                    // `r` a downstream network can *orient* a gadget at the
+                    // reaction site and not only place it.
+                    ("r".to_string(), DataType::Mat3),
+                ],
+            ),
+        );
+
+        // `BuildStep` — one authored or loaded step of a build script, as it
+        // travels the network: the operation's name and the rigid transform
+        // placing it, plus the generator's own metadata about it.
+        //
+        // Deliberately a **plain named record** and not a wrapper type, so
+        // `array`, `array_append`, `sequence`, `collect`, `map` and `switch`
+        // work on `[BuildStep]` unchanged and a text-format literal can spell
+        // a step. Deliberately **distinct from `MechanosynthStep`**, which is
+        // the replayer's output and carries replay provenance (`index`,
+        // `count`) an authored step does not have.
+        //
+        // The absent-field defaults match the build file's: an identity `r`,
+        // empty strings, `-1` for `layer` and `site`. Plain defaults rather
+        // than `Optional[T]` keep the record usable in `expr` without
+        // unwrapping, exactly as on `MechanosynthStep`. See
+        // `doc/design_mechanosynth_editor.md`.
+        ret.built_in_record_type_defs.insert(
+            "BuildStep".to_string(),
+            RecordTypeDef::from_named_fields(
+                "BuildStep",
+                vec![
+                    ("op".to_string(), DataType::String),
+                    ("t".to_string(), DataType::Vec3),
+                    ("r".to_string(), DataType::Mat3),
+                    ("note".to_string(), DataType::String),
+                    ("method".to_string(), DataType::String),
+                    ("phase".to_string(), DataType::String),
+                    ("layer".to_string(), DataType::Int),
+                    ("site".to_string(), DataType::Int),
                 ],
             ),
         );
@@ -906,6 +947,9 @@ impl NodeTypeRegistry {
         ret.add_node_type(export_atoms_get_node_type());
         ret.add_node_type(atom_cut_get_node_type());
         ret.add_node_type(mechanosynth_get_node_type());
+        ret.add_node_type(ops_library_get_node_type());
+        ret.add_node_type(build_script_get_node_type());
+        ret.add_node_type(export_build_script_get_node_type());
         ret.add_node_type(relax_get_node_type());
         ret.add_node_type(passivate_get_node_type());
         ret.add_node_type(remove_hydrogen_get_node_type());

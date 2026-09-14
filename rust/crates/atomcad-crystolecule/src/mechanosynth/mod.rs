@@ -37,13 +37,16 @@ pub mod compare;
 pub mod parse;
 pub mod schema;
 
-pub use apply::{HighlightTags, StepEffect, apply_step, replay, resolve_tolerance, steps_applied};
+pub use apply::{
+    HighlightTags, StepEffect, apply_step, describe_nearest, replay, resolve_tolerance,
+    steps_applied,
+};
 pub use compare::{Mismatch, compare_structures, describe_mismatches};
 pub use parse::{
     load_build_script, load_library, parse_build_script, parse_library, validate_script_ops,
 };
 pub use schema::{
     BUILD_FORMAT, BuildScript, DEFAULT_TOLERANCE, LIBRARY_FORMAT, MechanosynthError, NO_LAYER,
-    NO_SITE, OpLibrary, Operation, PATTERN_POSITION_EPSILON, Pattern, PatternAtom, PatternBond,
-    PatternElement, Step,
+    NO_SITE, ORIGIN_PATTERN_ATOM_ID, OpLibrary, Operation, PATTERN_POSITION_EPSILON, Pattern,
+    PatternAtom, PatternBond, PatternElement, Step,
 };

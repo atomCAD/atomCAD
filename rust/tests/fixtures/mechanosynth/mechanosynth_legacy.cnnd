@@ -1,0 +1,77 @@
+{
+  "node_networks": [
+    [
+      "Main",
+      {
+        "next_node_id": 3,
+        "node_type": {
+          "name": "Main",
+          "description": "",
+          "summary": null,
+          "category": "Custom",
+          "parameters": [],
+          "output_type": "HasAtoms"
+        },
+        "nodes": [
+          {
+            "id": 1,
+            "node_type_name": "import_xyz",
+            "custom_name": "base",
+            "position": [
+              100.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "import_xyz",
+            "data": {
+              "file_name": "methane.xyz"
+            }
+          },
+          {
+            "id": 2,
+            "node_type_name": "mechanosynth",
+            "custom_name": "build",
+            "position": [
+              340.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "1": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "mechanosynth",
+            "data": {
+              "ops_file": "methylate_ops.json",
+              "build_file": "methylate_build.json",
+              "step": -1
+            }
+          }
+        ],
+        "return_node_id": 2,
+        "displayed_node_ids": [
+          [
+            2,
+            "Normal"
+          ]
+        ]
+      }
+    ]
+  ],
+  "version": 2
+}

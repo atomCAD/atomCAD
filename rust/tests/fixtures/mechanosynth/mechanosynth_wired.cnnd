@@ -1,0 +1,117 @@
+{
+  "node_networks": [
+    [
+      "Main",
+      {
+        "next_node_id": 5,
+        "node_type": {
+          "name": "Main",
+          "description": "",
+          "summary": null,
+          "category": "Custom",
+          "parameters": [],
+          "output_type": "HasAtoms"
+        },
+        "nodes": [
+          {
+            "id": 1,
+            "node_type_name": "import_xyz",
+            "custom_name": "base",
+            "position": [
+              100.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "import_xyz",
+            "data": {
+              "file_name": "methane.xyz"
+            }
+          },
+          {
+            "id": 2,
+            "node_type_name": "ops_library",
+            "custom_name": "lib",
+            "position": [
+              100.0,
+              240.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ops_library",
+            "data": {
+              "file": "methylate_ops.json"
+            }
+          },
+          {
+            "id": 3,
+            "node_type_name": "build_script",
+            "custom_name": "gen",
+            "position": [
+              100.0,
+              380.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "build_script",
+            "data": {
+              "file": "methylate_build.json"
+            }
+          },
+          {
+            "id": 4,
+            "node_type_name": "mechanosynth",
+            "custom_name": "build",
+            "position": [
+              400.0,
+              240.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "1": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "2": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "3": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "mechanosynth",
+            "data": {
+              "ops_file": null,
+              "build_file": null,
+              "step": -1
+            }
+          }
+        ],
+        "return_node_id": 4,
+        "displayed_node_ids": [
+          [
+            4,
+            "Normal"
+          ]
+        ]
+      }
+    ]
+  ],
+  "version": 2
+}

@@ -39,6 +39,7 @@ pub mod atomic_structure_decorator;
 pub mod bond_reference;
 pub mod fragment;
 pub mod inline_bond;
+pub mod matching;
 pub mod tags;
 
 // Re-export types for convenience
@@ -49,6 +50,7 @@ pub use inline_bond::{
     BOND_AROMATIC, BOND_DATIVE, BOND_DELETED, BOND_DOUBLE, BOND_METALLIC, BOND_QUADRUPLE,
     BOND_SINGLE, BOND_TRIPLE, InlineBond,
 };
+pub use matching::AtomMatch;
 pub use tags::{MAX_TAGS, TagError, TagRemap};
 
 /// Atomic number used as a delete marker in diff structures.

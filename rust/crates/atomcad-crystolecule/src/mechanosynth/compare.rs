@@ -10,7 +10,7 @@
 //! meaningless across a replay, since every added atom takes the next free
 //! slot.
 
-use crate::atomic_constants::ATOM_INFO;
+use crate::atomic_constants::element_symbol;
 use crate::atomic_structure::AtomicStructure;
 use glam::DVec3;
 use rustc_hash::FxHashMap;
@@ -43,13 +43,6 @@ pub enum Mismatch {
     },
 }
 
-fn symbol(atomic_number: i16) -> String {
-    ATOM_INFO
-        .get(&(atomic_number as i32))
-        .map(|info| info.symbol.clone())
-        .unwrap_or_else(|| format!("Z={atomic_number}"))
-}
-
 fn at(p: DVec3) -> String {
     format!("({:.3}, {:.3}, {:.3})", p.x, p.y, p.z)
 }
@@ -60,13 +53,13 @@ impl fmt::Display for Mismatch {
             Mismatch::UnmatchedInB { position, element } => write!(
                 f,
                 "{} at {} is missing from b",
-                symbol(*element),
+                element_symbol(*element),
                 at(*position)
             ),
             Mismatch::UnmatchedInA { position, element } => write!(
                 f,
                 "{} at {} is missing from a",
-                symbol(*element),
+                element_symbol(*element),
                 at(*position)
             ),
             Mismatch::ElementDiffers {
@@ -77,8 +70,8 @@ impl fmt::Display for Mismatch {
                 f,
                 "element differs at {}: a has {}, b has {}",
                 at(*position),
-                symbol(*a_element),
-                symbol(*b_element)
+                element_symbol(*a_element),
+                element_symbol(*b_element)
             ),
             Mismatch::BondOnlyInA {
                 position1,
@@ -132,21 +125,14 @@ pub fn compare_structures(
     let mut b_to_a: FxHashMap<u32, u32> = FxHashMap::default();
 
     for a_atom in a.atoms_values() {
-        let mut best: Option<(u32, f64)> = None;
-        for candidate_id in b.get_atoms_in_radius(&a_atom.position, tolerance) {
-            if b_to_a.contains_key(&candidate_id) {
-                continue;
-            }
-            let Some(b_atom) = b.get_atom(candidate_id) else {
-                continue;
-            };
-            let distance = a_atom.position.distance(b_atom.position);
-            if best.is_none_or(|(_, best_distance)| distance < best_distance) {
-                best = Some((candidate_id, distance));
-            }
-        }
+        // No element filter: an element difference on a matched pair is a
+        // *reported* mismatch here, not a reason to look further afield.
+        let best = b.nearest_unclaimed_atom(a_atom.position, tolerance, None, |id| {
+            b_to_a.contains_key(&id)
+        });
         match best {
-            Some((b_id, _)) => {
+            Some(found) => {
+                let b_id = found.atom_id;
                 a_to_b.insert(a_atom.id, b_id);
                 b_to_a.insert(b_id, a_atom.id);
                 let b_atom = b.get_atom(b_id).expect("just matched");
@@ -187,7 +173,7 @@ pub fn compare_structures(
             };
             let position1 = a_atom.position;
             let position2 = a.get_atom(other_id).expect("bond endpoint").position;
-            match bond_order_between(b, b1, b2) {
+            match b.bond_order_between(b1, b2) {
                 None => mismatches.push(Mismatch::BondOnlyInA {
                     position1,
                     position2,
@@ -214,7 +200,7 @@ pub fn compare_structures(
             let (Some(&a1), Some(&a2)) = (b_to_a.get(&b_atom.id), b_to_a.get(&other_id)) else {
                 continue;
             };
-            if bond_order_between(a, a1, a2).is_none() {
+            if a.bond_order_between(a1, a2).is_none() {
                 mismatches.push(Mismatch::BondOnlyInB {
                     position1: b_atom.position,
                     position2: b.get_atom(other_id).expect("bond endpoint").position,
@@ -224,15 +210,6 @@ pub fn compare_structures(
     }
 
     mismatches
-}
-
-fn bond_order_between(structure: &AtomicStructure, id1: u32, id2: u32) -> Option<u8> {
-    structure
-        .get_atom(id1)?
-        .bonds
-        .iter()
-        .find(|bond| bond.other_atom_id() == id2)
-        .map(|bond| bond.bond_order())
 }
 
 /// A one-line-per-mismatch rendering, for a failure message or a generator's

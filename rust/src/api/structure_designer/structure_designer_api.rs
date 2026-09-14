@@ -289,6 +289,7 @@ pub fn api_data_type_to_data_type(api_data_type: &APIDataType) -> Result<DataTyp
         APIDataTypeBase::Structure => DataType::Structure,
         APIDataTypeBase::ScalarField => DataType::ScalarField,
         APIDataTypeBase::Isosurface => DataType::Isosurface,
+        APIDataTypeBase::OpLibrary => DataType::OpLibrary,
         APIDataTypeBase::Unit => DataType::Unit,
         APIDataTypeBase::Record => {
             // Empty name is intentionally accepted: a freshly-placed record
@@ -457,6 +458,7 @@ pub fn data_type_to_api_data_type(data_type: &DataType) -> APIDataType {
         DataType::Structure => APIDataTypeBase::Structure,
         DataType::ScalarField => APIDataTypeBase::ScalarField,
         DataType::Isosurface => APIDataTypeBase::Isosurface,
+        DataType::OpLibrary => APIDataTypeBase::OpLibrary,
         DataType::Unit => APIDataTypeBase::Unit,
         _ => APIDataTypeBase::Custom, // All other types are considered custom
     };

@@ -129,6 +129,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIBoolData dco_decode_api_bool_data(dynamic raw);
 
   @protected
+  APIBuildScriptData dco_decode_api_build_script_data(dynamic raw);
+
+  @protected
   APICamera dco_decode_api_camera(dynamic raw);
 
   @protected
@@ -229,6 +232,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIExportAtomsData dco_decode_api_export_atoms_data(dynamic raw);
+
+  @protected
+  APIExportBuildScriptData dco_decode_api_export_build_script_data(dynamic raw);
 
   @protected
   APIExprData dco_decode_api_expr_data(dynamic raw);
@@ -427,6 +433,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APINodeTypeView dco_decode_api_node_type_view(dynamic raw);
+
+  @protected
+  APIOpsLibraryData dco_decode_api_ops_library_data(dynamic raw);
+
+  @protected
+  APIOpsLibraryEntry dco_decode_api_ops_library_entry(dynamic raw);
 
   @protected
   APIParameterData dco_decode_api_parameter_data(dynamic raw);
@@ -679,6 +691,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIBoolData dco_decode_box_autoadd_api_bool_data(dynamic raw);
 
   @protected
+  APIBuildScriptData dco_decode_box_autoadd_api_build_script_data(dynamic raw);
+
+  @protected
   APICamera dco_decode_box_autoadd_api_camera(dynamic raw);
 
   @protected
@@ -734,6 +749,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIExportAtomsData dco_decode_box_autoadd_api_export_atoms_data(dynamic raw);
+
+  @protected
+  APIExportBuildScriptData dco_decode_box_autoadd_api_export_build_script_data(
+      dynamic raw);
 
   @protected
   APIExprData dco_decode_box_autoadd_api_expr_data(dynamic raw);
@@ -853,6 +872,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APINodeRef dco_decode_box_autoadd_api_node_ref(dynamic raw);
+
+  @protected
+  APIOpsLibraryData dco_decode_box_autoadd_api_ops_library_data(dynamic raw);
 
   @protected
   APIParameterData dco_decode_box_autoadd_api_parameter_data(dynamic raw);
@@ -1181,6 +1203,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<APINodeTypeView> dco_decode_list_api_node_type_view(dynamic raw);
 
   @protected
+  List<APIOpsLibraryEntry> dco_decode_list_api_ops_library_entry(dynamic raw);
+
+  @protected
   List<APIParameterElement> dco_decode_list_api_parameter_element(dynamic raw);
 
   @protected
@@ -1335,6 +1360,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIBoolData? dco_decode_opt_box_autoadd_api_bool_data(dynamic raw);
 
   @protected
+  APIBuildScriptData? dco_decode_opt_box_autoadd_api_build_script_data(
+      dynamic raw);
+
+  @protected
   APICamera? dco_decode_opt_box_autoadd_api_camera(dynamic raw);
 
   @protected
@@ -1393,6 +1422,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   APIExportAtomsData? dco_decode_opt_box_autoadd_api_export_atoms_data(
       dynamic raw);
+
+  @protected
+  APIExportBuildScriptData?
+      dco_decode_opt_box_autoadd_api_export_build_script_data(dynamic raw);
 
   @protected
   APIExprData? dco_decode_opt_box_autoadd_api_expr_data(dynamic raw);
@@ -1521,6 +1554,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APINodeRef? dco_decode_opt_box_autoadd_api_node_ref(dynamic raw);
+
+  @protected
+  APIOpsLibraryData? dco_decode_opt_box_autoadd_api_ops_library_data(
+      dynamic raw);
 
   @protected
   APIParameterData? dco_decode_opt_box_autoadd_api_parameter_data(dynamic raw);
@@ -1886,6 +1923,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIBoolData sse_decode_api_bool_data(SseDeserializer deserializer);
 
   @protected
+  APIBuildScriptData sse_decode_api_build_script_data(
+      SseDeserializer deserializer);
+
+  @protected
   APICamera sse_decode_api_camera(SseDeserializer deserializer);
 
   @protected
@@ -1994,6 +2035,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIExportAtomsData sse_decode_api_export_atoms_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIExportBuildScriptData sse_decode_api_export_build_script_data(
       SseDeserializer deserializer);
 
   @protected
@@ -2219,6 +2264,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APINodeTypeView sse_decode_api_node_type_view(SseDeserializer deserializer);
+
+  @protected
+  APIOpsLibraryData sse_decode_api_ops_library_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIOpsLibraryEntry sse_decode_api_ops_library_entry(
+      SseDeserializer deserializer);
 
   @protected
   APIParameterData sse_decode_api_parameter_data(SseDeserializer deserializer);
@@ -2510,6 +2563,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIBuildScriptData sse_decode_box_autoadd_api_build_script_data(
+      SseDeserializer deserializer);
+
+  @protected
   APICamera sse_decode_box_autoadd_api_camera(SseDeserializer deserializer);
 
   @protected
@@ -2578,6 +2635,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIExportAtomsData sse_decode_box_autoadd_api_export_atoms_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIExportBuildScriptData sse_decode_box_autoadd_api_export_build_script_data(
       SseDeserializer deserializer);
 
   @protected
@@ -2730,6 +2791,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APINodeRef sse_decode_box_autoadd_api_node_ref(SseDeserializer deserializer);
+
+  @protected
+  APIOpsLibraryData sse_decode_box_autoadd_api_ops_library_data(
+      SseDeserializer deserializer);
 
   @protected
   APIParameterData sse_decode_box_autoadd_api_parameter_data(
@@ -3115,6 +3180,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  List<APIOpsLibraryEntry> sse_decode_list_api_ops_library_entry(
+      SseDeserializer deserializer);
+
+  @protected
   List<APIParameterElement> sse_decode_list_api_parameter_element(
       SseDeserializer deserializer);
 
@@ -3299,6 +3368,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIBuildScriptData? sse_decode_opt_box_autoadd_api_build_script_data(
+      SseDeserializer deserializer);
+
+  @protected
   APICamera? sse_decode_opt_box_autoadd_api_camera(
       SseDeserializer deserializer);
 
@@ -3369,6 +3442,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   APIExportAtomsData? sse_decode_opt_box_autoadd_api_export_atoms_data(
       SseDeserializer deserializer);
+
+  @protected
+  APIExportBuildScriptData?
+      sse_decode_opt_box_autoadd_api_export_build_script_data(
+          SseDeserializer deserializer);
 
   @protected
   APIExprData? sse_decode_opt_box_autoadd_api_expr_data(
@@ -3520,6 +3598,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APINodeRef? sse_decode_opt_box_autoadd_api_node_ref(
+      SseDeserializer deserializer);
+
+  @protected
+  APIOpsLibraryData? sse_decode_opt_box_autoadd_api_ops_library_data(
       SseDeserializer deserializer);
 
   @protected
@@ -3936,6 +4018,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_bool_data(APIBoolData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_build_script_data(
+      APIBuildScriptData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_camera(APICamera self, SseSerializer serializer);
 
   @protected
@@ -4061,6 +4147,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_export_atoms_data(
       APIExportAtomsData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_export_build_script_data(
+      APIExportBuildScriptData self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_expr_data(APIExprData self, SseSerializer serializer);
@@ -4307,6 +4397,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_node_type_view(
       APINodeTypeView self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_ops_library_data(
+      APIOpsLibraryData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_ops_library_entry(
+      APIOpsLibraryEntry self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_parameter_data(
@@ -4609,6 +4707,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIBoolData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_api_build_script_data(
+      APIBuildScriptData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_api_camera(
       APICamera self, SseSerializer serializer);
 
@@ -4679,6 +4781,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_export_atoms_data(
       APIExportAtomsData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_export_build_script_data(
+      APIExportBuildScriptData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_expr_data(
@@ -4835,6 +4941,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_node_ref(
       APINodeRef self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_ops_library_data(
+      APIOpsLibraryData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_parameter_data(
@@ -5227,6 +5337,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<APINodeTypeView> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_api_ops_library_entry(
+      List<APIOpsLibraryEntry> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_api_parameter_element(
       List<APIParameterElement> self, SseSerializer serializer);
 
@@ -5418,6 +5532,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIBoolData? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_api_build_script_data(
+      APIBuildScriptData? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_api_camera(
       APICamera? self, SseSerializer serializer);
 
@@ -5488,6 +5606,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_export_atoms_data(
       APIExportAtomsData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_export_build_script_data(
+      APIExportBuildScriptData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_expr_data(
@@ -5640,6 +5762,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_node_ref(
       APINodeRef? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_ops_library_data(
+      APIOpsLibraryData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_parameter_data(

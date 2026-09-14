@@ -15,6 +15,7 @@
 //! them.
 
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
+use atomcad_crystolecule::mechanosynth::Step;
 use atomcad_crystolecule::mechanosynth::{compare_structures, describe_mismatches};
 use atomcad_crystolecule::structure::Structure;
 use atomcad_structure_designer::data_type::{DataType, RecordType};
@@ -26,8 +27,10 @@ use atomcad_structure_designer::evaluator::network_result::{
 };
 use atomcad_structure_designer::node_data::NodeData;
 use atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
+use atomcad_structure_designer::nodes::build_script::BuildScriptData;
+use atomcad_structure_designer::nodes::build_step::build_step_record;
 use atomcad_structure_designer::nodes::mechanosynth::{MS_CURRENT_TAG, MechanosynthData};
-use atomcad_structure_designer::nodes::string::StringData;
+use atomcad_structure_designer::nodes::ops_library::OpsLibraryData;
 use atomcad_structure_designer::nodes::value::ValueData;
 use atomcad_structure_designer::serialization::node_networks_serialization::{
     load_node_networks_from_file, save_node_networks_to_file,
@@ -35,7 +38,7 @@ use atomcad_structure_designer::serialization::node_networks_serialization::{
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 use atomcad_structure_designer::text_format::{edit_network, serialize_network};
 use atomcad_test_support::fixture_path_str;
-use glam::f64::{DVec2, DVec3};
+use glam::f64::{DMat3, DVec2, DVec3};
 use std::collections::HashMap;
 use tempfile::tempdir;
 
@@ -43,7 +46,7 @@ const H: i16 = 1;
 const C: i16 = 6;
 
 /// Positions are ideal, so structural comparisons can be far tighter than the
-/// 0.3 Å match tolerance.
+/// match tolerance.
 const EXACT: f64 = 1e-9;
 
 const NET: &str = "test";
@@ -98,10 +101,39 @@ fn crystal_value(atoms: AtomicStructure) -> NetworkResult {
     })
 }
 
-fn add_string_node(designer: &mut StructureDesigner, value: &str) -> u64 {
-    let node_id = designer.add_node("string", DVec2::new(-200.0, 0.0));
-    with_data::<StringData, _>(designer, node_id, |data| data.value = value.to_string());
+/// An `ops_library` node loaded from a fixture.
+fn add_ops_library_node(designer: &mut StructureDesigner, name: &str) -> u64 {
+    let node_id = designer.add_node("ops_library", DVec2::new(-400.0, -100.0));
+    with_data::<OpsLibraryData, _>(designer, node_id, |data| {
+        data.file = Some(fixture(name));
+        data.reload_missing(None);
+    });
     node_id
+}
+
+/// A `build_script` node loaded from a fixture.
+fn add_build_script_node(designer: &mut StructureDesigner, name: &str) -> u64 {
+    let node_id = designer.add_node("build_script", DVec2::new(-400.0, 100.0));
+    with_data::<BuildScriptData, _>(designer, node_id, |data| {
+        data.file = Some(fixture(name));
+        data.reload_missing(None);
+    });
+    node_id
+}
+
+/// Wires a fresh `ops_library` and `build_script` pair into a `mechanosynth`
+/// node's `ops` and `steps` pins.
+fn wire_ops_and_steps(
+    designer: &mut StructureDesigner,
+    node_id: u64,
+    ops: &str,
+    build: &str,
+) -> (u64, u64) {
+    let ops_id = add_ops_library_node(designer, ops);
+    let steps_id = add_build_script_node(designer, build);
+    designer.connect_nodes(ops_id, 0, node_id, 1);
+    designer.connect_nodes(steps_id, 0, node_id, 2);
+    (ops_id, steps_id)
 }
 
 fn add_int_node(designer: &mut StructureDesigner, value: i32) -> u64 {
@@ -444,8 +476,9 @@ fn a_wired_step_overrides_the_stored_one() {
 }
 
 #[test]
-fn wired_file_names_override_the_stored_ones_without_being_cached() {
-    // Both properties are empty, so only the wires can supply the files.
+fn wired_values_drive_the_replay_and_never_enter_the_node_data() {
+    // Both deprecated properties are empty, so only the wires can supply the
+    // library and the steps.
     let mut designer = setup_designer();
     let base_id = add_value_node(&mut designer, molecule_value(methane()));
     let node_id = add_mechanosynth(
@@ -456,24 +489,102 @@ fn wired_file_names_override_the_stored_ones_without_being_cached() {
             ..MechanosynthData::new()
         },
     );
-    let ops_id = add_string_node(&mut designer, &fixture("methylate_ops.json"));
-    let build_id = add_string_node(&mut designer, &fixture("methylate_build.json"));
-    designer.connect_nodes(ops_id, 0, node_id, 1);
-    designer.connect_nodes(build_id, 0, node_id, 2);
+    wire_ops_and_steps(
+        &mut designer,
+        node_id,
+        "methylate_ops.json",
+        "methylate_build.json",
+    );
 
     let result = expect_atoms(evaluate_pin(&designer, node_id, 0));
-    assert_same(&result, &methylate_expected(2), "wired files, step = 2");
+    assert_same(&result, &methylate_expected(2), "wired values, step = 2");
 
-    // A wired file is parsed at evaluation and never enters the node data,
-    // exactly as `import_xyz` does — the property panel must keep showing the
-    // (empty) stored names.
+    // The wired values are the upstream nodes' payload and never enter this
+    // node's data — the property panel must keep showing the (empty) stored
+    // names.
     let data = node_data(&designer, node_id);
     assert!(data.ops_file.is_none() && data.build_file.is_none());
     assert!(data.library.is_none() && data.script.is_none());
 }
 
 #[test]
-fn a_wired_file_that_cannot_be_loaded_errors_with_the_file_name() {
+fn a_wired_pin_wins_over_the_deprecated_property() {
+    // The properties name the three-step methylation; the wires name a
+    // two-step build that fails at its second step. The wires must win.
+    let mut designer = setup_designer();
+    let base_id = add_value_node(&mut designer, molecule_value(methane()));
+    let node_id = add_mechanosynth(
+        &mut designer,
+        base_id,
+        loaded_data("methylate_ops.json", "methylate_build.json", 1),
+    );
+    wire_ops_and_steps(
+        &mut designer,
+        node_id,
+        "methylate_ops.json",
+        "unmatched_build.json",
+    );
+
+    // Step 1 of the wired build is the same abstraction, so the result is the
+    // same; what proves the wire won is the count the info readout reports and
+    // that step 2 fails.
+    let result = expect_atoms(evaluate_pin(&designer, node_id, 0));
+    assert_same(&result, &methylate_expected(1), "wired steps, step = 1");
+
+    with_data::<MechanosynthData, _>(&mut designer, node_id, |data| data.step = 2);
+    let message = expect_error(evaluate_pin(&designer, node_id, 0));
+    assert!(
+        message.contains("step 2"),
+        "the wired two-step build should be the one replayed: {message}"
+    );
+}
+
+#[test]
+fn an_unknown_op_in_a_wired_step_array_names_the_step_and_the_op() {
+    let mut designer = setup_designer();
+    let base_id = add_value_node(&mut designer, molecule_value(methane()));
+    let node_id = add_mechanosynth(&mut designer, base_id, MechanosynthData::new());
+
+    let ops_id = add_ops_library_node(&mut designer, "methylate_ops.json");
+    designer.connect_nodes(ops_id, 0, node_id, 1);
+    let steps_id = add_value_node(
+        &mut designer,
+        NetworkResult::Array(vec![
+            build_step_record(&Step::new("habst", DVec3::new(0.0, 0.0, 1.09))),
+            build_step_record(&Step::new("no_such_op", DVec3::ZERO)),
+        ]),
+    );
+    designer.connect_nodes(steps_id, 0, node_id, 2);
+
+    let message = expect_error(evaluate_pin(&designer, node_id, 0));
+    assert!(
+        message.contains("step 2") && message.contains("no_such_op"),
+        "the step index and the op should both be named: {message}"
+    );
+    // The replay does not run: `validate_script_ops` is the first thing
+    // `replay` does, so not even step 1 is applied.
+    assert!(
+        !message.contains("not found within"),
+        "the replay should not have started: {message}"
+    );
+}
+
+#[test]
+fn an_unwired_steps_pin_with_no_property_emits_the_base_and_no_error() {
+    // A half-wired node is the normal state while the user is still building
+    // the graph; going red there would be noise.
+    let mut designer = setup_designer();
+    let base_id = add_value_node(&mut designer, molecule_value(methane()));
+    let node_id = add_mechanosynth(&mut designer, base_id, MechanosynthData::new());
+    let ops_id = add_ops_library_node(&mut designer, "methylate_ops.json");
+    designer.connect_nodes(ops_id, 0, node_id, 1);
+
+    let result = expect_atoms(evaluate_pin(&designer, node_id, 0));
+    assert_same(&result, &methane(), "no steps at all");
+}
+
+#[test]
+fn a_wired_loader_that_cannot_read_its_file_errors_with_the_file_name() {
     let mut designer = setup_designer();
     let base_id = add_value_node(&mut designer, molecule_value(methane()));
     let node_id = add_mechanosynth(
@@ -481,8 +592,7 @@ fn a_wired_file_that_cannot_be_loaded_errors_with_the_file_name() {
         base_id,
         loaded_data("methylate_ops.json", "methylate_build.json", -1),
     );
-    let missing = fixture("no_such_build.json");
-    let build_id = add_string_node(&mut designer, &missing);
+    let build_id = add_build_script_node(&mut designer, "no_such_build.json");
     designer.connect_nodes(build_id, 0, node_id, 2);
 
     let message = expect_error(evaluate_pin(&designer, node_id, 0));
@@ -512,7 +622,7 @@ fn a_step_that_cannot_match_surfaces_the_engines_message() {
         "the engine's wording should reach the pin behind one prefix: {message}"
     );
     assert!(
-        message.contains("not found within 0.30") && message.contains("nearest atom is C"),
+        message.contains("not found within 0.05") && message.contains("nearest atom is C"),
         "the whole diagnostic should survive: {message}"
     );
 
@@ -555,7 +665,9 @@ fn a_library_with_a_validation_error_errors_at_eval_and_sits_in_load_error() {
 }
 
 #[test]
-fn a_missing_file_property_names_the_property() {
+fn a_node_with_a_library_but_no_steps_replays_nothing() {
+    // The asymmetry is deliberate: no steps is a *state*, no library is a
+    // *mistake*. See `MechanosynthData::resolve_script`.
     let mut designer = setup_designer();
     let base_id = add_value_node(&mut designer, molecule_value(methane()));
 
@@ -563,11 +675,14 @@ fn a_missing_file_property_names_the_property() {
     ops_only.ops_file = Some(fixture("methylate_ops.json"));
     ops_only.reload_missing(None);
     let node_id = add_mechanosynth(&mut designer, base_id, ops_only);
-    let message = expect_error(evaluate_pin(&designer, node_id, 0));
-    assert!(
-        message.contains("build_file"),
-        "the missing property should be named: {message}"
-    );
+    let result = expect_atoms(evaluate_pin(&designer, node_id, 0));
+    assert_same(&result, &methane(), "a library with nothing to replay");
+}
+
+#[test]
+fn a_node_with_steps_but_no_library_says_to_wire_the_ops_pin() {
+    let mut designer = setup_designer();
+    let base_id = add_value_node(&mut designer, molecule_value(methane()));
 
     let mut build_only = MechanosynthData::new();
     build_only.build_file = Some(fixture("methylate_build.json"));
@@ -575,8 +690,8 @@ fn a_missing_file_property_names_the_property() {
     let node_id = add_mechanosynth(&mut designer, base_id, build_only);
     let message = expect_error(evaluate_pin(&designer, node_id, 0));
     assert!(
-        message.contains("ops_file"),
-        "the missing property should be named: {message}"
+        message.contains("ops pin"),
+        "the message should say what to do: {message}"
     );
 }
 
@@ -919,6 +1034,13 @@ fn vec3_field(record: &[(String, NetworkResult)], name: &str) -> DVec3 {
     }
 }
 
+fn mat3_field(record: &[(String, NetworkResult)], name: &str) -> DMat3 {
+    match field(record, name) {
+        NetworkResult::Mat3(value) => value,
+        other => panic!("{name} should be a Mat3, got {}", other.to_display_string()),
+    }
+}
+
 fn string_field(record: &[(String, NetworkResult)], name: &str) -> String {
     match field(record, name) {
         NetworkResult::String(value) => value,
@@ -942,6 +1064,9 @@ fn the_step_pin_describes_the_last_applied_step() {
     assert_eq!(int_field(&record, "site"), 1);
     assert!(string_field(&record, "note").contains("second carbon"));
     assert_eq!(vec3_field(&record, "t"), DVec3::new(5.0, 0.0, 0.0));
+    // The fixture states no rotation, so `r` is the identity — the same
+    // absent-field default the engine and the `BuildStep` record use.
+    assert_eq!(mat3_field(&record, "r"), DMat3::IDENTITY);
 
     // A step that states no metadata reports the absent-field defaults, not
     // whatever the neighbouring steps said.
@@ -967,6 +1092,31 @@ fn the_step_pin_at_step_zero_names_no_step_at_all() {
     assert_eq!(int_field(&record, "layer"), -1);
     assert_eq!(int_field(&record, "site"), -1);
     assert_eq!(vec3_field(&record, "t"), DVec3::ZERO);
+    assert_eq!(mat3_field(&record, "r"), DMat3::IDENTITY);
+}
+
+#[test]
+fn the_step_pin_carries_the_applied_steps_rotation() {
+    // `transform_build.json`'s second step turns 90 deg about z, so `r` on the
+    // pin is a rotation a downstream network can orient a gadget with — not
+    // only the point `t` places it at.
+    let mut designer = setup_designer();
+    let base = add_value_node(&mut designer, molecule_value(three_carbons()));
+    let node_id = add_mechanosynth(
+        &mut designer,
+        base,
+        loaded_data("transform_ops.json", "transform_build.json", 2),
+    );
+    let record = match evaluate_pin(&designer, node_id, 1) {
+        NetworkResult::Record(fields) => fields,
+        other => panic!("expected a record, got {}", other.to_display_string()),
+    };
+    let expected = DMat3::from_cols(
+        DVec3::new(0.0, 1.0, 0.0),
+        DVec3::new(-1.0, 0.0, 0.0),
+        DVec3::new(0.0, 0.0, 1.0),
+    );
+    assert_eq!(mat3_field(&record, "r"), expected);
 }
 
 #[test]
@@ -997,7 +1147,7 @@ fn both_output_pins_carry_the_same_failure() {
     let on_result = expect_error(evaluate_pin(&designer, node_id, 0));
     let on_step = expect_error(evaluate_pin(&designer, node_id, 1));
     assert_eq!(on_result, on_step);
-    assert!(on_result.contains("ops_file"), "{on_result}");
+    assert!(on_result.contains("ops pin"), "{on_result}");
 
     // And a match failure, which happens after both files parse.
     let mut designer = setup_designer();
@@ -1064,7 +1214,9 @@ fn the_step_pin_declares_the_built_in_record_type() {
     assert_eq!(
         names,
         vec![
-            "index", "count", "op", "note", "method", "phase", "layer", "site", "t"
-        ]
+            "index", "count", "op", "note", "method", "phase", "layer", "site", "t", "r"
+        ],
+        "`r` is appended last, so existing record_construct wires keep their \
+         positions"
     );
 }

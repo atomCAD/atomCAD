@@ -7,8 +7,52 @@ import '../../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'structure_designer_api_types.dart';
 
-// These functions are ignored because they are not marked as `pub`: `design_dir`
-// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `chapters`, `mechanosynth_data`, `mechanosynth_info`, `set_mechanosynth_data`
+// These functions are ignored because they are not marked as `pub`: `design_dir`, `node_data`
+// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `build_script_data`, `chapters`, `mechanosynth_data`, `mechanosynth_info`, `ops_library_data`, `set_build_script_file`, `set_mechanosynth_data`, `set_ops_library_file`
+
+APIOpsLibraryData? getOpsLibraryData(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerMechanosynthApiGetOpsLibraryData(
+            scopePath: scopePath, nodeId: nodeId);
+
+void setOpsLibraryData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        String? file,
+        required bool reload}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerMechanosynthApiSetOpsLibraryData(
+            scopePath: scopePath, nodeId: nodeId, file: file, reload: reload);
+
+APIBuildScriptData? getBuildScriptData(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerMechanosynthApiGetBuildScriptData(
+            scopePath: scopePath, nodeId: nodeId);
+
+void setBuildScriptData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        String? file,
+        required bool reload}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerMechanosynthApiSetBuildScriptData(
+            scopePath: scopePath, nodeId: nodeId, file: file, reload: reload);
+
+APIExportBuildScriptData? getExportBuildScriptData(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerMechanosynthApiGetExportBuildScriptData(
+            scopePath: scopePath, nodeId: nodeId);
+
+void setExportBuildScriptData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIExportBuildScriptData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerMechanosynthApiSetExportBuildScriptData(
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
 APIMechanosynthData? getMechanosynthData(
         {required Uint64List scopePath, required BigInt nodeId}) =>
@@ -23,6 +67,16 @@ void setMechanosynthNodeData(
     RustLib.instance.api
         .crateApiStructureDesignerMechanosynthApiSetMechanosynthNodeData(
             scopePath: scopePath, nodeId: nodeId, data: data);
+
+/// **Convert to nodes**: replaces a `mechanosynth` node's deprecated
+/// `ops_file` / `build_file` properties with wired `ops_library` /
+/// `build_script` nodes. One undo entry; returns the failure message, if any,
+/// for the panel to show.
+String? mechanosynthConvertFilesToNodes(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerMechanosynthApiMechanosynthConvertFilesToNodes(
+            scopePath: scopePath, nodeId: nodeId);
 
 APIMechanosynthInfo? getMechanosynthInfo(
         {required Uint64List scopePath, required BigInt nodeId}) =>

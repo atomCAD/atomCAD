@@ -9,8 +9,17 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
-/// Editor widget for `mechanosynth` nodes — two file pickers and a step
-/// scrubber.
+/// Editor widget for `mechanosynth` nodes — a step scrubber, the phase list,
+/// and the deprecated file properties where a legacy project still has them.
+///
+/// **The library and the steps arrive on wires now** (`ops`, `steps`), so the
+/// panel has nothing to offer for them: `ops_library` and `build_script` are
+/// ordinary nodes with their own panels. The two file fields appear only on a
+/// node that still carries the deprecated properties, and a field disappears
+/// as soon as its pin is wired, because the wire wins at evaluation and a
+/// field that edits something the node ignores is a trap. The **Convert to
+/// nodes** button is the one-press migration; nothing converts automatically.
+/// See `doc/design_mechanosynth_editor.md`.
 ///
 /// **The step slider commits on release.** Every write goes through
 /// `refresh_structure_designer_auto` on the UI thread, and a full replay plus
@@ -54,11 +63,11 @@ class MechanosynthEditor extends StatefulWidget {
   /// `build_file` pin cannot leave a stale count on screen.
   final APIMechanosynthInfo? info;
 
-  /// Whether the `ops_file` / `build_file` / `step` input pins are wired. A
-  /// wire overrides the stored property, so the field below it still edits
-  /// something real but no longer describes what the node evaluates.
-  final bool opsFileConnected;
-  final bool buildFileConnected;
+  /// Whether the `ops` / `steps` / `step` input pins are wired. A wire
+  /// overrides the matching stored property, so the property's field is hidden
+  /// rather than left editing something the node ignores.
+  final bool opsConnected;
+  final bool stepsConnected;
   final bool stepConnected;
 
   final StructureDesignerModel model;
@@ -68,8 +77,8 @@ class MechanosynthEditor extends StatefulWidget {
     required this.nodeId,
     required this.data,
     required this.info,
-    required this.opsFileConnected,
-    required this.buildFileConnected,
+    required this.opsConnected,
+    required this.stepsConnected,
     required this.stepConnected,
     required this.model,
   });
@@ -88,7 +97,8 @@ class _MechanosynthEditorState extends State<MechanosynthEditor> {
   /// the panel renders from it and nothing is written to the kernel.
   int? _previewStep;
 
-  /// A failure of one of the two file dialogs; nothing else lands here.
+  /// A failure of one of the two file dialogs, or of **Convert to nodes**;
+  /// nothing else lands here.
   String? _errorMessage;
 
   @override
@@ -116,6 +126,8 @@ class _MechanosynthEditorState extends State<MechanosynthEditor> {
             ? current.buildFile
             : buildFile as String?,
         step: step ?? current.step,
+        // Read-only on the kernel side; the setter ignores what is sent.
+        hasLegacyFiles: current.hasLegacyFiles,
       ),
     );
   }
@@ -144,45 +156,98 @@ class _MechanosynthEditorState extends State<MechanosynthEditor> {
     }
   }
 
-  /// A path field, its Browse button and — when the matching pin is wired —
-  /// the one line saying the wire wins.
+  /// A deprecated path field and its Browse button. Only reached for a
+  /// property that is actually set on a node whose matching pin is unwired —
+  /// see [_buildLegacyGroup].
   Widget _buildFileRow({
     required String label,
     required String? value,
-    required bool connected,
     required bool ops,
   }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Expanded(
+          child: StringInput(
+            label: label,
+            value: value ?? '',
+            onChanged: (text) {
+              final name = text.isEmpty ? null : text;
+              if (ops) {
+                _update(opsFile: name);
+              } else {
+                _update(buildFile: name);
+              }
+            },
+          ),
+        ),
+        const SizedBox(width: 8),
+        IconButton(
+          onPressed: () => _browse(ops: ops),
+          icon: const Icon(Icons.folder_open),
+          tooltip: 'Browse',
+        ),
+      ],
+    );
+  }
+
+  /// The deprecated file properties, shown only on a node that still has one.
+  ///
+  /// A property whose pin is wired gets no field: the wire supplies the value
+  /// and the property is dead weight the button is about to clear. A brand-new
+  /// node has neither property and sees none of this — the way to give it a
+  /// library and steps is to wire `ops_library` and `build_script`.
+  Widget _buildLegacyGroup(BuildContext context, APIMechanosynthData data) {
+    if (!data.hasLegacyFiles) return const SizedBox.shrink();
+
+    final showOps = data.opsFile != null && !widget.opsConnected;
+    final showBuild = data.buildFile != null && !widget.stepsConnected;
+    final captionStyle = Theme.of(context).textTheme.bodySmall;
+    final color = Theme.of(context).colorScheme.onSurfaceVariant;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Expanded(
-              child: StringInput(
-                label: label,
-                value: value ?? '',
-                onChanged: (text) {
-                  final name = text.isEmpty ? null : text;
-                  if (ops) {
-                    _update(opsFile: name);
-                  } else {
-                    _update(buildFile: name);
-                  }
-                },
-              ),
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              onPressed: () => _browse(ops: ops),
-              icon: const Icon(Icons.folder_open),
-              tooltip: 'Browse',
-            ),
-          ],
+        Text('File properties (deprecated)',
+            style: captionStyle?.copyWith(color: color)),
+        const SizedBox(height: 6),
+        if (showOps) ...[
+          _buildFileRow(
+            label: 'Operation Library',
+            value: data.opsFile,
+            ops: true,
+          ),
+          const SizedBox(height: 8),
+        ],
+        if (showBuild) ...[
+          _buildFileRow(
+            label: 'Build Script',
+            value: data.buildFile,
+            ops: false,
+          ),
+          const SizedBox(height: 8),
+        ],
+        if (!showOps && !showBuild)
+          _buildWiredHint('The wired pins supply the library and the steps.'),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            key: const Key('mechanosynth_convert_to_nodes'),
+            onPressed: _convertToNodes,
+            icon: const Icon(Icons.account_tree_outlined, size: 18),
+            label: const Text('Convert to nodes'),
+          ),
         ),
-        if (connected) _buildWiredHint('The wired pin supplies this file.'),
+        const SizedBox(height: 12),
       ],
     );
+  }
+
+  /// One press, one undo entry: the kernel builds the `ops_library` /
+  /// `build_script` nodes, wires them in and clears the properties.
+  void _convertToNodes() {
+    final error = widget.model.convertMechanosynthFilesToNodes(widget.nodeId);
+    setState(() => _errorMessage = error);
   }
 
   Widget _buildWiredHint(String text) {
@@ -483,20 +548,7 @@ class _MechanosynthEditorState extends State<MechanosynthEditor> {
             nodeTypeName: 'mechanosynth',
           ),
           const SizedBox(height: 16),
-          _buildFileRow(
-            label: 'Operation Library',
-            value: data.opsFile,
-            connected: widget.opsFileConnected,
-            ops: true,
-          ),
-          const SizedBox(height: 12),
-          _buildFileRow(
-            label: 'Build Script',
-            value: data.buildFile,
-            connected: widget.buildFileConnected,
-            ops: false,
-          ),
-          const SizedBox(height: 12),
+          _buildLegacyGroup(context, data),
           _buildStepGroup(context, data),
           const SizedBox(height: 4),
           _buildCurrentStep(context),

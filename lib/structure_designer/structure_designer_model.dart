@@ -3055,6 +3055,62 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  APIOpsLibraryData? getOpsLibraryData(BigInt nodeId) {
+    return mechanosynth_api.getOpsLibraryData(
+        scopePath: propertyEditorScopePath, nodeId: nodeId);
+  }
+
+  /// Writes an `ops_library` node's file name. `reload: true` forces a re-read
+  /// even when the name did not change — the panel's Reload button, for a file
+  /// edited outside the application.
+  void setOpsLibraryFile(BigInt nodeId, String? file, {bool reload = false}) {
+    mechanosynth_api.setOpsLibraryData(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        file: file,
+        reload: reload);
+    refreshFromKernel();
+  }
+
+  APIBuildScriptData? getBuildScriptData(BigInt nodeId) {
+    return mechanosynth_api.getBuildScriptData(
+        scopePath: propertyEditorScopePath, nodeId: nodeId);
+  }
+
+  /// The `build_script` counterpart of [setOpsLibraryFile].
+  void setBuildScriptFile(BigInt nodeId, String? file, {bool reload = false}) {
+    mechanosynth_api.setBuildScriptData(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        file: file,
+        reload: reload);
+    refreshFromKernel();
+  }
+
+  APIExportBuildScriptData? getExportBuildScriptData(BigInt nodeId) {
+    return mechanosynth_api.getExportBuildScriptData(
+        scopePath: propertyEditorScopePath, nodeId: nodeId);
+  }
+
+  void setExportBuildScriptFileName(BigInt nodeId, String fileName) {
+    mechanosynth_api.setExportBuildScriptData(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: APIExportBuildScriptData(fileName: fileName));
+    refreshFromKernel();
+  }
+
+  /// **Convert to nodes** on a `mechanosynth` node: swaps its deprecated
+  /// `ops_file` / `build_file` properties for wired `ops_library` /
+  /// `build_script` nodes. Returns the kernel's failure message, or `null` on
+  /// success. One undo entry.
+  String? convertMechanosynthFilesToNodes(BigInt nodeId) {
+    final error = mechanosynth_api.mechanosynthConvertFilesToNodes(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId);
+    refreshFromKernel();
+    return error;
+  }
+
   void setTagData(BigInt nodeId, APITagData data) {
     tag_api.setTagData(
         scopePath: scopeChainToBytes(propertyEditorScopeChain),

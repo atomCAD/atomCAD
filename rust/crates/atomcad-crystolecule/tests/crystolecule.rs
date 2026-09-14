@@ -14,6 +14,9 @@ mod extract_diff_test;
 #[path = "crystolecule/atomic_structure_test.rs"]
 mod atomic_structure_test;
 
+#[path = "crystolecule/atomic_structure_matching_test.rs"]
+mod atomic_structure_matching_test;
+
 #[path = "crystolecule/atom_tags_test.rs"]
 mod atom_tags_test;
 

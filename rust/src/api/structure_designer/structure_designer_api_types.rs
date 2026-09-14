@@ -67,6 +67,10 @@ pub enum APIDataTypeBase {
     /// paint. Ordinary first-class pin type. See
     /// `doc/design_isosurface_node.md`.
     Isosurface,
+    /// A parsed mechanosynthesis operation library. Opaque to the network:
+    /// produced by `ops_library`, consumed by `mechanosynth`. See
+    /// `doc/design_mechanosynth_editor.md`.
+    OpLibrary,
     /// The type with exactly one value. Produced by effect nodes; carries no
     /// payload. See `doc/design_node_execution.md`.
     Unit,
@@ -1532,10 +1536,18 @@ pub struct APIImportCubeData {
 /// The three stored properties of a `mechanosynth` node. The parsed library and
 /// script are `#[serde(skip)]` payload and never cross the bridge.
 pub struct APIMechanosynthData {
+    /// Deprecated: superseded by the `ops` pin. Kept so a project saved before
+    /// the pins existed keeps replaying, and so the panel can offer **Convert
+    /// to nodes**. See `doc/design_mechanosynth_editor.md`.
     pub ops_file: Option<String>,
+    /// Deprecated: superseded by the `steps` pin.
     pub build_file: Option<String>,
     /// Negative means "every step"; the panel writes the slider value instead.
     pub step: i32,
+    /// Whether either deprecated file property is set — the condition for
+    /// showing the **Convert to nodes** button. Read-only; the setter ignores
+    /// it.
+    pub has_legacy_files: bool,
 }
 
 /// What the `mechanosynth` panel needs beyond the stored properties: the loaded
@@ -1584,6 +1596,49 @@ pub struct APIMechanosynthChapter {
     pub first_step: i32,
     /// 1-based index of the chapter's last step, inclusive.
     pub last_step: i32,
+}
+
+/// The stored data of an `ops_library` node plus what the panel cannot compute
+/// for itself: the parsed library's contents. The parsed library is payload and
+/// never crosses the bridge, so the summary below is the only view of it.
+///
+/// Every field but `file` reads as empty / zero when no library is loaded —
+/// which is also the state a load failure leaves. The failure itself surfaces
+/// on the output pin, not here. See `doc/design_mechanosynth_editor.md`.
+pub struct APIOpsLibraryData {
+    pub file: Option<String>,
+    /// The match tolerance in force for a replay against this library
+    /// (Ångström): the file's own, else the engine default.
+    pub tolerance: f64,
+    /// Whether the file states a `tolerance` of its own — the panel says
+    /// "default" rather than repeating the number when it does not.
+    pub tolerance_stated: bool,
+    /// Load-time advisories, today the origin convention. Never errors.
+    pub warnings: Vec<String>,
+    pub ops: Vec<APIOpsLibraryEntry>,
+}
+
+/// One operation of a loaded library, as the panel lists it.
+pub struct APIOpsLibraryEntry {
+    pub name: String,
+    pub before_atoms: i32,
+    pub after_atoms: i32,
+    /// The operation states `"chiral": true`: a mirrored placement is a
+    /// different reaction, so the placement tool drops mirrored fits.
+    pub chiral: bool,
+}
+
+/// The stored data of a `build_script` node plus the loaded script's length,
+/// which the panel cannot compute (the parsed script never crosses the bridge).
+pub struct APIBuildScriptData {
+    pub file: Option<String>,
+    /// `0` when nothing is loaded, which is also what a load failure leaves.
+    pub step_count: i32,
+}
+
+/// The stored data of an `export_build_script` node.
+pub struct APIExportBuildScriptData {
+    pub file_name: String,
 }
 
 pub struct APIImportCIFData {

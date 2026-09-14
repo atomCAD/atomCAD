@@ -523,6 +523,9 @@ String _apiDataTypeToString(APIDataType dt) {
     case APIDataTypeBase.isosurface:
       base = 'Isosurface';
       break;
+    case APIDataTypeBase.opLibrary:
+      base = 'OpLibrary';
+      break;
     case APIDataTypeBase.unit:
       base = 'Unit';
       break;

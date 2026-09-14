@@ -9427,6 +9427,164 @@ impl StructureDesigner {
         Ok(())
     }
 
+    /// **Convert to nodes** on a `mechanosynth` node: replaces its deprecated
+    /// `ops_file` / `build_file` properties with wired `ops_library` /
+    /// `build_script` nodes carrying the same paths.
+    ///
+    /// One undo entry, and nothing happens automatically — a project that
+    /// loads with the legacy properties keeps replaying from them until the
+    /// user presses the button. Graph surgery on load would rewrite a design
+    /// nobody asked to have rewritten; see
+    /// `doc/design_mechanosynth_editor.md` §"Considered and rejected".
+    ///
+    /// Only the properties that are actually set produce a node, so a node
+    /// half-converted by hand converts the other half. A property whose pin is
+    /// already wired is cleared without a second node, because the wire
+    /// already wins.
+    pub fn convert_mechanosynth_files_to_nodes(
+        &mut self,
+        scope_path: &[u64],
+        node_id: u64,
+    ) -> Result<(), String> {
+        use super::nodes::build_script::BuildScriptData;
+        use super::nodes::mechanosynth::{MechanosynthData, OPS_PIN, STEPS_PIN};
+        use super::nodes::ops_library::OpsLibraryData;
+        use super::undo::commands::convert_files_to_nodes::ConvertFilesToNodesCommand;
+
+        let network_name = self
+            .active_node_network_name
+            .clone()
+            .ok_or("No active network")?;
+        let design_dir = self
+            .node_type_registry
+            .design_file_name
+            .as_ref()
+            .and_then(|design_path| atomcad_util::path_utils::get_parent_directory(design_path));
+
+        // 1. Read what there is to convert, and where to put the new nodes.
+        let (ops_file, build_file, position, ops_wired, steps_wired) = {
+            let target = self
+                .get_scope_network(scope_path)
+                .ok_or("Scope not found")?;
+            let node = target.nodes.get(&node_id).ok_or("Node not found")?;
+            let data = node
+                .data
+                .as_any_ref()
+                .downcast_ref::<MechanosynthData>()
+                .ok_or("Not a mechanosynth node")?;
+            let wired = |pin: usize| {
+                node.arguments
+                    .get(pin)
+                    .is_some_and(|argument| !argument.argument_output_pins().is_empty())
+            };
+            (
+                data.ops_file.clone(),
+                data.build_file.clone(),
+                node.position,
+                wired(OPS_PIN),
+                wired(STEPS_PIN),
+            )
+        };
+        if ops_file.is_none() && build_file.is_none() {
+            return Err("this node has no file properties to convert".to_string());
+        }
+
+        // 2. Snapshot before the surgery, exactly as `inline_node` does.
+        let (top_before, body_before) = if scope_path.is_empty() {
+            (self.snapshot_network(&network_name), None)
+        } else {
+            (None, self.snapshot_zone_body(scope_path))
+        };
+
+        // 3. The individual mutations below each push their own command; the
+        //    whole conversion is one undo entry, so they are suppressed and a
+        //    single snapshot command is pushed at the end.
+        self.undo_stack.suppress_recording();
+
+        // Stacked to the left of the node being converted. Both loaders run so
+        // the new nodes arrive with their payloads parsed, rather than waiting
+        // for the first evaluation to re-read the files.
+        const DX: f64 = -260.0;
+        const DY: f64 = 70.0;
+        if let Some(file) = ops_file.clone()
+            && !ops_wired
+        {
+            let new_id = self.add_node_scoped(
+                scope_path,
+                "ops_library",
+                DVec2::new(position.x + DX, position.y - DY),
+                None,
+            );
+            let mut data = OpsLibraryData {
+                file: Some(file),
+                ..OpsLibraryData::new()
+            };
+            data.reload_missing(design_dir.as_deref());
+            self.set_node_network_data_scoped(scope_path, new_id, Box::new(data));
+            self.connect_nodes_scoped(scope_path, new_id, 0, node_id, OPS_PIN);
+        }
+        if let Some(file) = build_file.clone()
+            && !steps_wired
+        {
+            let new_id = self.add_node_scoped(
+                scope_path,
+                "build_script",
+                DVec2::new(position.x + DX, position.y + DY),
+                None,
+            );
+            let mut data = BuildScriptData {
+                file: Some(file),
+                ..BuildScriptData::new()
+            };
+            data.reload_missing(design_dir.as_deref());
+            self.set_node_network_data_scoped(scope_path, new_id, Box::new(data));
+            self.connect_nodes_scoped(scope_path, new_id, 0, node_id, STEPS_PIN);
+        }
+
+        // 4. Clear the properties and their caches: the node reads its wires
+        //    now, and a stale path would re-appear in the text format.
+        if let Some(data) = self
+            .get_node_network_data_scoped(scope_path, node_id)
+            .and_then(|data| data.as_any_ref().downcast_ref::<MechanosynthData>())
+        {
+            let mut updated = data.clone();
+            updated.ops_file = None;
+            updated.build_file = None;
+            updated.library = None;
+            updated.script = None;
+            updated.load_error = None;
+            self.set_node_network_data_scoped(scope_path, node_id, Box::new(updated));
+        }
+
+        self.undo_stack.resume_recording();
+
+        // 5. Refresh paths do not validate, so a stale error would linger.
+        self.validate_active_network();
+
+        // 6. One undo entry for the whole conversion.
+        if scope_path.is_empty() {
+            if let (Some(before), Some(after)) = (top_before, self.snapshot_network(&network_name))
+            {
+                self.push_command(ConvertFilesToNodesCommand {
+                    network_name: network_name.clone(),
+                    before_snapshot: before,
+                    after_snapshot: after,
+                });
+            }
+        } else {
+            self.push_zone_body_command(
+                scope_path,
+                "Convert files to nodes".to_string(),
+                body_before,
+            );
+        }
+
+        self.is_dirty = true;
+        self.mark_full_refresh();
+
+        Ok(())
+    }
+
     /// Whether the node at `(scope_path, node_id)` can be converted to a closure
     /// (*Network → Closure*): it must be a custom-network instance, used as a
     /// function (no wire consumes a normal output pin) or unconsumed, whose

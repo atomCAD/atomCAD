@@ -501,6 +501,10 @@ pub fn parse_concrete_type_name(name: &str) -> Option<DataType> {
         // it is not a valid element type. See `doc/design_node_execution.md`
         // ("Out-of-scope follow-ups").
         DataType::Unit => None,
+        // `OpLibrary` is opaque to the network: no field access, no
+        // construction from the network, and so no `expr` literal that could
+        // produce one. See `doc/design_mechanosynth_editor.md`.
+        DataType::OpLibrary => None,
         _ => Some(dt),
     }
 }

@@ -1,9 +1,20 @@
 //! `mechanosynth` — replays a mechanosynthetic build sequence onto a workpiece.
 //!
 //! The whole rewrite engine lives in `atomcad_crystolecule::mechanosynth`; this
-//! node is the thin wrapper that gives it two file properties, a step number
-//! and a place in the network. See `design_mechanosynth_node.md` (external, in
-//! the mechanosynth working folder), Track A P2.
+//! node is the thin wrapper that gives it a place in the network. See
+//! `design_mechanosynth_node.md` (external, in the mechanosynth working folder),
+//! Track A P2, and `doc/design_mechanosynth_editor.md` for the wired-value
+//! conversion.
+//!
+//! **The library and the steps arrive on wires** (`ops: OpLibrary`,
+//! `steps: [BuildStep]`), produced by `ops_library` and `build_script` or by
+//! any array plumbing. The two file properties are **deprecated** and kept as
+//! the fallback for a project saved before the pins existed: with the pin
+//! unwired and the property set, the node reads the file exactly as it used
+//! to. A wired pin wins and the panel hides the property's field. Nothing
+//! converts a legacy node automatically — the panel offers a **Convert to
+//! nodes** button, because graph surgery the user did not ask for is worse
+//! than a stale property.
 //!
 //! Three conventions this node inherits and must not break:
 //!
@@ -42,6 +53,7 @@ use crate::node_network_gadget::NodeNetworkGadget;
 use crate::node_type::NodeTypeCategory;
 use crate::node_type::{NodeType, OutputPinDefinition, Parameter};
 use crate::node_type_registry::NodeTypeRegistry;
+use crate::nodes::build_step::{BUILD_STEP_RECORD, steps_from_array};
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
 use atomcad_crystolecule::mechanosynth::{
@@ -49,6 +61,7 @@ use atomcad_crystolecule::mechanosynth::{
     load_library, replay, steps_applied,
 };
 use atomcad_util::path_utils::{get_parent_directory, resolve_path, try_make_relative};
+use glam::DMat3;
 use glam::DVec3;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -56,6 +69,7 @@ use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::io;
 use std::path::Path;
+use std::sync::Arc;
 
 /// The atom tag the node paints on the atoms of the current step. An ordinary
 /// tag (`doc/design_atom_tags.md`), so `apply_style` can colour it and the tag
@@ -79,6 +93,14 @@ pub const MECHANOSYNTH_STEP_RECORD: &str = "MechanosynthStep";
 /// saved projects and existing wires keep their pin indices
 /// (`doc/design_multi_output_pins.md`).
 pub const STEP_OUTPUT_PIN: usize = 1;
+
+/// Input pin indices. The two file-name pins that used to sit at 1 and 2 are
+/// gone; the *properties* behind them are not (see the module doc), so a saved
+/// project keeps replaying while a wire into either slot now carries a value
+/// instead of a path.
+pub const OPS_PIN: usize = 1;
+pub const STEPS_PIN: usize = 2;
+pub const STEP_PIN: usize = 3;
 
 /// `step = -1` means "every step", which is the useful default: a freshly wired
 /// node shows the finished build.
@@ -200,41 +222,65 @@ impl MechanosynthData {
         Some((steps_applied(self.step, count), count))
     }
 
-    /// The library to replay with: the wired file if one arrived, else the
-    /// parsed cache, else the stored file re-read from disk.
+    /// The library to replay with: the one that arrived on the `ops` wire,
+    /// else the deprecated property's parsed cache, else that property's file
+    /// re-read from disk.
     fn resolve_library(
         &self,
-        wired: Option<String>,
+        wired: Option<Arc<OpLibrary>>,
         design_dir: Option<&str>,
     ) -> Result<Cow<'_, OpLibrary>, String> {
-        if let Some(name) = wired {
-            return load_library_at(&name, design_dir).map(Cow::Owned);
+        if let Some(library) = wired {
+            // One clone per evaluation of a value the `Arc` otherwise shares.
+            // `replay` wants a `&OpLibrary` outliving the call, and a library
+            // is small; the alternative is threading the `Arc` through `Cow`,
+            // which buys nothing here.
+            return Ok(Cow::Owned((*library).clone()));
         }
         if let Some(library) = &self.library {
             return Ok(Cow::Borrowed(library));
         }
         match &self.ops_file {
             Some(name) => load_library_at(name, design_dir).map(Cow::Owned),
-            None => Err("no operation library (set the ops_file property)".to_string()),
+            None => Err("no operation library (wire the ops pin)".to_string()),
         }
     }
 
-    /// The build script to replay. Same precedence as [`Self::resolve_library`].
+    /// The steps to replay. Same precedence as [`Self::resolve_library`], with
+    /// one difference: a node with neither a wire nor a property replays
+    /// **nothing** rather than failing, so a half-wired node still displays its
+    /// base instead of going red while the user is still building the graph.
     fn resolve_script(
         &self,
-        wired: Option<String>,
+        wired: Option<Vec<atomcad_crystolecule::mechanosynth::Step>>,
         design_dir: Option<&str>,
     ) -> Result<Cow<'_, BuildScript>, String> {
-        if let Some(name) = wired {
-            return load_script_at(&name, design_dir).map(Cow::Owned);
+        if let Some(steps) = wired {
+            return Ok(Cow::Owned(BuildScript {
+                // The label errors name. A wired array has no file, and
+                // "steps" is what the pin is called.
+                file: "steps".to_string(),
+                tolerance: None,
+                steps,
+            }));
         }
         if let Some(script) = &self.script {
             return Ok(Cow::Borrowed(script));
         }
         match &self.build_file {
             Some(name) => load_script_at(name, design_dir).map(Cow::Owned),
-            None => Err("no build script (set the build_file property)".to_string()),
+            None => Ok(Cow::Owned(BuildScript {
+                file: "steps".to_string(),
+                tolerance: None,
+                steps: Vec::new(),
+            })),
         }
+    }
+
+    /// Whether either deprecated file property is set. The panel shows its
+    /// **Convert to nodes** button exactly when this is true.
+    pub fn has_legacy_files(&self) -> bool {
+        self.ops_file.is_some() || self.build_file.is_some()
     }
 }
 
@@ -264,29 +310,6 @@ fn resolve(name: &str, design_dir: Option<&str>) -> Result<String, String> {
     resolve_path(name, design_dir)
         .map(|(resolved, _was_relative)| resolved)
         .map_err(|_| format!("failed to resolve path: {name}"))
-}
-
-/// A wired file-name pin: `None` when nothing is connected, the string when one
-/// is. Anything else is a type error the evaluator reports for us, so a
-/// non-string simply falls back to the stored property.
-#[allow(clippy::result_large_err)]
-fn wired_name(
-    network_evaluator: &NetworkEvaluator,
-    network_stack: &[NetworkStackElement<'_>],
-    node_id: u64,
-    registry: &NodeTypeRegistry,
-    context: &mut NetworkEvaluationContext,
-    parameter_index: usize,
-) -> Result<Option<String>, NetworkResult> {
-    network_evaluator.evaluate_or_default(
-        network_stack,
-        node_id,
-        registry,
-        context,
-        parameter_index,
-        None,
-        |result| result.extract_string().map(Some),
-    )
 }
 
 impl NodeData for MechanosynthData {
@@ -330,34 +353,43 @@ impl NodeData for MechanosynthData {
             .as_ref()
             .and_then(|design_path| get_parent_directory(design_path));
 
-        let wired_ops = match wired_name(
-            network_evaluator,
+        let wired_ops = match network_evaluator.evaluate_arg(
             network_stack,
             node_id,
             registry,
             context,
-            1,
+            OPS_PIN,
         ) {
-            Ok(name) => name,
-            Err(propagated) => return both(propagated),
+            NetworkResult::None => None,
+            NetworkResult::OpLibrary(library) => Some(library),
+            propagated @ NetworkResult::Error(_) => return both(propagated),
+            other => {
+                return both(error(format!(
+                    "expected an OpLibrary on the ops pin, got {:?}",
+                    other.infer_data_type()
+                )));
+            }
         };
-        let wired_build = match wired_name(
-            network_evaluator,
+        let wired_steps = match network_evaluator.evaluate_arg(
             network_stack,
             node_id,
             registry,
             context,
-            2,
+            STEPS_PIN,
         ) {
-            Ok(name) => name,
-            Err(propagated) => return both(propagated),
+            NetworkResult::None => None,
+            propagated @ NetworkResult::Error(_) => return both(propagated),
+            array => match steps_from_array(&array) {
+                Ok(steps) => Some(steps),
+                Err(message) => return both(error(message)),
+            },
         };
         let step = match network_evaluator.evaluate_or_default(
             network_stack,
             node_id,
             registry,
             context,
-            3,
+            STEP_PIN,
             self.step,
             NetworkResult::extract_int,
         ) {
@@ -369,7 +401,7 @@ impl NodeData for MechanosynthData {
             Ok(library) => library,
             Err(message) => return both(error(message)),
         };
-        let script = match self.resolve_script(wired_build, design_dir.as_deref()) {
+        let script = match self.resolve_script(wired_steps, design_dir.as_deref()) {
             Ok(script) => script,
             Err(message) => return both(error(message)),
         };
@@ -403,7 +435,7 @@ impl NodeData for MechanosynthData {
 
     fn get_subtitle(&self, connected_input_pins: &HashSet<String>) -> Option<String> {
         let mut parts = Vec::new();
-        if !connected_input_pins.contains("build_file")
+        if !connected_input_pins.contains("steps")
             && let Some(build_file) = &self.build_file
         {
             parts.push(build_file.clone());
@@ -545,6 +577,13 @@ fn step_record(script: &BuildScript, step: i32) -> NetworkResult {
             "t".to_string(),
             NetworkResult::Vec3(current.map_or(DVec3::ZERO, |s| s.t)),
         ),
+        // So a downstream network can *orient* a gadget at the reaction site
+        // and not only place it. The identity when no step has been applied,
+        // matching the absent-`r` default everywhere else.
+        (
+            "r".to_string(),
+            NetworkResult::Mat3(current.map_or(DMat3::IDENTITY, |s| s.r)),
+        ),
     ])
 }
 
@@ -598,11 +637,15 @@ pub fn get_node_type() -> NodeType {
             after the first `step` positionally controlled reactions of a build script. Scrubbing \
             `step` shows the structure being built.\n\
             \n\
-            Two JSON files drive it. The **operation library** (`ops_file`) names before/after \
-            atom patterns in a local frame; comparing them by pattern id *is* the rewrite. The \
-            **build script** (`build_file`) lists steps, each naming an operation and a rigid \
-            transform placing it into workpiece coordinates. Both are written by generators, not \
-            by hand.\n\
+            Two values drive it. The **operation library** on the `ops` pin (from `ops_library`) \
+            names before/after atom patterns in a local frame; comparing them by pattern id *is* \
+            the rewrite. The **steps** on the `steps` pin are an array of `BuildStep` records, \
+            each naming an operation and a rigid transform placing it into workpiece \
+            coordinates — from `build_script`, from the array nodes, or from both concatenated. \
+            With `steps` unwired the node replays nothing and emits the base.\n\
+            \n\
+            The match tolerance is the library's own, so a generated library pins it in one \
+            place.\n\
             \n\
             Matching is nearest-atom-within-tolerance on position and element; bonds take no part \
             in it. A step that fails to match aborts evaluation with a message naming the step, \
@@ -617,10 +660,14 @@ pub fn get_node_type() -> NodeType {
             \n\
             The second output pin, `step`, carries a `MechanosynthStep` record describing the \
             **last step applied** — `index`, `count`, `op`, `note`, the script's own `method`, \
-            `phase`, `layer` and `site` metadata, and the placement point `t` — so a `switch`, an \
-            `expr` or a `record_destructure` downstream can act on the step rather than parse its \
-            note. File paths are stored relative to the project file whenever possible so a \
-            copied project keeps working."
+            `phase`, `layer` and `site` metadata, and the placement point `t` and rotation `r` — \
+            so a `switch`, an `expr` or a `record_destructure` downstream can act on the step \
+            rather than parse its note.\n\
+            \n\
+            The `ops_file` and `build_file` **properties are deprecated**. A project saved \
+            before the pins existed keeps replaying from them, and the panel offers a **Convert \
+            to nodes** button that builds the `ops_library` / `build_script` nodes, wires them \
+            in and clears the properties. A wired pin always wins over the property."
             .to_string(),
         summary: Some("Replay a build sequence".to_string()),
         category: NodeTypeCategory::AtomicStructure,
@@ -632,13 +679,15 @@ pub fn get_node_type() -> NodeType {
             },
             Parameter {
                 id: None,
-                name: "ops_file".to_string(),
-                data_type: DataType::String,
+                name: "ops".to_string(),
+                data_type: DataType::OpLibrary,
             },
             Parameter {
                 id: None,
-                name: "build_file".to_string(),
-                data_type: DataType::String,
+                name: "steps".to_string(),
+                data_type: DataType::Array(Box::new(DataType::Record(RecordType::Named(
+                    BUILD_STEP_RECORD.to_string(),
+                )))),
             },
             Parameter {
                 id: None,

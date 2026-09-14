@@ -494,6 +494,7 @@ mod element_type_eligibility_tests {
             DataType::Structure,
             DataType::ScalarField,
             DataType::Isosurface,
+            DataType::OpLibrary,
             DataType::Unit,
             DataType::Array(Box::new(DataType::Int)),
             DataType::Iterator(Box::new(DataType::Int)),
@@ -542,6 +543,7 @@ mod element_type_eligibility_tests {
                 | DataType::Structure
                 | DataType::ScalarField
                 | DataType::Isosurface
+                | DataType::OpLibrary
                 | DataType::Unit
                 | DataType::Array(_)
                 | DataType::Iterator(_)
@@ -567,6 +569,7 @@ mod element_type_eligibility_tests {
                     | DataType::AnyFunction { .. }
                     | DataType::Iterator(_)
                     | DataType::Unit
+                    | DataType::OpLibrary
             )
         };
 
