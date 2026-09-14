@@ -33,6 +33,7 @@ pub mod data_type;
 pub mod displayed_node_refs;
 pub mod eval_errors;
 pub mod evaluator;
+pub mod mechanosynth_edit_ops;
 // D8: a component of the node network, not a peer module. See the crate doc.
 pub mod expr;
 pub mod identifier;

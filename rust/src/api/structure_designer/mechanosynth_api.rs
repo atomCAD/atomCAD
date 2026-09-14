@@ -256,6 +256,7 @@ pub fn ops_library_data(
                     .iter()
                     .map(|op| APIOpsLibraryEntry {
                         name: op.name.clone(),
+                        note: op.note.clone().unwrap_or_default(),
                         before_atoms: op.before.atoms.len() as i32,
                         after_atoms: op.after.atoms.len() as i32,
                         chiral: op.chiral,

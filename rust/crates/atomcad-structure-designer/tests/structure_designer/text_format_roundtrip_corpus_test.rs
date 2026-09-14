@@ -429,3 +429,21 @@ fn duplicate_node_names_are_written_uniquely_and_match_back() {
     }
     assert_eq!(text_of(&sd, "main"), first);
 }
+
+/// A `mechanosynth_edit` node with a wired prefix and an authored block. Its
+/// `authored` property is the format's only array-of-record-literals property
+/// outside `expr`'s parameter list, and the corpus file holds none yet — so
+/// this is the pin standing in for it until a demo grows one.
+#[test]
+fn a_mechanosynth_edit_node_with_a_wired_prefix_round_trips() {
+    let text = replace_is_a_no_op(
+        "lib = ops_library { file: \"ops.json\" }\n\
+         gen = build_script { file: \"build.json\" }\n\
+         edit = mechanosynth_edit { ops: lib, steps: gen, cursor: 2, authored: [\
+         { op: \"habst\", t: (12.71, 9.53, 8.02), method: \"probe\", phase: \"layer1\", layer: 1, site: 0 }, \
+         { op: \"dimerize\", t: (14.27, 9.53, 8.02), r: ((0.0, 1.0, 0.0), (-1.0, 0.0, 0.0), (0.0, 0.0, 1.0)), residual: 0.0213, approximate: true }] }\n\
+         output edit\n",
+    );
+    assert!(text.contains("steps: gen"), "{text}");
+    assert!(text.contains("residual: 0.0213"), "{text}");
+}

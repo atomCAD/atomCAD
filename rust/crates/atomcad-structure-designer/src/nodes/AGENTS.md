@@ -54,7 +54,20 @@ Built-in node type implementations. Each file defines one node type's behavior v
   deprecated** but still read when the matching pin is unwired, so a project
   saved before the pins existed keeps replaying; `Convert to nodes`
   (`StructureDesigner::convert_mechanosynth_files_to_nodes`) is the one-press
-  migration and nothing converts automatically. Design doc:
+  migration and nothing converts automatically.
+
+  **`mechanosynth_edit`** is the authoring half — same engine, different job,
+  the way `atom_edit` is to `apply_diff`. It owns an `authored: Vec<AuthoredStep>`
+  block that is applied **after** whatever arrives on its `steps` pin, a
+  non-undoable `cursor` into that block, and `#[serde(skip)]` placement state
+  (armed op, last offer sweep, pending candidates). Three things to know before
+  touching it: its `Default` is **hand-written** because `#[serde(default)]`
+  covers deserialization only and a derived `cursor: 0` would hide a fresh
+  node's whole block; `eval` runs **two** replays (prefix with no tags, then the
+  block with `ms_current`) because one concatenated script would paint the
+  highlight on the last *prefix* step at cursor 0; and every mutation goes
+  through `mechanosynth_edit_ops.rs`, never `set_node_network_data_scoped`,
+  which would add a second undo entry. Design doc:
   `doc/design_mechanosynth_editor.md`.
 - **I/O:** `import_xyz` (Molecule), `import_cif` (Blueprint), `import_cube` (two pins: a `ScalarField` of volumetric data plus the `Molecule` from the file's atom block; the sole `ScalarField` producer today — `doc/design_scalar_fields.md`). (`export_atoms` is listed under *Effect nodes* — it writes a `.xyz`/`.mol` file as its side effect and gates on Execute.)
 - **Annotation:** `comment`. Carries `anchors: Vec<CommentAnchor>` — what the note documents, either a `Node(id)` or a destination-keyed `WireAnchor` (wires are assembled, not stored, so there is nowhere on a wire to put anything). Anchors are **scope-local**, **inert with respect to evaluation** (never a dependency edge — do not let one make its target count as "used"), and **dropped when dangling, never re-resolved** — `repair_node_network`'s last pass does the dropping, and `CommentAnchor::resolve` is the single place implementing the `destination_param_id`-over-index precedence that makes a pin reorder on a dynamic-arity destination *remap* instead of drop. Design doc: `doc/design_wire_annotations.md`.

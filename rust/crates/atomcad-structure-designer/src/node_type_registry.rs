@@ -74,6 +74,7 @@ use super::nodes::mat3_diag::get_node_type as mat3_diag_get_node_type;
 use super::nodes::mat3_rows::get_node_type as mat3_rows_get_node_type;
 use super::nodes::materialize::get_node_type as materialize_get_node_type;
 use super::nodes::mechanosynth::get_node_type as mechanosynth_get_node_type;
+use super::nodes::mechanosynth_edit::get_node_type as mechanosynth_edit_get_node_type;
 use super::nodes::motif::get_node_type as motif_get_node_type;
 use super::nodes::motif_sub::get_node_type as motif_sub_get_node_type;
 use super::nodes::ops_library::get_node_type as ops_library_get_node_type;
@@ -947,6 +948,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(export_atoms_get_node_type());
         ret.add_node_type(atom_cut_get_node_type());
         ret.add_node_type(mechanosynth_get_node_type());
+        ret.add_node_type(mechanosynth_edit_get_node_type());
         ret.add_node_type(ops_library_get_node_type());
         ret.add_node_type(build_script_get_node_type());
         ret.add_node_type(export_build_script_get_node_type());

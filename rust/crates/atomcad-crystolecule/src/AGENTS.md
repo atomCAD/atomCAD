@@ -190,6 +190,17 @@ place an operation there. Four rules are load-bearing and each has tests in
   floating-point noise between two exact fits does not outvote "proper before
   mirrored".
 
+Two wrappers over `place` complete the file. **`applicable_ops`** answers "what
+can be done at this atom" — one row per operation with anything to say, ranked,
+applicable rows before near misses. It calls `place` at the library tolerance and,
+only when that fails, once more at `tolerance * NEAR_MISS_FACTOR`, so a row's
+candidates are *exactly* what a single `place` call returns and a near miss keeps
+its best rejected fit in a separate field rather than mixed in with placeable
+ones. **`preview_atoms`** turns one candidate into the ghost atoms that preview
+it — added, deleted, moved, and element-`Changed`, which exists because an
+element-swap operation would otherwise preview as nothing at all. Kept atoms draw
+nothing: a ghost on top of an atom that is already there is noise.
+
 Rank-deficient fits (a one-atom pattern, a collinear pair) are resolved
 explicitly rather than handed to the eigen solver, which would answer an
 undetermined question with whichever vector its sweeps produced; they offer no

@@ -223,6 +223,10 @@ pub struct StructureDesigner {
     // for *this* node, and `end_node_data_drag` pushes the one command covering
     // the whole drag. See `doc/design_isosurface_level.md` Part 5 §Plumbing.
     pub pending_node_data_drag: Option<super::undo::snapshot::PendingGadgetDrag>,
+    // The open `mechanosynth_edit` metadata-edit run, so consecutive keystrokes
+    // into one chip coalesce into a single undo entry. See
+    // `mechanosynth_edit_ops.rs`.
+    pub pending_step_metadata_edit: Option<crate::mechanosynth_edit_ops::PendingStepMetadataEdit>,
     // Direct editing mode: simplified UI focused on a single atom_edit node
     pub direct_editing_mode: bool,
     // CLI access rules: sparse map of namespace/network prefixes to allowed (true) / denied (false).
@@ -385,6 +389,7 @@ impl StructureDesigner {
             pending_comment_edit: None,
             pending_zone_resize: None,
             pending_node_data_drag: None,
+            pending_step_metadata_edit: None,
             direct_editing_mode: true,
             cli_access_rules: HashMap::new(),
             print_log: Vec::new(),

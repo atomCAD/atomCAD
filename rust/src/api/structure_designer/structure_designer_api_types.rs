@@ -1621,6 +1621,10 @@ pub struct APIOpsLibraryData {
 /// One operation of a loaded library, as the panel lists it.
 pub struct APIOpsLibraryEntry {
     pub name: String,
+    /// The library author's one-line description of the reaction; empty when
+    /// the file states none. An operation name alone does not say what
+    /// `si_donate_dimer` puts where, which is why the palette shows this.
+    pub note: String,
     pub before_atoms: i32,
     pub after_atoms: i32,
     /// The operation states `"chiral": true`: a mirrored placement is a
@@ -1639,6 +1643,134 @@ pub struct APIBuildScriptData {
 /// The stored data of an `export_build_script` node.
 pub struct APIExportBuildScriptData {
     pub file_name: String,
+}
+
+// ============================================================================
+// `mechanosynth_edit`
+// ============================================================================
+
+/// Everything the `mechanosynth_edit` panel shows: the authored block, where
+/// the cursor is, the wired library's operation names for the palette, and the
+/// tool's current state.
+///
+/// The **prefix** is summarised rather than listed — a generated block is
+/// hundreds of steps the user cannot edit here, and the panel shows it as one
+/// collapsed row. See `doc/design_mechanosynth_editor.md`.
+pub struct APIMechanosynthEditData {
+    /// How many steps arrive on the `steps` pin.
+    pub prefix_count: i32,
+    pub authored: Vec<APIAuthoredStep>,
+    /// The stored cursor; `-1` means "all" and follows the block as it grows.
+    pub cursor: i32,
+    /// The cursor after clamping: how many authored steps `result` shows.
+    pub applied: i32,
+    /// The wired library's operation names, for the palette's op-first entry.
+    /// Empty when no library is wired.
+    pub op_names: Vec<String>,
+    /// How many authored steps were placed with a residual above 1e-4 Å.
+    pub inexact_count: i32,
+    /// How many were oriented from the host's bonds rather than from the
+    /// library's frame atoms.
+    pub approximate_count: i32,
+    /// The most recent evaluation failure, if the last evaluation failed.
+    pub last_error: Option<String>,
+    /// `"idle"` / `"armed"` / `"offers"` / `"candidates"`.
+    pub tool_state: String,
+    /// The armed operation, when the tool has one.
+    pub armed_op: Option<String>,
+    /// The atom the open popup is anchored to.
+    pub anchor_atom_id: Option<u32>,
+    /// The authored block's chapters — maximal runs sharing a `(phase, layer)`.
+    pub chapters: Vec<APIMechanosynthChapter>,
+}
+
+/// One row of the authored block.
+pub struct APIAuthoredStep {
+    pub op: String,
+    pub t: APIVec3,
+    pub note: String,
+    pub method: String,
+    pub phase: String,
+    /// `-1` for "no particular layer".
+    pub layer: i32,
+    /// `-1` for "all sites, or none".
+    pub site: i32,
+    /// Max per-atom residual of the fit that placed it, Å.
+    pub residual: f64,
+    /// `residual < 1e-4 Å`: the step reproduces what a generator would have
+    /// written. A step with no chip is exact.
+    pub exact: bool,
+    /// The orientation came from the host's bonds, not from the library.
+    pub approximate: bool,
+}
+
+/// One preview atom of a ghosted candidate, in workpiece coordinates.
+pub struct APIGhostAtom {
+    /// `"added"` / `"deleted"` / `"moved"`.
+    pub kind: String,
+    pub position: APIVec3,
+    /// The tail of a moved atom's arrow; equal to `position` otherwise.
+    pub from: APIVec3,
+    pub atomic_number: i32,
+}
+
+/// One row of the offer popup: an operation that fits the clicked atom, or one
+/// that nearly does.
+pub struct APIMechanosynthOffer {
+    pub op: String,
+    /// The library's own note for the operation; empty when it has none.
+    pub note: String,
+    /// How many ways this operation can be placed here. `0` for a near miss.
+    pub candidate_count: i32,
+    pub best_residual: f64,
+    /// `false` makes this a **near miss**: it is shown with its residual,
+    /// dimmed and unselectable, and `mechanosynth_edit_choose` refuses it.
+    pub fits: bool,
+    pub exact: bool,
+    pub mirrored: bool,
+    pub approximate: bool,
+    /// The ghost atoms of the row's first candidate (a near-miss row's come
+    /// from its best rejected fit), so highlighting the row previews it with no
+    /// second call.
+    pub ghost: Vec<APIGhostAtom>,
+}
+
+/// An applicability sweep: what the library can do at one atom, plus what the
+/// popup needs to anchor and head itself.
+pub struct APIMechanosynthOffers {
+    pub anchor_atom_id: u32,
+    pub anchor_position: APIVec3,
+    pub anchor_atomic_number: i32,
+    pub rows: Vec<APIMechanosynthOffer>,
+}
+
+/// One way of placing the chosen operation at the clicked atom.
+pub struct APIMechanosynthCandidate {
+    /// What `mechanosynth_edit_choose` takes alongside the operation name.
+    pub index: i32,
+    pub residual: f64,
+    pub exact: bool,
+    pub mirrored: bool,
+    pub approximate: bool,
+    pub ghost: Vec<APIGhostAtom>,
+}
+
+/// What a pick did.
+///
+/// Exactly one of the three shapes is populated: a single candidate is
+/// committed on the spot (`committed`), several wait for a choice
+/// (`candidates`), and a failure carries both its message and the offers for
+/// the same atom, so a click with the wrong operation armed self-corrects in
+/// one more click.
+pub struct APIMechanosynthPickResult {
+    pub committed: bool,
+    /// Where the committed step landed in the authored block; `-1` otherwise.
+    pub inserted_index: i32,
+    /// The failure, when the armed operation does not fit here.
+    pub message: Option<String>,
+    pub candidates: Vec<APIMechanosynthCandidate>,
+    /// The offers for the clicked atom, populated only on a failure.
+    pub offers: Option<APIMechanosynthOffers>,
 }
 
 pub struct APIImportCIFData {

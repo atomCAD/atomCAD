@@ -81,6 +81,8 @@ expression: out
   network 'Main' valid=true
 === lattice_space_migration/trivial_v3.cnnd
   network 'Main' valid=true
+=== mechanosynth/mechanosynth_edit.cnnd
+  network 'Main' valid=true
 === mechanosynth/mechanosynth_legacy.cnnd
   network 'Main' valid=true
 === mechanosynth/mechanosynth_wired.cnnd

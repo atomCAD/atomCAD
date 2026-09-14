@@ -30,6 +30,9 @@ struct RawLibrary {
 #[derive(Deserialize)]
 struct RawOp {
     name: Option<String>,
+    /// The library author's one-line description of the reaction. Read only by
+    /// the editor's palette and offer list; the engine never interprets it.
+    note: Option<String>,
     before: Option<RawPattern>,
     after: Option<RawPattern>,
     /// Absent means false. Unknown to the pre-editor engine, which ignored it
@@ -193,6 +196,7 @@ pub fn parse_library(text: &str, file: &str) -> Result<OpLibrary, MechanosynthEr
 
         ops.push(Operation {
             name,
+            note: raw_op.note.filter(|note| !note.is_empty()),
             before,
             after,
             chiral: raw_op.chiral.unwrap_or(false),

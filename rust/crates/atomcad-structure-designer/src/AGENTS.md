@@ -66,6 +66,7 @@ structure_designer/
 ├── common_constants.rs        # Shared constants
 ├── preferences.rs             # User preferences persistence
 ├── ai_text_edit.rs            # ai_text_edit: the AI edit choke point (edit → validate → layout → log → undo)
+├── mechanosynth_edit_ops.rs   # mechanosynth_edit: block edits, cursor, and the click→place flow
 ├── ai_edit_log.rs             # Session log of AI edits (runtime-only, never in .cnnd)
 ├── ai_edit_diff.rs            # Diffs two AI text-format snapshots (By node / Text)
 ├── ai_edit_export.rs          # Renders the AI edit log as JSON (canonical) / Markdown (readable)

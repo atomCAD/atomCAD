@@ -840,3 +840,254 @@ fn after_state_key(
     key.sort_unstable();
     key
 }
+
+// ============================================================================
+// Applicability: what can be done here
+// ============================================================================
+
+/// How far past the library's tolerance a fit is still worth *reporting*.
+///
+/// A library that states 0.05 Å reports misses out to 0.5 Å, which is the range
+/// in which "this host is not an environment the library was calculated for" is
+/// a useful thing to say; beyond it the pattern is simply somewhere else. A
+/// constant rather than a per-library value until a library complains — see the
+/// open question in `doc/design_mechanosynth_editor.md`.
+pub const NEAR_MISS_FACTOR: f64 = 10.0;
+
+/// What one library operation has to say about one clicked atom.
+///
+/// A row is **either** applicable (`candidates` non-empty, `near_miss` `None`)
+/// **or** a near miss (`candidates` empty, `near_miss` `Some`) — never both, and
+/// never neither. Keeping the over-gate fit in its own field rather than mixed
+/// into `candidates` is what makes "a near miss cannot be committed" a
+/// type-level fact instead of a filter every caller has to remember.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Applicability {
+    pub op: String,
+    /// Candidates within the library tolerance, ranked; empty for a near miss.
+    pub candidates: Vec<Candidate>,
+    /// The best fit found *outside* the gate, kept so a near-miss row can be
+    /// previewed and measured rather than merely counted.
+    pub near_miss: Option<Candidate>,
+    /// Best residual of `candidates`, or of `near_miss`.
+    pub best_residual: f64,
+    /// `best_residual <= tolerance`, i.e. this row is applicable.
+    pub fits: bool,
+    /// Every candidate of this row came from the bond-derived fallback.
+    pub approximate: bool,
+}
+
+impl Applicability {
+    /// The candidate a row is previewed by: its first real one, else its
+    /// near miss. Never `None` — a row always holds one or the other.
+    pub fn preview(&self) -> &Candidate {
+        self.candidates
+            .first()
+            .or(self.near_miss.as_ref())
+            .expect("an Applicability row holds candidates or a near miss")
+    }
+}
+
+/// One entry per library operation that has anything to say about `clicked`,
+/// ranked; never an error, because "nothing applies here" is an answer.
+///
+/// This is a **wrapper over [`place`]**, not a second search: each row's
+/// `candidates` are exactly what `place` returns for that operation and that
+/// atom at `tolerance`, so the sweep and a single call cannot disagree. An
+/// operation that fails at the gate is retried once at
+/// `tolerance * NEAR_MISS_FACTOR` so a miss can report *how far* off it was —
+/// a precalculated library's real limit is the set of environments its
+/// generator enumerated, and that limit should be readable at the point of use.
+///
+/// Cost is one `place` per operation (two for a miss). Patterns hold a handful
+/// of atoms and the assignment search is pruned, so a twenty-operation library
+/// is one short sweep: cheap **per click**, and to be treated as too expensive
+/// per mouse-move.
+pub fn applicable_ops(
+    workpiece: &AtomicStructure,
+    library: &OpLibrary,
+    clicked: u32,
+    tolerance: f64,
+) -> Vec<Applicability> {
+    let mut rows: Vec<Applicability> = Vec::new();
+    for operation in &library.ops {
+        let row = match place(workpiece, library, &operation.name, clicked, tolerance) {
+            Ok(candidates) => {
+                let best_residual = candidates[0].residual;
+                Applicability {
+                    op: operation.name.clone(),
+                    approximate: candidates.iter().all(|candidate| candidate.approximate),
+                    best_residual,
+                    fits: true,
+                    candidates,
+                    near_miss: None,
+                }
+            }
+            // The operation said no at the gate. Ask again with the gate
+            // widened, and keep the best fit that is still outside the tight
+            // one — the `> tolerance` filter is what keeps the two fields
+            // mutually exclusive even in the hair's-breadth case where the
+            // wider neighbourhood turns up an assignment the tight search
+            // never ranged over.
+            Err(_) => {
+                let relaxed = place(
+                    workpiece,
+                    library,
+                    &operation.name,
+                    clicked,
+                    tolerance * NEAR_MISS_FACTOR,
+                );
+                let Some(miss) = relaxed.ok().and_then(|candidates| {
+                    candidates
+                        .into_iter()
+                        .find(|candidate| candidate.residual > tolerance)
+                }) else {
+                    continue;
+                };
+                Applicability {
+                    op: operation.name.clone(),
+                    candidates: Vec::new(),
+                    best_residual: miss.residual,
+                    approximate: miss.approximate,
+                    fits: false,
+                    near_miss: Some(miss),
+                }
+            }
+        };
+        rows.push(row);
+    }
+
+    // `place`'s own order with one key in front of it: an operation that fits
+    // outranks one that merely came close, however close it came.
+    let bucket = |residual: f64| (residual / RESIDUAL_RANK_EPSILON).round() as i64;
+    rows.sort_by(|a, b| {
+        b.fits
+            .cmp(&a.fits)
+            .then(bucket(a.best_residual).cmp(&bucket(b.best_residual)))
+            .then(a.preview().mirrored.cmp(&b.preview().mirrored))
+            .then(a.approximate.cmp(&b.approximate))
+            // Two rows can tie on all four; the op name keeps the list stable
+            // across calls.
+            .then_with(|| a.op.cmp(&b.op))
+    });
+    rows
+}
+
+// ============================================================================
+// Previewing a candidate
+// ============================================================================
+
+/// What a preview atom is doing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GhostKind {
+    /// The step creates it.
+    Added,
+    /// The step removes it.
+    Deleted,
+    /// The step keeps it and puts it somewhere else.
+    Moved,
+    /// The step keeps it where it is and changes its element. Without this the
+    /// preview of an element-swap operation would be empty, which reads as
+    /// "nothing would happen".
+    Changed,
+}
+
+/// One atom of a candidate's ghost preview, in workpiece coordinates.
+///
+/// Only the atoms a step *changes*: a kept atom — a frame atom, a host that
+/// only gains a bond — has nothing to draw, and drawing it would put a ghost on
+/// top of an atom that is already there.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GhostAtom {
+    pub kind: GhostKind,
+    /// Where it ends up. For a deletion, where the atom is now.
+    pub position: DVec3,
+    /// Where it came from — the tail of a `Moved` atom's arrow. Equal to
+    /// [`position`](Self::position) for the other two kinds.
+    pub from: DVec3,
+    pub atomic_number: i16,
+}
+
+/// The ghost preview of one candidate: what the step would add, delete and
+/// move, ready to be drawn over the workpiece.
+///
+/// A pure function of the workpiece, the operation and the candidate, so the
+/// editor can preview a row of the offer list without applying anything — and
+/// so a *near miss*, which must never be applied, can still be shown.
+pub fn preview_atoms(
+    workpiece: &AtomicStructure,
+    op: &Operation,
+    candidate: &Candidate,
+) -> Vec<GhostAtom> {
+    let matched = |pattern_id: i64| {
+        candidate
+            .roles
+            .iter()
+            .find(|(id, _)| *id == pattern_id)
+            .and_then(|(_, atom_id)| workpiece.get_atom(*atom_id))
+    };
+    let mut ghosts = Vec::new();
+
+    for atom in &op.after.atoms {
+        let position = candidate.step.place(atom.pos);
+        match op.before.atom(atom.id) {
+            // Kept. A change of place or of element is visible; a bond change
+            // is not something a ghost *atom* can show, and the row's badges
+            // say what the operation is.
+            Some(before) => {
+                let Some(current) = matched(atom.id) else {
+                    continue;
+                };
+                let element = element_of(atom.element, Some(current.atomic_number));
+                if before.pos.distance(atom.pos) > PATTERN_POSITION_EPSILON {
+                    ghosts.push(GhostAtom {
+                        kind: GhostKind::Moved,
+                        position,
+                        from: current.position,
+                        atomic_number: element,
+                    });
+                } else if element != current.atomic_number {
+                    ghosts.push(GhostAtom {
+                        kind: GhostKind::Changed,
+                        position,
+                        from: position,
+                        atomic_number: element,
+                    });
+                }
+            }
+            None => ghosts.push(GhostAtom {
+                kind: GhostKind::Added,
+                position,
+                from: position,
+                atomic_number: element_of(atom.element, None),
+            }),
+        }
+    }
+
+    for atom in &op.before.atoms {
+        if op.after.has(atom.id) {
+            continue;
+        }
+        let Some(current) = matched(atom.id) else {
+            continue;
+        };
+        ghosts.push(GhostAtom {
+            kind: GhostKind::Deleted,
+            position: current.position,
+            from: current.position,
+            atomic_number: current.atomic_number,
+        });
+    }
+
+    ghosts
+}
+
+/// A pattern slot's element, with `"*"` falling back to whatever the workpiece
+/// atom is. `0` when neither says — impossible for an added atom, which the
+/// parser requires to name an element.
+fn element_of(slot: PatternElement, current: Option<i16>) -> i16 {
+    match slot {
+        PatternElement::Element(z) => z,
+        PatternElement::Any => current.unwrap_or(0),
+    }
+}

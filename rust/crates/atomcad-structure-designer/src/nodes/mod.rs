@@ -73,6 +73,7 @@ pub mod mat3_diag;
 pub mod mat3_rows;
 pub mod materialize;
 pub mod mechanosynth;
+pub mod mechanosynth_edit;
 pub mod motif;
 pub mod motif_sub;
 pub mod ops_library;

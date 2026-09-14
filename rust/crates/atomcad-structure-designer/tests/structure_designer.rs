@@ -336,6 +336,12 @@ mod crystal_molecule_split_validation_test;
 #[path = "structure_designer/mechanosynth_test.rs"]
 mod mechanosynth_test;
 
+#[path = "structure_designer/mechanosynth_edit_placement_test.rs"]
+mod mechanosynth_edit_placement_test;
+
+#[path = "structure_designer/mechanosynth_edit_test.rs"]
+mod mechanosynth_edit_test;
+
 #[path = "structure_designer/mechanosynth_values_test.rs"]
 mod mechanosynth_values_test;
 

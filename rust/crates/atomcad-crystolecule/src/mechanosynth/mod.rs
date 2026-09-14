@@ -47,7 +47,8 @@ pub use parse::{
     load_build_script, load_library, parse_build_script, parse_library, validate_script_ops,
 };
 pub use place::{
-    Candidate, EXACT_FIT_RESIDUAL, PlaceStats, RESIDUAL_RANK_EPSILON, place, place_with_stats,
+    Applicability, Candidate, EXACT_FIT_RESIDUAL, GhostAtom, GhostKind, NEAR_MISS_FACTOR,
+    PlaceStats, RESIDUAL_RANK_EPSILON, applicable_ops, place, place_with_stats, preview_atoms,
 };
 pub use schema::{
     BUILD_FORMAT, BuildScript, DEFAULT_TOLERANCE, LIBRARY_FORMAT, MechanosynthError, NO_LAYER,

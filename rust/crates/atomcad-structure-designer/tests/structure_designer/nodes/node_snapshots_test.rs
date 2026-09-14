@@ -139,6 +139,17 @@ fn test_mechanosynth_wired_evaluation() {
     insta::assert_json_snapshot!(snapshot);
 }
 
+/// The editor node replaying its own stored block onto the same base, with the
+/// `steps` pin unwired. Its atoms must match the other two mechanosynth
+/// fixtures' exactly — one engine, two nodes — and its third step carries a
+/// residual and an `approximate` flag, so the fixture also pins that those
+/// survive a `.cnnd` round trip.
+#[test]
+fn test_mechanosynth_edit_evaluation() {
+    let snapshot = evaluate_cnnd_file(&fixture_path_str("mechanosynth/mechanosynth_edit.cnnd"));
+    insta::assert_json_snapshot!(snapshot);
+}
+
 #[test]
 fn test_nut_bolt_evaluation() {
     let snapshot = evaluate_cnnd_file(&sample_path_str("nut-bolt.cnnd"));

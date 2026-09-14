@@ -20,6 +20,7 @@ import 'api/structure_designer/import_cif_api.dart';
 import 'api/structure_designer/import_cube_api.dart';
 import 'api/structure_designer/import_xyz_api.dart';
 import 'api/structure_designer/mechanosynth_api.dart';
+import 'api/structure_designer/mechanosynth_edit_api.dart';
 import 'api/structure_designer/profiling_api.dart';
 import 'api/structure_designer/relax_api.dart';
 import 'api/structure_designer/structure_designer_api.dart';
@@ -120,6 +121,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIAtomReplaceRule dco_decode_api_atom_replace_rule(dynamic raw);
+
+  @protected
+  APIAuthoredStep dco_decode_api_authored_step(dynamic raw);
 
   @protected
   APIBondLengthMode dco_decode_api_bond_length_mode(dynamic raw);
@@ -297,6 +301,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIGeoTransData dco_decode_api_geo_trans_data(dynamic raw);
 
   @protected
+  APIGhostAtom dco_decode_api_ghost_atom(dynamic raw);
+
+  @protected
   APIGuidelinePhase dco_decode_api_guideline_phase(dynamic raw);
 
   @protected
@@ -375,13 +382,29 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIMeasurement dco_decode_api_measurement(dynamic raw);
 
   @protected
+  APIMechanosynthCandidate dco_decode_api_mechanosynth_candidate(dynamic raw);
+
+  @protected
   APIMechanosynthChapter dco_decode_api_mechanosynth_chapter(dynamic raw);
 
   @protected
   APIMechanosynthData dco_decode_api_mechanosynth_data(dynamic raw);
 
   @protected
+  APIMechanosynthEditData dco_decode_api_mechanosynth_edit_data(dynamic raw);
+
+  @protected
   APIMechanosynthInfo dco_decode_api_mechanosynth_info(dynamic raw);
+
+  @protected
+  APIMechanosynthOffer dco_decode_api_mechanosynth_offer(dynamic raw);
+
+  @protected
+  APIMechanosynthOffers dco_decode_api_mechanosynth_offers(dynamic raw);
+
+  @protected
+  APIMechanosynthPickResult dco_decode_api_mechanosynth_pick_result(
+      dynamic raw);
 
   @protected
   APIMemoCounts dco_decode_api_memo_counts(dynamic raw);
@@ -864,7 +887,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIMechanosynthData dco_decode_box_autoadd_api_mechanosynth_data(dynamic raw);
 
   @protected
+  APIMechanosynthEditData dco_decode_box_autoadd_api_mechanosynth_edit_data(
+      dynamic raw);
+
+  @protected
   APIMechanosynthInfo dco_decode_box_autoadd_api_mechanosynth_info(dynamic raw);
+
+  @protected
+  APIMechanosynthOffers dco_decode_box_autoadd_api_mechanosynth_offers(
+      dynamic raw);
 
   @protected
   APIMotifData dco_decode_box_autoadd_api_motif_data(dynamic raw);
@@ -1138,6 +1169,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<APIAtomReplaceRule> dco_decode_list_api_atom_replace_rule(dynamic raw);
 
   @protected
+  List<APIAuthoredStep> dco_decode_list_api_authored_step(dynamic raw);
+
+  @protected
   List<APICandidateNode> dco_decode_list_api_candidate_node(dynamic raw);
 
   @protected
@@ -1163,10 +1197,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       dynamic raw);
 
   @protected
+  List<APIGhostAtom> dco_decode_list_api_ghost_atom(dynamic raw);
+
+  @protected
   List<APILiteralField> dco_decode_list_api_literal_field(dynamic raw);
 
   @protected
+  List<APIMechanosynthCandidate> dco_decode_list_api_mechanosynth_candidate(
+      dynamic raw);
+
+  @protected
   List<APIMechanosynthChapter> dco_decode_list_api_mechanosynth_chapter(
+      dynamic raw);
+
+  @protected
+  List<APIMechanosynthOffer> dco_decode_list_api_mechanosynth_offer(
       dynamic raw);
 
   @protected
@@ -1545,7 +1590,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       dynamic raw);
 
   @protected
+  APIMechanosynthEditData?
+      dco_decode_opt_box_autoadd_api_mechanosynth_edit_data(dynamic raw);
+
+  @protected
   APIMechanosynthInfo? dco_decode_opt_box_autoadd_api_mechanosynth_info(
+      dynamic raw);
+
+  @protected
+  APIMechanosynthOffers? dco_decode_opt_box_autoadd_api_mechanosynth_offers(
       dynamic raw);
 
   @protected
@@ -1915,6 +1968,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIAuthoredStep sse_decode_api_authored_step(SseDeserializer deserializer);
+
+  @protected
   APIBondLengthMode sse_decode_api_bond_length_mode(
       SseDeserializer deserializer);
 
@@ -2109,6 +2165,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIGeoTransData sse_decode_api_geo_trans_data(SseDeserializer deserializer);
 
   @protected
+  APIGhostAtom sse_decode_api_ghost_atom(SseDeserializer deserializer);
+
+  @protected
   APIGuidelinePhase sse_decode_api_guideline_phase(
       SseDeserializer deserializer);
 
@@ -2196,6 +2255,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIMeasurement sse_decode_api_measurement(SseDeserializer deserializer);
 
   @protected
+  APIMechanosynthCandidate sse_decode_api_mechanosynth_candidate(
+      SseDeserializer deserializer);
+
+  @protected
   APIMechanosynthChapter sse_decode_api_mechanosynth_chapter(
       SseDeserializer deserializer);
 
@@ -2204,7 +2267,23 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIMechanosynthEditData sse_decode_api_mechanosynth_edit_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIMechanosynthInfo sse_decode_api_mechanosynth_info(
+      SseDeserializer deserializer);
+
+  @protected
+  APIMechanosynthOffer sse_decode_api_mechanosynth_offer(
+      SseDeserializer deserializer);
+
+  @protected
+  APIMechanosynthOffers sse_decode_api_mechanosynth_offers(
+      SseDeserializer deserializer);
+
+  @protected
+  APIMechanosynthPickResult sse_decode_api_mechanosynth_pick_result(
       SseDeserializer deserializer);
 
   @protected
@@ -2780,7 +2859,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIMechanosynthEditData sse_decode_box_autoadd_api_mechanosynth_edit_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIMechanosynthInfo sse_decode_box_autoadd_api_mechanosynth_info(
+      SseDeserializer deserializer);
+
+  @protected
+  APIMechanosynthOffers sse_decode_box_autoadd_api_mechanosynth_offers(
       SseDeserializer deserializer);
 
   @protected
@@ -3105,6 +3192,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  List<APIAuthoredStep> sse_decode_list_api_authored_step(
+      SseDeserializer deserializer);
+
+  @protected
   List<APICandidateNode> sse_decode_list_api_candidate_node(
       SseDeserializer deserializer);
 
@@ -3133,11 +3224,23 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  List<APIGhostAtom> sse_decode_list_api_ghost_atom(
+      SseDeserializer deserializer);
+
+  @protected
   List<APILiteralField> sse_decode_list_api_literal_field(
       SseDeserializer deserializer);
 
   @protected
+  List<APIMechanosynthCandidate> sse_decode_list_api_mechanosynth_candidate(
+      SseDeserializer deserializer);
+
+  @protected
   List<APIMechanosynthChapter> sse_decode_list_api_mechanosynth_chapter(
+      SseDeserializer deserializer);
+
+  @protected
+  List<APIMechanosynthOffer> sse_decode_list_api_mechanosynth_offer(
       SseDeserializer deserializer);
 
   @protected
@@ -3587,7 +3690,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIMechanosynthEditData?
+      sse_decode_opt_box_autoadd_api_mechanosynth_edit_data(
+          SseDeserializer deserializer);
+
+  @protected
   APIMechanosynthInfo? sse_decode_opt_box_autoadd_api_mechanosynth_info(
+      SseDeserializer deserializer);
+
+  @protected
+  APIMechanosynthOffers? sse_decode_opt_box_autoadd_api_mechanosynth_offers(
       SseDeserializer deserializer);
 
   @protected
@@ -4010,6 +4122,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIAtomReplaceRule self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_authored_step(
+      APIAuthoredStep self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_bond_length_mode(
       APIBondLengthMode self, SseSerializer serializer);
 
@@ -4226,6 +4342,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIGeoTransData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_ghost_atom(APIGhostAtom self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_guideline_phase(
       APIGuidelinePhase self, SseSerializer serializer);
 
@@ -4325,6 +4444,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIMeasurement self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_mechanosynth_candidate(
+      APIMechanosynthCandidate self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_mechanosynth_chapter(
       APIMechanosynthChapter self, SseSerializer serializer);
 
@@ -4333,8 +4456,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIMechanosynthData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_mechanosynth_edit_data(
+      APIMechanosynthEditData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_mechanosynth_info(
       APIMechanosynthInfo self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_mechanosynth_offer(
+      APIMechanosynthOffer self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_mechanosynth_offers(
+      APIMechanosynthOffers self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_mechanosynth_pick_result(
+      APIMechanosynthPickResult self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_memo_counts(APIMemoCounts self, SseSerializer serializer);
@@ -4929,8 +5068,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIMechanosynthData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_api_mechanosynth_edit_data(
+      APIMechanosynthEditData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_api_mechanosynth_info(
       APIMechanosynthInfo self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_mechanosynth_offers(
+      APIMechanosynthOffers self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_motif_data(
@@ -5260,6 +5407,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<APIAtomReplaceRule> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_api_authored_step(
+      List<APIAuthoredStep> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_api_candidate_node(
       List<APICandidateNode> self, SseSerializer serializer);
 
@@ -5291,12 +5442,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<APIFunctionPinRoleView> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_api_ghost_atom(
+      List<APIGhostAtom> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_api_literal_field(
       List<APILiteralField> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_api_mechanosynth_candidate(
+      List<APIMechanosynthCandidate> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_api_mechanosynth_chapter(
       List<APIMechanosynthChapter> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_api_mechanosynth_offer(
+      List<APIMechanosynthOffer> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_api_motif_parameter_info(
@@ -5750,8 +5913,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIMechanosynthData? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_api_mechanosynth_edit_data(
+      APIMechanosynthEditData? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_api_mechanosynth_info(
       APIMechanosynthInfo? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_mechanosynth_offers(
+      APIMechanosynthOffers? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_motif_data(

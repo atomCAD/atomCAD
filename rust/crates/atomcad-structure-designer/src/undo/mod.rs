@@ -120,6 +120,9 @@ pub struct UndoStack {
     pub max_history: usize,
     /// When true, `push()` calls are silently ignored.
     recording_suppressed: bool,
+    /// Total number of commands ever pushed. Monotonic; see
+    /// [`UndoStack::push_count`].
+    push_count: u64,
 }
 
 impl Default for UndoStack {
@@ -129,6 +132,7 @@ impl Default for UndoStack {
             cursor: 0,
             max_history: 100,
             recording_suppressed: false,
+            push_count: 0,
         }
     }
 }
@@ -147,6 +151,7 @@ impl UndoStack {
         // Append the new command
         self.history.push(command);
         self.cursor += 1;
+        self.push_count += 1;
 
         // Evict oldest if over max_history
         if self.history.len() > self.max_history {
@@ -180,6 +185,30 @@ impl UndoStack {
     /// tests that assert a drag left **one** entry rather than one per tick.
     pub fn history_len(&self) -> usize {
         self.history.len()
+    }
+
+    /// How many commands have ever been pushed. Monotonic, unaffected by undo,
+    /// redo, truncation or eviction — which is what makes it a safe answer to
+    /// "is the command I pushed a moment ago still the top of the stack?", where
+    /// [`history_len`](Self::history_len) is not (an eviction at
+    /// `max_history` keeps the length identical across an unrelated push).
+    pub fn push_count(&self) -> u64 {
+        self.push_count
+    }
+
+    /// Removes the command that would be undone next, and returns it.
+    ///
+    /// This exists for **coalescing** — a caller that pushed a command, is
+    /// about to push its successor, and has established (through
+    /// [`push_count`](Self::push_count)) that nothing has happened in between.
+    /// It is not an undo: the command is dropped, not reversed, so the caller
+    /// must be replacing it with one that covers the same edit.
+    pub fn pop_last(&mut self) -> Option<Box<dyn UndoCommand>> {
+        if self.cursor == 0 || self.cursor != self.history.len() {
+            return None;
+        }
+        self.cursor -= 1;
+        self.history.pop()
     }
 
     pub fn can_undo(&self) -> bool {

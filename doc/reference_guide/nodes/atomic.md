@@ -1110,6 +1110,135 @@ picking one style rule set per instrument, so probe steps and lithography steps
 are coloured differently as you scrub; or an `expr` building a caption out of
 `phase`, `layer` and `index`.
 
+## mechanosynth_edit
+
+Authors a build script by clicking atoms, and replays it like
+[`mechanosynth`](#mechanosynth). Same engine underneath, different job: the
+replayer plays a script a generator wrote, this node is where a script is
+written by hand.
+
+**Input pins**
+
+- `base: HasAtoms` — the workpiece to build on. Required.
+- `ops: OpLibrary` — the operation library, from
+  [`ops_library`](#ops_library). Required.
+- `steps: [BuildStep]` (optional) — a **prefix**: steps that run before the
+  node's own block.
+
+**Output pins**
+
+- `result` — the workpiece after the prefix and the authored steps **up to the
+  cursor**, with the cursor step's atoms tagged `ms_current`. Same concrete type
+  as `base`.
+- `steps: [BuildStep]` — the prefix followed by the **whole** authored block,
+  whatever the cursor says. Wire it into `mechanosynth`,
+  [`export_build_script`](#export_build_script) or the array nodes.
+
+**Properties**
+
+- `cursor` — how many authored steps `result` shows. `-1` means "all" and keeps
+  following the block as it grows; anything past the end clamps, exactly as the
+  replayer's `step` slider does.
+- `authored` — the block itself (see *The text format*, below).
+
+### The block comes after the prefix
+
+The `steps` pin is a prefix and the node's own block follows it. The cursor only
+ever moves inside the block, so scrubbing shows your own steps being applied to
+whatever the upstream produced. To author *between* two generated blocks, chain
+two editors through `result`: the second one's prefix is the first one's output.
+
+There is deliberately no "insert at index 17 of the wired steps": an edit list
+over someone else's block breaks silently the moment that block changes length,
+which is the same drift that made absolute-coordinate diffs unworkable.
+
+The `steps` output ignores the cursor. The cursor says what to *show*; it never
+changes what the node hands downstream.
+
+### Placing a step
+
+Click one atom of the workpiece and the library answers with the operations that
+fit **that atom**, ranked, each previewed on the workpiece before you choose.
+Choosing one places the step exactly: the rigid transform comes from fitting the
+operation's `before` pattern onto the atoms that are actually there, so no
+coordinate is typed and no orientation is guessed.
+
+Which pattern atom your click stands for is decided by a fixed rule, never
+asked: the operation's **origin atom** if its element admits your click, else
+the eligible pattern atom with the smallest id. For a library that follows the
+origin convention (§*The two files*) that makes "click the atom the operation
+acts on" the whole instruction. The rule is strict — if the fit fails with your
+atom in that role, you get a message naming the role rather than the reaction
+silently landing on a neighbour.
+
+An operation can fit a site in more than one way — a dimerization with two bare
+neighbours is two different reactions — and then the candidates are offered
+instead of one being chosen for you. When only one fits, it is placed
+immediately.
+
+**Operations that nearly fit are shown too**, dimmed, with how far off they are:
+"`si_donate_dimer` — 0.31 Å off". That is the library telling you this host is
+not an environment it was calculated for. It cannot be chosen — there is no cast
+past the gate — and the two honest fixes are to add the variant to the library
+or to loosen the library's own `tolerance`.
+
+The tool is available while the node is selected and its `result` pin is the one
+being displayed.
+
+### Exactness, and the two chips
+
+The match tolerance decides whether a candidate is *accepted*; it never enters a
+coordinate. Every placed atom lands at exactly `r · p + t`, so a step is exact
+if and only if its `(r, t)` is — which is what each authored step's stored **fit
+residual** reports.
+
+- A residual below 1e-4 Å means the step reproduces what a generator would have
+  written, to the rounding the files use. Such a step carries no chip.
+- A larger residual gets a warning chip with the number: the library's pattern
+  did not quite match the environment it was applied to, and the atoms it placed
+  are off by about that much.
+- A step whose orientation had to be derived from the host's **bonds** — because
+  the operation names no frame atoms — is flagged *approximate* separately. Its
+  coordinates came from the application's idea of where a bond goes, not from
+  the library. Measured on a reconstructed Si(100) dimer that is 0.15–0.17 Å at
+  the added atom.
+
+A design with no chips replays to the same structure a generator's own run
+produces. The residual is the editor's own record and does **not** travel on the
+`steps` wire, so `export_build_script` neither sees it nor writes it.
+
+### Highlights
+
+Only `ms_current` is painted here, on the atoms the cursor step changed.
+`ms_added` and `ms_layer` describe a *finished* build and stay the replayer's;
+an editor's result is a work in progress.
+
+### The text format
+
+The block serialises as an `authored` property holding one record literal per
+step, and the cursor as an int:
+
+```
+edit = mechanosynth_edit { base: slab, ops: lib, steps: gen, cursor: 2, authored: [
+  { op: "habst", t: (12.71, 9.53, 8.02), method: "probe", phase: "layer1", layer: 1, site: 0 },
+  { op: "dimerize", t: (14.27, 9.53, 8.02), r: ((0.0, 1.0, 0.0), (-1.0, 0.0, 0.0), (0.0, 0.0, 1.0)), residual: 0.0213 }
+] }
+```
+
+A step literal takes the [`BuildStep`](./math_programming.md#record-types)
+fields plus two that belong to the editor only: `residual: Float` and
+`approximate: Bool`. An identity `r`, an empty `note` / `method` / `phase`, a
+`layer` or `site` of `-1`, a residual below 1e-4 Å and `approximate: false` are
+omitted on output and defaulted on input — so a short step stays short, and a
+step you typed by hand counts as **exact**: your assertion has the same standing
+a generated file's step has. An unknown field is a parse error naming it rather
+than a silent drop.
+
+Editing the block from the text is an ordinary undoable edit, and so are the
+list's own operations — reorder, delete, duplicate, and each metadata chip.
+**Moving the cursor is not**: it is navigation, exactly like the replayer's
+slider.
+
 ## ops_library
 
 Loads a mechanosynthesis **operation library** from a JSON file and emits it as

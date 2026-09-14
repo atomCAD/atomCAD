@@ -4,7 +4,7 @@ Status: **draft 2026-09-11, revised 2026-09-14** (clicked-atom role rule,
 tests moved into phases; then atom-first placement, the first-shell frame
 rule and the environment-variant convention — §Applicability and the last
 subsection of §Decisions, all landing in Phases 3–5 because Phase 2 is
-closed). **Phases 1 and 2 implemented 2026-09-14**; Phases 3–5
+closed). **Phases 1–3 implemented 2026-09-14**; Phases 4 and 5
 not started. Extends the `mechanosynth` subsystem
 (`rust/crates/atomcad-crystolecule/src/mechanosynth/`,
 `rust/crates/atomcad-structure-designer/src/nodes/mechanosynth.rs`,
@@ -889,9 +889,11 @@ they share.
 `crystolecule/tests/crystolecule/mechanosynth_test.rs`; the placement engine
 gets `mechanosynth_place_test.rs` beside it. Node tests extend
 `structure-designer/tests/structure_designer/mechanosynth_test.rs` and add
-`mechanosynth_edit_test.rs` and `mechanosynth_text_format_test.rs`; API
-tests extend `rust/tests/structure_designer_api/mechanosynth_api_test.rs`
-and add `mechanosynth_edit_api_test.rs`. The existing helpers in those files
+`mechanosynth_edit_test.rs` and `mechanosynth_edit_placement_test.rs`; API
+tests extend `rust/tests/structure_designer_api/mechanosynth_api_test.rs`.
+(Phase 3 put the placement flow on `StructureDesigner` rather than in `api/`,
+so its tests sit beside the node's rather than in the api harness — a test's
+home is decided by what it imports.) The existing helpers in those files
 (`methane()`, `methylate_expected(step)`, `assert_same`, `expect_error`,
 `add_value_node`) are reused, not duplicated.
 
@@ -1147,14 +1149,66 @@ this test is not written in Phase 2; adding the fixtures and the test is the
 first task of the generator work, and its passing is that work's acceptance
 check.
 
-### Phase 3 — The editor node
+### Phase 3 — The editor node — **DONE**
 
-Node, data, eval with the shared helper and prefix snapshot, undo commands,
-API, text format, round-trip fixture. Plus `applicable_ops` and
-`NEAR_MISS_FACTOR` in `place.rs` (§Applicability) and the
-`mechanosynth_edit_offers` API over them — the atom-first flow's engine half.
-It is a wrapper over the `place()` Phase 2 shipped, not a second search, so
-nothing in Phase 2 is reopened.
+Node, data, eval, undo commands, API, text format, round-trip fixture, plus
+`applicable_ops` / `NEAR_MISS_FACTOR` in `place.rs` and the placement flow over
+them. Seven deviations from the plan below, each recorded where it bites:
+
+- **There is no prefix snapshot, and the design's cache key does not exist.**
+  The plan said the snapshot is "kept in transient data keyed on the input's
+  `env_epoch`"; `env_epoch` numbers *HOF body invocations*, not input changes, so
+  it cannot answer "has the base changed". A correct key would be a structural
+  fingerprint of the base — an O(n) walk of the very structure the cache exists
+  to avoid touching — and what it would save is the prefix's per-step matching,
+  which for a few hundred steps is far below the `base.clone()` `replay` does
+  anyway. `feedback_avoid_speculative_caching` applies: `eval` replays prefix
+  then block, every time. The eval-profiler test that was to measure the cache is
+  not written for the same reason.
+- **`eval` runs two replays rather than one concatenated script**, and that is
+  load-bearing rather than incidental: `replay` paints `current` on the *last
+  applied step*, so one call would light up the last **prefix** step whenever the
+  cursor sits at 0 — exactly the state that must show no highlight at all.
+- **An unknown op in the authored block is an evaluation error, not a validation
+  error** — the same deviation Phase 1 recorded for the wired case, for the
+  narrower reason that the validator cannot see the wired *library*. `replay`
+  still calls `validate_script_ops` first, so the message names the step index
+  and the operation and nothing is applied.
+- **One undo command with four constructors**, not four command types
+  (`undo/commands/mechanosynth_edit_block.rs`). All four edits change the same
+  `(authored, cursor)` pair and all four restore it wholesale; four structs with
+  identical fields and identical `undo` bodies would say nothing the
+  `description` does not. Coalescing needed two small additions to `UndoStack`
+  — `push_count()` and `pop_last()` — documented in `undo/AGENTS.md`.
+- **`MechanosynthEditData::Default` is hand-written.** `#[serde(default = …)]`
+  covers deserialization only, so a derived `Default` gave a fresh node
+  `cursor: 0` — a node that shows its prefix and none of its block, for no reason
+  a user could see. Caught by the placement tests, which is what they are for.
+- **A fourth ghost kind, `Changed`**, for a kept atom whose element the step
+  rewrites. The plan named added / deleted / moved; an element-swap operation
+  touches none of those, so its preview would have been empty, which reads as
+  "this would do nothing".
+- **`Operation` gained a `note`**, parsed and otherwise inert. The offer popup is
+  specified to show "the library's own note", and the parser was discarding the
+  key. It also feeds `ops_library`'s panel listing.
+
+Two smaller shape choices worth knowing. The placement flow lives on
+`StructureDesigner` (`mechanosynth_edit_ops.rs`), not in `api/`, for the reason
+`ai_text_edit` does — so its tests need no `CAD_INSTANCE`; the api file is
+wrappers plus the transport shapes, and the *ghosts* are built down in the ops
+module where the workpiece is already in hand, so no `AtomicStructure` crosses
+the boundary. And the API's insert entry point is
+`mechanosynth_edit_duplicate_step`, not a general `insert_step`: a step that was
+never fitted against a workpiece has no `(r, t)` to write, so every other
+insertion comes from a placement.
+
+The corpus fixture is a **pinned case in
+`text_format_roundtrip_corpus_test.rs`** rather than a node added to
+`demolib/baselib_with_demos.cnnd` — the shared demo library is a user-facing
+file and this design has no demo to put in it yet. `mechanosynth_edit.cnnd`
+joins the `node_snapshots` set instead, and its atoms match the legacy and wired
+mechanosynth fixtures' exactly.
+
 
 *Tests — eval:* the shared assertion *same result, both nodes* at cursor
 `0`, `1`, `authored.len()` and `-1`, with and without a wired prefix; a

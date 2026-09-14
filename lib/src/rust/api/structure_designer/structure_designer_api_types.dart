@@ -576,6 +576,73 @@ class APIAtomReplaceRule {
           toAtomicNumber == other.toAtomicNumber;
 }
 
+/// One row of the authored block.
+class APIAuthoredStep {
+  final String op;
+  final APIVec3 t;
+  final String note;
+  final String method;
+  final String phase;
+
+  /// `-1` for "no particular layer".
+  final int layer;
+
+  /// `-1` for "all sites, or none".
+  final int site;
+
+  /// Max per-atom residual of the fit that placed it, Å.
+  final double residual;
+
+  /// `residual < 1e-4 Å`: the step reproduces what a generator would have
+  /// written. A step with no chip is exact.
+  final bool exact;
+
+  /// The orientation came from the host's bonds, not from the library.
+  final bool approximate;
+
+  const APIAuthoredStep({
+    required this.op,
+    required this.t,
+    required this.note,
+    required this.method,
+    required this.phase,
+    required this.layer,
+    required this.site,
+    required this.residual,
+    required this.exact,
+    required this.approximate,
+  });
+
+  @override
+  int get hashCode =>
+      op.hashCode ^
+      t.hashCode ^
+      note.hashCode ^
+      method.hashCode ^
+      phase.hashCode ^
+      layer.hashCode ^
+      site.hashCode ^
+      residual.hashCode ^
+      exact.hashCode ^
+      approximate.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIAuthoredStep &&
+          runtimeType == other.runtimeType &&
+          op == other.op &&
+          t == other.t &&
+          note == other.note &&
+          method == other.method &&
+          phase == other.phase &&
+          layer == other.layer &&
+          site == other.site &&
+          residual == other.residual &&
+          exact == other.exact &&
+          approximate == other.approximate;
+}
+
 /// Bond length computation mode for guided atom placement.
 enum APIBondLengthMode {
   /// Use crystal lattice bond length table (with UFF fallback).
@@ -1862,6 +1929,38 @@ class APIGeoTransData {
           transformOnlyFrame == other.transformOnlyFrame;
 }
 
+/// One preview atom of a ghosted candidate, in workpiece coordinates.
+class APIGhostAtom {
+  /// `"added"` / `"deleted"` / `"moved"`.
+  final String kind;
+  final APIVec3 position;
+
+  /// The tail of a moved atom's arrow; equal to `position` otherwise.
+  final APIVec3 from;
+  final int atomicNumber;
+
+  const APIGhostAtom({
+    required this.kind,
+    required this.position,
+    required this.from,
+    required this.atomicNumber,
+  });
+
+  @override
+  int get hashCode =>
+      kind.hashCode ^ position.hashCode ^ from.hashCode ^ atomicNumber.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIGhostAtom &&
+          runtimeType == other.runtimeType &&
+          kind == other.kind &&
+          position == other.position &&
+          from == other.from &&
+          atomicNumber == other.atomicNumber;
+}
+
 /// Which user-visible state the Guideline tool (issue #368) is in. Derived from
 /// the tool phase plus whether an atom is picked.
 enum APIGuidelinePhase {
@@ -2706,6 +2805,47 @@ sealed class APIMeasurement with _$APIMeasurement {
   }) = APIMeasurement_AtomInfo;
 }
 
+/// One way of placing the chosen operation at the clicked atom.
+class APIMechanosynthCandidate {
+  /// What `mechanosynth_edit_choose` takes alongside the operation name.
+  final int index;
+  final double residual;
+  final bool exact;
+  final bool mirrored;
+  final bool approximate;
+  final List<APIGhostAtom> ghost;
+
+  const APIMechanosynthCandidate({
+    required this.index,
+    required this.residual,
+    required this.exact,
+    required this.mirrored,
+    required this.approximate,
+    required this.ghost,
+  });
+
+  @override
+  int get hashCode =>
+      index.hashCode ^
+      residual.hashCode ^
+      exact.hashCode ^
+      mirrored.hashCode ^
+      approximate.hashCode ^
+      ghost.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIMechanosynthCandidate &&
+          runtimeType == other.runtimeType &&
+          index == other.index &&
+          residual == other.residual &&
+          exact == other.exact &&
+          mirrored == other.mirrored &&
+          approximate == other.approximate &&
+          ghost == other.ghost;
+}
+
 /// A maximal run of consecutive steps sharing a `(phase, layer)` — the unit the
 /// panel navigates a long script by. A 450-step script gives a dozen or so.
 ///
@@ -2791,6 +2931,99 @@ class APIMechanosynthData {
           hasLegacyFiles == other.hasLegacyFiles;
 }
 
+/// Everything the `mechanosynth_edit` panel shows: the authored block, where
+/// the cursor is, the wired library's operation names for the palette, and the
+/// tool's current state.
+///
+/// The **prefix** is summarised rather than listed — a generated block is
+/// hundreds of steps the user cannot edit here, and the panel shows it as one
+/// collapsed row. See `doc/design_mechanosynth_editor.md`.
+class APIMechanosynthEditData {
+  /// How many steps arrive on the `steps` pin.
+  final int prefixCount;
+  final List<APIAuthoredStep> authored;
+
+  /// The stored cursor; `-1` means "all" and follows the block as it grows.
+  final int cursor;
+
+  /// The cursor after clamping: how many authored steps `result` shows.
+  final int applied;
+
+  /// The wired library's operation names, for the palette's op-first entry.
+  /// Empty when no library is wired.
+  final List<String> opNames;
+
+  /// How many authored steps were placed with a residual above 1e-4 Å.
+  final int inexactCount;
+
+  /// How many were oriented from the host's bonds rather than from the
+  /// library's frame atoms.
+  final int approximateCount;
+
+  /// The most recent evaluation failure, if the last evaluation failed.
+  final String? lastError;
+
+  /// `"idle"` / `"armed"` / `"offers"` / `"candidates"`.
+  final String toolState;
+
+  /// The armed operation, when the tool has one.
+  final String? armedOp;
+
+  /// The atom the open popup is anchored to.
+  final int? anchorAtomId;
+
+  /// The authored block's chapters — maximal runs sharing a `(phase, layer)`.
+  final List<APIMechanosynthChapter> chapters;
+
+  const APIMechanosynthEditData({
+    required this.prefixCount,
+    required this.authored,
+    required this.cursor,
+    required this.applied,
+    required this.opNames,
+    required this.inexactCount,
+    required this.approximateCount,
+    this.lastError,
+    required this.toolState,
+    this.armedOp,
+    this.anchorAtomId,
+    required this.chapters,
+  });
+
+  @override
+  int get hashCode =>
+      prefixCount.hashCode ^
+      authored.hashCode ^
+      cursor.hashCode ^
+      applied.hashCode ^
+      opNames.hashCode ^
+      inexactCount.hashCode ^
+      approximateCount.hashCode ^
+      lastError.hashCode ^
+      toolState.hashCode ^
+      armedOp.hashCode ^
+      anchorAtomId.hashCode ^
+      chapters.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIMechanosynthEditData &&
+          runtimeType == other.runtimeType &&
+          prefixCount == other.prefixCount &&
+          authored == other.authored &&
+          cursor == other.cursor &&
+          applied == other.applied &&
+          opNames == other.opNames &&
+          inexactCount == other.inexactCount &&
+          approximateCount == other.approximateCount &&
+          lastError == other.lastError &&
+          toolState == other.toolState &&
+          armedOp == other.armedOp &&
+          anchorAtomId == other.anchorAtomId &&
+          chapters == other.chapters;
+}
+
 /// What the `mechanosynth` panel needs beyond the stored properties: the loaded
 /// script's length, how many steps the stored `step` actually applies (the
 /// clamp a negative or out-of-range value goes through), and the current step's
@@ -2867,6 +3100,151 @@ class APIMechanosynthInfo {
           currentLayer == other.currentLayer &&
           currentSite == other.currentSite &&
           chapters == other.chapters;
+}
+
+/// One row of the offer popup: an operation that fits the clicked atom, or one
+/// that nearly does.
+class APIMechanosynthOffer {
+  final String op;
+
+  /// The library's own note for the operation; empty when it has none.
+  final String note;
+
+  /// How many ways this operation can be placed here. `0` for a near miss.
+  final int candidateCount;
+  final double bestResidual;
+
+  /// `false` makes this a **near miss**: it is shown with its residual,
+  /// dimmed and unselectable, and `mechanosynth_edit_choose` refuses it.
+  final bool fits;
+  final bool exact;
+  final bool mirrored;
+  final bool approximate;
+
+  /// The ghost atoms of the row's first candidate (a near-miss row's come
+  /// from its best rejected fit), so highlighting the row previews it with no
+  /// second call.
+  final List<APIGhostAtom> ghost;
+
+  const APIMechanosynthOffer({
+    required this.op,
+    required this.note,
+    required this.candidateCount,
+    required this.bestResidual,
+    required this.fits,
+    required this.exact,
+    required this.mirrored,
+    required this.approximate,
+    required this.ghost,
+  });
+
+  @override
+  int get hashCode =>
+      op.hashCode ^
+      note.hashCode ^
+      candidateCount.hashCode ^
+      bestResidual.hashCode ^
+      fits.hashCode ^
+      exact.hashCode ^
+      mirrored.hashCode ^
+      approximate.hashCode ^
+      ghost.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIMechanosynthOffer &&
+          runtimeType == other.runtimeType &&
+          op == other.op &&
+          note == other.note &&
+          candidateCount == other.candidateCount &&
+          bestResidual == other.bestResidual &&
+          fits == other.fits &&
+          exact == other.exact &&
+          mirrored == other.mirrored &&
+          approximate == other.approximate &&
+          ghost == other.ghost;
+}
+
+/// An applicability sweep: what the library can do at one atom, plus what the
+/// popup needs to anchor and head itself.
+class APIMechanosynthOffers {
+  final int anchorAtomId;
+  final APIVec3 anchorPosition;
+  final int anchorAtomicNumber;
+  final List<APIMechanosynthOffer> rows;
+
+  const APIMechanosynthOffers({
+    required this.anchorAtomId,
+    required this.anchorPosition,
+    required this.anchorAtomicNumber,
+    required this.rows,
+  });
+
+  @override
+  int get hashCode =>
+      anchorAtomId.hashCode ^
+      anchorPosition.hashCode ^
+      anchorAtomicNumber.hashCode ^
+      rows.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIMechanosynthOffers &&
+          runtimeType == other.runtimeType &&
+          anchorAtomId == other.anchorAtomId &&
+          anchorPosition == other.anchorPosition &&
+          anchorAtomicNumber == other.anchorAtomicNumber &&
+          rows == other.rows;
+}
+
+/// What a pick did.
+///
+/// Exactly one of the three shapes is populated: a single candidate is
+/// committed on the spot (`committed`), several wait for a choice
+/// (`candidates`), and a failure carries both its message and the offers for
+/// the same atom, so a click with the wrong operation armed self-corrects in
+/// one more click.
+class APIMechanosynthPickResult {
+  final bool committed;
+
+  /// Where the committed step landed in the authored block; `-1` otherwise.
+  final int insertedIndex;
+
+  /// The failure, when the armed operation does not fit here.
+  final String? message;
+  final List<APIMechanosynthCandidate> candidates;
+
+  /// The offers for the clicked atom, populated only on a failure.
+  final APIMechanosynthOffers? offers;
+
+  const APIMechanosynthPickResult({
+    required this.committed,
+    required this.insertedIndex,
+    this.message,
+    required this.candidates,
+    this.offers,
+  });
+
+  @override
+  int get hashCode =>
+      committed.hashCode ^
+      insertedIndex.hashCode ^
+      message.hashCode ^
+      candidates.hashCode ^
+      offers.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIMechanosynthPickResult &&
+          runtimeType == other.runtimeType &&
+          committed == other.committed &&
+          insertedIndex == other.insertedIndex &&
+          message == other.message &&
+          candidates == other.candidates &&
+          offers == other.offers;
 }
 
 /// Freeze mode for atom_edit energy minimization.
@@ -3377,6 +3755,11 @@ class APIOpsLibraryData {
 /// One operation of a loaded library, as the panel lists it.
 class APIOpsLibraryEntry {
   final String name;
+
+  /// The library author's one-line description of the reaction; empty when
+  /// the file states none. An operation name alone does not say what
+  /// `si_donate_dimer` puts where, which is why the palette shows this.
+  final String note;
   final int beforeAtoms;
   final int afterAtoms;
 
@@ -3386,6 +3769,7 @@ class APIOpsLibraryEntry {
 
   const APIOpsLibraryEntry({
     required this.name,
+    required this.note,
     required this.beforeAtoms,
     required this.afterAtoms,
     required this.chiral,
@@ -3394,6 +3778,7 @@ class APIOpsLibraryEntry {
   @override
   int get hashCode =>
       name.hashCode ^
+      note.hashCode ^
       beforeAtoms.hashCode ^
       afterAtoms.hashCode ^
       chiral.hashCode;
@@ -3404,6 +3789,7 @@ class APIOpsLibraryEntry {
       other is APIOpsLibraryEntry &&
           runtimeType == other.runtimeType &&
           name == other.name &&
+          note == other.note &&
           beforeAtoms == other.beforeAtoms &&
           afterAtoms == other.afterAtoms &&
           chiral == other.chiral;

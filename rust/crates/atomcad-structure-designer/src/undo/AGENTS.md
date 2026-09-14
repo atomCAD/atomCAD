@@ -20,6 +20,7 @@ undo/
     ├── text_edit_network.rs, factor_selection.rs
     ├── inline_node.rs             # Inline a custom node (top-level; whole-network snapshot, like text_edit)
     ├── convert_files_to_nodes.rs  # mechanosynth "Convert to nodes" (same whole-network snapshot shape)
+    ├── mechanosynth_edit_block.rs # mechanosynth_edit's authored block + cursor (one command, four constructors)
     ├── convert_to_closure.rs      # Network→Closure (top-level; before/after whole-network snapshot)
     ├── extract_closure_body.rs    # Closure→Network inside a zone body (body snapshot + add/remove of N)
     ├── edit_zone_body.rs           # Body-scoped structural edits (whole-body snapshot)
@@ -106,6 +107,21 @@ Moves are the exception — they use the lighter scope-aware `MoveNodesCommand` 
 `CompositeCommand { commands: Vec<Box<dyn UndoCommand>>, description }` (`commands/composite.rs`) bundles N children into **one** undo step: `undo` runs them in reverse, `redo` forward (standard composite order; `MoveNodesCommand` sets absolute positions so order is immaterial in practice). Its `refresh_mode()` is `combine_refresh_modes` (in `mod.rs`) — strongest child wins: any `Full` ⇒ `Full`; else union all `NodeDataChanged` id-lists; else `Lightweight`. **Never construct a 1-child composite** — push the bare child instead.
 
 This is the mechanism behind **reflow-on-footprint-change** (`doc/design_reflow_on_footprint_change.md`): when an in-place footprint growth (HOF expand on `f`-disconnect / `set_collapse_mode` / in-body add·paste·duplicate·connect) pushes neighbour nodes, `StructureDesigner::reflow_for_footprint_change` returns the moved `(id, old, new)` per scope and the trigger bundles a `MoveNodesCommand` per scope alongside its primary command. **Rule: bundle a move command only for scopes the primary command's snapshot does NOT already cover.** A body-scoped `EditZoneBodyCommand` takes a *fresh after-snapshot at push time*, so moves *within that body* ride along for free — only **ancestor**-scope moves (the cascade climbing past the edited body) need explicit bundling. Helpers: `capture_footprint_chain` / `capture_body_owner_footprint_chain` (snapshot pre-edit sizes BEFORE mutating) and `push_zone_body_command_with_ancestor_reflow` (Case C — reflows starting one scope up at the body-owning HOF). `combine_refresh_modes` must promote to the strongest child so a deletion's `Full` is not downgraded to a move's `Lightweight`.
+
+### Coalescing a Run of Small Edits
+
+`UndoStack::push_count()` is a monotonic counter of every push, and
+`pop_last()` removes the command that would be undone next. Together they let a
+caller ask "is the command I pushed a moment ago still the top of the stack?"
+and, if so, replace it with one spanning both edits — which is how typing into a
+`mechanosynth_edit` metadata chip costs one undo entry rather than one per
+keystroke (`mechanosynth_edit_ops.rs`, `PendingStepMetadataEdit`).
+
+Use `push_count`, never `history_len`: an eviction at `max_history` leaves the
+length unchanged across an unrelated push, and the caller would then pop
+somebody else's command. The pending record also carries the run's **original**
+before-state, so one undo reverts the whole typed word rather than its last
+letter.
 
 ### Selection Is Not Undoable
 

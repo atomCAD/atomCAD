@@ -131,6 +131,12 @@ impl Pattern {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Operation {
     pub name: String,
+    /// The library author's one-line description of the reaction, when the file
+    /// states one. The editor shows it beside the operation in the palette and
+    /// in the offer list — which is the whole reason it is kept: an operation
+    /// name alone does not say what `si_donate_dimer` puts where. Nothing in
+    /// the engine reads it.
+    pub note: Option<String>,
     pub before: Pattern,
     pub after: Pattern,
     /// The reaction has a handedness: a mirrored placement is a *different*
