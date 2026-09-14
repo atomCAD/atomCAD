@@ -223,3 +223,141 @@ fn canonical_round_trip_tilted_axis() {
         assert_eq!(cam.get_canonical_view(), v);
     }
 }
+
+// ---------------------------------------------------------------------------
+// `orthonormalize_up` — the stored-pose invariant the Flutter viewport relies
+// on. `build_view_matrix` orthonormalizes internally, so nothing here shows up
+// in a render; what it protects is `getCameraTransform` on the Flutter side,
+// which builds every pick ray and every world→screen projection from `up` as
+// stored. A world axis left in `up` scaled `right` by `cos φ` and sheared `up`
+// along the view direction, so hover and clicks hit the wrong atom.
+// ---------------------------------------------------------------------------
+
+/// The invariant every reader of a pose is entitled to assume.
+fn assert_canonical(cam: &Camera) {
+    let forward = (cam.target - cam.eye).normalize();
+    assert!(
+        approx_eq(cam.up.length(), 1.0),
+        "up must be a unit vector, got {}",
+        cam.up.length()
+    );
+    assert!(
+        cam.up.dot(forward).abs() < 1e-9,
+        "up must be perpendicular to forward, got dot {}",
+        cam.up.dot(forward)
+    );
+}
+
+#[test]
+fn orthonormalize_up_projects_a_world_axis_onto_the_view_plane() {
+    // The pose `atomcad-cli camera --eye ... --up 0,0,1` writes: looking down
+    // at 45°, with world +Z still in `up`.
+    let mut cam = test_camera();
+    cam.eye = DVec3::new(0.0, -30.0, 30.0);
+    cam.target = DVec3::ZERO;
+    cam.up = DVec3::Z;
+
+    cam.orthonormalize_up();
+
+    assert_canonical(&cam);
+    // Looking down the +Y/-Z diagonal, screen-up tilts back over the shoulder:
+    // world +Z projected onto the view plane is (0, 1, 1)/sqrt(2).
+    let s = std::f64::consts::FRAC_1_SQRT_2;
+    assert!(vec_approx_eq(cam.up, DVec3::new(0.0, s, s)), "{:?}", cam.up);
+}
+
+#[test]
+fn orthonormalize_up_is_idempotent_and_leaves_a_canonical_pose_alone() {
+    let mut cam = test_camera();
+    // `test_camera`'s up is the old hand-rounded (0, 0.32, 0.95), 0.2° off
+    // perpendicular — start from the exact one, or this measures that rounding
+    // instead of idempotence.
+    cam.up = DVec3::new(0.0, 1.0, 3.0).normalize();
+    let before = cam.up;
+    cam.orthonormalize_up();
+    assert!(
+        vec_approx_eq(cam.up, before),
+        "{:?} vs {:?}",
+        cam.up,
+        before
+    );
+    cam.orthonormalize_up();
+    assert!(vec_approx_eq(cam.up, before));
+}
+
+#[test]
+fn orthonormalize_up_normalizes_a_scaled_up() {
+    let mut cam = test_camera();
+    cam.eye = DVec3::new(0.0, -30.0, 0.0);
+    cam.target = DVec3::ZERO;
+    cam.up = DVec3::Z * 7.5;
+
+    cam.orthonormalize_up();
+
+    assert_canonical(&cam);
+    assert!(vec_approx_eq(cam.up, DVec3::Z));
+}
+
+#[test]
+fn orthonormalize_up_falls_back_to_the_nav_axis_when_up_is_the_view_direction() {
+    // Looking along +Y with `up` left pointing the same way: the roll the
+    // caller asked for carries no information, so the turntable axis wins.
+    let mut cam = test_camera();
+    cam.eye = DVec3::new(0.0, -30.0, 0.0);
+    cam.target = DVec3::ZERO;
+    cam.up = DVec3::Y;
+
+    cam.orthonormalize_up();
+
+    assert_canonical(&cam);
+    assert!(vec_approx_eq(cam.up, DVec3::Z), "{:?}", cam.up);
+}
+
+#[test]
+fn orthonormalize_up_stays_finite_looking_along_the_nav_axis() {
+    // Straight down with `up` at +Z and `nav_up` at +Z: every roll is equally
+    // valid, but the basis must not collapse onto the view axis or picking
+    // dies outright.
+    let mut cam = test_camera();
+    cam.eye = DVec3::new(0.0, 0.0, 50.0);
+    cam.target = DVec3::ZERO;
+    cam.up = DVec3::Z;
+    cam.nav_up = DVec3::Z;
+
+    cam.orthonormalize_up();
+
+    assert_canonical(&cam);
+    assert!(cam.up.is_finite());
+}
+
+#[test]
+fn orthonormalize_up_leaves_a_degenerate_pose_for_its_owner() {
+    // eye == target: there is no view direction, so there is nothing to be
+    // perpendicular to and the call must not produce a NaN.
+    let mut cam = test_camera();
+    cam.eye = DVec3::ZERO;
+    cam.target = DVec3::ZERO;
+    cam.up = DVec3::Z;
+
+    cam.orthonormalize_up();
+
+    assert!(vec_approx_eq(cam.up, DVec3::Z));
+}
+
+#[test]
+fn canonical_views_are_already_canonical() {
+    // `set_canonical_view` writes its own perpendicular up; this pins that it
+    // does, so the invariant does not quietly depend on a later call.
+    let mut cam = test_camera();
+    for v in [
+        CameraCanonicalView::Top,
+        CameraCanonicalView::Bottom,
+        CameraCanonicalView::Front,
+        CameraCanonicalView::Back,
+        CameraCanonicalView::Left,
+        CameraCanonicalView::Right,
+    ] {
+        cam.set_canonical_view(v);
+        assert_canonical(&cam);
+    }
+}

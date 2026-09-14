@@ -619,6 +619,11 @@ pub fn apply_camera_settings(renderer: &mut Renderer, settings: Option<&CameraSe
         renderer.camera.pivot_point = s.pivot_point;
         renderer.camera.nav_up = s.nav_up;
         renderer.camera.nav_up_label = s.nav_up_label.clone();
+        // A project saved before `Camera::orthonormalize_up` existed — or one
+        // whose camera was last written from the CLI — can carry a world axis
+        // as `up`, which the Flutter viewport would then build its pick rays
+        // from. Canonicalize on load; the render is unaffected either way.
+        renderer.camera.orthonormalize_up();
         renderer.update_camera_buffer();
     } else {
         // D8: a network with no saved camera_settings counts as "saved value =

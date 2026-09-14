@@ -41,6 +41,27 @@ class Ray {
   Ray({required this.start, required this.direction});
 }
 
+/// Builds the viewport's camera basis.
+///
+/// `right` and `up` are **orthonormalized against `forward`** here, and not
+/// taken from `camera.up` as stored. The renderer does the same thing — its
+/// view matrix is `look_at_rh(eye, target, up)`, which orthonormalizes
+/// internally — so a basis built from the raw `up` disagrees with what is on
+/// screen, and every geometric use of this transform is a pick ray or a
+/// world→screen projection that has to agree with the render or it points at
+/// the wrong atom.
+///
+/// The stored `up` is only perpendicular to `forward` when the pose was last
+/// written by something that normalizes it (`rotateCamera` below,
+/// `Camera::realign_up_to_nav_axis` on the Rust side). Anything that writes a
+/// *world* axis instead — the CLI's `camera --up`, a loaded project's camera
+/// settings, the initial pose — leaves `up` tilted out of the view plane by the
+/// camera's elevation, and then `forward × up` is both short (by `cos φ`) and
+/// sheared along the view direction. Picking then lands on a different atom
+/// the further the pointer is from the viewport centre, which looks like random
+/// hits rather than an offset. The screen-vertical axis the turntable orbits
+/// about is `camera.navUp` (issue #349), a separate field, so nothing needs the
+/// raw vector here.
 CameraTransform? getCameraTransform(APICamera? camera) {
   if (camera == null) {
     return null;
@@ -48,8 +69,21 @@ CameraTransform? getCameraTransform(APICamera? camera) {
   final eye = apiVec3ToVector3(camera.eye);
   final target = apiVec3ToVector3(camera.target);
   final forward = (target - eye).normalized();
-  final up = apiVec3ToVector3(camera.up);
-  final right = forward.cross(up);
+
+  final rawUp = apiVec3ToVector3(camera.up);
+  var right = forward.cross(rawUp);
+  if (right.length < 1e-9) {
+    // Degenerate pose: the stored up is parallel to the view direction, so
+    // every roll is equally valid (`look_at_rh` is degenerate here too). Pick
+    // a deterministic perpendicular so picking stays usable instead of
+    // collapsing onto the view axis.
+    final fallback = forward.z.abs() < 0.9
+        ? vector_math.Vector3(0.0, 0.0, 1.0)
+        : vector_math.Vector3(0.0, 1.0, 0.0);
+    right = forward.cross(fallback);
+  }
+  right.normalize();
+  final up = right.cross(forward).normalized();
 
   return CameraTransform(
     eye: eye,

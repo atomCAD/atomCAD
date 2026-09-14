@@ -118,6 +118,52 @@ impl Camera {
         self.up = up_proj.normalize();
     }
 
+    /// Projects `up` onto the plane perpendicular to the view direction and
+    /// normalizes it, so the stored `up` is the camera's **screen** up rather
+    /// than whatever world axis the caller happened to hand over.
+    ///
+    /// `build_view_matrix` orthonormalizes internally (`look_at_rh`), so the
+    /// render is correct whatever `up` holds — but the Flutter viewport builds
+    /// its pick rays and its world→screen projection from `up` **as stored**,
+    /// and a stored world axis makes those disagree with the render by the
+    /// camera's own elevation: `right` comes out short by `cos φ` and `up`
+    /// carries a component along the view direction, so hover and clicks land
+    /// on the wrong atom. Every writer of a pose therefore ends with this call,
+    /// and readers may rely on `up ⟂ forward`, `|up| = 1`.
+    ///
+    /// Distinct from [`Self::realign_up_to_nav_axis`], which *replaces* the
+    /// roll with the navigation axis; this one preserves the roll the caller
+    /// asked for and only removes the component it cannot mean.
+    pub fn orthonormalize_up(&mut self) {
+        let Some(forward) = (self.target - self.eye).try_normalize() else {
+            // Degenerate pose (eye == target): there is no view direction to be
+            // perpendicular to, so leave `up` for whoever fixes the pose.
+            return;
+        };
+        let up_proj = self.up - forward * self.up.dot(forward);
+        if let Some(up) = up_proj.try_normalize() {
+            self.up = up;
+            return;
+        }
+        // `up` is parallel to the view direction, so the roll it asked for
+        // carries no information. Fall back to the navigation axis, which is
+        // what the turntable would use anyway.
+        let nav_proj = self.nav_up - forward * self.nav_up.dot(forward);
+        if let Some(up) = nav_proj.try_normalize() {
+            self.up = up;
+            return;
+        }
+        // Looking straight along the navigation axis too: any roll is as good
+        // as any other, so pick a deterministic one rather than leave a basis
+        // that collapses onto the view axis.
+        let seed = if forward.z.abs() < 0.9 {
+            DVec3::Z
+        } else {
+            DVec3::Y
+        };
+        self.up = forward.cross(seed).cross(forward).normalize();
+    }
+
     /// Restores the default navigation axis (`+Z` / `"Z"`) and re-aligns `up`
     /// per D3. Used by the D8 `None`-restore rule and the `reset_view_up` API.
     pub fn reset_nav_up(&mut self) {

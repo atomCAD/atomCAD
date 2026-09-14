@@ -170,10 +170,12 @@ impl Renderer {
             eye: DVec3::new(0.0, -30.0, 10.0),
             // have it look at the origin
             target: DVec3::new(0.0, 0.0, 0.0),
-            // calculate up vector perpendicular to (target - eye)
-            // The view direction is (0,30,-30), so a perpendicular vector
-            // with positive z is (0.0, 0.32, 0.95)
-            up: DVec3::new(0.0, 0.32, 0.95),
+            // Perpendicular to the view direction (0, 30, -10) — the pose is
+            // canonical from the start, which is the invariant
+            // `Camera::orthonormalize_up` maintains everywhere else. (The value
+            // this replaced, (0, 0.32, 0.95), was off by 0.2°, and its comment
+            // named a view direction the eye/target above do not produce.)
+            up: DVec3::new(0.0, 1.0, 3.0).normalize(),
             aspect: width as f64 / height as f64,
             fovy: std::f64::consts::PI * 0.15,
             znear: 1.5,
@@ -1035,10 +1037,17 @@ impl Renderer {
         })
     }
 
+    /// Writes a camera pose. `up` is taken as the caller's *intent* for the
+    /// roll and is orthonormalized against the new view direction, so callers
+    /// that pass a world axis (the CLI's `camera --up`, a loaded project) leave
+    /// the same canonical pose behind as the turntable does — see
+    /// [`Camera::orthonormalize_up`] for why a stored world axis breaks
+    /// viewport picking.
     pub fn move_camera(&mut self, eye: &DVec3, target: &DVec3, up: &DVec3) {
         self.camera.eye = *eye;
         self.camera.target = *target;
         self.camera.up = *up;
+        self.camera.orthonormalize_up();
 
         self.update_camera_buffer();
     }
@@ -1606,6 +1615,9 @@ impl Renderer {
         // Calculate target from eye and forward
         self.camera.target = self.camera.eye + forward;
         self.camera.up = up;
+        // A rotation quaternion is orthonormal in exact arithmetic; this keeps
+        // the invariant exactly rather than to the quaternion's rounding.
+        self.camera.orthonormalize_up();
 
         // Update the GPU buffers
         self.update_camera_buffer();
