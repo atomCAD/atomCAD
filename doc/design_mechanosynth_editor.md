@@ -1,7 +1,10 @@
 # Design: build scripts as network values and the `mechanosynth_edit` node
 
 Status: **draft 2026-09-11, revised 2026-09-14** (clicked-atom role rule,
-tests moved into phases). **Phases 1 and 2 implemented 2026-09-14**; Phases 3–5
+tests moved into phases; then atom-first placement, the first-shell frame
+rule and the environment-variant convention — §Applicability and the last
+subsection of §Decisions, all landing in Phases 3–5 because Phase 2 is
+closed). **Phases 1 and 2 implemented 2026-09-14**; Phases 3–5
 not started. Extends the `mechanosynth` subsystem
 (`rust/crates/atomcad-crystolecule/src/mechanosynth/`,
 `rust/crates/atomcad-structure-designer/src/nodes/mechanosynth.rs`,
@@ -184,12 +187,77 @@ reconstructed dimer atom are not congruent (back-bonds 2.352 versus
 within the 0.3 Å tolerance and place the added atom 0.11 Å wrong on one of
 them, which the generator's replay-equals-target check rejects. So a
 donation splits into one op per host environment, the way the H library
-already splits `h_donate` from `h_donate_dimer` by bond length. The user
-picks the variant; the wrong one fails the gate or commits with a visible
-residual (§Exactness).
+already splits `h_donate` from `h_donate_dimer` by bond length. Which variant
+applies is decided by the fit rather than by the user, and the wrong one fails
+the gate or commits with a visible residual (§Exactness, and the next
+subsection for what the split means for the palette).
+
+A two-atom `before` has the same problem in a second guise: two atoms are
+collinear, so the roll about their axis is undetermined, and an `after` that
+displaces them off that axis — a reconstructed dimer does, by 0.03 Å — would
+have the displacement land at an arbitrary azimuth. Frame atoms fix that too,
+which is why dimerization needs them as much as donation does.
+
+**Which atoms become the frame is a library-authoring choice, and the rule is
+the first shell: the bonded neighbours of the origin atom, nothing further
+out.** A host and its three neighbours are four non-planar atoms, which is
+exactly what Kabsch needs, and every distinction such a frame can draw is a
+distinction in bond lengths and angles *at the host* — chemistry. A frame
+taken from a radius instead would split operations on third-shell differences
+that change nothing about the reaction, and the variant count would multiply
+for no information gained. The engine imposes none of this: it reads whatever
+patterns a library states, and `is_frame_atom` recognises them from the two
+patterns either way.
 
 Deriving the direction from bonds survives only as the fallback for ops
 without frame atoms (hand-written libraries), and it is labelled as such.
+
+### The library answers "what can be done here"
+
+A library whose patterns fix orientation exactly is a library with more
+operations in it. Frame atoms state the host's environment, and an operation
+that states an environment applies only to that environment: an ideal-site
+host and a reconstructed dimer atom become `si_donate` and `si_donate_dimer`,
+and the same split runs through every donation. That is not a cost to be
+minimised. It is the library saying how many distinct situations it has
+actually been calculated for, and the two ways of keeping the list short were
+both measured and both fail §Exactness — one tolerant operation places an atom
+0.11 Å wrong on the variant it was not derived from, and one operation
+oriented from the host's bonds is 0.15–0.17 Å off.
+
+So the operation count grows, and the interaction inverts to keep it
+invisible. **The primary flow is atom-first**: click an atom, and the editor
+answers with the operations that fit *it*, ranked (§Applicability, §Placement
+tool). The user reaches `si_donate_dimer` by choosing the entry that is
+offered, which is the one whose pattern matches what is actually there — the
+gate resolves the variant, the way argument types resolve an overload. Under a
+library tolerance of 0.05 Å at most one variant of a family can fit, so the
+list stays short and correct, and the variant names are read as an answer
+rather than as a taxonomy to be learned up front. Op-first survives as the
+repeat flow: after a commit the tool stays armed with the same operation, so a
+run of identical placements is one click each.
+
+Two consequences, because they are why this works rather than decoration:
+
+- **A miss becomes a coverage report.** When nothing fits, the offer list
+  still shows what came close and how close: "`si_donate_dimer` — 0.31 Å off"
+  says this host is not an environment the library knows. A bare "no
+  placement" says nothing, and a precalculated library's real limit is exactly
+  the set of environments its generator enumerated, so that limit should be
+  readable at the point of use.
+- **The variants must be nameable.** `si_donate_2`, `si_donate_3` would mean
+  the split is not understood — the equivalent of calling two types `Type1`
+  and `Type2`. The convention is `<operation>_<environment>` with the
+  environment vocabulary **shared across operations**, so that a library where
+  `cl_donate_dimer`, `si_donate_dimer` and `h_donate_dimer` all name the same
+  kind of host is one a user learns once. Nothing in the engine reads the
+  name; this is a convention for whoever writes the generator.
+
+Rejected: **merging variants to keep the palette short.** A variant is a claim
+— "this reaction, on this site, has this geometry, and it was computed" —
+so merging two deletes a claim the library has evidence for and replaces it
+with a tolerance wide enough to hide the difference. That is the 0.3 Å gate
+this design already moved away from.
 
 ## T0 — types and nodes
 
@@ -410,6 +478,71 @@ the loop is extracted into one primitive on `AtomicStructure` first, with
 the element-symbol helper and canonical-bond keying that are duplicated
 beside it.
 
+## T1 — applicability: what can be done here
+
+Added by the atom-first revision, so it lands in **Phase 3** with the editor
+node's API rather than in the closed Phase 2. It is one more pure function
+beside `place()` in `place.rs`, and a wrapper over it rather than a second
+search:
+
+```rust
+pub struct Applicability {
+    pub op: String,
+    /// Candidates within the library tolerance, ranked; empty for a near miss.
+    pub candidates: Vec<Candidate>,
+    /// The best fit found *outside* the gate, kept so a near-miss row can be
+    /// previewed and measured rather than merely counted. `None` whenever
+    /// `candidates` is non-empty — a row is one or the other, never both.
+    pub near_miss: Option<Candidate>,
+    /// Best residual of `candidates`, or of `near_miss`.
+    pub best_residual: f64,
+    pub fits: bool,          // best_residual <= tolerance
+    pub approximate: bool,   // every candidate came from the fallback
+}
+
+/// One entry per library operation that has anything to say about `clicked`,
+/// ranked; never an error, because "nothing applies here" is an answer.
+pub fn applicable_ops(
+    workpiece: &AtomicStructure,
+    library: &OpLibrary,
+    clicked: u32,
+    tolerance: f64,
+) -> Vec<Applicability>;
+```
+
+For each operation it calls `place()` at `tolerance * NEAR_MISS_FACTOR`
+(`NEAR_MISS_FACTOR = 10`, so a 0.05 Å library reports misses out to 0.5 Å) and
+partitions the candidates at `tolerance`. An operation with at least one
+candidate inside is *applicable* and keeps those candidates; one with only
+candidates outside is a *near miss* and keeps the best of them in `near_miss`,
+so the editor can preview and measure it; an operation whose `place()` returns
+`UnknownOp`, `NoRole` or `NoPlacement` drops out of the list entirely — it has
+nothing to say about this atom. The relaxed gate widens the neighbourhood
+search along with it (`extent + tolerance`), which is what a near-miss search
+wants.
+
+Candidates outside the gate never leave this struct's `near_miss` slot: they
+are for showing, not for placing, and the editor refuses to commit one
+(§Placement tool). Keeping them in a separate field rather than mixed into
+`candidates` is what makes that refusal a type-level fact instead of a filter
+every caller has to remember.
+
+The result is sorted: applicable before near miss, then by `best_residual`,
+then proper before mirrored, then exact before approximate — `place()`'s own
+order with one key in front of it.
+
+**No grouping, and still no `family` key.** Under a library tolerance of
+0.05 Å at most one variant of a family fits, so the list does not contain the
+near-duplicates that grouping would exist to collapse. The other variants
+appear, if at all, in the near-miss section, where the residual is precisely
+the information that makes them worth showing.
+
+Cost is one `place()` per library operation. Patterns hold at most a handful
+of atoms and the assignment search is pruned, so a twenty-operation library is
+one short sweep: cheap **per click or selection**, and to be treated as too
+expensive per mouse-move. The editor runs it on a pick, never on hover
+(§Placement tool).
+
 ## Exactness: the matching tolerance never reaches a coordinate
 
 **Requirement.** A build authored interactively with a library whose
@@ -471,6 +604,10 @@ Therefore:
   chips is exact to file rounding.
 - The placement engine ranks by residual before anything else, so an exact
   candidate always outranks an inexact one.
+- A host the library has no variant for shows up as a **near miss** in the
+  offer list, with its residual (§Applicability), rather than as a silent
+  absence — so the gap between the library's environments and the workpiece's
+  is readable where it matters.
 - One test pins the claim (Phase 2, *round-trip exactness*): re-author a
   generated build by driving `place()` with each step's origin atom in
   order, choose the candidate whose `r` matches the generator's, and require
@@ -493,7 +630,7 @@ should warn on such patterns.
 | output 0 | `result` — the workpiece after the prefix and the authored steps up to the cursor; same concrete type as `base` |
 | output 1 | `steps: [BuildStep]` — prefix followed by the whole authored block, cursor ignored |
 | stored | `authored: Vec<AuthoredStep>` (a `Step` plus its fit `residual` and `approximate` flag), `cursor: i32` (number of authored steps applied, `-1` = all; §Cursor) |
-| transient (`#[serde(skip)]`) | placement state (chosen op, pending candidates), the prefix snapshot, last replay error |
+| transient (`#[serde(skip)]`) | placement state (chosen op, pending candidates, the last offer list and the atom it was taken on), the prefix snapshot, last replay error |
 
 `result` is painted with `ms_current` on the cursor step's touched atoms and
 with nothing else; `ms_added`/`ms_layer` are the replayer's concern. Ghost
@@ -521,28 +658,105 @@ changes are **not** undo commands, like the replayer's slider.
 ### Placement tool
 
 Active only while the node is selected and its `result` pin is the displayed
-one (the same rule `atom_edit` uses to own viewport picks). States:
+one (the same rule `atom_edit` uses to own viewport picks). The primary flow
+is **atom-first** — click an atom and the library answers (the last
+subsection of §Decisions); op-first is kept as the repeat flow, entered
+by a commit or from the palette.
 
-1. **Idle.** The palette lists the wired library's operations, with a
-   filter box. Choosing one enters Armed. Typing selects by prefix.
-2. **Armed.** The prompt reads "click the *host* atom" (the origin atom's
-   element and, when present, the op `note`). A viewport click on an atom
-   calls `place`; a click elsewhere or Escape returns to Idle.
-3. **Candidates.** An `Err` from `place` (`NoRole`, `NoPlacement`) is
-   shown in place ("no `dimerize` partner within tolerance of the clicked
-   atom, taken as pattern atom 1; nearest bare Si at 4.59 Å") and the tool
-   stays Armed. The message always names the role the clicked atom was
-   given, so a click on the wrong atom of an asymmetric op explains itself.
-   One candidate: commit immediately. Several: every candidate's after
-   state is drawn as ghosts at once (added atoms
-   green, deleted red, moved with an arrow, at 40 % alpha, the
-   `xray`-style ghosting), the panel lists them ("2 of 2: mirrored, residual
-   0.00 Å"), Tab cycles, clicking a ghost atom that belongs to exactly one
-   candidate chooses it, Enter takes the highlighted one, Escape abandons.
-4. **Commit.** One undo command inserts the step after the cursor with
+#### The offer popup
+
+The offer list is a **viewport overlay anchored to the clicked atom**, not a
+section of the property panel: the answer appears where the question was
+asked, which is the whole point of the inversion, and a 300 px panel on the
+far right would put eye and mouse travel on every placement. Concretely: an
+`Overlay` entry above the viewport, positioned each frame from the anchor
+atom's world position projected to screen, offset up and to the right,
+clamped to stay wholly inside the viewport, closed when the anchor atom is no
+longer in `result`. It holds keyboard focus while open. About 300 px wide,
+eight rows before it scrolls.
+
+```
+┌──────────────────────────────────────────┐
+│ 3 operations apply to this Si            │  header: count, clicked element
+├──────────────────────────────────────────┤
+│ si_donate_dimer            exact · 1  ▸  │  name, badges; highlighted row
+│   Si donation onto a reconstructed…      │  the library's own note, elided
+│ cl_donate_dimer            exact · 1     │
+│   Cl2 dose onto a reconstructed dimer…   │
+│ dimerize                   exact · 2     │  2 = candidate count
+├──────────────────────────────────────────┤
+│ si_donate               0.31 Å off       │  near misses: dimmed, unselectable
+│ cl_donate               0.44 Å off       │
+└──────────────────────────────────────────┘
+```
+
+Badges come from `Applicability`: the candidate count, and one of *exact* /
+*inexact, 0.02 Å* / *approximate*.
+
+**Near-miss rows are not selectable.** They are the `fits == false` entries,
+below a rule, dimmed. Enter or a click on one replaces the row with the reason
+— "0.31 Å off; this host is not an environment `si_donate` was calculated for.
+Add the variant, or loosen the library's tolerance." — and nothing is
+inserted. There is no cast past the gate, deliberately: an inexact step
+*inside* the gate commits with a residual chip (§Exactness), but outside it
+the library is stating it has not computed this situation, and the honest
+fixes are the two named in the message.
+
+**Highlighting a row previews it.** The highlighted row's first candidate is
+ghosted on the workpiece at once — added atoms green, deleted red, moved with
+an arrow, 40 % alpha, the `xray`-style ghosting — and a near-miss row previews
+its `near_miss` candidate in amber. This is free: the sweep computed and kept
+every candidate, so moving the highlight redraws a ghost and never calls
+`place` again. It is also what makes a library of variants learnable — the
+user sees each reaction happen on the real workpiece before choosing — so it
+is not optional polish.
+
+Typing filters the rows by prefix against the operation name. The sweep is not
+re-run; the filter only hides rows.
+
+#### States
+
+1. **Idle.** The panel's prompt reads "Click an atom to see what can be done
+   there." The palette still lists the wired library's operations with a
+   filter box for the op-first entry, and choosing one enters Armed. A
+   viewport click on a workpiece atom runs `applicable_ops`, rings the atom as
+   the *query anchor*, and enters Offers. The click does not change the app's
+   atom selection: the anchor is the tool's own transient state.
+2. **Offers.** The popup above, first row highlighted and previewed. Up/Down
+   move the highlight, typing filters, Enter or a click takes the highlighted
+   row, Escape or a click on empty space returns to Idle. An empty result is
+   the popup with "nothing applies to this Si" and no rows — an answer, not an
+   error. Choosing a row goes to Candidates **with the candidates the sweep
+   already computed**; `place` is not run a second time.
+3. **Armed.** A strip at the top of the viewport reads "`si_donate_dimer`
+   armed — click a host · Esc to stop", naming the origin atom's element and,
+   when present, the op `note`. A viewport click on an atom calls `place` for
+   that one operation; Escape returns to Idle. An `Err` (`NoRole`,
+   `NoPlacement`) **opens the offer popup at that atom**, headed by the
+   failure — "`si_donate_dimer` doesn't fit this Si — nearest bare Si at
+   4.59 Å" — with the operations that do fit beneath it, so a click on the
+   wrong atom, or with the wrong variant armed, self-corrects in one more
+   click instead of becoming a message to interpret. The failure always names
+   the role the clicked atom was given, so a click on the wrong atom of an
+   asymmetric op explains itself.
+4. **Candidates.** One candidate: commit immediately. Several: the popup is
+   replaced **in place** — same anchor, same width — by the candidate rows
+   ("2 of 2: mirrored, residual 0.00 Å"), every candidate's after state
+   ghosted at once, Tab cycles, clicking a ghost atom that belongs to exactly
+   one candidate chooses it, Enter takes the highlighted one, Escape abandons.
+5. **Commit.** One undo command inserts the step after the cursor with
    metadata copied from the previous authored step (or the last prefix
-   step), moves the cursor to it, and returns to Armed with the same op
-   so a series of identical placements is one click each.
+   step), moves the cursor to it, closes the popup, and enters Armed with the
+   committed op so a series of identical placements is one click each.
+
+The sweep runs on a pick, never on hover: it is one `place()` per library
+operation (§Applicability), which is cheap once per click and wasteful once
+per mouse move.
+
+**Nothing is shown before the click.** No affordance marks which atoms accept
+an operation, because that is a sweep per atom over the whole workpiece. The
+user asks by clicking. Highlighting every atom an *armed* operation accepts is
+the same machinery T2 area-apply needs and is listed there, not here.
 
 Approximate candidates (fallback orientation) carry a warning chip on the
 step row, "orientation derived from bonds", so a user knows the coordinates
@@ -575,9 +789,21 @@ over `#[frb(ignore)]` functions on `&StructureDesigner` so the tests need no
 - `get_mechanosynth_edit_data` → stored block, cursor, prefix length,
   library op names, last error.
 - `set_mechanosynth_edit_cursor`, `begin/endNodeDataDrag` around scrubs.
+- `mechanosynth_edit_offers(atom_id)` → the applicability list: the
+  atom-first entry point. Per row — op name, the library's `note` for it,
+  candidate count, best residual, fits/near-miss, mirrored, approximate, and
+  **the ghost atoms of the row's first candidate** (a near-miss row's come
+  from `near_miss`), so highlighting a row previews it without a second call.
+  Also the anchor atom's world position and element, which the popup needs to
+  place itself and to write its header. The full candidates stay in transient
+  state, so choosing a row needs no second `place()`.
 - `mechanosynth_edit_arm(op)`, `mechanosynth_edit_pick(atom_id)` →
   candidate list (indices, residual, mirrored, approximate, ghost atoms for
-  rendering), `mechanosynth_edit_choose(index)`, `mechanosynth_edit_cancel`.
+  rendering) or, on a failure, the message **and** the same offer list;
+  `mechanosynth_edit_choose(op, index)` — the op is named as well as the
+  index, because an offer list spans several operations, and an op the last
+  offer list reported as a **near miss** is refused here, not silently placed
+  — `mechanosynth_edit_cancel`.
 - `mechanosynth_edit_insert_step`, `mechanosynth_edit_delete_step`,
   `mechanosynth_edit_move_step`, `set_mechanosynth_edit_step_metadata`.
 - `mechanosynth_convert_files_to_nodes` on the replayer.
@@ -613,14 +839,19 @@ is `[]`), the rule learned on the replayer. The round-trip corpus test
 ### Reference guide
 
 - `doc/reference_guide/nodes/atomic.md`: a new `## mechanosynth_edit`
-  section (pins, the placement tool and its "click the atom the operation
-  acts on" rule, candidates, the steps list, the text format), new `## ops_library`, `## build_script`, `## export_build_script`
+  section (pins, the placement tool — atom-first, the offer popup and its
+  preview, why a near miss is shown but cannot be chosen, and the "click the
+  atom the operation acts on" rule behind both — candidates, the steps list,
+  the text format), new
+  `## ops_library`, `## build_script`, `## export_build_script`
   sections, and the `## mechanosynth` section updated for the `ops`/`steps`
   pins, the deprecated file properties and Convert to nodes.
 - `doc/reference_guide/nodes/math_programming.md`: the `BuildStep` record
   beside `MechanosynthStep`; `r` added to the latter.
 - The two-files section of the `mechanosynth` guide documents `chiral`,
-  frame atoms as a pattern-writing convention, the tolerance advice, the effect-derived
+  frame atoms as a pattern-writing convention — including the first-shell rule
+  and the `<operation>_<environment>` naming convention for the environment
+  variants they imply — the tolerance advice, the effect-derived
   `ms_current` rule, and the origin convention.
 
 ## Follow-ups (signatures only)
@@ -629,7 +860,9 @@ is `[]`), the rule learned on the replayer. The round-trip corpus test
   Blueprint or tag) with an op armed → one step per host whose candidate
   list has exactly one entry, in a chosen order (pick order, along a lattice
   direction, nearest-first); hosts with several candidates are listed and
-  skipped.
+  skipped. The same sweep-over-many-atoms machinery would let an armed
+  operation highlight every atom it accepts, the one affordance §Placement
+  tool deliberately leaves out of Phase 4.
 - **T2 site repeat.** `steps_move { steps: [BuildStep], translation: Vec3,
   rotation: Mat3 } → [BuildStep]`: applies one rigid transform to every
   step's `t`/`r`. Pure array node, no ops.
@@ -917,7 +1150,11 @@ check.
 ### Phase 3 — The editor node
 
 Node, data, eval with the shared helper and prefix snapshot, undo commands,
-API, text format, round-trip fixture.
+API, text format, round-trip fixture. Plus `applicable_ops` and
+`NEAR_MISS_FACTOR` in `place.rs` (§Applicability) and the
+`mechanosynth_edit_offers` API over them — the atom-first flow's engine half.
+It is a wrapper over the `place()` Phase 2 shipped, not a second search, so
+nothing in Phase 2 is reopened.
 
 *Tests — eval:* the shared assertion *same result, both nodes* at cursor
 `0`, `1`, `authored.len()` and `-1`, with and without a wired prefix; a
@@ -951,12 +1188,43 @@ ten times adds nothing to the stack); every API mutator except the cursor
 setter adds exactly one undo entry (the `feedback_persisted_mutations_must_be_undoable`
 rule, checked mechanically).
 
+*Tests — applicability* (in `mechanosynth_place_test.rs`, beside
+`place()`'s, since the function lives in `place.rs`): on the donation with
+three frame atoms, a click on
+its host lists that operation as fitting and the second environment variant as
+a near miss with its residual; at the 0.05 Å default no two variants of one
+family are ever both applicable on the same atom, which is what makes the
+offer list an answer rather than a menu; a click on an atom no operation
+accepts returns an empty list, not an error; each entry's candidates equal
+what `place()` returns for that operation and atom at the library tolerance,
+so the sweep and the single call cannot disagree; an operation whose only
+candidates are over the gate is a near miss, never applicable, and carries its
+best rejected fit in `near_miss` while `candidates` stays empty — and the
+converse for an applicable one, so no entry is ever both; the result
+holds at most one entry per library operation and none for an operation that
+errored; the near-miss gate is `tolerance * NEAR_MISS_FACTOR` — a fit at
+`10·tolerance − ε` is reported and one at `10·tolerance + ε` is not; the list
+sorts applicable before near miss, then by residual, and the order is stable
+across two calls on the same input.
+
 *Tests — placement API:* the arm → pick → choose sequence inserts one step
-and one undo entry; pick with a single candidate commits immediately and
+and one undo entry; the atom-first offers → choose sequence inserts the same
+step and one undo entry; `mechanosynth_edit_choose` names the operation as
+well as the index, so an offer list spanning several operations cannot be
+chosen from ambiguously, and a `(op, index)` pair the last offer list does not
+contain is an error that inserts nothing; **choosing an op the last offer list
+reported as a near miss is an error naming the residual and inserts nothing**,
+so an over-gate fit cannot reach the authored block through the API any more
+than through the popup; every offer row carries the ghost atoms of its first
+candidate, a near-miss row's taken from `near_miss`, so the panel can preview
+a row without a second call; a pick that fails while Armed
+returns the failure message *and* the offers for that atom; pick with a single
+candidate commits immediately and
 reports so; cancel inserts nothing and returns to Idle; pick while Idle is
 an error; arm with an op not in the wired library is an error naming the
 op; choose with an out-of-range index is an error and inserts nothing; pick
-on an atom id not present in `result` is an error; after a commit the tool
+on an atom id not present in `result` is an error; offers on an atom id not
+present in `result` is an error; after a commit the tool
 is Armed with the same op; the inserted step copies `method`/`phase`/
 `layer`/`site` from the previous authored step, or from the last prefix
 step when the block is empty, and `note` from neither; the candidate list
@@ -985,15 +1253,38 @@ corpus test gains a fixture with an editor node and a wired prefix.
 ### Phase 4 — Panel and tool
 
 Scrubber and chapter list extracted from `mechanosynth_editor.dart` into a
-shared widget; palette, prompt, candidate list, ghosts, steps list, chips;
-the placement tool wired into viewport picking.
+shared widget; palette, prompt, steps list, chips; the **offer popup** — a
+viewport `Overlay` anchored to the clicked atom, with its dimmed unselectable
+near-miss section, preview-on-highlight, prefix filtering and keyboard model
+(§Placement tool) — the candidate list in the same popup, ghosts, the armed
+strip; the placement tool wired into viewport picking, with the applicability
+sweep on a pick and never on hover.
 
-*Tests:* a widget test for the extracted scrubber — it builds from the
+The popup is the one genuinely new widget: atomCAD has transient viewport
+overlays, but none that is interactive and pinned to a projected 3D point, so
+budget the re-anchor-on-camera-change and viewport-clamping work rather than
+assuming an existing affordance covers it.
+
+*Tests:* two widget tests. The extracted scrubber — it builds from the
 replayer's info and from the editor's, reports cursor changes through the
-callback, and the chapter list jumps; `flutter analyze` clean of new
-warnings. Nothing else automated: the panel is thin editor UI and the rule
+callback, and the chapter list jumps. The offer popup, from a canned
+applicability list, because its rules are decidable without a viewport:
+applicable rows above the rule and near-miss rows below it; a near-miss row
+does not report a choice through the callback and shows its reason instead;
+Up/Down move the highlight and each move reports the previewed row exactly
+once; typing filters by prefix without re-querying; Escape reports a cancel;
+an empty list renders the "nothing applies" header and no rows. Plus
+`flutter analyze` clean of new warnings. Nothing else automated: the rest is
+thin editor UI and the rule
 from `feedback_manual_test_for_editor_ui` applies. The **manual
-walkthrough** (human) is: palette filter and type-to-select; click-to-place
+walkthrough** (human) is: palette filter and type-to-select; a click on an
+atom with nothing armed, and choosing a variant from the offer list it
+produces; arrowing that list and watching each ghost preview follow the
+highlight; the popup staying anchored to its atom while the camera orbits, and
+clamping at the viewport edge; a click on a host the library has no variant
+for, the near-miss residual it reports, and the refusal when it is chosen; the
+wrong variant armed, and the offers that follow the
+failure; click-to-place
 on a diamond library build with an exact residual; a two-candidate pick
 with ghosts, Tab, click-a-ghost and Enter; an approximate placement and its
 chip; a failed pick and its message naming the role; reorder, delete and
@@ -1011,7 +1302,9 @@ they parse.
 
 Outside the repository, a prerequisite for one-click donations on the real
 libraries: the generator emits frame atoms and environment variants for
-its donation and dimerization ops, and writes `tolerance: 0.05`. The
+its donation and dimerization ops — first shell only, named
+`<operation>_<environment>` from a vocabulary shared across operations
+(§Decisions) — and writes `tolerance: 0.05`. The
 diamond output stays the regression reference for everything else, and the
 real-library exactness test (P2) is the acceptance check for that work.
 
@@ -1037,7 +1330,14 @@ real-library exactness test (P2) is the acceptance check for that work.
 - A `family` key grouping environment variants in the palette, with the
   variant chosen by smallest residual. Complicates the schema and the
   engine to hide a distinction the user should learn; the residual chip and
-  a tight library tolerance make the wrong variant fail visibly instead.
+  a tight library tolerance make the wrong variant fail visibly instead. The
+  atom-first offer list (§Applicability) reaches the same end without either:
+  it shows the variant that *fits* rather than the variant that fits *best*,
+  so the gate does the resolving, no key is added, and the user learns the
+  distinction by seeing which variant is offered where — a better teacher than
+  a grouped palette would have been.
+- Merging environment variants back into one tolerant operation to keep the
+  palette short — see the last subsection of §Decisions.
 - Pinning `t` to the clicked atom for multi-atom ops. The fit's `t` is what
   congruence-derived ops effectively produce; kept atoms are never snapped,
   so `t` only decides where added atoms land.
@@ -1056,3 +1356,12 @@ real-library exactness test (P2) is the acceptance check for that work.
 - The neighbourhood radius for the assignment search on libraries with
   large patterns (the T4 recorder may produce them); `extent + tolerance`
   is right for the current libraries.
+- Whether `NEAR_MISS_FACTOR` should become a per-library value. A constant 10
+  is right for a generated library at 0.05 Å; a hand-written library that
+  states 0.3 Å would report misses out to 3 Å, which is more noise than
+  report. Left a constant until a library complains.
+- Whether the offer list should also show operations that fit an atom in a
+  role the user plainly did not mean — the `*` frame role of some unrelated
+  operation. The role rule picks one role per operation and the fit usually
+  rejects it, so this may never arise; if it does, the fix is a rank, not a
+  filter.
