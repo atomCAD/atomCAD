@@ -221,12 +221,17 @@ silently become workpiece, and the pin is what excludes tools from
 ### Symbolic state is a label; geometry is the truth
 
 A tool type may declare a list of **state names**, and an operation's tool
-side may say `from` and `to`. The node tracks one state per bound tool. The
-state starts **unknown** and is set by the first operation that uses the
-tool, so no per-instance configuration exists; from the second use on, an
+side may say `from` and `to`. The node tracks one state per bound tool.
+**Every tool starts in its type's initial state**, the first entry of the
+list: a tool type is researched with a resting state, every sequence starts
+there, and the library is the one that knows it — so no per-instance
+configuration exists and the symbolic check applies from the first step. An
 operation whose `from` differs from the tracked state is an error naming the
-tool type, its state and the state required. The geometric rewrite is applied
-after the symbolic check and must match too. When the two disagree — the
+tool type, its state and the state required. The wired molecule has to *be*
+in the initial state; the frame atoms do not include the apex's cargo, so
+binding cannot check that, and the first tool-side match does, with the
+nearest-atom message. The geometric rewrite is applied after the symbolic
+check and must match too. When the two disagree — the
 state says *charged* and the apex has no atom to give — the geometric
 failure is reported, because the geometry is what a viewer sees and the
 label is the thing that is wrong.
@@ -239,6 +244,10 @@ than an atom position, which is the message a process author can act on.
 Rejected: **state derived from geometry alone** (no labels). Correct but
 mute. Also rejected: **labels only**, with no tool-side geometry. Then
 nothing changes on the tool in the viewport, which is the whole motivation.
+And **an unknown state until first use** (an earlier revision): it avoided
+per-instance configuration, but so does a library-declared initial state,
+and it left the first step unchecked and every sequence starting from
+nowhere.
 
 ### Operations declare their method; the user never types it
 
@@ -389,7 +398,7 @@ skipping unknown keys.
 |---|---|
 | `name` | unique among tool types; what an operation's `tool.type` names, and the tag a design puts on the molecule that plays it |
 | `note` | free text for the panel and the offer list, like an operation's |
-| `states` | optional list of state names; the vocabulary `from`/`to` may use. Absent means the type carries no symbolic state |
+| `states` | optional list of state names; the vocabulary `from`/`to` may use, and **the first entry is the type's initial state**, the one every bound tool starts in. Absent means the type carries no symbolic state; an empty list is a parse error |
 | `frame` | four or more entries, each a **tag name** and a position in the tool's local frame. No elements, no `*`: the atoms are found by tag, never by pattern. Exactly one entry is `apex` and it sits at the origin; the entries are not coplanar; tag names are unique within the frame. Each is a **parse error** when violated, naming the type — unlike the origin *warning* on operations, this is a rule the fit depends on |
 
 The tag vocabulary is the library's, and it should be **shared across
@@ -521,8 +530,8 @@ test pins that.
 downstream sees the kind. Three fields are appended: `tool_type: String`,
 the operation's tool type when it is `tip`; `tool_state: String`, the
 tracked state of that tool *after* the step, `""` when the type has no
-states or the state is still unknown; and `agent: String`, the operation's
-agent when it is `bulk`. Empty strings at step 0, as for every other field.
+states; and `agent: String`, the operation's agent when it is `bulk`. Empty
+strings at step 0, as for every other field.
 
 ## Engine
 
@@ -537,7 +546,8 @@ pub struct ToolBinding {
     pub instance: usize,          // index on the `tools` pin
     pub tool_type: String,        // the type its frame fitted
     pub pose: ToolPose,           // r, t, residual
-    pub state: Option<String>,    // None until an operation with `to` sets it
+    pub state: Option<String>,    // the type's initial state, changed by `to`;
+                                  // None only for a type without `states`
 }
 
 /// Everything a replay acts on, as one structure.
@@ -570,8 +580,9 @@ listing the library's types, two is `Err(ToolMultiType)` naming both; the
 type's frame tags are looked up among the molecule's atoms — a tag on no
 atom or on two is `Err(ToolFrameTag)` naming the tag; the fit of the frame
 positions onto those atoms is the pose, and a residual above tolerance is
-`Err(ToolPoseResidual)` naming the type and the residual. A type bound
-twice across molecules is `Err(ToolDuplicate)` naming both molecules. A
+`Err(ToolPoseResidual)` naming the type and the residual; the binding's
+state is the type's initial state. A type bound twice across molecules is
+`Err(ToolDuplicate)` naming both molecules. A
 type with **no** molecule is fine until a step needs it. Binding happens
 before any step, so a mis-tagged tool is reported once, at the top, rather
 than at the first step that uses it.
@@ -586,8 +597,8 @@ than at the first step that uses it.
 2. **Tool side**, when the operation is `tip` and the `tools` pin is wired:
    the binding of the operation's tool type is looked up — none is
    `Err(ToolMissing)` naming the step, the operation and the type; the
-   symbolic check — if `from` is set and the binding's state is known and
-   differs, `Err(ToolState)`; then `apply_step` on the scene with the
+   symbolic check — if `from` is set and differs from the binding's state,
+   `Err(ToolState)`; then `apply_step` on the scene with the
    tool-side patterns as an `Operation` and `Step { r: pose.r, t: pose.t }`,
    which by construction matches inside that tool molecule; atoms it adds
    belong to the tool; then the state update, `to` if set.
@@ -930,8 +941,8 @@ unknown kind is `Invalid` naming the operation; a `bulk` operation without
 `agent`, an `agent` on a non-bulk operation, a `tip` operation without a
 tool side, and a tool side on a `bulk` or `spontaneous` operation are each
 `Invalid`; an unknown `tool.type`, a `from` outside `states`, a duplicate
-tool name and a `*` on an added tool-side atom are each an `Invalid` naming
-the location; a tool side with empty patterns loads; a frame with three
+tool name, an empty `states` list and a `*` on an added tool-side atom are
+each an `Invalid` naming the location; a tool side with empty patterns loads; a frame with three
 entries, without `apex`, with `apex` off the origin, with coplanar entries,
 with a repeated tag, or with a tag equal to a type name is each an `Invalid`
 naming the type; `approach` parses onto the
@@ -960,10 +971,15 @@ survive into `scene` and are absent from `result`.
 *Tests — replay:* the shared assertion **the base is unchanged by the tool
 model** — `result` split from `replay_scene` equals `replay(...)` atom for
 atom, tags included, for every step of every fixture build, with tools wired
-and without; after `habst` the tip has one more H at the apex position
-transformed by its pose and its state is `Some("spent")`; after `hdump` the
-dump cluster has one more atom and the tip is `charged` again; two `habst`
-in a row is `ToolState` naming the type, `spent` and `charged`; a step whose
+and without; at step 0 every bound tool is in its type's initial state —
+`charged` for the tip — and the record's `tool_state` says so after the
+first step that uses it; `hdump` as the first step is `ToolState` naming
+`charged` and `spent`, because the tip starts charged; after `habst` the tip
+has one more H at the apex position transformed by its pose and its state is
+`spent`; after `hdump` the dump cluster has one more atom and the tip is
+`charged` again; two `habst` in a row is `ToolState` naming the type,
+`spent` and `charged`; a tip wired with an H already on its apex binds and
+fails at its first `habst` with the nearest-atom message, not at binding; a step whose
 `before` matches inside a tool molecule is `StepOnTool`; `habst_probe`
 leaves the probe unchanged and the record's `tool_type` is `probe`; a
 `bulk` and a `spontaneous` step touch no tool; the record's `method` is
@@ -1171,6 +1187,3 @@ The guide sections above, the screenshot slot, the manual checklist.
 - Whether binding should be validated *before* evaluation as a node-level
   validation error (the node knows its wires, not their contents, so it
   cannot today) — an evaluation error at step 0 is what the design has.
-- Whether `tool_state` on the record should become an `Optional[String]`
-  once `Optional` reaches record fields, so "unknown" stops being the empty
-  string.
