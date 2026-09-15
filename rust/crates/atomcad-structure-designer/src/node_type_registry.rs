@@ -824,6 +824,10 @@ impl NodeTypeRegistry {
         // than `Optional[T]` keep the record usable in `expr` without
         // unwrapping, exactly as on `MechanosynthStep`. See
         // `doc/design_mechanosynth_editor.md`.
+        //
+        // **Seven fields.** `method` used to be an eighth; how a reaction is
+        // performed is a fact about the *operation*, so the library states it
+        // once and no step types it (`doc/design_mechanosynth_tools.md`).
         ret.built_in_record_type_defs.insert(
             "BuildStep".to_string(),
             RecordTypeDef::from_named_fields(
@@ -833,7 +837,6 @@ impl NodeTypeRegistry {
                     ("t".to_string(), DataType::Vec3),
                     ("r".to_string(), DataType::Mat3),
                     ("note".to_string(), DataType::String),
-                    ("method".to_string(), DataType::String),
                     ("phase".to_string(), DataType::String),
                     ("layer".to_string(), DataType::Int),
                     ("site".to_string(), DataType::Int),

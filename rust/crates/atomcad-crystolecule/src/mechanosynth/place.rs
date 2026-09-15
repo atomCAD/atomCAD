@@ -33,6 +33,8 @@
 //!   dimerization partners are two reactions and stay two candidates.
 
 use super::apply::describe_nearest;
+use super::fit::{rank_of, rigid_fit};
+use super::scene::ToolBinding;
 use super::schema::{
     MechanosynthError, OpLibrary, Operation, PATTERN_POSITION_EPSILON, PatternAtom, PatternElement,
     Step,
@@ -43,7 +45,7 @@ use crate::guided_placement::{
     Hybridization, Sp2CandidateResult, Sp3CandidateResult, Sp3Case1Result, compute_sp1_candidates,
     compute_sp2_candidates, compute_sp3_candidates, detect_hybridization, gather_bond_directions,
 };
-use glam::{DMat3, DQuat, DVec3};
+use glam::{DMat3, DVec3};
 
 /// A fit at or below this max per-atom residual (Å) counts as *exact*: it
 /// reproduces the coordinates a generator would have written, to the 1e-6 Å the
@@ -60,10 +62,6 @@ const SAME_AFTER_STATE_EPSILON: f64 = 1e-6;
 /// 1e-16 and 3e-16 would order by which one the arithmetic happened to favour,
 /// and "proper before mirrored" would never get a say.
 pub const RESIDUAL_RANK_EPSILON: f64 = 1e-6;
-
-/// Below this the centred pattern is treated as rank-deficient along a
-/// direction — a single point, or a collinear pair. Å.
-const RANK_EPSILON: f64 = 1e-9;
 
 /// One way of placing an operation at the clicked atom.
 ///
@@ -443,12 +441,6 @@ fn missing_partner(
 // The rigid fit
 // ============================================================================
 
-struct Fit {
-    r: DMat3,
-    t: DVec3,
-    residual: f64,
-}
-
 /// Whether an improper fit of this pattern says anything a proper one does not.
 ///
 /// It does exactly when the pattern spans a plane: reflecting a point or a line
@@ -456,190 +448,6 @@ struct Fit {
 /// candidate there would be the same reaction wearing a different `r`.
 fn mirror_fit_is_meaningful(local: &[DVec3]) -> bool {
     rank_of(local) >= 2
-}
-
-/// 0 for a single point (or coincident points), 1 for a collinear set, 2 for
-/// anything that spans a plane. Distinguishing 2 from 3 is not needed: both
-/// determine a rotation.
-fn rank_of(points: &[DVec3]) -> usize {
-    let centroid = centroid(points);
-    let centred: Vec<DVec3> = points.iter().map(|p| *p - centroid).collect();
-    let Some(first) = centred
-        .iter()
-        .copied()
-        .max_by(|a, b| a.length().total_cmp(&b.length()))
-        .filter(|v| v.length() > RANK_EPSILON)
-    else {
-        return 0;
-    };
-    let axis = first.normalize();
-    if centred
-        .iter()
-        .any(|v| v.cross(axis).length() > RANK_EPSILON)
-    {
-        2
-    } else {
-        1
-    }
-}
-
-fn centroid(points: &[DVec3]) -> DVec3 {
-    if points.is_empty() {
-        return DVec3::ZERO;
-    }
-    points.iter().copied().sum::<DVec3>() / points.len() as f64
-}
-
-/// The rigid transform taking `local` onto `world` in the least-squares sense,
-/// and the max per-atom distance it leaves behind.
-///
-/// `mirrored` asks for the improper fit. The mirror cannot be recovered from the
-/// proper one, so it is a second fit — of the pattern reflected through a fixed
-/// plane, whose proper fit composed with that reflection is the best improper
-/// transform.
-///
-/// Rank-deficient inputs are resolved rather than left to the eigen solver,
-/// which would answer an undetermined question with whichever vector its sweeps
-/// happened to produce: a single point fits with the identity, a collinear pair
-/// with the shortest arc between the two axes.
-fn rigid_fit(local: &[DVec3], world: &[DVec3], mirrored: bool) -> Option<Fit> {
-    if local.len() != world.len() || local.is_empty() {
-        return None;
-    }
-    const MIRROR: DMat3 = DMat3::from_cols(DVec3::X, DVec3::Y, DVec3::new(0.0, 0.0, -1.0));
-    let reflected: Vec<DVec3>;
-    let source = if mirrored {
-        reflected = local.iter().map(|p| MIRROR * *p).collect();
-        &reflected[..]
-    } else {
-        local
-    };
-
-    let source_centroid = centroid(source);
-    let world_centroid = centroid(world);
-    let centred_source: Vec<DVec3> = source.iter().map(|p| *p - source_centroid).collect();
-    let centred_world: Vec<DVec3> = world.iter().map(|p| *p - world_centroid).collect();
-
-    let rotation = match rank_of(source) {
-        0 => DMat3::IDENTITY,
-        1 => {
-            let index = (0..centred_source.len())
-                .max_by(|&a, &b| {
-                    centred_source[a]
-                        .length()
-                        .total_cmp(&centred_source[b].length())
-                })
-                .expect("non-empty");
-            let from = centred_source[index];
-            let to = centred_world[index];
-            if from.length() < RANK_EPSILON || to.length() < RANK_EPSILON {
-                DMat3::IDENTITY
-            } else {
-                DMat3::from_quat(DQuat::from_rotation_arc(from.normalize(), to.normalize()))
-            }
-        }
-        _ => kabsch(&centred_source, &centred_world),
-    };
-
-    let r = if mirrored {
-        rotation * MIRROR
-    } else {
-        rotation
-    };
-    let t = world_centroid - rotation * source_centroid;
-    let residual = local
-        .iter()
-        .zip(world)
-        .map(|(p, q)| (r * *p + t).distance(*q))
-        .fold(0.0, f64::max);
-    Some(Fit { r, t, residual })
-}
-
-/// The proper rotation taking the centred `source` points onto the centred
-/// `target` points in the least-squares sense.
-///
-/// Horn's quaternion form rather than an SVD: the largest eigenvector of a
-/// symmetric 4×4 is a few dozen lines of Jacobi rotations, it yields a proper
-/// rotation by construction (no reflection case to repair), and it adds no
-/// dependency.
-fn kabsch(source: &[DVec3], target: &[DVec3]) -> DMat3 {
-    // s[a][b] = Σ source_a · target_b, the correlation matrix of Horn 1987. The
-    // index order is the half of this that is easy to get backwards: the other
-    // one yields the transpose, which is a perfectly good rotation matrix and
-    // simply rotates the wrong way.
-    let mut s = [[0.0f64; 3]; 3];
-    for (p, q) in source.iter().zip(target) {
-        for a in 0..3 {
-            for b in 0..3 {
-                s[a][b] += p[a] * q[b];
-            }
-        }
-    }
-    let (sxx, sxy, sxz) = (s[0][0], s[0][1], s[0][2]);
-    let (syx, syy, syz) = (s[1][0], s[1][1], s[1][2]);
-    let (szx, szy, szz) = (s[2][0], s[2][1], s[2][2]);
-
-    let n = [
-        [sxx + syy + szz, syz - szy, szx - sxz, sxy - syx],
-        [syz - szy, sxx - syy - szz, sxy + syx, szx + sxz],
-        [szx - sxz, sxy + syx, -sxx + syy - szz, syz + szy],
-        [sxy - syx, szx + sxz, syz + szy, -sxx - syy + szz],
-    ];
-    let q = largest_eigenvector_4(n);
-    let quat = DQuat::from_xyzw(q[1], q[2], q[3], q[0]);
-    if quat.length_squared() < RANK_EPSILON {
-        return DMat3::IDENTITY;
-    }
-    DMat3::from_quat(quat.normalize())
-}
-
-/// The eigenvector of the largest eigenvalue of a symmetric 4×4, by cyclic
-/// Jacobi rotations. Deterministic: a fixed sweep order and a fixed number of
-/// sweeps, so the same input always gives the same answer bit for bit.
-fn largest_eigenvector_4(matrix: [[f64; 4]; 4]) -> [f64; 4] {
-    let mut a = matrix;
-    let mut v = [[0.0f64; 4]; 4];
-    for (i, row) in v.iter_mut().enumerate() {
-        row[i] = 1.0;
-    }
-    for _ in 0..24 {
-        let off: f64 = (0..4)
-            .flat_map(|p| ((p + 1)..4).map(move |q| (p, q)))
-            .map(|(p, q)| a[p][q] * a[p][q])
-            .sum();
-        if off < 1e-30 {
-            break;
-        }
-        for p in 0..4 {
-            for q in (p + 1)..4 {
-                if a[p][q] == 0.0 {
-                    continue;
-                }
-                let theta = (a[q][q] - a[p][p]) / (2.0 * a[p][q]);
-                let t = theta.signum() / (theta.abs() + (theta * theta + 1.0).sqrt());
-                let c = 1.0 / (t * t + 1.0).sqrt();
-                let s = t * c;
-                // A ← Jᵀ A J, in the two halves it factors into: the columns
-                // first, then the rows of the result.
-                let rotate_columns = |m: &mut [[f64; 4]; 4]| {
-                    for row in m.iter_mut() {
-                        let (kp, kq) = (row[p], row[q]);
-                        row[p] = c * kp - s * kq;
-                        row[q] = s * kp + c * kq;
-                    }
-                };
-                rotate_columns(&mut a);
-                let (row_p, row_q) = (a[p], a[q]);
-                a[p] = std::array::from_fn(|k| c * row_p[k] - s * row_q[k]);
-                a[q] = std::array::from_fn(|k| s * row_p[k] + c * row_q[k]);
-                rotate_columns(&mut v);
-            }
-        }
-    }
-    let best = (0..4)
-        .max_by(|&i, &j| a[i][i].total_cmp(&a[j][j]))
-        .expect("four diagonal entries");
-    [v[0][best], v[1][best], v[2][best], v[3][best]]
 }
 
 // ============================================================================
@@ -875,9 +683,41 @@ pub struct Applicability {
     pub fits: bool,
     /// Every candidate of this row came from the bond-derived fallback.
     pub approximate: bool,
+    /// What this row's tool has to say, when tools are wired and the operation
+    /// is [`Method::Tip`](super::Method::Tip). `None` otherwise — with tools
+    /// unwired no row carries a tool annotation, which is the modelling use of
+    /// the editor exactly as it was before tools existed.
+    pub tool: Option<ToolReadiness>,
+}
+
+/// Whether the tool a `tip` operation needs can perform it here and now.
+///
+/// A row whose tool is not ready is offered **below the rule with the near
+/// misses, dimmed and unselectable** — for the same reason a near miss is not
+/// selectable: it cannot be committed, because its tool side would not match.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ToolReadiness {
+    /// The operation's tool type.
+    pub tool_type: String,
+    /// The state the bound tool is in, `None` when no molecule plays the type
+    /// or the type carries no symbolic state.
+    pub state: Option<String>,
+    /// Whether the tool is bound, in the right state, and its tool side
+    /// matches at its pose.
+    pub ready: bool,
+    /// Why not, in the words a row shows where the residual would be —
+    /// *habst_tool is spent*, *no molecule tagged `probe` on the tools pin*.
+    pub reason: Option<String>,
 }
 
 impl Applicability {
+    /// Whether this row can be committed: it fits geometrically **and**, when
+    /// the operation needs a tool, that tool is ready. The one question the
+    /// offer list and the commit path both ask.
+    pub fn offerable(&self) -> bool {
+        self.fits && self.tool.as_ref().is_none_or(|tool| tool.ready)
+    }
+
     /// The candidate a row is previewed by: its first real one, else its
     /// near miss. Never `None` — a row always holds one or the other.
     pub fn preview(&self) -> &Candidate {
@@ -923,6 +763,7 @@ pub fn applicable_ops(
     library: &OpLibrary,
     clicked: u32,
     tolerance: f64,
+    bindings: Option<&[ToolBinding]>,
 ) -> Vec<Applicability> {
     let mut rows: Vec<Applicability> = Vec::new();
     for operation in &library.ops {
@@ -936,6 +777,7 @@ pub fn applicable_ops(
                     fits: true,
                     candidates,
                     near_miss: None,
+                    tool: None,
                 }
             }
             // The operation said no at the gate. Ask again with the gate
@@ -966,18 +808,30 @@ pub fn applicable_ops(
                     approximate: miss.approximate,
                     fits: false,
                     near_miss: Some(miss),
+                    tool: None,
                 }
             }
         };
+        // The tool check runs **only** for an operation that already fits the
+        // clicked atom: asking a tool whether it could perform a reaction that
+        // does not apply here has no answer worth showing, and the check costs
+        // one nearest-atom match per row.
+        let mut row = row;
+        if row.fits {
+            row.tool = tool_readiness(workpiece, operation, bindings, tolerance);
+        }
         rows.push(row);
     }
 
     // `place`'s own order with one key in front of it: an operation that fits
-    // outranks one that merely came close, however close it came.
+    // outranks one that merely came close, however close it came. A row whose
+    // *tool* is not ready cannot be committed either, so it sorts with the near
+    // misses rather than among the offers.
     let bucket = |residual: f64| (residual / RESIDUAL_RANK_EPSILON).round() as i64;
     rows.sort_by(|a, b| {
-        b.fits
-            .cmp(&a.fits)
+        b.offerable()
+            .cmp(&a.offerable())
+            .then(b.fits.cmp(&a.fits))
             .then(bucket(a.best_residual).cmp(&bucket(b.best_residual)))
             .then(a.preview().mirrored.cmp(&b.preview().mirrored))
             .then(a.approximate.cmp(&b.approximate))
@@ -986,6 +840,82 @@ pub fn applicable_ops(
             .then_with(|| a.op.cmp(&b.op))
     });
     rows
+}
+
+/// Whether the tool `operation` needs is bound, in the right state, and shaped
+/// the way its tool side expects at its parked pose.
+///
+/// One nearest-atom match of a few atoms, at a pose already solved — no search.
+/// The state check comes first because *habst_tool is spent* is the message a
+/// process author can act on, but the geometric check runs even when the label
+/// agrees: the geometry is what a viewer sees and the label is the thing that
+/// can be wrong.
+fn tool_readiness(
+    workpiece: &AtomicStructure,
+    operation: &Operation,
+    bindings: Option<&[ToolBinding]>,
+    tolerance: f64,
+) -> Option<ToolReadiness> {
+    let bindings = bindings?;
+    let tool_side = operation.tool.as_ref()?;
+    let tool_type = tool_side.tool_type.clone();
+
+    let Some(binding) = bindings
+        .iter()
+        .find(|binding| binding.tool_type == tool_type)
+    else {
+        return Some(ToolReadiness {
+            reason: Some(format!("no molecule tagged `{tool_type}` on the tools pin")),
+            tool_type,
+            state: None,
+            ready: false,
+        });
+    };
+
+    if let Some(required) = &tool_side.from
+        && binding.state.as_deref() != Some(required.as_str())
+    {
+        let found = binding
+            .state
+            .clone()
+            .unwrap_or_else(|| "stateless".to_string());
+        return Some(ToolReadiness {
+            reason: Some(format!("{tool_type} is {found}, not {required}")),
+            tool_type,
+            state: binding.state.clone(),
+            ready: false,
+        });
+    }
+
+    let mut tool_step = Step::new(operation.name.clone(), binding.pose.t);
+    tool_step.r = binding.pose.r;
+    for pattern_atom in &tool_side.before.atoms {
+        let target = tool_step.place(pattern_atom.pos);
+        let found = workpiece.nearest_unclaimed_atom(
+            target,
+            tolerance,
+            pattern_atom.element.required_atomic_number(),
+            |_| false,
+        );
+        if found.is_none() {
+            return Some(ToolReadiness {
+                reason: Some(format!(
+                    "{tool_type}: {}",
+                    describe_nearest(workpiece, target)
+                )),
+                tool_type,
+                state: binding.state.clone(),
+                ready: false,
+            });
+        }
+    }
+
+    Some(ToolReadiness {
+        tool_type,
+        state: binding.state.clone(),
+        ready: true,
+        reason: None,
+    })
 }
 
 // ============================================================================

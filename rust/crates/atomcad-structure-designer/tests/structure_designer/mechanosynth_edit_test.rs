@@ -16,7 +16,7 @@
 
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::mechanosynth::{
-    Step, compare_structures, describe_mismatches, load_build_script,
+    NO_SITE, Step, compare_structures, describe_mismatches, load_build_script,
 };
 use atomcad_crystolecule::structure::Structure;
 use atomcad_structure_designer::evaluator::network_evaluator::{
@@ -607,7 +607,7 @@ fn consecutive_edits_to_one_field_coalesce_and_a_different_field_does_not() {
     );
 
     designer
-        .set_mechanosynth_edit_step_metadata(&[], node_id, 1, StepMetadataField::Method, "probe", 0)
+        .set_mechanosynth_edit_step_metadata(&[], node_id, 1, StepMetadataField::Site, "", 4)
         .expect("a real step");
     assert_eq!(
         designer.undo_stack.history_len(),
@@ -620,7 +620,7 @@ fn consecutive_edits_to_one_field_coalesce_and_a_different_field_does_not() {
     assert!(designer.undo());
     let data = editor_data(&designer, node_id);
     assert_eq!(data.authored[1].step.phase, "");
-    assert_eq!(data.authored[1].step.method, "");
+    assert_eq!(data.authored[1].step.site, NO_SITE);
 }
 
 #[test]
@@ -676,7 +676,7 @@ fn author_and_serialize(designer: &mut StructureDesigner, code: &str) -> String 
 fn an_editor_node_round_trips_through_the_text_format() {
     let mut designer = setup_designer();
     let code = r#"lib = ops_library { file: "ops.json" }
-edit = mechanosynth_edit { ops: lib, cursor: 2, authored: [{ op: "habst", t: (12.71, 9.53, 8.02), method: "probe", phase: "layer1", layer: 1, site: 0 }, { op: "dimerize", t: (14.27, 9.53, 8.02), r: ((0.0, 1.0, 0.0), (-1.0, 0.0, 0.0), (0.0, 0.0, 1.0)), residual: 0.0213, approximate: true }] }
+edit = mechanosynth_edit { ops: lib, cursor: 2, authored: [{ op: "habst", t: (12.71, 9.53, 8.02), phase: "layer1", layer: 1, site: 0 }, { op: "dimerize", t: (14.27, 9.53, 8.02), r: ((0.0, 1.0, 0.0), (-1.0, 0.0, 0.0), (0.0, 0.0, 1.0)), residual: 0.0213, approximate: true }] }
 output edit
 "#;
     let first = author_and_serialize(&mut designer, code);

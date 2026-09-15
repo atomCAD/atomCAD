@@ -1,0 +1,8 @@
+6
+habst_tool parked against the central carbon of tool_scene.xyz: the apex sits at (0, 0, 1.22), so the tool side's ethynyl-carbon slot lands 0.01 A from the workpiece carbon at the origin, while the tool's own ethynyl carbon is nudged to 0.04 A from it. The nearer atom wins, so the tool side matches off the tool - which is what ToolSideOffTool reports. The four frame atoms are exact, so it still binds.
+C        0.000000       0.000000       1.220000
+C        0.000000       0.000000      -0.030000
+C        0.000000       0.000000      -1.440000
+C        1.450000       0.000000      -1.950000
+C       -0.725000       1.255700      -1.950000
+C       -0.725000      -1.255700      -1.950000

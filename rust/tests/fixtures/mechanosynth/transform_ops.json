@@ -1,9 +1,23 @@
 {
   "comment": "One op that plants two markers on the local +x and +y axes, so a step's rotation is readable off the result.",
-  "format": "atomcad-msops/1",
+  "format": "atomcad-msops/2",
+  "tools": [
+    {
+      "name": "probe",
+      "note": "A bare probe: the whole tool model these fixtures need. Every operation here is `tip` and carries an empty tool side, so the frame is declared and never bound - none of these fixtures wires a tool.",
+      "frame": [
+        { "tag": "apex", "pos": [0.0, 0.0, 0.0] },
+        { "tag": "a",    "pos": [1.45, 0.0, -3.17] },
+        { "tag": "b",    "pos": [-0.73, 1.26, -3.17] },
+        { "tag": "c",    "pos": [-0.73, -1.26, -3.17] }
+      ]
+    }
+  ],
   "ops": [
     {
       "name": "plant",
+      "method": "tip",
+      "tool": { "type": "probe" },
       "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
       "after": {
         "atoms": [

@@ -1,0 +1,8 @@
+6
+probe: the same skeleton as habst_tool, at a different pose (45 deg about y, translated to (0, -30, 0)). It is a bare tip - its tool side is empty, so no step ever changes it. Same atom order as tool_tip.xyz.
+C        0.000000     -30.000000       0.000000
+C       -0.855599     -30.000000      -0.855599
+C       -1.880904     -30.000000      -1.880904
+C       -1.216224     -30.000000      -3.266833
+C       -2.754181     -28.744300      -1.728876
+C       -2.754181     -31.255700      -1.728876

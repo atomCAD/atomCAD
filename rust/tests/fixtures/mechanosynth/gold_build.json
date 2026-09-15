@@ -1,6 +1,6 @@
 {
   "comment": "Hand-written against place_ops.json / place_workpiece.xyz with known (r, t): the in-repo stand-in for a generator's output.",
-  "format": "atomcad-msbuild/1",
+  "format": "atomcad-msbuild/2",
   "steps": [
     {
       "op": "habst",

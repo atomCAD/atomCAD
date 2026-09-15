@@ -28,7 +28,7 @@ use atomcad_structure_designer::nodes::build_script::BuildScriptData;
 use atomcad_structure_designer::nodes::build_step::steps_from_array;
 use atomcad_structure_designer::nodes::export_build_script::ExportBuildScriptData;
 use atomcad_structure_designer::nodes::mechanosynth::{
-    MechanosynthData, STEP_PIN, STEPS_PIN, load_script_at,
+    MechanosynthData, OPS_PIN, STEP_PIN, STEPS_PIN, load_script_at,
 };
 use atomcad_structure_designer::nodes::ops_library::OpsLibraryData;
 use atomcad_structure_designer::structure_designer::StructureDesigner;
@@ -150,6 +150,12 @@ pub fn mechanosynth_info(
         NetworkResult::Int(step) => step,
         _ => stored.step,
     };
+    // The `ops` pin, for the current step's method alone. The library is where
+    // a reaction's kind is stated, so the readout has to ask it.
+    let library = match designer.evaluate_node_argument(scope_path, node_id, OPS_PIN) {
+        NetworkResult::OpLibrary(library) => Some(library),
+        _ => stored.library.clone().map(std::sync::Arc::new),
+    };
 
     let Some(script) = script else {
         return Some(APIMechanosynthInfo {
@@ -173,6 +179,15 @@ pub fn mechanosynth_info(
         .checked_sub(1)
         .and_then(|index| script.steps.get(index));
 
+    // The method is the **operation's** kind, read from the wired library: a
+    // step names a reaction, and how the reaction is performed is a fact about
+    // the reaction. With no library wired the panel simply has nothing to say.
+    let current_method = current
+        .zip(library.as_ref())
+        .and_then(|(step, library)| library.get(&step.op))
+        .map(|op| op.method.as_str().to_string())
+        .unwrap_or_default();
+
     Some(APIMechanosynthInfo {
         count: count as i32,
         applied: applied as i32,
@@ -180,7 +195,7 @@ pub fn mechanosynth_info(
         current_note: current
             .and_then(|step| step.note.clone())
             .unwrap_or_default(),
-        current_method: current.map(|step| step.method.clone()).unwrap_or_default(),
+        current_method,
         current_phase: current.map(|step| step.phase.clone()).unwrap_or_default(),
         current_layer: current.map_or(NO_LAYER, |step| step.layer),
         current_site: current.map_or(NO_SITE, |step| step.site),

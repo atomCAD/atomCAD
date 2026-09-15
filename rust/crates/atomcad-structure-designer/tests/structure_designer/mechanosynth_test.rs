@@ -1058,7 +1058,9 @@ fn the_step_pin_describes_the_last_applied_step() {
     assert_eq!(int_field(&record, "index"), 3);
     assert_eq!(int_field(&record, "count"), 5);
     assert_eq!(string_field(&record, "op"), "grow");
-    assert_eq!(string_field(&record, "method"), "probe");
+    // The method is the **operation's** kind now, read from the library, not a
+    // string the step typed. Every operation of the metadata fixture is `tip`.
+    assert_eq!(string_field(&record, "method"), "tip");
     assert_eq!(string_field(&record, "phase"), "layer1");
     assert_eq!(int_field(&record, "layer"), 1);
     assert_eq!(int_field(&record, "site"), 1);
@@ -1069,10 +1071,11 @@ fn the_step_pin_describes_the_last_applied_step() {
     assert_eq!(mat3_field(&record, "r"), DMat3::IDENTITY);
 
     // A step that states no metadata reports the absent-field defaults, not
-    // whatever the neighbouring steps said.
+    // whatever the neighbouring steps said. `method` is not among them: it is
+    // the operation's, so it is stated for every step that names a real one.
     let record = step_record(1);
     assert_eq!(int_field(&record, "index"), 1);
-    assert_eq!(string_field(&record, "method"), "");
+    assert_eq!(string_field(&record, "method"), "tip");
     assert_eq!(string_field(&record, "phase"), "");
     assert_eq!(int_field(&record, "layer"), -1);
     assert_eq!(int_field(&record, "site"), -1);

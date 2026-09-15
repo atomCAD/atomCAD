@@ -1,21 +1,39 @@
 {
   "comment": "Both ways of breaking the origin convention, in one file. Loads with warnings, never an error: a foreign library that does not follow the convention still replays and still places.",
-  "format": "atomcad-msops/1",
+  "format": "atomcad-msops/2",
+  "tools": [
+    {
+      "name": "probe",
+      "note": "A bare probe: the whole tool model these fixtures need. Every operation here is `tip` and carries an empty tool side, so the frame is declared and never bound - none of these fixtures wires a tool.",
+      "frame": [
+        { "tag": "apex", "pos": [0.0, 0.0, 0.0] },
+        { "tag": "a",    "pos": [1.45, 0.0, -3.17] },
+        { "tag": "b",    "pos": [-0.73, 1.26, -3.17] },
+        { "tag": "c",    "pos": [-0.73, -1.26, -3.17] }
+      ]
+    }
+  ],
   "ops": [
     {
       "name": "displaced",
+      "method": "tip",
+      "tool": { "type": "probe" },
       "comment": "Has a before atom id 1, but it does not sit at the origin.",
       "before": { "atoms": [ { "id": 1, "el": "C", "pos": [1.5, 0.0, 0.0] } ], "bonds": [] },
       "after":  { "atoms": [ { "id": 1, "el": "N", "pos": [1.5, 0.0, 0.0] } ], "bonds": [] }
     },
     {
       "name": "no_atom_one",
+      "method": "tip",
+      "tool": { "type": "probe" },
       "comment": "Numbers its before atoms from 2, so nothing names the atom to click.",
       "before": { "atoms": [ { "id": 2, "el": "C", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
       "after":  { "atoms": [ { "id": 2, "el": "N", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] }
     },
     {
       "name": "conventional",
+      "method": "tip",
+      "tool": { "type": "probe" },
       "comment": "Follows the convention, so it contributes no warning.",
       "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
       "after":  { "atoms": [ { "id": 1, "el": "N", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] }

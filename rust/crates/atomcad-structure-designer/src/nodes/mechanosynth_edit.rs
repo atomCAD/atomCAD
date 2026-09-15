@@ -114,7 +114,6 @@ impl AuthoredStep {
     /// Copies the build metadata — not the note, which is about one step — from
     /// `source`. This is what a commit does with the previous step.
     pub(crate) fn inherit_metadata_from(&mut self, source: &Step) {
-        self.step.method = source.method.clone();
         self.step.phase = source.phase.clone();
         self.step.layer = source.layer;
         self.step.site = source.site;
@@ -133,8 +132,6 @@ struct AuthoredStepJson {
     r: Option<[[f64; 3]; 3]>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     note: String,
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    method: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     phase: String,
     #[serde(default = "absent_layer", skip_serializing_if = "is_absent_layer")]
@@ -174,7 +171,6 @@ impl From<AuthoredStep> for AuthoredStepJson {
             t: step.t.to_array(),
             r: (!is_identity_rotation(&step.r)).then(|| dmat3_to_rows(&step.r)),
             note: step.note.unwrap_or_default(),
-            method: step.method,
             phase: step.phase,
             layer: step.layer,
             site: step.site,
@@ -192,7 +188,6 @@ impl From<AuthoredStepJson> for AuthoredStep {
                 t: DVec3::from_array(json.t),
                 r: json.r.map_or(DMat3::IDENTITY, |rows| rows_to_dmat3(&rows)),
                 note: (!json.note.is_empty()).then_some(json.note),
-                method: json.method,
                 phase: json.phase,
                 layer: json.layer,
                 site: json.site,
@@ -472,8 +467,7 @@ pub fn replay_prefix_and_block(
         cursor,
         HighlightTags {
             current: Some(MS_CURRENT_TAG),
-            added: None,
-            layer: None,
+            ..HighlightTags::default()
         },
     )
     .map_err(|failure| failure.to_string())
@@ -708,9 +702,6 @@ fn step_to_text(authored: &AuthoredStep) -> TextValue {
     if let Some(note) = step.note.as_ref().filter(|note| !note.is_empty()) {
         fields.push(("note".to_string(), TextValue::String(note.clone())));
     }
-    if !step.method.is_empty() {
-        fields.push(("method".to_string(), TextValue::String(step.method.clone())));
-    }
     if !step.phase.is_empty() {
         fields.push(("phase".to_string(), TextValue::String(step.phase.clone())));
     }
@@ -743,15 +734,7 @@ fn step_from_text(value: &TextValue, index: usize) -> Result<AuthoredStep, Strin
     for (key, _) in fields {
         if !matches!(
             key.as_str(),
-            "op" | "t"
-                | "r"
-                | "note"
-                | "method"
-                | "phase"
-                | "layer"
-                | "site"
-                | "residual"
-                | "approximate"
+            "op" | "t" | "r" | "note" | "phase" | "layer" | "site" | "residual" | "approximate"
         ) {
             return Err(format!("step {index}: unknown field \"{key}\""));
         }
@@ -812,7 +795,6 @@ fn step_from_text(value: &TextValue, index: usize) -> Result<AuthoredStep, Strin
             t,
             r,
             note: (!note.is_empty()).then_some(note),
-            method: text("method")?,
             phase: text("phase")?,
             layer: number("layer", NO_LAYER)?,
             site: number("site", NO_SITE)?,

@@ -9,7 +9,7 @@
 //! no `if context.execute` guard here.
 //!
 //! **What it omits is part of the format, not a size optimization.** An
-//! identity `r`, an empty `note` / `method` / `phase` and a `-1` `layer` /
+//! identity `r`, an empty `note` / `phase` and a `-1` `layer` /
 //! `site` are exactly the values `parse_build_script` produces for an absent
 //! key, so omitting them makes `build_script → export_build_script` a
 //! round trip rather than a re-write.
@@ -214,9 +214,6 @@ fn step_to_json(step: &Step) -> Value {
     if let Some(note) = step.note.as_deref().filter(|note| !note.is_empty()) {
         object.insert("note".to_string(), Value::String(note.to_string()));
     }
-    if !step.method.is_empty() {
-        object.insert("method".to_string(), Value::String(step.method.clone()));
-    }
     if !step.phase.is_empty() {
         object.insert("phase".to_string(), Value::String(step.phase.clone()));
     }
@@ -307,7 +304,7 @@ pub fn get_node_type() -> NodeType {
             \n\
             Per-step fields that hold their default are omitted, which is what makes a load and \
             a re-export a round trip rather than a re-write: an identity rotation, an empty \
-            `note`, `method` or `phase`, and a `layer` or `site` of `-1`. A record wired into \
+            `note` or `phase`, and a `layer` or `site` of `-1`. A record wired into \
             the optional `metadata` pin is written into the file's header.\n\
             \n\
             The path is stored relative to the project file whenever possible."

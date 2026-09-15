@@ -72,10 +72,13 @@ crates/atomcad-crystolecule/src/
 │       └── space_groups.rs         # Lookup table for 230 space groups (symmetry ops)
 ├── mechanosynth/
 │   ├── mod.rs                      # Build-sequence replay: re-exports
-│   ├── schema.rs                   # OpLibrary/Operation/Pattern/BuildScript/Step + MechanosynthError
+│   ├── schema.rs                   # OpLibrary/Operation/ToolType/ToolSide/Method/Pattern/BuildScript/Step + MechanosynthError
 │   ├── parse.rs                    # JSON parse + validation of both files
-│   ├── apply.rs                    # apply_step, replay (with the highlight tag)
-│   ├── place.rs                    # placement engine: click -> candidate steps (Kabsch fit)
+│   ├── apply.rs                    # match_before / apply_matched / apply_step, replay
+│   ├── scene.rs                    # Scene, Participant, ToolBinding, replay_scene, event rules
+│   ├── pose.rs                     # tool_pose: a tool's transform from its four tagged atoms
+│   ├── fit.rs                      # the rigid fit (Horn's quaternion Kabsch), shared by place + pose
+│   ├── place.rs                    # placement engine: click -> candidate steps + tool readiness
 │   └── compare.rs                  # compare_structures: position-tolerant Vec<Mismatch>
 ├── lattice_fill/
 │   ├── concave_rebond.rs           # Concave-corner clash → host-host bond rewrite
@@ -141,6 +144,10 @@ crates/atomcad-crystolecule/src/
 | `BuildScript` / `Step` | `mechanosynth/schema.rs` | An ordered list of (operation name, translation, rotation); `p_workpiece = r · p_local + t` |
 | `Mismatch` | `mechanosynth/compare.rs` | One difference found by `compare_structures` — unmatched atom, element, bond presence or bond order |
 | `Candidate` | `mechanosynth/place.rs` | One way of placing an operation at a clicked atom: the `Step`, the pattern-id → atom-id assignment, the fit residual, and the `mirrored` / `approximate` flags |
+| `Method` | `mechanosynth/schema.rs` | `Tip` / `Bulk` / `Spontaneous` — a **closed, engine-defined** vocabulary on every operation. A library cannot add a kind; what it adds is the *instrument*, through the tool type (`tip`) or the `agent` (`bulk`) |
+| `ToolType` / `ToolSide` | `mechanosynth/schema.rs` | A tool type the library envisions (its `states`, whose **first entry is the initial state**, and its four-or-more non-coplanar tagged `frame` atoms), and what one `tip` operation does to it — the same before/after rewrite, in the tool's local frame |
+| `Scene` / `Participant` / `ToolBinding` | `mechanosynth/scene.rs` | The base, the feedstocks and the tools merged into **one** structure, with every atom mapped to the structure it belongs to, plus one binding per wired tool |
+| `ToolPose` | `mechanosynth/pose.rs` | A bound tool's `r`, `t` and fit residual, solved from its four tagged atoms |
 
 ## Core Concepts
 
@@ -352,6 +359,40 @@ load-bearing:
   `apply_step`), because "did this bond change" is a question about the workpiece
   as the step found it.
 
+**Tool molecules** (`mechanosynth/scene.rs`, `pose.rs`) extend that primitive to
+the whole cast rather than adding a second one. `replay_scene` merges the
+workpiece, the **feedstocks** it draws on and the **tool molecules** that do the
+work into one `Scene`, mapping every atom to its `Participant`; `replay` is that
+function with neither array wired, so there is exactly one replay path. Four
+things are load-bearing:
+
+- **A tool's state change *is* the same rewrite.** A `tip` operation carries a
+  second side, written in the tool's local frame and placed by the tool's pose,
+  so exact placement, effect-derived `touched` and a nearest-atom failure all
+  come with it for free. There is no pattern-free "positioned changes"
+  mechanism, and adding one would drop the positional sanity check.
+- **Binding is a tag lookup, never a search.** A design tags a molecule with the
+  tool type's name and its four frame atoms with the frame's tags; the rigid fit
+  of the library's frame onto those four *is* the pose. Nothing is swept, and
+  every deviation is an error naming the molecule rather than a guess — the
+  design is supposed to supply exactly the cast the library wrote parts for.
+  The frame is non-coplanar **by parse rule**, which is what makes a mirrored
+  molecule fail the residual instead of binding mirrored.
+- **The participant map is the only record of which structure a step acted on.**
+  An atom a step *adds* is entered under the participant its match landed in,
+  which is what lets `Scene::workpiece()` give back the workpiece alone. No tag
+  can recover this after the fact: an H dumped on a reservoir carries none.
+- **A step is all or nothing.** Both sides match, and every participant check
+  runs, before the first mutation — so a failed step leaves the scene exactly as
+  it found it, and the partial-result form's "the scene after the last
+  successful step" is true rather than approximately true.
+
+`event_indices` is the **event** grouping of a step sequence (a tip visit alone;
+a run of `bulk` steps sharing an agent; a `spontaneous` step joining the event
+before it). It is a *display* grouping and never a replay semantics: the replay
+is sequential for every kind, so the order of the steps inside an event is their
+meaning.
+
 `OpLibrary::warnings` carries load-time advisories — today the **origin
 convention**, that `before` atom `ORIGIN_PATTERN_ATOM_ID` (1) sits at the origin
 and is the atom the operation acts on. A violation is never an error: a foreign
@@ -389,8 +430,12 @@ O(n²), compares flags and tag names). Design doc:
 - `FieldError` (field) — grid description problems (zero dimension, sample-count
   mismatch, degenerate axes, non-finite sample)
 - `MechanosynthError` (mechanosynth/schema) — Io / Json / Invalid (a validation
-  failure naming the file, the operation or step, and the field) / NoMatch (a
-  `before` atom that found nothing within tolerance)
+  failure naming the file, the operation, the tool type or the step, and the
+  field) / NoMatch (a `before` atom that found nothing within tolerance, boxed
+  because it is the widest variant and every fallible function here returns this
+  enum) / the binding family (SceneTags, ToolUntagged, ToolMultiType,
+  ToolDuplicate, ToolFrameTag, ToolPoseResidual) / the per-step family
+  (ToolMissing, ToolState, StepOnTool, StepAcrossParticipants, ToolSideOffTool)
 
 All use `thiserror` derive macros.
 
@@ -436,6 +481,7 @@ tests/crystolecule/
 ├── motif_bond_inference_test.rs   # Bond inference on fractional coords, cross-cell bonds
 ├── miller_test.rs                 # Index reduction, enumeration, {hkl} symmetry families
 ├── mechanosynth_test.rs           # Parse/validate, id-rule matrix, matching, replay, highlight, compare
+├── mechanosynth_tools_test.rs     # The /2 format, tool pose + binding, the scene replay, tool-aware offers, event rules
 ├── field_test.rs                  # ScalarField contract: bounds, interpolation, gradients
 ├── patch_test.rs                  # Cell selection, region depths, apply_patch pipeline
 ├── patch_build_test.rs            # Tiling-vector validation, tile extraction

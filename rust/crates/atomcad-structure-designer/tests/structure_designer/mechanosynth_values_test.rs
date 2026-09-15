@@ -266,7 +266,6 @@ fn the_build_step_record_type_is_registered_with_the_documented_fields() {
             ("t", &DataType::Vec3),
             ("r", &DataType::Mat3),
             ("note", &DataType::String),
-            ("method", &DataType::String),
             ("phase", &DataType::String),
             ("layer", &DataType::Int),
             ("site", &DataType::Int),
@@ -289,7 +288,7 @@ fn the_build_step_record_type_is_registered_with_the_documented_fields() {
 #[test]
 fn a_step_stating_only_op_and_t_reads_out_with_the_documented_defaults() {
     let script = parse_build_script(
-        r#"{ "format": "atomcad-msbuild/1",
+        r#"{ "format": "atomcad-msbuild/2",
              "steps": [ { "op": "habst", "t": [1.0, 2.0, 3.0] } ] }"#,
         "build.json",
     )
@@ -302,7 +301,7 @@ fn a_step_stating_only_op_and_t_reads_out_with_the_documented_defaults() {
     assert!(matches!(field("op"), NetworkResult::String(op) if op == "habst"));
     assert!(matches!(field("t"), NetworkResult::Vec3(t) if t == DVec3::new(1.0, 2.0, 3.0)));
     assert!(matches!(field("r"), NetworkResult::Mat3(r) if r == DMat3::IDENTITY));
-    for empty in ["note", "method", "phase"] {
+    for empty in ["note", "phase"] {
         assert!(
             matches!(field(empty), NetworkResult::String(text) if text.is_empty()),
             "{empty} should default to the empty string"
@@ -328,7 +327,6 @@ fn build_step_to_step_and_back_is_the_identity() {
             t: DVec3::new(4.0, 5.0, 6.0),
             r: rotation,
             note: Some("a note".to_string()),
-            method: "probe".to_string(),
             phase: "layer1".to_string(),
             layer: 1,
             site: 0,
@@ -559,7 +557,7 @@ fn an_unknown_op_passes_through_build_script_unchanged() {
     with_data::<BuildScriptData, _>(&mut designer, steps_id, |data| {
         data.script = Some(
             parse_build_script(
-                r#"{ "format": "atomcad-msbuild/1",
+                r#"{ "format": "atomcad-msbuild/2",
                      "steps": [ { "op": "no_such_op", "t": [0, 0, 0] } ] }"#,
                 "build.json",
             )
@@ -626,7 +624,6 @@ fn a_default_valued_field_is_omitted_and_a_stated_one_is_written() {
                 t: DVec3::ZERO,
                 r: rotation,
                 note: Some("a note".to_string()),
-                method: "probe".to_string(),
                 phase: "layer1".to_string(),
                 layer: 1,
                 site: 0,
@@ -637,10 +634,12 @@ fn a_default_valued_field_is_omitted_and_a_stated_one_is_written() {
 
     let text = std::fs::read_to_string(&path).expect("written");
     let document: serde_json::Value = serde_json::from_str(&text).expect("valid JSON");
-    assert_eq!(document["format"], "atomcad-msbuild/1");
+    assert_eq!(document["format"], "atomcad-msbuild/2");
 
     let plain = &document["steps"][0];
     for absent in ["r", "note", "method", "phase", "layer", "site"] {
+        // `method` is in the list for a second reason: the exporter must never
+        // write one again, whatever a step carried before the format change.
         assert!(
             plain.get(absent).is_none(),
             "a defaulted \"{absent}\" must be omitted: {text}"
@@ -649,7 +648,10 @@ fn a_default_valued_field_is_omitted_and_a_stated_one_is_written() {
 
     let rich = &document["steps"][1];
     assert_eq!(rich["note"], "a note");
-    assert_eq!(rich["method"], "probe");
+    assert!(
+        rich.get("method").is_none(),
+        "the step has no method any more"
+    );
     assert_eq!(rich["phase"], "layer1");
     assert_eq!(rich["layer"], 1);
     assert_eq!(rich["site"], 0);

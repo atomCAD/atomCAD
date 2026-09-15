@@ -440,7 +440,7 @@ fn a_mechanosynth_edit_node_with_a_wired_prefix_round_trips() {
         "lib = ops_library { file: \"ops.json\" }\n\
          gen = build_script { file: \"build.json\" }\n\
          edit = mechanosynth_edit { ops: lib, steps: gen, cursor: 2, authored: [\
-         { op: \"habst\", t: (12.71, 9.53, 8.02), method: \"probe\", phase: \"layer1\", layer: 1, site: 0 }, \
+         { op: \"habst\", t: (12.71, 9.53, 8.02), phase: \"layer1\", layer: 1, site: 0 }, \
          { op: \"dimerize\", t: (14.27, 9.53, 8.02), r: ((0.0, 1.0, 0.0), (-1.0, 0.0, 0.0), (0.0, 0.0, 1.0)), residual: 0.0213, approximate: true }] }\n\
          output edit\n",
     );

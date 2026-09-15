@@ -857,9 +857,11 @@ current step did — `Step 12 of 47: gm_methylate`, followed by that step's `not
 when it has one. "Current" means the last step applied, so at step 0 the line
 says only that this is the untouched base.
 
-Below the note, small **chips** show the current step's `method`, `phase`,
-`layer` and `site`. Each chip is omitted when the script says nothing about it,
-so an unannotated build shows no chips rather than a row of placeholders.
+Below the note, small **chips** show the operation's `method` and the step's
+`phase`, `layer` and `site`. The last three are omitted when the script says
+nothing about them, so an unannotated build shows almost no chips rather than a
+row of placeholders; `method` is the operation's, so it is there whenever the
+step names an operation the wired library has.
 
 The slider **applies on release**, not on every tick: each intermediate value
 would be a full replay plus a re-render of the workpiece, and those frames are
@@ -938,17 +940,73 @@ that only `after` has — an added atom needs a real element.
 
 ```json
 {
-  "format": "atomcad-msops/1",
+  "format": "atomcad-msops/2",
   "tolerance": 0.3,
+  "tools": [
+    {
+      "name": "habst_tool",
+      "note": "Hydrogen abstraction tool: an ethynyl radical on a handle.",
+      "states": ["charged", "spent"],
+      "frame": [
+        { "tag": "apex", "pos": [0, 0, 0] },
+        { "tag": "a",    "pos": [1.45, 0, -3.17] },
+        { "tag": "b",    "pos": [-0.73, 1.26, -3.17] },
+        { "tag": "c",    "pos": [-0.73, -1.26, -3.17] }
+      ]
+    }
+  ],
   "ops": [
     {
       "name": "habst",
+      "method": "tip",
       "before": { "atoms": [ {"id": 1, "el": "H", "pos": [0, 0, 0]} ], "bonds": [] },
-      "after":  { "atoms": [], "bonds": [] }
+      "after":  { "atoms": [], "bonds": [] },
+      "tool": {
+        "type": "habst_tool",
+        "from": "charged",
+        "to": "spent",
+        "before": { "atoms": [ {"id": 1, "el": "C", "pos": [0, 0, 0]} ], "bonds": [] },
+        "after":  { "atoms": [ {"id": 1, "el": "C", "pos": [0, 0, 0]},
+                               {"id": 2, "el": "H", "pos": [0, 0, 1.06]} ],
+                    "bonds": [ [1, 2] ] }
+      }
     }
   ]
 }
 ```
+
+**Every operation states its `method`**, one of three kinds the application
+defines: `tip` (a positional probe visits one site), `bulk` (one site's share of
+an exposure of the whole workpiece — a gas, a dose, light) or `spontaneous` (the
+workpiece rearranges by itself). How a reaction is performed is a fact about the
+reaction, not a choice a build script makes, so it is stated once by whoever
+researched it. A `bulk` operation also names the **`agent`** that performs it
+(`"Cl2"`, `"UV"`); a `tip` operation instead names the **tool type** that does,
+in a `tool` side.
+
+A `tip` operation's **`tool` side** is the same before/after rewrite as its
+target side, written in the tool's own local frame: what the tool looks like
+before the reaction and after it. `from` and `to` name states from the tool
+type's `states` list, and both halves may be empty — a bare probe performing
+lithography names its type so the step records which instrument visited, without
+asserting any change.
+
+The **`tools` section** describes each tool type the process uses: its `name`,
+an optional `note`, an optional `states` list whose **first entry is the state
+every tool of that type starts in**, and a `frame` of four or more named atom
+positions in the tool's local coordinates. Exactly one frame entry is tagged
+`apex` and sits at the origin, and the four may not be coplanar — three points
+are congruent to their own mirror image in space, so it takes a fourth off their
+plane for a molecule built the wrong way round to be refused rather than
+accepted mirrored. Take the legs off the tool's **handle**, not off its business
+axis, which is usually linear and would leave the four coplanar.
+
+The section is required as soon as any operation is `tip`, and every rule above
+is a load error naming the tool type.
+
+An operation may also carry an **`approach`** pose (`r` and `t`), the tool frame
+relative to the target frame at the moment of reaction. It is read and kept for
+a future animation feature and changes nothing today.
 
 A **build script** lists steps, each naming an operation and a rigid transform
 that places the operation's local frame into workpiece coordinates
@@ -958,14 +1016,13 @@ may want). The optional `note` is free text describing the step.
 
 ```json
 {
-  "format": "atomcad-msbuild/1",
+  "format": "atomcad-msbuild/2",
   "tolerance": 0.3,
   "steps": [
     {
       "op": "habst",
       "t": [3.567, 0.892, 12.40],
       "note": "layer 1, dimer 3, left H",
-      "method": "probe",
       "phase": "layer1",
       "layer": 1,
       "site": 0
@@ -974,21 +1031,27 @@ may want). The optional `note` is free text describing the step.
 }
 ```
 
-A step may also carry four **optional metadata fields**. They change nothing
+A step may also carry three **optional metadata fields**. They change nothing
 about what the step *does*; they are what the node can say about it, to the
 network and to you:
 
 | Field | Type | Absent | Meaning |
 |---|---|---|---|
-| `method` | string | `""` | which instrument or process performs the step — a positional tool, area lithography, a gas exposure, a bulk thermal or photochemical step. The generator picks the vocabulary; the node never interprets it. |
 | `phase` | string | `""` | the phase of the process the step belongs to. Many steps, possibly of mixed methods. This is what the panel's phase list groups by (together with `layer`). |
 | `layer` | integer | `-1` | the terrace the step builds, counted by the generator (`1` for the first new layer over the seed, say). `-1` means "no particular layer" — substrate work, bulk steps. |
 | `site` | integer | `-1` | which of several structures built by one script the step serves. `-1` means "all" or "none" — a bulk step acts on every site at once. |
 
-They are additive, so a script written for this version loads in an older one
-and vice versa; the `format` string does not change. A present field of the
-wrong JSON type is rejected with a message naming the step and the field, like
-any other malformed step.
+A present field of the wrong JSON type is rejected with a message naming the
+step and the field, like any other malformed step.
+
+**A step never states its method.** It used to; the kind is a fact about the
+reaction, so it lives on the operation and the step is down to `op`, `t`, `r`,
+`note`, `phase`, `layer` and `site`. A `method` key in a build file is ignored
+like any other unknown key.
+
+**Both `/2` formats replace `/1` outright.** A `/1` file is refused with a
+message saying so: both files are written by generators, and the fix is to
+regenerate them rather than to keep two readers.
 
 The **library's** `tolerance` is the match tolerance for every replay against
 it; a library that states none gets the default, **0.05 Å**. That is tight on
@@ -1105,7 +1168,7 @@ of the network can act on. Wire the pin into a
 | `count` | Int | the script's step count |
 | `op` | String | the last applied step's operation name |
 | `note` | String | its `note` |
-| `method` | String | its `method` |
+| `method` | String | the **operation's** kind — `tip`, `bulk` or `spontaneous`. Read from the wired library, not from the step |
 | `phase` | String | its `phase` |
 | `layer` | Int | its `layer` (`-1` for none) |
 | `site` | Int | its `site` (`-1` for none) |
@@ -1128,9 +1191,9 @@ error, because a record whose `index` described a replay that did not finish
 would be a lie.
 
 A typical use: a [`switch`](./math_programming.md#switch) on `step.method`
-picking one style rule set per instrument, so probe steps and lithography steps
-are coloured differently as you scrub; or an `expr` building a caption out of
-`phase`, `layer` and `index`.
+picking one style rule set per kind, so tip steps and bulk steps are coloured
+differently as you scrub; or an `expr` building a caption out of `phase`,
+`layer` and `index`.
 
 ## mechanosynth_edit
 
@@ -1286,11 +1349,13 @@ a click whose meaning depended on invisible state would place it there anyway.
   alone, with the same phase rows beneath it. Moving it is navigation and is not
   undoable.
 - **The step list** numbers the block from 1. A row shows its operation, its
-  note, a dot in its method's colour and a warning triangle when the step is
+  note, a dot in its operation's method colour and a warning triangle when the
+  step is
   inexact or approximate. Drag the handle to reorder, and each row has
   **Duplicate** and **Delete**. Clicking a row moves the cursor to it and opens
-  its `note` / `method` / `phase` / `layer` / `site` fields; typing into one of
-  them costs a single undo step, not one per keystroke.
+  its `note` / `phase` / `layer` / `site` fields; typing into one of them costs
+  a single undo step, not one per keystroke. There is no `method` field to edit:
+  the method is the operation's.
 - **A summary line** above the list counts the inexact and approximate steps, so
   a block that is not exact says so without scrolling.
 
@@ -1329,14 +1394,14 @@ step, and the cursor as an int:
 
 ```
 edit = mechanosynth_edit { base: slab, ops: lib, steps: gen, cursor: 2, authored: [
-  { op: "habst", t: (12.71, 9.53, 8.02), method: "probe", phase: "layer1", layer: 1, site: 0 },
+  { op: "habst", t: (12.71, 9.53, 8.02), phase: "layer1", layer: 1, site: 0 },
   { op: "dimerize", t: (14.27, 9.53, 8.02), r: ((0.0, 1.0, 0.0), (-1.0, 0.0, 0.0), (0.0, 0.0, 1.0)), residual: 0.0213 }
 ] }
 ```
 
 A step literal takes the [`BuildStep`](./math_programming.md#record-types)
 fields plus two that belong to the editor only: `residual: Float` and
-`approximate: Bool`. An identity `r`, an empty `note` / `method` / `phase`, a
+`approximate: Bool`. An identity `r`, an empty `note` / `phase`, a
 `layer` or `site` of `-1`, a residual below 1e-4 Å and `approximate: false` are
 omitted on output and defaulted on input — so a short step stays short, and a
 step you typed by hand counts as **exact**: your assertion has the same standing
@@ -1409,7 +1474,7 @@ two with `switch`. That is the whole reason a build script is a value rather
 than a file name on the replayer.
 
 Absent per-step fields take the file format's own defaults — an identity
-rotation, empty `note` / `method` / `phase`, `-1` for `layer` and `site` — so a
+rotation, empty `note` / `phase`, `-1` for `layer` and `site` — so a
 step stating only `op` and `t` reads out the same way whether it came from a
 file or was written by hand.
 
@@ -1439,7 +1504,8 @@ evaluation never touches the disk.
 
 Per-step fields holding their default are **omitted**, which is what makes a
 load and a re-export a round trip rather than a re-write: an identity rotation,
-an empty `note`, `method` or `phase`, and a `layer` or `site` of `-1`.
+an empty `note` or `phase`, and a `layer` or `site` of `-1`. The file it writes
+is `atomcad-msbuild/2`.
 
 ## Surface reconstruction patches (`patch_build` + `patch_latticefill`)
 

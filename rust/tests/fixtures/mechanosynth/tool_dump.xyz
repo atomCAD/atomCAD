@@ -1,0 +1,7 @@
+5
+The reservoir: a chain of five bare carbons at x = 20, far from the workpiece. A recharge dumps its hydrogen on the second of them, at (20, 1.54, 0) - the first one in the chain with two bonds, hence with bonding directions an offer can be oriented by.
+C       20.000000       0.000000       0.000000
+C       20.000000       1.540000       0.000000
+C       20.000000       3.080000       0.000000
+C       20.000000       4.620000       0.000000
+C       20.000000       6.160000       0.000000

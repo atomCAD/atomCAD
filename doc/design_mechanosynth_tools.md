@@ -1,6 +1,15 @@
 # Design: tool molecules in `mechanosynth`
 
-Status: **draft 2026-09-14, revised 2026-09-15 (twice), not implemented.**
+Status: **draft 2026-09-14, revised 2026-09-15 (twice); Phase 1 (schema and
+engine) implemented 2026-09-15, and the document corrected against it. Phases
+2-4 open.**
+Building Phase 1 falsified two things this document asserted, and both are
+rewritten where they are stated rather than noted here: **a pattern cannot
+assert an atom's absence**, so a tool wired carrying cargo an operation's tool
+side does not name is not caught geometrically at all (§Symbolic state is a
+label); and **a step has to be all or nothing**, both sides matched before the
+first atom moves, or a tool-side failure leaves the target side's rewrite behind
+and the partial-result form hands back a half-applied step (§The scene).
 The first revision made three things structural: operations declare their
 method; one operation is one instrument; tools are identified by atom tags
 and posed by four tagged atoms, so no step names a tool and nothing is
@@ -251,14 +260,35 @@ list: a tool type is researched with a resting state, every sequence starts
 there, and the library is the one that knows it — so no per-instance
 configuration exists and the symbolic check applies from the first step. An
 operation whose `from` differs from the tracked state is an error naming the
-tool type, its state and the state required. The wired molecule has to *be*
-in the initial state; the frame atoms do not include the apex's cargo, so
-binding cannot check that, and the first tool-side match does, with the
-nearest-atom message. The geometric rewrite is applied after the symbolic
-check and must match too. When the two disagree — the
-state says *charged* and the apex has no atom to give — the geometric
-failure is reported, because the geometry is what a viewer sees and the
-label is the thing that is wrong.
+tool type, its state and the state required. The geometric rewrite is applied
+after the symbolic check and must match too. When the two disagree — the state
+says *charged* and the apex has no atom to give — the geometric failure is
+reported, because the geometry is what a viewer sees and the label is the thing
+that is wrong.
+
+**What the geometry can and cannot catch, exactly** (corrected during Phase 1,
+where the first reading of this paragraph turned out to be false). The wired
+molecule is *supposed* to be in the initial state, and binding cannot check
+that: the frame atoms are on the handle and say nothing about the apex's cargo.
+Neither, in general, can the first tool-side match — **a pattern says what must
+be present, never what must be absent.** So the two directions are not
+symmetric:
+
+- A tool wired **carrying cargo it should not have** is caught only when an
+  operation's tool side *names* the cargo in its `before`. `habst`'s `before` is
+  the bare ethynyl — apex C, second C, handle C — and all three are still there
+  when an H hangs off the apex, so `habst` matches and the extra H is silently
+  tolerated. `hdump`'s `before` *does* name the cargo H, so a tool wired charged
+  and asked to recharge fails there with the nearest-atom message.
+- A tool wired **missing something it should have** is caught immediately by
+  whichever tool side names the missing atom.
+
+The symbolic state is what covers the remaining gap, and it is why it exists:
+an initial state the library declares means the *sequence* is checked from step
+one even where the geometry cannot see the difference. A library that wants the
+cargo checked geometrically as well lists the atoms around the apex that a
+charged tool has and a spent one does not — which is what `hdump` does, and what
+`habst` deliberately does not need to.
 
 The labels earn their place three ways: the `step` record carries
 `tool_state`, so a caption can read "tool: charged"; the panel shows each
@@ -649,34 +679,45 @@ type with **no** molecule is fine until a step needs it. Binding happens
 before any step, so a mis-tagged tool is reported once, at the top, rather
 than at the first step that uses it.
 
-**Per step**, in order:
+**Per step**, in order. **A step is all or nothing**: both sides *match*, and
+every check below runs, before the first atom moves. Matching the tool side
+against the scene as the target side left it was the first shape of this list
+and it is wrong — a tool-side failure would then leave the target side's rewrite
+behind, and the partial-result form below would hand the editor a half-applied
+step rather than "the scene after the last successful step". Nothing is lost by
+matching both up front: the two sides touch different participants by
+construction, and the one case where they would not is `ToolSideOffTool`, which
+is raised before anything moves.
 
-1. **Target side.** `apply_step(&mut scene.structure, op, step)` exactly as
-   today, matching anywhere in the scene. The matched `before` atoms must
+1. **Target side.** Match `op.before` anywhere in the scene, exactly as
+   `apply_step` does today. The matched `before` atoms must
    all belong to **one** participant that is the base or a feedstock — a
    target side matching inside a tool molecule is `Err(StepOnTool)` naming
    the step and the tool, and one whose matched atoms span two
    participants (a workpiece atom and a reservoir atom, or two reservoirs)
-   is `Err(StepAcrossParticipants)` naming the step and both. Atoms the
-   step adds **belong to the participant the match landed in** — this is
-   the fact that makes the workpiece separable from the reservoirs, and
-   nothing but the engine knows it. A step whose `before` is empty (a pure
-   addition) belongs to the base.
+   is `Err(StepAcrossParticipants)` naming the step and both. Both are
+   raised here, before anything is mutated, which is what makes "and the
+   scene is unchanged" true of them.
 2. **Tool side**, when the operation is `tip` and the `tools` pin is wired:
    the binding of the operation's tool type is looked up — none is
    `Err(ToolMissing)` naming the step, the operation and the type; the
    symbolic check — if `from` is set and differs from the binding's state,
-   `Err(ToolState)`; then `apply_step` on the scene with the
-   tool-side patterns as an `Operation` and `Step { r: pose.r, t: pose.t }`.
+   `Err(ToolState)`; then a match of the tool-side `before` at
+   `Step { r: pose.r, t: pose.t }`.
    This is the same nearest-atom match as the target side, over the whole
    scene, so nothing about it is confined to the tool by construction: a
    tool parked in contact with the workpiece, or later at an approach pose,
    can have base atoms inside tolerance of a pattern position. So the
    matched `before` atoms must **all belong to that binding** — any other
    is `Err(ToolSideOffTool)` naming the step, the tool and the atom it
-   found, the mirror of `StepOnTool`. Atoms it adds belong to the tool;
-   then the state update, `to` if set.
-3. **Highlights.** `touched` from both sides is painted `ms_current`, so
+   found, the mirror of `StepOnTool`.
+3. **Apply**, now that nothing can fail: the target side's rewrite, then the
+   tool side's. Atoms the target side adds **belong to the participant the
+   match landed in** — this is the fact that makes the workpiece separable
+   from the reservoirs, and nothing but the engine knows it; a step whose
+   `before` is empty (a pure addition) belongs to the base. Atoms the tool
+   side adds belong to the tool. Then the state update, `to` if set.
+4. **Highlights.** `touched` from both sides is painted `ms_current`, so
    the tip lights up with the site it visited, and a dump lights up with
    the atom it received. `ms_added` and `ms_layer` are painted on **base
    atoms only**: they mean "what the build created on the workpiece, by
@@ -743,7 +784,9 @@ which sort with the near misses.
 
 `replay_scene` gains a partial-result form for the editor's block replay:
 on a step failure it returns the scene after the last successful step
-together with the error, rather than the error alone. The replayer node
+together with the error, rather than the error alone. "After the last
+successful step" is exact rather than approximate, and it is the
+all-or-nothing rule in §The scene that makes it so. The replayer node
 keeps calling the all-or-nothing form.
 
 ### Errors
@@ -1084,12 +1127,33 @@ the two tool molecules, each placed rotated and translated away from the
 origin; the engine tests tag them programmatically after loading (`.xyz`
 carries no tags), and `tool_tip_on_handle.xyz` is the tooltip bonded to a
 cluster of a few hundred atoms, tagged the same way. `tool_tip_touching.xyz`
-is the tip parked with its apex within tolerance of a workpiece atom of
-`tool_scene.xyz`, for the off-tool check. `tool_scene.xyz` — a
-methane-like workpiece; `tool_dump.xyz` — a small bare cluster beside it
-that serves as the dump, a separate structure for the `feedstocks` pin, and
-`tool_dump_touching.xyz` the same cluster moved to within tolerance of a
-workpiece atom, for the across-participants check. `tool_build.json` —
+is the tip parked against a workpiece atom of `tool_scene.xyz`, for the off-tool
+check. `tool_scene.xyz` — a methane-like workpiece; `tool_dump.xyz` — a small
+bare cluster beside it that serves as the dump, a separate structure for the
+`feedstocks` pin, and `tool_dump_touching.xyz` the same cluster moved up against
+the workpiece, for the across-participants check.
+
+Three things about those three that only came out of building them, and that a
+regeneration has to preserve:
+
+- **The off-tool fixture cannot work by parking the apex on a workpiece atom.**
+  The apex *is* a frame atom, so the tool's own apex sits exactly at the
+  tool-side pattern's first position and always wins the match. The fixture
+  instead nudges a **non-frame** atom of the tool (the ethynyl carbon) 0.04 Å
+  off its ideal local position and parks the tool so a workpiece carbon is 0.01 Å
+  from it: the nearer atom wins, and it is the workpiece's.
+- **The across-participants fixture needs a multi-atom `before`.** Every
+  operation listed above has a one-atom `before` pattern, and one atom cannot
+  span two participants. The library therefore also carries `bridge`
+  (`spontaneous`, two `*` atoms 2.5 Å apart, bonding them), and the touching
+  cluster sits one bridge length from the workpiece.
+- **The reservoir has to be a bonded cluster, and the recharge has to target an
+  atom with at least two bonds.** `hdump` adds an atom off the origin from a
+  one-atom `before`, so `place` derives its orientation from the host's free
+  bonding directions — and an atom with zero or one bond has none to offer, so
+  the row is never *offered* (the replay itself is unaffected, since a step
+  states its own transform). A loose "bare cluster" or a chain end therefore
+  makes every editor test about the recharge vacuous. `tool_build.json` —
 `habst` on the workpiece, `hdump` on the cluster, `habst` again,
 `habst_probe`, `settle`, two `expose`; **seven keys per step at most**.
 `mechanosynth_tools.cnnd` — a slab on `base`, a reservoir tagged `dump` by
@@ -1106,7 +1170,7 @@ only the edits the format change forces (a `method` assertion removed, a
 
 ## Phases
 
-### Phase 1 — Schema and engine
+### Phase 1 — Schema and engine — **DONE**
 
 First commit: the fixture rewrite and re-snapshot above. Then `ToolType`,
 `ToolSide`, `Method`, `Operation::{method, agent, tool, approach}`,
@@ -1175,7 +1239,10 @@ operation that does not fit the clicked atom.
 
 *Tests — partial result:* the partial-result form on a block that fails
 at step `k` returns the scene after `k − 1` together with the error, and
-that scene equals the all-or-nothing form asked for `k − 1` atom for atom;
+that scene equals the all-or-nothing form asked for `k − 1` atom for atom —
+**including when step `k` is a `tip` step whose target side would have
+matched and whose tool side would not**, which is the case that pins the
+all-or-nothing rule and the one a naive two-phase apply gets wrong;
 on a block that fails at step 1 it returns the untouched scene; on a block
 that succeeds it returns the same scene as the all-or-nothing form and no
 error; a binding error yields no scene at all, since nothing was replayed.
@@ -1204,8 +1271,12 @@ first step that uses it; `hdump` as the first step is `ToolState` naming
 has one more H at the apex position transformed by its pose and its state is
 `spent`; after `hdump` the dump cluster has one more atom and the tip is
 `charged` again; two `habst` in a row is `ToolState` naming the type,
-`spent` and `charged`; a tip wired with an H already on its apex binds and
-fails at its first `habst` with the nearest-atom message, not at binding; a step whose
+`spent` and `charged`; a tool whose apex region is not what the library
+states binds — the frame is on the handle — and fails at the first step whose
+tool side *names* the missing atom, with the nearest-atom message, never at
+binding; a tip wired carrying cargo that `habst`'s `before` does not name is
+**not** caught geometrically at all, which is what the symbolic state is for
+(§Symbolic state is a label); a step whose
 `before` matches inside a tool molecule is `StepOnTool`; with
 `tool_tip_touching.xyz` wired, `habst` is `ToolSideOffTool` naming the
 workpiece atom the tool side found, and the workpiece is unchanged;
@@ -1222,8 +1293,17 @@ the replay on every atom that survives; asking for one step fewer than a
 failing step succeeds; the event rules — two consecutive `expose` with the
 same agent are one event, a different agent starts a new one, a `settle`
 after `hdump` joins the `hdump` event, a `settle` at index 0 is its own
-event; and two `expose` steps on bonded neighbours replay to a different
-scene in the two orders, pinning that an event does not commute.
+event; and two `expose` steps **whose first one's product is what the second
+one matches** replay to a different outcome in the two orders, pinning that an
+event does not commute.
+
+The obvious form of that last test — two exposures on *bonded neighbours* —
+does **not** work, and the reason is worth keeping: `expose`'s `before` is one
+`*` atom, so the two steps match two different atoms whichever way round they
+run and the results are equal. Two steps interact only when one's effect is
+inside the other's tolerance, so the fixture chains them: the first exposure's
+added atom is the atom the second one matches, and the reverse order finds
+nothing there at all.
 
 ### Phase 2 — Nodes, records, API
 

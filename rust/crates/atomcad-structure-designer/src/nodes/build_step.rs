@@ -16,6 +16,11 @@
 //! identity `r`, empty strings, `-1` for `layer` and `site`. A record that
 //! states only `op` and `t` therefore round-trips to the same `Step` a JSON
 //! step stating only `op` and `t` parses to.
+//!
+//! **Seven fields**, and a test pins that. `method` used to be the eighth; it
+//! is a fact about the reaction rather than a choice a build makes, so it lives
+//! on the *operation* now and no step types it. See
+//! `doc/design_mechanosynth_tools.md`.
 
 use crate::evaluator::network_result::{NetworkResult, dmat3_to_rows, rows_to_dmat3};
 use atomcad_crystolecule::mechanosynth::{NO_LAYER, NO_SITE, Step};
@@ -34,10 +39,6 @@ pub fn build_step_record(step: &Step) -> NetworkResult {
         (
             "note".to_string(),
             NetworkResult::String(step.note.clone().unwrap_or_default()),
-        ),
-        (
-            "method".to_string(),
-            NetworkResult::String(step.method.clone()),
         ),
         (
             "phase".to_string(),
@@ -106,7 +107,6 @@ pub fn step_from_record(value: &NetworkResult, index: usize) -> Result<Step, Str
         // absent or present; the record's is always a string, so the empty
         // string is "no note" in this direction.
         note: if note.is_empty() { None } else { Some(note) },
-        method: text("method")?,
         phase: text("phase")?,
         layer: number("layer", NO_LAYER)?,
         site: number("site", NO_SITE)?,

@@ -37,6 +37,7 @@ use atomcad_structure_designer::nodes::build_step::steps_from_array;
 use atomcad_structure_designer::nodes::mechanosynth_edit::{AuthoredStep, OPS_PIN, STEPS_PIN};
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 use glam::DVec3;
+use std::collections::HashMap;
 
 fn vec3(value: DVec3) -> APIVec3 {
     APIVec3 {
@@ -98,12 +99,15 @@ fn candidates_view(rows: &[CandidateRow]) -> Vec<APIMechanosynthCandidate> {
         .collect()
 }
 
-fn authored_view(step: &AuthoredStep) -> APIAuthoredStep {
+/// `methods` maps an operation name to its kind, from the wired library. The
+/// method is the operation's now, so a row that names an operation the library
+/// does not have simply shows none.
+fn authored_view(step: &AuthoredStep, methods: &HashMap<String, String>) -> APIAuthoredStep {
     APIAuthoredStep {
         op: step.step.op.clone(),
         t: vec3(step.step.t),
         note: step.step.note.clone().unwrap_or_default(),
-        method: step.step.method.clone(),
+        method: methods.get(&step.step.op).cloned().unwrap_or_default(),
         phase: step.step.phase.clone(),
         layer: step.step.layer,
         site: step.step.site,
@@ -135,9 +139,16 @@ pub fn mechanosynth_edit_data(
         NetworkResult::None | NetworkResult::Error(_) => Vec::new(),
         array => steps_from_array(&array).unwrap_or_default(),
     };
-    let op_names = match designer.evaluate_node_argument(scope_path, node_id, OPS_PIN) {
-        NetworkResult::OpLibrary(library) => library.ops.iter().map(|op| op.name.clone()).collect(),
-        _ => Vec::new(),
+    let (op_names, methods) = match designer.evaluate_node_argument(scope_path, node_id, OPS_PIN) {
+        NetworkResult::OpLibrary(library) => (
+            library.ops.iter().map(|op| op.name.clone()).collect(),
+            library
+                .ops
+                .iter()
+                .map(|op| (op.name.clone(), op.method.as_str().to_string()))
+                .collect(),
+        ),
+        _ => (Vec::new(), HashMap::new()),
     };
 
     let (inexact_count, approximate_count) = data.inexact_counts();
@@ -153,7 +164,11 @@ pub fn mechanosynth_edit_data(
 
     Some(APIMechanosynthEditData {
         prefix_count: prefix.len() as i32,
-        authored: data.authored.iter().map(authored_view).collect(),
+        authored: data
+            .authored
+            .iter()
+            .map(|step| authored_view(step, &methods))
+            .collect(),
         cursor: data.cursor,
         applied: data.applied() as i32,
         op_names,
@@ -455,7 +470,7 @@ pub fn mechanosynth_edit_move_step(
 }
 
 /// Writes one metadata field of one authored step. `field` is one of `note`,
-/// `method`, `phase`, `layer`, `site`; `text` carries the first three and
+/// `phase`, `layer`, `site`; `text` carries the first two and
 /// `number` the last two. Consecutive writes to the same field of the same step
 /// coalesce into one undo entry.
 #[flutter_rust_bridge::frb(sync)]

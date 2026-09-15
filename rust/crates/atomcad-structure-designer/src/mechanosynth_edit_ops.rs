@@ -179,7 +179,6 @@ fn offer_sweep(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StepMetadataField {
     Note,
-    Method,
     Phase,
     Layer,
     Site,
@@ -189,7 +188,6 @@ impl StepMetadataField {
     pub fn parse(name: &str) -> Option<Self> {
         match name {
             "note" => Some(Self::Note),
-            "method" => Some(Self::Method),
             "phase" => Some(Self::Phase),
             "layer" => Some(Self::Layer),
             "site" => Some(Self::Site),
@@ -200,7 +198,6 @@ impl StepMetadataField {
     fn as_str(self) -> &'static str {
         match self {
             Self::Note => "note",
-            Self::Method => "method",
             Self::Phase => "phase",
             Self::Layer => "layer",
             Self::Site => "site",
@@ -474,7 +471,6 @@ impl StructureDesigner {
                     StepMetadataField::Note => {
                         authored_step.step.note = (!text.is_empty()).then_some(text)
                     }
-                    StepMetadataField::Method => authored_step.step.method = text,
                     StepMetadataField::Phase => authored_step.step.phase = text,
                     StepMetadataField::Layer => authored_step.step.layer = number,
                     StepMetadataField::Site => authored_step.step.site = number,
@@ -524,7 +520,15 @@ impl StructureDesigner {
             return Err(format!("atom {atom_id} is not in the workpiece"));
         }
         let library = self.mechanosynth_edit_library(scope_path, node_id)?;
-        let offers = applicable_ops(&workpiece, &library, atom_id, resolve_tolerance(&library));
+        // Tool-aware offers are Phase 2's: the bindings live on the evaluated
+        // scene, which this entry point does not reach yet.
+        let offers = applicable_ops(
+            &workpiece,
+            &library,
+            atom_id,
+            resolve_tolerance(&library),
+            None,
+        );
         let sweep = offer_sweep(&workpiece, &library, atom_id, &offers);
 
         let data = self

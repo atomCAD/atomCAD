@@ -411,10 +411,13 @@ impl NodeData for MechanosynthData {
             NetworkResult::Molecule(molecule) => &mut molecule.atoms,
             _ => unreachable!("the match above admitted only these two"),
         };
+        // `tool` and `feedstock` stay unrequested until the node grows the
+        // pins that would wire a participant into the scene (Phase 2).
         let tags = HighlightTags {
             current: Some(MS_CURRENT_TAG),
             added: Some(MS_ADDED_TAG),
             layer: Some(MS_LAYER_TAG),
+            ..HighlightTags::default()
         };
         match replay(atoms, &library, &script, step, tags) {
             Ok(result) => {
@@ -422,7 +425,7 @@ impl NodeData for MechanosynthData {
                 // The record is built from the same script and the same clamp
                 // the replay just used, so the second pin costs no second
                 // replay.
-                let record = step_record(&script, step);
+                let record = step_record(&script, &library, step);
                 EvalOutput::multi(vec![wrapper, record])
             }
             Err(failure) => both(error(failure.to_string())),
@@ -545,10 +548,14 @@ fn both(result: NetworkResult) -> EvalOutput {
 /// At `index = 0` nothing has run, so the step-specific fields take their
 /// absent-field defaults rather than describing `steps[0]`, which has *not*
 /// been applied yet.
-fn step_record(script: &BuildScript, step: i32) -> NetworkResult {
+fn step_record(script: &BuildScript, library: &OpLibrary, step: i32) -> NetworkResult {
     let count = script.steps.len();
     let index = steps_applied(step, count);
     let current = index.checked_sub(1).and_then(|last| script.steps.get(last));
+    // `method` is the **operation's** kind now, not a string the step typed:
+    // a step names a reaction, and how the reaction is performed is a fact
+    // about the reaction. See `doc/design_mechanosynth_tools.md`.
+    let operation = current.and_then(|step| library.get(&step.op));
 
     let text = |value: Option<&str>| NetworkResult::String(value.unwrap_or_default().to_string());
 
@@ -562,7 +569,7 @@ fn step_record(script: &BuildScript, step: i32) -> NetworkResult {
         ),
         (
             "method".to_string(),
-            text(current.map(|s| s.method.as_str())),
+            text(operation.map(|op| op.method.as_str())),
         ),
         ("phase".to_string(), text(current.map(|s| s.phase.as_str()))),
         (
@@ -659,7 +666,7 @@ pub fn get_node_type() -> NodeType {
             the terrace under construction carry `ms_layer`.\n\
             \n\
             The second output pin, `step`, carries a `MechanosynthStep` record describing the \
-            **last step applied** — `index`, `count`, `op`, `note`, the script's own `method`, \
+            **last step applied** — `index`, `count`, `op`, `note`, the operation's `method`, \
             `phase`, `layer` and `site` metadata, and the placement point `t` and rotation `r` — \
             so a `switch`, an `expr` or a `record_destructure` downstream can act on the step \
             rather than parse its note.\n\

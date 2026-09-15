@@ -7,8 +7,8 @@
 //! fail.
 
 use super::schema::{
-    BuildScript, DEFAULT_TOLERANCE, MechanosynthError, NO_LAYER, OpLibrary, Operation,
-    PATTERN_POSITION_EPSILON, PatternElement, Step,
+    BuildScript, DEFAULT_TOLERANCE, MechanosynthError, NoMatch, OpLibrary, Operation,
+    PATTERN_POSITION_EPSILON, Pattern, PatternElement, Step,
 };
 use crate::atomic_constants::element_symbol;
 use crate::atomic_structure::{AtomicStructure, BondReference};
@@ -86,14 +86,47 @@ pub fn apply_step(
     step_number: usize,
     tolerance: f64,
 ) -> Result<StepEffect, MechanosynthError> {
-    // --- 1. match -----------------------------------------------------------
-    // Every `before` atom must match a distinct workpiece atom. With ideal
-    // coordinates the tolerance is far below half a bond length, so ambiguity
-    // does not arise; if two candidates are within tolerance the nearest wins.
+    let matched = match_before(
+        workpiece,
+        &op.name,
+        &op.before,
+        step,
+        step_number,
+        tolerance,
+        None,
+    )?;
+    Ok(apply_matched(
+        workpiece, &op.before, &op.after, step, matched,
+    ))
+}
+
+/// Which workpiece atom each `before` atom of the pattern is, or the failure
+/// that says why one of them is nowhere.
+///
+/// Split from [`apply_matched`] because the scene replay has a question to ask
+/// **between** the two: which participant did the match land in? A step that
+/// matched across a workpiece and a reservoir has no answer and must leave the
+/// scene untouched, so the check cannot come after the rewrite.
+///
+/// Every `before` atom must match a distinct workpiece atom. With ideal
+/// coordinates the tolerance is far below half a bond length, so ambiguity does
+/// not arise; if two candidates are within tolerance the nearest wins.
+///
+/// `participant_of` labels the atom a failed match found instead, so the
+/// message can say where it looked. `None` for a caller with no scene.
+pub(super) fn match_before(
+    workpiece: &AtomicStructure,
+    op_name: &str,
+    before: &Pattern,
+    step: &Step,
+    step_number: usize,
+    tolerance: f64,
+    participant_of: Option<&dyn Fn(u32) -> String>,
+) -> Result<FxHashMap<i64, u32>, MechanosynthError> {
     let mut matched: FxHashMap<i64, u32> = FxHashMap::default();
     let mut claimed: FxHashSet<u32> = FxHashSet::default();
 
-    for pattern_atom in &op.before.atoms {
+    for pattern_atom in &before.atoms {
         let target = step.place(pattern_atom.pos);
         let found = workpiece.nearest_unclaimed_atom(
             target,
@@ -107,9 +140,13 @@ pub fn apply_step(
                 claimed.insert(found.atom_id);
             }
             None => {
-                return Err(MechanosynthError::NoMatch {
+                let participant = participant_of
+                    .zip(workpiece.nearest_atom(target))
+                    .map(|(label, nearest)| label(nearest.atom_id))
+                    .unwrap_or_default();
+                return Err(MechanosynthError::NoMatch(Box::new(NoMatch {
                     step: step_number,
-                    op: op.name.clone(),
+                    op: op_name.to_string(),
                     t_x: step.t.x,
                     t_y: step.t.y,
                     t_z: step.t.z,
@@ -117,18 +154,32 @@ pub fn apply_step(
                     element: pattern_element_symbol(pattern_atom.element),
                     tolerance,
                     nearest: describe_nearest(workpiece, target),
-                });
+                    participant,
+                })));
             }
         }
     }
+    Ok(matched)
+}
+
+/// Rewrites `workpiece` by the `before` → `after` difference, given the match
+/// [`match_before`] found. Infallible: every way of failing was the match.
+pub(super) fn apply_matched(
+    workpiece: &mut AtomicStructure,
+    before: &Pattern,
+    after: &Pattern,
+    step: &Step,
+    matched: FxHashMap<i64, u32>,
+) -> StepEffect {
+    let mut matched = matched;
 
     // --- 2. what the step will change ---------------------------------------
     // Read before anything is mutated, because "did this bond change" is a
     // question about the workpiece as the step found it.
     let before_bonds: FxHashMap<(i64, i64), u8> =
-        op.before.bonds.iter().map(|b| (b.key(), b.order)).collect();
+        before.bonds.iter().map(|b| (b.key(), b.order)).collect();
     let after_bonds: FxHashMap<(i64, i64), u8> =
-        op.after.bonds.iter().map(|b| (b.key(), b.order)).collect();
+        after.bonds.iter().map(|b| (b.key(), b.order)).collect();
 
     // Pattern ids at either end of a bond this step actually rewrites. A bond
     // rule that is a no-op on this workpiece — deleting one that is not there,
@@ -179,8 +230,8 @@ pub fn apply_step(
     // first: a deletion's footprint is the atoms it was bonded to, which is all
     // that is left to highlight after an abstraction.
     let mut deletion_neighbours: Vec<u32> = Vec::new();
-    for pattern_atom in &op.before.atoms {
-        if op.after.has(pattern_atom.id) {
+    for pattern_atom in &before.atoms {
+        if after.has(pattern_atom.id) {
             continue;
         }
         let atom_id = matched[&pattern_atom.id];
@@ -194,8 +245,8 @@ pub fn apply_step(
     // between the two *patterns*, never against the workpiece, so a kept atom
     // stays exactly where the workpiece has it and is not snapped to the
     // pattern position.
-    for after_atom in &op.after.atoms {
-        let Some(before_atom) = op.before.atom(after_atom.id) else {
+    for after_atom in &after.atoms {
+        let Some(before_atom) = before.atom(after_atom.id) else {
             continue;
         };
         let atom_id = matched[&after_atom.id];
@@ -220,8 +271,8 @@ pub fn apply_step(
     }
 
     // Ids only in `after`: add. Validation guarantees a concrete element here.
-    for after_atom in &op.after.atoms {
-        if op.before.has(after_atom.id) {
+    for after_atom in &after.atoms {
+        if before.has(after_atom.id) {
             continue;
         }
         let PatternElement::Element(z) = after_atom.element else {
@@ -268,7 +319,7 @@ pub fn apply_step(
         }
     }
 
-    Ok(StepEffect { touched, added })
+    StepEffect { touched, added }
 }
 
 /// The tail of a match-failure message: what *is* near the position the step
@@ -304,7 +355,15 @@ pub struct HighlightTags<'a> {
     /// the last applied step's `layer`. Empty when that layer is
     /// [`NO_LAYER`](super::schema::NO_LAYER), because "no particular layer" is
     /// not a layer to highlight.
+    ///
+    /// `added` and `layer` are painted on **base atoms only**: they mean "what
+    /// the build created on the workpiece", and an abstracted H sitting on the
+    /// tip, or dumped on a reservoir, is cargo rather than construction.
     pub layer: Option<&'a str>,
+    /// Painted on every atom of every wired tool molecule.
+    pub tool: Option<&'a str>,
+    /// Painted on every atom of every wired reservoir.
+    pub feedstock: Option<&'a str>,
 }
 
 /// Replays the first `step` steps of `script` onto a copy of `base`.
@@ -321,6 +380,11 @@ pub struct HighlightTags<'a> {
 ///
 /// A step that fails to match aborts the whole replay; the partial state is
 /// reachable by asking for one step fewer.
+///
+/// This is [`replay_scene`](super::replay_scene) with no feedstocks and no
+/// tools, which is exactly what it means: with nothing wired, the scene *is*
+/// the workpiece, no binding runs, and the tool side of every operation is
+/// skipped.
 pub fn replay(
     base: &AtomicStructure,
     library: &OpLibrary,
@@ -328,47 +392,7 @@ pub fn replay(
     step: i32,
     tags: HighlightTags<'_>,
 ) -> Result<AtomicStructure, MechanosynthError> {
-    super::parse::validate_script_ops(script, library)?;
-
-    let tolerance = resolve_tolerance(library);
-    let n = steps_applied(step, script.steps.len());
-
-    // The layer under construction is the last applied step's, read up front so
-    // the loop below can filter as it goes. `NO_LAYER` disables the layer set
-    // entirely.
-    let active_layer = n
-        .checked_sub(1)
-        .and_then(|index| script.steps.get(index))
-        .map(|last| last.layer)
-        .filter(|layer| *layer != NO_LAYER);
-
-    let mut workpiece = base.clone();
-    let mut last_touched: Vec<u32> = Vec::new();
-    let mut created: Vec<u32> = Vec::new();
-    let mut created_in_layer: Vec<u32> = Vec::new();
-
-    for (i, script_step) in script.steps.iter().take(n).enumerate() {
-        let op = library
-            .get(&script_step.op)
-            .expect("validate_script_ops checked every op name");
-        let effect = apply_step(&mut workpiece, op, script_step, i + 1, tolerance)?;
-        if tags.added.is_some() {
-            created.extend(effect.added.iter().copied());
-        }
-        if tags.layer.is_some() && active_layer == Some(script_step.layer) {
-            created_in_layer.extend(effect.added.iter().copied());
-        }
-        last_touched = effect.touched;
-    }
-
-    // Ids are never reused, so a created atom a later step deleted is simply
-    // gone; the sets are filtered against the finished workpiece rather than
-    // bookkept step by step.
-    paint(&mut workpiece, tags.current, last_touched);
-    paint(&mut workpiece, tags.added, created);
-    paint(&mut workpiece, tags.layer, created_in_layer);
-
-    Ok(workpiece)
+    super::replay_scene(base, &[], &[], library, script, step, tags).map(|scene| scene.structure)
 }
 
 /// Clears `tag` from every atom and paints it on the surviving ids of `atoms`.
@@ -378,7 +402,7 @@ pub fn replay(
 /// `mechanosynth` node — is not this replay's. `atoms_with_tag` is empty when
 /// the name is not interned, so this is a no-op on a structure that has never
 /// seen the tag.
-fn paint(workpiece: &mut AtomicStructure, tag: Option<&str>, atoms: Vec<u32>) {
+pub(super) fn paint(workpiece: &mut AtomicStructure, tag: Option<&str>, atoms: Vec<u32>) {
     let Some(tag) = tag else { return };
     for atom_id in workpiece.atoms_with_tag(tag) {
         workpiece.remove_atom_tag(atom_id, tag);

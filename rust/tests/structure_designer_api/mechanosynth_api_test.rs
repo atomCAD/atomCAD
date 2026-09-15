@@ -311,7 +311,10 @@ fn info_reports_the_current_steps_metadata() {
     let node_id = add_metadata_node(&mut designer, 3);
 
     let info = mechanosynth_info(&mut designer, &[], node_id).expect("the node is a mechanosynth");
-    assert_eq!(info.current_method, "probe");
+    // The method is the **operation's** kind, read from the library; every
+    // operation of the metadata fixture is `tip`. The other three are the
+    // step's own.
+    assert_eq!(info.current_method, "tip");
     assert_eq!(info.current_phase, "layer1");
     assert_eq!(info.current_layer, 1);
     assert_eq!(info.current_site, 1);
@@ -319,7 +322,7 @@ fn info_reports_the_current_steps_metadata() {
     // A step that states nothing reports the defaults the panel omits chips for.
     let node_id = add_metadata_node(&mut designer, 1);
     let info = mechanosynth_info(&mut designer, &[], node_id).expect("the node is a mechanosynth");
-    assert_eq!(info.current_method, "");
+    assert_eq!(info.current_method, "tip");
     assert_eq!(info.current_phase, "");
     assert_eq!(info.current_layer, -1);
     assert_eq!(info.current_site, -1);

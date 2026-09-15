@@ -1,5 +1,5 @@
 {
-  "format": "atomcad-msbuild/1",
+  "format": "atomcad-msbuild/2",
   "tolerance": 0.15,
   "unknown_key": 42,
   "steps": [

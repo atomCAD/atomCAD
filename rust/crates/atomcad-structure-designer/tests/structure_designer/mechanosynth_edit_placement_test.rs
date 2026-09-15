@@ -505,7 +505,6 @@ fn a_commit_inherits_the_previous_steps_metadata_but_not_its_note() {
         .expect("fits");
 
     for (field, text, number) in [
-        (StepMetadataField::Method, "probe", 0),
         (StepMetadataField::Phase, "layer1", 0),
         (StepMetadataField::Note, "the first donation", 0),
         (StepMetadataField::Layer, "", 1),
@@ -528,7 +527,6 @@ fn a_commit_inherits_the_previous_steps_metadata_but_not_its_note() {
     let stored = data(&designer, node_id);
     assert_eq!(stored.authored.len(), 2);
     let second = &stored.authored[1].step;
-    assert_eq!(second.method, "probe");
     assert_eq!(second.phase, "layer1");
     assert_eq!(second.layer, 1);
     assert_eq!(second.site, 4);

@@ -161,5 +161,8 @@ mod miller_test;
 #[path = "crystolecule/mechanosynth_test.rs"]
 mod mechanosynth_test;
 
+#[path = "crystolecule/mechanosynth_tools_test.rs"]
+mod mechanosynth_tools_test;
+
 #[path = "crystolecule/mechanosynth_place_test.rs"]
 mod mechanosynth_place_test;

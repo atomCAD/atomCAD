@@ -1,0 +1,32 @@
+{
+  "comment": "The tool-aware build, against tool_ops.json on tool_scene.xyz with tool_dump.xyz on feedstocks and tool_tip.xyz / tool_probe.xyz on tools. It abstracts, recharges on the reservoir, abstracts again, abstracts with the bare probe, settles, then exposes both carbons - so one script covers all three methods, both tool types, a state round trip and a two-step bulk event. Seven keys per step at most: `method` is the operation's now.",
+  "format": "atomcad-msbuild/2",
+  "steps": [
+    { "op": "habst", "t": [0.0, 0.0, 1.09],
+      "note": "the charged tip takes methane A's +z hydrogen and goes spent",
+      "phase": "abstract", "layer": 1, "site": 0 },
+
+    { "op": "hdump", "t": [20.0, 1.54, 0.0],
+      "note": "the recharge: the spent tip dumps its hydrogen on the reservoir",
+      "phase": "recharge", "layer": 1, "site": 0 },
+
+    { "op": "habst", "t": [1.027662, 0.0, -0.363333],
+      "note": "the recharged tip takes a second hydrogen of methane A",
+      "phase": "abstract", "layer": 1, "site": 0 },
+
+    { "op": "habst_probe", "t": [10.0, 0.0, 1.09],
+      "note": "the same abstraction on methane B, by the bare probe",
+      "phase": "abstract", "layer": 1, "site": 1 },
+
+    { "op": "settle", "t": [-0.513831, 0.889981, -0.363333],
+      "note": "methane A relaxes into the two vacancies",
+      "phase": "settle", "layer": 1, "site": 0 },
+
+    { "op": "expose", "t": [0.0, 0.0, 0.0],
+      "note": "one site's share of the X2 dose",
+      "phase": "dose", "layer": 2, "site": 0 },
+    { "op": "expose", "t": [10.0, 0.0, 0.0],
+      "note": "the other site's share of the same dose - one event with the step before it",
+      "phase": "dose", "layer": 2, "site": 1 }
+  ]
+}

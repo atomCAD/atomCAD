@@ -25,6 +25,20 @@ atomCAD is a CAD application for Atomically Precise Manufacturing (APM). It enab
 
 **Reading GitHub issues/PRs:** Use the `gh` CLI, e.g. `gh issue view <number> --repo atomCAD/atomCAD` (add `--comments` for discussion). `gh` requires authentication even for this public repo, so if it errors with "not logged in," ask the user to run `gh auth login` rather than falling back to scraping the web UI.
 
+**Committing: work on `main`, and do not open a branch for ordinary work.**
+There is effectively one maintainer, `main` is where the work lands, and a
+branch per feature buys nothing here but an extra merge. A phase of a design
+document, a bug fix, a refactor, a documentation pass — all of these are
+ordinary work: stage them and commit them on `main`. The default "if on the
+default branch, branch first" habit does **not** apply to this repository.
+
+Branch only when the user asks for one, or when the change is genuinely
+speculative — something meant to be thrown away or reviewed before it is
+allowed near `main`.
+
+Two things that have not changed: **commit only when the user asks**, and push
+only when the user asks.
+
 ## Architecture
 
 ```

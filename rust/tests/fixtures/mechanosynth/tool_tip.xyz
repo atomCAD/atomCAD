@@ -1,0 +1,8 @@
+6
+habst_tool: an ethynyl radical on a handle, placed rotated (30 deg about z after 90 deg about x) and translated to (0, 30, 0), so a test that recovers the pose recovers something neither identity nor axis-aligned. Atom order is apex, ethynyl C, handle C, leg a, leg b, leg c; the engine tests tag those four after loading, because .xyz carries no tags.
+C        0.000000      30.000000       0.000000
+C       -0.605000      31.047891      -0.000000
+C       -1.330000      32.303628      -0.000000
+C       -0.329263      33.470301      -0.000000
+C       -2.212868      32.382801       1.255700
+C       -2.212868      32.382801      -1.255700

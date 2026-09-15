@@ -221,10 +221,10 @@ fn script_error(json: &str) -> String {
 
 #[test]
 fn library_rejects_a_wrong_format() {
-    let message = library_error(r#"{ "format": "atomcad-msops/2", "ops": [] }"#);
+    let message = library_error(r#"{ "format": "atomcad-msops/1", "ops": [] }"#);
     assert!(message.contains("ops.json"), "{message}");
     assert!(message.contains("format"), "{message}");
-    assert!(message.contains("atomcad-msops/1"), "{message}");
+    assert!(message.contains("atomcad-msops/2"), "{message}");
 }
 
 #[test]
@@ -232,15 +232,15 @@ fn script_rejects_a_wrong_format() {
     let message = script_error(r#"{ "format": "atomcad-msops/1", "steps": [] }"#);
     assert!(message.contains("build.json"), "{message}");
     assert!(message.contains("format"), "{message}");
-    assert!(message.contains("atomcad-msbuild/1"), "{message}");
+    assert!(message.contains("atomcad-msbuild/2"), "{message}");
 }
 
 #[test]
 fn library_rejects_a_duplicate_operation_name() {
     let message = library_error(
-        r#"{ "format": "atomcad-msops/1", "ops": [
-             { "name": "habst", "before": { "atoms": [], "bonds": [] }, "after": { "atoms": [], "bonds": [] } },
-             { "name": "habst", "before": { "atoms": [], "bonds": [] }, "after": { "atoms": [], "bonds": [] } }
+        r#"{ "format": "atomcad-msops/2", "ops": [
+             { "name": "habst", "method": "spontaneous", "before": { "atoms": [], "bonds": [] }, "after": { "atoms": [], "bonds": [] } },
+             { "name": "habst", "method": "spontaneous", "before": { "atoms": [], "bonds": [] }, "after": { "atoms": [], "bonds": [] } }
            ] }"#,
     );
     assert!(message.contains("ops.json"), "{message}");
@@ -251,7 +251,7 @@ fn library_rejects_a_duplicate_operation_name() {
 #[test]
 fn library_rejects_a_duplicate_id_within_a_pattern() {
     let message = library_error(
-        r#"{ "format": "atomcad-msops/1", "ops": [ { "name": "habst",
+        r#"{ "format": "atomcad-msops/2", "ops": [ { "name": "habst", "method": "spontaneous",
              "before": { "atoms": [ { "id": 1, "el": "H", "pos": [0,0,0] },
                                     { "id": 1, "el": "C", "pos": [0,0,1] } ], "bonds": [] },
              "after": { "atoms": [], "bonds": [] } } ] }"#,
@@ -265,7 +265,7 @@ fn library_rejects_a_duplicate_id_within_a_pattern() {
 #[test]
 fn library_rejects_a_bond_to_an_unknown_id() {
     let message = library_error(
-        r#"{ "format": "atomcad-msops/1", "ops": [ { "name": "hdon",
+        r#"{ "format": "atomcad-msops/2", "ops": [ { "name": "hdon", "method": "spontaneous",
              "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] } ], "bonds": [] },
              "after": { "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] } ], "bonds": [ [1, 5] ] } } ] }"#,
     );
@@ -278,7 +278,7 @@ fn library_rejects_a_bond_to_an_unknown_id() {
 #[test]
 fn library_rejects_a_self_bond() {
     let message = library_error(
-        r#"{ "format": "atomcad-msops/1", "ops": [ { "name": "hdon",
+        r#"{ "format": "atomcad-msops/2", "ops": [ { "name": "hdon", "method": "spontaneous",
              "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] } ], "bonds": [] },
              "after": { "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] } ], "bonds": [ [1, 1] ] } } ] }"#,
     );
@@ -291,7 +291,7 @@ fn library_rejects_a_self_bond() {
 #[test]
 fn library_rejects_an_unsupported_bond_order() {
     let message = library_error(
-        r#"{ "format": "atomcad-msops/1", "ops": [ { "name": "dimerp",
+        r#"{ "format": "atomcad-msops/2", "ops": [ { "name": "dimerp", "method": "spontaneous",
              "before": { "atoms": [], "bonds": [] },
              "after": { "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] },
                                    { "id": 2, "el": "C", "pos": [0,0,1.3] } ],
@@ -305,7 +305,7 @@ fn library_rejects_an_unsupported_bond_order() {
 #[test]
 fn library_rejects_a_wildcard_on_an_added_atom() {
     let message = library_error(
-        r#"{ "format": "atomcad-msops/1", "ops": [ { "name": "hdon",
+        r#"{ "format": "atomcad-msops/2", "ops": [ { "name": "hdon", "method": "spontaneous",
              "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] } ], "bonds": [] },
              "after": { "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] },
                                    { "id": 2, "el": "*", "pos": [0,0,1.09] } ], "bonds": [] } } ] }"#,
@@ -320,7 +320,7 @@ fn library_rejects_a_wildcard_on_an_added_atom() {
 #[test]
 fn library_rejects_an_unknown_element_symbol() {
     let message = library_error(
-        r#"{ "format": "atomcad-msops/1", "ops": [ { "name": "habst",
+        r#"{ "format": "atomcad-msops/2", "ops": [ { "name": "habst", "method": "spontaneous",
              "before": { "atoms": [ { "id": 1, "el": "Xx", "pos": [0,0,0] } ], "bonds": [] },
              "after": { "atoms": [], "bonds": [] } } ] }"#,
     );
@@ -336,7 +336,7 @@ fn library_rejects_an_unknown_element_symbol() {
 #[test]
 fn script_rejects_a_matrix_that_is_not_three_by_three() {
     let message = script_error(
-        r#"{ "format": "atomcad-msbuild/1", "steps": [
+        r#"{ "format": "atomcad-msbuild/2", "steps": [
              { "op": "habst", "t": [0,0,0], "r": [ [1,0,0], [0,1,0] ] } ] }"#,
     );
     assert!(message.contains("build.json"), "{message}");
@@ -348,7 +348,7 @@ fn script_rejects_a_matrix_that_is_not_three_by_three() {
 #[test]
 fn script_rejects_a_malformed_translation() {
     let message = script_error(
-        r#"{ "format": "atomcad-msbuild/1", "steps": [ { "op": "habst", "t": [0,0] } ] }"#,
+        r#"{ "format": "atomcad-msbuild/2", "steps": [ { "op": "habst", "t": [0,0] } ] }"#,
     );
     assert!(message.contains("build.json"), "{message}");
     assert!(message.contains("step 1"), "{message}");
@@ -359,7 +359,7 @@ fn script_rejects_a_malformed_translation() {
 fn a_step_naming_an_unknown_operation_is_rejected_against_the_library() {
     let lib = library("methylate_ops.json");
     let build = parse_build_script(
-        r#"{ "format": "atomcad-msbuild/1", "steps": [
+        r#"{ "format": "atomcad-msbuild/2", "steps": [
              { "op": "habst", "t": [0,0,0] },
              { "op": "no_such_op", "t": [0,0,0] } ] }"#,
         "build.json",
@@ -876,7 +876,7 @@ fn a_failing_step_aborts_the_replay_and_names_its_one_based_index() {
     let lib = library("methylate_ops.json");
     // Step 2 asks for a hydrogen that step 1 already took.
     let build = parse_build_script(
-        r#"{ "format": "atomcad-msbuild/1", "steps": [
+        r#"{ "format": "atomcad-msbuild/2", "steps": [
              { "op": "habst", "t": [0.0, 0.0, 1.09] },
              { "op": "habst", "t": [0.0, 0.0, 1.09] } ] }"#,
         "build.json",
@@ -1146,6 +1146,7 @@ fn all_tags() -> HighlightTags<'static> {
         current: Some(HIGHLIGHT),
         added: Some(ADDED),
         layer: Some(LAYER),
+        ..HighlightTags::default()
     }
 }
 
@@ -1164,7 +1165,6 @@ fn absent_metadata_fields_take_their_defaults() {
     // Step 1 of the fixture states none of the four; the pre-metadata fixtures
     // state none anywhere, and both must read the same.
     let s = script("metadata_build.json");
-    assert_eq!(s.steps[0].method, "");
     assert_eq!(s.steps[0].phase, "");
     assert_eq!(s.steps[0].layer, NO_LAYER);
     assert_eq!(s.steps[0].site, NO_SITE);
@@ -1172,7 +1172,6 @@ fn absent_metadata_fields_take_their_defaults() {
     assert_eq!(NO_SITE, -1);
 
     let old = script("valid_build.json");
-    assert_eq!(old.steps[0].method, "");
     assert_eq!(old.steps[0].layer, NO_LAYER);
 
     // And a step built in code carries the same defaults.
@@ -1184,7 +1183,6 @@ fn absent_metadata_fields_take_their_defaults() {
 #[test]
 fn present_metadata_fields_land_where_the_schema_says() {
     let s = script("metadata_build.json");
-    assert_eq!(s.steps[1].method, "probe");
     assert_eq!(s.steps[1].phase, "layer1");
     assert_eq!(s.steps[1].layer, 1);
     assert_eq!(s.steps[1].site, 0);
@@ -1197,14 +1195,9 @@ fn present_metadata_fields_land_where_the_schema_says() {
 fn a_metadata_field_of_the_wrong_type_names_the_step_and_the_field() {
     // A wrong type is an `Invalid` error like any other malformed step — not a
     // serde message about the whole document.
-    for (field, value) in [
-        ("method", "7"),
-        ("phase", "[\"a\"]"),
-        ("layer", "\"one\""),
-        ("site", "1.5"),
-    ] {
+    for (field, value) in [("phase", "[\"a\"]"), ("layer", "\"one\""), ("site", "1.5")] {
         let text = format!(
-            r#"{{ "format": "atomcad-msbuild/1", "steps": [
+            r#"{{ "format": "atomcad-msbuild/2", "steps": [
                  {{ "op": "a", "t": [0, 0, 0] }},
                  {{ "op": "b", "t": [0, 0, 0], "{field}": {value} }}
                ] }}"#
@@ -1219,7 +1212,7 @@ fn a_metadata_field_of_the_wrong_type_names_the_step_and_the_field() {
 
     // An explicit null is "absent", so it takes the default rather than failing.
     let nulled = parse_build_script(
-        r#"{ "format": "atomcad-msbuild/1", "steps": [
+        r#"{ "format": "atomcad-msbuild/2", "steps": [
              { "op": "a", "t": [0, 0, 0], "phase": null, "layer": null }
            ] }"#,
         "build.json",
@@ -1546,8 +1539,8 @@ fn every_new_key_is_additive_so_an_old_build_still_reads_the_file() {
     // operations with the key removed — which is what "loads on an old build"
     // means in practice.
     let with_key = parse_library(
-        r#"{ "format": "atomcad-msops/1", "ops": [ {
-            "name": "handed", "chiral": true,
+        r#"{ "format": "atomcad-msops/2", "ops": [ {
+            "name": "handed", "method": "spontaneous", "chiral": true,
             "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0, 0, 0] } ] },
             "after":  { "atoms": [ { "id": 1, "el": "N", "pos": [0, 0, 0] } ] }
         } ] }"#,
@@ -1555,8 +1548,8 @@ fn every_new_key_is_additive_so_an_old_build_still_reads_the_file() {
     )
     .expect("parses");
     let without_key = parse_library(
-        r#"{ "format": "atomcad-msops/1", "ops": [ {
-            "name": "handed",
+        r#"{ "format": "atomcad-msops/2", "ops": [ {
+            "name": "handed", "method": "spontaneous",
             "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0, 0, 0] } ] },
             "after":  { "atoms": [ { "id": 1, "el": "N", "pos": [0, 0, 0] } ] }
         } ] }"#,

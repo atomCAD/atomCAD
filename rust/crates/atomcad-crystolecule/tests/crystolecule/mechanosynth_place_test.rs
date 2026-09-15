@@ -1026,7 +1026,7 @@ fn names(rows: &[Applicability]) -> Vec<&str> {
 fn a_click_lists_the_operations_that_fit_and_the_ones_that_nearly_do() {
     let lib = library();
     let workpiece = workpiece();
-    let rows = applicable_ops(&workpiece, &lib, host_a(&workpiece), TOL);
+    let rows = applicable_ops(&workpiece, &lib, host_a(&workpiece), TOL, None);
 
     // The donation the cluster was built for fits exactly.
     let fitting = row(&rows, "hdon_frame");
@@ -1060,7 +1060,7 @@ fn a_click_lists_the_operations_that_fit_and_the_ones_that_nearly_do() {
 fn no_two_variants_of_one_family_fit_the_same_atom_at_the_tight_gate() {
     let lib = library();
     let workpiece = workpiece();
-    let rows = applicable_ops(&workpiece, &lib, host_a(&workpiece), TOL);
+    let rows = applicable_ops(&workpiece, &lib, host_a(&workpiece), TOL, None);
     let fitting: Vec<&str> = rows
         .iter()
         .filter(|row| row.fits)
@@ -1077,7 +1077,7 @@ fn every_row_is_applicable_or_a_near_miss_and_never_both() {
     let lib = library();
     let workpiece = workpiece();
     for atom_id in workpiece.atom_ids().cloned().collect::<Vec<u32>>() {
-        for row in applicable_ops(&workpiece, &lib, atom_id, TOL) {
+        for row in applicable_ops(&workpiece, &lib, atom_id, TOL, None) {
             assert_eq!(
                 row.fits,
                 !row.candidates.is_empty(),
@@ -1105,7 +1105,7 @@ fn a_rows_candidates_are_exactly_what_place_returns_for_that_operation() {
     let lib = library();
     let workpiece = workpiece();
     for atom_id in workpiece.atom_ids().cloned().collect::<Vec<u32>>() {
-        for row in applicable_ops(&workpiece, &lib, atom_id, TOL) {
+        for row in applicable_ops(&workpiece, &lib, atom_id, TOL, None) {
             if !row.fits {
                 continue;
             }
@@ -1128,7 +1128,7 @@ fn an_atom_no_operation_accepts_returns_an_empty_list_rather_than_an_error() {
     // nothing, so even the bond-derived fallback has nothing to offer.
     workpiece.add_atom(18, DVec3::ZERO);
     let atom_id = *workpiece.atom_ids().next().expect("one atom");
-    assert!(applicable_ops(&workpiece, &lib, atom_id, TOL).is_empty());
+    assert!(applicable_ops(&workpiece, &lib, atom_id, TOL, None).is_empty());
 }
 
 #[test]
@@ -1138,20 +1138,20 @@ fn the_near_miss_gate_is_ten_times_the_tolerance() {
     let host = host_a(&workpiece);
     // `hdon_frame_wide`'s residual on this host is the one number both sides of
     // the gate are measured against.
-    let rows = applicable_ops(&workpiece, &lib, host, TOL);
+    let rows = applicable_ops(&workpiece, &lib, host, TOL, None);
     let residual = row(&rows, "hdon_frame_wide").best_residual;
 
     // Just inside: the tolerance that puts the miss at exactly the factor.
     let inside = residual / NEAR_MISS_FACTOR * 1.001;
     assert!(
-        applicable_ops(&workpiece, &lib, host, inside)
+        applicable_ops(&workpiece, &lib, host, inside, None)
             .iter()
             .any(|row| row.op == "hdon_frame_wide"),
         "a fit at just under 10x the tolerance is still reported"
     );
     let outside = residual / NEAR_MISS_FACTOR * 0.999;
     assert!(
-        !applicable_ops(&workpiece, &lib, host, outside)
+        !applicable_ops(&workpiece, &lib, host, outside, None)
             .iter()
             .any(|row| row.op == "hdon_frame_wide"),
         "a fit at just over 10x the tolerance is not"
@@ -1163,7 +1163,7 @@ fn the_offer_list_sorts_applicable_first_then_by_residual_and_is_stable() {
     let lib = library();
     let workpiece = workpiece();
     let host = host_a(&workpiece);
-    let rows = applicable_ops(&workpiece, &lib, host, TOL);
+    let rows = applicable_ops(&workpiece, &lib, host, TOL, None);
 
     if let Some(first_miss) = rows.iter().position(|row| !row.fits) {
         assert!(
@@ -1181,14 +1181,14 @@ fn the_offer_list_sorts_applicable_first_then_by_residual_and_is_stable() {
             );
         }
     }
-    assert_eq!(rows, applicable_ops(&workpiece, &lib, host, TOL));
+    assert_eq!(rows, applicable_ops(&workpiece, &lib, host, TOL, None));
 }
 
 #[test]
 fn an_operation_oriented_from_bonds_is_offered_and_flagged_approximate() {
     let lib = library();
     let workpiece = workpiece();
-    let rows = applicable_ops(&workpiece, &lib, host_a(&workpiece), TOL);
+    let rows = applicable_ops(&workpiece, &lib, host_a(&workpiece), TOL, None);
     let bare = row(&rows, "hdon_bare");
     assert!(bare.fits, "the fallback still produces a placement");
     assert!(
@@ -1379,7 +1379,7 @@ fn every_offer_row_previews_itself() {
     let lib = library();
     let workpiece = workpiece();
     for atom_id in workpiece.atom_ids().cloned().collect::<Vec<u32>>() {
-        for row in applicable_ops(&workpiece, &lib, atom_id, TOL) {
+        for row in applicable_ops(&workpiece, &lib, atom_id, TOL, None) {
             let operation = op(&lib, &row.op);
             // Atoms **or** bonds: an operation whose whole effect is a bond has
             // nothing in the atom list, and `bridge` is in the fixture to keep

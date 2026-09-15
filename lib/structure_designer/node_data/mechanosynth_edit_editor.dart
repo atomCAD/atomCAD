@@ -39,7 +39,10 @@ import 'package:flutter_cad/structure_designer/node_data/mechanosynth_scrubber.d
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
-/// Colours the method chip. A build's `method` values are a small vocabulary
+/// Colours the method badge. The method is the **operation's** kind, not
+/// something a step types — see `doc/design_mechanosynth_tools.md`.
+///
+/// A build's `method` values are a small vocabulary
 /// ("probe", "relax", …) the user reads down a long list, so they get a stable
 /// colour rather than a legend: the same method is the same colour in every
 /// project, and an unnamed method has none.
@@ -434,24 +437,10 @@ class _MechanosynthEditEditorState extends State<MechanosynthEditEditor> {
             onChanged: (text) => write('note', text: text),
           ),
           const SizedBox(height: 4),
-          Row(
-            children: [
-              Expanded(
-                child: StringInput(
-                  label: 'Method',
-                  value: step.method,
-                  onChanged: (text) => write('method', text: text),
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: StringInput(
-                  label: 'Phase',
-                  value: step.phase,
-                  onChanged: (text) => write('phase', text: text),
-                ),
-              ),
-            ],
+          StringInput(
+            label: 'Phase',
+            value: step.phase,
+            onChanged: (text) => write('phase', text: text),
           ),
           const SizedBox(height: 4),
           Row(

@@ -34,8 +34,11 @@
 
 pub mod apply;
 pub mod compare;
+mod fit;
 pub mod parse;
 pub mod place;
+pub mod pose;
+pub mod scene;
 pub mod schema;
 
 pub use apply::{
@@ -48,11 +51,16 @@ pub use parse::{
 };
 pub use place::{
     Applicability, Candidate, EXACT_FIT_RESIDUAL, GhostAtom, GhostBond, GhostBondKind, GhostKind,
-    NEAR_MISS_FACTOR, PlaceStats, RESIDUAL_RANK_EPSILON, applicable_ops, place, place_with_stats,
-    preview_atoms, preview_bonds,
+    NEAR_MISS_FACTOR, PlaceStats, RESIDUAL_RANK_EPSILON, ToolReadiness, applicable_ops, place,
+    place_with_stats, preview_atoms, preview_bonds,
+};
+pub use pose::{ToolPose, tool_pose};
+pub use scene::{
+    Participant, Scene, ToolBinding, event_indices, replay_scene, replay_scene_partial,
 };
 pub use schema::{
-    BUILD_FORMAT, BuildScript, DEFAULT_TOLERANCE, LIBRARY_FORMAT, MechanosynthError, NO_LAYER,
-    NO_SITE, ORIGIN_PATTERN_ATOM_ID, OpLibrary, Operation, PATTERN_POSITION_EPSILON, Pattern,
-    PatternAtom, PatternBond, PatternElement, Step,
+    APEX_FRAME_TAG, Approach, BUILD_FORMAT, BuildScript, DEFAULT_TOLERANCE, FRAME_COPLANAR_EPSILON,
+    FrameAtom, LIBRARY_FORMAT, MechanosynthError, Method, NO_LAYER, NO_SITE, NoMatch,
+    ORIGIN_PATTERN_ATOM_ID, OpLibrary, Operation, PATTERN_POSITION_EPSILON, Pattern, PatternAtom,
+    PatternBond, PatternElement, Step, ToolSide, ToolType,
 };
