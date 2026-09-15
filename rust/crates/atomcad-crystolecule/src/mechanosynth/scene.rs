@@ -230,7 +230,7 @@ pub fn replay_steps(
         let op = library
             .get(&script_step.op)
             .expect("validate_script_ops checked every op name");
-        match apply_one(scene, op, script_step, i + 1, tolerance, tool_model) {
+        match apply_step_in_scene(scene, op, script_step, i + 1, tolerance, tool_model) {
             Ok(effect) => {
                 if tags.added.is_some() {
                     created.extend(base_atoms(scene, &effect.added));
@@ -468,10 +468,16 @@ fn bind_tools(
 
 /// What one step did to the scene: the union of both sides' `touched`, and the
 /// atoms it created.
+///
+/// Public for the same reason [`StepEffect`](super::StepEffect) is: a generator
+/// that emits a step and applies it immediately — so that later steps read
+/// coordinates from the scene as built so far — needs to know which atoms the
+/// step created and which it disturbed. [`replay_steps`] is the whole-script
+/// form and reports neither.
 #[derive(Debug, Default, Clone)]
-struct SceneEffect {
-    touched: Vec<u32>,
-    added: Vec<u32>,
+pub struct SceneEffect {
+    pub touched: Vec<u32>,
+    pub added: Vec<u32>,
 }
 
 /// Applies one step: the target side, then the tool side when the operation is
@@ -486,7 +492,7 @@ struct SceneEffect {
 /// construction, and the one case where they would not is
 /// [`MechanosynthError::ToolSideOffTool`], which is raised here before anything
 /// moves.
-fn apply_one(
+pub fn apply_step_in_scene(
     scene: &mut Scene,
     op: &super::schema::Operation,
     script_step: &Step,

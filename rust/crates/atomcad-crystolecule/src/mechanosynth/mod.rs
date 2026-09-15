@@ -56,8 +56,8 @@ pub use place::{
 };
 pub use pose::{ToolPose, tool_pose};
 pub use scene::{
-    Participant, Scene, ToolBinding, build_scene, event_indices, replay_scene,
-    replay_scene_partial, replay_steps,
+    Participant, Scene, SceneEffect, ToolBinding, apply_step_in_scene, build_scene, event_indices,
+    replay_scene, replay_scene_partial, replay_steps,
 };
 pub use schema::{
     APEX_FRAME_TAG, Approach, BUILD_FORMAT, BuildScript, DEFAULT_TOLERANCE, FRAME_COPLANAR_EPSILON,
