@@ -6,14 +6,14 @@
 /// block is hundreds of steps nobody edits here, and everything below it is the
 /// block the user wrote. See `doc/design_mechanosynth_editor.md`.
 ///
-/// **Placement happens in the viewport, not here.** The panel's palette exists
-/// only for the op-first repeat flow — arm an operation, then click hosts — and
-/// the primary flow is the other way round: click an atom and the library
-/// answers with what fits it, in a popup anchored to that atom
-/// (`mechanosynth_offer_popup.dart`). So the prompt line is the panel's main
-/// contribution to the tool: it says what a click will do next.
+/// **Placement happens in the viewport, not here.** Placement is atom-first:
+/// click an atom and the library answers with what fits it, in a popup anchored
+/// to that atom (`mechanosynth_offer_popup.dart`). The panel's palette is a
+/// **reference list**, not a tool — there is no armed mode to arm from it — so
+/// the prompt line is the panel's main contribution to the tool: it says what a
+/// click will do next.
 ///
-/// Three things about the list are worth knowing before changing it:
+/// Four things about the list are worth knowing before changing it:
 ///
 /// - **The cursor is navigation, not an edit.** Moving it records no undo
 ///   entry, exactly as the replayer's slider does; every other mutation here is
@@ -27,6 +27,13 @@
 /// - **A chip edit coalesces.** Consecutive writes to the same field of the
 ///   same step merge into one undo entry in the kernel, so typing a note costs
 ///   one Ctrl+Z rather than one per keystroke.
+/// - **A failing block still shows a step list and a viewport.** When the
+///   cursor step's tool side does not match, the pins carry the error — a
+///   downstream export must never receive a truncated build — but the viewport
+///   keeps drawing the last good state and the cursor row carries the engine's
+///   message as an error chip. That is the state the *Making a sequence
+///   tool-aware* walk lives in: the user reads the reason, clicks the
+///   reservoir, and inserts the recharge in front of the failing step.
 library;
 
 import 'package:flutter/material.dart';
@@ -36,32 +43,9 @@ import 'package:flutter_cad/inputs/int_input.dart';
 import 'package:flutter_cad/inputs/string_input.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/structure_designer/node_data/mechanosynth_scrubber.dart';
+import 'package:flutter_cad/structure_designer/node_data/mechanosynth_status.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
-
-/// Colours the method badge. The method is the **operation's** kind, not
-/// something a step types — see `doc/design_mechanosynth_tools.md`.
-///
-/// A build's `method` values are a small vocabulary
-/// ("probe", "relax", …) the user reads down a long list, so they get a stable
-/// colour rather than a legend: the same method is the same colour in every
-/// project, and an unnamed method has none.
-Color? methodColor(String method, ColorScheme scheme) {
-  if (method.isEmpty) return null;
-  const palette = <Color>[
-    Color(0xFF7E9CD8),
-    Color(0xFF98BB6C),
-    Color(0xFFE6C384),
-    Color(0xFFD27E99),
-    Color(0xFF7AA89F),
-    Color(0xFFC4746E),
-  ];
-  var hash = 0;
-  for (final unit in method.codeUnits) {
-    hash = (hash * 31 + unit) & 0x7fffffff;
-  }
-  return palette[hash % palette.length];
-}
 
 class MechanosynthEditEditor extends StatefulWidget {
   final BigInt nodeId;
@@ -286,6 +270,37 @@ class _MechanosynthEditEditorState extends State<MechanosynthEditEditor> {
     );
   }
 
+  /// Says what the viewport is drawing when the block fails at the cursor step.
+  ///
+  /// Without it the view is a lie by omission: the pins carry an error, so a
+  /// user who knows the rules expects an empty viewport, and the structure in
+  /// front of them is the state *before* the failing step rather than after it.
+  /// The atom count is the kernel's, off the parked scene — `-1` means the
+  /// block did not fail.
+  Widget _buildLastGoodState(
+      BuildContext context, APIMechanosynthEditData data) {
+    if (data.lastGoodAtomCount < 0) return const SizedBox.shrink();
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 6.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.visibility_outlined, size: 14, color: scheme.tertiary),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              'Showing the last good state — ${data.lastGoodAtomCount} atoms, '
+              'before step ${data.applied}.',
+              key: const Key('mechanosynth_edit_last_good'),
+              style: TextStyle(fontSize: 11.5, color: scheme.tertiary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildStepList(BuildContext context, APIMechanosynthEditData data) {
     if (data.authored.isEmpty) {
       final scheme = Theme.of(context).colorScheme;
@@ -325,7 +340,17 @@ class _MechanosynthEditEditorState extends State<MechanosynthEditEditor> {
     // Rows are numbered from 1, so row `k` is the step the cursor has just
     // applied.
     final isCursor = data.applied == index + 1;
-    final color = methodColor(step.method, scheme);
+    final color = methodColor(step.method);
+    // The cursor step is the last one the block replayed, so a block failure is
+    // *this* row's failure — there is no other row it could belong to.
+    //
+    // `lastGoodAtomCount >= 0` is what distinguishes a **block** failure from
+    // an *input* one (a bad library, an erroring prefix): a block failure hands
+    // back the state before the failing step, an input failure never ran a step
+    // and hands back nothing. An input failure belongs to no row, and the
+    // banner at the foot of the panel carries it.
+    final blockError = data.lastGoodAtomCount >= 0 ? data.lastError : null;
+    final failed = isCursor && blockError != null;
 
     return Container(
       key: key,
@@ -377,6 +402,14 @@ class _MechanosynthEditEditorState extends State<MechanosynthEditEditor> {
                       ),
                     ),
                   ),
+                  if (failed)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4.0),
+                      child: Icon(Icons.error_outline,
+                          key: const Key('mechanosynth_edit_step_error_icon'),
+                          size: 14,
+                          color: scheme.error),
+                    ),
                   if (!step.exact || step.approximate)
                     Padding(
                       padding: const EdgeInsets.only(left: 4.0),
@@ -412,6 +445,26 @@ class _MechanosynthEditEditorState extends State<MechanosynthEditEditor> {
               ),
             ),
           ),
+          // The engine's message, in place on the row that produced it. The
+          // banner at the foot of the panel says the same thing; this is what
+          // says *which step*, which is the half the walk needs.
+          if (failed)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(30.0, 0.0, 4.0, 5.0),
+              child: Container(
+                key: const Key('mechanosynth_edit_step_error_chip'),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6.0, vertical: 3.0),
+                decoration: BoxDecoration(
+                  color: scheme.errorContainer.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(3.0),
+                ),
+                child: SelectableText(
+                  blockError,
+                  style: TextStyle(fontSize: 11.0, color: scheme.onSurface),
+                ),
+              ),
+            ),
           // Only the cursor row opens its chips: five fields on every row of a
           // fifty-step block would bury the list the chips describe.
           if (isCursor) _buildChips(context, index, step),
@@ -431,6 +484,22 @@ class _MechanosynthEditEditorState extends State<MechanosynthEditEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // **The method is not a field.** It used to be one; it is the
+          // operation's kind now, so the row states it and offers no way to
+          // type it. The detail beside it is the instrument (`tip`) or the
+          // agent (`bulk`) — also the operation's, also not a choice.
+          if (step.method.isNotEmpty) ...[
+            Align(
+              alignment: Alignment.centerLeft,
+              child: MechanosynthMethodBadge(
+                key: const Key('mechanosynth_edit_method_badge'),
+                method: step.method,
+                detail:
+                    methodDetail(toolType: step.toolType, agent: step.agent),
+              ),
+            ),
+            const SizedBox(height: 6),
+          ],
           StringInput(
             label: 'Note',
             value: step.note,
@@ -506,6 +575,14 @@ class _MechanosynthEditEditorState extends State<MechanosynthEditEditor> {
               style: TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant),
             ),
           _buildFitSummary(context, data),
+          // What tells the user a recharge is due **before** the offers do: the
+          // tool states at the cursor, refreshed by every cursor move and
+          // commit because the whole panel is.
+          MechanosynthToolsReadout(
+            tools: data.tools,
+            feedstocks: data.feedstocks,
+          ),
+          _buildLastGoodState(context, data),
           MechanosynthChapterList(
             chapters: data.chapters,
             applied: _previewCursor ?? data.applied,

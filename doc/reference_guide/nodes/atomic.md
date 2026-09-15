@@ -922,11 +922,28 @@ current step did — `Step 12 of 47: gm_methylate`, followed by that step's `not
 when it has one. "Current" means the last step applied, so at step 0 the line
 says only that this is the untouched base.
 
-Below the note, small **chips** show the operation's `method` and the step's
-`phase`, `layer` and `site`. The last three are omitted when the script says
-nothing about them, so an unannotated build shows almost no chips rather than a
-row of placeholders; `method` is the operation's, so it is there whenever the
-step names an operation the wired library has.
+Below the note, a **method badge** — `tip`, `bulk` or `spontaneous`, coloured by
+kind — carries the instrument beside it on a `tip` step and the agent on a
+`bulk` one. After it, small **chips** show the step's `phase`, `layer` and
+`site`, each omitted when the script says nothing about it, so an unannotated
+build shows almost no chips rather than a row of placeholders. None of the four
+is editable: the method and the instrument are the *operation's*, and the other
+three are the step's own annotations, read from the script.
+
+Below that, a **Tools** block lists one row per wired tool molecule — its index
+on the pin, the type its tag names, the state it is in at the current step, and
+the **pose residual**, which is how well its four tagged atoms fitted the
+library's frame. A residual of a few thousandths of an Ångström is a tool
+correctly tagged; a large one means a tag is on the wrong atom, and the replay
+will say so. A **Feedstocks** line follows it, one entry per wired reservoir in
+pin order with how many of its atoms are in the scene at the current step — the
+number that visibly changes as you scrub across a dump step. (The editor's
+one-line readout gives the total instead: its question is whether a recharge is
+due, not which reservoir moved.)
+
+Both readouts are taken from the node's **last evaluation**. A node that has not
+been evaluated — nothing displayed, nothing downstream — shows neither, which is
+the same as having nothing wired to the pins.
 
 The slider **applies on release**, not on every tick: each intermediate value
 would be a full replay plus a re-render of the workpiece, and those frames are
@@ -1395,8 +1412,9 @@ following the atom from there, and the ⌖ button in the header snaps it back.
 **Resting the pointer on a row ghosts it on the workpiece; clicking one places
 it.** The ghost is translucent atoms *and bonds* in the scene itself, behind
 whatever is in front of them: added green, deleted red, moved blue with a trail from where they
-were, an element swap amber. A near-miss row is ghosted in amber throughout,
-because it is for looking at, not for placing.
+were, an element swap amber. A row below the rule — a near miss, or a fit whose
+tool is not ready — is ghosted in amber throughout, because it is for looking
+at, not for placing.
 
 Some operations move no atom at all. `bridge` and `bridge_c` in the silicon
 library have identical before and after atom lists and differ only in the bond
@@ -1454,11 +1472,22 @@ a click whose meaning depended on invisible state would place it there anyway.
   step is
   inexact or approximate. Drag the handle to reorder, and each row has
   **Duplicate** and **Delete**. Clicking a row moves the cursor to it and opens
-  its `note` / `phase` / `layer` / `site` fields; typing into one of them costs
-  a single undo step, not one per keystroke. There is no `method` field to edit:
-  the method is the operation's.
+  its `note` / `phase` / `layer` / `site` fields, headed by a read-only **method
+  badge** carrying the instrument or the agent; typing into one of the fields
+  costs a single undo step, not one per keystroke. There is no `method` field to
+  edit: the method is the operation's.
 - **A summary line** above the list counts the inexact and approximate steps, so
   a block that is not exact says so without scrolling.
+- **The Tools readout** below it names each bound tool and its state at the
+  cursor — *habst_tool · spent* — with the wired reservoirs and their atom count
+  beside it. It is what tells you a recharge is due *before* the offer list
+  does: walk the cursor forward and watch the state, rather than discovering it
+  on a blocked row.
+- **The last-good-state line** appears only when the block fails at the cursor
+  step, and says what the viewport is drawing: the state before the failing
+  step, with its atom count. Without it the view would be a lie by omission —
+  the pins carry an error, so an empty viewport is what you would expect, and
+  what is actually in front of you is the step before.
 
 ### Exactness, and the two chips
 
@@ -1538,11 +1567,21 @@ way a `Motif` is — produced by one node, consumed by pins that ask for it. Wir
 one library node into as many consumers as you like; it is parsed once and
 shared.
 
-The panel lists what the file holds — each operation's name, how many atoms its
-`before` and `after` patterns have, and whether it is `chiral` — above the
-tolerance in force. That listing is the only view of a parsed library from
-inside the application, and it is where you read the operation names a build
-script refers to. A **Reload** button beside Browse re-reads a file that changed
+The panel lists what the file holds — each operation's name, its **method badge**
+with the instrument or the agent beside it, how many atoms its `before` and
+`after` patterns have, and whether it is `chiral` — under the tolerance in
+force. That listing is the only view of a parsed library from inside the
+application, and it is where you read the operation names a build script refers
+to.
+
+Above the operations, a **Tool types** section names the instruments the library
+envisions: each type's name, its note, its state vocabulary (the first state is
+the one every bound tool starts in) and — the part a design has to act on — the
+**atom tags** a molecule must carry to *be* that tool: the type's own name on
+the molecule, and one frame tag on each of four atoms. That list appears nowhere
+else in the application, so this is the instruction for making a molecule usable
+on `mechanosynth`'s `tools` pin. A library whose operations are all `bulk` or
+`spontaneous` has no tool types and shows no section. A **Reload** button beside Browse re-reads a file that changed
 on disk; there is no file watching.
 
 A library that breaks the origin convention (§*The two files*) loads with a

@@ -119,15 +119,31 @@ fn candidates_view(rows: &[CandidateRow]) -> Vec<APIMechanosynthCandidate> {
         .collect()
 }
 
-/// `methods` maps an operation name to its kind, from the wired library. The
-/// method is the operation's now, so a row that names an operation the library
-/// does not have simply shows none.
-fn authored_view(step: &AuthoredStep, methods: &HashMap<String, String>) -> APIAuthoredStep {
+/// What the wired library says about one operation: its kind, and the
+/// instrument or the agent that performs it. All three are the **operation's**,
+/// never the step's, so a row that names an operation the library does not have
+/// simply shows none of them.
+///
+/// Not a transport type — it never leaves this file, so it is `frb(ignore)`d;
+/// codegen otherwise walks every type declared under `api/` and would generate
+/// a Dart twin for it.
+#[flutter_rust_bridge::frb(ignore)]
+#[derive(Clone, Default)]
+struct OpFacts {
+    method: String,
+    tool_type: String,
+    agent: String,
+}
+
+fn authored_view(step: &AuthoredStep, facts: &HashMap<String, OpFacts>) -> APIAuthoredStep {
+    let op = facts.get(&step.step.op).cloned().unwrap_or_default();
     APIAuthoredStep {
         op: step.step.op.clone(),
         t: vec3(step.step.t),
         note: step.step.note.clone().unwrap_or_default(),
-        method: methods.get(&step.step.op).cloned().unwrap_or_default(),
+        method: op.method,
+        tool_type: op.tool_type,
+        agent: op.agent,
         phase: step.step.phase.clone(),
         layer: step.step.layer,
         site: step.step.site,
@@ -165,7 +181,20 @@ pub fn mechanosynth_edit_data(
             library
                 .ops
                 .iter()
-                .map(|op| (op.name.clone(), op.method.as_str().to_string()))
+                .map(|op| {
+                    (
+                        op.name.clone(),
+                        OpFacts {
+                            method: op.method.as_str().to_string(),
+                            tool_type: op
+                                .tool
+                                .as_ref()
+                                .map(|tool| tool.tool_type.clone())
+                                .unwrap_or_default(),
+                            agent: op.agent.clone().unwrap_or_default(),
+                        },
+                    )
+                })
                 .collect(),
         ),
         _ => (Vec::new(), HashMap::new()),

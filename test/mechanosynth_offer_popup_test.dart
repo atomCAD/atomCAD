@@ -54,6 +54,9 @@ APIMechanosynthOffer _offer(
   int candidates = 1,
   bool exact = true,
   String note = '',
+  String toolType = '',
+  String toolState = '',
+  String toolReason = '',
 }) =>
     APIMechanosynthOffer(
       op: op,
@@ -71,13 +74,14 @@ APIMechanosynthOffer _offer(
         for (var i = 0; i < (fits ? candidates : 1); i++)
           _candidate(i, residual: residual, mirrored: i.isOdd),
       ],
-      // No tool annotation: an empty `toolType` is the state every row carries
-      // with the `tools` pin unwired.
-      toolType: '',
-      toolState: '',
-      toolReady: true,
-      toolReason: '',
-      offerable: fits,
+      // An empty `toolType` is the state every row carries with the `tools`
+      // pin unwired — no annotation at all, which is the modelling use.
+      toolType: toolType,
+      toolState: toolState,
+      toolReady: toolReason.isEmpty,
+      toolReason: toolReason,
+      // The kernel's own definition: it fits **and** its tool is ready.
+      offerable: fits && toolReason.isEmpty,
     );
 
 /// The kernel sorts applicable before near miss; the fixture arrives sorted,
@@ -404,6 +408,113 @@ void main() {
               of: find.byKey(const Key('mechanosynth_popup_row_dimerize_0')),
               matching: find.byIcon(Icons.circle)),
           findsOneWidget);
+    });
+  });
+
+  // ==========================================================================
+  // Tool-blocked rows (doc/design_mechanosynth_tools.md)
+  // ==========================================================================
+  //
+  // A `tip` operation needs its instrument bound, in the right state, and
+  // matching at its pose. A row that fits the host perfectly but whose tip is
+  // spent **cannot be committed**, so it belongs with the near misses rather
+  // than among the offers — and the thing it has to say is not a residual but
+  // a reason. These are the rules a regression would turn into "the popup
+  // offered me a step the kernel then refused".
+  group('tool-blocked rows', () {
+    final offers = <APIMechanosynthOffer>[
+      _offer('hdump', toolType: 'habst_tool', toolState: 'spent'),
+      _offer('expose'),
+      _offer('habst',
+          toolType: 'habst_tool',
+          toolState: 'spent',
+          toolReason: 'habst_tool is spent'),
+      _offer('habst_probe',
+          toolType: 'probe',
+          toolReason: 'no molecule tagged `probe` on the tools pin'),
+      _offer('si_donate', fits: false, residual: 0.31),
+    ];
+
+    testWidgets('a blocked row sits below the rule with the near misses',
+        (tester) async {
+      await _pump(tester, offers: offers);
+      final rows = _rowKeys(tester);
+      expect(rows.indexWhere((k) => k.endsWith('hdump_0')),
+          lessThan(rows.indexWhere((k) => k.endsWith('habst_0'))));
+      expect(rows.indexWhere((k) => k.endsWith('expose_0')),
+          lessThan(rows.indexWhere((k) => k.endsWith('habst_probe_0'))));
+      expect(find.byType(Divider), findsOneWidget);
+    });
+
+    testWidgets('the header counts what can be placed, not what fits',
+        (tester) async {
+      // Four of the five rows fit; two of them are blocked by their tool.
+      await _pump(tester, offers: offers);
+      expect(_header(tester), '2 operations apply to this Si');
+    });
+
+    testWidgets('the reason takes the badge slot, where the residual would be',
+        (tester) async {
+      await _pump(tester, offers: offers);
+      expect(find.text('habst_tool is spent'), findsOneWidget);
+      expect(find.text('no molecule tagged `probe` on the tools pin'),
+          findsOneWidget);
+    });
+
+    testWidgets('clicking a blocked row explains instead of placing',
+        (tester) async {
+      final harness = await _pump(tester, offers: offers);
+      await tester.tap(find.byKey(const Key('mechanosynth_popup_row_habst_0')));
+      await tester.pump();
+      expect(harness.chosen, isEmpty);
+      // The refusal names the fix, and the fix for a spent tool is a *step*,
+      // not an edit to the library.
+      expect(find.byKey(const Key('mechanosynth_popup_reason_habst')),
+          findsOneWidget);
+      expect(find.textContaining('recharge'), findsOneWidget);
+    });
+
+    testWidgets('a near miss keeps its own refusal, which names the library',
+        (tester) async {
+      await _pump(tester, offers: offers);
+      await tester
+          .tap(find.byKey(const Key('mechanosynth_popup_row_si_donate_0')));
+      await tester.pump();
+      expect(find.textContaining("loosen the library's tolerance"),
+          findsOneWidget);
+    });
+
+    testWidgets('a blocked row still previews, in the warning colour',
+        (tester) async {
+      // Seeing the ghost is half the answer to "why not here?", and a blocked
+      // row's placement is a real fit — it is simply not commitable.
+      final harness = await _pump(tester, offers: offers);
+      await tester.tap(find.byKey(const Key('mechanosynth_popup_row_habst_0')));
+      await tester.pump();
+      expect(harness.previews, ['habst']);
+    });
+
+    testWidgets('a ready tool is an annotation, not a chip', (tester) async {
+      // The panel's *Tools* readout is what says a recharge is due; a ready
+      // instrument on a row is reference, and the row has no width to spare.
+      await _pump(tester, offers: offers);
+      final info = tester.widget<MechanosynthNoteTooltip>(
+          find.byKey(const Key('mechanosynth_popup_info_hdump_0')));
+      expect(info.note, 'habst_tool · spent');
+    });
+
+    testWidgets('a bulk row carries no tool annotation at all', (tester) async {
+      await _pump(tester, offers: offers);
+      expect(find.byKey(const Key('mechanosynth_popup_info_expose_0')),
+          findsNothing);
+    });
+
+    testWidgets('with tools unwired the rows are what they always were',
+        (tester) async {
+      await _pump(tester);
+      expect(_header(tester), '3 operations apply to this Si');
+      expect(find.byKey(const Key('mechanosynth_popup_info_cl_donate_dimer_0')),
+          findsNothing);
     });
   });
 }

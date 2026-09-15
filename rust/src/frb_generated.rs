@@ -15006,6 +15006,8 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_t = <crate::api::common_api_types::APIVec3>::sse_decode(deserializer);
         let mut var_note = <String>::sse_decode(deserializer);
         let mut var_method = <String>::sse_decode(deserializer);
+        let mut var_toolType = <String>::sse_decode(deserializer);
+        let mut var_agent = <String>::sse_decode(deserializer);
         let mut var_phase = <String>::sse_decode(deserializer);
         let mut var_layer = <i32>::sse_decode(deserializer);
         let mut var_site = <i32>::sse_decode(deserializer);
@@ -15017,6 +15019,8 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             t: var_t,
             note: var_note,
             method: var_method,
+            tool_type: var_toolType,
+            agent: var_agent,
             phase: var_phase,
             layer: var_layer,
             site: var_site,
@@ -22678,6 +22682,8 @@ impl flutter_rust_bridge::IntoDart
             self.t.into_into_dart().into_dart(),
             self.note.into_into_dart().into_dart(),
             self.method.into_into_dart().into_dart(),
+            self.tool_type.into_into_dart().into_dart(),
+            self.agent.into_into_dart().into_dart(),
             self.phase.into_into_dart().into_dart(),
             self.layer.into_into_dart().into_dart(),
             self.site.into_into_dart().into_dart(),
@@ -29222,6 +29228,8 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <crate::api::common_api_types::APIVec3>::sse_encode(self.t, serializer);
         <String>::sse_encode(self.note, serializer);
         <String>::sse_encode(self.method, serializer);
+        <String>::sse_encode(self.tool_type, serializer);
+        <String>::sse_encode(self.agent, serializer);
         <String>::sse_encode(self.phase, serializer);
         <i32>::sse_encode(self.layer, serializer);
         <i32>::sse_encode(self.site, serializer);

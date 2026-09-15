@@ -201,6 +201,20 @@ viewport and the panel address the same node with the same
   selection; a family armed as a tool with the atoms it fits highlighted) —
   don't reintroduce this one as a stopgap. The panel's **Operations** list is a
   reference list, not a tool.
+- **The rule in the list is `offerable`, not `fits`.** Above it: what can be
+  committed. Below it, dimmed and unselectable-for-placing: near misses
+  (`fits == false`) *and* rows whose **tool is not ready** — a `tip` operation
+  whose instrument is unbound, in the wrong state, or not matching at its pose.
+  A tool-blocked row fits the host perfectly, so its residual says nothing
+  useful; the kernel's reason (*habst_tool is spent*) takes the badge slot
+  instead. Both kinds still preview, in the warning colour, because seeing the
+  ghost is half the answer to "why not here?"; both refuse a click with an
+  explanation, and the two explanations differ — a near miss's fix is an edit to
+  the *library*, a blocked tool's fix is a *step* (the recharge). The kernel
+  refuses both independently (`mechanosynth_edit_choose`), so the popup is the
+  explanation, never the enforcement. A **ready** tool is not worth a chip on a
+  300 px row: it goes into the row's ⓘ beside the library's note, and the
+  panel's *Tools* readout is what the user watches for a recharge.
 - **Orientation variants are rows, not a second list.** An offer carries *all*
   its candidates (`APIMechanosynthOffer.candidates`), and the popup expands any
   operation with more than one into a `_RowKind.group` header plus one

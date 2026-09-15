@@ -17784,19 +17784,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIAuthoredStep dco_decode_api_authored_step(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 10)
-      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+    if (arr.length != 12)
+      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
     return APIAuthoredStep(
       op: dco_decode_String(arr[0]),
       t: dco_decode_api_vec_3(arr[1]),
       note: dco_decode_String(arr[2]),
       method: dco_decode_String(arr[3]),
-      phase: dco_decode_String(arr[4]),
-      layer: dco_decode_i_32(arr[5]),
-      site: dco_decode_i_32(arr[6]),
-      residual: dco_decode_f_64(arr[7]),
-      exact: dco_decode_bool(arr[8]),
-      approximate: dco_decode_bool(arr[9]),
+      toolType: dco_decode_String(arr[4]),
+      agent: dco_decode_String(arr[5]),
+      phase: dco_decode_String(arr[6]),
+      layer: dco_decode_i_32(arr[7]),
+      site: dco_decode_i_32(arr[8]),
+      residual: dco_decode_f_64(arr[9]),
+      exact: dco_decode_bool(arr[10]),
+      approximate: dco_decode_bool(arr[11]),
     );
   }
 
@@ -23468,6 +23470,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_t = sse_decode_api_vec_3(deserializer);
     var var_note = sse_decode_String(deserializer);
     var var_method = sse_decode_String(deserializer);
+    var var_toolType = sse_decode_String(deserializer);
+    var var_agent = sse_decode_String(deserializer);
     var var_phase = sse_decode_String(deserializer);
     var var_layer = sse_decode_i_32(deserializer);
     var var_site = sse_decode_i_32(deserializer);
@@ -23479,6 +23483,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         t: var_t,
         note: var_note,
         method: var_method,
+        toolType: var_toolType,
+        agent: var_agent,
         phase: var_phase,
         layer: var_layer,
         site: var_site,
@@ -30178,6 +30184,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_api_vec_3(self.t, serializer);
     sse_encode_String(self.note, serializer);
     sse_encode_String(self.method, serializer);
+    sse_encode_String(self.toolType, serializer);
+    sse_encode_String(self.agent, serializer);
     sse_encode_String(self.phase, serializer);
     sse_encode_i_32(self.layer, serializer);
     sse_encode_i_32(self.site, serializer);

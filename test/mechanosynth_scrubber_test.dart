@@ -34,7 +34,7 @@ APIMechanosynthInfo _info({int count = 9, int applied = 3}) =>
       applied: applied,
       currentOp: 'habst',
       currentNote: '',
-      currentMethod: 'probe',
+      currentMethod: 'tip',
       currentPhase: 'etch',
       currentLayer: 0,
       currentSite: -1,
@@ -49,7 +49,11 @@ APIAuthoredStep _step(String op) => APIAuthoredStep(
       op: op,
       t: const APIVec3(x: 0, y: 0, z: 0),
       note: '',
-      method: 'probe',
+      // The method is the *operation's* kind, one of three words, and the tool
+      // type comes with it on a `tip` step — neither is something the step says.
+      method: 'tip',
+      toolType: 'habst_tool',
+      agent: '',
       phase: 'etch',
       layer: 0,
       site: -1,

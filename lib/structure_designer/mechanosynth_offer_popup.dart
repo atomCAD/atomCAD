@@ -13,15 +13,21 @@
 ///
 /// Three rules are load-bearing rather than decorative:
 ///
-/// - **Near-miss rows cannot be placed.** They are the `fits == false` entries,
+/// - **Blocked rows cannot be placed.** They are the `offerable == false`
+///   entries — a **near miss** (`fits == false`, shown with its residual) or a
+///   row whose **tool is not ready** (`fits == true`, shown with the kernel's
+///   reason where the residual would be: *habst_tool is spent*, *no molecule
+///   tagged `probe` on the tools pin*). Both sit
 ///   below a rule, dimmed, and with no apply button. They *are* selectable —
 ///   seeing the amber ghost is half the answer to "why not here?" — but a click
 ///   on one also replaces the row with the reason and inserts nothing. There is
 ///   deliberately no cast past the gate: an inexact step *inside* the gate
 ///   commits with a residual chip,
 ///   but outside it the library is stating it has not computed this situation,
-///   and the honest fixes are the two the message names. The kernel refuses the
-///   same thing independently (`mechanosynth_edit_choose`), so this is the
+///   and the honest fixes are the two the message names. A tool-blocked row's
+///   fix is different in kind — it is a *step*, the recharge, not an edit to
+///   the library — so the two refusals say different things. The kernel refuses
+///   both independently (`mechanosynth_edit_choose`), so this is the
 ///   explanation, not the enforcement.
 /// - **Hovering a row previews it, after a delay; clicking one places it.**
 ///   The preview is a real object in the scene — decorator ghosts, tessellated
@@ -99,11 +105,15 @@ class MechanosynthNoteTooltip extends StatelessWidget {
 }
 
 /// What the selected row would do, handed back so the host can ghost it.
-/// A near-miss preview is drawn in a warning colour; it is for showing, never
-/// for placing.
+/// A blocked row's preview is drawn in a warning colour; it is for showing,
+/// never for placing.
 class MechanosynthPreview {
   final String op;
   final int candidateIndex;
+
+  /// The row cannot be committed — an over-gate fit, or a fit whose tool is not
+  /// ready. Named for the first case, which was the only one when it was
+  /// written; the colour means "showing, not placing" in both.
   final bool nearMiss;
   final List<APIGhostAtom> ghost;
 
@@ -143,6 +153,28 @@ class _Row {
   final String subtitle;
   final String badge;
   final bool fits;
+
+  /// Whether the row can be **committed**: it fits geometrically *and*, when
+  /// its operation needs an instrument, that instrument is bound, in the right
+  /// state, and matching at its pose.
+  ///
+  /// This, not [fits], is what puts a row above or below the rule. A row that
+  /// fits a host perfectly but whose tip is spent cannot be placed either, and
+  /// listing it among the offers would mean listing something the kernel is
+  /// about to refuse.
+  final bool offerable;
+
+  /// The operation's instrument, when tools are wired and the operation is
+  /// `tip`. Empty means the row carries **no** tool annotation at all — the
+  /// state every row is in with the `tools` pin unwired, which is the
+  /// modelling use.
+  final String toolType;
+  final String toolState;
+
+  /// Why the tool is not ready, in the words the row shows where the residual
+  /// would be. Empty on a ready row.
+  final String toolReason;
+
   final double residual;
   final List<APIGhostAtom> ghost;
 
@@ -161,8 +193,12 @@ class _Row {
     required this.subtitle,
     required this.badge,
     required this.fits,
+    required this.offerable,
     required this.residual,
     required this.ghost,
+    this.toolType = '',
+    this.toolState = '',
+    this.toolReason = '',
     this.ordinal = 0,
     this.ordinalCount = 0,
   });
@@ -170,6 +206,17 @@ class _Row {
   /// Whether this row can be selected (and so previewed) or placed. A group
   /// header can do neither.
   bool get isSelectable => kind != _RowKind.group;
+
+  /// Whether the row sits below the rule: it cannot be committed, either
+  /// because it does not fit or because its tool is not ready.
+  bool get isBlocked => !offerable;
+
+  /// `habst_tool · charged`, for the annotation on a ready row. Empty when the
+  /// row carries no tool at all.
+  String get toolSummary {
+    if (toolType.isEmpty) return '';
+    return toolState.isEmpty ? toolType : '$toolType · $toolState';
+  }
 }
 
 class MechanosynthOfferPopup extends StatefulWidget {
@@ -319,14 +366,15 @@ class _MechanosynthOfferPopupState extends State<MechanosynthOfferPopup> {
   /// Every row, before filtering.
   ///
   /// An operation with more than one placement becomes a **group**: its name on
-  /// a header line, then one **variant** row per orientation. A near miss is
-  /// never expanded — its `candidates` hold the single rejected fit, and
-  /// offering a choice between placements of something that cannot be placed
-  /// would be nonsense.
+  /// a header line, then one **variant** row per orientation. A row that cannot
+  /// be committed is never expanded — a near miss's `candidates` hold the
+  /// single rejected fit, and a tool-blocked row's placements are all blocked
+  /// by the same tool, so offering a choice between them would be nonsense in
+  /// both cases.
   List<_Row> get _allRows {
     final rows = <_Row>[];
     for (final offer in widget.offers) {
-      final expand = offer.fits && offer.candidates.length > 1;
+      final expand = offer.offerable && offer.candidates.length > 1;
       if (!expand) {
         rows.add(_Row(
           kind: _RowKind.single,
@@ -334,14 +382,23 @@ class _MechanosynthOfferPopupState extends State<MechanosynthOfferPopup> {
           candidateIndex: 0,
           title: offer.op,
           subtitle: offer.note,
-          badge: offer.fits
-              ? _badge(
-                  exact: offer.exact,
-                  approximate: offer.approximate,
-                  residual: offer.bestResidual,
-                )
-              : '${formatNatural(offer.bestResidual, 2)} Å off',
+          // **The reason takes the badge slot.** A tool-blocked row fits, so
+          // its residual says nothing a user needs; what they need is *habst_tool
+          // is spent*, and that is the one place on the row wide enough for it.
+          badge: !offer.fits
+              ? '${formatNatural(offer.bestResidual, 2)} Å off'
+              : offer.offerable
+                  ? _badge(
+                      exact: offer.exact,
+                      approximate: offer.approximate,
+                      residual: offer.bestResidual,
+                    )
+                  : offer.toolReason,
           fits: offer.fits,
+          offerable: offer.offerable,
+          toolType: offer.toolType,
+          toolState: offer.toolState,
+          toolReason: offer.toolReason,
           residual: offer.bestResidual,
           ghost: offer.ghost,
         ));
@@ -356,6 +413,9 @@ class _MechanosynthOfferPopupState extends State<MechanosynthOfferPopup> {
         subtitle: offer.note,
         badge: '${offer.candidates.length} ways',
         fits: true,
+        offerable: true,
+        toolType: offer.toolType,
+        toolState: offer.toolState,
         residual: offer.bestResidual,
         ghost: const [],
       ));
@@ -374,6 +434,9 @@ class _MechanosynthOfferPopupState extends State<MechanosynthOfferPopup> {
             mirrored: candidate.mirrored,
           ),
           fits: true,
+          offerable: true,
+          toolType: offer.toolType,
+          toolState: offer.toolState,
           residual: candidate.residual,
           ghost: candidate.ghost,
           ordinal: i + 1,
@@ -416,7 +479,9 @@ class _MechanosynthOfferPopupState extends State<MechanosynthOfferPopup> {
       elementNumberToSymbol[widget.anchorAtomicNumber] ?? '?';
 
   String get _header {
-    final fitting = widget.offers.where((o) => o.fits).length;
+    // Counts what can be **placed**, not what fits: a row whose tip is spent is
+    // not one of "3 operations apply here" from the user's point of view.
+    final fitting = widget.offers.where((o) => o.offerable).length;
     if (fitting == 0) {
       return 'Nothing applies to this $_anchorSymbol';
     }
@@ -474,21 +539,24 @@ class _MechanosynthOfferPopupState extends State<MechanosynthOfferPopup> {
     }
     final row = rows[_highlight];
     if (!row.isSelectable) return;
-    final key = '${row.op}#${row.candidateIndex}#${row.fits}';
+    final key = '${row.op}#${row.candidateIndex}#${row.offerable}';
     if (key == _reportedKey) return;
     _reportedKey = key;
     widget.onPreview(MechanosynthPreview(
       op: row.op,
       candidateIndex: row.candidateIndex,
-      nearMiss: !row.fits,
+      // The warning colour means "this is being shown, not placed", which is
+      // as true of a spent tip's perfect fit as of an over-gate one.
+      nearMiss: row.isBlocked,
       ghost: row.ghost,
     ));
   }
 
   void _take(_Row row) {
-    if (!row.fits) {
+    if (row.isBlocked) {
       // The refusal, in place of the row: an over-gate fit says the library has
-      // not computed this environment, and the two honest fixes are naming it.
+      // not computed this environment, and a blocked tool says which state it
+      // is in. Both have honest fixes, and the message names them.
       setState(() => _refused = row.op);
       return;
     }
@@ -567,8 +635,10 @@ class _MechanosynthOfferPopupState extends State<MechanosynthOfferPopup> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final rows = _rows;
-    final applicable = rows.where((row) => row.fits).toList();
-    final nearMisses = rows.where((row) => !row.fits).toList();
+    // Above the rule: what can be committed. Below it: near misses *and*
+    // tool-blocked rows, which the kernel has already sorted after them.
+    final applicable = rows.where((row) => !row.isBlocked).toList();
+    final nearMisses = rows.where((row) => row.isBlocked).toList();
 
     return Focus(
       focusNode: _focusNode,
@@ -690,24 +760,41 @@ class _MechanosynthOfferPopupState extends State<MechanosynthOfferPopup> {
     );
   }
 
+  /// What the row's ⓘ says: the library's note, and the instrument when the
+  /// row carries a ready one. Empty means no icon at all.
+  static String _tooltipText(_Row row) {
+    final tool = row.offerable ? row.toolSummary : '';
+    if (tool.isEmpty) return row.subtitle;
+    return row.subtitle.isEmpty ? tool : '${row.subtitle}\n$tool';
+  }
+
   Widget _buildRow(_Row row, List<_Row> rows) {
     final scheme = Theme.of(context).colorScheme;
     final index = rows.indexOf(row);
     final highlighted = index == _highlight;
-    final dim = !row.fits;
+    final dim = row.isBlocked;
     final variant = row.kind == _RowKind.variant;
     final titleColor =
         dim ? scheme.onSurfaceVariant.withValues(alpha: 0.6) : scheme.onSurface;
 
     if (_refused == row.op && dim) {
+      // Two different refusals, and they have different fixes. An over-gate fit
+      // says the *library* has not computed this environment; a blocked tool
+      // says the instrument is in the wrong state, and the fix is a step, not
+      // an edit to the library.
+      final reason = row.fits
+          ? '${row.toolReason}. Author the step that puts it back in the '
+              'state this operation needs — a recharge is a placement on the '
+              'reservoir like any other.'
+          : '${formatNatural(row.residual, 2)} Å off; this host is not an '
+              'environment ${row.op} was calculated for. Add the variant, or '
+              "loosen the library's tolerance.";
       return Container(
         key: Key('mechanosynth_popup_reason_${row.op}'),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         color: scheme.errorContainer.withValues(alpha: 0.4),
         child: Text(
-          '${formatNatural(row.residual, 2)} Å off; this host is not an '
-          'environment ${row.op} was calculated for. Add the variant, or '
-          "loosen the library's tolerance.",
+          reason,
           style: TextStyle(fontSize: 11.5, color: scheme.onSurface),
         ),
       );
@@ -733,9 +820,10 @@ class _MechanosynthOfferPopupState extends State<MechanosynthOfferPopup> {
       onTap: () {
         if (!row.isSelectable) return;
         _cancelPendingHover();
-        // A near miss cannot be placed, so a click on one is still a question:
-        // it previews immediately and puts the reason in place of the row.
-        if (!row.fits) {
+        // A blocked row cannot be placed, so a click on one is still a
+        // question: it previews immediately and puts the reason in place of
+        // the row.
+        if (row.isBlocked) {
           _setHighlight(index);
           setState(() => _refused = row.op);
           return;
@@ -810,17 +898,24 @@ class _MechanosynthOfferPopupState extends State<MechanosynthOfferPopup> {
             // line of its own. At 300 px the note was always elided to a
             // fragment, so it read as clutter while saying nothing; here it is
             // whole, on demand, and the row is half as tall.
+            //
+            // **A ready row's instrument goes here too**, rather than into a
+            // chip of its own. The row already spends its width on a title, a
+            // badge and (for a variant) an indent, an arrow and an ordinal;
+            // and a ready tool is not news — the panel's *Tools* readout is
+            // what says a recharge is due. A *blocked* tool is news, and it
+            // gets the badge instead.
             SizedBox(
               // A variant carries no note of its own — the note is the
               // operation's, and it is on the group header — so it reclaims
               // the width instead of reserving it.
               width: variant ? 0 : 22,
-              child: row.subtitle.isEmpty
+              child: _tooltipText(row).isEmpty
                   ? null
                   : MechanosynthNoteTooltip(
                       key: Key(
                           'mechanosynth_popup_info_${row.op}_${row.candidateIndex}'),
-                      note: row.subtitle,
+                      note: _tooltipText(row),
                       child: Icon(
                         Icons.info_outline,
                         size: 14,

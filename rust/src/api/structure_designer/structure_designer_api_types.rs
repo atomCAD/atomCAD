@@ -1750,7 +1750,14 @@ pub struct APIAuthoredStep {
     pub op: String,
     pub t: APIVec3,
     pub note: String,
+    /// The **operation's** kind — `tip` / `bulk` / `spontaneous` — not
+    /// something the step states. Empty when the wired library does not have
+    /// the operation, which is also the state with no library wired.
     pub method: String,
+    /// The instrument a `tip` operation needs; empty otherwise.
+    pub tool_type: String,
+    /// The species or energy a `bulk` operation needs; empty otherwise.
+    pub agent: String,
     pub phase: String,
     /// `-1` for "no particular layer".
     pub layer: i32,

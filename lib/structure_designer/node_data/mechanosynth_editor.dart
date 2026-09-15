@@ -5,6 +5,7 @@ import 'package:flutter_cad/common/file_dialog_directory.dart';
 import 'package:flutter_cad/inputs/string_input.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/structure_designer/node_data/mechanosynth_scrubber.dart';
+import 'package:flutter_cad/structure_designer/node_data/mechanosynth_status.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
@@ -19,6 +20,13 @@ import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 /// field that edits something the node ignores is a trap. The **Convert to
 /// nodes** button is the one-press migration; nothing converts automatically.
 /// See `doc/design_mechanosynth_editor.md`.
+///
+/// **The *Tools* block and the *Feedstocks* line are derived and wire-only.**
+/// A tool is not chosen here: the operation names its type and the atom tags on
+/// the wired molecule name the instance, so the block reports what the last
+/// evaluation bound — index, type, pose residual, state — and offers nothing to
+/// edit. Both come from [MechanosynthToolsBlock], shared with the editor panel.
+/// See `doc/design_mechanosynth_tools.md`.
 ///
 /// **The scrubber and the phase list are not this panel's**, since Phase 4:
 /// they are [MechanosynthScrubber] / [MechanosynthChapterList], shared with the
@@ -233,21 +241,27 @@ class _MechanosynthEditorState extends State<MechanosynthEditor> {
     );
   }
 
-  /// The current step's metadata as chips. Each is omitted when the script says
-  /// nothing about it, so an unannotated build shows no row at all rather than
-  /// a line of placeholders.
+  /// The current step's metadata as chips, headed by the **method badge**.
+  ///
+  /// The method is not one chip among four: it is the operation's kind, the
+  /// only one of these the step does not state, and it decides what the chip
+  /// beside it means — the instrument for a `tip` step, the agent for a `bulk`
+  /// one. So it gets the coloured badge and the rest stay plain chips. Each is
+  /// omitted when the script says nothing about it, so an unannotated build
+  /// shows no row at all rather than a line of placeholders.
   Widget _buildMetadataChips(BuildContext context) {
     final info = widget.info;
     if (info == null || info.count == 0 || _previewStep != null) {
       return const SizedBox.shrink();
     }
     final labels = <String>[
-      if (info.currentMethod.isNotEmpty) info.currentMethod,
       if (info.currentPhase.isNotEmpty) info.currentPhase,
       if (info.currentLayer >= 0) 'layer ${info.currentLayer}',
       if (info.currentSite >= 0) 'site ${info.currentSite}',
     ];
-    if (labels.isEmpty) return const SizedBox.shrink();
+    if (labels.isEmpty && info.currentMethod.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
     final scheme = Theme.of(context).colorScheme;
     return Padding(
@@ -255,7 +269,17 @@ class _MechanosynthEditorState extends State<MechanosynthEditor> {
       child: Wrap(
         spacing: 4.0,
         runSpacing: 4.0,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
+          if (info.currentMethod.isNotEmpty)
+            MechanosynthMethodBadge(
+              key: const Key('mechanosynth_method_badge'),
+              method: info.currentMethod,
+              detail: methodDetail(
+                toolType: info.currentToolType,
+                agent: info.currentAgent,
+              ),
+            ),
           for (final label in labels)
             Container(
               padding:
@@ -353,6 +377,15 @@ class _MechanosynthEditorState extends State<MechanosynthEditor> {
           const SizedBox(height: 4),
           _buildCurrentStep(context),
           _buildMetadataChips(context),
+          // The wired participants, below the step readout. Both lists are
+          // derived and wire-only: a tool is identified by the atom tags on
+          // the molecule and a reservoir by being wired, so there is nothing
+          // here to set.
+          MechanosynthToolsBlock(
+            tools: info?.tools ?? const <APIMechanosynthToolRow>[],
+            feedstocks:
+                info?.feedstocks ?? const <APIMechanosynthFeedstockRow>[],
+          ),
           MechanosynthChapterList(
             chapters: info?.chapters ?? const <APIMechanosynthChapter>[],
             applied: _previewStep ?? info?.applied ?? 0,

@@ -581,7 +581,17 @@ class APIAuthoredStep {
   final String op;
   final APIVec3 t;
   final String note;
+
+  /// The **operation's** kind — `tip` / `bulk` / `spontaneous` — not
+  /// something the step states. Empty when the wired library does not have
+  /// the operation, which is also the state with no library wired.
   final String method;
+
+  /// The instrument a `tip` operation needs; empty otherwise.
+  final String toolType;
+
+  /// The species or energy a `bulk` operation needs; empty otherwise.
+  final String agent;
   final String phase;
 
   /// `-1` for "no particular layer".
@@ -605,6 +615,8 @@ class APIAuthoredStep {
     required this.t,
     required this.note,
     required this.method,
+    required this.toolType,
+    required this.agent,
     required this.phase,
     required this.layer,
     required this.site,
@@ -619,6 +631,8 @@ class APIAuthoredStep {
       t.hashCode ^
       note.hashCode ^
       method.hashCode ^
+      toolType.hashCode ^
+      agent.hashCode ^
       phase.hashCode ^
       layer.hashCode ^
       site.hashCode ^
@@ -635,6 +649,8 @@ class APIAuthoredStep {
           t == other.t &&
           note == other.note &&
           method == other.method &&
+          toolType == other.toolType &&
+          agent == other.agent &&
           phase == other.phase &&
           layer == other.layer &&
           site == other.site &&

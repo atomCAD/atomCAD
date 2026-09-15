@@ -9,7 +9,10 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'structure_designer_api_types.dart';
 
 // These functions are ignored because they are not marked as `pub`: `authored_view`, `candidates_view`, `ghost`, `offers_view`, `vec3`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `OpFacts`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `mechanosynth_edit_data`
+// These functions are ignored (category: IgnoreBecauseOwnerTyShouldIgnore): `default`
 
 APIMechanosynthEditData? getMechanosynthEditData(
         {required Uint64List scopePath, required BigInt nodeId}) =>

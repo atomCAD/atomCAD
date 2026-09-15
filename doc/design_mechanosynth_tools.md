@@ -1,8 +1,9 @@
 # Design: tool molecules in `mechanosynth`
 
 Status: **draft 2026-09-14, revised 2026-09-15 (twice); Phase 1 (schema and
-engine) implemented 2026-09-15, Phase 2 (nodes, records, API) implemented
-2026-09-15, and the document corrected against both. Phases 3-4 open.**
+engine), Phase 2 (nodes, records, API) and Phase 3 (panel) implemented
+2026-09-15, and the document corrected against all three. Phase 4 (guide and
+walkthrough) open, and the manual walkthrough in §Phase 3 is still pending.**
 Building Phase 1 falsified two things this document asserted, and both are
 rewritten where they are stated rather than noted here: **a pattern cannot
 assert an atom's absence**, so a tool wired carrying cargo an operation's tool
@@ -15,7 +16,11 @@ editor's two passes need one scene**, which `replay_scene` cannot express, so
 the engine exposes `build_scene` and `replay_steps` beside it (§The scene); and
 **the last-good-state override is not a new hook** but the per-pin display
 override `EvalOutput` already carries, while what the node stores is the whole
-`Scene` rather than a structure (§mechanosynth_edit).
+`Scene` rather than a structure (§mechanosynth_edit). Building Phase 3 falsified
+one more: **there is no armed strip and no armed repeat flow** — that mode was
+removed from the editor before this document was written — so a spent tool is
+discovered on the *Tools* readout or on a blocked offer row, never on a failing
+repeat pick (§mechanosynth_edit, §Tool status).
 The first revision made three things structural: operations declare their
 method; one operation is one instrument; tools are identified by atom tags
 and posed by four tagged atoms, so no step names a tool and nothing is
@@ -899,7 +904,10 @@ the same clamp. An evaluation error reaches all three pins.
 tool (index, the type its tag names, pose residual, current state), and a
 *Feedstocks* line — one entry per wired reservoir with its atom count at
 the step — read from the evaluated scene through `get_mechanosynth_info`.
-The current step's chips show the method kind and the tool type or agent.
+The method leads the chip row as a **badge** coloured by kind, with the tool
+type or the agent beside it; `phase`, `layer` and `site` stay plain chips
+behind it. The split is not decoration: the method is the only one of the four
+the step does not state, and it decides what the field beside it means.
 Nothing is editable — the pins are wire-only and every field is derived.
 
 **Subtitle** unchanged.
@@ -939,30 +947,65 @@ because the operation names its type and the binding names the molecule.
 **The `method` chip goes**: the row shows the operation's kind as a
 read-only badge, coloured by kind, with the tool type or agent beside it.
 
+**The badge is on the cursor row, not on every row** (Phase 3). The step list
+is fifty rows in a 300 px panel, each already carrying a drag handle, a number,
+the operation name, a note, a warning triangle and two icon buttons; a badge
+per row would take the width the operation name needs. So every row keeps the
+**dot** in its kind's colour — which is what makes a block's shape readable at
+a glance — and the badge with its instrument or agent opens with the metadata
+fields, on the one row the cursor is on. That is also the row where it replaces
+something: the fields beside it are editable and the badge deliberately is not.
+
 **Tool-aware offers.** When tools are wired, `applicable_ops` also answers
 "is the tool ready" for every `tip` operation that fits the clicked atom:
 the operation's tool type must be bound, its `from` must agree with the
 tool's state, and its tool-side `before` must match at the tool's pose —
 one nearest-atom match of a few atoms per operation, no search. A row whose
 tool is not ready is shown **below the rule with the near misses, dimmed and
-unselectable**, with the reason where the residual would be: *habst_tool
-is spent*, *no molecule tagged `probe` on the tools pin*. It is not
-selectable for the same reason a near miss is not: it cannot be committed,
-because its tool side would not match. A `bulk` or `spontaneous` row is
-never affected. With tools unwired no row carries a tool annotation, which
-is the modelling use exactly as it is today.
+not placeable**, with the reason where the residual would be: *habst_tool
+is spent*, *no molecule tagged `probe` on the tools pin*. It cannot be
+committed for the same reason a near miss cannot: its tool side would not
+match.
 
-The repeat flow needs no change: after a commit the same operation stays
-armed, and when its tool is now spent the next pick fails with the state in
-the message and opens the offer popup at that atom, where the recharge
-operation is the applicable row if the atom is a feedstock atom — so "click
-the dump" is the whole instruction.
+**"Not placeable" is not "not selectable"** (Phase 3, correcting this
+paragraph's word for it). A near-miss row has always been *selectable* in the
+popup — seeing the amber ghost is half the answer to "why not here?" — and a
+click on one previews it and puts the reason in place of the row instead of
+committing. A tool-blocked row behaves identically, and the two reasons differ
+in the fix they name: a near miss's fix is an edit to the **library** (add the
+variant, or loosen the tolerance), a blocked tool's fix is a **step** (the
+recharge). So the rule the list splits on is
+`Applicability::offerable()` — fits *and* tool ready — rather than `fits`, and
+the header counts what can be placed rather than what fits.
+
+A `bulk` or `spontaneous` row is
+never affected. With tools unwired no row carries a tool annotation, which
+is the modelling use exactly as it is today. A row whose tool *is* ready
+carries its annotation in the row's ⓘ beside the library's note rather than on
+the row itself (Phase 3): at 300 px a variant row already spends its width on
+an indent, a rule, an arrow, an ordinal, a title and a badge, and a ready
+instrument is reference — the panel's *Tools* readout is what the user watches
+for a recharge. The badge slot is reserved for a *blocked* tool's reason, which
+is what the design wanted it for.
+
+**There is no repeat flow to change** (Phase 3, correcting this paragraph's
+assumption of one). This document was written against an editor with an
+*armed* mode — commit an operation and the next click places it again — and
+that mode was removed before this design started: the library names one
+operation per host *environment*, so "the same operation again" is usually
+wrong at the next site, and a click whose meaning depends on invisible state
+costs more than the clicks it saves (`lib/structure_designer/AGENTS.md`
+§Mechanosynthesis placement tool). A viewport click is always the atom-first
+question, so a spent tool cannot be discovered by a failing repeat pick; it is
+discovered on the *Tools* readout, or on the blocked row of the next offer
+list. "Click the dump" is still the whole instruction for the recharge.
 
 **Tool status.** The panel's steps list gains a one-line *Tools* readout
 above the rows — each bound tool's type and its state at the cursor, *habst_tool
-· spent* — refreshed on every cursor move and commit, and the armed strip in
-the viewport carries the armed operation's tool and state beside its name.
-That is what tells the user a recharge is due before the offers do.
+· spent* — refreshed on every cursor move and commit. That is what tells the
+user a recharge is due before the offers do, and with no armed strip to carry
+it (see above) it is the **only** place that does, which is why it is a line of
+its own rather than a fold-out.
 
 **A failing cursor step shows the last good state — in the viewport, not
 on the pins.** When the block fails at the cursor step, `result` and
@@ -1009,7 +1052,18 @@ failing and a downstream replayer must see the same steps throughout. An
 three pins, because then there is no prefix to concatenate.
 
 The failing row carries the error chip
-with the engine's message, and the panel banner names it.
+with the engine's message, and the panel banner names it. The row is the
+**cursor** row — the cursor step is the last one the block replayed, so there is
+no other row the failure could belong to — and the chip is keyed on the last
+good state being present rather than on there being an error at all, because an
+*input* failure has an error and no row (Phase 3, §Phase 3).
+
+The panel also says, in a line of its own, **what the viewport is showing**:
+*Showing the last good state — 412 atoms, before step 7* (Phase 3; this document
+did not ask for it). Without it the view is a lie by omission. The pins carry an
+error, so a user who knows the rules expects an empty viewport, and the
+structure in front of them is the state *before* the failing step rather than
+after it; nothing else on screen says which.
 
 **Every kind is authored the same way in milestone 1**: click an atom,
 choose the row. A bulk step is one site's share of an exposure and is
@@ -1507,18 +1561,70 @@ which covers a tip step, a dump onto the reservoir and the state round
 trip. Step 4 is `habst_probe` and would need a second tool molecule for no
 extra coverage.
 
-### Phase 3 — Panel
+### Phase 3 — Panel — **DONE**
+
+Implemented 2026-09-15. Five things are worth recording because they are
+**not** what the list assumed:
+
+- **There is no armed strip**, so the item that put the tool and its state on
+  one is void. The editor's armed mode was removed before this design was
+  written and this document did not notice; both places that assumed it are
+  rewritten above (§mechanosynth_edit, §Tool status). The consequence is that
+  the *Tools* readout is the **only** surface that says a recharge is due
+  before an offer list does, which is why it is an always-visible line.
+- **The method badge needed two fields the API did not have.** `method`
+  reached `APIAuthoredStep` in Phase 2 as a lookup of the operation's kind in
+  the wired library, but the badge shows the instrument or the agent beside
+  the kind, and neither was carried. `APIAuthoredStep` gains `tool_type` and
+  `agent`, derived from the same library lookup — three facts about the
+  operation, resolved in one place (`OpFacts` in `mechanosynth_edit_api.rs`,
+  `frb(ignore)`d: codegen walks every type declared under `api/` and would
+  otherwise generate a Dart twin for a local helper).
+- **A *ready* tool is not worth a chip on an offer row.** The design asked for
+  the tool annotation on the row; at 300 px the row already spends its width on
+  a title, a badge and — for a variant — an indent, a rule, an arrow and an
+  ordinal. A *blocked* tool takes the badge slot, which is what the design
+  wanted it for; a ready one goes into the row's ⓘ beside the library's note,
+  because the *Tools* readout is what the user is actually watching for a
+  recharge. A blocked row is *dimmed and not placeable*, which is not the same
+  as *unselectable* — §Tool-aware offers is rewritten where it said so.
+- **The tool-atom refusal message was not Phase 3 work.** It is in the list, but
+  the kernel's refusal already reaches the user: `mechanosynth_edit_offers`
+  returns it as an error and the viewport shows it on the error snackbar, which
+  is the existing surface for a failed placement call. Adding a second surface
+  for it in the panel would have said the same thing further from the click.
+- **The failing row's error chip keys on `last_good_atom_count`, not on
+  `last_error`.** An *input* failure — a bad library, an erroring prefix — sets
+  `last_error` too, and it belongs to no row. The discriminator is the one the
+  node already draws: a block failure records the scene before the failing step
+  (`last_good_atom_count >= 0`), an input failure records `None` because nothing
+  ran. The banner at the foot of the panel carries the input failure alone.
+
+The method colours are **literal, not hashed**. The vocabulary is closed and
+three words long now, so the hash the editor carried (written when `method` was
+a free-text field with a long tail — `probe`, `relax`, …) would have given
+`tip` a colour by accident and given one to a library's typo as well. Unknown
+kinds get none.
 
 The *Tools* block and the *Feedstocks* line on the replayer, the derived
 chips on both panels, the method badge replacing the chip, the tool-atom
 refusal message, the Tools listing on `ops_library`; in the editor the
 tool-blocked section of the
 offer popup with its reasons, the *Tools* readout above the steps list, the
-tool and state on the armed strip, and the error chip with the last good
-state in the viewport.
+error chip with the last good state in the viewport.
 
 *Tests:* `flutter analyze` clean of new warnings; the rest is thin editor UI
-under `feedback_manual_test_for_editor_ui`. The **manual walkthrough**
+under `feedback_manual_test_for_editor_ui`. One exception earned its tests:
+the offer popup already has a harness, and "the popup offered me a step the
+kernel then refused" is a correctness bug rather than a cosmetic one, so
+`test/mechanosynth_offer_popup_test.dart` gains a *tool-blocked rows* group —
+a blocked row sorts below the rule with the near misses, the header counts
+what can be **placed** rather than what fits, the reason takes the badge slot,
+a click explains instead of placing and the two refusals say different things
+(a near miss names the library, a blocked tool names the recharge), a blocked
+row still previews in the warning colour, a ready tool is an annotation rather
+than a chip, a `bulk` row carries none, and with `tools` unwired every row is
+what it always was. The **manual walkthrough**
 (human): tag a tool molecule placed by hand — the type on the molecule,
 `apex` and three legs in `atom_edit` — and see it bound, with its residual
 and state, in the panel; wire it twice and read the duplicate error; move
@@ -1585,7 +1691,8 @@ The guide sections above, the screenshot slot, the manual checklist.
   test the engine owns — before it can be trusted; until then bulk steps are
   authored one by one and the animation plays them together.
 - **Settle** (deferred). After a commit, offer the spontaneous operations
-  that fit at the atoms the step touched — on the armed strip with the
+  that fit at the atoms the step touched — in a strip of its own (there is no
+  armed strip to hang it on) with the
   after-state ghosted, applied only on Enter, re-offered after each one so a
   chain is a series of keystrokes, never automatic. The open point is where
   to look: the touched atoms are the obvious neighbourhood, and whether it

@@ -5,6 +5,7 @@ import 'package:flutter_cad/common/file_dialog_directory.dart';
 import 'package:flutter_cad/common/number_format.dart';
 import 'package:flutter_cad/inputs/string_input.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
+import 'package:flutter_cad/structure_designer/node_data/mechanosynth_status.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
@@ -118,6 +119,13 @@ class _FileRow extends StatelessWidget {
 /// [APIOpsLibraryData] carries a summary built kernel-side. It is also how a
 /// user learns an operation's name, which is what the placement tool will ask
 /// for.
+///
+/// **The tool types come above the operations** because they are the half a
+/// design has to act on. A `tip` operation names the instrument it needs, and
+/// the engine finds that instrument by **atom tags** — the type's own name on
+/// the molecule and one frame tag on each of four atoms. Those tags are listed
+/// here, and nowhere else in the application, so this section is the
+/// instruction for making a molecule usable as a tool.
 class OpsLibraryEditor extends StatefulWidget {
   final BigInt nodeId;
   final APIOpsLibraryData? data;
@@ -188,6 +196,20 @@ class _OpsLibraryEditorState extends State<OpsLibraryEditor> {
               style: captionStyle?.copyWith(color: color),
             ),
             const SizedBox(height: 6),
+            // The tool types come **above** the operations, because they are
+            // what a design has to act on: the frame tags listed here are the
+            // tags a tool molecule must carry before any `tip` operation in
+            // this library can be performed at all.
+            if (data.tools.isNotEmpty) ...[
+              Text('Tool types',
+                  key: const Key('ops_library_tools_heading'),
+                  style: captionStyle?.copyWith(color: color)),
+              const SizedBox(height: 3),
+              for (final tool in data.tools) _buildToolTypeRow(context, tool),
+              const SizedBox(height: 8),
+              Text('Operations', style: captionStyle?.copyWith(color: color)),
+              const SizedBox(height: 3),
+            ],
             for (final op in data.ops) _buildOpRow(context, op),
           ],
           for (final warning in data.warnings)
@@ -217,8 +239,62 @@ class _OpsLibraryEditorState extends State<OpsLibraryEditor> {
     );
   }
 
+  /// One tool type: its name, its state vocabulary, and the four atom tags a
+  /// design must apply. The note is on a second line when the file states one —
+  /// it is the only place a user reads what the instrument *is*.
+  ///
+  /// The first state is the one every bound tool starts in, which is why the
+  /// list is printed in file order rather than sorted.
+  Widget _buildToolTypeRow(BuildContext context, APIOpsLibraryToolType tool) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      key: Key('ops_library_tool_${tool.name}'),
+      padding: const EdgeInsets.only(bottom: 4.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: SelectableText(
+                  tool.name,
+                  style: TextStyle(fontSize: 12.0, color: scheme.onSurface),
+                  maxLines: 1,
+                ),
+              ),
+              if (tool.states.isNotEmpty)
+                Text(
+                  tool.states.join(' / '),
+                  style:
+                      TextStyle(fontSize: 11.0, color: scheme.onSurfaceVariant),
+                ),
+            ],
+          ),
+          if (tool.note.isNotEmpty)
+            SelectableText(
+              tool.note,
+              style: TextStyle(
+                fontSize: 11.0,
+                color: scheme.onSurfaceVariant,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          if (tool.frameTags.isNotEmpty)
+            SelectableText(
+              'tags: ${tool.name}, ${tool.frameTags.join(', ')}',
+              style: TextStyle(fontSize: 11.0, color: scheme.onSurfaceVariant),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildOpRow(BuildContext context, APIOpsLibraryEntry op) {
     final scheme = Theme.of(context).colorScheme;
+    // The method is the operation's own fact, so it is stated on the row rather
+    // than inferred from the tool section; the detail beside it is the
+    // instrument for `tip` and the agent for `bulk`.
+    final detail = methodDetail(toolType: op.toolType, agent: op.agent);
     return Padding(
       padding: const EdgeInsets.only(bottom: 2.0),
       child: Row(
@@ -230,6 +306,11 @@ class _OpsLibraryEditorState extends State<OpsLibraryEditor> {
               maxLines: 1,
             ),
           ),
+          if (op.method.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(right: 6.0),
+              child: MechanosynthMethodBadge(method: op.method, detail: detail),
+            ),
           if (op.chiral)
             Padding(
               padding: const EdgeInsets.only(right: 6.0),
