@@ -1,14 +1,19 @@
 # Design: tool molecules in `mechanosynth`
 
-Status: **draft 2026-09-14, revised 2026-09-15, not implemented.** The
-revision made four things structural: operations declare their method; one
-operation is one instrument; tools are identified by atom tags and posed by
-four tagged atoms, so no step names a tool and nothing is searched; and
-feedstocks are part of the workpiece, so the node has one `base` pin and one
-`tools` pin. **The build script loses a field and gains none.** Backward
-compatibility with the files and libraries that exist today is deliberately
-not a goal — one colleague uses the feature, the libraries are generated,
-and the generator is regenerated with the format.
+Status: **draft 2026-09-14, revised 2026-09-15 (twice), not implemented.**
+The first revision made three things structural: operations declare their
+method; one operation is one instrument; tools are identified by atom tags
+and posed by four tagged atoms, so no step names a tool and nothing is
+searched. The second, after review, gave feedstocks their own pin again —
+a `feedstocks: [HasAtoms]` input beside `tools` — because the
+**workpiece alone** has to be an output, and only the engine knows which
+structure a step's added atoms belong to; it also fixed the frame example,
+the bulk-order semantics, the phase rule on the array pins, the tool-side
+containment check, and made `scene` the pin a placed node displays. **The
+build script loses a field and gains none.** Backward compatibility with
+the files and libraries that exist today is deliberately not a goal — one
+colleague uses the feature, the libraries are generated, and the generator
+is regenerated with the format.
 
 Extends the `mechanosynth` subsystem
 (`rust/crates/atomcad-crystolecule/src/mechanosynth/`,
@@ -76,11 +81,17 @@ In scope:
   *type*, and a **tool side** on every `tip` operation: a before/after
   rewrite of the tool in the tool's own local frame, plus an optional
   symbolic state transition;
-- one appended input pin on `mechanosynth` and `mechanosynth_edit`,
+- two appended input pins on `mechanosynth` and `mechanosynth_edit`:
+  `feedstocks: [HasAtoms]`, the reservoirs a build draws on, and
   `tools: [HasAtoms]`, whose elements are **bound to tool types by an atom
   tag** and posed by **four tagged atoms**, one molecule per type;
-- the engine replaying one **scene** — the base and the tools merged — and a
-  `scene` output pin carrying it for display;
+- the engine replaying one **scene** — the base, the feedstocks and the
+  tools merged, every atom mapped to its **participant** — with `result`
+  staying **the workpiece alone** and an appended `scene` output carrying
+  the merged structure for display;
+- a **display default**: both nodes show `scene` when placed, through one
+  small policy hook beside the existing "all pins" opt-in, with pin order
+  unchanged;
 - the tool's pose in the design solved from its own structure, never entered;
 - the `step` record reporting the method, the tool type and state, and the
   agent;
@@ -88,8 +99,8 @@ In scope:
   readout and a last-good-state view of a failing cursor step, so that a
   tool-aware sequence is authored under guidance rather than by trial.
 
-**Feedstocks need nothing from this design.** They are part of `base` —
-§Decisions says how — and a step that draws on one is an ordinary step.
+A step that draws on a reservoir is an ordinary step; nothing in the build
+script says which structure a step acts on, the match does.
 
 **The build script gains no field.** A step stays `op`, `t`, `r`, `note`,
 `phase`, `layer`, `site`; `method` leaves it. That is a consequence of the
@@ -122,48 +133,58 @@ library expects. The nearest-atom match is not graph matching; it is exactly
 the positional sanity check a tool model wants, and it costs nothing to
 reuse.
 
-### Feedstocks are part of the base
+### Feedstocks have their pin, because the workpiece is an output
 
 A feedstock is not different in kind from the workpiece: a step rewrites it
 with the same operations, through the same engine, at a position its `t`
-names. Nothing the node could do with a feedstock — count it, tag it, keep
-it out of an output — is anything it does not already do, or that the
-network cannot do beside it. So the node has **one `base` pin**, and a
-feedstock is whatever part of the base the process draws on.
+names. What *is* different is what the user wants out: the **workpiece
+alone** — to export it, relax it, count it, feed it to the next build —
+without the hydrogen dump beside it. So the node has a **`feedstocks:
+[HasAtoms]`** input beside `tools`, `result` is the base after the step
+and nothing else, and `scene` is the base, the feedstocks and the tools
+merged.
 
-The practice, with the nodes that exist:
+The engine already builds the thing this needs. A tool is a **participant**
+of the scene, every atom is mapped to its participant, and an atom a step
+adds is entered under the participant its match landed in. A feedstock is
+one more participant kind. That is the whole cost: one enum variant, one
+error, one tag, one pin per node, one panel line.
 
 - **A reservoir that is a separate molecule** — a hydrogen dump, a source
-  cluster — is placed with the ordinary transform nodes and joined to the
-  workpiece with **`atom_union`** before `base`. A step whose `t` lies on it
-  matches there; a reservoir running out is an ordinary match failure.
+  cluster — is placed with the ordinary transform nodes and wired to
+  `feedstocks`. A step whose `t` lies on it matches there; a reservoir
+  running out is an ordinary match failure, and the error's participant
+  label says which reservoir.
 - **A reservoir that is a region of the workpiece** — a sacrificial terrace
   the tool picks atoms from — needs nothing at all; it is already in the
-  base.
-- **Telling feedstock atoms apart** — to colour them, to count what a build
-  took from them, to drop them from an export — is a **`tag`** before the
-  union. Tags survive `atom_union`, `apply_style` colours by them, and
-  `filter` removes by them. This also names the reservoir, which no index
-  ever could.
+  base, and its atoms are workpiece atoms.
+- **Telling reservoirs apart in the scene** is the tag `ms_feedstock` the
+  scene paints, plus whatever `tag` the user put on the molecule before
+  wiring it — tags survive the merge, `apply_style` colours by them, and a
+  user's own tag names the reservoir, which no index ever could.
 
-Rejected: **a `feedstocks: [HasAtoms]` pin** beside `tools`. Considered at
-length, and it was the shape of two earlier revisions. It would have carried
-a participant tag, a derived "which structure did this step act on" field
-on the record, panel rows and its own error for a step spanning two
-structures — every one of which restates something a tag or a match already
-knows, at the price of a pin, a tag slot, a record field and a quarter of
-the tests. The one convenience it offered, not having to add the union node,
-is one node in a network that already has a dozen. Also rejected: **`base`
-as `[HasAtoms]` with the workpiece first** — it loses the `result` type and
-dies on the array system's single-phase rule the moment a Crystal workpiece
-meets a Molecule reservoir; `atom_union` has the same rule and the same
-answer, convert first.
+Rejected: **folding the feedstocks into `base` with `atom_union` and
+recovering the workpiece with `filter` by tag** — the shape of the previous
+revision of this document. It was one node fewer, and it does not work: the
+atom a step *adds* to the reservoir carries no tag, so an H dumped onto the
+reservoir survives the filter and turns up in the "workpiece". Only the
+engine knows, at match time, which structure a step acted on, and a
+participant is the record of that. Also rejected: **`base` as `[HasAtoms]`
+with the workpiece first** — it loses the `result` type and dies on the
+array system's single-phase rule the moment a Crystal workpiece meets a
+Molecule reservoir; the answer is the same as for `tools`, convert first.
+And **a participant field on the `step` record**: which reservoir a step
+drew on is readable from the error, the panel and the scene's tags, and a
+derived field on every step for a fact only recharges have is not worth
+its slot. Deferred, not rejected: **a `feedstocks` array output** with the
+reservoirs after the step (§Follow-ups).
 
 ### The library envisions the tools; the design supplies them, tagged
 
-Tools are the one kind of molecule the network *cannot* fold into the base:
-they need a pose, a state that changes with every step, exclusion from
-`result`, and a refusal to be placed on. So they have their pin. The
+Tools need more from the node than a reservoir does: a pose, a state that
+changes with every step, and a refusal to be placed on, besides the
+exclusion from `result` the two share. So they have their own pin, and
+the library has to describe them. The
 library's `tools` section names every tool type the process uses and, per
 type, a **frame**: four or more named atoms with positions in the tool's
 local coordinate system, the one named `apex` at the origin. A step never
@@ -190,8 +211,11 @@ each named atom a local position; the tags give each a design position; the
 rigid fit of the correspondences — Kabsch, the same fit the placement engine
 uses — is the tool's transform, and its residual against the library
 tolerance is the check that the molecule really has the geometry the library
-was computed for. Four non-coplanar correspondences determine a proper
-rotation uniquely, so there is no mirror to consider, no candidate list, no
+was computed for. Three non-collinear correspondences already fix a proper
+rotation; the fourth, off their plane, is what makes a molecule that is the
+mirror image of the library's fail the residual instead of binding
+mirrored — a triangle is congruent to its mirror image in space, a
+tetrahedron is not. So there is no mirror rule, no candidate list, no
 ambiguity and no sweep: a tip of thousands of atoms binds in the time it
 takes to look up four tags.
 
@@ -341,7 +365,7 @@ and what the animation milestone will do with it. The library adds the
 | kind | who performs it | what one step is | sequencing | animation (milestone 2) |
 |---|---|---|---|---|
 | `tip` | a positional probe — the operation's tool type; a bare probe is a tool type with an empty tool side | one visit of one tool to one site, at the step's `t`/`r` | strictly sequential | the tool travels from its parked pose to the `approach` pose, the rewrite happens, the tool retracts |
-| `bulk` | an exposure of the whole workpiece — a gas, a dose, light; named by the operation's `agent` | one site's share of an exposure | a maximal run of consecutive `bulk` steps with the same `agent` is one **event**; their order within the event carries no meaning, and a generator sorts them for stable files | the event plays as one: the agent arrives everywhere at once, every site of the event reacts together |
+| `bulk` | an exposure of the whole workpiece — a gas, a dose, light; named by the operation's `agent` | one site's share of an exposure | a maximal run of consecutive `bulk` steps with the same `agent` is one **event**, the unit the panel and the animation group by; the steps are still replayed one after another in file order | the event plays as one: the agent arrives everywhere at once, every site of the event reacts together |
 | `spontaneous` | nothing external — the workpiece rearranges by itself | one rearrangement enabled by the step before it | belongs to the **event of the preceding non-spontaneous step**; a spontaneous step at the very start of a script is its own event | plays as the settling that follows its enabling step, before the next tool visit or exposure |
 
 Three consequences, which are the reason the vocabulary is closed:
@@ -361,6 +385,18 @@ Three consequences, which are the reason the vocabulary is closed:
   follow from the sequence by the two rules in the table, and the panel's
   chapter machinery can show them when milestone 2 wants them. Milestone 1
   defines the rules, exposes the fields, and does no grouping.
+- **An event is a display grouping, not a replay semantics.** The replay is
+  sequential for every kind: each step's `before` is matched against the
+  scene as the steps before it left it, and two bulk steps on neighbouring
+  sites are not independent — one can add the atom the other's `*` slot
+  then finds, or delete a neighbour the other's frame names. So the order of
+  the steps inside an event **is** their meaning, exactly as for tip steps;
+  a generator that wants a stable file sorts its sites *before* it replays
+  them, and a re-sort of an existing file is an edit that has to replay
+  again. The animation shows an event as one arrival because that is what
+  an exposure looks like, and it shows the scene after the event, which is
+  the sequential result; nothing in milestone 2 may assume the steps
+  commute.
 
 What is deliberately *not* in the vocabulary: the instrument labels the
 earlier libraries used as free strings (`sam`, `stml`, `gas`, `dose`, `uv`,
@@ -386,9 +422,9 @@ skipping unknown keys.
     "states": ["charged", "spent"],
     "frame": [
       { "tag": "apex", "pos": [0, 0, 0] },
-      { "tag": "a",    "pos": [0, 0, -1.21] },
-      { "tag": "b",    "pos": [0, 0, -2.66] },
-      { "tag": "c",    "pos": [1.02, 0, -3.15] }
+      { "tag": "a",    "pos": [1.45, 0, -3.17] },
+      { "tag": "b",    "pos": [-0.73, 1.26, -3.17] },
+      { "tag": "c",    "pos": [-0.73, -1.26, -3.17] }
     ]
   }
 ]
@@ -414,6 +450,18 @@ and the library author chooses them so. A frame atom that a tool side moves
 or deletes is a library error the engine cannot see; the residual on the
 next binding will.
 
+**The legs come off the axis.** A functionalized tool is usually linear at
+the business end — the example is an ethynyl on a handle, apex C at the
+origin, the second C at (0, 0, −1.21), the handle carbon at (0, 0, −2.66) —
+and the apex plus any two atoms of that axis are collinear, so any fourth
+atom leaves the four coplanar and the parse rule rejects the frame. The legs
+are therefore taken from the **handle**, not the axis: in the example `a`,
+`b`, `c` are the three cage atoms bonded to the handle carbon, at
+tetrahedral positions around it, which puts them in a plane 3.17 Å below the
+apex and the apex off that plane. The same holds for a bare probe, whose
+apex and its nearest neighbour are on the axis: the legs are three
+second-shell atoms around the axis, never the axis atom itself.
+
 **What a design does.** Per tool: tag the molecule with the type name (one
 `tag` node with no region tags the whole molecule), then tag the four frame
 atoms — `apex` and the three legs — with `atom_edit`'s *Tag selected…* on
@@ -433,10 +481,12 @@ the apex geometry of the tip the process is designed for, as it states every
 other geometry, and a different tip model is a different type or a
 regeneration. Which tip a process uses is a designed fact.
 
-**Tag budget.** Type tags, `apex`, the shared leg names and the replay's
-own tags all count against a structure's thirty-two names once the tools
-are merged into the scene; with a shared leg vocabulary a process with a
-handful of tool types uses about ten.
+**Tag budget.** Type tags, `apex`, the shared leg names, the user's own
+reservoir tags and the replay's own tags (`ms_current`, `ms_added`,
+`ms_layer`, `ms_tool`, `ms_feedstock`) all count against a structure's
+thirty-two names once the participants are merged into the scene; with a
+shared leg vocabulary a process with a handful of tool types uses about a
+dozen.
 
 ### The tool side of an operation
 
@@ -454,20 +504,18 @@ handful of tool types uses about ten.
       "atoms": [
         { "id": 1, "el": "C", "pos": [0, 0, 0] },
         { "id": 2, "el": "C", "pos": [0, 0, -1.21] },
-        { "id": 3, "el": "*", "pos": [0, 0, -2.66] },
-        { "id": 4, "el": "*", "pos": [1.02, 0, -3.15] }
+        { "id": 3, "el": "*", "pos": [0, 0, -2.66] }
       ],
-      "bonds": []
+      "bonds": [[1, 2, 3], [2, 3]]
     },
     "after": {
       "atoms": [
         { "id": 1, "el": "C", "pos": [0, 0, 0] },
         { "id": 2, "el": "C", "pos": [0, 0, -1.21] },
         { "id": 3, "el": "*", "pos": [0, 0, -2.66] },
-        { "id": 4, "el": "*", "pos": [1.02, 0, -3.15] },
-        { "id": 5, "el": "H", "pos": [0, 0, 1.06] }
+        { "id": 4, "el": "H", "pos": [0, 0, 1.06] }
       ],
-      "bonds": [[1, 5]]
+      "bonds": [[1, 2, 3], [2, 3], [1, 4]]
     }
   }
 }
@@ -479,6 +527,12 @@ handful of tool types uses about ten.
 | `from` | optional; the state the tool must be in. Must be in the type's `states`. Absent: any state |
 | `to` | optional; the state after the step. Must be in `states`. Absent: unchanged |
 | `before`, `after` | the rewrite of the tool, in the tool's local frame; same pattern rules as the target side, including `*`, bond rules and the origin convention. Frame atoms are recognised the same way (`is_frame_atom`) and drop out of `touched` the same way |
+
+The tool side names the atoms the step reacts with and enough of their
+neighbourhood to be a positional sanity check; it does **not** have to
+repeat the frame. The pose comes from the binding, so the pattern's job is
+only to say "this is what the apex must look like now", and the example
+lists the apex, the ethynyl carbon and the handle carbon it hangs from.
 
 Both patterns may be empty, which is a tool side that changes nothing: a
 bare probe performing lithography names its type so the step records which
@@ -538,8 +592,9 @@ strings at step 0, as for every other field.
 ### The scene
 
 ```rust
-/// Which structure an atom of the scene belongs to.
-pub enum Participant { Base, Tool(usize) }
+/// Which structure an atom of the scene belongs to. The index is the
+/// position on the respective pin.
+pub enum Participant { Base, Feedstock(usize), Tool(usize) }
 
 /// A wired tool molecule after binding.
 pub struct ToolBinding {
@@ -559,6 +614,7 @@ pub struct Scene {
 
 pub fn replay_scene(
     base: &AtomicStructure,
+    feedstocks: &[AtomicStructure],
     tools: &[AtomicStructure],
     library: &OpLibrary,
     script: &BuildScript,
@@ -567,14 +623,20 @@ pub fn replay_scene(
 ) -> Result<Scene, MechanosynthError>;
 ```
 
-`replay` becomes the no-tool wrapper returning the base, and keeps its
-signature, so the editor's `replay_prefix_and_block`, the engine tests and
-every other caller compile unchanged.
+`replay` becomes the wrapper with no feedstocks and no tools, returning the
+base, and keeps its signature, so the editor's `replay_prefix_and_block`,
+the engine tests and every other caller compile unchanged.
 
 **Building the scene.** The base is cloned first, so its atom ids are
-unchanged; each tool is merged with `add_atomic_structure`, which remaps
-their ids and interns their tags, and every merged atom is entered in
-`participants`. Then **binding**, per wired molecule: the type tags it
+unchanged; each feedstock, then each tool, is merged with
+`add_atomic_structure`, which remaps their ids and interns their tags, and
+every merged atom is entered in `participants`. The merge unions the tag
+tables, and a structure has thirty-two tag names: when the base's names
+plus the participants' plus the replay's own would exceed that, the merge
+fails and the replay is `Err(SceneTags)` naming the molecule whose tags did
+not fit and the count — a real error, unlike the cosmetic highlight that
+`paint` drops silently, because a tool whose type tag cannot be interned
+cannot bind. Then **binding**, per wired tool molecule: the type tags it
 carries are collected — none is `Err(ToolUntagged)` naming the molecule and
 listing the library's types, two is `Err(ToolMultiType)` naming both; the
 type's frame tags are looked up among the molecule's atoms — a tag on no
@@ -591,38 +653,59 @@ than at the first step that uses it.
 
 1. **Target side.** `apply_step(&mut scene.structure, op, step)` exactly as
    today, matching anywhere in the scene. The matched `before` atoms must
-   all belong to the base — a target side matching inside a tool molecule
-   is `Err(StepOnTool)` naming the step and the tool. Atoms the step adds
-   belong to the base.
+   all belong to **one** participant that is the base or a feedstock — a
+   target side matching inside a tool molecule is `Err(StepOnTool)` naming
+   the step and the tool, and one whose matched atoms span two
+   participants (a workpiece atom and a reservoir atom, or two reservoirs)
+   is `Err(StepAcrossParticipants)` naming the step and both. Atoms the
+   step adds **belong to the participant the match landed in** — this is
+   the fact that makes the workpiece separable from the reservoirs, and
+   nothing but the engine knows it. A step whose `before` is empty (a pure
+   addition) belongs to the base.
 2. **Tool side**, when the operation is `tip` and the `tools` pin is wired:
    the binding of the operation's tool type is looked up — none is
    `Err(ToolMissing)` naming the step, the operation and the type; the
    symbolic check — if `from` is set and differs from the binding's state,
    `Err(ToolState)`; then `apply_step` on the scene with the
-   tool-side patterns as an `Operation` and `Step { r: pose.r, t: pose.t }`,
-   which by construction matches inside that tool molecule; atoms it adds
-   belong to the tool; then the state update, `to` if set.
-3. **Highlights.** `touched` from both sides is painted `ms_current`;
-   `added` from either side joins `ms_added` and, by the step's `layer`,
-   `ms_layer`. An H arriving on the tool is "added" in the same sense as an
-   H arriving on the workpiece.
+   tool-side patterns as an `Operation` and `Step { r: pose.r, t: pose.t }`.
+   This is the same nearest-atom match as the target side, over the whole
+   scene, so nothing about it is confined to the tool by construction: a
+   tool parked in contact with the workpiece, or later at an approach pose,
+   can have base atoms inside tolerance of a pattern position. So the
+   matched `before` atoms must **all belong to that binding** — any other
+   is `Err(ToolSideOffTool)` naming the step, the tool and the atom it
+   found, the mirror of `StepOnTool`. Atoms it adds belong to the tool;
+   then the state update, `to` if set.
+3. **Highlights.** `touched` from both sides is painted `ms_current`, so
+   the tip lights up with the site it visited, and a dump lights up with
+   the atom it received. `ms_added` and `ms_layer` are painted on **base
+   atoms only**: they mean "what the build created on the workpiece, by
+   layer", they feed style rules, counts and exports downstream of `result`
+   and `scene` alike, and an abstracted H sitting on the tip, or dumped on
+   the reservoir, is cargo, not construction. Tool and feedstock atoms are
+   told apart by `ms_tool` and `ms_feedstock` instead.
 
 **Workpiece-only replay.** With nothing wired to `tools`, step 2 is skipped
 for every step, no binding runs, and no state is tracked. This is not a
 compatibility mode but a use: looking at what a build does to the workpiece
 without modelling the instruments, which is how a library is developed
 before its tools exist. Wiring the pin turns the tool model on for the whole
-script.
+script. `feedstocks` is independent of it: a build can draw on a reservoir
+with no tool modelled, and the dump step is then an ordinary rewrite of
+the reservoir.
 
 Failure on either side aborts the replay with the step number in the
 message, and the partial state is reachable by asking for one step fewer,
-as today. `NoMatch` gains a `participant` label — `base`, `tool 0
-(habst_tool)` — so the sentence says where it looked.
+as today. `NoMatch` gains a `participant` label — `base`, `feedstock 1`,
+`tool 0 (habst_tool)` — so the sentence says where it looked.
 
 **Outputs from the scene.** `scene` is the structure itself, with every
-tool atom tagged `ms_tool` from the participant map. `result` is a clone
-with every tool atom deleted; base ids are unchanged, so it is atom-for-atom
-what `replay` produces, which is the assertion the tests pin.
+tool atom tagged `ms_tool` and every feedstock atom `ms_feedstock` from
+the participant map. `result` is a clone with every non-base atom deleted;
+base ids are unchanged, so for a build that touches no reservoir it is
+atom-for-atom what `replay` produces, which is the assertion the tests pin,
+and for one that does it is the base's atoms of the scene, added atoms
+included, with nothing of the reservoirs.
 
 ### The tool pose
 
@@ -639,9 +722,11 @@ pub fn tool_pose(
 
 The rigid fit the placement engine already has (Horn's quaternion Kabsch),
 factored out of `place.rs` so both use one function, applied once to four
-or more correspondences. No sweep, no candidates, no mirror: with the frame
-non-coplanar by parse rule the proper rotation is unique, and a molecule
-that is the mirror image of the library's simply fails the residual gate.
+or more correspondences. No sweep, no candidates, no mirror: three
+non-collinear points fix the proper rotation, and with the frame
+non-coplanar by parse rule a molecule that is the mirror image of the
+library's cannot be superimposed by any proper rotation, so it simply fails
+the residual gate.
 The residual is the maximum per-atom distance, as everywhere in this
 subsystem.
 
@@ -663,9 +748,10 @@ keeps calling the all-or-nothing form.
 
 ### Errors
 
-New `MechanosynthError` variants: at binding, `ToolUntagged`,
-`ToolMultiType`, `ToolDuplicate`, `ToolFrameTag`, `ToolPoseResidual`; per
-step, `ToolMissing`, `ToolState`, `StepOnTool`; and a `participant` field on
+New `MechanosynthError` variants: building the scene, `SceneTags`; at
+binding, `ToolUntagged`, `ToolMultiType`, `ToolDuplicate`, `ToolFrameTag`,
+`ToolPoseResidual`; per step, `ToolMissing`, `ToolState`, `StepOnTool`,
+`StepAcrossParticipants`, `ToolSideOffTool`; and a `participant` field on
 `NoMatch`. Parse-time: `Invalid` with a location naming the tool type or the
 operation, for an unknown `tool.type`, a `from`/`to` outside `states`, a
 duplicate tool name, a frame with fewer than four entries, no `apex`, an
@@ -677,49 +763,90 @@ string.
 ## The `mechanosynth` node
 
 **Pins.** Inputs `base`, `ops`, `steps`, `step` unchanged; **appended**
-`tools: [HasAtoms]` (pin 4), optional, wire-only. Array pins accept several
-wires and concatenate them, so `tools: [w_tip, si_tip]` in the text format
-is two wires, and a single structure wired to an array pin is broadcast to a
-one-element array by the existing rule. The wires may carry different
-phases — a tip model that is a Crystal beside a tooltip that is a Molecule —
-because the node's outputs do not take their type from the array's
-elements, which is the only case the validator's single-phase rule covers;
-a Phase 2 test pins this, since it is what every animation setup needs.
+`feedstocks: [HasAtoms]` (pin 4) and `tools: [HasAtoms]` (pin 5), both
+optional and wire-only. Array pins accept several wires and concatenate
+them, so `tools: [w_tip, si_tip]` in the text format is two wires, and a
+single structure wired to an array pin is broadcast to a one-element array
+by the existing rule. **Every wired feedstock and tool must have the phase
+of `base`** — all `Crystal` or all `Molecule` — and a mismatch is a
+validation error on the node naming the offending pin, wire and fix. The
+validator's generic single-phase rule only covers pins whose output type is
+taken from the array's elements, which neither of these is, so the node
+states the rule itself; it is the same rule `atom_union` enforces, for the
+same reason: the `scene` output is a merge of those atoms into `base`'s
+variant, and a Molecule's atoms inside a Crystal is exactly what the union
+refuses to produce. A tip model that is a Crystal beside a tooltip that is
+a Molecule, or a Molecule reservoir under a Crystal workpiece, is therefore
+wired through `exit_structure` or `enter_structure` first.
 
 **Outputs.** `result` (pin 0) is the base after the step, same type as
-`base`; `step` (pin 1) is the record above. **Appended** `scene` (pin 2):
-the merged scene after the step, keeping `base`'s variant the way
-`atom_union` does. A `scene` with nothing wired to `tools` equals `result`.
-The replay's own tags take four of the thirty-two slots, counting the three
-that exist; the tool tags take theirs (§Tag budget).
+`base`, **the workpiece alone**; `step` (pin 1) is the record above.
+**Appended** `scene` (pin 2): the merged scene after the step — base,
+feedstocks, tools — keeping `base`'s variant the way `atom_union` does. A
+`scene` with nothing wired to either array pin equals `result`. The
+replay's own tags take five of the thirty-two slots, counting the three
+that exist; the tool and reservoir tags take theirs (§Tag budget).
 
-**Evaluation** evaluates the new pin (`None` → empty), calls `replay_scene`,
-splits `result` off the scene, and builds the record from the same clamp. An
-evaluation error reaches all three pins.
+**Display default: `scene`.** A placed node shows pin 0 only, by the
+network's default display state, and the one existing opt-in shows *all*
+pins — meant for unpack nodes that draw nothing, and wrong here, because
+`result` and the base part of `scene` are the same atoms drawn twice. What
+a user scrubbing a build with tools wants to look at is the scene, and
+what the editor has to be looking at to author a recharge is the scene
+(§mechanosynth_edit). So `NodeData` gains a second, general hook beside
+`default_display_all_output_pins`: `default_displayed_output_pins(&self)
+-> Option<HashSet<i32>>`, `None` for every node today, `Some({2})` for both
+mechanosynth nodes; `add_node` and the display-policy pass consult it where
+they set `{0}`. **Pin order does not change.** Making `scene` pin 0 would
+have got the same default for free, and it was considered; but wires and
+displayed-pin sets are persisted by index, so it would silently rewire
+every existing file's `result` consumers to the scene, and in the text
+format a bare `build` would become the scene and every downstream consumer
+of the workpiece — the common wiring — would have to write `build.result`.
+Two things follow the hook: the serializer's "omit the default pin set"
+check compares against the node's default, not a hard-coded `{0}`, so a
+saved default round-trips and a file that had chosen `{0}` explicitly keeps
+it; and an old file in which the node was at its then-default `{0}` (no
+entry written) loads showing `scene`, which with nothing wired to the new
+pins is the same atoms.
+
+**Evaluation** evaluates the two new pins (`None` → empty), calls
+`replay_scene`, splits `result` off the scene, and builds the record from
+the same clamp. An evaluation error reaches all three pins.
 
 **Panel.** Below the existing readout, a *Tools* block: one row per wired
-tool (index, the type its tag names, pose residual, current state), read
-from the evaluated scene through `get_mechanosynth_info`. The current step's
-chips show the method kind and the tool type or agent. Nothing is editable —
-the pin is wire-only and every field is derived.
+tool (index, the type its tag names, pose residual, current state), and a
+*Feedstocks* line — one entry per wired reservoir with its atom count at
+the step — read from the evaluated scene through `get_mechanosynth_info`.
+The current step's chips show the method kind and the tool type or agent.
+Nothing is editable — the pins are wire-only and every field is derived.
 
 **Subtitle** unchanged.
 
 ## The `mechanosynth_edit` node
 
-The same input pin appended (pin 3), the same `scene` output appended
-(pin 2). `result` stays the base at the cursor. Evaluation replays prefix
-and block through `replay_scene` with the same two-replay rule (the prefix
+The same input pins appended (`feedstocks` pin 3, `tools` pin 4), the same
+`scene` output appended (pin 2), the same display default. `result` stays
+the base at the cursor, the workpiece alone. Evaluation replays prefix and
+block through `replay_scene` with the same two-replay rule (the prefix
 without highlights, the block with `ms_current`), so a cursor at `0` still
 shows no highlight on any participant.
 
-**The placement tool keeps its interaction**, and gains one refusal.
-It is active when `result` *or* `scene` is the displayed pin; base ids are
-the same in both, so a click on the base means the same thing whichever pin
-is shown. A recharge is authored exactly like a placement, because the
-reservoir is part of the base: click the dump atom, choose the donation. A
-click on a tool atom — possible only with `scene` displayed — is answered
-with "tools are rewritten by their operations, not placed on" and no offers.
+**The placement tool keeps its interaction**, and gains one refusal. The
+tool owns picks while the node is active, which the existing rule defines
+as selected and displayed on *any* pin; the hit test walks every displayed
+output of the node and takes the closest atom, and base ids are the same in
+`result` and `scene`, so a click on the workpiece means the same thing
+whichever pin is shown. A reservoir atom exists only in `scene`, which is
+why `scene` is the display default: a recharge is authored exactly like a
+placement — click the dump atom, choose the donation — and with `result`
+alone displayed there is nothing to click. The offer preview's ghost atoms
+ride on the decorator of the output structure; today that is pin 0 only,
+and it becomes **both** structures, so a selected row previews whichever
+pin is shown. A click on a tool atom — possible only with `scene`
+displayed — is answered with "tools are rewritten by their operations, not
+placed on" and no offers. Showing both pins at once draws the workpiece
+twice and is the user's choice, not an error.
 
 **Nothing new is stored or asked.** `AuthoredStep` loses `method` and gains
 nothing. A committed placement inherits `phase`, `layer` and `site` from the
@@ -753,24 +880,35 @@ above the rows — each bound tool's type and its state at the cursor, *habst_to
 the viewport carries the armed operation's tool and state beside its name.
 That is what tells the user a recharge is due before the offers do.
 
-**A failing cursor step shows the last good state.** When the block fails at
-the cursor step, `result` is the state after the step *before* it, the
-failing row carries the error chip with the engine's message, and the panel
-banner names it. Today the whole `result` becomes an error and the viewport
-empties, which is right for the replayer — its slider reaches any step — and
-wrong for authoring, where the failing step is the one being worked on and
-the user needs to see where it stands and click the dump. The replay loop
-already knows the structure after each step, so the block replay returns
-the last good structure alongside the error instead of discarding it; the
-replayer keeps its all-or-nothing policy.
+**A failing cursor step shows the last good state — in the viewport, not
+on the pins.** When the block fails at the cursor step, `result` and
+`scene` carry the error exactly as the replayer's would: a downstream
+export or style node must never receive a silently truncated build, and
+*same result, both nodes* holds for a failing block as for a good one. What
+changes is what the editor *displays*. Today the viewport empties, which
+is right for the replayer — its slider reaches any step — and wrong for
+authoring, where the failing step is the one being worked on and the user
+needs to see where it stands and click the dump. So the block replay
+returns the last good structure alongside the error instead of discarding
+it; the editor keeps that structure as evaluation-time node state (never
+persisted), with `ms_current` on the previous step, and the scene
+generator renders it in place of the erroring pin. This is **not** the
+ghost route: ghosts ride on the decorator of an evaluated structure, and
+here the displayed pin evaluated to an error, so there is no structure to
+decorate. It is a node-level override — a small `NodeData` hook the scene
+generator consults when a displayed pin of the active editor is an error,
+answering with the last good structure — and the placement tool's hit test
+picks against that same structure. The failing row carries the error chip
+with the engine's message, and the panel banner names it. The exact shape
+of the hook is Phase 2's call; that the pins carry the error is not.
 
 **Every kind is authored the same way in milestone 1**: click an atom,
 choose the row. A bulk step is one site's share of an exposure and is
 authored one site at a time, exactly like a tip step; a spontaneous step is
 chosen from the offer list on the atom it rearranges. The kinds differ in
-how the replay groups them and in how the animation will play them — an
+how the panel groups them and in how the animation will play them — an
 exposure's steps together, a settling right after its enabling step — not
-in how they are authored. Authoring a whole exposure in one action, and
+in how they are authored or replayed. Authoring a whole exposure in one action, and
 offering a rearrangement right after the step that enables it, are
 §Follow-ups, each with a reason it is not here yet.
 
@@ -792,15 +930,20 @@ it is the workflow most users will follow — model first, instrument later.
    before it, the row carries the reason — *habst_tool is spent* — and the
    *Tools* readout says the same.
 3. **Insert the recharge in front of it.** With the cursor on the step
-   before the failing one, click the reservoir atom; the offer list shows
+   before the failing one and `scene` displayed (the default), click the
+   reservoir atom; the offer list shows
    the recharge as its applicable row, because that is what the spent tool
    can do there. Commit. The recharge is inserted after the cursor, the
    readout flips to *charged*, and the step that failed now replays.
 4. **Repeat to the end.** Each pass is one click on the reservoir; the
    cursor never has to go backwards, because a recharge inserted at the
-   frontier cannot invalidate anything before it, and the geometry after
+   frontier cannot invalidate anything before it, and the workpiece after
    the frontier is unchanged by it — a recharge touches the reservoir and
-   the tool, never the workpiece.
+   the tool, never the workpiece. (A tail that *already* contains recharges
+   — a half-converted sequence — can be knocked out of step by an inserted
+   one, a recharge on a charged tool being a state error; the walk still
+   finds it at the frontier, as one more failing step to delete rather than
+   insert in front of.)
 
 The result is the same sequence with recharges interleaved, exact to the
 same file rounding, authored in as many clicks as there are recharges. The
@@ -831,12 +974,13 @@ each operation row shows its method and its tool type or agent. `build_script` a
 
 ## Text format
 
-Nothing new but the wire pin:
+Nothing new but the two wire pins, and `build` still means the workpiece:
 
 ```
-dump  = atom_trans { molecule: reservoir, translation: (40.0, 0.0, 20.0) }
-work  = atom_union { structures: [slab, dump] }
-build = mechanosynth { base: work, ops: lib, steps: gen, tools: [tip], step: 40 }
+dump  = free_move { input: reservoir, translation: (40.0, 0.0, 20.0) }
+build = mechanosynth { base: slab, ops: lib, steps: gen, feedstocks: [dump], tools: [tip], step: 40 }
+out   = export_atoms { molecule: build, ... }          # the workpiece alone
+view  = apply_style { molecule: build.scene, ... }     # everything
 ```
 
 The step literal of an editor's `authored` block loses `method` and gains
@@ -855,22 +999,29 @@ spontaneous steps as settling. Whether that is a node over `scene` and
 
 ## Reference guide
 
-- `doc/reference_guide/nodes/atomic.md` §mechanosynth: the new pin and the
-  `scene` output; a new subsection *Tools* — that the library names the tool
+- `doc/reference_guide/nodes/atomic.md` §mechanosynth: the two new pins,
+  the `scene` output, that `result` is the workpiece alone, and that a
+  placed node shows `scene`; a new subsection *Tools* — that the library names the tool
   types and the design supplies one molecule each, **how to tag it** (the
   type name, `apex`, the three legs; `atom_edit`'s *Tag selected…*, the
   `tag` node, hover and `label: "{tag}"` to check), that the pose is read
   off the four tagged atoms and never entered, the binding errors,
-  workpiece-only replay, what the panel shows; a new subsection *Feedstocks*
-  — that a reservoir is joined to the base with `atom_union`, told apart with
-  `tag`, and that a recharge is an ordinary step; a new subsection *Methods*
-  with the three-kind table, the event rules, and the statement that a step
-  never types its method; *The two files* gains the `/2` formats, the `tools`
-  section and the tool side with the example above, the invariant-frame rule
-  and the tagging contract; *Seeing the build* gains `ms_tool`; *The `step`
-  output pin* gains the three fields and the new meaning of `method`.
-- §mechanosynth_edit: the pin, the tool-atom refusal, the method badge
-  replacing the chip, the text format without `method`; a new subsection
+  workpiece-only replay, the phase rule (`exit_structure` /
+  `enter_structure` first), what the panel shows; a new subsection
+  *Feedstocks* — that a reservoir is wired to `feedstocks`, appears in
+  `scene` tagged `ms_feedstock` and never in `result`, that an atom a step
+  adds to it stays with it, and that a recharge is an ordinary step; a new
+  subsection *Methods* with the three-kind table, the event rules, that
+  events group the display and never the replay, and the statement that a
+  step never types its method; *The two files* gains the `/2` formats, the
+  `tools` section and the tool side with the example above, the
+  invariant-frame rule, the off-axis legs, and the tagging contract;
+  *Seeing the build* gains `ms_tool` and says that `ms_added`/`ms_layer`
+  stay workpiece-only; *The `step` output pin* gains the three fields and
+  the new meaning of `method`.
+- §mechanosynth_edit: the pins, that a recharge needs `scene` displayed,
+  the tool-atom refusal, the method badge replacing the chip, the text
+  format without `method`; a new subsection
   *Two ways to use the editor* — modelling with tools unwired, tool-aware
   authoring with them wired, the tool-blocked rows of the offer list, the
   Tools readout, the last-good-state view, and *Making a sequence
@@ -883,8 +1034,32 @@ spontaneous steps as settling. Whether that is a node over `scene` and
 ## Testing
 
 Conventions as in the crate `AGENTS.md` files: tests in the owning crate's
-`tests/` directory, fixtures under `rust/tests/fixtures/mechanosynth/`,
+`tests/` directory, fixtures under `rust/tests/fixtures/mechanosynth/`
+(reached from every crate through `atomcad_test_support::fixture_path`),
 synthetic and small, test names as sentences.
+
+**Where each test goes.** Engine tests (parse, pose, binding, replay,
+applicability, event rules) in
+`crates/atomcad-crystolecule/tests/crystolecule/` — the existing
+`mechanosynth_test.rs` and `mechanosynth_place_test.rs` take the edits the
+format change forces, and a new `mechanosynth_tools_test.rs` takes the
+scene, binding and tool-side tests. Node, evaluator, serialization and
+text-format tests in `crates/atomcad-structure-designer/tests/structure_designer/`
+— the existing `mechanosynth_test.rs`, `mechanosynth_edit_test.rs` and
+`mechanosynth_edit_placement_test.rs` extended, a new
+`mechanosynth_tools_node_test.rs` for the pins, the display default and
+the participant outputs, and `nodes/node_snapshots_test.rs` and
+`text_format_roundtrip_corpus_test.rs` gaining the fixture. API tests in
+`rust/tests/structure_designer_api/mechanosynth_api_test.rs`. A test that
+asserts something about the viewport — which atom a ray hits, what the
+decorator carries — reads `last_generated_structure_designer_scene` after a
+refresh, as `error_display_test.rs` does. The node snapshot evaluates pin 0
+of every displayed node whatever its pin set, so the display default does
+not move a snapshot; a snapshot moves only when `result` does.
+
+**No timing assertions.** "No sweep" is a property of the signature —
+`tool_pose` takes the correspondences and nothing else, and binding calls
+it once per molecule — not something a test measures with a clock.
 
 **Fixtures.** Every existing library fixture is rewritten to `/2`: `method`
 on every operation, and for each `tip` operation a tool side with a type —
@@ -896,8 +1071,9 @@ its `method` keys. The `.cnnd` fixtures (`mechanosynth_legacy.cnnd`,
 as the first commit of Phase 1, and stay byte-identical afterwards.
 
 New: `tool_ops.json` — a library with two tool types: `habst_tool` (states
-`charged`/`spent`) and `probe` (no states), each with a four-entry frame
-over the shared tags `apex`, `a`, `b`, `c`; operations `habst` (`tip`,
+`charged`/`spent`) and `probe` (no states), each with a four-entry
+**non-coplanar** frame over the shared tags `apex`, `a`, `b`, `c` — the
+legs off the axis, as in the example above; operations `habst` (`tip`,
 `habst_tool`, gains an H, `charged → spent`), `habst_probe` (`tip`, the same
 target side, the `probe` type with an empty tool side), `hdump` (`tip`,
 `habst_tool`; the target side adds an H to any bare atom, the tool side
@@ -907,15 +1083,20 @@ operation with an `approach` pose. `tool_tip.xyz` and `tool_probe.xyz` —
 the two tool molecules, each placed rotated and translated away from the
 origin; the engine tests tag them programmatically after loading (`.xyz`
 carries no tags), and `tool_tip_on_handle.xyz` is the tooltip bonded to a
-cluster of a few hundred atoms, tagged the same way. `tool_scene.xyz` — a
-methane-like workpiece beside a small bare cluster that serves as the dump,
-**one structure**, the dump's atoms tagged `dump` in the `.cnnd` that uses
-it. `tool_build.json` — `habst` on the workpiece, `hdump` on the cluster,
-`habst` again, `habst_probe`, `settle`, two `expose`; **seven keys per step
-at most**. `mechanosynth_tools.cnnd` — `atom_union` of a slab and a tagged
-reservoir into `base`; the tip and the probe on `tools`, each tagged with
-its type by a `tag` node and its four frame atoms by an `atom_edit`; for
-`node_snapshots` and `validation_corpus`.
+cluster of a few hundred atoms, tagged the same way. `tool_tip_touching.xyz`
+is the tip parked with its apex within tolerance of a workpiece atom of
+`tool_scene.xyz`, for the off-tool check. `tool_scene.xyz` — a
+methane-like workpiece; `tool_dump.xyz` — a small bare cluster beside it
+that serves as the dump, a separate structure for the `feedstocks` pin, and
+`tool_dump_touching.xyz` the same cluster moved to within tolerance of a
+workpiece atom, for the across-participants check. `tool_build.json` —
+`habst` on the workpiece, `hdump` on the cluster, `habst` again,
+`habst_probe`, `settle`, two `expose`; **seven keys per step at most**.
+`mechanosynth_tools.cnnd` — a slab on `base`, a reservoir tagged `dump` by
+a `tag` node on `feedstocks`, the tip and the probe on `tools`, each tagged
+with its type by a `tag` node and its four frame atoms by an `atom_edit`,
+the node displaying `scene` by default; for `node_snapshots` and
+`validation_corpus`.
 
 **Cross-cutting regressions,** run at the end of every phase: the three
 re-snapshotted `.cnnd` fixtures evaluate to the same atoms; the text-format
@@ -930,10 +1111,14 @@ only the edits the format change forces (a `method` assertion removed, a
 First commit: the fixture rewrite and re-snapshot above. Then `ToolType`,
 `ToolSide`, `Method`, `Operation::{method, agent, tool, approach}`,
 `OpLibrary::tools` and the parse rules; `Step` without `method`;
-`Participant`, `ToolBinding`, `Scene`, `replay_scene`, `replay` as its
-wrapper; `tool_pose` sharing `place()`'s fit; binding; the new errors and the
-`participant` label; the tag rule across participants; the event rules as a
-pure function over a step sequence (for the tests and for milestone 2).
+`Participant`, `ToolBinding`, `Scene`, `replay_scene` in both its
+all-or-nothing and its partial-result form, `replay` as its wrapper;
+`tool_pose` sharing `place()`'s fit; binding; `applicable_ops` over
+`bindings` and `ToolReadiness`; the new errors and the `participant`
+label; the tag rule across participants; the event rules as a pure
+function over a step sequence (for the tests and for milestone 2). Every
+engine feature the node layer consumes in Phase 2 is tested here at the
+engine level first; Phase 2's tests then cover only the wiring.
 
 *Tests — parse:* a `/2` library with `tools` and tool sides loads and a `/1`
 one is refused naming the fix; `method` parses to its kind, and a missing or
@@ -953,7 +1138,12 @@ and `tool_build.json` uses no other key.
 *Tests — pose and binding:* the frame fitted onto the tagged atoms of
 `tool_tip.xyz` recovers the rotation and translation to 1e-9 with
 `residual` below `EXACT_FIT_RESIDUAL`, and the same on
-`tool_tip_on_handle.xyz` with the same pose and in the same time (no sweep); a molecule
+`tool_tip_on_handle.xyz` with the same pose; the existing `place()` tests
+pass unchanged after the fit is factored out, which is the regression on
+the factoring; `tool_pose` with fewer than three correspondences, or with
+collinear ones, is an `Err` and never a NaN or an arbitrary rotation — a
+mis-tagged molecule whose tagged atoms happen to be collinear is
+`ToolPoseResidual`, not a silent bind; a molecule
 tagged as the mirror image of the frame fails with `ToolPoseResidual`
 rather than binding mirrored; the tip binds to `habst_tool` and the probe to
 `probe`, in either wiring order, and with the type tag on the whole
@@ -966,12 +1156,48 @@ binding errors are reported before any step is applied, even at `step = 0`;
 a type with no molecule is not an error until a step needs it, which is
 `ToolMissing` naming the step, the operation and the type; with `tools`
 unwired nothing is bound and no tool-side error can occur; the tool tags
-survive into `scene` and are absent from `result`.
+survive into `scene` and are absent from `result`; a base carrying
+thirty-two tag names with a tool or a reservoir wired is `SceneTags`
+naming the molecule, before binding.
+
+*Tests — applicability:* `applicable_ops` with `bindings: None` returns
+exactly what it returns today, row for row; with the tip bound and
+charged, `habst` on a workpiece H is `ready`; with the tip spent it is
+blocked with `ToolReadiness` naming `spent` and `charged`; with the tip
+charged, `hdump` on a reservoir atom is blocked by state; with the tip's
+apex H removed by hand while the state still says `charged`, `habst` is
+blocked by geometry with the nearest-atom reason, which pins that the
+geometric check runs even when the label agrees; with no `probe` bound,
+`habst_probe` is blocked with a reason naming the tag; `expose` and
+`settle` rows carry `tool: None`; ready rows sort above blocked rows and
+blocked rows sort with the near misses; the tool check is not run for an
+operation that does not fit the clicked atom.
+
+*Tests — partial result:* the partial-result form on a block that fails
+at step `k` returns the scene after `k − 1` together with the error, and
+that scene equals the all-or-nothing form asked for `k − 1` atom for atom;
+on a block that fails at step 1 it returns the untouched scene; on a block
+that succeeds it returns the same scene as the all-or-nothing form and no
+error; a binding error yields no scene at all, since nothing was replayed.
 
 *Tests — replay:* the shared assertion **the base is unchanged by the tool
 model** — `result` split from `replay_scene` equals `replay(...)` atom for
-atom, tags included, for every step of every fixture build, with tools wired
-and without; at step 0 every bound tool is in its type's initial state —
+atom, tags included, for every step of every fixture build that touches no
+reservoir, with tools wired and without; for `tool_build.json` with the
+dump wired, `result` has the workpiece's atoms and the H `habst` took, and
+nothing of the cluster, at every step, and the H `hdump` placed is in
+`scene` tagged `ms_feedstock`, in no `result`, and carries no `ms_added`;
+a `hdump` step whose `t` lies on the workpiece is an ordinary target-side
+rewrite of the workpiece (the base is a reservoir to itself); the dump
+wired and `tools` empty replays the whole build with the dump step as a
+plain rewrite of the reservoir, which pins that the two pins are
+independent; with
+`tool_dump_touching.xyz` wired, a step whose matched atoms span the
+workpiece and the cluster is `StepAcrossParticipants` naming both, and
+the scene is unchanged; the same build with the cluster wired as a
+*second* base through `atom_union` and no feedstock replays to the same
+scene atom for atom, which pins that a feedstock is nothing but a
+participant label; at step 0 every bound tool is in its type's initial state —
 `charged` for the tip — and the record's `tool_state` says so after the
 first step that uses it; `hdump` as the first step is `ToolState` naming
 `charged` and `spent`, because the tip starts charged; after `habst` the tip
@@ -980,46 +1206,79 @@ has one more H at the apex position transformed by its pose and its state is
 `charged` again; two `habst` in a row is `ToolState` naming the type,
 `spent` and `charged`; a tip wired with an H already on its apex binds and
 fails at its first `habst` with the nearest-atom message, not at binding; a step whose
-`before` matches inside a tool molecule is `StepOnTool`; `habst_probe`
-leaves the probe unchanged and the record's `tool_type` is `probe`; a
-`bulk` and a `spontaneous` step touch no tool; the record's `method` is
-`tip` / `bulk` / `spontaneous`, and `tool_type` and `agent` are the
-operation's, `""` where absent; tool-side `touched` atoms carry
-`ms_current` and the base's previous-step atoms do not; an atom added on the
-tool carries `ms_added` and joins `ms_layer` by the step's layer; a match
-failure names `base` or `tool 0 (habst_tool)`; every atom of the scene has a
-participant after every step, added atoms included; a `dump` tag on the
-reservoir survives the replay on every atom that survives; asking for one
-step fewer than a failing step succeeds; the event rules — two consecutive
-`expose` with the same agent are one event, a different agent starts a new
-one, a `settle` after `hdump` joins the `hdump` event, a `settle` at index 0
-is its own event.
+`before` matches inside a tool molecule is `StepOnTool`; with
+`tool_tip_touching.xyz` wired, `habst` is `ToolSideOffTool` naming the
+workpiece atom the tool side found, and the workpiece is unchanged;
+`habst_probe` leaves the probe unchanged and the record's `tool_type` is
+`probe`; a `bulk` and a `spontaneous` step touch no tool; the record's
+`method` is `tip` / `bulk` / `spontaneous`, and `tool_type` and `agent` are
+the operation's, `""` where absent; tool-side `touched` atoms carry
+`ms_current` and the base's previous-step atoms do not; an atom added on
+the tool carries **neither** `ms_added` nor `ms_layer`, and the `ms_added`
+set of `scene` equals that of `result`; a match failure names `base` or
+`tool 0 (habst_tool)`; every atom of the scene has a participant after
+every step, added atoms included; a `dump` tag on the reservoir survives
+the replay on every atom that survives; asking for one step fewer than a
+failing step succeeds; the event rules — two consecutive `expose` with the
+same agent are one event, a different agent starts a new one, a `settle`
+after `hdump` joins the `hdump` event, a `settle` at index 0 is its own
+event; and two `expose` steps on bonded neighbours replay to a different
+scene in the two orders, pinning that an event does not commute.
 
 ### Phase 2 — Nodes, records, API
 
-The pin and the `scene` output on both nodes; `BuildStep` down to seven
-fields and `build_step.rs` with it; the record's three fields and the new
-meaning of `method`; `AuthoredStep` without `method`; `build_script` and
-`export_build_script`; `get_mechanosynth_info` extended with the tools; the
-editor's tool-atom refusal, tool-aware offers over the bindings, and the
-last-good-state block replay; the `ops_library` listing data; FRB regenerated;
-the `.cnnd` fixture and its snapshot.
+The two pins and the `scene` output on both nodes; the
+`default_displayed_output_pins` hook, its use in `add_node` and the
+display-policy pass, and the serializer's default check against it;
+`BuildStep` down to seven fields and `build_step.rs` with it; the record's
+three fields and the new meaning of `method`; `AuthoredStep` without
+`method`; `build_script` and `export_build_script`; `get_mechanosynth_info`
+extended with the tools and the feedstocks; the editor's tool-atom refusal,
+tool-aware offers over the bindings, the ghost preview on both output
+structures, and the last-good-state block replay with its display hook;
+the node-level phase rule on both array pins; the `ops_library` listing
+data; FRB regenerated; the `.cnnd` fixture and its snapshot.
 
-*Tests — replayer node:* with `tools` wired, `result` equals the base of
-`replay_scene`, `scene` has the atom count of base plus tools, tool atoms
-carry `ms_tool` and no base atom does; a single structure wired to `tools`
-is one tool; a Crystal and a Molecule wired to `tools` together validate
-and bind, one type each; `scene` with nothing wired equals `result`; an
-error reaches all three pins; `step` reports the three fields with their absent values at
-step 0; `record_destructure` on a `BuildStep` yields exactly seven fields;
-the fixture's `dump` tag reaches `result` and `scene` on the reservoir's
-atoms.
+*Tests — replayer node:* with `feedstocks` and `tools` wired, `result`
+equals the base of `replay_scene`, `scene` has the atom count of base plus
+reservoirs plus tools, tool atoms carry `ms_tool`, reservoir atoms
+`ms_feedstock`, and no base atom carries either; a single structure wired
+to either array pin is one participant; a Molecule wired to `tools` or to
+`feedstocks` under a Crystal `base` is a validation error naming the pin,
+the wire and `enter_structure`, on the replayer and on the editor alike,
+and the same structure through `enter_structure` validates; `scene` has
+`base`'s variant; `scene` with nothing wired to either pin equals
+`result`; an error reaches all three pins; `step` reports the three
+fields with their absent values at step 0; `record_destructure` on a
+`BuildStep` yields exactly seven fields; the fixture's `dump` tag reaches
+`scene` on the reservoir's atoms and reaches no atom of `result`; a
+`.cnnd` whose `mechanosynth_edit` authored steps still carry a `method`
+key loads with the key dropped (serde ignores it), which is the file-side
+twin of the text format's parse error. *Display default:* a freshly placed
+`mechanosynth` and `mechanosynth_edit` node has `{2}` displayed and every
+other node type still `{0}`; a network saved with that default writes no
+`displayed_output_pins` entry for the node and loads back to `{2}`; a file
+with an explicit `{0}` for the node writes the entry and loads to `{0}`;
+an old file with no entry for the node loads to `{2}`, and with nothing
+wired to the new pins its displayed atoms are the same as before; the
+text-format round-trip corpus is unaffected, since pin visibility is not
+in the text format. *API:* `get_mechanosynth_info` reports one tool row
+per binding with type, residual and state, one feedstock entry per
+reservoir with its atom count, and the last-good structure's atom count
+on the editor when the block fails.
 
 *Tests — editor node:* the shared assertion *same result, both nodes* holds
-with tools wired; a placement on a reservoir atom of the base inserts a step
-that replays as a recharge (the tip's state flips back); offers on a tool
-atom are refused with the documented message and nothing is inserted; a
-base click yields the same step whether `result` or `scene` is displayed;
+with feedstocks and tools wired; a placement on a reservoir atom inserts a
+step that replays as a recharge (the tip's state flips back, the H lands on
+the reservoir and not in `result`); through
+`mechanosynth_edit_anchor_at_ray` on the regenerated scene, a ray at a
+reservoir atom returns `None` with only `result` displayed and the atom
+with `scene` displayed, and a ray at a workpiece atom returns the same id
+under either; offers on a tool atom are refused with the documented
+message and nothing is inserted; a base click yields the same step whether
+`result` or `scene` is displayed; after `select_preview`, the ghost
+visuals are on the decorator of both output structures and the two ghost
+lists are equal;
 the metadata command has no `method` field; `authored` round-trips without
 it. *Tool-aware offers:* with the tip spent, an offer on a workpiece H lists
 `habst` as tool-blocked with the reason naming the state, and choosing it is
@@ -1028,26 +1287,31 @@ applicable and `habst` blocked; with the tip charged the rows swap; with no
 molecule tagged `probe` wired, `habst_probe` is blocked with a reason naming
 the tag; `bulk` and `spontaneous` rows carry no tool annotation; with
 `tools` unwired no row does, and the offers equal today's. *Last good
-state:* with the cursor on a step whose tool side fails, `result` equals the
-state after the previous step, the last-error field carries the message,
-and moving the cursor back clears it; the replayer node on the same block
-reports the error on all its pins. *The workflow:* two `habst` authored with
+state:* with the cursor on a step whose tool side fails, `result` and
+`scene` are the same error the replayer node reports on the same block,
+the editor's last-good structure (read from the node data's override
+hook) equals the state after the previous step atom for atom, the
+last-error field carries the message, `mechanosynth_edit_anchor_at_ray`
+hits an atom of that structure on the regenerated scene, and moving the
+cursor back clears both. *The workflow:* two `habst` authored with
 tools unwired evaluate; wiring the tools makes the second fail at cursor 2
 and not at cursor 1; inserting `hdump` at cursor 1 makes the whole block
 replay; the `steps` output carried all steps throughout.
 
 *Tests — exporter and text format:* `export_build_script` writes `/2` and
 seven keys at most per step, and its output re-parses to the same steps; a
-`mechanosynth` statement with `tools: [t]` round-trips through `query` →
-`--replace`; an `authored` literal with `method` is a parse error naming the
-field; the registry snapshot gains the pin; `mechanosynth_tools.cnnd` joins
-`node_snapshots`.
+`mechanosynth` statement with `feedstocks: [d]` and `tools: [t]`
+round-trips through `query` → `--replace`, and `build` in a downstream
+statement still resolves to pin 0; an `authored` literal with `method` is a
+parse error naming the field; the registry snapshot gains the pins;
+`mechanosynth_tools.cnnd` joins `node_snapshots`.
 
 ### Phase 3 — Panel
 
-The *Tools* block on the replayer, the derived chips on both panels, the
-method badge replacing the chip, the tool-atom refusal message, the Tools
-listing on `ops_library`; in the editor the tool-blocked section of the
+The *Tools* block and the *Feedstocks* line on the replayer, the derived
+chips on both panels, the method badge replacing the chip, the tool-atom
+refusal message, the Tools listing on `ops_library`; in the editor the
+tool-blocked section of the
 offer popup with its reasons, the *Tools* readout above the steps list, the
 tool and state on the armed strip, and the error chip with the last good
 state in the viewport.
@@ -1058,10 +1322,13 @@ under `feedback_manual_test_for_editor_ui`. The **manual walkthrough**
 `apex` and three legs in `atom_edit` — and see it bound, with its residual
 and state, in the panel; wire it twice and read the duplicate error; move
 one leg tag to the wrong atom and read the residual error; scrub across an
-abstraction and watch the H appear on the tip; union a tagged reservoir into
-the base, scrub across the dump and watch the H
-leave the tip; move the tool molecule in the design and see the replay
-follow it; in the editor, with the tip spent, click a workpiece H and see
+abstraction and watch the H appear on the tip; wire a reservoir to
+`feedstocks`, scrub across the dump and watch the H leave the tip and land
+on the reservoir, then switch the eye from `scene` to `result` and see the
+reservoir gone and the workpiece intact; drop a fresh `mechanosynth` node
+and see `scene` displayed without touching an eye; move the tool molecule
+in the design and see the replay follow it; in the editor, with the tip
+spent and `scene` displayed, click a workpiece H and see
 the abstraction dimmed with its reason, click the reservoir and see the
 recharge offered, commit it and watch the readout flip to *charged*; author
 two abstractions with tools unwired, wire the tools, walk the cursor to the
@@ -1122,8 +1389,16 @@ The guide sections above, the screenshot slot, the manual checklist.
   chain is a series of keystrokes, never automatic. The open point is where
   to look: the touched atoms are the obvious neighbourhood, and whether it
   is always the right one is what has to be thought through first.
+- **`feedstocks: [HasAtoms]` output** on the replayer — the reservoirs
+  after the step, one element per wired reservoir in pin order, split from
+  the scene by the participant map exactly as `result` is. Wanted for
+  counting what a build took from a reservoir, or chaining a reservoir
+  into a second build; deferred because the scene shows it and nothing yet
+  consumes it. Same type rule as `result`: each element keeps its input's
+  variant.
 - **`parts: [HasAtoms]` output** on the replayer — the scene split by
-  participant — when milestone 2's trajectory node wants it.
+  participant, tools included — when milestone 2's trajectory node wants
+  it; the `feedstocks` output above is its reservoir half.
 - **Trajectories** (milestone 2): a node or mode interpolating each tool
   from park to `approach` and back, with the scene of the step; animation
   export.
@@ -1140,16 +1415,24 @@ The guide sections above, the screenshot slot, the manual checklist.
   a sweep, a mirror rule and an ambiguity error that four tagged atoms make
   unnecessary. With it went `chiral` on tool types and the asymmetric-frame
   rule.
-- **A `feedstocks: [HasAtoms]` pin.** The shape of two earlier revisions;
-  retired by *Feedstocks are part of the base*: `atom_union` and `tag` do
-  everything it did, with names instead of indices.
+- **Feedstocks folded into `base` through `atom_union`, recovered by
+  `filter`.** One revision of this document; retired by *Feedstocks have
+  their pin*: the atoms a step adds to a reservoir carry no tag, so the
+  filter cannot give back the workpiece, and the participant map the tools
+  need anyway does.
+- **`scene` as pin 0**, to make it the display default for free. Wires and
+  displayed-pin sets are persisted by index, so every existing file's
+  `result` wires would silently move to the scene, and the text format's
+  bare `build` would stop meaning the workpiece. A display-default hook
+  costs a few lines and changes no file's meaning.
 - **A `tool` index on the step**, in two forms: always present (positional,
   redundant, breaks on rewiring), and "absent means resolve" (nothing left to
   resolve once a type has one molecule). Both retired by *The library
   envisions the tools*.
 - **A `target` index on the step**, and its derived twin on the record.
-  Positional, and redundant once the match knows where it landed; with
-  feedstocks in the base there is nothing for it to name.
+  Positional, and redundant once the match knows where it landed; the
+  participant map records it, and the error, the panel and the scene's
+  tags report it.
 - **Ignoring a second molecule of a type silently.** A mis-wired tip that
   vanishes without a trace is the worst outcome; the error names both.
 - **Choosing among several molecules of one type per step.** Not in any
