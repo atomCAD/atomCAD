@@ -1,9 +1,9 @@
 # Design: tool molecules in `mechanosynth`
 
-Status: **draft 2026-09-14, revised 2026-09-15 (twice); Phase 1 (schema and
-engine), Phase 2 (nodes, records, API) and Phase 3 (panel) implemented
-2026-09-15, and the document corrected against all three. Phase 4 (guide and
-walkthrough) open, and the manual walkthrough in §Phase 3 is still pending.**
+Status: **draft 2026-09-14, revised 2026-09-15 (twice); all four phases
+implemented 2026-09-15**, and the document corrected against each of them. What
+remains is the human's: the manual checklist in §Phase 4 and the screenshot
+slots it names.
 Building Phase 1 falsified two things this document asserted, and both are
 rewritten where they are stated rather than noted here: **a pattern cannot
 assert an atom's absence**, so a tool wired carrying cargo an operation's tool
@@ -1624,29 +1624,137 @@ a click explains instead of placing and the two refusals say different things
 (a near miss names the library, a blocked tool names the recharge), a blocked
 row still previews in the warning colour, a ready tool is an annotation rather
 than a chip, a `bulk` row carries none, and with `tools` unwired every row is
-what it always was. The **manual walkthrough**
-(human): tag a tool molecule placed by hand — the type on the molecule,
-`apex` and three legs in `atom_edit` — and see it bound, with its residual
-and state, in the panel; wire it twice and read the duplicate error; move
-one leg tag to the wrong atom and read the residual error; scrub across an
-abstraction and watch the H appear on the tip; wire a reservoir to
-`feedstocks`, scrub across the dump and watch the H leave the tip and land
-on the reservoir, then switch the eye from `scene` to `result` and see the
-reservoir gone and the workpiece intact; drop a fresh `mechanosynth` node
-and see `scene` displayed without touching an eye; move the tool molecule
-in the design and see the replay follow it; in the editor, with the tip
-spent and `scene` displayed, click a workpiece H and see
-the abstraction dimmed with its reason, click the reservoir and see the
-recharge offered, commit it and watch the readout flip to *charged*; author
-two abstractions with tools unwired, wire the tools, walk the cursor to the
-failing step, see the last good state and the chip, insert the recharge in
-front of it and watch the block replay; reorder two steps so a tool is used
-twice and read the state error. The Flutter smoke test is not run by
-agents.
+what it always was. The **manual walkthrough** is the human's, and it is
+written out as the numbered checklist in §Phase 4 rather than twice: Phase 4
+gave it a bench in the repository, which is what turns a list of things to look
+at into a list of things to do. The Flutter smoke test is not run by agents.
 
-### Phase 4 — Guide and walkthrough
+### Phase 4 — Guide and walkthrough — **DONE**
 
-The guide sections above, the screenshot slot, the manual checklist.
+Implemented 2026-09-15. The guide sections above, the screenshot slots, the
+manual checklist.
+
+**Delivered.** `doc/reference_guide/nodes/atomic.md` §mechanosynth gains
+*Feedstocks* and *Methods: how a step is performed* beside the existing
+*Wiring the tools*; the participant rules and workpiece-only replay move into
+*How a step is applied*; *Seeing the build* grows from three tags to five and
+states that `ms_added` / `ms_layer` are workpiece-only; *The two files* gains
+the invariant-frame rule; and the duplicate-binding error — two molecules
+claiming one type — joins the binding errors, where the first pass had left it
+out. §mechanosynth_edit gains *Two ways to use the editor* and *Making a
+sequence tool-aware* with the four-step walk enumerated and the
+regenerate-or-adopt choice, and its text-format section says that `method` is
+not a field and that writing one is a parse error.
+`math_programming.md`'s `MechanosynthStep` gains the three appended fields,
+which had been documented in `atomic.md` and nowhere else.
+
+Five stale claims were found by reading the guide against the code rather than
+against this document, and are worth recording because none of them belongs to
+a phase:
+
+- **"The tool is available while the node is selected and its `result` pin is
+  the one being displayed"** — false since the display default became `scene`,
+  and false in a way that would have stopped a user authoring a recharge at all.
+  The tool owns picks while *any* of the node's pins is displayed.
+- **Two screenshot captions had gone stale**: one promised the replayer's panel
+  "showing the two file paths", which are the deprecated properties a current
+  node does not have, and one promised a "method chip" that is a badge now.
+- **A near miss was described as "unselectable"** in the same words this
+  document used, and has never been: it previews, and the click puts the reason
+  in place of the row. Both the guide and §Tool-aware offers now say *not
+  placeable*. The popup's keyboard bullet had the same gap the other way round —
+  it named near misses where the rule is "any row below the rule".
+- **The sample failure message had no participant** where the prose two
+  paragraphs above promised one. `NoMatch` appends ` (in base)` /
+  ` (in feedstock 0)`, and that parenthesis is often the whole diagnosis.
+- **Events were said to follow from "`method` and `agent` on the steps"**,
+  two paragraphs after saying a step never states its method. They follow from
+  the steps' *operations*.
+
+The pass also collapsed four near-verbatim repetitions the three new subsections
+created — the "not a compatibility mode but a use" paragraph, the
+feedstocks-are-independent sentence, the tool-aware-offer description and "a
+click means the same thing under either pin" — and moved `mechanosynth_edit`'s
+**Properties** block back under its pin lists, where the new subsections had
+stranded it under *Making a sequence tool-aware*.
+
+Screenshot slots (`TODO(image)`, the human's): the replayer's panel with a
+wired library and script; a long build's panel with the method badge; **new** —
+`scene` displayed with a tagged tool parked over its site, a dump cluster
+beside it, the frame tags labelled and the *Tools* block visible; the placement
+popup on a clicked silicon; and the popup's anatomy, whose caption now asks for
+a tool-blocked row beside the near miss.
+
+*Tests:* none automated beyond the cross-cutting regressions; the guide's
+text-format examples are pasted through `atomcad-cli edit` once by the human to
+confirm they parse.
+
+#### The manual checklist
+
+The human's, not an agent's (`rust/AGENTS.md`: agents must not run
+`flutter test integration_test/`). The bench is **in the repository**:
+`rust/tests/fixtures/mechanosynth/mechanosynth_tools.cnnd`, opened from the
+app. Every file it names is its sibling, so it loads with no setup, and it is
+deliberately small enough that a failure is attributable: a methane pair
+(`tool_scene.xyz`), an abstraction tool tagged by five `tag` nodes
+(`tool_tip.xyz`), a hydrogen dump 20 Å away (`tool_dump.xyz`), the `/2` library
+and the seven-step build. It is machine-written — regenerate it with the
+`#[ignore]`d `generate_the_tools_fixture` test rather than editing it by hand,
+and revert any change made while walking through it.
+
+1. **Open it and look at the panel.** The `mechanosynth` node shows `scene`
+   without an eye being touched; the *Tools* block names `habst_tool`,
+   `charged` at step 0, with a residual of a few thousandths; the *Feedstocks*
+   line counts one reservoir and its atoms.
+2. **Switch the eye from `scene` to `result`.** The tool and the dump disappear
+   and the methane pair is intact. Switch back.
+3. **Scrub 0 → 1.** A hydrogen leaves methane A and appears at the tip's apex;
+   the state flips to *spent*; the method badge reads `tip · habst_tool`; the
+   reservoir's count is unchanged.
+4. **Scrub 1 → 2.** The hydrogen leaves the tip and lands on the reservoir, the
+   state flips back to *charged*, and the *Feedstocks* count goes up by one.
+   Under `result` that hydrogen is nowhere, and the workpiece is untouched by
+   the step.
+5. **Scrub past 3.** Step 4 is `habst_probe`, and the fixture wires no molecule
+   tagged `probe` — the build fails naming the step, the operation and the
+   type. That is the rule that a tool type with no molecule is fine *until a
+   step needs it*, and the only way to see it. Scrub back to 3.
+6. **Colour by tag.** An `apply_style` with `label: "{tag}"` on `scene` shows
+   `ms_tool` across the tip, `ms_feedstock` across the dump, and `ms_added` on
+   neither.
+7. **Move the tool molecule** — a `free_move` in front of the `tools` wire —
+   and confirm the replay follows it with no edit to the build.
+8. **Break a tag.** Move the `c` leg tag to a neighbouring atom: the panel
+   reports the residual error naming the molecule, before any step runs. Put it
+   back.
+9. **Duplicate the tool wire** into `tools` twice: the duplicate error names
+   both. Undo.
+10. **Unwire `tools`.** The whole build replays with no binding and no state,
+    and `result` is what it was — the workpiece-only use. (It also gets past
+    step 4, which is the same rule seen from the other side.)
+11. **Add a `mechanosynth_edit`** after the replayer, wire the same library,
+    tools and feedstocks, and leave its `steps` prefix unwired. With the tip
+    *spent* and `scene` displayed, click a workpiece hydrogen: `habst` is below
+    the rule with *habst_tool is spent*, and clicking it explains rather than
+    places. Click the reservoir: the recharge is the applicable row. Commit it
+    and watch the readout flip to *charged*.
+12. **Click a tool atom.** "Tools are rewritten by their operations, not placed
+    on", and nothing is offered.
+13. **The walk.** Author two abstractions with `tools` unwired; wire the tools;
+    walk the cursor forward. The second stops the cursor with the reason on the
+    row, the viewport keeps drawing the previous state and the panel says so
+    with the atom count. Insert the recharge in front of it and watch the block
+    replay.
+14. **Reorder two steps** so the tool is used twice without a recharge between
+    them, and read the state error naming both states. Undo.
+15. **Round-trip.** Save the project *elsewhere* — the fixture is
+    machine-written and a snapshot test reads it — reload, and confirm the
+    authored block, its chips and the cursor survive; then paste the guide's
+    text-format example through `atomcad-cli edit` to confirm it parses.
+
+Then the regression this design shares with its predecessors: the demo projects
+in the maintainer's `mechanosynth/` folder still evaluate to the same
+structures. The Flutter smoke test is not run by agents.
 
 ## Follow-ups (signatures only)
 

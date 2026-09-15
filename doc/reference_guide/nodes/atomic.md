@@ -800,7 +800,7 @@ Where the rest of atomCAD describes *what* a structure is, this node describes
 donations, group placements and dimer manipulations a scanning-probe
 mechanosynthesis process would run to grow the structure from a seed.
 
-![TODO(image): the `mechanosynth` node selected, its properties panel showing the two file paths and the step slider, with the workpiece part-built in the viewport](TODO)
+![TODO(image): the `mechanosynth` node selected with `ops_library` and `build_script` wired into it, its properties panel showing the step slider and the current step's readout, and the workpiece part-built in the viewport](TODO)
 
 **Input pins**
 
@@ -871,18 +871,24 @@ property's field rather than leaving it editing something the node ignores.
 
 ### Wiring the tools
 
+![TODO(image): `scene` displayed — the workpiece with a tagged abstraction tool
+parked above its reaction site and a hydrogen-dump cluster off to one side, the
+tool's four frame atoms labelled with their tags, and the panel's *Tools* block
+showing the bound type, its state and its pose residual](TODO)
+
 A tool molecule is an ordinary structure in the design — a tooltip you modelled,
 or a tip apex imported from a file — wired to the `tools` pin. Nothing about the
 step names it: **the library states which instrument each operation needs, and
 atom tags say which molecule plays it.** So a build script never has to be
 edited when the instrument changes, and nothing is searched for.
 
-Per tool, a design applies five tags:
+Per tool, a design applies five tags — one saying *which type this is*, four
+saying *where it is*:
 
-1. the **tool type's name** on the whole molecule — one
-   [`tag`](#tag) node with no region does this;
-2. `apex` and the type's three leg tags on the four **frame atoms** the library
-   names. Use `tag` nodes with a small region each (a
+1. the **tool type's name**, on the whole molecule. One [`tag`](#tag) node with
+   no region does this.
+2. `apex` and the type's three leg tags, one each on the four **frame atoms**
+   the library names. Use `tag` nodes with a small region each (a
    [`free_sphere`](./geometry_3d.md#free_sphere) around the atom), or
    [`atom_edit`](#atom_edit)'s *Tag selected…*.
 
@@ -897,7 +903,15 @@ is placed with. Move the molecule in the design and the replay follows it. A
 molecule carrying no type tag, two type tags, a frame tag on no atom or on two,
 or a frame that does not fit within tolerance, is an error naming the molecule —
 reported once, before the first step, rather than at the step that happens to
-use it. A tool type with **no** molecule is fine until a step needs one.
+use it.
+
+**One molecule per type.** Two wired molecules carrying the same type tag is an
+error naming both: the library wrote one part and the design is offering two
+actors for it, and the engine will not choose. A process that really uses two
+of an instrument gives them two types in the library. A tool type with **no**
+molecule is the other way round and is *not* an error — it is fine until a step
+needs one, which is what lets a design wire the tools it has while the rest of
+the library is still being written.
 
 Each tool also carries a **symbolic state** from the library's vocabulary —
 `charged` / `spent` for a hydrogen abstraction tool — starting at the type's
@@ -908,9 +922,78 @@ makes a missing recharge an error rather than a wrong structure.
 **With `tools` unwired nothing is bound and no state is tracked.** That is not a
 compatibility mode but a use: looking at what a build does to the workpiece
 without modelling the instruments, which is how a library is developed before
-its tools exist. `feedstocks` is independent of it — a build can draw on a
-reservoir with no tool modelled, and the dump step is then an ordinary rewrite
-of the reservoir.
+its tools exist. Wiring the pin turns the tool model on for the whole script at
+once.
+
+### Feedstocks
+
+A **reservoir** is a structure a build draws atoms from and dumps atoms onto: a
+hydrogen dump for a spent abstraction tool, a cluster a donation tool recharges
+from. Wire it to `feedstocks`. Like a tool it is an ordinary structure in the
+design, and unlike a tool it needs no tags at all — being on the pin is the
+whole of it.
+
+- It appears in `scene`, with every one of its atoms tagged `ms_feedstock`, and
+  **never** in `result`. An `export_atoms` downstream of `result` therefore
+  writes the workpiece even while the build is shuttling atoms to and from a
+  cluster parked 40 Å away.
+- **An atom a step adds to a reservoir stays with the reservoir.** Added atoms
+  belong to whichever participant the step's match landed in, so the hydrogen a
+  recharge dumps is a reservoir atom from that moment on: it is in `scene`, it
+  is not in `result`, and it carries neither `ms_added` nor `ms_layer` (those
+  mean "what the build created on the workpiece" — see *Seeing the build*).
+  The reservoir's atom count on the panel's *Feedstocks* line is what you watch
+  change as you scrub across a dump.
+- **A recharge is an ordinary step.** Nothing in the file marks one: `hdump` is
+  an operation whose `before` matches on the reservoir and whose tool side puts
+  the tool back in `charged`. Which structure it touched is the engine's answer
+  from the participant map, not a field on the step.
+- A step whose matched atoms span **two** participants — one workpiece atom and
+  one reservoir atom, or two reservoirs — is refused (see *How a step is
+  applied*). Park a reservoir clear of the workpiece.
+
+Wiring a reservoir is independent of wiring tools. A build can draw on one with
+no tool modelled at all, and a tool can be modelled with no reservoir in sight;
+the two pins answer two different questions.
+
+### Methods: how a step is performed
+
+Every operation states its **method**, and a step never does. It is a closed
+vocabulary of three words, and the library adds the *who*: a tool type for a
+tip step, an `agent` for a bulk one.
+
+| method | who performs it | what one step is |
+|---|---|---|
+| `tip` | a positional probe — the operation's tool type. A bare probe is a tool type with an empty tool side | one visit of one tool to one site |
+| `bulk` | an exposure of the whole workpiece — a gas, a dose, light — named by the operation's `agent` (`"Cl2"`, `"UV"`) | one site's share of that exposure |
+| `spontaneous` | nothing external: the workpiece rearranges by itself | one rearrangement, enabled by the step before it |
+
+The kind implies the instrument. A `tip` operation has a tool side and therefore
+a tool type; a `bulk` or `spontaneous` one has neither, and a library that gives
+one a tool side does not load. A `bulk` operation must state an `agent`.
+
+**Events.** Consecutive steps group into *events*, by two rules: a maximal run
+of `bulk` steps sharing one `agent` is one event — a single dose, applied at
+several sites — and a `spontaneous` step belongs to the event of the
+non-spontaneous step before it, as the settling that follows it. (A spontaneous
+step at the very start of a script is its own event.) Nothing stores an event;
+the boundaries follow from the `method` and `agent` of the steps' *operations*,
+which the `step` output pin reports for the current step.
+
+**An event is a grouping for display, never a replay semantics.** The replay is
+strictly sequential for every kind: each step's `before` is matched against the
+scene as the steps before it left it. Two `bulk` steps at neighbouring sites are
+*not* independent — one can add the atom the other's `*` slot then finds, or
+delete a neighbour the other's pattern names — so the order of steps inside an
+event is part of their meaning, exactly as for tip steps. A generator that wants
+a stable file sorts its sites before it replays them; re-sorting an existing
+file is an edit, and it has to be replayed again.
+
+What is deliberately *not* in this vocabulary is the instrument. Earlier
+libraries used free strings (`sam`, `stml`, `gas`, `dose`, `uv`, `relax`) that
+were doing two jobs at once — kind and instrument — and the two have their own
+fields now. A style rule that used to colour by such a label colours by
+`tool_type` or `agent` instead.
 
 ### The properties panel
 
@@ -997,7 +1080,7 @@ itself with nothing to keep in sync by hand. When the `step` pin is wired the
 list still shows where the build stands, but its rows are inert, like the
 slider.
 
-![TODO(image): the properties panel of a long build — the step slider with accent ticks at the phase boundaries, the method/phase/layer chips, and the phase list with the current phase highlighted](TODO)
+![TODO(image): the properties panel of a long build — the step slider with accent ticks at the phase boundaries, the method badge with its instrument beside the phase and layer chips, and the phase list with the current phase highlighted](TODO)
 
 ### The two files
 
@@ -1057,14 +1140,14 @@ that only `after` has — an added atom needs a real element.
 }
 ```
 
-**Every operation states its `method`**, one of three kinds the application
-defines: `tip` (a positional probe visits one site), `bulk` (one site's share of
-an exposure of the whole workpiece — a gas, a dose, light) or `spontaneous` (the
-workpiece rearranges by itself). How a reaction is performed is a fact about the
-reaction, not a choice a build script makes, so it is stated once by whoever
-researched it. A `bulk` operation also names the **`agent`** that performs it
-(`"Cl2"`, `"UV"`); a `tip` operation instead names the **tool type** that does,
-in a `tool` side.
+**Every operation states its `method`** — `tip`, `bulk` or `spontaneous`, the
+three kinds described under [*Methods*](#methods-how-a-step-is-performed). The
+key is required, and an unknown value is a load error naming the operation: how
+a reaction is performed is a fact about the reaction, not a choice a build
+script makes, so it is stated once by whoever researched it. A `bulk` operation
+must also name the **`agent`** that performs it (`"Cl2"`, `"UV"`) and may not
+carry a tool side; a `tip` operation must carry one, and it is there that it
+names its tool type.
 
 A `tip` operation's **`tool` side** is the same before/after rewrite as its
 target side, written in the tool's own local frame: what the tool looks like
@@ -1075,13 +1158,24 @@ asserting any change.
 
 The **`tools` section** describes each tool type the process uses: its `name`,
 an optional `note`, an optional `states` list whose **first entry is the state
-every tool of that type starts in**, and a `frame` of four or more named atom
-positions in the tool's local coordinates. Exactly one frame entry is tagged
-`apex` and sits at the origin, and the four may not be coplanar — three points
+every tool of that type starts in**, and a `frame` of named atom positions in
+the tool's local coordinates — four of them, which is the format's floor rather
+than its ceiling but is what every library in practice writes. Exactly one frame
+entry is tagged `apex` and sits at the origin, and the four may not be
+coplanar — three points
 are congruent to their own mirror image in space, so it takes a fourth off their
 plane for a molecule built the wrong way round to be refused rather than
 accepted mirrored. Take the legs off the tool's **handle**, not off its business
 axis, which is usually linear and would leave the four coplanar.
+
+**The frame atoms must be atoms the tool keeps.** The frame and every tool side
+of that type share one local coordinate system: the pose solved from the frame
+is the transform every tool-side pattern is placed with. So the four named atoms
+have to exist, in the same places, in every state the tool passes through — the
+handle, never the apex's cargo. A library that names an atom its own tool side
+moves or deletes is wrong in a way nothing can check at load time; what you see
+is the residual climbing on the next binding. Tag names are unique within a
+frame, and a tool type's name may not collide with a frame tag.
 
 The section is required as soon as any operation is `tip`, and every rule above
 is a load error naming the tool type.
@@ -1192,12 +1286,41 @@ coordinate, not by hand.
 
 ### How a step is applied
 
-Each `before` atom is matched to the nearest workpiece atom within the tolerance
+Each `before` atom is matched to the nearest atom within the tolerance
 that has a compatible element; every `before` atom must match a *distinct* atom.
 Matching ignores bonds entirely — position plus element is sufficient on a
 lattice, and checking bonds would only add a way for a correct script to fail.
 A `before` pattern's bonds therefore exist only to express deletions and bond
 order changes.
+
+**The match is over the whole scene, and then confined to one participant.**
+With tools or reservoirs wired, everything is one structure — that is what makes
+the tool a real object in the model rather than a number — so a pattern can land
+on atoms that belong to different things, and three rules keep a step honest:
+
+- a step's `before` matching **inside a tool** is refused. Tools are rewritten
+  by the tool side of the operation that uses them, at the pose their tagged
+  atoms solve for; nothing places a step on one;
+- a step whose matched atoms **span two participants** — a workpiece atom and a
+  reservoir atom, or two reservoirs — is refused naming both. It is almost
+  always a reservoir parked too close to the workpiece;
+- the **tool side** of a `tip` operation is matched at the tool's pose, and its
+  matched atoms must all belong to that tool. A tool parked in contact with the
+  workpiece can otherwise have a base atom inside tolerance of a pattern
+  position, and the refusal names the atom it found.
+
+All three are raised **before anything moves**, along with the state check, so a
+refused step leaves the scene exactly as it was. That is also why a step is all
+or nothing: a tool-side failure discovered halfway would otherwise leave the
+target side's rewrite behind.
+
+When a match fails, the message says which participant it was looking in —
+`base`, `feedstock 1`, `tool 0 (habst_tool)`.
+
+With nothing wired to `tools` the second and third of those rules never run: no
+tool side is matched, nothing is bound and no state is checked (*Wiring the
+tools*). The first still does — a reservoir needs no tool to be a separate
+participant.
 
 Added atoms land exactly where the operation says. **The node never relaxes**,
 so coordinates stay ideal, tolerances stay tight, and every intermediate state
@@ -1209,25 +1332,39 @@ actually nearest:
 
 ```
 mechanosynth: step 17 (gm_methylate @ (3.567, 0.892, 11.31)) — before atom
-id 1 (*) not found within 0.05 Å; nearest atom is H at 0.91 Å
+id 1 (*) not found within 0.05 Å; nearest atom is H at 0.91 Å (in base)
 ```
+
+The parenthesis names the participant the nearest atom belongs to, which is
+often the whole diagnosis: a step that reports `(in feedstock 0)` is being
+applied at a position inside the reservoir.
 
 The partial state is reachable by setting `step` one lower, which is usually the
 quickest way to see what the script expected.
 
-### Seeing the build: three atom tags
+### Seeing the build: five atom tags
 
-The node paints three ordinary [atom tags](#tag), so an `apply_style` node
-downstream can colour any of them — at the cost of three of the 32 tag slots.
-All three describe the state at the current step and are cleared from the base
+The node paints five ordinary [atom tags](#tag), so an `apply_style` node
+downstream can colour any of them — at the cost of five of the 32 tag slots.
+All of them describe the state at the current step and are cleared from the base
 before anything is applied, so tags left by an upstream `mechanosynth` never
 leak into a downstream one's.
 
 | Tag | Atoms |
 |---|---|
-| `ms_current` | the atoms the current step **changed** and left in place: the ones it added, moved, gave a different element, gave or took a bond from, or whose bonded partner it deleted. So a hydrogen abstraction highlights the radical site it created rather than nothing at all, while an operation's frame atoms — named only to fix its orientation — never light up. |
-| `ms_added` | every atom **created** by an applied step that still exists — what this build has put down so far, as against the base it started from. |
-| `ms_layer` | every atom created by an applied step whose `layer` matches the *current* step's — the terrace under construction. Empty when the current step names no layer. |
+| `ms_current` | the atoms the current step **changed** and left in place: the ones it added, moved, gave a different element, gave or took a bond from, or whose bonded partner it deleted. So a hydrogen abstraction highlights the radical site it created rather than nothing at all, while an operation's frame atoms — named only to fix its orientation — never light up. Painted on *every* participant, so a tip step lights up the site it visited **and** the apex that visited it. |
+| `ms_added` | every atom **created** by an applied step that still exists — what this build has put down so far, as against the base it started from. **Workpiece atoms only.** |
+| `ms_layer` | every atom created by an applied step whose `layer` matches the *current* step's — the terrace under construction. Empty when the current step names no layer. **Workpiece atoms only.** |
+| `ms_tool` | every atom of every wired tool molecule, in `scene`. Nothing in `result` carries it, since `result` has no tool atoms at all. |
+| `ms_feedstock` | every atom of every wired reservoir, in `scene`. Likewise absent from `result`. |
+
+**`ms_added` and `ms_layer` are about construction, not cargo.** They mean "what
+this build created on the workpiece, by layer" — they feed style rules, counts
+and exports — so an abstracted hydrogen sitting on the tip, or dumped on a
+reservoir, carries neither. The atom is real and it is in `scene`; it is simply
+not something the build put down. Tool and reservoir atoms are told apart by
+`ms_tool` and `ms_feedstock` instead, and the `ms_added` set of `scene` is
+exactly the `ms_added` set of `result`.
 
 **Membership comes from the script's metadata, never from geometry.** An atom a
 step merely *moved* was not created by it, so it stays out of that step's layer
@@ -1315,38 +1452,102 @@ row's ghost atoms drawn on the workpiece](TODO)
   **a recharge is authored by clicking the reservoir**, and with `result` alone
   shown there is nothing to click.
 
-### Authoring with tools
-
-With `tools` wired, every offer the library makes is also asked whether its tool
-can do the job here and now: the type must be bound, the tool must be in the
-state the operation needs, and its tool side must match at the tool's pose. A row
-whose tool is not ready is shown below the rule with the near misses, dimmed and
-unselectable, with the reason where the residual would be — *habst_tool is
-spent*, *no molecule tagged `probe` on the tools pin*. Committing it is refused
-for the same reason a near miss is: it could not replay.
-
-A click on a **tool atom** is answered with "tools are rewritten by their
-operations, not placed on", and offers nothing. A click on the workpiece means
-the same thing whichever pin is displayed, because base atom ids are the same in
-`result` and `scene`.
-
-Turning a tool-free sequence into a tool-aware one is a mechanical walk: wire the
-tools, put the cursor at the start and step forward. The first step whose tool is
-in the wrong state stops the cursor; with the cursor on the step before it, click
-the reservoir atom and commit the recharge the offer list shows. Repeat to the
-end — one click per recharge, and the cursor never has to go backwards.
-
-When the block fails at the cursor step, both structure pins carry the error —
-a downstream export must never receive a silently truncated build — while the
-**viewport keeps showing the state after the last successful step**, which is
-the one the failing step is being authored against.
-
 **Properties**
 
 - `cursor` — how many authored steps `result` shows. `-1` means "all" and keeps
   following the block as it grows; anything past the end clamps, exactly as the
   replayer's `step` slider does.
 - `authored` — the block itself (see *The text format*, below).
+
+### Two ways to use the editor
+
+The `tools` pin decides which of two jobs this node is doing, and neither is a
+degraded version of the other.
+
+**Modelling, with `tools` unwired.** No tool is bound, no state is tracked, and
+no offer carries a tool annotation: the question is what the *library* can do to
+this workpiece, and the answer is exactly what it was before tools existed. This
+is how a library is developed — you find out that the reaction sequence works
+before you own a model of the instrument that performs it. A sequence authored
+this way is a real sequence; it simply says nothing about instruments.
+
+**Tool-aware authoring, with `tools` wired.** The tools carry their states
+across the block, a missing recharge becomes an error at the step that needs it
+rather than a wrong structure downstream, and the offer list answers for the
+instrument as well as for the site — *Authoring with tools*, next, is what that
+looks like. This is the mode a process is finished in.
+
+The `feedstocks` pin is independent of the choice. You can wire a reservoir
+without modelling a tool at all, and a dump step is then an ordinary rewrite of
+the reservoir.
+
+### Authoring with tools
+
+With `tools` wired, every offer the library makes is also asked whether its tool
+can do the job here and now: the type must be bound, the tool must be in the
+state the operation needs, and its tool side must match at the tool's pose. A row
+whose tool is not ready is shown below the rule with the near misses, dimmed,
+with the reason where the residual would be — *habst_tool is
+spent*, *no molecule tagged `probe` on the tools pin*. It previews like a near
+miss — clicking it puts the reason in place of the row — but it cannot be
+placed, for the same reason: it could not replay. The two refusals name
+different fixes, because they have different causes: a near miss wants a library
+that covers this environment, a blocked tool wants a *step*.
+
+A click on a **tool atom** is answered with "tools are rewritten by their
+operations, not placed on", and offers nothing.
+
+When the block fails at the cursor step, both structure pins carry the error —
+a downstream export must never receive a silently truncated build — while the
+**viewport keeps showing the state after the last successful step**, which is
+the one the failing step is being authored against. The panel says so in as many
+words, with the atom count, and the failing row carries the engine's message.
+The `steps` output keeps its whole array throughout: the block is stored data
+and the prefix arrived intact, which is what lets you insert a recharge *while*
+the block is failing.
+
+### Making a sequence tool-aware
+
+A sequence authored without tools is not a dead end, and turning it into a
+tool-aware one is a mechanical walk rather than a rewrite. It is the workflow
+most designs follow — model first, instrument later.
+
+1. **Wire the tools.** Tag the molecules and wire them to `tools`. Nothing else
+   changes: the block, the cursor and the steps are what they were.
+2. **Put the cursor at the start and step forward.** Every step whose tool is in
+   the right state replays as before. The first step that needs a state the tool
+   is not in stops the cursor: the viewport shows the state before it, the row
+   carries the reason — *habst_tool is spent* — and the *Tools* readout says the
+   same thing.
+3. **Insert the recharge in front of it.** With the cursor on the step *before*
+   the failing one and `scene` displayed (the default), click the reservoir
+   atom. The offer list shows the recharge as its applicable row, because that
+   is what a spent tool can do there. Commit it: the step is inserted after the
+   cursor, the readout flips to *charged*, and the step that failed now replays.
+4. **Repeat to the end.** One click per recharge, and the cursor never has to go
+   backwards — a recharge inserted at the frontier cannot invalidate anything
+   before it, and it touches the reservoir and the tool but never the workpiece.
+
+The result is the same sequence with recharges interleaved, exact to the same
+file rounding, authored in as many clicks as there are recharges.
+
+(A half-converted sequence — one that *already* contains some recharges — can be
+knocked out of step by an inserted one, since recharging an already-charged tool
+is a state error too. The walk still finds it, at the frontier, as one more
+failing step; that one is deleted rather than inserted in front of.)
+
+**A sequence that arrives on the `steps` pin** cannot be walked this way, because
+the authored block comes *after* the wired prefix and the cursor never enters it.
+Which way out is right depends on where the sequence came from:
+
+- **regenerate it.** A generated sequence belongs to its generator. The
+  recharges are one more rule there, emitted from the same tool-state
+  bookkeeping the library already encodes, and the file stays reproducible. This
+  is the right answer whenever there *is* a generator.
+- **adopt it.** For a sequence that is nobody's output any more — an old file, a
+  hand-written one — paste the steps into the `authored` block as literals
+  through the [node network text format](../../node_network_text_format.md),
+  then remove the `steps` wire. The walk above applies from there.
 
 ### The block comes after the prefix
 
@@ -1389,14 +1590,17 @@ not an environment it was calculated for. It cannot be chosen — there is no ca
 past the gate — and the two honest fixes are to add the variant to the library
 or to loosen the library's own `tolerance`.
 
-The tool is available while the node is selected and its `result` pin is the one
-being displayed.
+The tool is available while the node is selected and **any** of its output pins
+is being displayed — `scene` by default, which is what makes the reservoir
+clickable and so makes a recharge authorable. A click on the workpiece means the
+same thing under either pin, because base atom ids are shared between them.
 
 ### The offer popup
 
 ![TODO(image): the popup's anatomy — header, an applicable row with its badge
 and info icon, a group header with two indented variant rows carrying direction
-arrows, and the near-miss rows below the rule](TODO)
+arrows, and below the rule a near-miss row showing its residual beside a
+tool-blocked row showing *habst_tool is spent*](TODO)
 
 The answer to a click opens **beside the atom you clicked**, not in the property
 panel — the list follows the atom as you orbit, and clamps to the viewport edge
@@ -1430,8 +1634,9 @@ actually took — immediate on a small molecule, a little longer on a large slab
 
 - **Up / Down** move the selection, previewing each one. **Enter** places the
   selected row.
-- **Clicking a near-miss row** previews it in amber *and* replaces the row with
-  the reason it does not fit; it places nothing, and neither does Enter on it.
+- **Clicking a row below the rule** — a near miss, or a fit whose tool is not
+  ready — previews it in amber *and* replaces the row with the reason; it places
+  nothing, and neither does Enter on it.
 - **Typing** filters the rows by the start of the operation name; **Backspace**
   undoes a letter. Filtering only hides rows — the library is not searched
   again, so it is instant however long the list, and it clears the selection
@@ -1479,8 +1684,8 @@ a click whose meaning depended on invisible state would place it there anyway.
 - **A summary line** above the list counts the inexact and approximate steps, so
   a block that is not exact says so without scrolling.
 - **The Tools readout** below it names each bound tool and its state at the
-  cursor — *habst_tool · spent* — with the wired reservoirs and their atom count
-  beside it. It is what tells you a recharge is due *before* the offer list
+  cursor — *habst_tool · spent* — with the number of wired reservoirs and their
+  total atom count beside it. It is what tells you a recharge is due *before* the offer list
   does: walk the cursor forward and watch the state, rather than discovering it
   on a blocked row.
 - **The last-good-state line** appears only when the block fails at the cursor
@@ -1513,9 +1718,12 @@ produces. The residual is the editor's own record and does **not** travel on the
 
 ### Highlights
 
-Only `ms_current` is painted here, on the atoms the cursor step changed.
+Only `ms_current` is painted here, on the atoms the cursor step changed — on
+every participant, so a tip step lights up the apex as well as the site.
 `ms_added` and `ms_layer` describe a *finished* build and stay the replayer's;
-an editor's result is a work in progress.
+an editor's result is a work in progress. `ms_tool` and `ms_feedstock` are
+painted on `scene` here as they are there, since they say what a thing *is*
+rather than what the build has done to it.
 
 ### The text format
 
@@ -1537,6 +1745,12 @@ omitted on output and defaulted on input — so a short step stays short, and a
 step you typed by hand counts as **exact**: your assertion has the same standing
 a generated file's step has. An unknown field is a parse error naming it rather
 than a silent drop.
+
+**There is no `method` field**, and writing one is that parse error. The method
+is the operation's, read from the wired library; a step that could name its own
+would be a step that could disagree with the library about how it is performed.
+A `.cnnd` saved before the field was removed still loads — the key is dropped
+where the text format refuses it — so an old project needs no migration.
 
 Editing the block from the text is an ordinary undoable edit, and so are the
 list's own operations — reorder, delete, duplicate, and each metadata chip.
@@ -1581,8 +1795,12 @@ the one every bound tool starts in) and — the part a design has to act on — 
 the molecule, and one frame tag on each of four atoms. That list appears nowhere
 else in the application, so this is the instruction for making a molecule usable
 on `mechanosynth`'s `tools` pin. A library whose operations are all `bulk` or
-`spontaneous` has no tool types and shows no section. A **Reload** button beside Browse re-reads a file that changed
-on disk; there is no file watching.
+`spontaneous` has no tool types and shows no section.
+
+The path field has a **Browse** button and a **Reload** button beside it. They
+are not the same write: Browse (or typing a path) points the node at a file,
+while Reload re-reads the file it is already pointing at, for when it changed on
+disk. There is no file watching.
 
 A library that breaks the origin convention (§*The two files*) loads with a
 warning naming the operation, shown in the panel and in the problems list. A
