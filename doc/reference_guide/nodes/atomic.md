@@ -813,11 +813,33 @@ mechanosynthesis process would run to grow the structure from a seed.
   [`build_script`](#build_script), from the array nodes, or from both
   concatenated. With nothing wired the node replays nothing and emits the base.
 - `step: Int` (optional) — overrides the stored step number.
+- `feedstocks: [HasAtoms]` (optional) — the **reservoirs** the build draws from
+  and dumps onto: a cluster of bare carbons a spent tip recharges against, a
+  patch of adsorbed species a placement picks up from. Wire several, or none.
+- `tools: [HasAtoms]` (optional) — the **tool molecules** that perform the
+  build, each tagged with the name of the tool type it plays. See
+  [*Wiring the tools*](#wiring-the-tools).
+
+Every wired feedstock and tool must have the **same phase as `base`** — all
+`Crystal` or all `Molecule`. A mismatch is a validation error on the node naming
+the pin; wire the odd one through [`enter_structure`](#enter_structure) or
+[`exit_structure`](#exit_structure) first.
 
 **Output pins**
 
-- `result` — the workpiece after the first `step` reactions. Preserves the concrete input type.
+- `result` — the workpiece after the first `step` reactions, and **the workpiece
+  alone**: nothing of the reservoirs and nothing of the tools, so an export or a
+  count downstream never picks up an atom sitting on a tip. Preserves the
+  concrete input type.
 - `step` — a [`MechanosynthStep`](./math_programming.md#record-types) record describing the **last step applied**. Shown on demand like any extra output pin (click its eye), and wired downstream like any record. See [*The `step` output pin*](#the-step-output-pin).
+- `scene` — everything at once: the workpiece, the reservoirs and the tools as
+  one structure, with every tool atom tagged `ms_tool` and every reservoir atom
+  `ms_feedstock`. This is the pin a freshly placed node **displays** (see below).
+  With nothing wired to either array pin it is the same atoms as `result`.
+
+A placed node shows `scene` rather than `result`, because `result` and the base
+part of `scene` are the same atoms and showing both would draw the workpiece
+twice. Click the eyes to change that; the choice is saved with the project.
 
 **Properties**
 
@@ -846,6 +868,49 @@ undo entry. The result is atom-for-atom identical.
 
 A wired pin always wins over its property, and the panel then hides that
 property's field rather than leaving it editing something the node ignores.
+
+### Wiring the tools
+
+A tool molecule is an ordinary structure in the design — a tooltip you modelled,
+or a tip apex imported from a file — wired to the `tools` pin. Nothing about the
+step names it: **the library states which instrument each operation needs, and
+atom tags say which molecule plays it.** So a build script never has to be
+edited when the instrument changes, and nothing is searched for.
+
+Per tool, a design applies five tags:
+
+1. the **tool type's name** on the whole molecule — one
+   [`tag`](#tag) node with no region does this;
+2. `apex` and the type's three leg tags on the four **frame atoms** the library
+   names. Use `tag` nodes with a small region each (a
+   [`free_sphere`](./geometry_3d.md#free_sphere) around the atom), or
+   [`atom_edit`](#atom_edit)'s *Tag selected…*.
+
+The `ops_library` panel lists, per tool type, the tags a design must apply, its
+state names and its note. Hovering an atom shows its tags, and an
+[`apply_style`](#apply_style) rule with `label: "{tag}"` draws them — which is
+how a mis-tagged frame is found.
+
+Those four tagged atoms are all the pose needs: the library's frame is fitted
+onto them, and the fit *is* the transform every tool-side pattern of that type
+is placed with. Move the molecule in the design and the replay follows it. A
+molecule carrying no type tag, two type tags, a frame tag on no atom or on two,
+or a frame that does not fit within tolerance, is an error naming the molecule —
+reported once, before the first step, rather than at the step that happens to
+use it. A tool type with **no** molecule is fine until a step needs one.
+
+Each tool also carries a **symbolic state** from the library's vocabulary —
+`charged` / `spent` for a hydrogen abstraction tool — starting at the type's
+first state and moved by each operation that uses it. A step whose operation
+needs a state the tool is not in fails with both states named, which is what
+makes a missing recharge an error rather than a wrong structure.
+
+**With `tools` unwired nothing is bound and no state is tracked.** That is not a
+compatibility mode but a use: looking at what a build does to the workpiece
+without modelling the instruments, which is how a library is developed before
+its tools exist. `feedstocks` is independent of it — a build can draw on a
+reservoir with no tool modelled, and the dump step is then an ordinary rewrite
+of the reservoir.
 
 ### The properties panel
 
@@ -1174,10 +1239,13 @@ of the network can act on. Wire the pin into a
 | `site` | Int | its `site` (`-1` for none) |
 | `t` | Vec3 | its placement point, in workpiece coordinates |
 | `r` | Mat3 | its rotation — so a downstream network can *orient* a gadget at the reaction site, not only place it. The identity when the step states none |
+| `tool_type` | String | the instrument a `tip` step used, from the operation. Empty otherwise |
+| `tool_state` | String | that tool's state **after** the step. Empty when the type carries no states, or when nothing plays the type |
+| `agent` | String | the species or energy a `bulk` step used — `Cl2`, `UV`. Empty otherwise |
 
 "Current" means the **last step applied**, matching the panel's wording. At step
-0 nothing has run, so the record reads
-`{index: 0, count, op: "", note: "", method: "", phase: "", layer: -1, site: -1, t: (0, 0, 0), r: identity}`
+0 nothing has run, so every string field is empty and the record reads
+`{index: 0, count, op: "", …, t: (0, 0, 0), r: identity}`
 — it does not describe step 1, which has not happened yet.
 
 The schema is fixed rather than read from your file: a pin's type has to be
@@ -1185,10 +1253,10 @@ known before anything is evaluated, and a type that changed with a file's
 contents would disconnect downstream wires every time the generator was re-run.
 If you need a field that is not here, ask for it to be added.
 
-The two output pins are **one evaluation**. When the result pin carries an error
-— a missing file, a step that failed to match — the `step` pin carries the same
-error, because a record whose `index` described a replay that did not finish
-would be a lie.
+The three output pins are **one evaluation**. When the result pin carries an
+error — a missing file, a mis-tagged tool, a step that failed to match — the
+`step` and `scene` pins carry the same error, because a record whose `index`
+described a replay that did not finish would be a lie.
 
 A typical use: a [`switch`](./math_programming.md#switch) on `step.method`
 picking one style rule set per kind, so tip steps and bulk steps are coloured
@@ -1213,15 +1281,48 @@ row's ghost atoms drawn on the workpiece](TODO)
   [`ops_library`](#ops_library). Required.
 - `steps: [BuildStep]` (optional) — a **prefix**: steps that run before the
   node's own block.
+- `feedstocks: [HasAtoms]`, `tools: [HasAtoms]` (optional) — the replayer's two
+  participant pins, with the same meaning and the same phase rule. See
+  [*Wiring the tools*](#wiring-the-tools).
 
 **Output pins**
 
 - `result` — the workpiece after the prefix and the authored steps **up to the
-  cursor**, with the cursor step's atoms tagged `ms_current`. Same concrete type
-  as `base`.
+  cursor**, with the cursor step's atoms tagged `ms_current`. The workpiece
+  alone. Same concrete type as `base`.
 - `steps: [BuildStep]` — the prefix followed by the **whole** authored block,
   whatever the cursor says. Wire it into `mechanosynth`,
   [`export_build_script`](#export_build_script) or the array nodes.
+- `scene` — the merged scene at the cursor, as on the replayer, and the pin a
+  placed node displays. A reservoir atom exists only here, which matters:
+  **a recharge is authored by clicking the reservoir**, and with `result` alone
+  shown there is nothing to click.
+
+### Authoring with tools
+
+With `tools` wired, every offer the library makes is also asked whether its tool
+can do the job here and now: the type must be bound, the tool must be in the
+state the operation needs, and its tool side must match at the tool's pose. A row
+whose tool is not ready is shown below the rule with the near misses, dimmed and
+unselectable, with the reason where the residual would be — *habst_tool is
+spent*, *no molecule tagged `probe` on the tools pin*. Committing it is refused
+for the same reason a near miss is: it could not replay.
+
+A click on a **tool atom** is answered with "tools are rewritten by their
+operations, not placed on", and offers nothing. A click on the workpiece means
+the same thing whichever pin is displayed, because base atom ids are the same in
+`result` and `scene`.
+
+Turning a tool-free sequence into a tool-aware one is a mechanical walk: wire the
+tools, put the cursor at the start and step forward. The first step whose tool is
+in the wrong state stops the cursor; with the cursor on the step before it, click
+the reservoir atom and commit the recharge the offer list shows. Repeat to the
+end — one click per recharge, and the cursor never has to go backwards.
+
+When the block fails at the cursor step, both structure pins carry the error —
+a downstream export must never receive a silently truncated build — while the
+**viewport keeps showing the state after the last successful step**, which is
+the one the failing step is being authored against.
 
 **Properties**
 

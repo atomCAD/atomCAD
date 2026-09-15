@@ -395,6 +395,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIMechanosynthEditData dco_decode_api_mechanosynth_edit_data(dynamic raw);
 
   @protected
+  APIMechanosynthFeedstockRow dco_decode_api_mechanosynth_feedstock_row(
+      dynamic raw);
+
+  @protected
   APIMechanosynthInfo dco_decode_api_mechanosynth_info(dynamic raw);
 
   @protected
@@ -402,6 +406,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIMechanosynthOffers dco_decode_api_mechanosynth_offers(dynamic raw);
+
+  @protected
+  APIMechanosynthToolRow dco_decode_api_mechanosynth_tool_row(dynamic raw);
 
   @protected
   APIMechanosynthToolStatus dco_decode_api_mechanosynth_tool_status(
@@ -465,6 +472,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIOpsLibraryEntry dco_decode_api_ops_library_entry(dynamic raw);
+
+  @protected
+  APIOpsLibraryToolType dco_decode_api_ops_library_tool_type(dynamic raw);
 
   @protected
   APIParameterData dco_decode_api_parameter_data(dynamic raw);
@@ -1216,7 +1226,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       dynamic raw);
 
   @protected
+  List<APIMechanosynthFeedstockRow>
+      dco_decode_list_api_mechanosynth_feedstock_row(dynamic raw);
+
+  @protected
   List<APIMechanosynthOffer> dco_decode_list_api_mechanosynth_offer(
+      dynamic raw);
+
+  @protected
+  List<APIMechanosynthToolRow> dco_decode_list_api_mechanosynth_tool_row(
       dynamic raw);
 
   @protected
@@ -1256,6 +1274,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APIOpsLibraryEntry> dco_decode_list_api_ops_library_entry(dynamic raw);
+
+  @protected
+  List<APIOpsLibraryToolType> dco_decode_list_api_ops_library_tool_type(
+      dynamic raw);
 
   @protected
   List<APIParameterElement> dco_decode_list_api_parameter_element(dynamic raw);
@@ -2284,6 +2306,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIMechanosynthFeedstockRow sse_decode_api_mechanosynth_feedstock_row(
+      SseDeserializer deserializer);
+
+  @protected
   APIMechanosynthInfo sse_decode_api_mechanosynth_info(
       SseDeserializer deserializer);
 
@@ -2293,6 +2319,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIMechanosynthOffers sse_decode_api_mechanosynth_offers(
+      SseDeserializer deserializer);
+
+  @protected
+  APIMechanosynthToolRow sse_decode_api_mechanosynth_tool_row(
       SseDeserializer deserializer);
 
   @protected
@@ -2365,6 +2395,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIOpsLibraryEntry sse_decode_api_ops_library_entry(
+      SseDeserializer deserializer);
+
+  @protected
+  APIOpsLibraryToolType sse_decode_api_ops_library_tool_type(
       SseDeserializer deserializer);
 
   @protected
@@ -3257,7 +3291,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  List<APIMechanosynthFeedstockRow>
+      sse_decode_list_api_mechanosynth_feedstock_row(
+          SseDeserializer deserializer);
+
+  @protected
   List<APIMechanosynthOffer> sse_decode_list_api_mechanosynth_offer(
+      SseDeserializer deserializer);
+
+  @protected
+  List<APIMechanosynthToolRow> sse_decode_list_api_mechanosynth_tool_row(
       SseDeserializer deserializer);
 
   @protected
@@ -3303,6 +3346,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APIOpsLibraryEntry> sse_decode_list_api_ops_library_entry(
+      SseDeserializer deserializer);
+
+  @protected
+  List<APIOpsLibraryToolType> sse_decode_list_api_ops_library_tool_type(
       SseDeserializer deserializer);
 
   @protected
@@ -4486,6 +4533,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIMechanosynthEditData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_mechanosynth_feedstock_row(
+      APIMechanosynthFeedstockRow self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_mechanosynth_info(
       APIMechanosynthInfo self, SseSerializer serializer);
 
@@ -4496,6 +4547,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_mechanosynth_offers(
       APIMechanosynthOffers self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_mechanosynth_tool_row(
+      APIMechanosynthToolRow self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_mechanosynth_tool_status(
@@ -4572,6 +4627,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_ops_library_entry(
       APIOpsLibraryEntry self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_ops_library_tool_type(
+      APIOpsLibraryToolType self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_parameter_data(
@@ -5488,8 +5547,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<APIMechanosynthChapter> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_api_mechanosynth_feedstock_row(
+      List<APIMechanosynthFeedstockRow> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_api_mechanosynth_offer(
       List<APIMechanosynthOffer> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_api_mechanosynth_tool_row(
+      List<APIMechanosynthToolRow> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_api_motif_parameter_info(
@@ -5534,6 +5601,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_api_ops_library_entry(
       List<APIOpsLibraryEntry> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_api_ops_library_tool_type(
+      List<APIOpsLibraryToolType> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_api_parameter_element(

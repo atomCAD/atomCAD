@@ -39,6 +39,10 @@ APIMechanosynthInfo _info({int count = 9, int applied = 3}) =>
       currentLayer: 0,
       currentSite: -1,
       chapters: _chapters,
+      currentToolType: '',
+      currentAgent: '',
+      tools: const [],
+      feedstocks: const [],
     );
 
 APIAuthoredStep _step(String op) => APIAuthoredStep(
@@ -66,6 +70,9 @@ APIMechanosynthEditData _editData({int authored = 3, int applied = 2}) =>
       approximateCount: 0,
       toolState: 'idle',
       chapters: _chapters,
+      tools: const [],
+      feedstocks: const [],
+      lastGoodAtomCount: -1,
     );
 
 Future<void> _pump(WidgetTester tester, Widget child) async {

@@ -16643,7 +16643,23 @@ impl SseDecode
         let mut var_chapters = <Vec<
             crate::api::structure_designer::structure_designer_api_types::APIMechanosynthChapter,
         >>::sse_decode(deserializer);
-        return crate::api::structure_designer::structure_designer_api_types::APIMechanosynthEditData{prefix_count: var_prefixCount, authored: var_authored, cursor: var_cursor, applied: var_applied, op_names: var_opNames, inexact_count: var_inexactCount, approximate_count: var_approximateCount, last_error: var_lastError, tool_state: var_toolState, anchor_atom_id: var_anchorAtomId, chapters: var_chapters};
+        let mut var_tools = <Vec<
+            crate::api::structure_designer::structure_designer_api_types::APIMechanosynthToolRow,
+        >>::sse_decode(deserializer);
+        let mut var_feedstocks = <Vec<crate::api::structure_designer::structure_designer_api_types::APIMechanosynthFeedstockRow>>::sse_decode(deserializer);
+        let mut var_lastGoodAtomCount = <i32>::sse_decode(deserializer);
+        return crate::api::structure_designer::structure_designer_api_types::APIMechanosynthEditData{prefix_count: var_prefixCount, authored: var_authored, cursor: var_cursor, applied: var_applied, op_names: var_opNames, inexact_count: var_inexactCount, approximate_count: var_approximateCount, last_error: var_lastError, tool_state: var_toolState, anchor_atom_id: var_anchorAtomId, chapters: var_chapters, tools: var_tools, feedstocks: var_feedstocks, last_good_atom_count: var_lastGoodAtomCount};
+    }
+}
+
+impl SseDecode
+    for crate::api::structure_designer::structure_designer_api_types::APIMechanosynthFeedstockRow
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_instance = <i32>::sse_decode(deserializer);
+        let mut var_atomCount = <i32>::sse_decode(deserializer);
+        return crate::api::structure_designer::structure_designer_api_types::APIMechanosynthFeedstockRow{instance: var_instance, atom_count: var_atomCount};
     }
 }
 
@@ -16663,6 +16679,12 @@ impl SseDecode
         let mut var_chapters = <Vec<
             crate::api::structure_designer::structure_designer_api_types::APIMechanosynthChapter,
         >>::sse_decode(deserializer);
+        let mut var_currentToolType = <String>::sse_decode(deserializer);
+        let mut var_currentAgent = <String>::sse_decode(deserializer);
+        let mut var_tools = <Vec<
+            crate::api::structure_designer::structure_designer_api_types::APIMechanosynthToolRow,
+        >>::sse_decode(deserializer);
+        let mut var_feedstocks = <Vec<crate::api::structure_designer::structure_designer_api_types::APIMechanosynthFeedstockRow>>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIMechanosynthInfo {
             count: var_count,
             applied: var_applied,
@@ -16673,6 +16695,10 @@ impl SseDecode
             current_layer: var_currentLayer,
             current_site: var_currentSite,
             chapters: var_chapters,
+            current_tool_type: var_currentToolType,
+            current_agent: var_currentAgent,
+            tools: var_tools,
+            feedstocks: var_feedstocks,
         };
     }
 }
@@ -16696,7 +16722,12 @@ impl SseDecode
         let mut var_candidates = <Vec<
             crate::api::structure_designer::structure_designer_api_types::APIMechanosynthCandidate,
         >>::sse_decode(deserializer);
-        return crate::api::structure_designer::structure_designer_api_types::APIMechanosynthOffer{op: var_op, note: var_note, candidate_count: var_candidateCount, best_residual: var_bestResidual, fits: var_fits, exact: var_exact, mirrored: var_mirrored, approximate: var_approximate, ghost: var_ghost, candidates: var_candidates};
+        let mut var_toolType = <String>::sse_decode(deserializer);
+        let mut var_toolState = <String>::sse_decode(deserializer);
+        let mut var_toolReady = <bool>::sse_decode(deserializer);
+        let mut var_toolReason = <String>::sse_decode(deserializer);
+        let mut var_offerable = <bool>::sse_decode(deserializer);
+        return crate::api::structure_designer::structure_designer_api_types::APIMechanosynthOffer{op: var_op, note: var_note, candidate_count: var_candidateCount, best_residual: var_bestResidual, fits: var_fits, exact: var_exact, mirrored: var_mirrored, approximate: var_approximate, ghost: var_ghost, candidates: var_candidates, tool_type: var_toolType, tool_state: var_toolState, tool_ready: var_toolReady, tool_reason: var_toolReason, offerable: var_offerable};
     }
 }
 
@@ -16713,6 +16744,19 @@ impl SseDecode
             crate::api::structure_designer::structure_designer_api_types::APIMechanosynthOffer,
         >>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIMechanosynthOffers{anchor_atom_id: var_anchorAtomId, anchor_position: var_anchorPosition, anchor_atomic_number: var_anchorAtomicNumber, rows: var_rows};
+    }
+}
+
+impl SseDecode
+    for crate::api::structure_designer::structure_designer_api_types::APIMechanosynthToolRow
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_instance = <i32>::sse_decode(deserializer);
+        let mut var_toolType = <String>::sse_decode(deserializer);
+        let mut var_residual = <f64>::sse_decode(deserializer);
+        let mut var_state = <String>::sse_decode(deserializer);
+        return crate::api::structure_designer::structure_designer_api_types::APIMechanosynthToolRow{instance: var_instance, tool_type: var_toolType, residual: var_residual, state: var_state};
     }
 }
 
@@ -17047,12 +17091,16 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_ops = <Vec<
             crate::api::structure_designer::structure_designer_api_types::APIOpsLibraryEntry,
         >>::sse_decode(deserializer);
+        let mut var_tools = <Vec<
+            crate::api::structure_designer::structure_designer_api_types::APIOpsLibraryToolType,
+        >>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIOpsLibraryData {
             file: var_file,
             tolerance: var_tolerance,
             tolerance_stated: var_toleranceStated,
             warnings: var_warnings,
             ops: var_ops,
+            tools: var_tools,
         };
     }
 }
@@ -17067,13 +17115,32 @@ impl SseDecode
         let mut var_beforeAtoms = <i32>::sse_decode(deserializer);
         let mut var_afterAtoms = <i32>::sse_decode(deserializer);
         let mut var_chiral = <bool>::sse_decode(deserializer);
+        let mut var_method = <String>::sse_decode(deserializer);
+        let mut var_toolType = <String>::sse_decode(deserializer);
+        let mut var_agent = <String>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIOpsLibraryEntry {
             name: var_name,
             note: var_note,
             before_atoms: var_beforeAtoms,
             after_atoms: var_afterAtoms,
             chiral: var_chiral,
+            method: var_method,
+            tool_type: var_toolType,
+            agent: var_agent,
         };
+    }
+}
+
+impl SseDecode
+    for crate::api::structure_designer::structure_designer_api_types::APIOpsLibraryToolType
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_name = <String>::sse_decode(deserializer);
+        let mut var_note = <String>::sse_decode(deserializer);
+        let mut var_states = <Vec<String>>::sse_decode(deserializer);
+        let mut var_frameTags = <Vec<String>>::sse_decode(deserializer);
+        return crate::api::structure_designer::structure_designer_api_types::APIOpsLibraryToolType{name: var_name, note: var_note, states: var_states, frame_tags: var_frameTags};
     }
 }
 
@@ -18596,6 +18663,22 @@ impl SseDecode
 }
 
 impl SseDecode
+    for Vec<
+        crate::api::structure_designer::structure_designer_api_types::APIMechanosynthFeedstockRow,
+    >
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::structure_designer::structure_designer_api_types::APIMechanosynthFeedstockRow>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode
     for Vec<crate::api::structure_designer::structure_designer_api_types::APIMechanosynthOffer>
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -18604,6 +18687,20 @@ impl SseDecode
         let mut ans_ = vec![];
         for idx_ in 0..len_ {
             ans_.push(<crate::api::structure_designer::structure_designer_api_types::APIMechanosynthOffer>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode
+    for Vec<crate::api::structure_designer::structure_designer_api_types::APIMechanosynthToolRow>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::structure_designer::structure_designer_api_types::APIMechanosynthToolRow>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -18754,6 +18851,20 @@ impl SseDecode
         let mut ans_ = vec![];
         for idx_ in 0..len_ {
             ans_.push(<crate::api::structure_designer::structure_designer_api_types::APIOpsLibraryEntry>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode
+    for Vec<crate::api::structure_designer::structure_designer_api_types::APIOpsLibraryToolType>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::structure_designer::structure_designer_api_types::APIOpsLibraryToolType>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -25169,6 +25280,9 @@ impl flutter_rust_bridge::IntoDart
             self.tool_state.into_into_dart().into_dart(),
             self.anchor_atom_id.into_into_dart().into_dart(),
             self.chapters.into_into_dart().into_dart(),
+            self.tools.into_into_dart().into_dart(),
+            self.feedstocks.into_into_dart().into_dart(),
+            self.last_good_atom_count.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -25190,6 +25304,35 @@ impl
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart
+    for crate::api::structure_designer::structure_designer_api_types::APIMechanosynthFeedstockRow
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.instance.into_into_dart().into_dart(),
+            self.atom_count.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::structure_designer::structure_designer_api_types::APIMechanosynthFeedstockRow
+{
+}
+impl
+    flutter_rust_bridge::IntoIntoDart<
+        crate::api::structure_designer::structure_designer_api_types::APIMechanosynthFeedstockRow,
+    >
+    for crate::api::structure_designer::structure_designer_api_types::APIMechanosynthFeedstockRow
+{
+    fn into_into_dart(
+        self,
+    ) -> crate::api::structure_designer::structure_designer_api_types::APIMechanosynthFeedstockRow
+    {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
     for crate::api::structure_designer::structure_designer_api_types::APIMechanosynthInfo
 {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
@@ -25203,6 +25346,10 @@ impl flutter_rust_bridge::IntoDart
             self.current_layer.into_into_dart().into_dart(),
             self.current_site.into_into_dart().into_dart(),
             self.chapters.into_into_dart().into_dart(),
+            self.current_tool_type.into_into_dart().into_dart(),
+            self.current_agent.into_into_dart().into_dart(),
+            self.tools.into_into_dart().into_dart(),
+            self.feedstocks.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -25238,6 +25385,11 @@ impl flutter_rust_bridge::IntoDart
             self.approximate.into_into_dart().into_dart(),
             self.ghost.into_into_dart().into_dart(),
             self.candidates.into_into_dart().into_dart(),
+            self.tool_type.into_into_dart().into_dart(),
+            self.tool_state.into_into_dart().into_dart(),
+            self.tool_ready.into_into_dart().into_dart(),
+            self.tool_reason.into_into_dart().into_dart(),
+            self.offerable.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -25283,6 +25435,35 @@ impl
     fn into_into_dart(
         self,
     ) -> crate::api::structure_designer::structure_designer_api_types::APIMechanosynthOffers {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
+    for crate::api::structure_designer::structure_designer_api_types::APIMechanosynthToolRow
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.instance.into_into_dart().into_dart(),
+            self.tool_type.into_into_dart().into_dart(),
+            self.residual.into_into_dart().into_dart(),
+            self.state.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::structure_designer::structure_designer_api_types::APIMechanosynthToolRow
+{
+}
+impl
+    flutter_rust_bridge::IntoIntoDart<
+        crate::api::structure_designer::structure_designer_api_types::APIMechanosynthToolRow,
+    > for crate::api::structure_designer::structure_designer_api_types::APIMechanosynthToolRow
+{
+    fn into_into_dart(
+        self,
+    ) -> crate::api::structure_designer::structure_designer_api_types::APIMechanosynthToolRow {
         self
     }
 }
@@ -25825,6 +26006,7 @@ impl flutter_rust_bridge::IntoDart
             self.tolerance_stated.into_into_dart().into_dart(),
             self.warnings.into_into_dart().into_dart(),
             self.ops.into_into_dart().into_dart(),
+            self.tools.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -25855,6 +26037,9 @@ impl flutter_rust_bridge::IntoDart
             self.before_atoms.into_into_dart().into_dart(),
             self.after_atoms.into_into_dart().into_dart(),
             self.chiral.into_into_dart().into_dart(),
+            self.method.into_into_dart().into_dart(),
+            self.tool_type.into_into_dart().into_dart(),
+            self.agent.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -25871,6 +26056,35 @@ impl
     fn into_into_dart(
         self,
     ) -> crate::api::structure_designer::structure_designer_api_types::APIOpsLibraryEntry {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
+    for crate::api::structure_designer::structure_designer_api_types::APIOpsLibraryToolType
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.name.into_into_dart().into_dart(),
+            self.note.into_into_dart().into_dart(),
+            self.states.into_into_dart().into_dart(),
+            self.frame_tags.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::structure_designer::structure_designer_api_types::APIOpsLibraryToolType
+{
+}
+impl
+    flutter_rust_bridge::IntoIntoDart<
+        crate::api::structure_designer::structure_designer_api_types::APIOpsLibraryToolType,
+    > for crate::api::structure_designer::structure_designer_api_types::APIOpsLibraryToolType
+{
+    fn into_into_dart(
+        self,
+    ) -> crate::api::structure_designer::structure_designer_api_types::APIOpsLibraryToolType {
         self
     }
 }
@@ -30144,6 +30358,19 @@ impl SseEncode
         <String>::sse_encode(self.tool_state, serializer);
         <Option<u32>>::sse_encode(self.anchor_atom_id, serializer);
         <Vec<crate::api::structure_designer::structure_designer_api_types::APIMechanosynthChapter>>::sse_encode(self.chapters, serializer);
+        <Vec<crate::api::structure_designer::structure_designer_api_types::APIMechanosynthToolRow>>::sse_encode(self.tools, serializer);
+        <Vec<crate::api::structure_designer::structure_designer_api_types::APIMechanosynthFeedstockRow>>::sse_encode(self.feedstocks, serializer);
+        <i32>::sse_encode(self.last_good_atom_count, serializer);
+    }
+}
+
+impl SseEncode
+    for crate::api::structure_designer::structure_designer_api_types::APIMechanosynthFeedstockRow
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.instance, serializer);
+        <i32>::sse_encode(self.atom_count, serializer);
     }
 }
 
@@ -30161,6 +30388,10 @@ impl SseEncode
         <i32>::sse_encode(self.current_layer, serializer);
         <i32>::sse_encode(self.current_site, serializer);
         <Vec<crate::api::structure_designer::structure_designer_api_types::APIMechanosynthChapter>>::sse_encode(self.chapters, serializer);
+        <String>::sse_encode(self.current_tool_type, serializer);
+        <String>::sse_encode(self.current_agent, serializer);
+        <Vec<crate::api::structure_designer::structure_designer_api_types::APIMechanosynthToolRow>>::sse_encode(self.tools, serializer);
+        <Vec<crate::api::structure_designer::structure_designer_api_types::APIMechanosynthFeedstockRow>>::sse_encode(self.feedstocks, serializer);
     }
 }
 
@@ -30179,6 +30410,11 @@ impl SseEncode
         <bool>::sse_encode(self.approximate, serializer);
         <Vec<crate::api::structure_designer::structure_designer_api_types::APIGhostAtom>>::sse_encode(self.ghost, serializer);
         <Vec<crate::api::structure_designer::structure_designer_api_types::APIMechanosynthCandidate>>::sse_encode(self.candidates, serializer);
+        <String>::sse_encode(self.tool_type, serializer);
+        <String>::sse_encode(self.tool_state, serializer);
+        <bool>::sse_encode(self.tool_ready, serializer);
+        <String>::sse_encode(self.tool_reason, serializer);
+        <bool>::sse_encode(self.offerable, serializer);
     }
 }
 
@@ -30191,6 +30427,18 @@ impl SseEncode
         <crate::api::common_api_types::APIVec3>::sse_encode(self.anchor_position, serializer);
         <i32>::sse_encode(self.anchor_atomic_number, serializer);
         <Vec<crate::api::structure_designer::structure_designer_api_types::APIMechanosynthOffer>>::sse_encode(self.rows, serializer);
+    }
+}
+
+impl SseEncode
+    for crate::api::structure_designer::structure_designer_api_types::APIMechanosynthToolRow
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.instance, serializer);
+        <String>::sse_encode(self.tool_type, serializer);
+        <f64>::sse_encode(self.residual, serializer);
+        <String>::sse_encode(self.state, serializer);
     }
 }
 
@@ -30418,6 +30666,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <bool>::sse_encode(self.tolerance_stated, serializer);
         <Vec<String>>::sse_encode(self.warnings, serializer);
         <Vec<crate::api::structure_designer::structure_designer_api_types::APIOpsLibraryEntry>>::sse_encode(self.ops, serializer);
+        <Vec<crate::api::structure_designer::structure_designer_api_types::APIOpsLibraryToolType>>::sse_encode(self.tools, serializer);
     }
 }
 
@@ -30431,6 +30680,21 @@ impl SseEncode
         <i32>::sse_encode(self.before_atoms, serializer);
         <i32>::sse_encode(self.after_atoms, serializer);
         <bool>::sse_encode(self.chiral, serializer);
+        <String>::sse_encode(self.method, serializer);
+        <String>::sse_encode(self.tool_type, serializer);
+        <String>::sse_encode(self.agent, serializer);
+    }
+}
+
+impl SseEncode
+    for crate::api::structure_designer::structure_designer_api_types::APIOpsLibraryToolType
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.name, serializer);
+        <String>::sse_encode(self.note, serializer);
+        <Vec<String>>::sse_encode(self.states, serializer);
+        <Vec<String>>::sse_encode(self.frame_tags, serializer);
     }
 }
 
@@ -31567,6 +31831,20 @@ impl SseEncode
 }
 
 impl SseEncode
+    for Vec<
+        crate::api::structure_designer::structure_designer_api_types::APIMechanosynthFeedstockRow,
+    >
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::structure_designer::structure_designer_api_types::APIMechanosynthFeedstockRow>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode
     for Vec<crate::api::structure_designer::structure_designer_api_types::APIMechanosynthOffer>
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -31574,6 +31852,18 @@ impl SseEncode
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::api::structure_designer::structure_designer_api_types::APIMechanosynthOffer>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode
+    for Vec<crate::api::structure_designer::structure_designer_api_types::APIMechanosynthToolRow>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::structure_designer::structure_designer_api_types::APIMechanosynthToolRow>::sse_encode(item, serializer);
         }
     }
 }
@@ -31700,6 +31990,18 @@ impl SseEncode
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::api::structure_designer::structure_designer_api_types::APIOpsLibraryEntry>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode
+    for Vec<crate::api::structure_designer::structure_designer_api_types::APIOpsLibraryToolType>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::structure_designer::structure_designer_api_types::APIOpsLibraryToolType>::sse_encode(item, serializer);
         }
     }
 }

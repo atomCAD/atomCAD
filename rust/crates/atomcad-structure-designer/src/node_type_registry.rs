@@ -804,6 +804,15 @@ impl NodeTypeRegistry {
                     // `r` a downstream network can *orient* a gadget at the
                     // reaction site and not only place it.
                     ("r".to_string(), DataType::Mat3),
+                    // The tool model (`doc/design_mechanosynth_tools.md`),
+                    // appended for the same reason. `method` above now reports
+                    // the *operation's* kind — `tip` / `bulk` / `spontaneous` —
+                    // so a `switch` downstream sees the kind; these three say
+                    // which instrument, what state it is in after the step, and
+                    // which species a `bulk` step used. Empty where absent.
+                    ("tool_type".to_string(), DataType::String),
+                    ("tool_state".to_string(), DataType::String),
+                    ("agent".to_string(), DataType::String),
                 ],
             ),
         );

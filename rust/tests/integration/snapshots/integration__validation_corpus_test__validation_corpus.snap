@@ -85,6 +85,8 @@ expression: out
   network 'Main' valid=true
 === mechanosynth/mechanosynth_legacy.cnnd
   network 'Main' valid=true
+=== mechanosynth/mechanosynth_tools.cnnd
+  network 'Main' valid=true
 === mechanosynth/mechanosynth_wired.cnnd
   network 'Main' valid=true
 === multi_output_migration/old_atom_edit_output_diff_false.cnnd

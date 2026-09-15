@@ -713,10 +713,12 @@ impl StructureDesigner {
         Some(current)
     }
 
-    /// If the just-added node opts into displaying all of its output pins by
-    /// default (see [`NodeData::default_display_all_output_pins`]) and it is
-    /// currently displayed, mark its remaining output pins (`1..N`) displayed —
-    /// pin 0 is already on from `NodeNetwork::add_node`. Both display setters
+    /// Applies the just-added node's **display default**, when it states one
+    /// and is currently displayed: either every output pin
+    /// ([`NodeData::default_display_all_output_pins`], the destructure nodes)
+    /// or an explicit set ([`NodeData::default_displayed_output_pins`], the
+    /// two `mechanosynth` nodes' `{2}`). Pin 0 is already on from
+    /// `NodeNetwork::add_node`. Both display setters
     /// preserve an existing `displayed_pins` set, so calling this *after* the
     /// display-policy pass is safe (the policy only flips the node-level
     /// display type, never the pin set). We deliberately do not force-show a
@@ -738,16 +740,35 @@ impl StructureDesigner {
             return;
         }
         if let Some(network) = self.get_scope_network_mut(scope_path) {
-            let opt_in = network
-                .nodes
-                .get(&node_id)
-                .map(|n| n.data.default_display_all_output_pins())
-                .unwrap_or(false);
-            if !opt_in || !network.is_node_displayed(node_id) {
+            let Some(data) = network.nodes.get(&node_id).map(|n| &n.data) else {
+                return;
+            };
+            let all_pins = data.default_display_all_output_pins();
+            let explicit = data.default_displayed_output_pins();
+            if !network.is_node_displayed(node_id) {
                 return;
             }
-            for pin_index in 1..pin_count {
-                network.set_pin_displayed(node_id, pin_index as i32, true);
+            // The explicit set wins where a node states one (both `mechanosynth`
+            // nodes say `{2}`); the older all-pins opt-in is the destructure
+            // nodes'. A node states one or the other, never both.
+            if let Some(pins) = explicit {
+                // Additions first, removals after: `set_pin_displayed` drops a
+                // node from `displayed_nodes` the moment its pin set empties,
+                // which would lose a `Ghost` display type on the way past.
+                for pin_index in 0..pin_count {
+                    if pins.contains(&(pin_index as i32)) {
+                        network.set_pin_displayed(node_id, pin_index as i32, true);
+                    }
+                }
+                for pin_index in 0..pin_count {
+                    if !pins.contains(&(pin_index as i32)) {
+                        network.set_pin_displayed(node_id, pin_index as i32, false);
+                    }
+                }
+            } else if all_pins {
+                for pin_index in 1..pin_count {
+                    network.set_pin_displayed(node_id, pin_index as i32, true);
+                }
             }
         }
     }

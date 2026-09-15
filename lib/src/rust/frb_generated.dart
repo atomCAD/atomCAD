@@ -18977,8 +18977,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIMechanosynthEditData dco_decode_api_mechanosynth_edit_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 11)
-      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
+    if (arr.length != 14)
+      throw Exception('unexpected arr length: expect 14 but see ${arr.length}');
     return APIMechanosynthEditData(
       prefixCount: dco_decode_i_32(arr[0]),
       authored: dco_decode_list_api_authored_step(arr[1]),
@@ -18991,6 +18991,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       toolState: dco_decode_String(arr[8]),
       anchorAtomId: dco_decode_opt_box_autoadd_u_32(arr[9]),
       chapters: dco_decode_list_api_mechanosynth_chapter(arr[10]),
+      tools: dco_decode_list_api_mechanosynth_tool_row(arr[11]),
+      feedstocks: dco_decode_list_api_mechanosynth_feedstock_row(arr[12]),
+      lastGoodAtomCount: dco_decode_i_32(arr[13]),
+    );
+  }
+
+  @protected
+  APIMechanosynthFeedstockRow dco_decode_api_mechanosynth_feedstock_row(
+      dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return APIMechanosynthFeedstockRow(
+      instance: dco_decode_i_32(arr[0]),
+      atomCount: dco_decode_i_32(arr[1]),
     );
   }
 
@@ -18998,8 +19014,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIMechanosynthInfo dco_decode_api_mechanosynth_info(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 9)
-      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    if (arr.length != 13)
+      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
     return APIMechanosynthInfo(
       count: dco_decode_i_32(arr[0]),
       applied: dco_decode_i_32(arr[1]),
@@ -19010,6 +19026,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       currentLayer: dco_decode_i_32(arr[6]),
       currentSite: dco_decode_i_32(arr[7]),
       chapters: dco_decode_list_api_mechanosynth_chapter(arr[8]),
+      currentToolType: dco_decode_String(arr[9]),
+      currentAgent: dco_decode_String(arr[10]),
+      tools: dco_decode_list_api_mechanosynth_tool_row(arr[11]),
+      feedstocks: dco_decode_list_api_mechanosynth_feedstock_row(arr[12]),
     );
   }
 
@@ -19017,8 +19037,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIMechanosynthOffer dco_decode_api_mechanosynth_offer(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 10)
-      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+    if (arr.length != 15)
+      throw Exception('unexpected arr length: expect 15 but see ${arr.length}');
     return APIMechanosynthOffer(
       op: dco_decode_String(arr[0]),
       note: dco_decode_String(arr[1]),
@@ -19030,6 +19050,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       approximate: dco_decode_bool(arr[7]),
       ghost: dco_decode_list_api_ghost_atom(arr[8]),
       candidates: dco_decode_list_api_mechanosynth_candidate(arr[9]),
+      toolType: dco_decode_String(arr[10]),
+      toolState: dco_decode_String(arr[11]),
+      toolReady: dco_decode_bool(arr[12]),
+      toolReason: dco_decode_String(arr[13]),
+      offerable: dco_decode_bool(arr[14]),
     );
   }
 
@@ -19044,6 +19069,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       anchorPosition: dco_decode_api_vec_3(arr[1]),
       anchorAtomicNumber: dco_decode_i_32(arr[2]),
       rows: dco_decode_list_api_mechanosynth_offer(arr[3]),
+    );
+  }
+
+  @protected
+  APIMechanosynthToolRow dco_decode_api_mechanosynth_tool_row(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return APIMechanosynthToolRow(
+      instance: dco_decode_i_32(arr[0]),
+      toolType: dco_decode_String(arr[1]),
+      residual: dco_decode_f_64(arr[2]),
+      state: dco_decode_String(arr[3]),
     );
   }
 
@@ -19319,14 +19358,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIOpsLibraryData dco_decode_api_ops_library_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
     return APIOpsLibraryData(
       file: dco_decode_opt_String(arr[0]),
       tolerance: dco_decode_f_64(arr[1]),
       toleranceStated: dco_decode_bool(arr[2]),
       warnings: dco_decode_list_String(arr[3]),
       ops: dco_decode_list_api_ops_library_entry(arr[4]),
+      tools: dco_decode_list_api_ops_library_tool_type(arr[5]),
     );
   }
 
@@ -19334,14 +19374,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIOpsLibraryEntry dco_decode_api_ops_library_entry(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
     return APIOpsLibraryEntry(
       name: dco_decode_String(arr[0]),
       note: dco_decode_String(arr[1]),
       beforeAtoms: dco_decode_i_32(arr[2]),
       afterAtoms: dco_decode_i_32(arr[3]),
       chiral: dco_decode_bool(arr[4]),
+      method: dco_decode_String(arr[5]),
+      toolType: dco_decode_String(arr[6]),
+      agent: dco_decode_String(arr[7]),
+    );
+  }
+
+  @protected
+  APIOpsLibraryToolType dco_decode_api_ops_library_tool_type(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return APIOpsLibraryToolType(
+      name: dco_decode_String(arr[0]),
+      note: dco_decode_String(arr[1]),
+      states: dco_decode_list_String(arr[2]),
+      frameTags: dco_decode_list_String(arr[3]),
     );
   }
 
@@ -21380,11 +21437,29 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<APIMechanosynthFeedstockRow>
+      dco_decode_list_api_mechanosynth_feedstock_row(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_api_mechanosynth_feedstock_row)
+        .toList();
+  }
+
+  @protected
   List<APIMechanosynthOffer> dco_decode_list_api_mechanosynth_offer(
       dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>)
         .map(dco_decode_api_mechanosynth_offer)
+        .toList();
+  }
+
+  @protected
+  List<APIMechanosynthToolRow> dco_decode_list_api_mechanosynth_tool_row(
+      dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_api_mechanosynth_tool_row)
         .toList();
   }
 
@@ -21471,6 +21546,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>)
         .map(dco_decode_api_ops_library_entry)
+        .toList();
+  }
+
+  @protected
+  List<APIOpsLibraryToolType> dco_decode_list_api_ops_library_tool_type(
+      dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_api_ops_library_tool_type)
         .toList();
   }
 
@@ -24622,6 +24706,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_toolState = sse_decode_String(deserializer);
     var var_anchorAtomId = sse_decode_opt_box_autoadd_u_32(deserializer);
     var var_chapters = sse_decode_list_api_mechanosynth_chapter(deserializer);
+    var var_tools = sse_decode_list_api_mechanosynth_tool_row(deserializer);
+    var var_feedstocks =
+        sse_decode_list_api_mechanosynth_feedstock_row(deserializer);
+    var var_lastGoodAtomCount = sse_decode_i_32(deserializer);
     return APIMechanosynthEditData(
         prefixCount: var_prefixCount,
         authored: var_authored,
@@ -24633,7 +24721,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         lastError: var_lastError,
         toolState: var_toolState,
         anchorAtomId: var_anchorAtomId,
-        chapters: var_chapters);
+        chapters: var_chapters,
+        tools: var_tools,
+        feedstocks: var_feedstocks,
+        lastGoodAtomCount: var_lastGoodAtomCount);
+  }
+
+  @protected
+  APIMechanosynthFeedstockRow sse_decode_api_mechanosynth_feedstock_row(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_instance = sse_decode_i_32(deserializer);
+    var var_atomCount = sse_decode_i_32(deserializer);
+    return APIMechanosynthFeedstockRow(
+        instance: var_instance, atomCount: var_atomCount);
   }
 
   @protected
@@ -24649,6 +24750,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_currentLayer = sse_decode_i_32(deserializer);
     var var_currentSite = sse_decode_i_32(deserializer);
     var var_chapters = sse_decode_list_api_mechanosynth_chapter(deserializer);
+    var var_currentToolType = sse_decode_String(deserializer);
+    var var_currentAgent = sse_decode_String(deserializer);
+    var var_tools = sse_decode_list_api_mechanosynth_tool_row(deserializer);
+    var var_feedstocks =
+        sse_decode_list_api_mechanosynth_feedstock_row(deserializer);
     return APIMechanosynthInfo(
         count: var_count,
         applied: var_applied,
@@ -24658,7 +24764,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         currentPhase: var_currentPhase,
         currentLayer: var_currentLayer,
         currentSite: var_currentSite,
-        chapters: var_chapters);
+        chapters: var_chapters,
+        currentToolType: var_currentToolType,
+        currentAgent: var_currentAgent,
+        tools: var_tools,
+        feedstocks: var_feedstocks);
   }
 
   @protected
@@ -24676,6 +24786,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_ghost = sse_decode_list_api_ghost_atom(deserializer);
     var var_candidates =
         sse_decode_list_api_mechanosynth_candidate(deserializer);
+    var var_toolType = sse_decode_String(deserializer);
+    var var_toolState = sse_decode_String(deserializer);
+    var var_toolReady = sse_decode_bool(deserializer);
+    var var_toolReason = sse_decode_String(deserializer);
+    var var_offerable = sse_decode_bool(deserializer);
     return APIMechanosynthOffer(
         op: var_op,
         note: var_note,
@@ -24686,7 +24801,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         mirrored: var_mirrored,
         approximate: var_approximate,
         ghost: var_ghost,
-        candidates: var_candidates);
+        candidates: var_candidates,
+        toolType: var_toolType,
+        toolState: var_toolState,
+        toolReady: var_toolReady,
+        toolReason: var_toolReason,
+        offerable: var_offerable);
   }
 
   @protected
@@ -24702,6 +24822,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         anchorPosition: var_anchorPosition,
         anchorAtomicNumber: var_anchorAtomicNumber,
         rows: var_rows);
+  }
+
+  @protected
+  APIMechanosynthToolRow sse_decode_api_mechanosynth_tool_row(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_instance = sse_decode_i_32(deserializer);
+    var var_toolType = sse_decode_String(deserializer);
+    var var_residual = sse_decode_f_64(deserializer);
+    var var_state = sse_decode_String(deserializer);
+    return APIMechanosynthToolRow(
+        instance: var_instance,
+        toolType: var_toolType,
+        residual: var_residual,
+        state: var_state);
   }
 
   @protected
@@ -25001,12 +25136,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_toleranceStated = sse_decode_bool(deserializer);
     var var_warnings = sse_decode_list_String(deserializer);
     var var_ops = sse_decode_list_api_ops_library_entry(deserializer);
+    var var_tools = sse_decode_list_api_ops_library_tool_type(deserializer);
     return APIOpsLibraryData(
         file: var_file,
         tolerance: var_tolerance,
         toleranceStated: var_toleranceStated,
         warnings: var_warnings,
-        ops: var_ops);
+        ops: var_ops,
+        tools: var_tools);
   }
 
   @protected
@@ -25018,12 +25155,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_beforeAtoms = sse_decode_i_32(deserializer);
     var var_afterAtoms = sse_decode_i_32(deserializer);
     var var_chiral = sse_decode_bool(deserializer);
+    var var_method = sse_decode_String(deserializer);
+    var var_toolType = sse_decode_String(deserializer);
+    var var_agent = sse_decode_String(deserializer);
     return APIOpsLibraryEntry(
         name: var_name,
         note: var_note,
         beforeAtoms: var_beforeAtoms,
         afterAtoms: var_afterAtoms,
-        chiral: var_chiral);
+        chiral: var_chiral,
+        method: var_method,
+        toolType: var_toolType,
+        agent: var_agent);
+  }
+
+  @protected
+  APIOpsLibraryToolType sse_decode_api_ops_library_tool_type(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_name = sse_decode_String(deserializer);
+    var var_note = sse_decode_String(deserializer);
+    var var_states = sse_decode_list_String(deserializer);
+    var var_frameTags = sse_decode_list_String(deserializer);
+    return APIOpsLibraryToolType(
+        name: var_name,
+        note: var_note,
+        states: var_states,
+        frameTags: var_frameTags);
   }
 
   @protected
@@ -27221,6 +27379,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<APIMechanosynthFeedstockRow>
+      sse_decode_list_api_mechanosynth_feedstock_row(
+          SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <APIMechanosynthFeedstockRow>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_api_mechanosynth_feedstock_row(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<APIMechanosynthOffer> sse_decode_list_api_mechanosynth_offer(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -27229,6 +27401,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <APIMechanosynthOffer>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_api_mechanosynth_offer(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<APIMechanosynthToolRow> sse_decode_list_api_mechanosynth_tool_row(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <APIMechanosynthToolRow>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_api_mechanosynth_tool_row(deserializer));
     }
     return ans_;
   }
@@ -27373,6 +27558,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <APIOpsLibraryEntry>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_api_ops_library_entry(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<APIOpsLibraryToolType> sse_decode_list_api_ops_library_tool_type(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <APIOpsLibraryToolType>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_api_ops_library_tool_type(deserializer));
     }
     return ans_;
   }
@@ -30928,6 +31126,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.toolState, serializer);
     sse_encode_opt_box_autoadd_u_32(self.anchorAtomId, serializer);
     sse_encode_list_api_mechanosynth_chapter(self.chapters, serializer);
+    sse_encode_list_api_mechanosynth_tool_row(self.tools, serializer);
+    sse_encode_list_api_mechanosynth_feedstock_row(self.feedstocks, serializer);
+    sse_encode_i_32(self.lastGoodAtomCount, serializer);
+  }
+
+  @protected
+  void sse_encode_api_mechanosynth_feedstock_row(
+      APIMechanosynthFeedstockRow self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.instance, serializer);
+    sse_encode_i_32(self.atomCount, serializer);
   }
 
   @protected
@@ -30943,6 +31152,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.currentLayer, serializer);
     sse_encode_i_32(self.currentSite, serializer);
     sse_encode_list_api_mechanosynth_chapter(self.chapters, serializer);
+    sse_encode_String(self.currentToolType, serializer);
+    sse_encode_String(self.currentAgent, serializer);
+    sse_encode_list_api_mechanosynth_tool_row(self.tools, serializer);
+    sse_encode_list_api_mechanosynth_feedstock_row(self.feedstocks, serializer);
   }
 
   @protected
@@ -30959,6 +31172,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.approximate, serializer);
     sse_encode_list_api_ghost_atom(self.ghost, serializer);
     sse_encode_list_api_mechanosynth_candidate(self.candidates, serializer);
+    sse_encode_String(self.toolType, serializer);
+    sse_encode_String(self.toolState, serializer);
+    sse_encode_bool(self.toolReady, serializer);
+    sse_encode_String(self.toolReason, serializer);
+    sse_encode_bool(self.offerable, serializer);
   }
 
   @protected
@@ -30969,6 +31187,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_api_vec_3(self.anchorPosition, serializer);
     sse_encode_i_32(self.anchorAtomicNumber, serializer);
     sse_encode_list_api_mechanosynth_offer(self.rows, serializer);
+  }
+
+  @protected
+  void sse_encode_api_mechanosynth_tool_row(
+      APIMechanosynthToolRow self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.instance, serializer);
+    sse_encode_String(self.toolType, serializer);
+    sse_encode_f_64(self.residual, serializer);
+    sse_encode_String(self.state, serializer);
   }
 
   @protected
@@ -31175,6 +31403,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.toleranceStated, serializer);
     sse_encode_list_String(self.warnings, serializer);
     sse_encode_list_api_ops_library_entry(self.ops, serializer);
+    sse_encode_list_api_ops_library_tool_type(self.tools, serializer);
   }
 
   @protected
@@ -31186,6 +31415,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.beforeAtoms, serializer);
     sse_encode_i_32(self.afterAtoms, serializer);
     sse_encode_bool(self.chiral, serializer);
+    sse_encode_String(self.method, serializer);
+    sse_encode_String(self.toolType, serializer);
+    sse_encode_String(self.agent, serializer);
+  }
+
+  @protected
+  void sse_encode_api_ops_library_tool_type(
+      APIOpsLibraryToolType self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.name, serializer);
+    sse_encode_String(self.note, serializer);
+    sse_encode_list_String(self.states, serializer);
+    sse_encode_list_String(self.frameTags, serializer);
   }
 
   @protected
@@ -33101,12 +33343,32 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_api_mechanosynth_feedstock_row(
+      List<APIMechanosynthFeedstockRow> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_api_mechanosynth_feedstock_row(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_api_mechanosynth_offer(
       List<APIMechanosynthOffer> self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_api_mechanosynth_offer(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_api_mechanosynth_tool_row(
+      List<APIMechanosynthToolRow> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_api_mechanosynth_tool_row(item, serializer);
     }
   }
 
@@ -33217,6 +33479,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_api_ops_library_entry(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_api_ops_library_tool_type(
+      List<APIOpsLibraryToolType> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_api_ops_library_tool_type(item, serializer);
     }
   }
 

@@ -24,7 +24,7 @@
 
 use crate::nodes::build_step::steps_from_array;
 use crate::nodes::mechanosynth_edit::{
-    AuthoredStep, MechanosynthEditData, OPS_PIN, STEPS_PIN, ToolState,
+    AuthoredStep, MechanosynthEditData, OPS_PIN, SCENE_OUTPUT_PIN, STEPS_PIN, ToolState,
 };
 use crate::structure_designer::StructureDesigner;
 use crate::undo::commands::mechanosynth_edit_block::{
@@ -32,8 +32,8 @@ use crate::undo::commands::mechanosynth_edit_block::{
 };
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::mechanosynth::{
-    Applicability, Candidate, GhostAtom, OpLibrary, Step, applicable_ops, preview_atoms,
-    preview_bonds, resolve_tolerance, steps_applied,
+    Applicability, Candidate, GhostAtom, OpLibrary, Participant, Scene, Step, ToolReadiness,
+    applicable_ops, preview_atoms, preview_bonds, resolve_tolerance, steps_applied,
 };
 use glam::DVec3;
 
@@ -79,6 +79,15 @@ pub struct OfferRow {
     /// miss carries its one rejected fit here too, so it previews like
     /// anything else.
     pub candidates: Vec<CandidateRow>,
+    /// What this row's tool has to say, when tools are wired and the operation
+    /// is `tip`. `None` otherwise — with `tools` unwired no row carries a tool
+    /// annotation, which is the modelling use of the editor exactly as it was
+    /// before tools existed.
+    pub tool: Option<ToolReadiness>,
+    /// Whether the row can be committed at all: it fits **and** its tool is
+    /// ready. A row that fits but whose tool is not sits below the rule with
+    /// the near misses, dimmed, with the reason where the residual would be.
+    pub offerable: bool,
 }
 
 /// One row of the candidate list: which way of placing the chosen operation,
@@ -169,6 +178,8 @@ fn offer_sweep(
                         .map(|op| preview_atoms(workpiece, op, preview))
                         .unwrap_or_default(),
                     candidates,
+                    tool: row.tool.clone(),
+                    offerable: row.offerable(),
                 }
             })
             .collect(),
@@ -232,19 +243,30 @@ impl StructureDesigner {
             .downcast_mut::<MechanosynthEditData>()
     }
 
-    /// The workpiece the tool acts on: the node's own `result`, i.e. the state
-    /// at the cursor, which is what the user is looking at.
-    fn mechanosynth_edit_workpiece(
+    /// The **scene** the tool acts on: the state at the cursor, with the
+    /// reservoirs and the tool molecules in it, which is what the user is
+    /// looking at (`scene` is the display default).
+    ///
+    /// Evaluating the node is what produces it — the scene carries the tool
+    /// bindings and the participant map, neither of which survives the trip
+    /// through a pin, so the node parks it in its own data and this reads it
+    /// back. An *errored* pin is not a failure here: when the block fails at
+    /// the cursor step the stored scene is the state after the last successful
+    /// step, which is exactly what the viewport is showing and therefore what a
+    /// click must be resolved against.
+    fn mechanosynth_edit_scene(
         &mut self,
         scope_path: &[u64],
         node_id: u64,
-    ) -> Result<AtomicStructure, String> {
-        match self.evaluate_node_output(scope_path, node_id, 0) {
-            crate::evaluator::network_result::NetworkResult::Error(message) => Err(message),
-            other => other
-                .extract_atomic()
-                .ok_or_else(|| "the node produced no atoms".to_string()),
-        }
+    ) -> Result<Scene, String> {
+        let evaluated = self.evaluate_node_output(scope_path, node_id, SCENE_OUTPUT_PIN as i32);
+        self.mechanosynth_edit_data(scope_path, node_id)
+            .ok_or("Not a mechanosynth_edit node")?
+            .last_scene()
+            .ok_or_else(|| match evaluated {
+                crate::evaluator::network_result::NetworkResult::Error(message) => message,
+                _ => "the node produced no atoms".to_string(),
+            })
     }
 
     /// The wired operation library.
@@ -515,21 +537,35 @@ impl StructureDesigner {
         node_id: u64,
         atom_id: u32,
     ) -> Result<OfferSweep, String> {
-        let workpiece = self.mechanosynth_edit_workpiece(scope_path, node_id)?;
-        if workpiece.get_atom(atom_id).is_none() {
+        let scene = self.mechanosynth_edit_scene(scope_path, node_id)?;
+        if scene.structure.get_atom(atom_id).is_none() {
             return Err(format!("atom {atom_id} is not in the workpiece"));
         }
+        // **A tool atom is not a host.** A tool is rewritten by the operations
+        // that use it, at the pose its tagged atoms solve for; there is nothing
+        // to place on it, and offering one would be offering a step the engine
+        // refuses as `StepOnTool`.
+        if let Participant::Tool(index) = scene.participant(atom_id) {
+            let label = scene.label(Participant::Tool(index));
+            return Err(format!(
+                "that atom belongs to {label}; tools are rewritten by their operations, not \
+                 placed on"
+            ));
+        }
         let library = self.mechanosynth_edit_library(scope_path, node_id)?;
-        // Tool-aware offers are Phase 2's: the bindings live on the evaluated
-        // scene, which this entry point does not reach yet.
+        // The bindings make the sweep tool-aware: a `tip` row that fits the
+        // clicked atom is additionally asked whether its tool is bound, in the
+        // right state, and matches at its pose. `None` when nothing is wired to
+        // `tools`, which leaves every row unannotated as before.
+        let bindings = (!scene.bindings.is_empty()).then_some(scene.bindings.as_slice());
         let offers = applicable_ops(
-            &workpiece,
+            &scene.structure,
             &library,
             atom_id,
             resolve_tolerance(&library),
-            None,
+            bindings,
         );
-        let sweep = offer_sweep(&workpiece, &library, atom_id, &offers);
+        let sweep = offer_sweep(&scene.structure, &library, atom_id, &offers);
 
         let data = self
             .mechanosynth_edit_data_mut(scope_path, node_id)
@@ -605,6 +641,16 @@ impl StructureDesigner {
                     row.best_residual
                 ));
             }
+            // A tool-blocked row is refused for the same reason a near miss is:
+            // it cannot be committed, because its tool side would not match.
+            if let Some(tool) = row.tool.as_ref().filter(|tool| !tool.ready) {
+                return Err(format!(
+                    "'{op}' cannot be performed here: {}",
+                    tool.reason
+                        .clone()
+                        .unwrap_or_else(|| format!("{} is not ready", tool.tool_type))
+                ));
+            }
             row.candidates
                 .get(index)
                 .ok_or_else(|| {
@@ -638,7 +684,7 @@ impl StructureDesigner {
         op: &str,
         index: usize,
     ) -> Result<(), String> {
-        let workpiece = self.mechanosynth_edit_workpiece(scope_path, node_id)?;
+        let workpiece = self.mechanosynth_edit_scene(scope_path, node_id)?.structure;
         let library = self.mechanosynth_edit_library(scope_path, node_id)?;
         let operation = library
             .get(op)

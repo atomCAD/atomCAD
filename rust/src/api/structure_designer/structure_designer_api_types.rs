@@ -1579,6 +1579,38 @@ pub struct APIMechanosynthInfo {
     /// The script's chapters, in order, covering every step exactly once.
     /// Empty when no script is loaded.
     pub chapters: Vec<APIMechanosynthChapter>,
+    /// The current step's tool type, when the operation is `tip`; empty
+    /// otherwise and at `applied = 0`.
+    pub current_tool_type: String,
+    /// The current step's `agent`, when the operation is `bulk`.
+    pub current_agent: String,
+    /// One row per **wired** tool molecule, in pin order. Empty when nothing is
+    /// wired to `tools`, and also when the node has not been evaluated — the
+    /// readout is read off the last evaluation rather than forcing one.
+    pub tools: Vec<APIMechanosynthToolRow>,
+    /// One entry per wired reservoir, in pin order.
+    pub feedstocks: Vec<APIMechanosynthFeedstockRow>,
+}
+
+/// One bound tool molecule, as the panel lists it: which type its tag named,
+/// how well its four frame atoms fitted, and what state it is in at the step.
+pub struct APIMechanosynthToolRow {
+    /// Index on the `tools` pin.
+    pub instance: i32,
+    pub tool_type: String,
+    /// Max per-atom residual of the frame fit, Å.
+    pub residual: f64,
+    /// The tracked state; empty when the type carries none.
+    pub state: String,
+}
+
+/// One wired reservoir, as the panel lists it.
+pub struct APIMechanosynthFeedstockRow {
+    /// Index on the `feedstocks` pin.
+    pub instance: i32,
+    /// How many of its atoms are in the scene at the step — it grows as a build
+    /// dumps onto it and shrinks as one draws from it.
+    pub atom_count: i32,
 }
 
 /// A maximal run of consecutive steps sharing a `(phase, layer)` — the unit the
@@ -1616,6 +1648,21 @@ pub struct APIOpsLibraryData {
     /// Load-time advisories, today the origin convention. Never errors.
     pub warnings: Vec<String>,
     pub ops: Vec<APIOpsLibraryEntry>,
+    /// The tool types the library envisions, above the operations. Empty for a
+    /// library whose operations are all `bulk` / `spontaneous`.
+    pub tools: Vec<APIOpsLibraryToolType>,
+}
+
+/// One tool type of a loaded library, as the panel lists it. The `frame_tags`
+/// are what a **design** must apply: the type's own name on the molecule, and
+/// one of these on each of the four frame atoms.
+pub struct APIOpsLibraryToolType {
+    pub name: String,
+    pub note: String,
+    /// The type's state vocabulary, in file order; the first is the state every
+    /// bound tool starts in. Empty when the type carries no symbolic state.
+    pub states: Vec<String>,
+    pub frame_tags: Vec<String>,
 }
 
 /// One operation of a loaded library, as the panel lists it.
@@ -1630,6 +1677,12 @@ pub struct APIOpsLibraryEntry {
     /// The operation states `"chiral": true`: a mirrored placement is a
     /// different reaction, so the placement tool drops mirrored fits.
     pub chiral: bool,
+    /// How the reaction is performed: `tip`, `bulk` or `spontaneous`.
+    pub method: String,
+    /// The instrument a `tip` operation needs; empty otherwise.
+    pub tool_type: String,
+    /// The species or energy a `bulk` operation needs; empty otherwise.
+    pub agent: String,
 }
 
 /// The stored data of a `build_script` node plus the loaded script's length,
@@ -1680,6 +1733,16 @@ pub struct APIMechanosynthEditData {
     pub anchor_atom_id: Option<u32>,
     /// The authored block's chapters — maximal runs sharing a `(phase, layer)`.
     pub chapters: Vec<APIMechanosynthChapter>,
+    /// One row per bound tool at the cursor — the *Tools* readout above the
+    /// steps list, which is what tells the user a recharge is due before the
+    /// offers do.
+    pub tools: Vec<APIMechanosynthToolRow>,
+    /// One entry per wired reservoir at the cursor.
+    pub feedstocks: Vec<APIMechanosynthFeedstockRow>,
+    /// How many atoms the last good scene has when the block fails at the
+    /// cursor step — the viewport is showing that state rather than nothing,
+    /// and the panel says so. `-1` when the block did not fail.
+    pub last_good_atom_count: i32,
 }
 
 /// One row of the authored block.
@@ -1735,6 +1798,23 @@ pub struct APIMechanosynthOffer {
     /// under the operation's name — one row per orientation — so there is no
     /// second list to open.
     pub candidates: Vec<APIMechanosynthCandidate>,
+    /// The operation's tool type, when tools are wired and the operation is
+    /// `tip`; empty otherwise. An empty string means the row carries **no**
+    /// tool annotation at all, which is the state with `tools` unwired.
+    pub tool_type: String,
+    /// The bound tool's state; empty when the type carries none or nothing
+    /// plays it.
+    pub tool_state: String,
+    /// Whether the tool is bound, in the right state, and its tool side matches
+    /// at its pose. Meaningless when `tool_type` is empty.
+    pub tool_ready: bool,
+    /// Why not, in the words the row shows where the residual would be —
+    /// *habst_tool is spent*, *no molecule tagged `probe` on the tools pin*.
+    pub tool_reason: String,
+    /// Whether the row can be committed: it fits **and** its tool is ready.
+    /// A row that fits but whose tool does not sits below the rule with the
+    /// near misses, dimmed and unselectable.
+    pub offerable: bool,
 }
 
 /// Where the placement tool stands, evaluated from nothing — the viewport reads

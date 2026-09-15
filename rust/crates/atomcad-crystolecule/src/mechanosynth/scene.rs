@@ -182,11 +182,36 @@ pub fn replay_scene_partial(
     step: i32,
     tags: HighlightTags<'_>,
 ) -> Result<(Scene, Option<MechanosynthError>), MechanosynthError> {
+    let mut scene = build_scene(base, feedstocks, tools, library)?;
+    let failure = replay_steps(&mut scene, library, script, step, tags)?;
+    Ok((scene, failure))
+}
+
+/// Replays `script` **into a scene that already exists**, which is the form
+/// with two passes over one cast: the editor replays its wired prefix with no
+/// highlights and then its authored block with `ms_current`, and the second
+/// pass has to see the tool states the first one left behind. One concatenated
+/// script would not do — it would paint the highlight on the last *prefix* step
+/// whenever the cursor sits at 0, which is exactly the state that must show no
+/// highlight at all — and re-binding a fresh scene would put every tool back in
+/// its initial state.
+///
+/// The outer `Err` is a script that names an operation the library does not
+/// have; the inner `Some` is a step failure, after which `scene` is the state
+/// the last successful step left. Ids are never reused, so replaying a second
+/// script into a scene is exactly replaying a longer one.
+pub fn replay_steps(
+    scene: &mut Scene,
+    library: &OpLibrary,
+    script: &BuildScript,
+    step: i32,
+    tags: HighlightTags<'_>,
+) -> Result<Option<MechanosynthError>, MechanosynthError> {
     super::parse::validate_script_ops(script, library)?;
 
     let tolerance = resolve_tolerance(library);
     let n = super::steps_applied(step, script.steps.len());
-    let mut scene = build_scene(base, feedstocks, tools, library, tolerance)?;
+    let tool_model = !scene.bindings.is_empty();
 
     // The layer under construction is the last applied step's, read up front so
     // the loop can filter as it goes. `NO_LAYER` disables the layer set.
@@ -205,20 +230,13 @@ pub fn replay_scene_partial(
         let op = library
             .get(&script_step.op)
             .expect("validate_script_ops checked every op name");
-        match apply_one(
-            &mut scene,
-            op,
-            script_step,
-            i + 1,
-            tolerance,
-            !tools.is_empty(),
-        ) {
+        match apply_one(scene, op, script_step, i + 1, tolerance, tool_model) {
             Ok(effect) => {
                 if tags.added.is_some() {
-                    created.extend(base_atoms(&scene, &effect.added));
+                    created.extend(base_atoms(scene, &effect.added));
                 }
                 if tags.layer.is_some() && active_layer == Some(script_step.layer) {
-                    created_in_layer.extend(base_atoms(&scene, &effect.added));
+                    created_in_layer.extend(base_atoms(scene, &effect.added));
                 }
                 last_touched = effect.touched;
             }
@@ -235,9 +253,9 @@ pub fn replay_scene_partial(
     paint(&mut scene.structure, tags.current, last_touched);
     paint(&mut scene.structure, tags.added, created);
     paint(&mut scene.structure, tags.layer, created_in_layer);
-    paint_participants(&mut scene, tags);
+    paint_participants(scene, tags);
 
-    Ok((scene, failure))
+    Ok(failure)
 }
 
 /// `ms_added` and `ms_layer` mean "what the build created **on the workpiece**,
@@ -283,13 +301,13 @@ fn paint_participants(scene: &mut Scene, tags: HighlightTags<'_>) {
 ///
 /// **Binding happens before any step**, so a mis-tagged tool is reported once,
 /// at the top, rather than at the first step that happens to use it.
-fn build_scene(
+pub fn build_scene(
     base: &AtomicStructure,
     feedstocks: &[AtomicStructure],
     tools: &[AtomicStructure],
     library: &OpLibrary,
-    tolerance: f64,
 ) -> Result<Scene, MechanosynthError> {
+    let tolerance = resolve_tolerance(library);
     // The base is cloned first, so its atom ids are unchanged and `result` is
     // atom-for-atom comparable with a tool-free replay.
     let mut structure = base.clone();

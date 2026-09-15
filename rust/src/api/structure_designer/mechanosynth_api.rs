@@ -19,10 +19,13 @@ use crate::api::api_common::{
 };
 use crate::api::structure_designer::structure_designer_api_types::{
     APIBuildScriptData, APIExportBuildScriptData, APIMechanosynthChapter, APIMechanosynthData,
-    APIMechanosynthInfo, APIOpsLibraryData, APIOpsLibraryEntry,
+    APIMechanosynthFeedstockRow, APIMechanosynthInfo, APIMechanosynthToolRow, APIOpsLibraryData,
+    APIOpsLibraryEntry, APIOpsLibraryToolType,
 };
 use atomcad_crystolecule::mechanosynth::resolve_tolerance;
-use atomcad_crystolecule::mechanosynth::{BuildScript, NO_LAYER, NO_SITE, steps_applied};
+use atomcad_crystolecule::mechanosynth::{
+    BuildScript, NO_LAYER, NO_SITE, Participant, Scene, steps_applied,
+};
 use atomcad_structure_designer::evaluator::network_result::NetworkResult;
 use atomcad_structure_designer::nodes::build_script::BuildScriptData;
 use atomcad_structure_designer::nodes::build_step::steps_from_array;
@@ -168,6 +171,10 @@ pub fn mechanosynth_info(
             current_layer: NO_LAYER,
             current_site: NO_SITE,
             chapters: Vec::new(),
+            current_tool_type: String::new(),
+            current_agent: String::new(),
+            tools: tool_rows(stored.last_scene().as_ref()),
+            feedstocks: feedstock_rows(stored.last_scene().as_ref()),
         });
     };
     let count = script.steps.len();
@@ -182,11 +189,20 @@ pub fn mechanosynth_info(
     // The method is the **operation's** kind, read from the wired library: a
     // step names a reaction, and how the reaction is performed is a fact about
     // the reaction. With no library wired the panel simply has nothing to say.
-    let current_method = current
+    let operation = current
         .zip(library.as_ref())
-        .and_then(|(step, library)| library.get(&step.op))
+        .and_then(|(step, library)| library.get(&step.op));
+    let current_method = operation
         .map(|op| op.method.as_str().to_string())
         .unwrap_or_default();
+    let current_tool_type = operation
+        .and_then(|op| op.tool.as_ref())
+        .map(|tool| tool.tool_type.clone())
+        .unwrap_or_default();
+    let current_agent = operation
+        .and_then(|op| op.agent.clone())
+        .unwrap_or_default();
+    let scene = stored.last_scene();
 
     Some(APIMechanosynthInfo {
         count: count as i32,
@@ -200,7 +216,66 @@ pub fn mechanosynth_info(
         current_layer: current.map_or(NO_LAYER, |step| step.layer),
         current_site: current.map_or(NO_SITE, |step| step.site),
         chapters: chapters(&script),
+        current_tool_type,
+        current_agent,
+        tools: tool_rows(scene.as_ref()),
+        feedstocks: feedstock_rows(scene.as_ref()),
     })
+}
+
+/// The panel's *Tools* block: one row per bound tool molecule, in pin order.
+///
+/// Read off the scene the node's last evaluation parked, never by forcing one —
+/// a panel rebuild must not cost a replay. A node that has not been evaluated
+/// therefore reports no tools, which is also the truth about what is on screen.
+#[flutter_rust_bridge::frb(ignore)]
+pub fn tool_rows(scene: Option<&Scene>) -> Vec<APIMechanosynthToolRow> {
+    scene
+        .map(|scene| {
+            scene
+                .bindings
+                .iter()
+                .map(|binding| APIMechanosynthToolRow {
+                    instance: binding.instance as i32,
+                    tool_type: binding.tool_type.clone(),
+                    residual: binding.pose.residual,
+                    state: binding.state.clone().unwrap_or_default(),
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// The panel's *Feedstocks* line: one entry per wired reservoir with the atom
+/// count it has **at the step** — it grows as a build dumps onto it.
+#[flutter_rust_bridge::frb(ignore)]
+pub fn feedstock_rows(scene: Option<&Scene>) -> Vec<APIMechanosynthFeedstockRow> {
+    let Some(scene) = scene else {
+        return Vec::new();
+    };
+    let mut counts: Vec<(usize, i32)> = Vec::new();
+    for (atom_id, participant) in &scene.participants {
+        let Participant::Feedstock(index) = participant else {
+            continue;
+        };
+        // A step can delete a reservoir atom, and the map keeps the id; count
+        // what is actually there.
+        if scene.structure.get_atom(*atom_id).is_none() {
+            continue;
+        }
+        match counts.iter_mut().find(|(known, _)| known == index) {
+            Some((_, count)) => *count += 1,
+            None => counts.push((*index, 1)),
+        }
+    }
+    counts.sort_unstable();
+    counts
+        .into_iter()
+        .map(|(instance, atom_count)| APIMechanosynthFeedstockRow {
+            instance: instance as i32,
+            atom_count,
+        })
+        .collect()
 }
 
 /// Splits a script into chapters: maximal runs of consecutive steps sharing a
@@ -275,6 +350,29 @@ pub fn ops_library_data(
                         before_atoms: op.before.atoms.len() as i32,
                         after_atoms: op.after.atoms.len() as i32,
                         chiral: op.chiral,
+                        method: op.method.as_str().to_string(),
+                        tool_type: op
+                            .tool
+                            .as_ref()
+                            .map(|tool| tool.tool_type.clone())
+                            .unwrap_or_default(),
+                        agent: op.agent.clone().unwrap_or_default(),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
+        // The tool types, above the operations: what a design has to tag, and
+        // the state vocabulary the offers will name.
+        tools: library
+            .map(|library| {
+                library
+                    .tools
+                    .iter()
+                    .map(|tool| APIOpsLibraryToolType {
+                        name: tool.name.clone(),
+                        note: tool.note.clone().unwrap_or_default(),
+                        states: tool.states.clone().unwrap_or_default(),
+                        frame_tags: tool.frame.iter().map(|entry| entry.tag.clone()).collect(),
                     })
                     .collect()
             })

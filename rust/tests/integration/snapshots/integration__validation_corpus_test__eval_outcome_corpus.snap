@@ -80,11 +80,13 @@ expression: out
 === lattice_space_migration/trivial_v3.cnnd
   network 'Main' node=1 pin=0 -> Ok
 === mechanosynth/mechanosynth_edit.cnnd
-  network 'Main' node=4 pin=0 -> Ok
+  network 'Main' node=4 pin=2 -> Ok
 === mechanosynth/mechanosynth_legacy.cnnd
-  network 'Main' node=2 pin=0 -> Ok
+  network 'Main' node=2 pin=2 -> Ok
+=== mechanosynth/mechanosynth_tools.cnnd
+  network 'Main' node=15 pin=2 -> Ok
 === mechanosynth/mechanosynth_wired.cnnd
-  network 'Main' node=4 pin=0 -> Ok
+  network 'Main' node=4 pin=2 -> Ok
 === multi_output_migration/old_atom_edit_output_diff_false.cnnd
   network 'Main' node=3 pin=0 -> Ok
 === multi_output_migration/old_atom_edit_output_diff_true.cnnd

@@ -1,0 +1,16 @@
+---
+source: crates/atomcad-structure-designer/tests/structure_designer/nodes/node_snapshots_test.rs
+expression: snapshot
+---
+{
+  "network_name": "Main",
+  "node_count": 15,
+  "return_node_id": 15,
+  "displayed_node_outputs": [
+    {
+      "node_id": 15,
+      "node_type": "mechanosynth",
+      "output": "Molecule:\natoms: 8\nbonds: 6\nfirst 8 atoms:\n  [1] Z=6 pos=(0.000000, 0.000000, 0.000000) depth=0.000 bonds=2\n  [4] Z=1 pos=(-0.513831, 0.889981, -0.363333) depth=0.000 bonds=1\n  [5] Z=1 pos=(-0.513831, -0.889981, -0.363333) depth=0.000 bonds=1\n  [6] Z=6 pos=(10.000000, 0.000000, 0.000000) depth=0.000 bonds=4\n  [7] Z=1 pos=(10.000000, 0.000000, 1.090000) depth=0.000 bonds=1\n  [8] Z=1 pos=(11.027662, 0.000000, -0.363333) depth=0.000 bonds=1\n  [9] Z=1 pos=(9.486169, 0.889981, -0.363333) depth=0.000 bonds=1\n  [10] Z=1 pos=(9.486169, -0.889981, -0.363333) depth=0.000 bonds=1\nfirst 6 bonds:\n  1 -- 4 (order=1)\n  1 -- 5 (order=1)\n  6 -- 7 (order=1)\n  6 -- 8 (order=1)\n  6 -- 9 (order=1)\n  6 -- 10 (order=1)"
+    }
+  ]
+}

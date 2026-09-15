@@ -71,6 +71,13 @@ APIMechanosynthOffer _offer(
         for (var i = 0; i < (fits ? candidates : 1); i++)
           _candidate(i, residual: residual, mirrored: i.isOdd),
       ],
+      // No tool annotation: an empty `toolType` is the state every row carries
+      // with the `tools` pin unwired.
+      toolType: '',
+      toolState: '',
+      toolReady: true,
+      toolReason: '',
+      offerable: fits,
     );
 
 /// The kernel sorts applicable before near miss; the fixture arrives sorted,

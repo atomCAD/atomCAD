@@ -1,8 +1,8 @@
 # Design: tool molecules in `mechanosynth`
 
 Status: **draft 2026-09-14, revised 2026-09-15 (twice); Phase 1 (schema and
-engine) implemented 2026-09-15, and the document corrected against it. Phases
-2-4 open.**
+engine) implemented 2026-09-15, Phase 2 (nodes, records, API) implemented
+2026-09-15, and the document corrected against both. Phases 3-4 open.**
 Building Phase 1 falsified two things this document asserted, and both are
 rewritten where they are stated rather than noted here: **a pattern cannot
 assert an atom's absence**, so a tool wired carrying cargo an operation's tool
@@ -10,6 +10,12 @@ side does not name is not caught geometrically at all (§Symbolic state is a
 label); and **a step has to be all or nothing**, both sides matched before the
 first atom moves, or a tool-side failure leaves the target side's rewrite behind
 and the partial-result form hands back a half-applied step (§The scene).
+Building Phase 2 falsified two more, likewise rewritten in place: **the
+editor's two passes need one scene**, which `replay_scene` cannot express, so
+the engine exposes `build_scene` and `replay_steps` beside it (§The scene); and
+**the last-good-state override is not a new hook** but the per-pin display
+override `EvalOutput` already carries, while what the node stores is the whole
+`Scene` rather than a structure (§mechanosynth_edit).
 The first revision made three things structural: operations declare their
 method; one operation is one instrument; tools are identified by atom tags
 and posed by four tagged atoms, so no step names a tool and nothing is
@@ -654,8 +660,40 @@ pub fn replay_scene(
 ```
 
 `replay` becomes the wrapper with no feedstocks and no tools, returning the
-base, and keeps its signature, so the editor's `replay_prefix_and_block`,
-the engine tests and every other caller compile unchanged.
+base, and keeps its signature, so the engine tests and every other caller
+compile unchanged.
+
+**Phase 2 added one entry point the phase list did not foresee.** The editor's
+`replay_prefix_and_block` replays *twice* — the wired prefix with no highlights,
+then the authored block with `ms_current` — and neither form above can express
+the second pass: `replay_scene` builds a scene from the three inputs, so calling
+it again would re-bind every tool into its *initial* state and lose what the
+prefix did to it. So `replay_scene_partial` is factored into the two halves it
+always was, and both are public:
+
+```rust
+pub fn build_scene(
+    base: &AtomicStructure,
+    feedstocks: &[AtomicStructure],
+    tools: &[AtomicStructure],
+    library: &OpLibrary,
+) -> Result<Scene, MechanosynthError>;
+
+/// Replays `script` into a scene that already exists.
+pub fn replay_steps(
+    scene: &mut Scene,
+    library: &OpLibrary,
+    script: &BuildScript,
+    step: i32,
+    tags: HighlightTags<'_>,
+) -> Result<Option<MechanosynthError>, MechanosynthError>;
+```
+
+`replay_scene_partial` is now `build_scene` followed by one `replay_steps`, so
+there is still one code path. The obvious alternative — one concatenated
+`prefix + block` script — is wrong for the reason the two replays existed in the
+first place: it paints `ms_current` on the last *prefix* step whenever the cursor
+sits at 0.
 
 **Building the scene.** The base is cloned first, so its atom ids are
 unchanged; each feedstock, then each tool, is merged with
@@ -870,10 +908,13 @@ Nothing is editable — the pins are wire-only and every field is derived.
 
 The same input pins appended (`feedstocks` pin 3, `tools` pin 4), the same
 `scene` output appended (pin 2), the same display default. `result` stays
-the base at the cursor, the workpiece alone. Evaluation replays prefix and
-block through `replay_scene` with the same two-replay rule (the prefix
-without highlights, the block with `ms_current`), so a cursor at `0` still
-shows no highlight on any participant.
+the base at the cursor, the workpiece alone. Evaluation keeps the
+two-replay rule — the prefix without highlights, the block with
+`ms_current` — so a cursor at `0` still shows no highlight on any
+participant; it runs both passes over **one** scene through `build_scene`
+and two `replay_steps` calls rather than through `replay_scene`, for the
+reason given in §The scene: a second `replay_scene` would re-bind every
+tool into its initial state.
 
 **The placement tool keeps its interaction**, and gains one refusal. The
 tool owns picks while the node is active, which the existing rule defines
@@ -938,12 +979,37 @@ persisted), with `ms_current` on the previous step, and the scene
 generator renders it in place of the erroring pin. This is **not** the
 ghost route: ghosts ride on the decorator of an evaluated structure, and
 here the displayed pin evaluated to an error, so there is no structure to
-decorate. It is a node-level override — a small `NodeData` hook the scene
-generator consults when a displayed pin of the active editor is an error,
-answering with the last good structure — and the placement tool's hit test
-picks against that same structure. The failing row carries the error chip
-with the engine's message, and the panel banner names it. The exact shape
-of the hook is Phase 2's call; that the pins carry the error is not.
+decorate.
+
+**The override channel already existed** (Phase 2, correcting this
+paragraph's guess at it): `EvalOutput::set_display_override(pin, value)` is
+what `motif_edit` uses to draw something other than what the wire carries,
+and `generate_scene` consults it per pin. So there is **no new `NodeData`
+hook** — `eval` returns the error on the pins and hands the last good
+structures over on the same two pin indices as display overrides.
+`hit_test_node_atomic_structure` reads the generated scene, so the
+placement tool picks against that structure for free rather than being
+taught about the override.
+
+What the node *does* store, and what the earlier text was reaching for, is
+the whole `Scene` rather than a structure: the offer sweep needs the tool
+**bindings** and a click needs the **participant map**, and neither
+survives the trip through a pin. It lives in a `#[serde(skip)]`
+`Mutex<Option<Scene>>` on the node data — the `atom_edit` cache pattern —
+written on every evaluation that got as far as replaying a step.
+
+**The `steps` output keeps its array** through a block failure, which this
+document did not say and its Phase 2 test list assumed ("the `steps` output
+carried all steps throughout"). `steps` is not a replay product: the block
+is stored data and the prefix arrived intact, so the array is exactly as
+valid as it was a moment ago — and it has to be, because the walk in
+§Making a sequence tool-aware inserts a recharge *while* the block is
+failing and a downstream replayer must see the same steps throughout. An
+*input* failure — a bad library, an erroring prefix — still errors on all
+three pins, because then there is no prefix to concatenate.
+
+The failing row carries the error chip
+with the engine's message, and the panel banner names it.
 
 **Every kind is authored the same way in milestone 1**: click an atom,
 choose the row. A bulk step is one site's share of an exposure and is
@@ -1025,6 +1091,13 @@ build = mechanosynth { base: slab, ops: lib, steps: gen, feedstocks: [dump], too
 out   = export_atoms { molecule: build, ... }          # the workpiece alone
 view  = apply_style { molecule: build.scene, ... }     # everything
 ```
+
+The bracket form is accepted and is what a multi-wire pin prints, but the
+serializer spells a **single** wire on an array pin without them —
+`feedstocks: dump` — which is the format's existing convention for every
+array pin and not something these two introduce. A `query` → `--replace`
+round trip is therefore a no-op on the serializer's own output and
+normalizes a hand-written `[dump]` to `dump` once (Phase 2).
 
 The step literal of an editor's `authored` block loses `method` and gains
 nothing.
@@ -1305,7 +1378,38 @@ inside the other's tolerance, so the fixture chains them: the first exposure's
 added atom is the atom the second one matches, and the reverse order finds
 nothing there at all.
 
-### Phase 2 — Nodes, records, API
+### Phase 2 — Nodes, records, API — **DONE**
+
+Implemented 2026-09-15. Most of the list below was already true: the
+seven-field `BuildStep`, `build_step.rs`, `AuthoredStep` without `method`,
+`build_script`, `export_build_script` and the `/2` format string all landed
+with Phase 1's commit, because the schema change that removed the field
+reached them directly. Four things are worth recording because they are **not**
+what the list assumed:
+
+- **The editor's last-good-state hook is the display-override channel that
+  already exists.** `EvalOutput::set_display_override(pin, value)` is what
+  `motif_edit` uses to draw something other than what the wire carries, and it
+  is exactly the shape §mechanosynth_edit asked for — the pins carry the error
+  while the viewport shows the last good structure. No new `NodeData` hook was
+  needed for the *display* half. What the node does store is the whole `Scene`
+  (`#[serde(skip)]`, behind a `Mutex`, the `atom_edit` cache pattern), because
+  the placement tool needs the **bindings** and the **participant map**, and
+  neither survives the trip through a pin. The replayer parks its scene the same
+  way, for the panel's *Tools* and *Feedstocks* readouts — read off the last
+  evaluation, never by forcing one, so a panel rebuild costs no replay.
+- **A `value` node cannot feed an array pin**, which the node-layer tests ran
+  into: `value` declares `DataType::None` and the array merge converts through
+  the declared type. The tests wire `import_xyz` nodes with their payload
+  written directly instead, which is also the only way to get a *tagged* tool in
+  (no `.xyz` carries tags).
+- **The phase rule lives in `validate_node_wires`**, keyed on the node type
+  name, because it needs the resolved type of two different pins and
+  `NodeData::get_data_error` only sees which pins are wired.
+- **`steps` survives a block failure**, and the last-good atom count is the
+  *editor* API's rather than `get_mechanosynth_info`'s. Both are argued where
+  they belong, in §mechanosynth_edit and in the test list below.
+
 
 The two pins and the `scene` output on both nodes; the
 `default_displayed_output_pins` hook, its use in `add_node` and the
@@ -1340,12 +1444,19 @@ other node type still `{0}`; a network saved with that default writes no
 `displayed_output_pins` entry for the node and loads back to `{2}`; a file
 with an explicit `{0}` for the node writes the entry and loads to `{0}`;
 an old file with no entry for the node loads to `{2}`, and with nothing
-wired to the new pins its displayed atoms are the same as before; the
-text-format round-trip corpus is unaffected, since pin visibility is not
-in the text format. *API:* `get_mechanosynth_info` reports one tool row
-per binding with type, residual and state, one feedstock entry per
-reservoir with its atom count, and the last-good structure's atom count
-on the editor when the block fails.
+wired to the new pins its displayed atoms are the same as before. *(Pin
+visibility **is** in the text format — `visible: [scene]` — so the
+round-trip corpus prints the new default rather than being unaffected by
+it; it round-trips exactly, because both directions name the pin.)*
+*API:* `get_mechanosynth_info` reports one tool row
+per binding with type, residual and state, and one feedstock entry per
+reservoir with its atom count. The last-good structure's atom count is
+**`get_mechanosynth_edit_data`'s**, not this one's: `mechanosynth_info`
+downcasts to `MechanosynthData` and cannot see an editor node at all.
+Both readouts are taken from the scene the node's **last** evaluation
+parked, never by forcing one — a panel is rebuilt far more often than a
+block changes, and a forced replay per rebuild is the cost this subsystem
+least wants.
 
 *Tests — editor node:* the shared assertion *same result, both nodes* holds
 with feedstocks and tools wired; a placement on a reservoir atom inserts a
@@ -1383,8 +1494,18 @@ seven keys at most per step, and its output re-parses to the same steps; a
 `mechanosynth` statement with `feedstocks: [d]` and `tools: [t]`
 round-trips through `query` → `--replace`, and `build` in a downstream
 statement still resolves to pin 0; an `authored` literal with `method` is a
-parse error naming the field; the registry snapshot gains the pins;
-`mechanosynth_tools.cnnd` joins `node_snapshots`.
+parse error naming the field; `mechanosynth_tools.cnnd` joins
+`node_snapshots`. *(There is no registry snapshot test to grow — the pins
+are pinned by the output-pin assertions in `mechanosynth_test.rs`
+instead.)*
+
+The fixture is **machine-written**: regenerate it with the `#[ignore]`d
+`generate_the_tools_fixture` test beside the others. It tags its one tool
+the way a design does — one `tag` node for the type name, four more with a
+small `free_sphere` region each for the frame atoms — and stops at step 3,
+which covers a tip step, a dump onto the reservoir and the state round
+trip. Step 4 is `habst_probe` and would need a second tool molecule for no
+extra coverage.
 
 ### Phase 3 — Panel
 

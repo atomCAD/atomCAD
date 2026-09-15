@@ -47,7 +47,7 @@ use crate::data_type::{DataType, RecordType};
 use crate::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
-use crate::evaluator::network_result::NetworkResult;
+use crate::evaluator::network_result::{NetworkResult, first_array_element_error};
 use crate::node_data::{EvalOutput, NodeData};
 use crate::node_network_gadget::NodeNetworkGadget;
 use crate::node_type::NodeTypeCategory;
@@ -56,9 +56,10 @@ use crate::node_type_registry::NodeTypeRegistry;
 use crate::nodes::build_step::{BUILD_STEP_RECORD, steps_from_array};
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
+use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::mechanosynth::{
-    BuildScript, HighlightTags, MechanosynthError, NO_LAYER, NO_SITE, OpLibrary, load_build_script,
-    load_library, replay, steps_applied,
+    BuildScript, HighlightTags, MechanosynthError, NO_LAYER, NO_SITE, OpLibrary, Scene,
+    load_build_script, load_library, replay_scene, steps_applied,
 };
 use atomcad_util::path_utils::{get_parent_directory, resolve_path, try_make_relative};
 use glam::DMat3;
@@ -69,7 +70,7 @@ use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::io;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 /// The atom tag the node paints on the atoms of the current step. An ordinary
 /// tag (`doc/design_atom_tags.md`), so `apply_style` can colour it and the tag
@@ -85,6 +86,15 @@ pub const MS_ADDED_TAG: &str = "ms_added";
 /// step's created. Empty when the current step names no layer.
 pub const MS_LAYER_TAG: &str = "ms_layer";
 
+/// The atom tag every atom of every wired tool molecule carries in `scene`.
+/// Tool and feedstock atoms are told apart by these rather than by `ms_added`,
+/// which means "what the build created **on the workpiece**"
+/// (`doc/design_mechanosynth_tools.md`).
+pub const MS_TOOL_TAG: &str = "ms_tool";
+
+/// The atom tag every atom of every wired reservoir carries in `scene`.
+pub const MS_FEEDSTOCK_TAG: &str = "ms_feedstock";
+
 /// The named record type of the `step` output pin. Registered in
 /// `node_type_registry.rs` beside `Patch` and `MaterializeRegion`.
 pub const MECHANOSYNTH_STEP_RECORD: &str = "MechanosynthStep";
@@ -94,6 +104,12 @@ pub const MECHANOSYNTH_STEP_RECORD: &str = "MechanosynthStep";
 /// (`doc/design_multi_output_pins.md`).
 pub const STEP_OUTPUT_PIN: usize = 1;
 
+/// Index of the `scene` output pin — the merged scene (base, feedstocks,
+/// tools) after the step. **Appended** (pin 2) for the same reason: making it
+/// pin 0 would have got the display default for free and silently rewired
+/// every existing file's `result` consumers to the scene.
+pub const SCENE_OUTPUT_PIN: usize = 2;
+
 /// Input pin indices. The two file-name pins that used to sit at 1 and 2 are
 /// gone; the *properties* behind them are not (see the module doc), so a saved
 /// project keeps replaying while a wire into either slot now carries a value
@@ -101,6 +117,9 @@ pub const STEP_OUTPUT_PIN: usize = 1;
 pub const OPS_PIN: usize = 1;
 pub const STEPS_PIN: usize = 2;
 pub const STEP_PIN: usize = 3;
+/// **Appended** (pin 4 / pin 5), both optional and wire-only.
+pub const FEEDSTOCKS_PIN: usize = 4;
+pub const TOOLS_PIN: usize = 5;
 
 /// `step = -1` means "every step", which is the useful default: a freshly wired
 /// node shows the finished build.
@@ -113,7 +132,7 @@ pub fn default_step() -> i32 {
 /// Only the three properties are serialized. The parsed library and script are
 /// payload — reloaded from the files on project load, on a property edit, and
 /// (as a fallback) at evaluation.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct MechanosynthData {
     pub ops_file: Option<String>,
     pub build_file: Option<String>,
@@ -131,6 +150,30 @@ pub struct MechanosynthData {
     /// when it is evaluated).
     #[serde(skip)]
     pub load_error: Option<String>,
+    /// The scene the most recent successful evaluation produced.
+    ///
+    /// The panel's *Tools* and *Feedstocks* readouts are facts about the tool
+    /// bindings and the participant map, and neither survives the trip through
+    /// a pin — so `eval` parks the whole scene here and the readout reads it
+    /// back. Deliberately **not** forced: the panel reads whatever the last
+    /// evaluation left, so a panel rebuild never costs a replay, and a node
+    /// that has not been evaluated simply reports no tools.
+    #[serde(skip)]
+    pub last_scene: Mutex<Option<Scene>>,
+}
+
+impl Clone for MechanosynthData {
+    fn clone(&self) -> Self {
+        Self {
+            ops_file: self.ops_file.clone(),
+            build_file: self.build_file.clone(),
+            step: self.step,
+            library: self.library.clone(),
+            script: self.script.clone(),
+            load_error: self.load_error.clone(),
+            last_scene: Mutex::new(self.last_scene.lock().ok().and_then(|slot| slot.clone())),
+        }
+    }
 }
 
 impl MechanosynthData {
@@ -142,7 +185,20 @@ impl MechanosynthData {
             library: None,
             script: None,
             load_error: None,
+            last_scene: Mutex::new(None),
         }
+    }
+
+    fn record_last_scene(&self, scene: Option<Scene>) {
+        if let Ok(mut slot) = self.last_scene.lock() {
+            *slot = scene;
+        }
+    }
+
+    /// The scene the most recent successful evaluation produced, for the
+    /// panel's *Tools* and *Feedstocks* readouts.
+    pub fn last_scene(&self) -> Option<Scene> {
+        self.last_scene.lock().ok().and_then(|slot| slot.clone())
     }
 
     /// Parses whichever of the two files has no cache yet, from the stored
@@ -336,12 +392,12 @@ impl NodeData for MechanosynthData {
         let input_val =
             network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
         if input_val.is_error() {
-            return both(input_val);
+            return all_pins(input_val);
         }
         let mut wrapper = match input_val {
             NetworkResult::Crystal(_) | NetworkResult::Molecule(_) => input_val,
             other => {
-                return both(error(format!(
+                return all_pins(error(format!(
                     "expected atomic input, got {:?}",
                     other.infer_data_type()
                 )));
@@ -362,9 +418,9 @@ impl NodeData for MechanosynthData {
         ) {
             NetworkResult::None => None,
             NetworkResult::OpLibrary(library) => Some(library),
-            propagated @ NetworkResult::Error(_) => return both(propagated),
+            propagated @ NetworkResult::Error(_) => return all_pins(propagated),
             other => {
-                return both(error(format!(
+                return all_pins(error(format!(
                     "expected an OpLibrary on the ops pin, got {:?}",
                     other.infer_data_type()
                 )));
@@ -378,10 +434,10 @@ impl NodeData for MechanosynthData {
             STEPS_PIN,
         ) {
             NetworkResult::None => None,
-            propagated @ NetworkResult::Error(_) => return both(propagated),
+            propagated @ NetworkResult::Error(_) => return all_pins(propagated),
             array => match steps_from_array(&array) {
                 Ok(steps) => Some(steps),
-                Err(message) => return both(error(message)),
+                Err(message) => return all_pins(error(message)),
             },
         };
         let step = match network_evaluator.evaluate_or_default(
@@ -394,16 +450,43 @@ impl NodeData for MechanosynthData {
             NetworkResult::extract_int,
         ) {
             Ok(step) => step,
-            Err(propagated) => return both(propagated),
+            Err(propagated) => return all_pins(propagated),
+        };
+
+        // The two participant pins. Unwired is an empty list, which is the
+        // workpiece-only replay: no binding runs and no tool state is tracked.
+        let feedstocks = match participants(
+            network_evaluator,
+            network_stack,
+            node_id,
+            registry,
+            context,
+            FEEDSTOCKS_PIN,
+            "feedstocks",
+        ) {
+            Ok(structures) => structures,
+            Err(failure) => return all_pins(*failure),
+        };
+        let tools = match participants(
+            network_evaluator,
+            network_stack,
+            node_id,
+            registry,
+            context,
+            TOOLS_PIN,
+            "tools",
+        ) {
+            Ok(structures) => structures,
+            Err(failure) => return all_pins(*failure),
         };
 
         let library = match self.resolve_library(wired_ops, design_dir.as_deref()) {
             Ok(library) => library,
-            Err(message) => return both(error(message)),
+            Err(message) => return all_pins(error(message)),
         };
         let script = match self.resolve_script(wired_steps, design_dir.as_deref()) {
             Ok(script) => script,
-            Err(message) => return both(error(message)),
+            Err(message) => return all_pins(error(message)),
         };
 
         let atoms = match &mut wrapper {
@@ -411,29 +494,45 @@ impl NodeData for MechanosynthData {
             NetworkResult::Molecule(molecule) => &mut molecule.atoms,
             _ => unreachable!("the match above admitted only these two"),
         };
-        // `tool` and `feedstock` stay unrequested until the node grows the
-        // pins that would wire a participant into the scene (Phase 2).
         let tags = HighlightTags {
             current: Some(MS_CURRENT_TAG),
             added: Some(MS_ADDED_TAG),
             layer: Some(MS_LAYER_TAG),
-            ..HighlightTags::default()
+            tool: Some(MS_TOOL_TAG),
+            feedstock: Some(MS_FEEDSTOCK_TAG),
         };
-        match replay(atoms, &library, &script, step, tags) {
-            Ok(result) => {
-                *atoms = result;
+        match replay_scene(atoms, &feedstocks, &tools, &library, &script, step, tags) {
+            Ok(scene) => {
+                // `result` is the **workpiece alone**; `scene` is everything.
+                // Both keep `base`'s variant, the way `atom_union` does.
+                let mut scene_wrapper = wrapper.clone();
+                *atoms_of(&mut wrapper) = scene.workpiece();
+                *atoms_of(&mut scene_wrapper) = scene.structure.clone();
                 // The record is built from the same script and the same clamp
                 // the replay just used, so the second pin costs no second
                 // replay.
-                let record = step_record(&script, &library, step);
-                EvalOutput::multi(vec![wrapper, record])
+                let record = step_record(&script, &library, step, &scene);
+                self.record_last_scene(Some(scene));
+                EvalOutput::multi(vec![wrapper, record, scene_wrapper])
             }
-            Err(failure) => both(error(failure.to_string())),
+            Err(failure) => {
+                self.record_last_scene(None);
+                all_pins(error(failure.to_string()))
+            }
         }
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
         Box::new(self.clone())
+    }
+
+    /// **`scene`, not `result`.** `result` and the base part of `scene` are the
+    /// same atoms, so showing both draws the workpiece twice; what a user
+    /// scrubbing a build with tools wants to look at is the scene. With nothing
+    /// wired to the two participant pins it is the same atoms as `result`, so
+    /// the default costs a node without tools nothing.
+    fn default_displayed_output_pins(&self) -> Option<HashSet<i32>> {
+        Some(HashSet::from([SCENE_OUTPUT_PIN as i32]))
     }
 
     fn get_subtitle(&self, connected_input_pins: &HashSet<String>) -> Option<String> {
@@ -532,14 +631,69 @@ fn error(message: impl std::fmt::Display) -> NetworkResult {
     NetworkResult::Error(format!("mechanosynth: {message}"))
 }
 
-/// The same result on both output pins.
+/// The same result on **all three** output pins.
 ///
-/// The two outputs are one evaluation, so whatever stops the workpiece from
-/// being produced stops the record too: a `MechanosynthStep` whose `index`
-/// described a replay that failed would be a lie, and `None` on the pin would
-/// be a silent one.
-fn both(result: NetworkResult) -> EvalOutput {
-    EvalOutput::multi(vec![result.clone(), result])
+/// The outputs are one evaluation, so whatever stops the workpiece from being
+/// produced stops the record and the scene too: a `MechanosynthStep` whose
+/// `index` described a replay that failed would be a lie, and `None` on the pin
+/// would be a silent one.
+fn all_pins(result: NetworkResult) -> EvalOutput {
+    EvalOutput::multi(vec![result.clone(), result.clone(), result])
+}
+
+/// The atoms inside a `Crystal` / `Molecule` wrapper.
+fn atoms_of(wrapper: &mut NetworkResult) -> &mut AtomicStructure {
+    match wrapper {
+        NetworkResult::Crystal(crystal) => &mut crystal.atoms,
+        NetworkResult::Molecule(molecule) => &mut molecule.atoms,
+        _ => unreachable!("only the two atomic variants reach here"),
+    }
+}
+
+/// One of the two participant pins as a list of structures.
+///
+/// Both are `[HasAtoms]`, optional and wire-only: `None` is the empty list.
+/// The single-structure broadcast to a one-element array is the evaluator's own
+/// rule, so nothing here has to know about it. An element that is itself an
+/// error forwards verbatim rather than being replaced by a type complaint
+/// (`nodes/AGENTS.md` §Errors).
+pub(crate) fn participants<'a>(
+    network_evaluator: &NetworkEvaluator,
+    network_stack: &[NetworkStackElement<'a>],
+    node_id: u64,
+    registry: &NodeTypeRegistry,
+    context: &mut NetworkEvaluationContext,
+    pin: usize,
+    pin_name: &str,
+) -> Result<Vec<AtomicStructure>, Box<NetworkResult>> {
+    // The error is boxed: `NetworkResult` is a wide enum (a `Crystal` variant
+    // alone is over a kilobyte), so an unboxed `Err` would make every `Ok`
+    // return pay for it.
+    match network_evaluator.evaluate_arg(network_stack, node_id, registry, context, pin) {
+        NetworkResult::None => Ok(Vec::new()),
+        propagated @ NetworkResult::Error(_) => Err(Box::new(propagated)),
+        NetworkResult::Array(elements) => {
+            if let Some(failure) = first_array_element_error(pin_name, &elements) {
+                return Err(Box::new(failure));
+            }
+            let mut structures = Vec::with_capacity(elements.len());
+            for element in elements {
+                match element.extract_atomic() {
+                    Some(structure) => structures.push(structure),
+                    None => {
+                        return Err(Box::new(error(format!(
+                            "every {pin_name} entry must be an atomic structure"
+                        ))));
+                    }
+                }
+            }
+            Ok(structures)
+        }
+        other => Err(Box::new(error(format!(
+            "expected an array of atomic structures on the {pin_name} pin, got {:?}",
+            other.infer_data_type()
+        )))),
+    }
 }
 
 /// The `MechanosynthStep` record describing the **last step applied** — the
@@ -548,7 +702,12 @@ fn both(result: NetworkResult) -> EvalOutput {
 /// At `index = 0` nothing has run, so the step-specific fields take their
 /// absent-field defaults rather than describing `steps[0]`, which has *not*
 /// been applied yet.
-fn step_record(script: &BuildScript, library: &OpLibrary, step: i32) -> NetworkResult {
+fn step_record(
+    script: &BuildScript,
+    library: &OpLibrary,
+    step: i32,
+    scene: &Scene,
+) -> NetworkResult {
     let count = script.steps.len();
     let index = steps_applied(step, count);
     let current = index.checked_sub(1).and_then(|last| script.steps.get(last));
@@ -558,6 +717,10 @@ fn step_record(script: &BuildScript, library: &OpLibrary, step: i32) -> NetworkR
     let operation = current.and_then(|step| library.get(&step.op));
 
     let text = |value: Option<&str>| NetworkResult::String(value.unwrap_or_default().to_string());
+    // The instrument is the operation's, and only a `tip` operation has one.
+    let tool_type = operation
+        .and_then(|op| op.tool.as_ref())
+        .map(|tool| tool.tool_type.as_str());
 
     NetworkResult::record(vec![
         ("index".to_string(), NetworkResult::Int(index as i32)),
@@ -590,6 +753,23 @@ fn step_record(script: &BuildScript, library: &OpLibrary, step: i32) -> NetworkR
         (
             "r".to_string(),
             NetworkResult::Mat3(current.map_or(DMat3::IDENTITY, |s| s.r)),
+        ),
+        // Appended: the tool model's three facts about the step. `tool_type`
+        // and `tool_state` are the `tip` operation's instrument and the state
+        // it is in **after** the step; `agent` is a `bulk` operation's species.
+        // Empty strings where absent, as for every other field.
+        ("tool_type".to_string(), text(tool_type)),
+        (
+            "tool_state".to_string(),
+            text(tool_type.and_then(|name| {
+                scene
+                    .binding_of(name)
+                    .and_then(|binding| binding.state.as_deref())
+            })),
+        ),
+        (
+            "agent".to_string(),
+            text(operation.and_then(|op| op.agent.as_deref())),
         ),
     ])
 }
@@ -666,10 +846,25 @@ pub fn get_node_type() -> NodeType {
             the terrace under construction carry `ms_layer`.\n\
             \n\
             The second output pin, `step`, carries a `MechanosynthStep` record describing the \
-            **last step applied** — `index`, `count`, `op`, `note`, the operation's `method`, \
-            `phase`, `layer` and `site` metadata, and the placement point `t` and rotation `r` — \
-            so a `switch`, an `expr` or a `record_destructure` downstream can act on the step \
-            rather than parse its note.\n\
+            **last step applied** — `index`, `count`, `op`, `note`, the operation's `method` \
+            (`tip` / `bulk` / `spontaneous`), `phase`, `layer` and `site` metadata, the \
+            placement point `t` and rotation `r`, and the tool model's `tool_type`, \
+            `tool_state` (after the step) and `agent` — so a `switch`, an `expr` or a \
+            `record_destructure` downstream can act on the step rather than parse its note.\n\
+            \n\
+            The `feedstocks` pin takes the reservoirs a build draws on and dumps to, and the \
+            `tools` pin the tool molecules that perform it — each identified by the atom tag \
+            naming its type in the library, and posed by the four atoms tagged with the type's \
+            frame tags. Both are optional: with `tools` unwired no tool is bound and no tool \
+            state is tracked, which is how a library is developed before its instruments exist. \
+            Every wired entry must have the phase of `base`; wire one through `enter_structure` \
+            or `exit_structure` otherwise.\n\
+            \n\
+            The third output pin, `scene`, is everything at once — the workpiece, the reservoirs \
+            and the tools as one structure, with tool atoms tagged `ms_tool` and reservoir atoms \
+            `ms_feedstock`. `result` stays the **workpiece alone**, so an export or a count \
+            downstream of it never picks up an atom sitting on a tip. A freshly placed node \
+            shows `scene`.\n\
             \n\
             The `ops_file` and `build_file` **properties are deprecated**. A project saved \
             before the pins existed keeps replaying from them, and the panel offers a **Convert \
@@ -701,6 +896,20 @@ pub fn get_node_type() -> NodeType {
                 name: "step".to_string(),
                 data_type: DataType::Int,
             },
+            // Appended, both optional and wire-only. Every wired entry must
+            // have the phase of `base` — the node states that rule itself
+            // (`network_validator.rs`), because neither pin takes its output
+            // type from the array's elements.
+            Parameter {
+                id: None,
+                name: "feedstocks".to_string(),
+                data_type: DataType::Array(Box::new(DataType::HasAtoms)),
+            },
+            Parameter {
+                id: None,
+                name: "tools".to_string(),
+                data_type: DataType::Array(Box::new(DataType::HasAtoms)),
+            },
         ],
         output_pins: vec![
             OutputPinDefinition::same_as_input("result", "base"),
@@ -710,6 +919,11 @@ pub fn get_node_type() -> NodeType {
                 "step",
                 DataType::Record(RecordType::Named(MECHANOSYNTH_STEP_RECORD.to_string())),
             ),
+            // The merged scene, keeping `base`'s variant the way `atom_union`
+            // does. Appended rather than made pin 0 for the same reason: wires
+            // and displayed-pin sets are persisted by index, and a bare `build`
+            // in the text format would silently become the scene.
+            OutputPinDefinition::same_as_input("scene", "base"),
         ],
         zone_input_pins: vec![],
         zone_output_pins: vec![],

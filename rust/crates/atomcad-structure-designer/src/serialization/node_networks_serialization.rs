@@ -636,12 +636,23 @@ pub fn node_network_to_serializable(
         .map(|(&id, state)| (id, state.display_type))
         .collect();
 
-    // Only write displayed_output_pins for nodes with non-default pin state
-    let default_pins: std::collections::HashSet<i32> = std::collections::HashSet::from([0]);
+    // Only write displayed_output_pins for nodes with non-default pin state.
+    // "Default" is the *node's* default — `{0}` globally, but an explicit set
+    // where the node states one (`NodeData::default_displayed_output_pins`;
+    // both `mechanosynth` nodes say `{2}`). Comparing against a hard-coded
+    // `{0}` would write an entry for every node sitting at its own default and,
+    // worse, write none for a node the user had explicitly put back on `{0}`.
     let displayed_output_pins: Vec<(u64, Vec<i32>)> = network
         .displayed_nodes
         .iter()
-        .filter(|(_, state)| state.displayed_pins != default_pins)
+        .filter(|(id, state)| {
+            let default_pins = network
+                .nodes
+                .get(id)
+                .and_then(|node| node.data.default_displayed_output_pins())
+                .unwrap_or_else(|| std::collections::HashSet::from([0]));
+            state.displayed_pins != default_pins
+        })
         .map(|(&id, state)| (id, state.displayed_pins.iter().copied().collect()))
         .collect();
 
@@ -773,6 +784,40 @@ pub fn serializable_to_node_network(
     for serializable_node in &serializable.nodes {
         let node = serializable_to_node(serializable_node, built_in_node_types, design_dir)?;
         network.nodes.insert(node.id, node);
+    }
+
+    // A displayed node the file wrote no pin entry for sits at its *own*
+    // default, which is `{0}` for almost every node and an explicit set for the
+    // few that state one (`NodeData::default_displayed_output_pins`). This runs
+    // after the nodes are in, because the default is the node data's to answer;
+    // the loop above builds `displayed_nodes` from the two display fields alone
+    // and has nothing to ask yet. An old file in which a `mechanosynth` node
+    // was at the then-default `{0}` therefore loads showing `scene`, which with
+    // nothing wired to the new pins is the same atoms.
+    {
+        let explicit: std::collections::HashSet<u64> = serializable
+            .displayed_output_pins
+            .iter()
+            .map(|(id, _)| *id)
+            .collect();
+        let defaults: Vec<(u64, std::collections::HashSet<i32>)> = network
+            .displayed_nodes
+            .keys()
+            .filter(|id| !explicit.contains(id))
+            .filter_map(|id| {
+                let pins = network
+                    .nodes
+                    .get(id)?
+                    .data
+                    .default_displayed_output_pins()?;
+                Some((*id, pins))
+            })
+            .collect();
+        for (node_id, pins) in defaults {
+            if let Some(state) = network.displayed_nodes.get_mut(&node_id) {
+                state.displayed_pins = pins;
+            }
+        }
     }
 
     // Restore the parameter-id counter. `next_param_id` is intentionally NOT

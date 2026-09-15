@@ -61,9 +61,16 @@ APIMechanosynthAnchor? mechanosynthEditAnchorAtRay(
 /// Selects one row of the open list for **preview**, so the next evaluation
 /// ghosts it on the workpiece.
 ///
-/// Taken on a click, never on hover: the preview goes through the decorator and
-/// the tessellator like guided placement, so it costs one evaluation. That is
-/// the trade the click-to-activate row list buys.
+/// The preview goes through the decorator and the tessellator like guided
+/// placement, so it costs an evaluation of *this* node. It must not cost one of
+/// the chain above it — `base` reaches back through a `mechanosynth` replaying
+/// a hundred steps over a few thousand atoms, and nothing upstream has changed.
+/// So this is the `atom_edit` drag pattern: `mark_skip_downstream` keeps the
+/// refresh from clearing the node's input cache (and from walking the
+/// downstream cone), and the node's `eval` then reuses its cached inputs. Safe
+/// here for the same reason it is safe there — the tool only owns picks while
+/// this node's own pin is the displayed one, so there is no downstream node
+/// whose display could go stale.
 String? mechanosynthEditSelectPreview(
         {required Uint64List scopePath,
         required BigInt nodeId,
@@ -130,7 +137,7 @@ String? mechanosynthEditMoveStep(
             scopePath: scopePath, nodeId: nodeId, from: from, to: to);
 
 /// Writes one metadata field of one authored step. `field` is one of `note`,
-/// `method`, `phase`, `layer`, `site`; `text` carries the first three and
+/// `phase`, `layer`, `site`; `text` carries the first two and
 /// `number` the last two. Consecutive writes to the same field of the same step
 /// coalesce into one undo entry.
 String? setMechanosynthEditStepMetadata(

@@ -3003,6 +3003,19 @@ class APIMechanosynthEditData {
   /// The authored block's chapters — maximal runs sharing a `(phase, layer)`.
   final List<APIMechanosynthChapter> chapters;
 
+  /// One row per bound tool at the cursor — the *Tools* readout above the
+  /// steps list, which is what tells the user a recharge is due before the
+  /// offers do.
+  final List<APIMechanosynthToolRow> tools;
+
+  /// One entry per wired reservoir at the cursor.
+  final List<APIMechanosynthFeedstockRow> feedstocks;
+
+  /// How many atoms the last good scene has when the block fails at the
+  /// cursor step — the viewport is showing that state rather than nothing,
+  /// and the panel says so. `-1` when the block did not fail.
+  final int lastGoodAtomCount;
+
   const APIMechanosynthEditData({
     required this.prefixCount,
     required this.authored,
@@ -3015,6 +3028,9 @@ class APIMechanosynthEditData {
     required this.toolState,
     this.anchorAtomId,
     required this.chapters,
+    required this.tools,
+    required this.feedstocks,
+    required this.lastGoodAtomCount,
   });
 
   @override
@@ -3029,7 +3045,10 @@ class APIMechanosynthEditData {
       lastError.hashCode ^
       toolState.hashCode ^
       anchorAtomId.hashCode ^
-      chapters.hashCode;
+      chapters.hashCode ^
+      tools.hashCode ^
+      feedstocks.hashCode ^
+      lastGoodAtomCount.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -3046,7 +3065,36 @@ class APIMechanosynthEditData {
           lastError == other.lastError &&
           toolState == other.toolState &&
           anchorAtomId == other.anchorAtomId &&
-          chapters == other.chapters;
+          chapters == other.chapters &&
+          tools == other.tools &&
+          feedstocks == other.feedstocks &&
+          lastGoodAtomCount == other.lastGoodAtomCount;
+}
+
+/// One wired reservoir, as the panel lists it.
+class APIMechanosynthFeedstockRow {
+  /// Index on the `feedstocks` pin.
+  final int instance;
+
+  /// How many of its atoms are in the scene at the step — it grows as a build
+  /// dumps onto it and shrinks as one draws from it.
+  final int atomCount;
+
+  const APIMechanosynthFeedstockRow({
+    required this.instance,
+    required this.atomCount,
+  });
+
+  @override
+  int get hashCode => instance.hashCode ^ atomCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIMechanosynthFeedstockRow &&
+          runtimeType == other.runtimeType &&
+          instance == other.instance &&
+          atomCount == other.atomCount;
 }
 
 /// What the `mechanosynth` panel needs beyond the stored properties: the loaded
@@ -3087,6 +3135,21 @@ class APIMechanosynthInfo {
   /// Empty when no script is loaded.
   final List<APIMechanosynthChapter> chapters;
 
+  /// The current step's tool type, when the operation is `tip`; empty
+  /// otherwise and at `applied = 0`.
+  final String currentToolType;
+
+  /// The current step's `agent`, when the operation is `bulk`.
+  final String currentAgent;
+
+  /// One row per **wired** tool molecule, in pin order. Empty when nothing is
+  /// wired to `tools`, and also when the node has not been evaluated — the
+  /// readout is read off the last evaluation rather than forcing one.
+  final List<APIMechanosynthToolRow> tools;
+
+  /// One entry per wired reservoir, in pin order.
+  final List<APIMechanosynthFeedstockRow> feedstocks;
+
   const APIMechanosynthInfo({
     required this.count,
     required this.applied,
@@ -3097,6 +3160,10 @@ class APIMechanosynthInfo {
     required this.currentLayer,
     required this.currentSite,
     required this.chapters,
+    required this.currentToolType,
+    required this.currentAgent,
+    required this.tools,
+    required this.feedstocks,
   });
 
   @override
@@ -3109,7 +3176,11 @@ class APIMechanosynthInfo {
       currentPhase.hashCode ^
       currentLayer.hashCode ^
       currentSite.hashCode ^
-      chapters.hashCode;
+      chapters.hashCode ^
+      currentToolType.hashCode ^
+      currentAgent.hashCode ^
+      tools.hashCode ^
+      feedstocks.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -3124,7 +3195,11 @@ class APIMechanosynthInfo {
           currentPhase == other.currentPhase &&
           currentLayer == other.currentLayer &&
           currentSite == other.currentSite &&
-          chapters == other.chapters;
+          chapters == other.chapters &&
+          currentToolType == other.currentToolType &&
+          currentAgent == other.currentAgent &&
+          tools == other.tools &&
+          feedstocks == other.feedstocks;
 }
 
 /// One row of the offer popup: an operation that fits the clicked atom, or one
@@ -3156,6 +3231,28 @@ class APIMechanosynthOffer {
   /// second list to open.
   final List<APIMechanosynthCandidate> candidates;
 
+  /// The operation's tool type, when tools are wired and the operation is
+  /// `tip`; empty otherwise. An empty string means the row carries **no**
+  /// tool annotation at all, which is the state with `tools` unwired.
+  final String toolType;
+
+  /// The bound tool's state; empty when the type carries none or nothing
+  /// plays it.
+  final String toolState;
+
+  /// Whether the tool is bound, in the right state, and its tool side matches
+  /// at its pose. Meaningless when `tool_type` is empty.
+  final bool toolReady;
+
+  /// Why not, in the words the row shows where the residual would be —
+  /// *habst_tool is spent*, *no molecule tagged `probe` on the tools pin*.
+  final String toolReason;
+
+  /// Whether the row can be committed: it fits **and** its tool is ready.
+  /// A row that fits but whose tool does not sits below the rule with the
+  /// near misses, dimmed and unselectable.
+  final bool offerable;
+
   const APIMechanosynthOffer({
     required this.op,
     required this.note,
@@ -3167,6 +3264,11 @@ class APIMechanosynthOffer {
     required this.approximate,
     required this.ghost,
     required this.candidates,
+    required this.toolType,
+    required this.toolState,
+    required this.toolReady,
+    required this.toolReason,
+    required this.offerable,
   });
 
   @override
@@ -3180,7 +3282,12 @@ class APIMechanosynthOffer {
       mirrored.hashCode ^
       approximate.hashCode ^
       ghost.hashCode ^
-      candidates.hashCode;
+      candidates.hashCode ^
+      toolType.hashCode ^
+      toolState.hashCode ^
+      toolReady.hashCode ^
+      toolReason.hashCode ^
+      offerable.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -3196,7 +3303,12 @@ class APIMechanosynthOffer {
           mirrored == other.mirrored &&
           approximate == other.approximate &&
           ghost == other.ghost &&
-          candidates == other.candidates;
+          candidates == other.candidates &&
+          toolType == other.toolType &&
+          toolState == other.toolState &&
+          toolReady == other.toolReady &&
+          toolReason == other.toolReason &&
+          offerable == other.offerable;
 }
 
 /// An applicability sweep: what the library can do at one atom, plus what the
@@ -3230,6 +3342,44 @@ class APIMechanosynthOffers {
           anchorPosition == other.anchorPosition &&
           anchorAtomicNumber == other.anchorAtomicNumber &&
           rows == other.rows;
+}
+
+/// One bound tool molecule, as the panel lists it: which type its tag named,
+/// how well its four frame atoms fitted, and what state it is in at the step.
+class APIMechanosynthToolRow {
+  /// Index on the `tools` pin.
+  final int instance;
+  final String toolType;
+
+  /// Max per-atom residual of the frame fit, Å.
+  final double residual;
+
+  /// The tracked state; empty when the type carries none.
+  final String state;
+
+  const APIMechanosynthToolRow({
+    required this.instance,
+    required this.toolType,
+    required this.residual,
+    required this.state,
+  });
+
+  @override
+  int get hashCode =>
+      instance.hashCode ^
+      toolType.hashCode ^
+      residual.hashCode ^
+      state.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIMechanosynthToolRow &&
+          runtimeType == other.runtimeType &&
+          instance == other.instance &&
+          toolType == other.toolType &&
+          residual == other.residual &&
+          state == other.state;
 }
 
 /// Where the placement tool stands, evaluated from nothing — the viewport reads
@@ -3731,12 +3881,17 @@ class APIOpsLibraryData {
   final List<String> warnings;
   final List<APIOpsLibraryEntry> ops;
 
+  /// The tool types the library envisions, above the operations. Empty for a
+  /// library whose operations are all `bulk` / `spontaneous`.
+  final List<APIOpsLibraryToolType> tools;
+
   const APIOpsLibraryData({
     this.file,
     required this.tolerance,
     required this.toleranceStated,
     required this.warnings,
     required this.ops,
+    required this.tools,
   });
 
   @override
@@ -3745,7 +3900,8 @@ class APIOpsLibraryData {
       tolerance.hashCode ^
       toleranceStated.hashCode ^
       warnings.hashCode ^
-      ops.hashCode;
+      ops.hashCode ^
+      tools.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -3756,7 +3912,8 @@ class APIOpsLibraryData {
           tolerance == other.tolerance &&
           toleranceStated == other.toleranceStated &&
           warnings == other.warnings &&
-          ops == other.ops;
+          ops == other.ops &&
+          tools == other.tools;
 }
 
 /// One operation of a loaded library, as the panel lists it.
@@ -3774,12 +3931,24 @@ class APIOpsLibraryEntry {
   /// different reaction, so the placement tool drops mirrored fits.
   final bool chiral;
 
+  /// How the reaction is performed: `tip`, `bulk` or `spontaneous`.
+  final String method;
+
+  /// The instrument a `tip` operation needs; empty otherwise.
+  final String toolType;
+
+  /// The species or energy a `bulk` operation needs; empty otherwise.
+  final String agent;
+
   const APIOpsLibraryEntry({
     required this.name,
     required this.note,
     required this.beforeAtoms,
     required this.afterAtoms,
     required this.chiral,
+    required this.method,
+    required this.toolType,
+    required this.agent,
   });
 
   @override
@@ -3788,7 +3957,10 @@ class APIOpsLibraryEntry {
       note.hashCode ^
       beforeAtoms.hashCode ^
       afterAtoms.hashCode ^
-      chiral.hashCode;
+      chiral.hashCode ^
+      method.hashCode ^
+      toolType.hashCode ^
+      agent.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -3799,7 +3971,44 @@ class APIOpsLibraryEntry {
           note == other.note &&
           beforeAtoms == other.beforeAtoms &&
           afterAtoms == other.afterAtoms &&
-          chiral == other.chiral;
+          chiral == other.chiral &&
+          method == other.method &&
+          toolType == other.toolType &&
+          agent == other.agent;
+}
+
+/// One tool type of a loaded library, as the panel lists it. The `frame_tags`
+/// are what a **design** must apply: the type's own name on the molecule, and
+/// one of these on each of the four frame atoms.
+class APIOpsLibraryToolType {
+  final String name;
+  final String note;
+
+  /// The type's state vocabulary, in file order; the first is the state every
+  /// bound tool starts in. Empty when the type carries no symbolic state.
+  final List<String> states;
+  final List<String> frameTags;
+
+  const APIOpsLibraryToolType({
+    required this.name,
+    required this.note,
+    required this.states,
+    required this.frameTags,
+  });
+
+  @override
+  int get hashCode =>
+      name.hashCode ^ note.hashCode ^ states.hashCode ^ frameTags.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIOpsLibraryToolType &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          note == other.note &&
+          states == other.states &&
+          frameTags == other.frameTags;
 }
 
 class APIParameterData {

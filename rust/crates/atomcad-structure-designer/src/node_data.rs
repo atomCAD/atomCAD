@@ -352,6 +352,27 @@ pub trait NodeData: Any + AsAny {
     fn default_display_all_output_pins(&self) -> bool {
         false
     }
+
+    /// Which output pins a freshly-placed instance of this node should display,
+    /// when the global default (pin 0) is the wrong one.
+    ///
+    /// [`NodeData::default_display_all_output_pins`] is the *all pins* answer,
+    /// meant for the destructure nodes whose outputs draw no geometry. This is
+    /// the general one: an explicit set. Both `mechanosynth` nodes answer
+    /// `{2}` — `result` and the base part of `scene` are the same atoms, so
+    /// showing both draws the workpiece twice, and the scene is what a user
+    /// scrubbing a build with tools wants to look at (and what the editor has
+    /// to be looking at to author a recharge). See
+    /// `doc/design_mechanosynth_tools.md`.
+    ///
+    /// Two things follow it besides `add_node`: the serializer omits a pin set
+    /// that equals *this* default rather than a hard-coded `{0}`, so a saved
+    /// default round-trips and a file that chose `{0}` explicitly keeps it.
+    ///
+    /// Default: `None` — pin 0, the global default.
+    fn default_displayed_output_pins(&self) -> Option<HashSet<i32>> {
+        None
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]

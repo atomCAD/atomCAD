@@ -150,6 +150,18 @@ fn test_mechanosynth_edit_evaluation() {
     insta::assert_json_snapshot!(snapshot);
 }
 
+/// The tool model end to end: a workpiece, a reservoir on `feedstocks`, and a
+/// tool molecule tagged the way a design tags one — a `tag` node for the type
+/// name and four more, each with a small `free_sphere` region, for the frame
+/// atoms. The displayed pin is `scene`, which is the node's own default and is
+/// therefore **not** written into the file; that it comes back as `scene` is
+/// half of what this fixture pins. See `doc/design_mechanosynth_tools.md`.
+#[test]
+fn test_mechanosynth_tools_evaluation() {
+    let snapshot = evaluate_cnnd_file(&fixture_path_str("mechanosynth/mechanosynth_tools.cnnd"));
+    insta::assert_json_snapshot!(snapshot);
+}
+
 #[test]
 fn test_nut_bolt_evaluation() {
     let snapshot = evaluate_cnnd_file(&sample_path_str("nut-bolt.cnnd"));

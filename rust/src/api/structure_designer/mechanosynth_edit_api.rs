@@ -23,6 +23,7 @@ use crate::api::api_common::{
     refresh_structure_designer_auto, with_cad_instance_or, with_mut_cad_instance_or,
 };
 use crate::api::common_api_types::APIVec3;
+use crate::api::structure_designer::mechanosynth_api::{feedstock_rows, tool_rows};
 use crate::api::structure_designer::structure_designer_api_types::{
     APIAuthoredStep, APIGhostAtom, APIMechanosynthAnchor, APIMechanosynthCandidate,
     APIMechanosynthChapter, APIMechanosynthEditData, APIMechanosynthOffer, APIMechanosynthOffers,
@@ -81,6 +82,25 @@ fn offers_view(sweep: &OfferSweep) -> APIMechanosynthOffers {
                 approximate: row.approximate,
                 ghost: row.ghost.iter().map(ghost).collect(),
                 candidates: candidates_view(&row.candidates),
+                // An empty `tool_type` is the "no tool annotation" state, which
+                // is what every row carries with `tools` unwired.
+                tool_type: row
+                    .tool
+                    .as_ref()
+                    .map(|tool| tool.tool_type.clone())
+                    .unwrap_or_default(),
+                tool_state: row
+                    .tool
+                    .as_ref()
+                    .and_then(|tool| tool.state.clone())
+                    .unwrap_or_default(),
+                tool_ready: row.tool.as_ref().is_none_or(|tool| tool.ready),
+                tool_reason: row
+                    .tool
+                    .as_ref()
+                    .and_then(|tool| tool.reason.clone())
+                    .unwrap_or_default(),
+                offerable: row.offerable,
             })
             .collect(),
     }
@@ -162,6 +182,15 @@ pub fn mechanosynth_edit_data(
             steps: data.authored_steps(),
         });
 
+    // The *Tools* readout and the last-good banner both come off the scene the
+    // node's last evaluation parked — never by forcing one, since the panel is
+    // rebuilt far more often than the block changes.
+    let scene = data.last_scene();
+    let last_good_atom_count = match (data.last_error(), scene.as_ref()) {
+        (Some(_), Some(scene)) => scene.structure.iter_atoms().count() as i32,
+        _ => -1,
+    };
+
     Some(APIMechanosynthEditData {
         prefix_count: prefix.len() as i32,
         authored: data
@@ -178,6 +207,9 @@ pub fn mechanosynth_edit_data(
         tool_state: data.placement.state().as_str().to_string(),
         anchor_atom_id: data.placement.anchor,
         chapters,
+        tools: tool_rows(scene.as_ref()),
+        feedstocks: feedstock_rows(scene.as_ref()),
+        last_good_atom_count,
     })
 }
 

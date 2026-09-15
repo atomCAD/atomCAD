@@ -798,6 +798,18 @@ fn validate_node_wires(
         // applied via the output-resolution check below.
     }
 
+    // The `mechanosynth` nodes' participant pins must share `base`'s phase.
+    if let Some(error) = validate_mechanosynth_participants(
+        network,
+        node_type_registry,
+        ctx,
+        dest_node_id,
+        dest_node,
+        dest_node_type,
+    ) {
+        return Some(error);
+    }
+
     // Polymorphic output pins must resolve to a concrete type. If any
     // output is unresolved, the node is flagged invalid. This is the
     // uniform rule that covers both single-input SameAsInput pins
@@ -850,6 +862,106 @@ fn validate_node_wires(
         }
     }
 
+    None
+}
+
+/// **Every wired feedstock and tool must have the phase of `base`** — all
+/// `Crystal` or all `Molecule`.
+///
+/// The generic single-phase rule only covers pins whose output type is taken
+/// from the array's elements, which neither of these is (both outputs mirror
+/// `base`), so the node states the rule itself. It is the same rule
+/// `atom_union` enforces and for the same reason: `scene` merges those atoms
+/// into `base`'s variant, and a Molecule's atoms inside a Crystal is exactly
+/// what the union refuses to produce. The fix — `enter_structure` /
+/// `exit_structure` — is named in the message, because it is not obvious from
+/// a type mismatch alone.
+///
+/// Blocking: `scene` would be a lie, so the node's output is not useful.
+fn validate_mechanosynth_participants(
+    network: &NodeNetwork,
+    node_type_registry: &NodeTypeRegistry,
+    ctx: &mut ValidationContext,
+    dest_node_id: u64,
+    dest_node: &Node,
+    dest_node_type: &crate::node_type::NodeType,
+) -> Option<ValidationError> {
+    let participant_pins: &[&str] = match dest_node.node_type_name.as_str() {
+        "mechanosynth" | "mechanosynth_edit" => &["feedstocks", "tools"],
+        _ => return None,
+    };
+
+    // The phase of whatever `base` resolves to. Nothing wired, or an
+    // unresolved source, means there is no rule to check yet — the `base`
+    // pin's own rules report that.
+    let pin_index = |name: &str| {
+        dest_node_type
+            .parameters
+            .iter()
+            .position(|parameter| parameter.name == name)
+    };
+    let resolved = |ctx: &mut ValidationContext, argument: &crate::node_network::Argument| {
+        let incoming = argument.incoming_wires.first()?;
+        let crate::node_network::SourcePin::NodeOutput { pin_index } = incoming.source_pin else {
+            return None;
+        };
+        ctx.resolve(
+            network,
+            node_type_registry,
+            incoming.source_node_id,
+            pin_index,
+        )
+    };
+
+    let base_argument = dest_node.arguments.get(pin_index("base")?)?;
+    let base_phase = resolved(ctx, base_argument)?;
+    if !matches!(base_phase, DataType::Crystal | DataType::Molecule) {
+        return None;
+    }
+
+    for pin_name in participant_pins {
+        let index = pin_index(pin_name)?;
+        let argument = dest_node.arguments.get(index)?;
+        for incoming in &argument.incoming_wires {
+            let crate::node_network::SourcePin::NodeOutput { pin_index } = incoming.source_pin
+            else {
+                continue;
+            };
+            let Some(source_type) = ctx.resolve(
+                network,
+                node_type_registry,
+                incoming.source_node_id,
+                pin_index,
+            ) else {
+                continue;
+            };
+            // An array wire carries the element type; a single structure is
+            // broadcast to a one-element array, so both shapes reach here.
+            let element = match &source_type {
+                DataType::Array(element) => (**element).clone(),
+                other => other.clone(),
+            };
+            if !matches!(element, DataType::Crystal | DataType::Molecule) {
+                continue;
+            }
+            if element != base_phase {
+                let fix = if base_phase == DataType::Crystal {
+                    "enter_structure"
+                } else {
+                    "exit_structure"
+                };
+                return Some(ValidationError::new(
+                    format!(
+                        "'{pin_name}' pin: the wire from node #{} carries {element:?}, but \
+                         'base' is {base_phase:?}; every feedstock and tool must have the \
+                         phase of the workpiece — wire it through `{fix}` first",
+                        incoming.source_node_id
+                    ),
+                    Some(dest_node_id),
+                ));
+            }
+        }
+    }
     None
 }
 

@@ -1200,9 +1200,10 @@ fn the_step_pin_declares_the_built_in_record_type() {
     // pick the schema out of its dropdown.
     let registry = NodeTypeRegistry::new();
     let node_type = registry.get_node_type("mechanosynth").unwrap();
-    assert_eq!(node_type.output_pins.len(), 2);
+    assert_eq!(node_type.output_pins.len(), 3);
     assert_eq!(node_type.output_pins[0].name, "result");
     assert_eq!(node_type.output_pins[1].name, "step");
+    assert_eq!(node_type.output_pins[2].name, "scene");
     assert_eq!(
         node_type.output_pins[1].data_type,
         atomcad_structure_designer::node_type::PinOutputType::Fixed(DataType::Record(
@@ -1217,9 +1218,21 @@ fn the_step_pin_declares_the_built_in_record_type() {
     assert_eq!(
         names,
         vec![
-            "index", "count", "op", "note", "method", "phase", "layer", "site", "t", "r"
+            "index",
+            "count",
+            "op",
+            "note",
+            "method",
+            "phase",
+            "layer",
+            "site",
+            "t",
+            "r",
+            "tool_type",
+            "tool_state",
+            "agent"
         ],
-        "`r` is appended last, so existing record_construct wires keep their \
+        "every new field is appended, so existing record_construct wires keep their \
          positions"
     );
 }

@@ -43,13 +43,14 @@ use crate::node_type_registry::NodeTypeRegistry;
 use crate::nodes::build_step::{
     BUILD_STEP_RECORD, build_step_record, is_identity_rotation, steps_from_array,
 };
-use crate::nodes::mechanosynth::MS_CURRENT_TAG;
+use crate::nodes::mechanosynth::{MS_CURRENT_TAG, MS_FEEDSTOCK_TAG, MS_TOOL_TAG, participants};
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
+use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::atomic_structure::atomic_structure_decorator::MechanosynthGhostVisuals;
 use atomcad_crystolecule::mechanosynth::{
     Applicability, BuildScript, Candidate, EXACT_FIT_RESIDUAL, GhostAtom, GhostBond, HighlightTags,
-    NO_LAYER, NO_SITE, OpLibrary, Step, replay, steps_applied,
+    NO_LAYER, NO_SITE, OpLibrary, Scene, Step, build_scene, replay_steps, steps_applied,
 };
 use glam::{DMat3, DVec3};
 use serde::{Deserialize, Serialize};
@@ -62,10 +63,17 @@ use std::sync::{Arc, Mutex};
 pub const BASE_PIN: usize = 0;
 pub const OPS_PIN: usize = 1;
 pub const STEPS_PIN: usize = 2;
+/// **Appended** (pin 3 / pin 4), both optional and wire-only — the replayer's
+/// two participant pins, one index lower because this node has no `step` pin.
+pub const FEEDSTOCKS_PIN: usize = 3;
+pub const TOOLS_PIN: usize = 4;
 
 /// Index of the `steps` output pin. **Appended**, never inserted, so pin 0
 /// stays the workpiece (`doc/design_multi_output_pins.md`).
 pub const STEPS_OUTPUT_PIN: usize = 1;
+
+/// Index of the `scene` output pin — the merged scene at the cursor.
+pub const SCENE_OUTPUT_PIN: usize = 2;
 
 /// The label errors use for a step array that arrived on a wire. A wired array
 /// has no file, and `steps` is what the pin is called.
@@ -291,6 +299,8 @@ struct CachedInputs {
     wrapper: NetworkResult,
     library: Arc<OpLibrary>,
     prefix: Vec<Step>,
+    feedstocks: Vec<AtomicStructure>,
+    tools: Vec<AtomicStructure>,
 }
 
 impl std::fmt::Debug for CachedInputs {
@@ -325,6 +335,19 @@ pub struct MechanosynthEditData {
     /// because `eval` takes `&self` (the `atom_edit` cache pattern).
     #[serde(skip)]
     pub last_error: Mutex<Option<String>>,
+    /// **The scene after the last successful step** of the most recent
+    /// evaluation.
+    ///
+    /// Two jobs in one field. When the block fails at the cursor step the pins
+    /// carry the error — a downstream export must never receive a silently
+    /// truncated build — but the *viewport* shows this, because the failing
+    /// step is the one being authored and the user has to see where it stands
+    /// to fix it. And the placement tool works against it whether or not the
+    /// block failed: the whole `Scene` rather than its atoms, because an offer
+    /// needs the tool **bindings** and a click needs the **participant** of the
+    /// atom it landed on. Evaluation-time state, never persisted.
+    #[serde(skip)]
+    last_scene: Mutex<Option<Scene>>,
 }
 
 /// A fresh editor shows its whole block, which is the useful default: the
@@ -345,6 +368,7 @@ impl Default for MechanosynthEditData {
             placement: PlacementState::default(),
             cached_input: Mutex::new(None),
             last_error: Mutex::new(None),
+            last_scene: Mutex::new(None),
         }
     }
 }
@@ -357,6 +381,7 @@ impl Clone for MechanosynthEditData {
             placement: self.placement.clone(),
             cached_input: Mutex::new(self.cached_input.lock().ok().and_then(|slot| slot.clone())),
             last_error: Mutex::new(self.last_error.lock().ok().and_then(|slot| slot.clone())),
+            last_scene: Mutex::new(self.last_scene.lock().ok().and_then(|slot| slot.clone())),
         }
     }
 }
@@ -427,6 +452,19 @@ impl MechanosynthEditData {
     pub fn last_error(&self) -> Option<String> {
         self.last_error.lock().ok().and_then(|slot| slot.clone())
     }
+
+    fn record_last_scene(&self, state: Option<Scene>) {
+        if let Ok(mut slot) = self.last_scene.lock() {
+            *slot = state;
+        }
+    }
+
+    /// The scene after the last successful step of the most recent evaluation.
+    /// `None` when nothing has been evaluated, or when the failure happened
+    /// before any step could run (a bad library, a mis-tagged tool).
+    pub fn last_scene(&self) -> Option<Scene> {
+        self.last_scene.lock().ok().and_then(|slot| slot.clone())
+    }
 }
 
 /// A one-off script wrapping a step list, for [`replay`].
@@ -438,39 +476,57 @@ fn script(file: &str, steps: Vec<Step>) -> BuildScript {
     }
 }
 
-/// Replays `prefix` and then the first `cursor` steps of `authored` onto
-/// `base`, painting `ms_current` on the last **authored** step's touched atoms.
+/// Replays `prefix` and then the first `cursor` steps of `authored` onto the
+/// scene built from `base`, `feedstocks` and `tools`, painting `ms_current` on
+/// the last **authored** step's touched atoms.
 ///
-/// Two replays rather than one concatenated script, and that is the whole point:
-/// a single call would paint the highlight on the last *prefix* step whenever
-/// the cursor sits at 0, which is exactly the state that must show no highlight
-/// at all.
+/// Two passes over **one** scene rather than one concatenated script, and that
+/// is the whole point: a single script would paint the highlight on the last
+/// *prefix* step whenever the cursor sits at 0, which is exactly the state that
+/// must show no highlight at all. Two *scenes* would be worse still — the
+/// second binding would put every tool back in its initial state.
+///
+/// The outer `Err` is a failure before any step ran (a bad script, a mis-tagged
+/// tool, a prefix step that would not replay): there is nothing to show. The
+/// `Ok` carries the scene *and* the block's failure, if the block failed — the
+/// scene is then the state after the last successful step, which is what the
+/// editor displays while the user works on the step that is failing.
 pub fn replay_prefix_and_block(
-    base: &atomcad_crystolecule::atomic_structure::AtomicStructure,
+    base: &AtomicStructure,
+    feedstocks: &[AtomicStructure],
+    tools: &[AtomicStructure],
     library: &OpLibrary,
     prefix: Vec<Step>,
     authored: Vec<Step>,
     cursor: i32,
-) -> Result<atomcad_crystolecule::atomic_structure::AtomicStructure, String> {
-    let after_prefix = replay(
-        base,
+) -> Result<(Scene, Option<String>), String> {
+    let mut scene =
+        build_scene(base, feedstocks, tools, library).map_err(|failure| failure.to_string())?;
+    let prefix_failure = replay_steps(
+        &mut scene,
         library,
         &script(PREFIX_LABEL, prefix),
         -1,
         HighlightTags::default(),
     )
     .map_err(|failure| failure.to_string())?;
-    replay(
-        &after_prefix,
+    if let Some(failure) = prefix_failure {
+        return Err(failure.to_string());
+    }
+    let block_failure = replay_steps(
+        &mut scene,
         library,
         &script(AUTHORED_LABEL, authored),
         cursor,
         HighlightTags {
             current: Some(MS_CURRENT_TAG),
+            tool: Some(MS_TOOL_TAG),
+            feedstock: Some(MS_FEEDSTOCK_TAG),
             ..HighlightTags::default()
         },
     )
-    .map_err(|failure| failure.to_string())
+    .map_err(|failure| failure.to_string())?;
+    Ok((scene, block_failure.map(|failure| failure.to_string())))
 }
 
 impl NodeData for MechanosynthEditData {
@@ -500,8 +556,14 @@ impl NodeData for MechanosynthEditData {
         // empty rather than storing half of one.
         let cached = self.cached_input.lock().ok().and_then(|slot| slot.clone());
 
-        let (wrapper_source, library, prefix) = match cached {
-            Some(cached) => (cached.wrapper, cached.library, cached.prefix),
+        let (wrapper_source, library, prefix, feedstocks, tools) = match cached {
+            Some(cached) => (
+                cached.wrapper,
+                cached.library,
+                cached.prefix,
+                cached.feedstocks,
+                cached.tools,
+            ),
             None => {
                 let input_val = network_evaluator.evaluate_arg_required(
                     network_stack,
@@ -511,7 +573,7 @@ impl NodeData for MechanosynthEditData {
                     BASE_PIN,
                 );
                 if input_val.is_error() {
-                    return both(input_val);
+                    return all_pins(input_val);
                 }
                 let wrapper_source = match input_val {
                     NetworkResult::Crystal(_) | NetworkResult::Molecule(_) => input_val,
@@ -534,7 +596,7 @@ impl NodeData for MechanosynthEditData {
                     NetworkResult::None => {
                         return self.fail("no operation library (wire the ops pin)".to_string());
                     }
-                    propagated @ NetworkResult::Error(_) => return both(propagated),
+                    propagated @ NetworkResult::Error(_) => return all_pins(propagated),
                     other => {
                         return self.fail(format!(
                             "expected an OpLibrary on the ops pin, got {:?}",
@@ -551,11 +613,38 @@ impl NodeData for MechanosynthEditData {
                     STEPS_PIN,
                 ) {
                     NetworkResult::None => Vec::new(),
-                    propagated @ NetworkResult::Error(_) => return both(propagated),
+                    propagated @ NetworkResult::Error(_) => return all_pins(propagated),
                     array => match steps_from_array(&array) {
                         Ok(steps) => steps,
                         Err(message) => return self.fail(message),
                     },
+                };
+
+                // The two participant pins. Unwired is an empty list, which
+                // is the workpiece-only replay.
+                let feedstocks = match participants(
+                    network_evaluator,
+                    network_stack,
+                    node_id,
+                    registry,
+                    context,
+                    FEEDSTOCKS_PIN,
+                    "feedstocks",
+                ) {
+                    Ok(structures) => structures,
+                    Err(failure) => return all_pins(*failure),
+                };
+                let tools = match participants(
+                    network_evaluator,
+                    network_stack,
+                    node_id,
+                    registry,
+                    context,
+                    TOOLS_PIN,
+                    "tools",
+                ) {
+                    Ok(structures) => structures,
+                    Err(failure) => return all_pins(*failure),
                 };
 
                 if let Ok(mut slot) = self.cached_input.lock() {
@@ -563,9 +652,11 @@ impl NodeData for MechanosynthEditData {
                         wrapper: wrapper_source.clone(),
                         library: library.clone(),
                         prefix: prefix.clone(),
+                        feedstocks: feedstocks.clone(),
+                        tools: tools.clone(),
                     });
                 }
-                (wrapper_source, library, prefix)
+                (wrapper_source, library, prefix, feedstocks, tools)
             }
         };
 
@@ -588,25 +679,82 @@ impl NodeData for MechanosynthEditData {
             .collect();
         let steps_output = NetworkResult::Array(all_steps.iter().map(build_step_record).collect());
 
-        match replay_prefix_and_block(atoms, &library, prefix, self.authored_steps(), self.cursor) {
-            Ok(result) => {
-                *atoms = result;
-                // The placement preview is display-only, so it rides on the
-                // decorator and never on the atoms — the same channel guided
-                // placement and the guideline use. The ghosts were computed
-                // when the row was selected; this only hands them over.
-                if decorate && self.placement.has_preview() {
-                    atoms.decorator_mut().mechanosynth_ghost_visuals =
-                        Some(Box::new(MechanosynthGhostVisuals {
-                            ghosts: self.placement.preview_ghosts.clone(),
-                            bonds: self.placement.preview_bonds.clone(),
-                            near_miss: self.placement.preview_near_miss,
-                        }));
-                }
-                self.record_error(None);
-                EvalOutput::multi(vec![wrapper, steps_output])
+        let (scene, block_failure) = match replay_prefix_and_block(
+            atoms,
+            &feedstocks,
+            &tools,
+            &library,
+            prefix,
+            self.authored_steps(),
+            self.cursor,
+        ) {
+            Ok(replayed) => replayed,
+            Err(message) => {
+                // Nothing ran, so there is no last good state to fall back to.
+                self.record_last_scene(None);
+                return self.fail(message);
             }
-            Err(message) => self.fail(message),
+        };
+
+        // `result` is the workpiece alone, `scene` everything; both keep
+        // `base`'s variant.
+        let mut scene_wrapper = wrapper.clone();
+        *atoms_of(&mut wrapper) = scene.workpiece();
+        *atoms_of(&mut scene_wrapper) = scene.structure.clone();
+
+        // The state after the last successful step, for the viewport and the
+        // placement tool. Recorded whether or not the block failed: on success
+        // it is simply what the pins carry. The **whole scene**, because an
+        // offer needs the bindings and a click needs the participant map — the
+        // decorator's preview ghosts are deliberately not in it, being display
+        // state of one evaluation.
+        self.record_last_scene(Some(scene));
+
+        // The placement preview is display-only, so it rides on the decorator
+        // and never on the atoms — the same channel guided placement and the
+        // guideline use. The ghosts were computed when the row was selected;
+        // this only hands them over. **Both** output structures carry them, so
+        // a selected row previews whichever pin the user is showing.
+        if decorate && self.placement.has_preview() {
+            let visuals = MechanosynthGhostVisuals {
+                ghosts: self.placement.preview_ghosts.clone(),
+                bonds: self.placement.preview_bonds.clone(),
+                near_miss: self.placement.preview_near_miss,
+            };
+            atoms_of(&mut wrapper)
+                .decorator_mut()
+                .mechanosynth_ghost_visuals = Some(Box::new(visuals.clone()));
+            atoms_of(&mut scene_wrapper)
+                .decorator_mut()
+                .mechanosynth_ghost_visuals = Some(Box::new(visuals));
+        }
+
+        match block_failure {
+            None => {
+                self.record_error(None);
+                EvalOutput::multi(vec![wrapper, steps_output, scene_wrapper])
+            }
+            Some(message) => {
+                // **The pins carry the error**, exactly as the replayer's
+                // would: a downstream export or style node must never receive
+                // a silently truncated build, and *same result, both nodes*
+                // has to hold for a failing block as for a good one. What
+                // changes is what the editor *displays* — the last good state,
+                // through the per-pin display override the scene generator
+                // already consults.
+                self.record_error(Some(message.clone()));
+                let failed = NetworkResult::Error(format!("mechanosynth_edit: {message}"));
+                // **`steps` is not a replay product.** The block is stored
+                // data and the prefix arrived intact, so the array is exactly
+                // as valid as it was a moment ago — and it has to be, because
+                // the walk that makes a sequence tool-aware inserts a recharge
+                // *while* the block is failing, and a downstream replayer must
+                // see the same steps throughout.
+                let mut output = EvalOutput::multi(vec![failed.clone(), steps_output, failed]);
+                output.set_display_override(0, wrapper);
+                output.set_display_override(SCENE_OUTPUT_PIN, scene_wrapper);
+                output
+            }
         }
     }
 
@@ -618,6 +766,14 @@ impl NodeData for MechanosynthEditData {
 
     fn clone_box(&self) -> Box<dyn NodeData> {
         Box::new(self.clone())
+    }
+
+    /// **`scene`, not `result`.** A reservoir atom exists only in the scene,
+    /// and a recharge is authored by clicking one; with `result` alone
+    /// displayed there would be nothing to click. Base ids are the same in
+    /// both, so a click on the workpiece means the same thing either way.
+    fn default_displayed_output_pins(&self) -> Option<HashSet<i32>> {
+        Some(HashSet::from([SCENE_OUTPUT_PIN as i32]))
     }
 
     fn get_subtitle(&self, _connected_input_pins: &HashSet<String>) -> Option<String> {
@@ -671,16 +827,25 @@ impl MechanosynthEditData {
     /// Records `message` as the node's last error and returns it on both pins.
     fn fail(&self, message: String) -> EvalOutput {
         self.record_error(Some(message.clone()));
-        both(NetworkResult::Error(format!(
+        all_pins(NetworkResult::Error(format!(
             "mechanosynth_edit: {message}"
         )))
     }
 }
 
-/// The same result on both output pins: the two outputs are one evaluation, so
-/// whatever stops the workpiece stops the step array too.
-fn both(result: NetworkResult) -> EvalOutput {
-    EvalOutput::multi(vec![result.clone(), result])
+/// The same result on all three output pins: the outputs are one evaluation, so
+/// whatever stops the workpiece stops the step array and the scene too.
+fn all_pins(result: NetworkResult) -> EvalOutput {
+    EvalOutput::multi(vec![result.clone(), result.clone(), result])
+}
+
+/// The atoms inside a `Crystal` / `Molecule` wrapper.
+fn atoms_of(wrapper: &mut NetworkResult) -> &mut AtomicStructure {
+    match wrapper {
+        NetworkResult::Crystal(crystal) => &mut crystal.atoms,
+        NetworkResult::Molecule(molecule) => &mut molecule.atoms,
+        _ => unreachable!("only the two atomic variants reach here"),
+    }
 }
 
 // ============================================================================
@@ -859,6 +1024,20 @@ pub fn get_node_type() -> NodeType {
             be derived from the host's bonds is flagged separately. A design with no chips \
             reproduces a generator's replay to file rounding.\n\
             \n\
+            The `feedstocks` and `tools` pins are the replayer's, and the third output pin, \
+            `scene`, is the same merged view — the workpiece, the reservoirs and the tool \
+            molecules at the cursor. A freshly placed node shows it, because a reservoir atom \
+            exists only there and a recharge is authored exactly like a placement: click the \
+            dump atom and choose the donation. An operation whose tool is not bound, is in the \
+            wrong state, or whose tool side does not match at the tool's pose is offered dimmed \
+            and cannot be committed, with the reason where the residual would be. A click on a \
+            tool atom is refused: tools are rewritten by their operations, not placed on.\n\
+            \n\
+            When the block fails at the cursor step, both structure pins carry the error — a \
+            downstream export must never receive a silently truncated build — while the \
+            viewport keeps showing the state after the last successful step, which is the one \
+            the failing step is being authored against.\n\
+            \n\
             The cursor is navigation, not an edit: scrubbing it is not undoable, exactly as \
             `mechanosynth`'s `step` slider is not."
             .to_string(),
@@ -882,6 +1061,19 @@ pub fn get_node_type() -> NodeType {
                     BUILD_STEP_RECORD.to_string(),
                 )))),
             },
+            // Appended, both optional and wire-only — the replayer's two
+            // participant pins. Every wired entry must have the phase of
+            // `base`, a rule the node states itself (`network_validator.rs`).
+            Parameter {
+                id: None,
+                name: "feedstocks".to_string(),
+                data_type: DataType::Array(Box::new(DataType::HasAtoms)),
+            },
+            Parameter {
+                id: None,
+                name: "tools".to_string(),
+                data_type: DataType::Array(Box::new(DataType::HasAtoms)),
+            },
         ],
         output_pins: vec![
             OutputPinDefinition::same_as_input("result", "base"),
@@ -891,6 +1083,10 @@ pub fn get_node_type() -> NodeType {
                     BUILD_STEP_RECORD.to_string(),
                 )))),
             ),
+            // The merged scene at the cursor, appended for the same reason it
+            // is on the replayer, and the **display default**: a reservoir atom
+            // exists only here, and a recharge is authored by clicking it.
+            OutputPinDefinition::same_as_input("scene", "base"),
         ],
         zone_input_pins: vec![],
         zone_output_pins: vec![],
