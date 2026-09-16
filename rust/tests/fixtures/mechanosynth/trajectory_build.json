@@ -1,0 +1,29 @@
+{
+  "comment": "The trajectory build, against tool_ops.json on tool_scene.xyz with tool_dump.xyz on feedstocks and tool_tip.xyz / tool_probe.xyz on tools. One run of habst_tool spanning three visits - abstract, recharge on the reservoir, abstract again - with a settle *inside* it, so a tool hovers over its next site while the crystal rearranges; then the bare probe's single visit, which ends that run; then a bulk step, which nothing visits. Every run shape this design distinguishes appears exactly once.",
+  "format": "atomcad-msbuild/2",
+  "steps": [
+    { "op": "habst", "t": [0.0, 0.0, 1.09],
+      "note": "the charged tip leaves park, takes methane A's +z hydrogen and goes spent",
+      "phase": "abstract", "layer": 1, "site": 0 },
+
+    { "op": "settle", "t": [-0.513831, 0.889981, -0.363333],
+      "note": "methane A relaxes into the vacancy while the tip hovers over the reservoir",
+      "phase": "settle", "layer": 1, "site": 0 },
+
+    { "op": "hdump", "t": [20.0, 1.54, 0.0],
+      "note": "the recharge, reached without going home: the same run's second visit",
+      "phase": "recharge", "layer": 1, "site": 0 },
+
+    { "op": "habst", "t": [1.027662, 0.0, -0.363333],
+      "note": "the run's last visit, after which the tip flies home",
+      "phase": "abstract", "layer": 1, "site": 0 },
+
+    { "op": "habst_probe", "t": [10.0, 0.0, 1.09],
+      "note": "the bare probe's own run of one visit - a second tool's tip step, which is what ended the first run",
+      "phase": "abstract", "layer": 1, "site": 1 },
+
+    { "op": "expose", "t": [0.0, 0.0, 0.0],
+      "note": "one site's share of the X2 dose; a bulk step has no visit and every tool is at park",
+      "phase": "dose", "layer": 2, "site": 0 }
+  ]
+}

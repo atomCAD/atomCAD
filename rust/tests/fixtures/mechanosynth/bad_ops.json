@@ -1,6 +1,6 @@
 {
   "comment": "Invalid on purpose: `add_star` gives an added atom the wildcard element, which the parser rejects because an added atom needs a real element. Used by the node tests to prove a load failure reaches the result pin.",
-  "format": "atomcad-msops/3",
+  "format": "atomcad-msops/4",
   "tools": [
     {
       "name": "probe",
@@ -10,13 +10,15 @@
         { "tag": "a",    "pos": [1.45, 0.0, -3.17] },
         { "tag": "b",    "pos": [-0.73, 1.26, -3.17] },
         { "tag": "c",    "pos": [-0.73, -1.26, -3.17] }
-      ]
+      ],
+      "envelope": { "half_angle": 30.0, "radius": 2.0 }
     }
   ],
   "ops": [
     {
       "name": "add_star",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": { "type": "probe" },
       "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
       "after": {

@@ -1,6 +1,6 @@
 {
   "comment": "The tool-aware library. Two tool types over the shared tag vocabulary apex/a/b/c: habst_tool, an ethynyl on a handle with a charged/spent state pair, and probe, a bare tip with no symbolic state and an empty tool side. The legs of both frames come off the handle, not off the business axis, so the four entries are not coplanar - which is what makes a mirrored molecule fail the residual instead of binding mirrored. Operations cover all three methods.",
-  "format": "atomcad-msops/3",
+  "format": "atomcad-msops/4",
   "tolerance": 0.05,
   "tools": [
     {
@@ -12,7 +12,8 @@
         { "tag": "a",    "pos": [1.45, 0.0, -3.17] },
         { "tag": "b",    "pos": [-0.725, 1.2557, -3.17] },
         { "tag": "c",    "pos": [-0.725, -1.2557, -3.17] }
-      ]
+      ],
+      "envelope": { "half_angle": 46.0, "radius": 5.2 }
     },
     {
       "name": "probe",
@@ -22,7 +23,8 @@
         { "tag": "a",    "pos": [1.45, 0.0, -3.17] },
         { "tag": "b",    "pos": [-0.725, 1.2557, -3.17] },
         { "tag": "c",    "pos": [-0.725, -1.2557, -3.17] }
-      ]
+      ],
+      "envelope": { "half_angle": 31.0, "radius": 2.3 }
     }
   ],
   "ops": [
@@ -30,6 +32,7 @@
       "name": "habst",
       "note": "Hydrogen abstraction by the charged tool: the H leaves the workpiece and arrives at the tool's apex.",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.06] },
       "before": { "atoms": [ { "id": 1, "el": "H", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
       "after":  { "atoms": [], "bonds": [] },
       "tool": {
@@ -59,6 +62,7 @@
       "name": "habst_probe",
       "note": "The same abstraction performed by a bare probe - a different reaction by the environment-variant convention, sharing only the target-side pattern. Its tool side is empty, so the step records which instrument visited without asserting any change.",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "before": { "atoms": [ { "id": 1, "el": "H", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
       "after":  { "atoms": [], "bonds": [] },
       "tool": { "type": "probe" }
@@ -67,6 +71,7 @@
       "name": "hdump",
       "note": "The recharge: the spent tool dumps its hydrogen onto a bare atom of a reservoir and comes back charged.",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 1.09], "tool": [0.0, 0.0, 1.06] },
       "before": { "atoms": [ { "id": 1, "el": "*", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
       "after": {
         "atoms": [
@@ -148,8 +153,10 @@
     },
     {
       "name": "habst_approach",
-      "note": "Carries the milestone-2 approach pose, which milestone 1 parses and keeps and reads for nothing.",
+      "note": "Still carries the `approach` pose /3 reserved and nobody ever wrote. /4 removed it, so it is an unknown key the loader skips - which is what this operation now pins. It also states a `duration`, the key the clock half of milestone 2 will read and nothing reads yet.",
+      "duration": 2.5,
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "before": { "atoms": [ { "id": 1, "el": "H", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
       "after":  { "atoms": [], "bonds": [] },
       "tool": { "type": "probe" },

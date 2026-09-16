@@ -27,11 +27,14 @@ use super::apply::{
     verify_clash, verify_pattern,
 };
 use super::pose::{ToolPose, name_pose_error, tool_pose};
-use super::schema::{BuildScript, MechanosynthError, Method, NO_LAYER, OpLibrary, Step, ToolType};
+use super::schema::{
+    BuildScript, MechanosynthError, Method, NO_LAYER, OpLibrary, Operation, Step, ToolType,
+};
+use super::trajectory::{Envelope, Landing, check_containment, plan_landing};
 use crate::atomic_constants::element_symbol;
 use crate::atomic_structure::AtomicStructure;
 use crate::atomic_structure::tags::MAX_TAGS;
-use glam::DVec3;
+use glam::{DMat3, DVec3};
 use rustc_hash::FxHashMap;
 
 /// Which structure of the scene an atom belongs to. The index is the position
@@ -59,6 +62,13 @@ pub struct ToolBinding {
     /// The symbolic state, starting at the type's initial state and moved by
     /// each tool side's `to`. `None` only for a type without `states`.
     pub state: Option<String>,
+    /// The type's collision envelope, copied here so that planning a landing
+    /// needs nothing the scene does not already hold. `build_scene` also checks
+    /// that this molecule fits inside it, once, at binding.
+    pub envelope: Envelope,
+    /// The type's local tool axis, `±z`; see
+    /// [`ToolType::axis`](super::schema::ToolType::axis).
+    pub axis: DVec3,
 }
 
 impl ToolBinding {
@@ -186,7 +196,7 @@ pub fn replay_scene_partial(
     tags: HighlightTags<'_>,
 ) -> Result<(Scene, Option<MechanosynthError>), MechanosynthError> {
     let mut scene = build_scene(base, feedstocks, tools, library)?;
-    let failure = replay_steps(&mut scene, library, script, step, tags)?;
+    let (failure, _landings) = replay_steps(&mut scene, library, script, step, tags)?;
     Ok((scene, failure))
 }
 
@@ -203,13 +213,19 @@ pub fn replay_scene_partial(
 /// have; the inner `Some` is a step failure, after which `scene` is the state
 /// the last successful step left. Ids are never reused, so replaying a second
 /// script into a scene is exactly replaying a longer one.
+///
+/// Beside the failure it reports the [`Landing`] of every step it applied, in
+/// step order — `None` for a step that is not `tip` or whose tool is unbound —
+/// because carrying a tool's orientation along a run needs the landings of the
+/// visits before this one. **Landing a step cannot fail it**, so the scene this
+/// leaves behind is milestone 1's, atom for atom, for every build that loads.
 pub fn replay_steps(
     scene: &mut Scene,
     library: &OpLibrary,
     script: &BuildScript,
     step: i32,
     tags: HighlightTags<'_>,
-) -> Result<Option<MechanosynthError>, MechanosynthError> {
+) -> Result<(Option<MechanosynthError>, Vec<Option<Landing>>), MechanosynthError> {
     super::parse::validate_script_ops(script, library)?;
 
     let tolerance = resolve_tolerance(library);
@@ -229,6 +245,7 @@ pub fn replay_steps(
     let mut created: Vec<u32> = Vec::new();
     let mut created_in_layer: Vec<u32> = Vec::new();
     let mut failure: Option<MechanosynthError> = None;
+    let mut landings: Vec<Option<Landing>> = Vec::with_capacity(n);
 
     for (i, script_step) in script.steps.iter().take(n).enumerate() {
         let op = library
@@ -236,6 +253,7 @@ pub fn replay_steps(
             .expect("validate_script_ops checked every op name");
         match apply_step_in_scene(scene, op, script_step, i + 1, tolerance, clash, tool_model) {
             Ok(effect) => {
+                landings.push(effect.landing);
                 if tags.added.is_some() {
                     created.extend(base_atoms(scene, &effect.added));
                 }
@@ -259,7 +277,7 @@ pub fn replay_steps(
     paint(&mut scene.structure, tags.layer, created_in_layer);
     paint_participants(scene, tags);
 
-    Ok(failure)
+    Ok((failure, landings))
 }
 
 /// `ms_added` and `ms_layer` mean "what the build created **on the workpiece**,
@@ -371,6 +389,18 @@ pub fn build_scene(
         bindings,
     };
     check_participants(&scene, library.clash_factor())?;
+
+    // **Containment is checked, not assumed.** A type that claims a smaller
+    // envelope than the molecule playing it would have the sweep call a site
+    // reachable the molecule cannot reach, so it is refused here — once, before
+    // any step, beside the frame residual it is the twin of.
+    for (index, binding) in scene.bindings.iter().enumerate() {
+        let tool_type = library
+            .tool_type(&binding.tool_type)
+            .expect("binding named a declared tool type");
+        check_containment(&scene, index, tool_type, library, &tool_atoms[index])?;
+    }
+
     Ok(scene)
 }
 
@@ -580,6 +610,8 @@ fn bind_tools(
             tool_type: tool_type.name.clone(),
             pose,
             state: tool_type.initial_state().map(str::to_string),
+            envelope: tool_type.envelope,
+            axis: tool_type.axis(),
         });
     }
 
@@ -602,30 +634,101 @@ fn bind_tools(
 pub struct SceneEffect {
     pub touched: Vec<u32>,
     pub added: Vec<u32>,
+    /// The landing of a `tip` step whose tool was bound, verdict included;
+    /// `None` for every other step.
+    ///
+    /// **The apply never fails over it.** A generator reads `reachable()` here
+    /// and turns a blocked site into the "step *n* could not be emitted" it
+    /// already produces for a failed match, so an emitted script is reachable by
+    /// construction; a replay carries on and reports it, because a view of a
+    /// build is not the place to decide that the build is impossible.
+    pub landing: Option<Landing>,
 }
 
-/// Applies one step: the target side, then the tool side when the operation is
-/// `tip` and tools are wired.
+/// Everything one step's checks produced, and nothing applied.
 ///
-/// **A step is all or nothing.** Both matches and every check run before the
-/// first mutation, so a step that fails leaves the scene exactly as it found
-/// it — which is what makes the partial-result form's "the scene after the last
-/// successful step" true rather than approximately true. Matching both sides
-/// against the same state is also the honest reading of "the tool side matches
-/// over the whole scene": the two sides touch different participants by
-/// construction, and the one case where they would not is
-/// [`MechanosynthError::ToolSideOffTool`], which is raised here before anything
-/// moves.
+/// The two matches, which participant the target side landed in, and — when the
+/// operation is `tip` and its tool is wired — the tool-side match and the
+/// binding it landed on. This is what [`apply_step_in_scene`] did before its
+/// first mutation, split out so that a caller can **plan a landing, or refuse a
+/// step, without moving an atom**: a sequence generator that wants to try a site
+/// before committing to it calls [`match_step_in_scene`] and
+/// [`plan_landing`](super::plan_landing), and the replay calls
+/// [`apply_step_in_scene`], which is the two of them plus the apply.
+#[derive(Debug, Clone)]
+pub struct StepPlan<'a> {
+    /// The operation the step names.
+    pub op: &'a Operation,
+    /// The step's rotation, which places the operation's local frame — and its
+    /// reaction point — into the design.
+    pub step_r: DMat3,
+    /// The step's translation.
+    pub step_t: DVec3,
+    /// The library's steric factor, carried so that the obstacle margins the
+    /// sweep uses are the ones this library's checks used.
+    pub clash: f64,
+    target_match: FxHashMap<i64, u32>,
+    target: Participant,
+    tool: Option<ToolPlan>,
+}
+
+/// The tool half of a [`StepPlan`]: which binding, and where its pattern
+/// matched.
+#[derive(Debug, Clone)]
+struct ToolPlan {
+    /// Index into [`Scene::bindings`].
+    index: usize,
+    /// Index on the `tools` pin — the binding's `instance`.
+    instance: usize,
+    /// The tool side's patterns placed by the binding's pose.
+    step: Step,
+    matched: FxHashMap<i64, u32>,
+}
+
+impl StepPlan<'_> {
+    /// The binding this step's tool side acts on, when the operation is `tip`
+    /// and a wired molecule plays its type. `None` for every other step — and
+    /// that is exactly when no landing is planned.
+    pub fn tool_binding(&self) -> Option<usize> {
+        self.tool.as_ref().map(|tool| tool.index)
+    }
+
+    /// The scene atoms the target side's `before` pattern matched.
+    ///
+    /// The sweep excludes them from its obstacles: the site is the reaction, not
+    /// something to avoid.
+    pub fn target_atoms(&self) -> Vec<u32> {
+        self.target_match.values().copied().collect()
+    }
+
+    /// The scene atoms **both** sides' `before` patterns matched — the site and
+    /// the apex that will react with it, which is what the current-step
+    /// highlight paints while the tool is still on its way down.
+    pub fn matched_atoms(&self) -> Vec<u32> {
+        let mut atoms = self.target_atoms();
+        if let Some(tool) = &self.tool {
+            atoms.extend(tool.matched.values().copied());
+        }
+        atoms
+    }
+}
+
+/// Every check one step has to pass, and nothing applied.
+///
+/// The positional matches of both sides, which participant the target side
+/// landed in, the participant rule, and the pattern and steric checks — in the
+/// order [`apply_step_in_scene`] has always run them, which is what keeps "a
+/// step is all or nothing" true.
 #[allow(clippy::too_many_arguments)]
-pub fn apply_step_in_scene(
-    scene: &mut Scene,
-    op: &super::schema::Operation,
+pub fn match_step_in_scene<'a>(
+    scene: &Scene,
+    op: &'a Operation,
     script_step: &Step,
     step_number: usize,
     tolerance: f64,
     clash: f64,
     tools_wired: bool,
-) -> Result<SceneEffect, MechanosynthError> {
+) -> Result<StepPlan<'a>, MechanosynthError> {
     // --- match the target side ---------------------------------------------
     // The positional pass alone: which participant the match landed in is a
     // question to answer *before* the bond and degree checks, because a match
@@ -703,7 +806,7 @@ pub fn apply_step_in_scene(
 
     // --- match the tool side ------------------------------------------------
     let tool_side = op.tool.as_ref().filter(|_| tools_wired);
-    let tool_plan = match tool_side {
+    let tool = match tool_side {
         None => None,
         Some(tool_side) => {
             let Some(index) = scene
@@ -801,20 +904,89 @@ pub fn apply_step_in_scene(
                 )?;
             }
 
-            Some((index, instance, tool_step, matched))
+            Some(ToolPlan {
+                index,
+                instance,
+                step: tool_step,
+                matched,
+            })
         }
     };
 
-    // --- apply, now that nothing can fail -----------------------------------
+    Ok(StepPlan {
+        op,
+        step_r: script_step.r,
+        step_t: script_step.t,
+        clash,
+        target_match,
+        target,
+        tool,
+    })
+}
+
+/// Applies one step: the target side, then the tool side when the operation is
+/// `tip` and tools are wired.
+///
+/// **A step is all or nothing.** Both matches and every check run before the
+/// first mutation, so a step that fails leaves the scene exactly as it found
+/// it — which is what makes the partial-result form's "the scene after the last
+/// successful step" true rather than approximately true. Matching both sides
+/// against the same state is also the honest reading of "the tool side matches
+/// over the whole scene": the two sides touch different participants by
+/// construction, and the one case where they would not is
+/// [`MechanosynthError::ToolSideOffTool`], which is raised here before anything
+/// moves.
+///
+/// Since the trajectory milestone this is [`match_step_in_scene`], then
+/// [`plan_landing`](super::plan_landing) when the step is `tip` with a bound
+/// tool, then the apply — and the landing rides back on
+/// [`SceneEffect::landing`]. The signature is milestone 1's, and **a landing
+/// never fails a step**: the envelope is on the binding, the reaction points are
+/// on the operation, and the sweep always answers.
+#[allow(clippy::too_many_arguments)]
+pub fn apply_step_in_scene(
+    scene: &mut Scene,
+    op: &Operation,
+    script_step: &Step,
+    step_number: usize,
+    tolerance: f64,
+    clash: f64,
+    tools_wired: bool,
+) -> Result<SceneEffect, MechanosynthError> {
+    let plan = match_step_in_scene(
+        scene,
+        op,
+        script_step,
+        step_number,
+        tolerance,
+        clash,
+        tools_wired,
+    )?;
+    let landing = plan.tool_binding().map(|_| plan_landing(scene, &plan));
+    let mut effect = apply_plan(scene, &plan);
+    effect.landing = landing;
+    Ok(effect)
+}
+
+/// The apply half of a step: everything after the last thing that could fail.
+///
+/// Split out of [`apply_step_in_scene`] so that a caller holding a [`StepPlan`]
+/// — the replay's look-ahead, which applies a step to a *clone* to see where the
+/// tool goes next — can apply it without matching it a second time.
+pub(super) fn apply_plan(scene: &mut Scene, plan: &StepPlan<'_>) -> SceneEffect {
+    let op = plan.op;
     let mut effect = SceneEffect::default();
 
-    let deleted = deleted_atoms(&op.before, &op.after, &target_match);
+    let mut script_step = Step::new(op.name.clone(), plan.step_t);
+    script_step.r = plan.step_r;
+
+    let deleted = deleted_atoms(&op.before, &op.after, &plan.target_match);
     let target_effect = apply_matched(
         &mut scene.structure,
         &op.before,
         &op.after,
-        script_step,
-        target_match,
+        &script_step,
+        plan.target_match.clone(),
     );
     for atom_id in deleted {
         scene.participants.remove(&atom_id);
@@ -822,23 +994,26 @@ pub fn apply_step_in_scene(
     // An atom a step adds belongs to the participant the match landed in. A
     // step whose `before` is empty — a pure addition — belongs to the base.
     for atom_id in &target_effect.added {
-        scene.participants.insert(*atom_id, target);
+        scene.participants.insert(*atom_id, plan.target);
     }
     effect.touched.extend(target_effect.touched.iter().copied());
     effect.added.extend(target_effect.added.iter().copied());
 
-    let Some((index, instance, tool_step, matched)) = tool_plan else {
-        return Ok(effect);
+    let Some(tool) = plan.tool.as_ref() else {
+        return effect;
     };
-    let tool_side = tool_side.expect("a tool plan exists only for a tool side");
+    let tool_side = op
+        .tool
+        .as_ref()
+        .expect("a tool plan exists only for a tool side");
 
-    let deleted = deleted_atoms(&tool_side.before, &tool_side.after, &matched);
+    let deleted = deleted_atoms(&tool_side.before, &tool_side.after, &tool.matched);
     let tool_effect = apply_matched(
         &mut scene.structure,
         &tool_side.before,
         &tool_side.after,
-        &tool_step,
-        matched,
+        &tool.step,
+        tool.matched.clone(),
     );
     for atom_id in deleted {
         scene.participants.remove(&atom_id);
@@ -846,16 +1021,16 @@ pub fn apply_step_in_scene(
     for atom_id in &tool_effect.added {
         scene
             .participants
-            .insert(*atom_id, Participant::Tool(instance));
+            .insert(*atom_id, Participant::Tool(tool.instance));
     }
     effect.touched.extend(tool_effect.touched.iter().copied());
     effect.added.extend(tool_effect.added.iter().copied());
 
     if let Some(to) = &tool_side.to {
-        scene.bindings[index].state = Some(to.clone());
+        scene.bindings[tool.index].state = Some(to.clone());
     }
 
-    Ok(effect)
+    effect
 }
 
 /// The scene atoms a rewrite will delete: the ids only `before` names.

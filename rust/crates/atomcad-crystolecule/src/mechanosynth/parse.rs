@@ -6,12 +6,13 @@
 //! rejection names the file, the operation or step, and the field.
 
 use super::schema::{
-    APEX_FRAME_TAG, Approach, BUILD_FORMAT, BuildScript, CLOSE_PAIR_WARNING_FACTOR,
-    DEFAULT_ANCHORS, FRAME_COPLANAR_EPSILON, FrameAtom, LIBRARY_FORMAT, MAX_PATTERN_DEGREE,
+    APEX_FRAME_TAG, BUILD_FORMAT, BuildScript, CLOSE_PAIR_WARNING_FACTOR, DEFAULT_ANCHORS,
+    DEFAULT_DURATION, FRAME_COPLANAR_EPSILON, FrameAtom, LIBRARY_FORMAT, MAX_PATTERN_DEGREE,
     MechanosynthError, Method, NO_LAYER, NO_SITE, ORIGIN_PATTERN_ATOM_ID, OpLibrary, Operation,
-    PATTERN_POSITION_EPSILON, Pattern, PatternAtom, PatternBond, PatternElement, Step, ToolSide,
-    ToolType, is_frame_atom,
+    PATTERN_POSITION_EPSILON, Pattern, PatternAtom, PatternBond, PatternElement, Reaction, Step,
+    ToolSide, ToolType, is_frame_atom,
 };
+use super::trajectory::Envelope;
 use crate::atomic_constants::{ATOM_INFO, CHEMICAL_ELEMENTS, element_symbol};
 use glam::{DMat3, DVec3};
 use serde::Deserialize;
@@ -42,6 +43,15 @@ struct RawToolType {
     /// because an empty vocabulary has no initial state to start in.
     states: Option<Vec<String>>,
     frame: Option<Vec<RawFrameAtom>>,
+    /// Required since `/4`. Raw rather than typed so that a wrong shape names
+    /// the tool type like every other malformed field.
+    envelope: Option<RawEnvelope>,
+}
+
+#[derive(Deserialize)]
+struct RawEnvelope {
+    half_angle: Option<f64>,
+    radius: Option<f64>,
 }
 
 #[derive(Deserialize)]
@@ -60,12 +70,6 @@ struct RawToolSide {
     /// whole tool side of a bare probe.
     before: Option<RawPattern>,
     after: Option<RawPattern>,
-}
-
-#[derive(Deserialize)]
-struct RawApproach {
-    r: Option<Vec<Vec<f64>>>,
-    t: Option<Vec<f64>>,
 }
 
 #[derive(Deserialize)]
@@ -89,8 +93,18 @@ struct RawOp {
     /// Raw so that a wrong type names the operation like every other malformed
     /// field.
     anchors: Option<serde_json::Value>,
-    /// Reserved for milestone 2; parsed and kept, read by nothing.
-    approach: Option<RawApproach>,
+    /// Required on `tip` since `/4`, forbidden elsewhere: the two points that
+    /// place the tool at the moment of reaction.
+    reaction: Option<RawReaction>,
+    /// Optional on any operation; `DEFAULT_DURATION` when absent. Reserved for
+    /// the clock half of milestone 2 and read by nothing here.
+    duration: Option<f64>,
+}
+
+#[derive(Deserialize)]
+struct RawReaction {
+    target: Option<Vec<f64>>,
+    tool: Option<Vec<f64>>,
 }
 
 #[derive(Deserialize)]
@@ -259,7 +273,8 @@ pub fn parse_library(text: &str, file: &str) -> Result<OpLibrary, MechanosynthEr
         let method = convert_method(file, &name, raw_op.method)?;
         let agent = convert_agent(file, &name, method, raw_op.agent)?;
         let tool = convert_tool_side(file, &name, method, &tools, raw_op.tool)?;
-        let approach = convert_approach(file, &name, raw_op.approach)?;
+        let reaction = convert_reaction(file, &name, method, raw_op.reaction)?;
+        let duration = convert_duration(file, &name, raw_op.duration)?;
         let anchors = convert_anchors(file, &name, &before, &after, raw_op.anchors)?;
 
         let operation = Operation {
@@ -271,8 +286,9 @@ pub fn parse_library(text: &str, file: &str) -> Result<OpLibrary, MechanosynthEr
             method,
             agent,
             tool,
-            approach,
             anchors,
+            reaction,
+            duration,
         };
         collect_pattern_warnings(&operation, &mut warnings);
         ops.push(operation);
@@ -649,12 +665,14 @@ fn convert_tool_types(
             .frame
             .ok_or_else(|| invalid(file, &location, "missing required field \"frame\""))?;
         let frame = convert_frame(file, &location, &name, raw_frame)?;
+        let envelope = convert_envelope(file, &location, raw_tool.envelope)?;
 
         tools.push(ToolType {
             name,
             note: raw_tool.note.filter(|note| !note.is_empty()),
             states,
             frame,
+            envelope,
         });
     }
 
@@ -767,6 +785,42 @@ fn convert_frame(
         Some(_) => {}
     }
 
+    // The **axis rule**: every entry but the apex lies on one side of the apex's
+    // `z = 0` plane, none on it, and that side is the direction the tool axis
+    // points — from the business end toward the legs. The envelope and the sweep
+    // both depend on knowing which way that is, and a frame that straddles the
+    // plane, or touches it, says nothing.
+    let mut sign: Option<f64> = None;
+    for entry in frame.iter().filter(|entry| entry.tag != APEX_FRAME_TAG) {
+        if entry.pos.z.abs() <= PATTERN_POSITION_EPSILON {
+            return Err(invalid(
+                file,
+                location,
+                format!(
+                    "frame entry \"{}\" of '{tool_name}' is on the apex's z = 0 plane, \
+                     so the legs do not say which way the tool axis points",
+                    entry.tag
+                ),
+            ));
+        }
+        let entry_sign = if entry.pos.z < 0.0 { -1.0 } else { 1.0 };
+        match sign {
+            None => sign = Some(entry_sign),
+            Some(seen) if seen != entry_sign => {
+                return Err(invalid(
+                    file,
+                    location,
+                    format!(
+                        "the frame entries of '{tool_name}' lie on both sides of the \
+                         apex's z = 0 plane, so the legs do not say which way the tool axis \
+                         points; every leg belongs behind the business end"
+                    ),
+                ));
+            }
+            Some(_) => {}
+        }
+    }
+
     if frame_is_coplanar(&frame) {
         return Err(invalid(
             file,
@@ -800,6 +854,56 @@ fn frame_is_coplanar(frame: &[FrameAtom]) -> bool {
         }
     }
     true
+}
+
+/// The tool type's collision envelope. Required since `/4`: without it there is
+/// no sweep, and a default would be the engine inventing a claim the library is
+/// the only one able to make.
+fn convert_envelope(
+    file: &str,
+    location: &str,
+    raw: Option<RawEnvelope>,
+) -> Result<Envelope, MechanosynthError> {
+    let raw = raw.ok_or_else(|| {
+        invalid(
+            file,
+            location,
+            "missing required field \"envelope\" (\"half_angle\" in degrees and \"radius\" \
+             in ångström); it is what the approach sweep keeps clear",
+        )
+    })?;
+
+    let half_angle = raw
+        .half_angle
+        .ok_or_else(|| invalid(file, location, "\"envelope\" is missing \"half_angle\""))?;
+    if !half_angle.is_finite() || half_angle <= 0.0 || half_angle >= 90.0 {
+        return Err(invalid(
+            file,
+            location,
+            format!(
+                "\"envelope\": \"half_angle\" is {half_angle}; it must be in degrees, \
+                 strictly between 0 and 90"
+            ),
+        ));
+    }
+
+    let radius = raw
+        .radius
+        .ok_or_else(|| invalid(file, location, "\"envelope\" is missing \"radius\""))?;
+    if !radius.is_finite() || radius <= 0.0 {
+        return Err(invalid(
+            file,
+            location,
+            format!(
+                "\"envelope\": \"radius\" is {radius}; it must be a positive length in ångström"
+            ),
+        ));
+    }
+
+    Ok(Envelope {
+        half_angle: half_angle.to_radians(),
+        radius,
+    })
 }
 
 /// The operation's kind. Required, and one of the three the engine defines:
@@ -974,33 +1078,84 @@ fn convert_tool_side(
     }))
 }
 
-/// The milestone-2 `approach` pose. Parsed so a generator can start writing it
-/// and kept so a milestone-2 build can start reading it; nothing reads it here.
-fn convert_approach(
+/// The two reaction points. Required on a `tip` operation and forbidden
+/// elsewhere, for the same reason a tool side is: a `bulk` or `spontaneous`
+/// operation has no tool to place.
+fn convert_reaction(
     file: &str,
     op: &str,
-    raw: Option<RawApproach>,
-) -> Result<Option<Approach>, MechanosynthError> {
-    let Some(raw) = raw else { return Ok(None) };
-    let location = format!("operation '{op}': approach");
-    let t = raw
-        .t
-        .ok_or_else(|| invalid(file, &location, "missing required field \"t\""))?;
-    if t.len() != 3 {
-        return Err(invalid(
-            file,
-            &location,
-            format!("\"t\" must be an array of 3 numbers, found {}", t.len()),
-        ));
-    }
-    let r = match raw.r {
-        None => DMat3::IDENTITY,
-        Some(rows) => convert_matrix(file, &location, &rows)?,
+    method: Method,
+    raw: Option<RawReaction>,
+) -> Result<Option<Reaction>, MechanosynthError> {
+    let location = format!("operation '{op}'");
+    let raw = match (method, raw) {
+        (Method::Tip, None) => {
+            return Err(invalid(
+                file,
+                location,
+                "a \"tip\" operation must carry a \"reaction\" block with a \"target\" point \
+                 in the operation's frame and a \"tool\" point in the tool's frame",
+            ));
+        }
+        (Method::Bulk | Method::Spontaneous, Some(_)) => {
+            return Err(invalid(
+                file,
+                location,
+                "only a \"tip\" operation has a \"reaction\"; nothing places a tool for a \
+                 bulk or spontaneous step",
+            ));
+        }
+        (Method::Bulk | Method::Spontaneous, None) => return Ok(None),
+        (Method::Tip, Some(raw)) => raw,
     };
-    Ok(Some(Approach {
-        r,
-        t: DVec3::new(t[0], t[1], t[2]),
+
+    let location = format!("operation '{op}': reaction");
+    let point = |which: &str, raw: Option<Vec<f64>>| -> Result<DVec3, MechanosynthError> {
+        let values = raw.ok_or_else(|| {
+            invalid(
+                file,
+                &location,
+                format!("missing required field \"{which}\""),
+            )
+        })?;
+        if values.len() != 3 {
+            return Err(invalid(
+                file,
+                &location,
+                format!(
+                    "\"{which}\" must be an array of 3 numbers, found {}",
+                    values.len()
+                ),
+            ));
+        }
+        if !values.iter().all(|value| value.is_finite()) {
+            return Err(invalid(
+                file,
+                &location,
+                format!("\"{which}\" must be three finite numbers"),
+            ));
+        }
+        Ok(DVec3::new(values[0], values[1], values[2]))
+    };
+
+    Ok(Some(Reaction {
+        target: point("target", raw.target)?,
+        tool: point("tool", raw.tool)?,
     }))
+}
+
+/// The operation's relative duration. Positive and finite, because it is a
+/// length of time; absent reads [`DEFAULT_DURATION`].
+fn convert_duration(file: &str, op: &str, raw: Option<f64>) -> Result<f64, MechanosynthError> {
+    match raw {
+        None => Ok(DEFAULT_DURATION),
+        Some(duration) if duration.is_finite() && duration > 0.0 => Ok(duration),
+        Some(duration) => Err(invalid(
+            file,
+            format!("operation '{op}'"),
+            format!("\"duration\" is {duration}; it must be a positive number of relative units"),
+        )),
+    }
 }
 
 fn convert_pattern(

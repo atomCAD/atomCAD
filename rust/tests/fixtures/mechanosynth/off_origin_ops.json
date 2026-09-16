@@ -1,6 +1,6 @@
 {
   "comment": "Both ways of breaking the origin convention, in one file. Loads with warnings, never an error: a foreign library that does not follow the convention still replays and still places.",
-  "format": "atomcad-msops/3",
+  "format": "atomcad-msops/4",
   "tools": [
     {
       "name": "probe",
@@ -10,13 +10,15 @@
         { "tag": "a",    "pos": [1.45, 0.0, -3.17] },
         { "tag": "b",    "pos": [-0.73, 1.26, -3.17] },
         { "tag": "c",    "pos": [-0.73, -1.26, -3.17] }
-      ]
+      ],
+      "envelope": { "half_angle": 30.0, "radius": 2.0 }
     }
   ],
   "ops": [
     {
       "name": "displaced",
       "method": "tip",
+      "reaction": { "target": [1.5, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": { "type": "probe" },
       "comment": "Has a before atom id 1, but it does not sit at the origin.",
       "before": { "atoms": [ { "id": 1, "el": "C", "pos": [1.5, 0.0, 0.0] } ], "bonds": [] },
@@ -25,6 +27,7 @@
     {
       "name": "no_atom_one",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": { "type": "probe" },
       "comment": "Numbers its before atoms from 2, so nothing names the atom to click.",
       "before": { "atoms": [ { "id": 2, "el": "C", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
@@ -33,6 +36,7 @@
     {
       "name": "conventional",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": { "type": "probe" },
       "comment": "Follows the convention, so it contributes no warning.",
       "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },

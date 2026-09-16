@@ -1,6 +1,6 @@
 {
   "comment": "Library for the effect-derived `touched` rule, frame-atom recognition, `chiral` and the origin convention. Every op here exists to make one clause of those rules observable on its own.",
-  "format": "atomcad-msops/3",
+  "format": "atomcad-msops/4",
   "tools": [
     {
       "name": "probe",
@@ -10,7 +10,8 @@
         { "tag": "a",    "pos": [1.45, 0.0, -3.17] },
         { "tag": "b",    "pos": [-0.73, 1.26, -3.17] },
         { "tag": "c",    "pos": [-0.73, -1.26, -3.17] }
-      ]
+      ],
+      "envelope": { "half_angle": 30.0, "radius": 2.0 }
     }
   ],
   "tolerance": 0.3,
@@ -18,6 +19,7 @@
     {
       "name": "donate",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": { "type": "probe" },
       "comment": "A donation with frame atoms: the host at the origin plus its three bonded neighbours, all kept exactly as they are so they fix the orientation and nothing else. Only the host and the new hydrogen may be touched.",
       "before": {
@@ -43,6 +45,7 @@
     {
       "name": "recolor",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": { "type": "probe" },
       "comment": "Sets the element without moving anything. On an atom that already carries it this changes nothing, which is the point: the comparison is against the workpiece, not against the before pattern's slot.",
       "before": { "atoms": [ { "id": 1, "el": "*", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
@@ -51,6 +54,7 @@
     {
       "name": "reorder_bond",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": { "type": "probe" },
       "comment": "Keeps both atoms exactly where they are and only changes the bond order, so the bond clause is the only reason either can be touched.",
       "before": {
@@ -71,6 +75,7 @@
     {
       "name": "inert",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": { "type": "probe" },
       "comment": "Names an atom and does nothing to it at all. Nothing may be touched.",
       "before": { "atoms": [ { "id": 1, "el": "*", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
@@ -79,6 +84,7 @@
     {
       "name": "handed",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": { "type": "probe" },
       "comment": "The only op here that states `chiral`. The replay engine ignores it; the placement engine drops mirrored fits for it.",
       "chiral": true,

@@ -7,13 +7,25 @@
 //! value reaching [`super::apply`] has already had its element symbols resolved
 //! to atomic numbers, its bond orders range-checked and its matrix squared off.
 
+use super::trajectory::Envelope;
 use glam::{DMat3, DVec3};
 use rustc_hash::FxHashMap;
 use thiserror::Error;
 
 /// The `format` string an operation library must carry.
 ///
-/// `/3` is the **pattern-check** format: within a pattern the bond list is
+/// `/4` is the **trajectory** format: every tool type states its collision
+/// [`Envelope`], every `tip` operation states its two [`Reaction`] points, every
+/// operation may state a relative `duration`, and a tool frame's legs must all
+/// lie on one side of the apex's `z = 0` plane — the sign that tells the engine
+/// which way the tool axis points. A `/3` file is refused with a message saying
+/// to regenerate it: without an envelope there is no sweep and without a
+/// reaction point there is nowhere to put the tool, so accepting one would mean
+/// inventing both. `approach`, reserved by `/3` and written by nobody, is gone;
+/// the parser skips it with every other unknown key. See
+/// `doc/design_mechanosynth_trajectory.md`.
+///
+/// `/3` was the **pattern-check** format: within a pattern the bond list is
 /// closed-world (a listed bond must exist at that order, an unlisted pair must
 /// not exist at all), a `before` atom may state its bond count as `deg`, an
 /// operation may state how many of its leading `before` ids a user may click as
@@ -24,7 +36,7 @@ use thiserror::Error;
 /// at all. Backward compatibility is deliberately not a goal — every library in
 /// existence is machine-written by a generator that is regenerated with the
 /// format. See `doc/design_mechanosynth_pattern_checks.md`.
-pub const LIBRARY_FORMAT: &str = "atomcad-msops/3";
+pub const LIBRARY_FORMAT: &str = "atomcad-msops/4";
 
 /// The `format` string a build script must carry.
 ///
@@ -225,7 +237,20 @@ pub struct ToolType {
     /// tool passes through — the handle, not the apex's cargo. The legs come
     /// off the **handle** rather than off the business axis, which is usually
     /// linear and would leave the four coplanar.
+    ///
+    /// Since `/4` every entry but `apex` has a `z` of one sign, none zero, and
+    /// **that sign is the tool axis**: the legs are behind the business end, so
+    /// the axis points from the business end toward them. The rule states the
+    /// shape and reads the sign from it, which is why no library has to flip
+    /// anything — the fixture tools keep their legs at `z < 0` and the silicon
+    /// library keeps its at `z > 0`.
     pub frame: Vec<FrameAtom>,
+    /// What the tool sweeps: a cone about the tool axis with its apex at the
+    /// operation's tool-side reaction point, continuing as a cylinder. Required
+    /// since `/4`. The envelope is the library's claim about the *instrument*,
+    /// so it may be wider than the wired molecule — but never narrower, which
+    /// `build_scene` checks once per binding.
+    pub envelope: Envelope,
 }
 
 impl ToolType {
@@ -248,6 +273,23 @@ impl ToolType {
     /// The frame entry carrying this tag, if the frame has one.
     pub fn frame_atom(&self, tag: &str) -> Option<&FrameAtom> {
         self.frame.iter().find(|entry| entry.tag == tag)
+    }
+
+    /// The **tool axis**, in the tool's local frame: `±z`, pointing from the
+    /// business end toward the legs.
+    ///
+    /// The sign is read from the legs, which the parser has already checked all
+    /// lie on one side of the apex's plane. Deriving the *direction* from the
+    /// legs instead — leg centroid to apex — is exact for a symmetric cage and
+    /// wrong by twenty-five degrees for a bcc tungsten pyramid, so only the sign
+    /// comes from them.
+    pub fn axis(&self) -> DVec3 {
+        let sign = self
+            .frame
+            .iter()
+            .find(|entry| entry.tag != APEX_FRAME_TAG)
+            .map_or(1.0, |entry| if entry.pos.z < 0.0 { -1.0 } else { 1.0 });
+        DVec3::new(0.0, 0.0, sign)
     }
 }
 
@@ -281,14 +323,29 @@ impl ToolSide {
     }
 }
 
-/// The tool frame relative to the operation's target frame at the moment of
-/// reaction. **Reserved for milestone 2**: parsed and kept, read by nothing, so
-/// a generator can start writing it before an animation build reads it.
+/// Where a `tip` operation's reaction happens, stated **twice**: once on the
+/// target side, in the operation's local frame, and once on the tool side, in
+/// the tool's local frame. The tool is posed so that the two coincide in design
+/// space, which is why the transferred atom does not move at the reaction — it
+/// changes hands.
+///
+/// For a donation both points are the transferred atom's position (where the
+/// workpiece will have it, where the tool holds it); for an abstraction, where
+/// the workpiece has it and where the tool will hold it; for a bare probe that
+/// touches, the atom acted on and the apex offset by a contact distance the
+/// library states like every other piece of geometry.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Approach {
-    pub r: DMat3,
-    pub t: DVec3,
+pub struct Reaction {
+    /// In the operation's local frame, placed into the design by the step's
+    /// `r` / `t` like a pattern atom.
+    pub target: DVec3,
+    /// In the tool's local frame, on or near the axis on the business-end side.
+    /// The envelope's cone apex sits here for this operation.
+    pub tool: DVec3,
 }
+
+/// [`Operation::duration`] when the file states none.
+pub const DEFAULT_DURATION: f64 = 1.0;
 
 /// One atom of a `before` or `after` pattern, in the operation's local frame.
 #[derive(Debug, Clone, PartialEq)]
@@ -415,8 +472,19 @@ pub struct Operation {
     /// **heteronuclear** pair of primary atoms, where a click on the second
     /// element is rejected by id 1 and admitted by id 2.
     pub anchors: i64,
-    /// Reserved for milestone 2; see [`Approach`].
-    pub approach: Option<Approach>,
+    /// Where the reaction happens, on both sides. `Some` exactly when
+    /// [`Method::Tip`]: a `bulk` or `spontaneous` operation has no tool to
+    /// place, so a `reaction` on one is a parse error the way a tool side is.
+    pub reaction: Option<Reaction>,
+    /// How long this operation takes, in the library's own relative units;
+    /// [`DEFAULT_DURATION`] when the file states none.
+    ///
+    /// **Read by nothing in this milestone.** It is reserved for the clock half
+    /// of milestone 2 — a real clock over a whole build — so that a generator
+    /// can start writing it before anything reads it. It belongs to the
+    /// researched operation rather than to the step, because how long a visit
+    /// takes is a fact about the reaction and the instrument.
+    pub duration: f64,
 }
 
 impl Operation {
@@ -1044,6 +1112,35 @@ pub enum MechanosynthError {
         tool: String,
         found: String,
     },
+
+    /// A bound molecule has an atom reaching outside the envelope its tool type
+    /// claims, at some `tip` operation's tool-side reaction point.
+    ///
+    /// The envelope is the solid the tool occupies, so this compares the atom's
+    /// **sphere**, not its centre.
+    ///
+    /// A library error, and reported where the frame residual is: **once, at
+    /// binding, before any step**. The envelope is what the sweep keeps clear,
+    /// so a type that claims a smaller envelope than the molecule playing it
+    /// would have the engine call a site reachable that the molecule cannot
+    /// reach. A *wider* envelope is fine — that is how a design declares the
+    /// shaft it does not model.
+    #[error(
+        "{tool}: {atom} lies {excess:.2} Å outside the envelope of tool type \
+         '{tool_type}' at the reaction point of operation '{op}'"
+    )]
+    ToolOutsideEnvelope {
+        /// `tool 0 (habst_tool)`.
+        tool: String,
+        tool_type: String,
+        /// The operation whose tool-side reaction point the envelope was placed
+        /// at.
+        op: String,
+        /// `the C of atom 17`.
+        atom: String,
+        /// How far the atom's sphere reaches past the envelope's surface, Å.
+        excess: f64,
+    },
 }
 
 /// The ` (in tool 0 (habst_tool))` tail of a match failure, or nothing when the
@@ -1083,7 +1180,8 @@ impl MechanosynthError {
             | MechanosynthError::Clash(_)
             | MechanosynthError::NoBondModel { .. }
             | MechanosynthError::InputClash { .. }
-            | MechanosynthError::ToolSideOffTool { .. } => None,
+            | MechanosynthError::ToolSideOffTool { .. }
+            | MechanosynthError::ToolOutsideEnvelope { .. } => None,
         }
     }
 }

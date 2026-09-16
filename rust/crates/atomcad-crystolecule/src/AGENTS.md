@@ -79,7 +79,13 @@ crates/atomcad-crystolecule/src/
 │   ├── pose.rs                     # tool_pose: a tool's transform from its four tagged atoms
 │   ├── fit.rs                      # the rigid fit (Horn's quaternion Kabsch), shared by place + pose
 │   ├── place.rs                    # placement engine: click -> candidate steps + tool readiness
-│   └── compare.rs                  # compare_structures: position-tolerant Vec<Mismatch>
+│   ├── compare.rs                  # compare_structures: position-tolerant Vec<Mismatch>
+│   └── trajectory/                 # where a tool is at every point of a step
+│       ├── mod.rs                  # re-exports; the two-layer rule
+│       ├── envelope.rs             # Envelope + the approach sweep (pure geometry, no scene)
+│       ├── landing.rs              # obstacles, plan_landing, the containment check
+│       ├── runs.rs                 # run structure of a script (script + library only)
+│       └── path.rs                 # poses, flights, hover, the scan, replay_scene_at
 ├── lattice_fill/
 │   ├── concave_rebond.rs           # Concave-corner clash → host-host bond rewrite
 │   ├── config.rs                   # LatticeFillConfig, Options, Result, Statistics
@@ -148,6 +154,11 @@ crates/atomcad-crystolecule/src/
 | `ToolType` / `ToolSide` | `mechanosynth/schema.rs` | A tool type the library envisions (its `states`, whose **first entry is the initial state**, and its four-or-more non-coplanar tagged `frame` atoms), and what one `tip` operation does to it — the same before/after rewrite, in the tool's local frame |
 | `Scene` / `Participant` / `ToolBinding` | `mechanosynth/scene.rs` | The base, the feedstocks and the tools merged into **one** structure, with every atom mapped to the structure it belongs to, plus one binding per wired tool |
 | `ToolPose` | `mechanosynth/pose.rs` | A bound tool's `r`, `t` and fit residual, solved from its four tagged atoms |
+| `Envelope` / `Approach` | `mechanosynth/trajectory/envelope.rs` | What a tool sweeps — a cone about the tool axis continuing into a cylinder, apex at the operation's tool-side reaction point. It is a **solid**: it contains the tool's atoms with their radii, so an obstacle is charged its own radius alone. `Approach` is what one direction's sweep found (direction, clearance in Å, tilt from `+z`) |
+| `Landing` | `mechanosynth/trajectory/landing.rs` | Where one `tip` step's tool reacts and from which direction, with `reachable()` — the verdict a generator refuses over and a replay merely reports |
+| `StepPlan` | `mechanosynth/scene.rs` | Everything a step's checks produced with nothing applied; `match_step_in_scene` makes one, `plan_landing` reads one, the apply half consumes one |
+| `Runs` | `mechanosynth/trajectory/runs.rs` | Which `tip` steps a tool performs without going home in between. Script and library only — never stored on a step |
+| `Pose` / `ToolMotion` / `Visit` | `mechanosynth/trajectory/path.rs` | A computed rigid pose (`ToolPose` without the residual), and what a tool does during one step: a `Visit` with its legs and scan, or a `Hover` over its next site |
 
 ## Core Concepts
 
@@ -442,7 +453,57 @@ things are load-bearing:
 - **A step is all or nothing.** Both sides match, and every participant check
   runs, before the first mutation — so a failed step leaves the scene exactly as
   it found it, and the partial-result form's "the scene after the last
-  successful step" is true rather than approximately true.
+  successful step" is true rather than approximately true. `match_step_in_scene`
+  *is* that prefix, split out; `apply_step_in_scene` is it plus `plan_landing`
+  plus the apply, with milestone 1's signature.
+
+**Trajectories** (`mechanosynth/trajectory/`, `doc/design_mechanosynth_trajectory.md`)
+make a step a process in time rather than a discrete change. Four rules hold the
+design together, and each is easy to erode:
+
+- **The engine measures, the generator refuses, the node reports.** A blocked
+  approach is *never* an error. `plan_landing` always answers — the sweep returns
+  the least blocked direction when no direction is free — and the verdict rides
+  back on `SceneEffect::landing` for the caller to act on: a sequence generator
+  turns `!reachable()` into "step *n* could not be emitted", while a replay
+  visits along that direction anyway. Making it an error would couple a
+  presentation heuristic (an envelope a library is *invited* to overstate) into
+  whether a project loads, and would break an authored block at the first crowded
+  site. The one thing that does fail is a **binding**: `ToolOutsideEnvelope`,
+  from `build_scene`, for a library whose envelope is narrower than the molecule
+  playing it.
+- **The engine's `Scene` is never moved.** A `Scene` always has its tools at
+  their bound poses, because that is what the tool-side match and the sweep
+  assume. `replay_scene_at` returns the scene *and* a `ToolMotion`; whoever draws
+  it applies the pose to its own copy with `apply_tool_pose`. Nothing in the
+  engine writes a flown pose into a `Scene`, which is why
+  `replay_scene_at(k, 1.0)` is `replay_scene(k)` atom for atom and there is no
+  "do not replay into a moved scene" rule to remember.
+- **Nothing about a trajectory is stored.** The approach direction depends on
+  what is in the way, and that depends on every step before this one; run
+  membership depends on the sequence. Both are recomputed on every evaluation, so
+  a reordered step is planned against the scene it now follows and joins whatever
+  run it now sits in. A stored direction or a stored run would go stale on the
+  first reorder.
+- **At most one tool is away from park at any step**, because a second tool's
+  `tip` step ends the first tool's run. The sweep therefore never has to ask
+  whether a hovering tool is in the way: while a tool hovers, nothing else moves,
+  and every other tool is at the park the sweep saw. Do not relax `runs` without
+  giving the sweep a second collision model.
+
+- **The tool's radius lives in the envelope, never in the obstacle.** The
+  envelope is the solid the tool occupies — `check_containment` compares each
+  atom's *sphere* (`gap ≤ −r_cov`), exempting only the cargo, whose sphere
+  swallows the apex — so `obstacles_for` charges an obstacle `clash · r_cov`
+  and nothing else. Adding the tool's radius there again charges its extent
+  twice, and the cost is not marginal: it grows the keep-out sphere around a
+  site's own host atom past the bond length, and since the cone's apex is a
+  point of the envelope's surface, the gap can never exceed the distance to the
+  apex — so the site is blocked from *every* direction and no tilt helps.
+
+Two words are kept apart throughout, and mixing them up will read as a bug:
+**clearance** is the sweep's number and is in ångström; **contact** is the path
+scan's and is a ratio of covalent radii.
 
 `event_indices` is the **event** grouping of a step sequence (a tip visit alone;
 a run of `bulk` steps sharing an agent; a `spontaneous` step joining the event
@@ -503,9 +564,10 @@ O(n²), compares flags and tag names). Design doc:
   and every fallible function here returns this enum: NoMatch (a `before` atom
   that found nothing within tolerance), BondMismatch and DegreeMismatch (the
   `/3` pattern checks) / the binding family (SceneTags, ToolUntagged,
-  ToolMultiType, ToolDuplicate, ToolFrameTag, ToolPoseResidual) / the per-step
-  family (ToolMissing, ToolState, StepOnTool, StepAcrossParticipants,
-  ToolSideOffTool)
+  ToolMultiType, ToolDuplicate, ToolFrameTag, ToolPoseResidual,
+  ToolOutsideEnvelope) / the per-step family (ToolMissing, ToolState,
+  StepOnTool, StepAcrossParticipants, ToolSideOffTool). **No trajectory
+  variant**: a blocked approach is a report, not an error
 
 All use `thiserror` derive macros.
 
@@ -552,6 +614,7 @@ tests/crystolecule/
 ├── miller_test.rs                 # Index reduction, enumeration, {hkl} symmetry families
 ├── mechanosynth_test.rs           # Parse/validate, id-rule matrix, matching, replay, highlight, compare
 ├── mechanosynth_tools_test.rs     # The /2 format, tool pose + binding, the scene replay, tool-aware offers, event rules
+├── mechanosynth_trajectory_test.rs # The envelope + sweep as pure geometry, landings through apply, runs, poses, the scan, replay_scene_at
 ├── field_test.rs                  # ScalarField contract: bounds, interpolation, gradients
 ├── patch_test.rs                  # Cell selection, region depths, apply_patch pipeline
 ├── patch_build_test.rs            # Tiling-vector validation, tile extraction

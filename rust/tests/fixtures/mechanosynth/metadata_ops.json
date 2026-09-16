@@ -1,6 +1,6 @@
 {
   "comment": "Three minimal operations for the step-metadata tests: one that creates an atom, one that deletes one, one that only moves one. Together they cover the three ways an atom can relate to a layer — created by it, removed after it, merely nudged by it.",
-  "format": "atomcad-msops/3",
+  "format": "atomcad-msops/4",
   "tools": [
     {
       "name": "probe",
@@ -10,13 +10,15 @@
         { "tag": "a",    "pos": [1.45, 0.0, -3.17] },
         { "tag": "b",    "pos": [-0.73, 1.26, -3.17] },
         { "tag": "c",    "pos": [-0.73, -1.26, -3.17] }
-      ]
+      ],
+      "envelope": { "half_angle": 30.0, "radius": 2.0 }
     }
   ],
   "ops": [
     {
       "name": "grow",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": { "type": "probe" },
       "comment": "Adds a hydrogen onto a carbon. The only op here that creates an atom.",
       "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
@@ -31,6 +33,7 @@
     {
       "name": "strip",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": { "type": "probe" },
       "comment": "Abstracts a hydrogen. Used to delete an atom an earlier step created.",
       "before": { "atoms": [ { "id": 1, "el": "H", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
@@ -39,6 +42,7 @@
     {
       "name": "nudge",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": { "type": "probe" },
       "comment": "Moves a carbon half an Angstrom along +x. Creates nothing, so a nudged atom must never join a layer set.",
       "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },

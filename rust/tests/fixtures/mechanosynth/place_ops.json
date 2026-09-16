@@ -1,6 +1,6 @@
 {
   "comment": "Synthetic library for the placement-engine tests: one operation per shape the engine has to distinguish. place_workpiece.xyz hosts every one of them exactly.",
-  "format": "atomcad-msops/3",
+  "format": "atomcad-msops/4",
   "tools": [
     {
       "name": "probe",
@@ -22,13 +22,15 @@
           "tag": "c",
           "pos": [-0.73, -1.26, -3.17]
         }
-      ]
+      ],
+      "envelope": { "half_angle": 30.0, "radius": 2.0 }
     }
   ],
   "ops": [
     {
       "name": "habst",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": {
         "type": "probe"
       },
@@ -51,6 +53,7 @@
     {
       "name": "recolor",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": {
         "type": "probe"
       },
@@ -79,6 +82,7 @@
     {
       "name": "hdon_frame",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": {
         "type": "probe"
       },
@@ -142,6 +146,7 @@
     {
       "name": "hdon_frame_wide",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": {
         "type": "probe"
       },
@@ -205,6 +210,7 @@
     {
       "name": "hdon_uniq",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": {
         "type": "probe"
       },
@@ -268,6 +274,7 @@
     {
       "name": "hdon_bare",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": {
         "type": "probe"
       },
@@ -301,6 +308,7 @@
     {
       "name": "dimerize",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": {
         "type": "probe"
       },
@@ -339,6 +347,7 @@
     {
       "name": "bridge",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": {
         "type": "probe"
       },
@@ -377,6 +386,7 @@
     {
       "name": "asym_add",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": {
         "type": "probe"
       },
@@ -420,6 +430,7 @@
     {
       "name": "planar3",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": {
         "type": "probe"
       },
@@ -473,6 +484,7 @@
     {
       "name": "land4",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": {
         "type": "probe"
       },
@@ -536,6 +548,7 @@
     {
       "name": "land4_chiral",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": {
         "type": "probe"
       },
@@ -600,6 +613,7 @@
     {
       "name": "habst_pair",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": {
         "type": "probe"
       },
@@ -634,6 +648,7 @@
     {
       "name": "off_origin_all",
       "method": "tip",
+      "reaction": { "target": [5.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": {
         "type": "probe"
       },

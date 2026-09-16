@@ -10,10 +10,10 @@
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::io::xyz_loader::load_xyz;
 use atomcad_crystolecule::mechanosynth::{
-    APEX_FRAME_TAG, BuildScript, EXACT_FIT_RESIDUAL, HighlightTags, MechanosynthError, Method,
-    OpLibrary, Participant, Step, ToolBinding, applicable_ops, event_indices, load_build_script,
-    load_library, parse_build_script, parse_library, replay, replay_scene, replay_scene_partial,
-    resolve_tolerance, tool_pose,
+    APEX_FRAME_TAG, BuildScript, DEFAULT_DURATION, EXACT_FIT_RESIDUAL, HighlightTags,
+    MechanosynthError, Method, OpLibrary, Participant, Step, ToolBinding, applicable_ops,
+    event_indices, load_build_script, load_library, parse_build_script, parse_library, replay,
+    replay_scene, replay_scene_partial, resolve_tolerance, tool_pose,
 };
 use atomcad_test_support::fixture_path;
 use glam::{DMat3, DVec3};
@@ -135,18 +135,23 @@ fn library_error(text: &str) -> String {
         .to_string()
 }
 
-/// A `/2` library with one `tools` entry, wrapping whatever ops text is given.
+/// A `/4` library with one `tools` entry, wrapping whatever ops text is given.
 fn with_probe_tools(ops: &str) -> String {
     format!(
-        r#"{{ "format": "atomcad-msops/3",
+        r#"{{ "format": "atomcad-msops/4",
               "tools": [ {{ "name": "probe", "frame": [
                  {{ "tag": "apex", "pos": [0,0,0] }},
                  {{ "tag": "a", "pos": [1.45, 0, -3.17] }},
                  {{ "tag": "b", "pos": [-0.725, 1.2557, -3.17] }},
-                 {{ "tag": "c", "pos": [-0.725, -1.2557, -3.17] }} ] }} ],
+                 {{ "tag": "c", "pos": [-0.725, -1.2557, -3.17] }} ],
+                 "envelope": {{ "half_angle": 30.0, "radius": 2.0 }} }} ],
               "ops": [ {ops} ] }}"#
     )
 }
+
+/// The `reaction` block every `tip` operation has to carry since `/4`, for the
+/// inline libraries whose subject is something else entirely.
+const REACTION: &str = r#""reaction": { "target": [0,0,0], "tool": [0,0,1.5] }"#;
 
 fn count_of_element(structure: &AtomicStructure, element: i16) -> usize {
     structure
@@ -195,9 +200,9 @@ fn an_older_library_is_refused_naming_the_fix() {
     // a pattern that lists no bonds — from "nothing is said" to "these atoms
     // are not bonded" — so accepting a `/2` file would read an assertion into
     // it that its author never made.
-    for older in ["atomcad-msops/1", "atomcad-msops/2"] {
+    for older in ["atomcad-msops/1", "atomcad-msops/2", "atomcad-msops/3"] {
         let message = library_error(&format!(r#"{{ "format": "{older}", "ops": [] }}"#));
-        assert!(message.contains("atomcad-msops/3"), "{message}");
+        assert!(message.contains("atomcad-msops/4"), "{message}");
         assert!(message.contains(older), "{message}");
     }
 }
@@ -327,17 +332,17 @@ fn a_wildcard_on_an_added_tool_side_atom_is_rejected() {
 #[test]
 fn a_duplicate_tool_type_name_is_rejected() {
     let message = library_error(
-        r#"{ "format": "atomcad-msops/3",
+        r#"{ "format": "atomcad-msops/4",
              "tools": [ { "name": "probe", "frame": [
                  { "tag": "apex", "pos": [0,0,0] },
                  { "tag": "a", "pos": [1,0,-3] },
                  { "tag": "b", "pos": [0,1,-3] },
-                 { "tag": "c", "pos": [-1,-1,-3] } ] },
+                 { "tag": "c", "pos": [-1,-1,-3] } ], "envelope": { "half_angle": 30.0, "radius": 2.0 } },
                  { "name": "probe", "frame": [
                  { "tag": "apex", "pos": [0,0,0] },
                  { "tag": "a", "pos": [1,0,-3] },
                  { "tag": "b", "pos": [0,1,-3] },
-                 { "tag": "c", "pos": [-1,-1,-3] } ] } ],
+                 { "tag": "c", "pos": [-1,-1,-3] } ], "envelope": { "half_angle": 30.0, "radius": 2.0 } } ],
              "ops": [] }"#,
     );
     assert!(message.contains("tool type 'probe'"), "{message}");
@@ -347,12 +352,12 @@ fn a_duplicate_tool_type_name_is_rejected() {
 #[test]
 fn an_empty_states_list_is_a_parse_error() {
     let message = library_error(
-        r#"{ "format": "atomcad-msops/3",
+        r#"{ "format": "atomcad-msops/4",
              "tools": [ { "name": "probe", "states": [], "frame": [
                  { "tag": "apex", "pos": [0,0,0] },
                  { "tag": "a", "pos": [1,0,-3] },
                  { "tag": "b", "pos": [0,1,-3] },
-                 { "tag": "c", "pos": [-1,-1,-3] } ] } ],
+                 { "tag": "c", "pos": [-1,-1,-3] } ], "envelope": { "half_angle": 30.0, "radius": 2.0 } } ],
              "ops": [] }"#,
     );
     assert!(message.contains("tool type 'probe'"), "{message}");
@@ -363,8 +368,8 @@ fn an_empty_states_list_is_a_parse_error() {
 fn every_frame_rule_is_a_parse_error_naming_the_type() {
     let frame = |entries: &str| {
         library_error(&format!(
-            r#"{{ "format": "atomcad-msops/3",
-                  "tools": [ {{ "name": "probe", "frame": [ {entries} ] }} ],
+            r#"{{ "format": "atomcad-msops/4",
+                  "tools": [ {{ "name": "probe", "frame": [ {entries} ], "envelope": {{ "half_angle": 30.0, "radius": 2.0 }} }} ],
                   "ops": [] }}"#
         ))
     };
@@ -395,12 +400,13 @@ fn every_frame_rule_is_a_parse_error_naming_the_type() {
     assert!(displaced_apex.contains("origin"), "{displaced_apex}");
 
     // Coplanar: the legs taken off the linear business axis rather than off the
-    // handle, which is the mistake the rule exists to catch.
+    // handle, which is the mistake the rule exists to catch. They still have to
+    // sit on one side of the apex's plane, or the axis rule catches them first.
     let coplanar = frame(
         r#"{ "tag": "apex", "pos": [0,0,0] },
-           { "tag": "a", "pos": [1,0,0] },
-           { "tag": "b", "pos": [0,1,0] },
-           { "tag": "c", "pos": [1,1,0] }"#,
+           { "tag": "a", "pos": [0,1,-3] },
+           { "tag": "b", "pos": [0,2,-3] },
+           { "tag": "c", "pos": [0,-1,-1] }"#,
     );
     assert!(coplanar.contains("coplanar"), "{coplanar}");
 
@@ -416,12 +422,12 @@ fn every_frame_rule_is_a_parse_error_naming_the_type() {
 #[test]
 fn a_type_name_that_is_also_a_frame_tag_is_rejected() {
     let message = library_error(
-        r#"{ "format": "atomcad-msops/3",
+        r#"{ "format": "atomcad-msops/4",
              "tools": [ { "name": "apex", "frame": [
                  { "tag": "apex", "pos": [0,0,0] },
                  { "tag": "a", "pos": [1,0,-3] },
                  { "tag": "b", "pos": [0,1,-3] },
-                 { "tag": "c", "pos": [-1,-1,-3] } ] } ],
+                 { "tag": "c", "pos": [-1,-1,-3] } ], "envelope": { "half_angle": 30.0, "radius": 2.0 } } ],
              "ops": [] }"#,
     );
     assert!(message.contains("tool type 'apex'"), "{message}");
@@ -429,19 +435,145 @@ fn a_type_name_that_is_also_a_frame_tag_is_rejected() {
 }
 
 #[test]
-fn approach_parses_onto_the_operation_and_is_absent_otherwise() {
+fn the_retired_approach_key_is_skipped_like_any_other_unknown_one() {
+    // `/3` reserved `approach` and nobody ever wrote it; `/4` removed it and the
+    // sweep computes what it was for. The fixture still carries one, so this
+    // pins that a file keeping it loses nothing.
     let lib = library("tool_ops.json");
-    let approach = lib
-        .get("habst_approach")
-        .unwrap()
-        .approach
-        .expect("the fixture states one");
-    assert_eq!(approach.t, DVec3::new(0.0, 0.0, 3.5));
-    // The file gives `r` as rows; `DMat3` is column-major, so a quarter turn
-    // about z takes local +x to +y.
-    assert!((approach.r * DVec3::X - DVec3::Y).length() < 1e-12);
+    assert!(lib.get("habst_approach").is_some());
+}
 
-    assert!(lib.get("habst").unwrap().approach.is_none());
+#[test]
+fn duration_reads_its_default_and_refuses_a_non_positive_one() {
+    let lib = library("tool_ops.json");
+    assert_eq!(lib.get("habst_approach").unwrap().duration, 2.5);
+    // Read by nothing in this milestone; the clock half of milestone 2 is what
+    // it is reserved for.
+    assert_eq!(lib.get("habst").unwrap().duration, DEFAULT_DURATION);
+
+    for bad in ["0", "-1.0"] {
+        let message = library_error(&with_probe_tools(&format!(
+            r#"{{ "name": "x", "method": "tip", {REACTION}, "duration": {bad},
+                  "tool": {{ "type": "probe" }},
+                  "before": {{ "atoms": [] }}, "after": {{ "atoms": [] }} }}"#
+        )));
+        assert!(message.contains("operation 'x'"), "{message}");
+        assert!(message.contains("duration"), "{message}");
+    }
+}
+
+#[test]
+fn an_envelope_is_required_on_every_tool_type_and_range_checked() {
+    let frame = r#""frame": [
+        { "tag": "apex", "pos": [0,0,0] },
+        { "tag": "a", "pos": [1.45, 0, -3.17] },
+        { "tag": "b", "pos": [-0.725, 1.2557, -3.17] },
+        { "tag": "c", "pos": [-0.725, -1.2557, -3.17] } ]"#;
+    let with = |envelope: &str| {
+        format!(
+            r#"{{ "format": "atomcad-msops/4",
+                  "tools": [ {{ "name": "probe", {frame}{envelope} }} ], "ops": [] }}"#
+        )
+    };
+
+    let message = library_error(&with(""));
+    assert!(message.contains("tool type 'probe'"), "{message}");
+    assert!(message.contains("envelope"), "{message}");
+
+    for bad in [
+        r#", "envelope": { "radius": 2.0 }"#,
+        r#", "envelope": { "half_angle": 0.0, "radius": 2.0 }"#,
+        r#", "envelope": { "half_angle": 90.0, "radius": 2.0 }"#,
+        r#", "envelope": { "half_angle": 30.0 }"#,
+        r#", "envelope": { "half_angle": 30.0, "radius": 0.0 }"#,
+        r#", "envelope": { "half_angle": 30.0, "radius": -1.0 }"#,
+    ] {
+        let message = library_error(&with(bad));
+        assert!(message.contains("tool type 'probe'"), "{message}");
+        assert!(message.contains("envelope"), "{message}");
+    }
+
+    // Degrees in the file, radians in the engine.
+    let lib = library("tool_ops.json");
+    let envelope = lib.tool_type("probe").expect("declared").envelope;
+    assert!((envelope.half_angle - 31.0_f64.to_radians()).abs() < 1e-12);
+    assert_eq!(envelope.radius, 2.3);
+}
+
+#[test]
+fn every_leg_of_a_frame_is_on_one_side_of_the_apex_plane() {
+    // The sign is the tool axis, so a frame that straddles the plane — or
+    // touches it — says nothing about which way the tool points.
+    let with = |legs: &str| {
+        format!(
+            r#"{{ "format": "atomcad-msops/4",
+                  "tools": [ {{ "name": "probe", "frame": [
+                     {{ "tag": "apex", "pos": [0,0,0] }}, {legs} ],
+                     "envelope": {{ "half_angle": 30.0, "radius": 2.0 }} }} ],
+                  "ops": [] }}"#
+        )
+    };
+
+    let straddling = library_error(&with(
+        r#"{ "tag": "a", "pos": [1.45, 0, -3.17] },
+           { "tag": "b", "pos": [-0.725, 1.2557, 3.17] },
+           { "tag": "c", "pos": [-0.725, -1.2557, -3.17] }"#,
+    ));
+    assert!(straddling.contains("tool type 'probe'"), "{straddling}");
+    assert!(straddling.contains("both sides"), "{straddling}");
+
+    let on_the_plane = library_error(&with(
+        r#"{ "tag": "a", "pos": [1.45, 0, -3.17] },
+           { "tag": "b", "pos": [-0.725, 1.2557, 0.0] },
+           { "tag": "c", "pos": [-0.725, -1.2557, -3.17] }"#,
+    ));
+    assert!(on_the_plane.contains("\"b\""), "{on_the_plane}");
+    assert!(on_the_plane.contains("z = 0"), "{on_the_plane}");
+
+    // Neither sign is privileged: the fixture tools keep their legs below the
+    // apex and read a `-z` axis, and the silicon library's legs sit above.
+    let lib = library("tool_ops.json");
+    assert_eq!(lib.tool_type("probe").unwrap().axis(), -DVec3::Z);
+}
+
+#[test]
+fn reaction_is_required_on_tip_and_forbidden_elsewhere() {
+    let missing = library_error(&with_probe_tools(
+        r#"{ "name": "x", "method": "tip", "tool": { "type": "probe" },
+             "before": { "atoms": [] }, "after": { "atoms": [] } }"#,
+    ));
+    assert!(missing.contains("operation 'x'"), "{missing}");
+    assert!(missing.contains("reaction"), "{missing}");
+
+    let present = library_error(&with_probe_tools(&format!(
+        r#"{{ "name": "x", "method": "spontaneous", {REACTION},
+              "before": {{ "atoms": [] }}, "after": {{ "atoms": [] }} }}"#
+    )));
+    assert!(present.contains("operation 'x'"), "{present}");
+    assert!(present.contains("reaction"), "{present}");
+
+    for bad in [
+        r#""reaction": { "tool": [0,0,1.5] }"#,
+        r#""reaction": { "target": [0,0,0] }"#,
+        r#""reaction": { "target": [0,0], "tool": [0,0,1.5] }"#,
+    ] {
+        let message = library_error(&with_probe_tools(&format!(
+            r#"{{ "name": "x", "method": "tip", {bad}, "tool": {{ "type": "probe" }},
+                  "before": {{ "atoms": [] }}, "after": {{ "atoms": [] }} }}"#
+        )));
+        assert!(message.contains("operation 'x'"), "{message}");
+        assert!(message.contains("reaction"), "{message}");
+    }
+
+    let lib = library("tool_ops.json");
+    let reaction = lib
+        .get("habst")
+        .unwrap()
+        .reaction
+        .expect("a tip states one");
+    assert_eq!(reaction.target, DVec3::ZERO);
+    assert_eq!(reaction.tool, DVec3::new(0.0, 0.0, 1.06));
+    assert!(lib.get("settle").unwrap().reaction.is_none());
 }
 
 // ============================================================================
@@ -1590,18 +1722,20 @@ fn a_tool_side_degree_failure_names_the_tool() {
 fn tool_side_library(before_atoms: &str, after_atoms: &str, before_bonds: &str) -> String {
     format!(
         r#"{{
-      "format": "atomcad-msops/3",
+      "format": "atomcad-msops/4",
       "tools": [
         {{ "name": "habst_tool", "states": ["charged", "spent"], "frame": [
           {{ "tag": "apex", "pos": [0.0, 0.0, 0.0] }},
           {{ "tag": "a", "pos": [1.45, 0.0, -3.17] }},
           {{ "tag": "b", "pos": [-0.725, 1.2557, -3.17] }},
-          {{ "tag": "c", "pos": [-0.725, -1.2557, -3.17] }} ] }}
+          {{ "tag": "c", "pos": [-0.725, -1.2557, -3.17] }} ],
+          "envelope": {{ "half_angle": 46.0, "radius": 2.3 }} }}
       ],
       "ops": [
         {{
           "name": "habst",
           "method": "tip",
+          "reaction": {{ "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.06] }},
           "before": {{ "atoms": [ {{ "id": 1, "el": "H", "pos": [0.0, 0.0, 0.0] }} ], "bonds": [] }},
           "after": {{ "atoms": [], "bonds": [] }},
           "tool": {{

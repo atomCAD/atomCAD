@@ -1,6 +1,6 @@
 {
   "comment": "Field-coverage library for the parsing tests. Unknown keys at every level are ignored.",
-  "format": "atomcad-msops/3",
+  "format": "atomcad-msops/4",
   "tools": [
     {
       "name": "probe",
@@ -10,7 +10,8 @@
         { "tag": "a",    "pos": [1.45, 0.0, -3.17] },
         { "tag": "b",    "pos": [-0.73, 1.26, -3.17] },
         { "tag": "c",    "pos": [-0.73, -1.26, -3.17] }
-      ]
+      ],
+      "envelope": { "half_angle": 30.0, "radius": 2.0 }
     }
   ],
   "tolerance": 0.25,
@@ -18,6 +19,7 @@
     {
       "name": "keep_only",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": { "type": "probe" },
       "basis": "provenance field, never read by the engine",
       "before": {
@@ -32,6 +34,7 @@
     {
       "name": "add_chain",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": { "type": "probe" },
       "note": "exercises the wildcard, an added atom, a default bond order and an explicit one",
       "before": {

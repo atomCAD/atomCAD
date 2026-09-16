@@ -221,11 +221,11 @@ fn script_error(json: &str) -> String {
 
 #[test]
 fn library_rejects_a_wrong_format() {
-    for older in ["atomcad-msops/1", "atomcad-msops/2"] {
+    for older in ["atomcad-msops/1", "atomcad-msops/2", "atomcad-msops/3"] {
         let message = library_error(&format!(r#"{{ "format": "{older}", "ops": [] }}"#));
         assert!(message.contains("ops.json"), "{message}");
         assert!(message.contains("format"), "{message}");
-        assert!(message.contains("atomcad-msops/3"), "{message}");
+        assert!(message.contains("atomcad-msops/4"), "{message}");
     }
 }
 
@@ -240,7 +240,7 @@ fn script_rejects_a_wrong_format() {
 #[test]
 fn library_rejects_a_duplicate_operation_name() {
     let message = library_error(
-        r#"{ "format": "atomcad-msops/3", "ops": [
+        r#"{ "format": "atomcad-msops/4", "ops": [
              { "name": "habst", "method": "spontaneous", "before": { "atoms": [], "bonds": [] }, "after": { "atoms": [], "bonds": [] } },
              { "name": "habst", "method": "spontaneous", "before": { "atoms": [], "bonds": [] }, "after": { "atoms": [], "bonds": [] } }
            ] }"#,
@@ -253,7 +253,7 @@ fn library_rejects_a_duplicate_operation_name() {
 #[test]
 fn library_rejects_a_duplicate_id_within_a_pattern() {
     let message = library_error(
-        r#"{ "format": "atomcad-msops/3", "ops": [ { "name": "habst", "method": "spontaneous",
+        r#"{ "format": "atomcad-msops/4", "ops": [ { "name": "habst", "method": "spontaneous",
              "before": { "atoms": [ { "id": 1, "el": "H", "pos": [0,0,0] },
                                     { "id": 1, "el": "C", "pos": [0,0,1] } ], "bonds": [] },
              "after": { "atoms": [], "bonds": [] } } ] }"#,
@@ -267,7 +267,7 @@ fn library_rejects_a_duplicate_id_within_a_pattern() {
 #[test]
 fn library_rejects_a_bond_to_an_unknown_id() {
     let message = library_error(
-        r#"{ "format": "atomcad-msops/3", "ops": [ { "name": "hdon", "method": "spontaneous",
+        r#"{ "format": "atomcad-msops/4", "ops": [ { "name": "hdon", "method": "spontaneous",
              "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] } ], "bonds": [] },
              "after": { "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] } ], "bonds": [ [1, 5] ] } } ] }"#,
     );
@@ -280,7 +280,7 @@ fn library_rejects_a_bond_to_an_unknown_id() {
 #[test]
 fn library_rejects_a_self_bond() {
     let message = library_error(
-        r#"{ "format": "atomcad-msops/3", "ops": [ { "name": "hdon", "method": "spontaneous",
+        r#"{ "format": "atomcad-msops/4", "ops": [ { "name": "hdon", "method": "spontaneous",
              "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] } ], "bonds": [] },
              "after": { "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] } ], "bonds": [ [1, 1] ] } } ] }"#,
     );
@@ -293,7 +293,7 @@ fn library_rejects_a_self_bond() {
 #[test]
 fn library_rejects_an_unsupported_bond_order() {
     let message = library_error(
-        r#"{ "format": "atomcad-msops/3", "ops": [ { "name": "dimerp", "method": "spontaneous",
+        r#"{ "format": "atomcad-msops/4", "ops": [ { "name": "dimerp", "method": "spontaneous",
              "before": { "atoms": [], "bonds": [] },
              "after": { "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] },
                                    { "id": 2, "el": "C", "pos": [0,0,1.3] } ],
@@ -307,7 +307,7 @@ fn library_rejects_an_unsupported_bond_order() {
 #[test]
 fn library_rejects_a_wildcard_on_an_added_atom() {
     let message = library_error(
-        r#"{ "format": "atomcad-msops/3", "ops": [ { "name": "hdon", "method": "spontaneous",
+        r#"{ "format": "atomcad-msops/4", "ops": [ { "name": "hdon", "method": "spontaneous",
              "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] } ], "bonds": [] },
              "after": { "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] },
                                    { "id": 2, "el": "*", "pos": [0,0,1.09] } ], "bonds": [] } } ] }"#,
@@ -322,7 +322,7 @@ fn library_rejects_a_wildcard_on_an_added_atom() {
 #[test]
 fn library_rejects_an_unknown_element_symbol() {
     let message = library_error(
-        r#"{ "format": "atomcad-msops/3", "ops": [ { "name": "habst", "method": "spontaneous",
+        r#"{ "format": "atomcad-msops/4", "ops": [ { "name": "habst", "method": "spontaneous",
              "before": { "atoms": [ { "id": 1, "el": "Xx", "pos": [0,0,0] } ], "bonds": [] },
              "after": { "atoms": [], "bonds": [] } } ] }"#,
     );
@@ -391,7 +391,7 @@ fn a_step_naming_an_unknown_operation_is_rejected_against_the_library() {
 /// says only what it is about.
 fn one_op(before: &str, after: &str, extra: &str) -> String {
     format!(
-        r#"{{ "format": "atomcad-msops/3", "ops": [ {{
+        r#"{{ "format": "atomcad-msops/4", "ops": [ {{
              "name": "probe_op", "method": "spontaneous", {extra}
              "before": {before},
              "after": {after}
@@ -1986,7 +1986,7 @@ fn every_new_key_is_additive_so_an_old_build_still_reads_the_file() {
     // operations with the key removed — which is what "loads on an old build"
     // means in practice.
     let with_key = parse_library(
-        r#"{ "format": "atomcad-msops/3", "ops": [ {
+        r#"{ "format": "atomcad-msops/4", "ops": [ {
             "name": "handed", "method": "spontaneous", "chiral": true,
             "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0, 0, 0] } ] },
             "after":  { "atoms": [ { "id": 1, "el": "N", "pos": [0, 0, 0] } ] }
@@ -1995,7 +1995,7 @@ fn every_new_key_is_additive_so_an_old_build_still_reads_the_file() {
     )
     .expect("parses");
     let without_key = parse_library(
-        r#"{ "format": "atomcad-msops/3", "ops": [ {
+        r#"{ "format": "atomcad-msops/4", "ops": [ {
             "name": "handed", "method": "spontaneous",
             "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0, 0, 0] } ] },
             "after":  { "atoms": [ { "id": 1, "el": "N", "pos": [0, 0, 0] } ] }

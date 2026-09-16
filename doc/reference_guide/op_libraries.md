@@ -103,7 +103,7 @@ operation actually touches; naming a frame atom is a load error.
 
 ```json
 {
-  "format": "atomcad-msops/3",
+  "format": "atomcad-msops/4",
   "tolerance": 0.3,
   "clash": 0.9,
   "tools": [
@@ -116,13 +116,15 @@ operation actually touches; naming a frame atom is a load error.
         { "tag": "a",    "pos": [1.45, 0, -3.17] },
         { "tag": "b",    "pos": [-0.73, 1.26, -3.17] },
         { "tag": "c",    "pos": [-0.73, -1.26, -3.17] }
-      ]
+      ],
+      "envelope": { "half_angle": 30.0, "radius": 4.0 }
     }
   ],
   "ops": [
     {
       "name": "habst",
       "method": "tip",
+      "reaction": { "target": [0, 0, 0], "tool": [0, 0, 1.06] },
       "before": { "atoms": [ {"id": 1, "el": "H", "pos": [0, 0, 0], "deg": 1} ],
                   "bonds": [] },
       "after":  { "atoms": [], "bonds": [] },
@@ -185,9 +187,88 @@ frame, and a tool type's name may not collide with a frame tag.
 The section is required as soon as any operation is `tip`, and every rule above
 is a load error naming the tool type.
 
-An operation may also carry an **`approach`** pose (`r` and `t`), the tool frame
-relative to the target frame at the moment of reaction. It is read and kept for
-a future animation feature and changes nothing today.
+Every frame entry but `apex` must lie on **one side** of the apex's `z = 0`
+plane, and none on it. That side is the **tool axis**: the legs are behind the
+business end, so the axis points from the business end toward them. The rule
+states the shape and reads the sign from it, so a library whose legs sit at
+positive `z` and one whose legs sit at negative `z` are both fine — what is not
+fine is a frame that straddles the plane, because then nothing says which way
+the tool points. It is a load error naming the type and the entry.
+
+### `envelope`: what the tool sweeps
+
+Every tool type states an **`envelope`**: a cone about the tool axis with its
+apex at the operation's [`reaction.tool`](#reaction-where-the-reaction-happens)
+point, continuing as a cylinder once the cone has grown that wide.
+
+```json
+"envelope": { "half_angle": 30.0, "radius": 4.0 }
+```
+
+`half_angle` is in degrees, strictly between 0 and 90; `radius` is in ångström
+and positive. Both are required, and either missing or out of range is a load
+error naming the type.
+
+This is what the `mechanosynth` node's approach sweep keeps clear: it is the
+volume the tool is assumed to occupy as it comes down onto a site, and the
+direction it picks is the least tilted one along which no scene atom is inside
+the envelope. Because the envelope is a solid of revolution, the tool's **roll**
+about its own axis cannot matter to collisions, which is what makes the search a
+search over directions.
+
+**It is a solid, so measure it against your atoms' radii.** The cone has to
+contain each atom's whole sphere — centre plus covalent radius — not just its
+centre, because the sweep then charges every obstacle its own radius and nothing
+more. Measure the half-angle that way and state it rounded outward. One atom is
+exempt and cannot be otherwise: the **cargo** sitting at the reaction point,
+which is the apex.
+
+**State the instrument, not the molecule.** The envelope may be *wider* than the
+wired tool molecule, and usually should be: a tooltip bonded in reality to a
+shaft the design does not model declares the shaft's radius here, and the sweep
+then keeps the shaft out of the workpiece too. It may not be *narrower* — every
+atom of the bound molecule has to fit inside it at every one of the type's
+reaction points, and one that does not is a load error at binding, reported once
+before any step, beside the frame residual.
+
+Note "every one of the type's reaction points": an operation whose `reaction.tool`
+is a contact distance sits *higher* than one whose reaction point is the cargo,
+so its cone is the tighter of the two and it is the one that sets the
+half-angle.
+
+### `reaction`: where the reaction happens
+
+Every `tip` operation states **where the reaction happens, twice**:
+
+```json
+"reaction": { "target": [0, 0, 0], "tool": [0, 0, 1.06] }
+```
+
+`target` is a point in the **operation's** local frame, placed into the design by
+the step's transform like a pattern atom; `tool` is a point in the **tool's**
+local frame, on or near the axis on the business-end side. The tool is posed so
+that the two coincide, which is why the transferred atom does not move at the
+reaction: it changes hands.
+
+For a donation both points are the transferred atom's position — where the
+workpiece will have it, where the tool holds it. For an abstraction, where the
+workpiece has it and where the tool will hold it. For a bare probe that merely
+touches, `target` is the atom acted on and `tool` is the apex moved a contact
+distance along the axis away from the legs — a number you state like any other
+piece of geometry.
+
+Both points are required on `tip` and are a load error on a `bulk` or
+`spontaneous` operation, which has no tool to place. They are written per
+operation, not per environment variant, so five `si_donate` variants carry five
+identical `reaction` blocks — write them once in the generator.
+
+### `duration`
+
+Any operation may state a **`duration`**, a positive number in the library's own
+relative units; the default is `1.0`. Nothing reads it yet — it is reserved for
+the animation half of the milestone, a real clock over a whole build — but it
+belongs to the researched operation rather than to the step, so a generator can
+start writing it now. Zero or a negative value is a load error.
 
 ### `chiral`
 
@@ -254,14 +335,22 @@ operation.
 
 ### Versioning, and unknown keys
 
-**Each library format replaces the one before it outright.** A `/1` or a `/2`
-file is refused with a message saying so; the build-script format is still
+**Each library format replaces the one before it outright.** A `/1`, `/2` or
+`/3` file is refused with a message saying so; the build-script format is still
 `atomcad-msbuild/2` and is unchanged. Libraries are written by generators, and
-the fix is to regenerate them rather than to keep two readers — and for `/3`
-that is not merely convenience: closed-world bonds change what a pattern *means*
-when it lists none, from "nothing is said" to "these atoms are not bonded", so
-reading a `/2` file as `/3` would put an assertion in it that its author never
-made.
+the fix is to regenerate them rather than to keep two readers — and neither bump
+was merely a convenience. Closed-world bonds (`/3`) change what a pattern
+*means* when it lists none, from "nothing is said" to "these atoms are not
+bonded", so reading a `/2` file as `/3` would put an assertion in it that its
+author never made. And without an `envelope` and a `reaction` (`/4`) there is no
+volume to sweep and nowhere to put the tool, so reading a `/3` file as `/4`
+would mean inventing both.
+
+`/4` also **removed** the `approach` pose `/3` reserved and nobody ever wrote:
+the direction a tool comes in from depends on what is in the way, and what is in
+the way depends on every step before this one, so it is computed rather than
+stored. A file that still carries an `approach` key loses nothing — it is an
+unknown key like any other.
 
 Unknown keys are ignored everywhere, so generators are free to add provenance
 fields (`"basis": "Freitas & Merkle 2008, RS7"`).

@@ -1,6 +1,6 @@
 {
   "comment": "Matching-only library. `mark` turns whichever carbon it matched into nitrogen, so a test can see the choice; `pair` has two before atoms 0.1 Å apart, close enough that both want the same workpiece atom.",
-  "format": "atomcad-msops/3",
+  "format": "atomcad-msops/4",
   "tools": [
     {
       "name": "probe",
@@ -10,13 +10,15 @@
         { "tag": "a",    "pos": [1.45, 0.0, -3.17] },
         { "tag": "b",    "pos": [-0.73, 1.26, -3.17] },
         { "tag": "c",    "pos": [-0.73, -1.26, -3.17] }
-      ]
+      ],
+      "envelope": { "half_angle": 30.0, "radius": 2.0 }
     }
   ],
   "ops": [
     {
       "name": "mark",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": { "type": "probe" },
       "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
       "after":  { "atoms": [ { "id": 1, "el": "N", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] }
@@ -24,6 +26,7 @@
     {
       "name": "pair",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": { "type": "probe" },
       "before": {
         "atoms": [
@@ -37,6 +40,7 @@
     {
       "name": "mark_any",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": { "type": "probe" },
       "before": { "atoms": [ { "id": 1, "el": "*", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
       "after":  { "atoms": [ { "id": 1, "el": "N", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] }

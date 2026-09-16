@@ -42,6 +42,7 @@ pub mod place;
 pub mod pose;
 pub mod scene;
 pub mod schema;
+pub mod trajectory;
 
 pub use apply::{
     Contact, HighlightTags, StepEffect, apply_step, describe_nearest, replay, resolve_tolerance,
@@ -58,14 +59,21 @@ pub use place::{
 };
 pub use pose::{ToolPose, tool_pose};
 pub use scene::{
-    Participant, Scene, SceneEffect, ToolBinding, apply_step_in_scene, build_scene, event_indices,
-    replay_scene, replay_scene_partial, replay_steps,
+    Participant, Scene, SceneEffect, StepPlan, ToolBinding, apply_step_in_scene, build_scene,
+    event_indices, match_step_in_scene, replay_scene, replay_scene_partial, replay_steps,
 };
 pub use schema::{
-    APEX_FRAME_TAG, Approach, BUILD_FORMAT, BondMismatch, BuildScript, CLASH_BLOCK,
-    CLASH_SEARCH_RADIUS, CLOSE_PAIR_WARNING_FACTOR, Clash, DEFAULT_ANCHORS, DEFAULT_TOLERANCE,
+    APEX_FRAME_TAG, BUILD_FORMAT, BondMismatch, BuildScript, CLASH_BLOCK, CLASH_SEARCH_RADIUS,
+    CLOSE_PAIR_WARNING_FACTOR, Clash, DEFAULT_ANCHORS, DEFAULT_DURATION, DEFAULT_TOLERANCE,
     DegreeMismatch, FRAME_COPLANAR_EPSILON, FrameAtom, LIBRARY_FORMAT, MAX_PATTERN_DEGREE,
     MechanosynthError, Method, NO_LAYER, NO_SITE, NoMatch, ORIGIN_PATTERN_ATOM_ID, OpLibrary,
-    Operation, PATTERN_POSITION_EPSILON, Pattern, PatternAtom, PatternBond, PatternElement, Step,
-    ToolSide, ToolType,
+    Operation, PATTERN_POSITION_EPSILON, Pattern, PatternAtom, PatternBond, PatternElement,
+    Reaction, Step, ToolSide, ToolType,
+};
+pub use trajectory::{
+    Approach, CLEAR_MARGIN, Envelope, Landing, MIN_STANDOFF, PATH_SAMPLE, PATH_SAMPLE_ANGLE,
+    PathContact, PathScan, Pose, REACTION, REACTION_DEPARTURE, REACTION_LANDING, Runs,
+    STANDOFF_TILT_CAP, SWEEP_DIRECTIONS, SWEEP_REFINEMENTS, ToolMotion, Visit, apply_tool_pose,
+    approach_direction, arriving_pose, obstacles_for, plan_landing, reaction_pose, replay_scene_at,
+    runs, standoff_pose, sweep_directions,
 };

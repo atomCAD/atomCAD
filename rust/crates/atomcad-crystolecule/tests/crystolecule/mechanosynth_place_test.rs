@@ -459,7 +459,7 @@ fn single_anchor_habst_pair() -> String {
     let h = tetra(0) * 1.09;
     format!(
         r#"{{
-          "format": "atomcad-msops/3",
+          "format": "atomcad-msops/4",
           "ops": [
             {{
               "name": "habst_pair",
@@ -518,7 +518,7 @@ fn symmetric_dimerize(anchors: Option<i64>) -> String {
     };
     format!(
         r#"{{
-          "format": "atomcad-msops/3",
+          "format": "atomcad-msops/4",
           "ops": [
             {{
               "name": "dimerize",
@@ -576,7 +576,7 @@ fn hetero_insert(anchors: Option<i64>) -> String {
     };
     format!(
         r#"{{
-          "format": "atomcad-msops/3",
+          "format": "atomcad-msops/4",
           "ops": [
             {{
               "name": "insert",
@@ -1019,7 +1019,7 @@ fn loose_frame_donation(deg: Option<u32>) -> String {
     };
     format!(
         r#"{{
-          "format": "atomcad-msops/3",
+          "format": "atomcad-msops/4",
           "ops": [
             {{
               "name": "hdon_loose",
@@ -1154,7 +1154,7 @@ fn three_coordinate_donation() -> String {
     );
     format!(
         r#"{{
-          "format": "atomcad-msops/3",
+          "format": "atomcad-msops/4",
           "ops": [
             {{
               "name": "hdon_deg",
@@ -1269,7 +1269,7 @@ fn framed_abstraction_library() -> OpLibrary {
     ];
     let json = format!(
         r#"{{
-          "format": "atomcad-msops/3",
+          "format": "atomcad-msops/4",
           "ops": [
             {{
               "name": "habst_framed",
@@ -1348,7 +1348,7 @@ fn framed_bridge_library() -> OpLibrary {
     );
     let json = format!(
         r#"{{
-          "format": "atomcad-msops/3",
+          "format": "atomcad-msops/4",
           "ops": [
             {{
               "name": "bridge_framed",
@@ -1727,8 +1727,8 @@ fn a_donate_then_bridge_candidate_is_offerable() {
     // the very same placement.
     let strict = parse_library(
         &donation_beside_a_spectator().replace(
-            r#""format": "atomcad-msops/3""#,
-            r#""format": "atomcad-msops/3", "clash": 1.1"#,
+            r#""format": "atomcad-msops/4""#,
+            r#""format": "atomcad-msops/4", "clash": 1.1"#,
         ),
         "strict.json",
     )
@@ -1769,7 +1769,7 @@ fn donation_beside_a_spectator() -> String {
     );
     format!(
         r#"{{
-          "format": "atomcad-msops/3",
+          "format": "atomcad-msops/4",
           "ops": [
             {{
               "name": "sidon",

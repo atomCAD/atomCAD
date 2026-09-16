@@ -1090,7 +1090,7 @@ libraries**](../op_libraries.md) is the reference for both: what
 every field means, what the loader refuses and warns about, and how to author a
 library a generator can be trusted to produce. In outline:
 
-- an **operation library** (`atomcad-msops/3`, read by
+- an **operation library** (`atomcad-msops/4`, read by
   [`ops_library`](#ops_library)) names the reactions. An **operation** is a
   before/after pair of small atom lists with concrete positions in a local
   frame; comparing the two halves by *pattern id* is the whole rewrite — an id

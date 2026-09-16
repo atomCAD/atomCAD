@@ -527,7 +527,10 @@ pub fn replay_prefix_and_block(
 ) -> Result<(Scene, Option<String>), String> {
     let mut scene =
         build_scene(base, feedstocks, tools, library).map_err(|failure| failure.to_string())?;
-    let prefix_failure = replay_steps(
+    // The editor's block replay lands every step like the node's and fails for
+    // none of them, so the landings go unread here: an authored step on a
+    // blocked site is seen in the replayer, not where it was authored.
+    let (prefix_failure, _) = replay_steps(
         &mut scene,
         library,
         &script(PREFIX_LABEL, prefix),
@@ -538,7 +541,7 @@ pub fn replay_prefix_and_block(
     if let Some(failure) = prefix_failure {
         return Err(failure.to_string());
     }
-    let block_failure = replay_steps(
+    let (block_failure, _) = replay_steps(
         &mut scene,
         library,
         &script(AUTHORED_LABEL, authored),

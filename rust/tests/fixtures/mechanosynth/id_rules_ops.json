@@ -1,6 +1,6 @@
 {
   "comment": "One operation per row of the id-rule table. Each is applied on its own by the id-rule tests, which build the step in code.",
-  "format": "atomcad-msops/3",
+  "format": "atomcad-msops/4",
   "tools": [
     {
       "name": "probe",
@@ -10,13 +10,15 @@
         { "tag": "a",    "pos": [1.45, 0.0, -3.17] },
         { "tag": "b",    "pos": [-0.73, 1.26, -3.17] },
         { "tag": "c",    "pos": [-0.73, -1.26, -3.17] }
-      ]
+      ],
+      "envelope": { "half_angle": 30.0, "radius": 2.0 }
     }
   ],
   "ops": [
     {
       "name": "keep",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": { "type": "probe" },
       "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
       "after":  { "atoms": [ { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] }
@@ -24,6 +26,7 @@
     {
       "name": "move",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": { "type": "probe" },
       "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
       "after":  { "atoms": [ { "id": 1, "el": "C", "pos": [0.0, 0.0, 2.0] } ], "bonds": [] }
@@ -31,6 +34,7 @@
     {
       "name": "replace",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": { "type": "probe" },
       "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
       "after":  { "atoms": [ { "id": 1, "el": "N", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] }
@@ -38,6 +42,7 @@
     {
       "name": "delete",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": { "type": "probe" },
       "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
       "after":  { "atoms": [], "bonds": [] }
@@ -45,6 +50,7 @@
     {
       "name": "add",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": { "type": "probe" },
       "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] } ], "bonds": [] },
       "after": {
@@ -58,6 +64,7 @@
     {
       "name": "bond_add",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": { "type": "probe" },
       "before": {
         "atoms": [
@@ -77,6 +84,7 @@
     {
       "name": "bond_delete",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": { "type": "probe" },
       "before": {
         "atoms": [
@@ -96,6 +104,7 @@
     {
       "name": "bond_order",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": { "type": "probe" },
       "before": {
         "atoms": [
@@ -115,6 +124,7 @@
     {
       "name": "bond_unchanged",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": { "type": "probe" },
       "before": {
         "atoms": [
@@ -134,6 +144,7 @@
     {
       "name": "move_and_delete",
       "method": "tip",
+      "reaction": { "target": [0.0, 0.0, 0.0], "tool": [0.0, 0.0, 1.5] },
       "tool": { "type": "probe" },
       "comment": "id 1 moves, id 2 goes; used to check that bonds to atoms outside the pattern follow their atom",
       "before": {

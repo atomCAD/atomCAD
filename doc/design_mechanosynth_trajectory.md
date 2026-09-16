@@ -14,8 +14,14 @@ radial gap to a true distance, took the blocked site out of the replay's
 failure set — the engine measures, the generator refuses, the node reports —
 moved the containment check to binding so that `apply_step_in_scene` really
 does keep its signature, put the standoff in the park plane, and made the
-generator's re-park part of Phase 1 (§Decisions, §Architecture, §Phases).
-Unreviewed since. Nothing of it is implemented.
+generator's re-park part of Phase 1 (§Decisions, §Architecture, §Phases). A fifth review, during Phase 1, made the
+envelope a **solid** rather than a locus of atom centres: it now contains the
+tool's atoms *with their radii*, and an obstacle is charged its own radius
+alone. The old pairing — centres in the envelope, the tool's widest radius added
+to every obstacle — charged the tool's extent twice, which grew the keep-out
+sphere around a site's own host atom past the bond length and made every
+abstraction unreachable from every direction (§The sweep). Phase 1 is
+implemented; Phases 2–4 are not.
 
 Builds on `doc/design_mechanosynth_tools.md` (milestone 1: what a build does
 to every molecule it involves, all four phases implemented 2026-09-15) and is
@@ -247,10 +253,19 @@ Every tool type declares a **collision envelope** in its own frame: a cone
 with its apex at the reaction point, half-angle `α`, opening along the tool
 axis toward the legs,
 continuing as a cylinder of radius `R` once the cone has grown that wide.
-The envelope contains the whole tool — and, when the library says so, more
-than the wired molecule: a tooltip's `R` can be the radius of the tip shaft
-the design does not model, so that an approach avoids what the real
-instrument would hit.
+The envelope is the **solid the tool occupies**: it contains every atom of the
+tool *with its covalent radius*, not merely the atom centres. That is what lets
+the sweep charge an obstacle its own radius and nothing more (§The sweep) — the
+tool's extent is already in the cone, and adding it again would charge for it
+twice. The library may also claim **more** than the wired molecule: a tooltip's
+`R` can be the radius of the tip shaft the design does not model, so that an
+approach avoids what the real instrument would hit.
+
+One atom is necessarily outside: the **cargo**, whose own sphere swallows the
+apex because the apex *is* where it sits. A donation's transferred atom is at
+the reaction point by construction, and no cone anchored there could contain it,
+so containment exempts an atom whose sphere contains the apex — and only that
+atom.
 
 Because the envelope is a solid of revolution about the tool axis, the tool's
 **roll** about that axis cannot matter to collisions, and the orientation
@@ -265,9 +280,10 @@ loaded silicon tool's reaction point at the cargo; the bcc tungsten pyramid is
 library's to state.
 
 **Containment is checked, not assumed — at binding.** `build_scene` tests
-every atom of the bound molecule against the envelope placed at the tool-side
-reaction point of **every** `tip` operation of that type, and an atom outside
-is `ToolOutsideEnvelope`, naming the tool type, the atom and the operation —
+every atom of the bound molecule — its **sphere**, `gap ≤ −r_cov`, the cargo
+excepted — against the envelope placed at the tool-side
+reaction point of **every** `tip` operation of that type, and an atom reaching
+outside the envelope is `ToolOutsideEnvelope`, naming the tool type, the atom and the operation —
 a library that claims a smaller envelope than its molecule is wrong the way a
 frame whose residual fails is wrong, and it is reported where the residual
 is: once, before any step. The check costs one pass over the tool's atoms per
@@ -282,10 +298,17 @@ The sweep is run about the **placed reaction point**
 carried into the design by the step's placement. The **obstacles** are every
 scene atom that is not the visiting tool's and not one of the target side's
 matched `before` atoms — the site is the reaction, not an obstacle. Each
-obstacle is a sphere: its covalent radius plus the largest covalent radius
-among the tool's atoms, times the library's clash factor (`CLASH_BLOCK`,
-0.9), so "inside the envelope" means what "clash" means everywhere else in
-the module.
+obstacle is a sphere of **its own covalent radius** times the library's clash
+factor (`CLASH_BLOCK`, 0.9). The tool's radius is deliberately *not* in there:
+the envelope is the solid the tool occupies (§The envelope), so the tool's
+extent has already been counted, and counting it twice is what an earlier draft
+did. The cost of that double charge was not marginal — the keep-out sphere
+around a site's own host atom became `0.9·(r_host + r_tool_max)`, which for an
+Si–Cl site and a tungsten probe is 2.46 Å against a 2.02 Å bond. Since the
+cone's apex is itself a point of the envelope's surface, the gap to an obstacle
+can never exceed its distance to the apex, so a host that close blocked the site
+from **every** direction, and no tilt could help. Twenty-eight of the silicon
+demo's 171 steps failed that way, all of them abstractions or probe visits.
 
 For a direction `d`, an obstacle at `p` has axial coordinate
 `s = (p − p_r) · d` and radial distance `ρ` from the axis. Its **gap** is
@@ -656,8 +679,8 @@ pub fn approach_direction(
 ) -> Approach;
 
 /// The one definition of an obstacle: every scene atom that is not the
-/// tool's and not in `exclude`, with margin `clash · (r_cov(atom) +
-/// r_tool)`, `r_tool` the largest covalent radius among the tool's atoms.
+/// tool's and not in `exclude`, with margin `clash · r_cov(atom)`. The
+/// tool's own extent is in the envelope, not here.
 pub fn obstacles_for(
     scene: &Scene,
     tool: usize,
