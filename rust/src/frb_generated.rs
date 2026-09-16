@@ -16609,7 +16609,8 @@ impl SseDecode
         let mut var_ghost = <Vec<
             crate::api::structure_designer::structure_designer_api_types::APIGhostAtom,
         >>::sse_decode(deserializer);
-        return crate::api::structure_designer::structure_designer_api_types::APIMechanosynthCandidate{index: var_index, residual: var_residual, exact: var_exact, mirrored: var_mirrored, approximate: var_approximate, ghost: var_ghost};
+        let mut var_blocked = <String>::sse_decode(deserializer);
+        return crate::api::structure_designer::structure_designer_api_types::APIMechanosynthCandidate{index: var_index, residual: var_residual, exact: var_exact, mirrored: var_mirrored, approximate: var_approximate, ghost: var_ghost, blocked: var_blocked};
     }
 }
 
@@ -16751,7 +16752,8 @@ impl SseDecode
         let mut var_toolReason = <String>::sse_decode(deserializer);
         let mut var_offerable = <bool>::sse_decode(deserializer);
         let mut var_muted = <bool>::sse_decode(deserializer);
-        return crate::api::structure_designer::structure_designer_api_types::APIMechanosynthOffer{op: var_op, note: var_note, candidate_count: var_candidateCount, best_residual: var_bestResidual, fits: var_fits, exact: var_exact, mirrored: var_mirrored, approximate: var_approximate, ghost: var_ghost, candidates: var_candidates, tool_type: var_toolType, tool_state: var_toolState, tool_ready: var_toolReady, tool_reason: var_toolReason, offerable: var_offerable, muted: var_muted};
+        let mut var_blocked = <String>::sse_decode(deserializer);
+        return crate::api::structure_designer::structure_designer_api_types::APIMechanosynthOffer{op: var_op, note: var_note, candidate_count: var_candidateCount, best_residual: var_bestResidual, fits: var_fits, exact: var_exact, mirrored: var_mirrored, approximate: var_approximate, ghost: var_ghost, candidates: var_candidates, tool_type: var_toolType, tool_state: var_toolState, tool_ready: var_toolReady, tool_reason: var_toolReason, offerable: var_offerable, muted: var_muted, blocked: var_blocked};
     }
 }
 
@@ -25248,6 +25250,7 @@ impl flutter_rust_bridge::IntoDart
             self.mirrored.into_into_dart().into_dart(),
             self.approximate.into_into_dart().into_dart(),
             self.ghost.into_into_dart().into_dart(),
+            self.blocked.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -25454,6 +25457,7 @@ impl flutter_rust_bridge::IntoDart
             self.tool_reason.into_into_dart().into_dart(),
             self.offerable.into_into_dart().into_dart(),
             self.muted.into_into_dart().into_dart(),
+            self.blocked.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -30414,6 +30418,7 @@ impl SseEncode
         <bool>::sse_encode(self.mirrored, serializer);
         <bool>::sse_encode(self.approximate, serializer);
         <Vec<crate::api::structure_designer::structure_designer_api_types::APIGhostAtom>>::sse_encode(self.ghost, serializer);
+        <String>::sse_encode(self.blocked, serializer);
     }
 }
 
@@ -30515,6 +30520,7 @@ impl SseEncode
         <String>::sse_encode(self.tool_reason, serializer);
         <bool>::sse_encode(self.offerable, serializer);
         <bool>::sse_encode(self.muted, serializer);
+        <String>::sse_encode(self.blocked, serializer);
     }
 }
 

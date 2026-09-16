@@ -14,10 +14,12 @@
 /// Three rules are load-bearing rather than decorative:
 ///
 /// - **Blocked rows cannot be placed.** They are the `offerable == false`
-///   entries — a **near miss** (`fits == false`, shown with its residual) or a
+///   entries — a **near miss** (`fits == false`, shown with its residual), a
 ///   row whose **tool is not ready** (`fits == true`, shown with the kernel's
 ///   reason where the residual would be: *habst_tool is spent*, *no molecule
-///   tagged `probe` on the tools pin*). Both sit
+///   tagged `probe` on the tools pin*), or a row whose **every placement is
+///   refused** by a pattern check (`blocked` non-empty: the clicked atom's bond
+///   count, or the atoms every orientation would land on). All three sit
 ///   below a rule, dimmed, and with no apply button. They *are* selectable —
 ///   seeing the amber ghost is half the answer to "why not here?" — but a click
 ///   on one also replaces the row with the reason and inserts nothing. There is
@@ -27,8 +29,16 @@
 ///   and the honest fixes are the two the message names. A tool-blocked row's
 ///   fix is different in kind — it is a *step*, the recharge, not an edit to
 ///   the library — so the two refusals say different things. The kernel refuses
-///   both independently (`mechanosynth_edit_choose`), so this is the
+///   all of them independently (`mechanosynth_edit_choose`), so this is the
 ///   explanation, not the enforcement.
+/// - **A refusal is per *candidate*, and a row is only as blocked as all of
+///   them.** The steric check's motivating row is mixed: one orientation of a
+///   donation is clean and the mirrored one lands in the bulk
+///   (`doc/design_mechanosynth_pattern_checks.md` §5.2). Such a row stays
+///   **above** the rule, expanded, and only the refused variants are dimmed —
+///   in place, under their group header, never dragged below the rule away
+///   from the siblings they are an alternative to. A row goes below the rule
+///   only when there is no way at all of placing it.
 /// - **Hovering a row previews it, after a delay; clicking one places it.**
 ///   The preview is a real object in the scene — decorator ghosts, tessellated
 ///   with the workpiece — so showing it costs a synchronous evaluation on the
@@ -188,6 +198,14 @@ class _Row {
   /// would be. Empty on a ready row.
   final String toolReason;
 
+  /// Why a pattern check refuses this placement — the clicked atom's bond
+  /// count, or the atom it would land on — in the kernel's own words. Empty
+  /// when nothing refuses it.
+  ///
+  /// On a **variant** it is that candidate's; on a **single** row it is the
+  /// row's, set only when every way of placing it is refused.
+  final String blockedReason;
+
   final double residual;
   final List<APIGhostAtom> ghost;
 
@@ -220,6 +238,7 @@ class _Row {
     this.toolType = '',
     this.toolState = '',
     this.toolReason = '',
+    this.blockedReason = '',
     this.ordinal = 0,
     this.ordinalCount = 0,
     this.muted = false,
@@ -229,9 +248,23 @@ class _Row {
   /// header can do neither.
   bool get isSelectable => kind != _RowKind.group;
 
-  /// Whether the row sits below the rule: it cannot be committed, either
-  /// because it does not fit or because its tool is not ready.
+  /// Whether the row cannot be committed: a near miss, a row whose tool is not
+  /// ready, or a placement a pattern check refuses.
   bool get isBlocked => !offerable;
+
+  /// Whether the row sits **below the rule**, with the other things that cannot
+  /// be placed.
+  ///
+  /// A refused **variant** does not: it is one orientation of an operation that
+  /// has a good one, and it belongs under its group header beside the sibling
+  /// it is the alternative to. Moving it below the rule would separate the two
+  /// halves of a single choice.
+  bool get belowRule => isBlocked && kind != _RowKind.variant;
+
+  /// What `_refusedKey` holds while this row's reason is showing. Per candidate,
+  /// not per operation: a mixed row's two variants are refused separately, and
+  /// only one of them may be.
+  String get refusalKey => '$op#$candidateIndex';
 
   /// `habst_tool · charged`, for the annotation on a ready row. Empty when the
   /// row carries no tool at all.
@@ -364,9 +397,13 @@ class _MechanosynthOfferPopupState extends State<MechanosynthOfferPopup> {
   /// The typed prefix. Filters by operation name; never re-queries.
   String _filter = '';
 
-  /// The near-miss row whose reason is currently shown in place of its normal
-  /// content, if any.
-  String? _refused;
+  /// The blocked row whose reason is currently shown in place of its normal
+  /// content, as its [_Row.refusalKey], if any.
+  ///
+  /// Keyed by **candidate**, not by operation: a mixed row lists one clean
+  /// placement and one refused one under the same name, and clicking the
+  /// refused one must not blank out its sibling.
+  String? _refusedKey;
 
   /// What was last reported through `onPreview`, so a rebuild that leaves the
   /// selection where it was does not report it again — each report is an
@@ -427,7 +464,7 @@ class _MechanosynthOfferPopupState extends State<MechanosynthOfferPopup> {
       _highlight = -1;
       _reportedKey = null;
       _filter = '';
-      _refused = null;
+      _refusedKey = null;
       _hovered = -1;
     }
     // Muting a row removes it from the list, so every index below it shifts.
@@ -478,12 +515,18 @@ class _MechanosynthOfferPopupState extends State<MechanosynthOfferPopup> {
                       approximate: offer.approximate,
                       residual: offer.bestResidual,
                     )
-                  : offer.toolReason,
+                  // A spent tip comes first: when both a pattern check and the
+                  // instrument refuse the row, the instrument is the one with a
+                  // step for a fix.
+                  : offer.toolReason.isNotEmpty
+                      ? offer.toolReason
+                      : offer.blocked,
           fits: offer.fits,
           offerable: offer.offerable,
           toolType: offer.toolType,
           toolState: offer.toolState,
           toolReason: offer.toolReason,
+          blockedReason: offer.blocked,
           residual: offer.bestResidual,
           ghost: offer.ghost,
           muted: _isMuted(offer),
@@ -514,16 +557,22 @@ class _MechanosynthOfferPopupState extends State<MechanosynthOfferPopup> {
           candidateIndex: candidate.index,
           title: '',
           subtitle: '',
-          badge: _badge(
-            exact: candidate.exact,
-            approximate: candidate.approximate,
-            residual: candidate.residual,
-            mirrored: candidate.mirrored,
-          ),
+          // **A refused variant shows why, where its fit facts would be.** It
+          // is one orientation of an operation whose siblings are placeable,
+          // so the row stays here, dimmed, and says what is in the way.
+          badge: candidate.blocked.isNotEmpty
+              ? candidate.blocked
+              : _badge(
+                  exact: candidate.exact,
+                  approximate: candidate.approximate,
+                  residual: candidate.residual,
+                  mirrored: candidate.mirrored,
+                ),
           fits: true,
-          offerable: true,
+          offerable: candidate.blocked.isEmpty,
           toolType: offer.toolType,
           toolState: offer.toolState,
+          blockedReason: candidate.blocked,
           residual: candidate.residual,
           ghost: candidate.ghost,
           ordinal: i + 1,
@@ -614,7 +663,7 @@ class _MechanosynthOfferPopupState extends State<MechanosynthOfferPopup> {
     }
     setState(() {
       _highlight = next;
-      _refused = null;
+      _refusedKey = null;
     });
     _reportPreview();
   }
@@ -649,9 +698,10 @@ class _MechanosynthOfferPopupState extends State<MechanosynthOfferPopup> {
   void _take(_Row row) {
     if (row.isBlocked) {
       // The refusal, in place of the row: an over-gate fit says the library has
-      // not computed this environment, and a blocked tool says which state it
-      // is in. Both have honest fixes, and the message names them.
-      setState(() => _refused = row.op);
+      // not computed this environment, a blocked tool says which state it is
+      // in, and a refused placement says what is in the way. All three have
+      // honest fixes, and the message names them.
+      setState(() => _refusedKey = row.refusalKey);
       return;
     }
     widget.onChoose(row.op, row.candidateIndex);
@@ -713,7 +763,7 @@ class _MechanosynthOfferPopupState extends State<MechanosynthOfferPopup> {
         character.trim().isNotEmpty) {
       setState(() {
         _filter += character;
-        _refused = null;
+        _refusedKey = null;
         // Filtering only hides rows; it must not spend an evaluation picking a
         // new selection for the user.
         _highlight = -1;
@@ -729,10 +779,12 @@ class _MechanosynthOfferPopupState extends State<MechanosynthOfferPopup> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final rows = _rows;
-    // Above the rule: what can be committed. Below it: near misses *and*
-    // tool-blocked rows, which the kernel has already sorted after them.
-    final applicable = rows.where((row) => !row.isBlocked).toList();
-    final nearMisses = rows.where((row) => row.isBlocked).toList();
+    // Above the rule: what can be committed, plus the refused *variants* of
+    // rows that can — those belong beside the sibling they are an alternative
+    // to. Below it: near misses, tool-blocked rows and rows with no placeable
+    // candidate at all, which the kernel has already sorted after them.
+    final applicable = rows.where((row) => !row.belowRule).toList();
+    final nearMisses = rows.where((row) => row.belowRule).toList();
 
     return Focus(
       focusNode: _focusNode,
@@ -973,20 +1025,26 @@ class _MechanosynthOfferPopupState extends State<MechanosynthOfferPopup> {
     final titleColor =
         dim ? scheme.onSurfaceVariant.withValues(alpha: 0.6) : scheme.onSurface;
 
-    if (_refused == row.op && dim) {
+    if (_refusedKey == row.refusalKey && dim) {
       // Two different refusals, and they have different fixes. An over-gate fit
       // says the *library* has not computed this environment; a blocked tool
       // says the instrument is in the wrong state, and the fix is a step, not
       // an edit to the library.
-      final reason = row.fits
-          ? '${row.toolReason}. Author the step that puts it back in the '
-              'state this operation needs — a recharge is a placement on the '
-              'reservoir like any other.'
-          : '${formatNatural(row.residual, 2)} Å off; this host is not an '
+      final reason = !row.fits
+          ? '${formatNatural(row.residual, 2)} Å off; this host is not an '
               'environment ${row.op} was calculated for. Add the variant, or '
-              "loosen the library's tolerance.";
+              "loosen the library's tolerance."
+          : row.toolReason.isNotEmpty
+              ? '${row.toolReason}. Author the step that puts it back in the '
+                  'state this operation needs — a recharge is a placement on '
+                  'the reservoir like any other.'
+              // A pattern check: the library is right and the *site* is wrong,
+              // so neither fix above applies. What is left is another
+              // orientation, another host, or a step that clears the way.
+              : '${row.blockedReason}. Try another way of placing it, another '
+                  'host, or a step that clears the way first.';
       return Container(
-        key: Key('mechanosynth_popup_reason_${row.op}'),
+        key: Key('mechanosynth_popup_reason_${row.op}_${row.candidateIndex}'),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         color: scheme.errorContainer.withValues(alpha: 0.4),
         child: Text(
@@ -1027,7 +1085,7 @@ class _MechanosynthOfferPopupState extends State<MechanosynthOfferPopup> {
         // the row.
         if (row.isBlocked) {
           _setHighlight(index);
-          setState(() => _refused = row.op);
+          setState(() => _refusedKey = row.refusalKey);
           return;
         }
         _take(row);

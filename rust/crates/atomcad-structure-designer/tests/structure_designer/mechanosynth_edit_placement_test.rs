@@ -15,7 +15,7 @@
 
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::io::xyz_loader::load_xyz;
-use atomcad_structure_designer::mechanosynth_edit_ops::StepMetadataField;
+use atomcad_structure_designer::mechanosynth_edit_ops::{OfferRow, OfferSweep, StepMetadataField};
 use atomcad_structure_designer::nodes::import_xyz::ImportXYZData;
 use atomcad_structure_designer::nodes::mechanosynth_edit::{MechanosynthEditData, ToolState};
 use atomcad_structure_designer::nodes::ops_library::OpsLibraryData;
@@ -28,6 +28,14 @@ const NET: &str = "test";
 /// Sub-cluster origins of `place_workpiece.xyz`.
 const A: DVec3 = DVec3::new(0.0, 0.0, 0.0); // 3-coordinate Si with three Si frames
 const B: DVec3 = DVec3::new(20.0, 0.0, 0.0); // Si with two partners at 3.5 Å
+
+/// Sub-cluster origins of `place_workpiece_blocked.xyz`, the occupied-site
+/// variant. `land4`'s `before` is planar and its `after` puts a hydrogen off
+/// the plane, so each of these hosts has exactly two ways of being placed —
+/// one per side — and the fixture parks a silicon on one side of [`MIXED`] and
+/// on both sides of [`FULLY_BLOCKED`].
+const MIXED: DVec3 = DVec3::new(20.0, 20.0, 0.0);
+const FULLY_BLOCKED: DVec3 = DVec3::new(40.0, 20.0, 0.0);
 
 fn fixture(name: &str) -> String {
     fixture_path_str(&format!("mechanosynth/{name}"))
@@ -75,17 +83,48 @@ fn setup() -> (StructureDesigner, u64) {
     (designer, node_id)
 }
 
+/// [`setup`], wired to the **occupied-site** workpiece instead: same library,
+/// same node, a base with atoms parked where `land4` wants to put its hydrogen.
+/// Returns the editor's node id and the workpiece its ids are numbered in.
+fn setup_blocked() -> (StructureDesigner, u64, AtomicStructure) {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network(NET);
+    designer.set_active_node_network_name(Some(NET.to_string()));
+
+    let path = fixture("place_workpiece_blocked.xyz");
+    let structure = load_xyz(&path, true).expect("the fixture loads");
+    let base_id = designer.add_node("import_xyz", DVec2::new(-600.0, 0.0));
+    with_data::<ImportXYZData, _>(&mut designer, base_id, |data| {
+        data.file_name = Some(path.clone());
+        data.atomic_structure = load_xyz(&path, true).ok();
+    });
+    let ops_id = designer.add_node("ops_library", DVec2::new(-600.0, 200.0));
+    with_data::<OpsLibraryData, _>(&mut designer, ops_id, |data| {
+        data.file = Some(fixture("place_ops.json"));
+        data.reload_missing(None);
+    });
+
+    let node_id = designer.add_node("mechanosynth_edit", DVec2::new(0.0, 0.0));
+    designer.connect_nodes(base_id, 0, node_id, 0);
+    designer.connect_nodes(ops_id, 0, node_id, 1);
+    designer.undo_stack.clear();
+    (designer, node_id, structure)
+}
+
 fn workpiece() -> AtomicStructure {
     load_xyz(&fixture("place_workpiece.xyz"), true).expect("the fixture loads")
 }
 
-/// The id of the only atom at `pos`, in the *same numbering* the editor sees:
-/// the node re-evaluates the same loader, so ids agree.
-fn at(pos: DVec3) -> u32 {
-    let s = workpiece();
-    let found = s.get_atoms_in_radius(&pos, 1e-4);
+/// The id of the only atom at `pos` of `structure`, in the *same numbering* the
+/// editor sees: the node re-evaluates the same loader, so ids agree.
+fn at_in(structure: &AtomicStructure, pos: DVec3) -> u32 {
+    let found = structure.get_atoms_in_radius(&pos, 1e-4);
     assert_eq!(found.len(), 1, "expected exactly one atom at {pos:?}");
     found[0]
+}
+
+fn at(pos: DVec3) -> u32 {
+    at_in(&workpiece(), pos)
 }
 
 fn data(designer: &StructureDesigner, node_id: u64) -> &MechanosynthEditData {
@@ -445,6 +484,172 @@ fn choosing_a_near_miss_is_refused_with_its_residual() {
     assert!(error.contains("off here"), "{error}");
     assert!(data(&designer, node_id).authored.is_empty());
     assert_eq!(designer.undo_stack.history_len(), 0);
+}
+
+// ============================================================================
+// Refused placements — the pattern checks, as the popup sees them
+// ============================================================================
+//
+// `doc/design_mechanosynth_pattern_checks.md` §5.2: blocking is a property of a
+// **candidate**, and a row is only as blocked as all of its candidates. The
+// interesting row is the mixed one — one orientation clean, one landing on an
+// atom — because it has to stay offerable while the bad half is refused.
+
+/// The row `op` occupies in the sweep at `atom_id`.
+fn row_at(sweep: &OfferSweep, op: &str) -> OfferRow {
+    sweep
+        .rows
+        .iter()
+        .find(|row| row.op == op)
+        .unwrap_or_else(|| {
+            panic!(
+                "no {op} row; got {:?}",
+                sweep.rows.iter().map(|r| &r.op).collect::<Vec<_>>()
+            )
+        })
+        .clone()
+}
+
+#[test]
+fn a_mixed_row_stays_offerable_and_carries_its_refusal_on_the_candidate() {
+    let (mut designer, node_id, structure) = setup_blocked();
+    let sweep = designer
+        .mechanosynth_edit_offers(&[], node_id, at_in(&structure, MIXED))
+        .expect("the atom exists");
+    let row = row_at(&sweep, "land4");
+
+    assert!(row.fits);
+    assert!(row.offerable, "one good way of placing it is enough");
+    assert_eq!(
+        row.blocked, None,
+        "a mixed row is not a blocked row: it sits above the rule"
+    );
+    assert_eq!(
+        row.candidates.len(),
+        2,
+        "one reaction per side of the plane"
+    );
+    let refused: Vec<&_> = row
+        .candidates
+        .iter()
+        .filter(|candidate| candidate.blocked.is_some())
+        .collect();
+    assert_eq!(refused.len(), 1, "the occupied side, and only it");
+    let reason = refused[0].blocked.as_deref().expect("a reason");
+    assert!(reason.contains("would put"), "{reason}");
+    assert!(
+        row.candidates[0].blocked.is_none(),
+        "ranked first: index 0 of an offerable row is always placeable"
+    );
+    assert!(
+        !refused[0].ghost.is_empty(),
+        "a refused candidate is kept so it can be previewed"
+    );
+}
+
+#[test]
+fn choosing_a_refused_candidate_is_refused_and_its_clean_sibling_commits() {
+    let (mut designer, node_id, structure) = setup_blocked();
+    let sweep = designer
+        .mechanosynth_edit_offers(&[], node_id, at_in(&structure, MIXED))
+        .expect("the atom exists");
+    let row = row_at(&sweep, "land4");
+    let refused = row
+        .candidates
+        .iter()
+        .find(|candidate| candidate.blocked.is_some())
+        .expect("one side is occupied");
+
+    let error = designer
+        .mechanosynth_edit_choose(&[], node_id, "land4", refused.index)
+        .expect_err("that way of placing it lands on an atom");
+    assert!(error.contains("land4"), "{error}");
+    assert!(error.contains("would put"), "{error}");
+    assert!(
+        data(&designer, node_id).authored.is_empty(),
+        "and it inserted nothing"
+    );
+    assert_eq!(designer.undo_stack.history_len(), 0);
+
+    // The clean sibling of the very same row commits, which is the whole point
+    // of refusing by candidate rather than by row.
+    let clean = row
+        .candidates
+        .iter()
+        .find(|candidate| candidate.blocked.is_none())
+        .expect("the free side");
+    designer
+        .mechanosynth_edit_choose(&[], node_id, "land4", clean.index)
+        .expect("the free side is placeable");
+    assert_eq!(data(&designer, node_id).authored.len(), 1);
+    assert_eq!(designer.undo_stack.history_len(), 1);
+}
+
+#[test]
+fn a_row_with_no_placeable_candidate_is_blocked_and_refused_at_the_row() {
+    let (mut designer, node_id, structure) = setup_blocked();
+    let sweep = designer
+        .mechanosynth_edit_offers(&[], node_id, at_in(&structure, FULLY_BLOCKED))
+        .expect("the atom exists");
+    let row = row_at(&sweep, "land4");
+
+    assert!(row.fits, "the fit is real; the site is not");
+    assert!(!row.offerable, "there is no way of placing it here");
+    let reason = row.blocked.as_deref().expect("every candidate is refused");
+    assert!(reason.contains("would put"), "{reason}");
+    assert!(
+        row.candidates
+            .iter()
+            .all(|candidate| candidate.blocked.is_some()),
+        "both sides are occupied"
+    );
+
+    // Refused **at the row**, before the index is looked at: which of several
+    // impossible placements was asked for is not the answer the user needs.
+    for index in [0, 1] {
+        let error = designer
+            .mechanosynth_edit_choose(&[], node_id, "land4", index)
+            .expect_err("nothing here is placeable");
+        assert!(error.contains("cannot be placed here"), "{error}");
+    }
+    assert!(data(&designer, node_id).authored.is_empty());
+    assert_eq!(designer.undo_stack.history_len(), 0);
+}
+
+#[test]
+fn previewing_a_refused_candidate_flags_it_the_way_a_near_miss_is_flagged() {
+    // The amber ghost means "this is being shown, not placed", which is as true
+    // of a placement that lands on an atom as of one outside the gate.
+    let (mut designer, node_id, structure) = setup_blocked();
+    let sweep = designer
+        .mechanosynth_edit_offers(&[], node_id, at_in(&structure, MIXED))
+        .expect("the atom exists");
+    let row = row_at(&sweep, "land4");
+    let refused = row
+        .candidates
+        .iter()
+        .find(|candidate| candidate.blocked.is_some())
+        .expect("one side is occupied");
+
+    designer
+        .mechanosynth_edit_select_preview(&[], node_id, "land4", refused.index)
+        .expect("a refused candidate previews like anything else");
+    let placement = &data(&designer, node_id).placement;
+    assert!(!placement.preview_ghosts.is_empty());
+    assert!(
+        placement.preview_near_miss,
+        "shown, not placed — the row fits, so only the refusal can say so"
+    );
+
+    let clean = row
+        .candidates
+        .iter()
+        .find(|candidate| candidate.blocked.is_none())
+        .expect("the free side");
+    designer
+        .mechanosynth_edit_select_preview(&[], node_id, "land4", clean.index)
+        .expect("previews");
+    assert!(!data(&designer, node_id).placement.preview_near_miss);
 }
 
 #[test]

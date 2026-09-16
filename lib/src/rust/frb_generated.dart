@@ -18977,8 +18977,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIMechanosynthCandidate dco_decode_api_mechanosynth_candidate(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 6)
-      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
     return APIMechanosynthCandidate(
       index: dco_decode_i_32(arr[0]),
       residual: dco_decode_f_64(arr[1]),
@@ -18986,6 +18986,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       mirrored: dco_decode_bool(arr[3]),
       approximate: dco_decode_bool(arr[4]),
       ghost: dco_decode_list_api_ghost_atom(arr[5]),
+      blocked: dco_decode_String(arr[6]),
     );
   }
 
@@ -19081,8 +19082,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIMechanosynthOffer dco_decode_api_mechanosynth_offer(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 16)
-      throw Exception('unexpected arr length: expect 16 but see ${arr.length}');
+    if (arr.length != 17)
+      throw Exception('unexpected arr length: expect 17 but see ${arr.length}');
     return APIMechanosynthOffer(
       op: dco_decode_String(arr[0]),
       note: dco_decode_String(arr[1]),
@@ -19100,6 +19101,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       toolReason: dco_decode_String(arr[13]),
       offerable: dco_decode_bool(arr[14]),
       muted: dco_decode_bool(arr[15]),
+      blocked: dco_decode_String(arr[16]),
     );
   }
 
@@ -24725,13 +24727,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_mirrored = sse_decode_bool(deserializer);
     var var_approximate = sse_decode_bool(deserializer);
     var var_ghost = sse_decode_list_api_ghost_atom(deserializer);
+    var var_blocked = sse_decode_String(deserializer);
     return APIMechanosynthCandidate(
         index: var_index,
         residual: var_residual,
         exact: var_exact,
         mirrored: var_mirrored,
         approximate: var_approximate,
-        ghost: var_ghost);
+        ghost: var_ghost,
+        blocked: var_blocked);
   }
 
   @protected
@@ -24865,6 +24869,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_toolReason = sse_decode_String(deserializer);
     var var_offerable = sse_decode_bool(deserializer);
     var var_muted = sse_decode_bool(deserializer);
+    var var_blocked = sse_decode_String(deserializer);
     return APIMechanosynthOffer(
         op: var_op,
         note: var_note,
@@ -24881,7 +24886,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         toolReady: var_toolReady,
         toolReason: var_toolReason,
         offerable: var_offerable,
-        muted: var_muted);
+        muted: var_muted,
+        blocked: var_blocked);
   }
 
   @protected
@@ -31202,6 +31208,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.mirrored, serializer);
     sse_encode_bool(self.approximate, serializer);
     sse_encode_list_api_ghost_atom(self.ghost, serializer);
+    sse_encode_String(self.blocked, serializer);
   }
 
   @protected
@@ -31291,6 +31298,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.toolReason, serializer);
     sse_encode_bool(self.offerable, serializer);
     sse_encode_bool(self.muted, serializer);
+    sse_encode_String(self.blocked, serializer);
   }
 
   @protected

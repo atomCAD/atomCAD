@@ -98,6 +98,15 @@ pub struct OfferRow {
     /// **Not a reason to refuse it.** Mute filters the sweep; a row that is in
     /// the list is placeable, whatever put it there.
     pub muted: bool,
+    /// Why **every** way of placing this operation here is refused, in the
+    /// words the row shows where its residual would be.
+    ///
+    /// `None` for a row with at least one placeable candidate — a *mixed* row
+    /// stays above the rule and dims only the candidates that are refused
+    /// (`doc/design_mechanosynth_pattern_checks.md` §5.2). Set, it puts the row
+    /// below the rule the way a near miss goes there, and `choose` refuses it
+    /// at the row before it looks at the index.
+    pub blocked: Option<String>,
 }
 
 /// One row of the candidate list: which way of placing the chosen operation,
@@ -111,6 +120,13 @@ pub struct CandidateRow {
     pub mirrored: bool,
     pub approximate: bool,
     pub ghost: Vec<GhostAtom>,
+    /// Why this particular placement cannot be committed, when it cannot: the
+    /// clicked atom's degree, or the atom this way of placing it would land on.
+    ///
+    /// A refused candidate is **kept, at its index**, because the reason is
+    /// about the ghost the user is looking at — so it previews like any other
+    /// and `choose` refuses it by index.
+    pub blocked: Option<String>,
 }
 
 /// An applicability sweep, with everything the popup needs to place and write
@@ -187,6 +203,7 @@ fn offer_sweep(
                             ghost: operation
                                 .map(|op| preview_atoms(workpiece, op, candidate))
                                 .unwrap_or_default(),
+                            blocked: candidate.refusal.map(|refusal| refusal.reason(&row.op)),
                         })
                     })
                     .collect();
@@ -209,6 +226,7 @@ fn offer_sweep(
                     tool: row.tool.clone(),
                     offerable: row.offerable(),
                     muted: muted.contains(&row.op),
+                    blocked: row.blocked(),
                 }
             })
             .collect(),
@@ -821,7 +839,14 @@ impl StructureDesigner {
                         .unwrap_or_else(|| format!("{} is not ready", tool.tool_type))
                 ));
             }
-            row.candidates
+            // **Refused at the row before the index is looked at**, when every
+            // way of placing it is refused: which of several impossible
+            // placements was asked for is not the answer the user needs.
+            if let Some(reason) = row.blocked() {
+                return Err(format!("'{op}' cannot be placed here: {reason}"));
+            }
+            let candidate = row
+                .candidates
                 .get(index)
                 .ok_or_else(|| {
                     format!(
@@ -829,7 +854,17 @@ impl StructureDesigner {
                         row.candidates.len()
                     )
                 })?
-                .clone()
+                .clone();
+            // **And by candidate**, for the mixed row the steric check is for:
+            // one orientation of a donation is clean and the other lands in the
+            // bulk, so the row is offerable and that one placement is not.
+            if let Some(refusal) = candidate.refusal {
+                return Err(format!(
+                    "that way of placing '{op}' is refused: {}",
+                    refusal.reason(op)
+                ));
+            }
+            candidate
         };
         self.commit_candidate(scope_path, node_id, &candidate)
     }
@@ -875,7 +910,13 @@ impl StructureDesigner {
                 // rather than mixed in with placeable candidates, so the
                 // preview has to look there for it.
                 match row.preview_at(index) {
-                    Some(candidate) => (candidate.clone(), !row.fits),
+                    // Amber for a **refused** candidate too, not only for a
+                    // near miss: the colour means "this is being shown, not
+                    // placed", which is as true of a placement that lands in
+                    // the bulk as of one outside the gate.
+                    Some(candidate) => {
+                        (candidate.clone(), !row.fits || candidate.refusal.is_some())
+                    }
                     None => return Err(format!("'{op}' has no candidate {index} here")),
                 }
             }

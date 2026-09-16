@@ -2862,6 +2862,11 @@ class APIMechanosynthCandidate {
   final bool approximate;
   final List<APIGhostAtom> ghost;
 
+  /// Why *this* way of placing the operation cannot be committed; empty when
+  /// it can. A refused candidate keeps its index and is shown dimmed inline
+  /// with this text — it previews like a near miss, and `choose` refuses it.
+  final String blocked;
+
   const APIMechanosynthCandidate({
     required this.index,
     required this.residual,
@@ -2869,6 +2874,7 @@ class APIMechanosynthCandidate {
     required this.mirrored,
     required this.approximate,
     required this.ghost,
+    required this.blocked,
   });
 
   @override
@@ -2878,7 +2884,8 @@ class APIMechanosynthCandidate {
       exact.hashCode ^
       mirrored.hashCode ^
       approximate.hashCode ^
-      ghost.hashCode;
+      ghost.hashCode ^
+      blocked.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -2890,7 +2897,8 @@ class APIMechanosynthCandidate {
           exact == other.exact &&
           mirrored == other.mirrored &&
           approximate == other.approximate &&
-          ghost == other.ghost;
+          ghost == other.ghost &&
+          blocked == other.blocked;
 }
 
 /// A maximal run of consecutive steps sharing a `(phase, layer)` — the unit the
@@ -3274,6 +3282,15 @@ class APIMechanosynthOffer {
   /// is in the list is placeable whatever put it there.
   final bool muted;
 
+  /// Why **every** way of placing this operation here is refused — the
+  /// clicked atom's bond count, or the atoms each placement would land on.
+  /// Empty when at least one candidate is placeable.
+  ///
+  /// Set, the row sits below the rule the way a near miss does, with this
+  /// text where its residual would be. A **mixed** row leaves it empty and
+  /// dims only the candidates that carry their own.
+  final String blocked;
+
   const APIMechanosynthOffer({
     required this.op,
     required this.note,
@@ -3291,6 +3308,7 @@ class APIMechanosynthOffer {
     required this.toolReason,
     required this.offerable,
     required this.muted,
+    required this.blocked,
   });
 
   @override
@@ -3310,7 +3328,8 @@ class APIMechanosynthOffer {
       toolReady.hashCode ^
       toolReason.hashCode ^
       offerable.hashCode ^
-      muted.hashCode;
+      muted.hashCode ^
+      blocked.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -3332,7 +3351,8 @@ class APIMechanosynthOffer {
           toolReady == other.toolReady &&
           toolReason == other.toolReason &&
           offerable == other.offerable &&
-          muted == other.muted;
+          muted == other.muted &&
+          blocked == other.blocked;
 }
 
 /// An applicability sweep: what the library can do at one atom, plus what the

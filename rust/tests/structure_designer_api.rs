@@ -45,6 +45,9 @@ mod isosurface_distribution_test;
 #[path = "structure_designer_api/mechanosynth_api_test.rs"]
 mod mechanosynth_api_test;
 
+#[path = "structure_designer_api/mechanosynth_edit_offers_view_test.rs"]
+mod mechanosynth_edit_offers_view_test;
+
 #[path = "structure_designer_api/mechanosynth_edit_ops_view_test.rs"]
 mod mechanosynth_edit_ops_view_test;
 

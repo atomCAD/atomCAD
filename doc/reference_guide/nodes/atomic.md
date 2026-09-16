@@ -1754,8 +1754,9 @@ same thing under either pin, because base atom ids are shared between them.
 
 ![TODO(image): the popup's anatomy — header, an applicable row with its badge
 and info icon, a group header with two indented variant rows carrying direction
-arrows, and below the rule a near-miss row showing its residual beside a
-tool-blocked row showing *habst_tool is spent*](TODO)
+arrows, one of them dimmed with *would put H 0.42 Å from the Si of atom 912*,
+and below the rule a near-miss row showing its residual beside a tool-blocked
+row showing *habst_tool is spent*](TODO)
 
 The answer to a click opens **beside the atom you clicked**, not in the property
 panel — the list follows the atom as you orbit, and clamps to the viewport edge
@@ -1773,9 +1774,9 @@ the ⌖ button in the header snaps it back to the automatic placement.
 **Resting the pointer on a row ghosts it on the workpiece; clicking one places
 it.** The ghost is translucent atoms *and bonds* in the scene itself, behind
 whatever is in front of them: added green, deleted red, moved blue with a trail from where they
-were, an element swap amber. A row below the rule — a near miss, or a fit whose
-tool is not ready — is ghosted in amber throughout, because it is for looking
-at, not for placing.
+were, an element swap amber. Anything that cannot be placed — a near miss, a fit
+whose tool is not ready, a placement a check refuses — is ghosted in amber
+throughout, because it is for looking at, not for placing.
 
 Some operations move no atom at all. `bridge` and `bridge_c` in the silicon
 library have identical before and after atom lists and differ only in the bond
@@ -1791,9 +1792,9 @@ actually took — immediate on a small molecule, a little longer on a large slab
 
 - **Up / Down** move the selection, previewing each one. **Enter** places the
   selected row.
-- **Clicking a row below the rule** — a near miss, or a fit whose tool is not
-  ready — previews it in amber *and* replaces the row with the reason; it places
-  nothing, and neither does Enter on it.
+- **Clicking anything that cannot be placed** — a row below the rule, or a
+  dimmed placement of a row above it — previews it in amber *and* replaces the
+  row with the reason; it places nothing, and neither does Enter on it.
 - **Typing** filters the rows by the start of the operation name; **Backspace**
   undoes a letter. Filtering only hides rows — the library is not searched
   again, so it is instant however long the list, and it clears the selection
@@ -1807,6 +1808,22 @@ placement goes *as you are currently looking at it* (it re-aims as you orbit), a
 number, and its own badge, so a mirrored placement says `exact · mirrored`. The
 number is what tells two apart when their arrows agree, which happens when they
 are symmetric about the view axis; clicking one previews it either way.
+
+**A refused placement stays in the list, dimmed, and says why.** The checks of
+§*How a step is applied* decide one **placement** at a time, not one operation:
+a planar pattern usually fits both ways up, and it is routine for one of them to
+be clean while the mirrored one points into the bulk. Such a row stays **above
+the rule** with its good placements offered, and the refused ones are dimmed in
+place under the same name, carrying the reason where their `exact · mirrored`
+would be — *would put H 0.42 Å from the Si of atom 912*. Clicking one previews
+it in amber like a near miss, which is the useful thing to do with it: the
+ghost shows exactly what is in the way.
+
+A row goes **below the rule** only when there is no way at all of placing it —
+every placement refused, or the clicked atom itself is wrong for the operation
+(*si_donate_site needs a host with 3 bond(s); the clicked atom has 4*). Then the
+row carries that reason as its own badge, the way a near miss carries its
+residual, and it is refused before it asks which placement you meant.
 
 The operation's note lives on the ⓘ beside its name — hover it. The row itself
 stays short, which is what makes room for the variants.

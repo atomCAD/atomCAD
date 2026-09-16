@@ -1,7 +1,7 @@
 # Design: pattern checks in the mechanosynthesis engine — bonds, degree, anchors, steric clashes
 
-Status: **drafted and reviewed 2026-09-16**. Phases 0 (§8), 1 and 2 (§12)
-implemented 2026-09-16; Phases 3–4 and the out-of-repo generator work are not.
+Status: **drafted and reviewed 2026-09-16**. Phases 0 (§8), 1, 2 and 3 (§12)
+implemented 2026-09-16; Phase 4 and the out-of-repo generator work are not.
 
 Two things Phase 2 had to decide that this document left implicit:
 
@@ -896,9 +896,28 @@ manual walkthrough item.
 | **0** | duplicate-candidate fix (§8) — **done** | `place.rs`, two tests |
 | **1** | `/3`: closed-world bonds, `deg`, `anchors`, `clash` in the schema and parser; the anchor role rule; load-time validation of §3.5; bond and degree checks in `match_before` and in the placement search and role rule; new error variants — **done** | `schema.rs`, `parse.rs`, `apply.rs`, `place.rs`, `scene.rs`, tests, guide "The two files" / "How a step is applied" |
 | **2** | steric check: `Contact`, `Refusal::Clash`, blocked-last ranking, replay error; structure sanity in `build_scene` — **done** | `apply.rs`, `place.rs`, `scene.rs`, `schema.rs`, tests, guide "The two files" / "How a step is applied". The two nodes needed **no** change: both reach the engine through `build_scene`, so §6 covers them where they stand |
-| **3** | editor surfacing: `CandidateRow.blocked`, `OfferRow.blocked`, `choose` by candidate, API, popup (blocked candidates inline, fully blocked rows below the rule); guide "The offer popup" | `mechanosynth_edit_ops.rs`, `mechanosynth_edit_api.rs`, FRB codegen, `mechanosynth_offer_popup.dart` |
+| **3** | editor surfacing: `CandidateRow.blocked`, `OfferRow.blocked`, `choose` by candidate, API, popup (blocked candidates inline, fully blocked rows below the rule); guide "The offer popup" — **done** | `mechanosynth_edit_ops.rs`, `mechanosynth_edit_api.rs`, FRB codegen, `mechanosynth_offer_popup.dart` |
 | **4** | the guide page `op_libraries.md` and the move out of `atomic.md`; AGENTS pointers | docs |
 | **ext** | outside the repo, before Phase 1 lands: the generator writes `/3` — bonds among named atoms in both halves, `deg` as drawn, a frame atom off the plane for the precursor and the edge host, the format string; `anchors` only if an operation has primary atoms of different elements, which none in v3 has — and both libraries are regenerated and replayed | `mechanosynth/gen` |
+
+**Phase 3 had one thing to decide that §5.2 and §7 left implicit: a refused
+candidate does not cross the rule.** §5.2 says a mixed row "shows its blocked
+candidates dimmed inline", and §7 says a blocked candidate "is dimmed inline
+with that text where its residual would be" — but the popup's above/below
+partition is a single `offerable` question asked of every *row* in the list,
+variants included, so applying it unchanged would have taken the refused variant
+out from under its group header and parked it below the rule, beside the near
+misses and away from the sibling it is the alternative to. The partition
+predicate is therefore "not offerable **and not a variant**", and the shown
+reason is keyed by `(op, candidate index)` rather than by operation, so the two
+halves of one choice stay independent. The row-level refusals are untouched.
+
+Two smaller Phase 3 consequences, both of the same shape — *a refused candidate
+is not a near miss, but everything that treats a near miss as "shown, not
+placed" has to treat it as one*: `mechanosynth_edit_select_preview` sets
+`preview_near_miss` for a refused candidate too, so its ghost is amber; and the
+viewport's popup-height estimate counts a row's placements only when the row is
+`offerable`, which is what the popup expands on.
 
 **Phase 1 brought two pieces of §5.2/§7 forward, because without them it would
 have shipped a broken invariant.** The clicked atom's degree refusal has to

@@ -1356,7 +1356,10 @@ class _StructureDesignerViewportState
         0,
         (total, row) =>
             total +
-            (row.fits && row.candidates.length > 1
+            // `offerable`, not `fits`: the popup expands only a row it can
+            // actually place, so a row blocked by its tool or by a pattern
+            // check is one line however many placements it holds.
+            (row.offerable && row.candidates.length > 1
                 ? row.candidates.length + 1
                 : 1));
     final size =

@@ -37,7 +37,7 @@ APIGhostAtom _ghost(String kind) => APIGhostAtom(
     kind: kind, position: _origin, from: _origin, atomicNumber: 14);
 
 APIMechanosynthCandidate _candidate(int index,
-        {double residual = 0.0, bool mirrored = false}) =>
+        {double residual = 0.0, bool mirrored = false, String blocked = ''}) =>
     APIMechanosynthCandidate(
       index: index,
       residual: residual,
@@ -45,6 +45,9 @@ APIMechanosynthCandidate _candidate(int index,
       mirrored: mirrored,
       approximate: false,
       ghost: [_ghost('added')],
+      // Empty is "nothing refuses this placement"; a reason is what dims the
+      // variant in place and makes `choose` refuse it by index.
+      blocked: blocked,
     );
 
 APIMechanosynthOffer _offer(
@@ -58,6 +61,10 @@ APIMechanosynthOffer _offer(
   String toolState = '',
   String toolReason = '',
   bool muted = false,
+
+  /// Which candidate indices a pattern check refuses, and why. A row whose
+  /// *every* candidate is in here is blocked as a row.
+  Map<int, String> refused = const {},
 }) =>
     APIMechanosynthOffer(
       op: op,
@@ -73,7 +80,8 @@ APIMechanosynthOffer _offer(
       // anything else — it is simply never expanded into a choice.
       candidates: [
         for (var i = 0; i < (fits ? candidates : 1); i++)
-          _candidate(i, residual: residual, mirrored: i.isOdd),
+          _candidate(i,
+              residual: residual, mirrored: i.isOdd, blocked: refused[i] ?? ''),
       ],
       // An empty `toolType` is the state every row carries with the `tools`
       // pin unwired — no annotation at all, which is the modelling use.
@@ -81,8 +89,16 @@ APIMechanosynthOffer _offer(
       toolState: toolState,
       toolReady: toolReason.isEmpty,
       toolReason: toolReason,
-      // The kernel's own definition: it fits **and** its tool is ready.
-      offerable: fits && toolReason.isEmpty,
+      // The kernel's own definition: it fits, its tool is ready, **and** at
+      // least one candidate carries no refusal.
+      offerable: fits &&
+          toolReason.isEmpty &&
+          refused.length < (fits ? candidates : 1),
+      // Set only when every way of placing it is refused, which is what puts
+      // the row below the rule rather than dimming a variant in place.
+      blocked: refused.length == (fits ? candidates : 1) && refused.isNotEmpty
+          ? refused.values.first
+          : '',
       // Only a *show all here* sweep produces a muted row, and it is badged
       // rather than blocked — mute filters the sweep, never the commit.
       muted: muted,
@@ -231,7 +247,8 @@ void main() {
     // the reason in place of the row.
     expect(harness.chosen, isEmpty);
     expect(harness.previews.last, 'si_donate');
-    final reason = find.byKey(const Key('mechanosynth_popup_reason_si_donate'));
+    final reason =
+        find.byKey(const Key('mechanosynth_popup_reason_si_donate_0'));
     expect(reason, findsOneWidget);
     expect(
         find.textContaining(
@@ -485,7 +502,7 @@ void main() {
       expect(harness.chosen, isEmpty);
       // The refusal names the fix, and the fix for a spent tool is a *step*,
       // not an edit to the library.
-      expect(find.byKey(const Key('mechanosynth_popup_reason_habst')),
+      expect(find.byKey(const Key('mechanosynth_popup_reason_habst_0')),
           findsOneWidget);
       expect(find.textContaining('recharge'), findsOneWidget);
     });
@@ -668,6 +685,107 @@ void main() {
           previewDelay: Duration.zero, mutedOps: const {'si_donate_dimer'});
       await _key(tester, LogicalKeyboardKey.enter);
       expect(harness.chosen, isEmpty);
+    });
+  });
+
+  // ==========================================================================
+  // Refused placements (doc/design_mechanosynth_pattern_checks.md §5.2, §7)
+  // ==========================================================================
+  //
+  // A pattern check refuses a **candidate**, and a row is only as blocked as
+  // all of its candidates. The motivating row is mixed — one orientation of a
+  // donation is clean, the mirrored one lands in the bulk — and it has to stay
+  // above the rule, expanded, with the bad half dimmed *in place*. Dragging a
+  // refused variant below the rule would separate the two halves of a single
+  // choice; blocking the row would hide a perfectly good placement.
+  group('refused placements', () {
+    final offers = <APIMechanosynthOffer>[
+      // Two ways of placing it; the mirrored one lands on an atom.
+      _offer('land4',
+          candidates: 2,
+          refused: const {1: 'would put H 0.00 Å from the Si of atom 25'}),
+      _offer('expose'),
+      // Every way of placing it is refused: a row, not a variant.
+      _offer('land4_both', candidates: 2, refused: const {
+        0: 'would put H 0.00 Å from the Si of atom 31',
+        1: 'would put H 0.00 Å from the Si of atom 32',
+      }),
+      _offer('si_donate', fits: false, residual: 0.31),
+    ];
+
+    testWidgets('a mixed row stays above the rule, with its group expanded',
+        (tester) async {
+      await _pump(tester, offers: offers);
+      // Above the divider: the group header, both of its variants, and the
+      // clean row. Below it: the fully blocked row and the near miss.
+      expect(find.byKey(const Key('mechanosynth_popup_group_land4')),
+          findsOneWidget);
+      expect(find.byKey(const Key('mechanosynth_popup_row_land4_1')),
+          findsOneWidget,
+          reason: 'the refused variant is kept, in place, so it can be seen');
+      expect(find.byKey(const Key('mechanosynth_popup_group_land4_both')),
+          findsNothing,
+          reason: 'a row with nothing placeable is never expanded');
+      expect(find.text('2 operations apply to this Si'), findsOneWidget,
+          reason: 'the mixed row counts; the fully blocked one does not');
+    });
+
+    testWidgets('a refused variant shows its reason where its fit facts would',
+        (tester) async {
+      await _pump(tester, offers: offers);
+      expect(find.text('would put H 0.00 Å from the Si of atom 25'),
+          findsOneWidget);
+      // And the fully blocked row shows the best candidate's reason as its own
+      // badge, where a near miss shows its residual.
+      expect(find.text('would put H 0.00 Å from the Si of atom 31'),
+          findsOneWidget);
+    });
+
+    testWidgets('clicking a refused variant explains instead of placing',
+        (tester) async {
+      final harness = await _pump(tester, offers: offers);
+      await tester.tap(find.byKey(const Key('mechanosynth_popup_row_land4_1')));
+      await tester.pump();
+
+      expect(harness.chosen, isEmpty);
+      // A click on it is still a question: the amber ghost, and the reason in
+      // place of the row.
+      expect(harness.previews.last, 'land4');
+      expect(find.byKey(const Key('mechanosynth_popup_reason_land4_1')),
+          findsOneWidget);
+      expect(
+          find.textContaining('Try another way of placing it'), findsOneWidget);
+      // Its clean sibling is untouched — the refusal is per candidate, so one
+      // variant's reason must not blank out the other.
+      expect(find.byKey(const Key('mechanosynth_popup_row_land4_0')),
+          findsOneWidget);
+    });
+
+    testWidgets('the clean sibling of a refused variant still places',
+        (tester) async {
+      final harness = await _pump(tester, offers: offers);
+      await tester.tap(find.byKey(const Key('mechanosynth_popup_row_land4_0')));
+      await tester.pump();
+      expect(harness.chosen, ['land4#0']);
+    });
+
+    testWidgets('a fully blocked row is refused at the row', (tester) async {
+      final harness = await _pump(tester, offers: offers);
+      await tester
+          .tap(find.byKey(const Key('mechanosynth_popup_row_land4_both_0')));
+      await tester.pump();
+      expect(harness.chosen, isEmpty);
+      expect(find.byKey(const Key('mechanosynth_popup_reason_land4_both_0')),
+          findsOneWidget);
+    });
+
+    testWidgets('a refused variant previews in the warning colour',
+        (tester) async {
+      final harness =
+          await _pump(tester, offers: offers, previewDelay: Duration.zero);
+      await _hover(tester, const Key('mechanosynth_popup_row_land4_1'));
+      expect(harness.previews.last, 'land4',
+          reason: 'the host is told which row, and that it is not placeable');
     });
   });
 }

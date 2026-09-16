@@ -203,18 +203,33 @@ viewport and the panel address the same node with the same
   reference list, not a tool.
 - **The rule in the list is `offerable`, not `fits`.** Above it: what can be
   committed. Below it, dimmed and unselectable-for-placing: near misses
-  (`fits == false`) *and* rows whose **tool is not ready** — a `tip` operation
-  whose instrument is unbound, in the wrong state, or not matching at its pose.
-  A tool-blocked row fits the host perfectly, so its residual says nothing
-  useful; the kernel's reason (*habst_tool is spent*) takes the badge slot
-  instead. Both kinds still preview, in the warning colour, because seeing the
-  ghost is half the answer to "why not here?"; both refuse a click with an
-  explanation, and the two explanations differ — a near miss's fix is an edit to
-  the *library*, a blocked tool's fix is a *step* (the recharge). The kernel
-  refuses both independently (`mechanosynth_edit_choose`), so the popup is the
+  (`fits == false`), rows whose **tool is not ready** — a `tip` operation whose
+  instrument is unbound, in the wrong state, or not matching at its pose — and
+  rows whose **every placement a pattern check refuses**
+  (`APIMechanosynthOffer.blocked` non-empty). All three fit the host or nearly
+  do, so a residual says nothing useful; the kernel's reason (*habst_tool is
+  spent*, *would put H 0.42 Å from the Si of atom 912*) takes the badge slot
+  instead. They all still preview, in the warning colour, because seeing the
+  ghost is half the answer to "why not here?"; they all refuse a click with an
+  explanation, and the explanations differ — a near miss's fix is an edit to
+  the *library*, a blocked tool's fix is a *step* (the recharge), a refused
+  placement's fix is another placement or another host. The kernel refuses all
+  of them independently (`mechanosynth_edit_choose`), so the popup is the
   explanation, never the enforcement. A **ready** tool is not worth a chip on a
   300 px row: it goes into the row's ⓘ beside the library's note, and the
   panel's *Tools* readout is what the user watches for a recharge.
+- **A refusal is per candidate, and only a whole-row refusal crosses the rule.**
+  `APIMechanosynthCandidate.blocked` refuses one *placement*; the row's own
+  `blocked` is set only when every candidate carries one
+  (`doc/design_mechanosynth_pattern_checks.md` §5.2). So a **mixed** row — one
+  orientation clean, the mirrored one landing in the bulk — stays above the
+  rule, expanded, with the bad half dimmed **in place** under its group header.
+  The partition predicate is `_Row.belowRule` (`isBlocked && kind != variant`),
+  *not* `isBlocked`: dragging a refused variant below the rule would separate
+  the two halves of one choice, and blocking the row would hide a good
+  placement. For the same reason the shown-reason state `_refusedKey` is keyed
+  by `op#candidateIndex`, never by `op` alone — clicking the refused variant
+  must not blank out its placeable sibling.
 - **Orientation variants are rows, not a second list.** An offer carries *all*
   its candidates (`APIMechanosynthOffer.candidates`), and the popup expands any
   operation with more than one into a `_RowKind.group` header plus one

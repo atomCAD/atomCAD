@@ -1847,6 +1847,14 @@ pub struct APIMechanosynthOffer {
     /// the row. Badged, never refused: mute filters the sweep, and a row that
     /// is in the list is placeable whatever put it there.
     pub muted: bool,
+    /// Why **every** way of placing this operation here is refused — the
+    /// clicked atom's bond count, or the atoms each placement would land on.
+    /// Empty when at least one candidate is placeable.
+    ///
+    /// Set, the row sits below the rule the way a near miss does, with this
+    /// text where its residual would be. A **mixed** row leaves it empty and
+    /// dims only the candidates that carry their own.
+    pub blocked: String,
 }
 
 /// Where the placement tool stands, evaluated from nothing — the viewport reads
@@ -1898,6 +1906,10 @@ pub struct APIMechanosynthCandidate {
     pub mirrored: bool,
     pub approximate: bool,
     pub ghost: Vec<APIGhostAtom>,
+    /// Why *this* way of placing the operation cannot be committed; empty when
+    /// it can. A refused candidate keeps its index and is shown dimmed inline
+    /// with this text — it previews like a near miss, and `choose` refuses it.
+    pub blocked: String,
 }
 
 pub struct APIImportCIFData {

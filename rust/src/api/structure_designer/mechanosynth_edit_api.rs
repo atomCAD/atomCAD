@@ -70,7 +70,13 @@ fn ghost(atom: &GhostAtom) -> APIGhostAtom {
     }
 }
 
-fn offers_view(sweep: &OfferSweep) -> APIMechanosynthOffers {
+/// The popup's whole view of a sweep, against a sweep the caller already has.
+///
+/// `pub` so the api-side tests can project a sweep built from a plain
+/// `StructureDesigner`; `frb(ignore)` because it is a projection between two
+/// Rust types and has no business being a Dart entry point.
+#[flutter_rust_bridge::frb(ignore)]
+pub fn offers_view(sweep: &OfferSweep) -> APIMechanosynthOffers {
     APIMechanosynthOffers {
         anchor_atom_id: sweep.anchor_atom_id,
         anchor_position: vec3(sweep.anchor_position),
@@ -111,6 +117,7 @@ fn offers_view(sweep: &OfferSweep) -> APIMechanosynthOffers {
                     .unwrap_or_default(),
                 offerable: row.offerable,
                 muted: row.muted,
+                blocked: row.blocked.clone().unwrap_or_default(),
             })
             .collect(),
     }
@@ -125,6 +132,7 @@ fn candidates_view(rows: &[CandidateRow]) -> Vec<APIMechanosynthCandidate> {
             mirrored: row.mirrored,
             approximate: row.approximate,
             ghost: row.ghost.iter().map(ghost).collect(),
+            blocked: row.blocked.clone().unwrap_or_default(),
         })
         .collect()
 }
