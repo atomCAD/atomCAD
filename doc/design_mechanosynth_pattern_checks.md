@@ -1,4 +1,4 @@
-# Design: pattern checks in the mechanosynthesis engine — bonds, degree, steric clashes
+# Design: pattern checks in the mechanosynthesis engine — bonds, degree, anchors, steric clashes
 
 Status: **drafted 2026-09-16**, not reviewed, not implemented.
 
@@ -37,11 +37,11 @@ step *does not account for* (see §5 for the exact definition).
 
 | clicked atom | ops offered | candidates | land on an existing atom (≤ 0.38 Å) | no overlap, but chemically impossible |
 |---|---|---|---|---|
-| Cl-terminated surface Si | 7 | 13 | 7 | `bridge` ×2 (the pair is already bonded), `si_pickup` (lifts a chlorinated atom), `precursor_chemisorb` ×1 (placed upside down, into the bulk) |
+| Cl-terminated surface Si | 7 | 13 | 7 | `bridge` ×2 (the pair is already bonded), `si_pickup` (lifts a chlorinated atom), `precursor_chemisorb` ×2 (placed upside down, into the bulk) |
 | subsurface Si, four Si neighbours | 6 | 53 | 41 | `dimerize` ×8 (a fifth bond on a bulk atom), `bridge` ×4 (already bonded) |
-| bare dimer Si | 6 | 10 | 1 | `precursor_chemisorb` ×1 (upside down) |
+| bare dimer Si | 6 | 12 | 1 | `bridge` ×2 (already bonded), `precursor_chemisorb` ×2 (upside down) |
 
-Three findings decide the design.
+Four findings decide the design.
 
 **Every donation variant fits a bulk atom exactly.** Three of a bulk atom's
 four neighbours are a perfect tetrahedral frame, so `si_donate_site` fits with
@@ -108,10 +108,10 @@ each new predicate extends the same test.
 | where | bonds | degree | clash |
 |---|---|---|---|
 | library load (`parse`) | endpoints, duplicates, self-bonds, closed-world consistency between `before` and `after`, valence plausibility | `deg` range, `deg` against listed bonds | planar-frame warning |
-| placement, target side | prune in the assignment search, role rule | prune, role rule | per candidate, both tiers |
+| placement, target side | prune in the assignment search, role rule | prune, role rule | per candidate |
 | placement, tool side (`tool_readiness`) | same | same | same |
-| replay, target side | error | error | error (block tier), warning (warn tier) |
-| replay, tool side | error | error | error / warning |
+| replay, target side | error | error | error |
+| replay, tool side | error | error | error |
 | scene construction (base, feedstocks, tools) | bond-model sanity of every participant | — | pair check of every participant |
 
 A fourth rule, **anchors** (§3.4, §4.3), is a placement-only rule: it says
@@ -204,10 +204,11 @@ library that is 3 on every donation host, 1 on the abstracted chlorine, 2 on
 the edge host, 1 on the ad-atom of `bridge`, and 3 on each of the precursor's
 four silicons.
 
-Checked at placement in the role rule (a clicked atom of the wrong degree
-cannot play the role, and the sweep drops the operation the way it drops an
-inadmissible element today) and as a prune in the assignment search; at replay
-as `MechanosynthError::DegreeMismatch` naming the step, the pattern id, the
+Checked at placement as a prune in the assignment search, and on the clicked
+atom itself in the role rule — where a wrong degree does not silently drop the
+operation the way a wrong element does, but keeps it as a dimmed row with the
+reason when the geometry would otherwise have fit (§4.2, §7); at replay as
+`MechanosynthError::DegreeMismatch` naming the step, the pattern id, the
 expected and the found count. Load-time validation: `deg` must be ≥ the number
 of bonds the pattern lists at that atom, because a pattern cannot list more
 bonds than the atom has.
@@ -227,7 +228,7 @@ or that a specific pair is unbonded. The two are complementary and both cheap.
 
 ### 3.3 `clash`: a library may state its own steric factor
 
-A library may carry an optional top-level `"clash": 0.9`, the block-tier factor
+A library may carry an optional top-level `"clash": 0.9`, the blocking factor
 of §5, in the same spirit as its `tolerance`: one value per library, stated by
 whoever computed the patterns, with the engine's constant as the default. A
 library that legitimately places atoms closer than the default allows says so
@@ -253,7 +254,7 @@ has a numbering convention that puts the primary atom first, and a count keeps
 it (a flagged anchor that is not id 1 would be clickable but not at the origin,
 and the origin is what makes the fit's `t` the clicked position). Renumbering
 is what a generator does anyway when it decides which atom is primary —
-mechadense's note (B) below is exactly such a renumbering.
+mechadense's note (B), read in §4.3, is exactly such a renumbering.
 
 Validation: `anchors` is in `1..=before.atoms.len()`; every anchor is a
 **reacting** atom, not a frame atom (`is_frame_atom` false), because an
@@ -274,7 +275,10 @@ Added:
   off that plane is a **warning**: "the fit cannot tell this pattern's up from
   its down; name a frame atom off the plane". This is the precursor case of
   §1, and it is the root fix for it — a fifth `before` atom under the dimer
-  makes the upside-down fit fail on geometry, whatever the steric threshold;
+  makes the upside-down fit fail on geometry, whatever the steric threshold.
+  On the v3 library it fires twice: `precursor_chemisorb` (four coplanar
+  silicons) and `si_donate_edge` (a host and its two neighbours), and the
+  latter's flipped fit is the "diagonal" candidate of §1;
 - **valence plausibility**: for a `before` atom with a concrete element and a
   `deg`, `deg` plus the bonds `after` adds at that id minus the bonds it
   removes must not exceed the element's maximum covalent valence (H 1, C 4,
@@ -320,9 +324,14 @@ assignment and they prune *earlier* than the distance test on a crowded
 neighbourhood, so the pruning-regression test's assignment count goes down,
 not up.
 
-The role rule (`role_atom`) filters on degree as it filters on element, so the
-`NoRole` error and the sweep's silent drop both apply. The message names the
-count: "`si_donate_site` needs a host with 3 bonds; the clicked Si has 4".
+The role rule (`role_atom`) checks the clicked atom's degree too, but does
+not treat a failure the way it treats a wrong element. A wrong element means
+the operation has nothing to say about this atom, so the sweep drops it. A
+wrong degree on an atom the operation *would* act on is a coverage report —
+"`si_donate_site` needs a host with 3 bonds; the clicked Si has 4" — so
+`place` runs the search anyway and, if a fit exists, returns its candidates
+with `Refusal::Degree` set (§7). The sweep shows such a row dimmed with that
+reason; a single `place` call with no fit at all is the usual `NoPlacement`.
 
 Because the same predicates run at both ends, the one-click commit path and
 the sweep cannot disagree, and `every_candidate_the_engine_offers_replays`
@@ -409,16 +418,22 @@ ratio = d / (r_cov(placed) + r_cov(other))
 with the covalent radii the application already carries (`ATOM_INFO`). The
 candidate's **contact** is the pair with the smallest ratio.
 
-### 5.2 Two tiers
+### 5.2 One rule
 
-| tier | condition | at placement | at replay |
-|---|---|---|---|
-| **blocked** | `ratio < CLASH_BLOCK` (library `clash`, default 0.9) | row below the rule, dimmed, unselectable; reason text "would put Si 0.33 Å from Cl" | `MechanosynthError::Clash` naming the step, both atoms, the distance and the threshold |
-| **warned** | `CLASH_BLOCK ≤ ratio < CLASH_WARN` (1.1) | amber chip on the candidate: "2.13 Å to Cl, no bond" | recorded on the step (§7); never an error |
+A candidate whose contact has `ratio < CLASH_BLOCK` (library `clash`, default
+0.9) is **blocked**: at placement the row goes below the rule, dimmed and
+unselectable, with the reason where the residual would be ("would put Si
+0.33 Å from Cl"); at replay it is `MechanosynthError::Clash`, naming the step,
+both atoms, the distance and the threshold. Every other ratio is silent.
 
-Ratios ≥ `CLASH_WARN` are silent.
+There is deliberately no second, advisory tier. One was considered — an amber
+chip for contacts between the block factor and about 1.1, which would have
+flagged the donate-then-bridge intermediates and the 2.13 Å Cl–Cl geometry of
+§5.3 — and dropped until someone asks for it: it is not clear it is needed, and
+the data it would report is in this document. If it is ever added it is a
+second constant and a chip, nothing structural.
 
-The blocked tier reuses the mechanism a near miss and an unready tool already
+The blocking rule reuses the mechanism a near miss and an unready tool already
 use: `Applicability::offerable()` becomes `fits && tool ready && not blocked`,
 and `choose` refuses a blocked row with the reason, so a blocked candidate
 cannot be committed by any path.
@@ -457,10 +472,9 @@ libraries use a **donate-then-bridge** idiom: an atom is placed at exactly the
 bond length from a neighbour, and a spontaneous `bridge` step one or two steps
 later makes the bond. The intermediate state is real (it is what the tool
 leaves behind) and it is a bond-length non-bonded contact by construction. A
-rule that blocks anything under 1.0 therefore blocks legitimate builds, and a
-warn tier at 1.1 flags exactly these intermediates plus the 2.13 Å Cl–Cl
-contact — which is the one genuinely questionable geometry in the silicon
-library, and worth an amber chip.
+rule that blocks anything under 1.0 therefore blocks legitimate builds. The
+2.13 Å Cl–Cl contact is the one genuinely questionable geometry in the silicon
+library; at 1.04 it passes, and it is recorded here so nobody rediscovers it.
 
 *The block factor lives between 0.86 and 1.02, and the two sides are not
 symmetric.* A false block at replay is an **error on a legitimate build**; a
@@ -468,10 +482,10 @@ false pass is the status quo, a bogus offer. So the margin on the legitimate
 side matters more, which argues for the lower end. Against that, the one bogus
 case at 0.86 has no other catcher until the generator adds a frame atom.
 
-**Recommendation: `CLASH_BLOCK = 0.9`, `CLASH_WARN = 1.1`**, both engine
-constants, the first overridable per library by `clash`. At 0.9 the margin to
-the legitimate floor is 0.12 (0.18 Å for a C–C contact, 0.27 Å for Si–Si) and
-the upside-down precursor is blocked by 0.04. Any value from 0.87 to 0.99 gives
+**Recommendation: `CLASH_BLOCK = 0.9`**, an engine constant, overridable per
+library by `clash`. At 0.9 the margin to the legitimate floor is 0.12 (0.18 Å
+for a C–C contact, 0.27 Å for Si–Si) and the upside-down precursor is blocked
+by 0.04. Any value from 0.87 to 0.99 gives
 the same answer on every case above; 0.95 would widen the bogus-side margin at
 the cost of the legitimate one, and the choice between them changes nothing on
 either library. Below 0.86 the precursor phantom returns; at or above 1.02 the
@@ -488,16 +502,12 @@ is a fixed 0.8 Å. It catches overlaps and nothing else; on an H–H contact 0.8
 is 1.3 bond lengths, on Si–Si it is a third of one. The ratio makes one constant
 mean the same thing for every pair.
 
-### 5.4 What a library author does about a warning
+### 5.4 What a library author does about the factor
 
-The warn tier will flag the donate-then-bridge idiom on every donation. That
-is correct and the guide (§9) says so: the chip reads "2.35 Å to Si, no bond —
-a bridge step is expected". A library that wants silence there can fold the
-bridge into the donation, which is a modelling decision (does the bond form as
-the tool withdraws, or afterwards?) and not the engine's to make. A library
-whose chemistry genuinely places atoms closer than 0.9 of a bond length to an
-atom they do not bond — none known — states `clash` and says why in its
-`note`.
+The donate-then-bridge idiom passes at 0.9 and the guide (§9) says so, with
+its floor. A library whose chemistry genuinely places atoms closer than 0.9 of
+a bond length to an atom they do not bond — none known — states `clash` and
+says why in its `note`.
 
 ---
 
@@ -513,25 +523,24 @@ validation of a bare base, when no scene is built) runs, per participant:
   node". This is the xyz-import case, and it is the one that would otherwise
   make every degree check pass vacuously on a structure that has no degrees;
 - **pair check**: every pair of atoms with `ratio < CLASH_BLOCK` and no bond
-  between them is an error naming both atoms and their participant; every
-  pair with `ratio < CLASH_WARN` and no bond is a warning. The spatial grid
-  makes this one radius query per atom.
+  between them is an error naming both atoms and their participant. The
+  spatial grid makes this one radius query per atom.
 
 Both run once per evaluation of the node, before the first step, and their
 errors are node errors in the existing channel. Measured on the inputs of the
 two existing demos with the same scratch program:
 
-| structure | closest unbonded pair | ratio | pairs under 1.1 |
+| structure | closest unbonded pair | ratio | at 0.9 |
 |---|---|---|---|
-| v3 Cl-passivated Si base | Cl–Cl 2.13 Å | 1.04 | 13 (warnings, no error) |
-| v3 bare Si reservoir | Si–Si 3.40 Å | 1.53 | 0 |
-| diamond H-passivated base | C–C 2.24 Å | 1.47 | 0 |
+| v3 Cl-passivated Si base | Cl–Cl 2.13 Å | 1.04 | passes |
+| v3 bare Si reservoir | Si–Si 3.40 Å | 1.53 | passes |
+| diamond H-passivated base | C–C 2.24 Å | 1.47 | passes |
 
-The thirteen warnings on the silicon base are the same 2.13 Å Cl–Cl geometry
+The silicon base has thirteen of those 2.13 Å Cl–Cl pairs, the same geometry
 the passivate phase later produces (§5.3): `materialize` puts two terminators
-that close on the ideal-site atoms at the slab's row ends. That is a genuine
-defect of the base, not of the check, and surfacing it once at load is the
-point.
+that close on the ideal-site atoms at the slab's row ends. They pass the check
+by 0.14; they are a known defect of the base, recorded here, not something the
+check reports.
 
 ---
 
@@ -545,21 +554,18 @@ pub refusal: Option<Refusal>,        // why the candidate is not offerable
 ```
 
 with `Contact { distance, ratio, placed: (pattern id, element), other: (atom id, element) }`
-and `Refusal::{Degree{..}, Bond{..}, Clash(Contact)}`. A candidate with a
-`Bond` or `Degree` refusal is in practice never *produced* — the search pruned
-it — except for the clicked atom's own role, where the sweep keeps the
-operation as a dimmed row with the reason, because "this host has 4 bonds and
-the operation needs 3" is the coverage report the editor exists to give.
+and `Refusal::{Degree { expected, found }, Clash(Contact)}`. There is no
+`Bond` refusal: a bond mismatch is pairwise, so the search prunes it and no
+candidate is ever produced. A degree mismatch on a non-clicked atom is pruned
+the same way; only the clicked atom's own degree reaches a candidate, because
+"this host has 4 bonds and the operation needs 3" is the coverage report the
+editor exists to give (§4.2).
 
-`OfferRow` and the API row carry `blocked: Option<String>` and
-`warning: Option<String>`; the popup shows a blocked row below the rule the way
-it shows a near miss (reason text where the residual would be) and an amber
-chip on a warned candidate beside the exact/approximate chips. Nothing else in
-the popup changes; the mute set is untouched.
-
-At replay, a warned step is recorded in the `step` record as
-`warnings: [String]` and the panel prints them under the note. This needs no
-new eval-time channel: the record is a value the node already produces.
+`OfferRow` and the API row carry `blocked: Option<String>`; the popup shows a
+blocked row below the rule the way it shows a near miss, with the reason text
+where the residual would be. Nothing else in the popup changes; the mute set is
+untouched. At replay a clash is an error like any other match failure, so the
+`step` record does not change.
 
 ---
 
@@ -597,9 +603,10 @@ its reason:
    reaction with several equivalent primary atoms numbers them first and says
    `anchors: n`. Frame atoms are never anchors.
 2. **Frame atoms**: name the host's bonded neighbours as `"*"` atoms present
-   unchanged in both halves; at least three, spanning three dimensions
-   whenever `after` places anything off their plane (the planar-frame
-   warning), so the fit is exact and cannot be flipped.
+   unchanged in both halves — none for an abstraction that places nothing,
+   and enough to span three dimensions whenever `after` places anything off
+   the host (the planar-frame warning), so the fit is exact and cannot be
+   flipped.
 3. **Bonds are complete**: list every bond among the atoms you name, in both
    halves. An unlisted pair asserts there is no bond.
 4. **`deg` on every atom whose environment you mean**: the host always; a frame
@@ -608,7 +615,9 @@ its reason:
    environment, named `<operation>_<environment>` with a shared environment
    vocabulary; the 0.05 Å default gate is what makes the variants resolvable.
 6. **`chiral`** when the reaction has a handedness.
-7. **Donate-then-bridge**: allowed, flagged amber, and what the chip means.
+7. **Donate-then-bridge**: allowed; it sits at 1.02–1.08 of a bond length,
+   above the 0.9 block factor, and that margin is the reason not to write a
+   library that goes lower.
 8. **`clash`**: only with a stated reason.
 9. **Tool frames**: four non-coplanar handle atoms, apex at the origin, never
    the cargo.
@@ -629,13 +638,11 @@ rationale; the guide page keeps the rules.
 - `nodes/atomic.md`, `mechanosynth` → "How a step is applied": the bond,
   degree and clash checks and their errors; the structure sanity errors.
 - `nodes/atomic.md`, `mechanosynth_edit` → "The offer popup": blocked rows and
-  their reasons; the amber contact chip; that a blocked row previews like a
-  near miss.
+  their reasons; that a blocked row previews like a near miss.
 - `nodes/atomic.md`, `mechanosynth_edit` → "Placing a step": "click the atom
   the operation acts on" becomes literally true — an operation is offered only
   on its anchors, and a click on any other atom of its pattern does not list
   it.
-- `nodes/atomic.md`, `mechanosynth` → "The `step` output pin": `warnings`.
 - the new `op_libraries.md`.
 
 ---
@@ -650,8 +657,7 @@ In `rust/crates/atomcad-crystolecule/tests/crystolecule/`:
   close pair, valence overflow are warnings naming the operation; replay fails
   with `BondMismatch` on a missing bond, a wrong order and an unlisted bond
   that exists; `DegreeMismatch` names expected and found; `Clash` names both
-  atoms; a warned step replays and reports the warning; tool-side bond and
-  degree failures name the tool.
+  atoms; tool-side bond and degree failures name the tool.
 - `mechanosynth_place_test.rs`: a bonded pair is not offered `bridge`; a
   four-coordinate host is not offered a `deg: 3` donation and the sweep row
   says why; a click on a frame atom is `NoRole` naming the anchors, and the
@@ -660,7 +666,7 @@ In `rust/crates/atomcad-crystolecule/tests/crystolecule/`:
   clicked atom is anchor 1; the search prunes on bonds and degree (assignment count
   non-increasing on the pruning-regression fixture); a candidate landing on an
   atom is produced with `Refusal::Clash` and is not offerable; a
-  donate-then-bridge candidate is offerable with a warning; the proper and
+  donate-then-bridge candidate is offerable; the proper and
   mirrored fits of a symmetric frame are one candidate at any residual below
   the gate; **every candidate the engine offers replays**, extended to the
   three predicates.
@@ -673,10 +679,10 @@ In `rust/crates/atomcad-crystolecule/tests/crystolecule/`:
 
 In `rust/crates/atomcad-structure-designer/tests/structure_designer/`:
 `mechanosynth_edit_placement_test.rs` — `choose` refuses a blocked row with
-its reason; the API row carries `blocked` / `warning`.
+its reason; the API row carries `blocked`.
 
-The Flutter smoke test is not run by agents; the popup's blocked row and amber
-chip are a manual walkthrough item.
+The Flutter smoke test is not run by agents; the popup's blocked row is a
+manual walkthrough item.
 
 ---
 
@@ -686,10 +692,10 @@ chip are a manual walkthrough item.
 |---|---|---|
 | **0** | duplicate-candidate fix (§8) | `place.rs`, one test |
 | **1** | `/3`: closed-world bonds, `deg`, `anchors`, `clash` in the schema and parser; the anchor role rule; load-time validation of §3.5; bond and degree checks in `match_before` and in the placement search and role rule; new error variants | `schema.rs`, `parse.rs`, `apply.rs`, `place.rs`, `scene.rs`, tests, guide "The two files" / "How a step is applied" |
-| **2** | steric check: `Contact`, `Refusal`, both tiers, `offerable`, replay error and step warning; structure sanity in `build_scene` and the nodes | `place.rs`, `apply.rs`, `scene.rs`, `mechanosynth.rs`, `mechanosynth_edit.rs`, the `step` record, tests |
-| **3** | editor surfacing: `OfferRow`, API, popup (blocked reason, amber chip), panel warnings; guide "The offer popup" | `mechanosynth_edit_ops.rs`, `mechanosynth_edit_api.rs`, FRB codegen, `mechanosynth_offer_popup.dart` |
+| **2** | steric check: `Contact`, `Refusal`, `offerable`, replay error; structure sanity in `build_scene` and the nodes | `place.rs`, `apply.rs`, `scene.rs`, `mechanosynth.rs`, `mechanosynth_edit.rs`, tests |
+| **3** | editor surfacing: `OfferRow`, API, popup (blocked reason); guide "The offer popup" | `mechanosynth_edit_ops.rs`, `mechanosynth_edit_api.rs`, FRB codegen, `mechanosynth_offer_popup.dart` |
 | **4** | the guide page `op_libraries.md` and the move out of `atomic.md`; AGENTS pointers | docs |
-| **ext** | outside the repo, before Phase 1 lands: the generator writes `/3` — bonds among named atoms in both halves, `deg` as drawn, a fifth frame atom under the precursor, the format string — and both libraries are regenerated and replayed | `mechanosynth/gen` |
+| **ext** | outside the repo, before Phase 1 lands: the generator writes `/3` — bonds among named atoms in both halves, `deg` as drawn, `anchors` where a reaction is symmetric, a frame atom off the plane for the precursor and the edge host, the format string — and both libraries are regenerated and replayed | `mechanosynth/gen` |
 
 Phase 1 breaks every existing library on purpose; the generator change is the
 pre-condition, and the diamond and silicon runs are the regression on it. The
@@ -749,8 +755,6 @@ has.
 
 ## 14. Open questions
 
-- Whether `CLASH_WARN` should also be library-overridable. Left a constant;
-  the warn tier is advisory and 1.1 flags exactly the known cases.
 - Whether the sweep should show *all* degree-rejected operations as dimmed
   rows, or only those whose geometry would otherwise have fit. This document
   says the latter (§7); the former is more complete and longer.
