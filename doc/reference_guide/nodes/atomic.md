@@ -1530,6 +1530,14 @@ were, an element swap amber. Anything that cannot be placed — a near miss, a f
 whose tool is not ready, a placement a check refuses — is ghosted in amber
 throughout, because it is for looking at, not for placing.
 
+**An added atom wears its element symbol.** The colour says what the step
+does, not which atom arrives, and two rows that put different elements on the
+same site — a chlorine and a silicon, say — would otherwise ghost as the same
+green sphere. So every added ghost, and every element swap, carries its symbol
+as the same camera-facing text `apply_style`'s `label` draws, sized by the
+display's label scale. A moved atom keeps its element and a deleted ghost sits on
+an atom you can already see, so neither is labelled.
+
 Some operations move no atom at all. `bridge` and `bridge_c` in the silicon
 library have identical before and after atom lists and differ only in the bond
 between them — the crystal coupling two radicals that are already in place — so

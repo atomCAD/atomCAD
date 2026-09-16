@@ -17,6 +17,10 @@ mod atomic_color_test;
 #[path = "display/atomic_render_style_test.rs"]
 mod atomic_render_style_test;
 
+// The element-symbol labels on the `mechanosynth_edit` ghost preview.
+#[path = "display/mechanosynth_ghost_label_test.rs"]
+mod mechanosynth_ghost_label_test;
+
 // Isosurface extraction (doc/design_isosurface_node.md P2). Tables A-E of that
 // document's test plan, sharing fixtures and invariant helpers.
 #[path = "display/isosurface_common.rs"]

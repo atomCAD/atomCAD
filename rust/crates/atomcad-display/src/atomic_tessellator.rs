@@ -1566,11 +1566,32 @@ const MS_GHOST_BOND_RADIUS: f64 = 0.14;
 /// effect is a bond — `bridge` and `bridge_c` in the silicon library have
 /// identical `before` and `after` atom lists — has no ghost *atoms* at all, and
 /// without the bond pass it previews as an empty scene.
+///
+/// **An added or changed ghost carries its element symbol** as an opaque
+/// billboard label, the same glyph pipeline `apply_style`'s `label` uses. The
+/// ghost's albedo is spent on *what the step does* (green = added), so it
+/// cannot also say *what the atom is* — and the element colour would not help
+/// even if it could: chlorine's element colour is nearly the "added" green, and
+/// a Cl and a Si ghost at the same site are otherwise the same translucent
+/// sphere to within a tenth of an ångström. Only the kinds where the identity
+/// is the news are labelled: `Added` (which atom arrives) and `Changed` (which
+/// element it becomes). A `Moved` atom keeps its element and a `Deleted` ghost
+/// sits on a real atom that already shows what it is, so a label there is
+/// noise. Near misses keep their label — the amber says "look, don't place",
+/// the symbol says what you are looking at. The scale is the display's
+/// `label_scale`, so the preview's text matches the scene's.
 pub fn tessellate_mechanosynth_ghosts_impostors(
     transparent_impostor_mesh: &mut TransparentImpostorMesh,
+    label_mesh: &mut LabelMesh,
     visuals: &atomcad_crystolecule::atomic_structure::atomic_structure_decorator::MechanosynthGhostVisuals,
+    atomic_viz_prefs: &AtomicStructureVisualizationPreferences,
 ) {
     use atomcad_crystolecule::mechanosynth::place::{GhostBondKind, GhostKind};
+
+    // em → Å, clamped the same way `tessellate_atom_labels` clamps it.
+    let label_scale = atomic_viz_prefs
+        .label_scale
+        .clamp(LABEL_SCALE_MIN, LABEL_SCALE_MAX);
 
     // Bonds first, so an added atom's sphere draws over the stick reaching it
     // rather than the other way round.
@@ -1633,5 +1654,20 @@ pub fn tessellate_mechanosynth_ghosts_impostors(
             &NO_RIM,
             MS_GHOST_ALPHA,
         );
+
+        if matches!(ghost.kind, GhostKind::Added | GhostKind::Changed) {
+            let anchor = ghost.position.as_vec3();
+            let depth_offset = radius as f32 + LABEL_DEPTH_EPSILON;
+            for glyph in &layout_label(&atom_info.symbol).glyphs {
+                label_mesh.add_glyph_quad(
+                    &anchor,
+                    [glyph.min[0] * label_scale, glyph.min[1] * label_scale],
+                    [glyph.max[0] * label_scale, glyph.max[1] * label_scale],
+                    glyph.uv_min,
+                    glyph.uv_max,
+                    depth_offset,
+                );
+            }
+        }
     }
 }
