@@ -1,6 +1,6 @@
 # Design: pattern checks in the mechanosynthesis engine — bonds, degree, anchors, steric clashes
 
-Status: **drafted 2026-09-16**, not reviewed, not implemented.
+Status: **drafted and reviewed 2026-09-16**, not implemented.
 
 Extends `doc/design_mechanosynth_editor.md` (the placement engine and the offer
 popup), `doc/design_mechanosynth_tools.md` (the `/2` formats, tool sides) and
@@ -32,8 +32,9 @@ The claim that the offers are too broad was measured rather than taken on
 trust. A scratch program built the v3 chlorinated Si(100) workpiece with the
 same `materialize` settings the generator uses, loaded the v3 library, and
 called the engine's own `applicable_ops` on three atoms. For every candidate it
-then measured how close the atoms the step *adds or moves* land to atoms the
-step *does not account for* (see §5 for the exact definition).
+then measured how close the atoms the step *adds or moves* land to atoms they
+are *not bonded to* (§5 has the exact rule, and §5.3 says how the measurement
+differed from it).
 
 | clicked atom | ops offered | candidates | land on an existing atom (≤ 0.38 Å) | no overlap, but chemically impossible |
 |---|---|---|---|---|
@@ -107,9 +108,9 @@ each new predicate extends the same test.
 
 | where | bonds | degree | clash |
 |---|---|---|---|
-| library load (`parse`) | endpoints, duplicates, self-bonds, closed-world consistency between `before` and `after`, valence plausibility | `deg` range, `deg` against listed bonds | planar-frame warning |
+| library load (`parse`) | endpoints, duplicates, self-bonds, unbonded close pair, valence plausibility | `deg` range, `deg` against listed bonds | planar-frame warning |
 | placement, target side | prune in the assignment search, role rule | prune, role rule | per candidate |
-| placement, tool side (`tool_readiness`) | same | same | same |
+| placement, tool side (`tool_readiness`) | same (its own match loop, §4.2) | same | same |
 | replay, target side | error | error | error |
 | replay, tool side | error | error | error |
 | scene construction (base, feedstocks, tools) | bond-model sanity of every participant | — | pair check of every participant |
@@ -168,11 +169,12 @@ The generator must therefore write every bond that exists among the atoms it
 names, in `before` and in `after`. For the v3 library that is the host's bonds
 to its frame atoms in every donation, the dimer bonds in `precursor_chemisorb`
 and `si_pickup`, and the tool apex's bonds to its legs in every tool side. The
-loader helps: a `before` pattern with two atoms closer than **1.1 × the sum of
-their covalent radii** and no bond between them is a **load-time warning**
-naming the pair — either the bond is missing from the file, or the library
-really means "these two are not bonded", in which case the workpiece had better
-agree.
+loader helps: a pattern, `before` or `after`, with two atoms closer than
+**1.1 × the sum of their covalent radii** and no bond between them is a
+**load-time warning** naming the pair — either the bond is missing from the
+file, or the library really means "these two are not bonded", in which case
+the workpiece had better agree (and, in `after`, the pair had better clear the
+`clash` factor of §5, or the operation is blocked on every host).
 
 ### 3.2 `deg`: the one SMARTS primitive worth adopting
 
@@ -239,7 +241,7 @@ here, and the guide says when that is honest (§5.4).
 An operation may carry an optional integer:
 
 ```json
-{ "name": "dimerize", "anchors": 2, "method": "spontaneous", ... }
+{ "name": "…", "anchors": 2, "method": "tip", ... }
 ```
 
 *The `before` atoms with ids `1..=anchors` are the operation's **anchors**: the
@@ -248,13 +250,28 @@ place it.* Default 1, which is the origin convention (`ORIGIN_PATTERN_ATOM_ID`)
 made strict: id 1 is the atom at the origin, the atom to click, and now the
 only such atom unless the library says otherwise.
 
+What the field does and does not do, stated precisely because the obvious
+reading is wrong. The role rule (§4.3) gives a click the anchor at the origin
+whenever that anchor's element admits it, and id 1 is the atom at the origin.
+So for a **homonuclear** symmetric operation — `dimerize`, two silicons —
+`anchors: 2` changes nothing: a click on either silicon already plays id 1 and
+the search assigns the other to id 2, today and under this design alike. The
+field takes effect only for a **heteronuclear** pair of primary atoms — an
+insertion that acts on a silicon *and* a carbon, say — where a click on the
+carbon is rejected by id 1 and admitted by id 2. Then the click plays id 2,
+which is off the origin, and the fit's `t` lands on the silicon rather than on
+the clicked atom. That is acceptable precisely because the library *declared*
+it: the operation says both atoms are things a user may click, and the engine
+places the reaction where the pattern puts it. The default of 1 is what turns
+the origin convention from a preference into the rule, which is the whole
+point of §4.3; `anchors` is the escape hatch a heteronuclear library may
+never need, and it costs one optional integer.
+
 The count form rather than a per-atom flag, for one reason: the library already
 has a numbering convention that puts the primary atom first, and a count keeps
 *one* convention where a flag would add a second that has to stay aligned with
-it (a flagged anchor that is not id 1 would be clickable but not at the origin,
-and the origin is what makes the fit's `t` the clicked position). Renumbering
-is what a generator does anyway when it decides which atom is primary —
-mechadense's note (B), read in §4.3, is exactly such a renumbering.
+it. Renumbering is what a generator does anyway when it decides which atom is
+primary — mechadense's note (B), read in §4.3, is exactly such a renumbering.
 
 Validation: `anchors` is in `1..=before.atoms.len()`; every anchor is a
 **reacting** atom, not a frame atom (`is_frame_atom` false), because an
@@ -270,10 +287,13 @@ Added:
 - **duplicate bond** (`[1,2]` and `[2,1]`, or twice `[1,2]`): error;
 - **`deg` below the listed bond count** at that atom: error;
 - **`deg` outside 0..=8**: error (nothing this engine models has more);
-- **planar frame**: a `before` pattern whose atoms span at most a plane
-  (rank ≤ 2, by the same `rank_of` the fit uses) while `after` places an atom
-  off that plane is a **warning**: "the fit cannot tell this pattern's up from
-  its down; name a frame atom off the plane". This is the precursor case of
+- **planar frame**: a `before` pattern of two or more atoms whose atoms span
+  at most a plane (rank ≤ 2, by the same `rank_of` the fit uses) while
+  `after` places an atom off that plane is a **warning**: "the fit cannot
+  tell this pattern's up from its down; name a frame atom off the plane". A
+  one-atom `before` is exempt: its orientation comes from the bond-derived
+  fallback (`needs_derived_orientation`), which is a design, not an
+  oversight. This is the precursor case of
   §1, and it is the root fix for it — a fifth `before` atom under the dimer
   makes the upside-down fit fail on geometry, whatever the steric threshold.
   On the v3 library it fires twice: `precursor_chemisorb` (four coplanar
@@ -285,7 +305,7 @@ Added:
   N 4, O 2, F/Cl/Br/I 1, Si/Ge 4, and no limit for an element the table does
   not list). A warning, not an error, because the table is the one
   element-specific thing in this design and a library author may know better;
-- **unbonded close pair** in `before` (§3.1): warning.
+- **unbonded close pair** in `before` or `after` (§3.1): warning.
 
 Warnings go where library warnings go today: `OpLibrary::warnings`, shown by
 the `ops_library` node.
@@ -304,10 +324,16 @@ first failure is the error; both variants carry the step number, the operation
 name and the translation, like `NoMatch` does, and are boxed into the same
 `NoMatch`-sized payload discipline (`clippy::result_large_err`).
 
-This runs for the target side and for the tool side, because both go through
-`match_before`. A tool side whose apex has lost a leg, or whose cargo bond is
-missing, fails with the tool named, which is what the tools design wanted the
-symbolic state check to approximate.
+This runs for the target side and for the tool side, because at replay both
+go through `match_before`. A tool side whose apex has lost a leg, or whose
+cargo bond is missing, fails with the tool named, which is what the tools
+design wanted the symbolic state check to approximate.
+
+The second pass is **one function**, taking the pattern, the match (pattern
+id → workpiece atom id) and the workpiece, returning the first bond or degree
+mismatch. `match_before` calls it; so do the two placement paths of §4.2.
+Three call sites, one predicate, which is what makes the invariant of §2 a
+fact rather than a discipline.
 
 The current header comment in `apply.rs` — "checking bonds would only add a way
 for a correct script to fail" — is replaced. A script whose bonds do not hold
@@ -319,10 +345,18 @@ failure is for.
 The assignment search (`Search::descend`) already prunes on pairwise distance
 as each `before` atom is assigned. The same loop gains two prunes at the same
 point: the candidate workpiece atom's degree against `deg`, and its bond to
-every already-assigned atom against the pattern's bond list. Both are O(1) per
-assignment and they prune *earlier* than the distance test on a crowded
-neighbourhood, so the pruning-regression test's assignment count goes down,
-not up.
+every already-assigned atom — the role atom included — against the pattern's
+bond list. Both are O(1) per assignment and they prune *earlier* than the
+distance test on a crowded neighbourhood, so the pruning-regression test's
+assignment count goes down, not up. The role atom itself is **not** pruned on
+degree: its mismatch is the refusal described next, not a dead branch.
+
+The placement-side tool check, `tool_readiness` in `place.rs`, does **not** go
+through `match_before`; it has its own nearest-atom loop over the tool side's
+`before` at the bound pose. It gains the same second pass (the shared
+function of §4.1) after that loop, reporting a mismatch as `ready: false`
+with the reason, so a tool whose cargo bond is missing is dimmed at placement
+exactly as it fails at replay.
 
 The role rule (`role_atom`) checks the clicked atom's degree too, but does
 not treat a failure the way it treats a wrong element. A wrong element means
@@ -330,8 +364,10 @@ the operation has nothing to say about this atom, so the sweep drops it. A
 wrong degree on an atom the operation *would* act on is a coverage report —
 "`si_donate_site` needs a host with 3 bonds; the clicked Si has 4" — so
 `place` runs the search anyway and, if a fit exists, returns its candidates
-with `Refusal::Degree` set (§7). The sweep shows such a row dimmed with that
-reason; a single `place` call with no fit at all is the usual `NoPlacement`.
+with `Refusal::Degree` set (§7). Because the clicked atom is the same in every
+candidate of one call, this refusal is on every candidate of the row, and the
+row as a whole is dimmed with that reason (§5.2 has the general rule); a
+single `place` call with no fit at all is the usual `NoPlacement`.
 
 Because the same predicates run at both ends, the one-click commit path and
 the sweep cannot disagree, and `every_candidate_the_engine_offers_replays`
@@ -362,12 +398,17 @@ search, and never revisited; a fit that fails in the assigned role is an error
 naming it. What changes is only which roles a click can be given.
 
 **Measured effect on the three probe atoms.** The chlorine click drops from two
-offers and three near misses to one offer, `cl_abstract`, which is the only
-operation of the library that acts on a chlorine. The two silicon clicks lose
-nothing on their own — every operation offered there has its host at id 1 —
-which is why anchors are a complement to the three checks and not a substitute
-for them: they decide *which atom you may click*, the checks decide *whether
-the pattern fits around it*.
+offers to one, `cl_abstract`, which is the only operation of the library that
+acts on a chlorine. Note that a `"*"` anchor admits every element, so the
+donation hosts and `bridge`'s ad-atom still *admit* the chlorine as id 1; what
+removes them is the search (no silicon frame at silicon distances around a
+chlorine) or the degree refusal of §4.2, and an operation whose geometry
+lands within the near-miss range may remain as a near miss, which is the
+coverage report working as designed. The two silicon clicks lose nothing on
+their own — every operation offered there has its host at id 1 — which is why
+anchors are a complement to the three checks and not a substitute for them:
+they decide *which atom you may click*, the checks decide *whether the
+pattern fits around it*.
 
 **mechadense's note, read against this.** His (B) says the anchor of one
 operation should be the shell-one silicon that receives the inserted bond
@@ -375,10 +416,12 @@ rather than the shell-two silicon it is on now. Under this design that is a
 library decision and a renumbering: the generator makes that atom id 1 at the
 origin. Nothing in the engine has an opinion about it, and nothing should. His
 (B1) asks for a symmetric insertion primitive with two equivalent first-shell
-silicons and "no unique preferable anchor" — that is `anchors: 2`, and a click
-on either silicon places the reaction with the clicked one as anchor 1. Its
-mirror image is the other assignment, and the after-state collapse (§8) makes
-the two one candidate when the reaction is symmetric and two when it is not,
+silicons and "no unique preferable anchor" — is already what the origin rule
+gives a homonuclear pair: a click on either silicon plays id 1 and the search
+assigns the other to id 2 (§3.4 says why `anchors: 2` adds nothing there, and
+why a generator may still write it as a statement of intent). The other
+assignment is the mirror image, and the after-state collapse (§8) makes the
+two one candidate when the reaction is symmetric and two when it is not,
 which is what `dimerize` does today. His (B2), multiselection, is **not** what
 the editor has now: the editor has one click and one role. What he describes
 is selecting a second atom to demand that it take part too, which would filter
@@ -399,32 +442,106 @@ For a candidate (or a step at replay) with rigid transform `(r, t)`:
 
 - **placed atoms**: the `after` atoms the step **adds** (ids only in `after`)
   or **moves** (ids in both with a different position), at `r · p + t`;
-- **accounted atoms**: every workpiece atom matched by a `before` id (role
-  atoms, frame atoms included), on either side of the operation when the step
-  has a tool side; plus, for each *moved* atom, the atoms it is currently
-  bonded to, because a moved atom keeps its bonds and lands at bond distance
-  from them by design;
-- **unaccounted atoms**: everything else in the structure the step is applied
-  to — the whole scene, feedstocks and tools included, since a placed atom
-  that lands inside a parked tool is a collision whoever it belongs to.
+- **the after state**: the structure the step is applied to — the whole
+  scene, feedstocks and tools included, since a placed atom that lands inside
+  a parked tool is a collision whoever it belongs to — as the step leaves it:
+  deleted atoms gone, placed atoms at their placed positions, bonds as the
+  rewrite makes them (an added atom has the bonds `after` gives it; a moved
+  atom keeps the bonds it has, minus the ones `before` alone lists, plus the
+  ones `after` alone lists).
 
-For each placed atom, find the nearest unaccounted atom within a fixed search
-radius (4 Å covers every pair of elements the engine models) and compute
+**One rule: two atoms that are not bonded to each other must not be closer
+than `clash` of their covalent-radius sum. Bonded atoms are never checked.**
+A bond is the library's statement that the two atoms belong at bond distance,
+whatever that distance is, and the engine has no better opinion. Everything
+else is a non-bonded contact and one threshold applies to all of them.
+
+Every pair that does not involve a placed atom is unchanged by the step, and
+§6 has already checked it on the inputs, so the check runs over the placed
+atoms only: for each placed atom, every atom of the after state within a fixed
+search radius (4 Å covers every pair of elements the engine models) that it is
+not bonded to, and
 
 ```
 ratio = d / (r_cov(placed) + r_cov(other))
 ```
 
 with the covalent radii the application already carries (`ATOM_INFO`). The
-candidate's **contact** is the pair with the smallest ratio.
+candidate's **contact** is the pair with the smallest ratio. Two placed atoms
+that are unbonded and too close are a pair like any other — that is a library
+whose `after` geometry is wrong, blocked on every host, and the load-time
+close-pair warning of §3.1, extended to `after`, tells the author first.
+
+**Nothing is mutated to run the check, at either end.** `apply_matched` is
+infallible by design and there is no rollback of a half-applied step, so the
+check runs *before* it, from the match and the pattern alone, at replay and
+at placement alike. Concretely, one function takes the workpiece, the
+operation, the match and the step and returns the contact:
+
+- a placed atom's position is `step.place(after.pos)`;
+- an added atom's bonds are the `after` bonds at its id, mapped through the
+  match (or to another placed atom); a moved atom's are its matched workpiece
+  atom's current bonds, minus the `before`-only bonds at its id, plus the
+  `after`-only ones;
+- its neighbours are the workpiece atoms within the search radius, **skipping
+  the atoms the step deletes** and the matched atoms of moved ids at their
+  *old* positions, plus the other placed atoms of the same step at their
+  placed positions;
+- every neighbour it is not bonded to contributes a ratio; the smallest is
+  the contact.
+
+This is the same information the preview already derives (`preview_atoms`,
+`preview_bonds`). At replay the function runs after `match_before` and before
+`apply_matched`, for the target side and for the tool side; at placement it
+runs per candidate after the fit.
+
+This is the §6 pair check restricted to the atoms a step touches, which is
+the point: one predicate — *unbonded and closer than `clash`* — on the inputs
+and on every step, stated once.
 
 ### 5.2 One rule
 
 A candidate whose contact has `ratio < CLASH_BLOCK` (library `clash`, default
-0.9) is **blocked**: at placement the row goes below the rule, dimmed and
-unselectable, with the reason where the residual would be ("would put Si
-0.33 Å from Cl"); at replay it is `MechanosynthError::Clash`, naming the step,
-both atoms, the distance and the threshold. Every other ratio is silent.
+0.9) is **blocked**: at placement it cannot be chosen, and carries the reason
+where its residual would be ("would put Si 0.33 Å from Cl"); at replay it is
+`MechanosynthError::Clash`, naming the step, both atoms, the distance and the
+threshold. Every other ratio is silent.
+
+**Blocking is a property of a candidate, and a row is only as blocked as all
+of its candidates.** This matters because the rows that motivate the check are
+mixed: `si_donate_edge` on a real edge host has one good fit and one flipped,
+clash-blocked fit (§1), and the good one must stay offerable. So:
+
+- a blocked candidate **stays in the row's candidate list**, at its index,
+  after every unblocked candidate in the ranking, marked with its refusal.
+  It stays because it must be previewable — the reason text is about the
+  ghost the user is looking at — and `preview_at` and `CandidateRow.index`
+  already index that list; a separate list would be a second `near_miss`
+  with its own preview path for no gain;
+- a row is **offerable** when it fits, its tool is ready, and **at least one**
+  candidate is unblocked: `Applicability::offerable()` becomes
+  `fits && tool ready && candidates.any(unblocked)`. A row whose every
+  candidate is blocked goes below the rule with the near misses, dimmed, with
+  the best candidate's reason where the residual would be. A mixed row stays
+  above the rule and shows its blocked candidates dimmed inline, each with
+  its reason;
+- `choose` refuses **by candidate**: choosing a blocked candidate of an
+  otherwise offerable row fails with that candidate's reason, so a blocked
+  candidate cannot be committed by any path. The row-level refusals `choose`
+  already has (near miss, tool not ready) stay as they are, and a row whose
+  every candidate is blocked is refused at the row with its reason before the
+  index is looked at.
+
+The one refusal that is row-level by construction is the clicked atom's own
+degree (§4.2): the clicked atom is the same in every candidate of a call, so
+`Refusal::Degree` is on all of them and the row is dimmed whole. The
+after-state collapse (§8) never has to arbitrate: two candidates with the same
+after state place the same atoms and have the same contact.
+
+The existing type-level fact — a row holds *either* candidates *or* a near
+miss, never both — is untouched. A row with candidates and none offerable is
+already a shape the editor has (a fitting row whose tool is not ready), and a
+fully blocked row is that shape with a different reason.
 
 There is deliberately no second, advisory tier. One was considered — an amber
 chip for contacts between the block factor and about 1.1, which would have
@@ -434,9 +551,9 @@ the data it would report is in this document. If it is ever added it is a
 second constant and a chip, nothing structural.
 
 The blocking rule reuses the mechanism a near miss and an unready tool already
-use: `Applicability::offerable()` becomes `fits && tool ready && not blocked`,
-and `choose` refuses a blocked row with the reason, so a blocked candidate
-cannot be committed by any path.
+use — the same `offerable()` question, the same below-the-rule presentation,
+the same refusal in `choose` — with the one refinement above: the question is
+asked of each candidate, and the row answers for all of them.
 
 ### 5.3 The constants, with the data that chose them
 
@@ -445,15 +562,25 @@ that "half the sum of the radii" and even 0.8 are too conservative, meaning
 they block too little. The measurements below are from the scratch program of
 §1, run on both existing libraries: every candidate the editor offers on the
 three probe atoms, and every one of the 140 workpiece steps of the v3 build and
-the 152 steps of the diamond build, replayed with the definitions of §5.1.
+the 152 steps of the diamond build, replayed with the measurement described
+after the first table.
 
 **What must be blocked**, by ratio:
 
 | case | ratio | caught by anything else? |
 |---|---|---|
 | placed atom on an existing atom (all donations on a bulk atom or a chlorinated host; the edge variant's diagonal candidate) | 0.00 – 0.31 | degree, for the bulk and chlorinated hosts |
-| moved atoms compressed against unlisted bonded neighbours (`dimerize`, `dimer_open` in the bulk) | 0.82 – 0.89 | degree |
 | upside-down planar precursor: a Cl 1.84 Å from a bulk Si | **0.86** | only the planar-frame warning, once the generator acts on it |
+
+(The bulk `dimerize` and `dimer_open` candidates compress moved atoms against
+neighbours they are *bonded* to, at 0.82–0.89. Under §5.1 those pairs are not
+checked; degree is what rejects those candidates, and it does.)
+
+The measurements were taken with an earlier definition of the check that also
+excluded every matched pattern atom from the comparison. Frame atoms sit at
+second-neighbour distance or further from anything a step places, and the
+host is bonded to what it receives, so the numbers are not expected to move;
+the replay-floor fixture of §11 is what confirms it under §5.1 as written.
 
 **What must pass**, the smallest ratios found in the two legitimate builds:
 
@@ -549,7 +676,7 @@ check reports.
 `Candidate` gains
 
 ```rust
-pub contact: Option<Contact>,        // the worst placed-vs-unaccounted pair
+pub contact: Option<Contact>,        // the closest placed-vs-unbonded pair
 pub refusal: Option<Refusal>,        // why the candidate is not offerable
 ```
 
@@ -561,11 +688,23 @@ the same way; only the clicked atom's own degree reaches a candidate, because
 "this host has 4 bonds and the operation needs 3" is the coverage report the
 editor exists to give (§4.2).
 
-`OfferRow` and the API row carry `blocked: Option<String>`; the popup shows a
-blocked row below the rule the way it shows a near miss, with the reason text
-where the residual would be. Nothing else in the popup changes; the mute set is
-untouched. At replay a clash is an error like any other match failure, so the
-`step` record does not change.
+`Applicability` gains nothing but the new `offerable()` rule of §5.2; blocked
+candidates live in `candidates`, ranked after the unblocked ones. `rank`
+orders a row's candidates blocked-last before its existing residual order,
+so index 0 of an offerable row is always a placeable candidate and the row's
+default preview is never a blocked one.
+
+`CandidateRow` (and its API twin) gains `blocked: Option<String>`, the
+refusal in the words the popup shows: the candidate is dimmed inline with
+that text where its residual would be, and clicking it previews it (a blocked
+ghost is the most useful thing to look at) but the place button is disabled.
+`OfferRow` (and its API twin) gains `blocked: Option<String>` too, set only
+when **every** candidate of the row is blocked, holding the best candidate's
+reason; the popup then shows the row below the rule the way it shows a near
+miss, with that text where the residual would be. A mixed row has `blocked:
+None`, sits above the rule, and dims only the candidates that are. Nothing
+else in the popup changes; the mute set is untouched. At replay a clash is an
+error like any other match failure, so the `step` record does not change.
 
 ---
 
@@ -600,8 +739,10 @@ its reason:
 
 1. **The origin convention, and anchors**: the atom the operation primarily
    acts on is id 1 at the origin, and it is the atom the user clicks. A
-   reaction with several equivalent primary atoms numbers them first and says
-   `anchors: n`. Frame atoms are never anchors.
+   reaction whose primary atoms are of *different* elements numbers them
+   first and says `anchors: n`, so a click on any of them is admitted; a
+   homonuclear pair needs no `anchors`, because a click on either already
+   plays id 1. Frame atoms are never anchors.
 2. **Frame atoms**: name the host's bonded neighbours as `"*"` atoms present
    unchanged in both halves — none for an abstraction that places nothing,
    and enough to span three dimensions whenever `after` places anything off
@@ -637,8 +778,10 @@ rationale; the guide page keeps the rules.
   page (§9).
 - `nodes/atomic.md`, `mechanosynth` → "How a step is applied": the bond,
   degree and clash checks and their errors; the structure sanity errors.
-- `nodes/atomic.md`, `mechanosynth_edit` → "The offer popup": blocked rows and
-  their reasons; that a blocked row previews like a near miss.
+- `nodes/atomic.md`, `mechanosynth_edit` → "The offer popup": blocked
+  candidates and blocked rows, their reasons, that a row is below the rule
+  only when every way of placing it is blocked, and that a blocked candidate
+  previews like a near miss.
 - `nodes/atomic.md`, `mechanosynth_edit` → "Placing a step": "click the atom
   the operation acts on" becomes literally true — an operation is offered only
   on its anchors, and a click on any other atom of its pattern does not list
@@ -662,11 +805,16 @@ In `rust/crates/atomcad-crystolecule/tests/crystolecule/`:
   four-coordinate host is not offered a `deg: 3` donation and the sweep row
   says why; a click on a frame atom is `NoRole` naming the anchors, and the
   sweep drops the operation (the chlorine fixture: one offer, `cl_abstract`);
-  with `anchors: 2` either atom of a symmetric operation places it and the
-  clicked atom is anchor 1; the search prunes on bonds and degree (assignment count
-  non-increasing on the pruning-regression fixture); a candidate landing on an
-  atom is produced with `Refusal::Clash` and is not offerable; a
-  donate-then-bridge candidate is offerable; the proper and
+  either atom of a homonuclear symmetric operation places it with the clicked
+  atom as id 1, with and without `anchors: 2`; on a heteronuclear fixture with
+  `anchors: 2` a click on the id-2 element plays id 2 and the fit's `t` is
+  the id-1 atom's position, and without `anchors` the same click is `NoRole`;
+  the search prunes on bonds and degree (assignment count non-increasing on
+  the pruning-regression fixture); a candidate landing on an atom is produced
+  with `Refusal::Clash`, ranked after the row's unblocked candidates; a row
+  with one blocked and one clean candidate is offerable and a row whose every
+  candidate is blocked is not; a donate-then-bridge candidate is offerable;
+  the proper and
   mirrored fits of a symmetric frame are one candidate at any residual below
   the gate; **every candidate the engine offers replays**, extended to the
   three predicates.
@@ -678,10 +826,12 @@ In `rust/crates/atomcad-crystolecule/tests/crystolecule/`:
   build files already under `tests/`, or a reduced pair if they are too large.
 
 In `rust/crates/atomcad-structure-designer/tests/structure_designer/`:
-`mechanosynth_edit_placement_test.rs` — `choose` refuses a blocked row with
-its reason; the API row carries `blocked`.
+`mechanosynth_edit_placement_test.rs` — `choose` refuses a blocked candidate
+of an offerable row with that candidate's reason and commits its clean
+sibling; `choose` refuses a fully blocked row at the row; the API candidate
+row and offer row carry `blocked`, the latter only when every candidate is.
 
-The Flutter smoke test is not run by agents; the popup's blocked row is a
+The Flutter smoke test is not run by agents; the popup's blocked candidates and fully blocked rows are a
 manual walkthrough item.
 
 ---
@@ -693,15 +843,27 @@ manual walkthrough item.
 | **0** | duplicate-candidate fix (§8) | `place.rs`, one test |
 | **1** | `/3`: closed-world bonds, `deg`, `anchors`, `clash` in the schema and parser; the anchor role rule; load-time validation of §3.5; bond and degree checks in `match_before` and in the placement search and role rule; new error variants | `schema.rs`, `parse.rs`, `apply.rs`, `place.rs`, `scene.rs`, tests, guide "The two files" / "How a step is applied" |
 | **2** | steric check: `Contact`, `Refusal`, `offerable`, replay error; structure sanity in `build_scene` and the nodes | `place.rs`, `apply.rs`, `scene.rs`, `mechanosynth.rs`, `mechanosynth_edit.rs`, tests |
-| **3** | editor surfacing: `OfferRow`, API, popup (blocked reason); guide "The offer popup" | `mechanosynth_edit_ops.rs`, `mechanosynth_edit_api.rs`, FRB codegen, `mechanosynth_offer_popup.dart` |
+| **3** | editor surfacing: `CandidateRow.blocked`, `OfferRow.blocked`, `choose` by candidate, API, popup (blocked candidates inline, fully blocked rows below the rule); guide "The offer popup" | `mechanosynth_edit_ops.rs`, `mechanosynth_edit_api.rs`, FRB codegen, `mechanosynth_offer_popup.dart` |
 | **4** | the guide page `op_libraries.md` and the move out of `atomic.md`; AGENTS pointers | docs |
-| **ext** | outside the repo, before Phase 1 lands: the generator writes `/3` — bonds among named atoms in both halves, `deg` as drawn, `anchors` where a reaction is symmetric, a frame atom off the plane for the precursor and the edge host, the format string — and both libraries are regenerated and replayed | `mechanosynth/gen` |
+| **ext** | outside the repo, before Phase 1 lands: the generator writes `/3` — bonds among named atoms in both halves, `deg` as drawn, a frame atom off the plane for the precursor and the edge host, the format string; `anchors` only if an operation has primary atoms of different elements, which none in v3 has — and both libraries are regenerated and replayed | `mechanosynth/gen` |
 
 Phase 1 breaks every existing library on purpose; the generator change is the
 pre-condition, and the diamond and silicon runs are the regression on it. The
 replay of the regenerated v3 build must be step-identical to today's except for
 the bonds the new patterns carry, which are the bonds the workpiece already
 has.
+
+**The in-repo fixtures are not generated and are migrated by hand in Phase
+1.** The `/2` libraries under `rust/tests/fixtures/mechanosynth/`
+(`place_ops.json`, `tool_ops.json`, `methylate_ops.json` and the rest) and the
+inline libraries in `mechanosynth_test.rs` and `mechanosynth_tools_test.rs`
+are hand-written. Under closed-world bonds a fixture pattern that names a
+host and three unbonded frame atoms now asserts "unbonded", so the existing
+placement and replay tests fail on semantics, not just on the format string.
+For each fixture: bump the format, list the bonds its atoms actually have in
+the fixture workpiece it is matched against, and add `deg` only where a test
+is about it. `bad_ops.json` keeps its deliberate faults. A fixture whose
+purpose is a `/2`-only behaviour (none is expected) is deleted with its test.
 
 ---
 
@@ -735,11 +897,24 @@ has.
   neighbours) are why it is a warning with an open table rather than an error.
 - **Cross-participant exclusion in the steric check**, as the generator does.
   The generator excluded it to keep a tool's cargo from clashing with its own
-  apex; the roles exclusion of §5.1 handles that, and a target-side atom
-  landing inside a tool is a real collision.
+  apex; under §5.1 the cargo is bonded to the apex and so is never checked
+  against it, and a target-side atom landing inside a tool is a real
+  collision.
+- **Excluding every matched pattern atom from the steric check**, the
+  definition an earlier draft used. It was a second rule beside the bond
+  rule, it needed a special case for moved atoms, and it hid a placed atom
+  landing on a frame atom. *Unbonded and too close* is the whole rule, and it
+  is the same rule §6 applies to the inputs.
 - **A per-atom `anchor` flag instead of a count** (§3.4): a second numbering
-  convention beside the origin one, and an anchor off the origin is clickable
-  but not where the fit's translation lands.
+  convention beside the origin one, for no more expressiveness.
+- **Blocked candidates in a separate list, like `near_miss`** (§5.2). A
+  blocked candidate must be previewable, and it belongs to a row that may
+  also hold placeable ones; keeping it in `candidates` at a stable index
+  reuses `preview_at` and `CandidateRow.index` unchanged, where a second list
+  would need a second preview path and a second index space.
+- **Blocking the whole row on one blocked candidate.** The motivating rows
+  are mixed (§5.2); a row-level block would dim `si_donate_edge` on every
+  legitimate edge host because its flipped fit clashes.
 - **Inferring anchors as "every reacting atom".** `c_insert` moves five atoms,
   including a hydrogen; a click on that hydrogen would place the insertion,
   which is not what anyone means by it. Which atoms are primary is knowledge
@@ -757,7 +932,7 @@ has.
 
 - Whether the sweep should show *all* degree-rejected operations as dimmed
   rows, or only those whose geometry would otherwise have fit. This document
-  says the latter (§7); the former is more complete and longer.
+  says the latter (§4.2); the former is more complete and longer.
 - The valence table of §3.5: which elements, and whether `N 4` (ammonium-like
   nitrogen) belongs in a covalent-only table.
 - **A second selected atom as a candidate filter.** After the anchor rule
