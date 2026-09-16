@@ -158,6 +158,14 @@ Rect mechanosynthActionBox({
 /// fills the viewport the least-overlapping side does — with the ring and the
 /// leader line still saying what belongs to what, and the header still
 /// draggable.
+///
+/// The side is chosen from the **undragged** placement and [drag] is applied
+/// afterwards. Choosing it from the dragged rectangle instead made the popup
+/// jump the moment a drag carried it over the reaction: the chosen side started
+/// overlapping, another side won, and the list teleported out from under the
+/// pointer. Avoidance is the *initial* placement's job; once the user takes
+/// hold of the header the position is theirs, and a drag over the reaction is a
+/// deliberate act rather than something to be corrected.
 Offset mechanosynthPopupPosition({
   required Rect box,
   required Size size,
@@ -175,19 +183,23 @@ Offset mechanosynthPopupPosition({
     Offset(centredX, box.top - MS_POPUP_GAP - size.height),
   ];
 
-  Offset? best;
+  var automatic = _clampInto(options.first, size, viewport);
   var bestOverlap = double.infinity;
   for (final option in options) {
-    final placed = _clampInto(option + drag, size, viewport);
+    final placed = _clampInto(option, size, viewport);
     final overlap = (placed & size).intersect(box);
     final area = overlap.isEmpty ? 0.0 : overlap.width * overlap.height;
-    if (area == 0.0) return placed;
+    if (area == 0.0) {
+      automatic = placed;
+      break;
+    }
     if (area < bestOverlap) {
       bestOverlap = area;
-      best = placed;
+      automatic = placed;
     }
   }
-  return best ?? _clampInto(options.first + drag, size, viewport);
+  if (drag == Offset.zero) return automatic;
+  return _clampInto(automatic + drag, size, viewport);
 }
 
 /// Keeps a popup of [size] wholly inside a viewport of [viewportSize], minus

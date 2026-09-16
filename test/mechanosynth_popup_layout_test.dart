@@ -161,6 +161,41 @@ void main() {
       expect(dragged - base, const Offset(40, 25));
     });
 
+    test('a drag onto the reaction does not flip it to another side', () {
+      // The jump this pins: the side was re-chosen from the *dragged*
+      // rectangle, so dragging the list over the reaction made the chosen side
+      // overlap, another side win, and the popup teleport out from under the
+      // pointer. Once the user is dragging, the position is theirs.
+      final box = mechanosynthActionBox(
+        anchor: const Offset(400, 300),
+        ghosts: const [],
+        fallbackCentre: Offset.zero,
+      );
+      final base = mechanosynthPopupPosition(
+          box: box, size: _popup, viewportSize: _viewport);
+
+      // Far enough left to bury the popup in the action box.
+      final onto = Offset(box.center.dx - _popup.width / 2 - base.dx,
+          box.center.dy - _popup.height / 2 - base.dy);
+      final dragged = mechanosynthPopupPosition(
+          box: box, size: _popup, viewportSize: _viewport, drag: onto);
+
+      expect(dragged, base + onto);
+      expect((dragged & _popup).intersect(box).isEmpty, isFalse,
+          reason: 'the fixture must actually put the popup on the reaction');
+
+      // And it keeps following the pointer from there, one pixel at a time,
+      // instead of snapping back out.
+      for (var step = 1; step <= 5; step++) {
+        final nudged = mechanosynthPopupPosition(
+            box: box,
+            size: _popup,
+            viewportSize: _viewport,
+            drag: onto + Offset(step.toDouble(), 0));
+        expect(nudged, base + onto + Offset(step.toDouble(), 0));
+      }
+    });
+
     test('still places something when the reaction fills the viewport', () {
       // Nothing can be clear of this; the contract is that it stays on screen
       // and the leader line does the explaining.
