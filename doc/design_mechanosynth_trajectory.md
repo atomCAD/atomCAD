@@ -20,7 +20,14 @@ tool's atoms *with their radii*, and an obstacle is charged its own radius
 alone. The old pairing — centres in the envelope, the tool's widest radius added
 to every obstacle — charged the tool's extent twice, which grew the keep-out
 sphere around a site's own host atom past the bond length and made every
-abstraction unreachable from every direction (§The sweep). Phase 1 is
+abstraction unreachable from every direction (§The sweep). The same review then
+**cut the trajectory loose from the tool layout entirely**: the standoff is a
+constant height above the reaction point rather than the park plane, and *no*
+tool's atoms are obstacles — not the visiting one's, not anyone else's. A visit
+is now a property of its site alone, so a sequence can be generated before
+anyone decides where the tools go, and the tools can be moved afterwards without
+invalidating it. Keeping them out of each other's way became the designer's job:
+park them on different sides of the workpiece and its reservoirs. Phase 1 is
 implemented; Phases 2–4 are not.
 
 Builds on `doc/design_mechanosynth_tools.md` (milestone 1: what a build does
@@ -92,8 +99,7 @@ In scope:
   the tool, switched on and coloured in the preferences (off by default),
   through a general overlay route from `EvalOutput` to the wireframe pass;
 - the panel's time row and readout lines; the reference guide, including the
-  layout a demo wants (tools parked behind the workpiece, away from the
-  camera).
+  layout a demo wants (each tool on its own side of the work).
 
 Out of scope, each with a home in §Follow-ups or §The clock: a real-time clock
 over the build and per-operation durations in use; a play button; animation
@@ -172,10 +178,10 @@ Two facts make this cheap and honest:
 
 - **At most one tool is away from park at any step.** A second tool's run
   cannot begin inside the first's, because its `tip` step would end the
-  first run. So the engine never has to ask whether a hovering tool is in
-  another tool's way: while a tool hovers, nothing else moves, and the sweep
-  that cleared its standoff saw every other tool at park, which is where they
-  are.
+  first run. Since the sweep ignores every tool this is no longer what makes
+  the collision model sound — it is what keeps the *motion* model simple:
+  one moving thing at a time, so `ToolMotion` describes one tool and a viewer
+  has one thing to follow.
 - **The next standoff is a function of the scene before the next visit**,
   which is the scene after this step plus the settles between — the engine
   has it by applying those steps to a clone. The standoff a tool flies to at
@@ -389,9 +395,9 @@ on its own: `approach_direction` takes an envelope, a reaction point and an
 obstacle list and returns the best direction with its clearance. That is the
 design's answer to "what if no direction exists": the generator does not
 emit the step, and sequences differently. The answer is the same in both
-places only while the obstacles are: parked tools are obstacles, so the
-generator sweeps against the parks it writes into the demo's tool files,
-which are the parks the project then loads (§Phases).
+places, and now unconditionally so: **no tool is an obstacle**, so neither the
+generator nor the node has to know where any tool sits, and the two cannot
+disagree about it.
 
 Rejected: **an approach direction from the local surface normal** (the
 centroid of the neighbourhood around the site). It is a guess about free
@@ -409,19 +415,12 @@ A visit has a **from** pose and a **to** pose. `from` is park on the first
 step of a run and the visit's own standoff otherwise; `to` is the next
 visit's standoff inside a run and park at its end. Between them:
 
-- the **standoff point** `S = p_r + d · H`: where the approach axis meets
-  the **park plane** `z = z_park`, the horizontal plane through the parked
-  apex `t_park` — `H = (z_park − z_r) / d_z`, `z_r` the reaction point's
-  height and `d_z` the direction's `z` component, floored at
-  `cos STANDOFF_TILT_CAP` (60°) so that a steeply tilted approach gets a
-  standoff about twice the park height up its axis rather than one at
-  infinity, and `H` never less than `MIN_STANDOFF` (6 Å). Vertical or
-  tilted, the standoff is at the park height, so every flight is level and
-  none passes under a neighbour's apex. An earlier draft projected the park
-  offset onto `d`; for a tilt away from the park that collapsed to the 6 Å
-  floor — below the parked apexes, the very case the fixed standoff is
-  rejected for below — and for a tilt toward a distant park it climbed far
-  above the plane;
+- the **standoff point** `S = p_r + d · STANDOFF_HEIGHT`: a constant 6 Å up
+  the approach direction from the reaction point. Nothing about the tools
+  enters it. Two earlier drafts derived it from the park — first by projecting
+  the park offset onto `d`, then by meeting the park plane — and both tied a
+  visit's shape to a layout the sequence has no business knowing. A visit is a
+  property of its site;
 - **inbound flight**, when `from` is park: a straight line from the parked
   apex `t_park` to `S`,
   the orientation slerping from the parked one to the reaction one on the
@@ -467,11 +466,8 @@ clock's business (§The clock).
 
 Rejected: **the straight line from park to site.** A tool parked thirty
 ångström away and nine above descends at seventeen degrees and sweeps its body
-through the passivation layer beside the site. Also rejected: **a fixed
-standoff height** independent of the park. Six ångström above the site is
-below the parked apexes in the silicon demo, so a tool flying at that height
-passes *under* its neighbours with its cage through their apex; the park
-height puts it beside them. Also rejected: **routing a flight around
+through the passivation layer beside the site; the standoff is what makes the
+last leg vertical. Also rejected: **routing a flight around
 obstacles.** It is where a path planner begins, and a re-park solves every
 case in a one-camera scene; §Follow-ups names the shape it would take.
 
@@ -678,15 +674,11 @@ pub fn approach_direction(
     obstacles: &[(DVec3, f64)],
 ) -> Approach;
 
-/// The one definition of an obstacle: every scene atom that is not the
-/// tool's and not in `exclude`, with margin `clash · r_cov(atom)`. The
-/// tool's own extent is in the envelope, not here.
-pub fn obstacles_for(
-    scene: &Scene,
-    tool: usize,
-    exclude: &[u32],
-    clash: f64,
-) -> Vec<(DVec3, f64)>;
+/// The one definition of an obstacle: every scene atom belonging to **no
+/// tool** and not in `exclude`, with margin `clash · r_cov(atom)`. The
+/// tool's own extent is in the envelope, not here; the other tools are
+/// nowhere, so that a sequence never depends on the layout.
+pub fn obstacles_for(scene: &Scene, exclude: &[u32], clash: f64) -> Vec<(DVec3, f64)>;
 
 /// Where one `tip` step's tool reacts and from which direction — the
 /// feasibility half of a visit, with no roll and no path in it.
@@ -695,8 +687,8 @@ pub struct Landing {
     pub reaction_point: DVec3,       // `p_r = step.r · reaction.target + step.t`
     pub reaction_tool: DVec3,        // `reaction.tool`, in the tool's frame
     pub approach: Approach,
-    /// Up the approach to the park plane: `(z_park − z_r) / max(d_z,
-    /// cos STANDOFF_TILT_CAP)`, never less than `MIN_STANDOFF`, Å.
+    /// How far up the approach the visit begins and ends, Å. Always
+    /// `STANDOFF_HEIGHT`; a field so a library could one day state its own.
     pub standoff_height: f64,
 }
 
@@ -743,8 +735,7 @@ pub struct SceneEffect {
     pub landing: Option<Landing>,
 }
 
-pub const MIN_STANDOFF: f64 = 6.0;           // Å
-pub const STANDOFF_TILT_CAP: f64 = 60.0;     // degrees
+pub const STANDOFF_HEIGHT: f64 = 6.0;        // Å
 pub const CLEAR_MARGIN: f64 = 0.5;           // Å
 pub const SWEEP_DIRECTIONS: usize = 256;
 pub const SWEEP_REFINEMENTS: usize = 8;
@@ -1076,11 +1067,12 @@ preference and put a preferences read into `eval`.
   property, what the slider shows (the visit's shape, the switch at the
   middle, runs and hovering), the two readout lines, what a blocked site
   looks like,
-  and **how to lay out a scene**: park the tools in a row **behind the
-  workpiece and the reservoir, away from the camera**, at one height, that
-  height being where every flight happens; a tool then leaves park once per
-  run, works across the scene in front of the camera, and goes home when its
-  run ends.
+  and **how to lay out a scene**: put each tool on a **different side** of the
+  workpiece and its reservoirs — one left, one right, one in front — clear of
+  the work itself. Nothing checks this, because the sweep does not look at
+  tools; what it buys is that no flight crosses another tool and no park sits
+  where the build will grow. A tool then leaves park once per run, works across
+  the scene, and goes home when its run ends.
 - `doc/reference_guide/nodes/math_programming.md`, the `MechanosynthStep`
   record: the five appended fields.
 - `doc/reference_guide/ui.md`, the preferences dialog: the two envelope
@@ -1182,9 +1174,9 @@ Through the scene, on `tool_scene.xyz` and the tagged fixture tools:
   every other participant's atoms, and its margins are
   `clash · (r_cov + r_tool)`;
 - `plan_landing` puts `reaction_point` at `step.r · reaction.target +
-  step.t`; the standoff lies in the park plane — its `z` equals the parked
-  apex's for a vertical approach and for a tilted one alike — and is
-  `MIN_STANDOFF` up the axis when the tool is parked lower;
+  step.t`; the standoff is `STANDOFF_HEIGHT` up the approach direction, the
+  same for a vertical approach and a tilted one, and a tool parked anywhere at
+  all gives the same landing;
 - `build_scene` copies the type's envelope onto the binding, and on a
   molecule with an atom outside that envelope at some `tip` operation's
   tool-side reaction point fails with `ToolOutsideEnvelope` naming the atom
@@ -1344,17 +1336,17 @@ the engine tests above. The external generator is rebuilt against the new
 `SceneEffect` (one added field), gains the one check that refuses a step
 whose landing is not `reachable()`, and **moves its parks**: today it parks
 the tools 9.33 Å above the top face with `si_tool` between the workpiece and
-the reservoir, which is on the line of every reservoir-to-workpiece flight
-and inside the vertical cylinder of any site under it. The parks go where
-§Reference guide tells a user to put them — in a row behind the workpiece
-and the reservoir, away from the camera, at one height, off every flight
-line — and the kickoff check is made against that layout. The fixture
+the reservoir, which is on the line of every reservoir-to-workpiece flight.
+The parks go where §Reference guide tells a user to put them — each tool on
+its own side of the work, clear of it. Nothing in the sweep depends on that
+any more, so the kickoff check would pass either way; what the layout buys is
+a scan that reports no crossed flight and a steric rule that refuses nothing. The fixture
 migration of §Testing is the first commit. Kickoff check: the silicon v3
 file set, regenerated as `/4` by the external generator with envelopes,
 reaction points and the new parks, replays at `(k, 1.0)` with the workpiece
 identical to milestone 1 for all 171 steps; every `tip` step is reachable
-and vertical (the demo's sites are all on the top face and nothing parks
-over them); every visit's scan is clear; at `(k, 0.5)` every cargo sits on
+and vertical (the demo's sites are all on the top face); every visit's scan is
+clear; at `(k, 0.5)` every cargo sits on
 its target's reaction point; and the cover phase is **one run per tool**:
 the shuttle leaves park once, alternates reservoir and workpiece for
 sixty-two visits with the settles passing under it, and returns once.
@@ -1421,7 +1413,7 @@ decision, as milestone 1 already said.
   cage opens — the same `Visit` rendered rather than scrubbed, with its own
   preference switch and colour.
 - **Library-stated standoff and speed.** `"trajectory": { "standoff": 8.0 }`
-  on the library, overriding `MIN_STANDOFF`, when a second process shows six
+  on the library, overriding `STANDOFF_HEIGHT`, when a second process shows six
   ångström is not one number for all.
 - **Time on `mechanosynth_edit`**, if authors want to watch a path before
   committing a step; needs the hit test to read the moved scene.
@@ -1486,9 +1478,13 @@ decision, as milestone 1 already said.
 
 ## Open questions
 
-- Whether `MIN_STANDOFF = 6 Å`, `STANDOFF_TILT_CAP = 60°`,
-  `CLEAR_MARGIN = 0.5 Å` and the `0.45 / 0.55` dwell are right for the
-  silicon demo's camera. Numbers to look at, not to argue about.
+- Whether `STANDOFF_HEIGHT = 6 Å`, `CLEAR_MARGIN = 0.5 Å` and the
+  `0.45 / 0.55` dwell are right for the silicon demo's camera. Numbers to look
+  at, not to argue about.
+- Whether a flight that crosses another tool should be more than a report, now
+  that the sweep does not look at tools at all. The path scan sees it and the
+  panel says so, which is the feedback a designer needs to re-park; making it
+  an error would put the layout back into whether a build loads.
 - Whether a `bulk` step should end a run after all. It does here because an
   exposure is a regime the instrument retracts from; a process that doses
   while a tool waits nearby would want the run to continue, and the change

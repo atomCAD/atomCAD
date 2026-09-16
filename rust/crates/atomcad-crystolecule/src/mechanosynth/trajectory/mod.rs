@@ -35,7 +35,7 @@ pub use envelope::{
     Approach, CLEAR_MARGIN, Envelope, SWEEP_DIRECTIONS, SWEEP_REFINEMENTS, approach_direction,
     sweep_directions,
 };
-pub use landing::{Landing, MIN_STANDOFF, STANDOFF_TILT_CAP, obstacles_for, plan_landing};
+pub use landing::{Landing, STANDOFF_HEIGHT, obstacles_for, plan_landing};
 pub use path::{
     PATH_SAMPLE, PATH_SAMPLE_ANGLE, PathContact, PathScan, Pose, REACTION, REACTION_DEPARTURE,
     REACTION_LANDING, ToolMotion, Visit, apply_tool_pose, arriving_pose, reaction_pose,

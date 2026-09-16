@@ -15,7 +15,7 @@ use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::io::xyz_loader::load_xyz;
 use atomcad_crystolecule::mechanosynth::{
     APEX_FRAME_TAG, BuildScript, CLASH_BLOCK, CLEAR_MARGIN, Envelope, HighlightTags, Landing,
-    MIN_STANDOFF, OpLibrary, Participant, Pose, REACTION, REACTION_DEPARTURE, REACTION_LANDING,
+    OpLibrary, Participant, Pose, REACTION, REACTION_DEPARTURE, REACTION_LANDING, STANDOFF_HEIGHT,
     SWEEP_DIRECTIONS, Scene, Step, ToolMotion, apply_step_in_scene, apply_tool_pose,
     approach_direction, arriving_pose, build_scene, load_build_script, load_library,
     match_step_in_scene, obstacles_for, plan_landing, reaction_pose, replay_scene, replay_scene_at,
@@ -80,22 +80,6 @@ fn tagged(name: &str, tool_type: &str) -> AtomicStructure {
 
 fn tip() -> AtomicStructure {
     tagged("tool_tip.xyz", "habst_tool")
-}
-
-/// The same tip, parked `height` ångström higher.
-///
-/// `tool_tip.xyz` parks its apex at `z = 0`, level with the workpiece, so the
-/// park plane *is* the site's plane there and every standoff hits the
-/// `MIN_STANDOFF` floor. A tool parked above the work is the ordinary case and
-/// the one the park-plane rule is about.
-fn tip_above(height: f64) -> AtomicStructure {
-    let mut structure = tip();
-    for atom_id in ids(&structure) {
-        let raised =
-            structure.get_atom(atom_id).expect("live").position + DVec3::new(0.0, 0.0, height);
-        structure.set_atom_position(atom_id, raised);
-    }
-    structure
 }
 
 fn probe() -> AtomicStructure {
@@ -466,17 +450,20 @@ fn the_sweep_gives_the_same_answer_for_the_same_scene() {
 // ============================================================================
 
 #[test]
-fn obstacles_are_every_atom_but_the_tools_own_and_the_excluded_set() {
+fn no_tool_is_an_obstacle_and_the_excluded_set_is_dropped() {
     let (scene, lib, _) = trajectory_scene(&[]);
+    // **Every** tool's atoms are left out, not just the visiting one's. A sweep
+    // that saw the parked tools would make a sequence depend on the tool layout,
+    // and the layout is meant to be the designer's to change afterwards.
     let tool_atoms: Vec<u32> = scene
         .participants
         .iter()
-        .filter(|(_, participant)| **participant == Participant::Tool(0))
+        .filter(|(_, participant)| matches!(participant, Participant::Tool(_)))
         .map(|(atom_id, _)| *atom_id)
         .collect();
-    assert!(!tool_atoms.is_empty());
+    assert!(tool_atoms.len() > 6, "both tools are wired");
 
-    let all = obstacles_for(&scene, 0, &[], lib.clash_factor());
+    let all = obstacles_for(&scene, &[], lib.clash_factor());
     let live = scene.structure.iter_atoms().count();
     assert_eq!(all.len(), live - tool_atoms.len());
 
@@ -486,8 +473,8 @@ fn obstacles_are_every_atom_but_the_tools_own_and_the_excluded_set() {
         .iter_atoms()
         .map(|(atom_id, _)| *atom_id)
         .find(|atom_id| !tool_atoms.contains(atom_id))
-        .expect("the scene has more than one tool");
-    let fewer = obstacles_for(&scene, 0, &[victim], lib.clash_factor());
+        .expect("the scene has atoms that are not a tool's");
+    let fewer = obstacles_for(&scene, &[victim], lib.clash_factor());
     assert_eq!(fewer.len(), all.len() - 1);
 
     // The margin is `clash · r_obstacle` and **nothing else**: the envelope is a
@@ -510,40 +497,34 @@ fn a_landing_places_the_reaction_point_where_the_step_puts_it() {
     // hydrogen's own place, so the reaction point *is* the step's translation.
     assert!((landing.reaction_point - (step.r * DVec3::ZERO + step.t)).length() < 1e-12);
     assert_eq!(landing.reaction_tool, DVec3::new(0.0, 0.0, 1.06));
-    assert!(landing.standoff_height >= MIN_STANDOFF);
+    assert_eq!(landing.standoff_height, STANDOFF_HEIGHT);
 }
 
 #[test]
-fn the_standoff_lies_in_the_park_plane_however_the_approach_tilts() {
-    // Whatever the tilt, the standoff is at the park height, so every flight is
-    // level and none passes under a neighbour's apex.
-    let tools = [tip_above(12.0), probe()];
-    let park_z = 12.0;
-
-    let vertical = landing_with(0, &[], &tools);
+fn the_standoff_is_a_constant_height_up_the_approach_wherever_the_tool_is_parked() {
+    // The visit's geometry is a property of the *site*, not of the layout: it is
+    // `STANDOFF_HEIGHT` up the approach direction from the reaction point, and
+    // nothing about the parked tools enters it. That is what lets a sequence be
+    // generated before anyone decides where the tools go.
+    let vertical = landing_of(0, &[]);
     assert_eq!(vertical.approach.direction, DVec3::Z);
-    assert!((vertical.standoff_point().z - park_z).abs() < 1e-9);
-
-    let tilted = landing_with(0, &[atom_over(DVec3::new(0.0, 0.0, 10.0))], &tools);
-    assert!(tilted.approach.tilt > 0.0, "{:?}", tilted.approach);
+    assert_eq!(vertical.standoff_height, STANDOFF_HEIGHT);
     assert!(
-        tilted.approach.tilt.to_degrees() < 60.0,
-        "past the tilt cap the park plane stops setting the height: {:?}",
-        tilted.approach
+        (vertical.standoff_point() - (vertical.reaction_point + DVec3::Z * STANDOFF_HEIGHT))
+            .length()
+            < 1e-12
     );
-    assert!((tilted.standoff_point().z - park_z).abs() < 1e-9);
-    // A tilted approach has to travel further up its own axis to reach the same
-    // plane.
-    assert!(tilted.standoff_height > vertical.standoff_height);
-}
 
-#[test]
-fn a_park_at_or_below_the_site_is_floored_at_the_minimum_standoff() {
-    // `tool_tip.xyz` parks its apex at z = 0, *below* the hydrogen it abstracts,
-    // so the park plane alone would put the standoff under the site; the floor
-    // is what keeps a descent from being a climb.
-    let landing = landing_of(0, &[]);
-    assert_eq!(landing.standoff_height, MIN_STANDOFF);
+    // A tilted approach travels the same distance, along its own axis.
+    let tilted = landing_of(0, &[atom_over(DVec3::new(0.0, 0.0, 10.0))]);
+    assert!(tilted.approach.tilt > 0.0, "{:?}", tilted.approach);
+    assert_eq!(tilted.standoff_height, STANDOFF_HEIGHT);
+    assert!(
+        (tilted.standoff_point()
+            - (tilted.reaction_point + tilted.approach.direction * STANDOFF_HEIGHT))
+            .length()
+            < 1e-12
+    );
 }
 
 #[test]
@@ -560,6 +541,41 @@ fn an_obstacle_over_the_site_tilts_the_approach_and_moving_it_away_makes_it_vert
     // Far away it is not in the way at all.
     let elsewhere = landing_of(0, &[obstacle_over(DVec3::new(0.0, 40.0, 5.0))]);
     assert_eq!(elsewhere.approach.direction, DVec3::Z);
+}
+
+#[test]
+fn a_tool_parked_over_the_site_does_not_tilt_anything() {
+    // The same skeleton in the same place, but wired to `tools` rather than to
+    // `feedstocks`, is invisible to the sweep. Keeping the tools out of each
+    // other's way is the designer's job, not the sequence's.
+    let over_the_site = {
+        let mut probe = molecule("tool_probe.xyz");
+        let apex = probe
+            .get_atom(ids(&probe)[APEX_INDEX])
+            .expect("apex")
+            .position;
+        let shift = DVec3::new(0.0, 0.0, 5.0) - apex;
+        for atom_id in ids(&probe) {
+            let moved = probe.get_atom(atom_id).expect("live").position + shift;
+            probe.set_atom_position(atom_id, moved);
+        }
+        let ids = ids(&probe);
+        for id in &ids {
+            probe.add_atom_tag(*id, "probe").expect("type tag fits");
+        }
+        probe
+            .add_atom_tag(ids[APEX_INDEX], FRAME_TAGS[0])
+            .expect("apex tag fits");
+        for (slot, index) in LEG_INDICES.iter().enumerate() {
+            probe
+                .add_atom_tag(ids[*index], FRAME_TAGS[slot + 1])
+                .expect("leg tag fits");
+        }
+        probe
+    };
+    let landing = landing_with(0, &[], &[tip(), over_the_site]);
+    assert_eq!(landing.approach.direction, DVec3::Z);
+    assert!(landing.reachable());
 }
 
 #[test]

@@ -485,11 +485,20 @@ design together, and each is easy to erode:
   a reordered step is planned against the scene it now follows and joins whatever
   run it now sits in. A stored direction or a stored run would go stale on the
   first reorder.
+- **The sweep sees no tool at all** — not the visiting one, not the parked
+  ones. A visit is a property of its site, so a sequence can be generated before
+  anyone decides where the tools go, and the tools can be moved afterwards
+  without invalidating it. The standoff is likewise a constant
+  `STANDOFF_HEIGHT` up the approach, never derived from a park. Putting the
+  tools back into `obstacles_for` would couple every emitted sequence to the
+  layout of the `.cnnd` that happened to be open. Keeping them apart is the
+  designer's job (park them on different sides of the work); the path scan
+  reports a flight that crosses one, and the steric rule still refuses a step
+  that places an atom inside one.
 - **At most one tool is away from park at any step**, because a second tool's
-  `tip` step ends the first tool's run. The sweep therefore never has to ask
-  whether a hovering tool is in the way: while a tool hovers, nothing else moves,
-  and every other tool is at the park the sweep saw. Do not relax `runs` without
-  giving the sweep a second collision model.
+  `tip` step ends the first tool's run. This is now about the *motion* model
+  rather than collisions: one moving thing at a time, so `ToolMotion` describes
+  one tool and a viewer has one thing to follow.
 
 - **The tool's radius lives in the envelope, never in the obstacle.** The
   envelope is the solid the tool occupies — `check_containment` compares each

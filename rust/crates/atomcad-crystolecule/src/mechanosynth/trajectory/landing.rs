@@ -18,14 +18,15 @@ use crate::mechanosynth::scene::{Participant, Scene, StepPlan};
 use crate::mechanosynth::schema::{MechanosynthError, Method, OpLibrary, ToolType};
 use glam::DVec3;
 
-/// The shortest standoff the engine will use, Å — the floor under a park that
-/// sits at or below the site.
-pub const MIN_STANDOFF: f64 = 6.0;
-
-/// How far from vertical the standoff's own axis may tilt before the park plane
-/// stops setting its height, degrees. Without the cap a nearly horizontal
-/// approach would put the standoff at infinity.
-pub const STANDOFF_TILT_CAP: f64 = 60.0;
+/// How far up the approach direction the standoff sits, Å.
+///
+/// **A constant, deliberately.** An earlier draft put the standoff where the
+/// approach axis met the *park plane*, which tied a visit's geometry to where
+/// the tools happened to be parked — and so tied a sequence generator to it too,
+/// since the generator has to plan the visit it is about to emit. A fixed height
+/// above the reaction point makes a visit a property of the site alone: the
+/// tools can be placed, and moved, long after the sequence exists.
+pub const STANDOFF_HEIGHT: f64 = 6.0;
 
 /// How far outside the envelope's surface a bound molecule's atom may reach
 /// before [`check_containment`] calls it a library error, Å. Floating-point
@@ -49,8 +50,9 @@ pub struct Landing {
     pub axis: DVec3,
     /// What the sweep found.
     pub approach: Approach,
-    /// Up the approach from the reaction point to the park plane, Å; never less
-    /// than [`MIN_STANDOFF`].
+    /// How far up the approach the visit begins and ends, Å. Always
+    /// [`STANDOFF_HEIGHT`]; a field rather than a constant so that a library
+    /// could one day state its own.
     pub standoff_height: f64,
 }
 
@@ -75,7 +77,7 @@ impl Landing {
 /// The one definition of an **obstacle**, so that a generator and the node can
 /// never disagree about what the sweep is avoiding.
 ///
-/// Every scene atom that is not the visiting tool's and not in `exclude` — the
+/// Every scene atom that belongs to **no tool** and is not in `exclude` — the
 /// target side's matched `before` atoms, because the site is the reaction, not
 /// an obstacle. Each obstacle is a sphere of its own covalent radius times the
 /// library's clash factor.
@@ -88,18 +90,23 @@ impl Landing {
 /// sphere around the site's own host atom grew past the bond length, and the
 /// cone's apex sits inside it.
 ///
-/// Parked tools *are* obstacles: at most one tool is ever away from park, so
-/// every other one is where the binding put it.
-pub fn obstacles_for(scene: &Scene, tool: usize, exclude: &[u32], clash: f64) -> Vec<(DVec3, f64)> {
-    let Some(binding) = scene.bindings.get(tool) else {
-        return Vec::new();
-    };
-    let visiting = Participant::Tool(binding.instance);
-
+/// **No tool is an obstacle, its own or anyone else's.** A sweep that saw the
+/// parked tools would make a visit depend on where they sit, and so would make a
+/// *sequence* depend on it: a generator plans the visit it is about to emit, so
+/// it would have to know the tool layout before it could emit a step. Leaving
+/// them out is what lets the tools be placed — and rearranged — long after the
+/// sequence exists.
+///
+/// The cost is that keeping the tools out of each other's way is the designer's
+/// job: park them on **different sides** of the workpiece and its reservoirs,
+/// one left, one right, one in front. Two things still watch for the mistakes
+/// that makes — the path scan reports a flight that crosses another tool, and
+/// the steric rule still refuses a step that places an atom inside a parked one.
+pub fn obstacles_for(scene: &Scene, exclude: &[u32], clash: f64) -> Vec<(DVec3, f64)> {
     scene
         .structure
         .iter_atoms()
-        .filter(|(atom_id, _)| scene.participant(**atom_id) != visiting)
+        .filter(|(atom_id, _)| !matches!(scene.participant(**atom_id), Participant::Tool(_)))
         .filter(|(atom_id, _)| !exclude.contains(atom_id))
         .map(|(_, atom)| (atom.position, clash * covalent_radius(atom.atomic_number)))
         .collect()
@@ -131,7 +138,7 @@ pub fn plan_landing(scene: &Scene, plan: &StepPlan<'_>) -> Landing {
         .expect("a tip operation carries a reaction block since /4");
 
     let reaction_point = plan.step_r * reaction.target + plan.step_t;
-    let obstacles = obstacles_for(scene, tool, &plan.target_atoms(), plan.clash);
+    let obstacles = obstacles_for(scene, &plan.target_atoms(), plan.clash);
     let approach = approach_direction(&binding.envelope, reaction_point, &obstacles);
 
     Landing {
@@ -139,22 +146,9 @@ pub fn plan_landing(scene: &Scene, plan: &StepPlan<'_>) -> Landing {
         reaction_point,
         reaction_tool: reaction.tool,
         axis: binding.axis,
-        standoff_height: standoff_height(binding.pose.t.z, reaction_point.z, approach.direction),
+        standoff_height: STANDOFF_HEIGHT,
         approach,
     }
-}
-
-/// How far up the approach the standoff sits: where the axis meets the **park
-/// plane**, the horizontal plane through the parked apex.
-///
-/// Vertical or tilted, the standoff is at the park height, so every flight is
-/// level and none passes under a neighbour's apex. The `z` component is floored
-/// at `cos STANDOFF_TILT_CAP` so a steeply tilted approach gets a standoff about
-/// twice the park height up its axis rather than one at infinity, and the whole
-/// thing is floored at [`MIN_STANDOFF`] for a park at or below the site.
-fn standoff_height(park_z: f64, reaction_z: f64, direction: DVec3) -> f64 {
-    let floor = STANDOFF_TILT_CAP.to_radians().cos();
-    ((park_z - reaction_z) / direction.z.max(floor)).max(MIN_STANDOFF)
 }
 
 /// Checks that every atom of a bound molecule lies inside the envelope its type
