@@ -158,7 +158,7 @@ crates/atomcad-crystolecule/src/
 | `Landing` | `mechanosynth/trajectory/landing.rs` | Where one `tip` step's tool reacts and from which direction, with `reachable()` — the verdict a generator refuses over and a replay merely reports |
 | `StepPlan` | `mechanosynth/scene.rs` | Everything a step's checks produced with nothing applied; `match_step_in_scene` makes one, `plan_landing` reads one, the apply half consumes one |
 | `Runs` | `mechanosynth/trajectory/runs.rs` | Which `tip` steps a tool performs without going home in between. Script and library only — never stored on a step |
-| `Pose` / `ToolMotion` / `Visit` | `mechanosynth/trajectory/path.rs` | A computed rigid pose (`ToolPose` without the residual), and what a tool does during one step: a `Visit` with its legs and scan, or a `Hover` over its next site |
+| `Pose` / `ToolMotion` / `Visit` / `Leg` | `mechanosynth/trajectory/path.rs` | A computed rigid pose (`ToolPose` without the residual), and what a tool does during one step: a `Visit` with its legs and scan, or a `Hover` over its next site. `Leg` names which part of that a step time falls on, in the panel's own words; it reads the same length split `pose_at` interpolates along, so the word and the pose cannot disagree |
 
 ## Core Concepts
 

@@ -24,14 +24,15 @@ use crate::api::structure_designer::structure_designer_api_types::{
 };
 use atomcad_crystolecule::mechanosynth::resolve_tolerance;
 use atomcad_crystolecule::mechanosynth::{
-    BuildScript, NO_LAYER, NO_SITE, Participant, Scene, steps_applied,
+    BuildScript, CLASH_BLOCK, NO_LAYER, NO_SITE, Participant, Scene, ToolMotion, steps_applied,
 };
 use atomcad_structure_designer::evaluator::network_result::NetworkResult;
 use atomcad_structure_designer::nodes::build_script::BuildScriptData;
 use atomcad_structure_designer::nodes::build_step::steps_from_array;
 use atomcad_structure_designer::nodes::export_build_script::ExportBuildScriptData;
 use atomcad_structure_designer::nodes::mechanosynth::{
-    MechanosynthData, OPS_PIN, STEP_PIN, STEPS_PIN, load_script_at,
+    MAX_REPORTED_CLEARANCE, MAX_REPORTED_CONTACT, MechanosynthData, OPS_PIN, STEP_PIN, STEPS_PIN,
+    TIME_PIN, load_script_at,
 };
 use atomcad_structure_designer::nodes::ops_library::OpsLibraryData;
 use atomcad_structure_designer::structure_designer::StructureDesigner;
@@ -61,6 +62,7 @@ pub fn mechanosynth_data(
         ops_file: data.ops_file.clone(),
         build_file: data.build_file.clone(),
         step: data.step,
+        time: data.time,
         has_legacy_files: data.has_legacy_files(),
     })
 }
@@ -98,6 +100,7 @@ pub fn set_mechanosynth_data(
         .with_ops_file(data.ops_file.clone())
         .with_build_file(data.build_file.clone());
     updated.step = data.step;
+    updated.time = data.time;
     updated.reload_missing(design_dir.as_deref());
 
     designer.set_node_network_data_scoped(scope_path, node_id, Box::new(updated));
@@ -153,12 +156,25 @@ pub fn mechanosynth_info(
         NetworkResult::Int(step) => step,
         _ => stored.step,
     };
+    // The `time` pin, read and clamped the way `eval` reads and clamps it, so
+    // the readout names the point the outputs were computed at.
+    let time = match designer.evaluate_node_argument(scope_path, node_id, TIME_PIN) {
+        NetworkResult::Float(time) => time,
+        NetworkResult::Int(time) => time as f64,
+        _ => stored.time,
+    }
+    .clamp(0.0, 1.0);
     // The `ops` pin, for the current step's method alone. The library is where
     // a reaction's kind is stated, so the readout has to ask it.
     let library = match designer.evaluate_node_argument(scope_path, node_id, OPS_PIN) {
         NetworkResult::OpLibrary(library) => Some(library),
         _ => stored.library.clone().map(std::sync::Arc::new),
     };
+    // What counts as a *collision* on the path is the library's clash factor,
+    // the same number the engine scanned with.
+    let clash = library
+        .as_ref()
+        .map_or(CLASH_BLOCK, |library| library.clash_factor());
 
     let Some(script) = script else {
         return Some(APIMechanosynthInfo {
@@ -175,6 +191,7 @@ pub fn mechanosynth_info(
             current_agent: String::new(),
             tools: tool_rows(stored.last_scene().as_ref()),
             feedstocks: feedstock_rows(stored.last_scene().as_ref()),
+            ..motion_lines(stored.last_scene().as_ref(), None, time, clash)
         });
     };
     let count = script.steps.len();
@@ -220,7 +237,69 @@ pub fn mechanosynth_info(
         current_agent,
         tools: tool_rows(scene.as_ref()),
         feedstocks: feedstock_rows(scene.as_ref()),
+        ..motion_lines(scene.as_ref(), stored.last_motion().as_ref(), time, clash)
     })
+}
+
+/// The panel's two readout lines, off the last evaluation's motion.
+///
+/// Returned as a whole `APIMechanosynthInfo` whose other fields are never read,
+/// so that both of `mechanosynth_info`'s returns can spread it with `..` and
+/// neither can forget a field. A `None` motion is every tool parked: empty
+/// words, and both measurements at the caps the `step` record uses, so the two
+/// surfaces report the same number for "nothing visits".
+fn motion_lines(
+    scene: Option<&Scene>,
+    motion: Option<&ToolMotion>,
+    time: f64,
+    clash: f64,
+) -> APIMechanosynthInfo {
+    let landing = motion.and_then(ToolMotion::landing);
+    let worst = motion
+        .and_then(ToolMotion::scan)
+        .and_then(|scan| scan.worst);
+    // A contact only *collides* below the library's clash factor; above it, it
+    // is the panel's "path clear (worst …)" line, which the panel builds from
+    // `contact_ratio` itself.
+    let collision = match (worst, scene) {
+        (Some(contact), Some(scene)) if contact.ratio < clash => format!(
+            "path collides at {:.0} %: {}",
+            contact.at * 100.0,
+            contact.describe(scene)
+        ),
+        _ => String::new(),
+    };
+
+    APIMechanosynthInfo {
+        time,
+        leg: motion
+            .map(|motion| motion.leg_at(time).as_str().to_string())
+            .unwrap_or_default(),
+        tilt_degrees: landing.map_or(0.0, |landing| landing.approach.tilt.to_degrees()),
+        approach_clearance: landing
+            .map_or(MAX_REPORTED_CLEARANCE, |landing| landing.approach.clearance)
+            .min(MAX_REPORTED_CLEARANCE),
+        contact_ratio: worst
+            .map_or(MAX_REPORTED_CONTACT, |contact| contact.ratio)
+            .min(MAX_REPORTED_CONTACT),
+        contact_at: worst.map_or(0.0, |contact| contact.at),
+        collision,
+        // Never read: every caller spreads this value into a literal that has
+        // already written each of these.
+        count: 0,
+        applied: 0,
+        current_op: String::new(),
+        current_note: String::new(),
+        current_method: String::new(),
+        current_phase: String::new(),
+        current_layer: NO_LAYER,
+        current_site: NO_SITE,
+        chapters: Vec::new(),
+        current_tool_type: String::new(),
+        current_agent: String::new(),
+        tools: Vec::new(),
+        feedstocks: Vec::new(),
+    }
 }
 
 /// The panel's *Tools* block: one row per bound tool molecule, in pin order.

@@ -100,6 +100,9 @@ class _MechanosynthEditorState extends State<MechanosynthEditor> {
             ? current.buildFile
             : buildFile as String?,
         step: step ?? current.step,
+        // The time row is Phase 3's; until then the property is carried
+        // through unchanged so a write of another field cannot reset it.
+        time: current.time,
         // Read-only on the kernel side; the setter ignores what is sent.
         hasLegacyFiles: current.hasLegacyFiles,
       ),

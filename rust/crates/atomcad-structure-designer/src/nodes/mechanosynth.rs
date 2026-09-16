@@ -58,8 +58,8 @@ use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::mechanosynth::{
-    BuildScript, HighlightTags, MechanosynthError, NO_LAYER, NO_SITE, OpLibrary, Scene,
-    load_build_script, load_library, replay_scene, steps_applied,
+    BuildScript, HighlightTags, MechanosynthError, NO_LAYER, NO_SITE, OpLibrary, Pose, Scene,
+    ToolMotion, apply_tool_pose, load_build_script, load_library, replay_scene_at, steps_applied,
 };
 use atomcad_util::path_utils::{get_parent_directory, resolve_path, try_make_relative};
 use glam::DMat3;
@@ -120,12 +120,31 @@ pub const STEP_PIN: usize = 3;
 /// **Appended** (pin 4 / pin 5), both optional and wire-only.
 pub const FEEDSTOCKS_PIN: usize = 4;
 pub const TOOLS_PIN: usize = 5;
+/// **Appended** (pin 6): the point *inside* the selected step, `[0, 1]`. Optional
+/// and overriding the `time` property, the way `step` overrides its own
+/// (`doc/design_mechanosynth_trajectory.md`).
+pub const TIME_PIN: usize = 6;
 
 /// `step = -1` means "every step", which is the useful default: a freshly wired
 /// node shows the finished build.
 pub fn default_step() -> i32 {
     -1
 }
+
+/// `time = 1.0` is the end of the selected step, which is milestone 1's scene
+/// exactly: the step applied and every tool home. Every project saved before
+/// this property existed therefore loads showing what it showed before.
+pub fn default_time() -> f64 {
+    1.0
+}
+
+/// The largest clearance the `step` record reports, Å: ten ångström is open sky,
+/// and an empty sweep is an infinity a record must not carry.
+pub const MAX_REPORTED_CLEARANCE: f64 = 10.0;
+
+/// The largest contact ratio the `step` record reports: twice the covalent sum
+/// is no contact, and an empty scan is an infinity.
+pub const MAX_REPORTED_CONTACT: f64 = 2.0;
 
 /// Stored data of a `mechanosynth` node.
 ///
@@ -140,6 +159,11 @@ pub struct MechanosynthData {
     /// [`steps_applied`] for the clamping rule.
     #[serde(default = "default_step")]
     pub step: i32,
+    /// Where inside the selected step the scene is taken, `[0, 1]`. Defaulted on
+    /// deserialization so a project saved before it existed loads at `1.0` —
+    /// milestone 1's scene, atom for atom.
+    #[serde(default = "default_time")]
+    pub time: f64,
 
     #[serde(skip)]
     pub library: Option<OpLibrary>,
@@ -160,6 +184,11 @@ pub struct MechanosynthData {
     /// that has not been evaluated simply reports no tools.
     #[serde(skip)]
     pub last_scene: Mutex<Option<Scene>>,
+    /// What the most recent successful evaluation's tool was doing, beside the
+    /// scene it was doing it in. The panel's approach and path lines are facts
+    /// about the visit, and a `ToolMotion` crosses no pin either.
+    #[serde(skip)]
+    pub last_motion: Mutex<Option<ToolMotion>>,
 }
 
 impl Clone for MechanosynthData {
@@ -168,10 +197,12 @@ impl Clone for MechanosynthData {
             ops_file: self.ops_file.clone(),
             build_file: self.build_file.clone(),
             step: self.step,
+            time: self.time,
             library: self.library.clone(),
             script: self.script.clone(),
             load_error: self.load_error.clone(),
             last_scene: Mutex::new(self.last_scene.lock().ok().and_then(|slot| slot.clone())),
+            last_motion: Mutex::new(self.last_motion.lock().ok().and_then(|slot| slot.clone())),
         }
     }
 }
@@ -182,10 +213,12 @@ impl MechanosynthData {
             ops_file: None,
             build_file: None,
             step: default_step(),
+            time: default_time(),
             library: None,
             script: None,
             load_error: None,
             last_scene: Mutex::new(None),
+            last_motion: Mutex::new(None),
         }
     }
 
@@ -193,6 +226,19 @@ impl MechanosynthData {
         if let Ok(mut slot) = self.last_scene.lock() {
             *slot = scene;
         }
+    }
+
+    fn record_last_motion(&self, motion: Option<ToolMotion>) {
+        if let Ok(mut slot) = self.last_motion.lock() {
+            *slot = motion;
+        }
+    }
+
+    /// What the most recent successful evaluation's tool was doing, for the
+    /// panel's approach and path lines. `None` when every tool is parked — and
+    /// when the node has not been evaluated, exactly as [`Self::last_scene`].
+    pub fn last_motion(&self) -> Option<ToolMotion> {
+        self.last_motion.lock().ok().and_then(|slot| slot.clone())
     }
 
     /// The scene the most recent successful evaluation produced, for the
@@ -452,6 +498,21 @@ impl NodeData for MechanosynthData {
             Ok(step) => step,
             Err(propagated) => return all_pins(propagated),
         };
+        // Read the way `free_rot` reads its angle, then clamped **here** rather
+        // than only in the engine, because the record reports the number the
+        // outputs were computed at.
+        let time = match network_evaluator.evaluate_or_default(
+            network_stack,
+            node_id,
+            registry,
+            context,
+            TIME_PIN,
+            self.time,
+            NetworkResult::extract_float,
+        ) {
+            Ok(time) => time.clamp(0.0, 1.0),
+            Err(propagated) => return all_pins(propagated),
+        };
 
         // The two participant pins. Unwired is an empty list, which is the
         // workpiece-only replay: no binding runs and no tool state is tracked.
@@ -501,22 +562,50 @@ impl NodeData for MechanosynthData {
             tool: Some(MS_TOOL_TAG),
             feedstock: Some(MS_FEEDSTOCK_TAG),
         };
-        match replay_scene(atoms, &feedstocks, &tools, &library, &script, step, tags) {
-            Ok(scene) => {
+        match replay_scene_at(
+            atoms,
+            &feedstocks,
+            &tools,
+            &library,
+            &script,
+            step,
+            time,
+            tags,
+        ) {
+            Ok((scene, motion)) => {
                 // `result` is the **workpiece alone**; `scene` is everything.
                 // Both keep `base`'s variant, the way `atom_union` does.
                 let mut scene_wrapper = wrapper.clone();
                 *atoms_of(&mut wrapper) = scene.workpiece();
-                *atoms_of(&mut scene_wrapper) = scene.structure.clone();
-                // The record is built from the same script and the same clamp
-                // the replay just used, so the second pin costs no second
-                // replay.
-                let record = step_record(&script, &library, step, &scene);
+                // The engine's scene is never moved: the moving tool is posed
+                // into the node's **own copy**, which is what the `scene` pin
+                // carries (`doc/design_mechanosynth_trajectory.md`).
+                let mut shown = scene.structure.clone();
+                let pose = motion.as_ref().map(|motion| {
+                    let pose = motion.pose_at(time);
+                    apply_tool_pose(&mut shown, &scene, motion.tool(), &pose);
+                    pose
+                });
+                *atoms_of(&mut scene_wrapper) = shown;
+                // The record is built from the same script, the same clamp and
+                // the same motion the replay just used, so the second pin costs
+                // no second replay.
+                let record = step_record(
+                    &script,
+                    &library,
+                    step,
+                    &scene,
+                    time,
+                    pose.as_ref(),
+                    motion.as_ref(),
+                );
                 self.record_last_scene(Some(scene));
+                self.record_last_motion(motion);
                 EvalOutput::multi(vec![wrapper, record, scene_wrapper])
             }
             Err(failure) => {
                 self.record_last_scene(None);
+                self.record_last_motion(None);
                 all_pins(error(failure.to_string()))
             }
         }
@@ -580,6 +669,7 @@ impl NodeData for MechanosynthData {
                 TextValue::String(self.build_file.clone().unwrap_or_default()),
             ),
             ("step".to_string(), TextValue::Int(self.step)),
+            ("time".to_string(), TextValue::Float(self.time)),
         ]
     }
 
@@ -607,6 +697,11 @@ impl NodeData for MechanosynthData {
             self.step = value
                 .as_int()
                 .ok_or_else(|| "step must be an integer".to_string())?;
+        }
+        if let Some(value) = props.get("time") {
+            self.time = value
+                .as_float()
+                .ok_or_else(|| "time must be a number".to_string())?;
         }
         Ok(())
     }
@@ -702,11 +797,15 @@ pub(crate) fn participants<'a>(
 /// At `index = 0` nothing has run, so the step-specific fields take their
 /// absent-field defaults rather than describing `steps[0]`, which has *not*
 /// been applied yet.
+#[allow(clippy::too_many_arguments)]
 fn step_record(
     script: &BuildScript,
     library: &OpLibrary,
     step: i32,
     scene: &Scene,
+    time: f64,
+    pose: Option<&Pose>,
+    motion: Option<&ToolMotion>,
 ) -> NetworkResult {
     let count = script.steps.len();
     let index = steps_applied(step, count);
@@ -770,6 +869,43 @@ fn step_record(
         (
             "agent".to_string(),
             text(operation.and_then(|op| op.agent.as_deref())),
+        ),
+        // Appended: the trajectory's five facts about the step
+        // (`doc/design_mechanosynth_trajectory.md`). `tool_r` / `tool_t` are
+        // what a camera follow or a gadget downstream needs and cannot derive;
+        // `approach` and `contact` are what a style rule needs to paint a tool
+        // whose site is blocked or whose flight collides.
+        ("time".to_string(), NetworkResult::Float(time)),
+        (
+            "tool_r".to_string(),
+            NetworkResult::Mat3(pose.map_or(DMat3::IDENTITY, |pose| pose.r)),
+        ),
+        (
+            "tool_t".to_string(),
+            NetworkResult::Vec3(pose.map_or(DVec3::ZERO, |pose| pose.t)),
+        ),
+        // Capped, because an empty sweep and an empty scan are both infinities
+        // and a record must stay finite. Neither cap cuts anything a rule would
+        // read: ten ångström of clearance is open sky, and a contact at twice
+        // the covalent sum is no contact.
+        (
+            "approach".to_string(),
+            NetworkResult::Float(
+                motion
+                    .and_then(ToolMotion::landing)
+                    .map_or(MAX_REPORTED_CLEARANCE, |landing| landing.approach.clearance)
+                    .min(MAX_REPORTED_CLEARANCE),
+            ),
+        ),
+        (
+            "contact".to_string(),
+            NetworkResult::Float(
+                motion
+                    .and_then(ToolMotion::scan)
+                    .and_then(|scan| scan.worst)
+                    .map_or(MAX_REPORTED_CONTACT, |contact| contact.ratio)
+                    .min(MAX_REPORTED_CONTACT),
+            ),
         ),
     ])
 }
@@ -866,7 +1002,9 @@ pub fn get_node_type() -> NodeType {
             downstream of it never picks up an atom sitting on a tip. A freshly placed node \
             shows `scene`.\n\
             \n\
-            The `ops_file` and `build_file` **properties are deprecated**. A project saved \
+            The `time` pin and property scrub **inside** the selected step, from 0 to 1. A \n            `tip` step's tool leaves park, descends on its site along a direction the engine \n            sweeps for collisions, reacts at 0.5 — where the workpiece switches from before \n            to after, for every kind of step — lifts off and flies to its next site or home; \n            a tool with another visit coming hovers over it through the settles in between. \n            `time` defaults to 1.0, the end of the step with every tool home, which is \n            exactly the scene this node produced before trajectories existed. The `step` \n            record reports the clamped `time`, the moving tool's frame (`tool_r` / `tool_t`), \n            the sweep's `approach` clearance in ångström — negative when the site is blocked \n            and the tool visits along the least-blocked direction — and the visit's worst \n            `contact` ratio over its legs.
+\n            
+\n            The `ops_file` and `build_file` **properties are deprecated**. A project saved \
             before the pins existed keeps replaying from them, and the panel offers a **Convert \
             to nodes** button that builds the `ops_library` / `build_script` nodes, wires them \
             in and clears the properties. A wired pin always wins over the property."
@@ -909,6 +1047,14 @@ pub fn get_node_type() -> NodeType {
                 id: None,
                 name: "tools".to_string(),
                 data_type: DataType::Array(Box::new(DataType::HasAtoms)),
+            },
+            // Appended (pin 6), optional: where inside the selected step the
+            // scene is taken. Overrides the `time` property the way `step`
+            // overrides its own, and is clamped to `[0, 1]` at evaluation.
+            Parameter {
+                id: None,
+                name: "time".to_string(),
+                data_type: DataType::Float,
             },
         ],
         output_pins: vec![

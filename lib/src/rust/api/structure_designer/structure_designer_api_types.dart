@@ -2956,6 +2956,11 @@ class APIMechanosynthData {
   /// Negative means "every step"; the panel writes the slider value instead.
   final int step;
 
+  /// Where inside the selected step the scene is taken, `[0, 1]`. `1.0` is the
+  /// end of the step with every tool home — the scene the node produced
+  /// before trajectories existed (`doc/design_mechanosynth_trajectory.md`).
+  final double time;
+
   /// Whether either deprecated file property is set — the condition for
   /// showing the **Convert to nodes** button. Read-only; the setter ignores
   /// it.
@@ -2965,6 +2970,7 @@ class APIMechanosynthData {
     this.opsFile,
     this.buildFile,
     required this.step,
+    required this.time,
     required this.hasLegacyFiles,
   });
 
@@ -2973,6 +2979,7 @@ class APIMechanosynthData {
       opsFile.hashCode ^
       buildFile.hashCode ^
       step.hashCode ^
+      time.hashCode ^
       hasLegacyFiles.hashCode;
 
   @override
@@ -2983,6 +2990,7 @@ class APIMechanosynthData {
           opsFile == other.opsFile &&
           buildFile == other.buildFile &&
           step == other.step &&
+          time == other.time &&
           hasLegacyFiles == other.hasLegacyFiles;
 }
 
@@ -3174,6 +3182,41 @@ class APIMechanosynthInfo {
   /// One entry per wired reservoir, in pin order.
   final List<APIMechanosynthFeedstockRow> feedstocks;
 
+  /// The clamped step time the last evaluation used — the wired `time` pin
+  /// when one is connected, else the stored property
+  /// (`doc/design_mechanosynth_trajectory.md`).
+  final double time;
+
+  /// What the moving tool is doing at that time, in words: one of
+  /// `flying from park`, `descending`, `at site (before)`,
+  /// `at site (reacted)`, `ascending`, `flying to next site`,
+  /// `returning to park`, `hovering over next site`. **Empty when every tool
+  /// is parked** — a `bulk` step, a `spontaneous` step outside a run, tools
+  /// unwired — which is how the panel knows to draw no readout lines.
+  final String leg;
+
+  /// The approach's angle from vertical, degrees. Zero when nothing visits.
+  final double tiltDegrees;
+
+  /// The sweep's clearance for the visit, Å: positive means every obstacle is
+  /// outside the tool's envelope, negative that the site is blocked and the
+  /// tool visits along the least-blocked direction. Capped, and at its cap
+  /// when nothing visits — the same convention as the `step` record's
+  /// `approach`.
+  final double approachClearance;
+
+  /// The visit's worst contact over its legs, as a ratio of the pair's
+  /// covalent-radius sum. At its cap when nothing came near or nothing moves.
+  final double contactRatio;
+
+  /// The step time of that worst contact, `[0, 1]`; zero when there is none.
+  final double contactAt;
+
+  /// The panel's path sentence when the visit **collides** — the worst contact
+  /// is below the library's clash factor — and empty otherwise. A report, never
+  /// an error: a collision on a flight is the layout, and the fix is a re-park.
+  final String collision;
+
   const APIMechanosynthInfo({
     required this.count,
     required this.applied,
@@ -3188,6 +3231,13 @@ class APIMechanosynthInfo {
     required this.currentAgent,
     required this.tools,
     required this.feedstocks,
+    required this.time,
+    required this.leg,
+    required this.tiltDegrees,
+    required this.approachClearance,
+    required this.contactRatio,
+    required this.contactAt,
+    required this.collision,
   });
 
   @override
@@ -3204,7 +3254,14 @@ class APIMechanosynthInfo {
       currentToolType.hashCode ^
       currentAgent.hashCode ^
       tools.hashCode ^
-      feedstocks.hashCode;
+      feedstocks.hashCode ^
+      time.hashCode ^
+      leg.hashCode ^
+      tiltDegrees.hashCode ^
+      approachClearance.hashCode ^
+      contactRatio.hashCode ^
+      contactAt.hashCode ^
+      collision.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -3223,7 +3280,14 @@ class APIMechanosynthInfo {
           currentToolType == other.currentToolType &&
           currentAgent == other.currentAgent &&
           tools == other.tools &&
-          feedstocks == other.feedstocks;
+          feedstocks == other.feedstocks &&
+          time == other.time &&
+          leg == other.leg &&
+          tiltDegrees == other.tiltDegrees &&
+          approachClearance == other.approachClearance &&
+          contactRatio == other.contactRatio &&
+          contactAt == other.contactAt &&
+          collision == other.collision;
 }
 
 /// One row of the offer popup: an operation that fits the clicked atom, or one

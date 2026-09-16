@@ -71,7 +71,7 @@ pub use schema::{
     Reaction, Step, ToolSide, ToolType,
 };
 pub use trajectory::{
-    Approach, CLEAR_MARGIN, Envelope, Landing, PATH_SAMPLE, PATH_SAMPLE_ANGLE, PathContact,
+    Approach, CLEAR_MARGIN, Envelope, Landing, Leg, PATH_SAMPLE, PATH_SAMPLE_ANGLE, PathContact,
     PathScan, Pose, REACTION, REACTION_DEPARTURE, REACTION_LANDING, Runs, STANDOFF_HEIGHT,
     SWEEP_DIRECTIONS, SWEEP_REFINEMENTS, ToolMotion, Visit, apply_tool_pose, approach_direction,
     arriving_pose, obstacles_for, plan_landing, reaction_pose, replay_scene_at, runs,

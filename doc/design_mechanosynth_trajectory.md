@@ -1,6 +1,6 @@
 # Design: tool trajectories in `mechanosynth`
 
-Status: **draft 2026-09-16, revised three times after review** — the
+Status: **draft 2026-09-16, revised six times after review** — the
 approach became a collision-free sweep rather than a surface-normal guess; a
 tool was allowed to fly from one site straight to its next instead of
 returning to park between them; and the engine was split into a feasibility
@@ -27,8 +27,15 @@ tool's atoms are obstacles — not the visiting one's, not anyone else's. A visi
 is now a property of its site alone, so a sequence can be generated before
 anyone decides where the tools go, and the tools can be moved afterwards without
 invalidating it. Keeping them out of each other's way became the designer's job:
-park them on different sides of the workpiece and its reservoirs. Phase 1 is
-implemented; Phases 2–4 are not.
+park them on different sides of the workpiece and its reservoirs. A sixth
+review, during Phase 2, corrected three things the document had wrong about the
+repository it describes: the text format has **no** omit-at-the-default rule and
+`get_text_properties` must be *total* (§The `mechanosynth` node); the panel's
+`leg` is an engine value, not a string the API invents, so `Leg` and
+`ToolMotion::leg_at` join the presentation layer (§Presentation); and the
+round-trip corpus entry Phase 2 asks for could not be added until `import_xyz`
+was made total, which is where that same rule had already been broken
+(§Testing). Phases 1 and 2 are implemented; Phases 3 and 4 are not.
 
 Builds on `doc/design_mechanosynth_tools.md` (milestone 1: what a build does
 to every molecule it involves, all four phases implemented 2026-09-15) and is
@@ -812,6 +819,33 @@ impl ToolMotion {
     /// hover. Continuous in `u`, and continuous across the step boundary
     /// inside a run.
     pub fn pose_at(&self, u: f64) -> Pose;
+    /// Which leg `u` falls on. The panel's readout — and the engine's, not the
+    /// API's: it reads the **same length split** `pose_at` interpolates along,
+    /// so the word and the pose cannot disagree. An API that decided the word
+    /// for itself would have had to re-derive that split from `Visit`'s fields
+    /// and would drift from it at the first change.
+    pub fn leg_at(&self, u: f64) -> Leg;
+}
+
+/// Which part of its visit a tool is on at a step time, in the panel's own
+/// words. `Hovering` is not a leg of a visit at all — it is what a tool waiting
+/// over its next site through a `spontaneous` step is doing.
+pub enum Leg {
+    FlyingFromPark,
+    Descending,
+    AtSiteBefore,
+    AtSiteReacted,
+    Ascending,
+    FlyingToNextSite,
+    ReturningToPark,
+    Hovering,
+}
+
+impl Leg {
+    /// `flying from park`, `descending`, `at site (before)`,
+    /// `at site (reacted)`, `ascending`, `flying to next site`,
+    /// `returning to park`, `hovering over next site`.
+    pub fn as_str(&self) -> &'static str;
 }
 
 /// The scan of a visit's legs. Its own type, not `apply::Contact`, whose
@@ -924,9 +958,23 @@ property, clamped to `[0, 1]`.
 
 **Property.** `time: Float`, default `1.0`; serialised with a serde default so
 every saved project loads at `1.0`; in the text format
-`build = mechanosynth { step: 12, time: 0.3 }`, omitted at the default like
-every other default. The round-trip corpus (`query` → `--replace` a no-op) is
-re-run.
+`build = mechanosynth { step: 12, time: 0.3 }`, and **written at its default
+too**, `time: 1`, like `step: -1` beside it.
+
+An earlier draft of this document said "omitted at the default like every other
+default". There is no such rule, and the opposite one is load-bearing:
+`get_text_properties` **must be total**
+(`text_format/AGENTS.md`). The editor decides whether a pin takes a literal by
+asking a *fresh* node which properties it has, so a property emitted only when
+set reads back as **wire-only** and its literal is dropped with a warning — the
+bug `a_structure_rot_axis_survives_a_replace` pins for `structure_rot`'s
+`axis_index`. A `time` written only when it was not `1.0` could therefore never
+be *set* from the text on a node that still had the default.
+
+The clamp is applied at **evaluation**, to the pin and the property alike, and
+not in the setter, so the stored number round-trips as written and only the
+outputs and the record see the clamped one. The round-trip corpus
+(`query` → `--replace` a no-op) is re-run.
 
 **Outputs.** `result` is the workpiece after `k − 1` steps for `time < 0.5`
 and after `k` from `0.5`. `scene` is the same rule with the moving or
@@ -976,13 +1024,21 @@ write the kernel — the viewport moving under the hand is the feature — which
 ## API and panel
 
 `APIMechanosynthData` gains `time: f64`. `APIMechanosynthInfo` gains `time`,
-`leg: String` — one of `flying from park`, `descending`, `at site (before)`,
-`at site (reacted)`, `ascending`, `flying to next site`, `returning to park`,
-`hovering over next site`, or empty when every tool is parked —
+`leg: String` — `motion.leg_at(time).as_str()`, so the eight words are the
+engine's (§Presentation) and empty when every tool is parked —
 `tilt_degrees: f64` and `approach_clearance: f64` from the sweep,
 `contact_ratio: f64`, `contact_at: f64` and `collision: String` from the
 scan (the panel sentence, empty when clear), all read off the last
-evaluation the way the tool rows are.
+evaluation the way the tool rows are — which means the node parks the
+`ToolMotion` beside `last_scene`, for the same reason it parks the scene: a
+panel rebuild must not cost a replay.
+
+`time` itself is read the way `applied` is: the **wired** `time` pin when one is
+connected, else the stored property, clamped — so the readout names the point
+the outputs were computed at rather than the one the node happens to store.
+`approach_clearance` and `contact_ratio` take the **same caps** as the record's
+`approach` and `contact`, and read at those caps when nothing visits, so the two
+surfaces never report a different number for the same absence.
 
 **Panel.** Under the step scrubber, a **time** row: a `Slider` over `[0, 1]`
 with a tick at `0.5`, live during the drag and bracketed for undo, a float box
@@ -1217,6 +1273,12 @@ produced, never against a typed coordinate:
   the arriving pose has the angle between the two axes and no more (minimal
   roll); `arriving_pose` on the third visit of a run is the parked
   orientation turned by the first two visits' minimal rotations, in order;
+- `ToolMotion::leg_at`: a first visit whose run continues names its six legs
+  in order (`flying from park`, `descending`, the two dwell words, `ascending`,
+  `flying to next site`); a lone visit ends `returning to park`; a chained
+  visit's inbound half is one `descending` and never a flight; a hover is
+  `hovering over next site` at every `u`; and the leg agrees with the pose —
+  where the word first becomes `descending` the tool is at its standoff;
 - `ToolMotion::pose_at`: at `u = 0` the park on a first visit and the
   standoff on a chained one; at `u = 1` the park at a run's end and the
   next standoff otherwise; the reaction pose throughout `[0.45, 0.55]`;
@@ -1265,13 +1327,21 @@ assertion is an equality against the engine:
 - a `mechanosynth` node with a bound tool emits one `ToolEnvelope` overlay
   per tool, apex at the nearest visit's reaction point, whose segments move
   with the flying tool and stand still for a parked one;
-- persistence: `time` round-trips through a `.cnnd` and is absent at the
-  default; a node saved without `time` loads at `1.0`; the text format
-  writes `time: 0.3` and omits `1.0`;
+- persistence: `time` round-trips through a `.cnnd`; a node saved **without**
+  `time` — a project from before the property existed — loads at `1.0`; the
+  text format writes `time: 0.3`, and writes `time: 1` at the default too,
+  because `get_text_properties` is total (§The `mechanosynth` node);
 - `nodes/node_snapshots_test.rs` gains `mechanosynth_trajectory_evaluation`
   on the new `.cnnd` — with `time: 0.3` stored, pin 0 is the workpiece after
   `k − 1`, which pins the gating through the real loader;
-- `text_format_roundtrip_corpus_test.rs` gains the new `.cnnd`.
+- `text_format_roundtrip_corpus_test.rs` gains the new `.cnnd`. **This is what
+  found the `import_xyz` bug**: the node emitted `file_name` only when set, so
+  by the totality rule above a `query` → `--replace` dropped the file name of
+  every imported structure — the `structure_rot` bug again, in a node the corpus
+  had never covered because `demolib` imports nothing. Making it total (and
+  reading `""` back as `None`, as `mechanosynth`'s own two file names do) is part
+  of this phase. `import_cif` and `import_cube` have the same shape and were not
+  audited.
 
 Scene and preferences, in the same harness:
 
@@ -1355,7 +1425,14 @@ sixty-two visits with the settles passing under it, and returns once.
 
 The `time` property and pin, the five record fields, `APIMechanosynthData`
 and `APIMechanosynthInfo`, the loader default, the text-format property,
-FRB regeneration, node tests, the round-trip corpus.
+FRB regeneration, node tests, the round-trip corpus. `Leg` and
+`ToolMotion::leg_at` are Phase 1 work that Phase 2 found missing: the panel's
+`leg` is a fact about the motion, so it is the engine's to state
+(§Presentation). Two guide pages come with it rather than waiting for Phase 4 —
+`nodes/atomic.md`'s new §*Scrubbing inside a step* and the `MechanosynthStep`
+row in `nodes/math_programming.md` — because the pin, the property and the five
+record fields are user-visible the moment this phase lands; what waits for Phase
+4 is the panel, the cage, the preferences and the walkthrough.
 
 ### Phase 3 — Panel and preferences
 

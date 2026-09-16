@@ -19008,13 +19008,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIMechanosynthData dco_decode_api_mechanosynth_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
     return APIMechanosynthData(
       opsFile: dco_decode_opt_String(arr[0]),
       buildFile: dco_decode_opt_String(arr[1]),
       step: dco_decode_i_32(arr[2]),
-      hasLegacyFiles: dco_decode_bool(arr[3]),
+      time: dco_decode_f_64(arr[3]),
+      hasLegacyFiles: dco_decode_bool(arr[4]),
     );
   }
 
@@ -19059,8 +19060,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIMechanosynthInfo dco_decode_api_mechanosynth_info(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 13)
-      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
+    if (arr.length != 20)
+      throw Exception('unexpected arr length: expect 20 but see ${arr.length}');
     return APIMechanosynthInfo(
       count: dco_decode_i_32(arr[0]),
       applied: dco_decode_i_32(arr[1]),
@@ -19075,6 +19076,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       currentAgent: dco_decode_String(arr[10]),
       tools: dco_decode_list_api_mechanosynth_tool_row(arr[11]),
       feedstocks: dco_decode_list_api_mechanosynth_feedstock_row(arr[12]),
+      time: dco_decode_f_64(arr[13]),
+      leg: dco_decode_String(arr[14]),
+      tiltDegrees: dco_decode_f_64(arr[15]),
+      approachClearance: dco_decode_f_64(arr[16]),
+      contactRatio: dco_decode_f_64(arr[17]),
+      contactAt: dco_decode_f_64(arr[18]),
+      collision: dco_decode_String(arr[19]),
     );
   }
 
@@ -24760,11 +24768,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_opsFile = sse_decode_opt_String(deserializer);
     var var_buildFile = sse_decode_opt_String(deserializer);
     var var_step = sse_decode_i_32(deserializer);
+    var var_time = sse_decode_f_64(deserializer);
     var var_hasLegacyFiles = sse_decode_bool(deserializer);
     return APIMechanosynthData(
         opsFile: var_opsFile,
         buildFile: var_buildFile,
         step: var_step,
+        time: var_time,
         hasLegacyFiles: var_hasLegacyFiles);
   }
 
@@ -24832,6 +24842,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_tools = sse_decode_list_api_mechanosynth_tool_row(deserializer);
     var var_feedstocks =
         sse_decode_list_api_mechanosynth_feedstock_row(deserializer);
+    var var_time = sse_decode_f_64(deserializer);
+    var var_leg = sse_decode_String(deserializer);
+    var var_tiltDegrees = sse_decode_f_64(deserializer);
+    var var_approachClearance = sse_decode_f_64(deserializer);
+    var var_contactRatio = sse_decode_f_64(deserializer);
+    var var_contactAt = sse_decode_f_64(deserializer);
+    var var_collision = sse_decode_String(deserializer);
     return APIMechanosynthInfo(
         count: var_count,
         applied: var_applied,
@@ -24845,7 +24862,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         currentToolType: var_currentToolType,
         currentAgent: var_currentAgent,
         tools: var_tools,
-        feedstocks: var_feedstocks);
+        feedstocks: var_feedstocks,
+        time: var_time,
+        leg: var_leg,
+        tiltDegrees: var_tiltDegrees,
+        approachClearance: var_approachClearance,
+        contactRatio: var_contactRatio,
+        contactAt: var_contactAt,
+        collision: var_collision);
   }
 
   @protected
@@ -31228,6 +31252,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_String(self.opsFile, serializer);
     sse_encode_opt_String(self.buildFile, serializer);
     sse_encode_i_32(self.step, serializer);
+    sse_encode_f_64(self.time, serializer);
     sse_encode_bool(self.hasLegacyFiles, serializer);
   }
 
@@ -31276,6 +31301,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.currentAgent, serializer);
     sse_encode_list_api_mechanosynth_tool_row(self.tools, serializer);
     sse_encode_list_api_mechanosynth_feedstock_row(self.feedstocks, serializer);
+    sse_encode_f_64(self.time, serializer);
+    sse_encode_String(self.leg, serializer);
+    sse_encode_f_64(self.tiltDegrees, serializer);
+    sse_encode_f_64(self.approachClearance, serializer);
+    sse_encode_f_64(self.contactRatio, serializer);
+    sse_encode_f_64(self.contactAt, serializer);
+    sse_encode_String(self.collision, serializer);
   }
 
   @protected

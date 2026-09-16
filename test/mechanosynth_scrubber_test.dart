@@ -43,6 +43,13 @@ APIMechanosynthInfo _info({int count = 9, int applied = 3}) =>
       currentAgent: '',
       tools: const [],
       feedstocks: const [],
+      time: 1.0,
+      leg: '',
+      tiltDegrees: 0.0,
+      approachClearance: 10.0,
+      contactRatio: 2.0,
+      contactAt: 0.0,
+      collision: '',
     );
 
 APIAuthoredStep _step(String op) => APIAuthoredStep(

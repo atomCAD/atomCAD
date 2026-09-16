@@ -16635,11 +16635,13 @@ impl SseDecode
         let mut var_opsFile = <Option<String>>::sse_decode(deserializer);
         let mut var_buildFile = <Option<String>>::sse_decode(deserializer);
         let mut var_step = <i32>::sse_decode(deserializer);
+        let mut var_time = <f64>::sse_decode(deserializer);
         let mut var_hasLegacyFiles = <bool>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIMechanosynthData {
             ops_file: var_opsFile,
             build_file: var_buildFile,
             step: var_step,
+            time: var_time,
             has_legacy_files: var_hasLegacyFiles,
         };
     }
@@ -16709,6 +16711,13 @@ impl SseDecode
             crate::api::structure_designer::structure_designer_api_types::APIMechanosynthToolRow,
         >>::sse_decode(deserializer);
         let mut var_feedstocks = <Vec<crate::api::structure_designer::structure_designer_api_types::APIMechanosynthFeedstockRow>>::sse_decode(deserializer);
+        let mut var_time = <f64>::sse_decode(deserializer);
+        let mut var_leg = <String>::sse_decode(deserializer);
+        let mut var_tiltDegrees = <f64>::sse_decode(deserializer);
+        let mut var_approachClearance = <f64>::sse_decode(deserializer);
+        let mut var_contactRatio = <f64>::sse_decode(deserializer);
+        let mut var_contactAt = <f64>::sse_decode(deserializer);
+        let mut var_collision = <String>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIMechanosynthInfo {
             count: var_count,
             applied: var_applied,
@@ -16723,6 +16732,13 @@ impl SseDecode
             current_agent: var_currentAgent,
             tools: var_tools,
             feedstocks: var_feedstocks,
+            time: var_time,
+            leg: var_leg,
+            tilt_degrees: var_tiltDegrees,
+            approach_clearance: var_approachClearance,
+            contact_ratio: var_contactRatio,
+            contact_at: var_contactAt,
+            collision: var_collision,
         };
     }
 }
@@ -25309,6 +25325,7 @@ impl flutter_rust_bridge::IntoDart
             self.ops_file.into_into_dart().into_dart(),
             self.build_file.into_into_dart().into_dart(),
             self.step.into_into_dart().into_dart(),
+            self.time.into_into_dart().into_dart(),
             self.has_legacy_files.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -25416,6 +25433,13 @@ impl flutter_rust_bridge::IntoDart
             self.current_agent.into_into_dart().into_dart(),
             self.tools.into_into_dart().into_dart(),
             self.feedstocks.into_into_dart().into_dart(),
+            self.time.into_into_dart().into_dart(),
+            self.leg.into_into_dart().into_dart(),
+            self.tilt_degrees.into_into_dart().into_dart(),
+            self.approach_clearance.into_into_dart().into_dart(),
+            self.contact_ratio.into_into_dart().into_dart(),
+            self.contact_at.into_into_dart().into_dart(),
+            self.collision.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -30442,6 +30466,7 @@ impl SseEncode
         <Option<String>>::sse_encode(self.ops_file, serializer);
         <Option<String>>::sse_encode(self.build_file, serializer);
         <i32>::sse_encode(self.step, serializer);
+        <f64>::sse_encode(self.time, serializer);
         <bool>::sse_encode(self.has_legacy_files, serializer);
     }
 }
@@ -30496,6 +30521,13 @@ impl SseEncode
         <String>::sse_encode(self.current_agent, serializer);
         <Vec<crate::api::structure_designer::structure_designer_api_types::APIMechanosynthToolRow>>::sse_encode(self.tools, serializer);
         <Vec<crate::api::structure_designer::structure_designer_api_types::APIMechanosynthFeedstockRow>>::sse_encode(self.feedstocks, serializer);
+        <f64>::sse_encode(self.time, serializer);
+        <String>::sse_encode(self.leg, serializer);
+        <f64>::sse_encode(self.tilt_degrees, serializer);
+        <f64>::sse_encode(self.approach_clearance, serializer);
+        <f64>::sse_encode(self.contact_ratio, serializer);
+        <f64>::sse_encode(self.contact_at, serializer);
+        <String>::sse_encode(self.collision, serializer);
     }
 }
 

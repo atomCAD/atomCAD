@@ -291,6 +291,17 @@ fn every_demolib_network_round_trips_through_replace() {
     run_round_trips(&demolib_path());
 }
 
+/// The trajectory fixture, which is the corpus's only `mechanosynth` node with a
+/// non-default `time` — the property the `/4` trajectory work added
+/// (`doc/design_mechanosynth_trajectory.md`). A property the text drops silently
+/// is the failure this file exists to catch.
+#[test]
+fn the_mechanosynth_trajectory_fixture_round_trips() {
+    run_round_trips(&atomcad_test_support::fixture_path(
+        "mechanosynth/mechanosynth_trajectory.cnnd",
+    ));
+}
+
 /// The maintainer's working file, which is not in the repository. Set
 /// `ATOMCAD_LAYOUT_CORPUS` to its path to include it.
 #[test]

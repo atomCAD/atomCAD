@@ -14,7 +14,7 @@
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::io::xyz_loader::load_xyz;
 use atomcad_crystolecule::mechanosynth::{
-    APEX_FRAME_TAG, BuildScript, CLASH_BLOCK, CLEAR_MARGIN, Envelope, HighlightTags, Landing,
+    APEX_FRAME_TAG, BuildScript, CLASH_BLOCK, CLEAR_MARGIN, Envelope, HighlightTags, Landing, Leg,
     OpLibrary, Participant, Pose, REACTION, REACTION_DEPARTURE, REACTION_LANDING, STANDOFF_HEIGHT,
     SWEEP_DIRECTIONS, Scene, Step, ToolMotion, apply_step_in_scene, apply_tool_pose,
     approach_direction, arriving_pose, build_scene, load_build_script, load_library,
@@ -1289,4 +1289,119 @@ fn a_step_that_cannot_match_is_an_error_at_every_time() {
     }
     // One step fewer is fine.
     let (_, _) = at(1, 1.0, &[]);
+}
+
+// ============================================================================
+// The legs, in words
+// ============================================================================
+
+/// Every leg the motion passes through as `u` runs from 0 to 1, consecutive
+/// duplicates collapsed — the sequence a panel readout walks while the slider
+/// is dragged.
+fn legs_over(motion: &ToolMotion) -> Vec<Leg> {
+    let mut seen: Vec<Leg> = Vec::new();
+    for sample in 0..=1000 {
+        let leg = motion.leg_at(sample as f64 / 1000.0);
+        if seen.last() != Some(&leg) {
+            seen.push(leg);
+        }
+    }
+    seen
+}
+
+#[test]
+fn a_first_visit_with_another_coming_names_its_six_legs_in_order() {
+    // Step 1 is `habst_tool`'s first visit, and its run continues at step 3, so
+    // this one visit covers both flights that are not a return home.
+    let (_, motion) = at(1, 0.0, &[]);
+    let motion = motion.expect("a tip step with a bound tool visits");
+    assert_eq!(
+        legs_over(&motion),
+        vec![
+            Leg::FlyingFromPark,
+            Leg::Descending,
+            Leg::AtSiteBefore,
+            Leg::AtSiteReacted,
+            Leg::Ascending,
+            Leg::FlyingToNextSite,
+        ]
+    );
+    // The words are the panel's, and the dwell pair is what the reaction at the
+    // middle of the dwell buys: a landed-but-unreacted frame and a
+    // reacted-but-not-departed one.
+    assert_eq!(motion.leg_at(REACTION_LANDING).as_str(), "at site (before)");
+    assert_eq!(motion.leg_at(REACTION).as_str(), "at site (reacted)");
+    assert_eq!(
+        motion.leg_at(REACTION_DEPARTURE).as_str(),
+        "at site (reacted)"
+    );
+}
+
+#[test]
+fn a_lone_visit_flies_out_from_park_and_returns_to_it() {
+    // Step 5 is the bare probe's whole run: one visit, out and back.
+    let (_, motion) = at(5, 0.0, &[]);
+    let motion = motion.expect("the probe visits");
+    assert_eq!(
+        legs_over(&motion),
+        vec![
+            Leg::FlyingFromPark,
+            Leg::Descending,
+            Leg::AtSiteBefore,
+            Leg::AtSiteReacted,
+            Leg::Ascending,
+            Leg::ReturningToPark,
+        ]
+    );
+    assert_eq!(motion.leg_at(1.0).as_str(), "returning to park");
+}
+
+#[test]
+fn a_chained_visit_spends_its_whole_inbound_half_descending() {
+    // Step 3 is reached without going home, so there is no flight in: the tool
+    // is already at its standoff when the step begins.
+    let (_, motion) = at(3, 0.0, &[]);
+    let motion = motion.expect("the run's second visit");
+    assert_eq!(
+        legs_over(&motion),
+        vec![
+            Leg::Descending,
+            Leg::AtSiteBefore,
+            Leg::AtSiteReacted,
+            Leg::Ascending,
+            Leg::FlyingToNextSite,
+        ],
+        "a chained visit never flies from park"
+    );
+}
+
+#[test]
+fn a_hover_is_one_leg_at_every_time() {
+    // Step 2 is the `settle` inside the run: the tool waits, so every `u` of it
+    // reports the same thing.
+    let (_, motion) = at(2, 0.0, &[]);
+    let motion = motion.expect("a settle inside a run is a hover");
+    assert_eq!(legs_over(&motion), vec![Leg::Hovering]);
+    assert_eq!(motion.leg_at(0.5).as_str(), "hovering over next site");
+}
+
+#[test]
+fn the_leg_and_the_pose_agree_about_where_the_tool_is() {
+    // The two read the same length split, and the readout would be a lie if
+    // they ever disagreed: at the moment the leg becomes the descent, the tool
+    // has to be at its standoff.
+    let (_, motion) = at(1, 0.0, &[]);
+    let motion = motion.expect("a visit");
+    let visit = match &motion {
+        ToolMotion::Visit(visit) => visit,
+        ToolMotion::Hover { .. } => unreachable!("step 1 is a tip step"),
+    };
+    let first_descent = (0..=1000)
+        .map(|sample| sample as f64 / 1000.0)
+        .find(|u| motion.leg_at(*u) == Leg::Descending)
+        .expect("the visit descends");
+    assert!(
+        (motion.pose_at(first_descent).t - visit.standoff.t).length() < 0.2,
+        "the descent begins at the standoff"
+    );
 }

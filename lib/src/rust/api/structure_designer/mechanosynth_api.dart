@@ -7,7 +7,7 @@ import '../../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'structure_designer_api_types.dart';
 
-// These functions are ignored because they are not marked as `pub`: `design_dir`, `node_data`
+// These functions are ignored because they are not marked as `pub`: `design_dir`, `motion_lines`, `node_data`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `build_script_data`, `chapters`, `feedstock_rows`, `mechanosynth_data`, `mechanosynth_info`, `ops_library_data`, `set_build_script_file`, `set_mechanosynth_data`, `set_ops_library_file`, `tool_rows`
 
 APIOpsLibraryData? getOpsLibraryData(

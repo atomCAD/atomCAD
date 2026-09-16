@@ -351,6 +351,9 @@ mod mechanosynth_values_test;
 #[path = "structure_designer/mechanosynth_tools_node_test.rs"]
 mod mechanosynth_tools_node_test;
 
+#[path = "structure_designer/mechanosynth_trajectory_node_test.rs"]
+mod mechanosynth_trajectory_node_test;
+
 #[path = "structure_designer/materialize_test.rs"]
 mod materialize_test;
 

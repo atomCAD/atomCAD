@@ -1544,6 +1544,10 @@ pub struct APIMechanosynthData {
     pub build_file: Option<String>,
     /// Negative means "every step"; the panel writes the slider value instead.
     pub step: i32,
+    /// Where inside the selected step the scene is taken, `[0, 1]`. `1.0` is the
+    /// end of the step with every tool home — the scene the node produced
+    /// before trajectories existed (`doc/design_mechanosynth_trajectory.md`).
+    pub time: f64,
     /// Whether either deprecated file property is set — the condition for
     /// showing the **Convert to nodes** button. Read-only; the setter ignores
     /// it.
@@ -1590,6 +1594,34 @@ pub struct APIMechanosynthInfo {
     pub tools: Vec<APIMechanosynthToolRow>,
     /// One entry per wired reservoir, in pin order.
     pub feedstocks: Vec<APIMechanosynthFeedstockRow>,
+    /// The clamped step time the last evaluation used — the wired `time` pin
+    /// when one is connected, else the stored property
+    /// (`doc/design_mechanosynth_trajectory.md`).
+    pub time: f64,
+    /// What the moving tool is doing at that time, in words: one of
+    /// `flying from park`, `descending`, `at site (before)`,
+    /// `at site (reacted)`, `ascending`, `flying to next site`,
+    /// `returning to park`, `hovering over next site`. **Empty when every tool
+    /// is parked** — a `bulk` step, a `spontaneous` step outside a run, tools
+    /// unwired — which is how the panel knows to draw no readout lines.
+    pub leg: String,
+    /// The approach's angle from vertical, degrees. Zero when nothing visits.
+    pub tilt_degrees: f64,
+    /// The sweep's clearance for the visit, Å: positive means every obstacle is
+    /// outside the tool's envelope, negative that the site is blocked and the
+    /// tool visits along the least-blocked direction. Capped, and at its cap
+    /// when nothing visits — the same convention as the `step` record's
+    /// `approach`.
+    pub approach_clearance: f64,
+    /// The visit's worst contact over its legs, as a ratio of the pair's
+    /// covalent-radius sum. At its cap when nothing came near or nothing moves.
+    pub contact_ratio: f64,
+    /// The step time of that worst contact, `[0, 1]`; zero when there is none.
+    pub contact_at: f64,
+    /// The panel's path sentence when the visit **collides** — the worst contact
+    /// is below the library's clash factor — and empty otherwise. A report, never
+    /// an error: a collision on a flight is the layout, and the fix is a re-park.
+    pub collision: String,
 }
 
 /// One bound tool molecule, as the panel lists it: which type its tag named,

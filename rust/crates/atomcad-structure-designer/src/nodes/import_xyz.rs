@@ -113,24 +113,31 @@ impl NodeData for ImportXYZData {
         }
     }
 
+    /// **Total**, deliberately — the same rule `mechanosynth`'s two file names
+    /// follow. A property the node omits here is treated as *wire-only* by the
+    /// text editor, which asks the node it has just created which properties
+    /// take literals, and a literal for it is then dropped with a warning.
+    /// Emitting `file_name` only when it was already set therefore made a
+    /// `query` → `edit --replace` round trip lose the name of every imported
+    /// file — the same bug `a_structure_rot_axis_survives_a_replace` pins for
+    /// `structure_rot`. An absent name is the empty string in both directions.
     fn get_text_properties(&self) -> Vec<(String, TextValue)> {
-        let mut props = Vec::new();
-        if let Some(ref file_name) = self.file_name {
-            props.push((
-                "file_name".to_string(),
-                TextValue::String(file_name.clone()),
-            ));
-        }
-        props
+        vec![(
+            "file_name".to_string(),
+            TextValue::String(self.file_name.clone().unwrap_or_default()),
+        )]
     }
 
     fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
         if let Some(v) = props.get("file_name") {
-            self.file_name = Some(
-                v.as_string()
-                    .ok_or_else(|| "file_name must be a string".to_string())?
-                    .to_string(),
-            );
+            let name = v
+                .as_string()
+                .ok_or_else(|| "file_name must be a string".to_string())?;
+            self.file_name = if name.is_empty() {
+                None
+            } else {
+                Some(name.to_string())
+            };
         }
         Ok(())
     }

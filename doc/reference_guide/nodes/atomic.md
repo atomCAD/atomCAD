@@ -820,6 +820,8 @@ mechanosynthesis process would run to grow the structure from a seed.
 - `tools: [HasAtoms]` (optional) — the **tool molecules** that perform the
   build, each tagged with the name of the tool type it plays. See
   [*Wiring the tools*](#wiring-the-tools).
+- `time: Float` (optional) — overrides the stored step time. Clamped to
+  `[0, 1]`. See [*Scrubbing inside a step*](#scrubbing-inside-a-step).
 
 Every wired feedstock and tool must have the **same phase as `base`** — all
 `Crystal` or all `Molecule`. A mismatch is a validation error on the node naming
@@ -847,6 +849,10 @@ twice. Click the eyes to change that; the choice is saved with the project.
 - `step` — how many steps to apply. `0` is the untouched base, `k` means "the
   first `k` steps", and anything past the end of the script — including the
   default `-1` — means the whole build.
+- `time` — where **inside** that last step the scene is taken, from 0 to 1.
+  The default `1.0` is the end of the step with every tool back at its park,
+  which is what the node showed before trajectories existed. See
+  [*Scrubbing inside a step*](#scrubbing-inside-a-step).
 - `ops_file`, `build_file` — **deprecated**; see below.
 
 The match tolerance is the **library's**, so it is pinned in one place for a
@@ -1267,6 +1273,62 @@ longer exists and simply drops out of both sets.
 Colour `ms_current` to make the reaction site pop out as you scrub, `ms_added`
 to separate the build from its seed, and `ms_layer` to watch one terrace fill in.
 
+### Scrubbing inside a step
+
+`step` picks a reaction; `time` says how far into that reaction you are
+looking. Together they are the whole clock: `step = k, time = u` means the
+first `k − 1` steps applied and step `k` in progress at `u`.
+
+A `tip` step is a **visit**. Its tool leaves its park, flies to a point six
+ångström above the reaction site, descends onto the site along a direction
+the engine finds by sweeping the tool's collision envelope over the scene,
+sits there while the reaction happens, lifts off, and flies on — to its next
+site if it has one coming, home if it does not. The timeline is fixed, so
+`0.5` means the same thing on every step:
+
+| `time` | the tool | the workpiece |
+|---|---|---|
+| `0.00` – `0.45` | flying in from park, then descending | before the step |
+| `0.45` – `0.50` | landed on the site | before the step |
+| `0.50` – `0.55` | still on the site | **after the step** |
+| `0.55` – `1.00` | ascending, then flying to its next site or home | after the step |
+
+The rewrite is instantaneous and always will be — the engine has ideal
+geometry and no transition states — so putting it in the middle of the dwell
+is what gives you a landed-but-unreacted frame and a reacted-but-not-departed
+one. For a `bulk` step, a `spontaneous` step, or a `tip` step with nothing
+wired to `tools`, there is no visit and nothing moves: the scene simply
+switches from before to after at `0.5`.
+
+**A tool leaves park once per run, not once per step.** A *run* is a maximal
+sequence of one tool's `tip` steps with only `spontaneous` steps in between.
+Inside a run the tool never goes home: after each reaction it lifts to its
+standoff and flies straight across to the next site, waits over it while the
+crystal settles, and descends when its next step comes. A `bulk` step, or
+another tool's `tip` step, ends the run and sends the tool home. So a shuttle
+that alternates between a reservoir and the workpiece for sixty visits leaves
+park once and returns once, and scrubbing across a step boundary inside a run
+is continuous: the pose at the end of one step is the pose at the start of the
+next.
+
+Nothing about a trajectory is stored in your build script. The approach
+direction depends on what is in the way, and what is in the way depends on
+every step before this one — so reordering or editing a step re-plans it
+against the scene it now follows, and it joins whatever run it now sits in.
+
+**Where the tools go is your decision, and it matters.** The sweep does not
+look at tools at all — not the visiting one, not the parked ones — so a
+sequence can be generated before anyone decides where the tools sit, and the
+tools can be moved afterwards without invalidating it. The cost is that
+keeping them out of each other's way is yours: park each tool on a **different
+side** of the workpiece and its reservoirs, clear of the work itself, and no
+flight crosses another tool.
+
+A site that no direction reaches is **reported, not refused**: the tool visits
+it along the least-blocked direction the sweep found, and the `step` record's
+`approach` goes negative. A view of a build is not the place to decide that the
+build is impossible — that judgement belongs to whoever generates the sequence.
+
 ### The `step` output pin
 
 Everything the build script knows about the current step, as a record the rest
@@ -1289,11 +1351,18 @@ of the network can act on. Wire the pin into a
 | `tool_type` | String | the instrument a `tip` step used, from the operation. Empty otherwise |
 | `tool_state` | String | that tool's state **after** the step. Empty when the type carries no states, or when nothing plays the type |
 | `agent` | String | the species or energy a `bulk` step used — `Cl2`, `UV`. Empty otherwise |
+| `time` | Float | the clamped step time the outputs were computed at |
+| `tool_r` | Mat3 | the moving or hovering tool's frame at that time. The identity when every tool is parked |
+| `tool_t` | Vec3 | that frame's origin — the tool's apex. Zero when every tool is parked |
+| `approach` | Float | how far every obstacle clears the tool's envelope along the approach, in ångström: positive means the site is reachable, **negative** that it is blocked and the tool is visiting along the least-blocked direction. Capped at `10.0`, which is also what it reads when nothing visits |
+| `contact` | Float | the closest the tool came to anything on its way in and out, as a ratio of the two atoms' covalent radii. Below the library's clash factor the visit collides. Capped at `2.0`, which is also what it reads when nothing came near or nothing moves |
 
 "Current" means the **last step applied**, matching the panel's wording. At step
 0 nothing has run, so every string field is empty and the record reads
 `{index: 0, count, op: "", …, t: (0, 0, 0), r: identity}`
-— it does not describe step 1, which has not happened yet.
+— it does not describe step 1, which has not happened yet. `time` is the
+exception: it reports the step time you asked for whatever the step is, because
+it describes the question rather than the answer.
 
 The schema is fixed rather than read from your file: a pin's type has to be
 known before anything is evaluated, and a type that changed with a file's
@@ -1308,7 +1377,10 @@ described a replay that did not finish would be a lie.
 A typical use: a [`switch`](./math_programming.md#switch) on `step.method`
 picking one style rule set per kind, so tip steps and bulk steps are coloured
 differently as you scrub; or an `expr` building a caption out of `phase`,
-`layer` and `index`.
+`layer` and `index`. The trajectory fields carry the same weight: `tool_r` and
+`tool_t` are what a camera follow or a downstream gadget needs and cannot
+derive, and an `expr` over `approach` or `contact` drives a style rule that
+paints a tool whose site is blocked or whose flight collides.
 
 ## mechanosynth_edit
 

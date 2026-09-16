@@ -11,12 +11,24 @@
 //! `get_mechanosynth_info`, which is the only way the panel can learn the step
 //! count — the parsed script never crosses the bridge.
 
+use atomcad_crystolecule::atomic_structure::AtomicStructure;
+use atomcad_crystolecule::io::xyz_loader::load_xyz;
+use atomcad_crystolecule::mechanosynth::{APEX_FRAME_TAG, ToolMotion, sweep_directions};
+use atomcad_structure_designer::evaluator::network_evaluator::{
+    NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
+};
+use atomcad_structure_designer::node_data::NodeData;
 use atomcad_structure_designer::nodes::build_script::BuildScriptData;
+use atomcad_structure_designer::nodes::float::FloatData;
+use atomcad_structure_designer::nodes::import_xyz::ImportXYZData;
 use atomcad_structure_designer::nodes::int::IntData;
-use atomcad_structure_designer::nodes::mechanosynth::MechanosynthData;
+use atomcad_structure_designer::nodes::mechanosynth::{
+    MAX_REPORTED_CLEARANCE, MAX_REPORTED_CONTACT, MechanosynthData,
+};
+use atomcad_structure_designer::nodes::ops_library::OpsLibraryData;
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 use atomcad_test_support::fixture_path_str;
-use glam::f64::DVec2;
+use glam::f64::{DVec2, DVec3};
 use rust_lib_flutter_cad::api::structure_designer::mechanosynth_api::{
     mechanosynth_data, mechanosynth_info, set_mechanosynth_data,
 };
@@ -115,6 +127,7 @@ fn a_node_inside_a_closure_body_is_reachable_and_a_colliding_root_id_is_not_conf
             ops_file: scoped.ops_file.clone(),
             build_file: scoped.build_file.clone(),
             step: 0,
+            time: 1.0,
             has_legacy_files: true,
         },
     );
@@ -143,6 +156,7 @@ fn the_setter_keeps_the_caches_on_a_no_op_write_and_reloads_on_a_real_one() {
             ops_file: stored.ops_file.clone(),
             build_file: stored.build_file.clone(),
             step: 1,
+            time: 1.0,
             has_legacy_files: true,
         },
     );
@@ -158,6 +172,7 @@ fn the_setter_keeps_the_caches_on_a_no_op_write_and_reloads_on_a_real_one() {
             ops_file: stored.ops_file.clone(),
             build_file: Some(fixture("unmatched_build.json")),
             step: -1,
+            time: 1.0,
             has_legacy_files: true,
         },
     );
@@ -409,4 +424,272 @@ fn no_script_means_no_chapters() {
     assert!(info.chapters.is_empty());
     assert_eq!(info.current_layer, -1);
     assert_eq!(info.current_site, -1);
+}
+
+// ============================================================================
+// The trajectory readout (`doc/design_mechanosynth_trajectory.md`)
+// ============================================================================
+//
+// These read the **last evaluation**, the way the tool and feedstock rows
+// already do, so each one wires a replayer over the trajectory fixture and
+// evaluates it before asking. What is asserted is the plumbing: that the panel
+// is handed the engine's own numbers. Which word each leg gets, and when, is
+// the engine's own test (`mechanosynth_trajectory_test.rs`).
+
+/// The shared frame tag vocabulary of `tool_ops.json`.
+const FRAME_TAGS: [&str; 4] = [APEX_FRAME_TAG, "a", "b", "c"];
+const LEG_INDICES: [usize; 3] = [3, 4, 5];
+
+fn molecule(name: &str) -> AtomicStructure {
+    load_xyz(&fixture(name), true).unwrap_or_else(|e| panic!("fixture {name} loads: {e}"))
+}
+
+fn atom_ids(structure: &AtomicStructure) -> Vec<u32> {
+    let mut ids: Vec<u32> = structure.iter_atoms().map(|(id, _)| *id).collect();
+    ids.sort_unstable();
+    ids
+}
+
+fn tagged(name: &str, tool_type: &str) -> AtomicStructure {
+    let mut structure = molecule(name);
+    let ids = atom_ids(&structure);
+    for id in &ids {
+        structure
+            .add_atom_tag(*id, tool_type)
+            .expect("type tag fits");
+    }
+    structure
+        .add_atom_tag(ids[0], FRAME_TAGS[0])
+        .expect("apex tag fits");
+    for (slot, index) in LEG_INDICES.iter().enumerate() {
+        structure
+            .add_atom_tag(ids[*index], FRAME_TAGS[slot + 1])
+            .expect("leg tag fits");
+    }
+    structure
+}
+
+fn with_data<T: NodeData + 'static, F: FnOnce(&mut T)>(
+    designer: &mut StructureDesigner,
+    node_id: u64,
+    f: F,
+) {
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get_mut("test")
+        .unwrap();
+    let node = network.nodes.get_mut(&node_id).expect("node exists");
+    let data = node
+        .data
+        .as_any_mut()
+        .downcast_mut::<T>()
+        .expect("node data type matches");
+    f(data);
+}
+
+fn add_molecule_node(designer: &mut StructureDesigner, structure: AtomicStructure) -> u64 {
+    let node_id = designer.add_node("import_xyz", DVec2::new(-600.0, 0.0));
+    with_data::<ImportXYZData, _>(designer, node_id, |data| {
+        data.file_name = Some(fixture("tool_scene.xyz"));
+        data.atomic_structure = Some(structure);
+    });
+    node_id
+}
+
+/// The trajectory replayer, wired and **evaluated** — the readout is read off
+/// the last evaluation and never forces one, so a node nobody has evaluated
+/// reports nothing, which is also the truth about what is on screen.
+fn add_evaluated_replayer(
+    designer: &mut StructureDesigner,
+    obstacles: &[AtomicStructure],
+    step: i32,
+    time: f64,
+) -> u64 {
+    let base_id = add_molecule_node(designer, molecule("tool_scene.xyz"));
+    let dump_id = add_molecule_node(designer, molecule("tool_dump.xyz"));
+    let tip_id = add_molecule_node(designer, tagged("tool_tip.xyz", "habst_tool"));
+    let probe_id = add_molecule_node(designer, tagged("tool_probe.xyz", "probe"));
+
+    let ops_id = designer.add_node("ops_library", DVec2::new(-400.0, -100.0));
+    with_data::<OpsLibraryData, _>(designer, ops_id, |data| {
+        data.file = Some(fixture("tool_ops.json"));
+        data.reload_missing(None);
+    });
+    let script_id = designer.add_node("build_script", DVec2::new(-400.0, 100.0));
+    with_data::<BuildScriptData, _>(designer, script_id, |data| {
+        data.file = Some(fixture("trajectory_build.json"));
+        data.reload_missing(None);
+    });
+
+    let node_id = designer.add_node("mechanosynth", DVec2::ZERO);
+    designer.connect_nodes(base_id, 0, node_id, 0);
+    designer.connect_nodes(ops_id, 0, node_id, 1);
+    designer.connect_nodes(script_id, 0, node_id, 2);
+    designer.connect_nodes(dump_id, 0, node_id, 4);
+    for structure in obstacles {
+        let source = add_molecule_node(designer, structure.clone());
+        designer.connect_nodes(source, 0, node_id, 4);
+    }
+    designer.connect_nodes(tip_id, 0, node_id, 5);
+    designer.connect_nodes(probe_id, 0, node_id, 5);
+    with_data::<MechanosynthData, _>(designer, node_id, |data| {
+        data.step = step;
+        data.time = time;
+    });
+
+    evaluate(designer, node_id);
+    node_id
+}
+
+fn evaluate(designer: &StructureDesigner, node_id: u64) {
+    let registry = &designer.node_type_registry;
+    let network = registry.node_networks.get("test").unwrap();
+    let evaluator = NetworkEvaluator::new();
+    let mut context = NetworkEvaluationContext::new();
+    let stack = vec![NetworkStackElement::root(network)];
+    evaluator.evaluate(&stack, node_id, 0, registry, false, &mut context);
+}
+
+/// What the node's own evaluation parked, for the equalities below.
+fn last_motion(designer: &StructureDesigner, node_id: u64) -> Option<ToolMotion> {
+    designer
+        .get_node_network_data_scoped(&[], node_id)?
+        .as_any_ref()
+        .downcast_ref::<MechanosynthData>()?
+        .last_motion()
+}
+
+#[test]
+fn the_readout_reports_the_visit_the_last_evaluation_planned() {
+    let time = 0.2;
+    let mut designer = setup_designer();
+    let node_id = add_evaluated_replayer(&mut designer, &[], 3, time);
+    let motion =
+        last_motion(&designer, node_id).expect("step 3 is a tip step, so something visits");
+    let landing = motion.landing().expect("a visit has a landing");
+
+    let info = mechanosynth_info(&mut designer, &[], node_id).expect("the node is a mechanosynth");
+    assert_eq!(info.time, time);
+    assert_eq!(info.leg, motion.leg_at(time).as_str());
+    assert!(!info.leg.is_empty(), "a visiting tool is doing something");
+    assert_eq!(info.tilt_degrees, landing.approach.tilt.to_degrees());
+    assert_eq!(
+        info.approach_clearance,
+        landing.approach.clearance.min(MAX_REPORTED_CLEARANCE)
+    );
+    assert_eq!(
+        info.contact_ratio,
+        motion
+            .scan()
+            .and_then(|scan| scan.worst)
+            .map_or(MAX_REPORTED_CONTACT, |contact| contact.ratio)
+            .min(MAX_REPORTED_CONTACT)
+    );
+    assert!(
+        info.collision.is_empty(),
+        "the unobstructed fixture flight is clear: {}",
+        info.collision
+    );
+}
+
+#[test]
+fn a_wired_time_reaches_the_readout() {
+    // The readout reports what the node **evaluates**, so a wired `time` has to
+    // win over the stored property here exactly as it does in `eval`.
+    let mut designer = setup_designer();
+    let node_id = add_evaluated_replayer(&mut designer, &[], 3, 1.0);
+    let float_id = designer.add_node("float", DVec2::new(-600.0, 400.0));
+    with_data::<FloatData, _>(&mut designer, float_id, |data| data.value = 0.25);
+    designer.connect_nodes(float_id, 0, node_id, 6);
+    evaluate(&designer, node_id);
+
+    let info = mechanosynth_info(&mut designer, &[], node_id).expect("the node is a mechanosynth");
+    assert_eq!(info.time, 0.25);
+    assert!(!info.leg.is_empty());
+}
+
+#[test]
+fn with_every_tool_parked_the_readout_says_nothing_and_reports_both_caps() {
+    // Step 6 of the fixture is `expose`, a bulk step: no visit, no sweep, no
+    // scan. An empty `leg` is how the panel knows to draw no readout lines.
+    let mut designer = setup_designer();
+    let node_id = add_evaluated_replayer(&mut designer, &[], 6, 0.3);
+    assert!(last_motion(&designer, node_id).is_none());
+
+    let info = mechanosynth_info(&mut designer, &[], node_id).expect("the node is a mechanosynth");
+    assert_eq!(info.leg, "");
+    assert_eq!(info.tilt_degrees, 0.0);
+    assert_eq!(info.approach_clearance, MAX_REPORTED_CLEARANCE);
+    assert_eq!(info.contact_ratio, MAX_REPORTED_CONTACT);
+    assert_eq!(info.contact_at, 0.0);
+    assert_eq!(info.collision, "");
+}
+
+#[test]
+fn a_blocked_site_reports_a_negative_clearance_and_the_info_is_still_returned() {
+    // The engine measures, the generator refuses, the node **reports**: a
+    // blocked site is a readout line, never an error and never a missing info.
+    let site = DVec3::new(0.0, 0.0, 1.09);
+    let cage: Vec<AtomicStructure> = sweep_directions()
+        .iter()
+        .step_by(16)
+        .map(|direction| {
+            let mut structure = AtomicStructure::new();
+            structure.add_atom(6, site + *direction * 2.6);
+            structure
+        })
+        .collect();
+
+    let mut designer = setup_designer();
+    let node_id = add_evaluated_replayer(&mut designer, &cage, 1, 0.3);
+    let info = mechanosynth_info(&mut designer, &[], node_id).expect("the node is a mechanosynth");
+
+    assert!(
+        info.approach_clearance < 0.0,
+        "the caged site is blocked: {}",
+        info.approach_clearance
+    );
+    assert!(!info.leg.is_empty(), "the tool visits it anyway");
+}
+
+#[test]
+fn a_tool_that_flies_past_something_reports_how_close_it_came() {
+    // A loose atom parked on the probe's flight line. The scan is a report,
+    // never an error: a collision on a flight is the user's layout, and the fix
+    // is a re-park the user can see at once.
+    let mut designer = setup_designer();
+    let clear = add_evaluated_replayer(&mut designer, &[], 5, 0.1);
+    let clear_ratio = mechanosynth_info(&mut designer, &[], clear)
+        .expect("the node is a mechanosynth")
+        .contact_ratio;
+
+    let motion = last_motion(&designer, clear).expect("the probe visits");
+    // On the probe's own inbound flight, a tenth of the way in — so the atom is
+    // planted exactly where the tool will pass rather than where it might.
+    let apex = motion.pose_at(0.1).t;
+
+    let mut obstacle = AtomicStructure::new();
+    obstacle.add_atom(6, apex);
+    let mut designer = setup_designer();
+    let node_id = add_evaluated_replayer(&mut designer, &[obstacle], 5, 0.1);
+    let info = mechanosynth_info(&mut designer, &[], node_id).expect("the node is a mechanosynth");
+
+    assert!(
+        info.contact_ratio < clear_ratio,
+        "the planted atom is closer than anything on the clear flight: {} vs {}",
+        info.contact_ratio,
+        clear_ratio
+    );
+    assert!(
+        info.collision.starts_with("path collides at "),
+        "the panel sentence: {}",
+        info.collision
+    );
+    assert!(info.collision.contains("ratio "), "{}", info.collision);
+    assert!(
+        (0.0..=1.0).contains(&info.contact_at),
+        "the contact's step time is a step time: {}",
+        info.contact_at
+    );
 }

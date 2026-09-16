@@ -128,6 +128,41 @@ pub fn arriving_pose(runs: &Runs, landings: &[Option<Landing>], park: &Pose, k: 
     pose
 }
 
+/// Which part of its visit a tool is on at a step time — the panel's readout,
+/// and the one place the leg structure of a [`Visit`] is named in words.
+///
+/// The two dwell values are what the reaction at the middle of the dwell buys:
+/// a landed-but-unreacted frame and a reacted-but-not-departed one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Leg {
+    FlyingFromPark,
+    Descending,
+    AtSiteBefore,
+    AtSiteReacted,
+    Ascending,
+    FlyingToNextSite,
+    ReturningToPark,
+    /// Not a leg of a visit at all: a tool waiting over its next site through a
+    /// `spontaneous` step.
+    Hovering,
+}
+
+impl Leg {
+    /// The panel's words for this leg.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Leg::FlyingFromPark => "flying from park",
+            Leg::Descending => "descending",
+            Leg::AtSiteBefore => "at site (before)",
+            Leg::AtSiteReacted => "at site (reacted)",
+            Leg::Ascending => "ascending",
+            Leg::FlyingToNextSite => "flying to next site",
+            Leg::ReturningToPark => "returning to park",
+            Leg::Hovering => "hovering over next site",
+        }
+    }
+}
+
 /// One tool's visit to one site, for one `tip` step.
 #[derive(Debug, Clone)]
 pub struct Visit {
@@ -194,6 +229,16 @@ impl ToolMotion {
             ToolMotion::Visit(visit) => visit.pose_at(u),
         }
     }
+
+    /// Which leg of the motion step time `u` falls on — the same split by path
+    /// length [`Self::pose_at`] interpolates along, so the word and the pose
+    /// always agree.
+    pub fn leg_at(&self, u: f64) -> Leg {
+        match self {
+            ToolMotion::Hover { .. } => Leg::Hovering,
+            ToolMotion::Visit(visit) => visit.leg_at(u),
+        }
+    }
 }
 
 impl Visit {
@@ -227,6 +272,76 @@ impl Visit {
             )
         }
     }
+
+    /// The leg `u` falls on, decided by the same length split as
+    /// [`Self::pose_at`]. A half whose legs all have zero length — a tool parked
+    /// exactly at its standoff — reports the leg it ends on, which is where
+    /// `pose_at` leaves it.
+    fn leg_at(&self, u: f64) -> Leg {
+        let u = u.clamp(0.0, 1.0);
+        if (REACTION_LANDING..REACTION).contains(&u) {
+            return Leg::AtSiteBefore;
+        }
+        if (REACTION..=REACTION_DEPARTURE).contains(&u) {
+            return Leg::AtSiteReacted;
+        }
+        if u < REACTION_LANDING {
+            let legs = self.inbound();
+            let flight = self.from_park
+                && leg_at(&leg_lengths(&legs), u / REACTION_LANDING)
+                    .is_some_and(|(index, _, _)| index == 0);
+            if flight {
+                Leg::FlyingFromPark
+            } else {
+                Leg::Descending
+            }
+        } else {
+            let legs = self.outbound();
+            let f = (u - REACTION_DEPARTURE) / (1.0 - REACTION_DEPARTURE);
+            let ascending = leg_at(&leg_lengths(&legs), f).is_some_and(|(index, _, _)| index == 0);
+            if ascending {
+                Leg::Ascending
+            } else if self.to_park {
+                Leg::ReturningToPark
+            } else {
+                Leg::FlyingToNextSite
+            }
+        }
+    }
+}
+
+/// The lengths of a chain of legs, which is how the time within a half is
+/// shared out: at one speed, so a long flight takes longer than a short one.
+fn leg_lengths(legs: &[(Pose, Pose)]) -> Vec<f64> {
+    legs.iter()
+        .map(|(from, to)| (to.t - from.t).length())
+        .collect()
+}
+
+/// Which leg a fraction `f ∈ [0, 1]` of a half falls on, with the share of that
+/// half the leg starts and ends at.
+///
+/// A leg of zero length — a tool parked exactly at its standoff — gets no time and
+/// is never returned; `None` is a chain with no length at all, which is a tool
+/// that does not move within the half.
+fn leg_at(lengths: &[f64], f: f64) -> Option<(usize, f64, f64)> {
+    let total: f64 = lengths.iter().sum();
+    if total <= f64::EPSILON {
+        return None;
+    }
+    let mut travelled = 0.0;
+    for (index, length) in lengths.iter().enumerate() {
+        if *length <= f64::EPSILON {
+            continue;
+        }
+        let start = travelled / total;
+        travelled += length;
+        let end = travelled / total;
+        if f <= end || end >= 1.0 {
+            return Some((index, start, end));
+        }
+    }
+    None
 }
 
 /// The pose a fraction `f ∈ [0, 1]` of the way along a chain of legs, time shared
@@ -235,38 +350,22 @@ impl Visit {
 ///
 /// A leg of zero length — a tool parked exactly at its standoff — gets no time.
 fn pose_along(legs: &[(Pose, Pose)], f: f64) -> Pose {
-    let lengths: Vec<f64> = legs
-        .iter()
-        .map(|(from, to)| (to.t - from.t).length())
-        .collect();
-    let total: f64 = lengths.iter().sum();
-
-    let Some((last_from, last_to)) = legs.last() else {
+    let Some((_, last_to)) = legs.last() else {
         // Cannot happen: every half has at least one leg.
         return Pose {
             r: DMat3::IDENTITY,
             t: DVec3::ZERO,
         };
     };
-    if total <= f64::EPSILON {
-        return *last_to;
-    }
 
-    let mut travelled = 0.0;
-    for ((from, to), length) in legs.iter().zip(&lengths) {
-        if *length <= f64::EPSILON {
-            continue;
-        }
-        let start = travelled / total;
-        travelled += length;
-        let end = travelled / total;
-        if f <= end || end >= 1.0 {
+    match leg_at(&leg_lengths(legs), f) {
+        Some((index, start, end)) => {
+            let (from, to) = legs[index];
             let local = ((f - start) / (end - start)).clamp(0.0, 1.0);
-            return from.blend(to, smoothstep(local));
+            from.blend(&to, smoothstep(local))
         }
+        None => *last_to,
     }
-    let _ = last_from;
-    *last_to
 }
 
 /// `3u² − 2u³`: zero slope at both ends, so two legs meet without a corner.

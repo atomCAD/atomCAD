@@ -37,7 +37,7 @@ pub use envelope::{
 };
 pub use landing::{Landing, STANDOFF_HEIGHT, obstacles_for, plan_landing};
 pub use path::{
-    PATH_SAMPLE, PATH_SAMPLE_ANGLE, PathContact, PathScan, Pose, REACTION, REACTION_DEPARTURE,
+    Leg, PATH_SAMPLE, PATH_SAMPLE_ANGLE, PathContact, PathScan, Pose, REACTION, REACTION_DEPARTURE,
     REACTION_LANDING, ToolMotion, Visit, apply_tool_pose, arriving_pose, reaction_pose,
     replay_scene_at, standoff_pose,
 };

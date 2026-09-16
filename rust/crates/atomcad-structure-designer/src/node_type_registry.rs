@@ -813,6 +813,22 @@ impl NodeTypeRegistry {
                     ("tool_type".to_string(), DataType::String),
                     ("tool_state".to_string(), DataType::String),
                     ("agent".to_string(), DataType::String),
+                    // The trajectory
+                    // (`doc/design_mechanosynth_trajectory.md`), appended for
+                    // the same reason. `time` is the clamped step time the
+                    // outputs were computed at; `tool_r` / `tool_t` are the
+                    // moving or hovering tool's frame at that time, the
+                    // identity and zero with every tool parked; `approach` is
+                    // the sweep's clearance in ångström, negative when the site
+                    // is blocked, capped at 10; `contact` is the visit's worst
+                    // contact ratio over its legs, capped at 2. The caps keep
+                    // the record finite — an empty sweep and an empty scan are
+                    // both infinities.
+                    ("time".to_string(), DataType::Float),
+                    ("tool_r".to_string(), DataType::Mat3),
+                    ("tool_t".to_string(), DataType::Vec3),
+                    ("approach".to_string(), DataType::Float),
+                    ("contact".to_string(), DataType::Float),
                 ],
             ),
         );

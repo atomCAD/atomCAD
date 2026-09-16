@@ -1241,7 +1241,12 @@ fn the_step_pin_declares_the_built_in_record_type() {
             "r",
             "tool_type",
             "tool_state",
-            "agent"
+            "agent",
+            "time",
+            "tool_r",
+            "tool_t",
+            "approach",
+            "contact"
         ],
         "every new field is appended, so existing record_construct wires keep their \
          positions"

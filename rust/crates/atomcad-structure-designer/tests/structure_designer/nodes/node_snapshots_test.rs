@@ -162,6 +162,20 @@ fn test_mechanosynth_tools_evaluation() {
     insta::assert_json_snapshot!(snapshot);
 }
 
+/// The trajectory fixture: the tools scene over `trajectory_build.json`, with
+/// `time: 0.3` stored and an untagged probe skeleton parked over the workpiece
+/// as a second reservoir, so the sweep has something to tilt around. The stored
+/// time is **before** the reaction, so pin 0 is the workpiece after `k - 1` —
+/// which is what pins the gating through the real loader rather than through a
+/// hand-built network. See `doc/design_mechanosynth_trajectory.md`.
+#[test]
+fn test_mechanosynth_trajectory_evaluation() {
+    let snapshot = evaluate_cnnd_file(&fixture_path_str(
+        "mechanosynth/mechanosynth_trajectory.cnnd",
+    ));
+    insta::assert_json_snapshot!(snapshot);
+}
+
 #[test]
 fn test_nut_bolt_evaluation() {
     let snapshot = evaluate_cnnd_file(&sample_path_str("nut-bolt.cnnd"));
