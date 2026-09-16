@@ -76,6 +76,7 @@ fn offers_view(sweep: &OfferSweep) -> APIMechanosynthOffers {
         anchor_position: vec3(sweep.anchor_position),
         anchor_atomic_number: sweep.anchor_atomic_number as i32,
         muted_count: sweep.skipped_muted as i32,
+        library_count: sweep.library_count as i32,
         rows: sweep
             .rows
             .iter()

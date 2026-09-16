@@ -353,15 +353,48 @@ that pair; muting touches neither, and folding a third field in would make
 every block edit carry a copy of the mute set and every mute carry a copy of
 the block. Two independent pieces of state, two commands.
 
-Like the block command, `undo`/`redo` calls `placement.reset()` — the open
-offer list was swept under the other mute set — and `invalidate_input_cache()`,
-since it reaches into node data outside a refresh. It does **not** need to
-invalidate anything downstream: mute changes no pin.
+Like the block command it calls `invalidate_input_cache()`, since it reaches
+into node data outside a refresh. It does **not** need to invalidate anything
+downstream: mute changes no pin.
+
+**It does not call `placement.reset()`, and neither does the setter** — see the
+revision below.
 
 Muting sets the project dirty. It is persisted state, so per
 `feedback_persisted_mutations_must_be_undoable` it is undoable; it is *not*
 the cursor, whose exemption is that a scrub navigates within one evaluation
 and stores nothing a colleague would notice.
+
+### Revised in Phase 3 (2026-09-16): muting leaves the open offer list alone
+
+Phase 1 had both the setter and the undo command call `placement.reset()`, on
+the reasoning that a list swept under the previous mute set no longer says what
+the tool would offer. Phase 3 showed that to be wrong, and the popup section
+above had already assumed the opposite ("`placement.offers` keeps the muted
+row, which is harmless").
+
+Two arguments, and they point the same way:
+
+- **Muting invalidates nothing in the list.** The rows were fitted against a
+  workpiece this does not touch, so every one of them is exactly as correct
+  afterwards as before. Resetting would be discarding a valid answer.
+- **Resetting is *visible*, and visible as a bug.** The viewport closes the
+  popup whenever the kernel stops reporting `offers`
+  (`_mechanosynthLayout` consults `mechanosynth_edit_tool_status` on every
+  build), so muting a row from the popup would shut the list the user was
+  reading — the opposite of "hides the row in place". And because `choose`
+  validates against the stored offers, every *remaining* row would stop being
+  placeable.
+
+So both paths leave the placement state alone, and `mechanosynth_edit` now has
+one command that does: every other one changes the workpiece the open
+candidates were fitted against, and muting does not.
+
+The one loose end this leaves is cosmetic and deliberately not fixed: a mute
+taken from the **panel** while a popup is open does not update the popup, which
+holds its own view of the muted set. The rows stay placeable and the next click
+re-sweeps, so nothing is wrong — it is just briefly stale, and the two surfaces
+are rarely used at once (the popup holds keyboard focus while it is open).
 
 ## Text format and files
 
@@ -436,7 +469,7 @@ Smoke test: a pending **manual** step for the maintainer, per
    green. — **DONE**
 2. **API + panel.** `APIMechanosynthOp`, the two entry points, codegen, the
    palette rewrite. This is the phase that closes mechadense's ask. — **DONE**
-3. **Popup.** The eye-off button, the footer, *show all here*.
+3. **Popup.** The eye-off button, the footer, *show all here*. — **DONE**
 4. **Guide**, and the manual walkthrough handed to the maintainer.
 
 Phases 1 and 2 are independently useful; 3 can be dropped or deferred without

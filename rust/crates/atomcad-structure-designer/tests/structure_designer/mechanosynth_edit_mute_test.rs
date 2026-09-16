@@ -299,16 +299,38 @@ fn unmuting_is_its_own_entry_and_a_no_op_mute_is_none() {
 }
 
 #[test]
-fn muting_closes_the_open_offer_list() {
-    // The list was swept under the previous set, so it no longer says what the
-    // tool would offer now.
+fn muting_leaves_an_open_offer_list_alone() {
+    // Muting changes no fit, so the rows are exactly as valid afterwards as
+    // before — and the popup hides the muted one in place rather than paying
+    // for a second sweep. Resetting here would be visible as a bug rather than
+    // as tidiness: the viewport closes the popup whenever the kernel stops
+    // saying `offers`, so muting a row *from* the popup would shut the list the
+    // user is reading.
     let (mut designer, node_id) = setup();
-    designer
+    let before = designer
         .mechanosynth_edit_offers(&[], node_id, at(A))
-        .expect("the atom exists");
-    assert!(!data(&designer, node_id).placement.offers.is_empty());
+        .expect("the atom exists")
+        .rows
+        .len();
+    let anchor = data(&designer, node_id).placement.anchor;
 
     mute(&mut designer, node_id, &["habst"]);
-    assert!(data(&designer, node_id).placement.offers.is_empty());
-    assert!(data(&designer, node_id).placement.anchor.is_none());
+
+    assert_eq!(data(&designer, node_id).placement.offers.len(), before);
+    assert_eq!(data(&designer, node_id).placement.anchor, anchor);
+
+    // And undo does not drop it either, for the same reason.
+    assert!(designer.undo());
+    assert_eq!(data(&designer, node_id).placement.offers.len(), before);
+}
+
+#[test]
+fn the_sweep_reports_the_wired_librarys_size() {
+    // So the popup's line can say "4 of 19 operations muted" — a proportion is
+    // what makes the count mean anything at a glance.
+    let (mut designer, node_id) = setup();
+    let sweep = designer
+        .mechanosynth_edit_offers(&[], node_id, at(A))
+        .expect("the atom exists");
+    assert_eq!(sweep.library_count, 14);
 }

@@ -3352,12 +3352,17 @@ class APIMechanosynthOffers {
   /// "how many muted ops apply here" — that costs the sweep the mute avoids.
   final int mutedCount;
 
+  /// How many operations the wired library defines, so the line can read
+  /// *4 of 19* rather than a bare *4*.
+  final int libraryCount;
+
   const APIMechanosynthOffers({
     required this.anchorAtomId,
     required this.anchorPosition,
     required this.anchorAtomicNumber,
     required this.rows,
     required this.mutedCount,
+    required this.libraryCount,
   });
 
   @override
@@ -3366,7 +3371,8 @@ class APIMechanosynthOffers {
       anchorPosition.hashCode ^
       anchorAtomicNumber.hashCode ^
       rows.hashCode ^
-      mutedCount.hashCode;
+      mutedCount.hashCode ^
+      libraryCount.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -3377,7 +3383,8 @@ class APIMechanosynthOffers {
           anchorPosition == other.anchorPosition &&
           anchorAtomicNumber == other.anchorAtomicNumber &&
           rows == other.rows &&
-          mutedCount == other.mutedCount;
+          mutedCount == other.mutedCount &&
+          libraryCount == other.libraryCount;
 }
 
 /// One operation of the wired library, as the panel's palette lists it.

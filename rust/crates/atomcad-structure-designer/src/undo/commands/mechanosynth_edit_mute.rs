@@ -44,9 +44,13 @@ impl MechanosynthEditMuteCommand {
             return;
         };
         data.muted = state.clone();
-        // The open offer list was swept under the other mute set, so it no
-        // longer says what the tool would offer now.
-        data.placement.reset();
+        // **The placement state is deliberately not reset**, which is where
+        // this differs from every other command touching this node. They reset
+        // because they change the workpiece the open candidates were fitted
+        // against; muting changes no fit, so the rows stay exactly as valid as
+        // they were. Dropping them would close a popup the user is reading, for
+        // a change that did not invalidate anything in it.
+        //
         // This reaches into the node's data directly rather than through a
         // refresh, so it owes the input cache the invalidation the refresh
         // system would otherwise have done. **The cache is all it owes**: muting

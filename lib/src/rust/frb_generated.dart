@@ -19107,14 +19107,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIMechanosynthOffers dco_decode_api_mechanosynth_offers(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
     return APIMechanosynthOffers(
       anchorAtomId: dco_decode_u_32(arr[0]),
       anchorPosition: dco_decode_api_vec_3(arr[1]),
       anchorAtomicNumber: dco_decode_i_32(arr[2]),
       rows: dco_decode_list_api_mechanosynth_offer(arr[3]),
       mutedCount: dco_decode_i_32(arr[4]),
+      libraryCount: dco_decode_i_32(arr[5]),
     );
   }
 
@@ -24892,12 +24893,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_anchorAtomicNumber = sse_decode_i_32(deserializer);
     var var_rows = sse_decode_list_api_mechanosynth_offer(deserializer);
     var var_mutedCount = sse_decode_i_32(deserializer);
+    var var_libraryCount = sse_decode_i_32(deserializer);
     return APIMechanosynthOffers(
         anchorAtomId: var_anchorAtomId,
         anchorPosition: var_anchorPosition,
         anchorAtomicNumber: var_anchorAtomicNumber,
         rows: var_rows,
-        mutedCount: var_mutedCount);
+        mutedCount: var_mutedCount,
+        libraryCount: var_libraryCount);
   }
 
   @protected
@@ -31299,6 +31302,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.anchorAtomicNumber, serializer);
     sse_encode_list_api_mechanosynth_offer(self.rows, serializer);
     sse_encode_i_32(self.mutedCount, serializer);
+    sse_encode_i_32(self.libraryCount, serializer);
   }
 
   @protected

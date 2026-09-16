@@ -1884,6 +1884,9 @@ pub struct APIMechanosynthOffers {
     /// filter that said nothing would turn that into a lie. Deliberately not
     /// "how many muted ops apply here" — that costs the sweep the mute avoids.
     pub muted_count: i32,
+    /// How many operations the wired library defines, so the line can read
+    /// *4 of 19* rather than a bare *4*.
+    pub library_count: i32,
 }
 
 /// One way of placing the chosen operation at the clicked atom.

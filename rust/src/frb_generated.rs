@@ -16768,7 +16768,8 @@ impl SseDecode
             crate::api::structure_designer::structure_designer_api_types::APIMechanosynthOffer,
         >>::sse_decode(deserializer);
         let mut var_mutedCount = <i32>::sse_decode(deserializer);
-        return crate::api::structure_designer::structure_designer_api_types::APIMechanosynthOffers{anchor_atom_id: var_anchorAtomId, anchor_position: var_anchorPosition, anchor_atomic_number: var_anchorAtomicNumber, rows: var_rows, muted_count: var_mutedCount};
+        let mut var_libraryCount = <i32>::sse_decode(deserializer);
+        return crate::api::structure_designer::structure_designer_api_types::APIMechanosynthOffers{anchor_atom_id: var_anchorAtomId, anchor_position: var_anchorPosition, anchor_atomic_number: var_anchorAtomicNumber, rows: var_rows, muted_count: var_mutedCount, library_count: var_libraryCount};
     }
 }
 
@@ -25483,6 +25484,7 @@ impl flutter_rust_bridge::IntoDart
             self.anchor_atomic_number.into_into_dart().into_dart(),
             self.rows.into_into_dart().into_dart(),
             self.muted_count.into_into_dart().into_dart(),
+            self.library_count.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -30526,6 +30528,7 @@ impl SseEncode
         <i32>::sse_encode(self.anchor_atomic_number, serializer);
         <Vec<crate::api::structure_designer::structure_designer_api_types::APIMechanosynthOffer>>::sse_encode(self.rows, serializer);
         <i32>::sse_encode(self.muted_count, serializer);
+        <i32>::sse_encode(self.library_count, serializer);
     }
 }
 

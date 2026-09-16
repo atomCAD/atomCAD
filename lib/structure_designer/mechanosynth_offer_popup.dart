@@ -40,10 +40,23 @@
 /// - **Typing filters, it does not re-query.** The sweep is one `place()` per
 ///   library operation and was paid for on the click; the filter only hides
 ///   rows.
+/// - **Muting hides a row in place, and says so in the footer.** The eye-off
+///   button leaves an operation out of this node's offer sweep
+///   (`doc/design_mechanosynth_op_muting.md`); like the filter it costs no
+///   re-query, because the rows in hand were fitted against a workpiece muting
+///   does not touch — and the kernel leaves its stored offer list alone for
+///   the same reason, so the remaining rows stay placeable. What muting may
+///   **never** do is go quiet: an empty list is read as a statement about the
+///   library's coverage, so the footer reports *4 of 19 operations muted*
+///   whenever anything is, and *show all here* sweeps the whole library for
+///   this one anchor. A row that sweep brings back is badged by its lit
+///   eye-off and is placeable like any other — mute filters the sweep and
+///   nothing else.
 library;
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_cad/common/element_symbol_input.dart';
@@ -185,6 +198,14 @@ class _Row {
   final int ordinal;
   final int ordinalCount;
 
+  /// The node mutes this operation, so only a *show all here* sweep produced
+  /// the row.
+  ///
+  /// It is **badged, never blocked**: mute filters the sweep, and a row that is
+  /// in the list is placeable whatever put it there. The badge is the lit
+  /// eye-off button, which doubles as the way back — one control, two states.
+  final bool muted;
+
   const _Row({
     required this.kind,
     required this.op,
@@ -201,6 +222,7 @@ class _Row {
     this.toolReason = '',
     this.ordinal = 0,
     this.ordinalCount = 0,
+    this.muted = false,
   });
 
   /// Whether this row can be selected (and so previewed) or placed. A group
@@ -240,6 +262,40 @@ class MechanosynthOfferPopup extends StatefulWidget {
 
   /// Escape, or a click outside.
   final VoidCallback onCancel;
+
+  /// Leave an operation out of this node's offer sweep, or put it back.
+  ///
+  /// The popup is where the clutter is noticed, so it is the cheapest place to
+  /// act on it. The host writes the node data; **this widget does not re-query**
+  /// — the remaining rows were computed against the same workpiece a moment
+  /// ago, so they are still correct, and a second sweep would be paid for
+  /// nothing.
+  final void Function(String op, bool muted)? onMute;
+
+  /// Which operations are currently muted, as the **host** understands it.
+  ///
+  /// One source rather than two: the kernel's sweep says which rows it brought
+  /// back muted, and a mute taken from this popup changes the answer without a
+  /// second sweep, so the host folds both together and this widget reads the
+  /// result. A row is drawn as muted exactly when its operation is in here.
+  final Set<String> mutedOps;
+
+  /// How many of the wired library's operations the sweep did not look at,
+  /// and how many the library has. `0` muted means the footer says nothing.
+  final int mutedCount;
+  final int libraryCount;
+
+  /// Sweep this anchor again over the **whole** library.
+  ///
+  /// The escape hatch that keeps an empty list honest: the list's promise is
+  /// that it reports what the library can do here, and muting would quietly
+  /// turn that into a lie without a way to ask the full question.
+  final VoidCallback? onShowAll;
+
+  /// Whether [onShowAll] has already been taken for this anchor. Host state,
+  /// because the answering sweep reports nothing skipped and the footer would
+  /// otherwise vanish at the moment it has something to say.
+  final bool showingAll;
 
   /// A drag on the header, in viewport pixels. The viewport accumulates these
   /// into an offset from the automatic position: the popup is placed clear of
@@ -284,6 +340,12 @@ class MechanosynthOfferPopup extends StatefulWidget {
     this.moved = false,
     this.arrowAngleFor,
     this.previewDelay = const Duration(milliseconds: 140),
+    this.onMute,
+    this.onShowAll,
+    this.mutedOps = const {},
+    this.mutedCount = 0,
+    this.libraryCount = 0,
+    this.showingAll = false,
   });
 
   @override
@@ -314,6 +376,13 @@ class _MechanosynthOfferPopupState extends State<MechanosynthOfferPopup> {
   /// The pending hover preview. Cancelled by any further pointer movement, so
   /// a pointer crossing the list previews only where it comes to rest.
   Timer? _hoverTimer;
+
+  /// The row the pointer is over, which is where the mute button appears.
+  ///
+  /// Separate from [_highlight] — that one means *previewed*, and costs an
+  /// evaluation — and **it costs nothing**: showing a button is a repaint, so
+  /// it needs no delay and arms no timer. `-1` is none.
+  int _hovered = -1;
 
   @override
   void initState() {
@@ -359,6 +428,16 @@ class _MechanosynthOfferPopupState extends State<MechanosynthOfferPopup> {
       _reportedKey = null;
       _filter = '';
       _refused = null;
+      _hovered = -1;
+    }
+    // Muting a row removes it from the list, so every index below it shifts.
+    // `_highlight` is an index into the *filtered* rows, so leaving it would
+    // silently move the selection — and Enter would then place a row the user
+    // never chose.
+    if (!setEquals(oldWidget.mutedOps, widget.mutedOps)) {
+      _highlight = -1;
+      _reportedKey = null;
+      _hovered = -1;
     }
   }
 
@@ -374,6 +453,12 @@ class _MechanosynthOfferPopupState extends State<MechanosynthOfferPopup> {
   List<_Row> get _allRows {
     final rows = <_Row>[];
     for (final offer in widget.offers) {
+      // **Muting hides the row in place.** The kernel's stored sweep keeps it,
+      // which is harmless — nothing can choose a row that is not drawn — and
+      // that is what lets a mute from this popup cost no second sweep. A
+      // *show all here* sweep is the exception: there the muted rows are the
+      // answer, so they are shown and badged.
+      if (_isMuted(offer) && !widget.showingAll) continue;
       final expand = offer.offerable && offer.candidates.length > 1;
       if (!expand) {
         rows.add(_Row(
@@ -401,6 +486,7 @@ class _MechanosynthOfferPopupState extends State<MechanosynthOfferPopup> {
           toolReason: offer.toolReason,
           residual: offer.bestResidual,
           ghost: offer.ghost,
+          muted: _isMuted(offer),
         ));
         continue;
       }
@@ -418,6 +504,7 @@ class _MechanosynthOfferPopupState extends State<MechanosynthOfferPopup> {
         toolState: offer.toolState,
         residual: offer.bestResidual,
         ghost: const [],
+        muted: _isMuted(offer),
       ));
       for (var i = 0; i < offer.candidates.length; i++) {
         final candidate = offer.candidates[i];
@@ -478,10 +565,17 @@ class _MechanosynthOfferPopupState extends State<MechanosynthOfferPopup> {
   String get _anchorSymbol =>
       elementNumberToSymbol[widget.anchorAtomicNumber] ?? '?';
 
+  bool _isMuted(APIMechanosynthOffer offer) =>
+      widget.mutedOps.contains(offer.op);
+
   String get _header {
     // Counts what can be **placed**, not what fits: a row whose tip is spent is
-    // not one of "3 operations apply here" from the user's point of view.
-    final fitting = widget.offers.where((o) => o.offerable).length;
+    // not one of "3 operations apply here" from the user's point of view — and
+    // not a muted one either, or muting a row from this list would leave the
+    // header claiming an operation the list no longer shows.
+    final fitting = widget.offers
+        .where((o) => o.offerable && (widget.showingAll || !_isMuted(o)))
+        .length;
     if (fitting == 0) {
       return 'Nothing applies to this $_anchorSymbol';
     }
@@ -676,10 +770,112 @@ class _MechanosynthOfferPopupState extends State<MechanosynthOfferPopup> {
                     ),
                   ),
                 ),
+              _buildMutedFooter(context, scheme),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  /// The honesty line: *4 of 19 operations muted · show all here*.
+  ///
+  /// Shown whenever anything is muted, **whether or not any of it would have
+  /// fitted**. The list's promise is that an empty result is a statement about
+  /// the library's coverage (`doc/design_mechanosynth_editor.md` §*A miss
+  /// becomes a coverage report*), and a filter that said nothing would turn
+  /// that into a lie — an empty popup with no explanation is the worst thing
+  /// muting could produce.
+  ///
+  /// It deliberately does **not** say how many of the muted operations apply
+  /// here. Knowing that means running the placement search for them, which is
+  /// exactly the cost the mute exists to avoid; *show all here* buys the same
+  /// answer, once, when it is asked for.
+  Widget _buildMutedFooter(BuildContext context, ColorScheme scheme) {
+    final muted = widget.mutedCount;
+    if (muted == 0 && !widget.showingAll) return const SizedBox.shrink();
+
+    final text = widget.showingAll
+        ? 'Showing all ${widget.libraryCount} operations'
+        : '$muted of ${widget.libraryCount} operations muted';
+
+    return Container(
+      padding: const EdgeInsets.only(left: 10, right: 4, top: 3, bottom: 3),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(6)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              text,
+              key: const Key('mechanosynth_popup_muted_footer'),
+              style: TextStyle(
+                fontSize: 11,
+                color: scheme.onSurfaceVariant.withValues(alpha: 0.85),
+              ),
+            ),
+          ),
+          if (!widget.showingAll && widget.onShowAll != null)
+            TextButton(
+              key: const Key('mechanosynth_popup_show_all'),
+              onPressed: widget.onShowAll,
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child:
+                  const Text('show all here', style: TextStyle(fontSize: 11)),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// The row's mute control, and — when the row is already muted — its badge.
+  ///
+  /// One control in two states rather than a chip plus a button: a lit eye-off
+  /// says *this one is muted* and is also the way back, which is the whole of
+  /// what a user needs from a muted row. The unlit one appears on hover, so a
+  /// list nobody is pointing at carries no buttons.
+  ///
+  /// Only on rows that name an operation. A **variant** is one placement of an
+  /// operation whose group header carries the name, and muting is per
+  /// operation — a per-placement mute would be a different feature.
+  Widget _buildMuteButton(_Row row, bool visible, ColorScheme scheme) {
+    if (widget.onMute == null || row.kind == _RowKind.variant) {
+      return const SizedBox.shrink();
+    }
+    // **A plain icon, not an `IconButton`.** The slot reserves the same box
+    // whether or not the control is in it, so a row does not change height
+    // when the pointer arrives — an `IconButton`'s 20 px tap target is taller
+    // than the row's text, and the rows below would shift out from under the
+    // pointer that is hovering this one.
+    final icon = Icon(
+      row.muted ? Icons.visibility_off : Icons.visibility_off_outlined,
+      key: Key('mechanosynth_popup_mute_icon_${row.op}'),
+      size: 14,
+      color: row.muted
+          ? scheme.tertiary
+          : scheme.onSurfaceVariant.withValues(alpha: 0.7),
+    );
+    return SizedBox(
+      width: 22,
+      child: (row.muted || visible)
+          ? Tooltip(
+              message: row.muted
+                  ? 'Muted — click to offer ${row.op} again'
+                  : 'Mute — leave ${row.op} out of the offer list',
+              child: GestureDetector(
+                key: Key('mechanosynth_popup_mute_${row.op}'),
+                behavior: HitTestBehavior.opaque,
+                onTap: () => widget.onMute!(row.op, !row.muted),
+                child: icon,
+              ),
+            )
+          : null,
     );
   }
 
@@ -810,6 +1006,12 @@ class _MechanosynthOfferPopupState extends State<MechanosynthOfferPopup> {
           ? Key('mechanosynth_popup_group_${row.op}')
           : Key('mechanosynth_popup_row_${row.op}_${row.candidateIndex}'),
       onHover: (hovering) {
+        // Tracked for **every** row, a group header included: the mute button
+        // is per operation, and a group header is the only place a multi-way
+        // operation's name appears. Showing a button costs a repaint, so this
+        // needs none of the preview's delay machinery.
+        final hoveredNow = hovering ? index : -1;
+        if (_hovered != hoveredNow) setState(() => _hovered = hoveredNow);
         if (!row.isSelectable) return;
         if (hovering) {
           _hoverRow(index);
@@ -905,6 +1107,7 @@ class _MechanosynthOfferPopupState extends State<MechanosynthOfferPopup> {
             // and a ready tool is not news — the panel's *Tools* readout is
             // what says a recharge is due. A *blocked* tool is news, and it
             // gets the badge instead.
+            _buildMuteButton(row, index == _hovered || highlighted, scheme),
             SizedBox(
               // A variant carries no note of its own — the note is the
               // operation's, and it is on the group header — so it reclaims

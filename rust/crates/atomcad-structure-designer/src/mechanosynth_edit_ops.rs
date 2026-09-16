@@ -134,6 +134,10 @@ pub struct OfferSweep {
     /// Deliberately **not** "how many muted ops apply here" — knowing that
     /// costs exactly the sweep the mute avoids.
     pub skipped_muted: usize,
+    /// How many operations the wired library defines, so the popup's line can
+    /// say *4 of 19* rather than a bare *4*. A proportion is what makes the
+    /// number mean something at a glance.
+    pub library_count: usize,
 }
 
 /// The atom a click landed on: what the popup hangs off and heads itself with.
@@ -165,6 +169,7 @@ fn offer_sweep(
         anchor_position: anchor.position,
         anchor_atomic_number: anchor.atomic_number,
         skipped_muted,
+        library_count: library.ops.len(),
         rows: rows
             .iter()
             .map(|row| {
@@ -562,8 +567,15 @@ impl StructureDesigner {
     ///
     /// A name the wired library does not define is stored anyway — the `ops`
     /// pin may be rewired, and a mute that evaporated when its library was
-    /// briefly swapped would be worse than one that waits. Muting closes any
-    /// open offer list, which was swept under the previous set.
+    /// briefly swapped would be worse than one that waits.
+    ///
+    /// **An open offer list is left alone**, deliberately. Muting changes no
+    /// fit: the rows were computed against a workpiece this does not touch, so
+    /// they are exactly as valid afterwards as before, and the popup hides the
+    /// muted one in place rather than paying for a second sweep. Resetting
+    /// would also be visible as a bug rather than as tidiness — the viewport
+    /// closes the popup whenever the kernel stops saying `offers`, so muting a
+    /// row from the popup would shut the list the user was reading.
     pub fn set_mechanosynth_edit_muted(
         &mut self,
         scope_path: &[u64],
@@ -606,7 +618,6 @@ impl StructureDesigner {
                 .mechanosynth_edit_data_mut(scope_path, node_id)
                 .ok_or("Not a mechanosynth_edit node")?;
             data.muted = after.clone();
-            data.placement.reset();
         }
         self.set_dirty(true);
         // Not a block edit, so it ends any open metadata-typing run rather than

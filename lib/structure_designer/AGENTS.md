@@ -267,6 +267,33 @@ viewport and the panel address the same node with the same
   handler is the fallback for the case where the popup does not hold focus,
   placed *before* the `isAtomEditLikeActive` gate because `mechanosynth_edit`
   is not an atom_edit-like node.
+- **Muting hides a row and never goes quiet** (`doc/design_mechanosynth_op_muting.md`).
+  The eye-off on a hovered row leaves that operation out of the node's offer
+  sweep; the footer reports `4 of 19 operations muted` whenever anything is, and
+  *show all here* re-sweeps this one anchor with `includeMuted: true`. Four
+  things hold this together and are easy to break:
+  1. **No re-sweep on a mute.** The rows in hand were fitted against a workpiece
+     muting does not touch, and the kernel deliberately leaves its stored offer
+     list alone for the same reason — which is what keeps the *remaining* rows
+     placeable, since `choose` validates against that list. `mechanosynth_edit`
+     is the one command that does not `placement.reset()`.
+  2. **`mutedOps` is one set, owned by the host.** `_msMuted` is seeded from the
+     sweep (empty for an ordinary one, the muted rows for a *show all* one) and
+     replaced — never mutated in place — when a row is muted, because the popup
+     resets its highlight on a set change and an in-place mutation is the same
+     object on both sides of `didUpdateWidget`. That reset is not cosmetic:
+     `_highlight` indexes the *filtered* rows, so a row vanishing above it would
+     silently move the selection and Enter would place something else.
+  3. **`showingAll` is host state.** The answering sweep reports nothing skipped,
+     so the footer would vanish at the moment it has something to say.
+  4. **The mute control is a plain `Icon` in a fixed 22 px slot, not an
+     `IconButton`.** A 20 px tap target is taller than the row's text, so the
+     row would grow when the pointer arrived and the rows below would shift out
+     from under it — which breaks hovering, not just looks.
+
+  A mute taken from the *panel* while a popup is open does not update the popup
+  (it holds its own view of the set). Rows stay placeable and the next click
+  re-sweeps; this is known and deliberate, not a bug to chase.
 
 The popup widget itself (`mechanosynth_offer_popup.dart`) takes plain data and
 callbacks and is unit-tested in `test/mechanosynth_offer_popup_test.dart`; the

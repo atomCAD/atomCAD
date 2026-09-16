@@ -101,7 +101,9 @@ final _offers = <APIMechanosynthOffer>[
 class _Harness {
   final chosen = <String>[];
   final previews = <String?>[];
+  final mutes = <String>[];
   var cancels = 0;
+  var showAlls = 0;
 }
 
 /// Hovers a row and lets the preview delay elapse.
@@ -121,6 +123,10 @@ Future<_Harness> _pump(
   List<APIMechanosynthOffer>? offers,
   double? Function(List<APIGhostAtom>)? arrowAngleFor,
   Duration previewDelay = const Duration(milliseconds: 100),
+  Set<String> mutedOps = const {},
+  int mutedCount = 0,
+  int libraryCount = 0,
+  bool showingAll = false,
 }) async {
   final harness = _Harness();
   await tester.pumpWidget(MaterialApp(
@@ -132,9 +138,15 @@ Future<_Harness> _pump(
           offers: offers ?? _offers,
           arrowAngleFor: arrowAngleFor,
           previewDelay: previewDelay,
+          mutedOps: mutedOps,
+          mutedCount: mutedCount,
+          libraryCount: libraryCount,
+          showingAll: showingAll,
           onChoose: (op, index) => harness.chosen.add('$op#$index'),
           onPreview: (preview) => harness.previews.add(preview?.op),
           onCancel: () => harness.cancels++,
+          onMute: (op, muted) => harness.mutes.add('$op=$muted'),
+          onShowAll: () => harness.showAlls++,
         ),
       ),
     ),
@@ -519,6 +531,143 @@ void main() {
       expect(_header(tester), '3 operations apply to this Si');
       expect(find.byKey(const Key('mechanosynth_popup_info_cl_donate_dimer_0')),
           findsNothing);
+    });
+  });
+
+  // ==========================================================================
+  // Muting
+  // ==========================================================================
+  //
+  // `doc/design_mechanosynth_op_muting.md` Phase 3. The rule the whole group
+  // defends: muting hides a row and **says so**, because an empty offer list is
+  // read as a statement about the library's coverage.
+
+  group('muting', () {
+    testWidgets('a muted operation is not listed, and the header agrees',
+        (tester) async {
+      // Leaving the header at "3 operations apply" while showing two rows would
+      // be the same lie by omission the footer exists to prevent, one line up.
+      await _pump(tester, mutedOps: const {'cl_donate_dimer'});
+      expect(_rowKeys(tester),
+          isNot(contains('mechanosynth_popup_row_cl_donate_dimer_0')));
+      expect(_header(tester), '2 operations apply to this Si');
+    });
+
+    testWidgets('the footer reports what was skipped, in proportion',
+        (tester) async {
+      await _pump(tester, mutedCount: 4, libraryCount: 19);
+      final footer = tester
+          .widget<Text>(
+              find.byKey(const Key('mechanosynth_popup_muted_footer')))
+          .data!;
+      expect(footer, '4 of 19 operations muted');
+      expect(
+          find.byKey(const Key('mechanosynth_popup_show_all')), findsOneWidget);
+    });
+
+    testWidgets('with nothing muted there is no footer at all', (tester) async {
+      await _pump(tester, libraryCount: 19);
+      expect(find.byKey(const Key('mechanosynth_popup_muted_footer')),
+          findsNothing);
+    });
+
+    testWidgets('an empty list still carries the footer', (tester) async {
+      // The worst outcome muting could produce is an empty popup with no
+      // explanation — precisely the case where the line matters most.
+      await _pump(tester, offers: const [], mutedCount: 4, libraryCount: 19);
+      expect(_header(tester), 'Nothing applies to this Si');
+      expect(find.byKey(const Key('mechanosynth_popup_muted_footer')),
+          findsOneWidget);
+    });
+
+    testWidgets('show all here asks the host, once', (tester) async {
+      final harness = await _pump(tester, mutedCount: 4, libraryCount: 19);
+      await tester.tap(find.byKey(const Key('mechanosynth_popup_show_all')));
+      await tester.pump();
+      expect(harness.showAlls, 1);
+    });
+
+    testWidgets('showing all says so and offers no second sweep',
+        (tester) async {
+      // The answering sweep reports nothing skipped, so the footer would
+      // otherwise vanish at the moment it has something to say.
+      await _pump(tester,
+          mutedOps: const {'cl_donate_dimer'},
+          mutedCount: 0,
+          libraryCount: 19,
+          showingAll: true);
+      final footer = tester
+          .widget<Text>(
+              find.byKey(const Key('mechanosynth_popup_muted_footer')))
+          .data!;
+      expect(footer, 'Showing all 19 operations');
+      expect(
+          find.byKey(const Key('mechanosynth_popup_show_all')), findsNothing);
+      // …and the muted row is back, listed like any other.
+      expect(_rowKeys(tester),
+          contains('mechanosynth_popup_row_cl_donate_dimer_0'));
+    });
+
+    testWidgets('a row brought back by show all is badged and placeable',
+        (tester) async {
+      // Mute filters the sweep and nothing else: a row that is in the list can
+      // be committed whatever put it there.
+      final harness = await _pump(tester,
+          mutedOps: const {'cl_donate_dimer'},
+          libraryCount: 19,
+          showingAll: true);
+      final icon = tester.widget<Icon>(find
+          .byKey(const Key('mechanosynth_popup_mute_icon_cl_donate_dimer')));
+      expect(icon.icon, Icons.visibility_off,
+          reason: 'a lit eye-off is the badge and the way back, one control');
+
+      await tester.tap(
+          find.byKey(const Key('mechanosynth_popup_row_cl_donate_dimer_0')));
+      await tester.pump();
+      expect(harness.chosen, ['cl_donate_dimer#0']);
+    });
+
+    testWidgets('the eye-off on a muted row unmutes it', (tester) async {
+      final harness = await _pump(tester,
+          mutedOps: const {'cl_donate_dimer'},
+          libraryCount: 19,
+          showingAll: true);
+      await tester.tap(
+          find.byKey(const Key('mechanosynth_popup_mute_cl_donate_dimer')));
+      await tester.pump();
+      expect(harness.mutes, ['cl_donate_dimer=false']);
+    });
+
+    testWidgets('hovering a row offers to mute it', (tester) async {
+      final harness = await _pump(tester);
+      const mute = Key('mechanosynth_popup_mute_cl_donate_dimer');
+      expect(find.byKey(mute), findsNothing,
+          reason: 'a list nobody is pointing at carries no buttons');
+
+      await _hover(
+          tester, const Key('mechanosynth_popup_row_cl_donate_dimer_0'));
+      expect(find.byKey(mute), findsOneWidget);
+      await tester.tap(find.byKey(mute));
+      await tester.pump();
+      expect(harness.mutes, ['cl_donate_dimer=true']);
+      expect(harness.chosen, isEmpty,
+          reason: 'the button must not fall through to placing the row');
+    });
+
+    testWidgets('muting drops the selection rather than shifting it',
+        (tester) async {
+      // `_highlight` indexes the filtered rows, so a row vanishing above it
+      // would silently move the selection — and Enter would then place a row
+      // the user never chose.
+      final harness = await _pump(tester, previewDelay: Duration.zero);
+      await _hover(
+          tester, const Key('mechanosynth_popup_row_cl_donate_dimer_0'));
+      expect(harness.previews.last, 'cl_donate_dimer');
+
+      await _pump(tester,
+          previewDelay: Duration.zero, mutedOps: const {'si_donate_dimer'});
+      await _key(tester, LogicalKeyboardKey.enter);
+      expect(harness.chosen, isEmpty);
     });
   });
 }

@@ -497,6 +497,22 @@ class _StructureDesignerViewportState
   /// is committed; a near-miss preview is drawn in a warning colour.
   MechanosynthPreview? _msPreview;
 
+  /// Which of the open sweep's operations are muted, as this popup understands
+  /// it (`doc/design_mechanosynth_op_muting.md`).
+  ///
+  /// Seeded from the sweep — an ordinary one brings back none, a *show all
+  /// here* one brings back exactly the muted ones — and updated in place when a
+  /// row's eye-off is clicked, because muting from the popup deliberately does
+  /// **not** re-sweep: the remaining rows were fitted against a workpiece the
+  /// mute did not touch, so they are still correct, and the kernel leaves its
+  /// stored offer list alone for the same reason.
+  Set<String> _msMuted = {};
+
+  /// Whether *show all here* has been taken for the open anchor. The answering
+  /// sweep reports nothing skipped, so without this the footer would vanish at
+  /// the moment it has something to say.
+  bool _msShowingAll = false;
+
   /// Set while a popup is open so a camera move re-lays-out the anchor.
   /// `renderingNeeded()` only schedules a *frame*; the widget tree is rebuilt
   /// only by `setState`, and a popup pinned to a projected 3D point has to move
@@ -1158,6 +1174,8 @@ class _StructureDesignerViewportState
       _msOffers = null;
       _msPreview = null;
       _msDragOffset = Offset.zero;
+      _msMuted = {};
+      _msShowingAll = false;
     });
     renderingNeeded();
   }
@@ -1198,6 +1216,76 @@ class _StructureDesignerViewportState
       _msAnchor = anchor;
       _msOffers = outcome.value;
       _msPreview = null;
+      _msMuted = _mutedOpsOf(outcome.value!);
+      _msShowingAll = false;
+    });
+    renderingNeeded();
+  }
+
+  /// The muted operations a sweep brought back. Empty for an ordinary sweep —
+  /// it did not look at them — and exactly the muted rows for a *show all
+  /// here* one.
+  static Set<String> _mutedOpsOf(APIMechanosynthOffers offers) => {
+        for (final row in offers.rows)
+          if (row.muted) row.op,
+      };
+
+  /// Sweeps the open anchor again over the **whole** library, mute set
+  /// ignored.
+  ///
+  /// The escape hatch that keeps an empty offer list honest: the list's promise
+  /// is that it reports what the library can do at this atom, and this is how
+  /// the user cashes that promise in. It costs one extra sweep, only when
+  /// asked, and the rows it brings back are fully placeable — mute filters the
+  /// sweep and nothing else.
+  void _mechanosynthShowAll() {
+    final nodeId = _mechanosynthEditNodeId;
+    final anchor = _msAnchor;
+    if (nodeId == null || anchor == null) return;
+
+    final outcome = widget.graphModel
+        .mechanosynthEditOffers(nodeId, anchor.atomId, includeMuted: true);
+    if (outcome.value == null) {
+      showErrorSnackBar(context, outcome.error ?? 'no offers');
+      return;
+    }
+    setState(() {
+      _msOffers = outcome.value;
+      _msPreview = null;
+      _msMuted = _mutedOpsOf(outcome.value!);
+      _msShowingAll = true;
+    });
+    renderingNeeded();
+  }
+
+  /// Leaves an operation out of this node's offer sweep, or puts it back.
+  ///
+  /// The popup is where the clutter is noticed, so it is the cheapest place to
+  /// act on it. **No re-sweep**: the rows in hand were fitted against a
+  /// workpiece muting does not touch, so hiding one in place is both correct
+  /// and free. The kernel leaves its stored offer list alone for the same
+  /// reason, which is what keeps the remaining rows placeable.
+  void _mechanosynthMute(String op, bool muted) {
+    final nodeId = _mechanosynthEditNodeId;
+    if (nodeId == null) return;
+
+    final error =
+        widget.graphModel.setMechanosynthEditMuted(nodeId, [op], muted);
+    if (error != null) {
+      showErrorSnackBar(context, error);
+      return;
+    }
+    // The row is about to vanish, so its ghosts must go with it — both the
+    // projected copy this widget holds and the kernel's, which is what the
+    // tessellator draws.
+    final previewed = _msPreview?.op == op && muted;
+    if (previewed) widget.graphModel.mechanosynthEditClearPreview(nodeId);
+    setState(() {
+      // A **new** set, not a mutation: the popup resets its highlight when the
+      // muted set changes, and a set mutated in place is the same object on
+      // both sides of `didUpdateWidget`.
+      _msMuted = muted ? {..._msMuted, op} : (_msMuted..remove(op)).toSet();
+      if (previewed) _msPreview = null;
     });
     renderingNeeded();
   }
@@ -1400,6 +1488,15 @@ class _StructureDesignerViewportState
         anchorAtomicNumber: anchor.atomicNumber,
         offers: offers.rows,
         onChoose: _mechanosynthChoose,
+        onMute: _mechanosynthMute,
+        onShowAll: _mechanosynthShowAll,
+        mutedOps: _msMuted,
+        // The sweep's own count plus whatever has been muted from the list
+        // since. While the list is not showing all, a row can only be muted
+        // here (a muted one is not drawn), so the delta is exactly the set.
+        mutedCount: offers.mutedCount + (_msShowingAll ? 0 : _msMuted.length),
+        libraryCount: offers.libraryCount,
+        showingAll: _msShowingAll,
         // Selecting a row is a round trip to the kernel: the ghosts go into the
         // node's transient state and the next evaluation tessellates them with
         // the workpiece. That is why the popup selects on a click and not on

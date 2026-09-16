@@ -1654,6 +1654,22 @@ are symmetric about the view axis; clicking one previews it either way.
 The operation's note lives on the ⓘ beside its name — hover it. The row itself
 stays short, which is what makes room for the variants.
 
+**Muting from the popup.** Pointing at a row reveals an eye-off button beside
+it. Clicking it leaves that operation out of this node's offer list from now on
+— the same setting the panel's *Operations* section edits, taken from the place
+you actually notice the clutter. The row disappears at once; nothing is
+re-searched, because the rows in hand describe the same workpiece either way.
+
+**The list always says what it left out.** A footer reads `4 of 19 operations
+muted` whenever anything is, and that matters most when nothing applies: an
+empty popup means *the library cannot do anything here*, and a filter that said
+nothing would turn that into a lie. **show all here** asks the whole library
+about this one atom, mute list ignored — it is the way to check that a
+disappointing answer is the library's and not your own filter. Rows it brings
+back carry a lit eye-off, which is both the badge saying *this one is muted* and
+the button that unmutes it. They place like any other row: muting decides what
+you are offered, never what can be done.
+
 A placement returns the tool to the start: the next viewport click is another
 question, not a repeat of the last answer. That is deliberate. A library names
 one operation per host *environment* (`si_donate_dimer`, `si_donate_site`, …),
