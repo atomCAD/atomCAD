@@ -1164,8 +1164,11 @@ fn a_bulk_and_a_spontaneous_step_touch_no_tool() {
     let no_tool_steps = BuildScript {
         file: "no_tool".to_string(),
         tolerance: None,
+        // Both act on methane B, on sites the steric rule leaves free: exposing
+        // the carbon itself would put the F 0.31 Å from the hydrogen already
+        // above it, which is a clash and now a refusal.
         steps: vec![
-            Step::new("expose", DVec3::new(10.0, 0.0, 0.0)),
+            Step::new("expose", DVec3::new(11.027662, 0.0, -0.363333)),
             Step::new("settle", DVec3::new(10.0, 0.0, 1.09)),
         ],
     };
@@ -1825,4 +1828,89 @@ fn the_plain_replay_is_the_scene_replay_with_nothing_wired() {
 
     // And the rotation the build states survives the wrapper unchanged.
     assert_eq!(DMat3::IDENTITY.determinant(), 1.0);
+}
+
+// ============================================================================
+// Structure sanity: the same rules, applied to the inputs
+// (doc/design_mechanosynth_pattern_checks.md §6)
+// ============================================================================
+
+#[test]
+fn a_participant_with_no_bond_model_is_refused_by_name() {
+    // The xyz-import case. Without this, every `deg` and every closed-world
+    // bond check against that structure would pass vacuously, because a
+    // structure with no bonds has no degrees to disagree with.
+    let lib = library("tool_ops.json");
+    let base = molecule("tool_scene.xyz");
+    let empty = BuildScript {
+        file: "none".to_string(),
+        tolerance: None,
+        steps: Vec::new(),
+    };
+
+    let mut bondless = AtomicStructure::new();
+    bondless.add_atom(H, DVec3::new(30.0, 0.0, 0.0));
+    bondless.add_atom(H, DVec3::new(30.0, 0.0, 5.0));
+
+    let message = error_of(&base, &[bondless], &[], &lib, &empty, -1).to_string();
+    assert!(message.contains("feedstock 0"), "{message}");
+    assert!(message.contains("no bonds"), "{message}");
+    assert!(message.contains("rebond"), "{message}");
+
+    // One atom is not a bond model missing; it is a structure with no bond to
+    // have.
+    let mut lone = AtomicStructure::new();
+    lone.add_atom(H, DVec3::new(30.0, 0.0, 0.0));
+    replay_plain(&base, &[lone], &[], &lib, &empty, -1).expect("a single atom is fine");
+}
+
+#[test]
+fn two_unbonded_atoms_of_one_participant_too_close_are_refused_by_name() {
+    let lib = library("tool_ops.json");
+    let empty = BuildScript {
+        file: "none".to_string(),
+        tolerance: None,
+        steps: Vec::new(),
+    };
+
+    // A workpiece with an unbonded hydrogen jammed against one of its own.
+    let mut base = molecule("tool_scene.xyz");
+    base.add_atom(H, DVec3::new(0.0, 0.3, 1.09));
+
+    let message = error_of(&base, &[], &[], &lib, &empty, -1).to_string();
+    assert!(message.contains("base"), "{message}");
+    assert!(message.contains("no bond between them"), "{message}");
+    assert!(message.contains("0.90"), "{message}");
+
+    // A **tool** parked in contact with the workpiece is a modelling choice,
+    // not a broken input: the pair check is per participant.
+    let base = molecule("tool_scene.xyz");
+    let touching = tagged("tool_tip_touching.xyz", "habst_tool");
+    replay_plain(&base, &[], &[touching], &lib, &empty, -1)
+        .expect("a tool may be parked against the workpiece");
+}
+
+#[test]
+fn a_placed_atom_inside_a_parked_tool_is_refused() {
+    // "The whole scene, feedstocks and tools included, since a placed atom
+    // that lands inside a parked tool is a collision whoever it belongs to."
+    // `settle` is spontaneous, so nothing about the tool is even consulted —
+    // the tool is simply in the way.
+    let lib = library("tool_ops.json");
+    let base = molecule("tool_scene.xyz");
+    let touching = tagged("tool_tip_touching.xyz", "habst_tool");
+    let nudge = BuildScript {
+        file: "nudge".to_string(),
+        tolerance: None,
+        steps: vec![Step::new("settle", DVec3::new(0.0, 0.0, 1.09))],
+    };
+
+    // With no tool wired the same step is fine: the site above the hydrogen is
+    // empty.
+    replay_plain(&base, &[], &[], &lib, &nudge, -1).expect("nothing is in the way");
+
+    let message = error_of(&base, &[], &[touching], &lib, &nudge, -1).to_string();
+    assert!(message.contains("step 1"), "{message}");
+    assert!(message.contains("habst_tool"), "{message}");
+    assert!(message.contains("does not bond"), "{message}");
 }

@@ -12,14 +12,21 @@
 //! discipline. A script whose bonds do not hold was generated against a
 //! different workpiece, and saying so is the whole point: atomCAD is for
 //! atomically precise manufacturing, and a workpiece whose bond model is wrong
-//! is not a model of anything. See
-//! `doc/design_mechanosynth_pattern_checks.md` §2.
+//! is not a model of anything.
+//!
+//! A third pass, [`worst_contact`], asks where the step's atoms actually land:
+//! **two atoms not bonded to each other must not be closer than a fraction of
+//! their covalent-radius sum.** It is shared the same way, and it too runs
+//! before the first mutation, because [`apply_matched`] is infallible by design
+//! and there is nothing to roll back. See
+//! `doc/design_mechanosynth_pattern_checks.md` §2 and §5.
 
 use super::schema::{
-    BondMismatch, BuildScript, DEFAULT_TOLERANCE, DegreeMismatch, MechanosynthError, NoMatch,
-    OpLibrary, Operation, PATTERN_POSITION_EPSILON, Pattern, PatternElement, Step,
+    BondMismatch, BuildScript, CLASH_SEARCH_RADIUS, Clash, DEFAULT_TOLERANCE, DegreeMismatch,
+    MechanosynthError, NoMatch, OpLibrary, Operation, PATTERN_POSITION_EPSILON, Pattern,
+    PatternElement, Step,
 };
-use crate::atomic_constants::element_symbol;
+use crate::atomic_constants::{ATOM_INFO, DEFAULT_ATOM_INFO, element_symbol};
 use crate::atomic_structure::{AtomicStructure, BondReference};
 use glam::DVec3;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -88,12 +95,19 @@ pub struct StepEffect {
 /// Applies one step to `workpiece` in place.
 ///
 /// `step_number` is 1-based and appears in the failure message only.
+///
+/// `tolerance` and `clash` are the two values a library states and a replay
+/// resolves once — [`resolve_tolerance`] and
+/// [`OpLibrary::clash_factor`](super::OpLibrary::clash_factor). They are
+/// parameters rather than a borrowed library so that a caller with a pattern
+/// and no file, and every test, can vary them.
 pub fn apply_step(
     workpiece: &mut AtomicStructure,
     op: &Operation,
     step: &Step,
     step_number: usize,
     tolerance: f64,
+    clash: f64,
 ) -> Result<StepEffect, MechanosynthError> {
     let matched = match_before(
         workpiece,
@@ -102,6 +116,17 @@ pub fn apply_step(
         step,
         step_number,
         tolerance,
+        None,
+    )?;
+    verify_clash(
+        workpiece,
+        &op.name,
+        &op.before,
+        &op.after,
+        &matched,
+        step,
+        step_number,
+        clash,
         None,
     )?;
     Ok(apply_matched(
@@ -359,6 +384,325 @@ pub(super) fn verify_pattern(
             participant_of,
         )),
     }
+}
+
+// ============================================================================
+// The steric check
+// ============================================================================
+
+/// The closest pair of atoms a step would leave **unbonded and touching**.
+///
+/// One end is always an atom the step *places* — adds, or moves. Every other
+/// pair is unchanged by the step, and the scene's input check — the same rule,
+/// applied once to the structures the engine is handed — has already had its
+/// say about those.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Contact {
+    /// Centre-to-centre distance, Å.
+    pub distance: f64,
+    /// `distance` over the sum of the two covalent radii. Below the library's
+    /// factor the step is blocked; see [`CLASH_BLOCK`](super::CLASH_BLOCK).
+    pub ratio: f64,
+    /// The `after` pattern id of the placed atom, and the element it ends up
+    /// being.
+    pub placed: (i64, i16),
+    /// The atom it comes close to: the workpiece atom it is, when the
+    /// workpiece has one, and its element. `None` for an atom the *same* step
+    /// places — two placed atoms too close to each other are a pair like any
+    /// other, and that one is a fault in the library rather than in the host.
+    pub other: (Option<u32>, i16),
+}
+
+impl Contact {
+    /// `the Cl of atom 481`, or `the Cl it also places`.
+    pub fn other_label(&self) -> String {
+        let element = element_symbol(self.other.1);
+        match self.other.0 {
+            Some(atom_id) => format!("the {element} of atom {atom_id}"),
+            None => format!("the {element} it also places"),
+        }
+    }
+
+    /// The contact in the words a refused candidate shows where its residual
+    /// would be.
+    pub fn reason(&self) -> String {
+        format!(
+            "would put {} {:.2} Å from {}",
+            element_symbol(self.placed.1),
+            self.distance,
+            self.other_label(),
+        )
+    }
+}
+
+/// The covalent radius of an element, falling back to the table's default for
+/// one it does not list. Never zero, so a ratio is always defined.
+pub(super) fn covalent_radius(z: i16) -> f64 {
+    ATOM_INFO
+        .get(&(z as i32))
+        .unwrap_or(&DEFAULT_ATOM_INFO)
+        .covalent_radius
+}
+
+/// One atom of the after state, named the way the check has to name it: by the
+/// workpiece atom it is, or — for an atom this step places — by its pattern id,
+/// because a moved atom is in two places at once until the step is applied.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum Node {
+    Existing(u32),
+    Placed(i64),
+}
+
+/// An atom the step adds or moves, in the after state, with everything it ends
+/// up bonded to — which is exactly what it must *not* be compared against.
+struct PlacedAtom {
+    id: i64,
+    pos: DVec3,
+    element: i16,
+    bonded: FxHashSet<Node>,
+}
+
+/// The worst non-bonded contact the step would create, or `None` when it
+/// creates none.
+///
+/// **One rule: two atoms that are not bonded to each other must not be closer
+/// than a fraction of their covalent-radius sum; bonded atoms are never
+/// checked.** A bond is the library's statement that the two belong at bond
+/// distance, whatever that distance is, and the engine has no better opinion.
+/// Everything else is a non-bonded contact and one threshold applies to all of
+/// them. See `doc/design_mechanosynth_pattern_checks.md` §5.
+///
+/// **Nothing is mutated to run it.** [`apply_matched`] is infallible by design
+/// and there is no rollback of a half-applied step, so this works from the
+/// match and the patterns alone: a placed atom's position is `step.place(p)`,
+/// its bonds are what the rewrite leaves it with, and its neighbours are the
+/// workpiece atoms around it minus the ones the step deletes and minus the old
+/// positions of the ones it moves. That is the same information
+/// [`preview_atoms`](super::preview_atoms) derives, which is why a blocked
+/// candidate is still previewable.
+///
+/// Takes the two patterns rather than an [`Operation`] so that a tool side —
+/// which is a before/after pair in the tool's own frame — goes through the very
+/// same function.
+pub(super) fn worst_contact(
+    workpiece: &AtomicStructure,
+    before: &Pattern,
+    after: &Pattern,
+    step: &Step,
+    matched: &FxHashMap<i64, u32>,
+) -> Option<Contact> {
+    // An id is *placed* when the step adds it, or keeps it somewhere else. A
+    // kept atom is not: `apply_matched` never snaps one, so it stays where the
+    // workpiece has it and its contacts are not this step's doing.
+    let is_placed = |id: i64| match (before.atom(id), after.atom(id)) {
+        (_, None) => false,
+        (None, Some(_)) => true,
+        (Some(b), Some(a)) => b.pos.distance(a.pos) > PATTERN_POSITION_EPSILON,
+    };
+
+    let placed_ids: Vec<i64> = after
+        .atoms
+        .iter()
+        .map(|atom| atom.id)
+        .filter(|id| is_placed(*id))
+        .collect();
+    if placed_ids.is_empty() {
+        return None;
+    }
+
+    // The workpiece atoms that will not be there afterwards, and the ones that
+    // will be somewhere else. Both drop out of the neighbour scan: a deleted
+    // atom is gone, and a moved one is compared at its new position instead.
+    let deleted: FxHashSet<u32> = before
+        .atoms
+        .iter()
+        .filter(|atom| !after.has(atom.id))
+        .filter_map(|atom| matched.get(&atom.id).copied())
+        .collect();
+    let moved_from: FxHashMap<u32, i64> = placed_ids
+        .iter()
+        .filter_map(|id| matched.get(id).map(|atom_id| (*atom_id, *id)))
+        .collect();
+
+    let node_of_pattern = |id: i64| -> Option<Node> {
+        if is_placed(id) {
+            Some(Node::Placed(id))
+        } else {
+            matched.get(&id).copied().map(Node::Existing)
+        }
+    };
+    let node_of_atom = |atom_id: u32| -> Node {
+        match moved_from.get(&atom_id) {
+            Some(id) => Node::Placed(*id),
+            None => Node::Existing(atom_id),
+        }
+    };
+
+    let mut atoms: Vec<PlacedAtom> = Vec::with_capacity(placed_ids.len());
+    for &id in &placed_ids {
+        let after_atom = after.atom(id).expect("placed ids come from `after`");
+        let current = matched
+            .get(&id)
+            .and_then(|atom_id| workpiece.get_atom(*atom_id));
+        let element = match after_atom.element {
+            PatternElement::Element(z) => z,
+            // `"*"` on a moved id leaves the workpiece atom's element alone.
+            PatternElement::Any => current.map_or(0, |atom| atom.atomic_number),
+        };
+
+        let mut bonded: FxHashSet<Node> = FxHashSet::default();
+        if before.has(id) {
+            // Moved: the bonds it has, minus the ones only `before` lists,
+            // plus the ones only `after` does.
+            if let Some(atom) = current {
+                for bond in &atom.bonds {
+                    let other = bond.other_atom_id();
+                    if deleted.contains(&other) {
+                        continue;
+                    }
+                    bonded.insert(node_of_atom(other));
+                }
+            }
+            for bond in &before.bonds {
+                let Some(other) = bond.other_end(id) else {
+                    continue;
+                };
+                if after.bonds.iter().any(|kept| kept.key() == bond.key()) {
+                    continue;
+                }
+                if let Some(node) = node_of_pattern(other) {
+                    bonded.remove(&node);
+                }
+            }
+        }
+        for bond in &after.bonds {
+            let Some(other) = bond.other_end(id) else {
+                continue;
+            };
+            if let Some(node) = node_of_pattern(other) {
+                bonded.insert(node);
+            }
+        }
+
+        atoms.push(PlacedAtom {
+            id,
+            pos: step.place(after_atom.pos),
+            element,
+            bonded,
+        });
+    }
+
+    let mut worst: Option<Contact> = None;
+    let mut consider = |placed: &PlacedAtom, other: (Option<u32>, i16), position: DVec3| {
+        let distance = placed.pos.distance(position);
+        let ratio = distance / (covalent_radius(placed.element) + covalent_radius(other.1));
+        if worst.is_some_and(|best: Contact| best.ratio <= ratio) {
+            return;
+        }
+        worst = Some(Contact {
+            distance,
+            ratio,
+            placed: (placed.id, placed.element),
+            other,
+        });
+    };
+
+    for placed in &atoms {
+        // The other atoms this step places, at the positions it places them.
+        for partner in &atoms {
+            if partner.id == placed.id || placed.bonded.contains(&Node::Placed(partner.id)) {
+                continue;
+            }
+            consider(placed, (None, partner.element), partner.pos);
+        }
+        // Everything the workpiece already has around it, the step's own
+        // casualties and travellers excepted.
+        for atom_id in workpiece.get_atoms_in_radius(&placed.pos, CLASH_SEARCH_RADIUS) {
+            if deleted.contains(&atom_id) || moved_from.contains_key(&atom_id) {
+                continue;
+            }
+            if placed.bonded.contains(&Node::Existing(atom_id)) {
+                continue;
+            }
+            let Some(atom) = workpiece.get_atom(atom_id) else {
+                continue;
+            };
+            consider(placed, (Some(atom_id), atom.atomic_number), atom.position);
+        }
+    }
+
+    worst
+}
+
+/// [`worst_contact`], as the error a *step* fails with when the factor blocks
+/// it.
+///
+/// Runs after [`verify_pattern`] and **before** [`apply_matched`], at replay
+/// and at placement alike, which is what makes "a candidate is offerable iff
+/// the step it produces replays" hold for the steric rule too.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn verify_clash(
+    workpiece: &AtomicStructure,
+    op_name: &str,
+    before: &Pattern,
+    after: &Pattern,
+    matched: &FxHashMap<i64, u32>,
+    step: &Step,
+    step_number: usize,
+    clash: f64,
+    participant_of: Option<&dyn Fn(u32) -> String>,
+) -> Result<(), MechanosynthError> {
+    let Some(contact) = worst_contact(workpiece, before, after, step, matched) else {
+        return Ok(());
+    };
+    if contact.ratio >= clash {
+        return Ok(());
+    }
+    let sum = covalent_radius(contact.placed.1) + covalent_radius(contact.other.1);
+    Err(MechanosynthError::Clash(Box::new(Clash {
+        step: step_number,
+        op: op_name.to_string(),
+        t_x: step.t.x,
+        t_y: step.t.y,
+        t_z: step.t.z,
+        placed_id: contact.placed.0,
+        placed_element: element_symbol(contact.placed.1),
+        other: contact.other_label(),
+        distance: contact.distance,
+        ratio: contact.ratio,
+        factor: clash,
+        limit: clash * sum,
+        participant: participant_of
+            .zip(contact.other.0)
+            .map(|(label, atom_id)| label(atom_id))
+            .unwrap_or_default(),
+    })))
+}
+
+/// The worst non-bonded contact `step` would create on `workpiece`, for a
+/// caller that wants to *measure* rather than to gate — the replay-floor
+/// fixture, and anything else asking how close a legitimate build comes.
+///
+/// Fails exactly where [`apply_step`] would fail to match.
+pub fn step_contact(
+    workpiece: &AtomicStructure,
+    op: &Operation,
+    step: &Step,
+    step_number: usize,
+    tolerance: f64,
+) -> Result<Option<Contact>, MechanosynthError> {
+    let matched = match_before(
+        workpiece,
+        &op.name,
+        &op.before,
+        step,
+        step_number,
+        tolerance,
+        None,
+    )?;
+    Ok(worst_contact(
+        workpiece, &op.before, &op.after, step, &matched,
+    ))
 }
 
 /// [`match_positions`] followed by [`verify_pattern`]: the whole match, for a

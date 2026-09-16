@@ -89,6 +89,14 @@ pub const CLOSE_PAIR_WARNING_FACTOR: f64 = 1.1;
 /// legitimate build.
 pub const CLASH_BLOCK: f64 = 0.9;
 
+/// How far the steric check looks around an atom a step places, in Ångström.
+///
+/// Every pair it could report sits below `1.1 × (r_a + r_b)`, and the widest
+/// covalent-radius sum among the elements this engine models is well under half
+/// of this, so nothing within reach of any sane factor is missed. A fixed
+/// radius keeps the check one spatial-grid query per placed atom.
+pub const CLASH_SEARCH_RADIUS: f64 = 4.0;
+
 /// The element slot of a pattern atom.
 ///
 /// `"*"` means "no element comparison": in `before` it matches any element, in
@@ -323,6 +331,19 @@ impl PatternBond {
             (self.a, self.b)
         } else {
             (self.b, self.a)
+        }
+    }
+
+    /// The other endpoint, when `id` is one of them. `None` when this bond is
+    /// not about `id` at all, which is what lets a caller filter and read the
+    /// partner in one step.
+    pub fn other_end(&self, id: i64) -> Option<i64> {
+        if self.a == id {
+            Some(self.b)
+        } else if self.b == id {
+            Some(self.a)
+        } else {
+            None
         }
     }
 }
@@ -723,6 +744,44 @@ pub struct DegreeMismatch {
     pub participant: String,
 }
 
+/// An atom a step places, landing too close to an atom it does not bond to.
+///
+/// Its own type so that [`MechanosynthError`] can box it, for the reason
+/// [`NoMatch`] is boxed: every fallible function here returns that enum.
+#[derive(Debug, Error)]
+#[error(
+    "step {step} ({op} @ ({t_x:.3}, {t_y:.3}, {t_z:.3})) — the {placed_element} it places \
+     (pattern atom {placed_id}) lands {distance:.2} Å from {other}, which it does not bond \
+     to; the limit is {factor:.2} of the covalent-radius sum, {limit:.2} Å{}",
+    in_participant(.participant)
+)]
+pub struct Clash {
+    /// 1-based, as everything user-facing about steps is.
+    pub step: usize,
+    pub op: String,
+    pub t_x: f64,
+    pub t_y: f64,
+    pub t_z: f64,
+    /// The `after` pattern id of the atom the step places.
+    pub placed_id: i64,
+    /// Its element symbol.
+    pub placed_element: String,
+    /// What it comes too close to, in words: `the Cl of atom 481`, or
+    /// `another atom this step places` for a pair the library itself put there.
+    pub other: String,
+    pub distance: f64,
+    /// `distance` over the covalent-radius sum — what the factor gates.
+    pub ratio: f64,
+    /// The factor in force: the library's `clash`, else [`CLASH_BLOCK`].
+    pub factor: f64,
+    /// `factor` times the covalent-radius sum: the distance the pair had to
+    /// clear.
+    pub limit: f64,
+    /// Which participant of the scene the other atom belongs to. Empty when
+    /// there is no scene to say it about.
+    pub participant: String,
+}
+
 /// The middle of a [`BondMismatch`] message: what the pattern said against what
 /// the workpiece has.
 fn describe_bond_mismatch(expected: Option<u8>, found: Option<u8>) -> String {
@@ -832,6 +891,46 @@ pub enum MechanosynthError {
     /// **Boxed**, like [`MechanosynthError::NoMatch`] and for the same reason.
     #[error(transparent)]
     DegreeMismatch(Box<DegreeMismatch>),
+
+    /// An atom a step places, landing inside an atom it does not bond to.
+    ///
+    /// **Boxed**, like [`MechanosynthError::NoMatch`] and for the same reason.
+    #[error(transparent)]
+    Clash(Box<Clash>),
+
+    /// A participant of the scene carries atoms and no bonds at all, so every
+    /// bond and degree check against it would pass vacuously. The xyz-import
+    /// case: the file has coordinates and the importer perceived nothing.
+    #[error(
+        "{molecule}: carries no bonds ({atoms} atoms); import with bonds or wire a `rebond` node"
+    )]
+    NoBondModel {
+        /// `base`, `feedstock 1`, `tool 0`.
+        molecule: String,
+        atoms: usize,
+    },
+
+    /// Two atoms of one participant that are not bonded to each other and sit
+    /// closer than the library's steric factor allows.
+    ///
+    /// The same predicate the steric check applies to every step
+    /// ([`MechanosynthError::Clash`]), applied to the structures the engine is
+    /// handed: a build that starts from an impossible workpiece cannot produce
+    /// a possible one.
+    #[error(
+        "{molecule}: {first} and {second} are {distance:.2} Å apart with no bond between them; \
+         the limit is {factor:.2} of the covalent-radius sum, {limit:.2} Å"
+    )]
+    InputClash {
+        /// `base`, `feedstock 1`, `tool 0`.
+        molecule: String,
+        /// `the Si of atom 12`.
+        first: String,
+        second: String,
+        distance: f64,
+        factor: f64,
+        limit: f64,
+    },
 
     /// Merging a feedstock or a tool into the scene would overflow the
     /// structure's thirty-two tag names.
@@ -981,6 +1080,9 @@ impl MechanosynthError {
             | MechanosynthError::StepAcrossParticipants { .. }
             | MechanosynthError::BondMismatch(_)
             | MechanosynthError::DegreeMismatch(_)
+            | MechanosynthError::Clash(_)
+            | MechanosynthError::NoBondModel { .. }
+            | MechanosynthError::InputClash { .. }
             | MechanosynthError::ToolSideOffTool { .. } => None,
         }
     }

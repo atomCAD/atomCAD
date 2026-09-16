@@ -39,7 +39,7 @@
 //!   has 4 bonds and the operation needs 3" is the coverage report the editor
 //!   exists to give. See `doc/design_mechanosynth_pattern_checks.md` §4.
 
-use super::apply::{PatternMismatch, check_pattern, describe_nearest};
+use super::apply::{Contact, PatternMismatch, check_pattern, describe_nearest, worst_contact};
 use super::fit::{rank_of, rigid_fit};
 use super::scene::ToolBinding;
 use super::schema::{
@@ -106,6 +106,13 @@ pub struct Candidate {
     /// named no frame atoms — coordinates from the application rather than from
     /// the library.
     pub approximate: bool,
+    /// The closest pair of atoms this candidate would leave unbonded and
+    /// touching, when it would leave any within the check's reach.
+    ///
+    /// Reported whether or not it blocks: *how close does this reaction come*
+    /// is the measurement behind the block factor, and the one a library
+    /// author needs when deciding whether to state a `clash` of their own.
+    pub contact: Option<Contact>,
     /// Why this candidate cannot be committed, when it cannot.
     ///
     /// A candidate carrying one is kept — it must be previewable, since the
@@ -121,11 +128,21 @@ pub struct Candidate {
 /// mismatch on a non-clicked atom is pruned the same way. Only the clicked
 /// atom's own degree reaches a candidate, because that one is a report about the
 /// atom the user chose rather than about the search.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// A **clash**, by contrast, is a property of the whole placement rather than
+/// of a pair of pattern atoms, so it cannot be pruned: it is known only once a
+/// fit exists, and it is what tells the row's good orientation from its
+/// flipped one.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Refusal {
     /// The clicked atom has `found` bonds where the role it was given states
-    /// `expected`.
+    /// `expected`. Row-level by construction: the clicked atom is the same in
+    /// every candidate of one call.
     Degree { expected: u32, found: usize },
+    /// The step would leave an atom it places closer to an atom it does not
+    /// bond to than the library's factor allows. Per **candidate**: a row's
+    /// proper fit can be clean while its mirrored one lands in the bulk.
+    Clash(Contact),
 }
 
 impl Refusal {
@@ -135,6 +152,7 @@ impl Refusal {
             Refusal::Degree { expected, found } => {
                 format!("{op} needs a host with {expected} bond(s); the clicked atom has {found}")
             }
+            Refusal::Clash(contact) => contact.reason(),
         }
     }
 }
@@ -189,6 +207,7 @@ pub fn place_with_stats(
         .ok_or(MechanosynthError::NoSuchAtom { atom_id: clicked })?;
     let clicked_pos = clicked_atom.position;
     let clicked_element = element_symbol(clicked_atom.atomic_number);
+    let clash = library.clash_factor();
 
     // --- 1. the clicked atom's role, decided once -----------------------------
     let role = role_atom(operation, clicked_atom.atomic_number).ok_or_else(|| {
@@ -233,6 +252,7 @@ pub fn place_with_stats(
                     .to_string(),
             });
         }
+        let candidates = measure_contacts(workpiece, operation, clash, candidates);
         return Ok((
             rank(workpiece, operation, candidates),
             PlaceStats::default(),
@@ -314,6 +334,7 @@ pub fn place_with_stats(
                 exact: fit.residual < EXACT_FIT_RESIDUAL,
                 mirrored,
                 approximate: false,
+                contact: None,
                 refusal: role_refusal,
             });
         }
@@ -335,7 +356,38 @@ pub fn place_with_stats(
         });
     }
 
+    let candidates = measure_contacts(workpiece, operation, clash, candidates);
     Ok((rank(workpiece, operation, candidates), stats))
+}
+
+/// Fills in every candidate's [`Contact`] and, where the factor blocks it, its
+/// [`Refusal::Clash`].
+///
+/// The same predicate the replay runs ([`worst_contact`]), over the same match,
+/// which is what keeps "a candidate is offerable iff the step it produces
+/// replays" true of the steric rule. A candidate already refused for the
+/// clicked atom's degree keeps that refusal: it is the row-level reason, and it
+/// is the one a user can act on.
+fn measure_contacts(
+    workpiece: &AtomicStructure,
+    op: &Operation,
+    clash: f64,
+    candidates: Vec<Candidate>,
+) -> Vec<Candidate> {
+    candidates
+        .into_iter()
+        .map(|mut candidate| {
+            let matched: FxHashMap<i64, u32> = candidate.roles.iter().copied().collect();
+            candidate.contact =
+                worst_contact(workpiece, &op.before, &op.after, &candidate.step, &matched);
+            if candidate.refusal.is_none()
+                && let Some(contact) = candidate.contact.filter(|c| c.ratio < clash)
+            {
+                candidate.refusal = Some(Refusal::Clash(contact));
+            }
+            candidate
+        })
+        .collect()
 }
 
 // ============================================================================
@@ -607,6 +659,7 @@ fn fallback_candidates(
                 exact: true,
                 mirrored: false,
                 approximate: true,
+                contact: None,
                 refusal,
             }
         })
@@ -658,8 +711,14 @@ fn frame_taking_z_to(direction: DVec3) -> DMat3 {
 }
 
 /// Collapses the candidates that produce the same after state, then orders what
-/// is left: by residual, then proper before mirrored, then exact before
-/// approximate.
+/// is left: **placeable before refused**, then by residual, then proper before
+/// mirrored, then exact before approximate.
+///
+/// Refused last so that index 0 of an offerable row is always a candidate that
+/// can be committed, and a row's default preview is never a blocked ghost. Two
+/// candidates with the same after state place the same atoms and so have the
+/// same contact, which is why the collapse never has to arbitrate between a
+/// blocked and a clean one.
 fn rank(workpiece: &AtomicStructure, op: &Operation, candidates: Vec<Candidate>) -> Vec<Candidate> {
     let mut kept: Vec<(AfterState, Candidate)> = Vec::new();
     for candidate in candidates {
@@ -685,8 +744,10 @@ fn rank(workpiece: &AtomicStructure, op: &Operation, candidates: Vec<Candidate>)
     let mut candidates: Vec<Candidate> = kept.into_iter().map(|(_, c)| c).collect();
     let bucket = |residual: f64| (residual / RESIDUAL_RANK_EPSILON).round() as i64;
     candidates.sort_by(|a, b| {
-        bucket(a.residual)
-            .cmp(&bucket(b.residual))
+        a.refusal
+            .is_some()
+            .cmp(&b.refusal.is_some())
+            .then(bucket(a.residual).cmp(&bucket(b.residual)))
             .then(a.mirrored.cmp(&b.mirrored))
             .then(a.approximate.cmp(&b.approximate))
             // Two genuinely distinct reactions can tie on all three — the two
@@ -1030,6 +1091,7 @@ pub fn applicable_ops_where(
     bindings: Option<&[ToolBinding]>,
     admit: &dyn Fn(&Operation) -> bool,
 ) -> Vec<Applicability> {
+    let clash = library.clash_factor();
     let mut rows: Vec<Applicability> = Vec::new();
     for operation in &library.ops {
         if !admit(operation) {
@@ -1086,7 +1148,7 @@ pub fn applicable_ops_where(
         // one nearest-atom match per row.
         let mut row = row;
         if row.fits {
-            row.tool = tool_readiness(workpiece, operation, bindings, tolerance);
+            row.tool = tool_readiness(workpiece, operation, bindings, tolerance, clash);
         }
         rows.push(row);
     }
@@ -1123,6 +1185,7 @@ fn tool_readiness(
     operation: &Operation,
     bindings: Option<&[ToolBinding]>,
     tolerance: f64,
+    clash: f64,
 ) -> Option<ToolReadiness> {
     let bindings = bindings?;
     let tool_side = operation.tool.as_ref()?;
@@ -1192,6 +1255,26 @@ fn tool_readiness(
     if let Some(mismatch) = check_pattern(workpiece, &tool_side.before, &matched, None) {
         return Some(ToolReadiness {
             reason: Some(format!("{tool_type}: {}", describe_tool_mismatch(mismatch))),
+            tool_type,
+            state: binding.state.clone(),
+            ready: false,
+        });
+    }
+
+    // And the steric rule, on the tool's own rewrite: a tool whose cargo would
+    // land inside something is dimmed at placement exactly as it fails at
+    // replay.
+    if let Some(contact) = worst_contact(
+        workpiece,
+        &tool_side.before,
+        &tool_side.after,
+        &tool_step,
+        &matched,
+    )
+    .filter(|contact| contact.ratio < clash)
+    {
+        return Some(ToolReadiness {
+            reason: Some(format!("{tool_type}: {}", contact.reason())),
             tool_type,
             state: binding.state.clone(),
             ready: false,

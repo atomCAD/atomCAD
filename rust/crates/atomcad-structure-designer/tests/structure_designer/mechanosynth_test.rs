@@ -986,11 +986,22 @@ fn property_edits_are_undoable_and_undo_restores_the_caches() {
 // The `step` output pin (`doc/design_mechanosynth_step_metadata.md`)
 // ============================================================================
 
-/// The three carbons `metadata_build.json` is written against.
+/// The three carbons `metadata_build.json` is written against, wired into a
+/// chain.
+///
+/// The bonds are **nominal** — 5 Å is no bond length, and nothing in the engine
+/// measures one. They are there because the scene refuses a participant that
+/// carries no bond model at all (`doc/design_mechanosynth_pattern_checks.md`
+/// §6), and a bond-free fixture would be exactly that structure.
 fn three_carbons() -> AtomicStructure {
     let mut s = AtomicStructure::new();
+    let mut previous: Option<u32> = None;
     for x in [0.0, 5.0, 10.0] {
-        s.add_atom(C, DVec3::new(x, 0.0, 0.0));
+        let atom_id = s.add_atom(C, DVec3::new(x, 0.0, 0.0));
+        if let Some(previous) = previous {
+            s.add_bond(previous, atom_id, 1);
+        }
+        previous = Some(atom_id);
     }
     s
 }

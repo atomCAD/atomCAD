@@ -23,7 +23,8 @@
 //! Design doc: `doc/design_mechanosynth_tools.md`.
 
 use super::apply::{
-    HighlightTags, apply_matched, match_positions, paint, resolve_tolerance, verify_pattern,
+    HighlightTags, apply_matched, covalent_radius, match_positions, paint, resolve_tolerance,
+    verify_clash, verify_pattern,
 };
 use super::pose::{ToolPose, name_pose_error, tool_pose};
 use super::schema::{BuildScript, MechanosynthError, Method, NO_LAYER, OpLibrary, Step, ToolType};
@@ -212,6 +213,7 @@ pub fn replay_steps(
     super::parse::validate_script_ops(script, library)?;
 
     let tolerance = resolve_tolerance(library);
+    let clash = library.clash_factor();
     let n = super::steps_applied(step, script.steps.len());
     let tool_model = !scene.bindings.is_empty();
 
@@ -232,7 +234,7 @@ pub fn replay_steps(
         let op = library
             .get(&script_step.op)
             .expect("validate_script_ops checked every op name");
-        match apply_step_in_scene(scene, op, script_step, i + 1, tolerance, tool_model) {
+        match apply_step_in_scene(scene, op, script_step, i + 1, tolerance, clash, tool_model) {
             Ok(effect) => {
                 if tags.added.is_some() {
                     created.extend(base_atoms(scene, &effect.added));
@@ -363,11 +365,131 @@ pub fn build_scene(
 
     let bindings = bind_tools(&structure, &tool_atoms, library, tolerance)?;
 
-    Ok(Scene {
+    let scene = Scene {
         structure,
         participants,
         bindings,
-    })
+    };
+    check_participants(&scene, library.clash_factor())?;
+    Ok(scene)
+}
+
+/// The same two predicates the engine applies to every step, applied once to
+/// the structures it is **handed**: every participant has a bond model, and no
+/// two atoms of one participant are unbonded and touching.
+///
+/// "Bonds are first-class citizens, checked everywhere it is possible to check
+/// them" is a statement about the base, the feedstocks and the tools as much as
+/// about the steps. A workpiece imported from xyz with no bonds perceived would
+/// otherwise make every `deg` and every closed-world bond check pass vacuously,
+/// and a build that starts from an impossible workpiece cannot produce a
+/// possible one. See `doc/design_mechanosynth_pattern_checks.md` §6.
+///
+/// **Per participant, not across the scene.** A tool parked in contact with the
+/// workpiece is a modelling choice the design made, not a broken input; only
+/// atoms of one structure are compared with each other.
+fn check_participants(scene: &Scene, clash: f64) -> Result<(), MechanosynthError> {
+    let mut atoms_of: FxHashMap<Participant, Vec<u32>> = FxHashMap::default();
+    for (atom_id, participant) in &scene.participants {
+        atoms_of.entry(*participant).or_default().push(*atom_id);
+    }
+
+    // Sorted, so the error a broken scene reports is the same one every time.
+    let mut participants: Vec<Participant> = atoms_of.keys().copied().collect();
+    participants.sort_by_key(|participant| match participant {
+        Participant::Base => (0usize, 0usize),
+        Participant::Feedstock(index) => (1, *index),
+        Participant::Tool(index) => (2, *index),
+    });
+
+    for participant in participants {
+        let atoms = &atoms_of[&participant];
+        let molecule = scene.label(participant);
+
+        let bonds = atoms
+            .iter()
+            .filter_map(|atom_id| scene.structure.get_atom(*atom_id))
+            .map(|atom| atom.bonds.len())
+            .sum::<usize>();
+        if atoms.len() >= 2 && bonds == 0 {
+            return Err(MechanosynthError::NoBondModel {
+                molecule,
+                atoms: atoms.len(),
+            });
+        }
+
+        // One radius query per atom, over the grid the structure already
+        // maintains; the `<` keeps each pair to one comparison.
+        //
+        // The radius is **this participant's own reach** — the factor times
+        // twice its widest covalent radius — rather than a fixed one, and the
+        // squared-distance test comes before every lookup that costs
+        // something. On a solid that leaves a handful of neighbours per atom
+        // where a 4 Å radius leaves thirty, which is the difference between
+        // this check being free on a large base and being felt.
+        let reach = clash * 2.0 * max_radius(scene, atoms);
+        let reach_squared = reach * reach;
+        let mut ids = atoms.clone();
+        ids.sort_unstable();
+        for &atom_id in &ids {
+            let Some(atom) = scene.structure.get_atom(atom_id) else {
+                continue;
+            };
+            for other_id in scene.structure.get_atoms_in_radius(&atom.position, reach) {
+                if other_id <= atom_id {
+                    continue;
+                }
+                let Some(other) = scene.structure.get_atom(other_id) else {
+                    continue;
+                };
+                if atom.position.distance_squared(other.position) >= reach_squared {
+                    continue;
+                }
+                if scene.participant(other_id) != participant {
+                    continue;
+                }
+                let sum =
+                    covalent_radius(atom.atomic_number) + covalent_radius(other.atomic_number);
+                let distance = atom.position.distance(other.position);
+                if distance >= clash * sum {
+                    continue;
+                }
+                if scene
+                    .structure
+                    .bond_order_between(atom_id, other_id)
+                    .is_some()
+                {
+                    continue;
+                }
+                return Err(MechanosynthError::InputClash {
+                    molecule,
+                    first: format!(
+                        "the {} of atom {atom_id}",
+                        element_symbol(atom.atomic_number)
+                    ),
+                    second: format!(
+                        "the {} of atom {other_id}",
+                        element_symbol(other.atomic_number)
+                    ),
+                    distance,
+                    factor: clash,
+                    limit: clash * sum,
+                });
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// The widest covalent radius among a participant's elements — half of what
+/// two of its atoms could ever be asked to clear.
+fn max_radius(scene: &Scene, atoms: &[u32]) -> f64 {
+    atoms
+        .iter()
+        .filter_map(|atom_id| scene.structure.get_atom(*atom_id))
+        .map(|atom| covalent_radius(atom.atomic_number))
+        .fold(0.0, f64::max)
 }
 
 /// Binds every wired molecule to the tool type whose name it carries as a tag,
@@ -494,12 +616,14 @@ pub struct SceneEffect {
 /// construction, and the one case where they would not is
 /// [`MechanosynthError::ToolSideOffTool`], which is raised here before anything
 /// moves.
+#[allow(clippy::too_many_arguments)]
 pub fn apply_step_in_scene(
     scene: &mut Scene,
     op: &super::schema::Operation,
     script_step: &Step,
     step_number: usize,
     tolerance: f64,
+    clash: f64,
     tools_wired: bool,
 ) -> Result<SceneEffect, MechanosynthError> {
     // --- match the target side ---------------------------------------------
@@ -560,6 +684,19 @@ pub fn apply_step_in_scene(
             &target_match,
             script_step,
             step_number,
+            Some(&label),
+        )?;
+        // The steric rule, over the **whole scene**: an atom this step places
+        // inside a parked tool is a collision whoever it belongs to.
+        verify_clash(
+            &scene.structure,
+            &op.name,
+            &op.before,
+            &op.after,
+            &target_match,
+            script_step,
+            step_number,
+            clash,
             Some(&label),
         )?;
     }
@@ -649,6 +786,17 @@ pub fn apply_step_in_scene(
                     &matched,
                     &tool_step,
                     step_number,
+                    Some(&label),
+                )?;
+                verify_clash(
+                    &scene.structure,
+                    &op.name,
+                    &tool_side.before,
+                    &tool_side.after,
+                    &matched,
+                    &tool_step,
+                    step_number,
+                    clash,
                     Some(&label),
                 )?;
             }

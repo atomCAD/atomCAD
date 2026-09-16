@@ -1156,8 +1156,12 @@ nothing: a click on either already plays id 1. Every anchor must be an atom the
 operation actually touches; naming a frame atom is a load error.
 
 A library may state a top-level **`clash`**, its own steric factor, in the same
-spirit as its `tolerance`. It is read today and acted on by a later release; the
-engine's default is 0.9 of a covalent-radius sum.
+spirit as its `tolerance`: the fraction of a covalent-radius sum that two atoms
+*not bonded to each other* must stay above. The engine's default is **0.9**, and
+[*How a step is applied*](#how-a-step-is-applied) says what it does. State your
+own only with a reason in the library's `note` — the idiom that comes closest,
+placing an atom at exactly the bond length from a neighbour a later `bridge`
+step will bond it to, sits at about 1.05 and clears 0.9 comfortably.
 
 ```json
 {
@@ -1390,6 +1394,47 @@ silence — which, for a tool whose purpose is atomically precise manufacturing,
 is the failure worth refusing. A structure whose bonds were never perceived —
 an `.xyz` import — wants an [`infer_bonds`](#infer_bonds) node before the
 `mechanosynth` node, or a library that states no `deg` and lists no bonds.
+
+**Atoms do not overlap.** A third check looks at where the step's atoms
+actually land. Every atom a step **adds or moves** is compared with everything
+around it, and one rule decides: *two atoms that are not bonded to each other
+must not be closer than the library's `clash` factor — 0.9 by default — times
+the sum of their covalent radii.* Bonded atoms are never compared, whatever
+their distance: a bond is the library's statement that the two belong at bond
+distance, and the node has no better opinion.
+
+```
+mechanosynth: step 63 (precursor_chemisorb @ (4.34, 0.00, 7.68)) — the Cl it
+places (pattern atom 7) lands 1.84 Å from the Si of atom 912, which it does not
+bond to; the limit is 0.90 of the covalent-radius sum, 2.13 Å (in base)
+```
+
+The comparison is over the **whole scene**: an atom that lands inside a parked
+tool is a collision whoever it belongs to. It runs at the interactive tool too,
+so a way of placing an operation that would bury an atom is offered dimmed,
+with that reason, instead of being placeable — the usual case being a planar
+pattern whose mirrored fit points into the bulk. Like the bond and degree
+checks, it is decided **before anything moves**.
+
+What this catches is the offer that geometry alone cannot see: the fit is exact,
+the bond counts agree, and the reaction would still put an atom where an atom
+already is. What it deliberately does not do is judge chemistry — one threshold,
+every non-bonded pair, no table of reactions.
+
+**The structures the node is handed are checked too**, once, before the first
+step. Bonds are checked everywhere it is possible to check them, and a build
+that starts from an impossible workpiece cannot produce a possible one. Per
+participant — the base, each feedstock, each tool:
+
+- a structure with **two or more atoms and no bonds at all** is refused. This is
+  the `.xyz` import again, and it is the one that would otherwise make every
+  `deg` check pass vacuously on a structure that has no degrees:
+  `feedstock 1: carries no bonds (412 atoms); import with bonds or wire a
+  rebond node`;
+- **two atoms of one structure that are not bonded and closer than the `clash`
+  factor allows** are refused, naming both. Per participant, not across the
+  scene: a tool parked in contact with the workpiece is a modelling choice, not
+  a broken input.
 
 **The match is over the whole scene, and then confined to one participant.**
 With tools or reservoirs wired, everything is one structure — that is what makes
@@ -1716,12 +1761,14 @@ The answer to a click opens **beside the atom you clicked**, not in the property
 panel — the list follows the atom as you orbit, and clamps to the viewport edge
 rather than sliding off it.
 
-The atom you asked about is **ringed in orange**, and the list is placed clear
-of the ring and of the ghosted preview, so it never covers the reaction it is
+The atom you asked about is **ringed in orange**, and the list opens clear of
+the ring and of the ghosted preview, so it does not cover the reaction it is
 describing. When the list ends up far from its atom — a reaction near the edge
 of the viewport, or one you have moved the list away from — a dashed line joins
-the two. **Drag the list by its header** to put it anywhere you like; it goes on
-following the atom from there, and the ⌖ button in the header snaps it back.
+the two. **Drag the list by its header** to put it anywhere you like, including
+straight over the reaction: once you take hold of it the position is yours, and
+it will not step aside on its own. It goes on following the atom from there, and
+the ⌖ button in the header snaps it back to the automatic placement.
 
 **Resting the pointer on a row ghosts it on the workpiece; clicking one places
 it.** The ghost is translucent atoms *and bonds* in the scene itself, behind

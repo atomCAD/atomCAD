@@ -347,13 +347,38 @@ load-bearing:
   be a silent no-op, and every hand-written fixture pattern must list the bonds
   its atoms have in the workpiece it is matched against. See
   `doc/design_mechanosynth_pattern_checks.md`.
+- **Atoms do not overlap, and that is one rule.** `apply::worst_contact` is the
+  third predicate and the second shared function: *two atoms not bonded to each
+  other must not be closer than the library's `clash` factor times their
+  covalent-radius sum; bonded atoms are never compared.* It runs over the atoms
+  a step **places** — adds or moves — against the whole scene, from the match
+  and the patterns alone, **before** `apply_matched`, because that function is
+  infallible by design and there is no rollback of a half-applied step. Two
+  traps: a moved atom is in two places at once until the step is applied, so
+  the neighbour scan skips its *old* position and the after-state names it by
+  pattern id (`apply::Node`); and the target side and the tool side are checked
+  **separately**, each against the scene as the step found it, so a tool parked
+  with its cargo exactly where the target side places an atom is refused at
+  both ends rather than at neither — which is what keeps placement and replay
+  agreeing.
+- **`scene::check_participants` applies the same two rules to the inputs**, once
+  per `build_scene`: a participant with two or more atoms and *no bonds at all*
+  is refused (the xyz-import case, which would make every `deg` check pass
+  vacuously), and so is a non-bonded pair of one participant inside the factor.
+  Per participant, never across the scene — a tool parked against the workpiece
+  is a design decision, not a broken input. Hand-written test fixtures
+  therefore need a bond model even when their geometry is nominal.
 - **The invariant the two halves share: a candidate is offerable iff the step it
   produces replays.** Every check that can run at placement runs there too, and
   through the same predicate. The single exception is the **clicked** atom's own
   degree, which becomes a `place::Refusal` on every candidate of that call
   rather than a dead branch — "this host has 4 bonds and the operation needs 3"
   is the coverage report the editor exists to give. `Applicability::offerable`
-  therefore also asks whether any candidate is unrefused.
+  therefore also asks whether any candidate is unrefused, and `place::rank`
+  orders refused candidates **last** so index 0 of an offerable row is always
+  placeable. A clash, unlike a bond or a degree, cannot be pruned — it is known
+  only once a fit exists — so it is a per-candidate `Refusal::Clash`, and a row
+  is only as blocked as *all* of its candidates.
 - **A click may only play an *anchor*.** `Operation::anchors` counts the leading
   `before` ids a click may be given (default 1, the atom at the origin). The old
   smallest-eligible-id fallback made every atom of every pattern clickable —

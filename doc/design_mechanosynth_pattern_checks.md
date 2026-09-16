@@ -1,7 +1,24 @@
 # Design: pattern checks in the mechanosynthesis engine — bonds, degree, anchors, steric clashes
 
-Status: **drafted and reviewed 2026-09-16**. Phase 0 (§8) and Phase 1 (§12)
-implemented 2026-09-16; Phases 2–4 and the out-of-repo generator work are not.
+Status: **drafted and reviewed 2026-09-16**. Phases 0 (§8), 1 and 2 (§12)
+implemented 2026-09-16; Phases 3–4 and the out-of-repo generator work are not.
+
+Two things Phase 2 had to decide that this document left implicit:
+
+- **The two sides of a `tip` step are checked separately, each against the
+  scene as the step found it** (§5.1 defines the after state as "the whole
+  scene … as the step leaves it", which taken literally would fold the tool
+  side's deletions into the target side's check). Separately, because
+  placement has no tool side to fold in: `place` produces the target step
+  alone, so checking the two together at replay and apart at placement would
+  break the §2 invariant in the direction that hides a real reaction. The cost
+  is that a tool parked with its cargo atom exactly where the target side
+  places one is refused — consistently at both ends — which for a pose that is
+  static across a whole build is a parking error rather than a reaction.
+- **`worst_contact` names a moved atom by its pattern id, not by its workpiece
+  atom**, because until the step is applied a moved atom is in two places at
+  once; the neighbour scan skips its old position and the other placed atoms
+  are compared at their new ones.
 
 Two decisions Phase 1 had to make that this document did not anticipate, both
 recorded here rather than in the sections they touch:
@@ -878,7 +895,7 @@ manual walkthrough item.
 |---|---|---|
 | **0** | duplicate-candidate fix (§8) — **done** | `place.rs`, two tests |
 | **1** | `/3`: closed-world bonds, `deg`, `anchors`, `clash` in the schema and parser; the anchor role rule; load-time validation of §3.5; bond and degree checks in `match_before` and in the placement search and role rule; new error variants — **done** | `schema.rs`, `parse.rs`, `apply.rs`, `place.rs`, `scene.rs`, tests, guide "The two files" / "How a step is applied" |
-| **2** | steric check: `Contact`, `Refusal`, `offerable`, replay error; structure sanity in `build_scene` and the nodes | `place.rs`, `apply.rs`, `scene.rs`, `mechanosynth.rs`, `mechanosynth_edit.rs`, tests |
+| **2** | steric check: `Contact`, `Refusal::Clash`, blocked-last ranking, replay error; structure sanity in `build_scene` — **done** | `apply.rs`, `place.rs`, `scene.rs`, `schema.rs`, tests, guide "The two files" / "How a step is applied". The two nodes needed **no** change: both reach the engine through `build_scene`, so §6 covers them where they stand |
 | **3** | editor surfacing: `CandidateRow.blocked`, `OfferRow.blocked`, `choose` by candidate, API, popup (blocked candidates inline, fully blocked rows below the rule); guide "The offer popup" | `mechanosynth_edit_ops.rs`, `mechanosynth_edit_api.rs`, FRB codegen, `mechanosynth_offer_popup.dart` |
 | **4** | the guide page `op_libraries.md` and the move out of `atomic.md`; AGENTS pointers | docs |
 | **ext** | outside the repo, before Phase 1 lands: the generator writes `/3` — bonds among named atoms in both halves, `deg` as drawn, a frame atom off the plane for the precursor and the edge host, the format string; `anchors` only if an operation has primary atoms of different elements, which none in v3 has — and both libraries are regenerated and replayed | `mechanosynth/gen` |

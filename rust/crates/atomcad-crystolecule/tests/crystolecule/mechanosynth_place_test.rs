@@ -12,11 +12,11 @@
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::io::xyz_loader::load_xyz;
 use atomcad_crystolecule::mechanosynth::{
-    Applicability, BuildScript, Candidate, EXACT_FIT_RESIDUAL, GhostBondKind, GhostKind,
-    HighlightTags, MechanosynthError, NEAR_MISS_FACTOR, OpLibrary, Operation,
+    Applicability, BuildScript, CLASH_BLOCK, Candidate, EXACT_FIT_RESIDUAL, GhostBondKind,
+    GhostKind, HighlightTags, MechanosynthError, NEAR_MISS_FACTOR, OpLibrary, Operation,
     RESIDUAL_RANK_EPSILON, Refusal, Step, applicable_ops, applicable_ops_where, apply_step,
     compare_structures, describe_mismatches, load_build_script, load_library, parse_library, place,
-    place_with_stats, preview_atoms, preview_bonds, replay, resolve_tolerance,
+    place_with_stats, preview_atoms, preview_bonds, replay, resolve_tolerance, step_contact,
 };
 use atomcad_test_support::{fixture_path, fixture_path_str};
 use glam::{DMat3, DQuat, DVec3};
@@ -215,6 +215,13 @@ fn replay_matches(
 /// atoms in `roles`"; `touched` is derived from *effect* since P1, so a frame
 /// atom is in `roles` and not touched, and a deletion's bonded neighbour is
 /// touched and not in `roles`. The match map is the invariant that was meant.
+/// The invariant of `doc/design_mechanosynth_pattern_checks.md` §2, as an
+/// **iff**: a candidate replays exactly when it carries no refusal.
+///
+/// The two halves matter equally. A candidate the engine offers and the replay
+/// refuses is a step the editor would let a user commit and then fail on; a
+/// candidate the engine refuses and the replay accepts is a reaction the editor
+/// hides for no reason.
 fn assert_candidate_replays(
     base: &AtomicStructure,
     operation: &Operation,
@@ -222,8 +229,24 @@ fn assert_candidate_replays(
     tolerance: f64,
 ) {
     let mut workpiece = base.clone();
-    let effect = apply_step(&mut workpiece, operation, &candidate.step, 1, tolerance)
-        .unwrap_or_else(|e| panic!("candidate for {} should replay: {e}", operation.name));
+    let replayed = apply_step(
+        &mut workpiece,
+        operation,
+        &candidate.step,
+        1,
+        tolerance,
+        CLASH_BLOCK,
+    );
+    if let Some(refusal) = candidate.refusal {
+        assert!(
+            replayed.is_err(),
+            "{}: a refused candidate ({refusal:?}) must not replay",
+            operation.name
+        );
+        return;
+    }
+    let effect =
+        replayed.unwrap_or_else(|e| panic!("candidate for {} should replay: {e}", operation.name));
 
     let mut expected = candidate.roles.clone();
     expected.sort_unstable();
@@ -301,7 +324,15 @@ fn the_clicked_atom_of_an_asymmetric_op_is_the_one_that_reacts() {
     assert_eq!(candidate.role, 1, "the clicked atom takes the origin role");
 
     let mut after = s.clone();
-    apply_step(&mut after, op(&lib, "asym_add"), &candidate.step, 1, TOL).expect("replays");
+    apply_step(
+        &mut after,
+        op(&lib, "asym_add"),
+        &candidate.step,
+        1,
+        TOL,
+        CLASH_BLOCK,
+    )
+    .expect("replays");
     let added = after
         .get_atoms_in_radius(&position(&s, partner), HB + 1e-6)
         .into_iter()
@@ -1539,6 +1570,259 @@ fn every_candidate_the_engine_offers_replays() {
 }
 
 // ============================================================================
+// The steric check at placement
+// (doc/design_mechanosynth_pattern_checks.md §5)
+// ============================================================================
+
+/// Where an operation's one added atom lands under a candidate.
+fn added_at(lib: &OpLibrary, name: &str, candidate: &Candidate) -> DVec3 {
+    let operation = op(lib, name);
+    let added: Vec<&_> = operation
+        .after
+        .atoms
+        .iter()
+        .filter(|atom| !operation.before.has(atom.id))
+        .collect();
+    assert_eq!(added.len(), 1, "{name} should add exactly one atom");
+    candidate.step.place(added[0].pos)
+}
+
+#[test]
+fn a_candidate_that_lands_on_an_atom_is_refused_and_ranked_last() {
+    // `land4`'s `before` is planar and its `after` puts a hydrogen off the
+    // plane, so the proper and the mirrored fit are two real reactions on
+    // opposite sides. Occupying one side is what the steric rule is for, and
+    // the other side must survive it.
+    let lib = library();
+    let s = workpiece();
+    let host = at(&s, D);
+
+    let clean = place(&s, &lib, "land4", host, TOL).expect("both sides fit");
+    assert_eq!(clean.len(), 2, "one reaction per side of the plane");
+    assert!(
+        clean.iter().all(|candidate| candidate.refusal.is_none()),
+        "nothing is in the way yet"
+    );
+
+    let mut occupied = s.clone();
+    let intruder = occupied.add_atom(SI, added_at(&lib, "land4", &clean[1]));
+
+    let candidates = place(&occupied, &lib, "land4", host, TOL).expect("the free side still fits");
+    assert_eq!(
+        candidates.len(),
+        2,
+        "a blocked candidate is kept — the reason is about the ghost the user sees"
+    );
+    assert_eq!(
+        candidates[0].refusal, None,
+        "ranked first: index 0 of an offerable row is always placeable"
+    );
+    let Some(Refusal::Clash(contact)) = candidates[1].refusal else {
+        panic!("expected a clash refusal, got {:?}", candidates[1].refusal);
+    };
+    assert_eq!(contact.other.0, Some(intruder), "it names the atom it hits");
+    assert!(contact.ratio < CLASH_BLOCK, "ratio {}", contact.ratio);
+    assert!(
+        contact.distance < 1e-6,
+        "it lands on it: {}",
+        contact.distance
+    );
+    assert!(
+        candidates[1].refusal.unwrap().reason("land4").contains("Å"),
+        "the reason reads as a distance"
+    );
+
+    // The contact is reported on the clean candidate too: *how close does this
+    // reaction come* is a measurement, not only a gate.
+    assert!(
+        candidates[0]
+            .contact
+            .is_some_and(|contact| contact.ratio >= CLASH_BLOCK)
+    );
+
+    // A mixed row stays above the rule.
+    let rows = applicable_ops(&occupied, &lib, host, TOL, None);
+    let mixed = row(&rows, "land4");
+    assert!(mixed.offerable(), "one good way of placing it is enough");
+    assert_eq!(mixed.blocked(), None, "a mixed row is not a blocked row");
+
+    // And the refusal is the replay's: a blocked candidate does not replay,
+    // and fails before anything is applied.
+    let mut after = occupied.clone();
+    let failure = apply_step(
+        &mut after,
+        op(&lib, "land4"),
+        &candidates[1].step,
+        1,
+        TOL,
+        CLASH_BLOCK,
+    )
+    .expect_err("a blocked candidate must not replay");
+    assert!(
+        matches!(failure, MechanosynthError::Clash(_)),
+        "expected a clash, got {failure}"
+    );
+    assert_eq!(
+        after.get_num_of_atoms(),
+        occupied.get_num_of_atoms(),
+        "and the step changed nothing"
+    );
+}
+
+#[test]
+fn a_row_whose_every_candidate_is_blocked_is_not_offerable() {
+    let lib = library();
+    let s = workpiece();
+    let host = at(&s, D);
+
+    let clean = place(&s, &lib, "land4", host, TOL).expect("both sides fit");
+    let mut occupied = s.clone();
+    for candidate in &clean {
+        occupied.add_atom(SI, added_at(&lib, "land4", candidate));
+    }
+
+    let candidates = place(&occupied, &lib, "land4", host, TOL).expect("the geometry still fits");
+    assert!(
+        candidates
+            .iter()
+            .all(|candidate| matches!(candidate.refusal, Some(Refusal::Clash(_)))),
+        "both sides are occupied now"
+    );
+
+    let rows = applicable_ops(&occupied, &lib, host, TOL, None);
+    let blocked = row(&rows, "land4");
+    assert!(blocked.fits, "the fit is real; the site is not");
+    assert!(!blocked.offerable());
+    let reason = blocked.blocked().expect("every candidate is refused");
+    assert!(reason.contains("would put"), "{reason}");
+}
+
+#[test]
+fn a_donate_then_bridge_candidate_is_offerable() {
+    // Both real libraries place an atom at exactly the bond length from a
+    // neighbour a later `bridge` step will bond it to. That intermediate is a
+    // bond-length non-bonded contact by construction — about 1.06 of the
+    // covalent-radius sum for Si — and it is the floor the block factor had to
+    // clear. See `doc/design_mechanosynth_pattern_checks.md` §5.3.
+    let lib = parse_library(&donation_beside_a_spectator(), "floor.json").expect("parses");
+    let (s, host) = spectator_workpiece();
+
+    let candidate = only(place(&s, &lib, "sidon", host, TOL).expect("places"));
+    let contact = candidate.contact.expect("the spectator is in reach");
+    assert_eq!(contact.placed.1, SI);
+    assert!(
+        (contact.distance - BOND).abs() < 1e-9,
+        "a bond length from the spectator, got {}",
+        contact.distance
+    );
+    assert!(
+        contact.ratio > 1.0 && contact.ratio < 1.1,
+        "the legitimate floor sits just above 1.0, got {}",
+        contact.ratio
+    );
+    assert_eq!(candidate.refusal, None, "and 0.9 lets it through");
+    assert!(row(&applicable_ops(&s, &lib, host, TOL, None), "sidon").offerable());
+
+    // The factor is the library's to state, and stating a strict one blocks
+    // the very same placement.
+    let strict = parse_library(
+        &donation_beside_a_spectator().replace(
+            r#""format": "atomcad-msops/3""#,
+            r#""format": "atomcad-msops/3", "clash": 1.1"#,
+        ),
+        "strict.json",
+    )
+    .expect("parses");
+    assert_eq!(strict.clash_factor(), 1.1);
+    let candidate = only(place(&s, &strict, "sidon", host, TOL).expect("the geometry is the same"));
+    assert!(
+        matches!(candidate.refusal, Some(Refusal::Clash(_))),
+        "the library's own factor is the one in force"
+    );
+}
+
+/// A three-coordinate Si host, its three frame neighbours, and a fourth Si
+/// twice the bond length out along the free direction — the *spectator* the
+/// donation's new atom will land a bond length from without bonding to it.
+fn spectator_workpiece() -> (AtomicStructure, u32) {
+    let mut s = AtomicStructure::new();
+    let host = s.add_atom(SI, DVec3::ZERO);
+    for i in 0..3 {
+        let neighbour = s.add_atom(SI, tetra(i) * BOND);
+        s.add_bond(host, neighbour, 1);
+    }
+    s.add_atom(SI, tetra(3) * (2.0 * BOND));
+    (s, host)
+}
+
+/// The donation [`spectator_workpiece`] hosts: a new Si on the host's free
+/// tetrahedral direction, bonded to the host alone.
+fn donation_beside_a_spectator() -> String {
+    let pos = |v: DVec3| format!("[{}, {}, {}]", v.x, v.y, v.z);
+    let frames = format!(
+        r#"{{ "id": 2, "el": "*", "pos": {} }},
+           {{ "id": 3, "el": "*", "pos": {} }},
+           {{ "id": 4, "el": "*", "pos": {} }}"#,
+        pos(tetra(0) * BOND),
+        pos(tetra(1) * BOND),
+        pos(tetra(2) * BOND),
+    );
+    format!(
+        r#"{{
+          "format": "atomcad-msops/3",
+          "ops": [
+            {{
+              "name": "sidon",
+              "method": "spontaneous",
+              "before": {{ "atoms": [
+                {{ "id": 1, "el": "Si", "pos": [0.0, 0.0, 0.0] }},
+                {frames}
+              ], "bonds": [[1, 2], [1, 3], [1, 4]] }},
+              "after": {{ "atoms": [
+                {{ "id": 1, "el": "Si", "pos": [0.0, 0.0, 0.0] }},
+                {frames},
+                {{ "id": 5, "el": "Si", "pos": {new} }}
+              ], "bonds": [[1, 2], [1, 3], [1, 4], [1, 5]] }}
+            }}
+          ]
+        }}"#,
+        new = pos(tetra(3) * BOND),
+    )
+}
+
+#[test]
+fn the_gold_build_never_comes_within_a_bond_length_of_an_atom_it_does_not_bond() {
+    // The replay floor: the constant is 0.9 because the closest a legitimate
+    // build comes is about 1.0, and this is the in-repo half of the data that
+    // chose it. A step that dipped below would say so here before it said so
+    // as a false refusal on a real build.
+    let lib = library();
+    let mut s = workpiece();
+    let build = gold_script();
+    let tolerance = resolve_tolerance(&lib);
+
+    let mut worst = f64::INFINITY;
+    for (index, step) in build.steps.iter().enumerate() {
+        let operation = op(&lib, &step.op);
+        if let Some(contact) = step_contact(&s, operation, step, index + 1, tolerance)
+            .unwrap_or_else(|e| panic!("step {} should match: {e}", index + 1))
+        {
+            assert!(
+                contact.ratio >= 1.0,
+                "step {} ({}) comes within {:.3} of a bond length",
+                index + 1,
+                step.op,
+                contact.ratio
+            );
+            worst = worst.min(contact.ratio);
+        }
+        apply_step(&mut s, operation, step, index + 1, tolerance, CLASH_BLOCK)
+            .unwrap_or_else(|e| panic!("step {} should replay at 0.9: {e}", index + 1));
+    }
+    assert!(worst.is_finite(), "the build should produce some contact");
+}
+
+// ============================================================================
 // Round-trip exactness
 // ============================================================================
 
@@ -1615,6 +1899,7 @@ fn re_authoring_a_generated_build_by_clicking_reproduces_it_exactly() {
             &candidate.step,
             index + 1,
             tolerance,
+            lib.clash_factor(),
         )
         .unwrap_or_else(|e| panic!("step {} should replay: {e}", index + 1));
     }

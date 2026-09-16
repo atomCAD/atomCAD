@@ -44,8 +44,8 @@ pub mod scene;
 pub mod schema;
 
 pub use apply::{
-    HighlightTags, StepEffect, apply_step, describe_nearest, replay, resolve_tolerance,
-    steps_applied,
+    Contact, HighlightTags, StepEffect, apply_step, describe_nearest, replay, resolve_tolerance,
+    step_contact, steps_applied,
 };
 pub use compare::{Mismatch, compare_structures, describe_mismatches};
 pub use parse::{
@@ -63,9 +63,9 @@ pub use scene::{
 };
 pub use schema::{
     APEX_FRAME_TAG, Approach, BUILD_FORMAT, BondMismatch, BuildScript, CLASH_BLOCK,
-    CLOSE_PAIR_WARNING_FACTOR, DEFAULT_ANCHORS, DEFAULT_TOLERANCE, DegreeMismatch,
-    FRAME_COPLANAR_EPSILON, FrameAtom, LIBRARY_FORMAT, MAX_PATTERN_DEGREE, MechanosynthError,
-    Method, NO_LAYER, NO_SITE, NoMatch, ORIGIN_PATTERN_ATOM_ID, OpLibrary, Operation,
-    PATTERN_POSITION_EPSILON, Pattern, PatternAtom, PatternBond, PatternElement, Step, ToolSide,
-    ToolType,
+    CLASH_SEARCH_RADIUS, CLOSE_PAIR_WARNING_FACTOR, Clash, DEFAULT_ANCHORS, DEFAULT_TOLERANCE,
+    DegreeMismatch, FRAME_COPLANAR_EPSILON, FrameAtom, LIBRARY_FORMAT, MAX_PATTERN_DEGREE,
+    MechanosynthError, Method, NO_LAYER, NO_SITE, NoMatch, ORIGIN_PATTERN_ATOM_ID, OpLibrary,
+    Operation, PATTERN_POSITION_EPSILON, Pattern, PatternAtom, PatternBond, PatternElement, Step,
+    ToolSide, ToolType,
 };

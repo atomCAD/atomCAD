@@ -13,7 +13,7 @@ use atomcad_crystolecule::mechanosynth::{
     BuildScript, CLASH_BLOCK, DEFAULT_ANCHORS, DEFAULT_TOLERANCE, HighlightTags,
     MAX_PATTERN_DEGREE, Mismatch, NO_LAYER, NO_SITE, OpLibrary, PatternElement, Step, apply_step,
     compare_structures, describe_mismatches, load_build_script, load_library, parse_build_script,
-    parse_library, replay, resolve_tolerance, steps_applied, validate_script_ops,
+    parse_library, replay, resolve_tolerance, step_contact, steps_applied, validate_script_ops,
 };
 use atomcad_test_support::fixture_path;
 use glam::{DMat3, DVec3};
@@ -52,7 +52,7 @@ fn apply_named(
 ) -> Vec<u32> {
     let op = lib.get(op_name).expect("op in fixture");
     let step = Step::new(op_name, t);
-    apply_step(workpiece, op, &step, 1, tolerance)
+    apply_step(workpiece, op, &step, 1, tolerance, CLASH_BLOCK)
         .expect("step should apply")
         .touched
 }
@@ -932,7 +932,7 @@ fn apply_error(
 ) -> String {
     let op = lib.get(op_name).expect("op in fixture");
     let step = Step::new(op_name, t);
-    apply_step(workpiece, op, &step, 1, tolerance)
+    apply_step(workpiece, op, &step, 1, tolerance, CLASH_BLOCK)
         .expect_err("this step should be refused")
         .to_string()
 }
@@ -1059,7 +1059,7 @@ fn a_wildcard_after_keeps_and_a_concrete_after_replaces() {
     s.add_atom(SI, DVec3::ZERO);
     let op = lib.get("carbon_to_star").unwrap();
     let step = Step::new("carbon_to_star", DVec3::ZERO);
-    assert!(apply_step(&mut s, op, &step, 1, 0.3).is_err());
+    assert!(apply_step(&mut s, op, &step, 1, 0.3, CLASH_BLOCK).is_err());
 }
 
 // ============================================================================
@@ -1105,7 +1105,7 @@ fn matching_is_injective() {
 
     let op = lib.get("pair").unwrap();
     let step = Step::new("pair", DVec3::ZERO);
-    let message = apply_step(&mut s, op, &step, 1, 0.3)
+    let message = apply_step(&mut s, op, &step, 1, 0.3, CLASH_BLOCK)
         .expect_err("cannot match one atom twice")
         .to_string();
     assert!(message.contains("id 2"), "{message}");
@@ -1128,7 +1128,7 @@ fn the_tolerance_boundary_holds_on_both_sides() {
     outside.add_atom(C, DVec3::new(0.0, 0.0, tolerance + epsilon));
     let op = lib.get("mark").unwrap();
     let step = Step::new("mark", DVec3::ZERO);
-    assert!(apply_step(&mut outside, op, &step, 1, tolerance).is_err());
+    assert!(apply_step(&mut outside, op, &step, 1, tolerance, CLASH_BLOCK).is_err());
 }
 
 #[test]
@@ -1139,7 +1139,7 @@ fn a_match_failure_message_carries_everything_the_author_needs() {
 
     let op = lib.get("mark").unwrap();
     let step = Step::new("mark", DVec3::new(3.567, 0.892, 11.31));
-    let message = apply_step(&mut s, op, &step, 17, 0.3)
+    let message = apply_step(&mut s, op, &step, 17, 0.3, CLASH_BLOCK)
         .expect_err("no carbon near")
         .to_string();
 
@@ -1160,7 +1160,7 @@ fn a_match_failure_on_an_empty_workpiece_says_so() {
     let mut s = AtomicStructure::new();
     let op = lib.get("mark_any").unwrap();
     let step = Step::new("mark_any", DVec3::ZERO);
-    let message = apply_step(&mut s, op, &step, 1, 0.3)
+    let message = apply_step(&mut s, op, &step, 1, 0.3, CLASH_BLOCK)
         .expect_err("nothing to match")
         .to_string();
     assert!(message.contains("(*)"), "{message}");
@@ -1176,9 +1176,16 @@ fn steps_place_added_atoms_at_r_times_pos_plus_t() {
     let lib = library("transform_ops.json");
     let build = script("transform_build.json");
 
+    // Nominal bonds, for the reason `three_carbons` states: a participant with
+    // no bond model at all is refused before the first step runs.
     let mut base = AtomicStructure::new();
+    let mut previous: Option<u32> = None;
     for x in [0.0, 10.0, 20.0] {
-        base.add_atom(C, DVec3::new(x, 0.0, 0.0));
+        let atom_id = base.add_atom(C, DVec3::new(x, 0.0, 0.0));
+        if let Some(previous) = previous {
+            base.add_bond(previous, atom_id, 1);
+        }
+        previous = Some(atom_id);
     }
 
     let result = replay(&base, &lib, &build, -1, HighlightTags::default()).expect("replays");
@@ -1197,7 +1204,8 @@ fn steps_place_added_atoms_at_r_times_pos_plus_t() {
     assert_eq!(element_at(&result, DVec3::new(20.0, 1.0, 0.0)), N);
 
     assert_eq!(result.get_num_of_atoms(), 9);
-    assert_eq!(result.get_num_of_bonds(), 6);
+    // Six from the three steps, plus the base's own two.
+    assert_eq!(result.get_num_of_bonds(), 8);
 }
 
 // ============================================================================
@@ -1565,10 +1573,23 @@ fn all_tags() -> HighlightTags<'static> {
 
 /// The base of `metadata_build.json`: three carbons on the x axis, unbonded.
 /// Steps address them by position, so nothing else is needed.
+/// Three reaction sites far enough apart that no step competes with another,
+/// wired into a chain.
+///
+/// The bonds are **nominal**: 5 Å is no bond length, and nothing in the engine
+/// measures one. They are there because `build_scene` refuses a participant
+/// that carries no bond model at all — the xyz-import case of
+/// `doc/design_mechanosynth_pattern_checks.md` §6 — and a bond-free fixture
+/// would be exactly that structure.
 fn three_carbons() -> AtomicStructure {
     let mut s = AtomicStructure::new();
+    let mut previous: Option<u32> = None;
     for x in [0.0, 5.0, 10.0] {
-        s.add_atom(C, DVec3::new(x, 0.0, 0.0));
+        let atom_id = s.add_atom(C, DVec3::new(x, 0.0, 0.0));
+        if let Some(previous) = previous {
+            s.add_bond(previous, atom_id, 1);
+        }
+        previous = Some(atom_id);
     }
     s
 }
@@ -1757,7 +1778,15 @@ fn a_steps_effect_separates_what_it_created_from_what_it_touched() {
     let host = atom_at(&s, DVec3::ZERO);
 
     let op = lib.get("grow").expect("op in fixture");
-    let effect = apply_step(&mut s, op, &Step::new("grow", DVec3::ZERO), 1, 0.3).unwrap();
+    let effect = apply_step(
+        &mut s,
+        op,
+        &Step::new("grow", DVec3::ZERO),
+        1,
+        0.3,
+        CLASH_BLOCK,
+    )
+    .unwrap();
 
     let hydrogen = atom_at(&s, DVec3::new(0.0, 0.0, 1.09));
     assert_eq!(effect.added, vec![hydrogen], "only the new atom is created");
@@ -1765,7 +1794,15 @@ fn a_steps_effect_separates_what_it_created_from_what_it_touched() {
 
     // A move creates nothing, however much it touches.
     let op = lib.get("nudge").expect("op in fixture");
-    let effect = apply_step(&mut s, op, &Step::new("nudge", DVec3::ZERO), 2, 0.3).unwrap();
+    let effect = apply_step(
+        &mut s,
+        op,
+        &Step::new("nudge", DVec3::ZERO),
+        2,
+        0.3,
+        CLASH_BLOCK,
+    )
+    .unwrap();
     assert!(effect.added.is_empty());
     assert_eq!(effect.touched.len(), 1);
 }
@@ -1938,7 +1975,7 @@ fn chiral_parses_defaults_to_false_and_the_replay_ignores_it() {
         r: mirror,
         ..Step::new("handed", DVec3::ZERO)
     };
-    apply_step(&mut s, op, &step, 1, 0.3).expect("a chiral op replays like any other");
+    apply_step(&mut s, op, &step, 1, 0.3, CLASH_BLOCK).expect("a chiral op replays like any other");
     assert!(has_atom_at(&s, DVec3::new(0.0, 0.0, 1.43)));
 }
 
@@ -2006,4 +2043,89 @@ fn the_origin_convention_is_a_warning_never_an_error() {
 
     // A conventional library carries none at all.
     assert!(library("methylate_ops.json").warnings.is_empty());
+}
+
+// ============================================================================
+// The steric check at replay
+// (doc/design_mechanosynth_pattern_checks.md §5)
+// ============================================================================
+
+#[test]
+fn a_step_that_lands_an_atom_on_another_is_refused() {
+    // Two donations on one host: the second puts its hydrogen exactly where
+    // the first put its own, and nothing in the pattern says so — `grow`
+    // names one atom, so there is no pair for the closed-world rule to speak
+    // about and no `deg` to fail. The steric rule is the whole of what catches
+    // it.
+    let lib = library("metadata_ops.json");
+    let op = lib.get("grow").expect("op in fixture");
+    let mut s = three_carbons();
+    let step = Step::new("grow", DVec3::ZERO);
+    apply_step(&mut s, op, &step, 1, 0.3, CLASH_BLOCK).expect("the first donation is free");
+
+    let atoms = s.get_num_of_atoms();
+    let message = apply_step(&mut s, op, &step, 2, 0.3, CLASH_BLOCK)
+        .expect_err("the second would land on the first")
+        .to_string();
+    assert!(message.contains("step 2"), "{message}");
+    assert!(message.contains("grow"), "{message}");
+    assert!(message.contains("H"), "{message}");
+    assert!(message.contains("0.00 Å"), "{message}");
+    assert!(message.contains("0.90"), "{message}");
+    assert_eq!(
+        s.get_num_of_atoms(),
+        atoms,
+        "a step is all or nothing: the check runs before the first mutation"
+    );
+}
+
+#[test]
+fn a_bonded_pair_is_never_checked_however_close_it_is() {
+    // A bond is the library's statement that the two atoms belong at bond
+    // distance, whatever that distance is. `grow` puts its hydrogen 1.09 Å
+    // from the carbon it bonds to, which is 0.79 of their covalent-radius
+    // sum — below the factor, and silent.
+    let lib = library("metadata_ops.json");
+    let op = lib.get("grow").expect("op in fixture");
+    let mut s = three_carbons();
+    apply_step(
+        &mut s,
+        op,
+        &Step::new("grow", DVec3::ZERO),
+        1,
+        0.3,
+        CLASH_BLOCK,
+    )
+    .expect("a bonded pair is not a contact");
+    assert!(has_atom_at(&s, DVec3::new(0.0, 0.0, 1.09)));
+}
+
+#[test]
+fn the_methylate_build_never_comes_within_a_bond_length_of_an_unbonded_atom() {
+    // The replay floor: 0.9 is the block factor because the closest a
+    // legitimate build comes to an atom it does not bond is about 1.0 — the
+    // donate-then-bridge idiom both real libraries use. This is the in-repo
+    // half of the data that chose the constant; a change that pushed a real
+    // build under 1.0 would show up here rather than as a false refusal.
+    let lib = library("methylate_ops.json");
+    let build = script("methylate_build.json");
+    let tolerance = resolve_tolerance(&lib);
+    let mut s = methane();
+
+    for (index, step) in build.steps.iter().enumerate() {
+        let op = lib.get(&step.op).expect("op in fixture");
+        if let Some(contact) = step_contact(&s, op, step, index + 1, tolerance)
+            .unwrap_or_else(|e| panic!("step {} should match: {e}", index + 1))
+        {
+            assert!(
+                contact.ratio >= 1.0,
+                "step {} ({}) comes within {:.3} of a bond length",
+                index + 1,
+                step.op,
+                contact.ratio
+            );
+        }
+        apply_step(&mut s, op, step, index + 1, tolerance, CLASH_BLOCK)
+            .unwrap_or_else(|e| panic!("step {} should replay at 0.9: {e}", index + 1));
+    }
 }
