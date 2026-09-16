@@ -15,7 +15,7 @@ use atomcad_crystolecule::mechanosynth::{
     Applicability, BuildScript, Candidate, EXACT_FIT_RESIDUAL, GhostBondKind, GhostKind,
     HighlightTags, MechanosynthError, NEAR_MISS_FACTOR, OpLibrary, Operation,
     RESIDUAL_RANK_EPSILON, Step, applicable_ops, applicable_ops_where, apply_step,
-    compare_structures, describe_mismatches, load_build_script, load_library, place,
+    compare_structures, describe_mismatches, load_build_script, load_library, parse_library, place,
     place_with_stats, preview_atoms, preview_bonds, replay, resolve_tolerance,
 };
 use atomcad_test_support::{fixture_path, fixture_path_str};
@@ -733,6 +733,82 @@ fn transforms_that_reach_the_same_after_state_collapse_to_the_proper_one() {
     // the same spot, because every one of them fixes the fourth direction.
     let candidate = only(place(&s, &lib, "hdon_frame", at(&s, A), TOL).expect("places"));
     assert!(!candidate.mirrored, "the survivor is the proper fit");
+}
+
+/// A framed abstraction whose three `"*"` frame atoms sit at *different*
+/// radii, so the six ways of assigning them to a symmetric host produce six
+/// visibly different transforms — and yet one after state, because the step
+/// only deletes the hydrogen and keeps everything else exactly where the
+/// workpiece has it.
+fn framed_abstraction_library() -> OpLibrary {
+    let pos = |v: DVec3| format!("[{}, {}, {}]", v.x, v.y, v.z);
+    let frames = [
+        tetra(0) * (BOND - 0.02),
+        tetra(1) * BOND,
+        tetra(2) * (BOND + 0.02),
+    ];
+    let json = format!(
+        r#"{{
+          "format": "atomcad-msops/2",
+          "ops": [
+            {{
+              "name": "habst_framed",
+              "method": "spontaneous",
+              "before": {{ "atoms": [
+                {{ "id": 1, "el": "Si", "pos": [0.0, 0.0, 0.0] }},
+                {{ "id": 2, "el": "*", "pos": {f0} }},
+                {{ "id": 3, "el": "*", "pos": {f1} }},
+                {{ "id": 4, "el": "*", "pos": {f2} }},
+                {{ "id": 5, "el": "H", "pos": {h} }}
+              ], "bonds": [] }},
+              "after": {{ "atoms": [
+                {{ "id": 1, "el": "Si", "pos": [0.0, 0.0, 0.0] }},
+                {{ "id": 2, "el": "*", "pos": {f0} }},
+                {{ "id": 3, "el": "*", "pos": {f1} }},
+                {{ "id": 4, "el": "*", "pos": {f2} }}
+              ], "bonds": [] }}
+            }}
+          ]
+        }}"#,
+        f0 = pos(frames[0]),
+        f1 = pos(frames[1]),
+        f2 = pos(frames[2]),
+        h = pos(tetra(3) * HB),
+    );
+    parse_library(&json, "framed_abstraction.json").expect("the inline library should parse")
+}
+
+/// The host of [`framed_abstraction_library`]: an ideal tetrahedral Si with
+/// three silicon neighbours and the hydrogen the operation takes.
+fn framed_abstraction_host() -> (AtomicStructure, u32) {
+    let mut s = AtomicStructure::new();
+    let host = s.add_atom(SI, DVec3::ZERO);
+    for i in 0..3 {
+        let neighbour = s.add_atom(SI, tetra(i) * BOND);
+        s.add_bond(host, neighbour, 1);
+    }
+    let h = s.add_atom(H, tetra(3) * HB);
+    s.add_bond(host, h, 1);
+    (s, host)
+}
+
+#[test]
+fn a_kept_atom_counts_as_itself_rather_than_as_where_the_fit_puts_it() {
+    let lib = framed_abstraction_library();
+    let (s, host) = framed_abstraction_host();
+    // Every assignment deletes the same hydrogen and leaves the four silicons
+    // untouched, so there is one after state however the frame was fitted —
+    // even though the fits differ by ~0.01 Å in where they *imagine* the kept
+    // silicons are.
+    let candidate = only(place(&s, &lib, "habst_framed", host, TOL).expect("places"));
+    assert!(!candidate.mirrored, "the survivor is the proper fit");
+    // The fixture is only a test of the keying if the fits it collapses are
+    // far apart on the scale the collapse used to quantise at (1e-6 Å).
+    assert!(
+        candidate.residual > 1e-3,
+        "the frame radii should make the fits genuinely differ, residual was {}",
+        candidate.residual
+    );
 }
 
 #[test]

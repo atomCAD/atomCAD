@@ -599,18 +599,32 @@ fn rank(workpiece: &AtomicStructure, op: &Operation, candidates: Vec<Candidate>)
     candidates
 }
 
-/// A quantised description of what a step will leave behind, canonically
-/// ordered so two orders of the same set compare equal.
+/// A description of what a step will leave behind, canonically ordered so two
+/// orders of the same set compare equal.
 type AfterState = Vec<(i64, i64, i64, i64)>;
 
-/// Every `after` atom's placed position and element, plus the workpiece atoms
-/// the step deletes.
+/// First-field tags for the entries of an [`AfterState`] that are not keyed by
+/// element and position. Negative, so neither can collide with an element.
+const KEPT_TAG: i64 = -2;
+const DELETED_TAG: i64 = -1;
+
+/// Every `after` atom, plus the workpiece atoms the step deletes.
 ///
-/// Positions rather than transforms, because a symmetric pattern reaches one
-/// after state by several transforms — the three cyclic permutations of a
-/// tetrahedral frame are three rotations and one reaction. Deletions as well as
-/// placements, because a pure abstraction has no placed atom to tell two
-/// candidates apart.
+/// An atom the step **adds or moves** is keyed by its placed position and
+/// element: positions rather than transforms, because a symmetric pattern
+/// reaches one after state by several transforms — the three cyclic
+/// permutations of a tetrahedral frame are three rotations and one reaction.
+///
+/// An atom the step **keeps** is keyed by the workpiece atom it matched. A kept
+/// atom does not move — `apply_matched` never snaps one to its pattern position
+/// — so where the fit imagines it to be says nothing about the state the step
+/// leaves behind, and quantising that imagined position only invites two
+/// transforms that reach the same state to straddle a bucket boundary. Its
+/// element is keyed with it, because a kept position with a new element is an
+/// element swap and a different after state.
+///
+/// Deletions as well as placements, because a pure abstraction has no placed
+/// atom to tell two candidates apart.
 fn after_state_key(
     workpiece: &AtomicStructure,
     op: &Operation,
@@ -626,7 +640,6 @@ fn after_state_key(
     };
     let mut key: AfterState = Vec::new();
     for atom in &op.after.atoms {
-        let pos = candidate.step.place(atom.pos);
         let element = match atom.element {
             PatternElement::Element(z) => z as i64,
             // `"*"` on a kept id leaves the workpiece atom's element alone, so
@@ -635,15 +648,24 @@ fn after_state_key(
                 .and_then(|atom_id| workpiece.get_atom(atom_id))
                 .map_or(0, |a| a.atomic_number as i64),
         };
-        key.push((element, quantise(pos.x), quantise(pos.y), quantise(pos.z)));
+        let kept = op
+            .before
+            .atom(atom.id)
+            .is_some_and(|before| before.pos.distance(atom.pos) <= PATTERN_POSITION_EPSILON);
+        if kept {
+            key.push((KEPT_TAG, matched(atom.id).map_or(-1, i64::from), element, 0));
+        } else {
+            let pos = candidate.step.place(atom.pos);
+            key.push((element, quantise(pos.x), quantise(pos.y), quantise(pos.z)));
+        }
     }
     for atom in &op.before.atoms {
         if op.after.has(atom.id) {
             continue;
         }
         // Deleted workpiece ids, tagged out of the element range so a deletion
-        // can never collide with a placement.
-        key.push((-1, matched(atom.id).map_or(-1, i64::from), 0, 0));
+        // can never collide with a placement or with a kept atom.
+        key.push((DELETED_TAG, matched(atom.id).map_or(-1, i64::from), 0, 0));
     }
     key.sort_unstable();
     key

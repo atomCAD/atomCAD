@@ -1,6 +1,7 @@
 # Design: pattern checks in the mechanosynthesis engine — bonds, degree, anchors, steric clashes
 
-Status: **drafted and reviewed 2026-09-16**, not implemented.
+Status: **drafted and reviewed 2026-09-16**. Phase 0 (§8) implemented
+2026-09-16; Phases 1–4 and the out-of-repo generator work are not.
 
 Extends `doc/design_mechanosynth_editor.md` (the placement engine and the offer
 popup), `doc/design_mechanosynth_tools.md` (the `/2` formats, tool sides) and
@@ -840,7 +841,7 @@ manual walkthrough item.
 
 | phase | what | touches |
 |---|---|---|
-| **0** | duplicate-candidate fix (§8) | `place.rs`, one test |
+| **0** | duplicate-candidate fix (§8) — **done** | `place.rs`, one test |
 | **1** | `/3`: closed-world bonds, `deg`, `anchors`, `clash` in the schema and parser; the anchor role rule; load-time validation of §3.5; bond and degree checks in `match_before` and in the placement search and role rule; new error variants | `schema.rs`, `parse.rs`, `apply.rs`, `place.rs`, `scene.rs`, tests, guide "The two files" / "How a step is applied" |
 | **2** | steric check: `Contact`, `Refusal`, `offerable`, replay error; structure sanity in `build_scene` and the nodes | `place.rs`, `apply.rs`, `scene.rs`, `mechanosynth.rs`, `mechanosynth_edit.rs`, tests |
 | **3** | editor surfacing: `CandidateRow.blocked`, `OfferRow.blocked`, `choose` by candidate, API, popup (blocked candidates inline, fully blocked rows below the rule); guide "The offer popup" | `mechanosynth_edit_ops.rs`, `mechanosynth_edit_api.rs`, FRB codegen, `mechanosynth_offer_popup.dart` |
