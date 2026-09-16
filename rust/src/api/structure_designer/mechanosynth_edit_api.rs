@@ -9,7 +9,7 @@
 //! candidates, ghosts and offer rows become plain records Dart can hold, and
 //! the engine's `AtomicStructure` never crosses the bridge.
 //!
-//! Two rules the wrappers encode:
+//! Three rules the wrappers encode:
 //!
 //! - **The cursor setter does not validate and does not mark the project
 //!   dirty for undo.** It is navigation, like the replayer's slider; every
@@ -18,6 +18,13 @@
 //!   operation the last offer list reported outside the gate, with the
 //!   residual in the message, so an over-gate fit cannot reach the authored
 //!   block through the API any more than through the popup.
+//! - **Muting is a view filter over the offer sweep and nothing else**
+//!   (`doc/design_mechanosynth_op_muting.md`). It reaches exactly two things
+//!   here: which operations `mechanosynth_edit_offers` asks about, and the
+//!   `muted` flag on a palette row. It is deliberately *not* a third refusal
+//!   in `choose` — a muted operation is unreachable because it is not in the
+//!   sweep, and a row that *is* in the list is placeable whatever put it
+//!   there.
 
 use crate::api::api_common::{
     refresh_structure_designer_auto, with_cad_instance_or, with_mut_cad_instance_or,
@@ -27,7 +34,7 @@ use crate::api::structure_designer::mechanosynth_api::{feedstock_rows, tool_rows
 use crate::api::structure_designer::structure_designer_api_types::{
     APIAuthoredStep, APIGhostAtom, APIMechanosynthAnchor, APIMechanosynthCandidate,
     APIMechanosynthChapter, APIMechanosynthEditData, APIMechanosynthOffer, APIMechanosynthOffers,
-    APIMechanosynthToolStatus,
+    APIMechanosynthOp, APIMechanosynthToolStatus,
 };
 use atomcad_crystolecule::mechanosynth::{BuildScript, GhostAtom, GhostKind};
 use atomcad_structure_designer::evaluator::network_result::NetworkResult;
@@ -68,6 +75,7 @@ fn offers_view(sweep: &OfferSweep) -> APIMechanosynthOffers {
         anchor_atom_id: sweep.anchor_atom_id,
         anchor_position: vec3(sweep.anchor_position),
         anchor_atomic_number: sweep.anchor_atomic_number as i32,
+        muted_count: sweep.skipped_muted as i32,
         rows: sweep
             .rows
             .iter()
@@ -101,6 +109,7 @@ fn offers_view(sweep: &OfferSweep) -> APIMechanosynthOffers {
                     .and_then(|tool| tool.reason.clone())
                     .unwrap_or_default(),
                 offerable: row.offerable,
+                muted: row.muted,
             })
             .collect(),
     }
@@ -175,30 +184,65 @@ pub fn mechanosynth_edit_data(
         NetworkResult::None | NetworkResult::Error(_) => Vec::new(),
         array => steps_from_array(&array).unwrap_or_default(),
     };
-    let (op_names, methods) = match designer.evaluate_node_argument(scope_path, node_id, OPS_PIN) {
-        NetworkResult::OpLibrary(library) => (
-            library.ops.iter().map(|op| op.name.clone()).collect(),
-            library
-                .ops
-                .iter()
-                .map(|op| {
-                    (
-                        op.name.clone(),
-                        OpFacts {
-                            method: op.method.as_str().to_string(),
-                            tool_type: op
-                                .tool
-                                .as_ref()
-                                .map(|tool| tool.tool_type.clone())
-                                .unwrap_or_default(),
-                            agent: op.agent.clone().unwrap_or_default(),
-                        },
-                    )
-                })
-                .collect(),
-        ),
-        _ => (Vec::new(), HashMap::new()),
-    };
+    // One pass over the wired library, feeding two things: the palette's rows,
+    // and the map `authored_view` looks a step's operation up in.
+    let (mut ops, methods): (Vec<APIMechanosynthOp>, HashMap<String, OpFacts>) =
+        match designer.evaluate_node_argument(scope_path, node_id, OPS_PIN) {
+            NetworkResult::OpLibrary(library) => (
+                library
+                    .ops
+                    .iter()
+                    .map(|op| APIMechanosynthOp {
+                        name: op.name.clone(),
+                        note: op.note.clone().unwrap_or_default(),
+                        method: op.method.as_str().to_string(),
+                        tool_type: op
+                            .tool
+                            .as_ref()
+                            .map(|tool| tool.tool_type.clone())
+                            .unwrap_or_default(),
+                        agent: op.agent.clone().unwrap_or_default(),
+                        muted: data.is_muted(&op.name),
+                    })
+                    .collect(),
+                library
+                    .ops
+                    .iter()
+                    .map(|op| {
+                        (
+                            op.name.clone(),
+                            OpFacts {
+                                method: op.method.as_str().to_string(),
+                                tool_type: op
+                                    .tool
+                                    .as_ref()
+                                    .map(|tool| tool.tool_type.clone())
+                                    .unwrap_or_default(),
+                                agent: op.agent.clone().unwrap_or_default(),
+                            },
+                        )
+                    })
+                    .collect(),
+            ),
+            _ => (Vec::new(), HashMap::new()),
+        };
+    // Muted names the wired library does not define, appended after its own
+    // with an empty `method`. They are kept rather than dropped — the `ops` pin
+    // may be rewired back — so the panel has to be able to show them, and a
+    // mute the user cannot see is a mute they cannot undo.
+    ops.extend(
+        data.muted
+            .iter()
+            .filter(|name| !methods.contains_key(*name))
+            .map(|name| APIMechanosynthOp {
+                name: name.clone(),
+                note: String::new(),
+                method: String::new(),
+                tool_type: String::new(),
+                agent: String::new(),
+                muted: true,
+            }),
+    );
 
     let (inexact_count, approximate_count) = data.inexact_counts();
     // The chapter list is the replayer's, run over the authored block: the
@@ -229,7 +273,7 @@ pub fn mechanosynth_edit_data(
             .collect(),
         cursor: data.cursor,
         applied: data.applied() as i32,
-        op_names,
+        ops,
         inexact_count: inexact_count as i32,
         approximate_count: approximate_count as i32,
         last_error: data.last_error(),
@@ -280,21 +324,62 @@ pub fn set_mechanosynth_edit_cursor(scope_path: Vec<u64>, node_id: u64, cursor: 
 
 /// The atom-first entry point: what the wired library can do at `atom_id`.
 /// An empty row list is an answer, not an error.
+/// `include_muted` sweeps the whole library for this anchor, ignoring the
+/// node's mute set — the popup's *show all here*, which is what keeps an empty
+/// list an honest statement about the library's coverage. Every other caller
+/// passes `false`.
 #[flutter_rust_bridge::frb(sync)]
 pub fn mechanosynth_edit_offers(
     scope_path: Vec<u64>,
     node_id: u64,
     atom_id: u32,
+    include_muted: bool,
 ) -> Result<APIMechanosynthOffers, String> {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
-                cad_instance
-                    .structure_designer
-                    .mechanosynth_edit_offers(&scope_path, node_id, atom_id)
-                    .map(|sweep| offers_view(&sweep))
+                let designer = &mut cad_instance.structure_designer;
+                let sweep = if include_muted {
+                    designer.mechanosynth_edit_offers_including_muted(&scope_path, node_id, atom_id)
+                } else {
+                    designer.mechanosynth_edit_offers(&scope_path, node_id, atom_id)
+                };
+                sweep.map(|sweep| offers_view(&sweep))
             },
             Err("no CAD instance".to_string()),
+        )
+    }
+}
+
+/// Mutes or unmutes `ops` on this node, in **one** undo entry however many
+/// names it carries — a group toggle in the panel writes a dozen at once, and
+/// that is one user action.
+///
+/// A name the wired library does not define is stored anyway: the `ops` pin may
+/// be rewired, and a mute that evaporated when its library was briefly swapped
+/// would be worse than one that waits.
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_mechanosynth_edit_muted(
+    scope_path: Vec<u64>,
+    node_id: u64,
+    ops: Vec<String>,
+    muted: bool,
+) -> Option<String> {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let outcome = cad_instance.structure_designer.set_mechanosynth_edit_muted(
+                    &scope_path,
+                    node_id,
+                    &ops,
+                    muted,
+                );
+                if outcome.is_ok() {
+                    refresh_structure_designer_auto(cad_instance);
+                }
+                outcome.err()
+            },
+            Some("no CAD instance".to_string()),
         )
     }
 }

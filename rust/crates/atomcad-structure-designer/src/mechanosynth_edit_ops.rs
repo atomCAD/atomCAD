@@ -91,6 +91,13 @@ pub struct OfferRow {
     /// ready. A row that fits but whose tool is not sits below the rule with
     /// the near misses, dimmed, with the reason where the residual would be.
     pub offerable: bool,
+    /// The node mutes this operation, so only a *show all here* sweep can have
+    /// produced the row. The popup badges it, to say why it was not there a
+    /// moment ago.
+    ///
+    /// **Not a reason to refuse it.** Mute filters the sweep; a row that is in
+    /// the list is placeable, whatever put it there.
+    pub muted: bool,
 }
 
 /// One row of the candidate list: which way of placing the chosen operation,
@@ -148,6 +155,7 @@ fn offer_sweep(
     atom_id: u32,
     rows: &[Applicability],
     skipped_muted: usize,
+    muted: &BTreeSet<String>,
 ) -> OfferSweep {
     let anchor = workpiece
         .get_atom(atom_id)
@@ -195,6 +203,7 @@ fn offer_sweep(
                     candidates,
                     tool: row.tool.clone(),
                     offerable: row.offerable(),
+                    muted: muted.contains(&row.op),
                 }
             })
             .collect(),
@@ -683,16 +692,15 @@ impl StructureDesigner {
         let bindings = (!scene.bindings.is_empty()).then_some(scene.bindings.as_slice());
         // Cloned out of the node's data before the sweep, which needs the
         // library and the scene rather than the node — and before the `&mut`
-        // borrow that stores the result.
-        let muted: BTreeSet<String> = if include_muted {
-            BTreeSet::new()
-        } else {
-            self.mechanosynth_edit_data(scope_path, node_id)
-                .ok_or("Not a mechanosynth_edit node")?
-                .muted
-                .clone()
-        };
-        let admit = |operation: &Operation| !muted.contains(&operation.name);
+        // borrow that stores the result. **The stored set either way**: an
+        // including-muted sweep still has to say which of the rows it brought
+        // back were the muted ones.
+        let muted: BTreeSet<String> = self
+            .mechanosynth_edit_data(scope_path, node_id)
+            .ok_or("Not a mechanosynth_edit node")?
+            .muted
+            .clone();
+        let admit = |operation: &Operation| include_muted || !muted.contains(&operation.name);
         let offers = applicable_ops_where(
             &scene.structure,
             &library,
@@ -709,7 +717,14 @@ impl StructureDesigner {
             .iter()
             .filter(|operation| !admit(operation))
             .count();
-        let sweep = offer_sweep(&scene.structure, &library, atom_id, &offers, skipped_muted);
+        let sweep = offer_sweep(
+            &scene.structure,
+            &library,
+            atom_id,
+            &offers,
+            skipped_muted,
+            &muted,
+        );
 
         let data = self
             .mechanosynth_edit_data_mut(scope_path, node_id)

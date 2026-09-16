@@ -57,6 +57,7 @@ APIMechanosynthOffer _offer(
   String toolType = '',
   String toolState = '',
   String toolReason = '',
+  bool muted = false,
 }) =>
     APIMechanosynthOffer(
       op: op,
@@ -82,6 +83,9 @@ APIMechanosynthOffer _offer(
       toolReason: toolReason,
       // The kernel's own definition: it fits **and** its tool is ready.
       offerable: fits && toolReason.isEmpty,
+      // Only a *show all here* sweep produces a muted row, and it is badged
+      // rather than blocked — mute filters the sweep, never the commit.
+      muted: muted,
     );
 
 /// The kernel sorts applicable before near miss; the fixture arrives sorted,

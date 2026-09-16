@@ -69,7 +69,22 @@ APIMechanosynthEditData _editData({int authored = 3, int applied = 2}) =>
       authored: [for (var i = 0; i < authored; i++) _step('op$i')],
       cursor: applied,
       applied: applied,
-      opNames: const ['habst', 'dimerize'],
+      ops: const [
+        APIMechanosynthOp(
+            name: 'habst',
+            note: '',
+            method: 'tip',
+            toolType: 'habst_tool',
+            agent: '',
+            muted: false),
+        APIMechanosynthOp(
+            name: 'dimerize',
+            note: '',
+            method: 'spontaneous',
+            toolType: '',
+            agent: '',
+            muted: false),
+      ],
       inexactCount: 0,
       approximateCount: 0,
       toolState: 'idle',

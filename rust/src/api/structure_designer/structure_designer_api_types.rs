@@ -1717,9 +1717,9 @@ pub struct APIMechanosynthEditData {
     pub cursor: i32,
     /// The cursor after clamping: how many authored steps `result` shows.
     pub applied: i32,
-    /// The wired library's operation names, for the palette's op-first entry.
-    /// Empty when no library is wired.
-    pub op_names: Vec<String>,
+    /// The wired library's operations, in the library's own order, for the
+    /// panel's palette. Empty when no library is wired.
+    pub ops: Vec<APIMechanosynthOp>,
     /// How many authored steps were placed with a residual above 1e-4 Å.
     pub inexact_count: i32,
     /// How many were oriented from the host's bonds rather than from the
@@ -1743,6 +1743,27 @@ pub struct APIMechanosynthEditData {
     /// cursor step — the viewport is showing that state rather than nothing,
     /// and the panel says so. `-1` when the block did not fail.
     pub last_good_atom_count: i32,
+}
+
+/// One operation of the wired library, as the panel's palette lists it.
+///
+/// The three instrument fields are the **operation's**, stated once by whoever
+/// researched the reaction — they are what the palette groups by, and there is
+/// deliberately no `family` key to group variants (see
+/// `doc/design_mechanosynth_editor.md` §Considered and rejected).
+pub struct APIMechanosynthOp {
+    pub name: String,
+    /// The library author's one-line description; empty when it states none.
+    pub note: String,
+    /// `tip` / `bulk` / `spontaneous`. **Empty** for a muted name the wired
+    /// library does not define — the row the panel greys out.
+    pub method: String,
+    /// The instrument a `tip` operation needs; empty otherwise.
+    pub tool_type: String,
+    /// The species or energy a `bulk` operation needs; empty otherwise.
+    pub agent: String,
+    /// The node's offer sweep does not ask about this operation.
+    pub muted: bool,
 }
 
 /// One row of the authored block.
@@ -1822,6 +1843,10 @@ pub struct APIMechanosynthOffer {
     /// A row that fits but whose tool does not sits below the rule with the
     /// near misses, dimmed and unselectable.
     pub offerable: bool,
+    /// The node mutes this operation, so only a *show all here* sweep produced
+    /// the row. Badged, never refused: mute filters the sweep, and a row that
+    /// is in the list is placeable whatever put it there.
+    pub muted: bool,
 }
 
 /// Where the placement tool stands, evaluated from nothing — the viewport reads
@@ -1851,6 +1876,14 @@ pub struct APIMechanosynthOffers {
     pub anchor_position: APIVec3,
     pub anchor_atomic_number: i32,
     pub rows: Vec<APIMechanosynthOffer>,
+    /// How many of the wired library's operations the sweep **did not look
+    /// at**, because the node mutes them.
+    ///
+    /// Always reported, whether or not any of them would have fitted: an empty
+    /// offer list is read as a statement about the library's coverage, and a
+    /// filter that said nothing would turn that into a lie. Deliberately not
+    /// "how many muted ops apply here" — that costs the sweep the mute avoids.
+    pub muted_count: i32,
 }
 
 /// One way of placing the chosen operation at the clicked atom.

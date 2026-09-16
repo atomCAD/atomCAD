@@ -103,6 +103,42 @@ class MechanosynthMethodBadge extends StatelessWidget {
 String methodDetail({required String toolType, required String agent}) =>
     toolType.isNotEmpty ? toolType : agent;
 
+/// The **instrument** an operation names — what the editor panel's palette
+/// groups by.
+///
+/// [methodDetail] for a `tip` or `bulk` operation, and the method itself
+/// otherwise, so a `spontaneous` group still has a label to wear. The schema's
+/// own rule is *one operation, one instrument*, so this is a fact the library
+/// already states rather than a grouping invented in the panel — there is
+/// deliberately no `family` key (`doc/design_mechanosynth_editor.md`
+/// §Considered and rejected), and this stands in for one.
+///
+/// An operation the wired library does not define has no method and therefore
+/// no instrument; it returns the empty string and belongs to no group.
+String instrumentOf(APIMechanosynthOp op) {
+  final detail = methodDetail(toolType: op.toolType, agent: op.agent);
+  return detail.isNotEmpty ? detail : op.method;
+}
+
+/// The instrument groups of `ops`, in the order the library first mentions
+/// each one.
+///
+/// Insertion order rather than alphabetical: a library lists its operations in
+/// the order its author thought about them, and a chip row that follows it
+/// reads like the library's own table of contents.
+///
+/// Operations with no method — muted names the wired library does not define —
+/// join no group, because they have nothing to say about what performs them.
+List<MapEntry<String, List<APIMechanosynthOp>>> groupOperationsByInstrument(
+    List<APIMechanosynthOp> ops) {
+  final groups = <String, List<APIMechanosynthOp>>{};
+  for (final op in ops) {
+    if (op.method.isEmpty) continue;
+    groups.putIfAbsent(instrumentOf(op), () => []).add(op);
+  }
+  return groups.entries.toList();
+}
+
 /// The replayer's *Tools* block and *Feedstocks* line.
 ///
 /// Both lists are read off the node's **last evaluation** — the kernel never

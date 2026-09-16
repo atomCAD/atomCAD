@@ -2996,9 +2996,9 @@ class APIMechanosynthEditData {
   /// The cursor after clamping: how many authored steps `result` shows.
   final int applied;
 
-  /// The wired library's operation names, for the palette's op-first entry.
-  /// Empty when no library is wired.
-  final List<String> opNames;
+  /// The wired library's operations, in the library's own order, for the
+  /// panel's palette. Empty when no library is wired.
+  final List<APIMechanosynthOp> ops;
 
   /// How many authored steps were placed with a residual above 1e-4 Å.
   final int inexactCount;
@@ -3037,7 +3037,7 @@ class APIMechanosynthEditData {
     required this.authored,
     required this.cursor,
     required this.applied,
-    required this.opNames,
+    required this.ops,
     required this.inexactCount,
     required this.approximateCount,
     this.lastError,
@@ -3055,7 +3055,7 @@ class APIMechanosynthEditData {
       authored.hashCode ^
       cursor.hashCode ^
       applied.hashCode ^
-      opNames.hashCode ^
+      ops.hashCode ^
       inexactCount.hashCode ^
       approximateCount.hashCode ^
       lastError.hashCode ^
@@ -3075,7 +3075,7 @@ class APIMechanosynthEditData {
           authored == other.authored &&
           cursor == other.cursor &&
           applied == other.applied &&
-          opNames == other.opNames &&
+          ops == other.ops &&
           inexactCount == other.inexactCount &&
           approximateCount == other.approximateCount &&
           lastError == other.lastError &&
@@ -3269,6 +3269,11 @@ class APIMechanosynthOffer {
   /// near misses, dimmed and unselectable.
   final bool offerable;
 
+  /// The node mutes this operation, so only a *show all here* sweep produced
+  /// the row. Badged, never refused: mute filters the sweep, and a row that
+  /// is in the list is placeable whatever put it there.
+  final bool muted;
+
   const APIMechanosynthOffer({
     required this.op,
     required this.note,
@@ -3285,6 +3290,7 @@ class APIMechanosynthOffer {
     required this.toolReady,
     required this.toolReason,
     required this.offerable,
+    required this.muted,
   });
 
   @override
@@ -3303,7 +3309,8 @@ class APIMechanosynthOffer {
       toolState.hashCode ^
       toolReady.hashCode ^
       toolReason.hashCode ^
-      offerable.hashCode;
+      offerable.hashCode ^
+      muted.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -3324,7 +3331,8 @@ class APIMechanosynthOffer {
           toolState == other.toolState &&
           toolReady == other.toolReady &&
           toolReason == other.toolReason &&
-          offerable == other.offerable;
+          offerable == other.offerable &&
+          muted == other.muted;
 }
 
 /// An applicability sweep: what the library can do at one atom, plus what the
@@ -3335,11 +3343,21 @@ class APIMechanosynthOffers {
   final int anchorAtomicNumber;
   final List<APIMechanosynthOffer> rows;
 
+  /// How many of the wired library's operations the sweep **did not look
+  /// at**, because the node mutes them.
+  ///
+  /// Always reported, whether or not any of them would have fitted: an empty
+  /// offer list is read as a statement about the library's coverage, and a
+  /// filter that said nothing would turn that into a lie. Deliberately not
+  /// "how many muted ops apply here" — that costs the sweep the mute avoids.
+  final int mutedCount;
+
   const APIMechanosynthOffers({
     required this.anchorAtomId,
     required this.anchorPosition,
     required this.anchorAtomicNumber,
     required this.rows,
+    required this.mutedCount,
   });
 
   @override
@@ -3347,7 +3365,8 @@ class APIMechanosynthOffers {
       anchorAtomId.hashCode ^
       anchorPosition.hashCode ^
       anchorAtomicNumber.hashCode ^
-      rows.hashCode;
+      rows.hashCode ^
+      mutedCount.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -3357,7 +3376,64 @@ class APIMechanosynthOffers {
           anchorAtomId == other.anchorAtomId &&
           anchorPosition == other.anchorPosition &&
           anchorAtomicNumber == other.anchorAtomicNumber &&
-          rows == other.rows;
+          rows == other.rows &&
+          mutedCount == other.mutedCount;
+}
+
+/// One operation of the wired library, as the panel's palette lists it.
+///
+/// The three instrument fields are the **operation's**, stated once by whoever
+/// researched the reaction — they are what the palette groups by, and there is
+/// deliberately no `family` key to group variants (see
+/// `doc/design_mechanosynth_editor.md` §Considered and rejected).
+class APIMechanosynthOp {
+  final String name;
+
+  /// The library author's one-line description; empty when it states none.
+  final String note;
+
+  /// `tip` / `bulk` / `spontaneous`. **Empty** for a muted name the wired
+  /// library does not define — the row the panel greys out.
+  final String method;
+
+  /// The instrument a `tip` operation needs; empty otherwise.
+  final String toolType;
+
+  /// The species or energy a `bulk` operation needs; empty otherwise.
+  final String agent;
+
+  /// The node's offer sweep does not ask about this operation.
+  final bool muted;
+
+  const APIMechanosynthOp({
+    required this.name,
+    required this.note,
+    required this.method,
+    required this.toolType,
+    required this.agent,
+    required this.muted,
+  });
+
+  @override
+  int get hashCode =>
+      name.hashCode ^
+      note.hashCode ^
+      method.hashCode ^
+      toolType.hashCode ^
+      agent.hashCode ^
+      muted.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIMechanosynthOp &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          note == other.note &&
+          method == other.method &&
+          toolType == other.toolType &&
+          agent == other.agent &&
+          muted == other.muted;
 }
 
 /// One bound tool molecule, as the panel lists it: which type its tag named,

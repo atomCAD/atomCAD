@@ -32,13 +32,37 @@ void setMechanosynthEditCursor(
 
 /// The atom-first entry point: what the wired library can do at `atom_id`.
 /// An empty row list is an answer, not an error.
+/// `include_muted` sweeps the whole library for this anchor, ignoring the
+/// node's mute set — the popup's *show all here*, which is what keeps an empty
+/// list an honest statement about the library's coverage. Every other caller
+/// passes `false`.
 APIMechanosynthOffers mechanosynthEditOffers(
         {required Uint64List scopePath,
         required BigInt nodeId,
-        required int atomId}) =>
+        required int atomId,
+        required bool includeMuted}) =>
     RustLib.instance.api
         .crateApiStructureDesignerMechanosynthEditApiMechanosynthEditOffers(
-            scopePath: scopePath, nodeId: nodeId, atomId: atomId);
+            scopePath: scopePath,
+            nodeId: nodeId,
+            atomId: atomId,
+            includeMuted: includeMuted);
+
+/// Mutes or unmutes `ops` on this node, in **one** undo entry however many
+/// names it carries — a group toggle in the panel writes a dozen at once, and
+/// that is one user action.
+///
+/// A name the wired library does not define is stored anyway: the `ops` pin may
+/// be rewired, and a mute that evaporated when its library was briefly swapped
+/// would be worse than one that waits.
+String? setMechanosynthEditMuted(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required List<String> ops,
+        required bool muted}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerMechanosynthEditApiSetMechanosynthEditMuted(
+            scopePath: scopePath, nodeId: nodeId, ops: ops, muted: muted);
 
 /// Which atom of this node's workpiece a viewport ray hits, or `None`.
 ///

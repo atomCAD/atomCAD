@@ -3181,17 +3181,38 @@ class StructureDesignerModel extends ChangeNotifier {
   /// stale atom id is one, and arrives as a thrown `AnyhowException` because
   /// the kernel function returns `Result`. Caught here rather than at the call
   /// site: a viewport click must not become an unhandled exception.
+  ///
+  /// [includeMuted] sweeps the whole library, ignoring the node's mute set —
+  /// the popup's *show all here*. Every other caller leaves it false.
   MechanosynthToolResult<APIMechanosynthOffers> mechanosynthEditOffers(
-      BigInt nodeId, int atomId) {
+      BigInt nodeId, int atomId,
+      {bool includeMuted = false}) {
     try {
       return MechanosynthToolResult(
           value: mechanosynth_edit_api.mechanosynthEditOffers(
               scopePath: propertyEditorScopePath,
               nodeId: nodeId,
-              atomId: atomId));
+              atomId: atomId,
+              includeMuted: includeMuted));
     } on AnyhowException catch (e) {
       return MechanosynthToolResult(error: e.message);
     }
+  }
+
+  /// Mutes or unmutes `ops` on the editor node — one undo entry however many
+  /// names it carries, which is what makes a group toggle one Ctrl+Z.
+  ///
+  /// Muting only filters what the placement tool *offers*. It never changes
+  /// what an authored step does, what replays, or what a pin carries.
+  String? setMechanosynthEditMuted(
+      BigInt nodeId, List<String> ops, bool muted) {
+    final error = mechanosynth_edit_api.setMechanosynthEditMuted(
+        scopePath: propertyEditorScopePath,
+        nodeId: nodeId,
+        ops: ops,
+        muted: muted);
+    refreshFromKernel();
+    return error;
   }
 
   /// Selects one row of the open list for preview, ghosting it on the

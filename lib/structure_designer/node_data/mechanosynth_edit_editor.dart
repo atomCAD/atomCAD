@@ -8,10 +8,16 @@
 ///
 /// **Placement happens in the viewport, not here.** Placement is atom-first:
 /// click an atom and the library answers with what fits it, in a popup anchored
-/// to that atom (`mechanosynth_offer_popup.dart`). The panel's palette is a
-/// **reference list**, not a tool — there is no armed mode to arm from it — so
-/// the prompt line is the panel's main contribution to the tool: it says what a
-/// click will do next.
+/// to that atom (`mechanosynth_offer_popup.dart`). There is no armed mode to
+/// arm from the panel, so the prompt line is the panel's contribution to the
+/// tool: it says what a click will do next.
+///
+/// What the panel's **Operations** section does own is *muting*
+/// (`doc/design_mechanosynth_op_muting.md`): which of the wired library's
+/// operations this node's offer sweep asks about. A mute is a view filter over
+/// that sweep and nothing else — a muted operation still replays, still
+/// exports, and still means what it means — so nothing in the step list below
+/// changes when one is set.
 ///
 /// Four things about the list are worth knowing before changing it:
 ///
@@ -137,25 +143,46 @@ class _MechanosynthEditEditorState extends State<MechanosynthEditEditor> {
   }
 
   // ==========================================================================
-  // Palette: what the wired library contains
+  // Palette: which of the library's operations this node works with
   // ==========================================================================
   //
-  // A **reference list**, not a tool. Clicking a name used to arm the
-  // operation, so that the next viewport click placed it; that mode is gone
-  // (see `mechanosynth_edit_ops.rs::commit_candidate`) because the library
-  // splits one reaction into one operation per host environment, which makes
-  // "the same operation again" the wrong default at the next site. Placement is
-  // atom-first: click an atom, and the list answers with what fits *there*.
+  // Not a placement tool. Clicking a name used to arm the operation, so that
+  // the next viewport click placed it; that mode is gone (see
+  // `mechanosynth_edit_ops.rs::commit_candidate`) because the library splits
+  // one reaction into one operation per host environment, which makes "the
+  // same operation again" the wrong default at the next site. Placement is
+  // atom-first: click an atom, and the offer popup answers with what fits
+  // *there*.
+  //
+  // What the list is for instead is **muting**
+  // (`doc/design_mechanosynth_op_muting.md`). A library grows on purpose and
+  // the offer popup stays short because the fit resolves which *variant*
+  // applies — but a whole `bulk` method the author is not using this phase fits
+  // nearly everywhere, and is on every popup. Unchecking it here takes it out
+  // of this node's offer sweep.
+  //
+  // Three affordances over one piece of state, and that is the invariant to
+  // keep: a group chip and *Mute these* both write individual names into the
+  // node's set, so there is no second kind of "muted group" that a library
+  // gaining a twentieth operation could silently capture.
+
+  void _setMuted(Iterable<String> names, bool muted) {
+    final list = names.toList();
+    if (list.isEmpty) return;
+    _report(widget.model.setMechanosynthEditMuted(widget.nodeId, list, muted));
+  }
 
   Widget _buildPalette(BuildContext context, APIMechanosynthEditData data) {
-    if (!widget.opsConnected || data.opNames.isEmpty) {
-      return const SizedBox.shrink();
-    }
+    // Shown whenever there is anything to show. **Not** gated on `opsConnected`:
+    // an unwired node can still carry a mute set — the pin gets rewired — and a
+    // mute the user cannot see is a mute they cannot undo.
+    if (data.ops.isEmpty) return const SizedBox.shrink();
+
     final scheme = Theme.of(context).colorScheme;
     final needle = _paletteFilter.trim().toLowerCase();
-    final matches = data.opNames
-        .where((name) => name.toLowerCase().contains(needle))
-        .toList();
+    final matches =
+        data.ops.where((op) => op.name.toLowerCase().contains(needle)).toList();
+    final mutedCount = data.ops.where((op) => op.muted).length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -172,41 +199,228 @@ class _MechanosynthEditEditorState extends State<MechanosynthEditEditor> {
                   size: 18,
                   color: scheme.onSurfaceVariant,
                 ),
-                Text('Operations (${data.opNames.length})',
-                    style: Theme.of(context).textTheme.bodySmall),
+                // "15 / 19" only while something is muted, so the state is
+                // legible without expanding the section.
+                Text(
+                  mutedCount == 0
+                      ? 'Operations (${data.ops.length})'
+                      : 'Operations (${data.ops.length - mutedCount} / '
+                          '${data.ops.length})',
+                  key: const Key('mechanosynth_edit_palette_count'),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               ],
             ),
           ),
         ),
         if (_paletteOpen) ...[
+          _buildGroupChips(context, data.ops),
           StringInput(
             label: 'Filter',
             value: _paletteFilter,
             onChanged: (text) => setState(() => _paletteFilter = text),
           ),
+          if (needle.isNotEmpty) _buildBulkButtons(context, matches),
           const SizedBox(height: 4),
           ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 160),
+            constraints: const BoxConstraints(maxHeight: 200),
             child: SingleChildScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  for (final name in matches)
-                    Padding(
-                      key: Key('mechanosynth_edit_palette_$name'),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 4.0, vertical: 3.0),
-                      child: Text(name,
-                          style:
-                              TextStyle(fontSize: 12, color: scheme.onSurface)),
-                    ),
+                  for (final op in matches) _buildPaletteRow(context, op),
                 ],
               ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 4.0),
+            child: Text(
+              'Unchecked operations are left out of this node\'s offer list. '
+              'Muting never changes what an authored step does.',
+              style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant),
             ),
           ),
           const SizedBox(height: 8),
         ],
       ],
+    );
+  }
+
+  /// One tri-state chip per instrument: all offered, some muted, all muted.
+  ///
+  /// Tapping mutes the whole group unless it is already wholly muted, in which
+  /// case it unmutes — so the chip is where "I am not doing precursor deposits
+  /// this week" is one click. It writes the group's names individually; there
+  /// is no stored notion of a muted group.
+  Widget _buildGroupChips(BuildContext context, List<APIMechanosynthOp> ops) {
+    final groups = groupOperationsByInstrument(ops);
+    if (groups.length < 2) return const SizedBox.shrink();
+    final scheme = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6.0),
+      child: Wrap(
+        spacing: 4.0,
+        runSpacing: 4.0,
+        children: [
+          for (final group in groups)
+            () {
+              final muted = group.value.where((op) => op.muted).length;
+              final allMuted = muted == group.value.length;
+              final color = methodColor(group.value.first.method) ??
+                  scheme.onSurfaceVariant;
+              return InkWell(
+                key: Key('mechanosynth_edit_group_${group.key}'),
+                onTap: () =>
+                    _setMuted(group.value.map((op) => op.name), !allMuted),
+                child: Tooltip(
+                  message: allMuted
+                      ? 'Offer ${group.value.length} ${group.key} operations '
+                          'again'
+                      : 'Leave ${group.value.length} ${group.key} operations '
+                          'out of the offer list',
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 6.0, vertical: 2.0),
+                    decoration: BoxDecoration(
+                      color: allMuted
+                          ? null
+                          : color.withValues(alpha: muted == 0 ? 0.18 : 0.08),
+                      border: Border.all(
+                          color:
+                              color.withValues(alpha: allMuted ? 0.25 : 0.55)),
+                      borderRadius: BorderRadius.circular(4.0),
+                    ),
+                    child: Text(
+                      '${group.key} ${group.value.length - muted}/'
+                      '${group.value.length}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: allMuted
+                            ? scheme.onSurfaceVariant.withValues(alpha: 0.6)
+                            : color,
+                        decoration:
+                            allMuted ? TextDecoration.lineThrough : null,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }(),
+        ],
+      ),
+    );
+  }
+
+  /// *Mute these* / *Unmute these*, acting on whatever the filter box matched.
+  ///
+  /// This is the general escape from any grouping the chips do not express:
+  /// typing `cl_donate` and pressing *Mute these (4)* is prefix-family muting
+  /// without a prefix-family concept.
+  Widget _buildBulkButtons(
+      BuildContext context, List<APIMechanosynthOp> matches) {
+    final offered = matches.where((op) => !op.muted).toList();
+    final muted = matches.where((op) => op.muted).toList();
+    return Padding(
+      padding: const EdgeInsets.only(top: 2.0),
+      child: Row(
+        children: [
+          TextButton(
+            key: const Key('mechanosynth_edit_mute_filtered'),
+            onPressed: offered.isEmpty
+                ? null
+                : () => _setMuted(offered.map((op) => op.name), true),
+            style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+            child: Text('Mute these (${offered.length})',
+                style: const TextStyle(fontSize: 11)),
+          ),
+          TextButton(
+            key: const Key('mechanosynth_edit_unmute_filtered'),
+            onPressed: muted.isEmpty
+                ? null
+                : () => _setMuted(muted.map((op) => op.name), false),
+            style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+            child: Text('Unmute these (${muted.length})',
+                style: const TextStyle(fontSize: 11)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// One operation: the checkbox that mutes it, its name, and its instrument.
+  ///
+  /// An **empty `method`** is a muted name the wired library does not define —
+  /// kept on purpose, because the `ops` pin may be rewired back. It is greyed
+  /// and says so, rather than being dropped, which would leave a mute nobody
+  /// could find to undo.
+  Widget _buildPaletteRow(BuildContext context, APIMechanosynthOp op) {
+    final scheme = Theme.of(context).colorScheme;
+    final unknown = op.method.isEmpty;
+    final color = methodColor(op.method);
+
+    return InkWell(
+      key: Key('mechanosynth_edit_palette_${op.name}'),
+      onTap: () => _setMuted([op.name], !op.muted),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2.0, vertical: 2.0),
+        child: Row(
+          children: [
+            Icon(
+              op.muted ? Icons.check_box_outline_blank : Icons.check_box,
+              key: Key('mechanosynth_edit_palette_check_${op.name}'),
+              size: 16,
+              color: op.muted ? scheme.onSurfaceVariant : scheme.primary,
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                op.name,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: op.muted || unknown
+                      ? scheme.onSurfaceVariant
+                      : scheme.onSurface,
+                  fontStyle: unknown ? FontStyle.italic : null,
+                ),
+              ),
+            ),
+            if (unknown)
+              Tooltip(
+                message: 'Not in the wired library. The mute is kept — rewire '
+                    'the ops pin and it applies again.',
+                child: Icon(Icons.help_outline,
+                    size: 14, color: scheme.onSurfaceVariant),
+              )
+            else ...[
+              if (op.note.isNotEmpty) ...[
+                Tooltip(
+                  message: op.note,
+                  child: Icon(Icons.info_outline,
+                      size: 13, color: scheme.onSurfaceVariant),
+                ),
+                const SizedBox(width: 4),
+              ],
+              Text(
+                instrumentOf(op),
+                style: TextStyle(
+                  fontSize: 10.5,
+                  color: (color ?? scheme.onSurfaceVariant)
+                      .withValues(alpha: op.muted ? 0.5 : 1.0),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 

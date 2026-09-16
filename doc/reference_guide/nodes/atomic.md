@@ -1665,8 +1665,11 @@ a click whose meaning depended on invisible state would place it there anyway.
 - **The prompt** at the top says what a click will do: "Click an atom to see
   what can be done there", or that the popup is waiting for a choice. With no
   library wired it says that instead — there is nothing to place without one.
-- **Operations** lists what the wired library contains, behind a filter box. It
-  is a reference list, not a tool: placement is always atom-first.
+- **Operations** lists what the wired library contains, behind a filter box.
+  Nothing here arms anything — placement is always atom-first — but this is
+  where you **mute** the operations you are not using, so the offer popup stays
+  about the phase you are working in. See
+  [*Muting operations*](#muting-operations).
 - **The prefix** is one read-only row ("142 steps from the steps pin"), because
   it is not editable here.
 - **The cursor** is the same scrubber the replayer has, over the authored block
@@ -1793,8 +1796,29 @@ Two consequences worth knowing:
   `ops` pin to a library that has it again and the mute comes back with it, so
   swapping libraries never quietly loses your working set.
 
-Muting is written through the `muted` property above. A panel control for it —
-a checkbox per operation, and one toggle per instrument — is not built yet.
+**Where to do it.** Expand **Operations** in the node's panel. The heading
+shows `Operations (15 / 19)` while anything is muted, so you can see the state
+without opening the section. Inside there are three ways to edit the same list:
+
+- **A checkbox per operation.** Checked means offered. Each row also carries the
+  operation's instrument — `si_tool`, `Cl2`, `spontaneous` — which is what the
+  chips above group by.
+- **An instrument chip per group**, reading `si_tool 7/7`. Click it to mute the
+  whole group; click a fully muted one to bring it back. This is the one-click
+  form of *I am not doing precursor deposits this week*: in the silicon library
+  that is the `C2HCl3` chip.
+- **Mute these / Unmute these**, beside the filter box, acting on whatever the
+  filter matched. Type `cl_donate`, press *Mute these (4)*.
+
+The chips are a fast way to edit a list of operations, not a separate setting:
+they write the individual names. So an operation added to the library later is
+offered, even if it lands in a group you muted last week.
+
+A muted name the wired library does not define is listed in italics at the
+bottom with a ⓘ. That is the *rewire the pin and it applies again* case, and it
+is shown rather than hidden so the mute is there to undo.
+
+The whole list can also be written through the `muted` property above.
 
 ## ops_library
 

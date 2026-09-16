@@ -408,6 +408,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIMechanosynthOffers dco_decode_api_mechanosynth_offers(dynamic raw);
 
   @protected
+  APIMechanosynthOp dco_decode_api_mechanosynth_op(dynamic raw);
+
+  @protected
   APIMechanosynthToolRow dco_decode_api_mechanosynth_tool_row(dynamic raw);
 
   @protected
@@ -1232,6 +1235,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   List<APIMechanosynthOffer> dco_decode_list_api_mechanosynth_offer(
       dynamic raw);
+
+  @protected
+  List<APIMechanosynthOp> dco_decode_list_api_mechanosynth_op(dynamic raw);
 
   @protected
   List<APIMechanosynthToolRow> dco_decode_list_api_mechanosynth_tool_row(
@@ -2322,6 +2328,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIMechanosynthOp sse_decode_api_mechanosynth_op(
+      SseDeserializer deserializer);
+
+  @protected
   APIMechanosynthToolRow sse_decode_api_mechanosynth_tool_row(
       SseDeserializer deserializer);
 
@@ -3297,6 +3307,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APIMechanosynthOffer> sse_decode_list_api_mechanosynth_offer(
+      SseDeserializer deserializer);
+
+  @protected
+  List<APIMechanosynthOp> sse_decode_list_api_mechanosynth_op(
       SseDeserializer deserializer);
 
   @protected
@@ -4549,6 +4563,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIMechanosynthOffers self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_mechanosynth_op(
+      APIMechanosynthOp self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_mechanosynth_tool_row(
       APIMechanosynthToolRow self, SseSerializer serializer);
 
@@ -5553,6 +5571,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_api_mechanosynth_offer(
       List<APIMechanosynthOffer> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_api_mechanosynth_op(
+      List<APIMechanosynthOp> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_api_mechanosynth_tool_row(

@@ -235,6 +235,14 @@ muted set rather than the enabled set, for the same reason, and it is the
 behaviour to state in the guide: *muting is a list of operations, and the
 chips are a fast way to edit that list.*
 
+The derivation itself lives in `mechanosynth_status.dart` — `instrumentOf` and
+`groupOperationsByInstrument`, beside the `methodDetail` it is built on, since
+that file already owns every *derived* mechanosynthesis readout and the panel
+and the `ops_library` listing must not disagree about which field belongs to
+which kind. That also makes it the one part of the palette worth a unit test:
+the widgets around it are a checkbox and a `Wrap`, which belong to the manual
+walkthrough.
+
 ## The popup: one affordance, one line, one escape hatch
 
 **Mute from the row.** The hovered or selected row grows a small eye-off
@@ -427,7 +435,7 @@ Smoke test: a pending **manual** step for the maintainer, per
    on `StructureDesigner`, the undo command, serde, text format. Rust tests
    green. — **DONE**
 2. **API + panel.** `APIMechanosynthOp`, the two entry points, codegen, the
-   palette rewrite. This is the phase that closes mechadense's ask.
+   palette rewrite. This is the phase that closes mechadense's ask. — **DONE**
 3. **Popup.** The eye-off button, the footer, *show all here*.
 4. **Guide**, and the manual walkthrough handed to the maintainer.
 
