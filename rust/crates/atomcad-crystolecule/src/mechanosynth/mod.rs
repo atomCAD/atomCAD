@@ -51,8 +51,8 @@ pub use parse::{
 };
 pub use place::{
     Applicability, Candidate, EXACT_FIT_RESIDUAL, GhostAtom, GhostBond, GhostBondKind, GhostKind,
-    NEAR_MISS_FACTOR, PlaceStats, RESIDUAL_RANK_EPSILON, ToolReadiness, applicable_ops, place,
-    place_with_stats, preview_atoms, preview_bonds,
+    NEAR_MISS_FACTOR, PlaceStats, RESIDUAL_RANK_EPSILON, ToolReadiness, applicable_ops,
+    applicable_ops_where, place, place_with_stats, preview_atoms, preview_bonds,
 };
 pub use pose::{ToolPose, tool_pose};
 pub use scene::{

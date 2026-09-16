@@ -55,7 +55,7 @@ use atomcad_crystolecule::mechanosynth::{
 use glam::{DMat3, DVec3};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::io;
 use std::sync::{Arc, Mutex};
 
@@ -324,6 +324,22 @@ pub struct MechanosynthEditData {
     /// replayer's slider does.
     #[serde(default = "default_cursor")]
     pub cursor: i32,
+    /// Operation names the placement tool's offer sweep does not ask about.
+    ///
+    /// **A view filter over the wired library and nothing else**
+    /// (`doc/design_mechanosynth_op_muting.md`): a muted operation still
+    /// replays, still exports and still means what it means — the sweep simply
+    /// does not look at it, so `commit_candidate` needs no rule about it. A
+    /// name the wired library does not define is kept and ignored, which is
+    /// what makes rewiring `ops` safe, and the **muted** set rather than the
+    /// enabled set is what makes an operation *added* to the library later
+    /// show up rather than silently vanish.
+    ///
+    /// A `BTreeSet` so the order is the name order: the `.cnnd` diff and the
+    /// text dump then do not churn on set operations, and a bulk mute writes a
+    /// dozen names at once.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub muted: BTreeSet<String>,
 
     #[serde(skip)]
     pub placement: PlacementState,
@@ -365,6 +381,7 @@ impl Default for MechanosynthEditData {
         Self {
             authored: Vec::new(),
             cursor: default_cursor(),
+            muted: BTreeSet::new(),
             placement: PlacementState::default(),
             cached_input: Mutex::new(None),
             last_error: Mutex::new(None),
@@ -378,6 +395,7 @@ impl Clone for MechanosynthEditData {
         Self {
             authored: self.authored.clone(),
             cursor: self.cursor,
+            muted: self.muted.clone(),
             placement: self.placement.clone(),
             cached_input: Mutex::new(self.cached_input.lock().ok().and_then(|slot| slot.clone())),
             last_error: Mutex::new(self.last_error.lock().ok().and_then(|slot| slot.clone())),
@@ -411,6 +429,13 @@ impl MechanosynthEditData {
         if let Ok(mut slot) = self.cached_input.lock() {
             *slot = None;
         }
+    }
+
+    /// Whether the offer sweep skips `op`. The one question the mute set is
+    /// ever asked — see the field's own note for what it deliberately does not
+    /// decide.
+    pub fn is_muted(&self, op: &str) -> bool {
+        self.muted.contains(op)
     }
 
     /// How many authored steps the stored cursor applies.
@@ -796,6 +821,20 @@ impl NodeData for MechanosynthEditData {
     fn get_text_properties(&self) -> Vec<(String, TextValue)> {
         vec![
             ("cursor".to_string(), TextValue::Int(self.cursor)),
+            // Written even when empty, for the same reason `authored` is: the
+            // text editor takes its list of known literal properties off the
+            // *node's own* `get_text_properties`, so an omitted key turns a
+            // `muted: [...]` a user typed into an "unknown property" warning
+            // and a silent drop.
+            (
+                "muted".to_string(),
+                TextValue::Array(
+                    self.muted
+                        .iter()
+                        .map(|name| TextValue::String(name.clone()))
+                        .collect(),
+                ),
+            ),
             (
                 "authored".to_string(),
                 TextValue::Array(self.authored.iter().map(step_to_text).collect()),
@@ -808,6 +847,20 @@ impl NodeData for MechanosynthEditData {
             self.cursor = value
                 .as_int()
                 .ok_or_else(|| "cursor must be an integer".to_string())?;
+        }
+        if let Some(value) = props.get("muted") {
+            let TextValue::Array(elements) = value else {
+                return Err("muted must be an array of operation names".to_string());
+            };
+            self.muted = elements
+                .iter()
+                .map(|element| {
+                    element
+                        .as_string()
+                        .map(str::to_string)
+                        .ok_or_else(|| "muted must be an array of operation names".to_string())
+                })
+                .collect::<Result<BTreeSet<String>, String>>()?;
         }
         if let Some(value) = props.get("authored") {
             let TextValue::Array(elements) = value else {

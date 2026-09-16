@@ -14,9 +14,9 @@ use atomcad_crystolecule::io::xyz_loader::load_xyz;
 use atomcad_crystolecule::mechanosynth::{
     Applicability, BuildScript, Candidate, EXACT_FIT_RESIDUAL, GhostBondKind, GhostKind,
     HighlightTags, MechanosynthError, NEAR_MISS_FACTOR, OpLibrary, Operation,
-    RESIDUAL_RANK_EPSILON, Step, applicable_ops, apply_step, compare_structures,
-    describe_mismatches, load_build_script, load_library, place, place_with_stats, preview_atoms,
-    preview_bonds, replay, resolve_tolerance,
+    RESIDUAL_RANK_EPSILON, Step, applicable_ops, applicable_ops_where, apply_step,
+    compare_structures, describe_mismatches, load_build_script, load_library, place,
+    place_with_stats, preview_atoms, preview_bonds, replay, resolve_tolerance,
 };
 use atomcad_test_support::{fixture_path, fixture_path_str};
 use glam::{DMat3, DQuat, DVec3};
@@ -1182,6 +1182,43 @@ fn the_offer_list_sorts_applicable_first_then_by_residual_and_is_stable() {
         }
     }
     assert_eq!(rows, applicable_ops(&workpiece, &lib, host, TOL, None));
+}
+
+#[test]
+fn admitting_everything_is_the_unfiltered_sweep_and_admitting_nothing_is_empty() {
+    // `applicable_ops_where` is the seam the editor's mute set hangs off
+    // (`doc/design_mechanosynth_op_muting.md`). The engine knows only the
+    // predicate, so the two boundary policies are what pin its meaning.
+    let lib = library();
+    let workpiece = workpiece();
+    let host = host_a(&workpiece);
+
+    assert_eq!(
+        applicable_ops_where(&workpiece, &lib, host, TOL, None, &|_| true),
+        applicable_ops(&workpiece, &lib, host, TOL, None),
+        "admitting every operation is the plain sweep, row for row"
+    );
+    assert!(
+        applicable_ops_where(&workpiece, &lib, host, TOL, None, &|_| false).is_empty(),
+        "and a rejected operation is indistinguishable from one the library never had"
+    );
+}
+
+#[test]
+fn a_rejected_operation_leaves_the_other_rows_exactly_as_they_were() {
+    // Filtering must not perturb the ranking of what survives: the offer list
+    // a user reads with four operations muted has to be the same list minus
+    // four rows, not a differently ordered one.
+    let lib = library();
+    let workpiece = workpiece();
+    let host = host_a(&workpiece);
+    let all = applicable_ops(&workpiece, &lib, host, TOL, None);
+    let dropped = all[0].op.clone();
+
+    let filtered =
+        applicable_ops_where(&workpiece, &lib, host, TOL, None, &|op| op.name != dropped);
+    let expected: Vec<_> = all.into_iter().filter(|row| row.op != dropped).collect();
+    assert_eq!(filtered, expected);
 }
 
 #[test]

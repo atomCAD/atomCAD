@@ -720,6 +720,49 @@ fn absent_step_fields_are_omitted_and_defaulted() {
 }
 
 #[test]
+fn the_mute_set_round_trips_through_the_text_format() {
+    // `muted` is a **total** text property (`doc/design_mechanosynth_op_muting.md`
+    // §Text format): the editor takes its list of known literal properties off
+    // the node's own `get_text_properties`, so a key that vanished when the set
+    // was empty would turn a `muted: [...]` a user typed into an ignored
+    // "unknown property".
+    let mut designer = setup_designer();
+    let empty = author_and_serialize(
+        &mut designer,
+        "edit = mechanosynth_edit { authored: [] }
+output edit
+",
+    );
+    assert!(empty.contains("muted: []"), "{empty}");
+
+    let text = author_and_serialize(
+        &mut designer,
+        "edit = mechanosynth_edit { muted: [\"dimerize\", \"habst\"], authored: [] }
+output edit
+",
+    );
+    // Stored in a `BTreeSet`, so the order is the name order whatever order it
+    // was written in — which is what keeps a `.cnnd` diff quiet.
+    assert!(text.contains(r#"muted: ["dimerize", "habst"]"#), "{text}");
+    assert_eq!(
+        author_and_serialize(&mut designer, &text),
+        text,
+        "a re-author must be a no-op"
+    );
+
+    let node_id = *designer
+        .node_type_registry
+        .node_networks
+        .get(NET)
+        .unwrap()
+        .nodes
+        .keys()
+        .next()
+        .expect("one node");
+    assert!(editor_data(&designer, node_id).is_muted("habst"));
+}
+
+#[test]
 fn an_empty_block_round_trips() {
     let mut designer = setup_designer();
     let text = author_and_serialize(
@@ -800,6 +843,11 @@ fn the_block_and_the_cursor_survive_a_cnnd_round_trip() {
     steps[2].residual = 0.0213;
     steps[2].approximate = true;
     let node_id = add_editor(&mut designer, base_id, steps, 2);
+    // Muted *and* authored: the point of the assertion below is that the two
+    // are independent, so the block still replays through the reload.
+    designer
+        .set_mechanosynth_edit_muted(&[], node_id, &["gm_methylate".to_string()], true)
+        .expect("a mechanosynth_edit node");
 
     let dir = tempdir().expect("temp dir");
     let path = dir.path().join("editor.cnnd");
@@ -824,6 +872,10 @@ fn the_block_and_the_cursor_survive_a_cnnd_round_trip() {
     assert_eq!(data.authored[2].residual, 0.0213);
     assert!(data.authored[2].approximate);
     assert_eq!(data.inexact_counts(), (1, 1));
+    assert!(
+        data.is_muted("gm_methylate"),
+        "the mute set travels with the project"
+    );
 
     // …and it still evaluates to the same thing. The comparison runs at 1e-5
     // because the `.xyz` base rounds its coordinates to six decimals, which is

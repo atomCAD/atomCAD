@@ -765,8 +765,32 @@ pub fn applicable_ops(
     tolerance: f64,
     bindings: Option<&[ToolBinding]>,
 ) -> Vec<Applicability> {
+    applicable_ops_where(workpiece, library, clicked, tolerance, bindings, &|_| true)
+}
+
+/// [`applicable_ops`], restricted to the operations `admit` accepts.
+///
+/// The predicate is the **caller's policy** — the editor passes "not muted"
+/// (`doc/design_mechanosynth_op_muting.md`) — and this crate deliberately does
+/// not know what a muted operation is. The restriction happens *before*
+/// `place` is called, so a filtered sweep costs what the shorter library would.
+///
+/// A rejected operation is indistinguishable from one the library never had:
+/// the caller that filters owes the user a statement that it did so, because
+/// an empty list is otherwise read as a coverage report on the whole library.
+pub fn applicable_ops_where(
+    workpiece: &AtomicStructure,
+    library: &OpLibrary,
+    clicked: u32,
+    tolerance: f64,
+    bindings: Option<&[ToolBinding]>,
+    admit: &dyn Fn(&Operation) -> bool,
+) -> Vec<Applicability> {
     let mut rows: Vec<Applicability> = Vec::new();
     for operation in &library.ops {
+        if !admit(operation) {
+            continue;
+        }
         let row = match place(workpiece, library, &operation.name, clicked, tolerance) {
             Ok(candidates) => {
                 let best_residual = candidates[0].residual;

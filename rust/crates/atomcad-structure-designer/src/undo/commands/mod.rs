@@ -21,6 +21,7 @@ pub mod extract_closure_body;
 pub mod factor_selection;
 pub mod inline_node;
 pub mod mechanosynth_edit_block;
+pub mod mechanosynth_edit_mute;
 pub mod motif_edit_property;
 pub mod move_nodes;
 pub mod node_structure_edit;

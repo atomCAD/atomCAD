@@ -1752,10 +1752,49 @@ would be a step that could disagree with the library about how it is performed.
 A `.cnnd` saved before the field was removed still loads — the key is dropped
 where the text format refuses it — so an old project needs no migration.
 
+A third property, `muted`, holds the operation names the placement tool's
+offer list leaves out — see [*Muting operations*](#muting-operations). It is
+always written, `[]` included:
+
+```
+edit = mechanosynth_edit { base: slab, ops: lib, muted: ["cl_donate_core"], authored: [] }
+```
+
 Editing the block from the text is an ordinary undoable edit, and so are the
-list's own operations — reorder, delete, duplicate, and each metadata chip.
-**Moving the cursor is not**: it is navigation, exactly like the replayer's
-slider.
+list's own operations — reorder, delete, duplicate, each metadata chip, and
+muting. **Moving the cursor is not**: it is navigation, exactly like the
+replayer's slider.
+
+### Muting operations
+
+A library names one operation per host *environment*, so it grows on purpose
+and the offer list stays short because it only shows what fits the atom you
+clicked. That works within a family of variants; it does not help with a whole
+**method** you are not using in this phase. A `bulk` dose fits nearly
+everywhere, so while you are authoring a `tip` sequence by hand its rows are on
+every popup, and they are the easiest rows to click by accident.
+
+**Muting an operation removes it from that node's offer sweep.** The node stores
+a list of names, and the tool does not ask those operations what they can do at
+the atom you clicked.
+
+It is a **view filter and nothing else.** A muted operation is still in the
+library and still means what it means: a step already in the block replays
+normally, the `steps` and `scene` pins are unchanged, an export is unchanged,
+and [`mechanosynth`](#mechanosynth) has no mute list at all. Muting changes what
+you are *offered*, never what a step *does*.
+
+Two consequences worth knowing:
+
+- **The list is per node, and travels with the project.** Two editors in one
+  network can be authoring two phases with two different working sets, and a
+  colleague who opens your file sees the list you saw. Muting is undoable.
+- **A name the wired library does not define is kept and ignored.** Rewire the
+  `ops` pin to a library that has it again and the mute comes back with it, so
+  swapping libraries never quietly loses your working set.
+
+Muting is written through the `muted` property above. A panel control for it —
+a checkbox per operation, and one toggle per instrument — is not built yet.
 
 ## ops_library
 

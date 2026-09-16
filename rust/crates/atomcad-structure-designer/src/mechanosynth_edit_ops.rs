@@ -30,12 +30,15 @@ use crate::structure_designer::StructureDesigner;
 use crate::undo::commands::mechanosynth_edit_block::{
     MechanosynthEditBlockCommand, MetadataEditKey,
 };
+use crate::undo::commands::mechanosynth_edit_mute::MechanosynthEditMuteCommand;
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::mechanosynth::{
-    Applicability, Candidate, GhostAtom, OpLibrary, Participant, Scene, Step, ToolReadiness,
-    applicable_ops, preview_atoms, preview_bonds, resolve_tolerance, steps_applied,
+    Applicability, Candidate, GhostAtom, OpLibrary, Operation, Participant, Scene, Step,
+    ToolReadiness, applicable_ops_where, preview_atoms, preview_bonds, resolve_tolerance,
+    steps_applied,
 };
 use glam::DVec3;
+use std::collections::BTreeSet;
 
 /// The open metadata-edit run: which chip is being typed into, where its first
 /// command landed on the undo stack, and the block state that command reverts
@@ -114,6 +117,16 @@ pub struct OfferSweep {
     /// to this Si".
     pub anchor_atomic_number: i16,
     pub rows: Vec<OfferRow>,
+    /// How many of the wired library's operations the sweep **did not look
+    /// at**, because the node mutes them.
+    ///
+    /// Always reported, whether or not any of them would have fitted: the offer
+    /// list's promise is that an empty result is a statement about the library
+    /// (`doc/design_mechanosynth_editor.md` §*A miss becomes a coverage
+    /// report*), and a filter that said nothing would turn that into a lie.
+    /// Deliberately **not** "how many muted ops apply here" — knowing that
+    /// costs exactly the sweep the mute avoids.
+    pub skipped_muted: usize,
 }
 
 /// The atom a click landed on: what the popup hangs off and heads itself with.
@@ -134,6 +147,7 @@ fn offer_sweep(
     library: &OpLibrary,
     atom_id: u32,
     rows: &[Applicability],
+    skipped_muted: usize,
 ) -> OfferSweep {
     let anchor = workpiece
         .get_atom(atom_id)
@@ -142,6 +156,7 @@ fn offer_sweep(
         anchor_atom_id: atom_id,
         anchor_position: anchor.position,
         anchor_atomic_number: anchor.atomic_number,
+        skipped_muted,
         rows: rows
             .iter()
             .map(|row| {
@@ -526,16 +541,124 @@ impl StructureDesigner {
     }
 
     // ========================================================================
+    // Muting
+    // ========================================================================
+
+    /// Adds `ops` to the node's mute set, or removes them, in **one** undo
+    /// entry however many names it carries.
+    ///
+    /// Bulk is the primary case, not a convenience: a group chip in the panel
+    /// mutes a dozen operations in one user action, and twelve single calls
+    /// would be twelve undo entries and twelve refreshes.
+    ///
+    /// A name the wired library does not define is stored anyway — the `ops`
+    /// pin may be rewired, and a mute that evaporated when its library was
+    /// briefly swapped would be worse than one that waits. Muting closes any
+    /// open offer list, which was swept under the previous set.
+    pub fn set_mechanosynth_edit_muted(
+        &mut self,
+        scope_path: &[u64],
+        node_id: u64,
+        ops: &[String],
+        muted: bool,
+    ) -> Result<(), String> {
+        let network_name = self
+            .active_node_network_name
+            .clone()
+            .ok_or("No active network")?;
+
+        let before = self
+            .mechanosynth_edit_data(scope_path, node_id)
+            .ok_or("Not a mechanosynth_edit node")?
+            .muted
+            .clone();
+
+        let mut after = before.clone();
+        for op in ops {
+            if muted {
+                after.insert(op.clone());
+            } else {
+                after.remove(op);
+            }
+        }
+        if after == before {
+            return Ok(());
+        }
+
+        let description = match (muted, ops) {
+            (true, [one]) => format!("Mute {one}"),
+            (false, [one]) => format!("Unmute {one}"),
+            (true, many) => format!("Mute {} operations", many.len()),
+            (false, many) => format!("Unmute {} operations", many.len()),
+        };
+
+        {
+            let data = self
+                .mechanosynth_edit_data_mut(scope_path, node_id)
+                .ok_or("Not a mechanosynth_edit node")?;
+            data.muted = after.clone();
+            data.placement.reset();
+        }
+        self.set_dirty(true);
+        // Not a block edit, so it ends any open metadata-typing run rather than
+        // merging into it.
+        self.pending_step_metadata_edit = None;
+
+        self.push_command(MechanosynthEditMuteCommand {
+            network_name,
+            scope_path: scope_path.to_vec(),
+            node_id,
+            description,
+            before,
+            after,
+        });
+        Ok(())
+    }
+
+    // ========================================================================
     // The placement tool
     // ========================================================================
 
-    /// The atom-first entry point: what the wired library can do at `atom_id`.
-    /// Never an error for "nothing applies" — an empty list is an answer.
+    /// The atom-first entry point: what the wired library can do at `atom_id`,
+    /// minus whatever the node mutes. Never an error for "nothing applies" — an
+    /// empty list is an answer.
     pub fn mechanosynth_edit_offers(
         &mut self,
         scope_path: &[u64],
         node_id: u64,
         atom_id: u32,
+    ) -> Result<OfferSweep, String> {
+        self.offer_sweep_at(scope_path, node_id, atom_id, false)
+    }
+
+    /// [`Self::mechanosynth_edit_offers`] over the **whole** wired library,
+    /// ignoring the node's mute set — the popup's *show all here*.
+    ///
+    /// The escape hatch that keeps an empty offer list honest once muting
+    /// exists: the list's promise is that it reports the library's coverage,
+    /// and this is how a user cashes that promise in. Its result replaces the
+    /// stored offers, so a row it brings back is fully placeable — mute filters
+    /// the sweep and nothing else.
+    pub fn mechanosynth_edit_offers_including_muted(
+        &mut self,
+        scope_path: &[u64],
+        node_id: u64,
+        atom_id: u32,
+    ) -> Result<OfferSweep, String> {
+        self.offer_sweep_at(scope_path, node_id, atom_id, true)
+    }
+
+    /// The sweep both entry points are.
+    ///
+    /// A named pair rather than one public `include_muted: bool` because "the
+    /// ordinary sweep" is what almost every caller means, and a bare `false` at
+    /// thirty call sites says less than the method name does.
+    fn offer_sweep_at(
+        &mut self,
+        scope_path: &[u64],
+        node_id: u64,
+        atom_id: u32,
+        include_muted: bool,
     ) -> Result<OfferSweep, String> {
         let scene = self.mechanosynth_edit_scene(scope_path, node_id)?;
         if scene.structure.get_atom(atom_id).is_none() {
@@ -558,14 +681,35 @@ impl StructureDesigner {
         // right state, and matches at its pose. `None` when nothing is wired to
         // `tools`, which leaves every row unannotated as before.
         let bindings = (!scene.bindings.is_empty()).then_some(scene.bindings.as_slice());
-        let offers = applicable_ops(
+        // Cloned out of the node's data before the sweep, which needs the
+        // library and the scene rather than the node — and before the `&mut`
+        // borrow that stores the result.
+        let muted: BTreeSet<String> = if include_muted {
+            BTreeSet::new()
+        } else {
+            self.mechanosynth_edit_data(scope_path, node_id)
+                .ok_or("Not a mechanosynth_edit node")?
+                .muted
+                .clone()
+        };
+        let admit = |operation: &Operation| !muted.contains(&operation.name);
+        let offers = applicable_ops_where(
             &scene.structure,
             &library,
             atom_id,
             resolve_tolerance(&library),
             bindings,
+            &admit,
         );
-        let sweep = offer_sweep(&scene.structure, &library, atom_id, &offers);
+        // Counted against the **wired library**, not against the stored set: a
+        // muted name the library does not define was never going to be swept,
+        // so reporting it would overstate what was hidden.
+        let skipped_muted = library
+            .ops
+            .iter()
+            .filter(|operation| !admit(operation))
+            .count();
+        let sweep = offer_sweep(&scene.structure, &library, atom_id, &offers, skipped_muted);
 
         let data = self
             .mechanosynth_edit_data_mut(scope_path, node_id)
