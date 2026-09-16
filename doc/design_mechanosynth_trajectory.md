@@ -9,7 +9,13 @@ fail (§Architecture). The testing story was then reviewed against the
 repository's harnesses and fixtures, which moved two test files to the
 harness their imports allow and made the frame's axis sign a property of
 the frame rather than a rule that would have flipped every fixture
-(§Testing). Unreviewed since. Nothing of it is implemented.
+(§Testing). A fourth review then corrected the sweep's clearance from a
+radial gap to a true distance, took the blocked site out of the replay's
+failure set — the engine measures, the generator refuses, the node reports —
+moved the containment check to binding so that `apply_step_in_scene` really
+does keep its signature, put the standoff in the park plane, and made the
+generator's re-park part of Phase 1 (§Decisions, §Architecture, §Phases).
+Unreviewed since. Nothing of it is implemented.
 
 Builds on `doc/design_mechanosynth_tools.md` (milestone 1: what a build does
 to every molecule it involves, all four phases implemented 2026-09-15) and is
@@ -65,15 +71,17 @@ In scope:
 - the **scene at a step time**: the scene after `step − 1`, with the step's
   rewrite applied iff `time ≥ 0.5`, and the moving or hovering tool's atoms
   at its pose at `time`;
-- an **error** when no collision-free approach direction exists, and a
-  **clearance scan** of every flight, reported on the panel and the
-  record;
+- a **report** when no collision-free approach direction exists — the tool
+  visits along the least-blocked direction and the panel and the record say
+  the site is blocked — and a **contact scan** of every leg of the visit,
+  the descent included, reported the same way; the replay never fails for
+  either;
 - the feasibility half exposed by `atomcad-crystolecule` — the pure sweep,
   the landing, and the step checks without the apply — so that a sequence
-  generator refuses an unreachable step before emitting it, and gets that
-  refusal for free from the apply it already calls;
-- four fields appended to `MechanosynthStep`: `time`, `tool_r`, `tool_t`,
-  `clearance`;
+  generator refuses a blocked step before emitting it, reading the verdict
+  off the apply it already calls;
+- five fields appended to `MechanosynthStep`: `time`, `tool_r`, `tool_t`,
+  `approach`, `contact`;
 - a **wireframe cage of each tool's envelope** in the viewport, following
   the tool, switched on and coloured in the preferences (off by default),
   through a general overlay route from `EvalOutput` to the wireframe pass;
@@ -167,8 +175,8 @@ Two facts make this cheap and honest:
   has it by applying those steps to a clone. The standoff a tool flies to at
   the end of step `k` and the standoff it descends from at step `j` are the
   same number computed the same way, so the boundary between steps is
-  continuous. If planning the next visit fails — its match, its sweep, its
-  envelope — the tool returns to park instead, and the failure is reported
+  continuous. If the next visit's match fails — a sweep cannot fail, it only
+  reports — the tool returns to park instead, and the failure is reported
   when the replay reaches that step, as it would have been anyway.
 
 The pose at `(k, u)` therefore depends on the scene after `k − 1`, step `k`,
@@ -192,8 +200,8 @@ Rejected: **storing the approach in the step.** The direction depends on what
 is in the way, and what is in the way depends on every step before this one.
 A reordered or edited sequence would carry directions computed against a
 scene that no longer exists. The generator and the node both recompute; the
-generator's reason to compute at all is to refuse a step that has no
-direction (§The sweep).
+generator's reason to compute at all is to refuse a step whose site is
+blocked (§The sweep).
 
 ### The tool is placed by two reaction points
 
@@ -256,28 +264,53 @@ loaded silicon tool's reaction point at the cargo; the bcc tungsten pyramid is
 `α = 55°` (its faces) with `R` the tip model's half-width. Both are the
 library's to state.
 
-**Containment is checked, not assumed.** At plan time every atom of the bound
-molecule is tested against the envelope at the step's reaction point; an atom
-outside is an error naming the tool type, the atom and the operation — a
-library that claims a smaller envelope than its molecule is wrong the way a
-frame whose residual fails is wrong. The check costs one pass over the tool's
-atoms.
+**Containment is checked, not assumed — at binding.** `build_scene` tests
+every atom of the bound molecule against the envelope placed at the tool-side
+reaction point of **every** `tip` operation of that type, and an atom outside
+is `ToolOutsideEnvelope`, naming the tool type, the atom and the operation —
+a library that claims a smaller envelope than its molecule is wrong the way a
+frame whose residual fails is wrong, and it is reported where the residual
+is: once, before any step. The check costs one pass over the tool's atoms per
+operation, and it is what lets the binding carry the envelope, so that
+applying a step needs nothing the scene does not already hold
+(§Architecture).
 
-### The sweep: the approach direction is found, and its absence is an error
+### The sweep: the approach direction is found, and its absence is reported
 
-The **obstacles** are every scene atom that is not the visiting tool's and not
-one of the target side's matched `before` atoms — the site is the reaction, not
-an obstacle. Each obstacle is a sphere: its covalent radius plus the largest
-covalent radius among the tool's atoms, times the library's clash factor
-(`CLASH_BLOCK`, 0.9), so "inside the envelope" means what "clash" means
-everywhere else in the module.
+The sweep is run about the **placed reaction point**
+`p_r = step.r · reaction.target + step.t` — the target-side reaction point
+carried into the design by the step's placement. The **obstacles** are every
+scene atom that is not the visiting tool's and not one of the target side's
+matched `before` atoms — the site is the reaction, not an obstacle. Each
+obstacle is a sphere: its covalent radius plus the largest covalent radius
+among the tool's atoms, times the library's clash factor (`CLASH_BLOCK`,
+0.9), so "inside the envelope" means what "clash" means everywhere else in
+the module.
 
 For a direction `d`, an obstacle at `p` has axial coordinate
-`s = (p − p_r) · d` and radial distance `ρ` from the axis; the envelope's
-radius at `s` is `0` for `s < 0` and `min(s · tan α, R)` after. The
-**clearance** of `d` is the minimum over obstacles of `ρ − radius(s) −
-margin`, obstacles with `s < −margin` skipped (they are behind the apex).
-Positive clearance is a free direction.
+`s = (p − p_r) · d` and radial distance `ρ` from the axis. Its **gap** is
+its signed **distance to the envelope's surface** — not its radial excess
+over the envelope's radius, which an earlier draft used and which overstates
+the room by `1/cos α` (fifteen per cent at 30°, seventy-four at the probe's
+55°). With `ℓ = s · cos α + ρ · sin α` the foot of the perpendicular along the
+slant, `s_R = R / tan α` the rim's axial position and `ℓ_R = R / sin α` its
+position along the slant, for a centre outside the envelope:
+
+- `ℓ ≤ 0`: the nearest surface point is the apex, gap `√(s² + ρ²)`;
+- `0 < ℓ < ℓ_R`: the nearest is on the slant, gap `ρ · cos α − s · sin α`;
+- `ℓ ≥ ℓ_R`: the nearest is the rim circle or the cylinder wall, gap the
+  smaller of `√((s − s_R)² + (ρ − R)²)` and, when `s ≥ s_R`, `ρ − R`.
+
+A centre is **inside** when `s > 0` and `ρ ≤ min(s · tan α, R)`; its gap is
+then negative, minus its distance to the nearer of the slant and the wall.
+The slant distance of the infinite cone is never used past the rim, where it
+would call a point beside the cylinder inside.
+
+The **clearance** of `d` is the minimum over obstacles of `gap − margin`.
+Positive clearance means every obstacle sphere is outside the envelope. An
+obstacle behind the apex by more than its margin can be skipped without
+looking, because its gap is at least that; that is an optimisation, not
+part of the definition. Positive clearance is a free direction.
 
 The **preferred direction** is global `+z`. A scanning probe is vertical
 unless something forces a tilt, the workpiece's top face is the `xy` plane
@@ -301,13 +334,18 @@ blocked site costs a few:
    `+z`, eight steps, keeping the last direction whose clearance held — so
    the tilt is the smallest the obstacles allow, not the coarsest sample of
    it. When candidate 0 was taken there is nothing to refine;
-4. if no candidate reaches `CLEAR_MARGIN`, take the remembered best if its
-   clearance is positive; otherwise **`NoApproach`**, an error naming the
-   step, the operation, the tool type and the best clearance found. The
-   replay stops there as for any other failing step, and the partial state
-   is reachable by asking for one step fewer.
+4. if no candidate reaches `CLEAR_MARGIN`, take the remembered best. Its
+   clearance may be negative: the sweep **always answers**, and the answer
+   carries its own verdict. A landing whose clearance is positive is
+   **reachable**; one whose clearance is not is **blocked**, and what
+   happens then depends on who asked (§Architecture): the generator refuses
+   to emit the step; the node performs the visit along that least-blocked
+   direction and reports it — the panel's approach line in the warning
+   colour, the record's `approach` negative — and the replay does not stop,
+   because a view of a build is not the place to decide that the build is
+   impossible.
 
-The cost is one dot product and one subtraction per obstacle per direction,
+The cost is one dot product and a few multiplications per obstacle per direction,
 and the walk stops at the first free candidate: an unobstructed site costs
 one pass over the obstacles, and even the worst case — two thousand atoms and
 every one of the 256 directions — is under a million operations,
@@ -319,13 +357,18 @@ here.
 **The generator gets the same answer, from the same code.** The silicon
 generator applies every step to a scene as it emits it, and the sweep runs
 inside that apply (§Architecture), so a site that has become unreachable —
-under an overhang, beside a parked tool — fails at emission with the step
-number, exactly as a pattern that does not match does. For a generator that
-wants to ask before committing, the sweep is also public on its own:
-`approach_direction` takes an envelope, a reaction point and an obstacle
-list and returns the direction and its clearance, or `None`. That is the
+under an overhang, beside a parked tool — comes back on the `SceneEffect`
+as a blocked landing, and the generator's loop, which already turns every
+apply failure into "step `n` could not be emitted", treats a blocked landing
+the same way: one check on the effect, the step number in the message. For
+a generator that wants to ask before committing, the sweep is also public
+on its own: `approach_direction` takes an envelope, a reaction point and an
+obstacle list and returns the best direction with its clearance. That is the
 design's answer to "what if no direction exists": the generator does not
-emit the step, and sequences differently.
+emit the step, and sequences differently. The answer is the same in both
+places only while the obstacles are: parked tools are obstacles, so the
+generator sweeps against the parks it writes into the demo's tool files,
+which are the parks the project then loads (§Phases).
 
 Rejected: **an approach direction from the local surface normal** (the
 centroid of the neighbourhood around the site). It is a guess about free
@@ -343,13 +386,21 @@ A visit has a **from** pose and a **to** pose. `from` is park on the first
 step of a run and the visit's own standoff otherwise; `to` is the next
 visit's standoff inside a run and park at its end. Between them:
 
-- the **standoff point** `S = p_r + d · H`, with
-  `H = max((t_park − p_r) · d, MIN_STANDOFF)`, `MIN_STANDOFF = 6 Å`: the
-  point on the approach axis at the height the tool was **parked at**,
-  measured along `d`, never closer than six ångström. The park height is
-  the height every flight happens at, so parking the tools at one height
-  keeps every leg level;
-- **inbound flight**, when `from` is park: a straight line from `P` to `S`,
+- the **standoff point** `S = p_r + d · H`: where the approach axis meets
+  the **park plane** `z = z_park`, the horizontal plane through the parked
+  apex `t_park` — `H = (z_park − z_r) / d_z`, `z_r` the reaction point's
+  height and `d_z` the direction's `z` component, floored at
+  `cos STANDOFF_TILT_CAP` (60°) so that a steeply tilted approach gets a
+  standoff about twice the park height up its axis rather than one at
+  infinity, and `H` never less than `MIN_STANDOFF` (6 Å). Vertical or
+  tilted, the standoff is at the park height, so every flight is level and
+  none passes under a neighbour's apex. An earlier draft projected the park
+  offset onto `d`; for a tilt away from the park that collapsed to the 6 Å
+  floor — below the parked apexes, the very case the fixed standoff is
+  rejected for below — and for a tilt toward a distant park it climbed far
+  above the plane;
+- **inbound flight**, when `from` is park: a straight line from the parked
+  apex `t_park` to `S`,
   the orientation slerping from the parked one to the reaction one on the
   way. Absent when the tool already hovers at `S`;
 - **descend**: from `S` to the reaction pose `A` along `−d`, orientation
@@ -360,22 +411,31 @@ visit's standoff inside a run and park at its end. Between them:
   with the orientation slerping to the next reaction one, or park, slerping
   back to the parked one.
 
-**Every descent is collision-free by construction**: the envelope translated
-along its own axis by `H` lies inside the envelope at the reaction point, and
-the sweep cleared that. The flights are not, and are not routed: each is
-**scanned** — sampled every `PATH_SAMPLE` (0.5 Å) of translation and five
-degrees of rotation, each tool atom checked against the scene atoms within
-`CLASH_SEARCH_RADIUS` that are not the tool's, with the module's
-covalent-radius ratio. The worst ratio over the visit's flights, its time and
-its pair are the visit's **clearance**, reported on the panel and the record;
-below the clash factor a flight *collides*. It is a report because a
-collision on a flight is the layout — a tool parked on another's line, a park
-too low — and the fix is to re-park, which the user sees at once; the
-approach, which the user cannot fix by hand, is what the engine solves.
+**A reachable descent is collision-free by the envelope's account**: the
+envelope translated along its own axis by `H` lies inside the envelope at
+the reaction point, and the sweep cleared that. The envelope is the
+library's claim, though, and the molecule is the fact, so the descent is
+**scanned** like everything else that moves. Nothing is routed; every leg —
+inbound flight, descent, ascent, outbound flight — is sampled every
+`PATH_SAMPLE` (0.5 Å) of translation and five degrees of rotation, each tool
+atom checked against the scene atoms within `CLASH_SEARCH_RADIUS` that are
+not the tool's and not the target side's matched `before` atoms, with the
+module's covalent-radius ratio. The worst ratio over the visit's legs, its
+time and its pair are the visit's **contact**, reported on the panel and
+the record; below the clash factor the visit *collides*. Two words, kept
+apart throughout: *clearance* is the sweep's number and is in ångström;
+*contact* is the scan's and is a ratio. It is a report,
+never an error: a collision on a flight is the layout — a tool parked on
+another's line, a park too low — and the fix is to re-park, which the user
+sees at once; a collision on a descent, or a blocked approach, is the
+library's envelope or the site's crowding, and a viewer of the build is
+told, while the generator that emitted the step is the one that refuses
+(§Architecture).
 
 Time is allotted by **path length within each half**: the inbound legs share
 `[0, 0.45)` in proportion to their lengths and the outbound legs `(0.55, 1]`
-likewise, so within a half the tool moves at one speed; each leg is eased
+likewise, so within a half the tool moves at one speed, and a leg of zero
+length — a tool parked exactly at its standoff — gets no time; each leg is eased
 with a smoothstep so the corner at `S` does not snap. A chained visit, whose
 inbound is one descent, spends its whole first half descending, slower than
 a first visit's descent; the halves are fixed so that `0.5` stays the
@@ -484,25 +544,37 @@ no run membership, for the reasons in §A tool leaves park once per run.
 
 ## Architecture
 
-Two layers, with one rule between them: **what can fail a build lives with
-the replay; what only moves pixels lives beside it and cannot fail.**
+Two layers, with one rule between them: **the engine measures, the
+generator refuses, the node reports.** The feasibility layer computes the
+landing and its verdict and hands both to whoever applied the step; nothing
+in it fails a step, because the same call serves a generator deciding what
+to emit, an editor replaying a half-written block and a viewer scrubbing a
+finished build, and only the first of those wants the verdict to stop it.
+The presentation layer moves pixels and cannot fail either.
 
 | layer | contains | who calls it | can it fail a step? |
 |---|---|---|---|
-| **feasibility** | reaction points, the envelope, obstacle collection, the sweep, the landing (direction, reaction point, standoff height), containment | `apply_step_in_scene` — so the replayer, the editor's block replay and the **sequence generator** all get it by applying a step, and the generator can also ask without applying | yes: `NoApproach`, `ToolOutsideEnvelope` |
-| **presentation** | runs, the reaction and standoff poses with their roll, the flights, the hover, the scan, the pose at a step time | `replay_scene_at` for the node; a future exporter | never — the scan is a report |
+| **feasibility** | reaction points, the envelope, obstacle collection, the sweep, the landing (direction, clearance, reaction point, standoff height) and its `reachable` verdict; containment, at binding | `apply_step_in_scene` — so the replayer, the editor's block replay and the **sequence generator** all get it by applying a step, and the generator can also ask without applying | a step, never; a **binding**, yes: `ToolOutsideEnvelope` from `build_scene` |
+| **presentation** | runs, the reaction and standoff poses with their roll, the flights, the hover, the scan, the pose at a step time | `replay_scene_at` for the node; a future exporter | never — the scan and the blocked approach are reports |
 
 Three consequences shape the code:
 
-**Feasibility is part of applying a step.** `apply_step_in_scene` plans the
-landing of every `tip` step whose tool is bound, between the checks and the
-mutation, and returns it on `SceneEffect`. The generator therefore learns
-that a site is unreachable the way it learns a pattern does not match — its
-emit-and-apply loop fails with the step number — and changes nothing to get
-the check. For a generator that wants to *try* a site before committing to
-it, the same two halves are public separately: `match_step_in_scene` (the
-checks, returning the plan the apply consumes) and `plan_landing`. One code
-path, three entry points.
+**Feasibility is part of applying a step, and its verdict is the caller's.**
+`apply_step_in_scene` plans the landing of every `tip` step whose tool is
+bound, between the checks and the mutation, and returns it on `SceneEffect`
+with its verdict; the apply itself succeeds either way, and its signature is
+milestone 1's — the envelope it needs was copied onto the `ToolBinding` by
+`build_scene`, and the reaction points are the operation's. The generator
+learns that a site is blocked from the effect it already reads for `added`
+and `touched`, and its one new line turns `!landing.reachable()` into the
+"step `n` could not be emitted" it already produces for a failed match — so
+an emitted script is reachable by construction, and the node never sees a
+blocked step from a generator. The node and the editor keep going, because
+for them the sweep is a description of the build, not a gate on it. For a
+generator that wants to *try* a site before committing to it, the same two
+halves are public separately: `match_step_in_scene` (the checks, returning
+the plan the apply consumes) and `plan_landing`. One code path, three entry
+points.
 
 **The engine's `Scene` is never moved.** A `Scene` always has its tools at
 their bound poses, because that is what the tool-side match and the sweep
@@ -521,7 +593,7 @@ that the generator and the node never disagree about it.
 
 What the generator imports, all re-exported from `mechanosynth`:
 `Envelope`, `Approach`, `approach_direction`, `sweep_directions`,
-`obstacles_for`, `Landing`, `plan_landing`, `match_step_in_scene`,
+`obstacles_for`, `Landing`, `plan_landing`, `StepPlan`, `match_step_in_scene`,
 `apply_step_in_scene` (unchanged signature, `SceneEffect` gains `landing`),
 `runs` / `Runs`, and the constants. It imports nothing from the
 presentation layer, and the presentation layer imports nothing from the
@@ -531,32 +603,38 @@ generator.
 
 New module `rust/crates/atomcad-crystolecule/src/mechanosynth/trajectory/`
 with `envelope.rs` (pure geometry: `Envelope`, the sweep), `landing.rs`
-(the scene-side feasibility: obstacles, containment, `plan_landing`),
-`runs.rs` (script-only run structure) and `path.rs` (presentation: poses,
-flights, hover, scan, `replay_scene_at`). `scene.rs` gains only the split of
-`apply_step_in_scene` into `match_step_in_scene` and the apply half.
+(the scene-side feasibility: obstacles, the containment check `build_scene`
+calls, `plan_landing`), `runs.rs` (script-only run structure) and `path.rs`
+(presentation: poses, flights, hover, scan, `replay_scene_at`). `scene.rs`
+gains the split of `apply_step_in_scene` into `match_step_in_scene` and the
+apply half, and, in `build_scene`, the envelope copy onto the binding and
+the containment call.
 
 ### Feasibility
 
 ```rust
 /// A tool type's collision envelope: a cone of `half_angle` (radians here)
 /// about the tool axis with its apex at the tool-side reaction point, continuing as a
-/// cylinder of `radius`. On `ToolType`.
+/// cylinder of `radius`. On `ToolType`, and copied onto every `ToolBinding`
+/// by `build_scene`, which is also where containment is checked.
 pub struct Envelope { pub half_angle: f64, pub radius: f64 }
 
 impl Envelope {
-    /// The envelope's radius at axial coordinate `s` from its apex: `0`
-    /// behind the apex, `min(s · tan α, radius)` ahead of it.
-    pub fn radius_at(&self, s: f64) -> f64;
+    /// The signed distance from a point at axial coordinate `s` and radial
+    /// distance `rho` to the envelope's surface — to the apex point, the
+    /// cone's slant, the rim circle or the cylinder wall, whichever is
+    /// nearest; negative inside.
+    pub fn gap(&self, s: f64, rho: f64) -> f64;
     /// The clearance of direction `d` at `at` against `obstacles`: the
-    /// smallest `ρ − radius(s) − margin`, obstacles behind the apex skipped.
+    /// smallest `gap − margin` over them.
     pub fn clearance(&self, at: DVec3, d: DVec3, obstacles: &[(DVec3, f64)]) -> f64;
 }
 
 /// What the sweep found for one direction.
 pub struct Approach {
     pub direction: DVec3,
-    /// The smallest margin by which an obstacle clears the envelope, Å.
+    /// The smallest margin by which an obstacle clears the envelope, Å;
+    /// negative when one is inside it.
     pub clearance: f64,
     /// Angle from global `+z`, radians.
     pub tilt: f64,
@@ -566,15 +644,16 @@ pub struct Approach {
 /// in order of increasing tilt. Computed once (`LazyLock`).
 pub fn sweep_directions() -> &'static [DVec3];
 
-/// The collision-free direction of least tilt from `+z` for a tool whose
-/// reaction point sits at `at`. `obstacles` are design-space positions with
-/// their margins. `None` when no sampled direction is free. **Pure
+/// The free direction of least tilt from `+z` for a tool whose reaction
+/// point sits at `at`, or, when no sampled direction is free, the least
+/// blocked one — always an answer, the clearance carrying the verdict.
+/// `obstacles` are design-space positions with their margins. **Pure
 /// geometry** — no scene, so a generator can call it on whatever it holds.
 pub fn approach_direction(
     envelope: &Envelope,
     at: DVec3,
     obstacles: &[(DVec3, f64)],
-) -> Option<Approach>;
+) -> Approach;
 
 /// The one definition of an obstacle: every scene atom that is not the
 /// tool's and not in `exclude`, with margin `clash · (r_cov(atom) +
@@ -591,30 +670,34 @@ pub fn obstacles_for(
 pub struct Landing {
     pub tool: usize,                 // index into `scene.bindings`
     pub reaction_point: DVec3,       // `p_r = step.r · reaction.target + step.t`
+    pub reaction_tool: DVec3,        // `reaction.tool`, in the tool's frame
     pub approach: Approach,
-    /// `max((t_park − p_r) · d, MIN_STANDOFF)`, Å.
+    /// Up the approach to the park plane: `(z_park − z_r) / max(d_z,
+    /// cos STANDOFF_TILT_CAP)`, never less than `MIN_STANDOFF`, Å.
     pub standoff_height: f64,
+}
+
+impl Landing {
+    /// `approach.clearance > 0`: every obstacle sphere is outside the
+    /// envelope. A generator refuses a step whose landing is not.
+    pub fn reachable(&self) -> bool;
 }
 
 /// Plans the landing of `step` on `scene` — the scene *before* the step —
 /// from the plan `match_step_in_scene` produced: the reaction point placed,
-/// containment checked, the sweep run, the standoff height fixed. `Err` for
-/// `NoApproach` and `ToolOutsideEnvelope`. Called by `apply_step_in_scene`
-/// for every `tip` step whose tool is bound; public for a generator that
-/// asks without applying.
-pub fn plan_landing(
-    scene: &Scene,
-    plan: &StepPlan,
-    library: &OpLibrary,
-    step_number: usize,
-) -> Result<Landing, MechanosynthError>;
+/// the sweep run, the standoff height fixed. Infallible: the envelope is on
+/// the binding, the reaction points are on the operation the plan holds, and
+/// the sweep always answers. Called by `apply_step_in_scene` for every `tip`
+/// step whose tool is bound; public for a generator that asks without
+/// applying.
+pub fn plan_landing(scene: &Scene, plan: &StepPlan) -> Landing;
 
 /// The checks of a step, all of them, and nothing applied: the target-side
 /// and tool-side matches, the participant rule, the pattern and steric
 /// checks. What `apply_step_in_scene` did before its first mutation, split
 /// out so a caller can plan a landing — or refuse a step — without moving an
 /// atom.
-pub struct StepPlan { /* the two matches, the target participant, the op */ }
+pub struct StepPlan { /* the two matches, the target participant, the op, the clash factor */ }
 pub fn match_step_in_scene(
     scene: &Scene,
     op: &Operation,
@@ -632,11 +715,13 @@ pub fn apply_step_in_scene(…) -> Result<SceneEffect, MechanosynthError>;
 pub struct SceneEffect {
     pub touched: Vec<u32>,
     pub added: Vec<u32>,
-    /// Appended: the landing of a `tip` step whose tool was bound.
+    /// Appended: the landing of a `tip` step whose tool was bound, verdict
+    /// included — a generator checks `reachable()` here.
     pub landing: Option<Landing>,
 }
 
 pub const MIN_STANDOFF: f64 = 6.0;           // Å
+pub const STANDOFF_TILT_CAP: f64 = 60.0;     // degrees
 pub const CLEAR_MARGIN: f64 = 0.5;           // Å
 pub const SWEEP_DIRECTIONS: usize = 256;
 pub const SWEEP_REFINEMENTS: usize = 8;
@@ -646,12 +731,13 @@ pub const SWEEP_REFINEMENTS: usize = 8;
 already reports, the `landing` of every step it applied, in step order
 (`None` for a step that is not `tip` or whose tool is unbound), because the
 presentation layer needs them to carry a tool's orientation along a run.
-Since `apply_step_in_scene` now lands every `tip` step, a build whose
-twelfth step has no approach fails at step twelve whatever `step` asks for
-beyond it — at `time = 1.0`, in the editor's block replay, and in the
-generator alike. That is the one
-deliberate change to milestone 1's output, and it changes only a file that
-was already showing an impossible build.
+Landing a step cannot fail it, so **milestone 1's output is unchanged for
+every build that loads**: `replay_scene(k)` returns the scene it returned
+before, in the node, in the editor's block replay and in the generator
+alike. The one new way for a build to fail is at binding,
+`ToolOutsideEnvelope`, which names a library whose envelope is smaller than
+the molecule playing it — a library error, reported where the frame residual
+is.
 
 ### Presentation
 
@@ -671,7 +757,7 @@ pub fn runs(script: &BuildScript, library: &OpLibrary) -> Runs;
 /// smallest rotation taking `R_from · z` onto the approach direction, and
 /// `t = p_r − R · reaction.tool`. `from` is the orientation the tool arrives
 /// with — parked on a first visit, the previous reaction pose inside a run.
-pub fn reaction_pose(landing: &Landing, reaction_tool: DVec3, from: &Pose) -> Pose;
+pub fn reaction_pose(landing: &Landing, from: &Pose) -> Pose;
 /// The reaction pose lifted by `standoff_height` along the direction.
 pub fn standoff_pose(landing: &Landing, reaction: &Pose) -> Pose;
 
@@ -680,7 +766,7 @@ pub fn standoff_pose(landing: &Landing, reaction: &Pose) -> Pose;
 /// landings from the parked pose — each visit turns the tool as little as
 /// the previous one left it. Pure; needs only the landings `replay_steps`
 /// returned.
-pub fn arriving_pose(runs: &Runs, landings: &[Option<Landing>], park: &Pose, k: usize, library: &OpLibrary) -> Pose;
+pub fn arriving_pose(runs: &Runs, landings: &[Option<Landing>], park: &Pose, k: usize) -> Pose;
 
 /// One tool's visit for one `tip` step.
 pub struct Visit {
@@ -693,8 +779,8 @@ pub struct Visit {
     /// Where the outbound flight ends: the next visit's standoff, or park.
     pub to: Pose,
     pub to_park: bool,
-    /// The scan over the visit's flights.
-    pub clearance: Clearance,
+    /// The scan over the visit's legs, descent and ascent included.
+    pub scan: PathScan,
 }
 
 /// What a tool does during a step, if anything.
@@ -714,14 +800,22 @@ impl ToolMotion {
     pub fn pose_at(&self, u: f64) -> Pose;
 }
 
-pub struct Clearance {
-    /// The worst contact along the flights, or `None` when no non-tool atom
-    /// came within `CLASH_SEARCH_RADIUS` of any tool atom at any sample.
-    pub worst: Option<Contact>,
-    /// Step time of `worst`, in `[0, 1]`.
+/// The scan of a visit's legs. Its own type, not `apply::Contact`, whose
+/// fields describe a placed pattern atom against a host.
+pub struct PathScan {
+    /// The worst pair along the legs, or `None` when no non-tool atom came
+    /// within `CLASH_SEARCH_RADIUS` of any tool atom at any sample.
+    pub worst: Option<PathContact>,
+}
+
+pub struct PathContact {
+    /// Centre-to-centre distance over the sum of the two covalent radii.
+    pub ratio: f64,
+    pub distance: f64,
+    /// Step time of the sample, in `[0, 1]`.
     pub at: f64,
-    /// The tool atom of `worst`, for the panel.
-    pub tool_atom: Option<u32>,
+    pub tool_atom: u32,
+    pub other: u32,
 }
 
 /// Writes the tool's atoms into `structure` — a copy of `scene.structure`
@@ -756,7 +850,7 @@ pub const PATH_SAMPLE_ANGLE: f64 = 5.0;      // degrees
 `replay_scene(…, step, tags)` becomes `replay_scene_at(…, step, 1.0, tags)`
 with the motion dropped, so every caller and every test compiles unchanged,
 and — since the scene is never moved — its output is milestone 1's exactly,
-tools included, for every build that has an approach. The tool positions a
+tools included, for every build that binds. The tool positions a
 *viewer* sees at `time = 1.0` differ inside a run, because the node applies
 the motion; the engine's scene does not.
 
@@ -766,10 +860,11 @@ the motion; the engine's scene does not.
    and `replay_steps` to `k − 1`, every `tip` step of it landed and the
    landings kept. A failure there is an error as today.
 2. `match_step_in_scene` for step `k`, then `plan_landing` if it is `tip`
-   with a bound tool. Step `k` failing — match, containment or sweep — is an
-   error at `(k, u)` for every `u`: the step is selected, and its checks are
-   what selecting it means. The partial state is reachable by asking for one
-   step fewer.
+   with a bound tool. Step `k` failing its match is an error at `(k, u)` for
+   every `u`: the step is selected, and its checks are what selecting it
+   means. The partial state is reachable by asking for one step fewer. A
+   blocked landing is not a failure: the visit is built along the sweep's
+   best direction and reported.
 3. If `u ≥ REACTION`: the apply half of step `k`, both sides, at the
    **bound** pose — the tool side matches at the binding's pose, the cargo
    enters the scene at the bound apex, and nothing in the matching or the
@@ -779,15 +874,18 @@ the motion; the engine's scene does not.
    **clone** of the scene after `k` (the step applied to the clone if `u`
    has not applied it), apply the `spontaneous` steps up to `j − 1`, then
    `match_step_in_scene` and `plan_landing` step `j`; its standoff is `to`,
-   or the hover pose. Any failure along the way makes `to` park instead —
-   silently here, because the replay reports it at the step that fails. The
-   clone is discarded. This is the only place the engine looks past the
+   or the hover pose. A match failure along the way makes `to` park instead
+   — silently here, because the replay reports it at the step that fails; a
+   blocked landing at `j` is still a standoff, and is reported when the
+   replay reaches `j`. The clone is discarded. This is the only place the engine looks past the
    selected step, and it costs one structure copy plus the settles.
 5. The `ToolMotion` is assembled: `arriving_pose` from the run structure
-   and the landings of step 1, `reaction_pose` from it, the standoff,
+   and the landings `replay_steps` returned for steps `1 … k − 1`,
+   `reaction_pose` from it, the standoff,
    `from_park` / `to_park` from the run structure, the look-ahead's `to`,
-   the flights scanned. A hover is the look-ahead's standoff with the same
-   arriving orientation.
+   every leg scanned. A hover is the look-ahead's standoff in the
+   orientation the outbound flight ended in, which is the next visit's
+   reaction orientation.
 6. Highlights. Before the reaction, `ms_current` is painted on the **matched
    `before` atoms** of step `k`, both sides: the site lights up as the tool
    approaches, and the apex that will react lights with it. From the reaction
@@ -797,9 +895,9 @@ the motion; the engine's scene does not.
 The caller then draws: `let mut shown = scene.structure.clone();
 apply_tool_pose(&mut shown, &scene, motion.tool(), &motion.pose_at(u))`.
 
-**Errors.** Two new `MechanosynthError` variants: `NoApproach { step, op,
-tool_type, best_clearance }` and `ToolOutsideEnvelope { step, op, tool_type,
-atom, excess }`. Parse-time `Invalid` locations: legs on both sides of the apex's plane or a leg on it, a
+**Errors.** One new `MechanosynthError` variant, raised by `build_scene`:
+`ToolOutsideEnvelope { tool, tool_type, op, atom, excess }`. No step-time
+variant: a blocked approach is a report (§Architecture). Parse-time `Invalid` locations: legs on both sides of the apex's plane or a leg on it, a
 missing or out-of-range `envelope`, a missing `reaction` on a `tip`
 operation or a present one elsewhere, a non-positive `duration`, a `/3`
 format string.
@@ -818,19 +916,22 @@ re-run.
 
 **Outputs.** `result` is the workpiece after `k − 1` steps for `time < 0.5`
 and after `k` from `0.5`. `scene` is the same rule with the moving or
-hovering tool at its pose. `step` gains four appended fields:
+hovering tool at its pose. `step` gains five appended fields:
 
 | field | type | meaning |
 |---|---|---|
 | `time` | Float | the clamped step time the outputs were computed at |
 | `tool_r` | Mat3 | the moving or hovering tool's frame at `time`, `R`; identity when every tool is parked |
 | `tool_t` | Vec3 | its frame origin (the apex), `t`; zero when every tool is parked |
-| `clearance` | Float | the visit's worst flight contact ratio, capped at `2.0`; `2.0` when nothing came near or nothing flies |
+| `approach` | Float | the sweep's clearance for the visit, Å, capped at `10.0`: positive means the site is reachable, negative that it is blocked and the tool visits along the least-blocked direction; `10.0` when nothing visits |
+| `contact` | Float | the visit's worst contact ratio over its legs, capped at `2.0`; `2.0` when nothing came near or nothing moves |
 
 `tool_r` / `tool_t` are what a camera follow or a gadget downstream needs and
-cannot derive; `clearance` is what a style rule needs to paint a tool whose
-flight collides. The cap keeps the record finite and honest: the scan cannot
-see past `CLASH_SEARCH_RADIUS`, and two is beyond it for every element pair.
+cannot derive; `approach` and `contact` are what a style rule needs to
+paint a tool whose site is blocked or whose flight collides. The caps keep
+the record finite — an empty scan and an empty sweep are both infinities —
+and cut nothing a rule would read: a contact at twice the covalent sum is no
+contact, and ten ångström of clearance is open sky.
 
 **Evaluation** reads `time` as `free_rot` reads its angle
 (`evaluate_or_default` with `extract_float`), calls `replay_scene_at`, and
@@ -865,8 +966,8 @@ write the kernel — the viewport moving under the hand is the feature — which
 `at site (reacted)`, `ascending`, `flying to next site`, `returning to park`,
 `hovering over next site`, or empty when every tool is parked —
 `tilt_degrees: f64` and `approach_clearance: f64` from the sweep,
-`flight_clearance: f64`, `flight_clearance_at: f64` and `collision: String`
-from the scan (the panel sentence, empty when clear), all read off the last
+`contact_ratio: f64`, `contact_at: f64` and `collision: String` from the
+scan (the panel sentence, empty when clear), all read off the last
 evaluation the way the tool rows are.
 
 **Panel.** Under the step scrubber, a **time** row: a `Slider` over `[0, 1]`
@@ -874,16 +975,17 @@ with a tick at `0.5`, live during the drag and bracketed for undo, a float box
 beside it, both disabled when the `time` pin is wired (the rule the step row
 uses). Under it two readout lines. The approach line:
 `approach: vertical, clear by 1.8 Å` or `approach: tilted 23°, clear by
-0.5 Å`. The flight line: `flights clear (worst 1.32)`, or, in the warning
-colour, `flight collides at 41 %: O of si_tool against Si 481, ratio 0.62`.
-A `NoApproach` error reaches the user on the result pin like every replay
-error, with the best clearance in the sentence. The tools block is unchanged;
+0.5 Å`, or, in the warning colour, `approach: blocked — best is tilted 41°,
+0.3 Å short`. The path line: `path clear (worst 1.32)`, or, in the warning
+colour, `path collides at 41 %: O of si_tool against Si 481, ratio 0.62`.
+Nothing about the approach reaches the result pin as an error: a blocked
+site is this line and a negative `approach` on the record. The tools block is unchanged;
 the row of a tool that is away from park is prefixed with a marker.
 
 ## The envelope cage: a viewport overlay switched in the preferences
 
 The envelope is the one thing in this design a user cannot otherwise see,
-and it is the thing a wrong tilt or a `NoApproach` is explained by. So the
+and it is the thing a wrong tilt or a blocked site is explained by. So the
 viewport can draw it: a **wireframe cage** of each bound tool's envelope —
 the cone from its apex to the rim where the cylinder begins, and a length of
 the cylinder beyond — in the tool's frame, following the tool wherever the
@@ -949,14 +1051,15 @@ preference and put a preferences read into `eval`.
 
 - `doc/reference_guide/nodes/atomic.md` §mechanosynth: the `time` pin and
   property, what the slider shows (the visit's shape, the switch at the
-  middle, runs and hovering), the two readout lines, the no-approach error,
+  middle, runs and hovering), the two readout lines, what a blocked site
+  looks like,
   and **how to lay out a scene**: park the tools in a row **behind the
   workpiece and the reservoir, away from the camera**, at one height, that
   height being where every flight happens; a tool then leaves park once per
   run, works across the scene in front of the camera, and goes home when its
   run ends.
 - `doc/reference_guide/nodes/math_programming.md`, the `MechanosynthStep`
-  record: the four appended fields.
+  record: the five appended fields.
 - `doc/reference_guide/ui.md`, the preferences dialog: the two envelope
   fields in *Atomic Structure Visualization*, and what the cage shows.
 - `doc/reference_guide/op_libraries.md`: the `/4` format — the frame's
@@ -997,10 +1100,15 @@ first commit of Phase 1, before any new code:
   containment check is what says whether the numbers are right;
 - the four `.cnnd` fixtures (`mechanosynth_legacy`, `mechanosynth_wired`,
   `mechanosynth_edit`, `mechanosynth_tools`) are re-snapshotted **once** in
-  that commit and must evaluate to the same atoms afterwards, tools
-  included, since the engine's scene is never moved (§Architecture). That
-  is a stronger regression than milestone 1's, and it is the one that would
-  catch a landing leaking into the replay.
+  that commit and must evaluate to the same atoms afterwards: `result`
+  always, because the engine's scene is never moved (§Architecture), and
+  the `scene` pin too, because none of the four stores a step inside a run
+  — `mechanosynth_tools.cnnd` stores step 3, the last visit of its
+  `habst_tool` run, after which the tool is home. A fixture that stored
+  step 1 or 2 would show the tool hovering on `scene` and would be
+  re-snapshotted with it; that is the design, not a leak. The `result`
+  equality is the stronger regression, and the one that would catch a
+  landing leaking into the replay.
 
 **The frame's axis sign is the reason the tool fixtures need no geometry
 change.** The fixture tools and milestone 1's ethynyl example have their legs
@@ -1015,17 +1123,23 @@ New fixtures: `trajectory_build.json` — `habst`, `settle`, `hdump` on the
 dump, `habst`, `habst_probe`, `expose`: one run of `habst_tool` with a
 settle *inside* it, then the probe's visit ending it, then a `bulk` step;
 and `mechanosynth_trajectory.cnnd` — `mechanosynth_tools.cnnd` with that
-script, `time: 0.3` stored, and a second copy of the probe parked directly
-over the workpiece site, for the node snapshot and the round-trip corpus.
-An obstacle over a site is otherwise built in code by translating
-`tool_probe.xyz`; no fixture is added for it.
+script, `time: 0.3` stored, and an **obstacle over the workpiece site**: a
+copy of `tool_probe.xyz` with its tags stripped, wired as a second
+feedstock — not a second molecule of type `probe`, which `build_scene`
+refuses as `ToolDuplicate` — for the node snapshot and the round-trip
+corpus. In the engine tests the same obstacle is built in code, an untagged
+`tool_probe.xyz` translated over the site and passed on `feedstocks`; no
+`.xyz` fixture is added for it.
 
 ### Feasibility layer — `crates/atomcad-crystolecule/tests/crystolecule/mechanosynth_trajectory_test.rs`
 
 Pure geometry, no scene:
 
-- `Envelope::radius_at`: zero behind the apex, linear in the cone, flat in
-  the cylinder; `Envelope::clearance` on one obstacle inside, on the
+- `Envelope::gap`: negative inside; zero on the slant, on the rim and on
+  the cylinder; for a point beside the slant at radial excess `x` it is
+  `x · cos α`, **not** `x` — the assertion that pins the distance against
+  the radial gap an earlier draft used; the apex-point case for a point
+  behind the apex; `Envelope::clearance` on one obstacle inside, on the
   surface, and outside the envelope has the sign and magnitude the formula
   says;
 - `sweep_directions()`: the first is `+z`, the last `−z`, tilt is
@@ -1035,7 +1149,8 @@ Pure geometry, no scene:
   `0`; with a single obstacle on the `+z` axis returns a direction tilted
   just past it (clearance at least `CLEAR_MARGIN`, tilt within a
   refinement step of the minimum); with obstacles enclosing the point
-  returns `None`; with every candidate blocked but one below the margin
+  returns a negative clearance and the least blocked of the sampled
+  directions; with every candidate blocked but one below the margin
   returns that one; the same inputs give the same output (determinism).
 
 Through the scene, on `tool_scene.xyz` and the tagged fixture tools:
@@ -1044,21 +1159,26 @@ Through the scene, on `tool_scene.xyz` and the tagged fixture tools:
   every other participant's atoms, and its margins are
   `clash · (r_cov + r_tool)`;
 - `plan_landing` puts `reaction_point` at `step.r · reaction.target +
-  step.t`; the standoff height is the park height along the direction, and
-  `MIN_STANDOFF` when the tool is parked lower; a molecule with an atom
-  outside its type's envelope is `ToolOutsideEnvelope` naming the atom;
-- a parked tool standing over the site tilts the approach; removing it
-  makes the approach vertical again;
+  step.t`; the standoff lies in the park plane — its `z` equals the parked
+  apex's for a vertical approach and for a tilted one alike — and is
+  `MIN_STANDOFF` up the axis when the tool is parked lower;
+- `build_scene` copies the type's envelope onto the binding, and on a
+  molecule with an atom outside that envelope at some `tip` operation's
+  tool-side reaction point fails with `ToolOutsideEnvelope` naming the atom
+  and the operation;
+- the probe parked over `habst_tool`'s site tilts that tool's approach;
+  moving it away makes the approach vertical again;
 - **the generator's path**: `apply_step_in_scene` on a `tip` step with a
   bound tool returns a `landing` equal to what `match_step_in_scene`
   followed by `plan_landing` returns, and the latter leaves the scene
-  untouched; on an enclosed site the apply fails with `NoApproach`
-  naming the step and the tool type, and the scene is unchanged (the
-  all-or-nothing rule now covers the landing);
+  untouched; on an enclosed site the apply **succeeds**, applies the step,
+  and returns a landing whose `reachable()` is false with a negative
+  clearance — the verdict the generator turns into a refusal;
 - `replay_steps` returns one landing per applied `tip` step with a bound
-  tool and `None` elsewhere; a script whose step `j` has no approach fails
-  at `j` for every `step ≥ j`, and `replay_scene` fails the same way —
-  the one deliberate change to milestone 1's output;
+  tool and `None` elsewhere; a script whose step `j` is blocked replays to
+  its end with the landing at `j` blocked, and `replay_scene(k)` is
+  milestone 1's for every `k` — nothing about a landing changes the
+  replay's output;
 - with `tools` unwired no landing is planned and nothing fails.
 
 Parse, in the existing `mechanosynth_tools_test.rs` beside the `/2` and
@@ -1093,9 +1213,16 @@ produced, never against a typed coordinate:
   probe's visit starts and ends at park; the `expose` step has no motion;
 - a failing look-ahead (step `j` made unmatchable) sends the tool to park
   at `(k, 1.0)`, and the replay fails at `j`;
-- flight scan: a slab placed across a flight reports a ratio below
+- the scan: a slab placed across a flight reports a ratio below
   `CLASH_BLOCK` at a time inside that flight; the same scene with the slab
-  removed reports none; a chained visit reports only its outbound flight;
+  removed reports none; a chained visit's inbound scan covers only its
+  descent; an obstacle just outside the envelope's slant — clear by the
+  sweep's account — is reported by the descent's scan when the molecule
+  reaches it, which is why the descent is scanned;
+- a blocked site (the site boxed in by obstacles built in code): the visit
+  is built along the sweep's best direction, `pose_at` is as continuous as
+  for any other visit, the motion carries the negative clearance, and the
+  replay does not fail;
 - `replay_scene_at(k, 1.0)` returns a scene equal to `replay_scene(k)`
   atom for atom, tools included, for every `k` of both build fixtures —
   the compatibility assertion and the proof that the engine never moves a
@@ -1114,9 +1241,10 @@ assertion is an equality against the engine:
 - the `time` pin is index 6, optional, and overrides the property; an
   out-of-range value on either is clamped; `result`, `scene` and the record
   at `(k, u)` equal what `replay_scene_at` and `apply_tool_pose` produce;
-- the four record fields are appended after `agent`, `tool_r` / `tool_t`
+- the five record fields are appended after `agent`, `tool_r` / `tool_t`
   are the motion's pose and the identity / zero with every tool parked,
-  `clearance` is the scan's ratio capped at `2.0`;
+  `approach` is the sweep's clearance capped at `10.0` and negative on the
+  blocked scene, `contact` is the scan's ratio capped at `2.0`;
 - the `scene` pin carries the tool at its flown pose while `last_scene`
   keeps it bound — the two are compared directly;
 - a `mechanosynth` node with a bound tool emits one `ToolEnvelope` overlay
@@ -1147,10 +1275,11 @@ Scene and preferences, in the same harness:
 - the getter reads `time` and the setter writes it, the caches surviving a
   no-op write as for the other properties;
 - `mechanosynth_info` reports `time`, `leg`, `tilt_degrees`,
-  `approach_clearance`, the flight clearance fields and `collision` off the
-  last evaluation: `leg` names each of the seven legs at a `u` inside it
-  and is empty at a `bulk` step; `collision` is the panel sentence for the
-  blocked fixture and empty otherwise;
+  `approach_clearance`, `contact_ratio`, `contact_at` and `collision` off
+  the last evaluation: `leg` takes each of its eight values at a `u` inside
+  that leg and is empty at a `bulk` step; `collision` is the panel sentence for the
+  slab scene and empty otherwise; `approach_clearance` is negative on the
+  blocked scene and the info is still returned — no error;
 - the preferences API twin round-trips the two new fields.
 
 ### Dart — `test/`
@@ -1189,19 +1318,27 @@ layer, with `match_step_in_scene` split out of `apply_step_in_scene` and the
 apply landing every `tip` step — then `runs.rs` and `path.rs` with
 `replay_scene_at`, the look-ahead and `replay_scene` as its `1.0` wrapper;
 the engine tests above. The external generator is rebuilt against the new
-`SceneEffect` (one added field) and gains nothing else it has to call. The
-fixture migration of §Testing is the first commit. Kickoff check: the silicon v3 file set, regenerated as
-`/4` by the external generator with envelopes and reaction points, replays
-at `(k, 1.0)` with the workpiece identical to milestone 1 for all 171 steps;
-every `tip` step has a vertical approach (the demo's sites are all on the top
-face with the tools parked above); at `(k, 0.5)` every cargo sits on its
-target's reaction point; and the cover phase is **one run per tool**: the
-shuttle leaves park once, alternates reservoir and workpiece for sixty-two
-visits with the settles passing under it, and returns once.
+`SceneEffect` (one added field), gains the one check that refuses a step
+whose landing is not `reachable()`, and **moves its parks**: today it parks
+the tools 9.33 Å above the top face with `si_tool` between the workpiece and
+the reservoir, which is on the line of every reservoir-to-workpiece flight
+and inside the vertical cylinder of any site under it. The parks go where
+§Reference guide tells a user to put them — in a row behind the workpiece
+and the reservoir, away from the camera, at one height, off every flight
+line — and the kickoff check is made against that layout. The fixture
+migration of §Testing is the first commit. Kickoff check: the silicon v3
+file set, regenerated as `/4` by the external generator with envelopes,
+reaction points and the new parks, replays at `(k, 1.0)` with the workpiece
+identical to milestone 1 for all 171 steps; every `tip` step is reachable
+and vertical (the demo's sites are all on the top face and nothing parks
+over them); every visit's scan is clear; at `(k, 0.5)` every cargo sits on
+its target's reaction point; and the cover phase is **one run per tool**:
+the shuttle leaves park once, alternates reservoir and workpiece for
+sixty-two visits with the settles passing under it, and returns once.
 
 ### Phase 2 — Node, record, API, text format
 
-The `time` property and pin, the four record fields, `APIMechanosynthData`
+The `time` property and pin, the five record fields, `APIMechanosynthData`
 and `APIMechanosynthInfo`, the loader default, the text-format property,
 FRB regeneration, node tests, the round-trip corpus.
 
@@ -1217,13 +1354,14 @@ end to end (struct, defaults, API twin, conversion, window, keys).
 The four guide pages, the layout advice included; the manual checklist —
 with the envelope cage switched on in the preferences, so every item below
 is watched with the cone visible —
-on the silicon v3 demo re-parked with the tools behind the workpiece: drag
+on the silicon v3 demo as Phase 1's generator parks it: drag
 the slider on a pickup and watch the shuttle leave park, descend on the
 reservoir, take its atom, lift and fly across to hover over the workpiece
 site; scrub the settles and see it wait; scrub the donation and see it
 descend, hand over, lift and fly back toward the reservoir; find the run's
 last donation and see it go home; park a tool directly over a site and watch
-the next visit tilt; set `time` by wire from a `float` node; park a tool on
+the next visit tilt; box a site in and read the blocked line while the tool
+still visits; set `time` by wire from a `float` node; park a tool on
 another's flight line and read the collision; undo one drag with one Ctrl-Z;
 open a milestone-1 project with a `/3` library and read the regenerate
 message. The Flutter smoke test stays the human's.
@@ -1254,7 +1392,7 @@ decision, as milestone 1 already said.
   Wanted only if a process interleaves two tools tightly enough for the
   return trips to show.
 - **A grid-backed cylinder query** for the sweep, when a scene makes the
-  obstacle pass the slow part. `approach_in_scene` is the only caller.
+  obstacle pass the slow part. `plan_landing` is the only caller.
 - **A drawn path.** A second `OverlayKind` drawing the flights, the
   standoffs and the colliding sample in red, through the route the envelope
   cage opens — the same `Visit` rendered rather than scrubbed, with its own
@@ -1266,7 +1404,10 @@ decision, as milestone 1 already said.
   committing a step; needs the hit test to read the moved scene.
 - **Offers that know the approach.** `applicable_ops` running the sweep for
   each ready row, so the editor greys out a placement the tool could not
-  reach before it is committed — the generator's check, in the editor.
+  reach before it is committed — the generator's check, in the editor. Until
+  then an authored step on a blocked site is seen in the replayer, not where
+  it was authored; the editor's block replay lands every step like the
+  node's and fails for none of them.
 - **A `parts: [HasAtoms]` output** (milestone 1's follow-up) — the moved tool
   as its own structure, for a downstream that wants only it.
 
@@ -1298,10 +1439,23 @@ decision, as milestone 1 already said.
   shaft the design does not wire; the roll would matter and the search would
   be three-dimensional. The envelope is what makes the search a sweep over
   directions.
-- **Making a flight collision an error too.** A collision on a flight is the
+- **Making a flight collision an error.** A collision on a flight is the
   user's layout and the fix is visible and immediate; an error there would
-  stop a demo for a re-park. The approach is different in kind: the user
-  cannot fix it by hand, so the engine either solves it or refuses.
+  stop a demo for a re-park.
+- **Making a blocked approach an error in the replay.** The first three
+  drafts did. It coupled a presentation-motivated heuristic — an envelope
+  whose radius the library is invited to overstate for an unmodelled shaft
+  — into whether a milestone 1 project loads at all, and it reached the
+  editor through its block replay, which binds tools and would have broken
+  an authored block at the first crowded site while the offers that placed
+  the step never ran the sweep. The generator wants the gate and gets it in
+  one line; nobody else does.
+- **A radial gap as the sweep's clearance** (`ρ − s · tan α`). It is not a
+  distance: a sphere the sweep called clear by the full margin could sit
+  inside the cone, by more than half an ångström at the probe's 55°, and
+  the descent — then unscanned — would have carried the molecule through
+  it. The gap is now the distance to the surface, and the descent is
+  scanned anyway.
 - **Interpolating the atoms themselves** (cargo sliding from apex to site).
   There is no path for an atom without a reaction coordinate; the handoff is
   instantaneous by the engine's founding rule and the coincident reaction
@@ -1309,9 +1463,9 @@ decision, as milestone 1 already said.
 
 ## Open questions
 
-- Whether `MIN_STANDOFF = 6 Å`, `CLEAR_MARGIN = 0.5 Å` and the `0.45 / 0.55`
-  dwell are right for the silicon demo's camera. Numbers to look at, not to
-  argue about.
+- Whether `MIN_STANDOFF = 6 Å`, `STANDOFF_TILT_CAP = 60°`,
+  `CLEAR_MARGIN = 0.5 Å` and the `0.45 / 0.55` dwell are right for the
+  silicon demo's camera. Numbers to look at, not to argue about.
 - Whether a `bulk` step should end a run after all. It does here because an
   exposure is a regime the instrument retracts from; a process that doses
   while a tool waits nearby would want the run to continue, and the change
@@ -1320,5 +1474,5 @@ decision, as milestone 1 already said.
   `+z`. The sweep finds the face's free directions either way; only the tie
   between two free ones would change. A per-library preference is the
   alternative, and nothing asks for it yet.
-- Whether the record's `clearance` should be a Bool `collides` beside the
+- Whether the record's `contact` should be a Bool `collides` beside the
   ratio, for a `switch` downstream. An `expr` on the ratio does it today.
