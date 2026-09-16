@@ -13,13 +13,18 @@ use thiserror::Error;
 
 /// The `format` string an operation library must carry.
 ///
-/// `/2` is the tool-molecule format: `method` is required on every operation, a
-/// `tip` operation carries a tool side, and `tools` describes every tool type
-/// the library envisions. A `/1` file is refused with a message saying to
-/// regenerate it — backward compatibility is deliberately not a goal, because
-/// every library in existence is machine-written by a generator that is
-/// regenerated with the format. See `doc/design_mechanosynth_tools.md`.
-pub const LIBRARY_FORMAT: &str = "atomcad-msops/2";
+/// `/3` is the **pattern-check** format: within a pattern the bond list is
+/// closed-world (a listed bond must exist at that order, an unlisted pair must
+/// not exist at all), a `before` atom may state its bond count as `deg`, an
+/// operation may state how many of its leading `before` ids a user may click as
+/// `anchors`, and a library may state its own steric factor as `clash`. A `/2`
+/// file is refused with a message saying to regenerate it: the bond semantics
+/// change the *meaning* of a pattern that lists no bonds, so silently accepting
+/// one would read "these atoms are not bonded" where the author meant nothing
+/// at all. Backward compatibility is deliberately not a goal — every library in
+/// existence is machine-written by a generator that is regenerated with the
+/// format. See `doc/design_mechanosynth_pattern_checks.md`.
+pub const LIBRARY_FORMAT: &str = "atomcad-msops/3";
 
 /// The `format` string a build script must carry.
 ///
@@ -50,6 +55,39 @@ pub const PATTERN_POSITION_EPSILON: f64 = 1e-6;
 /// click. Validated as a **warning** at load time, never an error: a foreign
 /// library that does not follow it still replays and still places.
 pub const ORIGIN_PATTERN_ATOM_ID: i64 = 1;
+
+/// [`Operation::anchors`] when the file states none: id 1 alone.
+///
+/// This is the origin convention (`ORIGIN_PATTERN_ATOM_ID`) made **strict** —
+/// id 1 is the atom at the origin, the atom to click, and the only atom a click
+/// may play unless the library says otherwise. See
+/// `doc/design_mechanosynth_pattern_checks.md` §3.4.
+pub const DEFAULT_ANCHORS: i64 = 1;
+
+/// The largest bond count a [`PatternAtom::deg`] may state. Nothing this engine
+/// models has more; a bcc tungsten apex, the widest thing anyone has proposed,
+/// has eight.
+pub const MAX_PATTERN_DEGREE: u32 = 8;
+
+/// Two atoms of one pattern closer than this multiple of their covalent-radius
+/// sum, with no bond listed between them, are a **load-time warning**: either
+/// the bond is missing from the file, or the library really means "these two are
+/// not bonded", in which case the workpiece had better agree.
+pub const CLOSE_PAIR_WARNING_FACTOR: f64 = 1.1;
+
+/// Two atoms that are **not bonded to each other** must not be closer than this
+/// multiple of their covalent-radius sum. The engine's default; a library states
+/// its own with `clash`.
+///
+/// Argued from data rather than picked (`doc/design_mechanosynth_pattern_checks.md`
+/// §5.3): the legitimate floor is a **donate-then-bridge** intermediate at 1.02
+/// of a bond length — an atom placed at exactly the bond distance from a
+/// neighbour it will bond to one step later — and the worst bogus offer that no
+/// other check catches is an upside-down chemisorbed precursor at 0.86. Any
+/// value in 0.87..=0.99 separates the two on both existing libraries; 0.9 keeps
+/// the larger margin on the side where a false positive is an error on a
+/// legitimate build.
+pub const CLASH_BLOCK: f64 = 0.9;
 
 /// The element slot of a pattern atom.
 ///
@@ -253,6 +291,19 @@ pub struct PatternAtom {
     pub element: PatternElement,
     /// Position in the operation's local frame, Ångström.
     pub pos: DVec3,
+    /// *The matched workpiece atom has exactly this many bonds*, of any order,
+    /// counting each bond once. Read on a `before` atom only.
+    ///
+    /// Absent is "don't care", so a library that does not trust its workpiece's
+    /// bond model — an xyz import with no bond perception — may leave it out and
+    /// lose only this check. A generator writes it **as drawn**: the number of
+    /// bonds the atom had in the workpiece the pattern was derived from.
+    ///
+    /// It says what the closed-world bond rule cannot. That rule speaks only
+    /// about pairs *inside* the pattern, so a bulk atom with three listed
+    /// neighbours and one unlisted one passes every bond check; `deg: 3` is what
+    /// rejects it. The two are complementary and both cost O(1).
+    pub deg: Option<u32>,
 }
 
 /// One bond of a pattern. Endpoints are pattern ids, not workpiece atom ids.
@@ -328,6 +379,21 @@ pub struct Operation {
     /// [`Method::Tip`]: **one operation, one instrument** — the same reaction
     /// performed by two instruments is two operations.
     pub tool: Option<ToolSide>,
+    /// The `before` atoms with ids `1..=anchors` are this operation's
+    /// **anchors**: the atoms the reaction primarily acts on, and the only atoms
+    /// a user may click to place it. [`DEFAULT_ANCHORS`] when the file states
+    /// none.
+    ///
+    /// A count rather than a per-atom flag, because the library already has a
+    /// numbering convention that puts the primary atom first and a count keeps
+    /// *one* convention where a flag would add a second to keep aligned with it.
+    ///
+    /// For a **homonuclear** symmetric operation — `dimerize`, two silicons —
+    /// stating `2` changes nothing: a click on either silicon already plays id 1
+    /// and the search assigns the other to id 2. The field earns its keep on a
+    /// **heteronuclear** pair of primary atoms, where a click on the second
+    /// element is rejected by id 1 and admitted by id 2.
+    pub anchors: i64,
     /// Reserved for milestone 2; see [`Approach`].
     pub approach: Option<Approach>,
 }
@@ -356,6 +422,20 @@ impl Operation {
     /// names it with a different order.
     pub fn has_bond_change_at(&self, id: i64) -> bool {
         has_bond_change_at(&self.before, &self.after, id)
+    }
+
+    /// Whether `before` pattern id `id` is an **anchor**: an atom a click may
+    /// play. See [`Operation::anchors`].
+    pub fn is_anchor(&self, id: i64) -> bool {
+        (ORIGIN_PATTERN_ATOM_ID..=self.anchors).contains(&id)
+    }
+
+    /// The `before` atoms a click may play, in file order.
+    pub fn anchor_atoms(&self) -> impl Iterator<Item = &PatternAtom> {
+        self.before
+            .atoms
+            .iter()
+            .filter(|atom| self.is_anchor(atom.id))
     }
 }
 
@@ -412,6 +492,10 @@ pub struct OpLibrary {
     /// the atom the operation acts on" true for every op in a library — worth
     /// telling the author about, not worth refusing the file over.
     pub warnings: Vec<String>,
+    /// The steric factor for every check against this library;
+    /// [`CLASH_BLOCK`] when the file states none. One value per library, in the
+    /// same spirit as `tolerance`: stated by whoever computed the patterns.
+    pub clash: Option<f64>,
     /// Every tool type the library's process uses, in file order. Empty for a
     /// library with no `tip` operation.
     pub tools: Vec<ToolType>,
@@ -427,6 +511,7 @@ impl OpLibrary {
     pub(super) fn new(
         file: String,
         tolerance: Option<f64>,
+        clash: Option<f64>,
         ops: Vec<Operation>,
         tools: Vec<ToolType>,
         warnings: Vec<String>,
@@ -444,12 +529,19 @@ impl OpLibrary {
         Self {
             file,
             tolerance,
+            clash,
             ops,
             warnings,
             tools,
             index,
             tool_index,
         }
+    }
+
+    /// The steric blocking factor in force for this library: its own `clash`,
+    /// else [`CLASH_BLOCK`].
+    pub fn clash_factor(&self) -> f64 {
+        self.clash.unwrap_or(CLASH_BLOCK)
     }
 
     /// The operation with this name, if the library has one.
@@ -576,6 +668,77 @@ pub struct NoMatch {
     pub participant: String,
 }
 
+/// A pattern bond that the workpiece does not agree with.
+///
+/// Its own type so that [`MechanosynthError`] can box it, for the reason
+/// [`NoMatch`] is boxed: every fallible function here returns that enum.
+#[derive(Debug, Error)]
+#[error(
+    "step {step} ({op} @ ({t_x:.3}, {t_y:.3}, {t_z:.3})) — pattern atoms {a} and {b} \
+     {}{}",
+    describe_bond_mismatch(*.expected, *.found),
+    in_participant(.participant)
+)]
+pub struct BondMismatch {
+    /// 1-based, as everything user-facing about steps is.
+    pub step: usize,
+    pub op: String,
+    pub t_x: f64,
+    pub t_y: f64,
+    pub t_z: f64,
+    /// The two pattern ids, in the pattern's own numbering.
+    pub a: i64,
+    pub b: i64,
+    /// The order the pattern states, or `None` for a pair the pattern leaves
+    /// unlisted — which, the bond list being closed-world, asserts "no bond".
+    pub expected: Option<u8>,
+    /// The order the workpiece has, or `None` for no bond at all.
+    pub found: Option<u8>,
+    /// Which participant of the scene the matched atoms belong to. Empty when
+    /// there is no scene to say it about.
+    pub participant: String,
+}
+
+/// A `before` atom whose matched workpiece atom has the wrong number of bonds.
+#[derive(Debug, Error)]
+#[error(
+    "step {step} ({op} @ ({t_x:.3}, {t_y:.3}, {t_z:.3})) — before atom id {atom_id} \
+     needs {expected} bond(s), the matched {element} has {found}{}",
+    in_participant(.participant)
+)]
+pub struct DegreeMismatch {
+    /// 1-based, as everything user-facing about steps is.
+    pub step: usize,
+    pub op: String,
+    pub t_x: f64,
+    pub t_y: f64,
+    pub t_z: f64,
+    pub atom_id: i64,
+    /// The matched workpiece atom's element symbol.
+    pub element: String,
+    pub expected: u32,
+    pub found: usize,
+    /// Which participant of the scene the matched atom belongs to. Empty when
+    /// there is no scene to say it about.
+    pub participant: String,
+}
+
+/// The middle of a [`BondMismatch`] message: what the pattern said against what
+/// the workpiece has.
+fn describe_bond_mismatch(expected: Option<u8>, found: Option<u8>) -> String {
+    match (expected, found) {
+        (Some(order), None) => format!("should carry a bond of order {order}, and carry none"),
+        (None, Some(order)) => {
+            format!("should carry no bond, and carry one of order {order}")
+        }
+        (Some(want), Some(got)) => {
+            format!("should carry a bond of order {want}, and carry one of order {got}")
+        }
+        // Not reachable: a pair only mismatches when the two differ.
+        (None, None) => "disagree".to_string(),
+    }
+}
+
 /// Everything that can go wrong reading or replaying a mechanosynthesis build.
 ///
 /// Every variant names the file it came from; validation variants additionally
@@ -612,15 +775,21 @@ pub enum MechanosynthError {
     #[error("atom {atom_id} is not in the workpiece")]
     NoSuchAtom { atom_id: u32 },
 
-    /// No `before` atom of the operation admits the clicked atom's element, so
-    /// the clicked atom cannot play any role in it.
-    #[error("{op} does not act on {element}; its before pattern accepts {accepted}")]
+    /// No **anchor** of the operation admits the clicked atom's element, so the
+    /// clicked atom is not one the operation acts on.
+    ///
+    /// The anchors, not the whole `before` pattern: a frame atom is by
+    /// definition one the operation does not touch, and a click is a statement
+    /// about where the reaction should happen. See
+    /// [`Operation::anchors`] and `doc/design_mechanosynth_pattern_checks.md`
+    /// §4.3.
+    #[error("{op} acts on {accepted} (its anchor); the clicked atom is {element}")]
     NoRole {
         op: String,
         /// The clicked atom's element symbol.
         element: String,
-        /// The element symbols the `before` pattern accepts, comma-separated;
-        /// `*` when a slot accepts anything.
+        /// The element symbols the operation's **anchors** accept,
+        /// comma-separated; `*` when an anchor accepts anything.
         accepted: String,
     },
 
@@ -649,6 +818,20 @@ pub enum MechanosynthError {
     /// replay (`clippy::result_large_err`).
     #[error(transparent)]
     NoMatch(Box<NoMatch>),
+
+    /// A pattern bond the workpiece does not agree with — missing, present
+    /// where the pattern lists none, or of a different order.
+    ///
+    /// **Boxed**, like [`MechanosynthError::NoMatch`] and for the same reason.
+    #[error(transparent)]
+    BondMismatch(Box<BondMismatch>),
+
+    /// A `before` atom's [`deg`](PatternAtom::deg) against what the matched
+    /// workpiece atom actually has.
+    ///
+    /// **Boxed**, like [`MechanosynthError::NoMatch`] and for the same reason.
+    #[error(transparent)]
+    DegreeMismatch(Box<DegreeMismatch>),
 
     /// Merging a feedstock or a tool into the scene would overflow the
     /// structure's thirty-two tag names.
@@ -796,6 +979,8 @@ impl MechanosynthError {
             | MechanosynthError::ToolState { .. }
             | MechanosynthError::StepOnTool { .. }
             | MechanosynthError::StepAcrossParticipants { .. }
+            | MechanosynthError::BondMismatch(_)
+            | MechanosynthError::DegreeMismatch(_)
             | MechanosynthError::ToolSideOffTool { .. } => None,
         }
     }

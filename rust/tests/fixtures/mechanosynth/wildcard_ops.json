@@ -1,6 +1,6 @@
 {
   "comment": "The four wildcard cases. Every op moves its atom by 1 Å so a test can tell the step ran.",
-  "format": "atomcad-msops/2",
+  "format": "atomcad-msops/3",
   "tools": [
     {
       "name": "probe",

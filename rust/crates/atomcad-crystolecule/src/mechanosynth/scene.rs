@@ -22,7 +22,9 @@
 //!
 //! Design doc: `doc/design_mechanosynth_tools.md`.
 
-use super::apply::{HighlightTags, apply_matched, match_before, paint, resolve_tolerance};
+use super::apply::{
+    HighlightTags, apply_matched, match_positions, paint, resolve_tolerance, verify_pattern,
+};
 use super::pose::{ToolPose, name_pose_error, tool_pose};
 use super::schema::{BuildScript, MechanosynthError, Method, NO_LAYER, OpLibrary, Step, ToolType};
 use crate::atomic_constants::element_symbol;
@@ -501,9 +503,13 @@ pub fn apply_step_in_scene(
     tools_wired: bool,
 ) -> Result<SceneEffect, MechanosynthError> {
     // --- match the target side ---------------------------------------------
+    // The positional pass alone: which participant the match landed in is a
+    // question to answer *before* the bond and degree checks, because a match
+    // that strayed onto the wrong structure fails those checks too and "it
+    // matched on a tool" is the sentence that explains why.
     let target_match = {
         let label = |atom_id: u32| scene.label(scene.participant(atom_id));
-        match_before(
+        match_positions(
             &scene.structure,
             &op.name,
             &op.before,
@@ -543,6 +549,19 @@ pub fn apply_step_in_scene(
             }
             Some(_) => {}
         }
+    }
+
+    {
+        let label = |atom_id: u32| scene.label(scene.participant(atom_id));
+        verify_pattern(
+            &scene.structure,
+            &op.name,
+            &op.before,
+            &target_match,
+            script_step,
+            step_number,
+            Some(&label),
+        )?;
     }
 
     // --- match the tool side ------------------------------------------------
@@ -593,7 +612,7 @@ pub fn apply_step_in_scene(
 
             let matched = {
                 let label = |atom_id: u32| scene.label(scene.participant(atom_id));
-                match_before(
+                match_positions(
                     &scene.structure,
                     &op.name,
                     &tool_side.before,
@@ -620,6 +639,20 @@ pub fn apply_step_in_scene(
                     });
                 }
             }
+
+            {
+                let label = |atom_id: u32| scene.label(scene.participant(atom_id));
+                verify_pattern(
+                    &scene.structure,
+                    &op.name,
+                    &tool_side.before,
+                    &matched,
+                    &tool_step,
+                    step_number,
+                    Some(&label),
+                )?;
+            }
+
             Some((index, instance, tool_step, matched))
         }
     };

@@ -2,13 +2,22 @@
 //!
 //! Matching is nearest-atom-within-tolerance on position and element, using the
 //! spatial grid [`AtomicStructure`] already maintains, so a step costs O(pattern
-//! size). Bonds take no part in matching: position plus element is sufficient on
-//! a lattice, and checking bonds would only add a way for a correct script to
-//! fail.
+//! size). Position and element find the atoms; **bonds and bond counts then
+//! verify that the atoms found are the ones the pattern was written about**.
+//!
+//! That second pass is [`check_pattern`], and it is one function with three
+//! call sites — the replay's [`match_before`] (target side and tool side alike)
+//! and the placement engine's two paths — which is what makes "a candidate is
+//! offerable if and only if the step it produces replays" a fact rather than a
+//! discipline. A script whose bonds do not hold was generated against a
+//! different workpiece, and saying so is the whole point: atomCAD is for
+//! atomically precise manufacturing, and a workpiece whose bond model is wrong
+//! is not a model of anything. See
+//! `doc/design_mechanosynth_pattern_checks.md` §2.
 
 use super::schema::{
-    BuildScript, DEFAULT_TOLERANCE, MechanosynthError, NoMatch, OpLibrary, Operation,
-    PATTERN_POSITION_EPSILON, Pattern, PatternElement, Step,
+    BondMismatch, BuildScript, DEFAULT_TOLERANCE, DegreeMismatch, MechanosynthError, NoMatch,
+    OpLibrary, Operation, PATTERN_POSITION_EPSILON, Pattern, PatternElement, Step,
 };
 use crate::atomic_constants::element_symbol;
 use crate::atomic_structure::{AtomicStructure, BondReference};
@@ -100,13 +109,175 @@ pub fn apply_step(
     ))
 }
 
+/// One way a matched pattern disagrees with the workpiece it matched.
+///
+/// Positional rather than named, so the one caller that has a step to name
+/// ([`match_before`]) turns it into an error while the two that do not — the
+/// placement engine's search and its tool check — turn it into a prune or a
+/// refusal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum PatternMismatch {
+    /// The matched atom of `id` has `found` bonds where the pattern says
+    /// `expected`.
+    Degree {
+        id: i64,
+        expected: u32,
+        found: usize,
+    },
+    /// The pair `(a, b)` carries `found` where the pattern says `expected`;
+    /// `None` on either side is "no bond". The bond list is **closed-world**
+    /// within a pattern, so an unlisted pair states `expected: None`.
+    Bond {
+        a: i64,
+        b: i64,
+        expected: Option<u8>,
+        found: Option<u8>,
+    },
+}
+
+/// The second pass of a match: the pattern's bonds and bond counts against the
+/// workpiece atoms the first pass found.
+///
+/// Two predicates, stated once for the whole engine:
+///
+/// - **`deg`**: a `before` atom stating one requires the matched workpiece atom
+///   to have exactly that many bonds, of any order, counting each bond once.
+/// - **closed-world bonds**: for every *pair* of pattern atoms, a listed bond
+///   means the workpiece has a bond of that order between the matched atoms, and
+///   an unlisted pair means the workpiece has none. Bonds to atoms **outside**
+///   the pattern are not constrained — that is what `deg` is for.
+///
+/// `skip_degree_of` exempts one pattern id from the degree check. The placement
+/// engine passes the clicked atom's role there: a wrong degree on the atom the
+/// user actually clicked is a coverage report to show, not a dead branch to
+/// prune. Replay has no click and passes `None`.
+///
+/// Returns the first disagreement, `None` when the match holds.
+pub(super) fn check_pattern(
+    workpiece: &AtomicStructure,
+    pattern: &Pattern,
+    matched: &FxHashMap<i64, u32>,
+    skip_degree_of: Option<i64>,
+) -> Option<PatternMismatch> {
+    for pattern_atom in &pattern.atoms {
+        let Some(expected) = pattern_atom.deg else {
+            continue;
+        };
+        if skip_degree_of == Some(pattern_atom.id) {
+            continue;
+        }
+        let Some(atom) = matched
+            .get(&pattern_atom.id)
+            .and_then(|atom_id| workpiece.get_atom(*atom_id))
+        else {
+            continue;
+        };
+        let found = atom.bonds.len();
+        if found != expected as usize {
+            return Some(PatternMismatch::Degree {
+                id: pattern_atom.id,
+                expected,
+                found,
+            });
+        }
+    }
+
+    for (i, first) in pattern.atoms.iter().enumerate() {
+        for second in &pattern.atoms[i + 1..] {
+            let (Some(&a), Some(&b)) = (matched.get(&first.id), matched.get(&second.id)) else {
+                continue;
+            };
+            let key = (first.id.min(second.id), first.id.max(second.id));
+            let expected = pattern
+                .bonds
+                .iter()
+                .find(|bond| bond.key() == key)
+                .map(|bond| bond.order);
+            let found = workpiece.bond_order_between(a, b);
+            if expected != found {
+                return Some(PatternMismatch::Bond {
+                    a: key.0,
+                    b: key.1,
+                    expected,
+                    found,
+                });
+            }
+        }
+    }
+
+    None
+}
+
+/// Turns a [`PatternMismatch`] into the error a *step* fails with.
+fn name_mismatch(
+    workpiece: &AtomicStructure,
+    matched: &FxHashMap<i64, u32>,
+    mismatch: PatternMismatch,
+    op_name: &str,
+    step: &Step,
+    step_number: usize,
+    participant_of: Option<&dyn Fn(u32) -> String>,
+) -> MechanosynthError {
+    let label = |pattern_id: i64| {
+        participant_of
+            .zip(matched.get(&pattern_id))
+            .map(|(label, atom_id)| label(*atom_id))
+            .unwrap_or_default()
+    };
+    match mismatch {
+        PatternMismatch::Degree {
+            id,
+            expected,
+            found,
+        } => MechanosynthError::DegreeMismatch(Box::new(DegreeMismatch {
+            step: step_number,
+            op: op_name.to_string(),
+            t_x: step.t.x,
+            t_y: step.t.y,
+            t_z: step.t.z,
+            atom_id: id,
+            element: matched
+                .get(&id)
+                .and_then(|atom_id| workpiece.get_atom(*atom_id))
+                .map_or_else(
+                    || "?".to_string(),
+                    |atom| element_symbol(atom.atomic_number),
+                ),
+            expected,
+            found,
+            participant: label(id),
+        })),
+        PatternMismatch::Bond {
+            a,
+            b,
+            expected,
+            found,
+        } => MechanosynthError::BondMismatch(Box::new(BondMismatch {
+            step: step_number,
+            op: op_name.to_string(),
+            t_x: step.t.x,
+            t_y: step.t.y,
+            t_z: step.t.z,
+            a,
+            b,
+            expected,
+            found,
+            participant: label(a),
+        })),
+    }
+}
+
 /// Which workpiece atom each `before` atom of the pattern is, or the failure
 /// that says why one of them is nowhere.
 ///
-/// Split from [`apply_matched`] because the scene replay has a question to ask
-/// **between** the two: which participant did the match land in? A step that
-/// matched across a workpiece and a reservoir has no answer and must leave the
-/// scene untouched, so the check cannot come after the rewrite.
+/// The positional pass alone: [`match_before`] is this followed by
+/// [`check_pattern`], and the two are separable because the scene replay has a
+/// question to ask **between** them — which participant did the match land in?
+/// A tool side that matched a base atom, or a step that matched across a
+/// workpiece and a reservoir, is better reported as exactly that than as the
+/// bond mismatch it necessarily also is: "the tool side of tool 0 matched the C
+/// of base" says why, where "the bond between atoms 1 and 2 is missing" only
+/// says what.
 ///
 /// Every `before` atom must match a distinct workpiece atom. With ideal
 /// coordinates the tolerance is far below half a bond length, so ambiguity does
@@ -114,7 +285,7 @@ pub fn apply_step(
 ///
 /// `participant_of` labels the atom a failed match found instead, so the
 /// message can say where it looked. `None` for a caller with no scene.
-pub(super) fn match_before(
+pub(super) fn match_positions(
     workpiece: &AtomicStructure,
     op_name: &str,
     before: &Pattern,
@@ -162,8 +333,69 @@ pub(super) fn match_before(
     Ok(matched)
 }
 
+/// The pattern's bonds and bond counts against the atoms
+/// [`match_positions`] found, as the error a *step* fails with.
+///
+/// Split out so the scene replay can run its participant checks first; the
+/// predicate itself is [`check_pattern`], shared with the placement engine.
+pub(super) fn verify_pattern(
+    workpiece: &AtomicStructure,
+    op_name: &str,
+    before: &Pattern,
+    matched: &FxHashMap<i64, u32>,
+    step: &Step,
+    step_number: usize,
+    participant_of: Option<&dyn Fn(u32) -> String>,
+) -> Result<(), MechanosynthError> {
+    match check_pattern(workpiece, before, matched, None) {
+        None => Ok(()),
+        Some(mismatch) => Err(name_mismatch(
+            workpiece,
+            matched,
+            mismatch,
+            op_name,
+            step,
+            step_number,
+            participant_of,
+        )),
+    }
+}
+
+/// [`match_positions`] followed by [`verify_pattern`]: the whole match, for a
+/// caller with no scene to interpose a participant check.
+pub(super) fn match_before(
+    workpiece: &AtomicStructure,
+    op_name: &str,
+    before: &Pattern,
+    step: &Step,
+    step_number: usize,
+    tolerance: f64,
+    participant_of: Option<&dyn Fn(u32) -> String>,
+) -> Result<FxHashMap<i64, u32>, MechanosynthError> {
+    let matched = match_positions(
+        workpiece,
+        op_name,
+        before,
+        step,
+        step_number,
+        tolerance,
+        participant_of,
+    )?;
+    verify_pattern(
+        workpiece,
+        op_name,
+        before,
+        &matched,
+        step,
+        step_number,
+        participant_of,
+    )?;
+    Ok(matched)
+}
+
 /// Rewrites `workpiece` by the `before` → `after` difference, given the match
-/// [`match_before`] found. Infallible: every way of failing was the match.
+/// [`match_before`] found. Infallible: every way of failing was the match,
+/// bonds and bond counts included.
 pub(super) fn apply_matched(
     workpiece: &mut AtomicStructure,
     before: &Pattern,
@@ -285,9 +517,12 @@ pub(super) fn apply_matched(
     }
 
     // --- 4. bonds -----------------------------------------------------------
-    // Bond rules apply to the surviving atoms only and are idempotent: a bond
-    // whose endpoint was deleted went with the atom, deleting an absent bond is
-    // a no-op, and adding one the workpiece already has just sets its order.
+    // Bond rules apply to the surviving atoms only. Since `/3` they are also
+    // never no-ops: the closed-world check in `match_before` has already
+    // established that every listed bond exists at the order the pattern states
+    // and that every unlisted pair does not, so "delete a bond that is not
+    // there" and "add one the workpiece already has" cannot occur — a step that
+    // would have done either failed to match.
     for key in before_bonds.keys() {
         if after_bonds.contains_key(key) {
             continue;

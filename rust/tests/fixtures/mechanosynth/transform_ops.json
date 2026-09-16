@@ -1,6 +1,6 @@
 {
   "comment": "One op that plants two markers on the local +x and +y axes, so a step's rotation is readable off the result.",
-  "format": "atomcad-msops/2",
+  "format": "atomcad-msops/3",
   "tools": [
     {
       "name": "probe",

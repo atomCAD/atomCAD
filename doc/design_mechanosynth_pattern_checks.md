@@ -1,7 +1,29 @@
 # Design: pattern checks in the mechanosynthesis engine — bonds, degree, anchors, steric clashes
 
-Status: **drafted and reviewed 2026-09-16**. Phase 0 (§8) implemented
-2026-09-16; Phases 1–4 and the out-of-repo generator work are not.
+Status: **drafted and reviewed 2026-09-16**. Phase 0 (§8) and Phase 1 (§12)
+implemented 2026-09-16; Phases 2–4 and the out-of-repo generator work are not.
+
+Two decisions Phase 1 had to make that this document did not anticipate, both
+recorded here rather than in the sections they touch:
+
+- **`deg` belongs on a `before` atom only**, and is a load error on an `after`
+  one: it is a statement about the workpiece a step *matches*, and on the
+  `after` side it would describe a structure that does not exist yet and that
+  the rewrite has already decided.
+- **The anchor frame-atom rule (§3.4) exempts an operation that changes
+  nothing.** Every atom of such an operation is a frame atom by the letter of
+  `is_frame_atom`, and "a click that places the reaction somewhere else" has no
+  meaning where there is no reaction to place. Likewise an operation whose
+  `before` is **empty** — a pure addition — has no atom to click, so the
+  `1..=before.atoms.len()` range is skipped and a stated `anchors` is refused.
+
+One ordering choice worth recording: at replay the **participant** checks
+(`StepOnTool`, `StepAcrossParticipants`, `ToolSideOffTool`) run *before* the
+pattern checks, so `match_before` is split into a positional pass and
+`verify_pattern` and the scene replay interposes between them. A tool side that
+matched a base atom necessarily fails the bond check too, and "the tool side of
+tool 0 matched the C of base" says *why* where "the bond between atoms 1 and 2
+is missing" only says *what*. `check_pattern` is still the one predicate.
 
 Extends `doc/design_mechanosynth_editor.md` (the placement engine and the offer
 popup), `doc/design_mechanosynth_tools.md` (the `/2` formats, tool sides) and
@@ -855,11 +877,21 @@ manual walkthrough item.
 | phase | what | touches |
 |---|---|---|
 | **0** | duplicate-candidate fix (§8) — **done** | `place.rs`, two tests |
-| **1** | `/3`: closed-world bonds, `deg`, `anchors`, `clash` in the schema and parser; the anchor role rule; load-time validation of §3.5; bond and degree checks in `match_before` and in the placement search and role rule; new error variants | `schema.rs`, `parse.rs`, `apply.rs`, `place.rs`, `scene.rs`, tests, guide "The two files" / "How a step is applied" |
+| **1** | `/3`: closed-world bonds, `deg`, `anchors`, `clash` in the schema and parser; the anchor role rule; load-time validation of §3.5; bond and degree checks in `match_before` and in the placement search and role rule; new error variants — **done** | `schema.rs`, `parse.rs`, `apply.rs`, `place.rs`, `scene.rs`, tests, guide "The two files" / "How a step is applied" |
 | **2** | steric check: `Contact`, `Refusal`, `offerable`, replay error; structure sanity in `build_scene` and the nodes | `place.rs`, `apply.rs`, `scene.rs`, `mechanosynth.rs`, `mechanosynth_edit.rs`, tests |
 | **3** | editor surfacing: `CandidateRow.blocked`, `OfferRow.blocked`, `choose` by candidate, API, popup (blocked candidates inline, fully blocked rows below the rule); guide "The offer popup" | `mechanosynth_edit_ops.rs`, `mechanosynth_edit_api.rs`, FRB codegen, `mechanosynth_offer_popup.dart` |
 | **4** | the guide page `op_libraries.md` and the move out of `atomic.md`; AGENTS pointers | docs |
 | **ext** | outside the repo, before Phase 1 lands: the generator writes `/3` — bonds among named atoms in both halves, `deg` as drawn, a frame atom off the plane for the precursor and the edge host, the format string; `anchors` only if an operation has primary atoms of different elements, which none in v3 has — and both libraries are regenerated and replayed | `mechanosynth/gen` |
+
+**Phase 1 brought two pieces of §5.2/§7 forward, because without them it would
+have shipped a broken invariant.** The clicked atom's degree refusal has to
+exist as soon as the degree check does, or `place` offers a candidate that
+`apply_step` refuses. So `Candidate::refusal` and `place::Refusal` exist now
+(with a `Degree` variant only — Phase 2 adds `Clash(Contact)`),
+`Applicability::offerable` already asks whether any candidate is unrefused, and
+`Applicability::blocked()` already returns the reason when none is. What Phase 2
+adds to them is the steric half: `Contact`, `Candidate::contact`, the
+`Refusal::Clash` variant and the blocked-last ranking of §7.
 
 Phase 1 breaks every existing library on purpose; the generator change is the
 pre-condition, and the diamond and silicon runs are the regression on it. The

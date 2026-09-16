@@ -138,7 +138,7 @@ fn library_error(text: &str) -> String {
 /// A `/2` library with one `tools` entry, wrapping whatever ops text is given.
 fn with_probe_tools(ops: &str) -> String {
     format!(
-        r#"{{ "format": "atomcad-msops/2",
+        r#"{{ "format": "atomcad-msops/3",
               "tools": [ {{ "name": "probe", "frame": [
                  {{ "tag": "apex", "pos": [0,0,0] }},
                  {{ "tag": "a", "pos": [1.45, 0, -3.17] }},
@@ -190,10 +190,16 @@ fn a_two_library_with_tools_and_tool_sides_loads() {
 }
 
 #[test]
-fn a_one_library_is_refused_naming_the_fix() {
-    let message = library_error(r#"{ "format": "atomcad-msops/1", "ops": [] }"#);
-    assert!(message.contains("atomcad-msops/2"), "{message}");
-    assert!(message.contains("atomcad-msops/1"), "{message}");
+fn an_older_library_is_refused_naming_the_fix() {
+    // `/2` as much as `/1`. The bond semantics of `/3` change the *meaning* of
+    // a pattern that lists no bonds — from "nothing is said" to "these atoms
+    // are not bonded" — so accepting a `/2` file would read an assertion into
+    // it that its author never made.
+    for older in ["atomcad-msops/1", "atomcad-msops/2"] {
+        let message = library_error(&format!(r#"{{ "format": "{older}", "ops": [] }}"#));
+        assert!(message.contains("atomcad-msops/3"), "{message}");
+        assert!(message.contains(older), "{message}");
+    }
 }
 
 #[test]
@@ -321,7 +327,7 @@ fn a_wildcard_on_an_added_tool_side_atom_is_rejected() {
 #[test]
 fn a_duplicate_tool_type_name_is_rejected() {
     let message = library_error(
-        r#"{ "format": "atomcad-msops/2",
+        r#"{ "format": "atomcad-msops/3",
              "tools": [ { "name": "probe", "frame": [
                  { "tag": "apex", "pos": [0,0,0] },
                  { "tag": "a", "pos": [1,0,-3] },
@@ -341,7 +347,7 @@ fn a_duplicate_tool_type_name_is_rejected() {
 #[test]
 fn an_empty_states_list_is_a_parse_error() {
     let message = library_error(
-        r#"{ "format": "atomcad-msops/2",
+        r#"{ "format": "atomcad-msops/3",
              "tools": [ { "name": "probe", "states": [], "frame": [
                  { "tag": "apex", "pos": [0,0,0] },
                  { "tag": "a", "pos": [1,0,-3] },
@@ -357,7 +363,7 @@ fn an_empty_states_list_is_a_parse_error() {
 fn every_frame_rule_is_a_parse_error_naming_the_type() {
     let frame = |entries: &str| {
         library_error(&format!(
-            r#"{{ "format": "atomcad-msops/2",
+            r#"{{ "format": "atomcad-msops/3",
                   "tools": [ {{ "name": "probe", "frame": [ {entries} ] }} ],
                   "ops": [] }}"#
         ))
@@ -410,7 +416,7 @@ fn every_frame_rule_is_a_parse_error_naming_the_type() {
 #[test]
 fn a_type_name_that_is_also_a_frame_tag_is_rejected() {
     let message = library_error(
-        r#"{ "format": "atomcad-msops/2",
+        r#"{ "format": "atomcad-msops/3",
              "tools": [ { "name": "apex", "frame": [
                  { "tag": "apex", "pos": [0,0,0] },
                  { "tag": "a", "pos": [1,0,-3] },
@@ -1504,6 +1510,129 @@ fn the_geometric_check_runs_even_when_the_label_agrees() {
     assert_eq!(tool.state.as_deref(), Some("charged"));
     let reason = tool.reason.clone().unwrap_or_default();
     assert!(reason.contains("nearest"), "{reason}");
+}
+
+#[test]
+fn a_tool_side_bond_failure_names_the_tool_at_both_ends() {
+    // The pattern checks run on the tool side exactly as on the target side,
+    // because the replay's match is the same function and the placement-side
+    // tool check calls the same predicate. Here the tool side claims a bond
+    // between the apex and the handle carbon 2.66 Å away, which the fixture tip
+    // does not have — a tool the library was not computed for.
+    let lib = parse_library(&apex_bond_library(), "apex_bond.json").expect("parses");
+    let base = molecule("tool_scene.xyz");
+    let one = BuildScript {
+        file: "one".to_string(),
+        tolerance: None,
+        steps: vec![Step::new("habst", DVec3::new(0.0, 0.0, 1.09))],
+    };
+
+    let message = error_of(&base, &[], &[tip()], &lib, &one, -1).to_string();
+    assert!(message.contains("step 1"), "{message}");
+    assert!(message.contains("pattern atoms 1 and 2"), "{message}");
+    assert!(message.contains("carry none"), "{message}");
+    assert!(
+        message.contains("habst_tool"),
+        "the failure names the tool: {message}"
+    );
+
+    // …and the same tool is dimmed at placement, through `tool_readiness`'s own
+    // nearest-atom loop rather than through the replay's match.
+    let scene = replay_plain(&base, &[], &[tip()], &lib, &empty_script(), 0).expect("binds");
+    let atom = workpiece_hydrogen(&scene.structure);
+    let rows = applicable_ops(
+        &scene.structure,
+        &lib,
+        atom,
+        resolve_tolerance(&lib),
+        Some(&scene.bindings),
+    );
+    let habst = rows.iter().find(|row| row.op == "habst").expect("offered");
+    let tool = habst.tool.as_ref().expect("a tip row carries one");
+    assert!(!tool.ready, "reason: {:?}", tool.reason);
+    assert!(!habst.offerable());
+    let reason = tool.reason.clone().unwrap_or_default();
+    assert!(reason.contains("habst_tool"), "{reason}");
+    assert!(reason.contains("missing"), "{reason}");
+}
+
+#[test]
+fn a_tool_side_degree_failure_names_the_tool() {
+    // `deg` on a tool-side atom is the same predicate as on the target side.
+    // Here the apex must carry exactly two bonds — its ethynyl partner and a
+    // cargo it does not have — and the wired tip's apex carries one.
+    let lib = parse_library(&apex_degree_library(), "apex_deg.json").expect("parses");
+    let base = molecule("tool_scene.xyz");
+    let one = BuildScript {
+        file: "one".to_string(),
+        tolerance: None,
+        steps: vec![Step::new("habst", DVec3::new(0.0, 0.0, 1.09))],
+    };
+
+    let message = error_of(&base, &[], &[tip()], &lib, &one, -1).to_string();
+    assert!(message.contains("step 1"), "{message}");
+    assert!(message.contains("needs 2 bond(s)"), "{message}");
+    assert!(message.contains("has 1"), "{message}");
+    assert!(
+        message.contains("habst_tool"),
+        "the failure names the tool: {message}"
+    );
+}
+
+/// `tool_ops.json`'s abstraction, with the tool side's own `before` altered so
+/// that exactly one pattern check fails on the fixture tip.
+///
+/// `after_atoms` repeats the same atoms without any `deg`, which is a
+/// `before`-only key.
+fn tool_side_library(before_atoms: &str, after_atoms: &str, before_bonds: &str) -> String {
+    format!(
+        r#"{{
+      "format": "atomcad-msops/3",
+      "tools": [
+        {{ "name": "habst_tool", "states": ["charged", "spent"], "frame": [
+          {{ "tag": "apex", "pos": [0.0, 0.0, 0.0] }},
+          {{ "tag": "a", "pos": [1.45, 0.0, -3.17] }},
+          {{ "tag": "b", "pos": [-0.725, 1.2557, -3.17] }},
+          {{ "tag": "c", "pos": [-0.725, -1.2557, -3.17] }} ] }}
+      ],
+      "ops": [
+        {{
+          "name": "habst",
+          "method": "tip",
+          "before": {{ "atoms": [ {{ "id": 1, "el": "H", "pos": [0.0, 0.0, 0.0] }} ], "bonds": [] }},
+          "after": {{ "atoms": [], "bonds": [] }},
+          "tool": {{
+            "type": "habst_tool",
+            "from": "charged",
+            "to": "spent",
+            "before": {{ "atoms": [{before_atoms}], "bonds": [{before_bonds}] }},
+            "after": {{ "atoms": [{after_atoms},
+              {{ "id": 9, "el": "H", "pos": [0.0, 0.0, 1.06] }}
+            ], "bonds": [{before_bonds}, [1, 9]] }}
+          }}
+        }}
+      ]
+    }}"#
+    )
+}
+
+/// A tool side claiming a bond between the apex and the handle carbon, which
+/// sit 2.66 Å apart and are not bonded.
+fn apex_bond_library() -> String {
+    let atoms = r#"{ "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] },
+                    { "id": 2, "el": "C", "pos": [0.0, 0.0, -2.66] }"#;
+    tool_side_library(atoms, atoms, "[1, 2]")
+}
+
+/// A tool side requiring the apex to carry two bonds, which it does not.
+fn apex_degree_library() -> String {
+    tool_side_library(
+        r#"{ "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0], "deg": 2 },
+           { "id": 2, "el": "C", "pos": [0.0, 0.0, -1.21] }"#,
+        r#"{ "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] },
+           { "id": 2, "el": "C", "pos": [0.0, 0.0, -1.21] }"#,
+        "[1, 2]",
+    )
 }
 
 #[test]

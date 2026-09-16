@@ -1,15 +1,27 @@
 {
   "comment": "Synthetic library for the placement-engine tests: one operation per shape the engine has to distinguish. place_workpiece.xyz hosts every one of them exactly.",
-  "format": "atomcad-msops/2",
+  "format": "atomcad-msops/3",
   "tools": [
     {
       "name": "probe",
       "note": "A bare probe: the whole tool model these fixtures need. Every operation here is `tip` and carries an empty tool side, so the frame is declared and never bound - none of these fixtures wires a tool.",
       "frame": [
-        { "tag": "apex", "pos": [0.0, 0.0, 0.0] },
-        { "tag": "a",    "pos": [1.45, 0.0, -3.17] },
-        { "tag": "b",    "pos": [-0.73, 1.26, -3.17] },
-        { "tag": "c",    "pos": [-0.73, -1.26, -3.17] }
+        {
+          "tag": "apex",
+          "pos": [0.0, 0.0, 0.0]
+        },
+        {
+          "tag": "a",
+          "pos": [1.45, 0.0, -3.17]
+        },
+        {
+          "tag": "b",
+          "pos": [-0.73, 1.26, -3.17]
+        },
+        {
+          "tag": "c",
+          "pos": [-0.73, -1.26, -3.17]
+        }
       ]
     }
   ],
@@ -17,18 +29,16 @@
     {
       "name": "habst",
       "method": "tip",
-      "tool": { "type": "probe" },
+      "tool": {
+        "type": "probe"
+      },
       "note": "one-atom abstraction: the whole pattern is the atom to remove",
       "before": {
         "atoms": [
           {
             "id": 1,
             "el": "H",
-            "pos": [
-              0.0,
-              0.0,
-              0.0
-            ]
+            "pos": [0.0, 0.0, 0.0]
           }
         ],
         "bonds": []
@@ -41,18 +51,16 @@
     {
       "name": "recolor",
       "method": "tip",
-      "tool": { "type": "probe" },
+      "tool": {
+        "type": "probe"
+      },
       "note": "one-atom rewrite that adds nothing off the origin, so nothing needs orienting",
       "before": {
         "atoms": [
           {
             "id": 1,
             "el": "Si",
-            "pos": [
-              0.0,
-              0.0,
-              0.0
-            ]
+            "pos": [0.0, 0.0, 0.0]
           }
         ],
         "bonds": []
@@ -62,11 +70,7 @@
           {
             "id": 1,
             "el": "Ge",
-            "pos": [
-              0.0,
-              0.0,
-              0.0
-            ]
+            "pos": [0.0, 0.0, 0.0]
           }
         ],
         "bonds": []
@@ -75,249 +79,157 @@
     {
       "name": "hdon_frame",
       "method": "tip",
-      "tool": { "type": "probe" },
+      "tool": {
+        "type": "probe"
+      },
       "note": "donation oriented by three wildcard frame atoms on a tetrahedral host",
       "before": {
         "atoms": [
           {
             "id": 1,
             "el": "Si",
-            "pos": [
-              0.0,
-              0.0,
-              0.0
-            ]
+            "pos": [0.0, 0.0, 0.0]
           },
           {
             "id": 2,
             "el": "*",
-            "pos": [
-              1.357928,
-              1.357928,
-              1.357928
-            ]
+            "pos": [1.357928, 1.357928, 1.357928]
           },
           {
             "id": 3,
             "el": "*",
-            "pos": [
-              1.357928,
-              -1.357928,
-              -1.357928
-            ]
+            "pos": [1.357928, -1.357928, -1.357928]
           },
           {
             "id": 4,
             "el": "*",
-            "pos": [
-              -1.357928,
-              1.357928,
-              -1.357928
-            ]
+            "pos": [-1.357928, 1.357928, -1.357928]
           }
         ],
-        "bonds": []
+        "bonds": [[1, 2], [1, 3], [1, 4]]
       },
       "after": {
         "atoms": [
           {
             "id": 1,
             "el": "Si",
-            "pos": [
-              0.0,
-              0.0,
-              0.0
-            ]
+            "pos": [0.0, 0.0, 0.0]
           },
           {
             "id": 2,
             "el": "*",
-            "pos": [
-              1.357928,
-              1.357928,
-              1.357928
-            ]
+            "pos": [1.357928, 1.357928, 1.357928]
           },
           {
             "id": 3,
             "el": "*",
-            "pos": [
-              1.357928,
-              -1.357928,
-              -1.357928
-            ]
+            "pos": [1.357928, -1.357928, -1.357928]
           },
           {
             "id": 4,
             "el": "*",
-            "pos": [
-              -1.357928,
-              1.357928,
-              -1.357928
-            ]
+            "pos": [-1.357928, 1.357928, -1.357928]
           },
           {
             "id": 5,
             "el": "H",
-            "pos": [
-              -0.854478,
-              -0.854478,
-              0.854478
-            ]
+            "pos": [-0.854478, -0.854478, 0.854478]
           }
         ],
-        "bonds": [
-          [
-            1,
-            5
-          ]
-        ]
+        "bonds": [[1, 2], [1, 3], [1, 4], [1, 5]]
       }
     },
     {
       "name": "hdon_frame_wide",
       "method": "tip",
-      "tool": { "type": "probe" },
+      "tool": {
+        "type": "probe"
+      },
       "note": "the same donation in a second host environment: back-bonds 0.12 A longer",
       "before": {
         "atoms": [
           {
             "id": 1,
             "el": "Si",
-            "pos": [
-              0.0,
-              0.0,
-              0.0
-            ]
+            "pos": [0.0, 0.0, 0.0]
           },
           {
             "id": 2,
             "el": "*",
-            "pos": [
-              1.42721,
-              1.42721,
-              1.42721
-            ]
+            "pos": [1.42721, 1.42721, 1.42721]
           },
           {
             "id": 3,
             "el": "*",
-            "pos": [
-              1.42721,
-              -1.42721,
-              -1.42721
-            ]
+            "pos": [1.42721, -1.42721, -1.42721]
           },
           {
             "id": 4,
             "el": "*",
-            "pos": [
-              -1.42721,
-              1.42721,
-              -1.42721
-            ]
+            "pos": [-1.42721, 1.42721, -1.42721]
           }
         ],
-        "bonds": []
+        "bonds": [[1, 2], [1, 3], [1, 4]]
       },
       "after": {
         "atoms": [
           {
             "id": 1,
             "el": "Si",
-            "pos": [
-              0.0,
-              0.0,
-              0.0
-            ]
+            "pos": [0.0, 0.0, 0.0]
           },
           {
             "id": 2,
             "el": "*",
-            "pos": [
-              1.42721,
-              1.42721,
-              1.42721
-            ]
+            "pos": [1.42721, 1.42721, 1.42721]
           },
           {
             "id": 3,
             "el": "*",
-            "pos": [
-              1.42721,
-              -1.42721,
-              -1.42721
-            ]
+            "pos": [1.42721, -1.42721, -1.42721]
           },
           {
             "id": 4,
             "el": "*",
-            "pos": [
-              -1.42721,
-              1.42721,
-              -1.42721
-            ]
+            "pos": [-1.42721, 1.42721, -1.42721]
           },
           {
             "id": 5,
             "el": "H",
-            "pos": [
-              -0.854478,
-              -0.854478,
-              0.854478
-            ]
+            "pos": [-0.854478, -0.854478, 0.854478]
           }
         ],
-        "bonds": [
-          [
-            1,
-            5
-          ]
-        ]
+        "bonds": [[1, 2], [1, 3], [1, 4], [1, 5]]
       }
     },
     {
       "name": "hdon_uniq",
       "method": "tip",
-      "tool": { "type": "probe" },
+      "tool": {
+        "type": "probe"
+      },
       "note": "frame atoms of three different elements, so the assignment is unique",
       "before": {
         "atoms": [
           {
             "id": 1,
             "el": "Si",
-            "pos": [
-              0.0,
-              0.0,
-              0.0
-            ]
+            "pos": [0.0, 0.0, 0.0]
           },
           {
             "id": 2,
             "el": "C",
-            "pos": [
-              1.357928,
-              1.357928,
-              1.357928
-            ]
+            "pos": [1.357928, 1.357928, 1.357928]
           },
           {
             "id": 3,
             "el": "N",
-            "pos": [
-              1.357928,
-              -1.357928,
-              -1.357928
-            ]
+            "pos": [1.357928, -1.357928, -1.357928]
           },
           {
             "id": 4,
             "el": "O",
-            "pos": [
-              -1.357928,
-              1.357928,
-              -1.357928
-            ]
+            "pos": [-1.357928, 1.357928, -1.357928]
           }
         ],
         "bonds": []
@@ -327,72 +239,45 @@
           {
             "id": 1,
             "el": "Si",
-            "pos": [
-              0.0,
-              0.0,
-              0.0
-            ]
+            "pos": [0.0, 0.0, 0.0]
           },
           {
             "id": 2,
             "el": "C",
-            "pos": [
-              1.357928,
-              1.357928,
-              1.357928
-            ]
+            "pos": [1.357928, 1.357928, 1.357928]
           },
           {
             "id": 3,
             "el": "N",
-            "pos": [
-              1.357928,
-              -1.357928,
-              -1.357928
-            ]
+            "pos": [1.357928, -1.357928, -1.357928]
           },
           {
             "id": 4,
             "el": "O",
-            "pos": [
-              -1.357928,
-              1.357928,
-              -1.357928
-            ]
+            "pos": [-1.357928, 1.357928, -1.357928]
           },
           {
             "id": 5,
             "el": "H",
-            "pos": [
-              -0.854478,
-              -0.854478,
-              0.854478
-            ]
+            "pos": [-0.854478, -0.854478, 0.854478]
           }
         ],
-        "bonds": [
-          [
-            1,
-            5
-          ]
-        ]
+        "bonds": [[1, 5]]
       }
     },
     {
       "name": "hdon_bare",
       "method": "tip",
-      "tool": { "type": "probe" },
+      "tool": {
+        "type": "probe"
+      },
       "note": "a donation that names no frame atoms: the orientation has to be derived from the host's bonds",
       "before": {
         "atoms": [
           {
             "id": 1,
             "el": "Si",
-            "pos": [
-              0.0,
-              0.0,
-              0.0
-            ]
+            "pos": [0.0, 0.0, 0.0]
           }
         ],
         "bonds": []
@@ -402,54 +287,35 @@
           {
             "id": 1,
             "el": "Si",
-            "pos": [
-              0.0,
-              0.0,
-              0.0
-            ]
+            "pos": [0.0, 0.0, 0.0]
           },
           {
             "id": 2,
             "el": "H",
-            "pos": [
-              0.0,
-              0.0,
-              1.48
-            ]
+            "pos": [0.0, 0.0, 1.48]
           }
         ],
-        "bonds": [
-          [
-            1,
-            2
-          ]
-        ]
+        "bonds": [[1, 2]]
       }
     },
     {
       "name": "dimerize",
       "method": "tip",
-      "tool": { "type": "probe" },
+      "tool": {
+        "type": "probe"
+      },
       "note": "two bare Si pulled together; symmetric, so either atom can be the clicked one",
       "before": {
         "atoms": [
           {
             "id": 1,
             "el": "Si",
-            "pos": [
-              0.0,
-              0.0,
-              0.0
-            ]
+            "pos": [0.0, 0.0, 0.0]
           },
           {
             "id": 2,
             "el": "Si",
-            "pos": [
-              3.5,
-              0.0,
-              0.0
-            ]
+            "pos": [3.5, 0.0, 0.0]
           }
         ],
         "bonds": []
@@ -459,54 +325,35 @@
           {
             "id": 1,
             "el": "Si",
-            "pos": [
-              0.55,
-              0.0,
-              0.0
-            ]
+            "pos": [0.55, 0.0, 0.0]
           },
           {
             "id": 2,
             "el": "Si",
-            "pos": [
-              2.95,
-              0.0,
-              0.0
-            ]
+            "pos": [2.95, 0.0, 0.0]
           }
         ],
-        "bonds": [
-          [
-            1,
-            2
-          ]
-        ]
+        "bonds": [[1, 2]]
       }
     },
     {
       "name": "bridge",
       "method": "tip",
-      "tool": { "type": "probe" },
+      "tool": {
+        "type": "probe"
+      },
       "note": "bond only: the two atoms stay exactly where they are and one bond appears between them",
       "before": {
         "atoms": [
           {
             "id": 1,
             "el": "Si",
-            "pos": [
-              0.0,
-              0.0,
-              0.0
-            ]
+            "pos": [0.0, 0.0, 0.0]
           },
           {
             "id": 2,
             "el": "Si",
-            "pos": [
-              3.5,
-              0.0,
-              0.0
-            ]
+            "pos": [3.5, 0.0, 0.0]
           }
         ],
         "bonds": []
@@ -516,54 +363,35 @@
           {
             "id": 1,
             "el": "Si",
-            "pos": [
-              0.0,
-              0.0,
-              0.0
-            ]
+            "pos": [0.0, 0.0, 0.0]
           },
           {
             "id": 2,
             "el": "Si",
-            "pos": [
-              3.5,
-              0.0,
-              0.0
-            ]
+            "pos": [3.5, 0.0, 0.0]
           }
         ],
-        "bonds": [
-          [
-            1,
-            2
-          ]
-        ]
+        "bonds": [[1, 2]]
       }
     },
     {
       "name": "asym_add",
       "method": "tip",
-      "tool": { "type": "probe" },
+      "tool": {
+        "type": "probe"
+      },
       "note": "two Si, but only atom 1 reacts: the clicked atom is always the one that gets the H",
       "before": {
         "atoms": [
           {
             "id": 1,
             "el": "Si",
-            "pos": [
-              0.0,
-              0.0,
-              0.0
-            ]
+            "pos": [0.0, 0.0, 0.0]
           },
           {
             "id": 2,
             "el": "Si",
-            "pos": [
-              3.5,
-              0.0,
-              0.0
-            ]
+            "pos": [3.5, 0.0, 0.0]
           }
         ],
         "bonds": []
@@ -573,400 +401,254 @@
           {
             "id": 1,
             "el": "Si",
-            "pos": [
-              0.0,
-              0.0,
-              0.0
-            ]
+            "pos": [0.0, 0.0, 0.0]
           },
           {
             "id": 2,
             "el": "Si",
-            "pos": [
-              3.5,
-              0.0,
-              0.0
-            ]
+            "pos": [3.5, 0.0, 0.0]
           },
           {
             "id": 3,
             "el": "H",
-            "pos": [
-              0.0,
-              0.0,
-              1.48
-            ]
+            "pos": [0.0, 0.0, 1.48]
           }
         ],
-        "bonds": [
-          [
-            1,
-            3
-          ]
-        ]
+        "bonds": [[1, 3]]
       }
     },
     {
       "name": "planar3",
       "method": "tip",
-      "tool": { "type": "probe" },
+      "tool": {
+        "type": "probe"
+      },
       "note": "planar before and planar after: the mirrored fit reaches the same after state",
       "before": {
         "atoms": [
           {
             "id": 1,
             "el": "C",
-            "pos": [
-              0.0,
-              0.0,
-              0.0
-            ]
+            "pos": [0.0, 0.0, 0.0]
           },
           {
             "id": 2,
             "el": "O",
-            "pos": [
-              1.4,
-              0.0,
-              0.0
-            ]
+            "pos": [1.4, 0.0, 0.0]
           },
           {
             "id": 3,
             "el": "N",
-            "pos": [
-              0.0,
-              1.4,
-              0.0
-            ]
+            "pos": [0.0, 1.4, 0.0]
           }
         ],
-        "bonds": []
+        "bonds": [[1, 2], [1, 3]]
       },
       "after": {
         "atoms": [
           {
             "id": 1,
             "el": "C",
-            "pos": [
-              0.0,
-              0.0,
-              0.0
-            ]
+            "pos": [0.0, 0.0, 0.0]
           },
           {
             "id": 2,
             "el": "O",
-            "pos": [
-              1.4,
-              0.0,
-              0.0
-            ]
+            "pos": [1.4, 0.0, 0.0]
           },
           {
             "id": 3,
             "el": "N",
-            "pos": [
-              0.0,
-              1.4,
-              0.0
-            ]
+            "pos": [0.0, 1.4, 0.0]
           },
           {
             "id": 4,
             "el": "H",
-            "pos": [
-              -0.77,
-              -0.77,
-              0.0
-            ]
+            "pos": [-0.77, -0.77, 0.0]
           }
         ],
-        "bonds": [
-          [
-            1,
-            4
-          ]
-        ]
+        "bonds": [[1, 2], [1, 3], [1, 4]]
       }
     },
     {
       "name": "land4",
       "method": "tip",
-      "tool": { "type": "probe" },
+      "tool": {
+        "type": "probe"
+      },
       "note": "planar before, out-of-plane after: the two sides of the plane are two reactions",
       "before": {
         "atoms": [
           {
             "id": 1,
             "el": "Si",
-            "pos": [
-              0.0,
-              0.0,
-              0.0
-            ]
+            "pos": [0.0, 0.0, 0.0]
           },
           {
             "id": 2,
             "el": "C",
-            "pos": [
-              2.0,
-              0.0,
-              0.0
-            ]
+            "pos": [2.0, 0.0, 0.0]
           },
           {
             "id": 3,
             "el": "N",
-            "pos": [
-              0.0,
-              2.2,
-              0.0
-            ]
+            "pos": [0.0, 2.2, 0.0]
           },
           {
             "id": 4,
             "el": "O",
-            "pos": [
-              1.5,
-              1.5,
-              0.0
-            ]
+            "pos": [1.5, 1.5, 0.0]
           }
         ],
-        "bonds": []
+        "bonds": [[1, 2], [2, 4]]
       },
       "after": {
         "atoms": [
           {
             "id": 1,
             "el": "Si",
-            "pos": [
-              0.0,
-              0.0,
-              0.0
-            ]
+            "pos": [0.0, 0.0, 0.0]
           },
           {
             "id": 2,
             "el": "C",
-            "pos": [
-              2.0,
-              0.0,
-              0.0
-            ]
+            "pos": [2.0, 0.0, 0.0]
           },
           {
             "id": 3,
             "el": "N",
-            "pos": [
-              0.0,
-              2.2,
-              0.0
-            ]
+            "pos": [0.0, 2.2, 0.0]
           },
           {
             "id": 4,
             "el": "O",
-            "pos": [
-              1.5,
-              1.5,
-              0.0
-            ]
+            "pos": [1.5, 1.5, 0.0]
           },
           {
             "id": 5,
             "el": "H",
-            "pos": [
-              0.8,
-              0.8,
-              1.2
-            ]
+            "pos": [0.8, 0.8, 1.2]
           }
         ],
-        "bonds": [
-          [
-            1,
-            5
-          ]
-        ]
+        "bonds": [[1, 2], [2, 4], [1, 5]]
       }
     },
     {
       "name": "land4_chiral",
       "method": "tip",
-      "tool": { "type": "probe" },
+      "tool": {
+        "type": "probe"
+      },
       "note": "planar before, out-of-plane after: the two sides of the plane are two reactions",
       "before": {
         "atoms": [
           {
             "id": 1,
             "el": "Si",
-            "pos": [
-              0.0,
-              0.0,
-              0.0
-            ]
+            "pos": [0.0, 0.0, 0.0]
           },
           {
             "id": 2,
             "el": "C",
-            "pos": [
-              2.0,
-              0.0,
-              0.0
-            ]
+            "pos": [2.0, 0.0, 0.0]
           },
           {
             "id": 3,
             "el": "N",
-            "pos": [
-              0.0,
-              2.2,
-              0.0
-            ]
+            "pos": [0.0, 2.2, 0.0]
           },
           {
             "id": 4,
             "el": "O",
-            "pos": [
-              1.5,
-              1.5,
-              0.0
-            ]
+            "pos": [1.5, 1.5, 0.0]
           }
         ],
-        "bonds": []
+        "bonds": [[1, 2], [2, 4]]
       },
       "after": {
         "atoms": [
           {
             "id": 1,
             "el": "Si",
-            "pos": [
-              0.0,
-              0.0,
-              0.0
-            ]
+            "pos": [0.0, 0.0, 0.0]
           },
           {
             "id": 2,
             "el": "C",
-            "pos": [
-              2.0,
-              0.0,
-              0.0
-            ]
+            "pos": [2.0, 0.0, 0.0]
           },
           {
             "id": 3,
             "el": "N",
-            "pos": [
-              0.0,
-              2.2,
-              0.0
-            ]
+            "pos": [0.0, 2.2, 0.0]
           },
           {
             "id": 4,
             "el": "O",
-            "pos": [
-              1.5,
-              1.5,
-              0.0
-            ]
+            "pos": [1.5, 1.5, 0.0]
           },
           {
             "id": 5,
             "el": "H",
-            "pos": [
-              0.8,
-              0.8,
-              1.2
-            ]
+            "pos": [0.8, 0.8, 1.2]
           }
         ],
-        "bonds": [
-          [
-            1,
-            5
-          ]
-        ]
+        "bonds": [[1, 2], [2, 4], [1, 5]]
       },
       "chiral": true
     },
     {
       "name": "habst_pair",
       "method": "tip",
-      "tool": { "type": "probe" },
-      "note": "abstraction that names its host: the H admits only role 2, the C only role 1",
+      "tool": {
+        "type": "probe"
+      },
+      "note": "abstraction that names its host: both atoms are anchors, so either click places it - the C as id 1, the H as id 2",
       "before": {
         "atoms": [
           {
             "id": 1,
             "el": "C",
-            "pos": [
-              0.0,
-              0.0,
-              0.0
-            ]
+            "pos": [0.0, 0.0, 0.0]
           },
           {
             "id": 2,
             "el": "H",
-            "pos": [
-              0.629312,
-              0.629312,
-              0.629312
-            ]
+            "pos": [0.629312, 0.629312, 0.629312]
           }
         ],
-        "bonds": [
-          [
-            1,
-            2
-          ]
-        ]
+        "bonds": [[1, 2]]
       },
       "after": {
         "atoms": [
           {
             "id": 1,
             "el": "C",
-            "pos": [
-              0.0,
-              0.0,
-              0.0
-            ]
+            "pos": [0.0, 0.0, 0.0]
           }
         ],
         "bonds": []
-      }
+      },
+      "anchors": 2
     },
     {
       "name": "off_origin_all",
       "method": "tip",
-      "tool": { "type": "probe" },
-      "note": "no before atom sits at the origin, so the role falls to the smallest eligible id",
+      "tool": {
+        "type": "probe"
+      },
+      "note": "no before atom sits at the origin, so the fit's t is not the clicked atom's position",
       "before": {
         "atoms": [
           {
-            "id": 2,
+            "id": 1,
             "el": "Si",
-            "pos": [
-              5.0,
-              0.0,
-              0.0
-            ]
+            "pos": [5.0, 0.0, 0.0]
           },
           {
-            "id": 3,
+            "id": 2,
             "el": "Si",
-            "pos": [
-              8.5,
-              0.0,
-              0.0
-            ]
+            "pos": [8.5, 0.0, 0.0]
           }
         ],
         "bonds": []
@@ -974,39 +656,22 @@
       "after": {
         "atoms": [
           {
+            "id": 1,
+            "el": "Si",
+            "pos": [5.0, 0.0, 0.0]
+          },
+          {
             "id": 2,
             "el": "Si",
-            "pos": [
-              5.0,
-              0.0,
-              0.0
-            ]
+            "pos": [8.5, 0.0, 0.0]
           },
           {
             "id": 3,
-            "el": "Si",
-            "pos": [
-              8.5,
-              0.0,
-              0.0
-            ]
-          },
-          {
-            "id": 4,
             "el": "H",
-            "pos": [
-              5.0,
-              0.0,
-              1.48
-            ]
+            "pos": [5.0, 0.0, 1.48]
           }
         ],
-        "bonds": [
-          [
-            2,
-            4
-          ]
-        ]
+        "bonds": [[1, 3]]
       }
     }
   ]

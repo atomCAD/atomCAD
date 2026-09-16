@@ -1103,10 +1103,67 @@ element (so one `habst` serves carbon, germanium and silicon hosts), and in
 `after` on a kept atom it leaves the element alone. It is rejected on an atom
 that only `after` has — an added atom needs a real element.
 
+**Within a pattern the bond list is a complete statement.** For every *pair* of
+atoms the pattern names:
+
+- a listed bond `[a, b, order]` means the workpiece has a bond between those two
+  atoms, of that order;
+- an **unlisted pair means the workpiece has no bond between them**.
+
+Either way a disagreement is a refusal — the step does not apply, and the
+interactive tool does not offer it. Bonds to atoms *outside* the pattern are not
+constrained; `deg` (below) is what speaks about those.
+
+So a pattern lists **every bond that exists among the atoms it names**, in
+`before` and in `after` alike: a donation lists the host's bonds to its frame
+atoms in both halves, a dimer manipulation lists the dimer bond, a tool side
+lists the apex's bonds to its legs. Two consequences are worth stating because
+they are the point. An operation that bonds two atoms — `bridge` — lists no bond
+between them in `before`, which asserts they are apart, so offering it on a pair
+that is *already* bonded is impossible and needs no rule of its own. And a
+deletion cannot silently do nothing: a step that deletes a bond is a step whose
+`before` says the bond is there.
+
+A `before` atom may also state **`deg`**, the number of bonds the matched
+workpiece atom must have, of any order, counting each bond once:
+
+```json
+{ "id": 1, "el": "*", "pos": [0, 0, 0], "deg": 3 }
+```
+
+Absent is "don't care", so a library matched against a structure whose bonds
+were never perceived — an `.xyz` import — can leave it out and lose only this
+check. Write it **as drawn**: the number of bonds the atom had in the workpiece
+the pattern was computed from. It is what says "this donation goes on a
+three-coordinate host, not on a bulk atom": the bond list speaks only about
+pairs *inside* the pattern, so a bulk atom with three listed neighbours and one
+unlisted one satisfies every bond rule, and `deg: 3` is what rejects it. `deg`
+belongs on a `before` atom; on an `after` atom it is a load error.
+
+An operation may state **`anchors`**, how many of its leading `before` ids are
+atoms a user may click:
+
+```json
+{ "name": "c_insert", "anchors": 2, "method": "tip", ... }
+```
+
+The default is **1** — id 1, the atom at the origin — which makes the origin
+convention the rule rather than a preference: an operation is offered *only* on
+the atoms it acts on, and a click on a frame atom does not list it. Raise it
+only when a reaction has primary atoms of **different elements** and a user
+might reasonably click either. A symmetric pair of the same element needs
+nothing: a click on either already plays id 1. Every anchor must be an atom the
+operation actually touches; naming a frame atom is a load error.
+
+A library may state a top-level **`clash`**, its own steric factor, in the same
+spirit as its `tolerance`. It is read today and acted on by a later release; the
+engine's default is 0.9 of a covalent-radius sum.
+
 ```json
 {
-  "format": "atomcad-msops/2",
+  "format": "atomcad-msops/3",
   "tolerance": 0.3,
+  "clash": 0.9,
   "tools": [
     {
       "name": "habst_tool",
@@ -1124,7 +1181,8 @@ that only `after` has — an added atom needs a real element.
     {
       "name": "habst",
       "method": "tip",
-      "before": { "atoms": [ {"id": 1, "el": "H", "pos": [0, 0, 0]} ], "bonds": [] },
+      "before": { "atoms": [ {"id": 1, "el": "H", "pos": [0, 0, 0], "deg": 1} ],
+                  "bonds": [] },
       "after":  { "atoms": [], "bonds": [] },
       "tool": {
         "type": "habst_tool",
@@ -1225,9 +1283,24 @@ reaction, so it lives on the operation and the step is down to `op`, `t`, `r`,
 `note`, `phase`, `layer` and `site`. A `method` key in a build file is ignored
 like any other unknown key.
 
-**Both `/2` formats replace `/1` outright.** A `/1` file is refused with a
-message saying so: both files are written by generators, and the fix is to
-regenerate them rather than to keep two readers.
+**Each library format replaces the one before it outright.** A `/1` or a `/2`
+file is refused with a message saying so; the build-script format is still
+`atomcad-msbuild/2` and is unchanged. Libraries are written by generators, and
+the fix is to regenerate them rather than to keep two readers — and for `/3`
+that is not merely convenience: closed-world bonds change what a pattern *means*
+when it lists none, from "nothing is said" to "these atoms are not bonded", so
+reading a `/2` file as `/3` would put an assertion in it that its author never
+made.
+
+**Warnings the loader raises.** None of these refuses a file; `ops_library`
+lists them, each naming its operation.
+
+| Warning | What it means |
+|---|---|
+| id 1 is not at the origin, or the pattern has no id 1 | the origin convention, below |
+| `before` spans at most a plane while `after` places an atom off it | the fit cannot tell the pattern's up from its down, so the reaction can be placed upside down into the bulk. Name a frame atom off the plane |
+| two atoms of one pattern closer than 1.1 bond lengths with no bond between them | either the bond is missing from the file, or the library really means they are apart — in which case the workpiece had better agree |
+| `deg` plus what the operation bonds, minus what it breaks, exceeds the element's covalent valence | the operation would over-coordinate the atom. A warning rather than an error because the element table is a short one, and a metal apex is exactly what it cannot cover |
 
 The **library's** `tolerance` is the match tolerance for every replay against
 it; a library that states none gets the default, **0.05 Å**. That is tight on
@@ -1250,7 +1323,8 @@ By convention the `before` atom with **id 1 sits at the origin** and is the atom
 the operation acts on. A library that breaks the convention still loads and
 still replays; `ops_library` shows a warning naming the operation. Following it
 is what makes "click the atom the operation acts on" true for every operation
-in a library.
+in a library — and since `anchors` defaults to 1, an operation whose `before`
+has no id 1 is one the interactive tool never offers, whatever you click.
 
 **Frame atoms.** A one-atom `before` pattern carries no orientation, so a
 donation that must land in a particular direction lists the host's bonded
@@ -1288,10 +1362,34 @@ coordinate, not by hand.
 
 Each `before` atom is matched to the nearest atom within the tolerance
 that has a compatible element; every `before` atom must match a *distinct* atom.
-Matching ignores bonds entirely — position plus element is sufficient on a
-lattice, and checking bonds would only add a way for a correct script to fail.
-A `before` pattern's bonds therefore exist only to express deletions and bond
-order changes.
+Position and element **find** the atoms; the pattern's bonds and bond counts
+then **verify** that the atoms found are the ones the pattern was written about:
+
+- every `deg` a `before` atom states must be the number of bonds its matched
+  atom actually has;
+- every bond the pattern lists must be there, at that order, and every pair it
+  leaves unlisted must have no bond at all (see [*The two
+  files*](#the-two-files)).
+
+Both are checked here and at the interactive tool, for the target side and for
+the tool side alike, so a step the editor offers is a step that replays. A
+disagreement names the step, the operation, the transform and the atoms:
+
+```
+mechanosynth: step 41 (si_donate_site @ (7.13, 0.00, 4.42)) — before atom id 1
+needs 3 bond(s), the matched Si has 4 (in base)
+
+mechanosynth: step 12 (bridge @ (2.44, 2.44, 0.00)) — pattern atoms 1 and 2
+should carry no bond, and carry one of order 1 (in base)
+```
+
+This is a change from earlier releases, which matched on position and element
+alone. A build whose bonds do not hold was generated against a different
+workpiece, and a replay that tolerated it would produce a wrong model in
+silence — which, for a tool whose purpose is atomically precise manufacturing,
+is the failure worth refusing. A structure whose bonds were never perceived —
+an `.xyz` import — wants an [`infer_bonds`](#infer_bonds) node before the
+`mechanosynth` node, or a library that states no `deg` and lists no bonds.
 
 **The match is over the whole scene, and then confined to one participant.**
 With tools or reservoirs wired, everything is one structure — that is what makes
@@ -1571,13 +1669,25 @@ Choosing one places the step exactly: the rigid transform comes from fitting the
 operation's `before` pattern onto the atoms that are actually there, so no
 coordinate is typed and no orientation is guessed.
 
-Which pattern atom your click stands for is decided by a fixed rule, never
-asked: the operation's **origin atom** if its element admits your click, else
-the eligible pattern atom with the smallest id. For a library that follows the
-origin convention (§*The two files*) that makes "click the atom the operation
-acts on" the whole instruction. The rule is strict — if the fit fails with your
-atom in that role, you get a message naming the role rather than the reaction
-silently landing on a neighbour.
+**"Click the atom the operation acts on" is literally the rule.** An operation
+is offered only on its **anchors** — by default the one atom at the origin of
+its pattern, or the first `anchors` ids where the library says so (§*The two
+files*). Click any other atom of its pattern, a frame atom especially, and the
+operation is simply not in the list: a frame atom is one the operation names to
+fix its orientation and does not touch, so clicking it is not a statement about
+where the reaction should happen.
+
+Which anchor your click stands for is then decided by a fixed rule, never asked:
+the one at the origin if its element admits your click, else the anchor with the
+smallest id. The rule is strict — if the fit fails with your atom in that role,
+you get a message naming the role rather than the reaction silently landing on a
+neighbour.
+
+An operation can also be listed **dimmed with a reason instead of a residual**,
+when the geometry fits but the atom you clicked is not the host it wants: "`…`
+needs a host with 3 bond(s); the clicked atom has 4". That is the library's
+coverage report on your click — the reaction is real, the site is not — and the
+fix is a variant for that environment, not a looser gate.
 
 An operation can fit a site in more than one way — a dimerization with two bare
 neighbours is two different reactions — and then the candidates are offered
@@ -1881,9 +1991,10 @@ are not the same write: Browse (or typing a path) points the node at a file,
 while Reload re-reads the file it is already pointing at, for when it changed on
 disk. There is no file watching.
 
-A library that breaks the origin convention (§*The two files*) loads with a
-warning naming the operation, shown in the panel and in the problems list. A
-parse failure is an error on the output pin naming the file and the offending
+A library that breaks the origin convention, names a bond it probably means to
+have, or would over-coordinate an atom (§*The two files*) loads with a warning
+naming the operation, shown in the panel and in the problems list. A parse
+failure is an error on the output pin naming the file and the offending
 operation.
 
 ## build_script

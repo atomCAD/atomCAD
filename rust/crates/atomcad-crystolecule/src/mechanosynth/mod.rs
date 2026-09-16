@@ -11,10 +11,12 @@
 //! Three properties are load-bearing and easy to erode:
 //!
 //! - **Coordinates, not graphs.** Matching is nearest-atom-within-tolerance on
-//!   position and element. No subgraph isomorphism, no bond-pattern matching,
-//!   no chemical perception — and matching deliberately ignores bonds, so a
-//!   `before` pattern's bonds exist only to express deletions and order
-//!   changes.
+//!   position and element. No subgraph isomorphism, no chemical perception.
+//!   What the coordinates find, the pattern's **bonds** and **bond counts**
+//!   then verify: within a pattern the bond list is closed-world, and a
+//!   `before` atom may state its own bond count as `deg`. Neither searches; both
+//!   are O(1) checks on atoms already found. See
+//!   `doc/design_mechanosynth_pattern_checks.md`.
 //! - **Ideal geometry.** Added atoms land exactly where the operation says.
 //!   Nothing here relaxes anything, so coordinates stay ideal, tolerances stay
 //!   tight, and every intermediate state is deterministic. Wire `relax`
@@ -51,7 +53,7 @@ pub use parse::{
 };
 pub use place::{
     Applicability, Candidate, EXACT_FIT_RESIDUAL, GhostAtom, GhostBond, GhostBondKind, GhostKind,
-    NEAR_MISS_FACTOR, PlaceStats, RESIDUAL_RANK_EPSILON, ToolReadiness, applicable_ops,
+    NEAR_MISS_FACTOR, PlaceStats, RESIDUAL_RANK_EPSILON, Refusal, ToolReadiness, applicable_ops,
     applicable_ops_where, place, place_with_stats, preview_atoms, preview_bonds,
 };
 pub use pose::{ToolPose, tool_pose};
@@ -60,8 +62,10 @@ pub use scene::{
     replay_scene, replay_scene_partial, replay_steps,
 };
 pub use schema::{
-    APEX_FRAME_TAG, Approach, BUILD_FORMAT, BuildScript, DEFAULT_TOLERANCE, FRAME_COPLANAR_EPSILON,
-    FrameAtom, LIBRARY_FORMAT, MechanosynthError, Method, NO_LAYER, NO_SITE, NoMatch,
-    ORIGIN_PATTERN_ATOM_ID, OpLibrary, Operation, PATTERN_POSITION_EPSILON, Pattern, PatternAtom,
-    PatternBond, PatternElement, Step, ToolSide, ToolType,
+    APEX_FRAME_TAG, Approach, BUILD_FORMAT, BondMismatch, BuildScript, CLASH_BLOCK,
+    CLOSE_PAIR_WARNING_FACTOR, DEFAULT_ANCHORS, DEFAULT_TOLERANCE, DegreeMismatch,
+    FRAME_COPLANAR_EPSILON, FrameAtom, LIBRARY_FORMAT, MAX_PATTERN_DEGREE, MechanosynthError,
+    Method, NO_LAYER, NO_SITE, NoMatch, ORIGIN_PATTERN_ATOM_ID, OpLibrary, Operation,
+    PATTERN_POSITION_EPSILON, Pattern, PatternAtom, PatternBond, PatternElement, Step, ToolSide,
+    ToolType,
 };

@@ -1,6 +1,6 @@
 {
   "comment": "Both ways of breaking the origin convention, in one file. Loads with warnings, never an error: a foreign library that does not follow the convention still replays and still places.",
-  "format": "atomcad-msops/2",
+  "format": "atomcad-msops/3",
   "tools": [
     {
       "name": "probe",

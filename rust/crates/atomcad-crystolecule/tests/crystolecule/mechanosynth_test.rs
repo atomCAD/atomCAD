@@ -10,10 +10,10 @@
 
 use atomcad_crystolecule::atomic_structure::{AtomicStructure, BondReference};
 use atomcad_crystolecule::mechanosynth::{
-    BuildScript, DEFAULT_TOLERANCE, HighlightTags, Mismatch, NO_LAYER, NO_SITE, OpLibrary,
-    PatternElement, Step, apply_step, compare_structures, describe_mismatches, load_build_script,
-    load_library, parse_build_script, parse_library, replay, resolve_tolerance, steps_applied,
-    validate_script_ops,
+    BuildScript, CLASH_BLOCK, DEFAULT_ANCHORS, DEFAULT_TOLERANCE, HighlightTags,
+    MAX_PATTERN_DEGREE, Mismatch, NO_LAYER, NO_SITE, OpLibrary, PatternElement, Step, apply_step,
+    compare_structures, describe_mismatches, load_build_script, load_library, parse_build_script,
+    parse_library, replay, resolve_tolerance, steps_applied, validate_script_ops,
 };
 use atomcad_test_support::fixture_path;
 use glam::{DMat3, DVec3};
@@ -221,10 +221,12 @@ fn script_error(json: &str) -> String {
 
 #[test]
 fn library_rejects_a_wrong_format() {
-    let message = library_error(r#"{ "format": "atomcad-msops/1", "ops": [] }"#);
-    assert!(message.contains("ops.json"), "{message}");
-    assert!(message.contains("format"), "{message}");
-    assert!(message.contains("atomcad-msops/2"), "{message}");
+    for older in ["atomcad-msops/1", "atomcad-msops/2"] {
+        let message = library_error(&format!(r#"{{ "format": "{older}", "ops": [] }}"#));
+        assert!(message.contains("ops.json"), "{message}");
+        assert!(message.contains("format"), "{message}");
+        assert!(message.contains("atomcad-msops/3"), "{message}");
+    }
 }
 
 #[test]
@@ -238,7 +240,7 @@ fn script_rejects_a_wrong_format() {
 #[test]
 fn library_rejects_a_duplicate_operation_name() {
     let message = library_error(
-        r#"{ "format": "atomcad-msops/2", "ops": [
+        r#"{ "format": "atomcad-msops/3", "ops": [
              { "name": "habst", "method": "spontaneous", "before": { "atoms": [], "bonds": [] }, "after": { "atoms": [], "bonds": [] } },
              { "name": "habst", "method": "spontaneous", "before": { "atoms": [], "bonds": [] }, "after": { "atoms": [], "bonds": [] } }
            ] }"#,
@@ -251,7 +253,7 @@ fn library_rejects_a_duplicate_operation_name() {
 #[test]
 fn library_rejects_a_duplicate_id_within_a_pattern() {
     let message = library_error(
-        r#"{ "format": "atomcad-msops/2", "ops": [ { "name": "habst", "method": "spontaneous",
+        r#"{ "format": "atomcad-msops/3", "ops": [ { "name": "habst", "method": "spontaneous",
              "before": { "atoms": [ { "id": 1, "el": "H", "pos": [0,0,0] },
                                     { "id": 1, "el": "C", "pos": [0,0,1] } ], "bonds": [] },
              "after": { "atoms": [], "bonds": [] } } ] }"#,
@@ -265,7 +267,7 @@ fn library_rejects_a_duplicate_id_within_a_pattern() {
 #[test]
 fn library_rejects_a_bond_to_an_unknown_id() {
     let message = library_error(
-        r#"{ "format": "atomcad-msops/2", "ops": [ { "name": "hdon", "method": "spontaneous",
+        r#"{ "format": "atomcad-msops/3", "ops": [ { "name": "hdon", "method": "spontaneous",
              "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] } ], "bonds": [] },
              "after": { "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] } ], "bonds": [ [1, 5] ] } } ] }"#,
     );
@@ -278,7 +280,7 @@ fn library_rejects_a_bond_to_an_unknown_id() {
 #[test]
 fn library_rejects_a_self_bond() {
     let message = library_error(
-        r#"{ "format": "atomcad-msops/2", "ops": [ { "name": "hdon", "method": "spontaneous",
+        r#"{ "format": "atomcad-msops/3", "ops": [ { "name": "hdon", "method": "spontaneous",
              "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] } ], "bonds": [] },
              "after": { "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] } ], "bonds": [ [1, 1] ] } } ] }"#,
     );
@@ -291,7 +293,7 @@ fn library_rejects_a_self_bond() {
 #[test]
 fn library_rejects_an_unsupported_bond_order() {
     let message = library_error(
-        r#"{ "format": "atomcad-msops/2", "ops": [ { "name": "dimerp", "method": "spontaneous",
+        r#"{ "format": "atomcad-msops/3", "ops": [ { "name": "dimerp", "method": "spontaneous",
              "before": { "atoms": [], "bonds": [] },
              "after": { "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] },
                                    { "id": 2, "el": "C", "pos": [0,0,1.3] } ],
@@ -305,7 +307,7 @@ fn library_rejects_an_unsupported_bond_order() {
 #[test]
 fn library_rejects_a_wildcard_on_an_added_atom() {
     let message = library_error(
-        r#"{ "format": "atomcad-msops/2", "ops": [ { "name": "hdon", "method": "spontaneous",
+        r#"{ "format": "atomcad-msops/3", "ops": [ { "name": "hdon", "method": "spontaneous",
              "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] } ], "bonds": [] },
              "after": { "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] },
                                    { "id": 2, "el": "*", "pos": [0,0,1.09] } ], "bonds": [] } } ] }"#,
@@ -320,7 +322,7 @@ fn library_rejects_a_wildcard_on_an_added_atom() {
 #[test]
 fn library_rejects_an_unknown_element_symbol() {
     let message = library_error(
-        r#"{ "format": "atomcad-msops/2", "ops": [ { "name": "habst", "method": "spontaneous",
+        r#"{ "format": "atomcad-msops/3", "ops": [ { "name": "habst", "method": "spontaneous",
              "before": { "atoms": [ { "id": 1, "el": "Xx", "pos": [0,0,0] } ], "bonds": [] },
              "after": { "atoms": [], "bonds": [] } } ] }"#,
     );
@@ -378,6 +380,379 @@ fn a_step_naming_an_unknown_operation_is_rejected_against_the_library() {
         .expect_err("unknown op")
         .to_string();
     assert!(message.contains("no_such_op"), "{message}");
+}
+
+// ============================================================================
+// The `/3` pattern checks: load-time validation
+// (doc/design_mechanosynth_pattern_checks.md §3)
+// ============================================================================
+
+/// A one-operation `/3` library around the two pattern bodies given, so a test
+/// says only what it is about.
+fn one_op(before: &str, after: &str, extra: &str) -> String {
+    format!(
+        r#"{{ "format": "atomcad-msops/3", "ops": [ {{
+             "name": "probe_op", "method": "spontaneous", {extra}
+             "before": {before},
+             "after": {after}
+           }} ] }}"#
+    )
+}
+
+#[test]
+fn library_rejects_a_duplicate_bond() {
+    // The bond list is closed-world, so one pair means one thing; two entries
+    // for it would be two statements, and picking either would be a guess.
+    for pair in ["[1, 2]", "[2, 1]"] {
+        let message = library_error(&one_op(
+            &format!(
+                r#"{{ "atoms": [ {{ "id": 1, "el": "C", "pos": [0,0,0] }},
+                                  {{ "id": 2, "el": "C", "pos": [0,0,1.54] }} ],
+                      "bonds": [ [1, 2], {pair} ] }}"#
+            ),
+            r#"{ "atoms": [], "bonds": [] }"#,
+            "",
+        ));
+        assert!(message.contains("ops.json"), "{message}");
+        assert!(message.contains("operation 'probe_op'"), "{message}");
+        assert!(message.contains("before pattern"), "{message}");
+        assert!(message.contains("listed twice"), "{message}");
+    }
+}
+
+#[test]
+fn library_rejects_a_deg_below_the_bonds_the_pattern_lists() {
+    // A pattern cannot list more bonds at an atom than the atom has.
+    let message = library_error(&one_op(
+        r#"{ "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0], "deg": 1 },
+                        { "id": 2, "el": "C", "pos": [0,0,1.54] },
+                        { "id": 3, "el": "C", "pos": [0,1.54,0] } ],
+              "bonds": [ [1, 2], [1, 3] ] }"#,
+        r#"{ "atoms": [], "bonds": [] }"#,
+        "",
+    ));
+    assert!(message.contains("operation 'probe_op'"), "{message}");
+    assert!(message.contains("atom id 1"), "{message}");
+    assert!(message.contains("\"deg\" is 1"), "{message}");
+    assert!(message.contains("2 bond(s)"), "{message}");
+}
+
+#[test]
+fn library_rejects_a_deg_outside_the_range_anything_can_carry() {
+    for deg in ["9", "-1", "1.5", "\"three\""] {
+        let message = library_error(&one_op(
+            &format!(
+                r#"{{ "atoms": [ {{ "id": 1, "el": "C", "pos": [0,0,0], "deg": {deg} }} ] }}"#
+            ),
+            r#"{ "atoms": [], "bonds": [] }"#,
+            "",
+        ));
+        assert!(message.contains("operation 'probe_op'"), "{message}");
+        assert!(message.contains("\"deg\""), "{message}");
+        assert!(
+            message.contains(&MAX_PATTERN_DEGREE.to_string()),
+            "{message}"
+        );
+    }
+
+    // The boundaries themselves are accepted: 0 is a bare atom, 8 is the widest
+    // thing anyone has proposed (a bcc tungsten apex).
+    for deg in [0, MAX_PATTERN_DEGREE] {
+        parse_library(
+            &one_op(
+                &format!(
+                    r#"{{ "atoms": [ {{ "id": 1, "el": "C", "pos": [0,0,0], "deg": {deg} }} ] }}"#
+                ),
+                r#"{ "atoms": [], "bonds": [] }"#,
+                "",
+            ),
+            "ops.json",
+        )
+        .unwrap_or_else(|e| panic!("deg {deg} should be accepted: {e}"));
+    }
+}
+
+#[test]
+fn library_rejects_anchors_out_of_range_or_naming_a_frame_atom() {
+    let two_atoms = r#"{ "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] },
+                                    { "id": 2, "el": "H", "pos": [0,0,1.09] } ],
+                         "bonds": [ [1, 2] ] }"#;
+    let abstraction = r#"{ "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] } ],
+                           "bonds": [] }"#;
+
+    for anchors in ["0", "3", "\"two\""] {
+        let message = library_error(&one_op(
+            two_atoms,
+            abstraction,
+            &format!(r#""anchors": {anchors},"#),
+        ));
+        assert!(message.contains("operation 'probe_op'"), "{message}");
+        assert!(message.contains("anchors"), "{message}");
+    }
+
+    // 2 is in range and both atoms react, so it is accepted.
+    let lib = parse_library(
+        &one_op(two_atoms, abstraction, r#""anchors": 2,"#),
+        "ops.json",
+    )
+    .expect("both atoms of an abstraction react");
+    assert_eq!(lib.get("probe_op").expect("op").anchors, 2);
+
+    // A **frame atom** as an anchor is the case the rule exists to remove: a
+    // click on an atom the operation does not touch would place the reaction
+    // somewhere else. Here id 2 is kept, unmoved and in no bond change.
+    let message = library_error(&one_op(
+        r#"{ "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] },
+                        { "id": 2, "el": "H", "pos": [0,0,1.09] } ],
+              "bonds": [] }"#,
+        r#"{ "atoms": [ { "id": 1, "el": "N", "pos": [0,0,0] },
+                        { "id": 2, "el": "H", "pos": [0,0,1.09] } ],
+              "bonds": [] }"#,
+        r#""anchors": 2,"#,
+    ));
+    assert!(message.contains("atom id 2"), "{message}");
+    assert!(message.contains("does not touch it"), "{message}");
+
+    // The default of 1 is what turns the origin convention into the rule.
+    let lib = parse_library(&one_op(two_atoms, abstraction, ""), "ops.json").expect("parses");
+    assert_eq!(lib.get("probe_op").expect("op").anchors, DEFAULT_ANCHORS);
+    assert_eq!(DEFAULT_ANCHORS, 1);
+}
+
+/// Every warning a `/3` library can carry, for the tests below.
+fn warnings_of(text: &str) -> Vec<String> {
+    parse_library(text, "ops.json")
+        .expect("a warning never refuses a file")
+        .warnings
+}
+
+#[test]
+fn a_planar_frame_whose_after_leaves_the_plane_is_a_warning() {
+    // A rectangle has an in-plane two-fold axis, so a *proper* rotation maps
+    // its atoms onto themselves with everything the operation places on the
+    // other side. That is the upside-down chemisorbed precursor of the design's
+    // §1, and the cure is a frame atom off the plane.
+    let planar = r#"{ "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] },
+                                 { "id": 2, "el": "N", "pos": [2.2,0,0] },
+                                 { "id": 3, "el": "O", "pos": [0,2.2,0] } ],
+                      "bonds": [] }"#;
+    let off_plane = r#"{ "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] },
+                                    { "id": 2, "el": "N", "pos": [2.2,0,0] },
+                                    { "id": 3, "el": "O", "pos": [0,2.2,0] },
+                                    { "id": 4, "el": "H", "pos": [0,0,1.09] } ],
+                         "bonds": [ [1, 4] ] }"#;
+    let in_plane = r#"{ "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] },
+                                   { "id": 2, "el": "N", "pos": [2.2,0,0] },
+                                   { "id": 3, "el": "O", "pos": [0,2.2,0] },
+                                   { "id": 4, "el": "H", "pos": [-0.77,-0.77,0] } ],
+                        "bonds": [ [1, 4] ] }"#;
+
+    let warnings = warnings_of(&one_op(planar, off_plane, ""));
+    let planar_warning = warnings
+        .iter()
+        .find(|w| w.contains("up from its down"))
+        .unwrap_or_else(|| panic!("expected a planar-frame warning, got {warnings:?}"));
+    assert!(
+        planar_warning.contains("operation 'probe_op'"),
+        "{planar_warning}"
+    );
+
+    // An addition that stays in the plane is determined exactly, so it is not
+    // a warning…
+    assert!(
+        !warnings_of(&one_op(planar, in_plane, ""))
+            .iter()
+            .any(|w| w.contains("up from its down"))
+    );
+
+    // …and neither is a **one-atom** `before`, whose orientation comes from the
+    // bond-derived fallback by design rather than by oversight.
+    assert!(
+        !warnings_of(&one_op(
+            r#"{ "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] } ], "bonds": [] }"#,
+            r#"{ "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] },
+                            { "id": 2, "el": "H", "pos": [0,0,1.09] } ],
+                  "bonds": [ [1, 2] ] }"#,
+            "",
+        ))
+        .iter()
+        .any(|w| w.contains("up from its down"))
+    );
+}
+
+#[test]
+fn an_unbonded_close_pair_is_a_warning_naming_both_atoms() {
+    // Either the bond is missing from the file, or the library really means
+    // "these two are not bonded" — in which case the workpiece had better
+    // agree. Both readings are worth telling the author about; neither is worth
+    // refusing the file over.
+    let warnings = warnings_of(&one_op(
+        r#"{ "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] },
+                        { "id": 2, "el": "H", "pos": [0,0,1.09] } ],
+              "bonds": [] }"#,
+        r#"{ "atoms": [ { "id": 1, "el": "N", "pos": [0,0,0] },
+                        { "id": 2, "el": "H", "pos": [0,0,1.09] } ],
+              "bonds": [] }"#,
+        "",
+    ));
+    let close = warnings
+        .iter()
+        .find(|w| w.contains("no bond between them"))
+        .unwrap_or_else(|| panic!("expected a close-pair warning, got {warnings:?}"));
+    assert!(close.contains("operation 'probe_op'"), "{close}");
+    assert!(close.contains("before pattern"), "{close}");
+    assert!(
+        close.contains("1 (C)") && close.contains("2 (H)"),
+        "{close}"
+    );
+    assert!(close.contains("1.090"), "{close}");
+
+    // A pair at a real non-bonded distance says nothing, and neither does one
+    // the pattern bonds.
+    assert!(
+        !warnings_of(&one_op(
+            r#"{ "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] },
+                            { "id": 2, "el": "H", "pos": [0,0,3.0] } ],
+                  "bonds": [] }"#,
+            r#"{ "atoms": [], "bonds": [] }"#,
+            "",
+        ))
+        .iter()
+        .any(|w| w.contains("no bond between them"))
+    );
+    assert!(
+        !warnings_of(&one_op(
+            r#"{ "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] },
+                            { "id": 2, "el": "H", "pos": [0,0,1.09] } ],
+                  "bonds": [ [1, 2] ] }"#,
+            r#"{ "atoms": [], "bonds": [] }"#,
+            "",
+        ))
+        .iter()
+        .any(|w| w.contains("no bond between them"))
+    );
+}
+
+#[test]
+fn a_valence_the_step_would_overflow_is_a_warning() {
+    // `deg` plus what `after` adds at that id, minus what it removes, against
+    // the element's maximum covalent valence. A warning, not an error: the
+    // table is the one element-specific thing in the design, and the metals in
+    // a tool are why it has to stay open.
+    let warnings = warnings_of(&one_op(
+        r#"{ "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0], "deg": 4 } ], "bonds": [] }"#,
+        r#"{ "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] },
+                        { "id": 2, "el": "H", "pos": [0,0,1.09] } ],
+              "bonds": [ [1, 2] ] }"#,
+        "",
+    ));
+    let valence = warnings
+        .iter()
+        .find(|w| w.contains("can carry"))
+        .unwrap_or_else(|| panic!("expected a valence warning, got {warnings:?}"));
+    assert!(valence.contains("operation 'probe_op'"), "{valence}");
+    assert!(valence.contains("atom id 1"), "{valence}");
+    assert!(valence.contains("5 bonds"), "{valence}");
+
+    // The same donation onto a three-coordinate host is exactly what a real
+    // library does, and says nothing.
+    assert!(
+        !warnings_of(&one_op(
+            r#"{ "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0], "deg": 3 } ], "bonds": [] }"#,
+            r#"{ "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] },
+                            { "id": 2, "el": "H", "pos": [0,0,1.09] } ],
+                  "bonds": [ [1, 2] ] }"#,
+            "",
+        ))
+        .iter()
+        .any(|w| w.contains("can carry"))
+    );
+
+    // An element the table has no opinion about is left alone.
+    assert!(
+        !warnings_of(&one_op(
+            r#"{ "atoms": [ { "id": 1, "el": "W", "pos": [0,0,0], "deg": 8 } ], "bonds": [] }"#,
+            r#"{ "atoms": [ { "id": 1, "el": "W", "pos": [0,0,0] },
+                            { "id": 2, "el": "H", "pos": [0,0,1.7] } ],
+                  "bonds": [ [1, 2] ] }"#,
+            "",
+        ))
+        .iter()
+        .any(|w| w.contains("can carry"))
+    );
+}
+
+#[test]
+fn a_library_may_state_its_own_clash_factor() {
+    let stated = parse_library(
+        &one_op(
+            r#"{ "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] } ], "bonds": [] }"#,
+            r#"{ "atoms": [], "bonds": [] }"#,
+            "",
+        )
+        .replace(r#""ops":"#, r#""clash": 0.8, "ops":"#),
+        "ops.json",
+    )
+    .expect("parses");
+    assert_eq!(stated.clash, Some(0.8));
+    assert_eq!(stated.clash_factor(), 0.8);
+
+    // Absent is the engine's constant, argued from the two real libraries in
+    // §5.3 of the design.
+    let lib = library("methylate_ops.json");
+    assert_eq!(lib.clash, None);
+    assert_eq!(lib.clash_factor(), CLASH_BLOCK);
+    assert_eq!(CLASH_BLOCK, 0.9);
+
+    for bad in ["0", "-1", "\"tight\""] {
+        let message = library_error(
+            &one_op(
+                r#"{ "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] } ], "bonds": [] }"#,
+                r#"{ "atoms": [], "bonds": [] }"#,
+                "",
+            )
+            .replace(r#""ops":"#, &format!(r#""clash": {bad}, "ops":"#)),
+        );
+        assert!(message.contains("clash"), "{message}");
+    }
+}
+
+// ============================================================================
+// The `/3` pattern checks: replay
+// (doc/design_mechanosynth_pattern_checks.md §4.1)
+// ============================================================================
+
+#[test]
+fn a_deg_the_matched_atom_does_not_have_is_refused_naming_both_counts() {
+    // The closed-world bond rule speaks only about pairs *inside* the pattern,
+    // so a bulk atom with three listed neighbours and one unlisted one passes
+    // every bond check. `deg` is what rejects it.
+    let lib = parse_library(
+        &one_op(
+            r#"{ "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0], "deg": 3 } ], "bonds": [] }"#,
+            r#"{ "atoms": [ { "id": 1, "el": "C", "pos": [0,0,0] },
+                            { "id": 2, "el": "H", "pos": [0,0,1.09] } ],
+                  "bonds": [ [1, 2] ] }"#,
+            "",
+        ),
+        "ops.json",
+    )
+    .expect("parses");
+
+    // `methane()`'s carbon has four bonds, not three.
+    let mut s = methane();
+    let message = apply_error(&mut s, &lib, "probe_op", DVec3::ZERO, 0.3);
+    assert!(message.contains("step 1"), "{message}");
+    assert!(message.contains("probe_op"), "{message}");
+    assert!(message.contains("before atom id 1"), "{message}");
+    assert!(message.contains("needs 3 bond(s)"), "{message}");
+    assert!(message.contains("C has 4"), "{message}");
+    assert_eq!(s.get_num_of_atoms(), 5, "nothing was applied");
+
+    // The radical, with three, is the environment the pattern was written for.
+    let mut radical = methyl_radical();
+    apply_named(&mut radical, &lib, "probe_op", DVec3::ZERO, 0.3);
+    assert!(has_atom_at(&radical, DVec3::new(0.0, 0.0, 1.09)));
 }
 
 #[test]
@@ -547,30 +922,68 @@ fn bonds_are_added_deleted_and_reordered() {
     assert_eq!(s.get_num_of_bonds(), 1, "still one bond, not two");
 }
 
+/// The step `apply_named` would have run, as the error it fails with.
+fn apply_error(
+    workpiece: &mut AtomicStructure,
+    lib: &OpLibrary,
+    op_name: &str,
+    t: DVec3,
+    tolerance: f64,
+) -> String {
+    let op = lib.get(op_name).expect("op in fixture");
+    let step = Step::new(op_name, t);
+    apply_step(workpiece, op, &step, 1, tolerance)
+        .expect_err("this step should be refused")
+        .to_string()
+}
+
 #[test]
-fn deleting_an_absent_bond_is_a_no_op_and_a_before_bond_is_never_verified() {
+fn a_listed_bond_the_workpiece_does_not_have_is_refused() {
+    // The `/2` engine matched on position and element alone, so `before`'s
+    // bonds were read only to compute the rewrite and deleting an absent bond
+    // was a silent no-op. Under `/3` the bond list is a **statement about the
+    // workpiece**, and a step whose statement is false was generated against a
+    // different workpiece.
     let lib = library("id_rules_ops.json");
     let mut s = AtomicStructure::new();
     let a = s.add_atom(C, DVec3::ZERO);
     let b = s.add_atom(C, DVec3::new(0.0, 0.0, 1.54));
 
-    // `bond_delete`'s `before` claims a bond the workpiece does not have. The
-    // match must still succeed (matching ignores bonds) and the deletion is a
-    // no-op rather than an error.
-    apply_named(&mut s, &lib, "bond_delete", DVec3::ZERO, 0.3);
-    assert_eq!(s.get_num_of_bonds(), 0);
+    let message = apply_error(&mut s, &lib, "bond_delete", DVec3::ZERO, 0.3);
+    assert!(message.contains("step 1"), "{message}");
+    assert!(message.contains("bond_delete"), "{message}");
+    assert!(message.contains("1 and 2"), "{message}");
+    assert!(message.contains("carry none"), "{message}");
+    // Nothing was applied: the check runs before the first mutation.
     assert_eq!(s.get_num_of_atoms(), 2);
-    assert!(s.get_atom(a).is_some() && s.get_atom(b).is_some());
+    assert_eq!(s.get_num_of_bonds(), 0);
 
-    // A bond present in both patterns with the same order leaves the workpiece
-    // exactly as it found it.
+    // The same step on a workpiece that does have the bond replays.
+    s.add_bond(a, b, 1);
+    apply_named(&mut s, &lib, "bond_delete", DVec3::ZERO, 0.3);
+    assert_eq!(bond_order(&s, a, b), None);
+}
+
+#[test]
+fn a_listed_bond_of_the_wrong_order_is_refused_and_an_unlisted_pair_must_be_apart() {
+    let lib = library("id_rules_ops.json");
+    let mut s = AtomicStructure::new();
+    let a = s.add_atom(C, DVec3::ZERO);
+    let b = s.add_atom(C, DVec3::new(0.0, 0.0, 1.54));
+
+    // `bond_unchanged` states order 1; the workpiece has order 2.
     s.add_bond(a, b, 2);
-    apply_named(&mut s, &lib, "bond_unchanged", DVec3::ZERO, 0.3);
-    assert_eq!(
-        bond_order(&s, a, b),
-        Some(2),
-        "an unchanged bond is not rewritten to the pattern's order"
-    );
+    let message = apply_error(&mut s, &lib, "bond_unchanged", DVec3::ZERO, 0.3);
+    assert!(message.contains("order 1"), "{message}");
+    assert!(message.contains("order 2"), "{message}");
+    assert_eq!(bond_order(&s, a, b), Some(2), "nothing was applied");
+
+    // …and the closed-world half: `bond_add` lists no bond between its two
+    // atoms, which asserts there is none. A bonded pair is refused, which is
+    // what makes "bridging an already bridged pair" refuse itself with no rule
+    // of its own.
+    let message = apply_error(&mut s, &lib, "bond_add", DVec3::ZERO, 0.3);
+    assert!(message.contains("should carry no bond"), "{message}");
 }
 
 #[test]
@@ -1430,19 +1843,16 @@ fn a_kept_atom_with_a_bond_order_change_is_touched() {
 fn a_bond_rule_that_changes_nothing_touches_nobody() {
     let lib = library("id_rules_ops.json");
 
-    // `bond_delete`'s `before` claims a bond the workpiece does not have, so
-    // the deletion is a no-op — and a no-op is not a change.
-    let mut s = AtomicStructure::new();
-    s.add_atom(C, DVec3::ZERO);
-    s.add_atom(C, DVec3::new(0.0, 0.0, 1.54));
-    assert!(apply_named(&mut s, &lib, "bond_delete", DVec3::ZERO, 0.3).is_empty());
-
-    // A bond present in both patterns at the same order is not even a rule.
+    // A bond present in both patterns at the same order is not a rule at all,
+    // so neither endpoint is touched. Under `/3` the workpiece has to carry
+    // that bond at that order for the step to match in the first place, which
+    // is what makes the no-op the *only* remaining shape of this case.
     let mut s = AtomicStructure::new();
     let a = s.add_atom(C, DVec3::ZERO);
     let b = s.add_atom(C, DVec3::new(0.0, 0.0, 1.54));
-    s.add_bond(a, b, 2);
+    s.add_bond(a, b, 1);
     assert!(apply_named(&mut s, &lib, "bond_unchanged", DVec3::ZERO, 0.3).is_empty());
+    assert_eq!(bond_order(&s, a, b), Some(1));
 }
 
 #[test]
@@ -1539,7 +1949,7 @@ fn every_new_key_is_additive_so_an_old_build_still_reads_the_file() {
     // operations with the key removed — which is what "loads on an old build"
     // means in practice.
     let with_key = parse_library(
-        r#"{ "format": "atomcad-msops/2", "ops": [ {
+        r#"{ "format": "atomcad-msops/3", "ops": [ {
             "name": "handed", "method": "spontaneous", "chiral": true,
             "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0, 0, 0] } ] },
             "after":  { "atoms": [ { "id": 1, "el": "N", "pos": [0, 0, 0] } ] }
@@ -1548,7 +1958,7 @@ fn every_new_key_is_additive_so_an_old_build_still_reads_the_file() {
     )
     .expect("parses");
     let without_key = parse_library(
-        r#"{ "format": "atomcad-msops/2", "ops": [ {
+        r#"{ "format": "atomcad-msops/3", "ops": [ {
             "name": "handed", "method": "spontaneous",
             "before": { "atoms": [ { "id": 1, "el": "C", "pos": [0, 0, 0] } ] },
             "after":  { "atoms": [ { "id": 1, "el": "N", "pos": [0, 0, 0] } ] }

@@ -6,12 +6,13 @@
 //! rejection names the file, the operation or step, and the field.
 
 use super::schema::{
-    APEX_FRAME_TAG, Approach, BUILD_FORMAT, BuildScript, FRAME_COPLANAR_EPSILON, FrameAtom,
-    LIBRARY_FORMAT, MechanosynthError, Method, NO_LAYER, NO_SITE, ORIGIN_PATTERN_ATOM_ID,
-    OpLibrary, Operation, PATTERN_POSITION_EPSILON, Pattern, PatternAtom, PatternBond,
-    PatternElement, Step, ToolSide, ToolType,
+    APEX_FRAME_TAG, Approach, BUILD_FORMAT, BuildScript, CLOSE_PAIR_WARNING_FACTOR,
+    DEFAULT_ANCHORS, FRAME_COPLANAR_EPSILON, FrameAtom, LIBRARY_FORMAT, MAX_PATTERN_DEGREE,
+    MechanosynthError, Method, NO_LAYER, NO_SITE, ORIGIN_PATTERN_ATOM_ID, OpLibrary, Operation,
+    PATTERN_POSITION_EPSILON, Pattern, PatternAtom, PatternBond, PatternElement, Step, ToolSide,
+    ToolType, is_frame_atom,
 };
-use crate::atomic_constants::CHEMICAL_ELEMENTS;
+use crate::atomic_constants::{ATOM_INFO, CHEMICAL_ELEMENTS, element_symbol};
 use glam::{DMat3, DVec3};
 use serde::Deserialize;
 use std::collections::HashSet;
@@ -25,6 +26,8 @@ use std::path::Path;
 struct RawLibrary {
     format: Option<String>,
     tolerance: Option<f64>,
+    /// The library's own steric factor; the engine's `CLASH_BLOCK` when absent.
+    clash: Option<serde_json::Value>,
     ops: Option<Vec<RawOp>>,
     /// Required whenever any operation is `tip`; absent is an empty list, which
     /// only a library of `bulk` and `spontaneous` operations can get away with.
@@ -77,11 +80,15 @@ struct RawOp {
     /// with every other unknown key — the key set is additive, so a file
     /// carrying it loads on an old build.
     chiral: Option<bool>,
-    /// Required in `/2`. Raw rather than a typed `Option<String>` so that a
+    /// Required since `/2`. Raw rather than a typed `Option<String>` so that a
     /// wrong type names the operation like every other malformed field.
     method: Option<serde_json::Value>,
     agent: Option<String>,
     tool: Option<RawToolSide>,
+    /// How many of the leading `before` ids a click may play; 1 when absent.
+    /// Raw so that a wrong type names the operation like every other malformed
+    /// field.
+    anchors: Option<serde_json::Value>,
     /// Reserved for milestone 2; parsed and kept, read by nothing.
     approach: Option<RawApproach>,
 }
@@ -97,6 +104,9 @@ struct RawAtom {
     id: Option<i64>,
     el: Option<String>,
     pos: Option<Vec<f64>>,
+    /// The bond count the matched workpiece atom must have. Raw so that a wrong
+    /// type names the operation and the atom.
+    deg: Option<serde_json::Value>,
 }
 
 #[derive(Deserialize)]
@@ -250,8 +260,9 @@ pub fn parse_library(text: &str, file: &str) -> Result<OpLibrary, MechanosynthEr
         let agent = convert_agent(file, &name, method, raw_op.agent)?;
         let tool = convert_tool_side(file, &name, method, &tools, raw_op.tool)?;
         let approach = convert_approach(file, &name, raw_op.approach)?;
+        let anchors = convert_anchors(file, &name, &before, &after, raw_op.anchors)?;
 
-        ops.push(Operation {
+        let operation = Operation {
             name,
             note: raw_op.note.filter(|note| !note.is_empty()),
             before,
@@ -261,16 +272,323 @@ pub fn parse_library(text: &str, file: &str) -> Result<OpLibrary, MechanosynthEr
             agent,
             tool,
             approach,
-        });
+            anchors,
+        };
+        collect_pattern_warnings(&operation, &mut warnings);
+        ops.push(operation);
     }
 
     Ok(OpLibrary::new(
         file.to_string(),
         raw.tolerance,
+        convert_clash(file, raw.clash)?,
         ops,
         tools,
         warnings,
     ))
+}
+
+/// The library-wide steric factor. A positive finite number, because it
+/// multiplies a covalent-radius sum.
+fn convert_clash(
+    file: &str,
+    raw: Option<serde_json::Value>,
+) -> Result<Option<f64>, MechanosynthError> {
+    match raw {
+        None | Some(serde_json::Value::Null) => Ok(None),
+        Some(value) => match value.as_f64() {
+            Some(clash) if clash.is_finite() && clash > 0.0 => Ok(Some(clash)),
+            _ => Err(invalid(
+                file,
+                "top level",
+                "\"clash\" must be a positive number: it multiplies a covalent-radius sum",
+            )),
+        },
+    }
+}
+
+/// How many of the leading `before` ids a click may play.
+///
+/// Both rules are errors rather than warnings. An out-of-range count is a
+/// generator bug; an anchor that is a **frame atom** is the case the anchor rule
+/// exists to remove — a click on an atom the operation does not touch, placing
+/// the reaction somewhere else entirely.
+///
+/// An operation that **does nothing at all** is exempt from the second rule.
+/// Every atom of such an operation is a frame atom by the letter of
+/// [`is_frame_atom`], and "a click that places the reaction somewhere else" has
+/// no meaning where there is no reaction to place. No generated library holds
+/// one; the fixtures that pin "this step touches nothing" do.
+fn convert_anchors(
+    file: &str,
+    op: &str,
+    before: &Pattern,
+    after: &Pattern,
+    raw: Option<serde_json::Value>,
+) -> Result<i64, MechanosynthError> {
+    let location = format!("operation '{op}'");
+    let raw_stated = !matches!(raw, None | Some(serde_json::Value::Null));
+    let anchors = match raw {
+        None | Some(serde_json::Value::Null) => DEFAULT_ANCHORS,
+        Some(value) => value
+            .as_i64()
+            .ok_or_else(|| invalid(file, &location, "\"anchors\" must be an integer"))?,
+    };
+    let limit = before.atoms.len() as i64;
+    if limit == 0 {
+        // A pure addition names no atom to click; the script's own transform is
+        // what places it. Stating `anchors` on one is a generator bug.
+        if raw_stated {
+            return Err(invalid(
+                file,
+                &location,
+                "\"anchors\" is stated, but the before pattern names no atom to click",
+            ));
+        }
+        return Ok(anchors);
+    }
+    if anchors < 1 || anchors > limit {
+        return Err(invalid(
+            file,
+            &location,
+            format!(
+                "\"anchors\" is {anchors}; it must be in 1..={limit}, the number of before atoms"
+            ),
+        ));
+    }
+    if !changes_anything(before, after) {
+        return Ok(anchors);
+    }
+    for atom in &before.atoms {
+        if (ORIGIN_PATTERN_ATOM_ID..=anchors).contains(&atom.id)
+            && is_frame_atom(before, after, atom.id)
+        {
+            return Err(invalid(
+                file,
+                &location,
+                format!(
+                    "\"anchors\" is {anchors}, which makes atom id {} an anchor, but the \
+                     operation does not touch it — clicking it would place the reaction \
+                     somewhere else",
+                    atom.id
+                ),
+            ));
+        }
+    }
+    Ok(anchors)
+}
+
+/// Whether the rewrite does anything to anything: an atom it adds, or one of
+/// `before`'s that it does not leave exactly as it found it.
+fn changes_anything(before: &Pattern, after: &Pattern) -> bool {
+    after.atoms.iter().any(|atom| !before.has(atom.id))
+        || before
+            .atoms
+            .iter()
+            .any(|atom| !is_frame_atom(before, after, atom.id))
+}
+
+/// The advisory problems of one operation, each naming it.
+///
+/// Three checks, all warnings: none of them makes a file unusable, and each is
+/// a statement about a library the author is better placed to judge than the
+/// engine is. See `doc/design_mechanosynth_pattern_checks.md` §3.5.
+fn collect_pattern_warnings(op: &Operation, warnings: &mut Vec<String>) {
+    warn_planar_frame(op, warnings);
+    warn_valence(op, warnings);
+    for (which, pattern) in [("before", &op.before), ("after", &op.after)] {
+        warn_close_pairs(&op.name, which, pattern, warnings);
+    }
+    if let Some(tool) = &op.tool {
+        for (which, pattern) in [("before", &tool.before), ("after", &tool.after)] {
+            warn_close_pairs(
+                &format!("{}' tool side, type '{}", op.name, tool.tool_type),
+                which,
+                pattern,
+                warnings,
+            );
+        }
+    }
+}
+
+/// How far off a pattern's span an atom must sit (Å) before the span is treated
+/// as failing to reach it, for [`warn_planar_frame`].
+///
+/// Not [`RANK_EPSILON`], which is the arithmetic noise floor: a pattern file
+/// rounds to 1e-6 Å, so a planar frame written at an angle can come back a
+/// micro-Ångström out of plane, and a threshold at the noise floor would read
+/// that as a third dimension and suppress the warning. Not the match tolerance
+/// either, which is a hundred times larger. A thousandth of an Ångström is well
+/// above what rounding produces and well below an orientation the fit could
+/// actually use.
+const SPAN_EPSILON: f64 = 1e-3;
+
+/// A `before` pattern that spans at most a plane while `after` places an atom
+/// off that span.
+///
+/// The fit onto such a pattern cannot tell the pattern's up from its down: a
+/// rectangle has an in-plane two-fold axis, so a *proper* rotation maps its
+/// atoms onto themselves with everything the operation places on the other
+/// side. That is the upside-down chemisorbed precursor of
+/// `doc/design_mechanosynth_pattern_checks.md` §1, and the root fix is a frame
+/// atom off the plane rather than any steric threshold.
+///
+/// A **one-atom** `before` is exempt: its orientation comes from the
+/// bond-derived fallback (`needs_derived_orientation`), which is a design and
+/// not an oversight.
+fn warn_planar_frame(op: &Operation, warnings: &mut Vec<String>) {
+    if op.before.atoms.len() < 2 {
+        return;
+    }
+    // The span itself decides, rather than a rank: `rank_of` answers 2 for
+    // everything from a plane upwards, because the *fit* only needs to know
+    // that a rotation is determined. What matters here is whether `after`
+    // reaches outside what `before` spans, and a `before` that spans three
+    // dimensions cannot be reached outside of.
+    let span: Vec<DVec3> = op.before.atoms.iter().map(|atom| atom.pos).collect();
+    let off_span = op
+        .after
+        .atoms
+        .iter()
+        .any(|atom| distance_from_span(&span, atom.pos) > SPAN_EPSILON);
+    if !off_span {
+        return;
+    }
+    warnings.push(format!(
+        "operation '{}': after places an atom outside what the before pattern spans, so \
+         the fit cannot tell this pattern's up from its down; name a frame atom off the \
+         plane",
+        op.name
+    ));
+}
+
+/// How far `point` lies from the affine span of `span`, which holds at least one
+/// point.
+fn distance_from_span(span: &[DVec3], point: DVec3) -> f64 {
+    let origin = span[0];
+    let mut basis: Vec<DVec3> = Vec::with_capacity(3);
+    for p in &span[1..] {
+        let mut v = *p - origin;
+        for b in &basis {
+            v -= *b * v.dot(*b);
+        }
+        if v.length() > SPAN_EPSILON {
+            basis.push(v.normalize());
+        }
+    }
+    let mut residual = point - origin;
+    for b in &basis {
+        residual -= *b * residual.dot(*b);
+    }
+    residual.length()
+}
+
+/// A `before` atom whose `deg`, plus what `after` bonds to it and minus what
+/// `after` takes away, would exceed the element's maximum covalent valence.
+///
+/// A warning rather than an error, because the table is the one
+/// element-specific thing in this design and a library author may know better —
+/// the metals in a tool are exactly the case an open table has to allow.
+fn warn_valence(op: &Operation, warnings: &mut Vec<String>) {
+    for atom in &op.before.atoms {
+        let (Some(deg), PatternElement::Element(z)) = (atom.deg, atom.element) else {
+            continue;
+        };
+        let Some(limit) = max_covalent_valence(z) else {
+            continue;
+        };
+        let delta = bond_count_delta(op, atom.id);
+        let after_count = deg as i64 + delta;
+        if after_count > i64::from(limit) {
+            warnings.push(format!(
+                "operation '{}': atom id {} is {} with deg {deg}, and the operation leaves \
+                 it with {after_count} bonds, past the {limit} a {} can carry",
+                op.name,
+                atom.id,
+                element_symbol(z),
+                element_symbol(z),
+            ));
+        }
+    }
+}
+
+/// The bonds `after` adds at `id` minus the bonds it removes, over the pairs the
+/// pattern names.
+fn bond_count_delta(op: &Operation, id: i64) -> i64 {
+    let at = |pattern: &Pattern| -> Vec<(i64, i64)> {
+        pattern
+            .bonds
+            .iter()
+            .filter(|bond| bond.a == id || bond.b == id)
+            .map(|bond| bond.key())
+            .collect()
+    };
+    let before = at(&op.before);
+    let after = at(&op.after);
+    let added = after.iter().filter(|key| !before.contains(key)).count() as i64;
+    let removed = before.iter().filter(|key| !after.contains(key)).count() as i64;
+    added - removed
+}
+
+/// The largest number of covalent bonds an element is expected to carry, for
+/// [`warn_valence`]. `None` means "this table has no opinion", which is the
+/// honest answer for every element it does not list.
+fn max_covalent_valence(z: i16) -> Option<u32> {
+    match z {
+        1 => Some(1),                // H
+        6 => Some(4),                // C
+        7 => Some(4),                // N
+        8 => Some(2),                // O
+        9 | 17 | 35 | 53 => Some(1), // F, Cl, Br, I
+        14 | 32 => Some(4),          // Si, Ge
+        _ => None,
+    }
+}
+
+/// Two atoms of one pattern within [`CLOSE_PAIR_WARNING_FACTOR`] of their
+/// covalent-radius sum with no bond listed between them.
+///
+/// Either the bond is missing from the file, or the library really means "these
+/// two are not bonded" — in which case the workpiece had better agree, and, in
+/// `after`, the pair had better clear the library's steric factor or the
+/// operation is blocked on every host.
+///
+/// A pair with a `"*"` slot is skipped: a wildcard has no radius, and inventing
+/// one would turn a real check into a guess.
+fn warn_close_pairs(op: &str, which: &str, pattern: &Pattern, warnings: &mut Vec<String>) {
+    for (i, a) in pattern.atoms.iter().enumerate() {
+        for b in &pattern.atoms[i + 1..] {
+            let (PatternElement::Element(za), PatternElement::Element(zb)) = (a.element, b.element)
+            else {
+                continue;
+            };
+            if pattern
+                .bonds
+                .iter()
+                .any(|bond| bond.key() == (a.id.min(b.id), a.id.max(b.id)))
+            {
+                continue;
+            }
+            let (Some(ra), Some(rb)) = (covalent_radius(za), covalent_radius(zb)) else {
+                continue;
+            };
+            let distance = a.pos.distance(b.pos);
+            if distance < (ra + rb) * CLOSE_PAIR_WARNING_FACTOR {
+                warnings.push(format!(
+                    "operation '{op}': in the {which} pattern, atoms {} ({}) and {} ({}) \
+                     are {distance:.3} Å apart with no bond between them",
+                    a.id,
+                    element_symbol(za),
+                    b.id,
+                    element_symbol(zb),
+                ));
+            }
+        }
+    }
+}
+
+fn covalent_radius(z: i16) -> Option<f64> {
+    ATOM_INFO.get(&(z as i32)).map(|info| info.covalent_radius)
 }
 
 /// `tool type 'habst_tool'`
@@ -732,15 +1050,48 @@ fn convert_pattern(
                 ),
             ));
         }
+        let deg = match raw_atom.deg {
+            None | Some(serde_json::Value::Null) => None,
+            // `deg` is a statement about the workpiece the pattern *matches*,
+            // so it belongs on a `before` atom. On an `after` atom it would be
+            // a statement about a structure that does not exist yet, and one
+            // the rewrite has already decided.
+            Some(_) if which != "before" => {
+                return Err(invalid(
+                    file,
+                    &location,
+                    format!(
+                        "atom id {id}: \"deg\" belongs on a before atom — it says what the \
+                         workpiece must look like for the operation to apply"
+                    ),
+                ));
+            }
+            Some(value) => {
+                let deg = value
+                    .as_i64()
+                    .filter(|deg| (0..=i64::from(MAX_PATTERN_DEGREE)).contains(deg))
+                    .ok_or_else(|| {
+                        invalid(
+                            file,
+                            &location,
+                            format!(
+                                "atom id {id}: \"deg\" must be an integer in 0..={MAX_PATTERN_DEGREE}"
+                            ),
+                        )
+                    })?;
+                Some(deg as u32)
+            }
+        };
         atoms.push(PatternAtom {
             id,
             element,
             pos: DVec3::new(pos[0], pos[1], pos[2]),
+            deg,
         });
     }
 
     let raw_bonds = raw.bonds.unwrap_or_default();
-    let mut bonds = Vec::with_capacity(raw_bonds.len());
+    let mut bonds: Vec<PatternBond> = Vec::with_capacity(raw_bonds.len());
     for raw_bond in raw_bonds {
         let (a, b, order) = convert_bond(file, &location, &raw_bond)?;
         for endpoint in [a, b] {
@@ -759,7 +1110,37 @@ fn convert_pattern(
                 format!("bond [{a}, {b}] connects an atom to itself"),
             ));
         }
-        bonds.push(PatternBond { a, b, order });
+        // The bond list is closed-world, so one pair means one thing: two
+        // entries for it would be two contradictory statements, and picking
+        // either would be a guess.
+        let bond = PatternBond { a, b, order };
+        if bonds.iter().any(|other| other.key() == bond.key()) {
+            return Err(invalid(
+                file,
+                &location,
+                format!("bond [{a}, {b}] is listed twice; a pattern states each pair once"),
+            ));
+        }
+        bonds.push(bond);
+    }
+
+    // A pattern cannot list more bonds at an atom than the atom has.
+    for atom in &atoms {
+        let Some(deg) = atom.deg else { continue };
+        let listed = bonds
+            .iter()
+            .filter(|bond| bond.a == atom.id || bond.b == atom.id)
+            .count();
+        if (deg as usize) < listed {
+            return Err(invalid(
+                file,
+                &location,
+                format!(
+                    "atom id {}: \"deg\" is {deg} but the pattern lists {listed} bond(s) there",
+                    atom.id
+                ),
+            ));
+        }
     }
 
     Ok(Pattern { atoms, bonds })

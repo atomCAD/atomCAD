@@ -14,7 +14,7 @@ use atomcad_crystolecule::io::xyz_loader::load_xyz;
 use atomcad_crystolecule::mechanosynth::{
     Applicability, BuildScript, Candidate, EXACT_FIT_RESIDUAL, GhostBondKind, GhostKind,
     HighlightTags, MechanosynthError, NEAR_MISS_FACTOR, OpLibrary, Operation,
-    RESIDUAL_RANK_EPSILON, Step, applicable_ops, applicable_ops_where, apply_step,
+    RESIDUAL_RANK_EPSILON, Refusal, Step, applicable_ops, applicable_ops_where, apply_step,
     compare_structures, describe_mismatches, load_build_script, load_library, parse_library, place,
     place_with_stats, preview_atoms, preview_bonds, replay, resolve_tolerance,
 };
@@ -328,17 +328,243 @@ fn a_silicon_click_on_a_wildcard_frame_donation_is_always_the_origin_role() {
 }
 
 #[test]
-fn an_op_with_no_atom_at_the_origin_falls_to_the_smallest_eligible_id() {
+fn an_op_with_no_atom_at_the_origin_falls_to_the_smallest_anchor_id() {
     let lib = library();
     let s = workpiece();
     let candidates = place(&s, &lib, "off_origin_all", at(&s, B), TOL).expect("places");
     assert_eq!(candidates.len(), 2, "two partners at the pattern distance");
     for candidate in &candidates {
         assert_eq!(
-            candidate.role, 2,
-            "ids are 2 and 3; neither is at the origin"
+            candidate.role, 1,
+            "no before atom is at the origin, so the smallest anchor id decides"
         );
     }
+    // …and the fit's `t` is therefore *not* the clicked atom's position: the
+    // pattern puts id 1 at (5, 0, 0), and the step places it on the click.
+    let clicked = position(&s, at(&s, B));
+    for candidate in &candidates {
+        assert!(
+            !candidate.step.t.abs_diff_eq(clicked, 1e-6),
+            "an off-origin role moves t away from the click"
+        );
+        assert!(
+            candidate
+                .step
+                .place(DVec3::new(5.0, 0.0, 0.0))
+                .abs_diff_eq(clicked, 1e-6),
+            "and the role atom still lands on the clicked atom"
+        );
+    }
+}
+
+#[test]
+fn a_click_may_only_play_an_anchor() {
+    // The `/2` role rule fell back to the smallest *eligible* id, which made
+    // every atom of every pattern clickable — frame atoms included — whenever
+    // the origin atom's element happened not to admit the click. `hdon_uniq`
+    // is that shape: its frame atoms are C, N and O, none of which its silicon
+    // anchor admits.
+    let lib = library();
+    let s = workpiece();
+    let frame = at(&s, G + DVec3::new(-1.357928, 1.357928, 1.357928));
+    assert_eq!(element(&s, frame), C, "the G cluster's carbon frame atom");
+
+    match expect_err(place(&s, &lib, "hdon_uniq", frame, TOL)) {
+        MechanosynthError::NoRole {
+            op,
+            element,
+            accepted,
+        } => {
+            assert_eq!(op, "hdon_uniq");
+            assert_eq!(element, "C");
+            assert_eq!(accepted, "Si", "the anchor's element, not the pattern's");
+        }
+        other => panic!("expected NoRole, got {other}"),
+    }
+
+    // And the sweep drops it, rather than offering the reaction on an atom the
+    // operation does not act on.
+    assert!(
+        !applicable_ops(&s, &lib, frame, TOL, None)
+            .iter()
+            .any(|row| row.op == "hdon_uniq"),
+        "a frame atom is not a place to offer the operation"
+    );
+}
+
+#[test]
+fn an_operation_may_declare_more_than_one_anchor() {
+    // `habst_pair` states `anchors: 2`, so either of its two reacting atoms may
+    // be clicked. Without that the H — which the silicon anchor's element does
+    // not admit — would have no role at all.
+    let lib = library();
+    let s = workpiece();
+    let host = at(&s, F);
+    let hydrogen = at(&s, F + tetra(0) * 1.09);
+
+    assert_eq!(op(&lib, "habst_pair").anchors, 2);
+    assert_eq!(
+        only(place(&s, &lib, "habst_pair", host, TOL).expect("host click places")).role,
+        1
+    );
+    assert_eq!(
+        only(place(&s, &lib, "habst_pair", hydrogen, TOL).expect("H click places")).role,
+        2
+    );
+
+    // With the default of one anchor the same click has no role: id 1 is the
+    // carbon, and nothing else is clickable.
+    let single = parse_library(&single_anchor_habst_pair(), "single_anchor.json").expect("parses");
+    match expect_err(place(&s, &single, "habst_pair", hydrogen, TOL)) {
+        MechanosynthError::NoRole { accepted, .. } => assert_eq!(accepted, "C"),
+        other => panic!("expected NoRole, got {other}"),
+    }
+}
+
+/// `habst_pair` with `anchors` left at its default, so only the carbon is
+/// clickable. Written inline rather than added to the fixture library, which
+/// would then offer two near-identical rows on every click.
+fn single_anchor_habst_pair() -> String {
+    let h = tetra(0) * 1.09;
+    format!(
+        r#"{{
+          "format": "atomcad-msops/3",
+          "ops": [
+            {{
+              "name": "habst_pair",
+              "method": "spontaneous",
+              "before": {{ "atoms": [
+                {{ "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] }},
+                {{ "id": 2, "el": "H", "pos": [{}, {}, {}] }}
+              ], "bonds": [[1, 2]] }},
+              "after": {{ "atoms": [
+                {{ "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] }}
+              ], "bonds": [] }}
+            }}
+          ]
+        }}"#,
+        h.x, h.y, h.z
+    )
+}
+
+#[test]
+fn a_homonuclear_pair_needs_no_anchors_key() {
+    // §3.4 of the design: for a symmetric operation over one element, stating
+    // `anchors: 2` changes nothing, because a click on either atom already
+    // plays id 1 and the search assigns the other to id 2. The two libraries
+    // below differ only in the key, and both place the same way from either end.
+    let s = workpiece();
+    let one = parse_library(&symmetric_dimerize(None), "one_anchor.json").expect("parses");
+    let two = parse_library(&symmetric_dimerize(Some(2)), "two_anchors.json").expect("parses");
+
+    for (lib, label) in [(&one, "default"), (&two, "anchors: 2")] {
+        let from_clicked = place(&s, lib, "dimerize", at(&s, B), TOL).expect("places");
+        assert!(
+            from_clicked.iter().all(|candidate| candidate.role == 1),
+            "{label}: the clicked atom plays id 1"
+        );
+        let partner = at(&s, B + DVec3::new(DIMER_D, 0.0, 0.0));
+        let from_partner = place(&s, lib, "dimerize", partner, TOL).expect("places");
+        assert!(
+            from_partner.iter().all(|candidate| candidate.role == 1),
+            "{label}: and so does the other end"
+        );
+        assert!(
+            from_partner[0]
+                .step
+                .t
+                .abs_diff_eq(position(&s, partner), EXACT),
+            "{label}: the reaction is placed on the atom that was clicked"
+        );
+    }
+}
+
+/// The symmetric dimerisation of `place_ops.json`, with `anchors` optional.
+fn symmetric_dimerize(anchors: Option<i64>) -> String {
+    let key = match anchors {
+        Some(n) => format!(r#""anchors": {n},"#),
+        None => String::new(),
+    };
+    format!(
+        r#"{{
+          "format": "atomcad-msops/3",
+          "ops": [
+            {{
+              "name": "dimerize",
+              "method": "spontaneous",
+              {key}
+              "before": {{ "atoms": [
+                {{ "id": 1, "el": "Si", "pos": [0.0, 0.0, 0.0] }},
+                {{ "id": 2, "el": "Si", "pos": [{DIMER_D}, 0.0, 0.0] }}
+              ], "bonds": [] }},
+              "after": {{ "atoms": [
+                {{ "id": 1, "el": "Si", "pos": [0.55, 0.0, 0.0] }},
+                {{ "id": 2, "el": "Si", "pos": [2.95, 0.0, 0.0] }}
+              ], "bonds": [[1, 2]] }}
+            }}
+          ]
+        }}"#
+    )
+}
+
+#[test]
+fn a_heteronuclear_anchor_pair_places_the_reaction_where_the_pattern_puts_it() {
+    // The case `anchors` exists for: two primary atoms of *different* elements.
+    // A click on the id-2 element is rejected by id 1 and admitted by id 2, and
+    // the fit's `t` then lands on the id-1 atom rather than on the click —
+    // which is acceptable precisely because the library declared it.
+    let mut s = AtomicStructure::new();
+    let silicon = s.add_atom(SI, DVec3::ZERO);
+    let carbon = s.add_atom(C, DVec3::new(BOND, 0.0, 0.0));
+    s.add_bond(silicon, carbon, 1);
+
+    let two = parse_library(&hetero_insert(Some(2)), "hetero_two.json").expect("parses");
+    let candidate = only(place(&s, &two, "insert", carbon, TOL).expect("the C click places"));
+    assert_eq!(candidate.role, 2);
+    assert!(
+        candidate.step.t.abs_diff_eq(position(&s, silicon), EXACT),
+        "t is the id-1 atom's position, not the clicked atom's"
+    );
+
+    // Without the key the same click has no role at all.
+    let one = parse_library(&hetero_insert(None), "hetero_one.json").expect("parses");
+    match expect_err(place(&s, &one, "insert", carbon, TOL)) {
+        MechanosynthError::NoRole { element, .. } => assert_eq!(element, "C"),
+        other => panic!("expected NoRole, got {other}"),
+    }
+}
+
+/// A two-element insertion: the Si–C bond is broken and a hydrogen bridges the
+/// two. Both named atoms react — each loses a bond and gains another — so
+/// either may be an anchor, and they are of different elements, which is the
+/// one case `anchors` exists for.
+fn hetero_insert(anchors: Option<i64>) -> String {
+    let key = match anchors {
+        Some(n) => format!(r#""anchors": {n},"#),
+        None => String::new(),
+    };
+    format!(
+        r#"{{
+          "format": "atomcad-msops/3",
+          "ops": [
+            {{
+              "name": "insert",
+              "method": "spontaneous",
+              {key}
+              "before": {{ "atoms": [
+                {{ "id": 1, "el": "Si", "pos": [0.0, 0.0, 0.0] }},
+                {{ "id": 2, "el": "C", "pos": [{BOND}, 0.0, 0.0] }}
+              ], "bonds": [[1, 2]] }},
+              "after": {{ "atoms": [
+                {{ "id": 1, "el": "Si", "pos": [0.0, 0.0, 0.0] }},
+                {{ "id": 2, "el": "C", "pos": [{BOND}, 0.0, 0.0] }},
+                {{ "id": 3, "el": "H", "pos": [{half}, 1.0, 0.0] }}
+              ], "bonds": [[1, 3], [2, 3]] }}
+            }}
+          ]
+        }}"#,
+        half = BOND / 2.0
+    )
 }
 
 #[test]
@@ -630,9 +856,12 @@ fn the_assignment_search_stays_pruned_on_a_crowded_neighbourhood() {
     // four before atoms, three of them wildcards, so only the pairwise prune
     // stands between the search and N³ partial assignments.
     let mut s = AtomicStructure::new();
-    s.add_atom(SI, DVec3::ZERO);
+    let host = s.add_atom(SI, DVec3::ZERO);
     for i in 0..3 {
-        s.add_atom(SI, tetra(i) * BOND);
+        // Bonded, because `hdon_frame`'s before lists the host's three
+        // back-bonds and the bond list is closed-world.
+        let neighbour = s.add_atom(SI, tetra(i) * BOND);
+        s.add_bond(host, neighbour, 1);
     }
     let mut seed: u64 = 0x2026_0914;
     let mut next = || {
@@ -655,6 +884,266 @@ fn the_assignment_search_stays_pruned_on_a_crowded_neighbourhood() {
         stats.assignments_visited,
         stats.neighbourhood
     );
+}
+
+#[test]
+fn the_bond_prune_admits_only_the_atoms_the_pattern_says_are_bonded() {
+    // `hdon_frame` lists the host's three back-bonds, so the only atoms the
+    // search may assign to its frame slots are the three the host is bonded to,
+    // whatever else is in the neighbourhood. Three choices at the first slot,
+    // two at the second, one at the third: 3 + 6 + 6 partial assignments, and
+    // the 200 scattered atoms cost one bond lookup each rather than a subtree.
+    let lib = library();
+    let (s, clicked) = crowded_host(true);
+    let (candidates, stats) =
+        place_with_stats(&s, &lib, "hdon_frame", clicked, TOL).expect("places");
+    assert!(!candidates.is_empty());
+    assert_eq!(
+        stats.assignments_visited, 15,
+        "visited {} partial assignments in a neighbourhood of {}",
+        stats.assignments_visited, stats.neighbourhood
+    );
+}
+
+#[test]
+fn the_degree_prune_makes_the_search_cheaper_rather_than_dearer() {
+    // `deg` is checked at the same point the distance test is, and it is O(1),
+    // so a slot that states one costs nothing and removes a subtree. Here the
+    // three real partners carry one bond each and the two hundred scattered
+    // atoms carry none; the two libraries are the same pattern with and without
+    // the key.
+    let (s, clicked) = crowded_host(false);
+    let without = parse_library(&loose_frame_donation(None), "no_deg.json").expect("parses");
+    let with = parse_library(&loose_frame_donation(Some(1)), "deg.json").expect("parses");
+
+    let (loose, loose_stats) =
+        place_with_stats(&s, &without, "hdon_loose", clicked, TOL).expect("places");
+    let (tight, tight_stats) =
+        place_with_stats(&s, &with, "hdon_loose", clicked, TOL).expect("places");
+
+    assert!(!loose.is_empty() && !tight.is_empty(), "both place");
+    assert!(
+        tight_stats.assignments_visited <= loose_stats.assignments_visited,
+        "stating deg must never cost assignments: {} vs {}",
+        tight_stats.assignments_visited,
+        loose_stats.assignments_visited
+    );
+    assert!(
+        tight_stats.assignments_visited < loose_stats.assignments_visited,
+        "…and on this fixture it saves some: {} vs {}",
+        tight_stats.assignments_visited,
+        loose_stats.assignments_visited
+    );
+}
+
+/// A host with three partners at the distance the test's pattern wants, buried
+/// in 200 atoms scattered by a fixed generator so the run is the same every
+/// time. `bonded` puts the partners at a bond length and bonds them to the
+/// host; otherwise they sit a dimer length away, bonded to a private partner
+/// each so that their *degree* is what tells them from the scatter.
+fn crowded_host(bonded: bool) -> (AtomicStructure, u32) {
+    let mut s = AtomicStructure::new();
+    let host = s.add_atom(SI, DVec3::ZERO);
+    let reach = if bonded { BOND } else { DIMER_D };
+    for i in 0..3 {
+        let partner = s.add_atom(SI, tetra(i) * reach);
+        if bonded {
+            s.add_bond(host, partner, 1);
+        } else {
+            let private = s.add_atom(SI, tetra(i) * reach + tetra(3) * BOND);
+            s.add_bond(partner, private, 1);
+        }
+    }
+    let mut seed: u64 = 0x2026_0914;
+    let mut next = || {
+        seed = seed
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
+        ((seed >> 33) as f64) / ((1u64 << 31) as f64) - 0.5
+    };
+    for _ in 0..200 {
+        s.add_atom(SI, DVec3::new(next(), next(), next()) * 10.0);
+    }
+    (s, host)
+}
+
+/// A donation over three unbonded wildcard partners at a dimer length, with
+/// `deg` on the partner slots optional. `deg` is a `before`-only key, so
+/// `after` repeats the atoms without it.
+fn loose_frame_donation(deg: Option<u32>) -> String {
+    let key = match deg {
+        Some(n) => format!(r#", "deg": {n}"#),
+        None => String::new(),
+    };
+    let pos = |v: DVec3| format!("[{}, {}, {}]", v.x, v.y, v.z);
+    let frames = |key: &str| {
+        format!(
+            r#"{{ "id": 2, "el": "*", "pos": {}{key} }},
+               {{ "id": 3, "el": "*", "pos": {}{key} }},
+               {{ "id": 4, "el": "*", "pos": {}{key} }}"#,
+            pos(tetra(0) * DIMER_D),
+            pos(tetra(1) * DIMER_D),
+            pos(tetra(2) * DIMER_D),
+        )
+    };
+    format!(
+        r#"{{
+          "format": "atomcad-msops/3",
+          "ops": [
+            {{
+              "name": "hdon_loose",
+              "method": "spontaneous",
+              "before": {{ "atoms": [
+                {{ "id": 1, "el": "Si", "pos": [0.0, 0.0, 0.0] }},
+                {before_frames}
+              ], "bonds": [] }},
+              "after": {{ "atoms": [
+                {{ "id": 1, "el": "Si", "pos": [0.0, 0.0, 0.0] }},
+                {after_frames},
+                {{ "id": 5, "el": "H", "pos": [{hx}, {hy}, {hz}] }}
+              ], "bonds": [[1, 5]] }}
+            }}
+          ]
+        }}"#,
+        before_frames = frames(&key),
+        after_frames = frames(""),
+        hx = tetra(3).x * HB,
+        hy = tetra(3).y * HB,
+        hz = tetra(3).z * HB,
+    )
+}
+
+// ============================================================================
+// The closed-world bond rule and `deg` at placement
+// (doc/design_mechanosynth_pattern_checks.md §4.2)
+// ============================================================================
+
+#[test]
+fn an_already_bonded_pair_is_not_offered_a_bridge() {
+    // `bridge`'s `before` lists no bond between its two atoms, which under the
+    // closed-world rule *asserts* there is none. So "the step would change
+    // nothing" needs no rule of its own: every such case is a bond mismatch,
+    // and the search prunes it before a candidate exists.
+    let lib = library();
+    let mut s = workpiece();
+    let host = at(&s, B);
+    let partner = at(&s, B + DVec3::new(DIMER_D, 0.0, 0.0));
+
+    assert_eq!(
+        place(&s, &lib, "bridge", host, TOL)
+            .expect("two partners")
+            .len(),
+        2
+    );
+
+    s.add_bond(host, partner, 1);
+    let candidates = place(&s, &lib, "bridge", host, TOL).expect("the other partner is still free");
+    assert_eq!(candidates.len(), 1, "the bonded partner is gone");
+    assert!(
+        candidates[0]
+            .roles
+            .iter()
+            .all(|(_, atom_id)| *atom_id != partner),
+        "and it is not the atom that is already bridged"
+    );
+
+    // With both partners bonded there is nothing left to offer at all, and the
+    // sweep drops the row rather than offering a step that changes nothing.
+    s.add_bond(host, at(&s, B + DVec3::new(0.0, DIMER_D, 0.0)), 1);
+    assert!(matches!(
+        expect_err(place(&s, &lib, "bridge", host, TOL)),
+        MechanosynthError::NoPlacement { .. }
+    ));
+    assert!(
+        !applicable_ops(&s, &lib, host, TOL, None)
+            .iter()
+            .any(|row| row.op == "bridge")
+    );
+}
+
+#[test]
+fn a_host_of_the_wrong_degree_keeps_its_row_and_says_why() {
+    // A wrong *element* means the operation has nothing to say about this atom,
+    // so the sweep drops it. A wrong *degree* on an atom the operation would
+    // act on is a coverage report — "this donation needs a host with 3 bonds;
+    // the clicked atom has 4" — so `place` runs the search anyway and the row
+    // is dimmed with that reason.
+    let lib = parse_library(&three_coordinate_donation(), "deg_host.json").expect("parses");
+
+    // A saturated host: four bonds where the operation wants three.
+    let mut s = AtomicStructure::new();
+    let host = s.add_atom(SI, DVec3::ZERO);
+    for i in 0..4 {
+        let neighbour = s.add_atom(SI, tetra(i) * BOND);
+        s.add_bond(host, neighbour, 1);
+    }
+
+    let candidates = place(&s, &lib, "hdon_deg", host, TOL).expect("the geometry still fits");
+    assert!(
+        candidates.iter().all(|candidate| candidate.refusal
+            == Some(Refusal::Degree {
+                expected: 3,
+                found: 4
+            })),
+        "every candidate of one call carries the clicked atom's refusal"
+    );
+
+    let rows = applicable_ops(&s, &lib, host, TOL, None);
+    let donation = row(&rows, "hdon_deg");
+    assert!(donation.fits, "the fit is real; the host is not");
+    assert!(!donation.offerable(), "and it cannot be committed");
+    let blocked = donation.blocked().expect("every candidate is refused");
+    assert!(blocked.contains("3 bond(s)"), "{blocked}");
+    assert!(blocked.contains("has 4"), "{blocked}");
+
+    // The host the operation was written for carries no refusal at all.
+    let mut three = AtomicStructure::new();
+    let host = three.add_atom(SI, DVec3::ZERO);
+    for i in 0..3 {
+        let neighbour = three.add_atom(SI, tetra(i) * BOND);
+        three.add_bond(host, neighbour, 1);
+    }
+    let candidate = only(place(&three, &lib, "hdon_deg", host, TOL).expect("places"));
+    assert_eq!(candidate.refusal, None);
+    assert!(row(&applicable_ops(&three, &lib, host, TOL, None), "hdon_deg").offerable());
+}
+
+/// `hdon_frame` with `deg: 3` on its host, the one place a real library always
+/// states it. `deg` is a `before`-only key, so `after` repeats the atoms
+/// without it.
+fn three_coordinate_donation() -> String {
+    let pos = |v: DVec3| format!("[{}, {}, {}]", v.x, v.y, v.z);
+    let frames = format!(
+        r#"{{ "id": 2, "el": "*", "pos": {} }},
+           {{ "id": 3, "el": "*", "pos": {} }},
+           {{ "id": 4, "el": "*", "pos": {} }}"#,
+        pos(tetra(0) * BOND),
+        pos(tetra(1) * BOND),
+        pos(tetra(2) * BOND),
+    );
+    format!(
+        r#"{{
+          "format": "atomcad-msops/3",
+          "ops": [
+            {{
+              "name": "hdon_deg",
+              "method": "spontaneous",
+              "before": {{ "atoms": [
+                {{ "id": 1, "el": "Si", "pos": [0.0, 0.0, 0.0], "deg": 3 }},
+                {frames}
+              ], "bonds": [[1, 2], [1, 3], [1, 4]] }},
+              "after": {{ "atoms": [
+                {{ "id": 1, "el": "Si", "pos": [0.0, 0.0, 0.0] }},
+                {frames},
+                {{ "id": 5, "el": "H", "pos": [{hx}, {hy}, {hz}] }}
+              ], "bonds": [[1, 2], [1, 3], [1, 4], [1, 5]] }}
+            }}
+          ]
+        }}"#,
+        hx = tetra(3).x * HB,
+        hy = tetra(3).y * HB,
+        hz = tetra(3).z * HB,
+    )
 }
 
 // ============================================================================
@@ -749,7 +1238,7 @@ fn framed_abstraction_library() -> OpLibrary {
     ];
     let json = format!(
         r#"{{
-          "format": "atomcad-msops/2",
+          "format": "atomcad-msops/3",
           "ops": [
             {{
               "name": "habst_framed",
@@ -760,13 +1249,13 @@ fn framed_abstraction_library() -> OpLibrary {
                 {{ "id": 3, "el": "*", "pos": {f1} }},
                 {{ "id": 4, "el": "*", "pos": {f2} }},
                 {{ "id": 5, "el": "H", "pos": {h} }}
-              ], "bonds": [] }},
+              ], "bonds": [[1, 2], [1, 3], [1, 4], [1, 5]] }},
               "after": {{ "atoms": [
                 {{ "id": 1, "el": "Si", "pos": [0.0, 0.0, 0.0] }},
                 {{ "id": 2, "el": "*", "pos": {f0} }},
                 {{ "id": 3, "el": "*", "pos": {f1} }},
                 {{ "id": 4, "el": "*", "pos": {f2} }}
-              ], "bonds": [] }}
+              ], "bonds": [[1, 2], [1, 3], [1, 4]] }}
             }}
           ]
         }}"#,
@@ -828,7 +1317,7 @@ fn framed_bridge_library() -> OpLibrary {
     );
     let json = format!(
         r#"{{
-          "format": "atomcad-msops/2",
+          "format": "atomcad-msops/3",
           "ops": [
             {{
               "name": "bridge_framed",
@@ -944,7 +1433,9 @@ fn an_operation_the_library_does_not_have_is_named() {
 fn an_inadmissible_element_lists_what_the_op_does_accept() {
     let lib = library();
     let s = workpiece();
-    // `planar3` acts on C, O and N; the A site is silicon.
+    // `planar3` acts on the C at its origin — its one anchor — and the A site
+    // is silicon. The O and N of its pattern are frame atoms and are named by
+    // nothing, because a frame atom is not something to click.
     match expect_err(place(&s, &lib, "planar3", at(&s, A), TOL)) {
         MechanosynthError::NoRole {
             op,
@@ -953,7 +1444,7 @@ fn an_inadmissible_element_lists_what_the_op_does_accept() {
         } => {
             assert_eq!(op, "planar3");
             assert_eq!(element, "Si");
-            assert_eq!(accepted, "C, O, N");
+            assert_eq!(accepted, "C");
         }
         other => panic!("expected NoRole, got {other}"),
     }
@@ -1132,13 +1623,39 @@ fn re_authoring_a_generated_build_by_clicking_reproduces_it_exactly() {
 }
 
 #[test]
-fn the_fixture_library_warns_about_its_one_unconventional_operation() {
+fn the_fixture_library_warns_about_its_unconventional_operations() {
     let lib = library();
-    assert_eq!(lib.warnings.len(), 1, "warnings: {:?}", lib.warnings);
+
+    // The origin convention: one operation deliberately breaks it.
+    let origin: Vec<&String> = lib
+        .warnings
+        .iter()
+        .filter(|w| w.contains("not at the origin"))
+        .collect();
+    assert_eq!(origin.len(), 1, "warnings: {:?}", lib.warnings);
+    assert!(origin[0].contains("off_origin_all"), "{}", origin[0]);
+
+    // The planar-frame warning: exactly the operations whose `after` reaches
+    // outside what their `before` spans. `land4` is the planar-frame case of
+    // the design; the two two-atom patterns are the collinear one.
+    let planar: Vec<&str> = lib
+        .warnings
+        .iter()
+        .filter(|w| w.contains("cannot tell this pattern's up from its down"))
+        .map(|w| w.split('\'').nth(1).expect("a warning names its operation"))
+        .collect();
+    assert_eq!(
+        planar,
+        ["asym_add", "land4", "land4_chiral", "off_origin_all"],
+        "warnings: {:?}",
+        lib.warnings
+    );
+
+    // `planar3` is planar and stays out of it: its `after` adds an atom *in*
+    // the plane, which the fit determines exactly.
     assert!(
-        lib.warnings[0].contains("off_origin_all"),
-        "warning was: {}",
-        lib.warnings[0]
+        !planar.contains(&"planar3"),
+        "an in-plane addition needs no frame atom off the plane"
     );
 }
 

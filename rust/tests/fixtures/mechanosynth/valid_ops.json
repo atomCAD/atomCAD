@@ -1,6 +1,6 @@
 {
   "comment": "Field-coverage library for the parsing tests. Unknown keys at every level are ignored.",
-  "format": "atomcad-msops/2",
+  "format": "atomcad-msops/3",
   "tools": [
     {
       "name": "probe",

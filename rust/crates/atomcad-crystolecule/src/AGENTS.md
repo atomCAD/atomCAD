@@ -180,11 +180,12 @@ place an operation there. Four rules are load-bearing and each has tests in
 `mechanosynth_place_test.rs`:
 
 - **The clicked atom's role is decided before the search and never revisited.**
-  An atom usually admits several `before` slots (`"*"` admits every element),
-  and the rule picks the slot at the origin of the operation's frame, else the
-  smallest id. A fit that fails in the assigned role is an `Err` naming that
-  role — *not* a retry in another one, which would place the reaction on a
-  different atom from the one the user clicked.
+  An atom usually admits several `before` slots (`"*"` admits every element), and
+  the rule picks, **among the operation's anchors**, the slot at the origin of
+  the operation's frame, else the smallest anchor id. A click no anchor admits is
+  `NoRole`, and the sweep drops the operation. A fit that fails in the assigned
+  role is an `Err` naming that role — *not* a retry in another one, which would
+  place the reaction on a different atom from the one the user clicked.
 - **Orientation comes from the library.** A one-atom `before` pattern carries
   none, so a library states it by naming *frame atoms* (kept, unmoved, no bond
   change) and the Kabsch fit recovers the rotation exactly. Deriving the
@@ -331,11 +332,34 @@ a before/after pair of small atom lists in a local frame; a **step** names one
 and gives a rigid transform into workpiece coordinates. Three properties are
 load-bearing:
 
-- **Coordinates, not graphs.** Matching is nearest-atom-within-tolerance on
-  position and element, through the spatial grid, and *ignores bonds entirely* —
-  a `before` pattern's bonds exist only to express deletions and order changes.
-  No subgraph isomorphism, no chemical perception. Adding a bond check would only
-  add a way for a correct script to fail.
+- **Coordinates find the atoms; bonds and bond counts verify them.** Matching is
+  nearest-atom-within-tolerance on position and element, through the spatial
+  grid — no subgraph isomorphism, no chemical perception. Since
+  `atomcad-msops/3` a second, O(1) pass then checks two things about the atoms
+  that pass found (`apply::check_pattern`, and it is **one function with three
+  call sites**: `match_before`, the placement search's prunes, and
+  `place::tool_readiness`). Within a pattern the bond list is **closed-world** —
+  a listed bond must exist at that order, an unlisted *pair* must not exist at
+  all — and a `before` atom may state `deg`, the exact bond count of the atom it
+  matches. Bonds to atoms outside the pattern are unconstrained; that is what
+  `deg` is for. Consequences worth knowing: `bridge` on an already bonded pair
+  refuses itself with no rule of its own, "delete an absent bond" can no longer
+  be a silent no-op, and every hand-written fixture pattern must list the bonds
+  its atoms have in the workpiece it is matched against. See
+  `doc/design_mechanosynth_pattern_checks.md`.
+- **The invariant the two halves share: a candidate is offerable iff the step it
+  produces replays.** Every check that can run at placement runs there too, and
+  through the same predicate. The single exception is the **clicked** atom's own
+  degree, which becomes a `place::Refusal` on every candidate of that call
+  rather than a dead branch — "this host has 4 bonds and the operation needs 3"
+  is the coverage report the editor exists to give. `Applicability::offerable`
+  therefore also asks whether any candidate is unrefused.
+- **A click may only play an *anchor*.** `Operation::anchors` counts the leading
+  `before` ids a click may be given (default 1, the atom at the origin). The old
+  smallest-eligible-id fallback made every atom of every pattern clickable —
+  frame atoms included — whenever the origin atom's element did not admit the
+  click. A frame atom is by definition one the operation does not touch, so
+  clicking it is not a statement about where the reaction should go.
 - **Ideal geometry.** Added atoms land exactly where the operation says, and
   nothing here relaxes anything. That is what keeps tolerances tight and every
   intermediate state deterministic. Wire `relax` downstream if a settled
@@ -395,13 +419,24 @@ before it). It is a *display* grouping and never a replay semantics: the replay
 is sequential for every kind, so the order of the steps inside an event is their
 meaning.
 
-`OpLibrary::warnings` carries load-time advisories — today the **origin
-convention**, that `before` atom `ORIGIN_PATTERN_ATOM_ID` (1) sits at the origin
-and is the atom the operation acts on. A violation is never an error: a foreign
-library still replays and still places, since `t` falls out of the fit. An
-operation's optional `chiral` flag is likewise inert here and read only by the
-placement engine. Both are additive keys — the parser has always ignored what it
-does not know, so a file carrying them loads on an older build.
+`OpLibrary::warnings` carries load-time advisories, never errors: the **origin
+convention** (`before` atom `ORIGIN_PATTERN_ATOM_ID` is at the origin), a
+**planar frame** whose `after` reaches outside what `before` spans (the
+upside-down-precursor case), an **unbonded close pair** within one pattern, and
+a **valence** the operation would overflow. Each names its operation, and each
+is a statement about a library its author is better placed to judge than the
+engine is — the valence table in particular is the one element-specific thing
+here and stays open-ended (`max_covalent_valence` returns `None` for what it
+does not list).
+
+Note the one shape the `anchors` frame-atom rule has to exempt: an operation
+that **changes nothing at all** makes every atom a frame atom by the letter of
+`is_frame_atom`, and "a click that places the reaction somewhere else" is
+meaningless where there is no reaction. No generated library holds one; the
+fixtures that pin "this step touches nothing" do.
+
+An operation's optional `chiral` flag is inert here and read only by the
+placement engine.
 
 Deliberately independent of `atomic_structure_diff` / `apply_diff`, which solve
 the more general problem of anchoring arbitrary diffs across bases; nothing is
@@ -433,11 +468,13 @@ O(n²), compares flags and tag names). Design doc:
   mismatch, degenerate axes, non-finite sample)
 - `MechanosynthError` (mechanosynth/schema) — Io / Json / Invalid (a validation
   failure naming the file, the operation, the tool type or the step, and the
-  field) / NoMatch (a `before` atom that found nothing within tolerance, boxed
-  because it is the widest variant and every fallible function here returns this
-  enum) / the binding family (SceneTags, ToolUntagged, ToolMultiType,
-  ToolDuplicate, ToolFrameTag, ToolPoseResidual) / the per-step family
-  (ToolMissing, ToolState, StepOnTool, StepAcrossParticipants, ToolSideOffTool)
+  field) / the match family, all **boxed** because they are the widest variants
+  and every fallible function here returns this enum: NoMatch (a `before` atom
+  that found nothing within tolerance), BondMismatch and DegreeMismatch (the
+  `/3` pattern checks) / the binding family (SceneTags, ToolUntagged,
+  ToolMultiType, ToolDuplicate, ToolFrameTag, ToolPoseResidual) / the per-step
+  family (ToolMissing, ToolState, StepOnTool, StepAcrossParticipants,
+  ToolSideOffTool)
 
 All use `thiserror` derive macros.
 

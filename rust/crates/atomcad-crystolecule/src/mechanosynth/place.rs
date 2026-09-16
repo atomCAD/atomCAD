@@ -31,13 +31,20 @@
 //!   when they share `(r, t)`. Three tetrahedral `"*"` frame atoms around a
 //!   fixed host admit six assignments and six transforms, but one reaction; two
 //!   dimerization partners are two reactions and stay two candidates.
+//! - **A candidate is offerable exactly when the step it produces replays.**
+//!   The pattern checks — closed-world bonds and `deg` — run here as prunes in
+//!   the assignment search and there as [`check_pattern`], which is the same
+//!   function; the one exception is the *clicked* atom's own degree, which is a
+//!   [`Refusal`] on the candidate rather than a dead branch, because "this host
+//!   has 4 bonds and the operation needs 3" is the coverage report the editor
+//!   exists to give. See `doc/design_mechanosynth_pattern_checks.md` §4.
 
-use super::apply::describe_nearest;
+use super::apply::{PatternMismatch, check_pattern, describe_nearest};
 use super::fit::{rank_of, rigid_fit};
 use super::scene::ToolBinding;
 use super::schema::{
-    MechanosynthError, OpLibrary, Operation, PATTERN_POSITION_EPSILON, PatternAtom, PatternElement,
-    Step,
+    MechanosynthError, OpLibrary, Operation, PATTERN_POSITION_EPSILON, Pattern, PatternAtom,
+    PatternElement, Step,
 };
 use crate::atomic_constants::element_symbol;
 use crate::atomic_structure::AtomicStructure;
@@ -46,6 +53,7 @@ use crate::guided_placement::{
     compute_sp2_candidates, compute_sp3_candidates, detect_hybridization, gather_bond_directions,
 };
 use glam::{DMat3, DVec3};
+use rustc_hash::FxHashMap;
 
 /// A fit at or below this max per-atom residual (Å) counts as *exact*: it
 /// reproduces the coordinates a generator would have written, to the 1e-6 Å the
@@ -98,6 +106,37 @@ pub struct Candidate {
     /// named no frame atoms — coordinates from the application rather than from
     /// the library.
     pub approximate: bool,
+    /// Why this candidate cannot be committed, when it cannot.
+    ///
+    /// A candidate carrying one is kept — it must be previewable, since the
+    /// reason is about the ghost the user is looking at — and is not offerable.
+    /// See [`Refusal`] and [`Applicability::offerable`].
+    pub refusal: Option<Refusal>,
+}
+
+/// Why a candidate cannot be committed.
+///
+/// There is deliberately **no bond variant**: a bond mismatch is pairwise, so
+/// the assignment search prunes it and no candidate is ever produced. A degree
+/// mismatch on a non-clicked atom is pruned the same way. Only the clicked
+/// atom's own degree reaches a candidate, because that one is a report about the
+/// atom the user chose rather than about the search.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Refusal {
+    /// The clicked atom has `found` bonds where the role it was given states
+    /// `expected`.
+    Degree { expected: u32, found: usize },
+}
+
+impl Refusal {
+    /// The refusal in the words a row shows where its residual would be.
+    pub fn reason(&self, op: &str) -> String {
+        match self {
+            Refusal::Degree { expected, found } => {
+                format!("{op} needs a host with {expected} bond(s); the clicked atom has {found}")
+            }
+        }
+    }
 }
 
 /// What the assignment search did, for the pruning-regression test. A pruning
@@ -160,13 +199,30 @@ pub fn place_with_stats(
         }
     })?;
 
+    // The clicked atom's own degree is the one pattern check the search does not
+    // prune. A wrong element means the operation has nothing to say about this
+    // atom, so the sweep drops it; a wrong *degree* on an atom the operation
+    // would act on is a coverage report, so the search runs anyway and every
+    // candidate it produces carries the refusal.
+    let role_refusal = role.deg.and_then(|expected| {
+        let found = clicked_atom.bonds.len();
+        (found != expected as usize).then_some(Refusal::Degree { expected, found })
+    });
+
     // --- 5. fallback: a one-atom pattern that needs an orientation ------------
     // Checked before the fit rather than after it, because the fit *would*
     // succeed — with `r = identity`, which is an orientation the library never
     // stated and the workpiece never justified. A candidate ranked first on a
     // residual of zero would then be committed by the one-click rule.
     if needs_derived_orientation(operation) {
-        let candidates = fallback_candidates(workpiece, operation, role, clicked, clicked_pos);
+        let candidates = fallback_candidates(
+            workpiece,
+            operation,
+            role,
+            clicked,
+            clicked_pos,
+            role_refusal,
+        );
         if candidates.is_empty() {
             return Err(MechanosynthError::NoPlacement {
                 op: operation.name.clone(),
@@ -203,6 +259,7 @@ pub fn place_with_stats(
         workpiece,
         neighbourhood: &neighbourhood,
         others: &others,
+        before: &operation.before,
         slack: 2.0 * tolerance,
         assigned: vec![(role, clicked)],
         complete: Vec::new(),
@@ -257,6 +314,7 @@ pub fn place_with_stats(
                 exact: fit.residual < EXACT_FIT_RESIDUAL,
                 mirrored,
                 approximate: false,
+                refusal: role_refusal,
             });
         }
     }
@@ -284,19 +342,22 @@ pub fn place_with_stats(
 // The role rule
 // ============================================================================
 
-/// The `before` atom the clicked atom plays, by the rule in
-/// `doc/design_mechanosynth_editor.md` §Decisions: among the atoms whose element
-/// admits the click (`"*"` admits all), the one at the origin of the operation's
-/// frame, else the one with the smallest id.
+/// The `before` atom the clicked atom plays: among the operation's **anchors**
+/// whose element admits the click (`"*"` admits all), the one at the origin of
+/// the operation's frame, else the smallest anchor id. `None` when no anchor
+/// admits it, which means the operation does not act on this atom.
 ///
-/// The origin clause is what makes "click the atom the operation acts on" the
-/// whole instruction for a library that follows the origin convention. The
-/// smallest-id clause is for the libraries that do not.
+/// The anchors, not the whole `before` pattern. The old rule fell back to the
+/// smallest *eligible* id, which made every atom of every pattern clickable —
+/// frame atoms included — whenever the origin atom's element happened not to
+/// admit the click, and a click on a terminator chlorine would be given the
+/// `"*"` frame role of an operation that has nothing to do with chlorine. A
+/// frame atom is by definition one the operation does not touch, and a click is
+/// a statement about where the reaction should happen. See
+/// `doc/design_mechanosynth_pattern_checks.md` §4.3.
 fn role_atom(op: &Operation, atomic_number: i16) -> Option<&PatternAtom> {
     let eligible = || {
-        op.before
-            .atoms
-            .iter()
+        op.anchor_atoms()
             .filter(move |atom| atom.element.matches(atomic_number))
     };
     eligible()
@@ -305,10 +366,11 @@ fn role_atom(op: &Operation, atomic_number: i16) -> Option<&PatternAtom> {
         .or_else(|| eligible().min_by_key(|atom| atom.id))
 }
 
-/// The element symbols the `before` pattern accepts, for the `NoRole` message.
+/// The element symbols the operation's **anchors** accept, for the `NoRole`
+/// message.
 fn accepted_elements(op: &Operation) -> String {
     let mut symbols: Vec<String> = Vec::new();
-    for atom in &op.before.atoms {
+    for atom in op.anchor_atoms() {
         let symbol = match atom.element {
             PatternElement::Any => "*".to_string(),
             PatternElement::Element(z) => element_symbol(z),
@@ -316,6 +378,12 @@ fn accepted_elements(op: &Operation) -> String {
         if !symbols.contains(&symbol) {
             symbols.push(symbol);
         }
+    }
+    if symbols.is_empty() {
+        // An operation whose `before` names no atom with an anchor id: the
+        // origin-convention warning already said so at load time, and here it
+        // simply has nothing to be clicked on.
+        return "nothing".to_string();
     }
     symbols.join(", ")
 }
@@ -328,13 +396,27 @@ fn accepted_elements(op: &Operation) -> String {
 /// neighbourhood atoms.
 ///
 /// Patterns hold a handful of atoms, so the cost is in the branching factor
-/// rather than the depth, and one prune does all the work: a pair of assigned
-/// atoms must be as far apart in the workpiece as they are in the pattern, to
-/// within twice the tolerance (each end may be off by one tolerance).
+/// rather than the depth, and three prunes do all the work, applied at the same
+/// point as each atom is considered:
+///
+/// - the candidate atom's bond count must be the `deg` its slot states — one
+///   lookup, before the pairwise loop runs at all;
+/// - a pair of assigned atoms must be as far apart in the workpiece as they are
+///   in the pattern, to within twice the tolerance (each end may be off by one);
+/// - and its bond to every already-assigned atom — **the role atom included** —
+///   must be exactly what the pattern's closed-world bond list says.
+///
+/// The two new ones are O(1) apiece, so they make the search cheaper rather than
+/// dearer: on a crowded neighbourhood the `deg` lookup rejects a scattered atom
+/// outright and the bond check rejects one that merely happens to be at the
+/// right distance. The role atom's own degree is deliberately *not* pruned here:
+/// its mismatch is a [`Refusal`] on every candidate, not a dead branch.
 struct Search<'a> {
     workpiece: &'a AtomicStructure,
     neighbourhood: &'a [u32],
     others: &'a [&'a PatternAtom],
+    /// The whole `before` pattern, for its bond list.
+    before: &'a Pattern,
     slack: f64,
     assigned: Vec<(&'a PatternAtom, u32)>,
     complete: Vec<Vec<(&'a PatternAtom, u32)>>,
@@ -358,6 +440,12 @@ impl<'a> Search<'a> {
             if !pattern_atom.element.matches(atom.atomic_number) {
                 continue;
             }
+            if pattern_atom
+                .deg
+                .is_some_and(|deg| atom.bonds.len() != deg as usize)
+            {
+                continue;
+            }
             let fits = self.assigned.iter().all(|(other, other_id)| {
                 let pattern_distance = pattern_atom.pos.distance(other.pos);
                 let world_distance = self
@@ -365,7 +453,10 @@ impl<'a> Search<'a> {
                     .get_atom(*other_id)
                     .map(|a| a.position.distance(atom.position))
                     .unwrap_or(f64::INFINITY);
-                (world_distance - pattern_distance).abs() <= self.slack
+                if (world_distance - pattern_distance).abs() > self.slack {
+                    return false;
+                }
+                self.bond_agrees(pattern_atom.id, other.id, atom_id, *other_id)
             });
             if !fits {
                 continue;
@@ -375,6 +466,20 @@ impl<'a> Search<'a> {
             self.descend(depth + 1);
             self.assigned.pop();
         }
+    }
+
+    /// Whether the workpiece agrees with the pattern about the bond between two
+    /// pattern ids. An unlisted pair asserts "no bond", which is what makes
+    /// `bridge` on an already bonded pair refuse itself with no special rule.
+    fn bond_agrees(&self, a: i64, b: i64, a_atom: u32, b_atom: u32) -> bool {
+        let key = (a.min(b), a.max(b));
+        let expected = self
+            .before
+            .bonds
+            .iter()
+            .find(|bond| bond.key() == key)
+            .map(|bond| bond.order);
+        expected == self.workpiece.bond_order_between(a_atom, b_atom)
     }
 }
 
@@ -485,6 +590,7 @@ fn fallback_candidates(
     role: &PatternAtom,
     clicked: u32,
     clicked_pos: DVec3,
+    refusal: Option<Refusal>,
 ) -> Vec<Candidate> {
     free_directions(workpiece, clicked)
         .into_iter()
@@ -501,6 +607,7 @@ fn fallback_candidates(
                 exact: true,
                 mirrored: false,
                 approximate: true,
+                refusal,
             }
         })
         .collect()
@@ -823,11 +930,36 @@ pub struct ToolReadiness {
 }
 
 impl Applicability {
-    /// Whether this row can be committed: it fits geometrically **and**, when
-    /// the operation needs a tool, that tool is ready. The one question the
-    /// offer list and the commit path both ask.
+    /// Whether this row can be committed: it fits geometrically, at least one
+    /// of its candidates carries no refusal, **and**, when the operation needs a
+    /// tool, that tool is ready. The one question the offer list and the commit
+    /// path both ask.
+    ///
+    /// A row is only as blocked as *all* of its candidates, which matters
+    /// because the interesting rows are mixed — the edge-host donation of
+    /// `doc/design_mechanosynth_pattern_checks.md` §5.2 has one good fit and one
+    /// refused one, and the good one has to stay offerable.
     pub fn offerable(&self) -> bool {
-        self.fits && self.tool.as_ref().is_none_or(|tool| tool.ready)
+        self.fits
+            && self
+                .candidates
+                .iter()
+                .any(|candidate| candidate.refusal.is_none())
+            && self.tool.as_ref().is_none_or(|tool| tool.ready)
+    }
+
+    /// The reason this row cannot be committed, when **every** way of placing it
+    /// is refused. `None` for a row with at least one placeable candidate, which
+    /// stays above the rule and dims only the candidates that are refused.
+    pub fn blocked(&self) -> Option<String> {
+        if self.candidates.is_empty() {
+            return None;
+        }
+        let first = self.candidates.first()?.refusal?;
+        self.candidates
+            .iter()
+            .all(|candidate| candidate.refusal.is_some())
+            .then(|| first.reason(&self.op))
     }
 
     /// The candidate a row is previewed by: its first real one, else its
@@ -1025,25 +1157,45 @@ fn tool_readiness(
 
     let mut tool_step = Step::new(operation.name.clone(), binding.pose.t);
     tool_step.r = binding.pose.r;
+    let mut matched: FxHashMap<i64, u32> = FxHashMap::default();
     for pattern_atom in &tool_side.before.atoms {
         let target = tool_step.place(pattern_atom.pos);
         let found = workpiece.nearest_unclaimed_atom(
             target,
             tolerance,
             pattern_atom.element.required_atomic_number(),
-            |_| false,
+            |atom_id| matched.values().any(|claimed| *claimed == atom_id),
         );
-        if found.is_none() {
-            return Some(ToolReadiness {
-                reason: Some(format!(
-                    "{tool_type}: {}",
-                    describe_nearest(workpiece, target)
-                )),
-                tool_type,
-                state: binding.state.clone(),
-                ready: false,
-            });
+        match found {
+            Some(found) => {
+                matched.insert(pattern_atom.id, found.atom_id);
+            }
+            None => {
+                return Some(ToolReadiness {
+                    reason: Some(format!(
+                        "{tool_type}: {}",
+                        describe_nearest(workpiece, target)
+                    )),
+                    tool_type,
+                    state: binding.state.clone(),
+                    ready: false,
+                });
+            }
         }
+    }
+
+    // The same second pass the replay runs, so a tool whose cargo bond is
+    // missing is dimmed at placement exactly as it fails at replay. This path
+    // does not go through `match_before` — it has its own nearest-atom loop at
+    // the bound pose — which is why the predicate is a shared function rather
+    // than a step inside that one.
+    if let Some(mismatch) = check_pattern(workpiece, &tool_side.before, &matched, None) {
+        return Some(ToolReadiness {
+            reason: Some(format!("{tool_type}: {}", describe_tool_mismatch(mismatch))),
+            tool_type,
+            state: binding.state.clone(),
+            ready: false,
+        });
     }
 
     Some(ToolReadiness {
@@ -1052,6 +1204,35 @@ fn tool_readiness(
         ready: true,
         reason: None,
     })
+}
+
+/// A tool-side [`PatternMismatch`] in the words a dimmed row shows.
+fn describe_tool_mismatch(mismatch: PatternMismatch) -> String {
+    match mismatch {
+        PatternMismatch::Degree {
+            id,
+            expected,
+            found,
+        } => format!("its atom {id} needs {expected} bond(s) and has {found}"),
+        PatternMismatch::Bond {
+            a,
+            b,
+            expected: Some(order),
+            found: None,
+        } => format!("the bond between its atoms {a} and {b} (order {order}) is missing"),
+        PatternMismatch::Bond {
+            a,
+            b,
+            expected: None,
+            ..
+        } => format!("its atoms {a} and {b} are bonded, and the operation needs them apart"),
+        PatternMismatch::Bond {
+            a,
+            b,
+            expected: Some(want),
+            found: Some(got),
+        } => format!("the bond between its atoms {a} and {b} is order {got}, not {want}"),
+    }
 }
 
 // ============================================================================

@@ -1,6 +1,6 @@
 {
   "comment": "Library for the effect-derived `touched` rule, frame-atom recognition, `chiral` and the origin convention. Every op here exists to make one clause of those rules observable on its own.",
-  "format": "atomcad-msops/2",
+  "format": "atomcad-msops/3",
   "tools": [
     {
       "name": "probe",

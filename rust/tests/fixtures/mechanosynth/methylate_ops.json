@@ -1,6 +1,6 @@
 {
   "comment": "The three-operation library the multi-step fixture uses. Shapes follow the diamond sketch in the design doc, but the geometry is a free methane, not a lattice.",
-  "format": "atomcad-msops/2",
+  "format": "atomcad-msops/3",
   "tools": [
     {
       "name": "probe",

@@ -1,6 +1,6 @@
 {
   "comment": "One operation per row of the id-rule table. Each is applied on its own by the id-rule tests, which build the step in code.",
-  "format": "atomcad-msops/2",
+  "format": "atomcad-msops/3",
   "tools": [
     {
       "name": "probe",
@@ -141,7 +141,7 @@
           { "id": 1, "el": "C", "pos": [0.0, 0.0, 0.0] },
           { "id": 2, "el": "H", "pos": [0.0, 0.0, 1.09] }
         ],
-        "bonds": []
+        "bonds": [ [1, 2] ]
       },
       "after": {
         "atoms": [ { "id": 1, "el": "C", "pos": [3.0, 0.0, 0.0] } ],
