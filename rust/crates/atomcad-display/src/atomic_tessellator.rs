@@ -1550,6 +1550,12 @@ const MS_GHOST_TRAIL_RADIUS: f64 = 0.06;
 /// an annotation — for `bridge` it is the *only* thing the preview has to show.
 const MS_GHOST_BOND_RADIUS: f64 = 0.14;
 
+/// The element symbol on a ghost, relative to the display's `label_scale`.
+/// Smaller than a scene label: the symbol is there to tell two offers apart,
+/// not to be read across the room, and at full size it competed with the
+/// sphere it was annotating.
+const MS_GHOST_LABEL_FACTOR: f32 = 0.7;
+
 /// Tessellate the `mechanosynth_edit` placement preview as **transparent
 /// impostors**, so a ghost is depth-tested against the workpiece and hidden by
 /// the atoms in front of it.
@@ -1578,8 +1584,9 @@ const MS_GHOST_BOND_RADIUS: f64 = 0.14;
 /// element it becomes). A `Moved` atom keeps its element and a `Deleted` ghost
 /// sits on a real atom that already shows what it is, so a label there is
 /// noise. Near misses keep their label — the amber says "look, don't place",
-/// the symbol says what you are looking at. The scale is the display's
-/// `label_scale`, so the preview's text matches the scene's.
+/// the symbol says what you are looking at. The size follows the display's
+/// `label_scale`, reduced by [`MS_GHOST_LABEL_FACTOR`] so the symbol reads as
+/// an annotation on the ghost rather than as the ghost's headline.
 pub fn tessellate_mechanosynth_ghosts_impostors(
     transparent_impostor_mesh: &mut TransparentImpostorMesh,
     label_mesh: &mut LabelMesh,
@@ -1588,10 +1595,12 @@ pub fn tessellate_mechanosynth_ghosts_impostors(
 ) {
     use atomcad_crystolecule::mechanosynth::place::{GhostBondKind, GhostKind};
 
-    // em → Å, clamped the same way `tessellate_atom_labels` clamps it.
+    // em → Å, clamped the same way `tessellate_atom_labels` clamps it, then
+    // reduced: a ghost's symbol is an annotation, not a scene label.
     let label_scale = atomic_viz_prefs
         .label_scale
-        .clamp(LABEL_SCALE_MIN, LABEL_SCALE_MAX);
+        .clamp(LABEL_SCALE_MIN, LABEL_SCALE_MAX)
+        * MS_GHOST_LABEL_FACTOR;
 
     // Bonds first, so an added atom's sphere draws over the stick reaching it
     // rather than the other way round.

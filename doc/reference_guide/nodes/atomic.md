@@ -1534,9 +1534,10 @@ throughout, because it is for looking at, not for placing.
 does, not which atom arrives, and two rows that put different elements on the
 same site — a chlorine and a silicon, say — would otherwise ghost as the same
 green sphere. So every added ghost, and every element swap, carries its symbol
-as the same camera-facing text `apply_style`'s `label` draws, sized by the
-display's label scale. A moved atom keeps its element and a deleted ghost sits on
-an atom you can already see, so neither is labelled.
+as the same camera-facing text `apply_style`'s `label` draws, a little smaller
+than a scene label and following the display's label scale. A moved atom keeps
+its element and a deleted ghost sits on an atom you can already see, so neither
+is labelled.
 
 Some operations move no atom at all. `bridge` and `bridge_c` in the silicon
 library have identical before and after atom lists and differ only in the bond

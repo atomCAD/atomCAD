@@ -12,9 +12,12 @@
 //! the ghost's *destination* and clears its sphere, that it honours the
 //! display's `label_scale`, and that labelling leaves the sphere pass alone.
 
+use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::atomic_structure::atomic_structure_decorator::MechanosynthGhostVisuals;
 use atomcad_crystolecule::mechanosynth::place::{GhostAtom, GhostKind};
-use atomcad_display::atomic_tessellator::tessellate_mechanosynth_ghosts_impostors;
+use atomcad_display::atomic_tessellator::{
+    tessellate_atom_labels, tessellate_mechanosynth_ghosts_impostors,
+};
 use atomcad_display::preferences::{
     AtomicRenderingMethod, AtomicStructureVisualization, AtomicStructureVisualizationPreferences,
 };
@@ -200,6 +203,28 @@ fn label_honours_the_display_label_scale() {
     assert!(
         (ratio - 2.0).abs() < 1e-4,
         "doubling label_scale doubles the label, got ratio {ratio}"
+    );
+}
+
+/// A ghost's symbol is an annotation, not a scene label: at the same
+/// `label_scale` it is drawn smaller than the same text on a real atom, so it
+/// does not compete with the sphere it sits on.
+#[test]
+fn ghost_label_is_smaller_than_a_scene_label() {
+    let (_, ghost_labels) = tessellate(
+        &visuals(vec![ghost(GhostKind::Added, CHLORINE, DVec3::ZERO)], false),
+        0.7,
+    );
+    let mut s = AtomicStructure::new();
+    let id = s.add_atom(CHLORINE, DVec3::ZERO);
+    s.set_atom_label(id, "Cl".to_string());
+    let mut scene_labels = LabelMesh::new();
+    tessellate_atom_labels(&mut scene_labels, &s, &prefs(0.7));
+
+    let ratio = half_extent_x(&ghost_labels) / half_extent_x(&scene_labels);
+    assert!(
+        ratio < 0.9 && ratio > 0.4,
+        "ghost label should be noticeably but not drastically smaller, got ratio {ratio}"
     );
 }
 
