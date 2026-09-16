@@ -49,4 +49,9 @@ We categorize nodes by their functionality and/or output pin data type. There ar
 - [Atomic structure nodes](./reference_guide/nodes/atomic.md)
 - [Other nodes](./reference_guide/nodes/other.md)
 
+Beside them, one page describes a *file format* rather than a category of nodes:
+
+- [Operation libraries](./reference_guide/op_libraries.md) — the two JSON files
+  a mechanosynthesis build is made of, and how to author one.
+
 You create 2D geometry to eventually use the **extrude** node to create a 3D `Blueprint` from it. You create a `Blueprint` to eventually use the **atom_fill** node to materialize an atomic structure from it.

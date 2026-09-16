@@ -329,8 +329,14 @@ Design docs: `doc/design_isosurface_node.md`, `doc/design_isosurface_level.md`.
 — positionally controlled reactions — onto a workpiece, so that "the structure
 after the first `k` steps" is a value the caller can ask for. An **operation** is
 a before/after pair of small atom lists in a local frame; a **step** names one
-and gives a rigid transform into workpiece coordinates. Three properties are
-load-bearing:
+and gives a rigid transform into workpiece coordinates.
+
+**The normative description of both file formats is
+`doc/reference_guide/op_libraries.md`** — every field, every load error and
+warning, and the rules a generator must follow to produce a library the
+placement tool can offer correctly. Change the schema or the parser and that
+page changes with it; the design docs keep the rationale, and what follows
+keeps the invariants the code rests on. Three properties are load-bearing:
 
 - **Coordinates find the atoms; bonds and bond counts verify them.** Matching is
   nearest-atom-within-tolerance on position and element, through the spatial

@@ -1,7 +1,7 @@
 # Design: pattern checks in the mechanosynthesis engine — bonds, degree, anchors, steric clashes
 
-Status: **drafted and reviewed 2026-09-16**. Phases 0 (§8), 1, 2 and 3 (§12)
-implemented 2026-09-16; Phase 4 and the out-of-repo generator work are not.
+Status: **drafted and reviewed 2026-09-16**. Every phase (§12) is implemented
+2026-09-16; the out-of-repo generator work is not.
 
 Two things Phase 2 had to decide that this document left implicit:
 
@@ -774,6 +774,16 @@ lands where it does not — enumerated the way `preview_bonds` enumerates them.
 
 ## 9. Where the library-authoring guidelines live
 
+**Done in Phase 4.** `doc/reference_guide/op_libraries.md` exists, the format
+reference moved into it, `atomic.md`'s "The two files" is the two-bullet summary
+and the link, and the hub, both `ops` pins and the `ops_library` section point at
+it. One thing the plan below did not anticipate: the two conventions that used to
+sit under *Frame atoms* — first shell only, one operation per environment — are
+**authoring** rules 2 and 5, not format facts, so the format half says what a
+frame atom is and the authoring half says how many to name and how to name the
+variants. Stating them in both places would have been the swamping the page
+exists to avoid.
+
 The maintainer asked where to write down how to author an operation library.
 Today the format is documented inside the `mechanosynth` node's section of
 `doc/reference_guide/nodes/atomic.md` ("The two files"), which is the right
@@ -897,7 +907,7 @@ manual walkthrough item.
 | **1** | `/3`: closed-world bonds, `deg`, `anchors`, `clash` in the schema and parser; the anchor role rule; load-time validation of §3.5; bond and degree checks in `match_before` and in the placement search and role rule; new error variants — **done** | `schema.rs`, `parse.rs`, `apply.rs`, `place.rs`, `scene.rs`, tests, guide "The two files" / "How a step is applied" |
 | **2** | steric check: `Contact`, `Refusal::Clash`, blocked-last ranking, replay error; structure sanity in `build_scene` — **done** | `apply.rs`, `place.rs`, `scene.rs`, `schema.rs`, tests, guide "The two files" / "How a step is applied". The two nodes needed **no** change: both reach the engine through `build_scene`, so §6 covers them where they stand |
 | **3** | editor surfacing: `CandidateRow.blocked`, `OfferRow.blocked`, `choose` by candidate, API, popup (blocked candidates inline, fully blocked rows below the rule); guide "The offer popup" — **done** | `mechanosynth_edit_ops.rs`, `mechanosynth_edit_api.rs`, FRB codegen, `mechanosynth_offer_popup.dart` |
-| **4** | the guide page `op_libraries.md` and the move out of `atomic.md`; AGENTS pointers | docs |
+| **4** | the guide page `op_libraries.md` and the move out of `atomic.md`; AGENTS pointers — **done** | docs |
 | **ext** | outside the repo, before Phase 1 lands: the generator writes `/3` — bonds among named atoms in both halves, `deg` as drawn, a frame atom off the plane for the precursor and the edge host, the format string; `anchors` only if an operation has primary atoms of different elements, which none in v3 has — and both libraries are regenerated and replayed | `mechanosynth/gen` |
 
 **Phase 3 had one thing to decide that §5.2 and §7 left implicit: a refused
