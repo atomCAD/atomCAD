@@ -636,3 +636,118 @@ fn per_site_h_pinning_silicon_surf_recon() {
         "non-dimer Si–H must use the lattice-fill 1.42 fallback"
     );
 }
+
+// =============================================================================
+// One dimer geometry, independent of passivation
+// =============================================================================
+
+/// Materializes a box with the (100) 2×1 reconstruction on and passivation as
+/// given (hydrogen when on).
+fn fill_box_recon(
+    motif: &Motif,
+    cell: &UnitCellStruct,
+    cells: f64,
+    passivate: bool,
+) -> AtomicStructure {
+    let a = cell.a.length();
+    let config = LatticeFillConfig {
+        unit_cell: cell.clone(),
+        motif: motif.clone(),
+        parameter_element_values: HashMap::new(),
+        geometry: axis_aligned_box(DVec3::ZERO, DVec3::splat(cells * a)),
+        motif_offset: DVec3::ZERO,
+        regions: Vec::new(),
+    };
+    let options = LatticeFillOptions {
+        hydrogen_passivation: passivate,
+        remove_unbonded_atoms: true,
+        remove_single_bond_atoms: false,
+        reconstruct_surface: true,
+        invert_phase: false,
+        rebond_concave_clashes: true,
+        passivation_element: 1,
+    };
+    let margin = 5.0;
+    let fill_region = DAABox::new(DVec3::splat(-margin), DVec3::splat(cells * a + margin));
+    fill_lattice(&config, &options, &fill_region).atomic_structure
+}
+
+fn host_positions(s: &AtomicStructure, elem: i16) -> Vec<DVec3> {
+    s.atoms_values()
+        .filter(|a| a.atomic_number == elem)
+        .map(|a| a.position)
+        .collect()
+}
+
+/// Largest distance from any point of `a` to its nearest point in `b`.
+fn max_nearest_deviation(a: &[DVec3], b: &[DVec3]) -> f64 {
+    a.iter()
+        .map(|p| b.iter().map(|q| p.distance(*q)).fold(f64::MAX, f64::min))
+        .fold(0.0, f64::max)
+}
+
+/// The passivation flag adds or omits terminators; it must not move a single
+/// host atom. (It used to: the reconstruction picked a "clean" or
+/// "passivated" dimer geometry from the flag, 0.083 Å apart for silicon — past
+/// the mechanosynthesis operation gate, so a bare surface from `materialize`
+/// and a depassivated one could never match the same operation.)
+#[test]
+fn reconstructed_host_positions_do_not_depend_on_passivation() {
+    for (motif, a, elem) in [
+        (silicon_motif(), 5.431, 14),
+        (DEFAULT_ZINCBLENDE_MOTIF.clone(), 3.567, 6),
+    ] {
+        let cell = cubic_cell(a);
+        let passivated = host_positions(&fill_box_recon(&motif, &cell, 4.0, true), elem);
+        let bare = host_positions(&fill_box_recon(&motif, &cell, 4.0, false), elem);
+        assert_eq!(passivated.len(), bare.len(), "Z={elem}: host count differs");
+        let dev = max_nearest_deviation(&passivated, &bare);
+        assert!(dev < 1e-9, "Z={elem}: hosts moved by up to {dev} Å");
+    }
+}
+
+/// Every reconstructed dimer has the constants' bond length, and both of its
+/// atoms keep bulk-length back-bonds — the vertical drop is derived to make
+/// that so, rather than being a fourth free constant.
+#[test]
+fn reconstructed_dimer_has_bulk_length_back_bonds() {
+    for (motif, a, elem, dimer_len) in [
+        (silicon_motif(), 5.431, 14, 2.44),
+        (DEFAULT_ZINCBLENDE_MOTIF.clone(), 3.567, 6, 1.63),
+    ] {
+        let s = fill_box_recon(&motif, &cubic_cell(a), 4.0, true);
+        let bulk = a * 3f64.sqrt() / 4.0;
+        let mut dimers = 0;
+        for (&id, at) in s.iter_atoms() {
+            if at.atomic_number != elem {
+                continue;
+            }
+            for b in at.bonds.iter() {
+                let o = b.other_atom_id();
+                let ot = s.get_atom(o).unwrap();
+                if o < id || ot.atomic_number != elem {
+                    continue;
+                }
+                if (at.position.distance(ot.position) - dimer_len).abs() > 1e-6 {
+                    continue;
+                }
+                dimers += 1;
+                for (h, ha) in [(id, at), (o, ot)] {
+                    for bb in ha.bonds.iter() {
+                        let n = bb.other_atom_id();
+                        let na = s.get_atom(n).unwrap();
+                        if n == id || n == o || na.atomic_number != elem {
+                            continue;
+                        }
+                        let l = ha.position.distance(na.position);
+                        assert!(
+                            (l - bulk).abs() < 1e-6,
+                            "Z={elem}: back-bond of dimer atom {h} is {l:.6} Å, bulk is {bulk:.6}"
+                        );
+                    }
+                }
+            }
+        }
+        assert!(dimers > 0, "Z={elem}: no dimer of {dimer_len} Å found");
+    }
+}

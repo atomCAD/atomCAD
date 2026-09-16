@@ -68,12 +68,19 @@ pub struct SurfaceReconstructionOutcome {
     pub unpaired_surface_atoms: FxHashSet<u32>,
 }
 
+/// One dimer geometry per lattice, whether or not the dimer ends up
+/// passivated. Passivation adds or omits terminators; it never moves the host
+/// atoms. The mechanosynthesis model reaches a bare dimer by deleting its
+/// terminator, which moves nothing, so a bare surface built here has to stand
+/// exactly where a depassivated one does — a geometry forked on the
+/// passivation flag put the two 0.083 Å apart, past the 0.05 Å operation
+/// matching gate. The values are the monohydride/monohalide ones, because that
+/// is the state the surface is in everywhere except the few sites a process
+/// has opened.
 #[derive(Clone, Copy)]
 struct SurfaceReconstructionParams {
-    dimer_bond_length_clean: f64,
-    dimer_bond_length_passivated: f64,
-    vertical_displacement_clean: f64,
-    vertical_displacement_passivated: f64,
+    dimer_bond_length: f64,
+    vertical_displacement: f64,
     h_bond_length: f64,
     h_angle_from_normal_degrees: f64,
 }
@@ -82,24 +89,13 @@ struct SurfaceReconstructionParams {
 // Diamond (100) 2×1 Dimer Reconstruction Geometric Constants
 // ============================================================================
 
-/// Target dimer bond length for clean (unpassivated) diamond (100) surface in Ångströms.
-/// Literature value: ~1.42 Å
-const DIMER_BOND_LENGTH_CLEAN: f64 = 1.42;
-
-/// Target dimer bond length for hydrogen-passivated diamond (100) surface in Ångströms.
-/// Passivation weakens the π-bond, lengthening the dimer.
-/// Literature value: ~1.6 Å
-const DIMER_BOND_LENGTH_PASSIVATED: f64 = 1.6;
-
-/// Vertical displacement (downward) for clean surface reconstruction in Ångströms.
-/// Atoms move closer to the second layer.
-/// Delta from original: -0.205 Å
-const VERTICAL_DISPLACEMENT_CLEAN: f64 = -0.205;
-
-/// Vertical displacement (downward) for passivated surface reconstruction in Ångströms.
-/// Weaker reconstruction than clean surface.
-/// Delta from original: -0.076 Å
-const VERTICAL_DISPLACEMENT_PASSIVATED: f64 = -0.076;
+/// Target dimer bond length for the diamond (100) 2×1 dimer in Ångströms: the
+/// monohydride value, used whether or not the dimer is passivated — see
+/// `SurfaceReconstructionParams`. Hong & Chou (LDA slab, arXiv:cond-mat/9607008)
+/// give 1.63 Å for C(100)-2×1:H against 1.37 Å for the bare, doubly-bonded
+/// dimer; a second DFT study gives 1.62 Å. The vertical drop is derived, see
+/// [`vertical_drop_for_bulk_back_bond`].
+const DIMER_BOND_LENGTH: f64 = 1.63;
 
 /// C-H bond length for hydrogen passivation in Ångströms.
 const C_H_BOND_LENGTH: f64 = 1.09;
@@ -115,19 +111,15 @@ const C_H_ANGLE_FROM_NORMAL_DEGREES: f64 = 24.0;
 /// Silicon diamond-cubic lattice parameter in Ångströms.
 const SILICON_UNIT_CELL_SIZE_ANGSTROM: f64 = 5.431;
 
-/// Target dimer bond length for clean (unpassivated) silicon (100) surface in Ångströms.
-/// Best-effort value for now.
-const SI_DIMER_BOND_LENGTH_CLEAN: f64 = 2.25;
-
-/// Target dimer bond length for hydrogen-passivated silicon (100) monohydride surface in Ångströms.
-/// Best-effort value for now.
-const SI_DIMER_BOND_LENGTH_PASSIVATED: f64 = 2.34;
-
-/// Vertical displacement (downward) for clean Si(100) reconstruction in Ångströms.
-const SI_VERTICAL_DISPLACEMENT_CLEAN: f64 = -0.10; // TODO: research
-
-/// Vertical displacement (downward) for H-passivated Si(100) reconstruction in Ångströms.
-const SI_VERTICAL_DISPLACEMENT_PASSIVATED: f64 = -0.03; // TODO: research
+/// Target dimer bond length for the silicon (100) 2×1 dimer in Ångströms
+/// (monohydride value; see `SurfaceReconstructionParams`). Kratzer, Hammer &
+/// Nørskov (GGA slab, arXiv:mtrl-th/9503008) give 2.44 Å for Si(100)-2×1:H and
+/// the LDA monochloride is 2.43 Å (Surf. Sci. 1997), so one value serves H and
+/// Cl. A single bare dimer inside a terminated field stays near 2.40 Å (Jing &
+/// Whitten, PRB 46, 9544), within 0.02 Å per atom of this; only a pristine
+/// clean surface (2.24–2.28 Å, buckled) is not represented. The vertical drop
+/// is derived, see [`vertical_drop_for_bulk_back_bond`].
+const SI_DIMER_BOND_LENGTH: f64 = 2.44;
 
 /// Si-H bond length for hydrogen passivation in Ångströms.
 const SI_H_BOND_LENGTH: f64 = 1.50;
@@ -142,25 +134,58 @@ fn approximately_equal(a: f64, b: f64, tolerance: f64) -> bool {
     (a - b).abs() <= tolerance
 }
 
+/// The downward displacement of a reconstructed dimer atom that returns its two
+/// back-bonds to the bulk bond length, for lattice constant `a` and dimer bond
+/// length `d`.
+///
+/// The reconstruction moves layer one only; layer two stays on its ideal sites.
+/// Each dimer atom slides δ = (a/√2 − d)/2 toward its partner along the dimer
+/// axis, and its two layer-two neighbours sit a/4 below and a√2/4 to either
+/// side of its ideal site (perpendicular to the dimer axis), so
+///
+/// ```text
+/// back-bond² = δ² + (a√2/4)² + (a/4 − v)²
+/// ```
+///
+/// Setting the back-bond to the bulk bond a√3/4 fixes v. Terminated-surface
+/// calculations report bulk-length back-bonds (Si(100)-2×1:Cl, LDA: 2.34 Å;
+/// C(100)-2×1:H, LDA: 1.53 Å — each the calculation's own bulk value), so this
+/// is what the literature shows rather than a modelling convenience. The
+/// caveat: a real surface gets there by relaxing layer two upward as well,
+/// which this pass cannot do, so layer one ends up lower than in reality. The
+/// mechanosynthesis operation patterns encode local bond geometry, not the
+/// absolute height of a layer, so that is the right side to be exact on.
+///
+/// Well defined for every δ < a/4, which every real dimer satisfies by a wide
+/// margin (Si: 0.70 Å against 1.36 Å).
+fn vertical_drop_for_bulk_back_bond(a: f64, d: f64) -> f64 {
+    let delta = (a / 2f64.sqrt() - d) / 2.0;
+    let side = a * 2f64.sqrt() / 4.0;
+    let bulk = a * 3f64.sqrt() / 4.0;
+    let dz = (bulk * bulk - delta * delta - side * side).sqrt();
+    a / 4.0 - dz
+}
+
+/// `cell_size` is the actual lattice constant of the structure being filled
+/// (within `UNIT_CELL_SIZE_TOLERANCE_ANGSTROM` of the nominal one), so the
+/// derived drop is consistent with the lattice the atoms actually sit on.
+/// `vertical_displacement` is signed along the outward surface normal, hence
+/// negative for a drop toward the second layer.
 #[inline]
-fn diamond_reconstruction_params() -> SurfaceReconstructionParams {
+fn diamond_reconstruction_params(cell_size: f64) -> SurfaceReconstructionParams {
     SurfaceReconstructionParams {
-        dimer_bond_length_clean: DIMER_BOND_LENGTH_CLEAN,
-        dimer_bond_length_passivated: DIMER_BOND_LENGTH_PASSIVATED,
-        vertical_displacement_clean: VERTICAL_DISPLACEMENT_CLEAN,
-        vertical_displacement_passivated: VERTICAL_DISPLACEMENT_PASSIVATED,
+        dimer_bond_length: DIMER_BOND_LENGTH,
+        vertical_displacement: -vertical_drop_for_bulk_back_bond(cell_size, DIMER_BOND_LENGTH),
         h_bond_length: C_H_BOND_LENGTH,
         h_angle_from_normal_degrees: C_H_ANGLE_FROM_NORMAL_DEGREES,
     }
 }
 
 #[inline]
-fn silicon_reconstruction_params() -> SurfaceReconstructionParams {
+fn silicon_reconstruction_params(cell_size: f64) -> SurfaceReconstructionParams {
     SurfaceReconstructionParams {
-        dimer_bond_length_clean: SI_DIMER_BOND_LENGTH_CLEAN,
-        dimer_bond_length_passivated: SI_DIMER_BOND_LENGTH_PASSIVATED,
-        vertical_displacement_clean: SI_VERTICAL_DISPLACEMENT_CLEAN,
-        vertical_displacement_passivated: SI_VERTICAL_DISPLACEMENT_PASSIVATED,
+        dimer_bond_length: SI_DIMER_BOND_LENGTH,
+        vertical_displacement: -vertical_drop_for_bulk_back_bond(cell_size, SI_DIMER_BOND_LENGTH),
         h_bond_length: SI_H_BOND_LENGTH,
         h_angle_from_normal_degrees: SI_H_ANGLE_FROM_NORMAL_DEGREES,
     }
@@ -206,7 +231,7 @@ fn get_reconstruction_params(
             UNIT_CELL_SIZE_TOLERANCE_ANGSTROM,
         )
     {
-        return Some(diamond_reconstruction_params());
+        return Some(diamond_reconstruction_params(cell_size));
     }
 
     const SILICON_ATOMIC_NUMBER: i16 = 14;
@@ -218,7 +243,7 @@ fn get_reconstruction_params(
             UNIT_CELL_SIZE_TOLERANCE_ANGSTROM,
         )
     {
-        return Some(silicon_reconstruction_params());
+        return Some(silicon_reconstruction_params(cell_size));
     }
 
     None
@@ -927,18 +952,10 @@ fn apply_dimer_reconstruction(
     passivant_element: i16,
     params: SurfaceReconstructionParams,
 ) {
-    // Select geometry parameters based on passivation setting
-    let target_bond_length = if hydrogen_passivation {
-        params.dimer_bond_length_passivated
-    } else {
-        params.dimer_bond_length_clean
-    };
-
-    let vertical_displacement = if hydrogen_passivation {
-        params.vertical_displacement_passivated
-    } else {
-        params.vertical_displacement_clean
-    };
+    // One geometry whether or not the dimer is passivated; the flag only
+    // decides whether terminators are added below.
+    let target_bond_length = params.dimer_bond_length;
+    let vertical_displacement = params.vertical_displacement;
 
     // Get the two atoms
     let atom1 = structure.get_atom(dimer_pair.primary_atom_id);
