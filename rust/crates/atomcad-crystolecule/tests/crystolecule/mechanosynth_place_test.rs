@@ -811,6 +811,87 @@ fn a_kept_atom_counts_as_itself_rather_than_as_where_the_fit_puts_it() {
     );
 }
 
+/// A bridge over three interchangeable `"*"` frame atoms: the step adds no
+/// atom, moves none and deletes none, so every assignment leaves the same four
+/// atoms exactly where they were and the candidates differ *only* in which
+/// neighbour the new bond goes to.
+fn framed_bridge_library() -> OpLibrary {
+    let pos = |v: DVec3| format!("[{}, {}, {}]", v.x, v.y, v.z);
+    let atoms = format!(
+        r#"{{ "id": 1, "el": "Si", "pos": [0.0, 0.0, 0.0] }},
+           {{ "id": 2, "el": "*", "pos": {} }},
+           {{ "id": 3, "el": "*", "pos": {} }},
+           {{ "id": 4, "el": "*", "pos": {} }}"#,
+        pos(tetra(0) * DIMER_D),
+        pos(tetra(1) * DIMER_D),
+        pos(tetra(2) * DIMER_D),
+    );
+    let json = format!(
+        r#"{{
+          "format": "atomcad-msops/2",
+          "ops": [
+            {{
+              "name": "bridge_framed",
+              "method": "spontaneous",
+              "before": {{ "atoms": [{atoms}], "bonds": [] }},
+              "after": {{ "atoms": [{atoms}], "bonds": [[1, 2]] }}
+            }}
+          ]
+        }}"#
+    );
+    parse_library(&json, "framed_bridge.json").expect("the inline library should parse")
+}
+
+/// The host of [`framed_bridge_library`]: a silicon with three unbonded
+/// neighbours at exactly equal distances, so nothing but the bond can tell one
+/// assignment from another.
+fn framed_bridge_host() -> (AtomicStructure, u32, Vec<u32>) {
+    let mut s = AtomicStructure::new();
+    let host = s.add_atom(SI, DVec3::ZERO);
+    let neighbours = (0..3).map(|i| s.add_atom(SI, tetra(i) * DIMER_D)).collect();
+    (s, host, neighbours)
+}
+
+#[test]
+fn bonding_a_different_frame_atom_is_a_different_candidate() {
+    let lib = framed_bridge_library();
+    let (s, host, neighbours) = framed_bridge_host();
+    let candidates = place(&s, &lib, "bridge_framed", host, TOL).expect("places");
+    // Three neighbours, three reactions. The six assignments and their mirrors
+    // collapse in threes — permuting the two frame atoms the step does not
+    // bond changes nothing — but never across the bond.
+    assert_eq!(
+        candidates.len(),
+        3,
+        "expected one candidate per neighbour the bond could go to"
+    );
+    let bonded: Vec<u32> = candidates
+        .iter()
+        .map(|c| {
+            c.roles
+                .iter()
+                .find(|(pattern_id, _)| *pattern_id == 2)
+                .expect("the bonded frame atom is assigned")
+                .1
+        })
+        .collect();
+    for neighbour in &neighbours {
+        assert!(
+            bonded.contains(neighbour),
+            "no candidate bonds atom {neighbour}; they bond {bonded:?}"
+        );
+    }
+    for candidate in &candidates {
+        assert!(!candidate.mirrored, "each survivor is a proper fit");
+        assert_eq!(preview_atoms(&s, op(&lib, "bridge_framed"), candidate), []);
+        assert_eq!(
+            preview_bonds(&s, op(&lib, "bridge_framed"), candidate).len(),
+            1,
+            "a bridge previews as exactly one added bond"
+        );
+    }
+}
+
 #[test]
 fn candidates_are_ranked_and_the_ranking_is_stable() {
     let lib = library();

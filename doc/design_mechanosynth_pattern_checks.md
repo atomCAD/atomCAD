@@ -716,7 +716,20 @@ error like any other match failure, so the `step` record does not change.
 it matched; only added and moved atoms are keyed by position. With that, the
 proper and mirrored fits of a symmetric frame collapse to one candidate
 regardless of residual, and the quantisation constant stops being a hazard.
-Independent of everything else in this document; one function, one test.
+Independent of everything else in this document; one function.
+
+**Keying a kept atom by identity forces the key to carry bonds too**, which the
+first draft of this section missed. The key is an unordered set, so once the
+kept atoms of two candidates are named by workpiece id rather than by position,
+two assignments of a symmetric frame keep the *same* atoms and differ only in
+which of them the step bonds — and the key could not see the difference. A
+`bridge` over wildcard frame atoms is exactly that shape: three interchangeable
+neighbours, three genuinely different reactions, one candidate offered.
+Positional keying hid the hole rather than closing it, since it distinguished
+those assignments only when the pattern happened to be asymmetric. So the key
+also carries every bond the step adds, deletes or re-orders, its endpoints
+named the same way — by the workpiece atom where the step has one, by where it
+lands where it does not — enumerated the way `preview_bonds` enumerates them.
 
 ---
 
@@ -841,7 +854,7 @@ manual walkthrough item.
 
 | phase | what | touches |
 |---|---|---|
-| **0** | duplicate-candidate fix (§8) — **done** | `place.rs`, one test |
+| **0** | duplicate-candidate fix (§8) — **done** | `place.rs`, two tests |
 | **1** | `/3`: closed-world bonds, `deg`, `anchors`, `clash` in the schema and parser; the anchor role rule; load-time validation of §3.5; bond and degree checks in `match_before` and in the placement search and role rule; new error variants | `schema.rs`, `parse.rs`, `apply.rs`, `place.rs`, `scene.rs`, tests, guide "The two files" / "How a step is applied" |
 | **2** | steric check: `Contact`, `Refusal`, `offerable`, replay error; structure sanity in `build_scene` and the nodes | `place.rs`, `apply.rs`, `scene.rs`, `mechanosynth.rs`, `mechanosynth_edit.rs`, tests |
 | **3** | editor surfacing: `CandidateRow.blocked`, `OfferRow.blocked`, `choose` by candidate, API, popup (blocked candidates inline, fully blocked rows below the rule); guide "The offer popup" | `mechanosynth_edit_ops.rs`, `mechanosynth_edit_api.rs`, FRB codegen, `mechanosynth_offer_popup.dart` |

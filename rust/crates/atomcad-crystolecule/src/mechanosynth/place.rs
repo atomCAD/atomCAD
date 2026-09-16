@@ -601,14 +601,43 @@ fn rank(workpiece: &AtomicStructure, op: &Operation, candidates: Vec<Candidate>)
 
 /// A description of what a step will leave behind, canonically ordered so two
 /// orders of the same set compare equal.
-type AfterState = Vec<(i64, i64, i64, i64)>;
+type AfterState = Vec<KeyEntry>;
 
-/// First-field tags for the entries of an [`AfterState`] that are not keyed by
-/// element and position. Negative, so neither can collide with an element.
-const KEPT_TAG: i64 = -2;
-const DELETED_TAG: i64 = -1;
+/// One entry of an [`AfterState`]. `Ord` is derived only so a key can be put in
+/// a canonical order; the order between variants means nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum KeyEntry {
+    /// An atom the step adds or moves: where it lands, quantised, and what it
+    /// ends up being.
+    Placed {
+        element: i64,
+        x: i64,
+        y: i64,
+        z: i64,
+    },
+    /// An atom the step leaves where the workpiece has it, and what it ends up
+    /// being — a kept position with a new element is an element swap.
+    Kept { atom: Endpoint, element: i64 },
+    /// An atom the step deletes.
+    Deleted { atom: Endpoint },
+    /// A bond the step adds, deletes or re-orders. `order` is the order the
+    /// bond ends up with, and zero when the step deletes it.
+    Bond { a: Endpoint, b: Endpoint, order: u8 },
+}
 
-/// Every `after` atom, plus the workpiece atoms the step deletes.
+/// How an atom is named inside a key.
+///
+/// By the workpiece atom it matched wherever the step has one — the identity is
+/// exact, where a position is a quantised guess — and by where it lands only
+/// when the step adds it and there is no workpiece atom to name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Endpoint {
+    Matched(u32),
+    Lands(i64, i64, i64),
+}
+
+/// Every `after` atom, every bond the step changes, and the workpiece atoms the
+/// step deletes.
 ///
 /// An atom the step **adds or moves** is keyed by its placed position and
 /// element: positions rather than transforms, because a symmetric pattern
@@ -619,9 +648,16 @@ const DELETED_TAG: i64 = -1;
 /// atom does not move — `apply_matched` never snaps one to its pattern position
 /// — so where the fit imagines it to be says nothing about the state the step
 /// leaves behind, and quantising that imagined position only invites two
-/// transforms that reach the same state to straddle a bucket boundary. Its
-/// element is keyed with it, because a kept position with a new element is an
-/// element swap and a different after state.
+/// transforms that reach the same state to straddle a bucket boundary.
+///
+/// **Bonds, because atoms alone do not say where a bond went.** Keying a kept
+/// atom by identity rather than by position is what makes that necessary: the
+/// key is an unordered set, so two assignments of a symmetric frame keep the
+/// same atoms and differ *only* in which of them the step bonds. `bridge` over
+/// wildcard frame atoms is exactly that shape, and collapsing its assignments
+/// would hand the user one candidate for two different reactions. The changed
+/// bonds are enumerated the way [`preview_bonds`] enumerates them, so what a
+/// candidate is keyed by and what it previews as cannot drift apart.
 ///
 /// Deletions as well as placements, because a pure abstraction has no placed
 /// atom to tell two candidates apart.
@@ -638,6 +674,26 @@ fn after_state_key(
             .find(|(id, _)| *id == pattern_id)
             .map(|(_, atom_id)| *atom_id)
     };
+    // The atoms the step keeps exactly where they are. Everything else in
+    // `after` is placed, and everything in `before` alone is deleted.
+    let is_kept = |id: i64| {
+        let (Some(before), Some(after)) = (op.before.atom(id), op.after.atom(id)) else {
+            return false;
+        };
+        before.pos.distance(after.pos) <= PATTERN_POSITION_EPSILON
+    };
+    let name = |id: i64| match matched(id) {
+        Some(atom_id) => Endpoint::Matched(atom_id),
+        // Only an added atom has no workpiece atom to be named by.
+        None => match op.after.atom(id) {
+            Some(atom) => {
+                let pos = candidate.step.place(atom.pos);
+                Endpoint::Lands(quantise(pos.x), quantise(pos.y), quantise(pos.z))
+            }
+            None => Endpoint::Lands(i64::MIN, i64::MIN, i64::MIN),
+        },
+    };
+
     let mut key: AfterState = Vec::new();
     for atom in &op.after.atoms {
         let element = match atom.element {
@@ -648,25 +704,59 @@ fn after_state_key(
                 .and_then(|atom_id| workpiece.get_atom(atom_id))
                 .map_or(0, |a| a.atomic_number as i64),
         };
-        let kept = op
-            .before
-            .atom(atom.id)
-            .is_some_and(|before| before.pos.distance(atom.pos) <= PATTERN_POSITION_EPSILON);
-        if kept {
-            key.push((KEPT_TAG, matched(atom.id).map_or(-1, i64::from), element, 0));
+        if is_kept(atom.id) {
+            key.push(KeyEntry::Kept {
+                atom: name(atom.id),
+                element,
+            });
         } else {
             let pos = candidate.step.place(atom.pos);
-            key.push((element, quantise(pos.x), quantise(pos.y), quantise(pos.z)));
+            key.push(KeyEntry::Placed {
+                element,
+                x: quantise(pos.x),
+                y: quantise(pos.y),
+                z: quantise(pos.z),
+            });
         }
     }
+
     for atom in &op.before.atoms {
         if op.after.has(atom.id) {
             continue;
         }
-        // Deleted workpiece ids, tagged out of the element range so a deletion
-        // can never collide with a placement or with a kept atom.
-        key.push((DELETED_TAG, matched(atom.id).map_or(-1, i64::from), 0, 0));
+        key.push(KeyEntry::Deleted {
+            atom: name(atom.id),
+        });
     }
+
+    let bond = |a: i64, b: i64, order: u8| {
+        // Canonical within the pair, so one bond has one entry however the
+        // pattern wrote its endpoints.
+        let (a, b) = (name(a), name(b));
+        KeyEntry::Bond {
+            a: a.min(b),
+            b: a.max(b),
+            order,
+        }
+    };
+    for changed in &op.after.bonds {
+        let existing = op
+            .before
+            .bonds
+            .iter()
+            .find(|other| other.key() == changed.key());
+        match existing {
+            Some(before) if before.order == changed.order => continue,
+            _ => key.push(bond(changed.a, changed.b, changed.order)),
+        }
+    }
+    for gone in &op.before.bonds {
+        if op.after.bonds.iter().any(|other| other.key() == gone.key()) {
+            continue;
+        }
+        key.push(bond(gone.a, gone.b, 0));
+    }
+
     key.sort_unstable();
     key
 }
