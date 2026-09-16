@@ -5,7 +5,11 @@ approach became a collision-free sweep rather than a surface-normal guess; a
 tool was allowed to fly from one site straight to its next instead of
 returning to park between them; and the engine was split into a feasibility
 layer the sequence generator shares and a presentation layer that cannot
-fail (§Architecture). Unreviewed since. Nothing of it is implemented.
+fail (§Architecture). The testing story was then reviewed against the
+repository's harnesses and fixtures, which moved two test files to the
+harness their imports allow and made the frame's axis sign a property of
+the frame rather than a rule that would have flipped every fixture
+(§Testing). Unreviewed since. Nothing of it is implemented.
 
 Builds on `doc/design_mechanosynth_tools.md` (milestone 1: what a build does
 to every molecule it involves, all four phases implemented 2026-09-15) and is
@@ -206,13 +210,15 @@ distance, a number the library author states like every other geometry.
 That fixes the tool's position and leaves its orientation. The transferred
 atom therefore does not move in space at the reaction: it changes hands.
 
-**The tool axis is `+z` of the tool frame, and the business end is `−z`.**
-Every tool in the silicon library already has this shape — apex at the origin,
-legs at positive `z`, cargo on the negative axis, the probe's body opening
-upward — and the frame rule now states it: **every leg has `z > 0`**, a
-parse error otherwise, because the envelope and the sweep depend on it.
-Milestone 1's ethynyl example, whose legs sit at `z = −3.17`, is flipped in
-that document's text.
+**The tool axis is the frame's `z` axis, pointing from the business end
+toward the legs.** Every tool in the silicon library has this shape — apex at
+the origin, the legs at positive `z`, the cargo on the negative axis, the
+probe's body opening upward — and so do milestone 1's ethynyl example and
+the test fixtures, mirrored: legs at negative `z`, cargo at positive. The
+frame rule states the shape and reads the sign from it: **every leg lies on
+the same side of the apex's `z = 0` plane**, none on it, a parse error
+otherwise because the envelope and the sweep depend on it; the axis sign is
+the legs' side. No library has to flip anything.
 
 Rejected: **deriving the reaction point from the handoff atoms** (the
 centroid of what the target side adds or deletes, the centroid of the tool
@@ -221,16 +227,17 @@ probe, whose contact distance is a fact the library has to state anyway; two
 rules where one field serves. The library is where things are designed in
 detail.
 
-Rejected: **deriving the axis from the frame legs** (leg centroid to apex).
-Exact for the cage tools, whose three legs are symmetric about the axis, and
-wrong by twenty-five degrees for the W probe, whose three legs are three of
-the four neighbours of a bcc apex. A convention the frame already satisfies
-beats a derivation that sometimes does not.
+Rejected: **deriving the axis direction from the frame legs** (leg centroid
+to apex). Exact for the cage tools, whose three legs are symmetric about the
+axis, and wrong by twenty-five degrees for the W probe, whose three legs are
+three of the four neighbours of a bcc apex. Only the *sign* is read from the
+legs, which every frame gets right; the direction is the frame's `z`.
 
 ### The envelope: a cone into a cylinder, so the roll is free
 
 Every tool type declares a **collision envelope** in its own frame: a cone
-with its apex at the reaction point, half-angle `α`, opening along `+z`,
+with its apex at the reaction point, half-angle `α`, opening along the tool
+axis toward the legs,
 continuing as a cylinder of radius `R` once the cone has grown that wide.
 The envelope contains the whole tool — and, when the library says so, more
 than the wired molecule: a tooltip's `R` can be the radius of the tip shaft
@@ -434,8 +441,8 @@ schema, and a file that still carries it loses nothing.
 
 | key | meaning |
 |---|---|
-| `frame` | as before, with one new rule: every entry but `apex` has `z > 0`. The tool axis is `+z`, the business end `−z`. Parse error otherwise, naming the type and the tag |
-| `envelope` | required. `half_angle` in degrees, `(0, 90)`; `radius` in ångström, positive. The cone's apex is at the operation's tool-side reaction point, its axis `+z`; it becomes a cylinder of `radius` where `s · tan(half_angle)` reaches it. Parse error when missing or out of range, naming the type |
+| `frame` | as before, with one new rule: every entry but `apex` has `z` of one sign, none zero. The tool axis is `z` with that sign, the business end the other way. Parse error otherwise, naming the type and the tag |
+| `envelope` | required. `half_angle` in degrees, `(0, 90)`; `radius` in ångström, positive. The cone's apex is at the operation's tool-side reaction point, its axis the tool axis; it becomes a cylinder of `radius` where `s · tan(half_angle)` reaches it. Parse error when missing or out of range, naming the type |
 
 The envelope is the library's claim about the **instrument**, not the
 molecule: a tooltip bonded in reality to a tip the design does not wire
@@ -457,7 +464,7 @@ workpiece.
 | key | meaning |
 |---|---|
 | `reaction.target` | required on `tip`; a point in the operation's local frame, placed into the design by `step.r` / `step.t` like a pattern atom. Where the reaction happens on the workpiece: the transferred atom's position, or the atom a bare probe touches |
-| `reaction.tool` | required on `tip`; a point in the tool's local frame, on or near the `−z` axis: the cargo's position, or `apex + (0, 0, −contact)` for a probe that touches. The envelope's cone apex sits here for this operation |
+| `reaction.tool` | required on `tip`; a point in the tool's local frame, on or near the axis on the business-end side: the cargo's position, or the apex moved `contact` along the axis away from the legs, for a probe that touches. The envelope's cone apex sits here for this operation |
 | `duration` | optional, any operation; positive, relative units, default `1.0`. Parsed and kept, **read by nothing** in this design; reserved for the clock half of milestone 2 so a generator can start writing it. Zero or negative is a parse error naming the operation |
 
 `reaction` on a `bulk` or `spontaneous` operation is a parse error, as a tool
@@ -533,7 +540,7 @@ flights, hover, scan, `replay_scene_at`). `scene.rs` gains only the split of
 
 ```rust
 /// A tool type's collision envelope: a cone of `half_angle` (radians here)
-/// about `+z` with its apex at the tool-side reaction point, continuing as a
+/// about the tool axis with its apex at the tool-side reaction point, continuing as a
 /// cylinder of `radius`. On `ToolType`.
 pub struct Envelope { pub half_angle: f64, pub radius: f64 }
 
@@ -792,7 +799,7 @@ apply_tool_pose(&mut shown, &scene, motion.tool(), &motion.pose_at(u))`.
 
 **Errors.** Two new `MechanosynthError` variants: `NoApproach { step, op,
 tool_type, best_clearance }` and `ToolOutsideEnvelope { step, op, tool_type,
-atom, excess }`. Parse-time `Invalid` locations: a leg with `z ≤ 0`, a
+atom, excess }`. Parse-time `Invalid` locations: legs on both sides of the apex's plane or a leg on it, a
 missing or out-of-range `envelope`, a missing `reaction` on a `tip`
 operation or a present one elsewhere, a non-positive `duration`, a `/3`
 format string.
@@ -958,83 +965,219 @@ preference and put a preferences read into `eval`.
 
 ## Testing
 
-Engine, in `rust/crates/atomcad-crystolecule/tests/mechanosynth_trajectory_test.rs`,
-against the small fixtures the tool tests already use (a slab, a tagged
-cage tool, a donation/abstraction pair), plus the envelope and reaction
-points they now need:
+Conventions as in `doc/testing.md` and the crate `AGENTS.md` files: a test
+goes where its **imports** allow — a member crate cannot see `api`, so the
+domain harnesses hold everything that needs no transport type and
+`rust/tests/structure_designer_api/` holds only what does; fixtures stay
+under `rust/tests/fixtures/mechanosynth/`, reached through
+`atomcad_test_support::fixture_path`; test names are sentences; **no timing
+assertions** — that the sweep stops at its first free candidate is a
+property of the walk, not something a test measures with a clock. The
+layers of §Architecture are also the layers of the tests: the feasibility
+layer is tested as pure geometry and then through `apply_step_in_scene`,
+which is the call the generator makes; the presentation layer is tested
+against the feasibility layer's output, never against hand-typed
+coordinates.
+
+### Fixtures first
+
+The `/4` bump touches **every** library fixture, and that migration is the
+first commit of Phase 1, before any new code:
+
+- the twelve `*_ops.json` fixtures get the `/4` format string; every `tip`
+  operation gets a `reaction` block (its `probe` tool side from the `/2`
+  migration is empty, so `reaction.tool` is `apex + (0, 0, −contact)` along
+  the type's axis and `reaction.target` the anchor's position); every tool
+  type gets an `envelope`. Most of these fixtures wire no tools, so nothing
+  in them is ever swept — the fields are the format's, not the tests';
+- `tool_ops.json` gets real values: `habst_tool` with its cargo at
+  `(0, 0, 1.06)` as `reaction.tool` on `habst` and `hdump`, `probe` with a
+  contact-distance point on `habst_probe`, and an envelope each that the
+  six-atom skeleton and `tool_tip_on_handle.xyz` fit inside — the
+  containment check is what says whether the numbers are right;
+- the four `.cnnd` fixtures (`mechanosynth_legacy`, `mechanosynth_wired`,
+  `mechanosynth_edit`, `mechanosynth_tools`) are re-snapshotted **once** in
+  that commit and must evaluate to the same atoms afterwards, tools
+  included, since the engine's scene is never moved (§Architecture). That
+  is a stronger regression than milestone 1's, and it is the one that would
+  catch a landing leaking into the replay.
+
+**The frame's axis sign is the reason the tool fixtures need no geometry
+change.** The fixture tools and milestone 1's ethynyl example have their legs
+at `z = −3.17` and their cargo at `+z`; the silicon tools have legs at
+`+0.515` and cargo at `−z`. The frame rule is therefore *all legs on one side
+of the apex's plane*, and the axis sign is read from them — not "legs at
+`z > 0`", which would have flipped seven `.xyz` files and the tools `.cnnd`
+for no gain. Where this document says "the tool axis" it means `±z` with
+that sign.
+
+New fixtures: `trajectory_build.json` — `habst`, `settle`, `hdump` on the
+dump, `habst`, `habst_probe`, `expose`: one run of `habst_tool` with a
+settle *inside* it, then the probe's visit ending it, then a `bulk` step;
+and `mechanosynth_trajectory.cnnd` — `mechanosynth_tools.cnnd` with that
+script, `time: 0.3` stored, and a second copy of the probe parked directly
+over the workpiece site, for the node snapshot and the round-trip corpus.
+An obstacle over a site is otherwise built in code by translating
+`tool_probe.xyz`; no fixture is added for it.
+
+### Feasibility layer — `crates/atomcad-crystolecule/tests/crystolecule/mechanosynth_trajectory_test.rs`
+
+Pure geometry, no scene:
 
 - `Envelope::radius_at`: zero behind the apex, linear in the cone, flat in
-  the cylinder;
+  the cylinder; `Envelope::clearance` on one obstacle inside, on the
+  surface, and outside the envelope has the sign and magnitude the formula
+  says;
 - `sweep_directions()`: the first is `+z`, the last `−z`, tilt is
-  non-decreasing along the sequence, and consecutive tilts never jump by
-  more than the sphere's spacing;
-- `approach_direction` with no obstacles returns `+z` with tilt `0` after
-  one clearance test; with a single obstacle on the `+z` axis returns a
-  direction tilted just past it (clearance at least `CLEAR_MARGIN`, tilt
-  within a refinement step of the minimum); with obstacles enclosing the
-  point returns `None`; the same inputs give the same output (determinism);
+  non-decreasing along the sequence, consecutive tilts never jump by more
+  than the sphere's spacing, and every entry is a unit vector;
+- `approach_direction` with no obstacles returns exactly `+z` with tilt
+  `0`; with a single obstacle on the `+z` axis returns a direction tilted
+  just past it (clearance at least `CLEAR_MARGIN`, tilt within a
+  refinement step of the minimum); with obstacles enclosing the point
+  returns `None`; with every candidate blocked but one below the margin
+  returns that one; the same inputs give the same output (determinism).
+
+Through the scene, on `tool_scene.xyz` and the tagged fixture tools:
+
+- `obstacles_for` excludes the tool's atoms and the excluded set, includes
+  every other participant's atoms, and its margins are
+  `clash · (r_cov + r_tool)`;
+- `plan_landing` puts `reaction_point` at `step.r · reaction.target +
+  step.t`; the standoff height is the park height along the direction, and
+  `MIN_STANDOFF` when the tool is parked lower; a molecule with an atom
+  outside its type's envelope is `ToolOutsideEnvelope` naming the atom;
+- a parked tool standing over the site tilts the approach; removing it
+  makes the approach vertical again;
+- **the generator's path**: `apply_step_in_scene` on a `tip` step with a
+  bound tool returns a `landing` equal to what `match_step_in_scene`
+  followed by `plan_landing` returns, and the latter leaves the scene
+  untouched; on an enclosed site the apply fails with `NoApproach`
+  naming the step and the tool type, and the scene is unchanged (the
+  all-or-nothing rule now covers the landing);
+- `replay_steps` returns one landing per applied `tip` step with a bound
+  tool and `None` elsewhere; a script whose step `j` has no approach fails
+  at `j` for every `step ≥ j`, and `replay_scene` fails the same way —
+  the one deliberate change to milestone 1's output;
+- with `tools` unwired no landing is planned and nothing fails.
+
+Parse, in the existing `mechanosynth_tools_test.rs` beside the `/2` and
+`/3` parse tests: legs on both sides of the apex's plane, or a leg at
+`z = 0`, a missing or out-of-range `envelope`, a missing `reaction` on
+`tip`, a `reaction` on `bulk`, a zero `duration`, and a `/3` file are each
+refused naming the location; `approach` in a file is ignored; a `/4`
+library without `duration` reads `1.0`.
+
+### Presentation layer — the same file
+
+Every assertion here compares against a `Landing` the feasibility layer
+produced, never against a typed coordinate:
+
 - `runs`: two `tip` steps of one tool with a `spontaneous` between are one
   run; with a `bulk` between, two runs; with another tool's `tip` between,
-  two runs; the `spontaneous` step inside a run reports its two neighbours;
-- the pose at `u = 0` is park on a first visit and the standoff on a
-  chained one; at `u = 1` it is park at a run's end and the next standoff
-  otherwise; for `u ∈ [0.45, 0.55]` it is the reaction pose; the pose is
-  continuous (a `1e-3` step in `u` moves the apex less than `PATH_SAMPLE`);
-- `arriving_pose` on the third visit of a run is the parked orientation
-  turned by the first two visits' minimal rotations, in order;
-- **continuity across a run**: the pose at `(k, 1.0)` equals the pose at
-  `(j, 0.0)` for consecutive visits `k`, `j` of one run, and equals the hover
-  pose at every `spontaneous` step between, to `1e-9`;
-- a failing look-ahead (step `j` made unmatchable) sends the tool to park at
-  `(k, 1.0)` and the replay fails at `j`;
-- at the reaction pose the tool-side reaction point coincides with the
-  target's to `1e-9`, and the tool's `+z` is the approach direction; the
-  rotation from the arriving orientation has the angle between the two axes
-  and no more (minimal roll);
-- containment: a molecule with an atom outside its type's envelope is
-  `ToolOutsideEnvelope` naming the atom;
-- a parked tool standing over the site tilts the approach; removing it makes
-  the approach vertical again;
-- the standoff is at the park height along the direction, and at
-  `MIN_STANDOFF` when the tool is parked lower;
+  two runs; the `spontaneous` step inside a run reports its two neighbours
+  and one outside a run reports none;
+- `reaction_pose`: the tool-side reaction point lands on the target's to
+  `1e-9`, the tool's axis is the approach direction, and the rotation from
+  the arriving pose has the angle between the two axes and no more (minimal
+  roll); `arriving_pose` on the third visit of a run is the parked
+  orientation turned by the first two visits' minimal rotations, in order;
+- `ToolMotion::pose_at`: at `u = 0` the park on a first visit and the
+  standoff on a chained one; at `u = 1` the park at a run's end and the
+  next standoff otherwise; the reaction pose throughout `[0.45, 0.55]`;
+  continuous (a `1e-3` step in `u` moves the apex less than `PATH_SAMPLE`)
+  at a thousand sampled `u`;
+- **continuity across a run**, on `trajectory_build.json`: the pose at
+  `(k, 1.0)` equals the pose at `(j, 0.0)` for the two `habst_tool` visits,
+  and equals the hover pose at the `settle` between them, to `1e-9`; the
+  probe's visit starts and ends at park; the `expose` step has no motion;
+- a failing look-ahead (step `j` made unmatchable) sends the tool to park
+  at `(k, 1.0)`, and the replay fails at `j`;
 - flight scan: a slab placed across a flight reports a ratio below
   `CLASH_BLOCK` at a time inside that flight; the same scene with the slab
-  removed reports none;
-- `replay_scene_at(k, 1.0)` returns a scene equal to `replay_scene(k)` atom
-  for atom, tools included, for every `k` of the fixture script — the
-  compatibility assertion, and the proof that the engine never moves a
-  scene; the structure `apply_tool_pose` produces has the tool's atoms
-  pairwise-distance-preserved from their bound positions at every `(k, u)`
-  and everything else untouched; `(k, u < 0.5)` has the workpiece of
-  `replay_scene(k − 1)`, `(k, u ≥ 0.5)` that of `replay_scene(k)`;
-- `apply_step_in_scene` on a `tip` step with a bound tool returns a
-  `landing`, and fails with `NoApproach` on an enclosed site — the
-  generator's check, exercised through the call the generator makes;
-  `match_step_in_scene` followed by `plan_landing` gives the same landing
-  and leaves the scene untouched;
-- `obstacles_for` excludes the tool's atoms and the excluded set, and its
-  margins are `clash · (r_cov + r_tool)`;
-- a script whose step `j` has no approach fails at `j` for every `step ≥ j`;
-- a `bulk` step and a `tip` step with tools unwired move no atom at any `u`
-  and gate at `0.5`; a `spontaneous` step outside a run likewise; one inside
-  a run holds the tool at the hover pose at every `u`;
-- `ms_current` before the reaction is the matched `before` set of both sides;
-- parse: a leg at `z ≤ 0`, a missing `envelope`, a missing `reaction` on
-  `tip`, a `reaction` on `bulk`, a zero `duration`, and a `/3` file are each
-  refused naming the location; `approach` in a file is ignored.
+  removed reports none; a chained visit reports only its outbound flight;
+- `replay_scene_at(k, 1.0)` returns a scene equal to `replay_scene(k)`
+  atom for atom, tools included, for every `k` of both build fixtures —
+  the compatibility assertion and the proof that the engine never moves a
+  scene; `(k, u < 0.5)` has the workpiece of `replay_scene(k − 1)`,
+  `(k, u ≥ 0.5)` that of `replay_scene(k)`; `apply_tool_pose` on a clone
+  leaves every non-tool atom, every bond and every tag untouched and keeps
+  the tool's atoms pairwise-distance-preserved from their bound positions;
+- `ms_current` before the reaction is the matched `before` set of both
+  sides; after it, the step's `touched`.
 
-Node, in `rust/tests/structure_designer_api/`: the pin is index 6 and the
-record fields are appended; the text format round-trips `time` and omits the
-default; a saved node without `time` loads at `1.0`; the node snapshot is
-updated; a `mechanosynth` node with a bound tool emits one `ToolEnvelope`
-overlay per tool whose apex sits at the nearest visit's reaction point and
-whose segments move with the flying tool. Scene, beside the existing
-preference and scene tests: the overlay reaches `wireframe_mesh` in the
-preference colour when `show_tool_envelopes` is on and not at all when it is
-off, and a `preferences.json` without the two fields loads with the
-defaults.
+### Node layer — `crates/atomcad-structure-designer/tests/structure_designer/mechanosynth_trajectory_node_test.rs`
 
-The panel is a manual walkthrough, as every editor UI here is.
+Wiring only, as `mechanosynth_tools_node_test.rs` does — every structural
+assertion is an equality against the engine:
+
+- the `time` pin is index 6, optional, and overrides the property; an
+  out-of-range value on either is clamped; `result`, `scene` and the record
+  at `(k, u)` equal what `replay_scene_at` and `apply_tool_pose` produce;
+- the four record fields are appended after `agent`, `tool_r` / `tool_t`
+  are the motion's pose and the identity / zero with every tool parked,
+  `clearance` is the scan's ratio capped at `2.0`;
+- the `scene` pin carries the tool at its flown pose while `last_scene`
+  keeps it bound — the two are compared directly;
+- a `mechanosynth` node with a bound tool emits one `ToolEnvelope` overlay
+  per tool, apex at the nearest visit's reaction point, whose segments move
+  with the flying tool and stand still for a parked one;
+- persistence: `time` round-trips through a `.cnnd` and is absent at the
+  default; a node saved without `time` loads at `1.0`; the text format
+  writes `time: 0.3` and omits `1.0`;
+- `nodes/node_snapshots_test.rs` gains `mechanosynth_trajectory_evaluation`
+  on the new `.cnnd` — with `time: 0.3` stored, pin 0 is the workpiece after
+  `k − 1`, which pins the gating through the real loader;
+- `text_format_roundtrip_corpus_test.rs` gains the new `.cnnd`.
+
+Scene and preferences, in the same harness:
+
+- a scene test in the manner of `error_display_test.rs` — refresh, read
+  `last_generated_structure_designer_scene` — asserts the overlay reaches
+  `wireframe_mesh` in the preference colour with `show_tool_envelopes` on,
+  contributes no segment with it off, and that toggling it changes the
+  scene without re-evaluating the node (the node's evaluation count, read
+  from the profiler hook, is unchanged);
+- `preferences_test.rs`: the two fields join
+  `test_default_values_match_documentation`, `test_non_default_values_roundtrip`
+  and `test_preferences_missing_fields_use_defaults`.
+
+### API layer — `rust/tests/structure_designer_api/mechanosynth_api_test.rs`
+
+- the getter reads `time` and the setter writes it, the caches surviving a
+  no-op write as for the other properties;
+- `mechanosynth_info` reports `time`, `leg`, `tilt_degrees`,
+  `approach_clearance`, the flight clearance fields and `collision` off the
+  last evaluation: `leg` names each of the seven legs at a `u` inside it
+  and is empty at a `bulk` step; `collision` is the panel sentence for the
+  blocked fixture and empty otherwise;
+- the preferences API twin round-trips the two new fields.
+
+### Dart — `test/`
+
+`mechanosynth_time_row_test.dart`, on a widget extracted the way
+`MechanosynthScrubber` was — plain numbers and callbacks, no kernel: the
+slider reports every tick through `onChanged` (unlike the step scrubber,
+which reports once), `onDragStart` / `onDragEnd` fire once each around a
+drag, the row is disabled when the pin is wired, the float box round-trips a
+typed value, and the tick sits at `0.5`. The preferences window's two new
+controls get `PreferencesKeys` entries so the human smoke test can find
+them.
+
+### Cross-cutting regressions, at the end of every phase
+
+The four re-snapshotted `.cnnd` fixtures evaluate to the same atoms; the
+text-format round-trip corpus stays a no-op; the engine, node and API
+suites pass with only the edits the format change forces. The harnesses are
+run explicitly (`--test structure_designer_api`, `integration`,
+`renderer_api`), because `cargo test --workspace` stops at the first failing
+harness. The Phase 1 kickoff check against the regenerated silicon v3 file
+set is the generator's test, run in the generator, not here.
+
+### Manual only
+
+The feel of the drag, the look of the cage, the demo walkthrough of Phase 4,
+and the Flutter smoke test, which stays the human's.
 
 ## Phases
 
@@ -1046,8 +1189,8 @@ layer, with `match_step_in_scene` split out of `apply_step_in_scene` and the
 apply landing every `tip` step — then `runs.rs` and `path.rs` with
 `replay_scene_at`, the look-ahead and `replay_scene` as its `1.0` wrapper;
 the engine tests above. The external generator is rebuilt against the new
-`SceneEffect` (one added field) and gains nothing else it has to call. The existing tool fixtures gain envelopes
-and reaction points. Kickoff check: the silicon v3 file set, regenerated as
+`SceneEffect` (one added field) and gains nothing else it has to call. The
+fixture migration of §Testing is the first commit. Kickoff check: the silicon v3 file set, regenerated as
 `/4` by the external generator with envelopes and reaction points, replays
 at `(k, 1.0)` with the workpiece identical to milestone 1 for all 171 steps;
 every `tip` step has a vertical approach (the demo's sites are all on the top
