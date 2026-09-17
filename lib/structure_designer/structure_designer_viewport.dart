@@ -736,8 +736,13 @@ class _StructureDesignerViewportState
       }
     }
 
-    // Number keys 1-7: bond order shortcuts
-    if (event is KeyDownEvent) {
+    // Number keys 1-7: bond order shortcuts. Bare keys only — Ctrl+digit is
+    // the window's panel-folding shortcut and must reach the global handler,
+    // and a modified digit never meant a bond order in the first place.
+    if (event is KeyDownEvent &&
+        !HardwareKeyboard.instance.isControlPressed &&
+        !HardwareKeyboard.instance.isAltPressed &&
+        !HardwareKeyboard.instance.isMetaPressed) {
       final int? bondOrder = _bondOrderFromKey(event.logicalKey);
       if (bondOrder != null) {
         _elementAccumulator.reset();

@@ -50,6 +50,19 @@ class _StructureDesignerState extends State<StructureDesigner> {
   // Resizable sidebar width for node network mode (user types / display / camera)
   double _nodeNetworkSidebarWidth = 200;
 
+  // Panel visibility. Demonstrating a design — a mechanosynth build
+  // walkthrough, say — wants the largest possible viewport, so each of the
+  // three docks can be folded away independently, and "presentation mode"
+  // folds all of them in one go. Pure view state: nothing here is persisted or
+  // undoable, exactly like `verticalDivision` and the sidebar widths.
+  bool _leftPanelVisible = true;
+  bool _networkEditorVisible = true;
+  bool _nodeDataPanelVisible = true;
+
+  // What the panels looked like before presentation mode hid them, so leaving
+  // it restores the arrangement rather than a blanket "everything on".
+  List<bool>? _savedPanelVisibility;
+
   // GlobalKey to access the NodeNetwork widget state
   final GlobalKey<NodeNetworkState> nodeNetworkKey =
       GlobalKey<NodeNetworkState>();
@@ -182,6 +195,53 @@ class _StructureDesignerState extends State<StructureDesigner> {
                                   ? 'Switch to Horizontal Layout'
                                   : 'Switch to Vertical Layout'),
                             ),
+                          const Divider(),
+                          // Panel folding. Ordered the way the window nests:
+                          // left sidebar, then network editor, then the
+                          // properties dock, then all three at once.
+                          MenuItemButton(
+                            key: const Key('toggle_left_panel_item'),
+                            onPressed: _toggleLeftPanel,
+                            shortcut: const SingleActivator(
+                                LogicalKeyboardKey.digit1,
+                                control: true),
+                            child: Text(_leftPanelVisible
+                                ? 'Hide Left Panel'
+                                : 'Show Left Panel'),
+                          ),
+                          if (!model.directEditingMode)
+                            MenuItemButton(
+                              key: const Key('toggle_network_editor_item'),
+                              onPressed: _toggleNetworkEditor,
+                              shortcut: const SingleActivator(
+                                  LogicalKeyboardKey.digit2,
+                                  control: true),
+                              child: Text(_networkEditorVisible
+                                  ? 'Hide Node Network'
+                                  : 'Show Node Network'),
+                            ),
+                          if (!model.directEditingMode)
+                            MenuItemButton(
+                              key: const Key('toggle_node_data_panel_item'),
+                              onPressed: _toggleNodeDataPanel,
+                              shortcut: const SingleActivator(
+                                  LogicalKeyboardKey.digit3,
+                                  control: true),
+                              child: Text(_nodeDataPanelVisible
+                                  ? 'Hide Properties Panel'
+                                  : 'Show Properties Panel'),
+                            ),
+                          MenuItemButton(
+                            key: const Key('toggle_presentation_mode_item'),
+                            onPressed: _togglePresentationMode,
+                            shortcut: const SingleActivator(
+                                LogicalKeyboardKey.digit0,
+                                control: true),
+                            child: Text(_anyPanelVisible
+                                ? 'Presentation Mode (hide all panels)'
+                                : 'Exit Presentation Mode'),
+                          ),
+                          const Divider(),
                           MenuItemButton(
                             key: const Key('toggle_console_item'),
                             onPressed: () => graphModel.toggleConsolePanel(),
@@ -410,15 +470,18 @@ class _StructureDesignerState extends State<StructureDesigner> {
                       Row(
                         children: [
                           // Left sidebar
-                          model.directEditingMode
-                              ? _buildDirectEditingSidebar()
-                              : _buildNodeNetworkSidebar(),
+                          if (_leftPanelVisible)
+                            model.directEditingMode
+                                ? _buildDirectEditingSidebar()
+                                : _buildNodeNetworkSidebar(),
                           // Main content area
                           MainContentArea(
                             graphModel: graphModel,
                             nodeNetworkKey: nodeNetworkKey,
                             verticalDivision: verticalDivision,
                             directEditingMode: model.directEditingMode,
+                            networkEditorVisible: _networkEditorVisible,
+                            nodeDataPanelVisible: _nodeDataPanelVisible,
                           ),
                         ],
                       ),
@@ -600,8 +663,9 @@ class _StructureDesignerState extends State<StructureDesigner> {
   Widget _buildValidationWarningBanner() {
     return Positioned(
       top: 8,
-      left: _directEditingSidebarWidth +
-          14, // Sidebar width + drag handle + offset
+      // Sidebar width + drag handle + offset, or the plain margin when the
+      // sidebar is folded away.
+      left: _leftPanelVisible ? _directEditingSidebarWidth + 14 : 8,
       right: 8,
       child: Center(
         child: Material(
@@ -663,6 +727,27 @@ class _StructureDesignerState extends State<StructureDesigner> {
       // Ctrl+`: Toggle Console panel.
       if (event.logicalKey == LogicalKeyboardKey.backquote) {
         graphModel.toggleConsolePanel();
+        return KeyEventResult.handled;
+      }
+      // Ctrl+1/2/3: fold the left sidebar, the node network editor and the
+      // properties dock. Ctrl+0: all three at once (presentation mode). The
+      // network and properties docks only exist in Node Network Mode.
+      if (event.logicalKey == LogicalKeyboardKey.digit1) {
+        _toggleLeftPanel();
+        return KeyEventResult.handled;
+      }
+      if (event.logicalKey == LogicalKeyboardKey.digit2 &&
+          !graphModel.directEditingMode) {
+        _toggleNetworkEditor();
+        return KeyEventResult.handled;
+      }
+      if (event.logicalKey == LogicalKeyboardKey.digit3 &&
+          !graphModel.directEditingMode) {
+        _toggleNodeDataPanel();
+        return KeyEventResult.handled;
+      }
+      if (event.logicalKey == LogicalKeyboardKey.digit0) {
+        _togglePresentationMode();
         return KeyEventResult.handled;
       }
       // Ctrl+Shift+N: flip node title bars between type names and node names
@@ -1041,6 +1126,57 @@ class _StructureDesignerState extends State<StructureDesigner> {
   void _toggleDivisionOrientation() {
     setState(() {
       verticalDivision = !verticalDivision;
+    });
+  }
+
+  /// True while at least one of the three docks is on screen — i.e. while
+  /// presentation mode is *not* in effect.
+  bool get _anyPanelVisible =>
+      _leftPanelVisible || _networkEditorVisible || _nodeDataPanelVisible;
+
+  void _toggleLeftPanel() {
+    setState(() {
+      _leftPanelVisible = !_leftPanelVisible;
+      _savedPanelVisibility = null;
+    });
+  }
+
+  /// Folding the network editor away also collapses the resizable split, so
+  /// the viewport (and the properties dock beside it) takes the whole area.
+  /// The split ratio resets to the default when it comes back.
+  void _toggleNetworkEditor() {
+    setState(() {
+      _networkEditorVisible = !_networkEditorVisible;
+      _savedPanelVisibility = null;
+    });
+  }
+
+  void _toggleNodeDataPanel() {
+    setState(() {
+      _nodeDataPanelVisible = !_nodeDataPanelVisible;
+      _savedPanelVisibility = null;
+    });
+  }
+
+  /// Fold every dock away for a demo, then put back exactly what was there.
+  void _togglePresentationMode() {
+    setState(() {
+      if (_anyPanelVisible) {
+        _savedPanelVisibility = [
+          _leftPanelVisible,
+          _networkEditorVisible,
+          _nodeDataPanelVisible,
+        ];
+        _leftPanelVisible = false;
+        _networkEditorVisible = false;
+        _nodeDataPanelVisible = false;
+      } else {
+        final saved = _savedPanelVisibility ?? const [true, true, true];
+        _leftPanelVisible = saved[0];
+        _networkEditorVisible = saved[1];
+        _nodeDataPanelVisible = saved[2];
+        _savedPanelVisibility = null;
+      }
     });
   }
 

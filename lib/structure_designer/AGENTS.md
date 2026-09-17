@@ -14,7 +14,7 @@ structure_designer/
 ├── structure_designer.dart           # Main widget: menu bar + 3-panel layout
 ├── structure_designer_model.dart     # StructureDesignerModel: central state
 ├── structure_designer_viewport.dart  # 3D viewport with ray-cast interaction
-├── main_content_area.dart            # Resizable split: viewport + (network editor | schema editor)
+├── main_content_area.dart            # Viewport + right properties dock, split from (network editor | schema editor)
 ├── schema_editor.dart                # Record-def field editor (active when activeRecordDefName != null)
 ├── camera_control_widget.dart        # Camera view selector (ortho/perspective)
 ├── display_panel.dart                # DISPLAY section: assembles the clusters below
@@ -75,10 +75,45 @@ A node id is **not** unique across the network: HOF zone bodies have per-body id
 
 ## Layout
 
-Three-panel layout:
-- **Left sidebar:** Display policy, camera controls, network list (tabs: List/Tree)
-- **Main area:** Resizable split between 3D viewport and node network editor
-- Supports vertical (side-by-side) and horizontal (stacked) layout modes
+Three docks around the viewport, **split off in a fixed order**, and the order
+is the whole design:
+
+1. **Left sidebar** (`structure_designer.dart`) — display policy, camera
+   controls, user types (tabs: List/Tree). Split from the window first, so it
+   runs full height.
+2. **Node network editor** (`main_content_area.dart`, via `ResizableContainer`)
+   — split next, taking the full width of what remains. Vertical division puts
+   it below the viewport, horizontal puts it beside; the orientation is
+   `verticalDivision`, flipped from the *View* menu.
+3. **Node properties panel** — split last, off the **viewport's** right edge,
+   sharing the viewport's `Row`.
+
+**The properties panel is docked to the viewport, not to the network editor.**
+That is what lets it be tall: nested inside the network editor's share (as it
+was before) it could never exceed ~35% of the window height, which made a
+step-through panel like `mechanosynth`'s unusable for demonstrating a build.
+If you move it back under the network editor you reintroduce that ceiling.
+
+Each dock folds away independently — `_leftPanelVisible`,
+`_networkEditorVisible`, `_nodeDataPanelVisible` in `_StructureDesignerState`,
+with *View* menu items and `Ctrl+1/2/3`, plus `Ctrl+0` for all three
+("presentation mode"). Folding the network editor drops the `ResizableContainer`
+entirely rather than sizing a child to zero, so the split ratio resets when it
+returns; that is accepted, not an oversight.
+
+All of this is **view state**: not persisted, not undoable, not in the model —
+the same status as `verticalDivision` and the sidebar widths. Don't move it onto
+`StructureDesignerModel` without a reason; a rebuild of the whole editor per
+panel toggle is cheap and a `notifyListeners` for it is not.
+
+Two things that need touching when this layout changes: the Direct Editing
+validation banner positions itself from `_directEditingSidebarWidth` and must
+handle the folded sidebar, and the `vertical_layout` / `horizontal_layout`
+`ValueKey` on the `ResizableContainer` is what `integration_test/` looks for.
+
+`Ctrl+digit` reaches the global handler only because
+`structure_designer_viewport.dart` excludes modifiers from its bare-digit
+bond-order shortcuts. A new bare-key viewport shortcut owes the same guard.
 
 ## Guided Atom Placement (in viewport)
 
