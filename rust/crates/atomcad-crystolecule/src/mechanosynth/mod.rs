@@ -76,5 +76,6 @@ pub use trajectory::{
     PATH_SAMPLE, PATH_SAMPLE_ANGLE, PathContact, PathScan, Pose, REACTION, REACTION_DEPARTURE,
     REACTION_LANDING, Runs, STANDOFF_HEIGHT, SWEEP_DIRECTIONS, SWEEP_REFINEMENTS, ToolMotion,
     Visit, apply_tool_pose, approach_direction, cage_apex, obstacles_for, plan_landing,
-    reaction_pose, replay_scene_at, runs, standoff_pose, sweep_directions, tool_envelope_cages,
+    playable_steps, reaction_pose, replay_scene_at, runs, standoff_pose, sweep_directions,
+    tool_envelope_cages,
 };

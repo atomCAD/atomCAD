@@ -18,9 +18,9 @@ use atomcad_crystolecule::mechanosynth::{
     HighlightTags, Landing, LandingPlan, Leg, OpLibrary, Participant, Pose, REACTION,
     REACTION_DEPARTURE, REACTION_LANDING, STANDOFF_HEIGHT, SWEEP_DIRECTIONS, Scene, Step,
     ToolMotion, apply_step_in_scene, apply_tool_pose, approach_direction, build_scene, cage_apex,
-    load_build_script, load_library, match_step_in_scene, obstacles_for, plan_landing,
-    reaction_pose, replay_scene, replay_scene_at, replay_steps, resolve_tolerance, runs,
-    sweep_directions, tool_envelope_cages,
+    load_build_script, load_library, match_step_in_scene, obstacles_for, parse_library,
+    plan_landing, playable_steps, reaction_pose, replay_scene, replay_scene_at, replay_steps,
+    resolve_tolerance, runs, sweep_directions, tool_envelope_cages,
 };
 use atomcad_test_support::fixture_path;
 use glam::DVec3;
@@ -1330,17 +1330,21 @@ fn applying_a_pose_moves_the_tool_rigidly_and_leaves_everything_else_alone() {
 }
 
 #[test]
-fn the_current_highlight_is_the_matched_site_before_the_reaction() {
+fn the_current_highlight_moves_at_the_reaction_and_not_before() {
+    // The highlight is part of the rewrite, not an announcement of it. A tag
+    // that lit the site up during the approach made the reaction *visually*
+    // happen when the tool set off, which left the one instant the timeline is
+    // built around reading as nothing at all.
     let lib = library("tool_ops.json");
     let build = script("trajectory_build.json");
-    let replay_at = |time: f64| {
+    let replay_at = |step: i32, time: f64| {
         replay_scene_at(
             &molecule("tool_scene.xyz"),
             &[molecule("tool_dump.xyz")],
             &[tip(), probe()],
             &lib,
             &build,
-            1,
+            step,
             time,
             HighlightTags {
                 current: Some("ms_current"),
@@ -1350,19 +1354,28 @@ fn the_current_highlight_is_the_matched_site_before_the_reaction() {
         .expect("replays")
         .0
     };
+    let lit = |scene: Scene| {
+        let mut ids = scene.structure.atoms_with_tag("ms_current");
+        ids.sort_unstable();
+        ids
+    };
 
-    // `habst` takes one hydrogen with a three-atom tool side, so before the
-    // reaction four atoms light up: the site and the apex that will react.
-    let approaching = replay_at(0.2);
-    let lit = approaching.structure.atoms_with_tag("ms_current");
-    assert_eq!(lit.len(), 4, "the matched before atoms of both sides");
+    // Step 1 has nothing before it, so nothing is lit while its tool descends.
+    assert!(lit(replay_at(1, 0.2)).is_empty());
+    assert!(lit(replay_at(1, REACTION - 0.01)).is_empty());
 
-    // From the reaction on it is the step's `touched`, which no longer includes
-    // the hydrogen, because that atom is gone.
-    let reacted = replay_at(0.8);
-    let lit = reacted.structure.atoms_with_tag("ms_current");
-    assert!(!lit.is_empty());
-    assert!(lit.len() < 4);
+    // At the reaction the step's own `touched` set appears, in the same instant
+    // the workpiece switches.
+    let reacted = lit(replay_at(1, REACTION));
+    assert!(!reacted.is_empty());
+    assert_eq!(lit(replay_at(1, 0.8)), reacted);
+    assert_eq!(lit(replay_at(1, 1.0)), reacted);
+
+    // And it holds through the *next* step's approach: before a reaction the
+    // highlight describes the last one that happened, exactly as the workpiece
+    // does. `(2, u < 0.5)` is `replay_scene(1)` in every respect.
+    assert_eq!(lit(replay_at(2, 0.2)), reacted);
+    assert_ne!(lit(replay_at(2, 0.8)), reacted);
 }
 
 #[test]
@@ -1650,4 +1663,131 @@ fn a_cage_is_posed_with_the_tool_it_belongs_to() {
     let local = cage_apex(&library, &script, 1, &binding.tool_type);
     let expected = binding.pose.r * local + binding.pose.t;
     assert!((cages[parked][0].0 - expected).length() < 1e-9);
+}
+
+// ============================================================================
+// Presentation — playable steps
+// ============================================================================
+
+/// A script of the named operations, at coordinates nothing here looks at:
+/// `playable_steps` is a function of the sequence of *methods* alone.
+fn script_of(ops: &[&str]) -> BuildScript {
+    let mut build = empty_script();
+    build.steps = ops.iter().map(|op| Step::new(*op, DVec3::ZERO)).collect();
+    build
+}
+
+#[test]
+fn every_visit_is_playable_and_a_settle_between_two_of_them_is_not() {
+    let lib = library("tool_ops.json");
+
+    // Nothing but visits: the playback stops on all of them.
+    assert_eq!(
+        playable_steps(&script_of(&["habst", "hdump", "habst"]), &lib),
+        vec![0, 1, 2]
+    );
+
+    // A settle holds its tool still, so it is stepped over and the run reads as
+    // one movement. Both visits survive.
+    assert_eq!(
+        playable_steps(&script_of(&["habst", "settle", "hdump"]), &lib),
+        vec![0, 2]
+    );
+
+    // However many settles, and whichever spontaneous operation they name.
+    assert_eq!(
+        playable_steps(
+            &script_of(&["habst", "settle", "bridge", "settle", "hdump"]),
+            &lib
+        ),
+        vec![0, 4]
+    );
+}
+
+#[test]
+fn a_block_of_gating_steps_is_one_beat_on_its_last_step_or_none_at_all() {
+    let lib = library("tool_ops.json");
+
+    // A run of exposures with their settles is a single beat, landing on the
+    // block's last step — the scene at that point has every step of the block
+    // applied.
+    assert_eq!(
+        playable_steps(
+            &script_of(&["habst", "expose", "settle", "expose_uv", "habst"]),
+            &lib
+        ),
+        vec![0, 3, 4]
+    );
+
+    // The block's last step is the last one *in the block*, not the last bulk
+    // in it: the settles after an exposure are part of what that beat shows.
+    assert_eq!(
+        playable_steps(&script_of(&["expose", "settle", "settle"]), &lib),
+        vec![2]
+    );
+
+    // A block with no exposure in it is worth no beat at all.
+    assert_eq!(
+        playable_steps(&script_of(&["settle", "settle"]), &lib),
+        Vec::<usize>::new()
+    );
+
+    // Including one trailing the last visit — the player's own rule that a run
+    // ends on the script's last step is what covers the tail.
+    assert_eq!(
+        playable_steps(&script_of(&["habst", "settle"]), &lib),
+        vec![0]
+    );
+}
+
+#[test]
+fn a_step_whose_operation_the_library_lacks_is_played_and_ends_the_block() {
+    let lib = library("tool_ops.json");
+
+    // Only what can be *proved* skippable is skipped. A step with no known
+    // method stops the playback on itself…
+    assert_eq!(
+        playable_steps(&script_of(&["habst", "nosuchop", "habst"]), &lib),
+        vec![0, 1, 2]
+    );
+
+    // …and ends whatever block it lands in, so the settles on either side of it
+    // are two blocks rather than one — neither of which holds an exposure, so
+    // neither is worth a beat.
+    assert_eq!(
+        playable_steps(&script_of(&["settle", "nosuchop", "settle"]), &lib),
+        vec![1]
+    );
+
+    // It also splits a bulk block, and each half is judged on its own.
+    assert_eq!(
+        playable_steps(
+            &script_of(&["expose", "nosuchop", "settle", "expose"]),
+            &lib
+        ),
+        vec![0, 1, 3]
+    );
+
+    // A library that defines nothing knows no method at all, so every step is
+    // playable and a playback degrades to walking them rather than dropping
+    // them. This is the shape of the unwired `ops` pin, which the api layer
+    // answers the same way.
+    let empty = parse_library(r#"{"format": "atomcad-msops/4", "ops": []}"#, "empty")
+        .expect("an empty library parses");
+    assert_eq!(
+        playable_steps(&script_of(&["habst", "settle", "expose"]), &empty),
+        vec![0, 1, 2]
+    );
+
+    // An empty script is an empty list, not a panic.
+    assert_eq!(playable_steps(&empty_script(), &lib), Vec::<usize>::new());
+}
+
+#[test]
+fn the_trajectory_fixture_loses_its_settle_and_keeps_its_exposure() {
+    // The two rules together, on a script that was written for something else:
+    // habst(0) settle(1) hdump(2) habst(3) habst_probe(4) expose(5).
+    let lib = library("tool_ops.json");
+    let build = script("trajectory_build.json");
+    assert_eq!(playable_steps(&build, &lib), vec![0, 2, 3, 4, 5]);
 }

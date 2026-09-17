@@ -136,3 +136,83 @@ pub fn runs(script: &BuildScript, library: &OpLibrary) -> Runs {
 
     runs
 }
+
+/// The steps a **playback** stops on, 0-based, ascending.
+///
+/// Playing a build one step at a time gives every step the same dwell, and most
+/// steps of a real script do not deserve one: a `spontaneous` settle holds its
+/// tool perfectly still while the crystal relaxes, so a run that should read as
+/// one movement — descend, react, lift, fly, descend — is chopped up by seconds
+/// of stillness. This is the list that fixes it, and the rule has two
+/// consequences from one sentence:
+///
+/// > A `tip` step is playable. A maximal block of consecutive non-`tip` steps
+/// > is **one** playable step — its last — if the block contains a `bulk` step,
+/// > and **no** playable step at all if the block is nothing but settles.
+///
+/// So a settle between two visits disappears from the playback, and a phase of
+/// `bulk` exposures with their settles between them plays as a single beat
+/// landing on its last step. Nothing is *dropped*: a player that jumps to step
+/// `m` is asking for the first `m − 1` steps applied, so the scene it lands on
+/// is exactly the one the skipped steps produced.
+///
+/// **Skipping a settle is pose-continuous**, which is what makes this a pacing
+/// decision and not an animation one. `path.rs` poses a `spontaneous` step that
+/// a run spans as a static `ToolMotion::Hover` at the *next* visit's standoff —
+/// the pose the previous visit's flight ends on at `time 1.0`, and the one the
+/// next visit begins from at `time 0.0`. The tool does not move across the
+/// jump; only the workpiece does, at once, which is what a relaxation looks
+/// like when you are not watching it. A `bulk` step parks every tool, so its
+/// block is continuous for the trivial reason.
+///
+/// **Only what can be proved skippable is skipped.** The method is the
+/// *operation's*, so a step naming an operation the library does not define has
+/// no known method: it stays playable **and** ends whatever block is open,
+/// exactly as it ends a run in [`runs`]. A script played against an empty or
+/// unwired library is therefore every step, never none — playback degrades to
+/// the un-skipped walk rather than silently dropping steps someone asked to
+/// see.
+///
+/// The list can be shorter than the script and can be empty (a script of
+/// nothing but settles). Neither is a failure: what covers the tail is the
+/// player's own rule that a run ends on the script's last step whether or not
+/// it is playable.
+///
+/// Design doc: `doc/design_mechanosynth_trajectory.md` §What playing skips.
+pub fn playable_steps(script: &BuildScript, library: &OpLibrary) -> Vec<usize> {
+    let method_at = |k: usize| {
+        script
+            .steps
+            .get(k)
+            .and_then(|step| library.get(&step.op))
+            .map(|op| op.method)
+    };
+
+    let count = script.steps.len();
+    let mut playable = Vec::new();
+    let mut k = 0;
+    while k < count {
+        match method_at(k) {
+            // A visit, or a step whose kind cannot be established. Both stop the
+            // playback on themselves.
+            Some(Method::Tip) | None => {
+                playable.push(k);
+                k += 1;
+            }
+            // A block of gating steps. It is walked to its end first, because
+            // whether it is worth a beat at all is a property of the block
+            // rather than of any step in it.
+            Some(_) => {
+                let mut has_bulk = false;
+                while let Some(method @ (Method::Bulk | Method::Spontaneous)) = method_at(k) {
+                    has_bulk |= method == Method::Bulk;
+                    k += 1;
+                }
+                if has_bulk {
+                    playable.push(k - 1);
+                }
+            }
+        }
+    }
+    playable
+}

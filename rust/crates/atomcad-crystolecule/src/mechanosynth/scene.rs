@@ -756,17 +756,6 @@ impl StepPlan<'_> {
     pub fn target_atoms(&self) -> Vec<u32> {
         self.target_match.values().copied().collect()
     }
-
-    /// The scene atoms **both** sides' `before` patterns matched — the site and
-    /// the apex that will react with it, which is what the current-step
-    /// highlight paints while the tool is still on its way down.
-    pub fn matched_atoms(&self) -> Vec<u32> {
-        let mut atoms = self.target_atoms();
-        if let Some(tool) = &self.tool {
-            atoms.extend(tool.matched.values().copied());
-        }
-        atoms
-    }
 }
 
 /// Every check one step has to pass, and nothing applied.

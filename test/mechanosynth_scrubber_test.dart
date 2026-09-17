@@ -11,6 +11,8 @@
 /// here a reader would otherwise assume off by one.
 library;
 
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -39,6 +41,9 @@ APIMechanosynthInfo _info({int count = 9, int applied = 3}) =>
       currentLayer: 0,
       currentSite: -1,
       chapters: _chapters,
+      // The transport's route. Irrelevant to the scrubber, which is the
+      // control for looking at a step rather than playing past it.
+      playable: Int32List.fromList(const []),
       currentToolType: '',
       currentAgent: '',
       tools: const [],

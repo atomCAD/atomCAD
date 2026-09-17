@@ -434,6 +434,16 @@ once more on release. The frame paints before the thread is handed over, which i
 of `structure_designer_viewport.dart`'s `renderingNeeded`. Reference
 implementation: `node_data/mechanosynth_time_row.dart`.
 
+**A control driven by a `Ticker` writes on every tick, and that is the same
+rule, not an exception to it.** A pointer delivers ticks faster than frames; a
+`Ticker` fires exactly once per frame, so its tick *is* the frame's one write
+and a post-frame queue would have nothing to coalesce. Such a driver also needs
+no preview state — the write refreshes synchronously, so the panel can go on
+rendering the kernel's own numbers. What it still needs is the undo bracket, and
+closed on **every** exit: the release, a pointer cancel, whatever ends the run
+by itself, and `dispose`. Reference implementation:
+`node_data/mechanosynth_transport.dart` (hold-to-play over `mechanosynth`).
+
 Evaluating *during* a drag without freezing is `doc/design_background_evaluation.md`
 (Send+Sync-ification, a lock around the global, snapshot eval, a worker thread) —
 five phases, none implemented. Do not attempt it piecemeal from a widget.

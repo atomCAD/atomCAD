@@ -16705,6 +16705,7 @@ impl SseDecode
         let mut var_chapters = <Vec<
             crate::api::structure_designer::structure_designer_api_types::APIMechanosynthChapter,
         >>::sse_decode(deserializer);
+        let mut var_playable = <Vec<i32>>::sse_decode(deserializer);
         let mut var_currentToolType = <String>::sse_decode(deserializer);
         let mut var_currentAgent = <String>::sse_decode(deserializer);
         let mut var_tools = <Vec<
@@ -16728,6 +16729,7 @@ impl SseDecode
             current_layer: var_currentLayer,
             current_site: var_currentSite,
             chapters: var_chapters,
+            playable: var_playable,
             current_tool_type: var_currentToolType,
             current_agent: var_currentAgent,
             tools: var_tools,
@@ -25432,6 +25434,7 @@ impl flutter_rust_bridge::IntoDart
             self.current_layer.into_into_dart().into_dart(),
             self.current_site.into_into_dart().into_dart(),
             self.chapters.into_into_dart().into_dart(),
+            self.playable.into_into_dart().into_dart(),
             self.current_tool_type.into_into_dart().into_dart(),
             self.current_agent.into_into_dart().into_dart(),
             self.tools.into_into_dart().into_dart(),
@@ -30523,6 +30526,7 @@ impl SseEncode
         <i32>::sse_encode(self.current_layer, serializer);
         <i32>::sse_encode(self.current_site, serializer);
         <Vec<crate::api::structure_designer::structure_designer_api_types::APIMechanosynthChapter>>::sse_encode(self.chapters, serializer);
+        <Vec<i32>>::sse_encode(self.playable, serializer);
         <String>::sse_encode(self.current_tool_type, serializer);
         <String>::sse_encode(self.current_agent, serializer);
         <Vec<crate::api::structure_designer::structure_designer_api_types::APIMechanosynthToolRow>>::sse_encode(self.tools, serializer);

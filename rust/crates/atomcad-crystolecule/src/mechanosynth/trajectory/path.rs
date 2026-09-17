@@ -18,7 +18,7 @@
 use super::landing::Landing;
 use super::runs::{Runs, runs};
 use crate::atomic_structure::AtomicStructure;
-use crate::mechanosynth::apply::{HighlightTags, covalent_radius, paint, resolve_tolerance};
+use crate::mechanosynth::apply::{HighlightTags, covalent_radius, resolve_tolerance};
 use crate::mechanosynth::scene::{
     LandingPlan, Participant, Scene, StepPlan, apply_plan, build_scene, match_step_in_scene,
     replay_steps,
@@ -685,13 +685,19 @@ pub fn replay_scene_at(
     landings.resize(selected, None);
     landings[index] = landing;
 
-    // Before the reaction the highlight is on the **matched `before` atoms** of
-    // both sides: the site lights up as the tool approaches, and the apex that
-    // will react lights with it. From the reaction on it is the step's
-    // `touched`, which `replay_steps` has already painted.
-    if let (Some(plan), Some(current)) = (&plan, tags.current) {
-        paint(&mut scene.structure, Some(current), plan.matched_atoms());
-    }
+    // **The highlight moves when the rewrite does, at `REACTION`, and not
+    // before.** `replay_steps` has already painted the last *applied* step's
+    // `touched` set, which before the reaction is step `k − 1`'s and from the
+    // reaction on is step `k`'s — so the tag agrees with the workpiece at every
+    // `u`, and there is nothing to do here.
+    //
+    // It used to light up step `k`'s matched `before` atoms during the
+    // approach, on the theory that a site the tool is descending on wants
+    // marking. Animating a build showed that for what it is: with the site
+    // already lit, the reaction has *visually* happened before the tool
+    // arrives, and the one instant the whole timeline is built around
+    // (§The reaction is at the middle of the dwell) reads as nothing at all.
+    // A highlight that anticipates its own cause is worse than no highlight.
 
     let motion = plan_motion(
         &scene,

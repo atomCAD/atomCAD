@@ -18,6 +18,8 @@
 /// landing at all — is not described as an approach.
 library;
 
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -44,6 +46,7 @@ APIMechanosynthInfo _info({
       currentLayer: -1,
       currentSite: -1,
       chapters: const [],
+      playable: Int32List.fromList(const []),
       currentToolType: 'habst_tool',
       currentAgent: '',
       tools: const [],

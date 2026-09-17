@@ -19060,8 +19060,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIMechanosynthInfo dco_decode_api_mechanosynth_info(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 20)
-      throw Exception('unexpected arr length: expect 20 but see ${arr.length}');
+    if (arr.length != 21)
+      throw Exception('unexpected arr length: expect 21 but see ${arr.length}');
     return APIMechanosynthInfo(
       count: dco_decode_i_32(arr[0]),
       applied: dco_decode_i_32(arr[1]),
@@ -19072,17 +19072,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       currentLayer: dco_decode_i_32(arr[6]),
       currentSite: dco_decode_i_32(arr[7]),
       chapters: dco_decode_list_api_mechanosynth_chapter(arr[8]),
-      currentToolType: dco_decode_String(arr[9]),
-      currentAgent: dco_decode_String(arr[10]),
-      tools: dco_decode_list_api_mechanosynth_tool_row(arr[11]),
-      feedstocks: dco_decode_list_api_mechanosynth_feedstock_row(arr[12]),
-      time: dco_decode_f_64(arr[13]),
-      leg: dco_decode_String(arr[14]),
-      tiltDegrees: dco_decode_f_64(arr[15]),
-      approachClearance: dco_decode_f_64(arr[16]),
-      contactRatio: dco_decode_f_64(arr[17]),
-      contactAt: dco_decode_f_64(arr[18]),
-      collision: dco_decode_String(arr[19]),
+      playable: dco_decode_list_prim_i_32_strict(arr[9]),
+      currentToolType: dco_decode_String(arr[10]),
+      currentAgent: dco_decode_String(arr[11]),
+      tools: dco_decode_list_api_mechanosynth_tool_row(arr[12]),
+      feedstocks: dco_decode_list_api_mechanosynth_feedstock_row(arr[13]),
+      time: dco_decode_f_64(arr[14]),
+      leg: dco_decode_String(arr[15]),
+      tiltDegrees: dco_decode_f_64(arr[16]),
+      approachClearance: dco_decode_f_64(arr[17]),
+      contactRatio: dco_decode_f_64(arr[18]),
+      contactAt: dco_decode_f_64(arr[19]),
+      collision: dco_decode_String(arr[20]),
     );
   }
 
@@ -24840,6 +24841,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_currentLayer = sse_decode_i_32(deserializer);
     var var_currentSite = sse_decode_i_32(deserializer);
     var var_chapters = sse_decode_list_api_mechanosynth_chapter(deserializer);
+    var var_playable = sse_decode_list_prim_i_32_strict(deserializer);
     var var_currentToolType = sse_decode_String(deserializer);
     var var_currentAgent = sse_decode_String(deserializer);
     var var_tools = sse_decode_list_api_mechanosynth_tool_row(deserializer);
@@ -24862,6 +24864,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         currentLayer: var_currentLayer,
         currentSite: var_currentSite,
         chapters: var_chapters,
+        playable: var_playable,
         currentToolType: var_currentToolType,
         currentAgent: var_currentAgent,
         tools: var_tools,
@@ -31306,6 +31309,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.currentLayer, serializer);
     sse_encode_i_32(self.currentSite, serializer);
     sse_encode_list_api_mechanosynth_chapter(self.chapters, serializer);
+    sse_encode_list_prim_i_32_strict(self.playable, serializer);
     sse_encode_String(self.currentToolType, serializer);
     sse_encode_String(self.currentAgent, serializer);
     sse_encode_list_api_mechanosynth_tool_row(self.tools, serializer);

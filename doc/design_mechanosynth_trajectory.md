@@ -42,14 +42,28 @@ follows the hand and one that crawls seconds behind it (§The `mechanosynth`
 node). An eighth review, measuring that panel, replaced the **folded roll with a
 park-relative one**: a visit's orientation now reads its own approach direction
 rather than the path taken to reach it, which takes a step from one sweep per
-visit of its run to two in total (§The envelope, §Presentation). Phases 1, 2 and
-3 are implemented; Phase 4 is not.
+visit of its run to two in total (§The envelope, §Presentation). A ninth
+review, after using Phase 3's panel, added **Phase 5, the play control**: a
+scrubbable build still could not be *shown*, because advancing the step leaves
+the time where the last drag left it and the motion breaks at every boundary
+(§Playing the build). A tenth review, after playing one, added **Phase 6**: at
+one second a step a build that is mostly settles plays mostly stillness, and the
+run the trajectory engine exists to show is chopped up by the steps that have no
+motion — so the driver walks a list of *playable* steps the kernel computes
+(§What playing skips). Playing one then reversed a decision of §Presentation:
+`ms_current` no longer lights step `k`'s site during the approach, because a
+highlight that arrives before its own reaction makes the reaction — the instant
+this whole timeline is built around — read as nothing at all (§Presentation
+step 6). Phases 1, 2, 3, 5 and 6 are implemented; Phase 4 — the guide pages and
+the manual walkthrough — is not.
 
 Builds on `doc/design_mechanosynth_tools.md` (milestone 1: what a build does
 to every molecule it involves, all four phases implemented 2026-09-15) and is
 the **first half of milestone 2** of that design. The second half — a real
 clock over a whole build, and animation export — is *not* designed here; §The
-clock milestone 2 will need says what this half hands it. This design retires
+clock milestone 2 will need says what this half hands it, and Phase 5's play
+button is the transport that clock will inherit rather than an instalment of
+it. This design retires
 milestone 1's reserved `approach` field; §The operation library says why.
 
 ## What this is
@@ -950,11 +964,21 @@ the motion; the engine's scene does not.
    pose the previous step's outbound flight aimed at, because both read the
    same landing. **No earlier visit's landing is read**, which is why
    `replay_steps` is asked for `LandingPlan::Last` rather than one per step.
-6. Highlights. Before the reaction, `ms_current` is painted on the **matched
-   `before` atoms** of step `k`, both sides: the site lights up as the tool
-   approaches, and the apex that will react lights with it. From the reaction
-   on, it is the step's `touched`, as today. `ms_added` and `ms_layer` follow
-   the applied set and change meaning not at all.
+6. Highlights. **Nothing to do**: `replay_steps` has already painted the last
+   *applied* step's `touched` set, which before the reaction is step
+   `k − 1`'s and from the reaction on is step `k`'s. The tag therefore moves
+   in the same instant the workpiece does, at `REACTION`. `ms_added` and
+   `ms_layer` follow the applied set and change meaning not at all.
+
+   This is a **reversal**. The design originally lit step `k`'s matched
+   `before` atoms during the approach, on the theory that a site the tool is
+   descending on wants marking. Animating a build showed that for what it is:
+   with the site already lit, the reaction has *visually* happened when the
+   tool sets off, and the one instant the whole timeline is built around
+   (§The reaction is at the middle of the dwell) reads as nothing at all. A
+   highlight that anticipates its own cause is worse than no highlight, and
+   before the reaction the honest thing to mark is the last reaction that
+   *did* happen — which is what the applied set already says.
 
 The caller then draws: `let mut shown = scene.structure.clone();
 apply_tool_pose(&mut shown, &scene, motion.tool(), &motion.pose_at(u))`.
@@ -1080,6 +1104,243 @@ Nothing about the approach reaches the result pin as an error: a blocked
 site is this line and a negative `approach` on the record. The tools block is unchanged;
 the row of a tool that is away from park is prefixed with a marker.
 
+## Playing the build: the transport row
+
+Phase 3 made a build **scrubbable**, and scrubbing is not showing. A
+colleague watching over a shoulder wants the build to *run*, and the only way
+to run it today is to drag the step slider — which advances `step` and leaves
+`time` exactly where the last drag left it, so every step after the first is
+entered part-way through its own visit and the motion breaks at every
+boundary. What is missing is a **driver**: something that advances `time` by
+itself and, when a step is used up, advances `step` and puts `time` back to
+zero.
+
+The driver is small, and it is small because the two phases before it built
+everything it needs. `setMechanosynthData` carries `step` and `time` in **one**
+write, so a boundary is one call and never a frame with the new step at the old
+time; `beginNodeDataDrag` / `endNodeDataDrag` already coalesce a gesture into a
+single undo entry; `APIMechanosynthInfo.count` already says where the script
+ends and `applied` already resolves the stored `-1`. **This phase is Dart
+only** — no engine change, no node change, no API change, no FRB
+regeneration.
+
+**Hold to play.** The control is a button that plays *while it is held* and
+stops the moment it is released. It is the scrub the user already knows,
+performed by a clock instead of by a hand, and inheriting that shape is worth
+more than it looks: there is no transport state to fall out of sync with the
+node, no stop button to hunt for, no way to leave the panel playing, and
+letting go is always the way out. It also happens to be the gesture a
+presenter wants — press to advance, release to talk, press again — which a
+fire-and-forget toggle would not give without a second control. The cost is
+real and accepted: a 171-step build is about three minutes of held button.
+A latch and a speed control are in §Follow-ups, not here.
+
+**The transport row goes directly under the panel header, above the step
+scrubber.** Vertical space in the node properties panel is the scarcest thing
+in this UI — the panel and the viewport share one column, and the mechanosynth
+panel is already the tallest in the application — so the one control a demo
+cannot do without must be the one that is on screen before anything is
+scrolled. The row is a single line: **rewind**, **play**, and to their right a
+compact position readout (`step 12 / 171 · time 0.43`). The readout duplicates
+what the two sliders below say, deliberately: it makes the top row *sufficient*
+for a demo, so everything under it can be scrolled away without losing the
+thread. The general remedies for the panel's height — a density pass, and the
+option to dock the properties panel to the right — are a separate piece of
+work and no part of this phase.
+
+**The driver advances by the wall clock, and never skips a step.** A `Ticker`
+reports elapsed time; each tick takes `dt` since the previous one and adds
+`dt / playStepSeconds(speed)` to the time. When the accumulated time reaches 1.0
+the write becomes the next step at time 0, and **the excess is dropped rather
+than carried**. On a machine where one step costs more than one frame's budget,
+carrying the remainder would silently skip steps and show a build that never
+happened; falling behind the wall clock is the acceptable failure, showing the
+wrong build is not. So a tick advances at most one step, and a slow scene plays
+slow.
+
+**The speed is an integer multiplier, and the default is the second stop.**
+`PLAY_BASE_STEP_SECONDS` is 2.0 and the row's `×n` field divides it, so ×1 is two
+seconds a step, ×2 one, ×4 a half. The default is **×2** — the only rate the
+driver had before it was adjustable — and that choice is the whole point of the
+base being 2: making the default the *second* stop rather than the first buys a
+**slower** gear as well as faster ones. A step worth narrating while it happens
+is worth two seconds, and a base-as-default would have had nowhere to go but up.
+The range stops at ×8: below a quarter-second a step the kernel is the limit
+rather than the setting, and a larger number would buy nothing but a misleading
+readout.
+
+The value is read **on each tick**, never cached into the accumulator, so
+turning the speed up mid-press takes effect on the next frame with nothing
+recomputed and nothing jumping — the next tick is simply longer or shorter.
+
+It is a bare `IntSpinField` with a `×` prefix rather than a labelled `IntInput`:
+a caption over the box would double the row's height, which is the one thing
+this row may not spend. The spin field brings the − / + buttons, the wheel and
+the arrow keys with it (`lib/AGENTS.md`), so the increment logic is not written
+a second time.
+
+**The speed is session state on `StructureDesignerModel`, not node data.** It
+changes no atom, so it has no business in the `.cnnd` — a project file that
+differed over how fast someone once played it would be a project file that
+differed over nothing — and no business on the undo stack either. It lives on
+the model rather than in the panel so that clicking to another node and back
+does not reset a speed the presenter just set. It does not survive a restart; if
+it ever needs to, the envelope cage's route (a `preferences.json` field, api
+twin, preferences window) is the precedent, and the project file still is not.
+
+**Every tick writes, so there is no preview state.** This is where the driver
+is *simpler* than the drag it resembles, and the reason is worth stating
+because the two look alike. A pointer delivers ticks faster than frames, which
+is why `MechanosynthTimeRow` holds the dragged value and queues one write for
+the end of the frame; a `Ticker` fires exactly once per frame, so every tick is
+already the only write that frame and the coalescing machinery has nothing to
+do. The write goes through `refresh_structure_designer_auto` synchronously, so
+the frame's cost *is* the refresh's cost and the next tick's `dt` has it
+already measured. Nothing is held for rendering: the sliders and the readouts
+show the kernel's own numbers, as they do at rest. The driver keeps only the
+`(step, time)` it is advancing, seeded at press from `info.applied` and
+`info.time`, because the kernel's clamp is not a place to accumulate a
+fraction.
+
+**One press, one undo entry.** The press brackets the whole run with
+`beginNodeDataDrag` / `endNodeDataDrag`, the way a slider drag does, so a
+three-minute play costs one Ctrl-Z rather than a hundred and seventy-one. The
+bracket must be closed on every exit, not just on release: a pointer cancel,
+the end of the script, and `dispose` of a panel whose node was deselected
+mid-play all stop the ticker and end the session — the `_dragging` field in
+`MechanosynthTimeRow` is the precedent, and it exists for exactly this.
+
+**The end of the script stops it; the next press starts over.** Reaching the
+last step writes `(count, 1.0)`, stops the ticker and returns the button to its
+idle look while the pointer is still down; the build does not loop, because a
+finished workpiece flickering back to a bare slab is not something anyone wants
+to watch twice. A press made when the scene is already at the end restarts from
+`(0, 0.0)` — the only thing such a press can mean. **Rewind** is the same jump
+on its own button, as one undo entry, for the presenter who wants to reset
+without playing.
+
+**A wired pin disables the row.** The driver must write both `step` and `time`,
+so it is enabled only when **neither** pin is wired; otherwise it greys out
+beside the same wired hint the two rows below it already show. Playing half the
+pair would advance a number the node ignores.
+
+**What this deliberately is not.** It is not the clock of §*The clock milestone
+2 will need*. It does not read the library's reserved `duration`, does not give
+a flight more time than a settle, does not group a `bulk` event's steps or run
+two tools at once, and does not export frames. Every step gets the same second
+and a gating step is a second of a still scene. When the real clock arrives it
+takes this button as its transport rather than replacing it — the press, the
+bracket, the one-write-per-frame rule and the placement all survive the change;
+only the function from elapsed time to `(k, u)` gets richer.
+
+Rejected: **seconds-per-step as the field** rather than a multiplier — the
+quantity a presenter thinks in is speed, and ×4 says "four times as fast" where
+`0.5 s` needs dividing first. **Persisting the speed in the project** — see
+above. **A play/pause toggle** — it is a mode, and a mode in a panel that
+rebuilds from the kernel on every write is a thing to keep in sync for a
+benefit the hold already delivers. **A driver node** over `scene` and `step`,
+feeding the pins from a network-level clock — that is milestone 2's question
+and answering it here would settle it on a demo's evidence. **Animating in the
+kernel**, i.e. a replay that returns a sequence — the scene is re-evaluated per
+frame anyway and a sequence would have to be held somewhere; the driver's whole
+claim is that the existing per-frame write is enough.
+
+## What playing skips: the playable steps
+
+Phase 5 gives every step the same second, and a real build does not deserve
+one. The silicon demo's 171 steps are mostly `spontaneous` settles, and a
+settle has **no motion at all** — the tool holds its hover pose for the whole
+step while the crystal relaxes under it. Played at one second each they cost
+minutes and, worse, they *break the run*: a shuttle descends, reacts, lifts,
+flies — and then stands perfectly still for three seconds before descending
+again. The motion the trajectory engine exists to show is chopped up by the
+steps that have none.
+
+So the driver does not walk the script one step at a time. It walks a list of
+**playable steps**, and the rule that builds it is one rule with two
+consequences:
+
+> A `tip` step is playable. A maximal block of consecutive non-`tip` steps is
+> **one** playable step — its last — if the block contains a `bulk` step, and
+> **no** playable step at all if the block is nothing but settles.
+
+A settle between two visits therefore disappears from the playback, and a
+chlorination phase of `bulk` exposures with their settles between them plays as
+a single second landing on the phase's last step. Everything in between is
+still *applied* — jumping to step `m` means the first `m − 1` steps have run —
+so the scene the next second starts from is exactly the scene the skipped steps
+produced. Nothing is dropped; only the waiting is.
+
+**Skipping a settle is pose-continuous, which is why this is a pacing change
+and not an animation change.** `path.rs` poses a `spontaneous` step that a run
+spans as a static `ToolMotion::Hover` at the **next** visit's standoff — the
+very pose the previous visit's flight ends on at `time 1.0`, and the one the
+next visit begins from at `time 0.0` (§Presentation). So the jump from
+`(k, 1.0)` to `(m, 0.0)` moves the tool **not at all**: only the workpiece
+changes, instantly, which is what a relaxation looks like when you are not
+watching it. No interpolation, no new geometry, nothing in the engine to
+change. The same is true of a bulk block for the trivial reason that a `bulk`
+step ends a run and parks every tool.
+
+**Only what can be proved skippable is skipped.** The method is the
+*operation's*, so a step whose operation the wired library does not define — or
+any step at all when nothing is wired to `ops` — has no known method, and those
+steps stay playable and end whatever block is open. Playback then degrades to
+Phase 5's every-step walk rather than silently dropping steps a user asked to
+see. `runs()` already ends a run on an unknown operation for the same reason,
+and this rule is deliberately the same shape.
+
+**The list is the kernel's, because the panel cannot see a method.** The parsed
+script never crosses the bridge and `APIMechanosynthInfo` carries
+`current_method` for the selected step alone, so a Dart-side rule is not
+available at any price. `APIMechanosynthInfo` gains:
+
+| field | type | meaning |
+|---|---|---|
+| `playable` | `Vec<i32>` | the 1-based step numbers the transport stops on, ascending. Empty when no script is loaded |
+
+filled in `mechanosynth_info`, which already holds both the script and the
+library. The rule itself is a pure function of the two —
+`playable_steps(script, library) -> Vec<usize>` in
+`trajectory/runs.rs`, beside `runs()`, which is the other statement about a
+script's structure that needs the library and no scene. It lives there rather
+than in `api` so it is tested in the crystolecule harness against `Method`
+directly, the way §Testing requires; the api layer only maps it to 1-based
+`i32`s. `chapters()` is the precedent for a list the panel navigates by and
+could not compute.
+
+**What changes in the transport.** One line of the driver: at a boundary, the
+next step is the first entry of `playable` greater than the current one rather
+than `current + 1`. Everything else in Phase 5 is untouched — the hold, the
+bracket, the one-write-per-frame rule, rewind, and the end-of-script stop.
+Three details fall out of it and are worth stating because each is a test:
+
+- **A press from a step that is not playable still plays that step**, to its
+  end, and then jumps. The user scrubbed there deliberately; the transport is
+  not entitled to skip the thing they are looking at.
+- **The end lands on `count`, playable or not.** When no entry is greater than
+  the current step the driver writes `(count, 1.0)` and stops, as it already
+  does — so a script ending in settles finishes on the settled workpiece rather
+  than stopping short of it.
+- **Step 0 is still a beat on the bare base**, and its boundary goes to the
+  *first* playable step rather than to step 1.
+
+**It is not a switch.** A checkbox would put a second control in a row whose
+whole argument was that it stays one line, and it would be offering a choice
+between watching the build and watching a still frame of it. The step scrubber
+is still there, unchanged, for anyone who wants to look at a settle: scrubbing
+is inspection, playing is presentation, and this is the difference between
+them.
+
+Rejected: **a per-step method array in the API**, which would put the policy in
+Dart and ship 171 strings a panel would have to re-derive a block structure
+from on every rebuild. **Playing a settle faster** rather than not at all — a
+compressed second of a still scene is still a still scene, and it would need a
+per-step rate the driver does not otherwise have. **Reading the library's
+`duration`** to pace the skipping: `duration` is milestone 2's, it is reserved
+and unpopulated today, and a rule that depends on it would not work on any
+library that exists.
+
 ## The envelope cage: a viewport overlay switched in the preferences
 
 The envelope is the one thing in this design a user cannot otherwise see,
@@ -1157,6 +1418,18 @@ preference and put a preferences read into `eval`.
   tools; what it buys is that no flight crosses another tool and no park sits
   where the build will grow. A tool then leaves park once per run, works across
   the scene, and goes home when its run ends.
+- `doc/reference_guide/nodes/atomic.md` §mechanosynth again, a
+  §*Playing the build*: the transport row at the top of the panel, that the
+  play button plays while held and stops on release, that a run is one undo
+  entry, that the end of the script stops it and the next press starts over,
+  and that a wired `step` or `time` pin greys the row out. Phase 5's, not
+  Phase 4's.
+- `doc/reference_guide/nodes/atomic.md` §*Playing the build* again, a
+  paragraph on **what playing skips**: that settles are stepped over and a run
+  of bulk exposures plays as one beat on its last step, that nothing is
+  dropped — every skipped step is still applied — that the scrubber is where a
+  settle is looked at, and that a step whose operation the library does not
+  define is never skipped. Phase 6's.
 - `doc/reference_guide/nodes/math_programming.md`, the `MechanosynthStep`
   record: the five appended fields.
 - `doc/reference_guide/ui.md`, the preferences dialog: the two envelope
@@ -1341,8 +1614,10 @@ produced, never against a typed coordinate:
   `(k, u ≥ 0.5)` that of `replay_scene(k)`; `apply_tool_pose` on a clone
   leaves every non-tool atom, every bond and every tag untouched and keeps
   the tool's atoms pairwise-distance-preserved from their bound positions;
-- `ms_current` before the reaction is the matched `before` set of both
-  sides; after it, the step's `touched`.
+- `ms_current` moves **at** the reaction and not before: nothing is lit while
+  step 1's tool descends, the step's `touched` set appears at `u = 0.5` and
+  holds to `u = 1`, and through step 2's approach it is still step 1's — the
+  tag agrees with the workpiece at every `u`.
 
 ### Node layer — `crates/atomcad-structure-designer/tests/structure_designer/mechanosynth_trajectory_node_test.rs`
 
@@ -1399,7 +1674,27 @@ Scene and preferences, in the same harness:
   that leg and is empty at a `bulk` step; `collision` is the panel sentence for the
   slab scene and empty otherwise; `approach_clearance` is negative on the
   blocked scene and the info is still returned — no error;
-- the preferences API twin round-trips the two new fields.
+- the preferences API twin round-trips the two new fields;
+- (Phase 6) `mechanosynth_info` carries `playable` as **1-based** step numbers
+  and nothing else — the rule is tested in the crystolecule harness, so what
+  the api test owns is the index base, that the list is empty with no script,
+  and that it is every step when no library is wired.
+
+### Playable steps — `crates/atomcad-crystolecule/tests/crystolecule/mechanosynth_trajectory_test.rs`
+
+`playable_steps` is a pure function of a script and a library, so it is tested
+as one, beside `runs()`: a script of nothing but `tip` steps is every step; a
+settle between two visits is absent while both visits are present; a block of
+`bulk` steps with settles between them yields its **last** step and nothing
+else; a block of settles alone yields nothing; a settle trailing the last visit
+yields nothing (the driver's end-of-script write is what covers it); a step
+naming an operation the library does not define is playable **and** ends the
+block it would otherwise have joined; and an empty library makes every step
+playable. `trajectory_build.json` is the combined case — a real script,
+written for something else, that happens to hold one settle between two visits
+and one trailing exposure. The 171-step silicon build is **not** a fixture here
+(it lives outside the repository), so its shortening is a manual check, not a
+test.
 
 ### Dart — `test/`
 
@@ -1411,6 +1706,28 @@ drag, the row is disabled when the pin is wired, the float box round-trips a
 typed value, and the tick sits at `0.5`. The preferences window's two new
 controls get `PreferencesKeys` entries so the human smoke test can find
 them.
+
+`mechanosynth_transport_test.dart`, on the same kind of widget — a driver over
+plain numbers and callbacks, pumped with `tester.pump(Duration(...))` so the
+ticker is the test's clock: a press then a pump of half `PLAY_STEP_SECONDS`
+reports a time of `0.5` at the same step; a pump across the boundary reports
+the next step at time `0.0`; a single pump of ten step-lengths advances
+**one** step, not ten; a press at the last step's end restarts at `(0, 0.0)`;
+the end of the script stops the ticker with the pointer still down and writes
+nothing further; `onDragStart` / `onDragEnd` fire exactly once around a press,
+once around a press ended by the script's end, and once around a press ended
+by `dispose`; rewind writes `(0, 0.0)` and starts no ticker; the row is
+disabled when either pin is wired. The speed: `playStepSeconds` divides the base
+and clamps its argument, ×1 takes twice the wall clock ×2 does, a change
+mid-press writes nothing by itself and the next tick advances at the new rate,
+and no value outside the row's range is ever reported.
+
+Phase 6 adds to it: given a `playable` list, a boundary lands on the next entry
+rather than on `current + 1`; a settle between two entries is never written; a
+press from a step that is not in the list plays *that* step to its end before
+jumping; a current step past the last entry ends the run at `(count, 1.0)`; and
+an empty list is Phase 5's every-step walk. The rule that builds the list is
+**not** tested here — it is Rust, and lives with `runs()`.
 
 ### Cross-cutting regressions, at the end of every phase
 
@@ -1425,7 +1742,10 @@ set is the generator's test, run in the generator, not here.
 ### Manual only
 
 The feel of the drag, the look of the cage, the demo walkthrough of Phase 4,
-and the Flutter smoke test, which stays the human's.
+whether a played build actually reads as continuous at Phase 5's one second a
+step, whether Phase 6 skips the right things — a run that reads as one
+movement, a bulk phase that reads as one event — and the Flutter smoke test,
+which stays the human's.
 
 ## Phases
 
@@ -1492,6 +1812,48 @@ another's flight line and read the collision; undo one drag with one Ctrl-Z;
 open a milestone-1 project with a `/3` library and read the regenerate
 message. The Flutter smoke test stays the human's.
 
+### Phase 5 — The play control
+
+Dart only, and independent of Phase 4: `mechanosynth_transport.dart` — the
+rewind and play buttons, the position readout, and the `Ticker` driver behind
+them, with `SingleTickerProviderStateMixin` and the bracket closed on release,
+cancel, the end of the script and `dispose`; the row mounted at the top of
+`mechanosynth_editor.dart`, above the step scrubber, disabled when `step` or
+`time` is wired; `PLAY_BASE_STEP_SECONDS` and the `×n` speed field, with the
+multiplier held as session state on `StructureDesignerModel`; the Dart tests
+above; the guide paragraph. Nothing in `rust/` is touched, so the Rust suites are run as
+regressions rather than extended.
+
+Kickoff check, on the silicon v3 demo: hold play from step 0 and watch the
+build run without a break at a step boundary — a shuttle that descends on the
+reservoir, lifts, flies and descends on the site without the scene jumping
+between the two; release mid-flight and the scene holds there; press again and
+it continues; hold to the end and the button lets go by itself at step 171;
+press once more and it starts from the bare slab; one Ctrl-Z after a long run
+returns to where the run began. Run the same demo at ×1 and at ×8 and confirm the
+speed field is the only thing that changes — the same steps, the same stops,
+just a different clock; change it mid-press and confirm the scene does not
+jump.
+
+### Phase 6 — Playing what moves
+
+`playable_steps` in `trajectory/runs.rs` and its tests; `playable` on
+`APIMechanosynthInfo`, filled in `mechanosynth_info` and empty in its no-script
+branch, with the api test; `flutter_rust_bridge_codegen generate`; the
+`playable` argument threaded from `mechanosynth_editor.dart` into
+`MechanosynthTransportRow`, whose boundary picks the next entry; the Dart tests
+above; the guide paragraph. The transport's other behaviour does not move, so
+Phase 5's tests are the regression.
+
+Kickoff check, on the silicon v3 demo: hold play and watch a shuttle's run come
+out continuous — descend, react, lift, fly, descend — with no second of
+stillness between visits where the settles used to be; watch a `bulk` phase go
+by as one beat rather than one per exposure; confirm the workpiece at the end
+of the run is the same atoms the un-skipped playback produced; scrub to a
+settle by hand and confirm it is still there to look at, and that pressing play
+on it plays it before moving on; unwire `ops` and confirm playback falls back
+to every step rather than skipping the lot.
+
 ## The clock milestone 2 will need
 
 With this half done, the animation half is a **driver**, not a change to the
@@ -1505,6 +1867,13 @@ time its length deserves; nothing in this design assumes anything about it.
 Export is a loop over `T` with the existing image export. Whether the driver
 is a node over `scene` and `step` or a mode of the replayer is that design's
 decision, as milestone 1 already said.
+
+Phase 5's play button is **not** that clock and does not pre-empt it. It is the
+scrub driven by a ticker at a fixed seconds-per-step, blind to `duration`, to
+`event_indices` and to `runs`; what it settles is only the *transport* — that
+holding a button is how a build is played, that a run is one undo entry, and
+that one write per frame is fast enough to drive it. When the clock arrives it
+supplies a better function from elapsed time to `(k, u)` and keeps the button.
 
 ## Follow-ups (signatures only)
 
@@ -1536,6 +1905,16 @@ decision, as milestone 1 already said.
   node's and fails for none of them.
 - **A `parts: [HasAtoms]` output** (milestone 1's follow-up) — the moved tool
   as its own structure, for a downstream that wants only it.
+- **A latched play.** A click that plays until clicked again, once the held
+  button has shown whether a demo actually wants one. A loop switch belongs with
+  it. The speed half of this follow-up was taken up and is §Playing the build's
+  `×n` field; what is still open is **remembering it across restarts**, which is
+  a `preferences.json` field and not a project one.
+- **A dwell that knows the step.** Phase 6 answers the half of this that hurt
+  — a step with no motion is not shortened but skipped. What is left is the
+  *tip* steps: a visit that flies across the whole scene gets the same second as
+  one that descends on the site it is already hovering over. Pacing those by the
+  length of the flight, or by the library's `duration`, is the clock's job.
 
 ## Considered and rejected
 

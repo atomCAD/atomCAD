@@ -1583,6 +1583,18 @@ pub struct APIMechanosynthInfo {
     /// The script's chapters, in order, covering every step exactly once.
     /// Empty when no script is loaded.
     pub chapters: Vec<APIMechanosynthChapter>,
+    /// The step numbers a **playback** stops on, **1-based** and ascending —
+    /// the visits, plus the last step of each block of gating steps that
+    /// contains a `bulk` exposure. A settle between two visits is absent, so
+    /// the transport steps over it and a run reads as one movement.
+    ///
+    /// Shorter than the script, and empty both when no script is loaded and
+    /// when a script is nothing but settles. Never *selective* about a step
+    /// whose method is unknown: with no library wired every step is here, so a
+    /// playback degrades to walking them all rather than dropping them.
+    /// `atomcad_crystolecule::mechanosynth::playable_steps` is the rule, and
+    /// `doc/design_mechanosynth_trajectory.md` §What playing skips is why.
+    pub playable: Vec<i32>,
     /// The current step's tool type, when the operation is `tip`; empty
     /// otherwise and at `applied = 0`.
     pub current_tool_type: String,

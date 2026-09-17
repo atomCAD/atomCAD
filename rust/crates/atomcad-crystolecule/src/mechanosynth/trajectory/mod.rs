@@ -41,6 +41,6 @@ pub use path::{
     REACTION_LANDING, ToolMotion, Visit, apply_tool_pose, cage_apex, reaction_pose,
     replay_scene_at, standoff_pose, tool_envelope_cages,
 };
-pub use runs::{Runs, runs};
+pub use runs::{Runs, playable_steps, runs};
 
 pub(super) use landing::check_containment;

@@ -7,11 +7,21 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
 import 'package:flutter_cad/structure_designer/node_data/mechanosynth_scrubber.dart';
 import 'package:flutter_cad/structure_designer/node_data/mechanosynth_status.dart';
 import 'package:flutter_cad/structure_designer/node_data/mechanosynth_time_row.dart';
+import 'package:flutter_cad/structure_designer/node_data/mechanosynth_transport.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
-/// Editor widget for `mechanosynth` nodes — a step scrubber, the phase list,
-/// and the deprecated file properties where a legacy project still has them.
+/// Editor widget for `mechanosynth` nodes — a transport row, a step scrubber,
+/// the phase list, and the deprecated file properties where a legacy project
+/// still has them.
+///
+/// **The transport row is first, and that is a layout decision, not an
+/// accident** ([MechanosynthTransportRow], Phase 5 of
+/// `doc/design_mechanosynth_trajectory.md`). Panel height is the scarcest
+/// resource in this UI, and holding its play button is the only way to *show* a
+/// build rather than scrub it — so it sits above everything, carries its own
+/// position readout, and everything below it can be scrolled out of sight
+/// without losing the thread.
 ///
 /// **The library and the steps arrive on wires now** (`ops`, `steps`), so the
 /// panel has nothing to offer for them: `ops_library` and `build_script` are
@@ -368,6 +378,29 @@ class _MechanosynthEditorState extends State<MechanosynthEditor> {
             nodeTypeName: 'mechanosynth',
           ),
           const SizedBox(height: 16),
+          // The transport is the top row of the panel, above everything else
+          // including the legacy file group. Vertical space here is the
+          // scarcest thing in this UI — the panel and the viewport share one
+          // column — so the one control a demo cannot do without is the one
+          // that is on screen before anything is scrolled, and its readout
+          // duplicates the two sliders below so that this row alone is enough
+          // to follow a run.
+          MechanosynthTransportRow(
+            count: info?.count ?? 0,
+            step: info?.applied ?? 0,
+            time: info?.time ?? data.time,
+            playable: info?.playable ?? const <int>[],
+            // Session state on the model rather than node data: the speed
+            // changes no atom, so it has no business in the project file or on
+            // the undo stack — but it must survive clicking to another node and
+            // back, which panel state would not.
+            speed: widget.model.mechanosynthPlaybackSpeed,
+            onSpeedChanged: widget.model.setMechanosynthPlaybackSpeed,
+            enabled: !widget.stepConnected && !widget.timeConnected,
+            onChanged: (step, time) => _update(step: step, time: time),
+            onDragStart: () => widget.model.beginNodeDataDrag(widget.nodeId),
+            onDragEnd: widget.model.endNodeDataDrag,
+          ),
           _buildLegacyGroup(context, data),
           MechanosynthScrubber.fromInfo(
             info,

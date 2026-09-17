@@ -42,6 +42,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/ai_history_api.dart'
 import 'package:flutter_cad/src/rust/api/structure_designer/profiling_api.dart'
     show APIRefreshMode, APIRefreshProfile;
 import 'package:flutter_cad/src/rust/api/common_api.dart' as common_api;
+import 'package:flutter_cad/structure_designer/node_data/mechanosynth_transport.dart';
 import 'package:flutter_cad/structure_designer/namespace_utils.dart';
 
 /// Distinguishes the five kinds of pin slots a node can expose. Replaces the
@@ -387,6 +388,27 @@ class StructureDesignerModel extends ChangeNotifier {
   /// Toggled from the *View* menu.
   /// See `doc/design_ai_edit_history.md` (D11).
   bool aiHistoryPanelVisible = false;
+
+  /// How fast the `mechanosynth` transport plays, as an integer multiplier of
+  /// [PLAY_BASE_STEP_SECONDS]. See `mechanosynth_transport.dart`.
+  ///
+  /// **Session state, deliberately.** It is a property of the *watching*, not
+  /// of the design: it changes no atom, so putting it in the `.cnnd` would make
+  /// a project file differ over how fast someone once played it, and give the
+  /// undo stack an entry for a viewing choice. It lives here rather than in the
+  /// panel so that clicking to another node and back does not reset a speed the
+  /// presenter just set. It does not survive a restart; if it ever needs to,
+  /// the envelope cage's route (a `preferences.json` field) is the precedent,
+  /// not the project file.
+  int mechanosynthPlaybackSpeed = DEFAULT_PLAY_SPEED;
+
+  /// Sets the playback multiplier, clamped to the range the field offers.
+  void setMechanosynthPlaybackSpeed(int speed) {
+    final clamped = speed.clamp(MIN_PLAY_SPEED, MAX_PLAY_SPEED);
+    if (clamped == mechanosynthPlaybackSpeed) return;
+    mechanosynthPlaybackSpeed = clamped;
+    notifyListeners();
+  }
 
   /// The AI edit log's summary rows, **oldest first** — the order
   /// `ai_history_list()` returns them in. Re-fetched only when

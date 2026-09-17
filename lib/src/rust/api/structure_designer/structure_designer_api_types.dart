@@ -3167,6 +3167,19 @@ class APIMechanosynthInfo {
   /// Empty when no script is loaded.
   final List<APIMechanosynthChapter> chapters;
 
+  /// The step numbers a **playback** stops on, **1-based** and ascending —
+  /// the visits, plus the last step of each block of gating steps that
+  /// contains a `bulk` exposure. A settle between two visits is absent, so
+  /// the transport steps over it and a run reads as one movement.
+  ///
+  /// Shorter than the script, and empty both when no script is loaded and
+  /// when a script is nothing but settles. Never *selective* about a step
+  /// whose method is unknown: with no library wired every step is here, so a
+  /// playback degrades to walking them all rather than dropping them.
+  /// `atomcad_crystolecule::mechanosynth::playable_steps` is the rule, and
+  /// `doc/design_mechanosynth_trajectory.md` §What playing skips is why.
+  final Int32List playable;
+
   /// The current step's tool type, when the operation is `tip`; empty
   /// otherwise and at `applied = 0`.
   final String currentToolType;
@@ -3227,6 +3240,7 @@ class APIMechanosynthInfo {
     required this.currentLayer,
     required this.currentSite,
     required this.chapters,
+    required this.playable,
     required this.currentToolType,
     required this.currentAgent,
     required this.tools,
@@ -3251,6 +3265,7 @@ class APIMechanosynthInfo {
       currentLayer.hashCode ^
       currentSite.hashCode ^
       chapters.hashCode ^
+      playable.hashCode ^
       currentToolType.hashCode ^
       currentAgent.hashCode ^
       tools.hashCode ^
@@ -3277,6 +3292,7 @@ class APIMechanosynthInfo {
           currentLayer == other.currentLayer &&
           currentSite == other.currentSite &&
           chapters == other.chapters &&
+          playable == other.playable &&
           currentToolType == other.currentToolType &&
           currentAgent == other.currentAgent &&
           tools == other.tools &&

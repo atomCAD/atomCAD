@@ -852,7 +852,8 @@ twice. Click the eyes to change that; the choice is saved with the project.
 - `time` — where **inside** that last step the scene is taken, from 0 to 1.
   The default `1.0` is the end of the step with every tool back at its park,
   which is what the node showed before trajectories existed. See
-  [*Scrubbing inside a step*](#scrubbing-inside-a-step).
+  [*Scrubbing inside a step*](#scrubbing-inside-a-step), and
+  [*Playing the build*](#playing-the-build) for running the whole script.
 - `ops_file`, `build_file` — **deprecated**; see below.
 
 The match tolerance is the **library's**, so it is pinned in one place for a
@@ -1251,7 +1252,7 @@ leak into a downstream one's.
 
 | Tag | Atoms |
 |---|---|
-| `ms_current` | the atoms the current step **changed** and left in place: the ones it added, moved, gave a different element, gave or took a bond from, or whose bonded partner it deleted. So a hydrogen abstraction highlights the radical site it created rather than nothing at all, while an operation's frame atoms — named only to fix its orientation — never light up. Painted on *every* participant, so a tip step lights up the site it visited **and** the apex that visited it. |
+| `ms_current` | the atoms the current step **changed** and left in place: the ones it added, moved, gave a different element, gave or took a bond from, or whose bonded partner it deleted. So a hydrogen abstraction highlights the radical site it created rather than nothing at all, while an operation's frame atoms — named only to fix its orientation — never light up. Painted on *every* participant, so a tip step lights up the site it visited **and** the apex that visited it. It moves **at** `time` 0.5, in the same instant the workpiece switches: while a tool is descending, the tag still marks the *previous* step's atoms, because that is the last reaction that has happened. |
 | `ms_added` | every atom **created** by an applied step that still exists — what this build has put down so far, as against the base it started from. **Workpiece atoms only.** |
 | `ms_layer` | every atom created by an applied step whose `layer` matches the *current* step's — the terrace under construction. Empty when the current step names no layer. **Workpiece atoms only.** |
 | `ms_tool` | every atom of every wired tool molecule, in `scene`. Nothing in `result` carries it, since `result` has no tool atoms at all. |
@@ -1293,6 +1294,11 @@ site if it has one coming, home if it does not. The timeline is fixed, so
 | `0.50` – `0.55` | still on the site | **after the step** |
 | `0.55` – `1.00` | ascending, then flying to its next site or home | after the step |
 
+"Before the step" means **everything** about it, `ms_current` included: while a
+tool descends, the highlight still marks the previous step's atoms. Nothing
+announces a reaction before it happens — which is what makes `0.5` the moment
+you can see.
+
 The rewrite is instantaneous and always will be — the engine has ideal
 geometry and no transition states — so putting it in the middle of the dwell
 is what gives you a landed-but-unreacted frame and a reacted-but-not-departed
@@ -1328,6 +1334,66 @@ A site that no direction reaches is **reported, not refused**: the tool visits
 it along the least-blocked direction the sweep found, and the `step` record's
 `approach` goes negative. A view of a build is not the place to decide that the
 build is impossible — that judgement belongs to whoever generates the sequence.
+
+### Playing the build
+
+Scrubbing shows you a moment; the transport row at the **top of the panel**
+shows you the build. Hold its green **play** button and the scene runs: the time
+advances by itself and, at the end of each step, the step advances and the time
+returns to 0 — which is what makes the motion continuous across a boundary.
+Dragging the step slider cannot do that, because it leaves the time where you
+left it and every step after the first is entered part-way through its own
+visit.
+
+- **It plays while held, and stops the moment you let go.** Press to advance,
+  release to talk, press again — it is the scrub you already know, performed by
+  a clock instead of by hand. There is no separate stop, and no way to leave a
+  panel playing.
+- **A run is one Ctrl+Z.** However far it played, one undo returns you to where
+  the press began.
+- **The `×n` box sets the speed**, from ×1 to ×8, and it starts at **×2** — one
+  second a step. ×1 is the slow gear, two seconds a step, for a reaction worth
+  narrating while it happens; the stops above are for getting through a long
+  build. Change it while playing and the next moment runs at the new rate;
+  nothing jumps. The speed is remembered while the application is open and is
+  **not** saved with the project — how fast you watched a build is not part of
+  the build.
+- **It never skips a step it meant to play.** On a scene heavy enough that one
+  step costs more than a frame, the playback falls behind the clock rather than
+  dropping steps you asked to see — so a high multiplier on a big scene simply
+  reaches the machine's limit.
+- **The end of the script releases the button for you**, and the next press
+  starts the build over from the bare base. **Rewind** (⏮) jumps to step 0
+  without playing.
+- The row's readout — `step 12 / 171 · time 0.43` — says the same thing as the
+  two sliders below it, so the top of the panel is enough to follow a run with
+  everything under it scrolled out of sight.
+
+The row is greyed out when a wire supplies `step` or `time`: playing has to
+write both, and writing one the node ignores would move a number and not the
+scene. Unwire the pin, or drive the animation from whatever is on the wire.
+
+**Playing does not walk every step, and that is the point.** A `spontaneous`
+settle holds its tool perfectly still while the crystal relaxes, so a playback
+that gave it a second would break a tool's run into a movement, a second of
+nothing, and another movement. Two rules fix it, and both are automatic:
+
+- **Settles are stepped over.** A run then reads as one movement — descend,
+  react, lift, fly, descend.
+- **A stretch of `bulk` exposures plays as a single beat**, on the last step of
+  the stretch. A chlorination phase of six doses and their settles is one
+  second, not twelve.
+
+**Nothing is skipped in the sense of not happening.** Landing on a step means
+every step before it has been applied, so the scene you see is exactly the one
+the stepped-over steps produced — you are not shown a shortcut, you are spared
+the wait. Scrub with the step slider when you want to look at a settle itself:
+scrubbing is for inspection, playing is for showing.
+
+A step whose operation the wired library does not define is **never** skipped,
+and neither is anything when no library is wired at all: with no method to
+judge by, the playback walks every step rather than guessing which ones do not
+matter.
 
 ### The `step` output pin
 

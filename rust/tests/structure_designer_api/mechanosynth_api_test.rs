@@ -727,3 +727,81 @@ fn no_tool_is_marked_when_every_tool_is_parked() {
     assert!(!info.tools.is_empty(), "the fixture binds two tools");
     assert!(info.tools.iter().all(|row| !row.moving));
 }
+
+// ============================================================================
+// Playable steps — what a playback stops on
+// (`doc/design_mechanosynth_trajectory.md` §What playing skips)
+// ============================================================================
+
+/// A `mechanosynth` node on the trajectory fixtures: six steps whose methods
+/// are `tip settle tip tip tip bulk`, which is both of the skipping rules in
+/// one script.
+fn add_trajectory_node(designer: &mut StructureDesigner, ops: bool, step: i32) -> u64 {
+    let node_id = designer.add_node("mechanosynth", DVec2::ZERO);
+    let mut data = MechanosynthData {
+        ops_file: ops.then(|| fixture("tool_ops.json")),
+        build_file: Some(fixture("trajectory_build.json")),
+        step,
+        ..MechanosynthData::new()
+    };
+    data.reload_missing(None);
+    designer.set_node_network_data_scoped(&[], node_id, Box::new(data));
+    node_id
+}
+
+#[test]
+fn info_reports_the_playable_steps_one_based() {
+    // The rule itself is tested in the crystolecule harness against `Method`;
+    // what the api owns is the index base. Step 2 is the settle, and it is the
+    // one step missing from the list.
+    let mut designer = setup_designer();
+    let node_id = add_trajectory_node(&mut designer, true, -1);
+
+    let info = mechanosynth_info(&mut designer, &[], node_id).expect("the node is a mechanosynth");
+    assert_eq!(info.count, 6);
+    assert_eq!(info.playable, vec![1, 3, 4, 5, 6]);
+
+    // Every entry is a real step number, ascending — the panel indexes the
+    // script with these.
+    assert!(info.playable.windows(2).all(|pair| pair[0] < pair[1]));
+    assert!(
+        info.playable
+            .iter()
+            .all(|step| (1..=info.count).contains(step))
+    );
+}
+
+#[test]
+fn playable_does_not_depend_on_the_step_number() {
+    // Like the chapters, it describes the script rather than the scrub
+    // position: the transport must not get a different route depending on
+    // where the slider happens to stand.
+    let mut designer = setup_designer();
+    let end_id = add_trajectory_node(&mut designer, true, -1);
+    let at_end = mechanosynth_info(&mut designer, &[], end_id)
+        .expect("the node is a mechanosynth")
+        .playable;
+
+    let start_id = add_trajectory_node(&mut designer, true, 0);
+    let at_start = mechanosynth_info(&mut designer, &[], start_id)
+        .expect("the node is a mechanosynth")
+        .playable;
+    assert_eq!(at_end, at_start);
+}
+
+#[test]
+fn no_library_makes_every_step_playable_and_no_script_makes_none() {
+    // Only what can be *proved* skippable is skipped. With nothing supplying a
+    // library there is no method to judge by, so the playback walks every step
+    // rather than dropping the lot.
+    let mut designer = setup_designer();
+    let node_id = add_trajectory_node(&mut designer, false, -1);
+    let info = mechanosynth_info(&mut designer, &[], node_id).expect("the node is a mechanosynth");
+    assert_eq!(info.playable, vec![1, 2, 3, 4, 5, 6]);
+
+    // And a node with no script at all has nothing to play.
+    let bare = designer.add_node("mechanosynth", DVec2::ZERO);
+    let info = mechanosynth_info(&mut designer, &[], bare).expect("the node is a mechanosynth");
+    assert_eq!(info.count, 0);
+    assert!(info.playable.is_empty());
+}

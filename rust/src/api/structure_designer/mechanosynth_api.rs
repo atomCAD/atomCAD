@@ -24,7 +24,8 @@ use crate::api::structure_designer::structure_designer_api_types::{
 };
 use atomcad_crystolecule::mechanosynth::resolve_tolerance;
 use atomcad_crystolecule::mechanosynth::{
-    BuildScript, CLASH_BLOCK, NO_LAYER, NO_SITE, Participant, Scene, ToolMotion, steps_applied,
+    BuildScript, CLASH_BLOCK, NO_LAYER, NO_SITE, Participant, Scene, ToolMotion, playable_steps,
+    steps_applied,
 };
 use atomcad_structure_designer::evaluator::network_result::NetworkResult;
 use atomcad_structure_designer::nodes::build_script::BuildScriptData;
@@ -187,6 +188,7 @@ pub fn mechanosynth_info(
             current_layer: NO_LAYER,
             current_site: NO_SITE,
             chapters: Vec::new(),
+            playable: Vec::new(),
             current_tool_type: String::new(),
             current_agent: String::new(),
             tools: tool_rows(stored.last_scene().as_ref(), stored.last_motion().as_ref()),
@@ -239,6 +241,16 @@ pub fn mechanosynth_info(
         current_layer: current.map_or(NO_LAYER, |step| step.layer),
         current_site: current.map_or(NO_SITE, |step| step.site),
         chapters: chapters(&script),
+        // 1-based, like every other step number the panel handles. With no
+        // library the rule cannot establish a single method, and answers with
+        // every step rather than none — see `playable_steps`.
+        playable: match library.as_ref() {
+            Some(library) => playable_steps(&script, library)
+                .into_iter()
+                .map(|k| k as i32 + 1)
+                .collect(),
+            None => (1..=count as i32).collect(),
+        },
         current_tool_type,
         current_agent,
         tools: tool_rows(scene.as_ref(), motion.as_ref()),
@@ -301,6 +313,7 @@ fn motion_lines(
         current_layer: NO_LAYER,
         current_site: NO_SITE,
         chapters: Vec::new(),
+        playable: Vec::new(),
         current_tool_type: String::new(),
         current_agent: String::new(),
         tools: Vec::new(),
