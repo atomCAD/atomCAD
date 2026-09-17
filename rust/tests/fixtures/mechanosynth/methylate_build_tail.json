@@ -1,0 +1,8 @@
+{
+  "comment": "The last two steps of methylate_build.json: a continuation phase, written to run after methylate_build_head.json rather than against the bare base. Importing one of these after the other is the workflow the file import must not be gated out of.",
+  "format": "atomcad-msbuild/2",
+  "steps": [
+    { "op": "gm_methylate", "t": [0.0, 0.0, 0.0], "note": "CH2 onto the bare carbon" },
+    { "op": "hdon", "t": [0.0, 0.0, 1.54], "note": "cap the new radical" }
+  ]
+}

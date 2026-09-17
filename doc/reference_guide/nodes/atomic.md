@@ -1527,7 +1527,8 @@ row's ghost atoms drawn on the workpiece](TODO)
   libraries*](../op_libraries.md)), from [`ops_library`](#ops_library).
   Required.
 - `steps: [BuildStep]` (optional) — a **prefix**: steps that run before the
-  node's own block.
+  node's own block. Read-only while it is wired; *Adopting the prefix* is how
+  a generated step becomes an editable one.
 - `feedstocks: [HasAtoms]`, `tools: [HasAtoms]` (optional) — the replayer's two
   participant pins, with the same meaning and the same phase rule. See
   [*Wiring the tools*](#wiring-the-tools).
@@ -1651,10 +1652,55 @@ two editors through `result`: the second one's prefix is the first one's output.
 
 There is deliberately no "insert at index 17 of the wired steps": an edit list
 over someone else's block breaks silently the moment that block changes length,
-which is the same drift that made absolute-coordinate diffs unworkable.
+which is the same drift that made absolute-coordinate diffs unworkable. When you
+want to change a step that arrived on the wire, take ownership of it instead —
+*Adopting the prefix*, next.
 
 The `steps` output ignores the cursor. The cursor says what to *show*; it never
 changes what the node hands downstream.
+
+### Adopting the prefix, and inserting a file
+
+A generator writes a build file, [`build_script`](#build_script) loads it, and
+the wire carries it here. That is a **live link**: the file is read on every
+evaluation, regenerate it and the node replays the new one. It is also read-only
+— the whole prefix is one collapsed row in the panel, and none of the block's
+tools reach it.
+
+To edit a generated step, move it into the block. The prefix row carries an
+**Adopt these into the block** button: one press copies every wired step into
+the authored block, in front of whatever was already there, and **disconnects
+the `steps` pin**, as a single undo entry. The cursor moves with the steps, so
+the viewport shows exactly what it showed a moment before. Afterwards those are
+ordinary authored steps — reorder them, delete them, annotate them, place new
+ones between them.
+
+Below the step list, **Insert steps from file…** does the same thing from a file
+dialog, splicing the file's steps in at the cursor. It is always available —
+with `steps` wired as much as without, since what decides whether an imported
+step replays is the state of the workpiece where it lands, not how the steps in
+front of it got there. A file whose first step expects the bare base will fail
+after a prefix; so will the same file dropped after a block you authored by
+hand. Wiring the phase you keep regenerating and *inserting* the phase you want
+to hand-edit is a good use of the pair.
+
+Both are **one-shot imports, not links.** Nothing on the node remembers where
+the steps came from: there is no path to see and nothing to reload, which is the
+visible difference from [`build_script`](#build_script),
+[`ops_library`](#ops_library) and [`import_xyz`](#import_xyz) — those keep a
+path field with a Browse and a Reload beside it precisely because they *do*
+track their file. The trade is the obvious one: regenerate the build and an
+adopted block will not follow it. Adopt when the generator has got you most of
+the way and the process is now yours to edit; keep the wire when you expect to
+regenerate and replay.
+
+An imported step counts as **exact** (*Exactness, and the two chips*, below). A
+generated file's step is its author's assertion about where the reaction goes,
+and the editor has no better evidence to offer than the generator had.
+
+The upstream [`build_script`](#build_script) node is left where it is, wired to
+nothing. Delete it if you are done with it — adoption will not delete a node you
+did not ask it to.
 
 ### Placing a step
 
@@ -1836,6 +1882,10 @@ a click whose meaning depended on invisible state would place it there anyway.
   edit: the method is the operation's.
 - **A summary line** above the list counts the inexact and approximate steps, so
   a block that is not exact says so without scrolling.
+- **The prefix row**, above the cursor, counts the steps arriving on the `steps`
+  pin and carries **Adopt these into the block**; **Insert steps from file…**
+  sits below the list. Both are described in *Adopting the prefix, and inserting
+  a file*.
 - **The Tools readout** below it names each bound tool and its state at the
   cursor — *habst_tool · spent* — with the number of wired reservoirs and their
   total atom count beside it. It is what tells you a recharge is due *before* the offer list
@@ -2054,6 +2104,13 @@ Absent per-step fields take the file format's own defaults — an identity
 rotation, empty `note` / `phase`, `-1` for `layer` and `site` — so a
 step stating only `op` and `t` reads out the same way whether it came from a
 file or was written by hand.
+
+This node keeps a **live link** to its file: the steps are re-read whenever the
+file changes, which is what the path field and the **Reload** button beside it
+mean. Feeding them to [`mechanosynth_edit`](#mechanosynth_edit) therefore gives
+that node a read-only prefix. To edit a generated step by hand, adopt the prefix
+into the editor's block — *Adopting the prefix, and inserting a file*, which is
+a one-shot copy and gives up the link.
 
 Whether a step names an operation that exists cannot be checked here: this node
 sees no library. An unknown operation passes through and is reported by whatever

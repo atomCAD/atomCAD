@@ -509,6 +509,187 @@ impl StructureDesigner {
         )
     }
 
+    // ========================================================================
+    // One-shot imports
+    // ========================================================================
+    //
+    // Both of these copy steps *into* the block, where they become ordinary
+    // authored steps with no memory of where they came from. That is the whole
+    // difference from the `steps` pin and from `build_script`'s `file`
+    // property, which stay live: a path that is still on screen is a promise
+    // that the node tracks the file, and neither of these keeps one.
+    //
+    // An imported step is **exact**. A generated file's step is its author's
+    // assertion about where the reaction goes, and the editor has no better
+    // evidence to offer than the generator had — so the residual is zero and
+    // the approximate flag is clear, exactly as for a step typed by hand
+    // (`AuthoredStep::residual`).
+
+    /// **Adopt these into the block**: copies the steps arriving on the `steps`
+    /// pin to the front of the authored block and disconnects the pin.
+    ///
+    /// The prefix runs *before* the block, so prepending preserves the replay
+    /// order exactly; disconnecting is what keeps the count right, and is why
+    /// this cannot be an `edit_mechanosynth_block` edit — that command restores
+    /// the block alone and would leave an undo that re-adopted the steps
+    /// without putting the wire back. The upstream node is left alone: it may
+    /// feed something else, and deleting a node nobody asked to have deleted is
+    /// the mistake `convert_mechanosynth_files_to_nodes` avoids too.
+    ///
+    /// Returns how many steps were adopted.
+    pub fn mechanosynth_edit_adopt_prefix(
+        &mut self,
+        scope_path: &[u64],
+        node_id: u64,
+    ) -> Result<usize, String> {
+        use crate::undo::commands::mechanosynth_edit_adopt::MechanosynthEditAdoptCommand;
+
+        let network_name = self
+            .active_node_network_name
+            .clone()
+            .ok_or("No active network")?;
+
+        // Read the prefix through the same path the engine does, so an adoption
+        // copies exactly the steps the block was replaying a moment ago.
+        let prefix = self.mechanosynth_edit_prefix(scope_path, node_id);
+        if prefix.is_empty() {
+            return Err("nothing on the steps pin to adopt".to_string());
+        }
+        let adopted = prefix.len();
+
+        // Snapshot before the surgery, exactly as `convert_files_to_nodes` does.
+        let (top_before, body_before) = if scope_path.is_empty() {
+            (self.snapshot_network(&network_name), None)
+        } else {
+            (None, self.snapshot_zone_body(scope_path))
+        };
+        self.undo_stack.suppress_recording();
+
+        {
+            let data = self
+                .mechanosynth_edit_data_mut(scope_path, node_id)
+                .ok_or("Not a mechanosynth_edit node")?;
+            let mut block: Vec<AuthoredStep> = prefix
+                .into_iter()
+                .map(|step| AuthoredStep {
+                    step,
+                    residual: 0.0,
+                    approximate: false,
+                })
+                .collect();
+            block.append(&mut data.authored);
+            data.authored = block;
+            // The cursor counts authored steps, so it has to move with them for
+            // the viewport to show what it showed before the press. `-1` means
+            // "all" and already does.
+            if data.cursor >= 0 {
+                data.cursor += adopted as i32;
+            }
+        }
+
+        // The wire has to go, or the adopted steps replay twice.
+        if let Some(network) = self.get_scope_network_mut(scope_path)
+            && let Some(node) = network.nodes.get_mut(&node_id)
+            && let Some(argument) = node.arguments.get_mut(STEPS_PIN)
+        {
+            argument.incoming_wires.clear();
+        }
+
+        self.undo_stack.resume_recording();
+
+        // The node caches its resolved inputs, the prefix among them
+        // (`CachedInputs`), and the refresh system only clears that cache on
+        // *displayed* nodes. The wire this just removed is an input of exactly
+        // this node, so it drops its own cache rather than trusting a refresh
+        // to notice: a stale prefix would replay the adopted steps twice.
+        if let Some(data) = self.mechanosynth_edit_data(scope_path, node_id) {
+            data.invalidate_input_cache();
+        }
+
+        // Refresh paths do not validate, so a stale error would linger.
+        self.validate_active_network();
+
+        if scope_path.is_empty() {
+            if let (Some(before), Some(after)) = (top_before, self.snapshot_network(&network_name))
+            {
+                self.push_command(MechanosynthEditAdoptCommand {
+                    network_name,
+                    before_snapshot: before,
+                    after_snapshot: after,
+                });
+            }
+        } else {
+            self.push_zone_body_command(
+                scope_path,
+                "Adopt steps into the block".to_string(),
+                body_before,
+            );
+        }
+
+        self.set_dirty(true);
+        self.mark_full_refresh();
+
+        Ok(adopted)
+    }
+
+    /// *Insert steps from file…*: splices a build file's steps into the block
+    /// at `index`, as one undo entry. The second entry point for the same
+    /// one-shot import, for a node with nothing on its `steps` pin.
+    ///
+    /// No graph changes, so this is an ordinary block edit. `design_dir`
+    /// resolves a relative path the way every other file node resolves one —
+    /// but nothing about the path is stored afterwards.
+    ///
+    /// Returns how many steps were inserted.
+    pub fn mechanosynth_edit_insert_steps_from_file(
+        &mut self,
+        scope_path: &[u64],
+        node_id: u64,
+        file: &str,
+        index: usize,
+        design_dir: Option<&str>,
+    ) -> Result<usize, String> {
+        let script = crate::nodes::build_script::load_script_at(file, design_dir)?;
+        if script.steps.is_empty() {
+            return Err(format!("{file} has no steps"));
+        }
+        let inserted = script.steps.len();
+        let steps: Vec<AuthoredStep> = script
+            .steps
+            .into_iter()
+            .map(|step| AuthoredStep {
+                step,
+                residual: 0.0,
+                approximate: false,
+            })
+            .collect();
+        let description = if inserted == 1 {
+            "Insert 1 build step from file".to_string()
+        } else {
+            format!("Insert {inserted} build steps from file")
+        };
+        self.edit_mechanosynth_block(
+            scope_path,
+            node_id,
+            description,
+            None,
+            move |authored, cursor| {
+                if index > authored.len() {
+                    return Err(format!(
+                        "step index {index} is past the end of the block ({})",
+                        authored.len()
+                    ));
+                }
+                authored.splice(index..index, steps);
+                // The cursor lands on the last inserted step, so the viewport
+                // shows what the import built rather than the state before it.
+                *cursor = (index + inserted) as i32;
+                Ok(())
+            },
+        )?;
+        Ok(inserted)
+    }
+
     /// Writes one metadata field of one step. Consecutive writes to the same
     /// field of the same step are one undo entry.
     pub fn set_mechanosynth_edit_step_metadata(

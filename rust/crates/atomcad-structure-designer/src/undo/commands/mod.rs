@@ -20,6 +20,7 @@ pub mod edit_zone_body;
 pub mod extract_closure_body;
 pub mod factor_selection;
 pub mod inline_node;
+pub mod mechanosynth_edit_adopt;
 pub mod mechanosynth_edit_block;
 pub mod mechanosynth_edit_mute;
 pub mod motif_edit_property;

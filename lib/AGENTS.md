@@ -109,7 +109,10 @@ still are selectable.
 
 Purely *informational* snackbars ("Saved foo.cnnd", "Activated: X", "Atom is
 fully bonded") deliberately keep their plain styling and short duration — there
-is nothing there worth reporting, and a Copy action on them is noise.
+is nothing there worth reporting, and a Copy action on them is noise. They are
+`showTransientSnackBar(context, msg)`, in the same file: one bar, so a
+confirmation from a property panel looks like a confirmation from the menu bar.
+Don't hand-roll a fourth `SnackBar`.
 
 `lib/structure_designer/error_report.dart` renders the design's unified error
 list (`doc/design_error_management.md` D1) as a plain-text report for

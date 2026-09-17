@@ -27,6 +27,29 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_cad/common/draggable_dialog.dart';
 
+/// The neutral transient confirmation: "Saved foo.cnnd", "Undo: …", "3 steps
+/// adopted". Short, floating, narrow, and with no `Copy` action — there is
+/// nothing here worth reporting, which is exactly what distinguishes it from
+/// [showErrorSnackBar] and [showCopyableSnackBar].
+///
+/// It lives here, beside the other two, because it is the third member of the
+/// same family and had been a private method on the top-level widget — out of
+/// reach of every property panel that wants to confirm something.
+void showTransientSnackBar(BuildContext context, String message) {
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  if (messenger == null) return;
+  messenger
+    ..hideCurrentSnackBar()
+    ..showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+        width: 300,
+      ),
+    );
+}
+
 /// Puts [text] on the clipboard and confirms with a short floating snackbar,
 /// matching the transient-confirmation style used by undo/redo and quick save.
 ///

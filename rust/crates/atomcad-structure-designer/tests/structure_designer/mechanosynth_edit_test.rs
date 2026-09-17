@@ -912,3 +912,319 @@ fn the_placement_state_is_never_serialized() {
     assert!(!saved.contains("habst\",\"anchor"), "{saved}");
     assert!(!saved.contains("\"armed\""), "the tool state is transient");
 }
+
+// ============================================================================
+// One-shot imports: adopting the prefix, and inserting a file
+// ============================================================================
+//
+// What these assert is the *difference* between the two ways a build file can
+// reach this node. On the `steps` pin it stays the file's: read on every
+// evaluation, collapsed into one panel row, untouchable. Adopted or inserted,
+// it is the block's: ordinary authored steps that reorder and delete, with the
+// wire gone so nothing replays twice.
+//
+// The base here is an `import_xyz` rather than a `value` node, because
+// adopting runs `validate_active_network` and a `value` declares
+// `DataType::None` — it carries a runtime result and no type, which no real
+// network does.
+
+fn add_xyz_base(designer: &mut StructureDesigner) -> u64 {
+    let base_id = designer.add_node("import_xyz", DVec2::new(-600.0, 0.0));
+    with_data::<ImportXYZData, _>(designer, base_id, |data| {
+        data.file_name = Some(fixture("methane.xyz"));
+        data.atomic_structure =
+            atomcad_crystolecule::io::xyz_loader::load_xyz(&fixture("methane.xyz"), true).ok();
+    });
+    base_id
+}
+
+/// An editor whose `steps` pin is fed by a real `build_script` node reading
+/// `build`, with an empty undo stack. Returns `(editor, build_script)`.
+fn editor_with_wired_prefix(
+    designer: &mut StructureDesigner,
+    build: &str,
+    authored: Vec<AuthoredStep>,
+    cursor: i32,
+) -> (u64, u64) {
+    let base_id = add_xyz_base(designer);
+    let node_id = add_editor(designer, base_id, authored, cursor);
+    let script_id = add_build_script_node(designer, build);
+    designer.connect_nodes(script_id, 0, node_id, 2);
+    designer.undo_stack.clear();
+    (node_id, script_id)
+}
+
+fn steps_pin_is_wired(designer: &StructureDesigner, node_id: u64) -> bool {
+    !designer
+        .node_type_registry
+        .node_networks
+        .get(NET)
+        .unwrap()
+        .nodes
+        .get(&node_id)
+        .unwrap()
+        .arguments[2]
+        .incoming_wires
+        .is_empty()
+}
+
+fn authored_ops(designer: &StructureDesigner, node_id: u64) -> Vec<String> {
+    editor_data(designer, node_id)
+        .authored
+        .iter()
+        .map(|authored| authored.step.op.clone())
+        .collect()
+}
+
+#[test]
+fn adopting_puts_the_prefix_in_front_of_the_block_and_drops_the_wire() {
+    let mut designer = setup_designer();
+    // One step on the wire, the other two authored: the order the adoption has
+    // to preserve is visible in the result either way round, because the three
+    // steps only replay in this one.
+    let block = methylate_steps().split_off(1);
+    let (node_id, _) =
+        editor_with_wired_prefix(&mut designer, "methylate_build_head.json", block, -1);
+
+    let before = expect_atoms(evaluate_pin(&designer, node_id, 0));
+    assert_same(&before, &methylate_expected(3));
+    assert_eq!(
+        designer
+            .mechanosynth_edit_adopt_prefix(&[], node_id)
+            .expect("the prefix adopts"),
+        1
+    );
+
+    // The block now holds what the wire held, in front of what it already had,
+    // and nothing arrives on the wire any more — which is what keeps the
+    // adopted step from replaying twice.
+    assert_eq!(
+        authored_ops(&designer, node_id),
+        vec!["habst", "gm_methylate", "hdon"]
+    );
+    assert!(!steps_pin_is_wired(&designer, node_id));
+
+    // The whole point: the workpiece is the one it was a moment ago.
+    assert_same(&expect_atoms(evaluate_pin(&designer, node_id, 0)), &before);
+}
+
+#[test]
+fn an_adopted_step_is_exact_and_ordinary() {
+    let mut designer = setup_designer();
+    let (node_id, _) =
+        editor_with_wired_prefix(&mut designer, "methylate_build.json", Vec::new(), -1);
+    assert_eq!(
+        designer
+            .mechanosynth_edit_adopt_prefix(&[], node_id)
+            .expect("the prefix adopts"),
+        3
+    );
+
+    // Exact, because a generated file's step is its author's assertion and the
+    // editor has no better evidence to offer than the generator had.
+    assert!(
+        editor_data(&designer, node_id)
+            .authored
+            .iter()
+            .all(|step| step.is_exact() && !step.approximate)
+    );
+
+    // And editable, which is the capability the adoption exists to give.
+    designer
+        .mechanosynth_edit_delete_step(&[], node_id, 2)
+        .expect("an adopted step deletes like any other");
+    assert_eq!(
+        authored_ops(&designer, node_id),
+        vec!["habst", "gm_methylate"]
+    );
+    assert_same(
+        &expect_atoms(evaluate_pin(&designer, node_id, 0)),
+        &methylate_expected(2),
+    );
+}
+
+#[test]
+fn adopting_carries_the_cursor_so_the_viewport_does_not_move() {
+    let mut designer = setup_designer();
+    // Cursor 0 with an empty block is "the state the prefix left behind"; after
+    // the adoption the same state is three authored steps in.
+    let (node_id, _) =
+        editor_with_wired_prefix(&mut designer, "methylate_build.json", Vec::new(), 0);
+    let before = expect_atoms(evaluate_pin(&designer, node_id, 0));
+    assert_same(&before, &methylate_expected(3));
+
+    designer
+        .mechanosynth_edit_adopt_prefix(&[], node_id)
+        .expect("the prefix adopts");
+
+    assert_eq!(
+        editor_data(&designer, node_id).cursor,
+        3,
+        "the cursor counts authored steps, so it moves with them"
+    );
+    assert_same(&expect_atoms(evaluate_pin(&designer, node_id, 0)), &before);
+}
+
+#[test]
+fn adopting_an_unwired_pin_is_refused_and_changes_nothing() {
+    let mut designer = setup_designer();
+    let base_id = add_xyz_base(&mut designer);
+    let node_id = add_editor(&mut designer, base_id, methylate_steps(), -1);
+    designer.undo_stack.clear();
+
+    let error = designer
+        .mechanosynth_edit_adopt_prefix(&[], node_id)
+        .expect_err("there is nothing to adopt");
+    assert!(error.contains("steps pin"), "{error}");
+    assert_eq!(editor_data(&designer, node_id).authored.len(), 3);
+    assert_eq!(designer.undo_stack.history_len(), 0, "no undo entry");
+}
+
+#[test]
+fn undoing_an_adoption_puts_the_wire_back() {
+    let mut designer = setup_designer();
+    let (node_id, _) =
+        editor_with_wired_prefix(&mut designer, "methylate_build.json", Vec::new(), -1);
+
+    designer
+        .mechanosynth_edit_adopt_prefix(&[], node_id)
+        .expect("the prefix adopts");
+    assert_eq!(
+        designer.undo_stack.history_len(),
+        1,
+        "the whole adoption is one undo entry"
+    );
+
+    // A block command alone would undo to an editor with no steps *and* no
+    // wire. Restoring the wire is why this is graph surgery instead.
+    assert!(designer.undo());
+    assert!(steps_pin_is_wired(&designer, node_id));
+    assert!(editor_data(&designer, node_id).authored.is_empty());
+    assert_same(
+        &expect_atoms(evaluate_pin(&designer, node_id, 0)),
+        &methylate_expected(3),
+    );
+
+    assert!(designer.redo());
+    assert!(!steps_pin_is_wired(&designer, node_id));
+    assert_eq!(editor_data(&designer, node_id).authored.len(), 3);
+    assert_same(
+        &expect_atoms(evaluate_pin(&designer, node_id, 0)),
+        &methylate_expected(3),
+    );
+}
+
+#[test]
+fn inserting_steps_from_a_file_splices_them_at_the_cursor() {
+    let mut designer = setup_designer();
+    let base_id = add_xyz_base(&mut designer);
+    let node_id = add_editor(&mut designer, base_id, Vec::new(), -1);
+    designer.undo_stack.clear();
+
+    assert_undo_restores_the_tuple(&mut designer, node_id, |designer| {
+        let inserted = designer
+            .mechanosynth_edit_insert_steps_from_file(
+                &[],
+                node_id,
+                &fixture("methylate_build.json"),
+                0,
+                None,
+            )
+            .expect("the file inserts");
+        assert_eq!(inserted, 3);
+    });
+
+    let data = editor_data(&designer, node_id);
+    assert_eq!(data.cursor, 3, "the cursor lands on the last step imported");
+    assert!(data.authored.iter().all(|step| step.is_exact()));
+    assert_same(
+        &expect_atoms(evaluate_pin(&designer, node_id, 0)),
+        &methylate_expected(3),
+    );
+}
+
+#[test]
+fn a_continuation_file_inserts_behind_a_wired_prefix() {
+    // The file import is deliberately not gated on the `steps` pin. What decides
+    // whether an imported step replays is the workpiece state where it lands,
+    // not how the steps ahead of it arrived — so a phase written to follow the
+    // wired block imports and replays, and the prefix stays a live wire.
+    let mut designer = setup_designer();
+    let (node_id, _) =
+        editor_with_wired_prefix(&mut designer, "methylate_build_head.json", Vec::new(), -1);
+    assert_same(
+        &expect_atoms(evaluate_pin(&designer, node_id, 0)),
+        &methylate_expected(1),
+    );
+
+    let inserted = designer
+        .mechanosynth_edit_insert_steps_from_file(
+            &[],
+            node_id,
+            &fixture("methylate_build_tail.json"),
+            0,
+            None,
+        )
+        .expect("a continuation phase inserts with the pin still wired");
+    assert_eq!(inserted, 2);
+
+    assert!(
+        steps_pin_is_wired(&designer, node_id),
+        "inserting from a file touches no wire — only adoption does"
+    );
+    assert_same(
+        &expect_atoms(evaluate_pin(&designer, node_id, 0)),
+        &methylate_expected(3),
+    );
+}
+
+#[test]
+fn a_file_that_does_not_fit_where_it_lands_fails_at_that_step_and_undoes() {
+    // The same refusal every ill-fitting step gets, and the reason a gate on the
+    // `steps` pin would be the wrong guard: this is what importing the *wrong*
+    // phase looks like, and it is one Ctrl+Z from gone.
+    let mut designer = setup_designer();
+    let (node_id, _) =
+        editor_with_wired_prefix(&mut designer, "methylate_build_head.json", Vec::new(), -1);
+
+    designer
+        .mechanosynth_edit_insert_steps_from_file(
+            &[],
+            node_id,
+            &fixture("methylate_build.json"),
+            0,
+            None,
+        )
+        .expect("the import itself succeeds — the steps are well-formed");
+
+    // `habst` again, on a workpiece whose +z hydrogen the prefix already took.
+    let error = expect_error(evaluate_pin(&designer, node_id, 0));
+    assert!(error.contains("habst"), "{error}");
+
+    assert!(designer.undo());
+    assert!(editor_data(&designer, node_id).authored.is_empty());
+    assert_same(
+        &expect_atoms(evaluate_pin(&designer, node_id, 0)),
+        &methylate_expected(1),
+    );
+}
+
+#[test]
+fn inserting_from_a_missing_file_is_refused_and_changes_nothing() {
+    let mut designer = setup_designer();
+    let base_id = add_xyz_base(&mut designer);
+    let node_id = add_editor(&mut designer, base_id, methylate_steps(), -1);
+    designer.undo_stack.clear();
+
+    designer
+        .mechanosynth_edit_insert_steps_from_file(
+            &[],
+            node_id,
+            &fixture("no_such_build.json"),
+            0,
+            None,
+        )
+        .expect_err("a missing file is an error, not an empty import");
+    assert_eq!(editor_data(&designer, node_id).authored.len(), 3);
+    assert_eq!(designer.undo_stack.history_len(), 0, "no undo entry");
+}

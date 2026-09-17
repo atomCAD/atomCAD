@@ -1,0 +1,7 @@
+{
+  "comment": "The first step of methylate_build.json and nothing else: a prefix short enough that an authored block can follow it, which is what the adoption tests need.",
+  "format": "atomcad-msbuild/2",
+  "steps": [
+    { "op": "habst", "t": [0.0, 0.0, 1.09], "note": "take the +z hydrogen" }
+  ]
+}

@@ -163,6 +163,38 @@ String? mechanosynthEditMoveStep(
         .crateApiStructureDesignerMechanosynthEditApiMechanosynthEditMoveStep(
             scopePath: scopePath, nodeId: nodeId, from: from, to: to);
 
+/// **Adopt these into the block**: copies the steps on the `steps` pin into the
+/// authored block and disconnects the pin, in one undo entry. Returns how many
+/// steps were adopted, for the confirmation the panel shows.
+///
+/// The adopted steps are ordinary authored steps afterwards — editable,
+/// reorderable, and with no link to the file the wire came from. That is the
+/// difference this action exists to make, and the panel says so once, when it
+/// happens.
+int mechanosynthEditAdoptPrefix(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerMechanosynthEditApiMechanosynthEditAdoptPrefix(
+            scopePath: scopePath, nodeId: nodeId);
+
+/// *Insert steps from file…*: splices a build file's steps into the block at
+/// `index`, in one undo entry. Returns how many steps were inserted.
+///
+/// The second entry point for the same one-shot import. Not gated on the
+/// `steps` pin — whether an imported step replays depends on the workpiece
+/// state at `index`, not on how the steps ahead of it arrived. Nothing about
+/// `file` is stored: a path the node
+/// remembered would be a promise to track it, which is exactly what this is
+/// not.
+int mechanosynthEditInsertStepsFromFile(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required String file,
+        required int index}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerMechanosynthEditApiMechanosynthEditInsertStepsFromFile(
+            scopePath: scopePath, nodeId: nodeId, file: file, index: index);
+
 /// Writes one metadata field of one authored step. `field` is one of `note`,
 /// `phase`, `layer`, `site`; `text` carries the first two and
 /// `number` the last two. Consecutive writes to the same field of the same step

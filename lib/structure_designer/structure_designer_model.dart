@@ -3296,6 +3296,47 @@ class StructureDesignerModel extends ChangeNotifier {
     return error;
   }
 
+  /// **Adopt these into the block**: copies the steps on the `steps` pin into
+  /// the authored block and disconnects the pin, in one undo entry. Returns
+  /// how many steps were adopted.
+  ///
+  /// A one-shot import, not a link: afterwards the steps are ordinary authored
+  /// steps and nothing on the node remembers the file they came from. That is
+  /// the opposite of what `build_script`'s own `file` property does, which is
+  /// why the panel confirms it once, in words.
+  MechanosynthToolResult<int> mechanosynthEditAdoptPrefix(BigInt nodeId) {
+    try {
+      final adopted = mechanosynth_edit_api.mechanosynthEditAdoptPrefix(
+          scopePath: propertyEditorScopePath, nodeId: nodeId);
+      refreshFromKernel();
+      return MechanosynthToolResult(value: adopted);
+    } on AnyhowException catch (e) {
+      return MechanosynthToolResult(error: e.message);
+    }
+  }
+
+  /// *Insert steps from file…*: splices a build file's steps into the block at
+  /// [index], in one undo entry. Returns how many steps were inserted.
+  ///
+  /// The same one-shot import as [mechanosynthEditAdoptPrefix], from a file
+  /// dialog. Available with `steps` wired as much as without. The path is not
+  /// stored.
+  MechanosynthToolResult<int> mechanosynthEditInsertStepsFromFile(
+      BigInt nodeId, String file, int index) {
+    try {
+      final inserted =
+          mechanosynth_edit_api.mechanosynthEditInsertStepsFromFile(
+              scopePath: propertyEditorScopePath,
+              nodeId: nodeId,
+              file: file,
+              index: index);
+      refreshFromKernel();
+      return MechanosynthToolResult(value: inserted);
+    } on AnyhowException catch (e) {
+      return MechanosynthToolResult(error: e.message);
+    }
+  }
+
   String? mechanosynthEditMoveStep(BigInt nodeId, int from, int to) {
     final error = mechanosynth_edit_api.mechanosynthEditMoveStep(
         scopePath: scopeChainToBytes(propertyEditorScopeChain),

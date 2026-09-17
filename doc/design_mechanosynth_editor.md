@@ -918,6 +918,65 @@ is `[]`), the rule learned on the replayer. The round-trip corpus test
   variants they imply — the tolerance advice, the effect-derived
   `ms_current` rule, and the origin convention.
 
+## Adopting the prefix
+
+Added 2026-09-17, after a user asked to hand-edit some of the steps in a
+generator's build file.
+
+The §Decisions rule above — *the authored block is appended after the wired
+prefix* — makes a wired block read-only, and the rejected alternative there
+stays rejected: an **edit list over the wired steps** ("insert at index k,
+delete k") drifts silently the moment the upstream block changes length.
+
+Adoption is not that. It is a **one-shot copy**: the steps on the `steps` pin
+are appended to the front of the authored block, the pin is disconnected, and
+from then on there is no upstream to drift against. The drift argument does not
+apply to data the node owns, which is why this is compatible with the decision
+rather than a reversal of it. `mechanosynth_edit_insert_steps_from_file` is the
+same import from a file dialog, at the cursor.
+
+The file import is deliberately **not** gated on the `steps` pin being unwired.
+Whether an imported step replays is decided by the workpiece state at its
+insertion point, not by how the steps before it arrived — a file written to run
+from the bare base fails after a wired prefix and after a hand-authored block
+alike — so such a gate would be over-inclusive (it blocks importing a
+continuation phase after the generated block it continues, which is a good
+workflow) and under-inclusive (it does nothing about the identical mismatch with
+no wire and a non-empty block). The mismatch is already reported the way every
+ill-fitting step is: the block fails at that step, the row carries the engine's
+message, and the viewport holds the last good state.
+
+Three things follow:
+
+- **It is graph surgery, not a block edit.** Removing the wire is half the
+  operation — without it the adopted steps replay twice — so the undo entry is a
+  whole-network snapshot (`MechanosynthEditAdoptCommand`, modelled on
+  `ConvertFilesToNodesCommand`), not `MechanosynthEditBlockCommand`, which
+  restores the block alone and would undo to a node with neither the steps nor
+  the wire.
+- **The node drops its own `CachedInputs`.** The cache holds the resolved
+  prefix, and the refresh system only clears it on *displayed* nodes; the wire
+  that just vanished is an input of this very node, so it invalidates rather
+  than trusting a refresh to notice.
+- **An adopted step is exact.** A generated file's step is its author's
+  assertion about where the reaction goes and the editor has no better evidence
+  to offer than the generator had — the same reasoning that makes a hand-typed
+  step exact (§Exactness).
+
+The cost is the one worth stating to the user, and the reference guide does: an
+adopted block no longer follows the file. Adoption is for "the generator got me
+most of the way, the process is mine now". Keeping the wire is for "I will
+regenerate and replay". The wire-level answer to the third case — regenerate
+*and* keep a few hand edits — is still the `steps_slice` / `steps_splice` pair
+sketched below, and is still not built.
+
+**The distinction is carried by the UI's shape, not by a caption.** A file node
+(`build_script`, `ops_library`, `import_xyz`) shows a stored path with a Browse
+and a Reload: that is this application's vocabulary for a live link. A one-shot
+action is a verb with nothing stored — *File > Import from .cnnd library*, the
+replayer's *Convert to nodes*, and now these two. The confirmation is said once,
+in a transient snackbar, at the moment of the press.
+
 ## Follow-ups (signatures only)
 
 - **T2 area apply.** On the editor: select N host atoms (marquee, region

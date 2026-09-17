@@ -843,18 +843,11 @@ class _StructureDesignerState extends State<StructureDesigner> {
 
   /// Short floating confirmation used by the keyboard-driven actions
   /// (undo/redo, quick save) that otherwise leave no visible trace.
-  void _showTransientSnackBar(BuildContext context, String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          duration: const Duration(seconds: 2),
-          behavior: SnackBarBehavior.floating,
-          width: 300,
-        ),
-      );
-  }
+  ///
+  /// The bar itself is [showTransientSnackBar], shared with the property
+  /// panels that confirm something the same way.
+  void _showTransientSnackBar(BuildContext context, String message) =>
+      showTransientSnackBar(context, message);
 
   Future<bool> _confirmDiscardChanges() async {
     if (!graphModel.isDirty) return true;

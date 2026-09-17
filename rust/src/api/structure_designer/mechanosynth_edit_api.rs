@@ -627,6 +627,74 @@ pub fn mechanosynth_edit_move_step(
     }
 }
 
+/// **Adopt these into the block**: copies the steps on the `steps` pin into the
+/// authored block and disconnects the pin, in one undo entry. Returns how many
+/// steps were adopted, for the confirmation the panel shows.
+///
+/// The adopted steps are ordinary authored steps afterwards — editable,
+/// reorderable, and with no link to the file the wire came from. That is the
+/// difference this action exists to make, and the panel says so once, when it
+/// happens.
+#[flutter_rust_bridge::frb(sync)]
+pub fn mechanosynth_edit_adopt_prefix(scope_path: Vec<u64>, node_id: u64) -> Result<u32, String> {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let adopted = cad_instance
+                    .structure_designer
+                    .mechanosynth_edit_adopt_prefix(&scope_path, node_id)?;
+                refresh_structure_designer_auto(cad_instance);
+                Ok(adopted as u32)
+            },
+            Err("no CAD instance".to_string()),
+        )
+    }
+}
+
+/// *Insert steps from file…*: splices a build file's steps into the block at
+/// `index`, in one undo entry. Returns how many steps were inserted.
+///
+/// The second entry point for the same one-shot import. Not gated on the
+/// `steps` pin — whether an imported step replays depends on the workpiece
+/// state at `index`, not on how the steps ahead of it arrived. Nothing about
+/// `file` is stored: a path the node
+/// remembered would be a promise to track it, which is exactly what this is
+/// not.
+#[flutter_rust_bridge::frb(sync)]
+pub fn mechanosynth_edit_insert_steps_from_file(
+    scope_path: Vec<u64>,
+    node_id: u64,
+    file: String,
+    index: u32,
+) -> Result<u32, String> {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let design_dir = cad_instance
+                    .structure_designer
+                    .node_type_registry
+                    .design_file_name
+                    .as_ref()
+                    .and_then(|design_path| {
+                        atomcad_util::path_utils::get_parent_directory(design_path)
+                    });
+                let inserted = cad_instance
+                    .structure_designer
+                    .mechanosynth_edit_insert_steps_from_file(
+                        &scope_path,
+                        node_id,
+                        &file,
+                        index as usize,
+                        design_dir.as_deref(),
+                    )?;
+                refresh_structure_designer_auto(cad_instance);
+                Ok(inserted as u32)
+            },
+            Err("no CAD instance".to_string()),
+        )
+    }
+}
+
 /// Writes one metadata field of one authored step. `field` is one of `note`,
 /// `phase`, `layer`, `site`; `text` carries the first two and
 /// `number` the last two. Consecutive writes to the same field of the same step

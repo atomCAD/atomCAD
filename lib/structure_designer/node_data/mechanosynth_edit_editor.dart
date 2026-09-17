@@ -42,8 +42,10 @@
 ///   reservoir, and inserts the recharge in front of the failing step.
 library;
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/common/error_display.dart';
+import 'package:flutter_cad/common/file_dialog_directory.dart';
 import 'package:flutter_cad/common/number_format.dart';
 import 'package:flutter_cad/inputs/int_input.dart';
 import 'package:flutter_cad/inputs/string_input.dart';
@@ -452,8 +454,84 @@ class _MechanosynthEditEditorState extends State<MechanosynthEditEditor> {
               style: TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant),
             ),
           ),
+          if (data.prefixCount > 0)
+            TextButton(
+              key: const Key('mechanosynth_edit_adopt_prefix'),
+              onPressed: _adoptPrefix,
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                textStyle: const TextStyle(fontSize: 11.5),
+              ),
+              child: const Text('Adopt these into the block'),
+            ),
         ],
       ),
+    );
+  }
+
+  /// One press: the wired steps become authored steps and the wire goes.
+  ///
+  /// The confirmation is said **once, here**, and not left as a standing label
+  /// on the node. A node that needed permanent chrome explaining what it is
+  /// *not* tracking would be the wrong affordance; what the user has just
+  /// watched — rows moving out of the collapsed prefix row into the editable
+  /// list, the wire disappearing — is most of the message already.
+  void _adoptPrefix() {
+    final result = widget.model.mechanosynthEditAdoptPrefix(widget.nodeId);
+    _report(result.error);
+    final adopted = result.value;
+    if (adopted == null) return;
+    showTransientSnackBar(
+      context,
+      adopted == 1
+          ? '1 step copied into the block. It no longer follows the file.'
+          : '$adopted steps copied into the block. They no longer follow '
+              'the file.',
+    );
+  }
+
+  /// The same one-shot import, from a file dialog, at the cursor.
+  ///
+  /// Not gated on the `steps` pin: what decides whether an imported step
+  /// replays is the workpiece state where it lands, not how the steps ahead of
+  /// it arrived.
+  ///
+  /// A file dialog and nothing else: no path is stored, so there is no field to
+  /// show afterwards and nothing to reload.
+  Future<void> _insertStepsFromFile(APIMechanosynthEditData data) async {
+    String? path;
+    try {
+      final picked = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+        dialogTitle: 'Insert build steps into the block',
+        initialDirectory:
+            initialDirectoryFor(APIFileDialogPurpose.structureImport),
+      );
+      path = picked?.files.single.path;
+    } catch (e) {
+      _report('Error browsing file: $e');
+      return;
+    }
+    if (path == null) return;
+    rememberPickedFile(APIFileDialogPurpose.structureImport, path);
+
+    // At the cursor, so an import lands where the user is looking — the same
+    // place a placed step lands.
+    final result = widget.model
+        .mechanosynthEditInsertStepsFromFile(widget.nodeId, path, data.applied);
+    if (!mounted) return;
+    _report(result.error);
+    final inserted = result.value;
+    if (inserted == null) return;
+    showTransientSnackBar(
+      context,
+      inserted == 1
+          ? '1 step inserted into the block. It has no link to the file.'
+          : '$inserted steps inserted into the block. They have no link to '
+              'the file.',
     );
   }
 
@@ -511,6 +589,34 @@ class _MechanosynthEditEditorState extends State<MechanosynthEditEditor> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// The block's own file action, below the list where the block is.
+  ///
+  /// Deliberately **not** a path field with a Browse and a Reload beside it:
+  /// that shape is the file nodes' (`build_script`, `ops_library`,
+  /// `import_xyz`) and it promises a live link. This is a verb, it runs once,
+  /// and it leaves nothing behind to reload.
+  Widget _buildBlockActions(
+      BuildContext context, APIMechanosynthEditData data) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 6.0),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton.icon(
+          key: const Key('mechanosynth_edit_insert_from_file'),
+          onPressed: () => _insertStepsFromFile(data),
+          icon: const Icon(Icons.playlist_add, size: 16),
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            textStyle: const TextStyle(fontSize: 11.5),
+          ),
+          label: const Text('Insert steps from file…'),
+        ),
       ),
     );
   }
@@ -804,6 +910,7 @@ class _MechanosynthEditEditorState extends State<MechanosynthEditEditor> {
                 widget.model.setMechanosynthEditCursor(widget.nodeId, step),
           ),
           _buildStepList(context, data),
+          _buildBlockActions(context, data),
           if (data.lastError != null)
             Padding(
               padding: const EdgeInsets.only(top: 12.0),
