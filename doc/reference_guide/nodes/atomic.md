@@ -1026,7 +1026,10 @@ on the pin, the type its tag names, the state it is in at the current step, and
 the **pose residual**, which is how well its four tagged atoms fitted the
 library's frame. A residual of a few thousandths of an Ångström is a tool
 correctly tagged; a large one means a tag is on the wrong atom, and the replay
-will say so. A **Feedstocks** line follows it, one entry per wired reservoir in
+will say so. The row of the tool that is **away from park** at the current
+step time shows a small flight icon in place of its index; at most one row ever
+does, because only one tool is ever away from park (see [*Scrubbing inside a
+step*](#scrubbing-inside-a-step)). A **Feedstocks** line follows it, one entry per wired reservoir in
 pin order with how many of its atoms are in the scene at the current step — the
 number that visibly changes as you scrub across a dump step. (The editor's
 one-line readout gives the total instead: its question is whether a recharge is
@@ -1053,6 +1056,50 @@ and step number, so a build assembled on the wire — two generated blocks joine
 with `array_concat`, or one picked by a `switch` — scrubs exactly like one read
 from a single file. A wire into `step` makes the slider and the phase rows
 inert, which is said in a line under the field.
+
+**The time row.** Under the step scrubber a second slider, **Time**, spans
+`0` to `1` with a tick at the reaction, `0.5`, and a float box beside it for an
+exact value. It says where *inside* the current step the scene is taken — see
+[*Scrubbing inside a step*](#scrubbing-inside-a-step). Unlike the step
+scrubber it applies **while you drag**: the point of the row is the tool moving
+under your hand, so each frame of the drag re-evaluates the one step in
+progress and the viewport follows. One drag is still one undo entry. A wire
+into `time` disables the row and a line under it says so; the row then shows
+the time the wire supplied, which is the time the outputs were computed at.
+
+Under the row, three lines describe the **visit** — and are absent whenever
+nothing is visiting: a `bulk` step, a settle outside a run, `tools` unwired.
+
+- The first names the tool's **leg**: `flying from park`, `descending`,
+  `at site (before)`, `at site (reacted)`, `ascending`, `flying to next site`,
+  `returning to park`, or `hovering over next site` during a settle inside a
+  run.
+- The **approach** line is the sweep's verdict on the site:
+  `approach: vertical, clear by 1.8 Å` or `approach: tilted 23°, clear by
+  0.5 Å` — the tilt from vertical the obstacles forced on the tool, and how far
+  the nearest obstacle stays outside the tool's envelope. A site nothing reaches
+  reads, in the warning colour, `approach: blocked — best is tilted 41°, 0.3 Å
+  short`: the tool visits anyway, along that least-blocked direction, and the
+  number is how deep the nearest obstacle intrudes into the envelope. Nothing
+  else changes — there is no error, the replay carries on, and the `step`
+  record's `approach` goes negative so a style rule can paint the site.
+- The **path** line is the scan of everything that moved: `path clear`, or
+  `path clear (worst 1.32)` when something came within range — the closest any
+  atom of the tool came to any atom of the scene over the whole visit, as a
+  fraction of the pair's covalent-radius sum. Below the library's `clash`
+  factor that is a collision, and the line, in the warning colour, says when
+  and between whom: `path collides at 41 %: O of si_tool against Si 481, ratio
+  0.62`. A collision on a flight is almost always the layout — a tool parked on
+  another tool's line, or a park too low over the work — and moving the park is
+  the fix; a collision on a descent is the library's envelope or the site's
+  crowding.
+
+The envelope the approach line is judging by can be drawn: switch on *Show tool
+collision envelopes* in **Edit → Preferences → Atomic Structure Visualization**
+(see [the preferences dialog](../ui.md#atomic-structure-visualization)) and a
+wireframe cone appears on every bound tool and follows it through the visit,
+so a tilt or a blocked line is something you read off the viewport rather than
+take on trust.
 
 ### Navigating a long script by phase
 
@@ -1326,7 +1373,21 @@ against the scene it now follows, and it joins whatever run it now sits in.
 look at tools at all — not the visiting one, not the parked ones — so a
 sequence can be generated before anyone decides where the tools sit, and the
 tools can be moved afterwards without invalidating it. The cost is that
-keeping them out of each other's way is yours: park each tool on a **different
+keeping them out of each other's way is yours. Park each tool on a **different
+side** of the workpiece and its reservoirs — one to the left, one to the right,
+one in front — clear of the work itself and of where the build will grow. Then
+no flight crosses another tool and no park is in the way of a site, a tool
+leaves park once per run, works across the scene and goes home when its run
+ends. Nothing checks the layout for you, but the panel's path line tells you
+when it is wrong: a tool parked on another's flight line reads as a collision
+there, and the fix is to move the park.
+
+The sweep's cone is invisible unless you ask for it. **Edit → Preferences →
+Atomic Structure Visualization → Show tool collision envelopes** draws each
+bound tool's envelope as a wireframe cage that rides with the tool — down onto
+the site, across to the next one — so what a tilt is avoiding, and what a
+blocked site is blocked by, can be seen against the atoms around the site. See
+[the preferences dialog](../ui.md#atomic-structure-visualization).keeping them out of each other's way is yours: park each tool on a **different
 side** of the workpiece and its reservoirs, clear of the work itself, and no
 flight crosses another tool.
 
