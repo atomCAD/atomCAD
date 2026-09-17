@@ -59,8 +59,9 @@ pub use place::{
 };
 pub use pose::{ToolPose, tool_pose};
 pub use scene::{
-    Participant, Scene, SceneEffect, StepPlan, ToolBinding, apply_step_in_scene, build_scene,
-    event_indices, match_step_in_scene, replay_scene, replay_scene_partial, replay_steps,
+    LandingPlan, Participant, Scene, SceneEffect, StepPlan, ToolBinding, apply_step_in_scene,
+    build_scene, event_indices, match_step_in_scene, replay_scene, replay_scene_partial,
+    replay_steps,
 };
 pub use schema::{
     APEX_FRAME_TAG, BUILD_FORMAT, BondMismatch, BuildScript, CLASH_BLOCK, CLASH_SEARCH_RADIUS,
@@ -74,7 +75,6 @@ pub use trajectory::{
     Approach, CAGE_CYLINDER_LENGTH, CAGE_MERIDIANS, CLEAR_MARGIN, Envelope, Landing, Leg,
     PATH_SAMPLE, PATH_SAMPLE_ANGLE, PathContact, PathScan, Pose, REACTION, REACTION_DEPARTURE,
     REACTION_LANDING, Runs, STANDOFF_HEIGHT, SWEEP_DIRECTIONS, SWEEP_REFINEMENTS, ToolMotion,
-    Visit, apply_tool_pose, approach_direction, arriving_pose, cage_apex, obstacles_for,
-    plan_landing, reaction_pose, replay_scene_at, runs, standoff_pose, sweep_directions,
-    tool_envelope_cages,
+    Visit, apply_tool_pose, approach_direction, cage_apex, obstacles_for, plan_landing,
+    reaction_pose, replay_scene_at, runs, standoff_pose, sweep_directions, tool_envelope_cages,
 };

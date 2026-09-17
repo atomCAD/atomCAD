@@ -20,7 +20,8 @@ use super::runs::{Runs, runs};
 use crate::atomic_structure::AtomicStructure;
 use crate::mechanosynth::apply::{HighlightTags, covalent_radius, paint, resolve_tolerance};
 use crate::mechanosynth::scene::{
-    Participant, Scene, StepPlan, apply_plan, build_scene, match_step_in_scene, replay_steps,
+    LandingPlan, Participant, Scene, StepPlan, apply_plan, build_scene, match_step_in_scene,
+    replay_steps,
 };
 use crate::mechanosynth::schema::{
     BuildScript, CLASH_SEARCH_RADIUS, MechanosynthError, Method, OpLibrary, Step,
@@ -75,26 +76,77 @@ impl Pose {
     }
 }
 
-/// The full reaction pose of a landing.
+/// The full reaction pose of a landing: **the parked tool turned by the single
+/// smallest rotation that points its axis down the approach.**
 ///
-/// `R = ΔR · R_from` with `ΔR` the smallest rotation taking the tool's axis onto
-/// the approach direction, and `t = p_r − R · reaction.tool` so that the two
-/// reaction points coincide. `from` is the orientation the tool arrives with —
-/// its parked one on a first visit, the previous reaction pose inside a run — so
-/// the **roll is free** and is spent moving the tool as little as possible: it
-/// never twirls.
-pub fn reaction_pose(landing: &Landing, from: &Pose) -> Pose {
-    let arriving_axis = (from.r * landing.axis).normalize();
-    let turn = DMat3::from_quat(DQuat::from_rotation_arc(
-        arriving_axis,
-        landing.approach.direction,
-    ));
-    let r = turn * from.r;
+/// `R = ΔR · R_park` with `ΔR` the smallest rotation taking the *parked* tool's
+/// axis onto the approach direction, and `t = p_r − R · reaction.tool` so that
+/// the two reaction points coincide. The roll about the tool axis is free — the
+/// envelope is a solid of revolution, so roll cannot matter to collisions — and
+/// it is spent staying as close to the pose the designer authored as the
+/// approach allows.
+///
+/// **Memoryless, deliberately.** The first implementation folded each visit's
+/// minimal rotation onto the orientation the tool *arrived* with, chained from
+/// park through every earlier visit of the run. That made a visit's orientation
+/// a function of the whole path taken to reach it, so drawing step `k` meant
+/// sweeping every earlier visit of its run — and a sweep is the most expensive
+/// thing in the replay. Measured on the silicon demo at step 49: forty sweeps
+/// planned, eleven read, 14.6 ms of a 25 ms evaluation. Reading the orientation
+/// off the approach direction alone costs **two** sweeps per step (this visit's
+/// and the next one's) however long the run is.
+///
+/// Three things the park-relative rule buys beyond the speed:
+///
+/// - **continuity across the step boundary is structural.** The standoff a tool
+///   flies to at the end of step `k` and the one it descends from at step `j`
+///   are now the same function of the same landing, rather than two folds that
+///   have to agree;
+/// - **the roll cannot drift.** Composed minimal rotations are not the minimal
+///   rotation of the composition, so the fold accumulated holonomy over a long
+///   run; this never strays further from the authored pose than one rotation;
+/// - **a vertical approach from an upright park is the identity**, so the tool
+///   is drawn exactly as it was posed.
+///
+/// It still does not twirl: `ΔR(axis_park → ·)` is continuous in the approach
+/// direction, so two visits with similar approaches get similar orientations.
+pub fn reaction_pose(landing: &Landing, park: &Pose) -> Pose {
+    let parked_axis = (park.r * landing.axis).normalize();
+    let turn = DMat3::from_quat(minimal_turn(parked_axis, landing.approach.direction, park));
+    let r = turn * park.r;
     Pose {
         r,
         t: landing.reaction_point - r * landing.reaction_tool,
     }
 }
+
+/// The smallest rotation taking `from` onto `to`, with the antiparallel case
+/// pinned down instead of left to chance.
+///
+/// `DQuat::from_rotation_arc` has no determined axis when the two are opposite —
+/// every axis in the perpendicular plane is a valid half-turn — and picks one
+/// arbitrarily. That would make a tool's roll jump as its approach crossed the
+/// antipode of its parked axis. The case is a tool parked pointing exactly away
+/// from the direction it approaches along, which a sane layout never produces;
+/// pinning the axis to the parked frame's `x` makes it deterministic and keeps
+/// it a property of the binding rather than of floating-point luck.
+fn minimal_turn(from: DVec3, to: DVec3, park: &Pose) -> DQuat {
+    if from.dot(to) < -1.0 + ANTIPARALLEL_EPSILON {
+        let axis = (park.r * DVec3::X).normalize();
+        // Guard the pathological frame whose `x` is itself along the axis.
+        let axis = if axis.cross(from).length() < 1e-9 {
+            (park.r * DVec3::Y).normalize()
+        } else {
+            axis
+        };
+        return DQuat::from_axis_angle(axis, std::f64::consts::PI);
+    }
+    DQuat::from_rotation_arc(from, to)
+}
+
+/// How close to antiparallel the parked axis and the approach must be before
+/// [`minimal_turn`] stops trusting the arc rotation's axis.
+const ANTIPARALLEL_EPSILON: f64 = 1e-9;
 
 /// The reaction pose lifted to the standoff, up the approach.
 pub fn standoff_pose(landing: &Landing, reaction: &Pose) -> Pose {
@@ -102,30 +154,6 @@ pub fn standoff_pose(landing: &Landing, reaction: &Pose) -> Pose {
         r: reaction.r,
         t: reaction.t + landing.approach.direction * landing.standoff_height,
     }
-}
-
-/// The orientation a tool arrives at step `k` with (0-based): its parked pose on
-/// the first visit of a run, else the parked pose folded through every earlier
-/// visit of the run — each visit turning the tool as little as the previous one
-/// left it.
-///
-/// Pure: it needs only the landings the replay already produced.
-pub fn arriving_pose(runs: &Runs, landings: &[Option<Landing>], park: &Pose, k: usize) -> Pose {
-    // Walk back to the run's first visit, then forward from the park.
-    let mut chain: Vec<usize> = Vec::new();
-    let mut visit = runs.previous_visit(k);
-    while let Some(previous) = visit {
-        chain.push(previous);
-        visit = runs.previous_visit(previous);
-    }
-
-    let mut pose = *park;
-    for previous in chain.iter().rev() {
-        if let Some(Some(landing)) = landings.get(*previous) {
-            pose = reaction_pose(landing, &pose);
-        }
-    }
-    pose
 }
 
 /// Which part of its visit a tool is on at a step time — the panel's readout,
@@ -600,7 +628,20 @@ pub fn replay_scene_at(
     };
 
     let mut scene = build_scene(base, feedstocks, tools, library)?;
-    let (failure, mut landings) = replay_steps(&mut scene, library, script, applied as i32, tags)?;
+    // Only the last applied step's landing is ever read: when `time` has already
+    // applied the selected step, that step's landing is the one the motion is
+    // built from. Every other visit's orientation is a function of its own
+    // approach direction (`reaction_pose`), so the replay owes the presentation
+    // layer nothing else — which is what takes a step-49 evaluation from forty
+    // sweeps to two.
+    let (failure, mut landings) = replay_steps(
+        &mut scene,
+        library,
+        script,
+        applied as i32,
+        tags,
+        LandingPlan::Last,
+    )?;
     if let Some(failure) = failure {
         return Err(failure);
     }
@@ -692,8 +733,7 @@ fn plan_motion(
         Method::Tip => {
             let landing = (*landings.get(index)?)?;
             let park = park_pose(scene, landing.tool);
-            let arriving = arriving_pose(runs, landings, &park, index);
-            let reaction = reaction_pose(&landing, &arriving);
+            let reaction = reaction_pose(&landing, &park);
             let standoff = standoff_pose(&landing, &reaction);
 
             // Where the tool goes next: the standoff of its run's next visit, or
@@ -712,7 +752,10 @@ fn plan_motion(
                     tools_wired,
                 )
                 .map(|landing| {
-                    let arriving = reaction_pose(&landing, &reaction);
+                    // The same function of the same landing step `j` will use
+                    // when the replay reaches it, which is what makes
+                    // `pose_at(k, 1.0) == pose_at(j, 0.0)` hold by construction.
+                    let arriving = reaction_pose(&landing, &park);
                     standoff_pose(&landing, &arriving)
                 })
             });
@@ -735,7 +778,11 @@ fn plan_motion(
             Some(ToolMotion::Visit(Box::new(visit)))
         }
         Method::Spontaneous => {
-            let (previous, next) = runs.spanned_by(index)?;
+            // Only the *next* visit is needed: the tool is waiting over the site
+            // it will descend on, in the orientation that site's approach gives
+            // it, and the flight that brought it here aimed at exactly this
+            // pose (`reaction_pose` reads the approach alone).
+            let (_, next) = runs.spanned_by(index)?;
             let landing = look_ahead(
                 scene,
                 library,
@@ -748,16 +795,7 @@ fn plan_motion(
                 tools_wired,
             )?;
             let park = park_pose(scene, landing.tool);
-            // The tool arrived here at the end of its previous visit, in the
-            // orientation that flight ended in — which is the next visit's
-            // reaction orientation.
-            let arriving = arriving_pose(runs, landings, &park, previous);
-            let previous_reaction = landings
-                .get(previous)
-                .copied()
-                .flatten()
-                .map_or(arriving, |previous| reaction_pose(&previous, &arriving));
-            let reaction = reaction_pose(&landing, &previous_reaction);
+            let reaction = reaction_pose(&landing, &park);
             Some(ToolMotion::Hover {
                 tool: landing.tool,
                 pose: standoff_pose(&landing, &reaction),

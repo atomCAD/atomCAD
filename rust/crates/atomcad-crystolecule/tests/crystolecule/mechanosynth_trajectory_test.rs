@@ -15,10 +15,10 @@ use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::io::xyz_loader::load_xyz;
 use atomcad_crystolecule::mechanosynth::{
     APEX_FRAME_TAG, BuildScript, CAGE_MERIDIANS, CLASH_BLOCK, CLEAR_MARGIN, Envelope,
-    HighlightTags, Landing, Leg, OpLibrary, Participant, Pose, REACTION, REACTION_DEPARTURE,
-    REACTION_LANDING, STANDOFF_HEIGHT, SWEEP_DIRECTIONS, Scene, Step, ToolMotion,
-    apply_step_in_scene, apply_tool_pose, approach_direction, arriving_pose, build_scene,
-    cage_apex, load_build_script, load_library, match_step_in_scene, obstacles_for, plan_landing,
+    HighlightTags, Landing, LandingPlan, Leg, OpLibrary, Participant, Pose, REACTION,
+    REACTION_DEPARTURE, REACTION_LANDING, STANDOFF_HEIGHT, SWEEP_DIRECTIONS, Scene, Step,
+    ToolMotion, apply_step_in_scene, apply_tool_pose, approach_direction, build_scene, cage_apex,
+    load_build_script, load_library, match_step_in_scene, obstacles_for, plan_landing,
     reaction_pose, replay_scene, replay_scene_at, replay_steps, resolve_tolerance, runs,
     sweep_directions, tool_envelope_cages,
 };
@@ -223,6 +223,7 @@ fn landing_with(
         &build,
         step_index as i32,
         HighlightTags::default(),
+        LandingPlan::None,
     )
     .expect("the script is valid");
     assert!(failure.is_none(), "{failure:?}");
@@ -682,8 +683,15 @@ fn a_blocked_site_applies_and_reports_rather_than_failing() {
 #[test]
 fn a_replay_reports_one_landing_per_applied_tip_step_and_none_elsewhere() {
     let (mut scene, lib, build) = trajectory_scene(&[]);
-    let (failure, landings) = replay_steps(&mut scene, &lib, &build, -1, HighlightTags::default())
-        .expect("the script is valid");
+    let (failure, landings) = replay_steps(
+        &mut scene,
+        &lib,
+        &build,
+        -1,
+        HighlightTags::default(),
+        LandingPlan::All,
+    )
+    .expect("the script is valid");
     assert!(failure.is_none(), "{failure:?}");
     assert_eq!(landings.len(), build.steps.len());
 
@@ -692,6 +700,54 @@ fn a_replay_reports_one_landing_per_applied_tip_step_and_none_elsewhere() {
     assert_eq!(landed, vec![true, false, true, true, true, false]);
     assert_eq!(landings[0].unwrap().tool, 0);
     assert_eq!(landings[4].unwrap().tool, 1);
+}
+
+#[test]
+fn a_replay_plans_only_the_landings_the_caller_asked_for() {
+    // The budget that keeps the sweep off the replay's hot path. A landing is a
+    // sweep — ~365 µs against ~6 µs to apply the step it belongs to — so
+    // planning one per replayed step spent most of the node's evaluation
+    // computing directions nobody read. Three of the four callers want none at
+    // all; the replayer wants exactly the last applied step's.
+    let tip_steps = |plan| {
+        let (mut scene, lib, build) = trajectory_scene(&[]);
+        let (failure, landings) =
+            replay_steps(&mut scene, &lib, &build, -1, HighlightTags::default(), plan)
+                .expect("the script is valid");
+        assert!(failure.is_none(), "{failure:?}");
+        landings.iter().map(Option::is_some).collect::<Vec<bool>>()
+    };
+
+    // habst, settle, hdump, habst, habst_probe, expose.
+    assert_eq!(
+        tip_steps(LandingPlan::All),
+        vec![true, false, true, true, true, false]
+    );
+    assert_eq!(
+        tip_steps(LandingPlan::None),
+        vec![false; 6],
+        "none means none"
+    );
+    // The last step of this script is `expose`, a bulk step, so even `Last`
+    // plans nothing: the rule is *the last applied step's, if it lands*.
+    assert_eq!(tip_steps(LandingPlan::Last), vec![false; 6]);
+
+    // Stopping on the probe's visit, `Last` lands that one and nothing before.
+    let (mut scene, lib, build) = trajectory_scene(&[]);
+    let (failure, landings) = replay_steps(
+        &mut scene,
+        &lib,
+        &build,
+        5,
+        HighlightTags::default(),
+        LandingPlan::Last,
+    )
+    .expect("the script is valid");
+    assert!(failure.is_none(), "{failure:?}");
+    assert_eq!(
+        landings.iter().map(Option::is_some).collect::<Vec<bool>>(),
+        vec![false, false, false, false, true]
+    );
 }
 
 #[test]
@@ -705,8 +761,15 @@ fn nothing_lands_when_no_tool_is_wired() {
         &lib,
     )
     .expect("a workpiece-only scene builds");
-    let (failure, landings) = replay_steps(&mut scene, &lib, &build, -1, HighlightTags::default())
-        .expect("the script is valid");
+    let (failure, landings) = replay_steps(
+        &mut scene,
+        &lib,
+        &build,
+        -1,
+        HighlightTags::default(),
+        LandingPlan::All,
+    )
+    .expect("the script is valid");
     assert!(failure.is_none(), "{failure:?}");
     assert!(landings.iter().all(Option::is_none));
 }
@@ -808,41 +871,79 @@ fn the_reaction_pose_turns_the_tool_by_the_axis_angle_and_no_more() {
 }
 
 #[test]
-fn the_arriving_pose_folds_the_runs_earlier_visits_in_order() {
+fn the_reaction_pose_reads_the_approach_alone_and_not_the_path_to_it() {
+    // The memoryless rule, and the reason a step costs two sweeps rather than
+    // one per visit of its whole run: a visit's orientation is a function of its
+    // own approach direction and the binding's park pose, so it cannot depend on
+    // which visits came before it.
     let (mut scene, lib, build) = trajectory_scene(&[]);
-    let (failure, landings) =
-        replay_steps(&mut scene, &lib, &build, -1, HighlightTags::default()).expect("valid");
+    let (failure, landings) = replay_steps(
+        &mut scene,
+        &lib,
+        &build,
+        -1,
+        HighlightTags::default(),
+        LandingPlan::All,
+    )
+    .expect("valid");
     assert!(failure.is_none());
-    let structure = runs(&build, &lib);
     let park = park_of(&scene, 0);
 
-    // The run's first visit arrives parked…
+    // Steps 0, 2 and 3 are the tip's run. Each pose points the axis down its own
+    // approach, from the park — folding the earlier visits in would give a
+    // different roll.
+    for index in [0usize, 2, 3] {
+        let landing = landings[index].expect("a tip step of the tip's run lands");
+        let axis = reaction_pose(&landing, &park).r * landing.axis;
+        assert!(
+            (axis - landing.approach.direction).length() < 1e-9,
+            "step {index}: {axis}"
+        );
+    }
+
+    // Two landings with the same approach give the same orientation, whatever
+    // sat between them in the run.
+    let first = landings[0].expect("step 0 lands");
+    let mut later = landings[3].expect("step 3 lands");
+    later.approach = first.approach;
+    later.axis = first.axis;
+    later.reaction_point = first.reaction_point;
+    later.reaction_tool = first.reaction_tool;
     assert_pose_close(
-        arriving_pose(&structure, &landings, &park, 0),
-        park,
-        "first",
-    );
-    // …the second arrives in the first's reaction orientation…
-    let first = reaction_pose(&landings[0].unwrap(), &park);
-    assert_pose_close(
-        arriving_pose(&structure, &landings, &park, 2),
-        first,
-        "second",
-    );
-    // …and the third in the second's, folded in order.
-    let second = reaction_pose(&landings[2].unwrap(), &first);
-    assert_pose_close(
-        arriving_pose(&structure, &landings, &park, 3),
-        second,
-        "third",
+        reaction_pose(&later, &park),
+        reaction_pose(&first, &park),
+        "same approach, same pose",
     );
 
-    // The probe's own run starts from its own park, not from the tip's.
+    // And each tool reads its own park: the probe's visit is posed from the
+    // probe's binding, never from the tip's.
     let probe_park = park_of(&scene, 1);
+    let probe = landings[4].expect("step 4 is the probe's visit");
+    let axis = reaction_pose(&probe, &probe_park).r * probe.axis;
+    assert!((axis - probe.approach.direction).length() < 1e-9, "{axis}");
+}
+
+#[test]
+fn an_approach_opposite_the_parked_axis_still_turns_deterministically() {
+    // `from_rotation_arc` has no determined axis for antiparallel inputs. The
+    // case is a tool parked pointing exactly away from its own approach, which
+    // no sane layout produces — but it must not be luck-dependent.
+    let landing = landing_of(0, &[]);
+    let (scene, _, _) = trajectory_scene(&[]);
+    let park = park_of(&scene, landing.tool);
+
+    let mut flipped = landing;
+    flipped.approach.direction = -(park.r * landing.axis).normalize();
+
     assert_pose_close(
-        arriving_pose(&structure, &landings, &probe_park, 4),
-        probe_park,
-        "the probe",
+        reaction_pose(&flipped, &park),
+        reaction_pose(&flipped, &park),
+        "deterministic",
+    );
+    let axis = reaction_pose(&flipped, &park).r * flipped.axis;
+    assert!(
+        (axis - flipped.approach.direction).length() < 1e-9,
+        "the axis still points down the approach: {axis}"
     );
 }
 

@@ -39,7 +39,11 @@ was made total, which is where that same rule had already been broken
 the time slider writes during the drag as this document says, but **at most once
 per frame** rather than on each tick, which is the difference between a drag that
 follows the hand and one that crawls seconds behind it (§The `mechanosynth`
-node). Phases 1, 2 and 3 are implemented; Phase 4 is not.
+node). An eighth review, measuring that panel, replaced the **folded roll with a
+park-relative one**: a visit's orientation now reads its own approach direction
+rather than the path taken to reach it, which takes a step from one sweep per
+visit of its run to two in total (§The envelope, §Presentation). Phases 1, 2 and
+3 are implemented; Phase 4 is not.
 
 Builds on `doc/design_mechanosynth_tools.md` (milestone 1: what a build does
 to every molecule it involves, all four phases implemented 2026-09-15) and is
@@ -288,8 +292,23 @@ Because the envelope is a solid of revolution about the tool axis, the tool's
 **roll** about that axis cannot matter to collisions, and the orientation
 search is over **directions**: the unit vector `d` the axis points along
 once the reaction points coincide. The tool arrives along `−d` and leaves
-along `+d`; the roll is chosen to move the tool as little as possible from
-the orientation it flies in with, so it never twirls.
+along `+d`; the roll is **the parked tool turned by the single smallest
+rotation that points its axis down `d`**, so it never twirls and a vertical
+approach from an upright park leaves the tool exactly as it was posed.
+
+That rule is **memoryless**, and the first implementation's was not: it folded
+each visit's minimal rotation onto the orientation the tool *arrived* with,
+chained from park through every earlier visit of the run. The fold reads well
+on paper and made a visit's orientation a function of the whole path taken to
+reach it — so drawing step `k` meant sweeping every earlier visit of its run,
+and the sweep is the most expensive thing in the engine. Measured on the
+silicon demo at step 49: **forty sweeps planned, eleven read, 14.6 ms of a
+25 ms evaluation**. Reading the orientation off `d` alone costs **two** sweeps
+per step — this visit's and the next one's — however long the run is, and buys
+two things beyond the speed: continuity across the step boundary becomes
+structural rather than a pair of folds that have to agree, and the roll cannot
+drift, since composed minimal rotations are not the minimal rotation of the
+composition. `reaction_pose`'s doc comment carries the argument.
 
 Numbers, for orientation: the TLM cage tools fit `α = 30°`, `R = 4 Å` with a
 loaded silicon tool's reaction point at the cargo; the bcc tungsten pyramid is
@@ -786,13 +805,6 @@ pub fn reaction_pose(landing: &Landing, from: &Pose) -> Pose;
 /// The reaction pose lifted by `standoff_height` along the direction.
 pub fn standoff_pose(landing: &Landing, reaction: &Pose) -> Pose;
 
-/// The orientation a tool arrives at step `k` with: its parked pose on the
-/// first visit of a run, else `reaction_pose` folded over the run's earlier
-/// landings from the parked pose — each visit turns the tool as little as
-/// the previous one left it. Pure; needs only the landings `replay_steps`
-/// returned.
-pub fn arriving_pose(runs: &Runs, landings: &[Option<Landing>], park: &Pose, k: usize) -> Pose;
-
 /// One tool's visit for one `tip` step.
 pub struct Visit {
     pub landing: Landing,
@@ -931,13 +943,13 @@ the motion; the engine's scene does not.
    blocked landing at `j` is still a standoff, and is reported when the
    replay reaches `j`. The clone is discarded. This is the only place the engine looks past the
    selected step, and it costs one structure copy plus the settles.
-5. The `ToolMotion` is assembled: `arriving_pose` from the run structure
-   and the landings `replay_steps` returned for steps `1 … k − 1`,
-   `reaction_pose` from it, the standoff,
-   `from_park` / `to_park` from the run structure, the look-ahead's `to`,
-   every leg scanned. A hover is the look-ahead's standoff in the
-   orientation the outbound flight ended in, which is the next visit's
-   reaction orientation.
+5. The `ToolMotion` is assembled: `reaction_pose` from the step's own landing
+   and the binding's park, the standoff, `from_park` / `to_park` from the run
+   structure, the look-ahead's `to`, every leg scanned. A hover is the
+   look-ahead's standoff in that visit's own reaction orientation — the same
+   pose the previous step's outbound flight aimed at, because both read the
+   same landing. **No earlier visit's landing is read**, which is why
+   `replay_steps` is asked for `LandingPlan::Last` rather than one per step.
 6. Highlights. Before the reaction, `ms_current` is painted on the **matched
    `before` atoms** of step `k`, both sides: the site lights up as the tool
    approaches, and the apex that will react lights with it. From the reaction
@@ -1285,10 +1297,16 @@ produced, never against a typed coordinate:
   two runs; the `spontaneous` step inside a run reports its two neighbours
   and one outside a run reports none;
 - `reaction_pose`: the tool-side reaction point lands on the target's to
-  `1e-9`, the tool's axis is the approach direction, and the rotation from
-  the arriving pose has the angle between the two axes and no more (minimal
-  roll); `arriving_pose` on the third visit of a run is the parked
-  orientation turned by the first two visits' minimal rotations, in order;
+  `1e-9`, the tool's axis is the approach direction, and the rotation from the
+  **parked** pose has the angle between the two axes and no more (minimal
+  roll); it is memoryless — two landings with the same approach give the same
+  orientation whatever sat between them in the run, and each tool reads its own
+  park; an approach exactly antiparallel to the parked axis still turns
+  deterministically;
+- `replay_steps` plans **only the landings the caller asked for**:
+  `LandingPlan::None` plans none, `Last` plans the last applied step's when it
+  lands, `All` one per `tip` step with a bound tool. The budget test, because a
+  landing is a sweep and nothing else in the replay comes close to its cost;
 - `ToolMotion::leg_at`: a first visit whose run continues names its six legs
   in order (`flying from park`, `descending`, the two dwell words, `ascending`,
   `flying to next site`); a lone visit ends `returning to park`; a chained

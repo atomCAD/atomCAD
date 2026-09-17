@@ -159,6 +159,7 @@ crates/atomcad-crystolecule/src/
 | `StepPlan` | `mechanosynth/scene.rs` | Everything a step's checks produced with nothing applied; `match_step_in_scene` makes one, `plan_landing` reads one, the apply half consumes one |
 | `Runs` | `mechanosynth/trajectory/runs.rs` | Which `tip` steps a tool performs without going home in between. Script and library only — never stored on a step |
 | `Pose` / `ToolMotion` / `Visit` / `Leg` | `mechanosynth/trajectory/path.rs` | A computed rigid pose (`ToolPose` without the residual), and what a tool does during one step: a `Visit` with its legs and scan, or a `Hover` over its next site. `Leg` names which part of that a step time falls on, in the panel's own words; it reads the same length split `pose_at` interpolates along, so the word and the pose cannot disagree |
+| `LandingPlan` | `mechanosynth/scene.rs` | Which of a replay's landings the caller will read. A landing is a **sweep**, the most expensive thing in the engine (~365 µs, against ~6 µs to apply the step it belongs to), so `replay_steps` plans only what is asked for. `apply_step_in_scene` is untouched — it still lands every `tip` step it applies, because that is how a generator learns a site is blocked |
 
 `Envelope::cage` and `tool_envelope_cages` draw the envelope rather than test
 against it: `cage` is the local-frame wireframe (meridians plus three rings) and
@@ -487,6 +488,18 @@ design together, and each is easy to erode:
   engine writes a flown pose into a `Scene`, which is why
   `replay_scene_at(k, 1.0)` is `replay_scene(k)` atom for atom and there is no
   "do not replay into a moved scene" rule to remember.
+- **A visit's orientation reads its approach direction, never the path to it.**
+  `reaction_pose` turns the *parked* tool by the single smallest rotation that
+  points its axis down the approach. The first implementation folded each
+  visit's minimal rotation onto the orientation the tool arrived with, chained
+  from park through the run — which made drawing step `k` require a sweep for
+  every earlier visit of its run (measured: forty planned, eleven read, 14.6 ms
+  of a 25 ms evaluation). Two consequences of the memoryless rule are worth
+  keeping: `pose_at(k, 1.0) == pose_at(j, 0.0)` now holds *by construction*
+  (both sides are the same function of the same landing, not two folds that must
+  agree), and the roll cannot drift, since composed minimal rotations are not
+  the minimal rotation of the composition. A step costs **two** sweeps — its own
+  and the look-ahead's — however long the run is.
 - **Nothing about a trajectory is stored.** The approach direction depends on
   what is in the way, and that depends on every step before this one; run
   membership depends on the sequence. Both are recomputed on every evaluation, so

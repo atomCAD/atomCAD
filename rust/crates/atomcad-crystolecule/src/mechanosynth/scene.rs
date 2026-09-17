@@ -196,7 +196,10 @@ pub fn replay_scene_partial(
     tags: HighlightTags<'_>,
 ) -> Result<(Scene, Option<MechanosynthError>), MechanosynthError> {
     let mut scene = build_scene(base, feedstocks, tools, library)?;
-    let (failure, _landings) = replay_steps(&mut scene, library, script, step, tags)?;
+    // No landing: this form exists for the editor, which draws the scene and
+    // reads no visit.
+    let (failure, _landings) =
+        replay_steps(&mut scene, library, script, step, tags, LandingPlan::None)?;
     Ok((scene, failure))
 }
 
@@ -219,12 +222,49 @@ pub fn replay_scene_partial(
 /// because carrying a tool's orientation along a run needs the landings of the
 /// visits before this one. **Landing a step cannot fail it**, so the scene this
 /// leaves behind is milestone 1's, atom for atom, for every build that loads.
+/// Which of a replay's landings the caller is going to read.
+///
+/// A landing costs a **sweep**, which is the most expensive thing in the engine:
+/// measured at ~365 µs on the silicon demo, against ~6 µs to apply the step it
+/// belongs to. Planning one for every replayed step — what this function did at
+/// first — spent 14.6 ms of a 25 ms evaluation computing directions that were
+/// then dropped on the floor, and three of the four callers here discard the
+/// whole vector.
+///
+/// So the caller says what it wants. This is a *replay* concern only:
+/// [`apply_step_in_scene`] still plans the landing of every `tip` step it
+/// applies and returns it on the effect, because that is how a sequence
+/// generator learns that a site is blocked.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LandingPlan {
+    /// None at all — the caller reads no landing.
+    #[default]
+    None,
+    /// Only the last applied step's, which is what a replay to `k` needs when
+    /// the selected step has already been applied.
+    Last,
+    /// Every one, for a caller that wants each step's verdict.
+    All,
+}
+
+impl LandingPlan {
+    /// Whether step `index` of `applied` steps should be landed.
+    fn wants(&self, index: usize, applied: usize) -> bool {
+        match self {
+            LandingPlan::None => false,
+            LandingPlan::Last => index + 1 == applied,
+            LandingPlan::All => true,
+        }
+    }
+}
+
 pub fn replay_steps(
     scene: &mut Scene,
     library: &OpLibrary,
     script: &BuildScript,
     step: i32,
     tags: HighlightTags<'_>,
+    landing_plan: LandingPlan,
 ) -> Result<(Option<MechanosynthError>, Vec<Option<Landing>>), MechanosynthError> {
     super::parse::validate_script_ops(script, library)?;
 
@@ -251,7 +291,23 @@ pub fn replay_steps(
         let op = library
             .get(&script_step.op)
             .expect("validate_script_ops checked every op name");
-        match apply_step_in_scene(scene, op, script_step, i + 1, tolerance, clash, tool_model) {
+        // Inlined rather than routed through `apply_step_in_scene`, so the
+        // landing can be skipped: that function's contract — every `tip` step it
+        // applies comes back with its landing — is what the generator reads, and
+        // must not move.
+        let applied_step =
+            match_step_in_scene(scene, op, script_step, i + 1, tolerance, clash, tool_model).map(
+                |plan| {
+                    let landing = plan
+                        .tool_binding()
+                        .filter(|_| landing_plan.wants(i, n))
+                        .map(|_| plan_landing(scene, &plan));
+                    let mut effect = apply_plan(scene, &plan);
+                    effect.landing = landing;
+                    effect
+                },
+            );
+        match applied_step {
             Ok(effect) => {
                 landings.push(effect.landing);
                 if tags.added.is_some() {

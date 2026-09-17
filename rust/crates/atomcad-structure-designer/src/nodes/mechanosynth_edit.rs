@@ -50,7 +50,8 @@ use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::atomic_structure::atomic_structure_decorator::MechanosynthGhostVisuals;
 use atomcad_crystolecule::mechanosynth::{
     Applicability, BuildScript, Candidate, EXACT_FIT_RESIDUAL, GhostAtom, GhostBond, HighlightTags,
-    NO_LAYER, NO_SITE, OpLibrary, Scene, Step, build_scene, replay_steps, steps_applied,
+    LandingPlan, NO_LAYER, NO_SITE, OpLibrary, Scene, Step, build_scene, replay_steps,
+    steps_applied,
 };
 use glam::{DMat3, DVec3};
 use serde::{Deserialize, Serialize};
@@ -536,6 +537,7 @@ pub fn replay_prefix_and_block(
         &script(PREFIX_LABEL, prefix),
         -1,
         HighlightTags::default(),
+        LandingPlan::None,
     )
     .map_err(|failure| failure.to_string())?;
     if let Some(failure) = prefix_failure {
@@ -552,6 +554,7 @@ pub fn replay_prefix_and_block(
             feedstock: Some(MS_FEEDSTOCK_TAG),
             ..HighlightTags::default()
         },
+        LandingPlan::None,
     )
     .map_err(|failure| failure.to_string())?;
     Ok((scene, block_failure.map(|failure| failure.to_string())))
