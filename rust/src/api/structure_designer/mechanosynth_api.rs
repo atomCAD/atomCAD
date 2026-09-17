@@ -189,9 +189,14 @@ pub fn mechanosynth_info(
             chapters: Vec::new(),
             current_tool_type: String::new(),
             current_agent: String::new(),
-            tools: tool_rows(stored.last_scene().as_ref()),
+            tools: tool_rows(stored.last_scene().as_ref(), stored.last_motion().as_ref()),
             feedstocks: feedstock_rows(stored.last_scene().as_ref()),
-            ..motion_lines(stored.last_scene().as_ref(), None, time, clash)
+            ..motion_lines(
+                stored.last_scene().as_ref(),
+                stored.last_motion().as_ref(),
+                time,
+                clash,
+            )
         });
     };
     let count = script.steps.len();
@@ -220,6 +225,7 @@ pub fn mechanosynth_info(
         .and_then(|op| op.agent.clone())
         .unwrap_or_default();
     let scene = stored.last_scene();
+    let motion = stored.last_motion();
 
     Some(APIMechanosynthInfo {
         count: count as i32,
@@ -235,9 +241,9 @@ pub fn mechanosynth_info(
         chapters: chapters(&script),
         current_tool_type,
         current_agent,
-        tools: tool_rows(scene.as_ref()),
+        tools: tool_rows(scene.as_ref(), motion.as_ref()),
         feedstocks: feedstock_rows(scene.as_ref()),
-        ..motion_lines(scene.as_ref(), stored.last_motion().as_ref(), time, clash)
+        ..motion_lines(scene.as_ref(), motion.as_ref(), time, clash)
     })
 }
 
@@ -307,18 +313,29 @@ fn motion_lines(
 /// Read off the scene the node's last evaluation parked, never by forcing one —
 /// a panel rebuild must not cost a replay. A node that has not been evaluated
 /// therefore reports no tools, which is also the truth about what is on screen.
+///
+/// `motion` marks the one row that is away from park. It is the *binding index*
+/// that moves, not the instance number — they coincide today and would stop
+/// coinciding the moment a tool failed to bind, so the comparison is on the
+/// index the motion actually names.
 #[flutter_rust_bridge::frb(ignore)]
-pub fn tool_rows(scene: Option<&Scene>) -> Vec<APIMechanosynthToolRow> {
+pub fn tool_rows(
+    scene: Option<&Scene>,
+    motion: Option<&ToolMotion>,
+) -> Vec<APIMechanosynthToolRow> {
+    let moving = motion.map(ToolMotion::tool);
     scene
         .map(|scene| {
             scene
                 .bindings
                 .iter()
-                .map(|binding| APIMechanosynthToolRow {
+                .enumerate()
+                .map(|(index, binding)| APIMechanosynthToolRow {
                     instance: binding.instance as i32,
                     tool_type: binding.tool_type.clone(),
                     residual: binding.pose.residual,
                     state: binding.state.clone().unwrap_or_default(),
+                    moving: moving == Some(index),
                 })
                 .collect()
         })

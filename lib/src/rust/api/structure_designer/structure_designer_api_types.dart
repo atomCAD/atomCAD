@@ -3540,11 +3540,19 @@ class APIMechanosynthToolRow {
   /// The tracked state; empty when the type carries none.
   final String state;
 
+  /// Whether this tool is the one **away from park** at the step time the
+  /// last evaluation used — flying, descending, dwelling, ascending or
+  /// hovering. At most one ever is
+  /// (`doc/design_mechanosynth_trajectory.md` §A tool leaves park once per
+  /// run), and the panel marks its row.
+  final bool moving;
+
   const APIMechanosynthToolRow({
     required this.instance,
     required this.toolType,
     required this.residual,
     required this.state,
+    required this.moving,
   });
 
   @override
@@ -3552,7 +3560,8 @@ class APIMechanosynthToolRow {
       instance.hashCode ^
       toolType.hashCode ^
       residual.hashCode ^
-      state.hashCode;
+      state.hashCode ^
+      moving.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -3562,7 +3571,8 @@ class APIMechanosynthToolRow {
           instance == other.instance &&
           toolType == other.toolType &&
           residual == other.residual &&
-          state == other.state;
+          state == other.state &&
+          moving == other.moving;
 }
 
 /// Where the placement tool stands, evaluated from nothing — the viewport reads

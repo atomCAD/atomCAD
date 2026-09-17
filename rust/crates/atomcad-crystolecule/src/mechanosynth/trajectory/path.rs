@@ -817,3 +817,93 @@ fn park_pose(scene: &Scene, tool: usize) -> Pose {
         t: binding.pose.t,
     }
 }
+
+// ===========================================================================
+// The envelope cage
+// ===========================================================================
+
+/// The wireframe cage of every bound tool's envelope, in design space — one
+/// entry per binding, in pin order, each a list of line segments.
+///
+/// The envelope is the one thing in this design a viewer cannot otherwise see,
+/// and it is what a tilt or a blocked site is explained by. The cone's apex sits
+/// at the tool-side reaction point of the tool's **nearest visit**
+/// ([`cage_apex`]), and the segments are posed with the same [`Pose`] the tool's
+/// atoms get — the binding's for a parked tool, `motion.pose_at(time)` for the
+/// one that flies — so the cage descends with the tool and sits on the site at
+/// the reaction.
+///
+/// Computed unconditionally, whether or not anyone has switched the overlay on:
+/// a preference must not reach into an evaluation
+/// (`doc/design_mechanosynth_trajectory.md` §The envelope cage).
+pub fn tool_envelope_cages(
+    scene: &Scene,
+    library: &OpLibrary,
+    script: &BuildScript,
+    step: i32,
+    motion: Option<&ToolMotion>,
+    time: f64,
+) -> Vec<Vec<(DVec3, DVec3)>> {
+    let selected = crate::mechanosynth::steps_applied(step, script.steps.len());
+    scene
+        .bindings
+        .iter()
+        .enumerate()
+        .map(|(index, binding)| {
+            let pose = match motion {
+                Some(motion) if motion.tool() == index => motion.pose_at(time),
+                _ => Pose {
+                    r: binding.pose.r,
+                    t: binding.pose.t,
+                },
+            };
+            let apex = cage_apex(library, script, selected, &binding.tool_type);
+            binding
+                .envelope
+                .cage(apex, binding.axis)
+                .into_iter()
+                .map(|(from, to)| (pose.apply(from), pose.apply(to)))
+                .collect()
+        })
+        .collect()
+}
+
+/// Where a tool's cage is anchored in its own frame: the tool-side reaction
+/// point of its **nearest visit** — the selected step when that step is this
+/// tool's, else its next `tip` step in the script, else its last, else the local
+/// origin for a tool no step uses.
+///
+/// `selected` is the 1-based number of the selected step, `0` for none.
+pub fn cage_apex(
+    library: &OpLibrary,
+    script: &BuildScript,
+    selected: usize,
+    tool_type: &str,
+) -> DVec3 {
+    let reaction_of = |index: usize| -> Option<DVec3> {
+        let step = script.steps.get(index)?;
+        let op = library.get(&step.op)?;
+        if op.method != Method::Tip {
+            return None;
+        }
+        if op.tool.as_ref()?.tool_type != tool_type {
+            return None;
+        }
+        op.reaction.map(|reaction| reaction.tool)
+    };
+
+    let current = selected.checked_sub(1);
+    if let Some(reaction) = current.and_then(reaction_of) {
+        return reaction;
+    }
+    // The next visit after the selected step, then — failing that — the last one
+    // before it, so a tool whose work is done still shows its cage where it last
+    // reached rather than at its own origin.
+    if let Some(reaction) = (selected..script.steps.len()).find_map(reaction_of) {
+        return reaction;
+    }
+    if let Some(reaction) = (0..current.unwrap_or(0)).rev().find_map(reaction_of) {
+        return reaction;
+    }
+    DVec3::ZERO
+}

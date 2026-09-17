@@ -62,6 +62,7 @@ structure_designer/
 ├── closure_network_conversion.rs # Converts closure ⇄ custom-network instance (function-value forms)
 ├── node_network_gadget.rs     # Gadget trait for interactive editing
 ├── node_layout.rs             # Node size estimation (matches Flutter)
+├── overlay.rs                 # Overlay/OverlayKind: line work a node emits *about* its output
 ├── navigation_history.rs      # Back/forward network navigation
 ├── common_constants.rs        # Shared constants
 ├── preferences.rs             # User preferences persistence
@@ -396,6 +397,29 @@ means updating `NodeSceneData::new()`, the `generate_scene` struct literal, the
 `MemorySizeEstimator` impl (the invisible-node cache budgets against it) and the
 direct-construction sites in
 `tests/structure_designer/multi_output_unit_test.rs`.
+
+## Viewport overlays
+
+An **overlay** (`overlay.rs`) is line work a node emits *about* its output — a
+`mechanosynth` tool's collision envelope today — which the scene tessellator
+draws into the existing `wireframe_mesh` alongside the unit-cell wireframe and
+the drawing-plane grid. It travels `EvalOutput::overlays` → `NodeSceneData`
+→ `scene_tessellator`, and each `OverlayKind` has its own preference switch and
+colour.
+
+Two properties are the whole point of the route and are easy to undo:
+
+- **A preference affects tessellation, never evaluation.** The node emits its
+  segments whether or not the box is ticked, and the *tessellator* does the
+  asking. Reading a preference inside `eval` would make the memoised evaluator's
+  outputs depend on the preferences — which every other preference is careful
+  not to do — and would turn toggling a checkbox into a re-evaluation.
+- **An overlay is not a gadget.** A gadget is the *selected* node's interactive
+  handle set; an overlay is a fact about every *displayed* node's output, wants
+  no hit test and no drag, and is therefore drawn outside the `is_active` gate.
+
+The unit-cell wireframe predates this and still has its own `NodeSceneData`
+field; the next overlay is a `kind` rather than a third field.
 
 ## User preferences: three files and two apply sites
 

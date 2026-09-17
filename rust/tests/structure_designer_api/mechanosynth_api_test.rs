@@ -693,3 +693,37 @@ fn a_tool_that_flies_past_something_reports_how_close_it_came() {
         info.contact_at
     );
 }
+
+#[test]
+fn the_tools_block_marks_the_one_row_that_is_away_from_park() {
+    // At most one tool is ever away from park, and the panel prefixes its row
+    // with a marker rather than a legend
+    // (`doc/design_mechanosynth_trajectory.md` §A tool leaves park once per
+    // run). The flag is the binding index the motion names, so a tool that
+    // failed to bind could never shift it onto its neighbour.
+    let mut designer = setup_designer();
+    let node_id = add_evaluated_replayer(&mut designer, &[], 3, 0.2);
+    let motion = last_motion(&designer, node_id).expect("step 3 is a tip step");
+
+    let info = mechanosynth_info(&mut designer, &[], node_id).expect("the node is a mechanosynth");
+    let moving: Vec<usize> = info
+        .tools
+        .iter()
+        .enumerate()
+        .filter(|(_, row)| row.moving)
+        .map(|(index, _)| index)
+        .collect();
+    assert_eq!(moving, vec![motion.tool()], "exactly the visiting tool");
+}
+
+#[test]
+fn no_tool_is_marked_when_every_tool_is_parked() {
+    // A `bulk` step has no visit, so nothing in the block is moving.
+    let mut designer = setup_designer();
+    let node_id = add_evaluated_replayer(&mut designer, &[], 6, 0.2);
+    assert!(last_motion(&designer, node_id).is_none());
+
+    let info = mechanosynth_info(&mut designer, &[], node_id).expect("the node is a mechanosynth");
+    assert!(!info.tools.is_empty(), "the fixture binds two tools");
+    assert!(info.tools.iter().all(|row| !row.moving));
+}

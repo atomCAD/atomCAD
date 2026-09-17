@@ -148,6 +148,23 @@ pub fn to_display_preferences(
             label_scale: preferences
                 .atomic_structure_visualization_preferences
                 .label_scale as f32,
+            show_tool_envelopes: preferences
+                .atomic_structure_visualization_preferences
+                .show_tool_envelopes,
+            tool_envelope_color: [
+                preferences
+                    .atomic_structure_visualization_preferences
+                    .tool_envelope_color
+                    .x as u8,
+                preferences
+                    .atomic_structure_visualization_preferences
+                    .tool_envelope_color
+                    .y as u8,
+                preferences
+                    .atomic_structure_visualization_preferences
+                    .tool_envelope_color
+                    .z as u8,
+            ],
         },
         background: display_prefs::BackgroundPreferences {
             show_axes: preferences.background_preferences.show_axes,

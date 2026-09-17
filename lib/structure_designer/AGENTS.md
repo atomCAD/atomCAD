@@ -417,6 +417,23 @@ own state, render the panel from it, and write once in `onChangeEnd`** — see
 Also close the session in `dispose()`, or a panel torn down mid-gesture leaves
 the kernel's coalescing session open and swallows the next undo entry.
 
+**When the control genuinely has to move the viewport under the hand, coalesce
+to one write per frame — never skip the coalescing.** Some controls are pointless
+committed on release: `mechanosynth`'s `time` row exists to show a tool
+descending, so a value that only lands when the drag ends shows nothing. The
+shape for that case is *not* "write on every tick": `Slider` drops repeats of the
+same discretised value, but a full traversal still crosses its division count, so
+a per-tick write queues one blocking refresh per division for a gesture that can
+afford a handful — measured at ~26 ms of evaluation plus a whole-scene
+tessellation and GPU upload each, which read as a drag crawling seconds behind
+the pointer. Hold the pointer's value in widget state and **render from it**, so
+the thumb tracks the hand at frame rate whatever the kernel costs; queue **one**
+write in a guarded `addPostFrameCallback` carrying the latest value; and write
+once more on release. The frame paints before the thread is handed over, which is
+`runExecuteWithPlacard`'s `endOfFrame` reasoning and the guarded-post-frame idiom
+of `structure_designer_viewport.dart`'s `renderingNeeded`. Reference
+implementation: `node_data/mechanosynth_time_row.dart`.
+
 Evaluating *during* a drag without freezing is `doc/design_background_evaluation.md`
 (Send+Sync-ification, a lock around the global, snapshot eval, a worker thread) —
 five phases, none implemented. Do not attempt it piecemeal from a widget.

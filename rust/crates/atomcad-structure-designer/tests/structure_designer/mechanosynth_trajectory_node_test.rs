@@ -16,14 +16,25 @@
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::io::xyz_loader::load_xyz;
 use atomcad_crystolecule::mechanosynth::{
-    APEX_FRAME_TAG, BuildScript, HighlightTags, OpLibrary, Pose, REACTION, Scene, ToolMotion,
-    apply_tool_pose, load_build_script, load_library, replay_scene_at, sweep_directions,
+    APEX_FRAME_TAG, BuildScript, CAGE_MERIDIANS, HighlightTags, OpLibrary, Pose, REACTION, Scene,
+    ToolMotion, apply_tool_pose, load_build_script, load_library, replay_scene_at,
+    sweep_directions, tool_envelope_cages,
 };
+use atomcad_display::preferences::{
+    AtomicRenderingMethod as DisplayAtomicRenderingMethod,
+    AtomicStructureVisualization as DisplayAtomicVisualization,
+    AtomicStructureVisualizationPreferences as DisplayAtomicPreferences,
+    BackgroundPreferences as DisplayBackgroundPreferences, DisplayPreferences,
+    GeometryVisualizationPreferences, MeshSmoothing,
+};
+use atomcad_renderer::camera::Camera;
+use atomcad_renderer::line_mesh::LineMesh;
 use atomcad_structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
 use atomcad_structure_designer::evaluator::network_result::NetworkResult;
 use atomcad_structure_designer::node_data::NodeData;
+use atomcad_structure_designer::node_network::NodeRef;
 use atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
 use atomcad_structure_designer::nodes::build_script::BuildScriptData;
 use atomcad_structure_designer::nodes::float::FloatData;
@@ -34,10 +45,15 @@ use atomcad_structure_designer::nodes::mechanosynth::{
     default_time,
 };
 use atomcad_structure_designer::nodes::ops_library::OpsLibraryData;
+use atomcad_structure_designer::overlay::{Overlay, OverlayKind};
+use atomcad_structure_designer::scene_tessellator::tessellate_scene_content;
 use atomcad_structure_designer::serialization::node_networks_serialization::{
     load_node_networks_from_file, save_node_networks_to_file,
 };
 use atomcad_structure_designer::structure_designer::StructureDesigner;
+use atomcad_structure_designer::structure_designer_scene::{
+    NodeOutput, NodeSceneData, StructureDesignerScene,
+};
 use atomcad_structure_designer::text_format::serialize_network;
 use atomcad_test_support::{fixture_path, fixture_path_str};
 use glam::f64::{DMat3, DVec2, DVec3};
@@ -718,4 +734,246 @@ fn the_record_type_is_still_the_registered_built_in() {
         vec!["time", "tool_r", "tool_t", "approach", "contact"],
         "the five are appended after `agent`"
     );
+}
+
+// ============================================================================
+// Phase 3 — the envelope cage overlay
+// ============================================================================
+
+/// The overlays the node's evaluation emitted, in pin order of the bindings.
+fn evaluate_overlays(designer: &StructureDesigner, node_id: u64) -> Vec<Overlay> {
+    let registry = &designer.node_type_registry;
+    let network = registry.node_networks.get(NET).unwrap();
+    let evaluator = NetworkEvaluator::new();
+    let mut context = NetworkEvaluationContext::new();
+    let stack = vec![NetworkStackElement::root(network)];
+    evaluator
+        .evaluate_all_outputs(&stack, node_id, registry, false, &mut context)
+        .overlays
+}
+
+/// What the engine says the cages are at `(step, time)` — the equality every
+/// structural assertion in this file is stated against.
+fn engine_cages(step: i32, time: f64) -> Vec<Vec<(DVec3, DVec3)>> {
+    let (scene, motion, _) = engine_at(&[], step, time);
+    tool_envelope_cages(&scene, &library(), &script(), step, motion.as_ref(), time)
+}
+
+#[test]
+fn a_bound_tool_gets_one_envelope_overlay_per_tool() {
+    let mut designer = setup_designer();
+    let node_id = add_replayer(&mut designer, &[], CHAINED_VISIT, 0.3);
+
+    let overlays = evaluate_overlays(&designer, node_id);
+    assert_eq!(overlays.len(), 2, "one cage per bound tool, in pin order");
+    for overlay in &overlays {
+        assert_eq!(overlay.kind, OverlayKind::ToolEnvelope);
+        // CAGE_MERIDIANS slants, the same number of cylinder lines, and three
+        // rings of CAGE_MERIDIANS segments each.
+        assert_eq!(overlay.segments.len(), 5 * CAGE_MERIDIANS);
+    }
+}
+
+#[test]
+fn the_cage_segments_are_the_engines() {
+    let mut designer = setup_designer();
+    let node_id = add_replayer(&mut designer, &[], CHAINED_VISIT, 0.3);
+
+    let overlays = evaluate_overlays(&designer, node_id);
+    let expected = engine_cages(CHAINED_VISIT, 0.3);
+    assert_eq!(overlays.len(), expected.len());
+    for (overlay, cage) in overlays.iter().zip(&expected) {
+        assert_eq!(overlay.segments.len(), cage.len());
+        for ((from, to), (want_from, want_to)) in overlay.segments.iter().zip(cage) {
+            assert!(
+                (*from - *want_from).length() < 1e-9 && (*to - *want_to).length() < 1e-9,
+                "the node poses the cage exactly as the engine does"
+            );
+        }
+    }
+}
+
+#[test]
+fn the_cage_follows_the_flying_tool_and_stands_still_for_a_parked_one() {
+    // `CHAINED_VISIT` is a `habst_tool` visit, so binding 0 moves through the
+    // step and binding 1 (the probe) stays at park the whole way.
+    let mut designer = setup_designer();
+    let node_id = add_replayer(&mut designer, &[], CHAINED_VISIT, 0.0);
+    let early = evaluate_overlays(&designer, node_id);
+
+    with_data::<MechanosynthData, _>(&mut designer, node_id, |data| data.time = REACTION);
+    let at_reaction = evaluate_overlays(&designer, node_id);
+
+    let apex = |overlay: &Overlay| overlay.segments[0].0;
+    assert!(
+        (apex(&early[0]) - apex(&at_reaction[0])).length() > 1.0,
+        "the visiting tool's cage descends with it"
+    );
+    assert_eq!(
+        early[1].segments, at_reaction[1].segments,
+        "the parked tool's cage does not move"
+    );
+}
+
+#[test]
+fn the_cage_sits_on_the_site_at_the_reaction() {
+    // The cone's apex is the tool-side reaction point, and the reaction pose
+    // brings that onto the target's — so at the reaction the apex *is* the
+    // landing's reaction point, which is what makes the cage readable as "this
+    // is the volume that had to be clear".
+    let mut designer = setup_designer();
+    let node_id = add_replayer(&mut designer, &[], CHAINED_VISIT, REACTION);
+
+    let overlays = evaluate_overlays(&designer, node_id);
+    let (_, motion, _) = engine_at(&[], CHAINED_VISIT, REACTION);
+    let motion = motion.expect("a tip step with a bound tool moves");
+    let landing = motion.landing().expect("a tip step lands");
+    assert!(
+        (overlays[motion.tool()].segments[0].0 - landing.reaction_point).length() < 1e-9,
+        "the apex coincides with the reaction point at the reaction"
+    );
+}
+
+#[test]
+fn the_cage_is_emitted_whether_or_not_the_preference_is_on() {
+    // The invariant that keeps a preference out of an evaluation: the node
+    // emits its segments unconditionally, and the tessellator does the asking.
+    // A preferences read inside `eval` would break the memoised evaluator's
+    // independence from them, and toggling the box would then cost a
+    // re-evaluation rather than a re-tessellation.
+    let mut designer = setup_designer();
+    let node_id = add_replayer(&mut designer, &[], CHAINED_VISIT, 0.3);
+    let off = evaluate_overlays(&designer, node_id);
+
+    let mut preferences = designer.preferences.clone();
+    preferences
+        .atomic_structure_visualization_preferences
+        .show_tool_envelopes = true;
+    designer.set_preferences(preferences);
+
+    let on = evaluate_overlays(&designer, node_id);
+    assert_eq!(off.len(), on.len());
+    for (a, b) in off.iter().zip(&on) {
+        assert_eq!(a.segments, b.segments);
+    }
+}
+
+#[test]
+fn a_node_with_no_bound_tool_emits_no_cage() {
+    // Tools unwired is the workpiece-only replay — the way a library is
+    // developed before its instruments exist — and there is no envelope to draw.
+    let mut designer = setup_designer();
+    let base_id = add_molecule_node(&mut designer, molecule("tool_scene.xyz"));
+    let ops_id = designer.add_node("ops_library", DVec2::new(-400.0, -100.0));
+    with_data::<OpsLibraryData, _>(&mut designer, ops_id, |data| {
+        data.file = Some(fixture("tool_ops.json"));
+        data.reload_missing(None);
+    });
+    let node_id = designer.add_node("mechanosynth", DVec2::ZERO);
+    designer.connect_nodes(base_id, 0, node_id, 0);
+    designer.connect_nodes(ops_id, 0, node_id, 1);
+
+    assert!(evaluate_overlays(&designer, node_id).is_empty());
+}
+
+// ============================================================================
+// …and the tessellation seam it reaches the screen through
+// ============================================================================
+
+/// A one-node scene whose node carries one two-segment `ToolEnvelope` overlay.
+fn scene_with_overlay() -> StructureDesignerScene {
+    let mut node_data = NodeSceneData::new(NodeOutput::None);
+    node_data.overlays = vec![Overlay::new(
+        OverlayKind::ToolEnvelope,
+        vec![
+            (DVec3::ZERO, DVec3::new(1.0, 0.0, 0.0)),
+            (DVec3::ZERO, DVec3::new(0.0, 1.0, 0.0)),
+        ],
+    )];
+    let mut scene = StructureDesignerScene::new();
+    scene.node_data.insert(NodeRef::top(0), node_data);
+    scene
+}
+
+fn cage_display_prefs(show: bool, color: [u8; 3]) -> DisplayPreferences {
+    DisplayPreferences {
+        geometry_visualization: GeometryVisualizationPreferences {
+            wireframe_geometry: false,
+            mesh_smoothing: MeshSmoothing::Smooth,
+            display_camera_target: false,
+            wireframe_active_color: [1.0, 1.0, 1.0],
+            wireframe_inactive_color: [0.5, 0.5, 0.5],
+            hide_coplanar_edges: false,
+        },
+        atomic_structure_visualization: DisplayAtomicPreferences {
+            visualization: DisplayAtomicVisualization::BallAndStick,
+            rendering_method: DisplayAtomicRenderingMethod::Impostors,
+            ball_and_stick_cull_depth: None,
+            space_filling_cull_depth: None,
+            scene_transparency_enabled: false,
+            scene_alpha: 1.0,
+            label_scale: 0.7,
+            show_tool_envelopes: show,
+            tool_envelope_color: color,
+        },
+        background: DisplayBackgroundPreferences {
+            show_axes: false,
+            show_grid: false,
+            grid_size: 10,
+            grid_color: [0, 0, 0],
+            grid_strong_color: [0, 0, 0],
+            show_lattice_axes: false,
+            show_lattice_grid: false,
+            lattice_grid_color: [0, 0, 0],
+            lattice_grid_strong_color: [0, 0, 0],
+            drawing_plane_grid_color: [0, 0, 0],
+            drawing_plane_grid_strong_color: [0, 0, 0],
+            unit_cell_wireframe_color: [0, 0, 0],
+        },
+    }
+}
+
+fn cage_camera() -> Camera {
+    Camera {
+        eye: DVec3::new(0.0, -30.0, 10.0),
+        target: DVec3::ZERO,
+        up: DVec3::new(0.0, 0.32, 0.95),
+        aspect: 1.0,
+        fovy: std::f64::consts::PI * 0.15,
+        znear: 1.5,
+        zfar: 2400.0,
+        orthographic: false,
+        ortho_half_height: 10.0,
+        pivot_point: DVec3::ZERO,
+        nav_up: DVec3::Z,
+        nav_up_label: "Z".to_string(),
+    }
+}
+
+/// The wireframe mesh a scene tessellates to — the pass the cage shares with the
+/// unit-cell wireframe and the drawing-plane grid.
+fn wireframe_of(scene: &StructureDesignerScene, preferences: &DisplayPreferences) -> LineMesh {
+    let (_, _, _, wireframe, _, _, _, _, _, _, _) =
+        tessellate_scene_content(scene, &cage_camera(), false, preferences);
+    wireframe
+}
+
+#[test]
+fn the_cage_reaches_the_wireframe_pass_in_the_preference_colour() {
+    let scene = scene_with_overlay();
+    let mesh = wireframe_of(&scene, &cage_display_prefs(true, [255, 160, 0]));
+
+    assert_eq!(mesh.indices.len(), 4, "two segments, two endpoints each");
+    for vertex in &mesh.vertices {
+        assert!((vertex.color[0] - 1.0).abs() < 1e-6);
+        assert!((vertex.color[1] - 160.0 / 255.0).abs() < 1e-6);
+        assert_eq!(vertex.color[2], 0.0);
+    }
+}
+
+#[test]
+fn the_cage_contributes_nothing_with_the_preference_off() {
+    let scene = scene_with_overlay();
+    let mesh = wireframe_of(&scene, &cage_display_prefs(false, [255, 160, 0]));
+    assert!(mesh.vertices.is_empty() && mesh.indices.is_empty());
 }

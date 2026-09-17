@@ -484,6 +484,7 @@ fn test_node_scene_data_interactive_pin_single() {
         construction_plane: None,
         surface_color_distribution: None,
         show_unit_cell_wireframe: false,
+        overlays: Vec::new(),
         selected_node_eval_cache: None,
     };
 
@@ -523,6 +524,7 @@ fn test_node_scene_data_interactive_pin_multi() {
         construction_plane: None,
         surface_color_distribution: None,
         show_unit_cell_wireframe: false,
+        overlays: Vec::new(),
         selected_node_eval_cache: None,
     };
 
@@ -563,6 +565,7 @@ fn test_node_scene_data_interactive_pin_only_pin1() {
         construction_plane: None,
         surface_color_distribution: None,
         show_unit_cell_wireframe: false,
+        overlays: Vec::new(),
         selected_node_eval_cache: None,
     };
 
@@ -586,6 +589,7 @@ fn test_node_scene_data_interactive_pin_empty() {
         construction_plane: None,
         surface_color_distribution: None,
         show_unit_cell_wireframe: false,
+        overlays: Vec::new(),
         selected_node_eval_cache: None,
     };
 

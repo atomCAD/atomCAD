@@ -611,8 +611,9 @@ class NodeDataWidget extends StatelessWidget {
           scopePath: scopePath,
           nodeId: selectedNode.id,
         );
-        // Pins: base = 0, ops = 1, steps = 2, step = 3. A wire on any of the
-        // last three overrides the stored property.
+        // Pins: base = 0, ops = 1, steps = 2, step = 3, feedstocks = 4,
+        // tools = 5, time = 6. A wire on `ops` / `steps` / `step` / `time`
+        // overrides the matching stored property.
         bool wired(int pin) =>
             selectedNode.inputPins.length > pin &&
             selectedNode.inputPins[pin].connected;
@@ -623,6 +624,7 @@ class NodeDataWidget extends StatelessWidget {
           opsConnected: wired(1),
           stepsConnected: wired(2),
           stepConnected: wired(3),
+          timeConnected: wired(6),
           model: model,
         );
       case 'mechanosynth_edit':

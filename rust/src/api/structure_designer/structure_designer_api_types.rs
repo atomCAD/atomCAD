@@ -1634,6 +1634,12 @@ pub struct APIMechanosynthToolRow {
     pub residual: f64,
     /// The tracked state; empty when the type carries none.
     pub state: String,
+    /// Whether this tool is the one **away from park** at the step time the
+    /// last evaluation used — flying, descending, dwelling, ascending or
+    /// hovering. At most one ever is
+    /// (`doc/design_mechanosynth_trajectory.md` §A tool leaves park once per
+    /// run), and the panel marks its row.
+    pub moving: bool,
 }
 
 /// One wired reservoir, as the panel lists it.

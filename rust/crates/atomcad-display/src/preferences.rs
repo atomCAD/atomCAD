@@ -37,6 +37,14 @@ pub struct AtomicStructureVisualizationPreferences {
     /// the atoms they annotate do (see `doc/design_atom_labels.md` §Label size).
     /// Clamped at the use site, mirroring `scene_alpha`.
     pub label_scale: f32,
+    /// Draw the wireframe cage of every bound tool's collision envelope, for
+    /// every displayed `mechanosynth` node (`doc/design_mechanosynth_trajectory.md`
+    /// §The envelope cage). The segments are emitted by the node's evaluation
+    /// either way; this decides only whether the tessellator draws them, which
+    /// is what keeps a preference out of an evaluation.
+    pub show_tool_envelopes: bool,
+    /// The cage's line colour, RGB 0-255.
+    pub tool_envelope_color: [u8; 3],
 }
 
 #[derive(Clone, Debug)]

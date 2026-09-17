@@ -41,6 +41,8 @@ fn prefs() -> AtomicStructureVisualizationPreferences {
         scene_transparency_enabled: false,
         scene_alpha: 1.0,
         label_scale: DEFAULT_LABEL_SCALE,
+        show_tool_envelopes: false,
+        tool_envelope_color: [0, 0, 0],
     }
 }
 
@@ -226,6 +228,8 @@ fn label_scale_scales_the_quads() {
     let extent = |scale: f32| -> f32 {
         let p = AtomicStructureVisualizationPreferences {
             label_scale: scale,
+            show_tool_envelopes: false,
+            tool_envelope_color: [0, 0, 0],
             ..prefs()
         };
         let mesh = labels(&s, &p);
@@ -257,6 +261,8 @@ fn nonpositive_label_scale_is_clamped_to_a_visible_size() {
     for scale in [0.0, -3.0] {
         let p = AtomicStructureVisualizationPreferences {
             label_scale: scale,
+            show_tool_envelopes: false,
+            tool_envelope_color: [0, 0, 0],
             ..prefs()
         };
         let mesh = labels(&s, &p);

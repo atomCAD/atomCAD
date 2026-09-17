@@ -258,3 +258,63 @@ fn refine(
     }
     Approach::new(lower, lower_clearance)
 }
+
+// ===========================================================================
+// The cage: a picture of the envelope
+// ===========================================================================
+
+/// How many meridians the wireframe cage draws, and how many segments each of
+/// its three rings has.
+pub const CAGE_MERIDIANS: usize = 16;
+
+/// How much of the cylinder the cage draws beyond the rim, Å. The envelope is
+/// infinite; the cage is a picture of it, and a picture has to stop.
+pub const CAGE_CYLINDER_LENGTH: f64 = 12.0;
+
+impl Envelope {
+    /// The wireframe cage of this envelope in the frame `apex` and `axis` are
+    /// given in: [`CAGE_MERIDIANS`] lines from the apex up the slant to the rim
+    /// and on to the top of the drawn cylinder, plus three rings — the rim, the
+    /// cylinder's midpoint and its top.
+    ///
+    /// Pure geometry, like everything else here: the caller poses the segments
+    /// with whatever pose it draws the tool's atoms at, so the cage descends
+    /// with the tool and sits on the site at the reaction.
+    pub fn cage(&self, apex: DVec3, axis: DVec3) -> Vec<(DVec3, DVec3)> {
+        let axis = axis.normalize_or_zero();
+        if axis == DVec3::ZERO {
+            return Vec::new();
+        }
+        let (u, v) = axis.any_orthonormal_pair();
+
+        let rim_axial = self.rim_axial();
+        let top_axial = rim_axial + CAGE_CYLINDER_LENGTH;
+        let middle_axial = rim_axial + CAGE_CYLINDER_LENGTH / 2.0;
+
+        // One point per meridian on each of the three rings.
+        let ring = |axial: f64| -> Vec<DVec3> {
+            (0..CAGE_MERIDIANS)
+                .map(|index| {
+                    let angle = std::f64::consts::TAU * index as f64 / CAGE_MERIDIANS as f64;
+                    apex + axis * axial + (u * angle.cos() + v * angle.sin()) * self.radius
+                })
+                .collect()
+        };
+        let rim = ring(rim_axial);
+        let middle = ring(middle_axial);
+        let top = ring(top_axial);
+
+        let mut segments = Vec::with_capacity(5 * CAGE_MERIDIANS);
+        for index in 0..CAGE_MERIDIANS {
+            // The slant, then the cylinder wall above it.
+            segments.push((apex, rim[index]));
+            segments.push((rim[index], top[index]));
+        }
+        for circle in [&rim, &middle, &top] {
+            for index in 0..CAGE_MERIDIANS {
+                segments.push((circle[index], circle[(index + 1) % CAGE_MERIDIANS]));
+            }
+        }
+        segments
+    }
+}

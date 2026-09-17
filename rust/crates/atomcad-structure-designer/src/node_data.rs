@@ -6,6 +6,7 @@ use crate::evaluator::network_result::NetworkResult;
 use crate::node_network_gadget::NodeNetworkGadget;
 use crate::node_type::NodeType;
 use crate::node_type_registry::NodeTypeRegistry;
+use crate::overlay::Overlay;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
@@ -49,6 +50,15 @@ pub struct EvalOutput {
     /// like "(5 elements)" / "(stopped at limit 100)" in place of the raw
     /// array dump.
     pub pin_subtitles: HashMap<usize, String>,
+    /// Line work this node wants drawn **about** its output — a tool's
+    /// collision envelope, and whatever the next [`OverlayKind`] is. The scene
+    /// generator copies it onto `NodeSceneData` and the tessellator draws each
+    /// kind iff that kind's preference is on, so a node emits its segments
+    /// unconditionally and no preference ever reaches an evaluation
+    /// (`crate::overlay`).
+    ///
+    /// [`OverlayKind`]: crate::overlay::OverlayKind
+    pub overlays: Vec<Overlay>,
 }
 
 impl EvalOutput {
@@ -59,6 +69,7 @@ impl EvalOutput {
             display_results: HashMap::new(),
             unit_cell_override: None,
             pin_subtitles: HashMap::new(),
+            overlays: Vec::new(),
         }
     }
 
@@ -69,6 +80,7 @@ impl EvalOutput {
             display_results: HashMap::new(),
             unit_cell_override: None,
             pin_subtitles: HashMap::new(),
+            overlays: Vec::new(),
         }
     }
 
@@ -147,9 +159,16 @@ impl MemorySizeEstimator for EvalOutput {
             .map(|s| std::mem::size_of::<usize>() + std::mem::size_of::<String>() + s.capacity())
             .sum::<usize>();
 
+        let overlays_size = self.overlays.capacity() * std::mem::size_of::<Overlay>()
+            + self.overlays.iter().map(Overlay::heap_bytes).sum::<usize>();
+
         // `unit_cell_override` is an inline `Option<UnitCellStruct>` — plain
         // data, already covered by `size_of::<EvalOutput>()`.
-        std::mem::size_of::<EvalOutput>() + results_size + display_results_size + pin_subtitles_size
+        std::mem::size_of::<EvalOutput>()
+            + results_size
+            + display_results_size
+            + pin_subtitles_size
+            + overlays_size
     }
 }
 

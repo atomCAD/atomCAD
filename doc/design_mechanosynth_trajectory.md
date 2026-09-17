@@ -35,7 +35,11 @@ repository it describes: the text format has **no** omit-at-the-default rule and
 `ToolMotion::leg_at` join the presentation layer (§Presentation); and the
 round-trip corpus entry Phase 2 asks for could not be added until `import_xyz`
 was made total, which is where that same rule had already been broken
-(§Testing). Phases 1 and 2 are implemented; Phases 3 and 4 are not.
+(§Testing). A seventh review, during Phase 3, corrected the panel's write rule:
+the time slider writes during the drag as this document says, but **at most once
+per frame** rather than on each tick, which is the difference between a drag that
+follows the hand and one that crawls seconds behind it (§The `mechanosynth`
+node). Phases 1, 2 and 3 are implemented; Phase 4 is not.
 
 Builds on `doc/design_mechanosynth_tools.md` (milestone 1: what a build does
 to every molecule it involves, all four phases implemented 2026-09-15) and is
@@ -1017,9 +1021,21 @@ thing to keep, keyed on the inputs' fingerprint, and it belongs beside
 
 **Undo.** `time` is node data; a slider drag is bracketed by the existing
 `begin_node_data_drag` / `end_node_data_drag` so Ctrl-Z undoes the drag, not
-its ticks (`isosurface`'s precedent). Unlike `isosurface`, each tick **does**
-write the kernel — the viewport moving under the hand is the feature — which is
-`xray`'s precedent.
+its ticks (`isosurface`'s precedent). Unlike `isosurface`, the drag **does**
+write the kernel before it ends — the viewport moving under the hand is the
+feature — but **at most once per frame**, which the first draft of this section
+got wrong by saying "each tick". A write is `frb(sync)`: an evaluation, a
+tessellation of the whole scene and a GPU upload, on the UI thread. `Slider`
+already drops a repeat of the same discretised value, but a full traversal still
+crosses a hundred divisions, and writing each one as the pointer handler delivers
+it queues a hundred blocking refreshes for a gesture that can afford a handful —
+measured at 26 ms of evaluation alone on the silicon demo, plus the tessellation,
+which made the drag crawl seconds behind the pointer. The panel therefore holds
+the pointer's value in the widget's own state and renders the slider from it, so
+the thumb tracks the hand at frame rate whatever the kernel costs, and queues one
+write for the end of the frame carrying the latest value, with a trailing write
+on release. `xray`'s per-tick alpha slider is not a precedent for this; it is a
+precedent for a *cheap* node.
 
 ## API and panel
 

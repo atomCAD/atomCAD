@@ -1,6 +1,7 @@
 use crate::eval_errors::ErrorOrigin;
 use crate::evaluator::network_result::Alignment;
 use crate::node_network::NodeRef;
+use crate::overlay::Overlay;
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::drawing_plane::DrawingPlane;
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
@@ -128,6 +129,14 @@ pub struct NodeSceneData {
     /// Whether to render a unit cell wireframe for this node (motif_edit only)
     pub show_unit_cell_wireframe: bool,
 
+    /// Line work this node's evaluation asked to have drawn **about** its
+    /// output — a `mechanosynth` tool's collision envelope, and whatever the
+    /// next [`OverlayKind`](crate::overlay::OverlayKind) is. Copied verbatim off
+    /// `EvalOutput::overlays`; the tessellator draws each kind iff that kind's
+    /// preference is on, which is what keeps a preference out of the
+    /// evaluation.
+    pub overlays: Vec<Overlay>,
+
     /// Eval cache for this node (used for gadget creation if this is the selected node)
     /// Contains node-specific data needed to reconstruct gadgets across refresh cycles
     pub selected_node_eval_cache: Option<Box<dyn Any>>,
@@ -147,6 +156,7 @@ impl NodeSceneData {
             construction_plane: None,
             surface_color_distribution: None,
             show_unit_cell_wireframe: false,
+            overlays: Vec::new(),
             selected_node_eval_cache: None,
         }
     }
@@ -518,6 +528,10 @@ impl MemorySizeEstimator for NodeSceneData {
             .map(|d| d.estimate_memory_bytes())
             .unwrap_or(0);
 
+        // Overlay segments: a few hundred floats per bound tool.
+        let overlays_size = self.overlays.capacity() * std::mem::size_of::<Overlay>()
+            + self.overlays.iter().map(Overlay::heap_bytes).sum::<usize>();
+
         // selected_node_eval_cache is a Box<dyn Any> - we can't know its size
         // Estimate conservatively as the size of the Box pointer
         let eval_cache_size = if self.selected_node_eval_cache.is_some() {
@@ -549,6 +563,7 @@ impl MemorySizeEstimator for NodeSceneData {
             + node_error_origins_size
             + unit_cell_size
             + surface_distribution_size
+            + overlays_size
             + eval_cache_size
     }
 }

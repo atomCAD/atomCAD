@@ -191,6 +191,12 @@ class MechanosynthToolsBlock extends StatelessWidget {
   /// step. The residual is the evidence that the four tagged atoms really are
   /// the frame the library describes: a tool whose legs were tagged on the
   /// wrong atoms binds with a residual nobody would call a fit.
+  ///
+  /// The row of the tool that is **away from park** at the current step time
+  /// carries a marker in place of its index — at most one ever is
+  /// (`doc/design_mechanosynth_trajectory.md` §A tool leaves park once per
+  /// run), so the marker names the one thing moving in the viewport without a
+  /// legend.
   Widget _buildToolRow(
       BuildContext context, ColorScheme scheme, APIMechanosynthToolRow tool) {
     return Padding(
@@ -200,9 +206,14 @@ class MechanosynthToolsBlock extends StatelessWidget {
         children: [
           SizedBox(
             width: 20.0,
-            child: Text('${tool.instance}',
-                style:
-                    TextStyle(fontSize: 11.0, color: scheme.onSurfaceVariant)),
+            child: tool.moving
+                ? Icon(Icons.flight_takeoff,
+                    key: Key('mechanosynth_tool_moving_${tool.instance}'),
+                    size: 13.0,
+                    color: scheme.primary)
+                : Text('${tool.instance}',
+                    style: TextStyle(
+                        fontSize: 11.0, color: scheme.onSurfaceVariant)),
           ),
           Expanded(
             child: Text(

@@ -209,6 +209,8 @@ fn bench_visualization_preferences() -> AtomicStructureVisualizationPreferences 
         scene_transparency_enabled: false,
         scene_alpha: 1.0,
         label_scale: 0.0,
+        show_tool_envelopes: false,
+        tool_envelope_color: [0, 0, 0],
     }
 }
 

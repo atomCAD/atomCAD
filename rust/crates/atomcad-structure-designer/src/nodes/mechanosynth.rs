@@ -54,12 +54,14 @@ use crate::node_type::NodeTypeCategory;
 use crate::node_type::{NodeType, OutputPinDefinition, Parameter};
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::nodes::build_step::{BUILD_STEP_RECORD, steps_from_array};
+use crate::overlay::{Overlay, OverlayKind};
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::mechanosynth::{
     BuildScript, HighlightTags, MechanosynthError, NO_LAYER, NO_SITE, OpLibrary, Pose, Scene,
     ToolMotion, apply_tool_pose, load_build_script, load_library, replay_scene_at, steps_applied,
+    tool_envelope_cages,
 };
 use atomcad_util::path_utils::{get_parent_directory, resolve_path, try_make_relative};
 use glam::DMat3;
@@ -599,9 +601,21 @@ impl NodeData for MechanosynthData {
                     pose.as_ref(),
                     motion.as_ref(),
                 );
+                // The envelope cage, one overlay per bound tool. Emitted
+                // unconditionally: the preference decides whether the
+                // tessellator draws it, never whether the node computes it, so
+                // toggling the switch costs no evaluation
+                // (`doc/design_mechanosynth_trajectory.md` §The envelope cage).
+                let overlays: Vec<Overlay> =
+                    tool_envelope_cages(&scene, &library, &script, step, motion.as_ref(), time)
+                        .into_iter()
+                        .map(|segments| Overlay::new(OverlayKind::ToolEnvelope, segments))
+                        .collect();
                 self.record_last_scene(Some(scene));
                 self.record_last_motion(motion);
-                EvalOutput::multi(vec![wrapper, record, scene_wrapper])
+                let mut output = EvalOutput::multi(vec![wrapper, record, scene_wrapper]);
+                output.overlays = overlays;
+                output
             }
             Err(failure) => {
                 self.record_last_scene(None);

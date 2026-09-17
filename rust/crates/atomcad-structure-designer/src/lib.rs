@@ -56,6 +56,7 @@ pub mod node_networks_import_manager;
 pub mod node_type;
 pub mod node_type_registry;
 pub mod nodes;
+pub mod overlay;
 pub mod preferences;
 pub mod promote_to_parameter;
 pub mod recent_files;

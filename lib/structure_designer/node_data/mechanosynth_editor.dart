@@ -6,6 +6,7 @@ import 'package:flutter_cad/inputs/string_input.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/structure_designer/node_data/mechanosynth_scrubber.dart';
 import 'package:flutter_cad/structure_designer/node_data/mechanosynth_status.dart';
+import 'package:flutter_cad/structure_designer/node_data/mechanosynth_time_row.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
@@ -54,6 +55,7 @@ class MechanosynthEditor extends StatefulWidget {
   final bool opsConnected;
   final bool stepsConnected;
   final bool stepConnected;
+  final bool timeConnected;
 
   final StructureDesignerModel model;
 
@@ -65,6 +67,7 @@ class MechanosynthEditor extends StatefulWidget {
     required this.opsConnected,
     required this.stepsConnected,
     required this.stepConnected,
+    required this.timeConnected,
     required this.model,
   });
 
@@ -88,6 +91,7 @@ class _MechanosynthEditorState extends State<MechanosynthEditor> {
     Object? opsFile = _unset,
     Object? buildFile = _unset,
     int? step,
+    double? time,
   }) {
     final current = widget.data;
     if (current == null) return;
@@ -100,9 +104,7 @@ class _MechanosynthEditorState extends State<MechanosynthEditor> {
             ? current.buildFile
             : buildFile as String?,
         step: step ?? current.step,
-        // The time row is Phase 3's; until then the property is carried
-        // through unchanged so a write of another field cannot reset it.
-        time: current.time,
+        time: time ?? current.time,
         // Read-only on the kernel side; the setter ignores what is sent.
         hasLegacyFiles: current.hasLegacyFiles,
       ),
@@ -377,6 +379,20 @@ class _MechanosynthEditorState extends State<MechanosynthEditor> {
           ),
           if (widget.stepConnected)
             _buildWiredHint('The wired pin supplies the step number.'),
+          // Where inside the selected step the scene is taken. The row reads
+          // the time the *last evaluation used* — the wired pin when one is
+          // connected — so the slider never shows a number the outputs were
+          // not computed at.
+          MechanosynthTimeRow(
+            value: info?.time ?? data.time,
+            enabled: !widget.timeConnected,
+            onChanged: (time) => _update(time: time),
+            onDragStart: () => widget.model.beginNodeDataDrag(widget.nodeId),
+            onDragEnd: widget.model.endNodeDataDrag,
+          ),
+          if (widget.timeConnected)
+            _buildWiredHint('The wired pin supplies the step time.'),
+          MechanosynthMotionLines(info: info),
           const SizedBox(height: 4),
           _buildCurrentStep(context),
           _buildMetadataChips(context),

@@ -60,6 +60,10 @@ class PreferencesKeys {
       Key('pref_scene_transparency_checkbox');
   static const Key sceneAlphaInput = Key('pref_scene_alpha_input');
   static const Key labelScaleInput = Key('pref_label_scale_input');
+  static const Key showToolEnvelopesCheckbox =
+      Key('pref_show_tool_envelopes_checkbox');
+  static const Key toolEnvelopeColorInput =
+      Key('pref_tool_envelope_color_input');
 
   // Other settings
   static const Key displayCameraPivotCheckbox =
@@ -991,6 +995,69 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                             'World-space height of the text drawn by an '
                             'apply_style rule\'s label field — labels scale '
                             'with zoom, like the atoms they name.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+
+                          const SizedBox(height: AppSpacing.medium),
+                          const Divider(),
+                          const SizedBox(height: AppSpacing.small),
+
+                          // The mechanosynthesis tool envelope cage. A way of
+                          // looking at every build rather than a property of
+                          // one, which is why it lives here and not on the
+                          // node; off by default.
+                          Row(
+                            children: [
+                              Checkbox(
+                                key: PreferencesKeys.showToolEnvelopesCheckbox,
+                                value: _preferences
+                                    .atomicStructureVisualizationPreferences
+                                    .showToolEnvelopes,
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    setState(() {
+                                      _preferences
+                                          .atomicStructureVisualizationPreferences
+                                          .showToolEnvelopes = value;
+                                    });
+                                    _applyPreferences();
+                                  }
+                                },
+                              ),
+                              const SizedBox(width: 8),
+                              const Expanded(
+                                child: Text('Show tool collision envelopes'),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: AppSpacing.small),
+                          IVec3Input(
+                            key: PreferencesKeys.toolEnvelopeColorInput,
+                            label: 'Tool envelope color (RGB)',
+                            value: _preferences
+                                .atomicStructureVisualizationPreferences
+                                .toolEnvelopeColor,
+                            onChanged: (value) {
+                              setState(() {
+                                _preferences
+                                    .atomicStructureVisualizationPreferences
+                                    .toolEnvelopeColor = value;
+                              });
+                              _applyPreferences();
+                            },
+                            minimumValue: const APIIVec3(x: 0, y: 0, z: 0),
+                            maximumValue:
+                                const APIIVec3(x: 255, y: 255, z: 255),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Draws the cone-into-cylinder keep-out volume of '
+                            'every bound mechanosynth tool, following it as it '
+                            'descends on a site. What a tilted approach or a '
+                            'blocked site is explained by.',
                             style: TextStyle(
                               fontSize: 12,
                               color: Colors.grey[600],

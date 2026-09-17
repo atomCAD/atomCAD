@@ -289,7 +289,10 @@ pub fn mechanosynth_edit_data(
         tool_state: data.placement.state().as_str().to_string(),
         anchor_atom_id: data.placement.anchor,
         chapters,
-        tools: tool_rows(scene.as_ref()),
+        // No motion: the editor keeps its cursor and gets no step time
+        // (`doc/design_mechanosynth_trajectory.md` §`mechanosynth_edit` keeps
+        // its cursor), so no tool of its block replay is ever away from park.
+        tools: tool_rows(scene.as_ref(), None),
         feedstocks: feedstock_rows(scene.as_ref()),
         last_good_atom_count,
     })

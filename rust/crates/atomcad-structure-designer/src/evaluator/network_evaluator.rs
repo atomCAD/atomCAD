@@ -1213,6 +1213,11 @@ impl NetworkEvaluator {
         // (motif_edit sets unit_cell_override; other nodes don't)
         let show_unit_cell_wireframe = eval_output.unit_cell_override.is_some();
 
+        // Overlays travel verbatim: a node emits them whether or not the
+        // preference for their kind is on, and the tessellator does the asking
+        // (`crate::overlay`).
+        let overlays = eval_output.overlays.clone();
+
         // Leave the context's scope path exactly as we found it (the inner
         // evaluation brackets its own pushes; these are ours).
         for _ in 0..pushed_scopes {
@@ -1233,6 +1238,7 @@ impl NetworkEvaluator {
             construction_plane,
             surface_color_distribution,
             show_unit_cell_wireframe,
+            overlays,
             selected_node_eval_cache: context.selected_node_eval_cache.take(),
         }
     }

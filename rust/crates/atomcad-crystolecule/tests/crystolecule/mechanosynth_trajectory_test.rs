@@ -14,12 +14,13 @@
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::io::xyz_loader::load_xyz;
 use atomcad_crystolecule::mechanosynth::{
-    APEX_FRAME_TAG, BuildScript, CLASH_BLOCK, CLEAR_MARGIN, Envelope, HighlightTags, Landing, Leg,
-    OpLibrary, Participant, Pose, REACTION, REACTION_DEPARTURE, REACTION_LANDING, STANDOFF_HEIGHT,
-    SWEEP_DIRECTIONS, Scene, Step, ToolMotion, apply_step_in_scene, apply_tool_pose,
-    approach_direction, arriving_pose, build_scene, load_build_script, load_library,
-    match_step_in_scene, obstacles_for, plan_landing, reaction_pose, replay_scene, replay_scene_at,
-    replay_steps, resolve_tolerance, runs, sweep_directions,
+    APEX_FRAME_TAG, BuildScript, CAGE_MERIDIANS, CLASH_BLOCK, CLEAR_MARGIN, Envelope,
+    HighlightTags, Landing, Leg, OpLibrary, Participant, Pose, REACTION, REACTION_DEPARTURE,
+    REACTION_LANDING, STANDOFF_HEIGHT, SWEEP_DIRECTIONS, Scene, Step, ToolMotion,
+    apply_step_in_scene, apply_tool_pose, approach_direction, arriving_pose, build_scene,
+    cage_apex, load_build_script, load_library, match_step_in_scene, obstacles_for, plan_landing,
+    reaction_pose, replay_scene, replay_scene_at, replay_steps, resolve_tolerance, runs,
+    sweep_directions, tool_envelope_cages,
 };
 use atomcad_test_support::fixture_path;
 use glam::DVec3;
@@ -1404,4 +1405,148 @@ fn the_leg_and_the_pose_agree_about_where_the_tool_is() {
         (motion.pose_at(first_descent).t - visit.standoff.t).length() < 0.2,
         "the descent begins at the standoff"
     );
+}
+
+// ============================================================================
+// Phase 3 — the cage, a picture of the envelope
+// ============================================================================
+
+#[test]
+fn the_cage_draws_its_meridians_and_three_rings() {
+    let envelope = Envelope {
+        half_angle: 30f64.to_radians(),
+        radius: 4.0,
+    };
+    let cage = envelope.cage(DVec3::ZERO, DVec3::Z);
+    assert_eq!(
+        cage.len(),
+        5 * CAGE_MERIDIANS,
+        "a slant and a wall line per meridian, plus three rings"
+    );
+
+    // Every meridian starts at the apex and every ring closes on itself.
+    let apex_segments = cage.iter().filter(|(from, _)| *from == DVec3::ZERO).count();
+    assert_eq!(apex_segments, CAGE_MERIDIANS);
+}
+
+#[test]
+fn the_cage_lies_on_the_envelopes_surface() {
+    // The cage is a *picture* of the envelope, so every vertex it draws must be
+    // a point of the surface: the rim ring and the cylinder rings all sit at
+    // `rho = radius`, and the apex at the origin of the axis.
+    let envelope = Envelope {
+        half_angle: 55f64.to_radians(),
+        radius: 2.5,
+    };
+    let apex = DVec3::new(1.0, -2.0, 3.0);
+    let axis = DVec3::new(0.0, 0.0, -1.0);
+
+    for (from, to) in envelope.cage(apex, axis) {
+        for point in [from, to] {
+            let relative = point - apex;
+            let s = relative.dot(axis);
+            let rho = (relative - s * axis).length();
+            let on_apex = relative.length() < 1e-9;
+            assert!(
+                on_apex || envelope.gap(s, rho).abs() < 1e-9,
+                "cage vertices are on the surface, not inside or outside it"
+            );
+        }
+    }
+}
+
+#[test]
+fn the_cage_follows_the_axis_sign() {
+    // The envelope opens toward the legs, so a tool whose legs are at negative
+    // `z` gets a cage that opens that way too — the fixture tools' shape.
+    let envelope = Envelope {
+        half_angle: 30f64.to_radians(),
+        radius: 4.0,
+    };
+    for axis in [DVec3::Z, -DVec3::Z] {
+        let cage = envelope.cage(DVec3::ZERO, axis);
+        let furthest = cage
+            .iter()
+            .flat_map(|(from, to)| [*from, *to])
+            .map(|point| point.dot(axis))
+            .fold(f64::NEG_INFINITY, f64::max);
+        assert!(furthest > 0.0, "the cage extends along +axis, never behind");
+    }
+}
+
+#[test]
+fn a_degenerate_axis_draws_nothing() {
+    let envelope = Envelope {
+        half_angle: 30f64.to_radians(),
+        radius: 4.0,
+    };
+    assert!(envelope.cage(DVec3::ZERO, DVec3::ZERO).is_empty());
+}
+
+#[test]
+fn the_cage_apex_is_the_nearest_visits_tool_side_reaction_point() {
+    // `trajectory_build.json`: steps 1, 3 and 4 are `habst_tool` visits, 5 is
+    // the probe's, 2 is a settle and 6 is a bulk step.
+    let library = library("tool_ops.json");
+    let script = script("trajectory_build.json");
+
+    // The selected step is this tool's: its own reaction point.
+    let at_own_step = cage_apex(&library, &script, 1, "habst_tool");
+    let reaction = library
+        .get(&script.steps[0].op)
+        .and_then(|op| op.reaction)
+        .expect("step 1 is a tip operation with a reaction block");
+    assert_eq!(at_own_step, reaction.tool);
+
+    // The selected step is somebody else's — the settle at step 2 — so the
+    // tool's *next* visit answers.
+    let next = library
+        .get(&script.steps[2].op)
+        .and_then(|op| op.reaction)
+        .expect("step 3 is a tip operation");
+    assert_eq!(cage_apex(&library, &script, 2, "habst_tool"), next.tool);
+
+    // Past the tool's last visit, its last one answers rather than the origin —
+    // a tool whose work is done still shows its cage where it last reached.
+    let last = library
+        .get(&script.steps[3].op)
+        .and_then(|op| op.reaction)
+        .expect("step 4 is a tip operation");
+    assert_eq!(
+        cage_apex(&library, &script, script.steps.len(), "habst_tool"),
+        last.tool
+    );
+
+    // A tool no step uses has nothing to anchor to.
+    assert_eq!(cage_apex(&library, &script, 1, "no_such_tool"), DVec3::ZERO);
+}
+
+#[test]
+fn a_cage_is_posed_with_the_tool_it_belongs_to() {
+    // The cage is drawn with the same pose the tool's atoms get — the binding's
+    // for a parked tool, the motion's for the one that flies — which is what
+    // makes it descend with the tool and sit on the site at the reaction.
+    let (scene, motion) = at(1, REACTION, &[]);
+    let library = library("tool_ops.json");
+    let script = script("trajectory_build.json");
+    let cages = tool_envelope_cages(&scene, &library, &script, 1, motion.as_ref(), REACTION);
+    assert_eq!(cages.len(), scene.bindings.len());
+
+    let motion = motion.expect("step 1 is a tip step with a bound tool");
+    let landing = motion.landing().expect("a tip step lands");
+    let apex = cages[motion.tool()][0].0;
+    assert!(
+        (apex - landing.reaction_point).length() < 1e-9,
+        "at the reaction the cone's apex is the reaction point itself"
+    );
+
+    // The tool that did not move is drawn at its binding: its cage's apex is
+    // that pose applied to the local anchor.
+    let parked = (0..scene.bindings.len())
+        .find(|index| *index != motion.tool())
+        .expect("the fixture binds two tools");
+    let binding = &scene.bindings[parked];
+    let local = cage_apex(&library, &script, 1, &binding.tool_type);
+    let expected = binding.pose.r * local + binding.pose.t;
+    assert!((cages[parked][0].0 - expected).length() < 1e-9);
 }

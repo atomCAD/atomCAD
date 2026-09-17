@@ -19149,13 +19149,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIMechanosynthToolRow dco_decode_api_mechanosynth_tool_row(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
     return APIMechanosynthToolRow(
       instance: dco_decode_i_32(arr[0]),
       toolType: dco_decode_String(arr[1]),
       residual: dco_decode_f_64(arr[2]),
       state: dco_decode_String(arr[3]),
+      moving: dco_decode_bool(arr[4]),
     );
   }
 
@@ -20273,8 +20274,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       dco_decode_atomic_structure_visualization_preferences(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 7)
-      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
     return AtomicStructureVisualizationPreferences(
       visualization: dco_decode_atomic_structure_visualization(arr[0]),
       renderingMethod: dco_decode_atomic_rendering_method(arr[1]),
@@ -20283,6 +20284,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       sceneTransparencyEnabled: dco_decode_bool(arr[4]),
       sceneAlpha: dco_decode_f_64(arr[5]),
       labelScale: dco_decode_f_64(arr[6]),
+      showToolEnvelopes: dco_decode_bool(arr[7]),
+      toolEnvelopeColor: dco_decode_apii_vec_3(arr[8]),
     );
   }
 
@@ -24960,11 +24963,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_toolType = sse_decode_String(deserializer);
     var var_residual = sse_decode_f_64(deserializer);
     var var_state = sse_decode_String(deserializer);
+    var var_moving = sse_decode_bool(deserializer);
     return APIMechanosynthToolRow(
         instance: var_instance,
         toolType: var_toolType,
         residual: var_residual,
-        state: var_state);
+        state: var_state,
+        moving: var_moving);
   }
 
   @protected
@@ -26047,6 +26052,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_sceneTransparencyEnabled = sse_decode_bool(deserializer);
     var var_sceneAlpha = sse_decode_f_64(deserializer);
     var var_labelScale = sse_decode_f_64(deserializer);
+    var var_showToolEnvelopes = sse_decode_bool(deserializer);
+    var var_toolEnvelopeColor = sse_decode_apii_vec_3(deserializer);
     return AtomicStructureVisualizationPreferences(
         visualization: var_visualization,
         renderingMethod: var_renderingMethod,
@@ -26054,7 +26061,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         spaceFillingCullDepth: var_spaceFillingCullDepth,
         sceneTransparencyEnabled: var_sceneTransparencyEnabled,
         sceneAlpha: var_sceneAlpha,
-        labelScale: var_labelScale);
+        labelScale: var_labelScale,
+        showToolEnvelopes: var_showToolEnvelopes,
+        toolEnvelopeColor: var_toolEnvelopeColor);
   }
 
   @protected
@@ -31365,6 +31374,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.toolType, serializer);
     sse_encode_f_64(self.residual, serializer);
     sse_encode_String(self.state, serializer);
+    sse_encode_bool(self.moving, serializer);
   }
 
   @protected
@@ -32166,6 +32176,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.sceneTransparencyEnabled, serializer);
     sse_encode_f_64(self.sceneAlpha, serializer);
     sse_encode_f_64(self.labelScale, serializer);
+    sse_encode_bool(self.showToolEnvelopes, serializer);
+    sse_encode_apii_vec_3(self.toolEnvelopeColor, serializer);
   }
 
   @protected

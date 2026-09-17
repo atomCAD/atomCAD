@@ -87,6 +87,24 @@ fn test_preferences_missing_fields_use_defaults() {
         loaded.layout_preferences.layout_algorithm,
         LayoutAlgorithmPreference::Sugiyama
     );
+    // …including the two envelope-cage fields, so a `preferences.json` written
+    // before they existed loads with the cage off and the default colour rather
+    // than failing.
+    assert!(
+        !loaded
+            .atomic_structure_visualization_preferences
+            .show_tool_envelopes
+    );
+    assert_eq!(
+        loaded
+            .atomic_structure_visualization_preferences
+            .tool_envelope_color,
+        PrefColor {
+            x: 255,
+            y: 160,
+            z: 0
+        }
+    );
 }
 
 /// Test backward compatibility: loading JSON with extra fields should ignore them.
@@ -303,6 +321,24 @@ fn test_default_values_match_documentation() {
         prefs.atomic_structure_visualization_preferences.label_scale,
         0.7
     );
+    // The tool envelope cage is off by default: it is a way of looking at every
+    // build rather than a property of one
+    // (`doc/design_mechanosynth_trajectory.md` §The envelope cage).
+    assert!(
+        !prefs
+            .atomic_structure_visualization_preferences
+            .show_tool_envelopes
+    );
+    assert_eq!(
+        prefs
+            .atomic_structure_visualization_preferences
+            .tool_envelope_color,
+        PrefColor {
+            x: 255,
+            y: 160,
+            z: 0
+        }
+    );
 
     // Background defaults
     assert_eq!(
@@ -377,6 +413,12 @@ fn test_non_default_values_roundtrip() {
             scene_transparency_enabled: true,
             scene_alpha: 0.35,
             label_scale: 1.25,
+            show_tool_envelopes: true,
+            tool_envelope_color: PrefColor {
+                x: 12,
+                y: 34,
+                z: 56,
+            },
         },
         background_preferences: BackgroundPreferences {
             background_color: PrefColor {
@@ -577,6 +619,21 @@ fn test_non_default_values_roundtrip() {
             .atomic_structure_visualization_preferences
             .label_scale,
         1.25
+    );
+    assert!(
+        loaded
+            .atomic_structure_visualization_preferences
+            .show_tool_envelopes
+    );
+    assert_eq!(
+        loaded
+            .atomic_structure_visualization_preferences
+            .tool_envelope_color,
+        PrefColor {
+            x: 12,
+            y: 34,
+            z: 56
+        }
     );
 
     assert_eq!(

@@ -324,6 +324,17 @@ pub struct AtomicStructureVisualizationPreferences {
     #[frb(non_final)]
     #[serde(default = "default_label_scale")]
     pub label_scale: f64,
+    /// Draw the wireframe cage of every bound tool's collision envelope, for
+    /// every displayed `mechanosynth` node. Off by default: it is a way of
+    /// looking at every build rather than a property of one. See
+    /// `doc/design_mechanosynth_trajectory.md` §The envelope cage.
+    #[frb(non_final)]
+    #[serde(default)]
+    pub show_tool_envelopes: bool,
+    /// The cage's line colour.
+    #[frb(non_final)]
+    #[serde(default = "default_tool_envelope_color")]
+    pub tool_envelope_color: APIIVec3,
 }
 
 fn default_ball_and_stick_cull_depth() -> Option<f64> {
@@ -341,6 +352,15 @@ fn default_scene_alpha() -> f64 {
 fn default_label_scale() -> f64 {
     0.7
 }
+/// Amber: the cage is a keep-out volume, and it has to read against both the
+/// grey wireframes already in the pass and the atoms it encloses.
+fn default_tool_envelope_color() -> APIIVec3 {
+    APIIVec3 {
+        x: 255,
+        y: 160,
+        z: 0,
+    }
+}
 
 impl Default for AtomicStructureVisualizationPreferences {
     fn default() -> Self {
@@ -352,6 +372,8 @@ impl Default for AtomicStructureVisualizationPreferences {
             scene_transparency_enabled: false,
             scene_alpha: 0.5,
             label_scale: 0.7,
+            show_tool_envelopes: false,
+            tool_envelope_color: default_tool_envelope_color(),
         }
     }
 }
@@ -912,6 +934,8 @@ impl From<&AtomicStructureVisualizationPreferences>
             scene_transparency_enabled: p.scene_transparency_enabled,
             scene_alpha: p.scene_alpha,
             label_scale: p.label_scale,
+            show_tool_envelopes: p.show_tool_envelopes,
+            tool_envelope_color: (&p.tool_envelope_color).into(),
         }
     }
 }
@@ -928,6 +952,8 @@ impl From<&domain::AtomicStructureVisualizationPreferences>
             scene_transparency_enabled: p.scene_transparency_enabled,
             scene_alpha: p.scene_alpha,
             label_scale: p.label_scale,
+            show_tool_envelopes: p.show_tool_envelopes,
+            tool_envelope_color: (&p.tool_envelope_color).into(),
         }
     }
 }

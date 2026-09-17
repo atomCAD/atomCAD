@@ -16820,7 +16820,8 @@ impl SseDecode
         let mut var_toolType = <String>::sse_decode(deserializer);
         let mut var_residual = <f64>::sse_decode(deserializer);
         let mut var_state = <String>::sse_decode(deserializer);
-        return crate::api::structure_designer::structure_designer_api_types::APIMechanosynthToolRow{instance: var_instance, tool_type: var_toolType, residual: var_residual, state: var_state};
+        let mut var_moving = <bool>::sse_decode(deserializer);
+        return crate::api::structure_designer::structure_designer_api_types::APIMechanosynthToolRow{instance: var_instance, tool_type: var_toolType, residual: var_residual, state: var_state, moving: var_moving};
     }
 }
 
@@ -18159,7 +18160,9 @@ let mut var_spaceFillingCullDepth = <Option<f64>>::sse_decode(deserializer);
 let mut var_sceneTransparencyEnabled = <bool>::sse_decode(deserializer);
 let mut var_sceneAlpha = <f64>::sse_decode(deserializer);
 let mut var_labelScale = <f64>::sse_decode(deserializer);
-return crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualizationPreferences{visualization: var_visualization, rendering_method: var_renderingMethod, ball_and_stick_cull_depth: var_ballAndStickCullDepth, space_filling_cull_depth: var_spaceFillingCullDepth, scene_transparency_enabled: var_sceneTransparencyEnabled, scene_alpha: var_sceneAlpha, label_scale: var_labelScale};}
+let mut var_showToolEnvelopes = <bool>::sse_decode(deserializer);
+let mut var_toolEnvelopeColor = <crate::api::common_api_types::APIIVec3>::sse_decode(deserializer);
+return crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualizationPreferences{visualization: var_visualization, rendering_method: var_renderingMethod, ball_and_stick_cull_depth: var_ballAndStickCullDepth, space_filling_cull_depth: var_spaceFillingCullDepth, scene_transparency_enabled: var_sceneTransparencyEnabled, scene_alpha: var_sceneAlpha, label_scale: var_labelScale, show_tool_envelopes: var_showToolEnvelopes, tool_envelope_color: var_toolEnvelopeColor};}
                 }
 
 impl SseDecode
@@ -25573,6 +25576,7 @@ impl flutter_rust_bridge::IntoDart
             self.tool_type.into_into_dart().into_dart(),
             self.residual.into_into_dart().into_dart(),
             self.state.into_into_dart().into_dart(),
+            self.moving.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -27870,7 +27874,9 @@ self.ball_and_stick_cull_depth.into_into_dart().into_dart(),
 self.space_filling_cull_depth.into_into_dart().into_dart(),
 self.scene_transparency_enabled.into_into_dart().into_dart(),
 self.scene_alpha.into_into_dart().into_dart(),
-self.label_scale.into_into_dart().into_dart()
+self.label_scale.into_into_dart().into_dart(),
+self.show_tool_envelopes.into_into_dart().into_dart(),
+self.tool_envelope_color.into_into_dart().into_dart()
                 ].into_dart()
                 }
             }
@@ -30591,6 +30597,7 @@ impl SseEncode
         <String>::sse_encode(self.tool_type, serializer);
         <f64>::sse_encode(self.residual, serializer);
         <String>::sse_encode(self.state, serializer);
+        <bool>::sse_encode(self.moving, serializer);
     }
 }
 
@@ -31517,7 +31524,9 @@ impl SseEncode for crate::api::structure_designer::structure_designer_preference
 <Option<f64>>::sse_encode(self.space_filling_cull_depth, serializer);
 <bool>::sse_encode(self.scene_transparency_enabled, serializer);
 <f64>::sse_encode(self.scene_alpha, serializer);
-<f64>::sse_encode(self.label_scale, serializer);}
+<f64>::sse_encode(self.label_scale, serializer);
+<bool>::sse_encode(self.show_tool_envelopes, serializer);
+<crate::api::common_api_types::APIIVec3>::sse_encode(self.tool_envelope_color, serializer);}
                 }
 
 impl SseEncode

@@ -82,10 +82,10 @@ crates/atomcad-crystolecule/src/
 │   ├── compare.rs                  # compare_structures: position-tolerant Vec<Mismatch>
 │   └── trajectory/                 # where a tool is at every point of a step
 │       ├── mod.rs                  # re-exports; the two-layer rule
-│       ├── envelope.rs             # Envelope + the approach sweep (pure geometry, no scene)
+│       ├── envelope.rs             # Envelope + the approach sweep + its wireframe cage (pure geometry, no scene)
 │       ├── landing.rs              # obstacles, plan_landing, the containment check
 │       ├── runs.rs                 # run structure of a script (script + library only)
-│       └── path.rs                 # poses, flights, hover, the scan, replay_scene_at
+│       └── path.rs                 # poses, flights, hover, the scan, replay_scene_at, the posed cages
 ├── lattice_fill/
 │   ├── concave_rebond.rs           # Concave-corner clash → host-host bond rewrite
 │   ├── config.rs                   # LatticeFillConfig, Options, Result, Statistics
@@ -159,6 +159,14 @@ crates/atomcad-crystolecule/src/
 | `StepPlan` | `mechanosynth/scene.rs` | Everything a step's checks produced with nothing applied; `match_step_in_scene` makes one, `plan_landing` reads one, the apply half consumes one |
 | `Runs` | `mechanosynth/trajectory/runs.rs` | Which `tip` steps a tool performs without going home in between. Script and library only — never stored on a step |
 | `Pose` / `ToolMotion` / `Visit` / `Leg` | `mechanosynth/trajectory/path.rs` | A computed rigid pose (`ToolPose` without the residual), and what a tool does during one step: a `Visit` with its legs and scan, or a `Hover` over its next site. `Leg` names which part of that a step time falls on, in the panel's own words; it reads the same length split `pose_at` interpolates along, so the word and the pose cannot disagree |
+
+`Envelope::cage` and `tool_envelope_cages` draw the envelope rather than test
+against it: `cage` is the local-frame wireframe (meridians plus three rings) and
+`tool_envelope_cages` poses one per binding with the same `Pose` the tool's atoms
+get, anchored at the tool-side reaction point of its **nearest visit**
+(`cage_apex`). It is a picture, so it stops after `CAGE_CYLINDER_LENGTH` where
+the envelope does not, and it is computed unconditionally — whether anyone has
+switched the overlay on is the viewer's business, not the engine's.
 
 ## Core Concepts
 

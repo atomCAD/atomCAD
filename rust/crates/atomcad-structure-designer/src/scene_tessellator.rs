@@ -1,5 +1,6 @@
 // Direct tessellation from StructureDesignerScene (no Scene trait needed)
 
+use crate::overlay::OverlayKind;
 use crate::structure_designer_scene::{NodeOutput, StructureDesignerScene};
 use atomcad_display::atomic_tessellator;
 use atomcad_display::coordinate_system_tessellator;
@@ -438,6 +439,40 @@ fn tessellate_non_lightweight_content(
                 uc,
                 &color_f32,
             );
+        }
+
+        // Overlays: line work a node emitted **about** its output. Drawn for
+        // every displayed node, not only the active one — a tool's envelope is a
+        // fact about the build rather than a handle on the selection — and only
+        // for the kinds whose preference is on. The node emitted the segments
+        // either way, so toggling a switch here re-tessellates and re-evaluates
+        // nothing (`crate::overlay`).
+        for overlay in &node_data.overlays {
+            let color = match overlay.kind {
+                OverlayKind::ToolEnvelope => {
+                    if !preferences
+                        .atomic_structure_visualization
+                        .show_tool_envelopes
+                    {
+                        continue;
+                    }
+                    preferences
+                        .atomic_structure_visualization
+                        .tool_envelope_color
+                }
+            };
+            let color_f32 = [
+                color[0] as f32 / 255.0,
+                color[1] as f32 / 255.0,
+                color[2] as f32 / 255.0,
+            ];
+            for (from, to) in &overlay.segments {
+                wireframe_mesh.add_line_with_uniform_color(
+                    &Vec3::new(from.x as f32, from.y as f32, from.z as f32),
+                    &Vec3::new(to.x as f32, to.y as f32, to.z as f32),
+                    &color_f32,
+                );
+            }
         }
     }
 
