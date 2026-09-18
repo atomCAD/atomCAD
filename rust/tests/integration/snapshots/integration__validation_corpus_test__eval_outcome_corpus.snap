@@ -99,6 +99,8 @@ expression: out
   network 'Main' node=1 pin=0 -> Error: Error in my_shape: error in radius input (from parameter #3): default input is missing
 === proxy/proxy_node.cnnd
   network 'proxy_demo' node=5 pin=0 -> Ok
+=== proxy/proxy_worked_example.cnnd
+  network 'proxy_worked_example' node=14 pin=0 -> Ok
 === rename_wire_loss/before.cnnd
   network '0test' node=1 pin=0 -> Ok
   network '0test' node=2 pin=0 -> Ok

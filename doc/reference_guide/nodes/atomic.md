@@ -890,19 +890,65 @@ clean. Then raise `hops` until the cost is the most you will pay and run the
 series downward until the energy stops moving.
 
 **Example.** A tool approach on Si(100), with the apex and the target dimer atom
-both tagged:
+both tagged. The silicon lattice comes from a `lattice_vecs` + `structure` pair,
+and the tool is a second `materialize` lifted clear of the surface — the two are
+*unbonded*, which is exactly why both need tagging:
 
 ```
-site    = tag { molecule: scene, name: "focus", region: apex_ball }
-site2   = tag { molecule: site,  name: "focus", region: target_ball }
-proxy_6 = proxy { molecule: site2, hops: 6, free: 3, core: 1 }
-relaxed = relax { molecule: proxy_6 }
+si_cell   = lattice_vecs { cell_length_a: 5.43, cell_length_b: 5.43, cell_length_c: 5.43 }
+si        = structure { lattice_vecs: si_cell }
+slab_box  = cuboid { structure: si, min_corner: (0, 0, 0), extent: (8, 8, 4) }
+slab      = materialize { shape: slab_box, parameter_element_value_definition: "PRIMARY Si\nSECONDARY Si", passivate: true, surf_recon: true }
+
+tip_box   = cuboid { structure: si, min_corner: (0, 0, 0), extent: (2, 2, 2) }
+tip_solid = materialize { shape: tip_box, parameter_element_value_definition: "PRIMARY Si\nSECONDARY Si", passivate: true }
+tip       = structure_move { input: tip_solid, translation: (12, 12, 19), subdivision: 4 }
+apex      = remove_hydrogen { molecule: tip, region: apex_ball }
+
+scene     = atom_union { structures: [slab, apex] }
+site      = tag { molecule: scene, name: "focus", region: apex_ball }
+site2     = tag { molecule: site,  name: "focus", region: target_ball }
+proxy_6   = proxy { molecule: site2, hops: 6, free: 3, core: 1 }
+relaxed   = relax { molecule: proxy_6 }
 ```
 
-Duplicate `proxy_6` with `hops: 7` to check convergence. The apex radical is
-unsaturated in both; every silicon that lost a neighbour carries a hydrogen on
-the old bond vector; everything more than three hops from either site is frozen;
-and the two sites plus their first neighbours carry `high`.
+`remove_hydrogen` in a small ball at the tool's lowest lattice site is what makes
+the apex a radical; `proxy` then leaves it one, because it caps severed bonds
+only.
+
+Duplicate `proxy_6` with `hops: 7` to check convergence — or drive the whole
+series from one node:
+
+```
+hops_series = range { start: 4, step: 1, count: 4 }
+series = map {
+  xs: hops_series,
+  input_type: Int,
+  output_type: Crystal,
+  body {
+    p = proxy { molecule: ^site2, hops: $element, free: 3 }
+    output p
+  }
+}
+```
+
+The apex radical is unsaturated in every member; every silicon that lost a
+neighbour carries a hydrogen on the old bond vector; everything more than three
+hops from either site is frozen; and the two sites plus their first neighbours
+carry `high`.
+
+**A caveat on the 2.42 Å figure.** With `fill` on, two caps on one host sit
+2.42 Å apart *on an ideal lattice* — that is 1.48 Å along each of two bonds at
+the tetrahedral angle. A cut that passes through a **reconstructed** surface
+severs bonds whose atoms the dimerisation has already displaced, and a cap goes
+on the real bond vector, not the ideal one. In the network above the seven-hop
+cut reports a closest pair of 2.14 Å for that reason: two caps, both at exactly
+1.48 Å, on directions subtending 92° instead of 109.5°. That is still a clean
+rim — the number to worry about is the 1.42 Å of a *shared site*, which is what
+`fill` removes, and anything under about 2 Å.
+
+This network is in the repository as
+`rust/tests/fixtures/proxy/proxy_worked_example.cnnd`.
 
 ## mechanosynth
 

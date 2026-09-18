@@ -13,7 +13,9 @@
 
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
-use atomcad_crystolecule::proxy_cut::{ProxyOptions, proxy_cut};
+use atomcad_crystolecule::proxy_cut::{
+    ProxyOptions, bond_distances, classify_riders, plan_proxy, proxy_cut,
+};
 use atomcad_crystolecule::structure::Structure;
 use atomcad_structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
@@ -869,5 +871,380 @@ fn the_proxy_fixture_loads_and_evaluates_a_nested_hops_series() {
     assert!(
         six.atoms_values().any(|a| a.is_frozen()),
         "`free: 3` freezes the rim"
+    );
+}
+
+// ============================================================================
+// The worked example (§6, Phase 5)
+// ============================================================================
+
+/// The apex silicon of the tool, at the lattice site the fixture's `apex_ball`
+/// is centred on. `remove_hydrogen` stripped its two passivants, so it is the
+/// radical the reaction is about.
+const APEX: DVec3 = DVec3::new(21.72, 21.72, 25.7925);
+
+/// Loads the §6 fixture and names its network.
+fn worked_example() -> (StructureDesigner, &'static str) {
+    let mut designer = StructureDesigner::new();
+    designer
+        .load_node_networks(&atomcad_test_support::fixture_path_str(
+            "proxy/proxy_worked_example.cnnd",
+        ))
+        .expect("the worked-example fixture loads");
+    let net = "proxy_worked_example";
+    designer.set_active_node_network_name(Some(net.to_string()));
+    (designer, net)
+}
+
+fn node_id(designer: &StructureDesigner, net: &str, name: &str) -> u64 {
+    let network = designer.node_type_registry.node_networks.get(net).unwrap();
+    *network
+        .nodes
+        .iter()
+        .find(|(_, n)| n.custom_name.as_deref() == Some(name))
+        .unwrap_or_else(|| panic!("the fixture should hold a node named `{name}`"))
+        .0
+}
+
+/// Positions are exact here — nothing in the fixture relaxes — so a rounded
+/// position is a stable identity for an atom across two cuts that hand out
+/// different ids.
+fn position_key(p: DVec3) -> (i64, i64, i64) {
+    let q = |v: f64| (v * 1e6).round() as i64;
+    (q(p.x), q(p.y), q(p.z))
+}
+
+fn heavy_positions(s: &AtomicStructure) -> HashSet<(i64, i64, i64)> {
+    s.atoms_values()
+        .filter(|a| a.bonds.len() != 1)
+        .map(|a| position_key(a.position))
+        .collect()
+}
+
+fn atom_at(s: &AtomicStructure, position: DVec3) -> Option<u32> {
+    s.atoms_values()
+        .find(|a| a.position.distance(position) < 1e-6)
+        .map(|a| a.id)
+}
+
+/// The fixture is the network of §6: a tool poised over a Si(100)-2×1 surface
+/// with its apex and the target dimer atom both tagged `focus`.
+///
+/// What is checked here is what the text format cannot show — that it
+/// evaluates, and that the claims §6 makes hold on the atoms that come out.
+#[test]
+fn the_worked_example_cuts_a_nested_pair_of_proxies_around_two_unbonded_fragments() {
+    let (designer, net) = worked_example();
+
+    let scene = evaluate_to_atomic(&designer, net, node_id(&designer, net, "site2"));
+    let six = evaluate_to_atomic(&designer, net, node_id(&designer, net, "proxy_6"));
+    let seven = evaluate_to_atomic(&designer, net, node_id(&designer, net, "proxy_7"));
+
+    // Two sources, one on each fragment — the multi-source case of §4.2, which
+    // is the whole reason the tool and the surface end up in one proxy. They
+    // are not bonded to each other in the input.
+    let focus = scene.atoms_with_tag("focus");
+    assert_eq!(focus.len(), 2, "the two `tag` nodes mark one atom each");
+    let apex = atom_at(&scene, APEX).expect("the apex site is populated");
+    assert!(focus.contains(&apex), "the apex carries the tag");
+    let target = *focus.iter().find(|id| **id != apex).unwrap();
+    assert!(
+        !scene
+            .get_atom(apex)
+            .unwrap()
+            .bonds
+            .iter()
+            .any(|b| b.other_atom_id() == target),
+        "tool and surface are unbonded before the reaction"
+    );
+
+    for (label, cut) in [("proxy_6", &six), ("proxy_7", &seven)] {
+        assert_eq!(
+            cut.atoms_with_tag("focus").len(),
+            2,
+            "{label} keeps both sources"
+        );
+    }
+
+    // §4.3 monotonicity, on the emitted atoms rather than on a plan: every
+    // heavy atom of the six-hop cut is in the seven-hop cut.
+    let six_heavy = heavy_positions(&six);
+    let seven_heavy = heavy_positions(&seven);
+    assert!(
+        six_heavy.len() < seven_heavy.len(),
+        "one more hop keeps strictly more: {} vs {}",
+        six_heavy.len(),
+        seven_heavy.len()
+    );
+    assert!(
+        six_heavy.is_subset(&seven_heavy),
+        "the hops series nests: {} of {} six-hop heavy atoms are missing from the seven-hop cut",
+        six_heavy.difference(&seven_heavy).count(),
+        six_heavy.len()
+    );
+
+    // §4.5: the apex was unsaturated in the input, so it stays unsaturated —
+    // `passivate` caps severed bonds only, and nothing severed here.
+    for (label, cut) in [("proxy_6", &six), ("proxy_7", &seven)] {
+        let apex_id = atom_at(cut, APEX).unwrap_or_else(|| panic!("{label} keeps the apex"));
+        let atom = cut.get_atom(apex_id).unwrap();
+        assert_eq!(atom.atomic_number, 14, "{label}: the apex is a silicon");
+        assert_eq!(
+            atom.bonds.len(),
+            2,
+            "{label}: the apex keeps its two bonds into the tool and gains no cap"
+        );
+        assert!(
+            !atom
+                .bonds
+                .iter()
+                .any(|b| cut.get_atom(b.other_atom_id()).unwrap().atomic_number == 1),
+            "{label}: no hydrogen was put back on the radical"
+        );
+    }
+}
+
+/// §4.7 on the emitted atoms: with `core: 1` the `high` tag covers exactly the
+/// sources and their first heavy neighbours, plus the riders those carry — and
+/// nothing else.
+///
+/// Derived from the output's own bond graph rather than from the plan, because
+/// what an ONIOM exporter will read is the tag on the atom.
+#[test]
+fn the_worked_example_paints_high_on_the_sources_and_their_first_neighbours_only() {
+    let (designer, net) = worked_example();
+    let cut = evaluate_to_atomic(&designer, net, node_id(&designer, net, "proxy_6"));
+
+    let riders = classify_riders(&cut);
+    let sources = cut.atoms_with_tag("focus");
+    let distance = bond_distances(&cut, &sources, &riders);
+
+    for atom in cut.atoms_values() {
+        let expected = match riders.get(&atom.id) {
+            // A rider follows its host (§4.7).
+            Some(host) => distance.get(host).is_some_and(|d| *d <= 1),
+            None => distance.get(&atom.id).is_some_and(|d| *d <= 1),
+        };
+        assert_eq!(
+            cut.atom_has_tag(atom.id, "high"),
+            expected,
+            "atom {} (Z={}, {} bonds) at {:?}",
+            atom.id,
+            atom.atomic_number,
+            atom.bonds.len(),
+            atom.position
+        );
+    }
+
+    assert!(
+        cut.atoms_with_tag("high").len() > sources.len(),
+        "the first neighbours are in the layer too"
+    );
+    assert!(
+        !cut.tag_names().iter().any(|n| n == "low"),
+        "untagged means low; no `low` tag is written (§4.7)"
+    );
+}
+
+/// §4.3 and §4.6 together: every atom `fill` restores lies beyond `hops`, and
+/// with `free < hops` that puts all of them in the frozen rim — the claim that
+/// makes `fill` free of relaxation cost.
+#[test]
+fn the_worked_example_freezes_every_atom_fill_restored() {
+    let (designer, net) = worked_example();
+    let scene = evaluate_to_atomic(&designer, net, node_id(&designer, net, "site2"));
+    let sources = scene.atoms_with_tag("focus");
+
+    for hops in [6u32, 7] {
+        let plan = plan_proxy(
+            &scene,
+            &sources,
+            &ProxyOptions {
+                hops,
+                free: 3,
+                core: Some(1),
+                ..Default::default()
+            },
+        )
+        .expect("the fixture's own cut plans");
+
+        assert!(!plan.filled.is_empty(), "hops = {hops}: fill did fire");
+        let frozen: HashSet<u32> = plan.frozen.iter().copied().collect();
+        for id in &plan.filled {
+            assert!(
+                plan.distance[id] > hops,
+                "hops = {hops}: filled atom {id} is within hops"
+            );
+            assert!(
+                frozen.contains(id),
+                "hops = {hops}: filled atom {id} is not frozen"
+            );
+        }
+    }
+}
+
+/// §2's "one node inside a `map` over a `range`": the fixture drives the same
+/// `proxy` from a zone body, once per hop count, and the four cuts grow
+/// strictly.
+///
+/// The body reads its `molecule` from a node one scope out and its `hops` from
+/// the zone input, which is the shape the convergence series is meant to take.
+#[test]
+fn the_worked_example_series_grows_strictly_over_a_range_of_hops() {
+    let (designer, net) = worked_example();
+    let series = evaluate(&designer, net, node_id(&designer, net, "series_array"));
+
+    let NetworkResult::Array(members) = series else {
+        panic!(
+            "`collect` yields an array, got {:?}",
+            series.infer_data_type()
+        );
+    };
+    assert_eq!(members.len(), 4, "range 4..8 has four members");
+
+    let counts: Vec<usize> = members
+        .iter()
+        .map(|member| match member {
+            NetworkResult::Crystal(c) => c.atoms.atom_ids().count(),
+            NetworkResult::Molecule(m) => m.atoms.atom_ids().count(),
+            other => panic!(
+                "expected an atomic member, got {:?}",
+                other.infer_data_type()
+            ),
+        })
+        .collect();
+
+    assert!(
+        counts.windows(2).all(|w| w[0] < w[1]),
+        "a bigger `hops` is a bigger proxy: {counts:?}"
+    );
+
+    // The last two members are the cuts the two standalone nodes make.
+    let six = evaluate_to_atomic(&designer, net, node_id(&designer, net, "proxy_6"));
+    let seven = evaluate_to_atomic(&designer, net, node_id(&designer, net, "proxy_7"));
+    assert_eq!(counts[2], atom_count(&six), "series member 3 is `proxy_6`");
+    assert_eq!(
+        counts[3],
+        atom_count(&seven),
+        "series member 4 is `proxy_7`"
+    );
+}
+
+/// The rim of the worked example, and the one place §6's arithmetic does not
+/// carry over from the ideal lattice.
+///
+/// §6 promises "no two of those hydrogens are closer than 2.42 Å because `fill`
+/// kept every atom that two survivors shared". The **guarantee** `fill` gives
+/// is the second clause — no dropped heavy atom is left with two kept heavy
+/// neighbours — and that is asserted here directly. The 2.42 Å is a
+/// *consequence* of it **on an ideal lattice only**: it is two caps on one host
+/// at 1.48 Å and the tetrahedral 109.47°, which is what the bulk-silicon rows
+/// of §4.3 measure (`proxy_cut_test.rs`).
+///
+/// This fixture cuts through a **2×1-reconstructed** surface, where the
+/// dimerisation has displaced the atoms the cut severs. §4.5 places each cap on
+/// the *real* bond vector, so the two caps on such a host subtend the real
+/// angle — measured at 92.4° for the seven-hop cut, which puts its closest pair
+/// at 2.14 Å with both caps still at exactly 1.48 Å. That is correct behaviour,
+/// not a missed `fill`: it is nowhere near the 1.42 Å shared-site figure, and
+/// it is above the ~2 Å line §3.3 calls unphysical.
+#[test]
+fn the_worked_example_rim_has_no_shared_site_and_no_unphysical_cap_pair() {
+    let (designer, net) = worked_example();
+    let scene = evaluate_to_atomic(&designer, net, node_id(&designer, net, "site2"));
+    let sources = scene.atoms_with_tag("focus");
+
+    for hops in [6u32, 7] {
+        let plan = plan_proxy(
+            &scene,
+            &sources,
+            &ProxyOptions {
+                hops,
+                free: 3,
+                core: Some(1),
+                ..Default::default()
+            },
+        )
+        .expect("the fixture cuts");
+
+        // What `fill` actually guarantees: the boundary has converged, so no
+        // vacated site is pointed at by two caps.
+        let riders = classify_riders(&scene);
+        let kept: HashSet<u32> = plan.kept.iter().copied().collect();
+        let kept_heavy: HashSet<u32> = kept
+            .iter()
+            .copied()
+            .filter(|id| !riders.contains_key(id))
+            .collect();
+        for atom in scene.atoms_values() {
+            if riders.contains_key(&atom.id) || kept_heavy.contains(&atom.id) {
+                continue;
+            }
+            let shared = atom
+                .bonds
+                .iter()
+                .filter(|b| kept_heavy.contains(&b.other_atom_id()))
+                .count();
+            assert!(
+                shared < 2,
+                "hops = {hops}: dropped atom {} bridges {shared} kept heavy atoms — \
+                 `fill` did not converge",
+                atom.id
+            );
+        }
+
+        // And the distance that follows from it. The lower bound is §3.3's
+        // unphysical line, not the ideal-lattice 2.42 Å.
+        let mut cut = scene.clone();
+        let stats = proxy_cut(
+            &mut cut,
+            "focus",
+            &ProxyOptions {
+                hops,
+                free: 3,
+                core: Some(1),
+                ..Default::default()
+            },
+        )
+        .expect("the fixture cuts");
+        let closest = stats.min_cap_pair.expect("the rim has cap pairs");
+        assert!(
+            closest > 2.0,
+            "hops = {hops}: closest cap pair {closest:.3} Å is unphysical"
+        );
+        assert!(
+            closest > 1.5,
+            "hops = {hops}: closest cap pair {closest:.3} Å is near the 1.42 Å \
+             shared-site figure `fill` exists to prevent"
+        );
+    }
+}
+
+/// The ideal-lattice figure, isolated: away from the reconstruction the six-hop
+/// cut's rim is exactly the 2.42 Å of §4.3 — so the 2.14 Å the seven-hop cut
+/// reports really is the reconstructed surface and not a regression in cap
+/// placement.
+#[test]
+fn the_worked_examples_six_hop_rim_meets_the_ideal_lattice_figure() {
+    let (designer, net) = worked_example();
+    let scene = evaluate_to_atomic(&designer, net, node_id(&designer, net, "site2"));
+
+    let mut cut = scene.clone();
+    let stats = proxy_cut(
+        &mut cut,
+        "focus",
+        &ProxyOptions {
+            hops: 6,
+            free: 3,
+            core: Some(1),
+            ..Default::default()
+        },
+    )
+    .expect("the fixture cuts");
+
+    let closest = stats.min_cap_pair.expect("the rim has cap pairs");
+    assert!(
+        (closest - 2.42).abs() < 0.01,
+        "six-hop rim: {closest:.4} Å, expected the ideal 2.42 Å"
     );
 }

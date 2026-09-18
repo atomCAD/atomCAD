@@ -414,12 +414,25 @@ relaxed  = relax { molecule: proxy_6 }
 Convergence check: duplicate `proxy_6` as `proxy_7` with `hops: 7`, relax
 both, compare. The tool's apex radical is unsaturated in both; every silicon
 that lost a neighbour to the cut carries a hydrogen on the old bond vector,
-and no two of those hydrogens are closer than 2.42 Å because `fill` (on by
-default) kept every atom that two survivors shared; everything more than
-three hops from the apex or the target is frozen; the apex, the target atom
-and their first neighbours carry `high`, ready for the ONIOM exporter of §9.
-Expect the filled `proxy_6` to hold roughly 1.5× the atoms of the plain
-six-hop shell, all of the extra ones frozen.
+and no cap pair sits on a shared site, because `fill` (on by default) kept
+every atom that two survivors shared; everything more than three hops from the
+apex or the target is frozen; the apex, the target atom and their first
+neighbours carry `high`, ready for the ONIOM exporter of §9. Expect the filled
+`proxy_6` to hold roughly 1.5× the atoms of the plain six-hop shell, all of the
+extra ones frozen.
+
+**The 2.42 Å of §4.3 is an ideal-lattice figure, and this example is where that
+matters.** It is two caps on one host, each at 1.48 Å, on directions subtending
+the tetrahedral 109.47°. A cut through a **reconstructed** surface severs bonds
+whose partners the dimerisation has already displaced, and §4.5 puts each cap on
+the *real* bond vector; the two caps on such a host therefore subtend the real
+angle. Measured on the Phase 5 fixture, the seven-hop cut's closest pair is
+2.14 Å — two caps at exactly 1.48 Å at 92.4° — while the six-hop cut, whose
+boundary stays clear of the reconstructed layer, reports the ideal 2.42 Å. Both
+are clean rims. What `fill` guarantees, and what the fixture asserts, is the
+*structural* property: no dropped heavy atom is left bridging two kept ones, so
+the 1.42 Å shared site never occurs. Read `min_cap_pair` against the ~2 Å
+unphysical line of §3.3, not against 2.42.
 
 ### 6.1 Choosing the parameters
 
@@ -1015,11 +1028,16 @@ network (Si(100) slab, a tool, two `tag` nodes, `proxy_6`, `proxy_7`),
 **Automated tests** (`proxy_node_test.rs` and `proxy_cut_test.rs`):
 
 - The fixture evaluates; `proxy_6`'s heavy atoms are a subset of `proxy_7`'s;
-  the tool apex is unsaturated in both; every cap pair is `>= 2.42 Å`; every
+  the tool apex is unsaturated in both; no dropped heavy atom is left bridging
+  two kept ones and no cap pair is under the ~2 Å unphysical line (the
+  `>= 2.42 Å` this plan first asked for is an **ideal-lattice** figure and does
+  not survive a cut through the reconstructed surface — see §6); every
   fill-restored atom is frozen; the apex, the target and their first
   neighbours carry `high` and nothing else does.
-- A `map` over `range 4..8` of a `proxy` inside a closure yields four
-  structures with strictly increasing atom counts.
+- A `map` over `range 4..8` of a `proxy` in a **zone body** yields four
+  structures with strictly increasing atom counts. (A `closure` would do, but
+  the body reads `molecule` from one scope out and `hops` from the zone input,
+  which is the shape the text format spells `^site2` / `$element`.)
 - Independence from workpiece size: the §4.3 figures for `hops = 4` and
   `hops = 6` are identical on an 8-cell and a 16-cell cube, which exercises
   the unbounded BFS and the grid-backed `nearest_dropped` on ~33k silicon

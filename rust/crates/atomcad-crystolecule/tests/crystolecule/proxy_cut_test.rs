@@ -494,6 +494,92 @@ fn fill_table_bulk_silicon_hops_6() {
     assert!((after - 2.42).abs() < 0.01, "closest cap pair: {after}");
 }
 
+/// Phase 5: the figures are a property of the **cut**, not of the workpiece.
+///
+/// Doubling the cube to sixteen cells a side — ~33k silicon atoms plus their
+/// surface hydrogens — must reproduce the §4.3 rows byte for byte. Two things
+/// are actually under test. The BFS is deliberately *unbounded* (§7.3 step 3),
+/// so it walks the whole component whatever its size; if it ever grew a
+/// `hops`-bounded early exit, `farthest_hop` and the fill rounds would still
+/// look right on the small cube and drift here. And `nearest_dropped` queries
+/// the spatial grid rather than scanning (§7.3 step 11) — on the bigger cube
+/// the dropped set is an order of magnitude larger while the free set is
+/// identical, so a scan would show up as time rather than as a wrong number.
+///
+/// No timing assertion: this is about the figures, and a threshold would be
+/// the flakiest line in the harness.
+#[test]
+fn the_fill_figures_do_not_depend_on_the_workpiece_size() {
+    let small = silicon_cube();
+    let big = build_silicon_cube(16.0);
+
+    // 32768 silicon atoms against 4096, but the passivating hydrogens scale
+    // with the *area*, so the totals are ~6.6x rather than 8x.
+    assert!(
+        big.atom_ids().count() > 6 * small.atom_ids().count(),
+        "the big cube really is the bigger one: {} vs {}",
+        big.atom_ids().count(),
+        small.atom_ids().count()
+    );
+
+    for hops in [4u32, 6] {
+        let small_plan = plan_proxy(small, &[cube_center_source(small)], &default_options(hops))
+            .expect("plan the small cube");
+        let big_plan = plan_proxy(&big, &[cube_center_source(&big)], &default_options(hops))
+            .expect("plan the big cube");
+
+        let small_heavy = kept_heavy(small, &small_plan);
+        let big_heavy = kept_heavy(&big, &big_plan);
+
+        assert_eq!(
+            small_heavy.len(),
+            big_heavy.len(),
+            "kept heavy atoms at hops = {hops}"
+        );
+        assert_eq!(
+            small_plan.fill_rounds, big_plan.fill_rounds,
+            "fill rounds at hops = {hops}"
+        );
+        assert_eq!(
+            small_plan.filled.len(),
+            big_plan.filled.len(),
+            "fill-restored atoms at hops = {hops}"
+        );
+        assert_eq!(
+            small_plan.caps.len(),
+            big_plan.caps.len(),
+            "caps at hops = {hops}"
+        );
+        assert_eq!(
+            farthest_hop(&small_plan, &small_heavy),
+            farthest_hop(&big_plan, &big_heavy),
+            "farthest hop at hops = {hops}"
+        );
+        assert_eq!(
+            shared_sites(&big, &big_heavy),
+            0,
+            "fill converged on the big cube at hops = {hops}"
+        );
+
+        let small_pair = min_cap_pair(&small_plan.caps).expect("cap pairs");
+        let big_pair = min_cap_pair(&big_plan.caps).expect("cap pairs");
+        assert!(
+            (small_pair - big_pair).abs() < 1e-9,
+            "closest cap pair at hops = {hops}: {small_pair} vs {big_pair}"
+        );
+
+        // `nearest_dropped` is the one figure that *should* move: the small
+        // cube's free atoms sit near its own surface, so beyond the cut there
+        // is nothing to find within the 8 A radius, while the big cube is bulk
+        // in every direction. Both are `Some` here, and the big cube's value is
+        // the honest one.
+        assert!(
+            big_plan.nearest_dropped.is_some(),
+            "the big cube has dropped heavy atoms near its free ones"
+        );
+    }
+}
+
 // =============================================================================
 // Caps (§4.5)
 // =============================================================================

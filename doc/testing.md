@@ -141,6 +141,23 @@ cargo test node_snapshots    # Run snapshot tests
 cargo insta review           # Review changes interactively
 ```
 
+### Fixture networks under `rust/tests/fixtures/`
+
+Every `.cnnd` under `rust/tests/fixtures/` is swept by two harnesses, so
+**dropping a new one in changes two insta snapshots** (`validation_corpus` and
+`eval_outcome_corpus`, in `rust/tests/integration/validation_corpus_test.rs`) —
+a one-line addition each, which is expected rather than a regression. Whether
+it also round-trips through `query` → `edit --replace` is a separate, explicit
+test in `text_format_roundtrip_corpus_test.rs`; add one there for any fixture
+worth keeping honest.
+
+`proxy/proxy_worked_example.cnnd` is the fullest of them: the worked example of
+`doc/design_proxy_node.md` §6 (a silicon lattice, a reconstructed Si(100) slab,
+an unbonded tool with a radical apex, two `tag` nodes, `proxy_6` / `proxy_7`,
+and the same cut driven by a `map` over a `range`). It is the only fixture whose
+round-trip exercises a **zone body** carrying both wire spellings — `$element`
+for the zone input and `^site2` for a node one scope out.
+
 ### Integration Tests
 | Test | Description |
 |------|-------------|

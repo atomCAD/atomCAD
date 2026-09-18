@@ -311,6 +311,18 @@ fn the_proxy_fixture_round_trips() {
     run_round_trips(&atomcad_test_support::fixture_path("proxy/proxy_node.cnnd"));
 }
 
+/// The `proxy` worked example (`doc/design_proxy_node.md` Phase 5). Beyond the
+/// eight properties of the fixture above it carries a `map` whose **zone body**
+/// holds a `proxy` reading both a zone input (`$element`) and a node one level
+/// out (`^site2`) — the two wire spellings of `body { ... }` that only a nested
+/// scope exercises.
+#[test]
+fn the_proxy_worked_example_round_trips() {
+    run_round_trips(&atomcad_test_support::fixture_path(
+        "proxy/proxy_worked_example.cnnd",
+    ));
+}
+
 /// The maintainer's working file, which is not in the repository. Set
 /// `ATOMCAD_LAYOUT_CORPUS` to its path to include it.
 #[test]
