@@ -866,7 +866,10 @@ empirical formula and the atom counts (cost), the free/frozen split (the
 relaxation's degrees of freedom), how much `fill` grew the cluster, the open
 valences left on the output (this sets the multiplicity of a quantum-chemistry
 input), the closest cap–cap distance, and the closest *dropped* heavy atom to
-any free atom.
+any free atom. The two distances read **—** when there is no such pair within
+the search radius at all, which is an answer rather than a missing measurement.
+The report appears once the node has been evaluated as the displayed node; a
+`proxy` inside a `map` or a `closure` body has no report of its own.
 
 Two of those are easy to misread:
 

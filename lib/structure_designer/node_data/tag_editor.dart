@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 import 'package:flutter_cad/inputs/string_input.dart';
+import 'package:flutter_cad/structure_designer/node_data/tag_name_suggestions.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 
 /// Editor widget for the `tag` node — adds a named, durable per-atom tag to
@@ -52,7 +53,7 @@ class TagEditor extends StatelessWidget {
               value: data.name,
               onChanged: _setName,
             ),
-            _TagSuggestions(
+            TagNameSuggestions(
               available: data.availableTags,
               currentName: data.name,
               onPick: _setName,
@@ -72,53 +73,6 @@ class TagEditor extends StatelessWidget {
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
-        ],
-      ),
-    );
-  }
-}
-
-/// Shows the input structure's existing tag names as one-click suggestion
-/// chips (§Existing-names suggestions). Empty (renders nothing) until the node
-/// has evaluated with a wired input.
-class _TagSuggestions extends StatelessWidget {
-  final List<String> available;
-  final String currentName;
-  final ValueChanged<String> onPick;
-
-  const _TagSuggestions({
-    required this.available,
-    required this.currentName,
-    required this.onPick,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final suggestions = available.where((name) => name != currentName).toList();
-    if (suggestions.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    return Padding(
-      padding: const EdgeInsets.only(top: 8.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Existing tags in input',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 4),
-          Wrap(
-            spacing: 6,
-            runSpacing: 4,
-            children: [
-              for (final name in suggestions)
-                ActionChip(
-                  label: Text(name),
-                  onPressed: () => onPick(name),
-                ),
-            ],
-          ),
         ],
       ),
     );

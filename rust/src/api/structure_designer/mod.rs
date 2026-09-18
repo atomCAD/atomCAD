@@ -15,6 +15,7 @@ pub mod import_xyz_api;
 pub mod mechanosynth_api;
 pub mod mechanosynth_edit_api;
 pub mod profiling_api;
+pub mod proxy_api;
 pub mod relax_api;
 pub mod structure_designer_api;
 pub mod structure_designer_api_types;

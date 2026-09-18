@@ -21,6 +21,7 @@ use atomcad_structure_designer::nodes::atom_edit::atom_edit::{
 use atomcad_structure_designer::nodes::comment::{
     CommentAnchor as DomainCommentAnchor, WireAnchor as DomainWireAnchor,
 };
+use atomcad_structure_designer::nodes::proxy::{ProxyData, ProxyStats};
 use atomcad_structure_designer::structure_designer::{
     ExecuteResult as DomainExecuteResult, NodeEvaluationResult as DomainNodeEvaluationResult,
 };
@@ -828,6 +829,132 @@ pub struct APIUntagData {
     /// Input structure's existing tag names, captured at the last eval, offered
     /// as suggestions in the editor.
     pub available_tags: Vec<String>,
+}
+
+/// Dart-facing twin of `atomcad_structure_designer::nodes::proxy::ProxyData`
+/// — the eight persisted properties plus the write-only `available_tags`
+/// snapshot the editor's suggestion chips read (as `APITagData` carries it).
+///
+/// Every one of the eight is also an input pin, and a wired pin overrides the
+/// stored value at eval, so the panel shows these as an inert fallback for a
+/// pin that is connected.
+pub struct APIProxyData {
+    /// Tag name marking the source atoms. Every atom carrying it is at
+    /// distance 0.
+    pub focus: String,
+    /// Keep heavy atoms whose bond distance is at most this.
+    pub hops: i32,
+    /// Heavy atoms farther than this get the frozen flag.
+    pub free: i32,
+    /// Drop heavy atoms the cut left with a single heavy neighbour, to a
+    /// fixpoint.
+    pub rm_single: bool,
+    /// Cap every severed bond with a terminator along the old bond vector.
+    pub passivate: bool,
+    /// Terminator element (atomic number); H/F/Cl/Br/I.
+    pub passiv_elem: i16,
+    /// Tag heavy atoms within this distance as `high` (the ONIOM high layer).
+    /// Negative disables — the editor displays it as "off".
+    pub core: i32,
+    /// Keep every dropped heavy atom that bridges two or more kept heavy
+    /// atoms, to a fixpoint.
+    pub fill: bool,
+    /// Input structure's existing tag names, captured at the last eval and
+    /// offered as suggestions. Empty until the node has evaluated with a wired
+    /// input. **Ignored by the setter** — it is a snapshot, not a property.
+    pub available_tags: Vec<String>,
+}
+
+/// Dart-facing twin of `atomcad_crystolecule::proxy_cut::ProxyStats` — the
+/// report the properties panel renders after a root evaluation of the selected
+/// `proxy` node. The two `Option<f64>` fields stay optional: absent means "no
+/// such pair within the module's search radius", which the panel prints as
+/// "—" rather than as a number.
+pub struct APIProxyStats {
+    /// Empirical formula of the output, e.g. `Si223H96`.
+    pub formula: String,
+    /// Heavy atoms kept, after `fill` and `rm_single`.
+    pub heavy: usize,
+    /// Riders (atoms with exactly one bond) kept.
+    pub riders: usize,
+    /// Terminators added.
+    pub caps: usize,
+    /// Atoms of the output *without* the frozen flag.
+    pub free: usize,
+    /// Atoms of the output *with* the frozen flag.
+    pub frozen: usize,
+    /// Heavy atoms `fill` restored.
+    pub filled: usize,
+    /// Synchronous `fill` rounds until nothing changed.
+    pub fill_rounds: usize,
+    /// Largest bond distance among the kept heavy atoms. A **size** figure,
+    /// not a shielding one.
+    pub farthest_hop: u32,
+    /// `hops - free`: the thinnest frozen shell. The **shielding** figure.
+    pub min_rim: i32,
+    /// Unsaturated slots the output still carries — what sets the multiplicity
+    /// of a quantum-chemistry input.
+    pub open_valences: usize,
+    /// Closest cap–cap distance, Å. `None` when no two caps lie within the
+    /// module's search radius.
+    pub min_cap_pair: Option<f64>,
+    /// Closest dropped heavy atom to any free atom, Å. `None` when nothing
+    /// dropped lies within the module's search radius.
+    pub nearest_dropped: Option<f64>,
+}
+
+impl From<&ProxyStats> for APIProxyStats {
+    fn from(stats: &ProxyStats) -> Self {
+        APIProxyStats {
+            formula: stats.formula.clone(),
+            heavy: stats.heavy,
+            riders: stats.riders,
+            caps: stats.caps,
+            free: stats.free,
+            frozen: stats.frozen,
+            filled: stats.filled,
+            fill_rounds: stats.fill_rounds,
+            farthest_hop: stats.farthest_hop,
+            min_rim: stats.min_rim,
+            open_valences: stats.open_valences,
+            min_cap_pair: stats.min_cap_pair,
+            nearest_dropped: stats.nearest_dropped,
+        }
+    }
+}
+
+impl From<&ProxyData> for APIProxyData {
+    fn from(data: &ProxyData) -> Self {
+        APIProxyData {
+            focus: data.focus.clone(),
+            hops: data.hops,
+            free: data.free,
+            rm_single: data.rm_single,
+            passivate: data.passivate,
+            passiv_elem: data.passiv_elem,
+            core: data.core,
+            fill: data.fill,
+            available_tags: data.available_tags.borrow().clone(),
+        }
+    }
+}
+
+impl From<&APIProxyData> for ProxyData {
+    /// `available_tags` is deliberately dropped: it is an eval-time snapshot
+    /// the node rewrites on every evaluation, never something the panel owns.
+    fn from(data: &APIProxyData) -> Self {
+        ProxyData {
+            focus: data.focus.clone(),
+            hops: data.hops,
+            free: data.free,
+            rm_single: data.rm_single,
+            passivate: data.passivate,
+            passiv_elem: data.passiv_elem,
+            core: data.core,
+            fill: data.fill,
+            available_tags: std::cell::RefCell::new(Vec::new()),
+        }
+    }
 }
 
 pub struct APIFreeSphereData {

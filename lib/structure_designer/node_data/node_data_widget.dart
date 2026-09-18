@@ -38,6 +38,9 @@ import 'package:flutter_cad/src/rust/api/structure_designer/mechanosynth_api.dar
 import 'package:flutter_cad/structure_designer/node_data/xray_editor.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/xray_api.dart'
     as xray_api;
+import 'package:flutter_cad/structure_designer/node_data/proxy_editor.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/proxy_api.dart'
+    as proxy_api;
 import 'package:flutter_cad/structure_designer/node_data/tag_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/untag_editor.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/tag_api.dart'
@@ -663,6 +666,19 @@ class NodeDataWidget extends StatelessWidget {
         return XrayEditor(
           nodeId: selectedNode.id,
           data: xrayData,
+          model: model,
+        );
+      case 'proxy':
+        // Scope-aware fetch of the eight stored properties + the input's
+        // tag-name snapshot. The report is not here: it lives in the selected
+        // node's eval cache and the editor reads it itself.
+        final proxyData = proxy_api.getProxyData(
+          scopePath: scopePath,
+          nodeId: selectedNode.id,
+        );
+        return ProxyEditor(
+          nodeId: selectedNode.id,
+          data: proxyData,
           model: model,
         );
       case 'tag':

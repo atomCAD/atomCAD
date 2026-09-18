@@ -22,6 +22,7 @@ import 'api/structure_designer/import_xyz_api.dart';
 import 'api/structure_designer/mechanosynth_api.dart';
 import 'api/structure_designer/mechanosynth_edit_api.dart';
 import 'api/structure_designer/profiling_api.dart';
+import 'api/structure_designer/proxy_api.dart';
 import 'api/structure_designer/relax_api.dart';
 import 'api/structure_designer/structure_designer_api.dart';
 import 'api/structure_designer/structure_designer_api_types.dart';
@@ -511,6 +512,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       dynamic raw);
 
   @protected
+  APIProxyData dco_decode_api_proxy_data(dynamic raw);
+
+  @protected
+  APIProxyStats dco_decode_api_proxy_stats(dynamic raw);
+
+  @protected
   APIRangeData dco_decode_api_range_data(dynamic raw);
 
   @protected
@@ -948,6 +955,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIPrintData dco_decode_box_autoadd_api_print_data(dynamic raw);
+
+  @protected
+  APIProxyData dco_decode_box_autoadd_api_proxy_data(dynamic raw);
+
+  @protected
+  APIProxyStats dco_decode_box_autoadd_api_proxy_stats(dynamic raw);
 
   @protected
   APIRangeData dco_decode_box_autoadd_api_range_data(dynamic raw);
@@ -1673,6 +1686,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIPrintData? dco_decode_opt_box_autoadd_api_print_data(dynamic raw);
+
+  @protected
+  APIProxyData? dco_decode_opt_box_autoadd_api_proxy_data(dynamic raw);
+
+  @protected
+  APIProxyStats? dco_decode_opt_box_autoadd_api_proxy_stats(dynamic raw);
 
   @protected
   APIRangeData? dco_decode_opt_box_autoadd_api_range_data(dynamic raw);
@@ -2446,6 +2465,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIProxyData sse_decode_api_proxy_data(SseDeserializer deserializer);
+
+  @protected
+  APIProxyStats sse_decode_api_proxy_stats(SseDeserializer deserializer);
+
+  @protected
   APIRangeData sse_decode_api_range_data(SseDeserializer deserializer);
 
   @protected
@@ -2971,6 +2996,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIPrintData sse_decode_box_autoadd_api_print_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIProxyData sse_decode_box_autoadd_api_proxy_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIProxyStats sse_decode_box_autoadd_api_proxy_stats(
       SseDeserializer deserializer);
 
   @protected
@@ -3827,6 +3860,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIPrintData? sse_decode_opt_box_autoadd_api_print_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIProxyData? sse_decode_opt_box_autoadd_api_proxy_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIProxyStats? sse_decode_opt_box_autoadd_api_proxy_stats(
       SseDeserializer deserializer);
 
   @protected
@@ -4688,6 +4729,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIPromoteToParameterResult self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_proxy_data(APIProxyData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_proxy_stats(APIProxyStats self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_range_data(APIRangeData self, SseSerializer serializer);
 
   @protected
@@ -5227,6 +5274,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_print_data(
       APIPrintData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_proxy_data(
+      APIProxyData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_proxy_stats(
+      APIProxyStats self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_range_data(
@@ -6092,6 +6147,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_print_data(
       APIPrintData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_proxy_data(
+      APIProxyData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_proxy_stats(
+      APIProxyStats? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_range_data(

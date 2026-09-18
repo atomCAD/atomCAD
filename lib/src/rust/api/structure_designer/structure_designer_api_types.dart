@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'structure_designer_api_types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `hash`
 
 /// Result of add_bond_pointer_move. Contains all info Flutter needs to draw
 /// the rubber-band preview line as a 2D overlay.
@@ -4508,6 +4508,188 @@ class APIPromoteToParameterResult {
           success == other.success &&
           error == other.error &&
           newNodeId == other.newNodeId;
+}
+
+/// Dart-facing twin of `atomcad_structure_designer::nodes::proxy::ProxyData`
+/// — the eight persisted properties plus the write-only `available_tags`
+/// snapshot the editor's suggestion chips read (as `APITagData` carries it).
+///
+/// Every one of the eight is also an input pin, and a wired pin overrides the
+/// stored value at eval, so the panel shows these as an inert fallback for a
+/// pin that is connected.
+class APIProxyData {
+  /// Tag name marking the source atoms. Every atom carrying it is at
+  /// distance 0.
+  final String focus;
+
+  /// Keep heavy atoms whose bond distance is at most this.
+  final int hops;
+
+  /// Heavy atoms farther than this get the frozen flag.
+  final int free;
+
+  /// Drop heavy atoms the cut left with a single heavy neighbour, to a
+  /// fixpoint.
+  final bool rmSingle;
+
+  /// Cap every severed bond with a terminator along the old bond vector.
+  final bool passivate;
+
+  /// Terminator element (atomic number); H/F/Cl/Br/I.
+  final int passivElem;
+
+  /// Tag heavy atoms within this distance as `high` (the ONIOM high layer).
+  /// Negative disables — the editor displays it as "off".
+  final int core;
+
+  /// Keep every dropped heavy atom that bridges two or more kept heavy
+  /// atoms, to a fixpoint.
+  final bool fill;
+
+  /// Input structure's existing tag names, captured at the last eval and
+  /// offered as suggestions. Empty until the node has evaluated with a wired
+  /// input. **Ignored by the setter** — it is a snapshot, not a property.
+  final List<String> availableTags;
+
+  const APIProxyData({
+    required this.focus,
+    required this.hops,
+    required this.free,
+    required this.rmSingle,
+    required this.passivate,
+    required this.passivElem,
+    required this.core,
+    required this.fill,
+    required this.availableTags,
+  });
+
+  @override
+  int get hashCode =>
+      focus.hashCode ^
+      hops.hashCode ^
+      free.hashCode ^
+      rmSingle.hashCode ^
+      passivate.hashCode ^
+      passivElem.hashCode ^
+      core.hashCode ^
+      fill.hashCode ^
+      availableTags.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIProxyData &&
+          runtimeType == other.runtimeType &&
+          focus == other.focus &&
+          hops == other.hops &&
+          free == other.free &&
+          rmSingle == other.rmSingle &&
+          passivate == other.passivate &&
+          passivElem == other.passivElem &&
+          core == other.core &&
+          fill == other.fill &&
+          availableTags == other.availableTags;
+}
+
+/// Dart-facing twin of `atomcad_crystolecule::proxy_cut::ProxyStats` — the
+/// report the properties panel renders after a root evaluation of the selected
+/// `proxy` node. The two `Option<f64>` fields stay optional: absent means "no
+/// such pair within the module's search radius", which the panel prints as
+/// "—" rather than as a number.
+class APIProxyStats {
+  /// Empirical formula of the output, e.g. `Si223H96`.
+  final String formula;
+
+  /// Heavy atoms kept, after `fill` and `rm_single`.
+  final BigInt heavy;
+
+  /// Riders (atoms with exactly one bond) kept.
+  final BigInt riders;
+
+  /// Terminators added.
+  final BigInt caps;
+
+  /// Atoms of the output *without* the frozen flag.
+  final BigInt free;
+
+  /// Atoms of the output *with* the frozen flag.
+  final BigInt frozen;
+
+  /// Heavy atoms `fill` restored.
+  final BigInt filled;
+
+  /// Synchronous `fill` rounds until nothing changed.
+  final BigInt fillRounds;
+
+  /// Largest bond distance among the kept heavy atoms. A **size** figure,
+  /// not a shielding one.
+  final int farthestHop;
+
+  /// `hops - free`: the thinnest frozen shell. The **shielding** figure.
+  final int minRim;
+
+  /// Unsaturated slots the output still carries — what sets the multiplicity
+  /// of a quantum-chemistry input.
+  final BigInt openValences;
+
+  /// Closest cap–cap distance, Å. `None` when no two caps lie within the
+  /// module's search radius.
+  final double? minCapPair;
+
+  /// Closest dropped heavy atom to any free atom, Å. `None` when nothing
+  /// dropped lies within the module's search radius.
+  final double? nearestDropped;
+
+  const APIProxyStats({
+    required this.formula,
+    required this.heavy,
+    required this.riders,
+    required this.caps,
+    required this.free,
+    required this.frozen,
+    required this.filled,
+    required this.fillRounds,
+    required this.farthestHop,
+    required this.minRim,
+    required this.openValences,
+    this.minCapPair,
+    this.nearestDropped,
+  });
+
+  @override
+  int get hashCode =>
+      formula.hashCode ^
+      heavy.hashCode ^
+      riders.hashCode ^
+      caps.hashCode ^
+      free.hashCode ^
+      frozen.hashCode ^
+      filled.hashCode ^
+      fillRounds.hashCode ^
+      farthestHop.hashCode ^
+      minRim.hashCode ^
+      openValences.hashCode ^
+      minCapPair.hashCode ^
+      nearestDropped.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIProxyStats &&
+          runtimeType == other.runtimeType &&
+          formula == other.formula &&
+          heavy == other.heavy &&
+          riders == other.riders &&
+          caps == other.caps &&
+          free == other.free &&
+          frozen == other.frozen &&
+          filled == other.filled &&
+          fillRounds == other.fillRounds &&
+          farthestHop == other.farthestHop &&
+          minRim == other.minRim &&
+          openValences == other.openValences &&
+          minCapPair == other.minCapPair &&
+          nearestDropped == other.nearestDropped;
 }
 
 class APIRangeData {

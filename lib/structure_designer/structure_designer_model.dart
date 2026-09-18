@@ -31,6 +31,8 @@ import 'package:flutter_cad/src/rust/api/structure_designer/mechanosynth_api.dar
     as mechanosynth_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/mechanosynth_edit_api.dart'
     as mechanosynth_edit_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/proxy_api.dart'
+    as proxy_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/tag_api.dart'
     as tag_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/profiling_api.dart'
@@ -3366,6 +3368,18 @@ class StructureDesignerModel extends ChangeNotifier {
         number: number);
     refreshFromKernel();
     return error;
+  }
+
+  /// Writes the `proxy` node's eight persisted properties.
+  ///
+  /// `availableTags` on `data` is an eval-time snapshot the node rewrites; the
+  /// Rust setter drops it, so the editor sends it empty.
+  void setProxyData(BigInt nodeId, APIProxyData data) {
+    proxy_api.setProxyData(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
+    refreshFromKernel();
   }
 
   void setTagData(BigInt nodeId, APITagData data) {
