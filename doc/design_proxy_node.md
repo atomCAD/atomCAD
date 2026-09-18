@@ -65,6 +65,7 @@ and a connected pin overrides the stored value.
 | 4 | `rm_single` | Bool | no | Drop outermost-shell heavy atoms left with a single heavy neighbour by the cut. |
 | 5 | `passivate` | Bool | no | Cap every severed bond with a terminator along the old bond vector. |
 | 6 | `passiv_elem` | Int | no | Terminator element (atomic number), H/F/Cl/Br/I. |
+| 7 | `core` | Int | no | Tag heavy atoms with distance at most this as `high` (the ONIOM high layer). Negative disables. |
 
 Pins 4–6 deliberately reuse the names and types of the same flags on
 `materialize`, so `proxy { passivate: true, rm_single: true }` reads the same
@@ -89,15 +90,16 @@ pub struct ProxyData {
     pub rm_single: bool,     // default false
     pub passivate: bool,     // default true
     pub passiv_elem: i16,    // default 1 (H)
+    pub core: i32,           // default -1 (no `high` tagging)
     #[serde(skip)] pub available_tags: RefCell<Vec<String>>, // tag dropdown, as TagData
     #[serde(skip)] pub stats: RefCell<Option<ProxyStats>>,   // panel report, as RelaxEvalCache
 }
 ```
 
-All six persisted fields are text properties, so the text form is
+All seven persisted fields are text properties, so the text form is
 
 ```
-proxy_6 = proxy { molecule: surface, focus: "focus", hops: 6, free: 3 }
+proxy_6 = proxy { molecule: surface, focus: "focus", hops: 6, free: 3, core: 1 }
 ```
 
 with `rm_single`, `passivate` and `passiv_elem` omitted at their defaults, as
@@ -186,7 +188,26 @@ lattice, so they are already at bulk positions — this is the frozen rim that
 makes a finite cluster stand in for a big surface. The `relax` node honours
 the flag today; an exporter for an external code reads the same bit.
 
-### 4.6 Errors
+### 4.6 `core`
+
+Off by default (`-1`). When `core >= 0`, heavy atoms with distance `<= core`
+get the tag **`high`**; riders and caps inherit the tag of their heavy atom.
+Zero is meaningful: only the focus atoms are high. The tag is **only added,
+never removed** — an input that already carries `high` keeps it, mirroring
+how `free` treats the frozen flag.
+
+**Untagged means low.** No `low` tag is written: every atom would carry it,
+it would spend a second name of the 32-tag budget, and the exporter (§8)
+treats "no `high` tag" as low anyway. This is the one place the node spends
+a tag name, and the exception to §5's "no per-shell tags".
+
+With `hops: 6, free: 3, core: 1` one node yields the three ONIOM shells:
+focus atoms and their first neighbours `high`, everything within three hops
+relaxed, everything beyond frozen. A `core` larger than `free` (frozen atoms
+in the high layer) is odd but legal; the exporter is where a wrong partition
+is diagnosed, not here.
+
+### 4.7 Errors
 
 - Empty `focus`, or no atom carries the tag: localized error naming the tag.
 - `hops < 0`: error. `free < 0`: treated as 0.
@@ -200,9 +221,10 @@ the flag today; an exporter for an external code reads the same bit.
   `atom_cut` upstream already provides it for anyone who wants both.
 - **No second output for the dropped atoms.** `structure_invert` on input and
   output can produce it later if a use case appears.
-- **No per-shell tags.** The tag budget is 32 names per structure; carrying a
-  shell index as tags would burn it. The `free` threshold lives in this node
-  for that reason, rather than in a hop-aware `freeze`.
+- **No per-shell tags** beyond the single `high` tag of `core`. The tag
+  budget is 32 names per structure; carrying a shell index as tags would burn
+  it. The `free` threshold lives in this node for that reason, rather than in
+  a hop-aware `freeze`.
 - **No `only`/`skip` tag on the standalone `passivate` node.** A `skip: String`
   pin there (hosts carrying the tag are excluded from the eligibility
   predicate that `add_hydrogens_filtered` already takes) is a useful,
@@ -218,14 +240,16 @@ atom is tagged the same way.
 ```
 site     = tag { molecule: scene, name: "focus", region: apex_ball }
 site2    = tag { molecule: site,  name: "focus", region: target_ball }
-proxy_6  = proxy { molecule: site2, hops: 6, free: 3 }
+proxy_6  = proxy { molecule: site2, hops: 6, free: 3, core: 1 }
 relaxed  = relax { molecule: proxy_6 }
 ```
 
 Convergence check: duplicate `proxy_6` as `proxy_7` with `hops: 7`, relax
 both, compare. The tool's apex radical is unsaturated in both; every silicon
 that lost a neighbour to the cut carries a hydrogen on the old bond vector;
-everything more than three hops from the apex or the target is frozen.
+everything more than three hops from the apex or the target is frozen; the
+apex, the target atom and their first neighbours carry `high`, ready for
+the ONIOM exporter of §8.
 
 ## 7. Implementation notes
 
@@ -242,4 +266,55 @@ everything more than three hops from the apex or the target is frozen.
 - Tests: rider retention, multi-source merge across an unbonded tool, radical
   preservation at the focus, `rm_single` restricted to cut-created singles,
   cap direction equals the old bond vector, frozen-only-set, monotonic `hops`
-  series, Crystal-in/Crystal-out, and a text-format round trip.
+  series, `core` tagging (riders inherit, existing `high` kept, `-1` writes
+  nothing), Crystal-in/Crystal-out, and a text-format round trip.
+
+## 8. Future: ONIOM export
+
+Not part of this node's implementation; recorded here so the node's data
+model is already shaped for it.
+
+### 8.1 What an ONIOM input needs
+
+1. **A layer label per atom** — high or low, occasionally a middle layer.
+2. **Link atoms** at every bond that crosses a layer boundary, placed along
+   the bond at a scaled distance (the ratio of the host–H to the host–host
+   bond length, ≈ 0.71 for C–C). Some codes generate them from the labels
+   (Gaussian), others want them listed (ORCA, an ASE driver).
+3. **Per-layer bookkeeping** — charge and multiplicity of the high-layer
+   model system, and the frozen set, which is independent of the layers.
+
+### 8.2 How atomCAD already carries it
+
+- **Layer membership is the `high` tag** (§4.6), painted by `proxy { core }`
+  or by hand with `tag` + a region. Untagged is low. A `mid` tag can be added
+  by the same convention if a three-layer scheme is ever needed. Nothing new
+  on `Atom`.
+- **Frozen atoms are the existing frozen flag** that `relax` honours.
+- **Link atoms are the proxy's severed-bond cap** (§4.4) applied at the
+  layer boundary instead of the cut, with the ONIOM scaled length, and
+  generated **at export time** — never inserted into the structure. The
+  crystolecule module that owns the cap owns this too.
+
+### 8.3 The one new node: `export_oniom`
+
+A sibling of `export_atoms` that reads the `high` tag and the frozen flag
+and writes the target format:
+
+- a Gaussian ONIOM block — layer letter per atom line, link-atom specs on
+  the crossing bonds;
+- an ORCA `QMAtoms` list plus the link-atom lines;
+- an ASE script wiring a UMA calculator for the low layer and a DFT
+  calculator for the high layer, with the subtractive energy assembled in
+  Python.
+
+Charge and multiplicity of the model system are node properties on the
+exporter, not per-atom data. The driver itself — the subtractive energy,
+the optimizer, the barrier search — stays outside atomCAD.
+
+### 8.4 A rule the exporter enforces
+
+A layer boundary must cut only **single bonds between like atoms** (Si–Si,
+C–C) and never a bond touching a focus atom. The exporter walks the crossing
+bonds and refuses with a localized error naming the offending bond. A refused
+export is far cheaper than a quietly wrong barrier.
