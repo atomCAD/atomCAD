@@ -909,7 +909,11 @@ Two of those are easy to misread:
   farthest hop looks large.
 - A small `nearest dropped` (under about 4 Å) means an *unbonded* neighbour —
   a trench wall, a second tip — was close enough to matter sterically and was
-  cut away. The remedy is to tag one of its atoms as focus too.
+  cut away. The remedy is to tag one of its atoms as focus too. The figure
+  counts only atoms the cluster is **not attached to**: the workpiece
+  continuing past the cut is always about two bonds from the relaxed interior,
+  and a cap already stands on the first severed bond, so it is never what this
+  line is warning about. A cut straight into the bulk normally reports **—**.
 
 **Choosing the parameters.** Set `core` from the reaction (the atoms whose bonds
 change, plus one shell) and `rim` from how much frozen bulk the cluster needs to

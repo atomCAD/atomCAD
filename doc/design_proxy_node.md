@@ -128,9 +128,9 @@ pub struct ProxyStats {
     pub open_valences: usize,// unsaturated slots left on kept atoms
     pub min_cap_pair: Option<f64>,    // closest cap-cap distance, Å;
                                       // None when no two caps lie within 3 Å
-    pub nearest_dropped: Option<f64>, // closest dropped heavy atom to any free atom
-                                      // (heavy or rider), Å; None when nothing
-                                      // dropped lies within 8 Å
+    pub nearest_dropped: Option<f64>, // closest DETACHED dropped heavy atom to any
+                                      // free atom (heavy or rider), Å; None when
+                                      // nothing qualifying lies within 8 Å
 }
 ```
 
@@ -165,10 +165,24 @@ loop of §6.1 reads, so it carries more than a count:
 - `min_cap_pair` — the closest two terminators come to each other, looked
   for within 3 Å. Below about 2 Å the rim is unphysical; with `fill` on this
   is 2.42 Å for silicon; absent means no two caps come within 3 Å at all.
-- `nearest_dropped` — the closest dropped heavy atom to any *free* atom. A
-  small value (under about 4 Å) means an unbonded neighbour — a trench wall,
-  a second tip — is close enough to matter sterically and was cut away; the
-  remedy is to tag one of its atoms `focus` (§4.2).
+- `nearest_dropped` — the closest **detached** dropped heavy atom to any
+  *free* atom. A small value (under about 4 Å) means an unbonded neighbour — a
+  trench wall, a second tip — is close enough to matter sterically and was cut
+  away; the remedy is to tag one of its atoms `focus` (§4.2).
+
+  **Detached is what makes the figure mean anything, and it was missing from
+  the first implementation.** Counting *every* dropped atom makes the workpiece
+  answer for itself: the atoms just past the boundary are the same lattice
+  continuing, the cut is what truncated them, and a cap already stands where
+  the first of them was. They are also always about two bonds from the nearest
+  free atom — a free atom lies within `hops - rim`, a dropped one starts past
+  `hops` — which on silicon is 3.84 Å, under the threshold. So the stat
+  reported a steric neighbour on every ordinary bulk cut, and at the node's
+  own defaults the panel showed the warning as its resting state. A dropped
+  atom counts only when it is at least `DETACHED_MIN_BOND_SEPARATION` = 3 bonds
+  from **every** kept atom: one bond out is the severed bond, two is the next
+  layer of the same bulk, and three is the first separation a covalent solid
+  cannot reach by simply continuing.
 
 `available_tags` is snapshotted from the input on every eval so the panel can
 offer a dropdown, exactly as `tag` does. It is the only mutable field on the
@@ -750,13 +764,17 @@ Decisions behind this shape:
    nothing on the plain cut, `rim >= hops` freezes all of it, and an atom `fill`
    restored beyond `hops` is frozen at every `rim`.
 10. **High.** When `core` is `Some(c)`: `high = { a ∈ kept_heavy | distance[a] <= c }`.
-11. **`nearest_dropped`.** For every kept atom that will be free after the
-    cut — a heavy atom not in `frozen` and not already frozen in the input,
-    or a rider of such an atom — query the input's spatial grid with
+11. **`nearest_dropped`.** First mark the **attached** dropped atoms: two
+    rounds of heavy neighbours out from `kept_heavy`, i.e. everything within
+    `DETACHED_MIN_BOND_SEPARATION - 1` bonds of the cluster. Then, for every
+    kept atom that will be free after the cut — a heavy atom not in `frozen`
+    and not already frozen in the input, or a rider of such an atom — query
+    the input's spatial grid with
     `get_atoms_in_radius(pos, NEAREST_DROPPED_RADIUS)`, keep dropped heavy
-    hits, take the minimum distance. Computed here because the dropped atoms
-    are gone once `apply_proxy` has run. The grid makes it linear in the
-    number of free atoms.
+    hits that are **not** attached, take the minimum distance. Computed here
+    because the dropped atoms are gone once `apply_proxy` has run. The grid
+    makes it linear in the number of free atoms, and the marking pass is two
+    levels over the boundary.
 
 ### 7.4 What `apply_proxy` does, in order
 
@@ -990,9 +1008,12 @@ rules that need a specific topology.
   `Some(1)` → sources plus first neighbours; riders are not in it (they
   follow at apply time).
 - `nearest_dropped`: on the two-fragment fixture with a dropped wall 3.0 Å
-  from a free atom the value is `Some(3.0 ± 1e-9)`; on the bulk cube with
-  `hops = 6, rim = 3` it is `Some(> 4.0)`; on a structure where nothing is
-  dropped it is `None`.
+  from a free atom the value is `Some(3.0 ± 1e-9)`, and bonding that wall to
+  the ring turns it into `None` — it is the *unbonded* neighbour the stat is
+  about; on a structure where nothing is dropped it is `None`; and on the bulk
+  cube it is `None` or `> 4 Å` at every `(hops, rim)` swept, because everything
+  a bulk cut drops is the workpiece continuing past the boundary. That last one
+  is the regression test for the panel's advisory firing on a textbook cut.
 - Errors: no sources → `NoFocusAtoms`; `passivant_element = 2` →
   `BadPassivant(2)`.
 - Determinism: two plans of the same input are equal, and every list is

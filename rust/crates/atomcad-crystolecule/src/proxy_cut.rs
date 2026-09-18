@@ -32,6 +32,16 @@ pub const HIGH_TAG: &str = "high";
 /// against a ~4 Å threshold (§3.3); anything farther is reported as `None`.
 pub const NEAREST_DROPPED_RADIUS: f64 = 8.0;
 
+/// How many bonds a dropped heavy atom must be from **every** kept atom before
+/// `ProxyStats::nearest_dropped` counts it as a separate object rather than as
+/// the workpiece continuing past the cut.
+///
+/// One bond out is the severed bond itself, and a terminator already sits on
+/// that vector; two bonds out is the next layer of the same truncated bulk.
+/// Three is the first separation a covalent solid cannot produce by simply
+/// continuing, so it is where "a thing the cluster is not attached to" starts.
+pub const DETACHED_MIN_BOND_SEPARATION: u32 = 3;
+
 /// Search radius for `ProxyStats::min_cap_pair` (Å): past the 2.42 Å of a
 /// clean silicon rim and the ~2 Å that marks an unphysical one.
 pub const CAP_PAIR_RADIUS: f64 = 3.0;
@@ -154,10 +164,13 @@ pub struct ProxyPlan {
     pub frozen: Vec<u32>,
     /// Heavy atoms the cut tags [`HIGH_TAG`]; riders and caps follow.
     pub high: Vec<u32>,
-    /// Closest dropped heavy atom to any atom that will be *free* after the
-    /// cut, Å. Planned rather than measured afterwards because the dropped
-    /// atoms are gone once `apply_proxy` has run. `None` when nothing dropped
-    /// lies within [`NEAREST_DROPPED_RADIUS`].
+    /// Closest **detached** dropped heavy atom to any atom that will be *free*
+    /// after the cut, Å — detached meaning at least
+    /// [`DETACHED_MIN_BOND_SEPARATION`] bonds from every kept atom, so the
+    /// workpiece continuing past the boundary does not count. Planned rather
+    /// than measured afterwards because the dropped atoms are gone once
+    /// `apply_proxy` has run. `None` when nothing qualifying lies within
+    /// [`NEAREST_DROPPED_RADIUS`].
     pub nearest_dropped: Option<f64>,
 }
 
@@ -509,14 +522,39 @@ pub fn plan_proxy(
     };
     high.sort_unstable();
 
-    // 11. nearest_dropped: the closest dropped heavy atom to any atom that
-    //     will be *free* after the cut. A small value means an unbonded
-    //     neighbour close enough to matter sterically was cut away.
+    // 11. nearest_dropped: the closest **detached** dropped heavy atom to any
+    //     atom that will be *free* after the cut. A small value means an
+    //     unbonded neighbour close enough to matter sterically was cut away.
+    //
+    //     Detached is the whole point, and it is why the bulk does not count.
+    //     The atoms immediately past the boundary are the same lattice
+    //     continuing, the cut is what truncated them, and a cap already stands
+    //     where the first of them was — so they are neither a surprise nor a
+    //     clash. They are also *always* about two bonds from the nearest free
+    //     atom (a free atom sits within `hops - rim`, a dropped one starts past
+    //     `hops`), which on silicon is 3.84 Å: counting them made every ordinary
+    //     bulk cut report a steric neighbour it did not have. Only what the
+    //     cluster is not attached to even at second hand is a separate object.
     let frozen_set: FxHashSet<u32> = frozen.iter().copied().collect();
+    let mut attached: FxHashSet<u32> = FxHashSet::default();
+    let mut frontier: Vec<u32> = kept_heavy.iter().copied().collect();
+    frontier.sort_unstable();
+    for _ in 1..DETACHED_MIN_BOND_SEPARATION {
+        let mut next: Vec<u32> = Vec::new();
+        for &a in &frontier {
+            for n in heavy_neighbors(structure, &riders, a) {
+                if kept_heavy.contains(&n) || !attached.insert(n) {
+                    continue;
+                }
+                next.push(n);
+            }
+        }
+        frontier = next;
+    }
     let dropped_heavy: FxHashSet<u32> = dropped
         .iter()
         .copied()
-        .filter(|id| !riders.contains_key(id))
+        .filter(|id| !riders.contains_key(id) && !attached.contains(id))
         .collect();
     let is_free_heavy = |id: u32| {
         kept_heavy.contains(&id)
@@ -610,10 +648,13 @@ pub struct ProxyStats {
     /// with `fill` on it is 2.42 Å for silicon. `None` when no two caps lie
     /// within [`CAP_PAIR_RADIUS`].
     pub min_cap_pair: Option<f64>,
-    /// Closest dropped heavy atom to any free atom (heavy or rider), Å. Under
-    /// about 4 Å an unbonded neighbour close enough to matter sterically was
-    /// cut away; the remedy is to tag one of its atoms as focus. `None` when
-    /// nothing dropped lies within [`NEAREST_DROPPED_RADIUS`].
+    /// Closest dropped heavy atom the cluster is **not attached to** to any
+    /// free atom (heavy or rider), Å. Under about 4 Å an unbonded neighbour
+    /// close enough to matter sterically was cut away; the remedy is to tag one
+    /// of its atoms as focus. The workpiece continuing past the cut is excluded
+    /// ([`DETACHED_MIN_BOND_SEPARATION`]) — it is always about two bonds from
+    /// the free region and would otherwise fire on every bulk cut. `None` when
+    /// nothing qualifying lies within [`NEAREST_DROPPED_RADIUS`].
     pub nearest_dropped: Option<f64>,
 }
 

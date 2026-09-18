@@ -246,7 +246,7 @@ class _ProxyEditorState extends State<ProxyEditor> {
             property: 'Remove single-neighbour atoms',
             pinName: 'rm_single',
             child: CheckboxListTile(
-              title: const Text('Remove single-neighbour atoms'),
+              title: const Text('Remove single-neighbour atoms in the rim'),
               value: data.rmSingle,
               onChanged: (value) => _commit(rmSingle: value ?? false),
               controlAffinity: ListTileControlAffinity.leading,

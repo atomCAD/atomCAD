@@ -1225,6 +1225,16 @@ fn nearest_dropped_finds_a_cut_away_steric_neighbour() {
     let plan = plan_proxy(&s, &[ring[0]], &options).expect("plan");
     let d = plan.nearest_dropped.expect("a dropped neighbour");
     assert!((d - 3.0).abs() < 1e-9, "nearest_dropped = {d}");
+
+    // It is the *unbonded* wall that qualifies: bond it to the ring and the
+    // same atoms become the structure continuing, which the stat ignores.
+    let mut attached = s.clone();
+    bond(&mut attached, ring[0], w0);
+    let plan = plan_proxy(&attached, &[ring[0]], &options).expect("plan");
+    assert_eq!(
+        plan.nearest_dropped, None,
+        "a fragment the cluster is bonded to is not a steric neighbour"
+    );
 }
 
 #[test]
@@ -1246,26 +1256,79 @@ fn nearest_dropped_is_none_when_nothing_is_dropped() {
     assert_eq!(plan.nearest_dropped, None);
 }
 
+/// A cut into the bulk has **no** steric neighbour, at any setting: everything
+/// it dropped is the same lattice continuing past the boundary, and a cap
+/// already stands on the first severed bond.
+///
+/// The regression this pins is the panel's advisory firing on a textbook cut.
+/// A free atom sits within `hops - rim` and a dropped one starts past `hops`,
+/// so at the node's shipped defaults the two are two bonds apart — 3.84 Å on
+/// silicon, under the ~4 Å line §3.3 reads the stat against. Counting the
+/// workpiece made "an unbonded neighbour this close was cut away" the *normal*
+/// state of the report.
 #[test]
-fn nearest_dropped_on_the_bulk_cube_is_comfortably_far() {
+fn nearest_dropped_ignores_the_workpiece_continuing_past_the_cut() {
     let s = silicon_cube();
     let source = cube_center_source(s);
-    // The §3.3 figure is quoted for a free depth of 3, i.e. hops 6 / rim 3.
-    let plan = plan_proxy(
-        s,
-        &[source],
-        &ProxyOptions {
-            hops: 6,
-            rim: 3,
-            rm_single: false,
-            ..Default::default()
-        },
-    )
-    .expect("plan");
-    let d = plan
+    for (hops, rim) in [(3u32, 1u32), (3, 0), (4, 1), (6, 3), (6, 0)] {
+        let plan = plan_proxy(
+            s,
+            &[source],
+            &ProxyOptions {
+                hops,
+                rim,
+                ..Default::default()
+            },
+        )
+        .expect("plan");
+        assert!(
+            plan.nearest_dropped.is_none_or(|d| d > 4.0),
+            "hops {hops} rim {rim}: nearest_dropped = {:?}, which would put a \
+             steric warning on an ordinary bulk cut",
+            plan.nearest_dropped
+        );
+    }
+
+    // At the shipped defaults the answer is a real distance to a real detached
+    // atom — 6.65 Å, comfortably clear of the ~4 Å line the panel warns at, where
+    // counting the bonded continuation gave 3.84 Å and a permanent warning.
+    let defaults = plan_proxy(s, &[source], &ProxyOptions::default()).expect("plan");
+    let d = defaults
         .nearest_dropped
-        .expect("the bulk always drops something");
-    assert!(d > 4.0, "nearest_dropped = {d}");
+        .expect("the bulk has detached atoms too");
+    assert!((d - 6.65).abs() < 0.01, "nearest_dropped = {d}");
+
+    // The atoms excluded are exactly the ones the cluster is attached to: with
+    // every one of them counted, the figure is the 3.84 Å of two Si-Si bonds.
+    let plan = plan_proxy(s, &[source], &ProxyOptions::default()).expect("plan");
+    let riders = classify_riders(s);
+    let kept: std::collections::HashSet<u32> = plan.kept.iter().copied().collect();
+    let free: Vec<u32> = plan
+        .kept
+        .iter()
+        .copied()
+        .filter(|id| !plan.frozen.contains(id))
+        .collect();
+    let mut naive: Option<f64> = None;
+    for &d in &plan.dropped {
+        if riders.contains_key(&d) {
+            continue;
+        }
+        let dp = s.get_atom(d).expect("dropped atom").position;
+        for &f in &free {
+            let fp = s.get_atom(f).expect("free atom").position;
+            let dist = dp.distance(fp);
+            if naive.is_none_or(|best| dist < best) {
+                naive = Some(dist);
+            }
+        }
+    }
+    let naive = naive.expect("the bulk drops plenty");
+    assert!(
+        (naive - 3.84).abs() < 0.05,
+        "the excluded atoms are the bonded continuation: {naive}"
+    );
+    assert!(kept.contains(&source));
 }
 
 // =============================================================================
@@ -1839,7 +1902,11 @@ fn min_cap_pair_is_none_when_no_two_caps_are_close() {
     let stats = apply_proxy(&mut s, &plan).expect("apply");
     assert_eq!(stats.caps, 2);
     assert_eq!(stats.min_cap_pair, None);
-    assert!(stats.nearest_dropped.is_some(), "the chain goes on");
+    assert_eq!(
+        stats.nearest_dropped, None,
+        "the rest of the chain is the structure continuing past the cut, not a \
+         steric neighbour"
+    );
 }
 
 // =============================================================================
