@@ -185,6 +185,10 @@ switched the overlay on is the viewer's business, not the engine's.
 
 The last step must stay last. `hydrogen_passivate` decides whether a bond is dangling from the **motif**, not from an atom's actual bonds, so any pass that adds a non-lattice bond before it runs will not stop it placing a terminator on that same direction as well — leaving the host over-coordinated. `concave_rebond` therefore runs *after* passivation and repairs the result rather than pre-empting it. `reconstruct_surface` hands it the set of {100} surface atoms it classified but could not pair, and an empty set makes the pass a no-op — which is what gates it on `surf_recon` without a second flag. See `doc/design_concave_rebonding.md`.
 
+**`Atom::in_crystal_depth` is a licence the display acts on, so a pass that cuts into a crystal has to clear it.** Only `fill_lattice` writes the field; it means "how far below the workpiece surface does this atom sit". Three things read it — `should_cull_atom` (the viewport skips atoms deeper than the ball-and-stick threshold, 8 Å by default, on the assumption that a deep atom is buried and cannot be seen), `xray`'s `fade_depth` ramp and `apply_style`'s `fade_depth` rule — plus `surface_reconstruction`'s `BULK_DEPTH_THRESHOLD`, which only ever runs inside the fill. Nothing computational depends on it: no simulation, exporter, `.cnnd`, picking or Dart binding reads it.
+
+The assumption behind the culling stops holding the moment a pass cuts the workpiece open, because the atoms it exposes still carry their old depths. `proxy_cut` therefore sets every atom of its result to 0 (`doc/design_proxy_node.md` §4.8): the symptom otherwise is a culled rim under caps that keep drawing (`add_atom` starts an atom at 0), i.e. free-floating hydrogens over a structure whose bonds are all intact. Other cutting nodes still carry the fill's depths and can reach the same artifact — the general fix is not in yet.
+
 **Position matching** (`atomic_structure/matching.rs`): four subsystems ask
 "which atom is *here*" — `apply_diff`'s `match_diff_atoms`, mechanosynth's
 `apply_step` and `compare_structures`, and the placement engine — and each used

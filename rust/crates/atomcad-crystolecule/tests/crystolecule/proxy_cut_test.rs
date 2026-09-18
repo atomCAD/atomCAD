@@ -1358,6 +1358,75 @@ fn frozen_flags_are_only_ever_set() {
 }
 
 // =============================================================================
+// `in_crystal_depth` (§4.8)
+// =============================================================================
+
+#[test]
+fn the_cut_clears_in_crystal_depth_on_every_atom() {
+    let (mut s, chain, head_h, adatom) = frozen_chain_fixture();
+    // The depths a cut through the bulk would arrive with.
+    for (i, &id) in chain.iter().enumerate() {
+        s.set_atom_in_crystal_depth(id, 3.0 * (i as f32 + 1.0));
+    }
+    s.set_atom_in_crystal_depth(head_h, 3.0);
+    s.set_atom_in_crystal_depth(adatom, 6.0);
+    let options = ProxyOptions {
+        hops: 2,
+        free: 1,
+        fill: false,
+        ..Default::default()
+    };
+    let plan = plan_proxy(&s, &[chain[0]], &options).expect("plan");
+    assert_eq!(plan.caps[0].host, chain[2], "the one severed bond is c2–c3");
+    apply_proxy(&mut s, &plan).expect("apply");
+
+    // Kept heavy atoms, their riders and the cap alike: the proxy is a
+    // free-standing cluster, so nothing in it is buried any more.
+    for atom in s.atoms_values() {
+        assert_eq!(
+            atom.in_crystal_depth, 0.0,
+            "atom {} left at depth {}",
+            atom.id, atom.in_crystal_depth
+        );
+    }
+}
+
+#[test]
+fn the_bulk_cut_leaves_nothing_behind_the_culling_threshold() {
+    let cube = silicon_cube();
+    let source = cube_center_source(cube);
+    let options = ProxyOptions {
+        hops: 4,
+        free: 3,
+        fill: false,
+        rm_single: true,
+        ..Default::default()
+    };
+    // The cut is deep enough in the bulk that its atoms arrive well past the
+    // 8 Å ball-and-stick culling threshold — this is the case that used to
+    // render as free-floating hydrogens.
+    let deepest_input = plan_proxy(cube, &[source], &options)
+        .expect("plan")
+        .kept
+        .iter()
+        .filter_map(|id| cube.get_atom(*id))
+        .map(|a| a.in_crystal_depth)
+        .fold(0.0f32, f32::max);
+    assert!(
+        deepest_input > 8.0,
+        "fixture no longer exercises depth culling: deepest kept atom is {deepest_input} Å"
+    );
+
+    let plan = plan_proxy(cube, &[source], &options).expect("plan");
+    let mut cut = cube.clone();
+    apply_proxy(&mut cut, &plan).expect("apply");
+    assert!(
+        cut.atoms_values().all(|a| a.in_crystal_depth == 0.0),
+        "every atom of the cut reads as surface"
+    );
+}
+
+// =============================================================================
 // The `high` tag (§4.7)
 // =============================================================================
 

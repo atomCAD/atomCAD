@@ -331,7 +331,8 @@ with `L` the host–terminator bond length from the existing passivation
 tables (`hydrogen_passivation.rs` for H; the halogen lengths added by
 `doc/design_halogen_passivation.md`). Single bond to `A`; the terminator
 carries the hydrogen-passivation flag (bit 1) like every other placed
-terminator, and the frozen flag of `A`.
+terminator, and the frozen flag of `A`. Its depth, like every other atom's, is
+cleared — see §4.8.
 
 This is the **link-atom construction**: the cap sits exactly where the
 removed neighbour was, on the true lattice direction. It caps *only severed
@@ -374,7 +375,32 @@ relaxed, everything beyond frozen. A `core` larger than `free` (frozen atoms
 in the high layer) is odd but legal; the exporter is where a wrong partition
 is diagnosed, not here.
 
-### 4.8 Errors
+### 4.8 `in_crystal_depth` is cleared
+
+Every atom of the output gets `in_crystal_depth = 0`, kept atoms and caps
+alike. The field records how far below the **workpiece surface** an atom sits;
+`fill_lattice` is the only thing that writes it, and the cut is exactly what
+makes it false. A proxy is a free-standing cluster: every atom of it is on a
+surface, and none of the old values describes anything real any more.
+
+This is not cosmetic, because the display treats the field as a licence to skip
+work. `should_cull_atom` drops any atom deeper than the ball-and-stick culling
+threshold (8 Å by default) on the assumption that a deep atom is buried inside
+the bulk and cannot be seen — true of the workpiece, false of a cluster cut out
+of it. Left alone, the rim of a six-hop cut into the bulk is culled while the
+caps keep drawing (`add_atom` starts them at 0), which renders as free-floating
+hydrogens over a structure whose bonds are all intact. Clearing the depth is
+the truthful fix rather than a workaround: nothing in a proxy is buried.
+
+Two consequences to know about. A `fade_depth` style rule or an `xray` node
+**downstream** of a `proxy` sees a uniform 0 and applies its surface alpha
+flat, with no ramp — the ramp was measuring a surface the cut has removed. And
+every other node that cuts into a crystal (`atom_cut`, a `passivate` on a cut
+face) still carries the fill's depths, so the same artifact is reachable there;
+the general remedy belongs in the cull rule or in those nodes and is tracked
+separately.
+
+### 4.9 Errors
 
 - Empty `focus`, or no atom carries the tag: localized error naming the tag.
 - `hops < 0`: error. `free < 0`: treated as 0.
@@ -609,7 +635,7 @@ Decisions behind this shape:
   tag-resolving convenience the node and most scripts call.
 - **Unsigned options.** The module cannot express "-1 means off" except as
   `Option`, which is what `core` is. The `-1` / negative-to-zero rules of
-  §4.8 are node-side validation, before `ProxyOptions` is built.
+  §4.9 are node-side validation, before `ProxyOptions` is built.
 - **Deterministic ids.** Every list in the plan is sorted by atom id, and
   `apply_proxy` walks them in that order, so the ids new caps receive do not
   depend on hash-map iteration. Snapshot tests, `.cnnd` stability and the

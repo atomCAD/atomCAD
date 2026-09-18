@@ -205,7 +205,7 @@ impl NodeData for ProxyData {
         let core = pin!(7, self.core, NetworkResult::extract_int);
         let fill = pin!(8, self.fill, NetworkResult::extract_bool);
 
-        // Validation, in the node's own words (§4.8 / §7.6 step 4).
+        // Validation, in the node's own words (§4.9 / §7.6 step 4).
         let focus = focus.trim().to_string();
         if focus.is_empty() {
             return EvalOutput::single(NetworkResult::Error(

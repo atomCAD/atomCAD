@@ -618,7 +618,7 @@ fn proxy_rejects_an_empty_focus_name_and_a_negative_hops() {
     );
 }
 
-/// `free: -1` is *not* an error — §4.8 says it is treated as 0, which must
+/// `free: -1` is *not* an error — §4.9 says it is treated as 0, which must
 /// produce exactly the `free: 0` output.
 #[test]
 fn proxy_clamps_a_negative_free_to_zero() {

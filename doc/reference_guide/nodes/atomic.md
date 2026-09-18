@@ -861,6 +861,17 @@ the property of the same name.
   reproducing hand-built clusters from the literature; it is not a size
   optimisation.
 
+**The cut is a free-standing cluster, and the output says so.** Atoms carry a
+*depth below the workpiece surface*, recorded when the crystal was materialized,
+and the viewport uses it to skip drawing atoms buried deeper than the culling
+threshold in Preferences. Nothing in a proxy is buried any more, so the node
+clears that depth on every atom it outputs — otherwise the rim of a cut taken
+out of the bulk would go undrawn while its cap hydrogens, which have no depth of
+their own, kept drawing, and the proxy would appear to be surrounded by
+free-floating hydrogens. The one thing to know: an `xray` node or a `fade_depth`
+style rule placed *after* a `proxy` has no depth left to ramp over and applies
+its surface alpha flat. Put either one upstream of the cut if you want the ramp.
+
 **Reading the report.** The properties panel shows the cut's statistics: the
 empirical formula and the atom counts (cost), the free/frozen split (the
 relaxation's degrees of freedom), how much `fill` grew the cluster, the open

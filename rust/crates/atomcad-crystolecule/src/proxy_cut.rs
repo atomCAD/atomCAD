@@ -42,7 +42,7 @@ pub const CAP_PAIR_RADIUS: f64 = 3.0;
 
 /// Everything the cut is tunable by. Unsigned on purpose: the module cannot
 /// express "-1 means off" except as an `Option`, which is what `core` is. The
-/// node's negative-value rules (§4.8) are validation done *before* this struct
+/// node's negative-value rules (§4.9) are validation done *before* this struct
 /// is built.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProxyOptions {
@@ -657,7 +657,21 @@ pub fn apply_proxy(
         }
     }
 
-    // 6. The report. The plan supplies what only the input knew; the rest is
+    // 6. `in_crystal_depth` is cleared on **every** atom of the result (§4.8).
+    //    The field means "how far below the workpiece surface does this atom
+    //    sit", and the cut is what makes that false: a proxy is a free-standing
+    //    cluster, every atom of it on the surface. Leaving the fill's values in
+    //    place strands the display's depth culling — a performance shortcut that
+    //    assumes a deep atom is hidden inside the bulk, which after the cut it
+    //    is not. It culled the rim of the cluster while the caps (`add_atom`
+    //    leaves those at 0.0) kept drawing, which looks exactly like free-
+    //    floating hydrogens over an output whose bonds are all intact.
+    let ids: Vec<u32> = structure.atom_ids().copied().collect();
+    for id in ids {
+        structure.set_atom_in_crystal_depth(id, 0.0);
+    }
+
+    // 7. The report. The plan supplies what only the input knew; the rest is
     //    walked off the result.
     let kept_riders = plan
         .kept
