@@ -17457,7 +17457,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_focus = <String>::sse_decode(deserializer);
         let mut var_hops = <i32>::sse_decode(deserializer);
-        let mut var_free = <i32>::sse_decode(deserializer);
+        let mut var_rim = <i32>::sse_decode(deserializer);
         let mut var_rmSingle = <bool>::sse_decode(deserializer);
         let mut var_passivate = <bool>::sse_decode(deserializer);
         let mut var_passivElem = <i16>::sse_decode(deserializer);
@@ -17467,7 +17467,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         return crate::api::structure_designer::structure_designer_api_types::APIProxyData {
             focus: var_focus,
             hops: var_hops,
-            free: var_free,
+            rim: var_rim,
             rm_single: var_rmSingle,
             passivate: var_passivate,
             passiv_elem: var_passivElem,
@@ -17490,7 +17490,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_filled = <usize>::sse_decode(deserializer);
         let mut var_fillRounds = <usize>::sse_decode(deserializer);
         let mut var_farthestHop = <u32>::sse_decode(deserializer);
-        let mut var_minRim = <i32>::sse_decode(deserializer);
+        let mut var_freeHops = <u32>::sse_decode(deserializer);
         let mut var_openValences = <usize>::sse_decode(deserializer);
         let mut var_minCapPair = <Option<f64>>::sse_decode(deserializer);
         let mut var_nearestDropped = <Option<f64>>::sse_decode(deserializer);
@@ -17504,7 +17504,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             filled: var_filled,
             fill_rounds: var_fillRounds,
             farthest_hop: var_farthestHop,
-            min_rim: var_minRim,
+            free_hops: var_freeHops,
             open_valences: var_openValences,
             min_cap_pair: var_minCapPair,
             nearest_dropped: var_nearestDropped,
@@ -26681,7 +26681,7 @@ impl flutter_rust_bridge::IntoDart
         [
             self.focus.into_into_dart().into_dart(),
             self.hops.into_into_dart().into_dart(),
-            self.free.into_into_dart().into_dart(),
+            self.rim.into_into_dart().into_dart(),
             self.rm_single.into_into_dart().into_dart(),
             self.passivate.into_into_dart().into_dart(),
             self.passiv_elem.into_into_dart().into_dart(),
@@ -26722,7 +26722,7 @@ impl flutter_rust_bridge::IntoDart
             self.filled.into_into_dart().into_dart(),
             self.fill_rounds.into_into_dart().into_dart(),
             self.farthest_hop.into_into_dart().into_dart(),
-            self.min_rim.into_into_dart().into_dart(),
+            self.free_hops.into_into_dart().into_dart(),
             self.open_valences.into_into_dart().into_dart(),
             self.min_cap_pair.into_into_dart().into_dart(),
             self.nearest_dropped.into_into_dart().into_dart(),
@@ -31237,7 +31237,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.focus, serializer);
         <i32>::sse_encode(self.hops, serializer);
-        <i32>::sse_encode(self.free, serializer);
+        <i32>::sse_encode(self.rim, serializer);
         <bool>::sse_encode(self.rm_single, serializer);
         <bool>::sse_encode(self.passivate, serializer);
         <i16>::sse_encode(self.passiv_elem, serializer);
@@ -31259,7 +31259,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <usize>::sse_encode(self.filled, serializer);
         <usize>::sse_encode(self.fill_rounds, serializer);
         <u32>::sse_encode(self.farthest_hop, serializer);
-        <i32>::sse_encode(self.min_rim, serializer);
+        <u32>::sse_encode(self.free_hops, serializer);
         <usize>::sse_encode(self.open_valences, serializer);
         <Option<f64>>::sse_encode(self.min_cap_pair, serializer);
         <Option<f64>>::sse_encode(self.nearest_dropped, serializer);

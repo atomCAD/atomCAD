@@ -15,7 +15,7 @@ import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 /// gets the standard "disable on wired input" treatment.
 const int _FOCUS_PIN = 1;
 const int _HOPS_PIN = 2;
-const int _FREE_PIN = 3;
+const int _RIM_PIN = 3;
 const int _RM_SINGLE_PIN = 4;
 const int _PASSIVATE_PIN = 5;
 const int _PASSIV_ELEM_PIN = 6;
@@ -102,7 +102,7 @@ class _ProxyEditorState extends State<ProxyEditor> {
   void _commit({
     String? focus,
     int? hops,
-    int? free,
+    int? rim,
     bool? rmSingle,
     bool? passivate,
     int? passivElem,
@@ -116,7 +116,7 @@ class _ProxyEditorState extends State<ProxyEditor> {
       APIProxyData(
         focus: focus ?? data.focus,
         hops: hops ?? data.hops,
-        free: free ?? data.free,
+        rim: rim ?? data.rim,
         rmSingle: rmSingle ?? data.rmSingle,
         passivate: passivate ?? data.passivate,
         passivElem: passivElem ?? data.passivElem,
@@ -144,8 +144,6 @@ class _ProxyEditorState extends State<ProxyEditor> {
             nodeTypeName: 'proxy',
           ),
           const SizedBox(height: 16),
-          _ProxyReport(stats: _stats),
-          const SizedBox(height: 16),
 
           // ---- focus ------------------------------------------------------
           _PinOverride(
@@ -171,46 +169,31 @@ class _ProxyEditorState extends State<ProxyEditor> {
               ],
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            'Every atom carrying this tag is a source, at distance 0.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
           const SizedBox(height: 16),
 
-          // ---- hops / free ------------------------------------------------
+          // ---- hops / rim -------------------------------------------------
           _PinOverride(
             connected: _isPinConnected(_HOPS_PIN),
             property: 'Hops',
             pinName: 'hops',
             child: _LabelledSpin(
-              label: 'Hops (keep within)',
+              label: 'Hops',
               value: data.hops,
               minimumValue: 0,
               onChanged: (value) => _commit(hops: value),
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            'The cost dial: heavy atoms this many bonds out or nearer are kept.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
           const SizedBox(height: 12),
           _PinOverride(
-            connected: _isPinConnected(_FREE_PIN),
-            property: 'Free',
-            pinName: 'free',
+            connected: _isPinConnected(_RIM_PIN),
+            property: 'Rim',
+            pinName: 'rim',
             child: _LabelledSpin(
-              label: 'Free (freeze beyond)',
-              value: data.free,
+              label: 'Rim (frozen shells)',
+              value: data.rim,
               minimumValue: 0,
-              onChanged: (value) => _commit(free: value),
+              onChanged: (value) => _commit(rim: value),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'The chemistry dial: set it from how far the strain field reaches.',
-            style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 16),
 
@@ -224,12 +207,6 @@ class _ProxyEditorState extends State<ProxyEditor> {
               children: [
                 CheckboxListTile(
                   title: const Text('Tag an ONIOM core (`high`)'),
-                  subtitle: Text(
-                    data.core < 0
-                        ? 'Off — no `high` tag is written'
-                        : 'Heavy atoms within ${data.core} '
-                            '${data.core == 1 ? "hop" : "hops"} are tagged',
-                  ),
                   value: data.core >= 0,
                   onChanged: (value) =>
                       _commit(core: (value ?? false) ? _DEFAULT_CORE : -1),
@@ -249,12 +226,7 @@ class _ProxyEditorState extends State<ProxyEditor> {
               ],
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            'Riders and caps inherit the tag; untagged means the low layer.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
 
           // ---- the three flags --------------------------------------------
           _PinOverride(
@@ -263,9 +235,6 @@ class _ProxyEditorState extends State<ProxyEditor> {
             pinName: 'fill',
             child: CheckboxListTile(
               title: const Text('Fill bridging atoms'),
-              subtitle: const Text(
-                'Keeps atoms two survivors shared; leave on or caps clash',
-              ),
               value: data.fill,
               onChanged: (value) => _commit(fill: value ?? true),
               controlAffinity: ListTileControlAffinity.leading,
@@ -278,9 +247,6 @@ class _ProxyEditorState extends State<ProxyEditor> {
             pinName: 'rm_single',
             child: CheckboxListTile(
               title: const Text('Remove single-neighbour atoms'),
-              subtitle: const Text(
-                'Recursive; breaks the nesting of the hops series',
-              ),
               value: data.rmSingle,
               onChanged: (value) => _commit(rmSingle: value ?? false),
               controlAffinity: ListTileControlAffinity.leading,
@@ -293,9 +259,6 @@ class _ProxyEditorState extends State<ProxyEditor> {
             pinName: 'passivate',
             child: CheckboxListTile(
               title: const Text('Cap severed bonds'),
-              subtitle: const Text(
-                'Only severed bonds — an input radical stays a radical',
-              ),
               value: data.passivate,
               onChanged: (value) => _commit(passivate: value ?? true),
               controlAffinity: ListTileControlAffinity.leading,
@@ -320,6 +283,10 @@ class _ProxyEditorState extends State<ProxyEditor> {
               ),
             ),
           ),
+          const SizedBox(height: 16),
+
+          // ---- the report, last: settings first, results after -------------
+          _ProxyReport(stats: _stats),
           const SizedBox(height: 16),
         ],
       ),
@@ -456,7 +423,7 @@ class _ProxyReport extends StatelessWidget {
               _ReportRow(
                   label: 'Farthest hop (size)', value: '${stats.farthestHop}'),
               _ReportRow(
-                  label: 'Min rim (shielding)', value: '${stats.minRim}'),
+                  label: 'Free depth (hops)', value: '${stats.freeHops}'),
               _ReportRow(
                   label: 'Open valences', value: '${stats.openValences}'),
               _ReportRow(
@@ -465,11 +432,6 @@ class _ProxyReport extends StatelessWidget {
               _ReportRow(
                   label: 'Nearest dropped',
                   value: _distance(stats.nearestDropped)),
-              const SizedBox(height: 8),
-              Text(
-                'Rim thickness is min rim, not farthest hop.',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
               if (stats.nearestDropped != null && stats.nearestDropped! < 4.0)
                 Padding(
                   padding: const EdgeInsets.only(top: 4.0),

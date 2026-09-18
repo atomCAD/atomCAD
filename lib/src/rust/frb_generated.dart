@@ -19766,7 +19766,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return APIProxyData(
       focus: dco_decode_String(arr[0]),
       hops: dco_decode_i_32(arr[1]),
-      free: dco_decode_i_32(arr[2]),
+      rim: dco_decode_i_32(arr[2]),
       rmSingle: dco_decode_bool(arr[3]),
       passivate: dco_decode_bool(arr[4]),
       passivElem: dco_decode_i_16(arr[5]),
@@ -19792,7 +19792,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       filled: dco_decode_usize(arr[6]),
       fillRounds: dco_decode_usize(arr[7]),
       farthestHop: dco_decode_u_32(arr[8]),
-      minRim: dco_decode_i_32(arr[9]),
+      freeHops: dco_decode_u_32(arr[9]),
       openValences: dco_decode_usize(arr[10]),
       minCapPair: dco_decode_opt_box_autoadd_f_64(arr[11]),
       nearestDropped: dco_decode_opt_box_autoadd_f_64(arr[12]),
@@ -25662,7 +25662,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_focus = sse_decode_String(deserializer);
     var var_hops = sse_decode_i_32(deserializer);
-    var var_free = sse_decode_i_32(deserializer);
+    var var_rim = sse_decode_i_32(deserializer);
     var var_rmSingle = sse_decode_bool(deserializer);
     var var_passivate = sse_decode_bool(deserializer);
     var var_passivElem = sse_decode_i_16(deserializer);
@@ -25672,7 +25672,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return APIProxyData(
         focus: var_focus,
         hops: var_hops,
-        free: var_free,
+        rim: var_rim,
         rmSingle: var_rmSingle,
         passivate: var_passivate,
         passivElem: var_passivElem,
@@ -25693,7 +25693,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_filled = sse_decode_usize(deserializer);
     var var_fillRounds = sse_decode_usize(deserializer);
     var var_farthestHop = sse_decode_u_32(deserializer);
-    var var_minRim = sse_decode_i_32(deserializer);
+    var var_freeHops = sse_decode_u_32(deserializer);
     var var_openValences = sse_decode_usize(deserializer);
     var var_minCapPair = sse_decode_opt_box_autoadd_f_64(deserializer);
     var var_nearestDropped = sse_decode_opt_box_autoadd_f_64(deserializer);
@@ -25707,7 +25707,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         filled: var_filled,
         fillRounds: var_fillRounds,
         farthestHop: var_farthestHop,
-        minRim: var_minRim,
+        freeHops: var_freeHops,
         openValences: var_openValences,
         minCapPair: var_minCapPair,
         nearestDropped: var_nearestDropped);
@@ -32019,7 +32019,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.focus, serializer);
     sse_encode_i_32(self.hops, serializer);
-    sse_encode_i_32(self.free, serializer);
+    sse_encode_i_32(self.rim, serializer);
     sse_encode_bool(self.rmSingle, serializer);
     sse_encode_bool(self.passivate, serializer);
     sse_encode_i_16(self.passivElem, serializer);
@@ -32041,7 +32041,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_usize(self.filled, serializer);
     sse_encode_usize(self.fillRounds, serializer);
     sse_encode_u_32(self.farthestHop, serializer);
-    sse_encode_i_32(self.minRim, serializer);
+    sse_encode_u_32(self.freeHops, serializer);
     sse_encode_usize(self.openValences, serializer);
     sse_encode_opt_box_autoadd_f_64(self.minCapPair, serializer);
     sse_encode_opt_box_autoadd_f_64(self.nearestDropped, serializer);

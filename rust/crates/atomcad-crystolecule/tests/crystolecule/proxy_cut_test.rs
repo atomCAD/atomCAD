@@ -159,9 +159,13 @@ fn sorted_ids(mut ids: Vec<u32>) -> Vec<u32> {
     ids
 }
 
+/// The crate defaults at a given `hops`, with `rm_single` **off**: the §4.3
+/// figures and every nesting property asserted below are stated for the
+/// untrimmed cut.
 fn default_options(hops: u32) -> ProxyOptions {
     ProxyOptions {
         hops,
+        rm_single: false,
         ..Default::default()
     }
 }
@@ -231,6 +235,7 @@ fn rider_source_promotes_its_host_and_is_kept() {
     let options = ProxyOptions {
         hops: 0,
         fill: false,
+        rm_single: false,
         ..Default::default()
     };
     let plan = plan_proxy(&s, &[head_h], &options).expect("plan");
@@ -303,8 +308,9 @@ fn multi_source_fragments_merge_and_a_third_is_dropped() {
 
     let options = ProxyOptions {
         hops: 6,
-        free: 6,
+        rim: 0,
         fill: false,
+        rm_single: false,
         ..Default::default()
     };
     let plan = plan_proxy(&s, &[tool[0], surface[0]], &options).expect("plan");
@@ -328,6 +334,7 @@ fn hops_zero_keeps_the_sources_and_their_riders_only() {
     let options = ProxyOptions {
         hops: 0,
         fill: false,
+        rm_single: false,
         ..Default::default()
     };
     let plan = plan_proxy(&s, &[ring[0]], &options).expect("plan");
@@ -356,6 +363,7 @@ fn fill_restores_a_heavy_atom_bridging_two_sources() {
         &ProxyOptions {
             hops: 0,
             fill: false,
+            rm_single: false,
             ..Default::default()
         },
     )
@@ -368,6 +376,7 @@ fn fill_restores_a_heavy_atom_bridging_two_sources() {
         &ProxyOptions {
             hops: 0,
             fill: true,
+            rm_single: false,
             ..Default::default()
         },
     )
@@ -436,6 +445,7 @@ fn fill_table_bulk_silicon_hops_4() {
         &ProxyOptions {
             hops: 4,
             fill: false,
+            rm_single: false,
             ..Default::default()
         },
     )
@@ -479,6 +489,7 @@ fn fill_table_bulk_silicon_hops_6() {
         &ProxyOptions {
             hops: 6,
             fill: false,
+            rm_single: false,
             ..Default::default()
         },
     )
@@ -610,6 +621,7 @@ fn fluorine_caps_use_the_halogen_length() {
     let options = ProxyOptions {
         hops: 3,
         passivant_element: 9,
+        rm_single: false,
         ..Default::default()
     };
     let plan = plan_proxy(s, &[source], &options).expect("plan");
@@ -651,6 +663,7 @@ fn caps_are_placed_on_severed_bonds_only() {
         &ProxyOptions {
             hops: 0,
             fill: false,
+            rm_single: false,
             ..Default::default()
         },
     )
@@ -676,6 +689,7 @@ fn caps_are_placed_on_severed_bonds_only() {
         &ProxyOptions {
             hops: 0,
             fill: false,
+            rm_single: false,
             ..Default::default()
         },
     )
@@ -690,6 +704,7 @@ fn passivate_off_plans_no_caps() {
     let options = ProxyOptions {
         hops: 3,
         passivate: false,
+        rm_single: false,
         ..Default::default()
     };
     assert!(
@@ -736,9 +751,12 @@ fn rm_single_cascades_along_a_chain_and_takes_the_riders() {
         previous = atom;
     }
 
+    // `rim: hops` freezes the whole cut, which is what makes every atom
+    // eligible for the trim: it only ever drops atoms in the frozen rim
+    // (§4.4). The interior-protection rule has its own test below.
     let options = ProxyOptions {
         hops: 3,
-        free: 6,
+        rim: 3,
         fill: false,
         rm_single: true,
         ..Default::default()
@@ -782,7 +800,7 @@ fn rm_single_leaves_input_singly_bonded_atoms_and_rider_hosts_alone() {
 
     let options = ProxyOptions {
         hops: 6,
-        free: 6,
+        rim: 0,
         fill: false,
         rm_single: true,
         ..Default::default()
@@ -809,9 +827,10 @@ fn rm_single_runs_after_fill() {
     bond(&mut s, a, bridge);
     bond(&mut s, b, bridge);
 
+    // `rim: hops`, so the whole cut is rim and the trim is unguarded here.
     let base = ProxyOptions {
         hops: 1,
-        free: 6,
+        rim: 1,
         rm_single: true,
         ..Default::default()
     };
@@ -854,15 +873,132 @@ fn rm_single_never_drops_a_source() {
         previous = atom;
     }
 
+    // `rim: hops`, so nothing is protected by the rim rule and the source
+    // exemption is the only thing standing between the cascade and the atom.
     let options = ProxyOptions {
         hops: 1,
-        free: 6,
+        rim: 1,
         fill: false,
         rm_single: true,
         ..Default::default()
     };
     let plan = plan_proxy(&s, &[focus], &options).expect("plan");
     assert_eq!(plan.kept, vec![focus], "a source is never dropped");
+}
+
+/// The cascade reaches a fixpoint with nothing left singly attached — and it
+/// does so *within the rim*, at the default `rim: 1`. The interior guard of
+/// §4.4 therefore costs nothing on a bulk cut: everything the trim wants to
+/// remove is in the outermost shell anyway. (A dangling atom the guard does
+/// leave is only reachable on a chain-like topology, which is the case the
+/// guard exists for.)
+/// §4.4's interior rule: the trim only ever drops atoms the cut **freezes**,
+/// so the cascade cannot walk a chain into the relaxed interior, and the atoms
+/// near the focus are safe whatever the topology.
+///
+/// Same fixture as the cascade test — a six-ring with a four-atom chain — cut
+/// at `hops: 3`. With the whole cut frozen (`rim: 3`) the chain unwinds
+/// completely; with `rim: 1` only the chain atom in the outermost shell may
+/// go, and at `rim: 0` nothing may.
+#[test]
+fn rm_single_never_reaches_the_relaxed_interior() {
+    let mut s = AtomicStructure::new();
+    let ring = six_ring(&mut s, DVec3::ZERO);
+    let mut chain = Vec::new();
+    let mut previous = ring[0];
+    for i in 1..=4 {
+        let atom = add(&mut s, 6, DVec3::new(1.4 + 1.54 * i as f64, 0.0, 0.0));
+        bond(&mut s, previous, atom);
+        let h = add(&mut s, 1, DVec3::new(1.4 + 1.54 * i as f64, 1.09, 0.0));
+        bond(&mut s, atom, h);
+        chain.push(atom);
+        previous = atom;
+    }
+    // `chain[k]` is at distance k + 1 from the source; `chain[3]` is beyond
+    // `hops` and is what the distance cut drops, starting the cascade.
+    let plan_of = |rim: u32| {
+        plan_proxy(
+            &s,
+            &[ring[0]],
+            &ProxyOptions {
+                hops: 3,
+                rim,
+                fill: false,
+                rm_single: true,
+                ..Default::default()
+            },
+        )
+        .expect("plan")
+    };
+
+    // rim 0: the free depth is `hops`, so no kept atom is eligible at all and
+    // the chain keeps everything the distance cut kept.
+    let none = plan_of(0);
+    for id in &chain[..3] {
+        assert!(none.kept.contains(id), "rim 0 must trim nothing: {id}");
+    }
+
+    // rim 1: the free depth is 2, so only `chain[2]` (distance 3) may go. The
+    // cascade would take `chain[1]` next — the rule is what stops it.
+    let one = plan_of(1);
+    assert!(
+        !one.kept.contains(&chain[2]),
+        "the outermost chain atom goes"
+    );
+    assert!(
+        one.kept.contains(&chain[1]),
+        "distance 2 is inside the free depth and must survive the cascade"
+    );
+    assert!(one.kept.contains(&chain[0]));
+
+    // rim 3: the whole cut is rim, so the cascade runs to the source.
+    let all = plan_of(3);
+    for id in &chain {
+        assert!(!all.kept.contains(id), "rim 3 unwinds the chain: {id}");
+    }
+    assert!(
+        all.kept.contains(&ring[0]),
+        "the source survives regardless"
+    );
+
+    // And the general statement, on the bulk cube: nothing the trim dropped
+    // was inside the free depth.
+    let cube = silicon_cube();
+    let source = cube_center_source(cube);
+    // `fill: false` on purpose: the filled boundary is {111}-faceted and leaves
+    // the trim nothing to do, so the plain cut is what exercises the rule here.
+    let options = ProxyOptions {
+        hops: 5,
+        rim: 2,
+        fill: false,
+        rm_single: true,
+        ..Default::default()
+    };
+    let trimmed = plan_proxy(cube, &[source], &options).expect("plan");
+    let untrimmed = plan_proxy(
+        cube,
+        &[source],
+        &ProxyOptions {
+            rm_single: false,
+            ..options.clone()
+        },
+    )
+    .expect("plan");
+    let kept_now: std::collections::HashSet<u32> = trimmed.kept.iter().copied().collect();
+    let mut dropped_by_trim = 0usize;
+    for id in &untrimmed.kept {
+        if kept_now.contains(id) {
+            continue;
+        }
+        dropped_by_trim += 1;
+        let d = untrimmed.distance.get(id).copied().unwrap_or(u32::MAX);
+        assert!(
+            d > options.free_hops(),
+            "atom {id} at distance {d} is inside the free depth {}",
+            options.free_hops()
+        );
+    }
+    assert!(dropped_by_trim > 0, "CONTROL: the trim did drop something");
 }
 
 #[test]
@@ -913,6 +1049,7 @@ fn keep_sets_are_monotonic_in_hops() {
                 &ProxyOptions {
                     hops: k,
                     fill,
+                    rm_single: false,
                     ..Default::default()
                 },
             )
@@ -923,6 +1060,7 @@ fn keep_sets_are_monotonic_in_hops() {
                 &ProxyOptions {
                     hops: k + 1,
                     fill,
+                    rm_single: false,
                     ..Default::default()
                 },
             )
@@ -936,35 +1074,37 @@ fn keep_sets_are_monotonic_in_hops() {
 }
 
 #[test]
-fn frozen_sets_shrink_as_free_grows() {
+fn frozen_sets_grow_as_rim_grows() {
     let s = silicon_cube();
     let source = cube_center_source(s);
-    for f in 0..5u32 {
-        let tighter = plan_proxy(
+    for r in 0..5u32 {
+        let thinner = plan_proxy(
             s,
             &[source],
             &ProxyOptions {
                 hops: 5,
-                free: f,
+                rim: r,
+                rm_single: false,
                 ..Default::default()
             },
         )
         .expect("plan");
-        let looser = plan_proxy(
+        let thicker = plan_proxy(
             s,
             &[source],
             &ProxyOptions {
                 hops: 5,
-                free: f + 1,
+                rim: r + 1,
+                rm_single: false,
                 ..Default::default()
             },
         )
         .expect("plan");
-        let small: std::collections::HashSet<u32> = looser.frozen.iter().copied().collect();
+        let small: std::collections::HashSet<u32> = thinner.frozen.iter().copied().collect();
         for id in &small {
-            assert!(tighter.frozen.contains(id), "free={f}: atom {id} unfrozen");
+            assert!(thicker.frozen.contains(id), "rim={r}: atom {id} unfrozen");
         }
-        assert!(looser.frozen.len() <= tighter.frozen.len());
+        assert!(thinner.frozen.len() <= thicker.frozen.len());
     }
 }
 
@@ -973,11 +1113,22 @@ fn frozen_sets_shrink_as_free_grows() {
 // =============================================================================
 
 #[test]
-fn frozen_is_exactly_distance_beyond_free() {
+fn frozen_is_exactly_distance_beyond_the_free_depth() {
     let s = silicon_cube();
     let source = cube_center_source(s);
 
-    let plan = plan_proxy(s, &[source], &default_options(6)).expect("plan");
+    // hops 6, rim 3 — the free depth is 3.
+    let plan = plan_proxy(
+        s,
+        &[source],
+        &ProxyOptions {
+            hops: 6,
+            rim: 3,
+            rm_single: false,
+            ..Default::default()
+        },
+    )
+    .expect("plan");
     for id in &plan.frozen {
         assert!(plan.distance[id] > 3);
     }
@@ -986,19 +1137,20 @@ fn frozen_is_exactly_distance_beyond_free() {
             assert!(plan.frozen.contains(&id), "atom {id} should be frozen");
         }
     }
-    // Everything fill restored lies beyond `hops` and so beyond `free`.
+    // Everything fill restored lies beyond `hops` and so beyond the free depth.
     for id in &plan.filled {
         assert!(plan.frozen.contains(id), "filled atom {id} must be frozen");
     }
 
-    // `free >= hops` freezes nothing on the plain cut.
+    // `rim: 0` freezes nothing on the plain cut.
     let plain = plan_proxy(
         s,
         &[source],
         &ProxyOptions {
             hops: 4,
-            free: 4,
+            rim: 0,
             fill: false,
+            rm_single: false,
             ..Default::default()
         },
     )
@@ -1021,6 +1173,7 @@ fn core_tags_the_first_shells_and_nothing_else() {
         &ProxyOptions {
             hops: 4,
             core: Some(0),
+            rm_single: false,
             ..Default::default()
         },
     )
@@ -1033,6 +1186,7 @@ fn core_tags_the_first_shells_and_nothing_else() {
         &ProxyOptions {
             hops: 4,
             core: Some(1),
+            rm_single: false,
             ..Default::default()
         },
     )
@@ -1064,7 +1218,8 @@ fn nearest_dropped_finds_a_cut_away_steric_neighbour() {
 
     let options = ProxyOptions {
         hops: 6,
-        free: 6,
+        rim: 0,
+        rm_single: false,
         ..Default::default()
     };
     let plan = plan_proxy(&s, &[ring[0]], &options).expect("plan");
@@ -1081,7 +1236,8 @@ fn nearest_dropped_is_none_when_nothing_is_dropped() {
         &[ring[0]],
         &ProxyOptions {
             hops: 6,
-            free: 6,
+            rim: 0,
+            rm_single: false,
             ..Default::default()
         },
     )
@@ -1094,7 +1250,18 @@ fn nearest_dropped_is_none_when_nothing_is_dropped() {
 fn nearest_dropped_on_the_bulk_cube_is_comfortably_far() {
     let s = silicon_cube();
     let source = cube_center_source(s);
-    let plan = plan_proxy(s, &[source], &default_options(6)).expect("plan");
+    // The §3.3 figure is quoted for a free depth of 3, i.e. hops 6 / rim 3.
+    let plan = plan_proxy(
+        s,
+        &[source],
+        &ProxyOptions {
+            hops: 6,
+            rim: 3,
+            rm_single: false,
+            ..Default::default()
+        },
+    )
+    .expect("plan");
     let d = plan
         .nearest_dropped
         .expect("the bulk always drops something");
@@ -1119,6 +1286,7 @@ fn a_disallowed_passivant_is_an_error() {
     let ring = six_ring(&mut s, DVec3::ZERO);
     let options = ProxyOptions {
         passivant_element: 2,
+        rm_single: false,
         ..Default::default()
     };
     let err = plan_proxy(&s, &[ring[0]], &options).unwrap_err();
@@ -1325,8 +1493,9 @@ fn frozen_flags_are_only_ever_set() {
     let (mut s, chain, head_h, adatom) = frozen_chain_fixture();
     let options = ProxyOptions {
         hops: 2,
-        free: 1,
+        rim: 1,
         fill: false,
+        rm_single: false,
         ..Default::default()
     };
     let plan = plan_proxy(&s, &[chain[0]], &options).expect("plan");
@@ -1372,8 +1541,9 @@ fn the_cut_clears_in_crystal_depth_on_every_atom() {
     s.set_atom_in_crystal_depth(adatom, 6.0);
     let options = ProxyOptions {
         hops: 2,
-        free: 1,
+        rim: 1,
         fill: false,
+        rm_single: false,
         ..Default::default()
     };
     let plan = plan_proxy(&s, &[chain[0]], &options).expect("plan");
@@ -1397,7 +1567,7 @@ fn the_bulk_cut_leaves_nothing_behind_the_culling_threshold() {
     let source = cube_center_source(cube);
     let options = ProxyOptions {
         hops: 4,
-        free: 3,
+        rim: 1,
         fill: false,
         rm_single: true,
         ..Default::default()
@@ -1435,9 +1605,10 @@ fn high_is_inherited_by_riders_and_caps() {
     let (mut s, chain, head_h, adatom) = frozen_chain_fixture();
     let options = ProxyOptions {
         hops: 2,
-        free: 1,
+        rim: 1,
         fill: false,
         core: Some(2),
+        rm_single: false,
         ..Default::default()
     };
     let plan = plan_proxy(&s, &[chain[0]], &options).expect("plan");
@@ -1462,9 +1633,10 @@ fn high_already_on_an_atom_beyond_core_is_kept() {
     s.add_atom_tag(chain[2], "high").expect("tag");
     let options = ProxyOptions {
         hops: 2,
-        free: 1,
+        rim: 1,
         fill: false,
         core: Some(0),
+        rm_single: false,
         ..Default::default()
     };
     let plan = plan_proxy(&s, &[chain[0]], &options).expect("plan");
@@ -1482,8 +1654,9 @@ fn core_none_leaves_the_tag_table_alone() {
     let before = s.tag_names().to_vec();
     let options = ProxyOptions {
         hops: 2,
-        free: 1,
+        rim: 1,
         fill: false,
+        rm_single: false,
         ..Default::default()
     };
     let plan = plan_proxy(&s, &[chain[0]], &options).expect("plan");
@@ -1502,9 +1675,10 @@ fn a_full_tag_table_fails_before_the_first_mutation() {
     }
     let options = ProxyOptions {
         hops: 2,
-        free: 1,
+        rim: 1,
         fill: false,
         core: Some(0),
+        rm_single: false,
         ..Default::default()
     };
     let plan = plan_proxy(&s, &[chain[0]], &options).expect("plan");
@@ -1626,7 +1800,7 @@ fn stats_report_the_cut_on_the_bulk_cube() {
     assert_eq!(stats.filled, 165 - 83);
     assert_eq!(stats.fill_rounds, 4);
     assert_eq!(stats.farthest_hop, 8, "a size figure, not a rim figure");
-    assert_eq!(stats.min_rim, 1, "hops 4 − free 3");
+    assert_eq!(stats.free_hops, 3, "hops 4 − rim 1");
     let pair = stats.min_cap_pair.expect("the rim has cap pairs");
     assert!((pair - 2.42).abs() < 0.01, "clean silicon rim: {pair}");
 
@@ -1638,6 +1812,7 @@ fn stats_report_the_cut_on_the_bulk_cube() {
         &ProxyOptions {
             hops: 4,
             fill: false,
+            rm_single: false,
             ..Default::default()
         },
     )
@@ -1677,8 +1852,9 @@ fn proxy_cut_resolves_the_focus_tag() {
     s.add_atom_tag(chain[0], "focus").expect("tag");
     let options = ProxyOptions {
         hops: 2,
-        free: 1,
+        rim: 1,
         fill: false,
+        rm_single: false,
         ..Default::default()
     };
 
@@ -1699,6 +1875,7 @@ fn proxy_cut_promotes_a_tagged_rider_to_its_host() {
     let options = ProxyOptions {
         hops: 1,
         fill: false,
+        rm_single: false,
         ..Default::default()
     };
     let stats = proxy_cut(&mut s, "focus", &options).expect("cut");

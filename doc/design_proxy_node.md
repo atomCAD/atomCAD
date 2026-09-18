@@ -39,7 +39,7 @@ Mark the atoms at the reaction site with a tag (default name `focus`). The
 node computes the **bond-graph distance** — hops over covalent bonds, counted
 over heavy atoms only — from the nearest focus atom to every other atom, keeps
 what lies within `hops`, fills in the boundary atoms that would otherwise
-leave clashing cap pairs, freezes what lies beyond `free`, caps the severed
+leave clashing cap pairs, freezes the outer `rim` shells, caps the severed
 bonds, and outputs the result as an ordinary atomic structure.
 
 Bond hops rather than a sphere because:
@@ -69,8 +69,8 @@ and a connected pin overrides the stored value.
 | 0 | `molecule` | HasAtoms | yes | Structure to cut, Crystal or Molecule. |
 | 1 | `focus` | String | no | Tag name marking the source atoms. Every atom carrying it is at distance 0. |
 | 2 | `hops` | Int | no | Keep heavy atoms whose distance is at most this. |
-| 3 | `free` | Int | no | Heavy atoms farther than this get the frozen flag. On the plain cut `free >= hops` freezes nothing; atoms `fill` restores beyond `free` are frozen regardless (§4.6). |
-| 4 | `rm_single` | Bool | no | Drop heavy atoms the cut left with a single heavy neighbour, repeated until none is left (§4.4). Focus atoms are never dropped. |
+| 3 | `rim` | Int | no | Thickness of the frozen rim, in shells counted inward from the cut boundary: heavy atoms farther than `hops - rim` from a source get the frozen flag. `rim: 0` still freezes what `fill` restored (§4.6). |
+| 4 | `rm_single` | Bool | no | Drop heavy atoms the cut left with a single heavy neighbour, repeated until none is left (§4.4). On by default. Focus atoms are never dropped. |
 | 5 | `passivate` | Bool | no | Cap every severed bond with a terminator along the old bond vector. |
 | 6 | `passiv_elem` | Int | no | Terminator element (atomic number), H/F/Cl/Br/I. |
 | 7 | `core` | Int | no | Tag heavy atoms with distance at most this as `high` (the ONIOM high layer). Negative disables. |
@@ -97,9 +97,9 @@ atom-mutating `map_atomic` path that `atom_cut` uses, not the metadata-only
 ```rust
 pub struct ProxyData {
     pub focus: String,       // default "focus"
-    pub hops: i32,           // default 6
-    pub free: i32,           // default 3
-    pub rm_single: bool,     // default false
+    pub hops: i32,           // default 3
+    pub rim: i32,            // default 1 (frozen shells, counted from the boundary)
+    pub rm_single: bool,     // default true
     pub passivate: bool,     // default true
     pub passiv_elem: i16,    // default 1 (H)
     pub core: i32,           // default -1 (no `high` tagging)
@@ -124,7 +124,7 @@ pub struct ProxyStats {
     pub filled: usize,       // heavy atoms added by fill
     pub fill_rounds: usize,  // synchronous fill rounds until nothing changed
     pub farthest_hop: u32,   // largest distance among kept heavy atoms
-    pub min_rim: i32,        // hops - free, the thinnest frozen shell
+    pub free_hops: u32,      // hops - rim, the depth of the relaxed interior
     pub open_valences: usize,// unsaturated slots left on kept atoms
     pub min_cap_pair: Option<f64>,    // closest cap-cap distance, Å;
                                       // None when no two caps lie within 3 Å
@@ -139,12 +139,13 @@ text property whatever its value (compare the `materialize` lines in the
 text-format snapshots), so a node at its defaults with `core: 1` serializes as
 
 ```
-proxy_6 = proxy { molecule: surface, focus: "focus", hops: 6, free: 3, rm_single: false, passivate: true, passiv_elem: 1, core: 1, fill: true, visible: true }
+proxy_6 = proxy { molecule: surface, focus: "focus", hops: 3, rim: 1, rm_single: true, passivate: true, passiv_elem: 1, core: 1, fill: true, visible: true }
 ```
 
 When *parsing*, a property left out takes its default, so the short form
 `proxy { molecule: surface, core: 1 }` is accepted and round-trips to the
-full line above. Node subtitle when pins 1–3 are unconnected: `focus · 6 / 3`.
+full line above. Node subtitle when pins 1–3 are unconnected: `focus · 3 / 1`
+(`focus · hops / rim`).
 
 `ProxyStats` feeds the report in the properties panel, the way `relax` shows
 its message. It is the user's only feedback on a cut and is what the tuning
@@ -154,8 +155,10 @@ loop of §6.1 reads, so it carries more than a count:
 - `free`, `frozen` — the relaxation's degrees of freedom.
 - `filled`, `fill_rounds`, `farthest_hop` — how much fill grew the cluster.
   `farthest_hop` is a **size** figure, not a shielding figure (§4.3).
-- `min_rim` — `hops - free`, the guaranteed thickness of the frozen rim in
-  its thinnest direction; the shielding figure.
+- `free_hops` — `hops - rim`, the depth of the relaxed interior. Derived from
+  the options, but it is the figure the chemistry is read against, and with
+  `rim` as the knob it is the one of the pair the panel cannot show as a
+  control.
 - `open_valences` — the unsaturated slots the output still carries, computed
   from hybridization the way `passivate` counts them. This is what sets the
   multiplicity of the quantum-chemistry input, so it has to be visible.
@@ -252,8 +255,8 @@ reproduces the bulk rows):
 Three consequences the rest of the design relies on:
 
 - **Cost.** Fill converges in about `hops` rounds and multiplies the atom
-  count by 1.4–1.9. Every atom it adds lies beyond `hops`, so with
-  `free < hops` all of them are frozen rim: no degrees of freedom are added
+  count by 1.4–1.9. Every atom it adds lies beyond `hops`, so all of them
+  are frozen rim whatever `rim` is: no degrees of freedom are added
   to the relaxation, only evaluation cost. The rim it produces is an
   H-terminated {111}-like surface with every cap on its ideal bond vector,
   which is the one hydrogen termination of silicon that is stable without
@@ -261,9 +264,9 @@ Three consequences the rest of the design relies on:
 - **Anisotropy.** Fill grows only where the boundary is {100}-like and adds
   nothing where it is already {111}-like. So the farthest kept atom can sit
   at about `2·hops`, while the thinnest part of the frozen rim is still
-  exactly `hops - free`. `farthest_hop` in the stats is a size figure;
-  `min_rim` is the shielding figure. Neither `free` nor `hops` should be
-  lowered because the farthest hop looks large.
+  exactly `rim` shells. `farthest_hop` in the stats is a size figure, and the
+  shielding figure is the `rim` knob itself. Neither `rim` nor `hops` should be
+  changed because the farthest hop looks large.
 - **Monotonicity.** Fill is a closure operator, so nested plain cuts give
   nested filled cuts: the `hops` series stays a convergence series.
 
@@ -274,24 +277,56 @@ the boundary so that no shared site occurs; it is not a size optimisation.
 
 ### 4.4 `rm_single`
 
-Off by default. When on, it runs on the **converged boundary** (after
+On by default. It runs on the **converged boundary** (after
 `fill`) and repeats until nothing changes: a kept heavy atom whose kept heavy
 neighbours number exactly one, **and** which had more than one heavy
-neighbour in the input, is dropped with its riders. Both counts use the §4.1
-definition of heavy, so an adatom rider hanging off an atom is neither a
-lost neighbour nor a remaining one. Atoms singly bonded in the input (an
-adatom, a terminal group) are therefore never touched on their own account.
-**Focus atoms are exempt**: a source is never dropped, whatever the count
-says.
+neighbour in the input, **and** which lies in the frozen rim, is dropped with
+its riders. Both counts use the §4.1 definition of heavy, so an adatom rider
+hanging off an atom is neither a lost neighbour nor a remaining one.
 
-It has to iterate. Before the first removal, singly attached atoms can only
-sit in the outermost shell (an atom at distance `k < hops` has all its
-neighbours at distance `<= k+1 <= hops`), but removing one lowers the kept
-count of its inward neighbour, and an atom at `hops - 1` whose only inward
-bond is its parent and whose outward neighbours the first round all dropped
-is left with one neighbour itself. ("Single-attached" here always means left
-so **by the cut** — an atom singly bonded in the *input* is a rider or an
-exempt terminal atom, and neither is ever dropped on its own account.) In a single-source diamond cut more than
+Three atoms are therefore never dropped, and each exemption answers a
+different question:
+
+- **An atom singly bonded in the *input*** — an adatom, a terminal group. The
+  flag removes single-ness *the cut caused*; this atom's is a fact about the
+  structure. With the "more than one heavy neighbour in the input" test, every
+  atom the flag drops has demonstrably **lost** a neighbour to the cut (or to
+  an earlier round of the trim, which is the same thing one step removed), so
+  "caused by the cut" is a property of the rule rather than a hope.
+- **A focus atom.** A source is never dropped, whatever the count says.
+- **Any atom inside the free depth** `hops - rim`, i.e. anything the cut does
+  not freeze. This is what bounds the cascade. Without it the trim is only
+  *locally* justified: each individual removal is caused by the cut, but the
+  chain of them walks inward one atom per round, and on a chain or a linker it
+  unwinds the whole thing back to the focus atom — destroying the very
+  neighbourhood the proxy was cut around. With it, the trim is a **rim
+  cleanup** and can reach at most `rim` shells inward, so the relaxed interior
+  is exactly what the user asked to keep. A useful way to state the whole rule
+  in one line: **`rm_single` only ever drops atoms the cut has frozen.** At
+  `rim: 0` nothing but what `fill` restored is frozen, so the flag has almost
+  nothing to act on — which is consistent rather than surprising: a cut with no
+  rim has asked for its entire boundary to be relaxed as it stands.
+
+The price of the last exemption is that a dangling atom can be left sitting
+just inside the free depth, where a round of the cascade would have taken it.
+On a bulk cut it does not arise — the fixpoint on the silicon cube is reached
+inside the first shell at the default `rim: 1`, which is what
+`rm_single_reaches_a_fixpoint_on_the_bulk_cube` pins — and where it does arise
+the topology is chain-like, which is the case the exemption exists for. Leaving
+one artefact at a boundary the user can see beats eating an unbounded number of
+atoms they cannot.
+
+It has to iterate, within that bound. Before the first removal, singly
+attached atoms can only sit in the outermost shell (an atom at distance
+`k < hops` has all its neighbours at distance `<= k+1 <= hops`), but removing
+one lowers the kept count of its inward neighbour, and an atom at `hops - 1`
+whose only inward bond is its parent and whose outward neighbours the first
+round all dropped is left with one neighbour itself. Round *n* can therefore
+reach distance `hops - n + 1` and no nearer, which is the other way of seeing
+why the free-depth exemption caps the cascade at `rim` rounds.
+("Single-attached" here always means left so **by the cut** — an atom singly
+bonded in the *input* is a rider or an exempt terminal atom, and neither is
+ever dropped on its own account.) In a single-source diamond cut more than
 half of the outermost shell has a single parent, so this is the common
 case. A one-shell trim would leave exactly the atoms the flag promises to
 remove; the fixpoint is what `materialize`'s `rm_single` does too
@@ -308,14 +343,20 @@ reading stands — widen the test to "at most one" if a real structure ever
 strands an atom.
 
 Two consequences to know about. Fill-restored atoms start with two anchors
-but are not immune: the cascade can remove an anchor and then the restored
-atom. And a chain of atoms inside the cut — an alkyl linker on a tool, a
-bare wire — unwinds all the way back to the first atom that keeps two
-neighbours, or to a focus atom, which is one more reason the flag is off by
-default.
+but are not immune: they lie beyond `hops`, so they are always in the rim, and
+the cascade can remove an anchor and then the restored atom. And a chain of
+atoms crossing the rim — an alkyl linker on a tool, a bare wire — unwinds back
+to the free depth and stops there, rather than back to the first atom that
+keeps two neighbours.
 
-Default off so that the `hops` series stays monotonic: every atom of the
-`hops = 5` proxy is in the `hops = 6` proxy.
+Default **on**: an atom left hanging by one bond is an artefact of the cut,
+not a feature of the structure, and it is the boundary atom a relaxation is
+most likely to do something silly with. The cost of the default is the
+monotonicity above — with the flag off, every atom of the `hops = 5` proxy is
+in the `hops = 6` proxy, and a convergence series that needs that guarantee
+should turn it off. A site hanging off a chain or a linker no longer needs it
+off: the free-depth exemption keeps the cascade out of the interior, so the
+trim eats the part of the linker that crosses the rim and stops.
 
 ### 4.5 `passivate`
 
@@ -342,17 +383,32 @@ the tool apex, the T-centre carbon, any radical surface site — without the
 user having to mark it. That is the whole reason this is a proxy flag rather
 than a downstream `passivate` node, which caps every dangling bond it finds.
 
-### 4.6 `free`
+### 4.6 `rim`
 
-Heavy atoms with distance `> free` get the frozen flag set; their riders and
-their caps follow. Atoms added by `fill` have distance `> hops`, so they are
-frozen whenever `free < hops`. **Flags are only ever set, never cleared**: an
-atom frozen in the input stays frozen whatever its distance, and a rider or a
-cap follows whichever of the two froze its host — the distance rule or the
-input flag. Boundary atoms come from the lattice, so they are already at bulk
+`rim` is the thickness of the frozen rim, in hop shells counted **inward from
+the cut boundary**. The absolute threshold it produces is the *free depth*
+`hops - rim` (saturating at zero): heavy atoms farther than that from a source
+get the frozen flag set, and their riders and their caps follow. Atoms added by
+`fill` have distance `> hops`, so they are frozen at every `rim`, `0` included.
+**Flags are only ever set, never cleared**: an atom frozen in the input stays
+frozen whatever its distance, and a rider or a cap follows whichever of the two
+froze its host — the distance rule or the input flag. Boundary atoms come from
+the lattice, so they are already at bulk
 positions — this is the frozen rim that makes a finite cluster stand in for a
 big surface. The `relax` node honours the flag today; an exporter for an
 external code reads the same bit.
+
+**Why relative rather than absolute.** The rim is *shielding*: a requirement of
+the cluster standing in for a workpiece, and one that does not change when the
+cut grows. `hops` is cost, and it is the knob that actually gets tuned — a
+convergence series is a series in `hops`. Stored as an absolute free depth, every
+`hops` edit silently re-thinned or re-thickened the rim, so the two knobs had to
+be moved together; stored as a rim, `hops` grows the relaxed interior and leaves
+the shielding where the chemistry put it. The derived free depth is in the
+report, so nothing is hidden by the swap — and the old absolute figure the
+design called `min_rim`, the "shielding figure" the tuning loop was told to
+watch, *is* this knob, which is the argument that it should have been the knob
+all along.
 
 ### 4.7 `core`
 
@@ -362,16 +418,16 @@ Zero tags only the focus atoms. It is legal here, but it is a partition the
 ONIOM exporter of §9.4 refuses, because every layer-boundary bond then
 touches a focus atom; one is the smallest value that survives export. The
 tag is **only added, never removed** — an input that already carries `high`
-keeps it, mirroring how `free` treats the frozen flag.
+keeps it, mirroring how `rim` treats the frozen flag.
 
 **Untagged means low.** No `low` tag is written: every atom would carry it,
 it would spend a second name of the 32-tag budget, and the exporter (§9)
 treats "no `high` tag" as low anyway. This is the one place the node spends
 a tag name, and the exception to §5's "no per-shell tags".
 
-With `hops: 6, free: 3, core: 1` one node yields the three ONIOM shells:
+With `hops: 6, rim: 3, core: 1` one node yields the three ONIOM shells:
 focus atoms and their first neighbours `high`, everything within three hops
-relaxed, everything beyond frozen. A `core` larger than `free` (frozen atoms
+relaxed, everything beyond frozen. A `core` larger than the free depth (frozen atoms
 in the high layer) is odd but legal; the exporter is where a wrong partition
 is diagnosed, not here.
 
@@ -403,7 +459,7 @@ separately.
 ### 4.9 Errors
 
 - Empty `focus`, or no atom carries the tag: localized error naming the tag.
-- `hops < 0`: error. `free < 0`: treated as 0.
+- `hops < 0`: error. `rim < 0`: treated as 0.
 - `passiv_elem` outside H/F/Cl/Br/I: the same error `passivate` raises.
 - Wrong input types: the standard errors from `evaluate_arg_required` /
   `evaluate_or_default`.
@@ -416,7 +472,7 @@ separately.
   output can produce it later if a use case appears.
 - **No per-shell tags** beyond the single `high` tag of `core`. The tag
   budget is 32 names per structure; carrying a shell index as tags would burn
-  it. The `free` threshold lives in this node for that reason, rather than in
+  it. The `rim` threshold lives in this node for that reason, rather than in
   a hop-aware `freeze`.
 - **No `only`/`skip` tag on the standalone `passivate` node.** A `skip: String`
   pin there (hosts carrying the tag are excluded from the eligibility
@@ -433,7 +489,7 @@ atom is tagged the same way.
 ```
 site     = tag { molecule: scene, name: "focus", region: apex_ball }
 site2    = tag { molecule: site,  name: "focus", region: target_ball }
-proxy_6  = proxy { molecule: site2, hops: 6, free: 3, core: 1 }
+proxy_6  = proxy { molecule: site2, hops: 6, rim: 3, core: 1 }
 relaxed  = relax { molecule: proxy_6 }
 ```
 
@@ -462,23 +518,24 @@ unphysical line of §3.3, not against 2.42.
 
 ### 6.1 Choosing the parameters
 
-`free` and `core` are chemistry, `hops` is cost. The stats of §3.3 are laid
-out for this loop:
+`rim` and `core` are chemistry, `hops` is cost, and because the rim is
+measured from the boundary the two no longer move together. The stats of §3.3
+are laid out for this loop:
 
 1. Tag the focus atoms. Set `core` from the reaction (the atoms whose bonds
-   change, plus one shell) and `free` from how far its strain field reaches
-   (two to three dimers on Si(100)). Confirm `free` later with a series in
-   `free` at fixed `hops`; that series is monotonic too.
-2. Pick `hops` so that `min_rim = hops - free` is at least two or three
-   shells, and evaluate.
+   change, plus one shell) and `rim` from how much frozen bulk the cluster
+   needs — two or three shells. Confirm it later with a series in `rim` at
+   fixed `hops`; that series is monotonic too.
+2. Raise `hops` until the report's `free_hops` reaches as far as the strain
+   field does (two to three dimers on Si(100)), and evaluate.
 3. Read the report: `formula` and the atom counts for cost, `min_cap_pair`
    to confirm the rim is clean, `open_valences` for the multiplicity,
    `nearest_dropped` for a cut-away steric neighbour. Raise `hops` until the
    cost is the most you will pay, then run the `hops` series downward.
 
 Do not read `farthest_hop` as rim thickness. Fill makes the rim thick in the
-{100} directions and leaves it at `hops - free` in the {111} directions, so a
-large farthest hop is not a reason to lower `hops` or raise `free`.
+{100} directions and leaves it at `rim` shells in the {111} directions, so a
+large farthest hop is not a reason to lower `hops` or raise `rim`.
 
 ## 7. Architecture: the crystolecule module and the node shell
 
@@ -523,10 +580,10 @@ pub const CAP_PAIR_RADIUS: f64 = 3.0;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProxyOptions {
-    pub hops: u32,                 // default 6
-    pub free: u32,                 // default 3
+    pub hops: u32,                 // default 3
+    pub rim: u32,                  // default 1 (free depth = hops - rim)
     pub fill: bool,                // default true
-    pub rm_single: bool,           // default false
+    pub rm_single: bool,           // default true
     pub passivate: bool,           // default true
     pub passivant_element: i16,    // default 1
     pub core: Option<u32>,         // default None = no `high` tagging
@@ -622,7 +679,7 @@ Decisions behind this shape:
   mutation; `apply_proxy` is the only function that touches the structure.
   This is the crate's existing pattern (`add_hydrogens_filtered` and
   `remove_hydrogens_filtered` both scan, then mutate) and it buys three
-  things: a `hops` or `free` series can be planned against one structure
+  things: a `hops` or `rim` series can be planned against one structure
   without cloning it per member, tests assert on the plan (pure graph work
   plus cap geometry) without inspecting a mutated structure, and the ONIOM
   exporter of §9 reuses `classify_riders`, `bond_distances` and
@@ -671,12 +728,15 @@ Decisions behind this shape:
    something, which is what the §4.3 table reports.
 6. **`rm_single`** (when on). A worklist to a fixpoint, the shape of
    `remove_single_bond_atoms_filtered`: scan `kept_heavy` once for atoms
-   that are not sources, have exactly one kept heavy neighbour and had more
-   than one heavy neighbour in the input (riders excluded from both counts);
-   remove that batch from `kept_heavy`; re-check only the removed atoms'
-   kept heavy neighbours against the same test; repeat until a batch is
-   empty. The kept set only shrinks, so it terminates. §4.4 is why the
-   cascade is required rather than a single pass.
+   that are not sources, lie beyond `options.free_hops()`, have exactly one
+   kept heavy neighbour and had more than one heavy neighbour in the input
+   (riders excluded from both counts); remove that batch from `kept_heavy`;
+   re-check only the removed atoms' kept heavy neighbours against the same
+   test; repeat until a batch is empty. The kept set only shrinks, so it
+   terminates. §4.4 is why the cascade is required rather than a single pass,
+   and why the free-depth test is what bounds it — the source test is then
+   redundant (a source is at distance 0) but stays, because the exemption is a
+   rule of its own and should not silently depend on `rim`.
 7. **Riders follow.** `kept = kept_heavy ∪ { r | riders[r] ∈ kept_heavy }`;
    everything else in the structure is `dropped`.
 8. **Caps** (when `options.passivate`). `severed_bond_caps` over
@@ -685,10 +745,10 @@ Decisions behind this shape:
    Elements are read through `effective_atomic_number` so a parameter
    element resolves. A kept atom never has a dropped rider (step 7), so
    riders need no case here.
-9. **Frozen.** `frozen = { a ∈ kept_heavy | distance[a] > free }`. This is the
-   whole rule, the one §3.1 and §4.6 state: `hops` plays no part in it, so on
-   the plain cut `free >= hops` freezes nothing, and an atom `fill` restored
-   at a distance beyond `free` is frozen whatever `hops` is.
+9. **Frozen.** `frozen = { a ∈ kept_heavy | distance[a] > options.free_hops() }`,
+   with `free_hops() = hops - rim` saturating at zero. So `rim: 0` freezes
+   nothing on the plain cut, `rim >= hops` freezes all of it, and an atom `fill`
+   restored beyond `hops` is frozen at every `rim`.
 10. **High.** When `core` is `Some(c)`: `high = { a ∈ kept_heavy | distance[a] <= c }`.
 11. **`nearest_dropped`.** For every kept atom that will be free after the
     cut — a heavy atom not in `frozen` and not already frozen in the input,
@@ -715,7 +775,7 @@ Decisions behind this shape:
 5. Add `high` to `plan.high`, their riders, and their hosts' caps. Never
    removed.
 6. Compute `ProxyStats`: `heavy`, `riders`, `caps`, `filled`, `fill_rounds`,
-   `farthest_hop`, `min_rim` and `nearest_dropped` from the plan; `free`,
+   `farthest_hop`, `free_hops` and `nearest_dropped` from the plan; `free`,
    `frozen`, `formula` and `open_valences` by walking the result;
    `min_cap_pair` by querying the result's grid within `CAP_PAIR_RADIUS`
    around every cap and keeping cap–cap hits, linear in the number of caps.
@@ -765,7 +825,7 @@ Decisions behind this shape:
 3. Pins 1–8 through `evaluate_or_default` with `extract_string` /
    `extract_int` / `extract_bool`, each defaulting to the stored property.
 4. Validation, in the node's own words: empty `focus` → `proxy: focus tag
-   name is empty`; `hops < 0` → `proxy: hops must be >= 0`; `free < 0` →
+   name is empty`; `hops < 0` → `proxy: hops must be >= 0`; `rim < 0` →
    clamped to 0; `core < 0` → `None`; `passiv_elem` not allowed → the same
    text `passivate` raises, built from `ALLOWED_PASSIVANTS`.
 5. `map_atomic(input, |mut s| { … proxy_cut(&mut s, &focus, &options) … })`.
@@ -810,9 +870,16 @@ lattice intact; the module itself is phase-agnostic.
   `StructureDesignerModel.getProxyData / setProxyData / getProxyStats`
   wrappers forwarding `propertyEditorScopeChain`. The editor reuses the
   tag-name suggestion dropdown of `tag_editor.dart`, the passivant dropdown
-  of `passivate_editor.dart`, `IntSpinField` for `hops` / `free` / `core`,
+  of `passivate_editor.dart`, `IntSpinField` for `hops` / `rim` / `core`,
   and the report block of `relax_editor.dart`, re-read after every refresh.
   `core` shows `-1` as "off".
+- **The panel carries no per-field prose, and the report comes last.** Every
+  control is one labelled row; what a field *means* lives in the node's own
+  description, behind the ⓘ button in the editor header, which is where the
+  paragraphs belong (the rule `isosurface_editor.dart` states: say a thing in
+  the panel only if it is non-obvious *and* fits in a line). The order is
+  settings first, report after — the fields are what a user came to touch, and
+  a result reads as a result when it follows the thing that produced it.
 
 ### 7.8 Using the module without atomCAD
 
@@ -822,14 +889,14 @@ use atomcad_crystolecule::proxy_cut::{plan_proxy, apply_proxy, proxy_cut, ProxyO
 // One cut, by tag. `workpiece` is an `AtomicStructure` with `focus` tags.
 let mut proxy = workpiece.clone();
 let stats = proxy_cut(&mut proxy, "focus", &ProxyOptions {
-    hops: 6, free: 3, core: Some(1), ..Default::default()
+    hops: 6, rim: 3, core: Some(1), ..Default::default()
 })?;
 println!("{} — {} free, {} frozen, {} open valences", stats.formula, stats.free, stats.frozen, stats.open_valences);
 
 // A convergence series: plan against the untouched workpiece, apply to a clone.
 let focus = workpiece.atoms_with_tag("focus");
 for hops in 4..=8 {
-    let options = ProxyOptions { hops, free: 3, ..Default::default() };
+    let options = ProxyOptions { hops, rim: 3, ..Default::default() };
     let plan = plan_proxy(&workpiece, &focus, &options)?;
     let mut proxy = workpiece.clone();
     let stats = apply_proxy(&mut proxy, &plan)?;
@@ -905,20 +972,26 @@ rules that need a specific topology.
   heavy neighbour in the input and so the input exemption, not the rider,
   is what saves it; a case where `fill` gives the atom its second neighbour
   keeps it (order: fill before `rm_single`); the cascade: a chain hanging off
-  a ring unwinds a round at a time once its end is cut by distance, and on the
-  bulk cube at `hops = 4` no kept non-source heavy atom is left with a single
-  kept heavy neighbour; a source reduced to one kept neighbour by the cascade
-  (a chain hanging off a lone focus atom) survives.
+  a ring unwinds a round at a time once its end is cut by distance **when the
+  whole cut is rim** (`rim == hops`), and on the bulk cube at `hops = 4` no
+  kept non-source heavy atom is left with a single kept heavy neighbour; a
+  source reduced to one kept neighbour by the cascade (a chain hanging off a
+  lone focus atom) survives.
+- The interior rule: on that same chain-off-a-ring fixture at `hops = 3`,
+  `rim: 0` trims nothing, `rim: 1` trims only the atom in the outermost shell
+  and leaves the one at distance 2, and `rim: 3` unwinds the chain to the
+  source; and on the plain bulk cut at `hops = 5, rim = 2` every atom the trim
+  dropped lies beyond the free depth.
 - Monotonicity: with `fill` on and off, `kept(hops = k) ⊆ kept(hops = k + 1)`
-  for `k` in 3..7 on the cube; `frozen(free = f) ⊇ frozen(free = f + 1)`.
-- Frozen list is exactly `distance > free`; empty for the plain cut when
-  `free >= hops`; fill-restored atoms beyond `free` are in it.
+  for `k` in 3..7 on the cube; `frozen(rim = r) ⊆ frozen(rim = r + 1)`.
+- Frozen list is exactly `distance > hops - rim`; empty for the plain cut at
+  `rim: 0`; fill-restored atoms are in it whatever `rim` is.
 - High list: `core = None` → empty; `Some(0)` → the sources only;
   `Some(1)` → sources plus first neighbours; riders are not in it (they
   follow at apply time).
 - `nearest_dropped`: on the two-fragment fixture with a dropped wall 3.0 Å
   from a free atom the value is `Some(3.0 ± 1e-9)`; on the bulk cube with
-  `hops = 6, free = 3` it is `Some(> 4.0)`; on a structure where nothing is
+  `hops = 6, rim = 3` it is `Some(> 4.0)`; on a structure where nothing is
   dropped it is `None`.
 - Errors: no sources → `NoFocusAtoms`; `passivant_element = 2` →
   `BadPassivant(2)`.
@@ -959,7 +1032,7 @@ the factoring.
 - Stats: `formula` on the cube proxy has the `Si…H…` shape with counts
   matching the atoms; `min_cap_pair` is `Some(2.42 ± 0.01)` with fill and
   `Some(1.42 ± 0.01)` without, and `None` on a hand-built cut whose two caps are
-  farther apart than `CAP_PAIR_RADIUS`; `min_rim == hops − free`;
+  farther apart than `CAP_PAIR_RADIUS`; `free_hops == hops − rim`;
   `filled.len() == stats.filled`.
 - `empirical_formula`: `CH4`, water as `OH2` (hydrogen is last whatever its
   count — the §7.5 rule, not Hill notation), a mixed structure's descending
@@ -980,7 +1053,7 @@ network.
 
 **Deliverables.** `ProxyData` with serde defaults for every field (an old
 `.cnnd` without `fill` loads `true`), `ProxyEvalCache`, the eval of §7.6,
-text properties for all eight fields, the `focus · 6 / 3` subtitle,
+text properties for all eight fields, the `focus · 3 / 1` subtitle,
 parameter metadata (`molecule` required, the rest optional), registration.
 
 **Automated tests** (`proxy_node_test.rs`, driving `StructureDesigner`
@@ -990,7 +1063,7 @@ through the text format the way sibling node tests do):
   out.
 - Stored property versus wired pin: an `int` node wired to `hops` overrides
   the stored value; disconnecting it restores the stored value.
-- Defaults: a freshly created node evaluates as `hops 6 / free 3 / fill on /
+- Defaults: a freshly created node evaluates as `hops 3 / rim 1 / fill on /
   passivate on / H / core off`.
 - Text format: the full line of §3.3 parses, evaluates and serializes back
   to itself byte for byte; the short form `proxy { molecule: x, core: 1 }`
@@ -1000,15 +1073,18 @@ through the text format the way sibling node tests do):
 - `.cnnd` round trip of a network containing the node, including a file
   written without the `fill` key.
 - Localized errors: no atom carries the tag → the message names the tag;
-  empty `focus` → the empty-name error; `hops: -1` → error; `free: -1`
-  evaluates as `free: 0` (same output); `passiv_elem: 2` → the same text
+  empty `focus` → the empty-name error; `hops: -1` → error; `rim: -1`
+  evaluates as `rim: 0` (same output); `passiv_elem: 2` → the same text
   `passivate` produces; an upstream `Error` on `molecule` passes through
-  unchanged.
+  unchanged. The node-level fixtures pass `rm_single: false` explicitly wherever
+  they count atoms of a *chain*: the default trim unwinds one back to its focus
+  atom, which is correct and has its own test, but it would otherwise be what
+  every count measured.
 - Eval cache: after a root evaluation with the node selected,
   `get_selected_node_eval_cache` downcasts to `ProxyEvalCache` and its stats
   match a direct `proxy_cut` on the same input; a nested evaluation (the node
   inside a custom network) stores nothing.
-- Subtitle: `focus · 6 / 3` with pins 1–3 unconnected; `None` once any of
+- Subtitle: `focus · 3 / 1` with pins 1–3 unconnected; `None` once any of
   them is wired.
 - Registry: `get_compatible_node_types` from a Crystal output lists `proxy`
   under *AtomicStructure*, alongside the existing cases in
@@ -1043,7 +1119,10 @@ harness, run explicitly with `cargo test -j 4 --test structure_designer_api`):
 **Manual walkthrough** (maintainer): tag dropdown lists the input's tags;
 spin fields clamp `hops >= 0`; the report updates after each edit and reads
 "—" for an absent `min_cap_pair` / `nearest_dropped`; `core = -1` displays as
-off; undo reverts a property edit; the Flutter smoke test.
+off; undo reverts a property edit; the Flutter smoke test. On the panel layout:
+the controls come first and the report last, no field carries a caption (the ⓘ
+button's description is where the prose lives), and raising `hops` leaves the
+frozen rim as thick as it was while the report's *free depth* grows with it.
 
 ### Phase 5 — Worked example and scale
 

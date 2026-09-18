@@ -4525,8 +4525,9 @@ class APIProxyData {
   /// Keep heavy atoms whose bond distance is at most this.
   final int hops;
 
-  /// Heavy atoms farther than this get the frozen flag.
-  final int free;
+  /// Thickness of the frozen rim, in hop shells counted inward from the cut
+  /// boundary; the absolute free depth is `hops - rim`.
+  final int rim;
 
   /// Drop heavy atoms the cut left with a single heavy neighbour, to a
   /// fixpoint.
@@ -4554,7 +4555,7 @@ class APIProxyData {
   const APIProxyData({
     required this.focus,
     required this.hops,
-    required this.free,
+    required this.rim,
     required this.rmSingle,
     required this.passivate,
     required this.passivElem,
@@ -4567,7 +4568,7 @@ class APIProxyData {
   int get hashCode =>
       focus.hashCode ^
       hops.hashCode ^
-      free.hashCode ^
+      rim.hashCode ^
       rmSingle.hashCode ^
       passivate.hashCode ^
       passivElem.hashCode ^
@@ -4582,7 +4583,7 @@ class APIProxyData {
           runtimeType == other.runtimeType &&
           focus == other.focus &&
           hops == other.hops &&
-          free == other.free &&
+          rim == other.rim &&
           rmSingle == other.rmSingle &&
           passivate == other.passivate &&
           passivElem == other.passivElem &&
@@ -4625,8 +4626,9 @@ class APIProxyStats {
   /// not a shielding one.
   final int farthestHop;
 
-  /// `hops - free`: the thinnest frozen shell. The **shielding** figure.
-  final int minRim;
+  /// `hops - rim`: the outermost hop shell still free — the depth of the
+  /// relaxed interior.
+  final int freeHops;
 
   /// Unsaturated slots the output still carries — what sets the multiplicity
   /// of a quantum-chemistry input.
@@ -4650,7 +4652,7 @@ class APIProxyStats {
     required this.filled,
     required this.fillRounds,
     required this.farthestHop,
-    required this.minRim,
+    required this.freeHops,
     required this.openValences,
     this.minCapPair,
     this.nearestDropped,
@@ -4667,7 +4669,7 @@ class APIProxyStats {
       filled.hashCode ^
       fillRounds.hashCode ^
       farthestHop.hashCode ^
-      minRim.hashCode ^
+      freeHops.hashCode ^
       openValences.hashCode ^
       minCapPair.hashCode ^
       nearestDropped.hashCode;
@@ -4686,7 +4688,7 @@ class APIProxyStats {
           filled == other.filled &&
           fillRounds == other.fillRounds &&
           farthestHop == other.farthestHop &&
-          minRim == other.minRim &&
+          freeHops == other.freeHops &&
           openValences == other.openValences &&
           minCapPair == other.minCapPair &&
           nearestDropped == other.nearestDropped;

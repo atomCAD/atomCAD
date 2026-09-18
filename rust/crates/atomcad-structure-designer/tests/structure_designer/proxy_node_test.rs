@@ -186,8 +186,9 @@ fn count_element(s: &AtomicStructure, atomic_number: i16) -> usize {
         .count()
 }
 
-/// A `value` → `proxy` pair with the given stored properties.
-fn chain_network(props: &[(&str, TextValue)]) -> (StructureDesigner, &'static str, u64) {
+/// A `value` → `proxy` pair with the given stored properties, exactly as
+/// stored — no property is supplied on the caller's behalf.
+fn raw_chain_network(props: &[(&str, TextValue)]) -> (StructureDesigner, &'static str, u64) {
     let net = "test";
     let mut designer = setup(net);
     let value_id = add_value_node(
@@ -200,6 +201,19 @@ fn chain_network(props: &[(&str, TextValue)]) -> (StructureDesigner, &'static st
     set_proxy_props(&mut designer, net, proxy_id, props);
     designer.connect_nodes(value_id, 0, proxy_id, 0);
     (designer, net, proxy_id)
+}
+
+/// [`raw_chain_network`] with `rm_single` **off** unless the caller sets it.
+///
+/// The fixture is a bare chain, and the flag is on by default: the cut leaves
+/// the last kept carbon hanging by one bond, so the cascade of §4.4 unwinds the
+/// chain all the way back to the focus atom. That is correct behaviour, and it
+/// has its own test — but it would turn every other count below into a count of
+/// the trim rather than of the cut.
+fn chain_network(props: &[(&str, TextValue)]) -> (StructureDesigner, &'static str, u64) {
+    let mut all = vec![("rm_single", TextValue::Bool(false))];
+    all.extend(props.iter().cloned());
+    raw_chain_network(&all)
 }
 
 // ============================================================================
@@ -221,7 +235,16 @@ fn proxy_preserves_the_input_phase_and_lattice() {
         crystal_value(capped_chain(), lattice.clone()),
     );
     let proxy_id = designer.add_node("proxy", DVec2::new(200.0, 0.0));
-    set_proxy_props(&mut designer, net, proxy_id, &[("hops", TextValue::Int(2))]);
+    set_proxy_props(
+        &mut designer,
+        net,
+        proxy_id,
+        &[
+            ("hops", TextValue::Int(2)),
+            // The bare chain would otherwise unwind under the default trim.
+            ("rm_single", TextValue::Bool(false)),
+        ],
+    );
     designer.connect_nodes(value_id, 0, proxy_id, 0);
 
     match evaluate(&designer, net, proxy_id) {
@@ -248,35 +271,48 @@ fn proxy_preserves_the_input_phase_and_lattice() {
 // Defaults
 // ============================================================================
 
-/// A freshly created node evaluates as `hops 6 / free 3 / fill on / passivate
-/// on / H / core off`. The chain's farthest atom is 4 hops out, so `hops: 6`
-/// keeps everything and no bond is severed — and `free: 3` still freezes the
-/// far end.
+/// A freshly created node evaluates as `hops 3 / rim 1 / rm_single on / fill on
+/// / passivate on / H / core off`.
 #[test]
-fn proxy_defaults_are_hops_6_free_3_fill_on_passivate_on_hydrogen_core_off() {
+fn proxy_defaults_are_hops_3_rim_1_rm_single_on_fill_on_passivate_on_hydrogen_core_off() {
     let fresh = ProxyData::default();
     assert_eq!(fresh.focus, "focus");
-    assert_eq!(fresh.hops, 6);
-    assert_eq!(fresh.free, 3);
-    assert!(!fresh.rm_single);
+    assert_eq!(fresh.hops, 3);
+    assert_eq!(fresh.rim, 1);
+    assert!(fresh.rm_single);
     assert!(fresh.passivate);
     assert_eq!(fresh.passiv_elem, 1);
     assert_eq!(fresh.core, -1);
     assert!(fresh.fill);
 
-    let (designer, net, proxy_id) = chain_network(&[]);
+    let (designer, net, proxy_id) = raw_chain_network(&[]);
     let out = evaluate_to_atomic(&designer, net, proxy_id);
 
-    assert_eq!(atom_count(&out), 11, "nothing is out of reach at hops: 6");
-    assert_eq!(count_element(&out, 1), 6, "no cap was placed (no bond cut)");
+    // `hops: 3` drops C4 and its riders, which leaves C3 hanging by one bond;
+    // `rm_single` takes C3, because at `rim: 1` the free depth is 2 and C3 sits
+    // at 3. The cascade stops there: C2 is inside the free depth, so it keeps
+    // its cap rather than being unwound, and the chain is not eaten back to the
+    // focus atom (§4.4's interior rule).
+    assert_eq!(atom_count(&out), 7, "C0..C2 + 3 riders + 1 cap");
+    assert_eq!(count_element(&out, 6), 3, "C0, C1 and C2");
+    assert_eq!(count_element(&out, 1), 4, "three riders and the cap");
+    assert_eq!(
+        out.atoms_values().filter(|a| a.is_frozen()).count(),
+        0,
+        "the trim took the whole rim, so nothing frozen is left"
+    );
     assert!(
         !out.tag_names().iter().any(|n| n == "high"),
         "core is off by default, so no `high` tag is interned"
     );
 
-    // `free: 3` freezes C4 (distance 4) and its three riders, nothing else.
-    let frozen = out.atoms_values().filter(|a| a.is_frozen()).count();
-    assert_eq!(frozen, 4, "C4 plus its three riders");
+    // The same cut without the trim: `hops: 3` keeps C0..C3, `rim: 1` freezes
+    // everything past distance 2.
+    let (designer, net, proxy_id) = chain_network(&[]);
+    let plain = evaluate_to_atomic(&designer, net, proxy_id);
+    assert_eq!(atom_count(&plain), 8, "C0..C3 + 3 riders + 1 cap");
+    let frozen = plain.atoms_values().filter(|a| a.is_frozen()).count();
+    assert_eq!(frozen, 2, "C3 and its cap");
 }
 
 // ============================================================================
@@ -297,6 +333,16 @@ fn a_wired_hops_pin_overrides_the_stored_property() {
         molecule_value(capped_chain()),
     );
     let proxy_id = designer.add_node("proxy", DVec2::new(200.0, 0.0));
+    set_proxy_props(
+        &mut designer,
+        net,
+        proxy_id,
+        &[
+            ("hops", TextValue::Int(6)),
+            // The bare chain would otherwise unwind under the default trim.
+            ("rm_single", TextValue::Bool(false)),
+        ],
+    );
     designer.connect_nodes(value_id, 0, proxy_id, 0);
 
     // Stored `hops: 6` keeps the whole chain.
@@ -343,7 +389,16 @@ fn the_flag_pins_override_their_stored_properties() {
         molecule_value(capped_chain()),
     );
     let proxy_id = designer.add_node("proxy", DVec2::new(200.0, 0.0));
-    set_proxy_props(&mut designer, net, proxy_id, &[("hops", TextValue::Int(2))]);
+    set_proxy_props(
+        &mut designer,
+        net,
+        proxy_id,
+        &[
+            ("hops", TextValue::Int(2)),
+            // The bare chain would otherwise unwind under the default trim.
+            ("rm_single", TextValue::Bool(false)),
+        ],
+    );
     designer.connect_nodes(value_id, 0, proxy_id, 0);
 
     let baseline = evaluate_to_atomic(&designer, net, proxy_id);
@@ -433,8 +488,8 @@ fn author_and_serialize(source: &str) -> String {
 /// exactly one canonical spelling.
 #[test]
 fn proxy_text_format_full_line_and_short_form() {
-    const FULL: &str = "proxy_6 = proxy { molecule: surface, focus: \"focus\", hops: 6, \
-                        free: 3, rm_single: false, passivate: true, passiv_elem: 1, core: 1, \
+    const FULL: &str = "proxy_6 = proxy { molecule: surface, focus: \"focus\", hops: 3, \
+                        rim: 1, rm_single: true, passivate: true, passiv_elem: 1, core: 1, \
                         fill: true, visible: true }";
 
     let full_source = format!("surface = import_xyz {{ }}\n{FULL}\n");
@@ -464,12 +519,12 @@ fn proxy_text_format_full_line_and_short_form() {
 /// drop.
 #[test]
 fn proxy_text_format_non_default_values_round_trip() {
-    let source = "p = proxy { focus: \"apex\", hops: 4, free: 4, rm_single: true, \
+    let source = "p = proxy { focus: \"apex\", hops: 4, rim: 4, rm_single: false, \
                   passivate: false, passiv_elem: 9, core: 0, fill: false }\n";
     let serialized = author_and_serialize(source);
     assert!(
         serialized.contains(
-            "p = proxy { focus: \"apex\", hops: 4, free: 4, rm_single: true, passivate: false, \
+            "p = proxy { focus: \"apex\", hops: 4, rim: 4, rm_single: false, passivate: false, \
              passiv_elem: 9, core: 0, fill: false }"
         ),
         "got:\n{serialized}"
@@ -514,7 +569,7 @@ fn proxy_cnnd_round_trip_and_missing_fill_key() {
         &[
             ("focus", TextValue::String("apex".to_string())),
             ("hops", TextValue::Int(4)),
-            ("free", TextValue::Int(2)),
+            ("rim", TextValue::Int(2)),
             ("rm_single", TextValue::Bool(true)),
             ("passivate", TextValue::Bool(false)),
             ("passiv_elem", TextValue::Int(9)),
@@ -539,7 +594,7 @@ fn proxy_cnnd_round_trip_and_missing_fill_key() {
     let data = proxy_data_of(registry.node_networks.get(net).unwrap());
     assert_eq!(data.focus, "apex");
     assert_eq!(data.hops, 4);
-    assert_eq!(data.free, 2);
+    assert_eq!(data.rim, 2);
     assert!(data.rm_single);
     assert!(!data.passivate);
     assert_eq!(data.passiv_elem, 9);
@@ -618,24 +673,25 @@ fn proxy_rejects_an_empty_focus_name_and_a_negative_hops() {
     );
 }
 
-/// `free: -1` is *not* an error — §4.9 says it is treated as 0, which must
-/// produce exactly the `free: 0` output.
+/// `rim: -1` is *not* an error — §4.9 says it is treated as 0, which must
+/// produce exactly the `rim: 0` output.
 #[test]
-fn proxy_clamps_a_negative_free_to_zero() {
+fn proxy_clamps_a_negative_rim_to_zero() {
     let (designer, net, proxy_id) =
-        chain_network(&[("hops", TextValue::Int(2)), ("free", TextValue::Int(-1))]);
+        chain_network(&[("hops", TextValue::Int(2)), ("rim", TextValue::Int(-1))]);
     let clamped = evaluate_to_atomic(&designer, net, proxy_id);
 
     let (designer, net, proxy_id) =
-        chain_network(&[("hops", TextValue::Int(2)), ("free", TextValue::Int(0))]);
+        chain_network(&[("hops", TextValue::Int(2)), ("rim", TextValue::Int(0))]);
     let zero = evaluate_to_atomic(&designer, net, proxy_id);
 
     assert_eq!(atom_count(&clamped), atom_count(&zero));
     let frozen = |s: &AtomicStructure| s.atoms_values().filter(|a| a.is_frozen()).count();
     assert_eq!(frozen(&clamped), frozen(&zero));
-    assert!(
-        frozen(&zero) > 0,
-        "CONTROL: `free: 0` does freeze something"
+    assert_eq!(
+        frozen(&zero),
+        0,
+        "CONTROL: `rim: 0` freezes nothing on a cut `fill` cannot grow"
     );
 }
 
@@ -712,7 +768,11 @@ fn proxy_stores_its_stats_in_the_selected_node_eval_cache() {
         &mut designer,
         net,
         proxy_id,
-        &[("hops", TextValue::Int(2)), ("free", TextValue::Int(1))],
+        &[
+            ("hops", TextValue::Int(2)),
+            ("rim", TextValue::Int(1)),
+            ("rm_single", TextValue::Bool(false)),
+        ],
     );
     designer.connect_nodes(value_id, 0, proxy_id, 0);
     // Deliberately no `validate_active_network()`: the `value` node's declared
@@ -738,7 +798,8 @@ fn proxy_stores_its_stats_in_the_selected_node_eval_cache() {
         "focus",
         &ProxyOptions {
             hops: 2,
-            free: 1,
+            rim: 1,
+            rm_single: false,
             ..Default::default()
         },
     )
@@ -751,7 +812,7 @@ fn proxy_stores_its_stats_in_the_selected_node_eval_cache() {
     assert_eq!(stats.heavy, 3);
     assert_eq!(stats.riders, 3);
     assert_eq!(stats.caps, 1);
-    assert_eq!(stats.min_rim, 1);
+    assert_eq!(stats.free_hops, 1);
 }
 
 /// A nested evaluation stores nothing: the cache is per *root* evaluation of
@@ -768,7 +829,16 @@ fn a_nested_evaluation_stores_no_eval_cache() {
         molecule_value(capped_chain()),
     );
     let proxy_id = designer.add_node("proxy", DVec2::new(200.0, 0.0));
-    set_proxy_props(&mut designer, net, proxy_id, &[("hops", TextValue::Int(2))]);
+    set_proxy_props(
+        &mut designer,
+        net,
+        proxy_id,
+        &[
+            ("hops", TextValue::Int(2)),
+            // The bare chain would otherwise unwind under the default trim.
+            ("rm_single", TextValue::Bool(false)),
+        ],
+    );
     designer.connect_nodes(value_id, 0, proxy_id, 0);
 
     let registry = &designer.node_type_registry;
@@ -802,14 +872,14 @@ fn a_nested_evaluation_stores_no_eval_cache() {
 // ============================================================================
 
 #[test]
-fn proxy_subtitle_shows_focus_hops_and_free_until_one_of_them_is_wired() {
+fn proxy_subtitle_shows_focus_hops_and_rim_until_one_of_them_is_wired() {
     use atomcad_structure_designer::node_data::NodeData;
 
     let data = ProxyData::default();
     let none: HashSet<String> = HashSet::new();
-    assert_eq!(data.get_subtitle(&none), Some("focus · 6 / 3".to_string()));
+    assert_eq!(data.get_subtitle(&none), Some("focus · 3 / 1".to_string()));
 
-    for pin in ["focus", "hops", "free"] {
+    for pin in ["focus", "hops", "rim"] {
         let wired: HashSet<String> = [pin.to_string()].into_iter().collect();
         assert_eq!(
             data.get_subtitle(&wired),
@@ -821,7 +891,7 @@ fn proxy_subtitle_shows_focus_hops_and_free_until_one_of_them_is_wired() {
 
     // A pin the subtitle does not show leaves it alone.
     let wired: HashSet<String> = ["fill".to_string()].into_iter().collect();
-    assert_eq!(data.get_subtitle(&wired), Some("focus · 6 / 3".to_string()));
+    assert_eq!(data.get_subtitle(&wired), Some("focus · 3 / 1".to_string()));
 }
 
 // ============================================================================
@@ -870,7 +940,7 @@ fn the_proxy_fixture_loads_and_evaluates_a_nested_hops_series() {
     );
     assert!(
         six.atoms_values().any(|a| a.is_frozen()),
-        "`free: 3` freezes the rim"
+        "the rim is frozen"
     );
 }
 
@@ -1047,8 +1117,8 @@ fn the_worked_example_paints_high_on_the_sources_and_their_first_neighbours_only
 }
 
 /// §4.3 and §4.6 together: every atom `fill` restores lies beyond `hops`, and
-/// with `free < hops` that puts all of them in the frozen rim — the claim that
-/// makes `fill` free of relaxation cost.
+/// a nonzero `rim` puts all of them in the frozen rim — the claim that makes
+/// `fill` free of relaxation cost.
 #[test]
 fn the_worked_example_freezes_every_atom_fill_restored() {
     let (designer, net) = worked_example();
@@ -1061,7 +1131,8 @@ fn the_worked_example_freezes_every_atom_fill_restored() {
             &sources,
             &ProxyOptions {
                 hops,
-                free: 3,
+                rim: hops - 3,
+                rm_single: false,
                 core: Some(1),
                 ..Default::default()
             },
@@ -1160,7 +1231,8 @@ fn the_worked_example_rim_has_no_shared_site_and_no_unphysical_cap_pair() {
             &sources,
             &ProxyOptions {
                 hops,
-                free: 3,
+                rim: hops - 3,
+                rm_single: false,
                 core: Some(1),
                 ..Default::default()
             },
@@ -1201,7 +1273,8 @@ fn the_worked_example_rim_has_no_shared_site_and_no_unphysical_cap_pair() {
             "focus",
             &ProxyOptions {
                 hops,
-                free: 3,
+                rim: hops - 3,
+                rm_single: false,
                 core: Some(1),
                 ..Default::default()
             },
@@ -1235,7 +1308,8 @@ fn the_worked_examples_six_hop_rim_meets_the_ideal_lattice_figure() {
         "focus",
         &ProxyOptions {
             hops: 6,
-            free: 3,
+            rim: 3,
+            rm_single: false,
             core: Some(1),
             ..Default::default()
         },

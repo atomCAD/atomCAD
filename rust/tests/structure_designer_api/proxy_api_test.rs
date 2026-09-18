@@ -95,7 +95,7 @@ fn add_proxy_node(
     designer: &mut StructureDesigner,
     scope_path: &[u64],
     hops: i32,
-    free: i32,
+    rim: i32,
 ) -> u64 {
     let node_id = if scope_path.is_empty() {
         designer.add_node("proxy", DVec2::new(200.0, 0.0))
@@ -104,7 +104,7 @@ fn add_proxy_node(
     };
     let data = ProxyData {
         hops,
-        free,
+        rim,
         ..ProxyData::default()
     };
     designer.set_node_network_data_scoped(scope_path, node_id, Box::new(data));
@@ -117,8 +117,8 @@ fn non_default_twin() -> APIProxyData {
     APIProxyData {
         focus: "site".to_string(),
         hops: 4,
-        free: 2,
-        rm_single: true,
+        rim: 2,
+        rm_single: false,
         passivate: false,
         passiv_elem: 9,
         core: 1,
@@ -143,8 +143,8 @@ fn the_setter_and_getter_round_trip_all_eight_persisted_fields() {
 
     assert_eq!(read.focus, "site");
     assert_eq!(read.hops, 4);
-    assert_eq!(read.free, 2);
-    assert!(read.rm_single);
+    assert_eq!(read.rim, 2);
+    assert!(!read.rm_single);
     assert!(!read.passivate);
     assert_eq!(read.passiv_elem, 9);
     assert_eq!(read.core, 1);
@@ -281,8 +281,8 @@ fn the_setter_dirties_the_project_and_is_undoable() {
     let restored = proxy_node_data(&designer, &[], node_id).expect("the node is still a proxy");
     assert_eq!(restored.focus, "focus");
     assert_eq!(restored.hops, 6);
-    assert_eq!(restored.free, 3);
-    assert!(!restored.rm_single);
+    assert_eq!(restored.rim, 3);
+    assert!(restored.rm_single, "the default the node was created with");
     assert!(restored.passivate);
     assert_eq!(restored.passiv_elem, 1);
     assert_eq!(restored.core, -1);
@@ -322,7 +322,7 @@ fn the_stats_getter_reports_the_crates_own_figures() {
         "focus",
         &ProxyOptions {
             hops: 2,
-            free: 1,
+            rim: 1,
             ..Default::default()
         },
     )
@@ -337,7 +337,7 @@ fn the_stats_getter_reports_the_crates_own_figures() {
     assert_eq!(stats.filled, expected.filled);
     assert_eq!(stats.fill_rounds, expected.fill_rounds);
     assert_eq!(stats.farthest_hop, expected.farthest_hop);
-    assert_eq!(stats.min_rim, expected.min_rim);
+    assert_eq!(stats.free_hops, expected.free_hops);
     assert_eq!(stats.open_valences, expected.open_valences);
     assert_eq!(stats.min_cap_pair, expected.min_cap_pair);
     assert_eq!(stats.nearest_dropped, expected.nearest_dropped);

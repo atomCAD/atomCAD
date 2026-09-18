@@ -50,13 +50,13 @@ fn default_focus() -> String {
     "focus".to_string()
 }
 fn default_hops() -> i32 {
-    6
-}
-fn default_free() -> i32 {
     3
 }
+fn default_rim() -> i32 {
+    1
+}
 fn default_rm_single() -> bool {
-    false
+    true
 }
 fn default_passivate() -> bool {
     true
@@ -84,11 +84,15 @@ pub struct ProxyData {
     /// Keep heavy atoms whose bond distance is at most this.
     #[serde(default = "default_hops")]
     pub hops: i32,
-    /// Heavy atoms farther than this get the frozen flag.
-    #[serde(default = "default_free")]
-    pub free: i32,
+    /// Thickness of the frozen rim, in hop shells counted inward from the cut
+    /// boundary. Relative to `hops` on purpose: the shielding the cluster needs
+    /// does not change when the cut grows, so `hops` can be tuned for cost
+    /// without disturbing it. The absolute threshold is `hops - rim`.
+    #[serde(default = "default_rim")]
+    pub rim: i32,
     /// Drop heavy atoms the cut left with a single heavy neighbour, to a
-    /// fixpoint. Off by default so the `hops` series stays monotonic.
+    /// fixpoint. On by default; turn it off when the `hops` series has to stay
+    /// strictly nested.
     #[serde(default = "default_rm_single")]
     pub rm_single: bool,
     /// Cap every severed bond with a terminator along the old bond vector.
@@ -116,7 +120,7 @@ impl Default for ProxyData {
         Self {
             focus: default_focus(),
             hops: default_hops(),
-            free: default_free(),
+            rim: default_rim(),
             rm_single: default_rm_single(),
             passivate: default_passivate(),
             passiv_elem: default_passiv_elem(),
@@ -198,7 +202,7 @@ impl NodeData for ProxyData {
 
         let focus = pin!(1, self.focus.clone(), NetworkResult::extract_string);
         let hops = pin!(2, self.hops, NetworkResult::extract_int);
-        let free = pin!(3, self.free, NetworkResult::extract_int);
+        let rim = pin!(3, self.rim, NetworkResult::extract_int);
         let rm_single = pin!(4, self.rm_single, NetworkResult::extract_bool);
         let passivate = pin!(5, self.passivate, NetworkResult::extract_bool);
         let passiv_elem = pin!(6, self.passiv_elem as i32, NetworkResult::extract_int) as i16;
@@ -217,8 +221,8 @@ impl NodeData for ProxyData {
                 "proxy: hops must be >= 0".to_string(),
             ));
         }
-        // `free < 0` is treated as 0 rather than rejected; `core < 0` is off.
-        let free = free.max(0);
+        // `rim < 0` is treated as 0 rather than rejected; `core < 0` is off.
+        let rim = rim.max(0);
         if !is_allowed_passivant(passiv_elem) {
             return EvalOutput::single(NetworkResult::Error(format!(
                 "proxy.passiv_elem: {} is not an allowed passivant; expected one of {:?} \
@@ -229,7 +233,7 @@ impl NodeData for ProxyData {
 
         let options = ProxyOptions {
             hops: hops as u32,
-            free: free as u32,
+            rim: rim as u32,
             fill,
             rm_single,
             passivate,
@@ -280,11 +284,11 @@ impl NodeData for ProxyData {
         // stale the moment any of the three it shows is connected.
         if connected_input_pins.contains("focus")
             || connected_input_pins.contains("hops")
-            || connected_input_pins.contains("free")
+            || connected_input_pins.contains("rim")
         {
             return None;
         }
-        Some(format!("{} · {} / {}", self.focus, self.hops, self.free))
+        Some(format!("{} · {} / {}", self.focus, self.hops, self.rim))
     }
 
     fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
@@ -292,7 +296,7 @@ impl NodeData for ProxyData {
         m.insert("molecule".to_string(), (true, None)); // required
         m.insert("focus".to_string(), (false, None));
         m.insert("hops".to_string(), (false, None));
-        m.insert("free".to_string(), (false, None));
+        m.insert("rim".to_string(), (false, None));
         m.insert("rm_single".to_string(), (false, None));
         m.insert("passivate".to_string(), (false, None));
         m.insert("passiv_elem".to_string(), (false, None));
@@ -305,7 +309,7 @@ impl NodeData for ProxyData {
         vec![
             ("focus".to_string(), TextValue::String(self.focus.clone())),
             ("hops".to_string(), TextValue::Int(self.hops)),
-            ("free".to_string(), TextValue::Int(self.free)),
+            ("rim".to_string(), TextValue::Int(self.rim)),
             ("rm_single".to_string(), TextValue::Bool(self.rm_single)),
             ("passivate".to_string(), TextValue::Bool(self.passivate)),
             (
@@ -329,10 +333,10 @@ impl NodeData for ProxyData {
                 .as_int()
                 .ok_or_else(|| "hops must be an integer".to_string())?;
         }
-        if let Some(v) = props.get("free") {
-            self.free = v
+        if let Some(v) = props.get("rim") {
+            self.rim = v
                 .as_int()
-                .ok_or_else(|| "free must be an integer".to_string())?;
+                .ok_or_else(|| "rim must be an integer".to_string())?;
         }
         if let Some(v) = props.get("rm_single") {
             self.rm_single = v
@@ -371,19 +375,43 @@ pub fn get_node_type() -> NodeType {
                       tag, capped where the cut severed bonds and frozen beyond a given shell so \
                       the interior still feels bulk. Distance is **bond hops** over heavy atoms \
                       (an atom with exactly one bond is a rider: never traversed, kept with its \
-                      host), not a sphere, so the proxy never contains a fragment the site is not \
-                      bonded to and the `hops` series is a discrete convergence series.\n\
+                      host), not a sphere, so the proxy never contains a fragment the site is \
+                      not bonded to and the `hops` series is a discrete convergence series.\n\
                       \n\
-                      `hops` is how far the cut reaches; `free` is how far the relaxation may \
-                      move (heavy atoms beyond it get the frozen flag, and flags are only ever \
-                      set, never cleared). `fill` keeps every dropped atom that bridged two kept \
-                      ones, which is what stops the diamond lattice leaving cap pairs 1.42 Å \
-                      apart — its atoms all lie beyond `hops`, so with `free < hops` they are \
-                      frozen rim and add no degrees of freedom. `rm_single` trims atoms the cut \
-                      left singly attached. `passivate` caps **only severed bonds**, so an atom \
-                      that was unsaturated in the input — a tool apex, a T-centre carbon — stays \
-                      unsaturated. `core` tags the innermost shells `high` for an ONIOM \
-                      partition; negative is off."
+                      **focus** — the tag marking the source atoms. Every atom carrying it is at \
+                      distance 0, and several sources grow shells that merge into one proxy, \
+                      which is how a tool not yet bonded to its target is cut together with it.\n\
+                      \n\
+                      **hops** — how far the cut reaches, the cost dial: heavy atoms this many \
+                      bonds from a source or nearer are kept.\n\
+                      \n\
+                      **rim** — the thickness of the frozen rim, in shells counted inward from \
+                      the cut boundary: the outer `rim` shells are frozen, so the relaxation may \
+                      move everything within `hops - rim` of a source. It is relative to `hops` \
+                      so that growing the cut grows the relaxed interior and leaves the \
+                      shielding alone. `rim: 0` still freezes what `fill` restored; a `rim` of \
+                      `hops` or more freezes the whole cluster. Flags are only ever set, never \
+                      cleared, so an atom frozen in the input stays frozen.\n\
+                      \n\
+                      **fill** — keeps every dropped atom that bridged two kept ones, which is \
+                      what stops the diamond lattice leaving cap pairs 1.42 Å apart. Its atoms \
+                      all lie beyond `hops`, so they are frozen rim and add no degrees of \
+                      freedom, only evaluation cost.\n\
+                      \n\
+                      **rm_single** — trims atoms **the cut left** hanging by a single bond, to \
+                      a fixpoint. An atom that was already singly bonded in the input is never \
+                      touched, a focus atom is never dropped, and only atoms in the frozen rim \
+                      are eligible — so the cascade reaches at most `rim` shells inward and can \
+                      never unwind a chain or a linker back towards the site. Turn it off when \
+                      the `hops` series has to stay strictly nested.\n\
+                      \n\
+                      **passivate** / **passiv_elem** — cap **only severed bonds**, with the \
+                      chosen terminator on the old bond vector, so an atom that was unsaturated \
+                      in the input — a tool apex, a T-centre carbon — stays unsaturated.\n\
+                      \n\
+                      **core** — tags heavy atoms within this many hops `high`, the ONIOM high \
+                      layer; riders and caps inherit it and untagged means the low layer. \
+                      Negative is off."
             .to_string(),
         summary: Some("Cut a simulation proxy around focus atoms".to_string()),
         category: NodeTypeCategory::AtomicStructure,
@@ -405,7 +433,7 @@ pub fn get_node_type() -> NodeType {
             },
             Parameter {
                 id: None,
-                name: "free".to_string(),
+                name: "rim".to_string(),
                 data_type: DataType::Int,
             },
             Parameter {

@@ -844,8 +844,9 @@ pub struct APIProxyData {
     pub focus: String,
     /// Keep heavy atoms whose bond distance is at most this.
     pub hops: i32,
-    /// Heavy atoms farther than this get the frozen flag.
-    pub free: i32,
+    /// Thickness of the frozen rim, in hop shells counted inward from the cut
+    /// boundary; the absolute free depth is `hops - rim`.
+    pub rim: i32,
     /// Drop heavy atoms the cut left with a single heavy neighbour, to a
     /// fixpoint.
     pub rm_single: bool,
@@ -890,8 +891,9 @@ pub struct APIProxyStats {
     /// Largest bond distance among the kept heavy atoms. A **size** figure,
     /// not a shielding one.
     pub farthest_hop: u32,
-    /// `hops - free`: the thinnest frozen shell. The **shielding** figure.
-    pub min_rim: i32,
+    /// `hops - rim`: the outermost hop shell still free — the depth of the
+    /// relaxed interior.
+    pub free_hops: u32,
     /// Unsaturated slots the output still carries — what sets the multiplicity
     /// of a quantum-chemistry input.
     pub open_valences: usize,
@@ -915,7 +917,7 @@ impl From<&ProxyStats> for APIProxyStats {
             filled: stats.filled,
             fill_rounds: stats.fill_rounds,
             farthest_hop: stats.farthest_hop,
-            min_rim: stats.min_rim,
+            free_hops: stats.free_hops,
             open_valences: stats.open_valences,
             min_cap_pair: stats.min_cap_pair,
             nearest_dropped: stats.nearest_dropped,
@@ -928,7 +930,7 @@ impl From<&ProxyData> for APIProxyData {
         APIProxyData {
             focus: data.focus.clone(),
             hops: data.hops,
-            free: data.free,
+            rim: data.rim,
             rm_single: data.rm_single,
             passivate: data.passivate,
             passiv_elem: data.passiv_elem,
@@ -946,7 +948,7 @@ impl From<&APIProxyData> for ProxyData {
         ProxyData {
             focus: data.focus.clone(),
             hops: data.hops,
-            free: data.free,
+            rim: data.rim,
             rm_single: data.rm_single,
             passivate: data.passivate,
             passiv_elem: data.passiv_elem,

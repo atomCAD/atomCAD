@@ -157,10 +157,10 @@
               "core": 1,
               "fill": true,
               "focus": "focus",
-              "free": 3,
               "hops": 7,
               "passiv_elem": 1,
               "passivate": true,
+              "rim": 4,
               "rm_single": false
             },
             "body_width": 320.0,
@@ -310,10 +310,10 @@
               "core": 1,
               "fill": true,
               "focus": "focus",
-              "free": 3,
               "hops": 6,
               "passiv_elem": 1,
               "passivate": true,
+              "rim": 3,
               "rm_single": false
             },
             "body_width": 320.0,

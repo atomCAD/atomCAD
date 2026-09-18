@@ -48,16 +48,32 @@ pub const CAP_PAIR_RADIUS: f64 = 3.0;
 pub struct ProxyOptions {
     /// Keep heavy atoms whose bond distance from a source is at most this.
     pub hops: u32,
-    /// Heavy atoms farther than this get the frozen flag. Note `hops` plays no
-    /// part in freezing: on the plain cut `free >= hops` freezes nothing, and
-    /// an atom `fill` restored beyond `free` is frozen whatever `hops` is.
-    pub free: u32,
+    /// Thickness of the frozen rim, in hop shells counted **inward from the
+    /// cut boundary**: the outermost `rim` shells of the plain cut are frozen,
+    /// everything nearer the sources is free. The absolute threshold the cut
+    /// actually applies is [`ProxyOptions::free_hops`].
+    ///
+    /// Relative rather than absolute because the rim is the shielding the
+    /// cluster needs, and that requirement does not change when `hops` does —
+    /// growing `hops` should grow the relaxed interior, not thin the rim.
+    /// `rim: 0` still freezes what `fill` restored (those atoms lie beyond
+    /// `hops`, §4.3); `rim >= hops` freezes the whole cluster.
+    pub rim: u32,
     /// Keep every dropped heavy atom that bridges two or more kept heavy
     /// atoms, to a fixpoint (§4.3). On by default: without it the diamond
     /// lattice leaves clashing cap pairs 1.42 Å apart on silicon.
     pub fill: bool,
-    /// Drop heavy atoms the cut left with a single heavy neighbour, to a
-    /// fixpoint (§4.4). Off by default so the `hops` series stays monotonic.
+    /// Drop heavy atoms **the cut left** with a single heavy neighbour, to a
+    /// fixpoint (§4.4). On by default: a boundary atom hanging by one bond is
+    /// an artefact of the cut, not of the structure. Turn it off when the
+    /// `hops` series has to stay strictly nested.
+    ///
+    /// Two things it never does. It never drops an atom that was *already*
+    /// singly bonded in the input, so an adatom or a terminal group survives on
+    /// its own account. And it only ever drops atoms **in the frozen rim**
+    /// (distance beyond [`ProxyOptions::free_hops`]), so the cascade cannot
+    /// walk a chain or a linker into the relaxed interior — with `rim: 0` it
+    /// therefore touches nothing but what `fill` restored.
     pub rm_single: bool,
     /// Cap every severed bond with a terminator along the old bond vector.
     pub passivate: bool,
@@ -70,14 +86,23 @@ pub struct ProxyOptions {
 impl Default for ProxyOptions {
     fn default() -> Self {
         Self {
-            hops: 6,
-            free: 3,
+            hops: 3,
+            rim: 1,
             fill: true,
-            rm_single: false,
+            rm_single: true,
             passivate: true,
             passivant_element: 1,
             core: None,
         }
+    }
+}
+
+impl ProxyOptions {
+    /// The absolute distance threshold the frozen rule uses: heavy atoms
+    /// farther than this from a source get the frozen flag. It is `hops - rim`
+    /// saturating at zero, so `rim >= hops` freezes everything.
+    pub fn free_hops(&self) -> u32 {
+        self.hops.saturating_sub(self.rim)
     }
 }
 
@@ -379,17 +404,29 @@ pub fn plan_proxy(
     }
     filled.sort_unstable();
 
-    // 6. rm_single, on the converged boundary. A kept heavy atom that is not a
-    //    source, has exactly one kept heavy neighbour and had more than one
-    //    heavy neighbour in the input is dropped — to a fixpoint, because
-    //    removing one lowers its inward neighbour's count.
+    // 6. rm_single, on the converged boundary. A kept heavy atom that lies in
+    //    the frozen rim, is not a source, has exactly one kept heavy neighbour
+    //    and had more than one heavy neighbour in the input is dropped — to a
+    //    fixpoint, because removing one lowers its inward neighbour's count.
     if options.rm_single {
+        let free_hops = options.free_hops();
         let mut worklist: Vec<u32> = kept_heavy.iter().copied().collect();
         worklist.sort_unstable();
         loop {
             let mut batch: Vec<u32> = Vec::new();
             for &a in &worklist {
-                if !kept_heavy.contains(&a) || source_set.contains(&a) {
+                if !kept_heavy.contains(&a) {
+                    continue;
+                }
+                // The trim is a **rim** cleanup: only atoms the cut freezes are
+                // eligible (§4.4). The relaxed interior is the chemistry under
+                // study, and the cascade would otherwise walk a chain or a
+                // linker inward one atom per round. A source has distance 0 and
+                // so is covered by this too; the explicit test stays because the
+                // exemption is a rule of its own, not a consequence of `rim`.
+                if source_set.contains(&a)
+                    || distance.get(&a).copied().unwrap_or(u32::MAX) <= free_hops
+                {
                     continue;
                 }
                 let hn = heavy_neighbors(structure, &riders, a);
@@ -451,11 +488,13 @@ pub fn plan_proxy(
         Vec::new()
     };
 
-    // 9. Frozen. `hops` plays no part here (§4.6).
+    // 9. Frozen: everything past the free depth `hops - rim` (§4.6). Atoms
+    //    `fill` restored lie beyond `hops`, so they are frozen even at `rim: 0`.
+    let free_hops = options.free_hops();
     let mut frozen: Vec<u32> = kept_heavy
         .iter()
         .copied()
-        .filter(|id| distance.get(id).copied().unwrap_or(u32::MAX) > options.free)
+        .filter(|id| distance.get(id).copied().unwrap_or(u32::MAX) > free_hops)
         .collect();
     frozen.sort_unstable();
 
@@ -534,11 +573,11 @@ pub fn plan_proxy(
 /// The report of one cut — the user's only feedback on it, and what the tuning
 /// loop of §6.1 reads.
 ///
-/// `farthest_hop` is a **size** figure and `min_rim` the **shielding** figure:
-/// `fill` grows the cluster only where the boundary is {100}-like, so the
-/// farthest kept atom can sit at about `2·hops` while the thinnest part of the
-/// frozen rim is still exactly `hops - free`. Neither `free` nor `hops` should
-/// be changed because `farthest_hop` looks large.
+/// `farthest_hop` is a **size** figure, not a shielding one: `fill` grows the
+/// cluster only where the boundary is {100}-like, so the farthest kept atom can
+/// sit at about `2·hops` while the thinnest part of the frozen rim is still
+/// exactly `rim`. Neither `rim` nor `hops` should be changed because
+/// `farthest_hop` looks large.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProxyStats {
     /// Empirical formula of the output, e.g. `Si223H96`.
@@ -559,8 +598,10 @@ pub struct ProxyStats {
     pub fill_rounds: usize,
     /// Largest bond distance among the kept heavy atoms. A size figure.
     pub farthest_hop: u32,
-    /// `hops - free`: the thinnest frozen shell. The shielding figure.
-    pub min_rim: i32,
+    /// `hops - rim`: the outermost hop shell that is still free, i.e. the
+    /// depth of the relaxed interior. Derived from the options, but the figure
+    /// the chemistry is read against, so the report carries it.
+    pub free_hops: u32,
     /// Unsaturated slots the output still carries, counted from hybridization
     /// the way `passivate` counts them — this is what sets the multiplicity of
     /// a quantum-chemistry input.
@@ -730,7 +771,7 @@ pub fn apply_proxy(
         filled: plan.filled.len(),
         fill_rounds: plan.fill_rounds,
         farthest_hop,
-        min_rim: plan.options.hops as i32 - plan.options.free as i32,
+        free_hops: plan.options.free_hops(),
         open_valences,
         min_cap_pair,
         nearest_dropped: plan.nearest_dropped,

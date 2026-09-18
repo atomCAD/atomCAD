@@ -821,7 +821,7 @@ the property of the same name.
 - `molecule` — the structure to cut (`Crystal` or `Molecule`). A Crystal stays a
   Crystal, lattice intact.
 - `focus` — the tag name marking the source atoms.
-- `hops`, `free`, `core` — see the properties below.
+- `hops`, `rim`, `core` — see the properties below.
 - `rm_single`, `passivate`, `fill` — the three flags.
 - `passiv_elem` — the terminator's atomic number.
 
@@ -831,16 +831,34 @@ the property of the same name.
   atoms are fine and are the usual case: before a reaction the tool apex is not
   yet bonded to the surface, so you tag the apex *and* the target atom and the
   two shells grow into one proxy.
-- `hops` (default 6) — keep heavy atoms this many bonds out or nearer. This is
+- `hops` (default 3) — keep heavy atoms this many bonds out or nearer. This is
   the cost dial.
-- `free` (default 3) — heavy atoms farther than this get the **frozen** flag, and
-  so do their riders and caps. This is the chemistry dial: set it from how far
-  the reaction's strain field reaches. Flags are only ever *set*, never cleared,
-  so an atom frozen upstream stays frozen.
-- `rm_single` (default off) — drop heavy atoms the cut left with a single heavy
-  neighbour, repeated until none is left. Atoms that were singly bonded in the
-  *input* are never touched on their own account, and a focus atom is never
-  dropped. Off by default because it breaks the nesting of the `hops` series.
+- `rim` (default 1) — how many shells of the cut are **frozen**, counted inward
+  from the boundary: the outer `rim` shells get the frozen flag, and so do their
+  riders and caps, leaving everything within `hops − rim` of a source free to
+  move. It is measured *from the boundary* rather than from the sources so that
+  the shielding stays put when you tune `hops` for cost — grow the cut and the
+  relaxed interior grows with it. `rim: 0` still freezes whatever `fill`
+  restored (those atoms lie beyond `hops`); a `rim` of `hops` or more freezes the
+  whole cluster. Flags are only ever *set*, never cleared, so an atom frozen
+  upstream stays frozen.
+- `rm_single` (default on) — drop heavy atoms **the cut left** with a single
+  heavy neighbour, repeated until none is left. An atom hanging by one bond is
+  an artefact of the cut rather than a feature of the structure, which is why
+  this is on. It is bounded three ways, and the third is the one to remember:
+  an atom that was *already* singly bonded in the input is never touched on its
+  own account; a focus atom is never dropped; and **only atoms in the frozen rim
+  are eligible at all**, so the trim can never reach the relaxed interior. That
+  last rule is what stops the cascade — each removal leaves a new atom hanging,
+  one shell further in — from walking a chain or a linker all the way back to
+  the site you cut around. The trim therefore reaches at most `rim` shells
+  inward, and at `rim: 0` it has nothing to act on but what `fill` restored.
+  Turn it off when you need the `hops` series to nest strictly.
+
+  The cost of that bound is that a dangling atom can be left just inside the
+  free depth, where one more round would have taken it. On a bulk cut it does
+  not happen; where it does, the shape is chain-like — which is the case the
+  bound is there for.
 - `passivate` (default on) — cap every **severed** bond with a terminator on the
   old bond vector. Only severed bonds: an atom that was unsaturated in the input
   — a tool apex radical, a T-centre carbon, an unsaturated surface site — stays
@@ -886,19 +904,21 @@ Two of those are easy to misread:
 
 - `farthest hop` is a **size** figure, not a shielding figure. `fill` grows the
   cluster only where the boundary is {100}-like, so the farthest kept atom can
-  sit at roughly twice `hops` while the rim is still exactly `hops − free` thick
-  in its thinnest direction. `min rim` is the shielding figure. Do not lower
-  `hops` or raise `free` because the farthest hop looks large.
+  sit at roughly twice `hops` while the rim is still exactly `rim` shells thick
+  in its thinnest direction. Do not lower `hops` or raise `rim` because the
+  farthest hop looks large.
 - A small `nearest dropped` (under about 4 Å) means an *unbonded* neighbour —
   a trench wall, a second tip — was close enough to matter sterically and was
   cut away. The remedy is to tag one of its atoms as focus too.
 
 **Choosing the parameters.** Set `core` from the reaction (the atoms whose bonds
-change, plus one shell) and `free` from how far its strain field reaches. Pick
-`hops` so that `min rim` = `hops − free` is two or three shells, evaluate, and
-read the report: the counts for cost, the closest cap pair to confirm the rim is
-clean. Then raise `hops` until the cost is the most you will pay and run the
-series downward until the energy stops moving.
+change, plus one shell) and `rim` from how much frozen bulk the cluster needs to
+stand in for the workpiece — two or three shells. Then `hops` is free to be what
+it is, a cost dial: raise it until the *free depth* in the report reaches as far
+as the reaction's strain field does and the cost is the most you will pay, and
+run the series downward until the energy stops moving. Neither of the other two
+knobs moves when you do, which is the point of measuring the rim from the
+boundary.
 
 **Example.** A tool approach on Si(100), with the apex and the target dimer atom
 both tagged. The silicon lattice comes from a `lattice_vecs` + `structure` pair,
@@ -919,7 +939,7 @@ apex      = remove_hydrogen { molecule: tip, region: apex_ball }
 scene     = atom_union { structures: [slab, apex] }
 site      = tag { molecule: scene, name: "focus", region: apex_ball }
 site2     = tag { molecule: site,  name: "focus", region: target_ball }
-proxy_6   = proxy { molecule: site2, hops: 6, free: 3, core: 1 }
+proxy_6   = proxy { molecule: site2, hops: 6, rim: 3, core: 1 }
 relaxed   = relax { molecule: proxy_6 }
 ```
 
@@ -937,16 +957,16 @@ series = map {
   input_type: Int,
   output_type: Crystal,
   body {
-    p = proxy { molecule: ^site2, hops: $element, free: 3 }
+    p = proxy { molecule: ^site2, hops: $element, rim: 3 }
     output p
   }
 }
 ```
 
 The apex radical is unsaturated in every member; every silicon that lost a
-neighbour carries a hydrogen on the old bond vector; everything more than three
-hops from either site is frozen; and the two sites plus their first neighbours
-carry `high`.
+neighbour carries a hydrogen on the old bond vector; the outer three shells of
+each member are frozen, so each member up the series relaxes one shell more than
+the last; and the two sites plus their first neighbours carry `high`.
 
 **A caveat on the 2.42 Å figure.** With `fill` on, two caps on one host sit
 2.42 Å apart *on an ideal lattice* — that is 1.48 Å along each of two bonds at
