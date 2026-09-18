@@ -198,6 +198,73 @@ pub fn terminator_bond_length(host: i16, passivant: i16) -> f64 {
 }
 
 // ============================================================================
+// Open valences
+// ============================================================================
+
+/// The unsaturated valence slots of one atom — the number of terminators
+/// [`add_hydrogens_filtered`] would place on it, and the figure
+/// `proxy_cut::ProxyStats::open_valences` sums (`doc/design_proxy_node.md`
+/// §7.5). One function, so the multiplicity a panel shows and the number of
+/// hydrogens `passivate` would add cannot disagree.
+///
+/// Zero for an atom that cannot host a terminator at all: a missing atom, a
+/// marker or unresolved parameter (`Z <= 0`), a hydrogen, an atom of the
+/// passivant's own element (the host-skip rule), and any saturated atom. The
+/// *options* of the passivation path — `selected_only`,
+/// `skip_already_passivated`, the region predicate — are caller-side filters
+/// and play no part here.
+pub fn open_valence_slots(
+    structure: &AtomicStructure,
+    atom_id: u32,
+    passivant_element: i16,
+) -> usize {
+    open_valence_analysis(structure, atom_id, passivant_element).map_or(0, |(_, needed)| needed)
+}
+
+/// [`open_valence_slots`] together with the hybridization it was derived from,
+/// which the placement path needs for the open bond directions. `None` is "no
+/// slots", so the two callers cannot disagree about the count.
+fn open_valence_analysis(
+    structure: &AtomicStructure,
+    atom_id: u32,
+    passivant_element: i16,
+) -> Option<(Hybridization, usize)> {
+    let atom = structure.get_atom(atom_id)?;
+
+    // Use effective atomic number to resolve parameter elements
+    let atomic_number = structure.effective_atomic_number(atom);
+
+    // Skip atoms that should not be passivated
+    if atomic_number <= 0 {
+        return None; // delete markers, unresolved parameters
+    }
+    // Host-skip rule (doc/design_halogen_passivation.md, "Host-skip rule"):
+    // never cap an atom with its own element. `host == 1` keeps the
+    // longstanding "H is a terminator, never a host" invariant for every
+    // passivant; `host == passivant` prevents self-capping (e.g. no F₂).
+    // For H passivation this is byte-identical to the old `== 1` check.
+    if atomic_number == 1 || atomic_number == passivant_element {
+        return None;
+    }
+
+    // Read the atom's hybridization override from flags (set by atom_edit evaluation).
+    // Convert from u8 flag value to Option<Hybridization> for detect_hybridization.
+    let hyb_override = match atom.hybridization_override() {
+        HYBRIDIZATION_SP3 => Some(Hybridization::Sp3),
+        HYBRIDIZATION_SP2 => Some(Hybridization::Sp2),
+        HYBRIDIZATION_SP1 => Some(Hybridization::Sp1),
+        HYBRIDIZATION_AUTO | _ => None,
+    };
+    let hybridization = detect_hybridization(structure, atom_id, hyb_override);
+    let max_bonds = covalent_max_neighbors(atomic_number, hybridization);
+    let current = count_active_neighbors(structure, atom_id);
+    if current >= max_bonds {
+        return None;
+    }
+    Some((hybridization, max_bonds - current))
+}
+
+// ============================================================================
 // Geometry: compute_open_directions
 // ============================================================================
 
@@ -404,44 +471,23 @@ pub fn add_hydrogens_filtered(
             None => continue,
         };
 
-        // Use effective atomic number to resolve parameter elements
-        let atomic_number = structure.effective_atomic_number(atom);
-
-        // Skip atoms that should not be passivated
-        if atomic_number <= 0 {
-            continue; // delete markers, unresolved parameters
-        }
-        // Host-skip rule (doc/design_halogen_passivation.md, "Host-skip rule"):
-        // never cap an atom with its own element. `host == 1` keeps the
-        // longstanding "H is a terminator, never a host" invariant for every
-        // passivant; `host == passivant` prevents self-capping (e.g. no F₂).
-        // For H passivation this is byte-identical to the old `== 1` check.
-        if atomic_number == 1 || atomic_number == options.passivant_element {
-            continue;
-        }
         if options.selected_only && !atom.is_selected() {
             continue;
         }
         if options.skip_already_passivated && atom.is_hydrogen_passivation() {
             continue;
         }
-        let position = atom.position;
 
-        // Read the atom's hybridization override from flags (set by atom_edit evaluation).
-        // Convert from u8 flag value to Option<Hybridization> for detect_hybridization.
-        let hyb_override = match atom.hybridization_override() {
-            HYBRIDIZATION_SP3 => Some(Hybridization::Sp3),
-            HYBRIDIZATION_SP2 => Some(Hybridization::Sp2),
-            HYBRIDIZATION_SP1 => Some(Hybridization::Sp1),
-            HYBRIDIZATION_AUTO | _ => None,
-        };
-        let hybridization = detect_hybridization(structure, atom_id, hyb_override);
-        let max_bonds = covalent_max_neighbors(atomic_number, hybridization);
-        let current = count_active_neighbors(structure, atom_id);
-        if current >= max_bonds {
+        // The element checks, the hybridization and the slot count are
+        // `open_valence_analysis`: the one place they live, shared with
+        // `open_valence_slots` (and so with the proxy report).
+        let Some((hybridization, needed)) =
+            open_valence_analysis(structure, atom_id, options.passivant_element)
+        else {
             continue;
-        }
-        let needed = max_bonds - current;
+        };
+        let atomic_number = structure.effective_atomic_number(atom);
+        let position = atom.position;
 
         let existing_dirs = gather_bond_directions(structure, atom);
         // Bond length: H keeps the per-context molecular table (unchanged);

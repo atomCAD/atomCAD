@@ -1,10 +1,11 @@
 use crate::atomic_constants::ATOM_INFO;
 use crate::atomic_constants::DEFAULT_ATOM_INFO;
+use crate::atomic_constants::element_symbol;
 use crate::atomic_structure::AtomicStructure;
 use atomcad_util::transform::Transform;
 
 use glam::f64::{DQuat, DVec3};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 // Bond distance multiplier - slightly larger than 1.0 to account for variations in bond distances
 const BOND_DISTANCE_MULTIPLIER: f64 = 1.15;
@@ -399,4 +400,43 @@ pub fn remove_single_bond_atoms_filtered(
             })
             .collect();
     }
+}
+
+/// The **empirical formula** of a structure, for a readout: `Si223H96`, `CH4`,
+/// `OH2`.
+///
+/// Elements come in descending atom count, ties broken by symbol, with
+/// **hydrogen always last** whatever its count — so a proxy reads
+/// `Si223H96` rather than `H96Si223`. A count of one is written bare.
+/// Elements are read through `effective_atomic_number`, so a parameter element
+/// resolves to what it stands for; markers (`Z <= 0`) are skipped.
+pub fn empirical_formula(structure: &AtomicStructure) -> String {
+    let mut counts: HashMap<i16, usize> = HashMap::new();
+    for atom in structure.atoms_values() {
+        let atomic_number = structure.effective_atomic_number(atom);
+        if atomic_number <= 0 {
+            continue;
+        }
+        *counts.entry(atomic_number).or_insert(0) += 1;
+    }
+
+    let mut entries: Vec<(bool, usize, String)> = counts
+        .into_iter()
+        .map(|(atomic_number, count)| (atomic_number == 1, count, element_symbol(atomic_number)))
+        .collect();
+    // Hydrogen last, then descending count, then symbol.
+    entries.sort_by(|a, b| {
+        a.0.cmp(&b.0)
+            .then_with(|| b.1.cmp(&a.1))
+            .then_with(|| a.2.cmp(&b.2))
+    });
+
+    let mut formula = String::new();
+    for (_, count, symbol) in entries {
+        formula.push_str(&symbol);
+        if count > 1 {
+            formula.push_str(&count.to_string());
+        }
+    }
+    formula
 }

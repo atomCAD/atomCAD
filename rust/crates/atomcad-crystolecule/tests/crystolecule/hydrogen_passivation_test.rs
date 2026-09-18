@@ -1,6 +1,7 @@
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::hydrogen_passivation::{
-    AddHydrogensOptions, RemoveHydrogensOptions, add_hydrogens, remove_hydrogens,
+    AddHydrogensOptions, RemoveHydrogensOptions, add_hydrogens, open_valence_slots,
+    remove_hydrogens,
 };
 use glam::f64::DVec3;
 
@@ -1207,4 +1208,59 @@ fn per_site_h_pinning_silicon_general_path() {
             "general-path Si–H bond length must be 1.48, got {d}"
         );
     }
+}
+
+// ============================================================================
+// open_valence_slots — the shared analysis half
+// ============================================================================
+
+/// The slot count and the placement path must agree atom for atom: the count
+/// is what a proxy report shows as `open_valences` and what a
+/// quantum-chemistry multiplicity is read from (`doc/design_proxy_node.md`
+/// §7.5).
+#[test]
+fn open_valence_slots_agrees_with_what_add_hydrogens_places() {
+    let dirs = tetrahedral_dirs(1.54);
+    let (mut s, anchor) = make_structure(6, &[(6, dirs[0]), (6, dirs[1])]);
+
+    // Two of four tetrahedral slots are taken on the anchor; each neighbour
+    // has one bond and three slots of its own.
+    assert_eq!(open_valence_slots(&s, anchor, 1), 2);
+    let ids: Vec<u32> = s.atom_ids().copied().collect();
+    let total: usize = ids.iter().map(|&id| open_valence_slots(&s, id, 1)).sum();
+    assert_eq!(total, 8);
+
+    let added = add_hydrogens(&mut s, &default_options()).atoms_added;
+    assert_eq!(added, total, "the two halves count the same slots");
+
+    // And the structure has no slot left once they are placed.
+    let ids: Vec<u32> = s.atom_ids().copied().collect();
+    let left: usize = ids.iter().map(|&id| open_valence_slots(&s, id, 1)).sum();
+    assert_eq!(left, 0);
+}
+
+#[test]
+fn open_valence_slots_is_zero_where_no_terminator_can_go() {
+    // A saturated carbon.
+    let dirs = tetrahedral_dirs(1.09);
+    let (s, methane_c) =
+        make_structure(6, &[(1, dirs[0]), (1, dirs[1]), (1, dirs[2]), (1, dirs[3])]);
+    assert_eq!(open_valence_slots(&s, methane_c, 1), 0);
+
+    // A hydrogen is a terminator, never a host — whatever the passivant.
+    let mut s = AtomicStructure::new();
+    let h = s.add_atom(1, DVec3::ZERO);
+    assert_eq!(open_valence_slots(&s, h, 1), 0);
+    assert_eq!(open_valence_slots(&s, h, 9), 0);
+
+    // The host-skip rule: no F₂, though H still caps a lone F.
+    let f = s.add_atom(9, DVec3::new(5.0, 0.0, 0.0));
+    assert_eq!(open_valence_slots(&s, f, 9), 0);
+    assert_eq!(open_valence_slots(&s, f, 1), 1);
+
+    // Markers and unresolved parameters carry no element, and a missing atom
+    // is not an atom.
+    let marker = s.add_atom(0, DVec3::new(10.0, 0.0, 0.0));
+    assert_eq!(open_valence_slots(&s, marker, 1), 0);
+    assert_eq!(open_valence_slots(&s, 9999, 1), 0);
 }

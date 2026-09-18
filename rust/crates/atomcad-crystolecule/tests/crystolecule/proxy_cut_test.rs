@@ -1,24 +1,30 @@
 //! Tests for `proxy_cut` — the bond-hop proxy cut (`doc/design_proxy_node.md`).
 //!
-//! Phase 1 covers the analysis half: riders, distances, the keep set (`fill`
-//! and `rm_single`), the severed-bond caps, the frozen / high lists and
-//! `nearest_dropped`. Nothing here mutates a structure.
+//! The analysis half — riders, distances, the keep set (`fill` and
+//! `rm_single`), the severed-bond caps, the frozen / high lists and
+//! `nearest_dropped` — plans without touching a structure; the apply half
+//! carries a plan out, reports on it, and is what `proxy_cut` drives by tag
+//! name.
 
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
+use atomcad_crystolecule::atomic_structure_utils::empirical_formula;
 use atomcad_crystolecule::crystolecule_constants::DEFAULT_ZINCBLENDE_MOTIF;
-use atomcad_crystolecule::hydrogen_passivation::terminator_bond_length;
+use atomcad_crystolecule::hydrogen_passivation::{
+    AddHydrogensOptions, add_hydrogens, terminator_bond_length,
+};
 use atomcad_crystolecule::lattice_fill::{LatticeFillConfig, LatticeFillOptions, fill_lattice};
 use atomcad_crystolecule::motif::Motif;
 use atomcad_crystolecule::proxy_cut::{
-    CapPlacement, ProxyError, ProxyOptions, bond_distances, classify_riders, plan_proxy,
-    severed_bond_caps,
+    CapPlacement, ProxyError, ProxyOptions, apply_proxy, bond_distances, classify_riders,
+    plan_proxy, proxy_cut, severed_bond_caps,
 };
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
 use atomcad_geo_tree::GeoNode;
 use atomcad_util::daabox::DAABox;
 use glam::f64::DVec3;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 
 // =============================================================================
@@ -1079,4 +1085,543 @@ fn terminator_bond_length_matches_the_general_passivation_path() {
             );
         }
     }
+}
+
+// =============================================================================
+// Apply (§7.4)
+// =============================================================================
+
+/// The bonds of a structure counted by walking the atoms — the cross-check on
+/// `get_num_of_bonds` after the deletions and the caps.
+fn walked_bond_count(structure: &AtomicStructure) -> usize {
+    let ends: usize = structure
+        .atoms_values()
+        .map(|a| a.bonds.iter().filter(|b| !b.is_delete_marker()).count())
+        .sum();
+    assert_eq!(ends % 2, 0, "every bond is stored on both of its atoms");
+    ends / 2
+}
+
+/// Everything about a structure that `apply_proxy` could possibly disturb —
+/// used to assert that a failed apply left the input untouched.
+fn fingerprint(structure: &AtomicStructure) -> String {
+    let mut atoms: Vec<String> = structure
+        .atoms_values()
+        .map(|a| {
+            let mut neighbors: Vec<u32> = a
+                .bonds
+                .iter()
+                .filter(|b| !b.is_delete_marker())
+                .map(|b| b.other_atom_id())
+                .collect();
+            neighbors.sort_unstable();
+            format!(
+                "{}:{}:{:?}:{}:{}:{:?}",
+                a.id, a.atomic_number, a.position, a.flags, a.tag_bits, neighbors
+            )
+        })
+        .collect();
+    atoms.sort();
+    format!("{:?}|{}", structure.tag_names(), atoms.join(";"))
+}
+
+/// The atom ids carrying a tag, in id order.
+fn tagged(structure: &AtomicStructure, name: &str) -> Vec<u32> {
+    sorted_ids(structure.atoms_with_tag(name))
+}
+
+#[test]
+fn apply_on_the_bulk_cube_matches_its_plan() {
+    let mut s = silicon_cube().clone();
+    let source = cube_center_source(&s);
+    let plan = plan_proxy(&s, &[source], &default_options(4)).expect("plan");
+    let dropped: HashSet<u32> = plan.dropped.iter().copied().collect();
+    let planned_caps = plan.caps.clone();
+    let stats = apply_proxy(&mut s, &plan).expect("apply");
+
+    // The output is exactly the kept atoms plus the caps.
+    assert_eq!(stats.heavy, 165, "the filled four-hop cut of §4.3");
+    assert_eq!(stats.riders, 0, "the cut is deep inside the cube");
+    assert_eq!(stats.caps, planned_caps.len());
+    assert_eq!(
+        s.atoms_values().count(),
+        stats.heavy + stats.riders + stats.caps
+    );
+
+    // No atom kept a bond to a dropped id, and the bond counter is in step
+    // with the atoms.
+    for atom in s.atoms_values() {
+        for bond in atom.bonds.iter().filter(|b| !b.is_delete_marker()) {
+            let other = bond.other_atom_id();
+            assert!(!dropped.contains(&other), "bond to dropped atom {other}");
+            assert!(s.get_atom(other).is_some(), "bond to missing atom {other}");
+        }
+    }
+    assert_eq!(s.get_num_of_bonds(), walked_bond_count(&s));
+
+    // Every planned cap is there: one terminator on its host, single bond, at
+    // the planned position, flagged as passivation.
+    for cap in &planned_caps {
+        let host = s.get_atom(cap.host).expect("the host survived the cut");
+        let placed: Vec<u32> = host
+            .bonds
+            .iter()
+            .filter(|b| !b.is_delete_marker())
+            .map(|b| b.other_atom_id())
+            .filter(|&n| {
+                s.get_atom(n)
+                    .is_some_and(|a| a.position.distance(cap.position) < 1e-9)
+            })
+            .collect();
+        assert_eq!(placed.len(), 1, "exactly one cap at the planned position");
+        let cap_atom = s.get_atom(placed[0]).expect("the cap");
+        assert_eq!(cap_atom.atomic_number, 1);
+        assert!(cap_atom.is_hydrogen_passivation(), "cap carries the flag");
+        assert_eq!(
+            cap_atom
+                .bonds
+                .iter()
+                .filter(|b| !b.is_delete_marker())
+                .count(),
+            1,
+            "a cap is bonded once"
+        );
+        let order = host
+            .bonds
+            .iter()
+            .find(|b| b.other_atom_id() == placed[0])
+            .expect("the host's bond to its cap")
+            .bond_order();
+        assert_eq!(order, BOND_SINGLE);
+    }
+
+    // Nothing is left unsaturated: the rim is fully capped.
+    assert_eq!(stats.open_valences, 0);
+}
+
+#[test]
+fn apply_is_deterministic() {
+    let s = silicon_cube();
+    let source = cube_center_source(s);
+    let plan = plan_proxy(s, &[source], &default_options(3)).expect("plan");
+
+    let mut first = s.clone();
+    let stats_a = apply_proxy(&mut first, &plan).expect("apply");
+    let mut second = s.clone();
+    let stats_b = apply_proxy(&mut second, &plan).expect("apply");
+
+    assert_eq!(stats_a, stats_b);
+    assert_eq!(fingerprint(&first), fingerprint(&second));
+}
+
+// =============================================================================
+// Frozen at apply time (§4.6)
+// =============================================================================
+
+/// A five-carbon chain with a hydrogen at each end, a heavy adatom rider on
+/// `c1`, and `c0` frozen in the input.
+fn frozen_chain_fixture() -> (AtomicStructure, Vec<u32>, u32, u32) {
+    let mut s = AtomicStructure::new();
+    let chain = capped_chain(&mut s, DVec3::ZERO, 5);
+    let head_h = s
+        .atoms_values()
+        .find(|a| a.atomic_number == 1)
+        .expect("the head cap")
+        .id;
+    let adatom = add(&mut s, 14, DVec3::new(1.54, 1.9, 0.0));
+    bond(&mut s, chain[1], adatom);
+    s.set_atom_frozen(chain[0], true);
+    (s, chain, head_h, adatom)
+}
+
+#[test]
+fn frozen_flags_are_only_ever_set() {
+    let (mut s, chain, head_h, adatom) = frozen_chain_fixture();
+    let options = ProxyOptions {
+        hops: 2,
+        free: 1,
+        fill: false,
+        ..Default::default()
+    };
+    let plan = plan_proxy(&s, &[chain[0]], &options).expect("plan");
+    // The distance rule alone would freeze only `c2`.
+    assert_eq!(plan.frozen, vec![chain[2]]);
+    let cap_host = plan.caps[0].host;
+    assert_eq!(cap_host, chain[2], "the one severed bond is c2–c3");
+    let stats = apply_proxy(&mut s, &plan).expect("apply");
+
+    let is_frozen = |id: u32| s.get_atom(id).expect("kept").is_frozen();
+    // Frozen in the input at distance 0 — the flag is never cleared.
+    assert!(is_frozen(chain[0]));
+    // Frozen by the distance rule, and its cap follows.
+    assert!(is_frozen(chain[2]));
+    let cap = s
+        .atoms_values()
+        .find(|a| a.atomic_number == 1 && a.is_hydrogen_passivation())
+        .expect("the cap");
+    assert!(cap.is_frozen(), "a cap follows its host");
+    // A rider follows its host either way: `head_h` hangs off the atom that
+    // was frozen in the input, the adatom off a free one.
+    assert!(is_frozen(head_h), "rider of a host frozen in the input");
+    assert!(!is_frozen(chain[1]), "c1 is within `free`");
+    assert!(!is_frozen(adatom), "a free rider of a free host stays free");
+
+    assert_eq!(stats.free + stats.frozen, s.atoms_values().count());
+    assert_eq!(stats.frozen, 4, "c0, its H, c2 and c2's cap");
+    assert_eq!(stats.free, 2, "c1 and its adatom");
+}
+
+// =============================================================================
+// The `high` tag (§4.7)
+// =============================================================================
+
+#[test]
+fn high_is_inherited_by_riders_and_caps() {
+    let (mut s, chain, head_h, adatom) = frozen_chain_fixture();
+    let options = ProxyOptions {
+        hops: 2,
+        free: 1,
+        fill: false,
+        core: Some(2),
+        ..Default::default()
+    };
+    let plan = plan_proxy(&s, &[chain[0]], &options).expect("plan");
+    assert_eq!(plan.high, sorted_ids(vec![chain[0], chain[1], chain[2]]));
+    apply_proxy(&mut s, &plan).expect("apply");
+
+    let cap = s
+        .atoms_values()
+        .find(|a| a.atomic_number == 1 && a.is_hydrogen_passivation())
+        .expect("the cap")
+        .id;
+    // The three heavy atoms, the two riders and the cap of a high host.
+    assert_eq!(
+        tagged(&s, "high"),
+        sorted_ids(vec![chain[0], chain[1], chain[2], head_h, adatom, cap])
+    );
+}
+
+#[test]
+fn high_already_on_an_atom_beyond_core_is_kept() {
+    let (mut s, chain, _head_h, _adatom) = frozen_chain_fixture();
+    s.add_atom_tag(chain[2], "high").expect("tag");
+    let options = ProxyOptions {
+        hops: 2,
+        free: 1,
+        fill: false,
+        core: Some(0),
+        ..Default::default()
+    };
+    let plan = plan_proxy(&s, &[chain[0]], &options).expect("plan");
+    assert_eq!(plan.high, vec![chain[0]], "core 0 is the sources only");
+    apply_proxy(&mut s, &plan).expect("apply");
+
+    // The tag is added, never removed: `c2` keeps the one it came with.
+    assert!(s.atom_has_tag(chain[2], "high"));
+    assert!(s.atom_has_tag(chain[0], "high"));
+}
+
+#[test]
+fn core_none_leaves_the_tag_table_alone() {
+    let (mut s, chain, _head_h, _adatom) = frozen_chain_fixture();
+    let before = s.tag_names().to_vec();
+    let options = ProxyOptions {
+        hops: 2,
+        free: 1,
+        fill: false,
+        ..Default::default()
+    };
+    let plan = plan_proxy(&s, &[chain[0]], &options).expect("plan");
+    assert!(plan.high.is_empty());
+    apply_proxy(&mut s, &plan).expect("apply");
+    assert_eq!(s.tag_names(), before.as_slice());
+    assert!(s.tag_names().is_empty());
+}
+
+#[test]
+fn a_full_tag_table_fails_before_the_first_mutation() {
+    let (mut s, chain, _head_h, _adatom) = frozen_chain_fixture();
+    // 32 live names, none of them `high`.
+    for i in 0..32 {
+        s.add_atom_tag(chain[0], &format!("t{i}")).expect("tag");
+    }
+    let options = ProxyOptions {
+        hops: 2,
+        free: 1,
+        fill: false,
+        core: Some(0),
+        ..Default::default()
+    };
+    let plan = plan_proxy(&s, &[chain[0]], &options).expect("plan");
+    let before = fingerprint(&s);
+
+    let err = apply_proxy(&mut s, &plan).expect_err("the tag table is full");
+    assert!(matches!(err, ProxyError::Tag(_)), "{err}");
+    assert_eq!(
+        fingerprint(&s),
+        before,
+        "the intern-first rule leaves a failed cut's input untouched"
+    );
+}
+
+// =============================================================================
+// Radicals and proxies of proxies
+// =============================================================================
+
+/// A silicon with only three bonds — a radical apex — each neighbour saturated
+/// with hydrogens so that none of them is a rider.
+fn radical_apex() -> (AtomicStructure, u32) {
+    let mut s = AtomicStructure::new();
+    let apex = add(&mut s, 14, DVec3::ZERO);
+    let dirs = [
+        DVec3::new(1.0, 1.0, 1.0),
+        DVec3::new(-1.0, -1.0, 1.0),
+        DVec3::new(-1.0, 1.0, -1.0),
+    ];
+    for dir in dirs {
+        let unit = dir.normalize();
+        let neighbor = add(&mut s, 14, unit * SI_SI);
+        bond(&mut s, apex, neighbor);
+        // Three hydrogens each, so the neighbour is saturated and heavy.
+        for offset in [
+            DVec3::new(1.0, 1.0, 1.0),
+            DVec3::new(-1.0, -1.0, 1.0),
+            DVec3::new(-1.0, 1.0, -1.0),
+        ] {
+            let h = add(&mut s, 1, unit * SI_SI + offset.normalize() * SI_H);
+            bond(&mut s, neighbor, h);
+        }
+    }
+    (s, apex)
+}
+
+#[test]
+fn a_radical_focus_atom_is_never_capped() {
+    let (mut s, apex) = radical_apex();
+    let plan = plan_proxy(&s, &[apex], &default_options(1)).expect("plan");
+    assert!(
+        plan.caps.is_empty(),
+        "nothing was severed, nothing is capped"
+    );
+    let stats = apply_proxy(&mut s, &plan).expect("apply");
+
+    // The apex keeps its three bonds and its open valence.
+    assert_eq!(
+        s.get_atom(apex)
+            .expect("the apex")
+            .bonds
+            .iter()
+            .filter(|b| !b.is_delete_marker())
+            .count(),
+        3
+    );
+    assert_eq!(stats.caps, 0);
+    assert_eq!(stats.open_valences, 1);
+
+    // `passivate` on a clone would add exactly that many atoms — the shared
+    // `open_valence_slots` is what both figures come from.
+    let mut clone = s.clone();
+    let added = add_hydrogens(&mut clone, &AddHydrogensOptions::default()).atoms_added;
+    assert_eq!(added, stats.open_valences);
+}
+
+#[test]
+fn a_proxy_of_a_proxy_equals_a_direct_cut() {
+    let cube = silicon_cube();
+    let source = cube_center_source(cube);
+
+    // The six-hop proxy, then a four-hop cut out of it.
+    let mut proxy = cube.clone();
+    let outer = plan_proxy(&proxy, &[source], &default_options(6)).expect("plan");
+    apply_proxy(&mut proxy, &outer).expect("apply");
+    let nested = plan_proxy(&proxy, &[source], &default_options(4)).expect("plan");
+
+    // The same four-hop cut taken straight from the workpiece.
+    let direct = plan_proxy(cube, &[source], &default_options(4)).expect("plan");
+
+    assert_eq!(
+        kept_heavy(&proxy, &nested),
+        kept_heavy(cube, &direct),
+        "the same heavy atoms, with the same ids"
+    );
+    let nested_caps: Vec<DVec3> = nested.caps.iter().map(|c| c.position).collect();
+    let direct_caps: Vec<DVec3> = direct.caps.iter().map(|c| c.position).collect();
+    assert_eq!(nested_caps.len(), direct_caps.len());
+    for (a, b) in nested_caps.iter().zip(&direct_caps) {
+        assert!(a.distance(*b) < 1e-9, "cap moved: {a} vs {b}");
+    }
+}
+
+// =============================================================================
+// Stats (§3.3)
+// =============================================================================
+
+#[test]
+fn stats_report_the_cut_on_the_bulk_cube() {
+    let cube = silicon_cube();
+    let source = cube_center_source(cube);
+
+    let mut filled = cube.clone();
+    let plan = plan_proxy(&filled, &[source], &default_options(4)).expect("plan");
+    let planned_filled = plan.filled.len();
+    let stats = apply_proxy(&mut filled, &plan).expect("apply");
+
+    assert_eq!(stats.formula, format!("Si165H{}", stats.caps));
+    assert_eq!(stats.filled, planned_filled);
+    assert_eq!(stats.filled, 165 - 83);
+    assert_eq!(stats.fill_rounds, 4);
+    assert_eq!(stats.farthest_hop, 8, "a size figure, not a rim figure");
+    assert_eq!(stats.min_rim, 1, "hops 4 − free 3");
+    let pair = stats.min_cap_pair.expect("the rim has cap pairs");
+    assert!((pair - 2.42).abs() < 0.01, "clean silicon rim: {pair}");
+
+    // Without fill the same cut keeps the clashing pairs of §4.3.
+    let mut plain = cube.clone();
+    let plain_plan = plan_proxy(
+        &plain,
+        &[source],
+        &ProxyOptions {
+            hops: 4,
+            fill: false,
+            ..Default::default()
+        },
+    )
+    .expect("plan");
+    let plain_stats = apply_proxy(&mut plain, &plain_plan).expect("apply");
+    assert_eq!(plain_stats.heavy, 83);
+    assert_eq!(plain_stats.filled, 0);
+    assert_eq!(plain_stats.fill_rounds, 0);
+    let plain_pair = plain_stats.min_cap_pair.expect("cap pairs");
+    assert!(
+        (plain_pair - 1.42).abs() < 0.01,
+        "the unphysical shared site: {plain_pair}"
+    );
+}
+
+#[test]
+fn min_cap_pair_is_none_when_no_two_caps_are_close() {
+    // A seven-carbon chain cut one hop either side of the middle: the two caps
+    // end up 5.26 Å apart, well beyond `CAP_PAIR_RADIUS`.
+    let mut s = AtomicStructure::new();
+    let chain = capped_chain(&mut s, DVec3::ZERO, 7);
+    let plan = plan_proxy(&s, &[chain[3]], &default_options(1)).expect("plan");
+    assert_eq!(plan.caps.len(), 2);
+    let stats = apply_proxy(&mut s, &plan).expect("apply");
+    assert_eq!(stats.caps, 2);
+    assert_eq!(stats.min_cap_pair, None);
+    assert!(stats.nearest_dropped.is_some(), "the chain goes on");
+}
+
+// =============================================================================
+// `proxy_cut` by tag name
+// =============================================================================
+
+#[test]
+fn proxy_cut_resolves_the_focus_tag() {
+    let (mut s, chain, _head_h, _adatom) = frozen_chain_fixture();
+    s.add_atom_tag(chain[0], "focus").expect("tag");
+    let options = ProxyOptions {
+        hops: 2,
+        free: 1,
+        fill: false,
+        ..Default::default()
+    };
+
+    // The same structure through the two halves by hand.
+    let mut by_hand = s.clone();
+    let plan = plan_proxy(&by_hand, &[chain[0]], &options).expect("plan");
+    let expected = apply_proxy(&mut by_hand, &plan).expect("apply");
+
+    let stats = proxy_cut(&mut s, "focus", &options).expect("cut");
+    assert_eq!(stats, expected);
+    assert_eq!(fingerprint(&s), fingerprint(&by_hand), "the same ids");
+}
+
+#[test]
+fn proxy_cut_promotes_a_tagged_rider_to_its_host() {
+    let (mut s, chain, head_h, _adatom) = frozen_chain_fixture();
+    s.add_atom_tag(head_h, "focus").expect("tag");
+    let options = ProxyOptions {
+        hops: 1,
+        fill: false,
+        ..Default::default()
+    };
+    let stats = proxy_cut(&mut s, "focus", &options).expect("cut");
+
+    // The host anchored the cut, and the rider came along with it.
+    assert!(s.get_atom(chain[0]).is_some());
+    assert!(s.get_atom(chain[1]).is_some());
+    assert!(s.get_atom(head_h).is_some());
+    assert!(s.get_atom(chain[2]).is_none(), "two hops out is gone");
+    assert_eq!(stats.heavy, 2);
+}
+
+#[test]
+fn proxy_cut_without_the_tag_is_an_error() {
+    let (mut s, _chain, _head_h, _adatom) = frozen_chain_fixture();
+    let err = proxy_cut(&mut s, "focus", &ProxyOptions::default()).expect_err("no focus");
+    assert!(matches!(err, ProxyError::NoFocusAtoms));
+}
+
+// =============================================================================
+// `empirical_formula` (§7.5)
+// =============================================================================
+
+#[test]
+fn empirical_formula_orders_by_count_with_hydrogen_last() {
+    // Methane: a bare count of one, and H last although it is the majority.
+    let mut methane = AtomicStructure::new();
+    let c = add(&mut methane, 6, DVec3::ZERO);
+    for pos in [
+        DVec3::new(0.63, 0.63, 0.63),
+        DVec3::new(-0.63, -0.63, 0.63),
+        DVec3::new(-0.63, 0.63, -0.63),
+        DVec3::new(0.63, -0.63, -0.63),
+    ] {
+        let h = add(&mut methane, 1, pos);
+        bond(&mut methane, c, h);
+    }
+    assert_eq!(empirical_formula(&methane), "CH4");
+
+    // Water. Hydrogen is last whatever its count, so this reads `OH2` —
+    // the §7.5 rule, not Hill notation.
+    let mut water = AtomicStructure::new();
+    let o = add(&mut water, 8, DVec3::ZERO);
+    for pos in [DVec3::new(0.76, 0.59, 0.0), DVec3::new(-0.76, 0.59, 0.0)] {
+        let h = add(&mut water, 1, pos);
+        bond(&mut water, o, h);
+    }
+    assert_eq!(empirical_formula(&water), "OH2");
+
+    // Descending count, ties by symbol, hydrogen last.
+    let mut mixed = AtomicStructure::new();
+    for i in 0..3 {
+        add(&mut mixed, 14, DVec3::new(i as f64, 0.0, 0.0));
+    }
+    for i in 0..2 {
+        add(&mut mixed, 6, DVec3::new(i as f64, 2.0, 0.0));
+    }
+    add(&mut mixed, 8, DVec3::new(0.0, 4.0, 0.0));
+    add(&mut mixed, 7, DVec3::new(1.0, 4.0, 0.0));
+    for i in 0..5 {
+        add(&mut mixed, 1, DVec3::new(i as f64, 6.0, 0.0));
+    }
+    assert_eq!(empirical_formula(&mixed), "Si3C2NOH5");
+}
+
+#[test]
+fn empirical_formula_skips_markers_and_resolves_parameters() {
+    let mut s = AtomicStructure::new();
+    add(&mut s, 6, DVec3::ZERO);
+    // A delete marker and an unchanged marker carry no element.
+    add(&mut s, 0, DVec3::new(1.0, 0.0, 0.0));
+    add(&mut s, -1, DVec3::new(2.0, 0.0, 0.0));
+    // A parameter element resolves to what it stands for.
+    add(&mut s, -100, DVec3::new(3.0, 0.0, 0.0));
+    add(&mut s, -100, DVec3::new(4.0, 0.0, 0.0));
+    let mut overrides = FxHashMap::default();
+    overrides.insert(-100i16, 14i16);
+    s.set_effective_atomic_numbers(overrides);
+
+    assert_eq!(empirical_formula(&s), "Si2C");
 }

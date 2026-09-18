@@ -16,8 +16,10 @@
 //! `apply_proxy` is the only function that touches the structure.
 
 use crate::atomic_constants::is_allowed_passivant;
+use crate::atomic_structure::inline_bond::BOND_SINGLE;
 use crate::atomic_structure::{AtomicStructure, TagError};
-use crate::hydrogen_passivation::terminator_bond_length;
+use crate::atomic_structure_utils::empirical_formula;
+use crate::hydrogen_passivation::{open_valence_slots, terminator_bond_length};
 use glam::f64::DVec3;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::VecDeque;
@@ -523,4 +525,215 @@ pub fn plan_proxy(
         high,
         nearest_dropped,
     })
+}
+
+// ============================================================================
+// Stats
+// ============================================================================
+
+/// The report of one cut — the user's only feedback on it, and what the tuning
+/// loop of §6.1 reads.
+///
+/// `farthest_hop` is a **size** figure and `min_rim` the **shielding** figure:
+/// `fill` grows the cluster only where the boundary is {100}-like, so the
+/// farthest kept atom can sit at about `2·hops` while the thinnest part of the
+/// frozen rim is still exactly `hops - free`. Neither `free` nor `hops` should
+/// be changed because `farthest_hop` looks large.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProxyStats {
+    /// Empirical formula of the output, e.g. `Si223H96`.
+    pub formula: String,
+    /// Heavy atoms kept, after `fill` and `rm_single`.
+    pub heavy: usize,
+    /// Riders kept.
+    pub riders: usize,
+    /// Terminators added.
+    pub caps: usize,
+    /// Atoms of the output *without* the frozen flag.
+    pub free: usize,
+    /// Atoms of the output *with* the frozen flag.
+    pub frozen: usize,
+    /// Heavy atoms `fill` restored.
+    pub filled: usize,
+    /// Synchronous `fill` rounds until nothing changed.
+    pub fill_rounds: usize,
+    /// Largest bond distance among the kept heavy atoms. A size figure.
+    pub farthest_hop: u32,
+    /// `hops - free`: the thinnest frozen shell. The shielding figure.
+    pub min_rim: i32,
+    /// Unsaturated slots the output still carries, counted from hybridization
+    /// the way `passivate` counts them — this is what sets the multiplicity of
+    /// a quantum-chemistry input.
+    pub open_valences: usize,
+    /// Closest cap–cap distance, Å. Below about 2 Å the rim is unphysical;
+    /// with `fill` on it is 2.42 Å for silicon. `None` when no two caps lie
+    /// within [`CAP_PAIR_RADIUS`].
+    pub min_cap_pair: Option<f64>,
+    /// Closest dropped heavy atom to any free atom (heavy or rider), Å. Under
+    /// about 4 Å an unbonded neighbour close enough to matter sterically was
+    /// cut away; the remedy is to tag one of its atoms as focus. `None` when
+    /// nothing dropped lies within [`NEAREST_DROPPED_RADIUS`].
+    pub nearest_dropped: Option<f64>,
+}
+
+// ============================================================================
+// apply_proxy
+// ============================================================================
+
+/// Mutation only: carry out a plan and report on the result. Must be applied
+/// to the structure the plan was made from — the plan carries its own options,
+/// so nothing can be passed that disagrees with the keep set and the caps it
+/// already decided.
+///
+/// The steps are §7.4 of the design, in order: intern the `high` tag (the one
+/// fallible step, run before the first mutation so a failure leaves the
+/// structure untouched), delete, cap, freeze, tag, measure.
+pub fn apply_proxy(
+    structure: &mut AtomicStructure,
+    plan: &ProxyPlan,
+) -> Result<ProxyStats, ProxyError> {
+    // Riders are classified on the *input*: after the deletions a boundary
+    // atom can be left with a single bond and would be miscounted.
+    let riders = classify_riders(structure);
+
+    // 1. Intern `high` before anything is mutated.
+    if !plan.high.is_empty() {
+        structure.intern_tag(HIGH_TAG)?;
+    }
+
+    // 2. Drop. `delete_atom` clears the bonds on both sides.
+    for &id in &plan.dropped {
+        structure.delete_atom(id);
+    }
+
+    // 3. Caps, in plan order — the plan's cap list is sorted and the ids are
+    //    handed out in that order, so two runs on equal inputs give equal
+    //    outputs.
+    let mut cap_ids: Vec<u32> = Vec::with_capacity(plan.caps.len());
+    for cap in &plan.caps {
+        let cap_id = structure.add_atom(plan.options.passivant_element, cap.position);
+        structure.set_atom_hydrogen_passivation(cap_id, true);
+        structure.add_bond(cap.host, cap_id, BOND_SINGLE);
+        cap_ids.push(cap_id);
+    }
+
+    // 4. Frozen — **only ever set, never cleared** (§4.6), so an atom frozen in
+    //    the input stays frozen whatever its distance. Riders and caps follow
+    //    their host, whichever of the two froze it.
+    for &id in &plan.frozen {
+        structure.set_atom_frozen(id, true);
+    }
+    for &id in &plan.kept {
+        if let Some(&host) = riders.get(&id)
+            && structure.get_atom(host).is_some_and(|a| a.is_frozen())
+        {
+            structure.set_atom_frozen(id, true);
+        }
+    }
+    for (cap, &cap_id) in plan.caps.iter().zip(&cap_ids) {
+        if structure.get_atom(cap.host).is_some_and(|a| a.is_frozen()) {
+            structure.set_atom_frozen(cap_id, true);
+        }
+    }
+
+    // 5. `high` — added, never removed (§4.7). Riders and caps inherit the tag
+    //    of their heavy atom. The name is interned above, so these cannot fail.
+    if !plan.high.is_empty() {
+        let high_set: FxHashSet<u32> = plan.high.iter().copied().collect();
+        for &id in &plan.high {
+            structure.add_atom_tag(id, HIGH_TAG)?;
+        }
+        for &id in &plan.kept {
+            if let Some(&host) = riders.get(&id)
+                && high_set.contains(&host)
+            {
+                structure.add_atom_tag(id, HIGH_TAG)?;
+            }
+        }
+        for (cap, &cap_id) in plan.caps.iter().zip(&cap_ids) {
+            if high_set.contains(&cap.host) {
+                structure.add_atom_tag(cap_id, HIGH_TAG)?;
+            }
+        }
+    }
+
+    // 6. The report. The plan supplies what only the input knew; the rest is
+    //    walked off the result.
+    let kept_riders = plan
+        .kept
+        .iter()
+        .filter(|id| riders.contains_key(id))
+        .count();
+    let farthest_hop = plan
+        .kept
+        .iter()
+        .filter(|id| !riders.contains_key(id))
+        .filter_map(|id| plan.distance.get(id).copied())
+        .max()
+        .unwrap_or(0);
+
+    let mut free = 0usize;
+    let mut frozen = 0usize;
+    let mut open_valences = 0usize;
+    for atom in structure.atoms_values() {
+        if atom.is_frozen() {
+            frozen += 1;
+        } else {
+            free += 1;
+        }
+        open_valences += open_valence_slots(structure, atom.id, plan.options.passivant_element);
+    }
+
+    // The closest two caps come to each other, over the result's grid: linear
+    // in the number of caps.
+    let cap_set: FxHashSet<u32> = cap_ids.iter().copied().collect();
+    let mut min_cap_pair: Option<f64> = None;
+    for &cap_id in &cap_ids {
+        let Some(position) = structure.get_atom(cap_id).map(|a| a.position) else {
+            continue;
+        };
+        for hit in structure.get_atoms_in_radius(&position, CAP_PAIR_RADIUS) {
+            if hit == cap_id || !cap_set.contains(&hit) {
+                continue;
+            }
+            let Some(other) = structure.get_atom(hit) else {
+                continue;
+            };
+            let d = position.distance(other.position);
+            if min_cap_pair.is_none_or(|best| d < best) {
+                min_cap_pair = Some(d);
+            }
+        }
+    }
+
+    Ok(ProxyStats {
+        formula: empirical_formula(structure),
+        heavy: plan.kept.len() - kept_riders,
+        riders: kept_riders,
+        caps: plan.caps.len(),
+        free,
+        frozen,
+        filled: plan.filled.len(),
+        fill_rounds: plan.fill_rounds,
+        farthest_hop,
+        min_rim: plan.options.hops as i32 - plan.options.free as i32,
+        open_valences,
+        min_cap_pair,
+        nearest_dropped: plan.nearest_dropped,
+    })
+}
+
+/// The whole cut by tag name: the atoms carrying `focus_tag` are the sources,
+/// then [`plan_proxy`] and [`apply_proxy`]. This is what the `proxy` node and
+/// most scripts call; the two halves stay public for the cases that plan a
+/// whole `hops` series against one untouched structure.
+pub fn proxy_cut(
+    structure: &mut AtomicStructure,
+    focus_tag: &str,
+    options: &ProxyOptions,
+) -> Result<ProxyStats, ProxyError> {
+    let mut sources = structure.atoms_with_tag(focus_tag);
+    sources.sort_unstable();
+    let plan = plan_proxy(structure, &sources, options)?;
+    apply_proxy(structure, &plan)
 }

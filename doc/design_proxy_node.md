@@ -288,13 +288,24 @@ It has to iterate. Before the first removal, singly attached atoms can only
 sit in the outermost shell (an atom at distance `k < hops` has all its
 neighbours at distance `<= k+1 <= hops`), but removing one lowers the kept
 count of its inward neighbour, and an atom at `hops - 1` whose only inward
-bond is its parent and whose outward neighbours were all single-attached is
-left with one neighbour itself. In a single-source diamond cut more than
+bond is its parent and whose outward neighbours the first round all dropped
+is left with one neighbour itself. ("Single-attached" here always means left
+so **by the cut** — an atom singly bonded in the *input* is a rider or an
+exempt terminal atom, and neither is ever dropped on its own account.) In a single-source diamond cut more than
 half of the outermost shell has a single parent, so this is the common
 case. A one-shell trim would leave exactly the atoms the flag promises to
 remove; the fixpoint is what `materialize`'s `rm_single` does too
 (`remove_single_bond_atoms_filtered` is recursive). Termination is
 immediate: the kept set only shrinks.
+
+The test is **exactly** one kept heavy neighbour, not "at most one". An atom
+whose last two kept neighbours vanish in the same round is therefore left
+with none and survives, floating and capped on every side. `materialize`'s
+`rm_single` tests `bonds.len() <= 1` for exactly that reason. Reaching the
+case here needs a boundary atom whose only two kept neighbours both become
+singly attached in the same round; no fixture has produced one, so the literal
+reading stands — widen the test to "at most one" if a real structure ever
+strands an atom.
 
 Two consequences to know about. Fill-restored atoms start with two anchors
 but are not immune: the cascade can remove an anchor and then the restored
@@ -334,11 +345,13 @@ than a downstream `passivate` node, which caps every dangling bond it finds.
 
 Heavy atoms with distance `> free` get the frozen flag set; their riders and
 their caps follow. Atoms added by `fill` have distance `> hops`, so they are
-frozen whenever `free < hops`. **Flags are only ever set, never cleared**: an atom frozen
-in the input stays frozen whatever its distance. Boundary atoms come from the
-lattice, so they are already at bulk positions — this is the frozen rim that
-makes a finite cluster stand in for a big surface. The `relax` node honours
-the flag today; an exporter for an external code reads the same bit.
+frozen whenever `free < hops`. **Flags are only ever set, never cleared**: an
+atom frozen in the input stays frozen whatever its distance, and a rider or a
+cap follows whichever of the two froze its host — the distance rule or the
+input flag. Boundary atoms come from the lattice, so they are already at bulk
+positions — this is the frozen rim that makes a finite cluster stand in for a
+big surface. The `relax` node honours the flag today; an exporter for an
+external code reads the same bit.
 
 ### 4.7 `core`
 
@@ -499,7 +512,8 @@ pub struct CapPlacement {
     pub position: DVec3,
 }
 
-/// Everything decided, nothing mutated. Every `Vec` is sorted by atom id.
+/// Everything decided, nothing mutated. Every `Vec` is sorted by atom id
+/// (`caps` by `(host, severed)`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProxyPlan {
     pub options: ProxyOptions,         // the options the plan was made with
@@ -507,7 +521,8 @@ pub struct ProxyPlan {
     pub kept: Vec<u32>,                // heavy atoms and riders that survive
     pub dropped: Vec<u32>,             // heavy atoms and riders that go
     pub caps: Vec<CapPlacement>,
-    pub filled: Vec<u32>,              // heavy atoms `fill` restored
+    pub filled: Vec<u32>,              // heavy atoms `fill` restored, less any
+                                       // a later `rm_single` took away
     pub fill_rounds: usize,
     pub frozen: Vec<u32>,              // heavy atoms the cut freezes (riders/caps follow)
     pub high: Vec<u32>,                // heavy atoms the cut tags (riders/caps follow)
@@ -655,8 +670,9 @@ Decisions behind this shape:
    `set_atom_hydrogen_passivation(id, true)`, `add_bond(host, id, BOND_SINGLE)`.
    Because the plan's cap list is sorted and the ids are handed out in that
    order, two runs on equal inputs give equal outputs.
-4. Set the frozen flag on `plan.frozen`, on their riders, and on the caps
-   whose host is frozen (or was frozen in the input). Never cleared.
+4. Set the frozen flag on `plan.frozen`, then on every kept rider and every
+   cap whose host carries it *after* that step — which is both the atoms this
+   cut froze and the ones the input had already frozen (§4.6). Never cleared.
 5. Add `high` to `plan.high`, their riders, and their hosts' caps. Never
    removed.
 6. Compute `ProxyStats`: `heavy`, `riders`, `caps`, `filled`, `fill_rounds`,
@@ -680,13 +696,23 @@ Decisions behind this shape:
   hybridization detection, `covalent_max_neighbors`, `count_active_neighbors`
   and the host-skip rule — becomes a public
   `open_valence_slots(structure, atom_id, passivant_element) -> usize`, which
-  `add_hydrogens_filtered` calls in its loop and `ProxyStats::open_valences`
-  sums. One function, so the multiplicity the panel shows and the number of
-  hydrogens `passivate` would add cannot disagree.
+  `ProxyStats::open_valences` sums. The placement path needs the hybridization
+  the count was derived from as well (it picks the open directions from it), so
+  both go through one private
+  `open_valence_analysis(…) -> Option<(Hybridization, usize)>` and the public
+  function is its `map_or(0, …)`. One analysis, so the multiplicity the panel
+  shows and the number of hydrogens `passivate` would add cannot disagree. The
+  *options* of the passivation path — `selected_only`,
+  `skip_already_passivated`, the region predicate — stay in its loop: they are
+  caller-side filters, not a property of the atom.
 - **Formula.** `empirical_formula(&AtomicStructure) -> String` in
   `atomic_structure_utils.rs`: elements by descending count, ties by symbol,
-  hydrogen always last, counts of one written bare (`Si223H96`, `CH4`).
-  Uses `effective_atomic_number`; markers (`Z <= 0`) are skipped.
+  hydrogen always last, counts of one written bare (`Si223H96`, `CH4`,
+  `Si3C2NOH5`). Uses `effective_atomic_number`; markers (`Z <= 0`) are skipped.
+  Hydrogen-last is what keeps a proxy reading `Si223H96` rather than
+  `H96Si223`, and it applies whatever the counts are: water is **`OH2`**. This
+  is deliberately *not* Hill notation — the readout this serves is a cluster
+  formula, not a chemical index entry.
 
 ### 7.6 The node shell
 
@@ -810,9 +836,11 @@ rules that need a specific topology.
 - Riders: a hydrogen with one bond is a rider mapped to its host; a singly
   bonded heavy adatom is a rider; an isolated atom is not; a source that is a
   rider promotes its host and the rider is kept.
-- Distances: on a hand-built chain and a six-ring the distances are the
+- Distances: on a hydrogen-capped chain and a six-ring the distances are the
   graph distances; riders are never traversed and get no distance; a second
-  component gets no distance.
+  component gets no distance. (The chain has to be capped: the end atoms of a
+  bare one have a single bond, so §4.1 makes them riders and they get no
+  distance at all.)
 - Multi-source merge: two unbonded fragments (a "tool" above a "surface")
   with one source each are both kept; a third fragment bonded to neither is
   dropped entirely; with `fill: false`, `hops = 0` keeps exactly the sources
@@ -833,15 +861,15 @@ rules that need a specific topology.
   (three bonds on silicon) gets no cap for its missing bond.
 - `rm_single`: a hand-built case where the cut leaves an atom with one kept
   neighbour drops it and its riders; an atom singly bonded in the input is
-  untouched; an atom whose only neighbours are a heavy adatom rider and one
-  kept atom is untouched (riders count in neither tally); a case where
-  `fill` gives the atom its second neighbour keeps it (order: fill before
-  `rm_single`); the cascade: a parent at `hops - 1` with one inward bond
-  whose outward neighbours were all single-attached is dropped in the
-  second round, and on the bulk cube at `hops = 4` no kept non-source heavy
-  atom is left with a single kept heavy neighbour; a source reduced to one
-  kept neighbour by the cascade (a chain hanging off a lone focus atom)
-  survives.
+  untouched, and so is an atom whose only neighbours are a heavy adatom rider
+  and one other atom — the rider counts in neither tally, which leaves one
+  heavy neighbour in the input and so the input exemption, not the rider,
+  is what saves it; a case where `fill` gives the atom its second neighbour
+  keeps it (order: fill before `rm_single`); the cascade: a chain hanging off
+  a ring unwinds a round at a time once its end is cut by distance, and on the
+  bulk cube at `hops = 4` no kept non-source heavy atom is left with a single
+  kept heavy neighbour; a source reduced to one kept neighbour by the cascade
+  (a chain hanging off a lone focus atom) survives.
 - Monotonicity: with `fill` on and off, `kept(hops = k) ⊆ kept(hops = k + 1)`
   for `k` in 3..7 on the cube; `frozen(free = f) ⊇ frozen(free = f + 1)`.
 - Frozen list is exactly `distance > free`; empty for the plain cut when
@@ -894,8 +922,10 @@ the factoring.
   `Some(1.42 ± 0.01)` without, and `None` on a hand-built cut whose two caps are
   farther apart than `CAP_PAIR_RADIUS`; `min_rim == hops − free`;
   `filled.len() == stats.filled`.
-- `empirical_formula`: `CH4`, `H2O`, `Si223H96` ordering, hydrogen last,
-  bare count of one, markers skipped, parameter elements resolved.
+- `empirical_formula`: `CH4`, water as `OH2` (hydrogen is last whatever its
+  count — the §7.5 rule, not Hill notation), a mixed structure's descending
+  order with ties by symbol, bare count of one, markers skipped, parameter
+  elements resolved.
 - `proxy_cut` by tag: missing tag → `NoFocusAtoms`; tag on a rider promotes
   the host; result equals `plan_proxy` + `apply_proxy` with the same ids.
 - Passivation regression: the existing `hydrogen_passivation_test.rs` suite

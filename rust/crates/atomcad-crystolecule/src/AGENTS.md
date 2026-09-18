@@ -33,13 +33,13 @@ made it its own crate. Consequences for anything you write here:
 crates/atomcad-crystolecule/src/
 ├── lib.rs                          # Crate root: module declarations (all submodules pub)
 ├── atomic_constants.rs             # Element database (symbol, radius, color)
-├── atomic_structure_utils.rs       # Auto-bonding, selection, cleanup helpers
+├── atomic_structure_utils.rs       # Auto-bonding, selection, cleanup helpers, `empirical_formula`
 ├── crystolecule_constants.rs       # Diamond unit cell size, default motif text
 ├── drawing_plane.rs                # 2D drawing plane embedded in 3D crystal
 ├── motif.rs                        # Motif struct (sites, bonds, parameters)
 ├── motif_parser.rs                 # Text format parser for motifs
 ├── guided_placement.rs             # Guided atom placement geometry (bond directions, saturation)
-├── hydrogen_passivation.rs         # General-purpose H passivation for arbitrary structures
+├── hydrogen_passivation.rs         # General-purpose H passivation for arbitrary structures; owns the two shared primitives `terminator_bond_length` and `open_valence_slots`
 ├── miller.rs                       # Miller-index arithmetic: reduction, enumeration, symmetry families {hkl}
 ├── patch.rs                        # Surface-patch domain model: tile extraction, cell selection, apply_patch
 ├── proxy_cut.rs                    # Bond-hop simulation-proxy cut: plan_proxy / apply_proxy (fill, rm_single, severed-bond caps)
@@ -126,6 +126,7 @@ crates/atomcad-crystolecule/src/
 | `SelectedCell` | `patch.rs` | One tiling site chosen by `select_patch_cells`: an in-plane lattice `offset` plus the `k` indices it spans along the free (non-periodic) direction |
 | `ProxyOptions` | `proxy_cut.rs` | What a proxy cut is tunable by: `hops` / `free` / `fill` / `rm_single` / `passivate` / `passivant_element` / `core`. Unsigned — the node's "-1 means off" rules are validated before this struct is built, and `core` is the one `Option` |
 | `ProxyPlan` | `proxy_cut.rs` | Everything one cut decided and nothing mutated: per-atom bond distance, the keep/drop sets, the severed-bond caps, the frozen and `high` lists. Every `Vec` is sorted by atom id so the ids `apply_proxy` hands out are deterministic |
+| `ProxyStats` | `proxy_cut.rs` | The report `apply_proxy` returns: formula, atom counts, `farthest_hop` (a **size** figure) beside `min_rim` (the **shielding** figure), `open_valences`, `min_cap_pair`, `nearest_dropped`. The `proxy` node stores it in the eval cache, never on the node data |
 | `LatticeFillConfig` | `lattice_fill/config.rs` | Unit cell + motif + geometry + options for filling |
 | `PlacedAtomTracker` | `lattice_fill/placed_atom_tracker.rs` | CrystallographicAddress → atom ID mapping |
 | `AtomInfo` | `atomic_constants.rs` | Element properties (symbol, radii, color) |
@@ -618,7 +619,7 @@ field         →  glam only (no crystolecule types at all)
 motif_bond_inference → Motif, UnitCellStruct, atomic_constants
 miller        →  glam only (no crystolecule types at all)
 patch         →  AtomicStructure, UnitCellStruct, weld, hydrogen_passivation, guided_placement, GeoNode
-proxy_cut     →  AtomicStructure, atomic_constants, hydrogen_passivation
+proxy_cut     →  AtomicStructure, atomic_constants, atomic_structure_utils, hydrogen_passivation
 mechanosynth  →  AtomicStructure, atomic_constants (serde_json for the two JSON files)
 guided_placement → AtomicStructure, simulation/uff (typer, params)
 hydrogen_passivation → AtomicStructure, atomic_constants, guided_placement
