@@ -69,7 +69,7 @@ and a connected pin overrides the stored value.
 | 0 | `molecule` | HasAtoms | yes | Structure to cut, Crystal or Molecule. |
 | 1 | `focus` | String | no | Tag name marking the source atoms. Every atom carrying it is at distance 0. |
 | 2 | `hops` | Int | no | Keep heavy atoms whose distance is at most this. |
-| 3 | `free` | Int | no | Heavy atoms farther than this get the frozen flag. `free >= hops` freezes nothing. |
+| 3 | `free` | Int | no | Heavy atoms farther than this get the frozen flag. On the plain cut `free >= hops` freezes nothing; atoms `fill` restores beyond `free` are frozen regardless (§4.6). |
 | 4 | `rm_single` | Bool | no | Drop outermost-shell heavy atoms left with a single heavy neighbour by the cut. |
 | 5 | `passivate` | Bool | no | Cap every severed bond with a terminator along the old bond vector. |
 | 6 | `passiv_elem` | Int | no | Terminator element (atomic number), H/F/Cl/Br/I. |
@@ -88,8 +88,9 @@ future pin must be **appended** (pin indices are persisted in wires).
 One pin, `OutputPinDefinition::single_same_as("molecule")`. A Crystal input
 stays a Crystal so its lattice survives for downstream nodes; a Molecule stays
 a Molecule. The node removes and adds atoms, so it goes through the
-`snapshot_atoms` / `map_atomic` / `eval_output_with_diff` path that `atom_cut`
-uses, not the metadata-only `map_atomic_in_region`.
+atom-mutating `map_atomic` path that `atom_cut` uses, not the metadata-only
+`map_atomic_in_region`. There is no `diff` pin (§5), so `snapshot_atoms` and
+`eval_output_with_diff` are not called; §7.6 says how one would be appended.
 
 ### 3.3 Node data
 
@@ -104,9 +105,15 @@ pub struct ProxyData {
     pub core: i32,           // default -1 (no `high` tagging)
     pub fill: bool,          // default true
     #[serde(skip)] pub available_tags: RefCell<Vec<String>>, // tag dropdown, as TagData
-    #[serde(skip)] pub stats: RefCell<Option<ProxyStats>>,   // panel report, as RelaxEvalCache
 }
 
+/// Root-eval report, stored in `context.selected_node_eval_cache` exactly as
+/// `RelaxEvalCache` is — never on the node data (§7.6).
+pub struct ProxyEvalCache {
+    pub stats: ProxyStats,
+}
+
+// Defined in `atomcad_crystolecule::proxy_cut` (§7.2); the node re-exports it.
 pub struct ProxyStats {
     pub formula: String,     // empirical formula of the output, e.g. "Si223H96"
     pub heavy: usize,        // heavy atoms kept (after fill and rm_single)
@@ -115,12 +122,15 @@ pub struct ProxyStats {
     pub free: usize,         // atoms without the frozen flag
     pub frozen: usize,       // atoms with the frozen flag
     pub filled: usize,       // heavy atoms added by fill
-    pub fill_rounds: usize,  // iterations fill needed to converge
-    pub farthest_hop: i32,   // largest distance among kept heavy atoms
+    pub fill_rounds: usize,  // synchronous fill rounds until nothing changed
+    pub farthest_hop: u32,   // largest distance among kept heavy atoms
     pub min_rim: i32,        // hops - free, the thinnest frozen shell
     pub open_valences: usize,// unsaturated slots left on kept atoms
-    pub min_cap_pair: f64,   // closest cap-cap distance, Å
-    pub nearest_dropped: f64,// closest dropped heavy atom to any free atom, Å
+    pub min_cap_pair: Option<f64>,    // closest cap-cap distance, Å;
+                                      // None when no two caps lie within 3 Å
+    pub nearest_dropped: Option<f64>, // closest dropped heavy atom to any free atom
+                                      // (heavy or rider), Å; None when nothing
+                                      // dropped lies within 8 Å
 }
 ```
 
@@ -148,16 +158,18 @@ loop of §6.1 reads, so it carries more than a count:
 - `open_valences` — the unsaturated slots the output still carries, computed
   from hybridization the way `passivate` counts them. This is what sets the
   multiplicity of the quantum-chemistry input, so it has to be visible.
-- `min_cap_pair` — the closest two terminators come to each other. Below
-  about 2 Å the rim is unphysical; with `fill` on this is 2.42 Å for silicon.
+- `min_cap_pair` — the closest two terminators come to each other, looked
+  for within 3 Å. Below about 2 Å the rim is unphysical; with `fill` on this
+  is 2.42 Å for silicon; absent means no two caps come within 3 Å at all.
 - `nearest_dropped` — the closest dropped heavy atom to any *free* atom. A
   small value (under about 4 Å) means an unbonded neighbour — a trench wall,
   a second tip — is close enough to matter sterically and was cut away; the
   remedy is to tag one of its atoms `focus` (§4.2).
 
 `available_tags` is snapshotted from the input on every eval so the panel can
-offer a dropdown, exactly as `tag` does. Neither `RefCell` field is ever
-*read* from `eval` (subnetwork node state is shared across call sites).
+offer a dropdown, exactly as `tag` does. It is the only mutable field on the
+node data, and it is never *read* from `eval` (subnetwork node state is shared
+across call sites); the stats go to the eval cache instead, see §7.6.
 
 ## 4. Semantics
 
@@ -218,7 +230,7 @@ out, which is why the rule iterates. It **converges**, because a boundary
 where every outside atom touches only one kept atom is a {111}-like facet,
 and the closure of a finite set under this rule is the {111}-faceted hull of
 the plain cut. Measured with a throwaway script over the ideal silicon
-lattice graph (hydrogen caps on every severed bond; the crate test in §7
+lattice graph (hydrogen caps on every severed bond; the crate test of §8 Phase 1
 reproduces the bulk rows):
 
 | case | `hops` | kept before | shared sites | H–H before | rounds | kept after | H–H after | farthest hop |
@@ -312,7 +324,7 @@ never removed** — an input that already carries `high` keeps it, mirroring
 how `free` treats the frozen flag.
 
 **Untagged means low.** No `low` tag is written: every atom would carry it,
-it would spend a second name of the 32-tag budget, and the exporter (§8)
+it would spend a second name of the 32-tag budget, and the exporter (§9)
 treats "no `high` tag" as low anyway. This is the one place the node spends
 a tag name, and the exception to §5's "no per-shell tags".
 
@@ -365,7 +377,7 @@ that lost a neighbour to the cut carries a hydrogen on the old bond vector,
 and no two of those hydrogens are closer than 2.42 Å because `fill` (on by
 default) kept every atom that two survivors shared; everything more than
 three hops from the apex or the target is frozen; the apex, the target atom
-and their first neighbours carry `high`, ready for the ONIOM exporter of §8.
+and their first neighbours carry `high`, ready for the ONIOM exporter of §9.
 Expect the filled `proxy_6` to hold roughly 1.5× the atoms of the plain
 six-hop shell, all of the extra ones frozen.
 
@@ -389,46 +401,562 @@ Do not read `farthest_hop` as rim thickness. Fill makes the rim thick in the
 {100} directions and leaves it at `hops - free` in the {111} directions, so a
 large farthest hop is not a reason to lower `hops` or raise `free`.
 
-## 7. Implementation notes
+## 7. Architecture: the crystolecule module and the node shell
 
-- Node file `rust/crates/atomcad-structure-designer/src/nodes/proxy.rs`,
-  registered in `nodes/mod.rs` and `node_type_registry.rs`; the reference
-  guide page `doc/reference_guide/nodes/atomic.md` gets a `## proxy` section
-  next to `atom_cut`.
-- The BFS, rider classification and severed-bond cap belong in
-  `atomcad-crystolecule` (a `proxy_cut` module beside `hydrogen_passivation`),
-  so the node is a thin adapter like its siblings and the algorithm is
-  testable from the crate's `tests/` directory.
-- Bond-length lookup must be **shared** with `hydrogen_passivation.rs`, not a
-  fourth copy (the halogen design doc already counts three sites).
-- The BFS distance of every kept atom, including the atoms `fill` adds, is
-  kept through the pipeline: `free`, `core` and the `farthest_hop` stat all
-  read it.
-- Stats that need geometry (`min_cap_pair`, `nearest_dropped`) are computed
-  once at the end of the eval over the caps and the dropped set; the
-  structure sizes here are a few hundred atoms, so a brute-force pass is
-  fine, but a dropped set the size of the input (a proxy cut from a
-  million-atom workpiece) needs a spatial grid for `nearest_dropped` — reuse
-  whatever `infer_bonds` uses.
-- Tests: rider retention, multi-source merge across an unbonded tool, radical
-  preservation at the focus, `rm_single` restricted to cut-created singles
-  and running after `fill`, cap direction equals the old bond vector,
-  frozen-only-set, monotonic `hops` series with `fill` on and off, `core`
-  tagging (riders inherit, existing `high` kept, `-1` writes nothing),
-  Crystal-in/Crystal-out, a text-format round trip (`fill: false` survives,
-  the default is omitted), and the fill table of §4.3: on a bulk diamond
-  block with one focus atom, `hops = 4` gives 83 atoms with 40 shared sites
-  and a 1.42 Å cap pair before fill, and 165 atoms, no shared site, a
-  2.42 Å closest pair and `farthest_hop = 8` after four rounds; `hops = 6`
-  gives 239 → 455 in six rounds. Fill-added atoms must all carry the frozen
-  flag when `free < hops`.
+### 7.1 The layering rule
 
-## 8. Future: ONIOM export
+The algorithm lives in `atomcad-crystolecule`, in a new module
+`proxy_cut.rs` beside `hydrogen_passivation.rs`. The node in
+`atomcad-structure-designer` is an adapter over it, the way `passivate` is
+an adapter over `add_hydrogens_filtered`, `relax` over `minimize_energy` and
+`patch_build` over `patch.rs`.
+
+The house reason is that the crate's `tests/` directory is where an algorithm
+is tested. The stronger reason is that AI agents increasingly drive
+`atomcad-crystolecule` **alone** — build a structure, cut a proxy, relax it,
+compare energies across a series — with no node network anywhere. Everything
+§4 describes therefore has to be callable with an `AtomicStructure` and a
+plain options struct, and has to report its statistics as a plain value.
+
+Two prohibitions follow:
+
+- The module never sees `NetworkResult`, pins, `NodeData`, the text format,
+  or a tag-name-as-parameter convention. It takes atom ids and options.
+- The node never traverses a bond, places a cap, or decides a distance. It
+  reads pins, validates, calls the module once, and stores the report.
+
+The test for whether the split is right: every row of the §4.3 table must be
+reproducible from `crates/atomcad-crystolecule/tests/crystolecule/` with no
+dependency on `atomcad-structure-designer`.
+
+### 7.2 Public surface of `proxy_cut`
+
+```rust
+// crates/atomcad-crystolecule/src/proxy_cut.rs
+
+pub const HIGH_TAG: &str = "high";
+/// Search radius for `ProxyStats::nearest_dropped` (Å). The stat is read
+/// against a ~4 Å threshold (§3.3); anything farther is reported as `None`.
+pub const NEAREST_DROPPED_RADIUS: f64 = 8.0;
+/// Search radius for `ProxyStats::min_cap_pair` (Å): past the 2.42 Å of a
+/// clean silicon rim and the ~2 Å that marks an unphysical one.
+pub const CAP_PAIR_RADIUS: f64 = 3.0;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProxyOptions {
+    pub hops: u32,                 // default 6
+    pub free: u32,                 // default 3
+    pub fill: bool,                // default true
+    pub rm_single: bool,           // default false
+    pub passivate: bool,           // default true
+    pub passivant_element: i16,    // default 1
+    pub core: Option<u32>,         // default None = no `high` tagging
+}
+impl Default for ProxyOptions { /* the defaults above */ }
+
+#[derive(Debug, thiserror::Error)]
+pub enum ProxyError {
+    #[error("no focus atoms")]
+    NoFocusAtoms,
+    #[error("passivant element {0} is not one of H, F, Cl, Br, I")]
+    BadPassivant(i16),
+    #[error(transparent)]
+    Tag(#[from] TagError),         // the `high` name did not fit the 32-slot table
+}
+
+/// One terminator to place: on `host`, along the old bond to `severed`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CapPlacement {
+    pub host: u32,
+    pub severed: u32,
+    pub position: DVec3,
+}
+
+/// Everything decided, nothing mutated. Every `Vec` is sorted by atom id.
+#[derive(Debug, Clone)]
+pub struct ProxyPlan {
+    pub distance: FxHashMap<u32, u32>, // every heavy atom reachable from a source
+    pub kept: Vec<u32>,                // heavy atoms and riders that survive
+    pub dropped: Vec<u32>,             // heavy atoms and riders that go
+    pub caps: Vec<CapPlacement>,
+    pub filled: Vec<u32>,              // heavy atoms `fill` restored
+    pub fill_rounds: usize,
+    pub frozen: Vec<u32>,              // heavy atoms the cut freezes (riders/caps follow)
+    pub high: Vec<u32>,                // heavy atoms the cut tags (riders/caps follow)
+    pub nearest_dropped: Option<f64>,  // needs the dropped positions, so it is planned
+}
+
+/// Rider id → its one heavy neighbour.
+pub fn classify_riders(structure: &AtomicStructure) -> FxHashMap<u32, u32>;
+
+/// Multi-source BFS over heavy atoms. A source that is a rider is replaced by
+/// its host. Unbounded: every heavy atom in the sources' components gets a
+/// distance, atoms in other components get none.
+pub fn bond_distances(
+    structure: &AtomicStructure,
+    sources: &[u32],
+    riders: &FxHashMap<u32, u32>,
+) -> FxHashMap<u32, u32>;
+
+/// The severed-bond caps of a keep set: one cap per bond from a kept heavy
+/// atom to a heavy atom that is not kept, on the old bond vector at the
+/// host–terminator length. `riders` says which atoms are not heavy.
+pub fn severed_bond_caps(
+    structure: &AtomicStructure,
+    is_kept: &dyn Fn(u32) -> bool,
+    riders: &FxHashMap<u32, u32>,
+    passivant_element: i16,
+) -> Vec<CapPlacement>;
+
+/// Analysis only. `sources` are atom ids (a rider promotes its host).
+pub fn plan_proxy(
+    structure: &AtomicStructure,
+    sources: &[u32],
+    options: &ProxyOptions,
+) -> Result<ProxyPlan, ProxyError>;
+
+/// Mutation only. Must be applied to the structure the plan was made from.
+pub fn apply_proxy(
+    structure: &mut AtomicStructure,
+    plan: &ProxyPlan,
+    options: &ProxyOptions,
+) -> Result<ProxyStats, ProxyError>;
+
+/// The whole thing by tag name: `atoms_with_tag` → `plan_proxy` → `apply_proxy`.
+pub fn proxy_cut(
+    structure: &mut AtomicStructure,
+    focus_tag: &str,
+    options: &ProxyOptions,
+) -> Result<ProxyStats, ProxyError>;
+
+pub struct ProxyStats { /* §3.3 */ }
+```
+
+Decisions behind this shape:
+
+- **Plan / apply split.** Analysis is immutable and complete before the first
+  mutation; `apply_proxy` is the only function that touches the structure.
+  This is the crate's existing pattern (`add_hydrogens_filtered` and
+  `remove_hydrogens_filtered` both scan, then mutate) and it buys three
+  things: a `hops` or `free` series can be planned against one structure
+  without cloning it per member, tests assert on the plan (pure graph work
+  plus cap geometry) without inspecting a mutated structure, and the ONIOM
+  exporter of §9 reuses `classify_riders`, `bond_distances` and
+  `severed_bond_caps` without touching the cut (the exporter's link atoms
+  sit at a scaled length rather than the terminator length, so that call
+  will add a length rule to `severed_bond_caps` when it arrives; nothing is
+  reserved for it now).
+- **Sources are atom ids, not a tag name.** An agent script usually has the
+  ids in hand; a tag is one way of producing them. `proxy_cut` is the
+  tag-resolving convenience the node and most scripts call.
+- **Unsigned options.** The module cannot express "-1 means off" except as
+  `Option`, which is what `core` is. The `-1` / negative-to-zero rules of
+  §4.8 are node-side validation, before `ProxyOptions` is built.
+- **Deterministic ids.** Every list in the plan is sorted by atom id, and
+  `apply_proxy` walks them in that order, so the ids new caps receive do not
+  depend on hash-map iteration. Snapshot tests, `.cnnd` stability and the
+  "proxy of a proxy" property all rely on this.
+- **A rider is a graph property, not an element property.** "Exactly one
+  bond" makes a singly bonded heavy adatom a rider too: it is never traversed,
+  it follows its host, and its own open valences are not the module's
+  business. An atom with **no** bond is heavy and unreachable, so it is
+  dropped unless it is itself a source.
+
+### 7.3 What `plan_proxy` does, in order
+
+1. **Riders.** `classify_riders`: one pass over the atoms; an atom with
+   `bonds.len() == 1` maps to `bonds[0].other_atom_id()`.
+2. **Sources.** Each id in `sources` is replaced by its host if it is a
+   rider, then deduplicated. Empty → `NoFocusAtoms`. `passivant_element`
+   is checked with `is_allowed_passivant` → `BadPassivant`.
+3. **Distances.** `bond_distances`: a queue BFS from all sources at once,
+   skipping riders when expanding. It is not bounded by `hops`, because the
+   atoms `fill` restores need their true distance (§4.2) and `farthest_hop`
+   reads it. Linear in the component; on a million-atom workpiece it is
+   still cheaper than deleting the dropped atoms afterwards.
+4. **Plain cut.** `kept_heavy = { a | distance[a] <= hops }`.
+5. **Fill** (when `options.fill`). Synchronous rounds. `pending[b]` counts,
+   for every dropped heavy atom `b` adjacent to a kept heavy atom, how many
+   kept heavy neighbours it has; the frontier is the set of heavy atoms kept
+   in the previous round (initially all of `kept_heavy`). A round walks the
+   frontier's heavy neighbours, increments their `pending`, and collects every
+   `b` that reached 2 and is not yet kept; the collected set becomes the next
+   frontier and joins `kept_heavy` at the end of the round. Stops when a round
+   collects nothing. `fill_rounds` is the number of rounds that collected
+   something, which is what the §4.3 table reports.
+6. **`rm_single`** (when on). One pass over `kept_heavy`: mark `a` if its kept
+   heavy neighbours number exactly one **and** its heavy neighbours in the
+   input number more than one; every mark is decided against the set as it
+   stood before the pass, then all marked atoms leave `kept_heavy` together,
+   so nothing cascades. The §4.4 argument is why one pass suffices.
+7. **Riders follow.** `kept = kept_heavy ∪ { r | riders[r] ∈ kept_heavy }`;
+   everything else in the structure is `dropped`.
+8. **Caps** (when `options.passivate`). `severed_bond_caps` over
+   `kept_heavy`: for each bond `a–b` with `b` heavy and not kept, a
+   `CapPlacement` at `pos(a) + unit(pos(b) − pos(a)) · terminator_bond_length(Z(a), passivant)`.
+   Elements are read through `effective_atomic_number` so a parameter
+   element resolves. A kept atom never has a dropped rider (step 7), so
+   riders need no case here.
+9. **Frozen.** `frozen = { a ∈ kept_heavy | distance[a] > free }`. This is the
+   whole rule, the one §3.1 and §4.6 state: `hops` plays no part in it, so on
+   the plain cut `free >= hops` freezes nothing, and an atom `fill` restored
+   at a distance beyond `free` is frozen whatever `hops` is.
+10. **High.** When `core` is `Some(c)`: `high = { a ∈ kept_heavy | distance[a] <= c }`.
+11. **`nearest_dropped`.** For every kept atom that will be free after the
+    cut — a heavy atom not in `frozen` and not already frozen in the input,
+    or a rider of such an atom — query the input's spatial grid with
+    `get_atoms_in_radius(pos, NEAREST_DROPPED_RADIUS)`, keep dropped heavy
+    hits, take the minimum distance. Computed here because the dropped atoms
+    are gone once `apply_proxy` has run. The grid makes it linear in the
+    number of free atoms.
+
+### 7.4 What `apply_proxy` does, in order
+
+1. **Intern `high` first** when the plan has any high atom — the one
+   fallible step runs before the first mutation, so an error leaves the
+   structure untouched.
+2. Delete `plan.dropped` in id order (`delete_atom` clears bonds on both
+   sides).
+3. Place caps in plan order: `add_atom(passivant, position)`,
+   `set_atom_hydrogen_passivation(id, true)`, `add_bond(host, id, BOND_SINGLE)`.
+   Because the plan's cap list is sorted and the ids are handed out in that
+   order, two runs on equal inputs give equal outputs.
+4. Set the frozen flag on `plan.frozen`, on their riders, and on the caps
+   whose host is frozen (or was frozen in the input). Never cleared.
+5. Add `high` to `plan.high`, their riders, and their hosts' caps. Never
+   removed.
+6. Compute `ProxyStats`: `heavy`, `riders`, `caps`, `filled`, `fill_rounds`,
+   `farthest_hop`, `min_rim` and `nearest_dropped` from the plan; `free`,
+   `frozen`, `formula` and `open_valences` by walking the result;
+   `min_cap_pair` by querying the result's grid within `CAP_PAIR_RADIUS`
+   around every cap and keeping cap–cap hits, linear in the number of caps.
+
+### 7.5 Shared pieces, factored rather than copied
+
+- **Bond length.** `hydrogen_passivation.rs` gets a public
+  `terminator_bond_length(host: i16, passivant: i16) -> f64`, which is the
+  existing branch at its one call site: the private `XH_BOND_LENGTHS` table
+  for hydrogen, `halogen_bond_length` otherwise. `proxy_cut` calls it. This
+  is a fourth *caller*, not a fourth *table*: `doc/design_halogen_passivation.md`
+  keeps its three hydrogen sites, which differ by context on purpose, and
+  the proxy's cap is a molecular-context cap on an arbitrary structure, so
+  the general path's values (Si–H 1.48 Å, the figure §4.3 uses) are the right
+  ones.
+- **Open valences.** The analysis half of `add_hydrogens_filtered` — the
+  hybridization detection, `covalent_max_neighbors`, `count_active_neighbors`
+  and the host-skip rule — becomes a public
+  `open_valence_slots(structure, atom_id, passivant_element) -> usize`, which
+  `add_hydrogens_filtered` calls in its loop and `ProxyStats::open_valences`
+  sums. One function, so the multiplicity the panel shows and the number of
+  hydrogens `passivate` would add cannot disagree.
+- **Formula.** `empirical_formula(&AtomicStructure) -> String` in
+  `atomic_structure_utils.rs`: elements by descending count, ties by symbol,
+  hydrogen always last, counts of one written bare (`Si223H96`, `CH4`).
+  Uses `effective_atomic_number`; markers (`Z <= 0`) are skipped.
+
+### 7.6 The node shell
+
+`nodes/proxy.rs` holds `ProxyData` (§3.3), `ProxyEvalCache`, and
+`get_node_type()`, and nothing else. Its `eval`:
+
+1. `evaluate_arg_required(…, 0)`; an `Error` is returned as-is (never
+   re-wrapped, per the nodes `AGENTS.md`).
+2. `*self.available_tags.borrow_mut() = tag names of the input` — the same
+   write-only snapshot `tag` takes, for the panel's dropdown.
+3. Pins 1–8 through `evaluate_or_default` with `extract_string` /
+   `extract_int` / `extract_bool`, each defaulting to the stored property.
+4. Validation, in the node's own words: empty `focus` → `proxy: focus tag
+   name is empty`; `hops < 0` → `proxy: hops must be >= 0`; `free < 0` →
+   clamped to 0; `core < 0` → `None`; `passiv_elem` not allowed → the same
+   text `passivate` raises, built from `ALLOWED_PASSIVANTS`.
+5. `map_atomic(input, |mut s| { … proxy_cut(&mut s, &focus, &options) … })`.
+   The closure returns the structure, so the `Result` is captured in a local
+   the way `tag` captures its tag error, and surfaced after the map as
+   `proxy: no atom carries the tag "focus"` / `proxy: <ProxyError>`.
+6. When `network_stack.len() == 1`, store
+   `ProxyEvalCache { stats }` in `context.selected_node_eval_cache` — the
+   relax pattern. Nothing mutable on `ProxyData` is read or written from
+   `eval` except the write-only `available_tags` snapshot.
+
+Two things §3 leaves open, resolved here:
+
+- **One output pin means `map_atomic` alone.** `snapshot_atoms` and
+  `eval_output_with_diff` exist to feed a `diff` pin, and §5 declines a
+  second output. Should a `diff` pin ever be wanted, it is appended as pin 1
+  with those two helpers, exactly as `atom_cut` has it; nothing here has to
+  change.
+- **Stats never live on the node data.** A `RefCell<Option<ProxyStats>>`
+  written from `eval` would be shared across every call site of a
+  subnetwork; the eval cache is per root evaluation of the selected node,
+  which is what the panel wants.
+
+`map_atomic` preserves the wrapper, so Crystal in gives Crystal out with its
+lattice intact; the module itself is phase-agnostic.
+
+### 7.7 API layer and Flutter
+
+- `rust/src/api/structure_designer/proxy_api.rs`: `get_proxy_data(scope_path,
+  node_id) -> Option<APIProxyData>`, `set_proxy_data(scope_path, node_id,
+  APIProxyData)` (via `set_node_network_data_scoped` +
+  `refresh_structure_designer_auto`, as `set_tag_data`), and
+  `get_proxy_stats() -> Option<APIProxyStats>` (selected-node eval cache
+  downcast, as `get_relax_message`). `APIProxyData` carries the eight
+  persisted fields plus `available_tags`; `APIProxyStats` mirrors
+  `ProxyStats` with the two `Option<f64>` fields kept optional. Both twins
+  live in `structure_designer_api_types.rs`; the module is added to
+  `flutter_rust_bridge.yaml`'s `rust_input` (a new api module is invisible to
+  codegen until it is listed).
+- `lib/structure_designer/node_data/proxy_editor.dart`, dispatched from
+  `node_data_widget.dart` with `scopePath` forwarded, and
+  `StructureDesignerModel.getProxyData / setProxyData / getProxyStats`
+  wrappers forwarding `propertyEditorScopeChain`. The editor reuses the
+  tag-name suggestion dropdown of `tag_editor.dart`, the passivant dropdown
+  of `passivate_editor.dart`, `IntSpinField` for `hops` / `free` / `core`,
+  and the report block of `relax_editor.dart`, re-read after every refresh.
+  `core` shows `-1` as "off".
+
+### 7.8 Using the module without atomCAD
+
+```rust
+use atomcad_crystolecule::proxy_cut::{plan_proxy, apply_proxy, proxy_cut, ProxyOptions};
+
+// One cut, by tag. `workpiece` is an `AtomicStructure` with `focus` tags.
+let mut proxy = workpiece.clone();
+let stats = proxy_cut(&mut proxy, "focus", &ProxyOptions {
+    hops: 6, free: 3, core: Some(1), ..Default::default()
+})?;
+println!("{} — {} free, {} frozen, {} open valences", stats.formula, stats.free, stats.frozen, stats.open_valences);
+
+// A convergence series: plan against the untouched workpiece, apply to a clone.
+let focus = workpiece.atoms_with_tag("focus");
+for hops in 4..=8 {
+    let options = ProxyOptions { hops, free: 3, ..Default::default() };
+    let plan = plan_proxy(&workpiece, &focus, &options)?;
+    let mut proxy = workpiece.clone();
+    let stats = apply_proxy(&mut proxy, &plan, &options)?;
+    // relax `proxy` with `simulation::minimize_energy`, compare energies …
+}
+```
+
+## 8. Implementation plan
+
+Five phases, each shippable on its own and each ending with a green Rust
+suite. Standing rules for every phase:
+
+- Run the suite as `cargo test -j 4 -p <crate>` from `rust/`, then
+  `cargo fmt` (the crate, never `--all`) and `cargo clippy`.
+- Tests go in the owning crate's `tests/` directory, declared in its
+  `tests/<crate>.rs` beside their siblings. No `#[cfg(test)]` modules.
+- The Dart layer gets no automated tests (house rule); it gets `flutter
+  analyze` and a manual walkthrough. The Flutter smoke test is the
+  maintainer's to run.
+- After any text-format change, the round-trip corpus test must still show
+  `query → --replace` as a no-op.
+
+### Phase 1 — Crate core: riders, distances, keep set, caps (no mutation)
+
+**Files.** `crates/atomcad-crystolecule/src/proxy_cut.rs` (new; `pub mod` in
+`lib.rs`), `hydrogen_passivation.rs` (`terminator_bond_length` made public),
+`tests/crystolecule/proxy_cut_test.rs` (new, declared in
+`tests/crystolecule.rs`).
+
+**Deliverables.** `ProxyOptions`, `ProxyError`, `CapPlacement`, `ProxyPlan`,
+`classify_riders`, `bond_distances`, `severed_bond_caps`, `plan_proxy`
+complete through §7.3 step 11. No `apply_proxy` yet.
+
+**Fixtures.** A bulk silicon cube built with `fill_lattice` (the `fill_box`
+helper of `lattice_fill_test.rs`, hydrogen passivation on, no
+reconstruction) of at least 8 unit cells a side with the source at the centre
+atom, so no shell of the `hops = 6` filled cut reaches the surface; and small
+hand-built graphs (`AtomicStructure::new` + `add_atom` + `add_bond`) for the
+rules that need a specific topology.
+
+**Automated tests** (`proxy_cut_test.rs`):
+
+- Riders: a hydrogen with one bond is a rider mapped to its host; a singly
+  bonded heavy adatom is a rider; an isolated atom is not; a source that is a
+  rider promotes its host and the rider is kept.
+- Distances: on a hand-built chain and a six-ring the distances are the
+  graph distances; riders are never traversed and get no distance; a second
+  component gets no distance.
+- Multi-source merge: two unbonded fragments (a "tool" above a "surface")
+  with one source each are both kept; a third fragment bonded to neither is
+  dropped entirely; `hops = 0` keeps exactly the sources and their riders.
+- The §4.3 fill table on the bulk cube, one source: `hops = 4` → 83 kept
+  heavy atoms before fill, 40 shared sites (dropped heavy atoms with two kept
+  heavy neighbours), closest planned cap pair 1.42 Å; after fill 165 kept,
+  `fill_rounds = 4`, no shared site, closest pair 2.42 Å, `farthest_hop = 8`;
+  `hops = 6` → 239 before, 455 after, 6 rounds, `farthest_hop = 12`. Every
+  atom in `filled` has `distance > hops`. With `fill: false` the before
+  figures are what the plan keeps.
+- Cap geometry: each `CapPlacement.position` equals
+  `pos(host) + unit(pos(severed) − pos(host)) · L` with `L = 1.48` for
+  Si–H, and the fluorine length from `halogen_bond_length` when
+  `passivant_element = 9`; a severed bond from a saturated focus atom
+  produces exactly one cap; a focus atom that was unsaturated in the input
+  (three bonds on silicon) gets no cap for its missing bond.
+- `rm_single`: a hand-built case where the cut leaves an atom with one kept
+  neighbour drops it and its riders; an atom singly bonded in the input is
+  untouched; a case where `fill` gives the atom its second neighbour keeps
+  it (order: fill before `rm_single`).
+- Monotonicity: with `fill` on and off, `kept(hops = k) ⊆ kept(hops = k + 1)`
+  for `k` in 3..7 on the cube; `frozen(free = f) ⊇ frozen(free = f + 1)`.
+- Frozen list is exactly `distance > free`; empty for the plain cut when
+  `free >= hops`; fill-restored atoms beyond `free` are in it.
+- High list: `core = None` → empty; `Some(0)` → the sources only;
+  `Some(1)` → sources plus first neighbours; riders are not in it (they
+  follow at apply time).
+- `nearest_dropped`: on the two-fragment fixture with a dropped wall 3.0 Å
+  from a free atom the value is `Some(3.0 ± 1e-9)`; on the bulk cube with
+  `hops = 6, free = 3` it is `Some(> 4.0)`; on a structure where nothing is
+  dropped it is `None`.
+- Errors: no sources → `NoFocusAtoms`; `passivant_element = 2` →
+  `BadPassivant(2)`.
+- Determinism: two plans of the same input are equal, and every list is
+  sorted ascending.
+- `terminator_bond_length(14, 1) == 1.48` and `(6, 1) == 1.09`, and the
+  halogen branch equals `halogen_bond_length` — the values the general
+  passivation path already uses, so the factoring changed nothing.
+
+### Phase 2 — Crate core: apply, stats, convenience
+
+**Files.** `proxy_cut.rs` (`apply_proxy`, `proxy_cut`, `ProxyStats`),
+`hydrogen_passivation.rs` (`open_valence_slots` public, used by
+`add_hydrogens_filtered`), `atomic_structure_utils.rs` (`empirical_formula`),
+`proxy_cut_test.rs` extended, `hydrogen_passivation_test.rs` extended for
+the factoring.
+
+**Automated tests:**
+
+- Apply on the bulk cube: atom count equals `heavy + riders + caps` from
+  the stats; every cap is bonded once, single order, to its host, sits at the
+  planned position, carries the passivation flag; no atom retains a bond to a
+  dropped id; `num_bonds` equals the bonds counted by walking the atoms.
+- Frozen only set: an atom frozen in the input at distance 0 is still
+  frozen; riders and caps of a frozen host are frozen; free riders of a free
+  host are not; `stats.free + stats.frozen` equals the atom count.
+- `high`: riders and caps inherit; an input already carrying `high` on an
+  atom beyond `core` keeps it; `core = None` leaves `tag_names()` unchanged;
+  with 32 live tags and no `high` among them, `apply_proxy` returns
+  `ProxyError::Tag(LimitReached)` and the structure is byte-identical to the
+  input (the intern-first rule).
+- Radical preservation: a focus silicon with one hydrogen removed keeps
+  three bonds and no cap; `open_valences == 1`; `add_hydrogens` on a clone
+  adds exactly `open_valences` atoms (the shared `open_valence_slots`).
+- Proxy of a proxy: cutting `hops = 4` from the `hops = 6` proxy gives the
+  same heavy-atom set and the same cap positions as cutting `hops = 4` from
+  the workpiece (caps are riders, §4.1).
+- Stats: `formula` on the cube proxy has the `Si…H…` shape with counts
+  matching the atoms; `min_cap_pair` is `Some(2.42)` with fill and
+  `Some(1.42)` without, and `None` on a hand-built cut whose two caps are
+  farther apart than `CAP_PAIR_RADIUS`; `min_rim == hops − free`;
+  `filled.len() == stats.filled`.
+- `empirical_formula`: `CH4`, `H2O`, `Si223H96` ordering, hydrogen last,
+  bare count of one, markers skipped, parameter elements resolved.
+- `proxy_cut` by tag: missing tag → `NoFocusAtoms`; tag on a rider promotes
+  the host; result equals `plan_proxy` + `apply_proxy` with the same ids.
+- Passivation regression: the existing `hydrogen_passivation_test.rs` suite
+  is unchanged and green after `open_valence_slots` is factored out.
+
+### Phase 3 — The node
+
+**Files.** `crates/atomcad-structure-designer/src/nodes/proxy.rs` (new),
+`nodes/mod.rs`, `node_type_registry.rs`,
+`tests/structure_designer/proxy_node_test.rs` (new, declared in
+`tests/structure_designer.rs`), the round-trip corpus fixture gains a proxy
+network.
+
+**Deliverables.** `ProxyData` with serde defaults for every field (an old
+`.cnnd` without `fill` loads `true`), `ProxyEvalCache`, the eval of §7.6,
+text properties for all eight fields, the `focus · 6 / 3` subtitle,
+parameter metadata (`molecule` required, the rest optional), registration.
+
+**Automated tests** (`proxy_node_test.rs`, driving `StructureDesigner`
+through the text format the way sibling node tests do):
+
+- Crystal in → Crystal out with the input lattice; Molecule in → Molecule
+  out.
+- Stored property versus wired pin: an `int` node wired to `hops` overrides
+  the stored value; disconnecting it restores the stored value.
+- Defaults: a freshly created node evaluates as `hops 6 / free 3 / fill on /
+  passivate on / H / core off`.
+- Text format: `proxy { molecule: x, focus: "focus", hops: 6, free: 3, core:
+  1 }` parses, evaluates and serializes back to itself; `fill: false`
+  survives a round trip and the default is omitted; `passiv_elem: 9`
+  survives. The corpus test still reports `--replace` as a no-op.
+- `.cnnd` round trip of a network containing the node, including a file
+  written without the `fill` key.
+- Localized errors: no atom carries the tag → the message names the tag;
+  empty `focus` → the empty-name error; `hops: -1` → error; `free: -1`
+  evaluates as `free: 0` (same output); `passiv_elem: 2` → the same text
+  `passivate` produces; an upstream `Error` on `molecule` passes through
+  unchanged.
+- Eval cache: after a root evaluation with the node selected,
+  `get_selected_node_eval_cache` downcasts to `ProxyEvalCache` and its stats
+  match a direct `proxy_cut` on the same input; a nested evaluation (the node
+  inside a custom network) stores nothing.
+- Subtitle: `focus · 6 / 3` with pins 1–3 unconnected; `None` once any of
+  them is wired.
+- Registry: `get_compatible_node_types` from a Crystal output lists `proxy`
+  under *AtomicStructure*, alongside the existing cases in
+  `rust/tests/structure_designer_api/node_type_registry_test.rs`.
+
+### Phase 4 — API, property panel, documentation
+
+**Files.** `rust/src/api/structure_designer/proxy_api.rs` (new) and its
+`mod.rs` entry, `structure_designer_api_types.rs` (`APIProxyData`,
+`APIProxyStats`, `From` impls), `flutter_rust_bridge.yaml`, the generated
+bindings, `lib/structure_designer/node_data/proxy_editor.dart` (new),
+`node_data_widget.dart`, `structure_designer_model.dart`,
+`doc/reference_guide/nodes/atomic.md` (`## proxy` after `## atom_cut`),
+`crates/atomcad-crystolecule/src/AGENTS.md` (module map row and a
+`ProxyPlan` / `ProxyOptions` row in Key Types), `rust/tests/structure_designer_api/proxy_api_test.rs`
+(new).
+
+**Automated tests** (`proxy_api_test.rs`, the `structure_designer_api`
+harness, run explicitly with `cargo test -j 4 --test structure_designer_api`):
+
+- `set_proxy_data` then `get_proxy_data` round-trips all eight fields
+  through the global instance, with `scope_path` respected inside a custom
+  network.
+- `get_proxy_data` on a node of another type returns `None`.
+- `get_proxy_stats` returns `Some` with the crate's figures after the proxy
+  node is selected and evaluated, and `None` when a `relax` node is selected
+  instead.
+- `set_proxy_data` marks the network dirty and is undoable (the persisted-
+  mutation rule), checked through the existing undo API tests' helpers.
+- `flutter analyze` clean; `dart format` applied.
+
+**Manual walkthrough** (maintainer): tag dropdown lists the input's tags;
+spin fields clamp `hops >= 0`; the report updates after each edit and reads
+"—" for an absent `min_cap_pair` / `nearest_dropped`; `core = -1` displays as
+off; undo reverts a property edit; the Flutter smoke test.
+
+### Phase 5 — Worked example and scale
+
+**Files.** A fixture `.cnnd` under `rust/tests/fixtures/` with the §6
+network (Si(100) slab, a tool, two `tag` nodes, `proxy_6`, `proxy_7`),
+`doc/reference_guide/nodes/atomic.md` example, `doc/testing.md`.
+
+**Automated tests** (`proxy_node_test.rs` and `proxy_cut_test.rs`):
+
+- The fixture evaluates; `proxy_6`'s heavy atoms are a subset of `proxy_7`'s;
+  the tool apex is unsaturated in both; every cap pair is `>= 2.42 Å`; every
+  fill-restored atom is frozen; the apex, the target and their first
+  neighbours carry `high` and nothing else does.
+- A `map` over `range 4..8` of a `proxy` inside a closure yields four
+  structures with strictly increasing atom counts.
+- Independence from workpiece size: the §4.3 figures for `hops = 4` and
+  `hops = 6` are identical on an 8-cell and a 16-cell cube, which exercises
+  the unbounded BFS and the grid-backed `nearest_dropped` on ~64k atoms with
+  no timing assertion.
+
+## 9. Future: ONIOM export
 
 Not part of this node's implementation; recorded here so the node's data
 model is already shaped for it.
 
-### 8.1 What an ONIOM input needs
+### 9.1 What an ONIOM input needs
 
 1. **A layer label per atom** — high or low, occasionally a middle layer.
 2. **Link atoms** at every bond that crosses a layer boundary, placed along
@@ -438,7 +966,7 @@ model is already shaped for it.
 3. **Per-layer bookkeeping** — charge and multiplicity of the high-layer
    model system, and the frozen set, which is independent of the layers.
 
-### 8.2 How atomCAD already carries it
+### 9.2 How atomCAD already carries it
 
 - **Layer membership is the `high` tag** (§4.7), painted by `proxy { core }`
   or by hand with `tag` + a region. Untagged is low. A `mid` tag can be added
@@ -454,7 +982,7 @@ model is already shaped for it.
   An exporter that orders or groups atoms by shell reads the per-atom
   distance, not the parameter.
 
-### 8.3 The one new node: `export_oniom`
+### 9.3 The one new node: `export_oniom`
 
 A sibling of `export_atoms` that reads the `high` tag and the frozen flag
 and writes the target format:
@@ -470,7 +998,7 @@ Charge and multiplicity of the model system are node properties on the
 exporter, not per-atom data. The driver itself — the subtractive energy,
 the optimizer, the barrier search — stays outside atomCAD.
 
-### 8.4 A rule the exporter enforces
+### 9.4 A rule the exporter enforces
 
 A layer boundary must cut only **single bonds between like atoms** (Si–Si,
 C–C) and never a bond touching a focus atom. The exporter walks the crossing
