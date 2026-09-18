@@ -98,6 +98,42 @@ fn test_get_compatible_node_types_from_float_output() {
     assert!(all_node_names.contains(&"vec3"), "vec3 should accept Float");
 }
 
+/// Dragging from a `Crystal` output offers the `HasAtoms` family, `proxy`
+/// among them (`doc/design_proxy_node.md` Phase 3). A node whose only atomic
+/// pin were mistyped would quietly vanish from this popup.
+#[test]
+fn test_get_compatible_node_types_from_crystal_output_lists_proxy() {
+    let registry = NodeTypeRegistry::new();
+
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            &registry,
+            &DataType::Crystal,
+            true,
+        );
+
+    let proxy_category = categories
+        .iter()
+        .find(|c| c.nodes.iter().any(|n| n.name == "proxy"))
+        .expect("proxy should accept a Crystal on its `molecule` pin");
+    assert_eq!(
+        proxy_category.category,
+        ApiNodeTypeCategory::AtomicStructure,
+        "proxy belongs with its `relax` / `passivate` / `atom_cut` siblings"
+    );
+
+    let all_node_names: Vec<&str> = categories
+        .iter()
+        .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
+        .collect();
+    // CONTROL: the rest of the family is here too.
+    assert!(all_node_names.contains(&"relax"), "relax accepts Crystal");
+    assert!(
+        all_node_names.contains(&"passivate"),
+        "passivate accepts Crystal"
+    );
+}
+
 #[test]
 fn test_get_compatible_node_types_to_geometry_input() {
     let registry = NodeTypeRegistry::new();

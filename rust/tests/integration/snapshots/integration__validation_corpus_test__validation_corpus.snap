@@ -100,6 +100,8 @@ expression: out
 === multi_output_migration/old_custom_network.cnnd
   network 'Main' valid=true
   network 'my_shape' valid=true
+=== proxy/proxy_node.cnnd
+  network 'proxy_demo' valid=true
 === rename_wire_loss/before.cnnd
   network '0test' valid=true
   network 'BIG_tip' valid=true

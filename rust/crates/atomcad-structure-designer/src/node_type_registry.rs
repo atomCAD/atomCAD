@@ -86,6 +86,7 @@ use super::nodes::plane_tiling_vectors::get_node_type as plane_tiling_vectors_ge
 use super::nodes::polygon::get_node_type as polygon_get_node_type;
 use super::nodes::print::get_node_type as print_get_node_type;
 use super::nodes::product::get_node_type as product_get_node_type;
+use super::nodes::proxy::get_node_type as proxy_get_node_type;
 use super::nodes::range::get_node_type as range_get_node_type;
 use super::nodes::record_construct::get_node_type as record_construct_get_node_type;
 use super::nodes::record_destructure::get_node_type as record_destructure_get_node_type;
@@ -981,6 +982,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(build_script_get_node_type());
         ret.add_node_type(export_build_script_get_node_type());
         ret.add_node_type(relax_get_node_type());
+        ret.add_node_type(proxy_get_node_type());
         ret.add_node_type(passivate_get_node_type());
         ret.add_node_type(remove_hydrogen_get_node_type());
         ret.add_node_type(infer_bonds_get_node_type());

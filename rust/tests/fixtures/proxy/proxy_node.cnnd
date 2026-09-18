@@ -1,0 +1,335 @@
+{
+  "node_networks": [
+    [
+      "proxy_demo",
+      {
+        "next_node_id": 7,
+        "node_type": {
+          "name": "proxy_demo",
+          "description": "",
+          "summary": null,
+          "category": "Custom",
+          "parameters": [],
+          "output_pins": [
+            {
+              "name": "result",
+              "data_type": "None"
+            }
+          ]
+        },
+        "nodes": [
+          {
+            "id": 4,
+            "node_type_name": "tag",
+            "custom_name": "site",
+            "position": [
+              520.0,
+              386.0
+            ],
+            "arguments": [
+              {
+                "incoming_wires": [
+                  {
+                    "source_node_id": 2,
+                    "source_pin": {
+                      "NodeOutput": {
+                        "pin_index": 0
+                      }
+                    },
+                    "source_scope_depth": 0
+                  }
+                ]
+              },
+              {
+                "incoming_wires": []
+              },
+              {
+                "incoming_wires": [
+                  {
+                    "source_node_id": 3,
+                    "source_pin": {
+                      "NodeOutput": {
+                        "pin_index": 0
+                      }
+                    },
+                    "source_scope_depth": 0
+                  }
+                ]
+              }
+            ],
+            "data_type": "tag",
+            "data": {
+              "name": "focus"
+            },
+            "body_width": 320.0,
+            "body_height": 180.0,
+            "collapse_mode": "Auto"
+          },
+          {
+            "id": 1,
+            "node_type_name": "cuboid",
+            "custom_name": "box",
+            "position": [
+              100.0,
+              221.0
+            ],
+            "arguments": [
+              {
+                "incoming_wires": []
+              },
+              {
+                "incoming_wires": []
+              },
+              {
+                "incoming_wires": []
+              },
+              {
+                "incoming_wires": []
+              }
+            ],
+            "data_type": "cuboid",
+            "data": {
+              "extent": [
+                4,
+                4,
+                4
+              ],
+              "min_corner": [
+                0,
+                0,
+                0
+              ],
+              "subdivision": 1
+            },
+            "body_width": 320.0,
+            "body_height": 180.0,
+            "collapse_mode": "Auto"
+          },
+          {
+            "id": 6,
+            "node_type_name": "proxy",
+            "custom_name": "proxy_7",
+            "position": [
+              730.0,
+              386.0
+            ],
+            "arguments": [
+              {
+                "incoming_wires": [
+                  {
+                    "source_node_id": 4,
+                    "source_pin": {
+                      "NodeOutput": {
+                        "pin_index": 0
+                      }
+                    },
+                    "source_scope_depth": 0
+                  }
+                ]
+              },
+              {
+                "incoming_wires": []
+              },
+              {
+                "incoming_wires": []
+              },
+              {
+                "incoming_wires": []
+              },
+              {
+                "incoming_wires": []
+              },
+              {
+                "incoming_wires": []
+              },
+              {
+                "incoming_wires": []
+              },
+              {
+                "incoming_wires": []
+              },
+              {
+                "incoming_wires": []
+              }
+            ],
+            "data_type": "proxy",
+            "data": {
+              "core": 1,
+              "fill": true,
+              "focus": "focus",
+              "free": 3,
+              "hops": 7,
+              "passiv_elem": 1,
+              "passivate": true,
+              "rm_single": false
+            },
+            "body_width": 320.0,
+            "body_height": 180.0,
+            "collapse_mode": "Auto"
+          },
+          {
+            "id": 3,
+            "node_type_name": "free_sphere",
+            "custom_name": "ball",
+            "position": [
+              100.0,
+              397.0
+            ],
+            "arguments": [
+              {
+                "incoming_wires": []
+              },
+              {
+                "incoming_wires": []
+              },
+              {
+                "incoming_wires": []
+              }
+            ],
+            "data_type": "free_sphere",
+            "data": {
+              "center": [
+                3.5,
+                3.5,
+                3.5
+              ],
+              "radius": 1.5
+            },
+            "body_width": 320.0,
+            "body_height": 180.0,
+            "collapse_mode": "Auto"
+          },
+          {
+            "id": 2,
+            "node_type_name": "materialize",
+            "custom_name": "slab",
+            "position": [
+              310.0,
+              386.0
+            ],
+            "arguments": [
+              {
+                "incoming_wires": [
+                  {
+                    "source_node_id": 1,
+                    "source_pin": {
+                      "NodeOutput": {
+                        "pin_index": 0
+                      }
+                    },
+                    "source_scope_depth": 0
+                  }
+                ]
+              },
+              {
+                "incoming_wires": []
+              },
+              {
+                "incoming_wires": []
+              },
+              {
+                "incoming_wires": []
+              },
+              {
+                "incoming_wires": []
+              },
+              {
+                "incoming_wires": []
+              },
+              {
+                "incoming_wires": []
+              },
+              {
+                "incoming_wires": []
+              }
+            ],
+            "data_type": "materialize",
+            "data": {
+              "hydrogen_passivation": true,
+              "invert_phase": false,
+              "parameter_element_value_definition": "",
+              "passivation_element": 1,
+              "rebond_concave_clashes": true,
+              "remove_single_bond_atoms_before_passivation": false,
+              "remove_unbonded_atoms": true,
+              "surface_reconstruction": false
+            },
+            "body_width": 320.0,
+            "body_height": 180.0,
+            "collapse_mode": "Auto"
+          },
+          {
+            "id": 5,
+            "node_type_name": "proxy",
+            "custom_name": "proxy_6",
+            "position": [
+              730.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "incoming_wires": [
+                  {
+                    "source_node_id": 4,
+                    "source_pin": {
+                      "NodeOutput": {
+                        "pin_index": 0
+                      }
+                    },
+                    "source_scope_depth": 0
+                  }
+                ]
+              },
+              {
+                "incoming_wires": []
+              },
+              {
+                "incoming_wires": []
+              },
+              {
+                "incoming_wires": []
+              },
+              {
+                "incoming_wires": []
+              },
+              {
+                "incoming_wires": []
+              },
+              {
+                "incoming_wires": []
+              },
+              {
+                "incoming_wires": []
+              },
+              {
+                "incoming_wires": []
+              }
+            ],
+            "data_type": "proxy",
+            "data": {
+              "core": 1,
+              "fill": true,
+              "focus": "focus",
+              "free": 3,
+              "hops": 6,
+              "passiv_elem": 1,
+              "passivate": true,
+              "rm_single": false
+            },
+            "body_width": 320.0,
+            "body_height": 180.0,
+            "collapse_mode": "Auto"
+          }
+        ],
+        "return_node_id": null,
+        "displayed_node_ids": [
+          [
+            5,
+            "Normal"
+          ]
+        ]
+      }
+    ]
+  ],
+  "version": 8
+}

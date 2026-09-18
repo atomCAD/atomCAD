@@ -788,6 +788,119 @@ Bonds connected to removed atoms are automatically deleted.
 
 `atom_cut` also exposes a `diff` output pin — since the operation is delete-only, the diff is a set of delete markers for the removed atoms — see [Diff output pins on atom-manipulating nodes](#diff-output-pins-on-atom-manipulating-nodes).
 
+## proxy
+
+Cuts a **simulation proxy** — a cluster around a reaction site, capped where the
+cut severed bonds and frozen beyond a given shell so the interior still feels
+bulk. It is what you hand to `relax`, or export for an external code, when the
+whole workpiece is too big to simulate at the level of theory the reaction
+needs.
+
+Mark the site by tagging its atoms (a `tag` node, usually gated by a small
+region); everything else follows from the bond graph.
+
+**Distance is bond hops, not a sphere.** The node counts hops over covalent
+bonds from the nearest tagged atom. Three consequences:
+
+- Only atoms the site is actually bonded to are kept — a second tip or the far
+  wall of a trench is never dragged in as a disconnected fragment.
+- The shells *are* the ONIOM layers: core, relaxed buffer and frozen rim are all
+  naturally "N bonds from the site".
+- The size series is discrete. `hops` = 4, 5, 6, 7 is a convergence series, one
+  node each (or one node inside a `map` over a `range`).
+
+An atom with exactly one bond — a hydrogen, a halogen passivant, a singly bonded
+adatom — is a **rider**: it never counts as a hop, it is kept exactly when the
+atom it hangs off is kept, and it inherits that atom's frozen state. So a real
+surface termination and a tool's own hydrogens survive the cut intact. Every
+"heavy atom" below means "not a rider".
+
+**Input pins.** All but `molecule` are optional, and a connected pin overrides
+the property of the same name.
+
+- `molecule` — the structure to cut (`Crystal` or `Molecule`). A Crystal stays a
+  Crystal, lattice intact.
+- `focus` — the tag name marking the source atoms.
+- `hops`, `free`, `core` — see the properties below.
+- `rm_single`, `passivate`, `fill` — the three flags.
+- `passiv_elem` — the terminator's atomic number.
+
+**Properties**
+
+- `focus` (default `focus`) — the tag every source atom carries. Several tagged
+  atoms are fine and are the usual case: before a reaction the tool apex is not
+  yet bonded to the surface, so you tag the apex *and* the target atom and the
+  two shells grow into one proxy.
+- `hops` (default 6) — keep heavy atoms this many bonds out or nearer. This is
+  the cost dial.
+- `free` (default 3) — heavy atoms farther than this get the **frozen** flag, and
+  so do their riders and caps. This is the chemistry dial: set it from how far
+  the reaction's strain field reaches. Flags are only ever *set*, never cleared,
+  so an atom frozen upstream stays frozen.
+- `rm_single` (default off) — drop heavy atoms the cut left with a single heavy
+  neighbour, repeated until none is left. Atoms that were singly bonded in the
+  *input* are never touched on their own account, and a focus atom is never
+  dropped. Off by default because it breaks the nesting of the `hops` series.
+- `passivate` (default on) — cap every **severed** bond with a terminator on the
+  old bond vector. Only severed bonds: an atom that was unsaturated in the input
+  — a tool apex radical, a T-centre carbon, an unsaturated surface site — stays
+  unsaturated, with no marking needed. This is the difference from the
+  `passivate` node, which caps every dangling bond it finds.
+- `passiv_elem` (default 1, hydrogen) — the terminator element; H, F, Cl, Br
+  or I.
+- `core` (default −1, off) — tag heavy atoms this many hops out or nearer with
+  the tag **`high`**, the ONIOM high layer. Riders and caps inherit it. Untagged
+  means "low"; no `low` tag is written. The tag is added, never removed.
+- `fill` (default on) — keep every dropped heavy atom that bridged two or more
+  kept ones, repeated until none is left. **Leave this on.** In the diamond
+  lattice a removed atom very often had two surviving neighbours, and each would
+  receive a cap pointing at the same vacated site: on silicon those two
+  hydrogens land 1.42 Å apart, on carbon 0.74 Å, which is an H₂ molecule.
+  Keeping the bridging atom instead turns the site into a boundary SiH₂ whose
+  two caps point away from each other at 2.42 Å. The switch exists for
+  reproducing hand-built clusters from the literature; it is not a size
+  optimisation.
+
+**Reading the report.** The properties panel shows the cut's statistics: the
+empirical formula and the atom counts (cost), the free/frozen split (the
+relaxation's degrees of freedom), how much `fill` grew the cluster, the open
+valences left on the output (this sets the multiplicity of a quantum-chemistry
+input), the closest cap–cap distance, and the closest *dropped* heavy atom to
+any free atom.
+
+Two of those are easy to misread:
+
+- `farthest hop` is a **size** figure, not a shielding figure. `fill` grows the
+  cluster only where the boundary is {100}-like, so the farthest kept atom can
+  sit at roughly twice `hops` while the rim is still exactly `hops − free` thick
+  in its thinnest direction. `min rim` is the shielding figure. Do not lower
+  `hops` or raise `free` because the farthest hop looks large.
+- A small `nearest dropped` (under about 4 Å) means an *unbonded* neighbour —
+  a trench wall, a second tip — was close enough to matter sterically and was
+  cut away. The remedy is to tag one of its atoms as focus too.
+
+**Choosing the parameters.** Set `core` from the reaction (the atoms whose bonds
+change, plus one shell) and `free` from how far its strain field reaches. Pick
+`hops` so that `min rim` = `hops − free` is two or three shells, evaluate, and
+read the report: the counts for cost, the closest cap pair to confirm the rim is
+clean. Then raise `hops` until the cost is the most you will pay and run the
+series downward until the energy stops moving.
+
+**Example.** A tool approach on Si(100), with the apex and the target dimer atom
+both tagged:
+
+```
+site    = tag { molecule: scene, name: "focus", region: apex_ball }
+site2   = tag { molecule: site,  name: "focus", region: target_ball }
+proxy_6 = proxy { molecule: site2, hops: 6, free: 3, core: 1 }
+relaxed = relax { molecule: proxy_6 }
+```
+
+Duplicate `proxy_6` with `hops: 7` to check convergence. The apex radical is
+unsaturated in both; every silicon that lost a neighbour carries a hydrogen on
+the old bond vector; everything more than three hops from either site is frozen;
+and the two sites plus their first neighbours carry `high`.
+
 ## mechanosynth
 
 Replays a **mechanosynthetic build sequence** onto a workpiece: the structure

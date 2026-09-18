@@ -302,6 +302,15 @@ fn the_mechanosynth_trajectory_fixture_round_trips() {
     ));
 }
 
+/// The `proxy` fixture (`doc/design_proxy_node.md` Phase 3). The node carries
+/// eight text properties of four different kinds, every one of which the
+/// serializer writes unconditionally — a property the text drops or re-spells
+/// shows up here as a changed line.
+#[test]
+fn the_proxy_fixture_round_trips() {
+    run_round_trips(&atomcad_test_support::fixture_path("proxy/proxy_node.cnnd"));
+}
+
 /// The maintainer's working file, which is not in the repository. Set
 /// `ATOMCAD_LAYOUT_CORPUS` to its path to include it.
 #[test]

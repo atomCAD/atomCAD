@@ -85,6 +85,7 @@ pub mod plane_tiling_vectors;
 pub mod polygon;
 pub mod print;
 pub mod product;
+pub mod proxy;
 pub mod range;
 pub mod record_construct;
 pub mod record_destructure;
