@@ -70,7 +70,7 @@ and a connected pin overrides the stored value.
 | 1 | `focus` | String | no | Tag name marking the source atoms. Every atom carrying it is at distance 0. |
 | 2 | `hops` | Int | no | Keep heavy atoms whose distance is at most this. |
 | 3 | `free` | Int | no | Heavy atoms farther than this get the frozen flag. On the plain cut `free >= hops` freezes nothing; atoms `fill` restores beyond `free` are frozen regardless (§4.6). |
-| 4 | `rm_single` | Bool | no | Drop outermost-shell heavy atoms left with a single heavy neighbour by the cut. |
+| 4 | `rm_single` | Bool | no | Drop heavy atoms the cut left with a single heavy neighbour, repeated until none is left (§4.4). Focus atoms are never dropped. |
 | 5 | `passivate` | Bool | no | Cap every severed bond with a terminator along the old bond vector. |
 | 6 | `passiv_elem` | Int | no | Terminator element (atomic number), H/F/Cl/Br/I. |
 | 7 | `core` | Int | no | Tag heavy atoms with distance at most this as `high` (the ONIOM high layer). Negative disables. |
@@ -134,16 +134,17 @@ pub struct ProxyStats {
 }
 ```
 
-All eight persisted fields are text properties, so the text form is
+All eight persisted fields are text properties. The serializer writes every
+text property whatever its value (compare the `materialize` lines in the
+text-format snapshots), so a node at its defaults with `core: 1` serializes as
 
 ```
-proxy_6 = proxy { molecule: surface, focus: "focus", hops: 6, free: 3, core: 1 }
+proxy_6 = proxy { molecule: surface, focus: "focus", hops: 6, free: 3, rm_single: false, passivate: true, passiv_elem: 1, core: 1, fill: true, visible: true }
 ```
 
-with `rm_single`, `passivate`, `passiv_elem` and `fill` omitted at their
-defaults, as the text format does for every node (`fill: false` appears only
-when it is switched off). Node subtitle when pins 1–3 are unconnected:
-`focus · 6 / 3`.
+When *parsing*, a property left out takes its default, so the short form
+`proxy { molecule: surface, core: 1 }` is accepted and round-trips to the
+full line above. Node subtitle when pins 1–3 are unconnected: `focus · 6 / 3`.
 
 `ProxyStats` feeds the report in the properties panel, the way `relax` shows
 its message. It is the user's only feedback on a cut and is what the tuning
@@ -266,16 +267,34 @@ the boundary so that no shared site occurs; it is not a size optimisation.
 
 ### 4.4 `rm_single`
 
-Off by default. When on, one pass over the **converged boundary** (after
-`fill`): a kept heavy atom whose kept heavy neighbours number exactly one,
-**and** which had more than one heavy neighbour in the input, is dropped with
-its riders. Atoms singly bonded in the input (an adatom, a terminal group)
-are not touched. Without `fill`, singly attached atoms can only appear in the
-outermost shell (an atom at distance `k < hops` has all its neighbours at
-distance `<= k+1 <= hops`); with `fill` they can only be atoms fill did not
-touch, since fill adds atoms with at least two kept neighbours and only ever
-raises the neighbour count of what is already kept. One pass is complete in
-both cases. It runs *after* fill so it cannot strip an atom that fill would
+Off by default. When on, it runs on the **converged boundary** (after
+`fill`) and repeats until nothing changes: a kept heavy atom whose kept heavy
+neighbours number exactly one, **and** which had more than one heavy
+neighbour in the input, is dropped with its riders. Both counts exclude
+riders (heavy means "not a rider" throughout §4, so a heavy adatom hanging
+off an atom is neither a lost neighbour nor a remaining one). Atoms singly
+bonded in the input (an adatom, a terminal group) are therefore never touched
+on their own account. **Focus atoms are exempt**: a source is never dropped,
+whatever the count says.
+
+It has to iterate. Before the first removal, singly attached atoms can only
+sit in the outermost shell (an atom at distance `k < hops` has all its
+neighbours at distance `<= k+1 <= hops`), but removing one lowers the kept
+count of its inward neighbour, and an atom at `hops - 1` whose only inward
+bond is its parent and whose outward neighbours were all single-attached is
+left with one neighbour itself. In a single-source diamond cut more than
+half of the outermost shell has a single parent, so this is the common
+case. A one-shell trim would leave exactly the atoms the flag promises to
+remove; the fixpoint is what `materialize`'s `rm_single` does too
+(`remove_single_bond_atoms_filtered` is recursive). Termination is
+immediate: the kept set only shrinks.
+
+Two consequences to know about. Fill-restored atoms start with two anchors
+but are not immune: the cascade can remove an anchor and then the restored
+atom. And a chain of atoms inside the cut — an alkyl linker on a tool, a
+bare wire — unwinds all the way back to the first atom that keeps two
+neighbours, or to a focus atom, which is one more reason the flag is off by
+default. It runs *after* fill so it cannot strip an atom that fill would
 have given a second neighbour.
 
 Default off so that the `hops` series stays monotonic: every atom of the
@@ -319,9 +338,11 @@ the flag today; an exporter for an external code reads the same bit.
 
 Off by default (`-1`). When `core >= 0`, heavy atoms with distance `<= core`
 get the tag **`high`**; riders and caps inherit the tag of their heavy atom.
-Zero is meaningful: only the focus atoms are high. The tag is **only added,
-never removed** — an input that already carries `high` keeps it, mirroring
-how `free` treats the frozen flag.
+Zero tags only the focus atoms. It is legal here, but it is a partition the
+ONIOM exporter of §9.4 refuses, because every layer-boundary bond then
+touches a focus atom; one is the smallest value that survives export. The
+tag is **only added, never removed** — an input that already carries `high`
+keeps it, mirroring how `free` treats the frozen flag.
 
 **Untagged means low.** No `low` tag is written: every atom would carry it,
 it would spend a second name of the 32-tag budget, and the exporter (§9)
@@ -475,6 +496,7 @@ pub struct CapPlacement {
 /// Everything decided, nothing mutated. Every `Vec` is sorted by atom id.
 #[derive(Debug, Clone)]
 pub struct ProxyPlan {
+    pub options: ProxyOptions,         // the options the plan was made with
     pub distance: FxHashMap<u32, u32>, // every heavy atom reachable from a source
     pub kept: Vec<u32>,                // heavy atoms and riders that survive
     pub dropped: Vec<u32>,             // heavy atoms and riders that go
@@ -516,10 +538,11 @@ pub fn plan_proxy(
 ) -> Result<ProxyPlan, ProxyError>;
 
 /// Mutation only. Must be applied to the structure the plan was made from.
+/// The plan carries its options, so nothing can be passed that disagrees
+/// with the caps and keep set already decided.
 pub fn apply_proxy(
     structure: &mut AtomicStructure,
     plan: &ProxyPlan,
-    options: &ProxyOptions,
 ) -> Result<ProxyStats, ProxyError>;
 
 /// The whole thing by tag name: `atoms_with_tag` → `plan_proxy` → `apply_proxy`.
@@ -584,11 +607,14 @@ Decisions behind this shape:
    frontier and joins `kept_heavy` at the end of the round. Stops when a round
    collects nothing. `fill_rounds` is the number of rounds that collected
    something, which is what the §4.3 table reports.
-6. **`rm_single`** (when on). One pass over `kept_heavy`: mark `a` if its kept
-   heavy neighbours number exactly one **and** its heavy neighbours in the
-   input number more than one; every mark is decided against the set as it
-   stood before the pass, then all marked atoms leave `kept_heavy` together,
-   so nothing cascades. The §4.4 argument is why one pass suffices.
+6. **`rm_single`** (when on). A worklist to a fixpoint, the shape of
+   `remove_single_bond_atoms_filtered`: scan `kept_heavy` once for atoms
+   that are not sources, have exactly one kept heavy neighbour and had more
+   than one heavy neighbour in the input (riders excluded from both counts);
+   remove that batch from `kept_heavy`; re-check only the removed atoms'
+   kept heavy neighbours against the same test; repeat until a batch is
+   empty. The kept set only shrinks, so it terminates. §4.4 is why the
+   cascade is required rather than a single pass.
 7. **Riders follow.** `kept = kept_heavy ∪ { r | riders[r] ∈ kept_heavy }`;
    everything else in the structure is `dropped`.
 8. **Caps** (when `options.passivate`). `severed_bond_caps` over
@@ -733,7 +759,7 @@ for hops in 4..=8 {
     let options = ProxyOptions { hops, free: 3, ..Default::default() };
     let plan = plan_proxy(&workpiece, &focus, &options)?;
     let mut proxy = workpiece.clone();
-    let stats = apply_proxy(&mut proxy, &plan, &options)?;
+    let stats = apply_proxy(&mut proxy, &plan)?;
     // relax `proxy` with `simulation::minimize_energy`, compare energies …
 }
 ```
@@ -781,7 +807,9 @@ rules that need a specific topology.
   component gets no distance.
 - Multi-source merge: two unbonded fragments (a "tool" above a "surface")
   with one source each are both kept; a third fragment bonded to neither is
-  dropped entirely; `hops = 0` keeps exactly the sources and their riders.
+  dropped entirely; with `fill: false`, `hops = 0` keeps exactly the sources
+  and their riders, and with `fill` on a heavy atom bonded to two sources is
+  restored as well.
 - The §4.3 fill table on the bulk cube, one source: `hops = 4` → 83 kept
   heavy atoms before fill, 40 shared sites (dropped heavy atoms with two kept
   heavy neighbours), closest planned cap pair 1.42 Å; after fill 165 kept,
@@ -797,8 +825,15 @@ rules that need a specific topology.
   (three bonds on silicon) gets no cap for its missing bond.
 - `rm_single`: a hand-built case where the cut leaves an atom with one kept
   neighbour drops it and its riders; an atom singly bonded in the input is
-  untouched; a case where `fill` gives the atom its second neighbour keeps
-  it (order: fill before `rm_single`).
+  untouched; an atom whose only neighbours are a heavy adatom rider and one
+  kept atom is untouched (riders count in neither tally); a case where
+  `fill` gives the atom its second neighbour keeps it (order: fill before
+  `rm_single`); the cascade: a parent at `hops - 1` with one inward bond
+  whose outward neighbours were all single-attached is dropped in the
+  second round, and on the bulk cube at `hops = 4` no kept non-source heavy
+  atom is left with a single kept heavy neighbour; a source reduced to one
+  kept neighbour by the cascade (a chain hanging off a lone focus atom)
+  survives.
 - Monotonicity: with `fill` on and off, `kept(hops = k) ⊆ kept(hops = k + 1)`
   for `k` in 3..7 on the cube; `frozen(free = f) ⊇ frozen(free = f + 1)`.
 - Frozen list is exactly `distance > free`; empty for the plain cut when
@@ -880,10 +915,11 @@ through the text format the way sibling node tests do):
   the stored value; disconnecting it restores the stored value.
 - Defaults: a freshly created node evaluates as `hops 6 / free 3 / fill on /
   passivate on / H / core off`.
-- Text format: `proxy { molecule: x, focus: "focus", hops: 6, free: 3, core:
-  1 }` parses, evaluates and serializes back to itself; `fill: false`
-  survives a round trip and the default is omitted; `passiv_elem: 9`
-  survives. The corpus test still reports `--replace` as a no-op.
+- Text format: the full line of §3.3 parses, evaluates and serializes back
+  to itself byte for byte; the short form `proxy { molecule: x, core: 1 }`
+  parses with every omitted property at its default and serializes to the
+  full line; `fill: false` and `passiv_elem: 9` survive a round trip. The
+  corpus test still reports `--replace` as a no-op.
 - `.cnnd` round trip of a network containing the node, including a file
   written without the `fill` key.
 - Localized errors: no atom carries the tag → the message names the tag;
