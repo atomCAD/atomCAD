@@ -179,6 +179,24 @@ fn lookup_xh_bond_length(atomic_number: i16) -> f64 {
     r_x + r_h
 }
 
+/// Equilibrium host–terminator bond length in Angstroms, for **any** allowed
+/// passivant.
+///
+/// This is the branch `add_hydrogens_filtered` has always taken inline: the
+/// per-context `XH_BOND_LENGTHS` table for hydrogen, [`halogen_bond_length`]
+/// otherwise (`doc/design_halogen_passivation.md` D2 — H must never reach that
+/// function). It is public because `proxy_cut` places link-atom caps on
+/// severed bonds and needs exactly the same length the general passivation
+/// path would use; see `doc/design_proxy_node.md` §7.5. Adding a caller here
+/// is deliberate — adding a fourth *table* would not be.
+pub fn terminator_bond_length(host: i16, passivant: i16) -> f64 {
+    if passivant == 1 {
+        lookup_xh_bond_length(host)
+    } else {
+        halogen_bond_length(host, passivant)
+    }
+}
+
 // ============================================================================
 // Geometry: compute_open_directions
 // ============================================================================
@@ -428,11 +446,7 @@ pub fn add_hydrogens_filtered(
         let existing_dirs = gather_bond_directions(structure, atom);
         // Bond length: H keeps the per-context molecular table (unchanged);
         // halogens use the shared molecular primitive (D2).
-        let bond_len = if options.passivant_element == 1 {
-            lookup_xh_bond_length(atomic_number)
-        } else {
-            halogen_bond_length(atomic_number, options.passivant_element)
-        };
+        let bond_len = terminator_bond_length(atomic_number, options.passivant_element);
         let open_dirs =
             compute_open_directions(structure, atom_id, hybridization, &existing_dirs, needed);
         let positions: Vec<DVec3> = open_dirs.iter().map(|d| position + *d * bond_len).collect();

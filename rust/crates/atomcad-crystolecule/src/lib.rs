@@ -16,6 +16,7 @@ pub mod motif_bond_inference;
 pub mod motif_parser;
 pub mod motif_symmetry;
 pub mod patch;
+pub mod proxy_cut;
 pub mod simulation;
 pub mod structure;
 pub mod supercell;

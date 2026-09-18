@@ -42,6 +42,7 @@ crates/atomcad-crystolecule/src/
 ├── hydrogen_passivation.rs         # General-purpose H passivation for arbitrary structures
 ├── miller.rs                       # Miller-index arithmetic: reduction, enumeration, symmetry families {hkl}
 ├── patch.rs                        # Surface-patch domain model: tile extraction, cell selection, apply_patch
+├── proxy_cut.rs                    # Bond-hop simulation-proxy cut: plan_proxy / apply_proxy (fill, rm_single, severed-bond caps)
 ├── weld.rs                         # weld_coincident_atoms(): fuse atoms at the same position (surface patches)
 ├── structure.rs                    # `Structure` value type (lattice_vecs + motif + motif_offset)
 ├── unit_cell_struct.rs             # Unit cell geometry & coordinate conversion
@@ -123,6 +124,8 @@ crates/atomcad-crystolecule/src/
 | `DrawingPlane` | `drawing_plane.rs` | Miller-indexed 2D plane with 2D↔3D transforms. Built via `from_spec(miller, u, v, …)` (the case matrix in `doc/design_drawing_plane_explicit_axes.md`): auto-pick both in-plane axes from the Miller index, or pin one/both in-plane lattice directions `[u v w]` explicitly, or derive the Miller index from `u × v`. `DrawingPlane::new` is a thin `from_spec` wrapper. `is_compatible` compares the resolved `u_axis`/`v_axis`, not just the Miller index |
 | `CompatibilityReport` | `patch.rs` | Welded / orphaned / over-coordination stats from `apply_patch`. Dart-facing twin `APICompatibilityReport` in `api/` |
 | `SelectedCell` | `patch.rs` | One tiling site chosen by `select_patch_cells`: an in-plane lattice `offset` plus the `k` indices it spans along the free (non-periodic) direction |
+| `ProxyOptions` | `proxy_cut.rs` | What a proxy cut is tunable by: `hops` / `free` / `fill` / `rm_single` / `passivate` / `passivant_element` / `core`. Unsigned — the node's "-1 means off" rules are validated before this struct is built, and `core` is the one `Option` |
+| `ProxyPlan` | `proxy_cut.rs` | Everything one cut decided and nothing mutated: per-atom bond distance, the keep/drop sets, the severed-bond caps, the frozen and `high` lists. Every `Vec` is sorted by atom id so the ids `apply_proxy` hands out are deterministic |
 | `LatticeFillConfig` | `lattice_fill/config.rs` | Unit cell + motif + geometry + options for filling |
 | `PlacedAtomTracker` | `lattice_fill/placed_atom_tracker.rs` | CrystallographicAddress → atom ID mapping |
 | `AtomInfo` | `atomic_constants.rs` | Element properties (symbol, radii, color) |
@@ -615,6 +618,7 @@ field         →  glam only (no crystolecule types at all)
 motif_bond_inference → Motif, UnitCellStruct, atomic_constants
 miller        →  glam only (no crystolecule types at all)
 patch         →  AtomicStructure, UnitCellStruct, weld, hydrogen_passivation, guided_placement, GeoNode
+proxy_cut     →  AtomicStructure, atomic_constants, hydrogen_passivation
 mechanosynth  →  AtomicStructure, atomic_constants (serde_json for the two JSON files)
 guided_placement → AtomicStructure, simulation/uff (typer, params)
 hydrogen_passivation → AtomicStructure, atomic_constants, guided_placement
@@ -648,6 +652,7 @@ tests/crystolecule/
 ├── field_test.rs                  # ScalarField contract: bounds, interpolation, gradients
 ├── patch_test.rs                  # Cell selection, region depths, apply_patch pipeline
 ├── patch_build_test.rs            # Tiling-vector validation, tile extraction
+├── proxy_cut_test.rs              # Riders, bond distances, fill/rm_single keep set, severed-bond caps; the §4.3 bulk-silicon fill table
 ├── concave_rebond_test.rs         # Concave-corner rebonding; clash detector re-derived independently
 ├── io/
 │   ├── mol_exporter_test.rs       # V3000 format, molecules, bond types
