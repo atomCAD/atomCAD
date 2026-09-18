@@ -179,12 +179,19 @@ The eval runs these steps in order on a clone of the input structure.
 ### 4.1 Riders
 
 An atom with **exactly one bond** in the input is a *rider*: a hydrogen, a
-halogen passivant, any monovalent terminator. Riders
+halogen passivant, any monovalent terminator, and also a singly bonded
+adatom of any element. Every other atom is **heavy**. Throughout this
+document "heavy" means exactly "not a rider", never "not hydrogen": every
+count of heavy neighbours, every hop, every `heavy` figure in the stats uses
+this graph definition. Riders
 
 - never count as a hop and are never traversed;
-- are kept exactly when their one heavy neighbour is kept;
+- are kept exactly when their one heavy neighbour (their *host*) is kept;
 - inherit the frozen decision of that neighbour;
-- if tagged as focus, promote their heavy neighbour to a source instead.
+- if tagged as focus, promote their host to a source instead. A rider whose
+  host is itself a rider is an isolated diatomic; it cannot anchor a cut, so
+  as a source it is discarded, and it is dropped like any other rider whose
+  host is not kept.
 
 This keeps the real surface termination and the tool's own hydrogens intact.
 Without the rule a surface hydrogen on a last-shell silicon would land one
@@ -270,12 +277,12 @@ the boundary so that no shared site occurs; it is not a size optimisation.
 Off by default. When on, it runs on the **converged boundary** (after
 `fill`) and repeats until nothing changes: a kept heavy atom whose kept heavy
 neighbours number exactly one, **and** which had more than one heavy
-neighbour in the input, is dropped with its riders. Both counts exclude
-riders (heavy means "not a rider" throughout §4, so a heavy adatom hanging
-off an atom is neither a lost neighbour nor a remaining one). Atoms singly
-bonded in the input (an adatom, a terminal group) are therefore never touched
-on their own account. **Focus atoms are exempt**: a source is never dropped,
-whatever the count says.
+neighbour in the input, is dropped with its riders. Both counts use the §4.1
+definition of heavy, so an adatom rider hanging off an atom is neither a
+lost neighbour nor a remaining one. Atoms singly bonded in the input (an
+adatom, a terminal group) are therefore never touched on their own account.
+**Focus atoms are exempt**: a source is never dropped, whatever the count
+says.
 
 It has to iterate. Before the first removal, singly attached atoms can only
 sit in the outermost shell (an atom at distance `k < hops` has all its
@@ -294,8 +301,7 @@ but are not immune: the cascade can remove an anchor and then the restored
 atom. And a chain of atoms inside the cut — an alkyl linker on a tool, a
 bare wire — unwinds all the way back to the first atom that keeps two
 neighbours, or to a focus atom, which is one more reason the flag is off by
-default. It runs *after* fill so it cannot strip an atom that fill would
-have given a second neighbour.
+default.
 
 Default off so that the `hops` series stays monotonic: every atom of the
 `hops = 5` proxy is in the `hops = 6` proxy.
@@ -494,7 +500,7 @@ pub struct CapPlacement {
 }
 
 /// Everything decided, nothing mutated. Every `Vec` is sorted by atom id.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ProxyPlan {
     pub options: ProxyOptions,         // the options the plan was made with
     pub distance: FxHashMap<u32, u32>, // every heavy atom reachable from a source
@@ -511,9 +517,10 @@ pub struct ProxyPlan {
 /// Rider id → its one heavy neighbour.
 pub fn classify_riders(structure: &AtomicStructure) -> FxHashMap<u32, u32>;
 
-/// Multi-source BFS over heavy atoms. A source that is a rider is replaced by
-/// its host. Unbounded: every heavy atom in the sources' components gets a
-/// distance, atoms in other components get none.
+/// Multi-source BFS over heavy atoms. `sources` must already be heavy
+/// (`plan_proxy` step 2 promotes riders before calling this). Unbounded:
+/// every heavy atom in the sources' components gets a distance, atoms in
+/// other components get none.
 pub fn bond_distances(
     structure: &AtomicStructure,
     sources: &[u32],
@@ -590,7 +597,8 @@ Decisions behind this shape:
 1. **Riders.** `classify_riders`: one pass over the atoms; an atom with
    `bonds.len() == 1` maps to `bonds[0].other_atom_id()`.
 2. **Sources.** Each id in `sources` is replaced by its host if it is a
-   rider, then deduplicated. Empty → `NoFocusAtoms`. `passivant_element`
+   rider, discarded if that host is itself a rider (§4.1) or the id names no
+   atom, then deduplicated. Empty → `NoFocusAtoms`. `passivant_element`
    is checked with `is_allowed_passivant` → `BadPassivant`.
 3. **Distances.** `bond_distances`: a queue BFS from all sources at once,
    skipping riders when expanding. It is not bounded by `hops`, because the
@@ -603,7 +611,7 @@ Decisions behind this shape:
    kept heavy neighbours it has; the frontier is the set of heavy atoms kept
    in the previous round (initially all of `kept_heavy`). A round walks the
    frontier's heavy neighbours, increments their `pending`, and collects every
-   `b` that reached 2 and is not yet kept; the collected set becomes the next
+   `b` whose `pending` reaches 2 during the round; the collected set becomes the next
    frontier and joins `kept_heavy` at the end of the round. Stops when a round
    collects nothing. `fill_rounds` is the number of rounds that collected
    something, which is what the §4.3 table reports.
@@ -638,9 +646,9 @@ Decisions behind this shape:
 
 ### 7.4 What `apply_proxy` does, in order
 
-1. **Intern `high` first** when the plan has any high atom — the one
-   fallible step runs before the first mutation, so an error leaves the
-   structure untouched.
+1. **Intern `high` first** (`intern_tag(HIGH_TAG)`) when the plan has any
+   high atom — the one fallible step runs before the first mutation, so an
+   error leaves the structure untouched.
 2. Delete `plan.dropped` in id order (`delete_atom` clears bonds on both
    sides).
 3. Place caps in plan order: `add_atom(passivant, position)`,
@@ -882,8 +890,8 @@ the factoring.
   same heavy-atom set and the same cap positions as cutting `hops = 4` from
   the workpiece (caps are riders, §4.1).
 - Stats: `formula` on the cube proxy has the `Si…H…` shape with counts
-  matching the atoms; `min_cap_pair` is `Some(2.42)` with fill and
-  `Some(1.42)` without, and `None` on a hand-built cut whose two caps are
+  matching the atoms; `min_cap_pair` is `Some(2.42 ± 0.01)` with fill and
+  `Some(1.42 ± 0.01)` without, and `None` on a hand-built cut whose two caps are
   farther apart than `CAP_PAIR_RADIUS`; `min_rim == hops − free`;
   `filled.len() == stats.filled`.
 - `empirical_formula`: `CH4`, `H2O`, `Si223H96` ordering, hydrogen last,
@@ -984,8 +992,8 @@ network (Si(100) slab, a tool, two `tag` nodes, `proxy_6`, `proxy_7`),
   structures with strictly increasing atom counts.
 - Independence from workpiece size: the §4.3 figures for `hops = 4` and
   `hops = 6` are identical on an 8-cell and a 16-cell cube, which exercises
-  the unbounded BFS and the grid-backed `nearest_dropped` on ~64k atoms with
-  no timing assertion.
+  the unbounded BFS and the grid-backed `nearest_dropped` on ~33k silicon
+  atoms plus their surface hydrogens, with no timing assertion.
 
 ## 9. Future: ONIOM export
 
