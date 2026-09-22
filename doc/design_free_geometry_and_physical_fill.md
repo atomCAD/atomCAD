@@ -50,6 +50,20 @@ the result is plausibly mechanosynthesisable and stable at room temperature
 once built. For some parts a third goal applies: control over the
 crystallography of chosen faces.
 
+One thing no fill can do is make the surface smooth. The atoms of a crystal
+lie on discrete planes, so a cut of the lattice by any surface, flat or
+curved, comes out as flat terraces separated by steps one atomic layer high.
+Each terrace is the low-index lattice plane nearest the local surface normal,
+and its width follows the local slope: many atoms wide where the surface runs
+close to a lattice plane, one or two atoms wide where it runs between them.
+The steps are a fraction of a unit cell high. On silicon, whose cell edge is
+5.4 Å, a step is 1.4 Å between (100) layers, 1.9 Å between (110) layers and
+3.1 Å between (111) bilayers; on diamond each of these is about two thirds as
+high. A sphere from Blender therefore becomes a stepped object at the atomic
+scale, like a hill drawn with contour lines. The lattice decides this and the
+fill cannot avoid it. What the fill decides is whether every terrace and
+every step is a site that can be built and that stays built.
+
 ### 2.1 Mechanosynthesisability
 
 The part must be buildable site by site with positional tools at cryogenic
@@ -213,10 +227,10 @@ for diamond cubic:
 Dangling bonds are terminators, and terminators are operations. The faces
 with the fewest dangling bonds are also the faces with the fewest site types,
 which are exactly the sites an operation library covers. So {111} and {100}
-are cheap to build and easy to cover, and a fill that minimises dangling
-bonds will drift toward them on its own. Every other orientation is a
-staircase of these terraces with steps between, and what such a surface needs
-is correct chemistry at the steps, not a prohibition on the plane.
+terraces are cheap to build and easy to cover. Every other orientation is the
+staircase of section 2, made of these terraces with steps between, and what
+such a surface needs is correct chemistry at the steps, not a prohibition on
+the plane.
 
 This reframes the fill. The question is no longer "which planes may the user
 draw" but "given any target volume, which subset of lattice sites near it has
@@ -440,12 +454,19 @@ neighbours, so it can trigger further fills but never a peel. One pass of
 peel to fixpoint followed by one pass of fill to fixpoint is therefore a
 fixpoint of both, and the result is order-independent within each pass.
 
-**Why the moves produce facets.** Both moves are the greedy descent of a
-lattice-gas model whose energy is the number of dangling bonds, restricted to
-a band around the target volume. The healed surface of a sphere or a Blender
-blob comes out composed of {111} and {100} micro-facets on its own, because
-those are the low-dangling-bond local arrangements, and those are the site
-types the operation library knows. The user did not have to draw them.
+**What the moves do to the staircase.** The geometric cut already produces
+the terraces and steps of section 2, and the healer does not change their
+orientation; it cannot, because both moves are local. What it removes is the
+tail of one-atom features an arbitrary cut leaves on them: single atoms
+standing on a terrace with one bond, and single holes in a terrace with three
+neighbours. One case comes free: an atom cut in the narrow gap of a (111)
+bilayer is one-coordinated, so peeling it terminates every (111) terrace in
+the wide gap, the monohydride termination, without any rule that knows about
+(111). Both moves are the greedy descent of a lattice-gas model whose energy
+is the number of dangling bonds, restricted to a band around the target
+volume. After them every surface atom has two or three lattice neighbours and
+sits on a terrace, a step or a kink, which are the environments an operation
+library is built around.
 
 **What it costs.** The healed surface may lie up to `δ_fill` outside the
 drawn volume and one atomic layer inside it, and where it lies depends on the
