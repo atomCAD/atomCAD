@@ -27,13 +27,15 @@ lattice constraint was adopted because it is the shape of an annealed crystal
 buys very little physics for what it costs in usability.
 
 The fill that turns geometry into atoms has its own limits. It keeps every
-lattice site whose signed distance is non-positive and then runs a chain of
-repairs: remove unbonded atoms, remove single-bonded atoms, dimerise {100}
-faces, passivate, and fix clashes in concave corners. The surface
-reconstruction knows only the six {100} normals, only cubic diamond in carbon
-or silicon, and only one global dimer phase. Edges, corners and every other
-face get generic passivation. On diamond an unpaired (100) carbon then carries
-a dihydride that cannot exist. The concave repair exists because the
+lattice site that lies inside the drawn volume, a step this document calls
+the **geometric cut** (in the code it is a sign test on the signed-distance
+function, SDF, that represents the volume), and then runs a chain of repairs:
+remove unbonded atoms, remove single-bonded atoms, dimerise {100} faces,
+passivate, and fix clashes in concave corners. The surface reconstruction
+knows only the six {100} normals, only cubic diamond in carbon or silicon,
+and only one global dimer phase. Edges, corners and every other face get
+generic passivation. On diamond an unpaired (100) carbon then carries a
+dihydride that cannot exist. The concave repair exists because the
 reconstruction has no notion of an unpaired atom.
 
 ## 2. The goals
@@ -72,17 +74,19 @@ the fill has to respect:
   was placed before that. Fewer surface sites and fewer dangling bonds mean a
   shorter build.
 
-Most of what the fill does beyond the sign test serves this goal: fewer site
-types, fewer operations, every site reachable, and a model close enough to
-its relaxed geometry that a simulation checks the design rather than rebuilds
-it.
+Most of what the fill does beyond the geometric cut serves this goal: fewer
+site types, fewer operations, every site reachable, and a model close enough
+to its relaxed geometry that a simulation checks the design rather than
+rebuilds it.
 
 ### 2.2 Room-temperature stability
 
 Once built, the part must not rearrange, desorb or react at room temperature.
-This is the easier goal, and section 3.1 explains why: on silicon, complete
-passivation and a rule against two terminators sitting too close are
-sufficient. The design is for vacuum; section 3.2 says what changes in air.
+This is the easier goal, and section 3.1 explains why: complete passivation
+and a rule against two terminators sitting too close are sufficient on both
+materials. On silicon the cut surface almost satisfies them already; on
+diamond satisfying them takes a reconstruction. The design is for vacuum;
+section 3.2 says what changes in air.
 
 ### 2.3 Controlled surface crystallography
 
@@ -97,10 +101,11 @@ index. It is deferred only in schedule, not in motivation.
 
 ## 3. What the physics constrains
 
-### 3.1 Hydrogen-terminated silicon does not move
+### 3.1 Hydrogen-terminated surfaces do not move
 
-A hydrogen-terminated silicon surface is kinetically stable far above room
-temperature:
+A hydrogen-terminated silicon or diamond surface is kinetically stable far
+above room temperature. Silicon, the weaker of the two, as the worked
+example:
 
 | Process on H-terminated Si | Onset |
 |---|---|
@@ -108,22 +113,24 @@ temperature:
 | (100) dihydride → monohydride conversion | ~650 K |
 | Si–H bond dissociation | ~3.2 eV, never thermal at 300 K |
 
-The (100) 1×1 dihydride is a real room-temperature phase on silicon. A
-one-atom pit terminated with three hydrogens is a hydrogenated vacancy, a
-well-known stable defect. A one-coordinated silicon with three hydrogens is a
-silyl group, chemically ordinary. A random-shaped hydrogen-terminated silicon
-nanocrystal sits in vacuum indefinitely because nothing on its surface can
-move. So on silicon a plain sign test, complete passivation, and a rule for
-two terminators that clash already produce a room-temperature-stable object.
-Only two things in this design are load-bearing for stability: no dangling
-bond is left unterminated, and no two terminators are forced below their
-steric limit.
+On diamond every corresponding number is higher. The (100) 1×1 dihydride is
+a real room-temperature phase on silicon. A one-atom pit terminated with
+three hydrogens is a hydrogenated vacancy, a well-known stable defect. A
+one-coordinated atom with three hydrogens is a silyl or methyl group,
+chemically ordinary. A random-shaped hydrogen-terminated nanocrystal of
+either element sits in vacuum indefinitely because nothing on its surface
+can move.
+
+**The stability floor** is therefore the same two conditions for both
+materials: no dangling bond is left unterminated, and no two terminators are
+forced below their steric limit. Nothing else in this design is needed
+for stability.
 
 A consequence worth stating once: **the built part is whatever the model
 says**. On a fully terminated surface every alternative arrangement, a
 different dimer phase, an unpaired dihydride, a step that is or is not
-rebonded, is separated from its neighbour by breaking an Si–H or Si–Si bond
-at 2 to 3 eV. Nature does not correct the model; it freezes it. The
+rebonded, is separated from its neighbour by breaking an X–H or X–X bond at
+2 to 4 eV. Nature does not correct the model; it freezes it. The
 reconstruction pass of section 5.5 is therefore not predicting what the
 surface will do. It is choosing what we build, under the single constraint
 that every local configuration it chooses exists as a stable minimum. The
@@ -131,9 +138,27 @@ exceptions are the barrierless cases: a dihydride cants, two terminators
 inside their steric limit react, and a bare dangling bond reacts with whatever
 it meets.
 
-Diamond differs in one respect. On C(100) the 1×1 dihydride is sterically
-impossible, so there the reconstruction pass decides whether the surface
-exists at all, not merely how many operations it costs.
+**Where the naive fill violates the floor.** A geometric cut followed by
+complete passivation satisfies the first condition by construction. Whether
+it satisfies the second depends on the material, and this is the only place
+silicon and diamond differ.
+
+On silicon the geometric cut produces clashes only in special places: two
+terminators pointing at each other across a concave corner, and neighbouring
+(100) dihydrides whose hydrogens sit close but can be relieved by canting.
+The repair is local and keeps the bond graph. A plain geometric cut, complete
+passivation and a clash rule already produce a room-temperature-stable
+silicon object.
+
+On diamond the clash sits on the most common site. The (100) site spacing
+shrinks from 3.84 Å on silicon to 2.52 Å on diamond, while the X–H bond only
+shrinks from 1.48 Å to 1.09 Å, so the terminators are relatively much larger.
+An unreconstructed C(100) dihydride field is a clash at every site, and
+canting cannot open it. The only repair is to change the bond graph by
+dimerising. So on diamond the reconstruction pass decides whether the surface
+exists at all, and it is part of the fill rather than a cleanup after it; on
+silicon the same pass is an optimisation of build cost. The rule is the same
+in both cases. What differs is how much of the cut surface the rule rejects.
 
 ### 3.2 Vacuum and air
 
@@ -156,12 +181,15 @@ surface chemistry after the build, not of the fill, and is left open.
 
 ### 3.3 Low-index facets are convenient, not required
 
-The half-space-with-Miller-index model comes from equilibrium
-thermodynamics. A crystal that minimises its surface free energy at fixed
-volume takes the Wulff shape: an intersection of half spaces, one per
-orientation, each at a distance proportional to the surface energy of that
-orientation. That is the exact shape of an annealed crystal, and it is the
-only justification for building geometry out of Miller-indexed planes.
+The half-space-with-Miller-index model comes from equilibrium thermodynamics.
+A crystal that minimises its surface free energy at fixed volume takes the
+Wulff shape: an intersection of half spaces, one per orientation, each at a
+distance proportional to the surface energy of that orientation. That is the
+exact shape of an annealed crystal, and it is the justification for building
+the whole of a part out of Miller-indexed planes. The other reason to want a
+lattice plane, a face that must slide or mate against another part, applies
+to particular faces rather than to the whole shape, and section 7 provides
+for it.
 
 A mechanosynthesised part is built site by site and never anneals. Facet
 selection by surface energy never happens to it. What remains is a constraint
@@ -226,7 +254,7 @@ gaps.
 Much of the geometry layer was built to work for any lattice, while the
 target for the foreseeable future is cubic silicon, with diamond second. This
 design separates what depends only on the motif and the bond graph from what
-is honestly specific to diamond cubic, and does not apologise for the second.
+is honestly specific to diamond cubic.
 
 Generic to any covalent lattice:
 
@@ -368,7 +396,7 @@ One principle governs the switches. We do not yet have measurements of how
 much each pass matters on realistic shapes, and the right way to get them is
 to run the same shape with a pass on and off and compare. So **every pass is
 individually switchable**, the defaults are the recommended configuration,
-and the baseline configuration (section 5.9) reproduces today's sign test
+and the baseline configuration (section 5.9) reproduces today's geometric cut
 plus passivation exactly, atom for atom. Nothing is silently mandatory except
 passivation itself, because an unterminated surface is the one thing that is
 not stable. The switches are region-overridable through the existing
@@ -429,7 +457,7 @@ the object of study, should be filled with `heal: none` or a region override.
 The two moves are separately switchable because they answer different
 questions: `peel` alone reproduces today's behaviour, and `fill` alone shows
 how much volume pit-filling adds without whisker removal confounding it.
-`none` reproduces today's sign test exactly, is the baseline for every
+`none` reproduces today's geometric cut exactly, is the baseline for every
 comparison, and stays the default for ionic lattices, where `rm_unbonded:
 false` is used today. The thresholds are derived from z, so the pass runs
 unchanged on any motif.
@@ -622,8 +650,8 @@ and with every new option at its default.
 
 **The baseline configuration** for any comparison is `heal: none`,
 `surf_recon: false`, `clash: report`, `access_check: false`. It is today's
-sign test plus passivation, and every other configuration is measured against
-it through the report.
+geometric cut plus passivation, and every other configuration is measured
+against it through the report.
 
 ### 5.10 Performance and the old path
 
@@ -691,12 +719,13 @@ A part for a mechanical design usually has one or two faces that matter: the
 face that slides, meshes or mates. Those faces need to be exact lattice
 planes so that the fill produces a flat terrace rather than a staircase, and
 the relative orientation of two such faces on two parts decides whether the
-contact is commensurate and locks, or is incommensurate and slides. Two parts modelled in place and materialised in one
-scene share one lattice orientation, so any two flat terraces that touch are
-in registry. The fill does not address this. An `align_face` node does, in
-the simplest form: the lattice stays fixed and the mesh is rigidly rotated so
-that one picked face becomes a chosen lattice plane, optionally translated so
-that the face sits in a chosen layer gap.
+contact is commensurate and locks, or is incommensurate and slides. Two parts
+modelled in place and materialised in one scene share one lattice
+orientation, so any two flat terraces that touch are in registry. The fill
+does not address this. An `align_face` node does, in the simplest form: the
+lattice stays fixed and the mesh is rigidly rotated so that one picked face
+becomes a chosen lattice plane, optionally translated so that the face sits
+in a chosen layer gap.
 
 Matching the face normal to (hkl) fixes two rotational degrees of freedom.
 The spin about the normal defaults to the minimal rotation and can be
@@ -833,21 +862,21 @@ Research, for the site catalogue:
   move of the reconstruction pass and runs before passivation; passivation
   reads the post-reconstruction dangling-bond list. One dimer geometry per
   lattice regardless of passivation.
-- Stability is the floor, not the goal. On silicon only complete passivation
-  and the terminator clash check are load-bearing for stability; every other
-  pass serves buildability, build cost, tip access or simulation readiness,
-  and says so where it is described.
+- Stability is the floor, not the goal. On both materials only complete
+  passivation and the terminator clash check are load-bearing for stability;
+  on diamond the clash check forces the reconstruction, on silicon it does
+  not. Every other pass serves buildability, build cost, tip access or
+  simulation readiness, and says so where it is described.
 - The built part is whatever the model says. The reconstruction pass chooses
   what is built, constrained by the site catalogue; it does not predict.
   Research is scoped to the existence, geometry and steric limits of
   terminated sites; surface energies and equilibrium shapes are background.
 - Every pass is individually switchable, with a baseline that reproduces
-  today's sign test plus passivation exactly. Questions about whether a pass
-  matters are settled by the report, not by argument.
-- Tip access is a reported check, not a move, until its census shows what a
-  move should do.
-- Energy-driven healing is not planned. The site catalogue is a data file the
-  fill reads its constants from.
-- Functional faces (bearing faces, registry between parts) are not produced
-  by the fill. They are made by aligning the imported mesh one face at a
-  time; the lattice stays fixed and the mesh rotates.
+  today's geometric cut plus passivation exactly. Questions about whether a
+  pass matters are settled by the report, not by argument. - Tip access is a
+  reported check, not a move, until its census shows what a move should do. -
+  Energy-driven healing is not planned. The site catalogue is a data file the
+  fill reads its constants from. - Functional faces (bearing faces, registry
+  between parts) are not produced by the fill. They are made by aligning the
+  imported mesh one face at a time; the lattice stays fixed and the mesh
+  rotates.
