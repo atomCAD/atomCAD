@@ -102,6 +102,7 @@ import 'package:flutter_cad/structure_designer/node_data/mat3_cols_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/mat3_diag_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/network_description_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_name_strip.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_preferences.dart';
 import 'package:flutter_cad/structure_designer/node_data/comment_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/custom_node_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/function_output_editor.dart';
@@ -209,14 +210,18 @@ class NodeDataWidget extends StatelessWidget {
                   // change it (`doc/design_node_names_in_ui.md` D3). Keyed by
                   // the node's identity so switching selection reseeds the
                   // field rather than carrying a half-typed name across.
-                  NodeNameStrip(
-                    key: ValueKey(
-                        '${nodeNetworkView.name}|${selected.scopeChain.join('/')}|${selected.node.id}'),
-                    model: model,
-                    root: nodeNetworkView,
-                    node: selected.node,
-                    scopeChain: selected.scopeChain,
-                  ),
+                  // Shown only while node titles show names: in type mode the
+                  // strip was easy to mistake for a node's own name-like field
+                  // (a parameter's Parameter Name starts out identical).
+                  if (model.nodeTitleMode == NodeTitleMode.name)
+                    NodeNameStrip(
+                      key: ValueKey(
+                          '${nodeNetworkView.name}|${selected.scopeChain.join('/')}|${selected.node.id}'),
+                      model: model,
+                      root: nodeNetworkView,
+                      node: selected.node,
+                      scopeChain: selected.scopeChain,
+                    ),
                   _buildNodeEditor(selected.node, model),
                   // Generic, node-type-agnostic: every node with input pins can
                   // expose itself as a function on its `-1` pin, so the role

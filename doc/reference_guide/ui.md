@@ -820,6 +820,10 @@ The header stays put whichever node is selected, and the name can be selected wi
 **Which node am I editing, and what is it called?** Directly above the
 node-specific fields sits a one-line **name strip**: an editable field holding
 the node's name, the node's type greyed beside it, and a **⧉** copy button.
+The strip is shown only while [node titles](#node-titles) show **node names**
+(**Ctrl+Shift+N**); with type names on the canvas it is hidden, so it cannot be
+mistaken for a node's own name-like field such as a `parameter`'s *Parameter
+Name*. Switch to node names to see or rename a node's name.
 
 ```
 union7                                    union  ⧉

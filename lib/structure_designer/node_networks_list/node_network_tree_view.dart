@@ -1304,15 +1304,19 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
   }
 
   /// Wraps the tree body so a right-click that does **not** land on a row opens
-  /// the root creation menu. Row-level `onSecondaryTapDown` handlers sit deeper
-  /// in the tree and win the gesture arena, so this only fires on the empty
-  /// space below/around the rows. `HitTestBehavior.opaque` is what makes that
-  /// empty space hit-testable at all.
+  /// the root creation menu. `HitTestBehavior.opaque` is what makes the empty
+  /// space below/around the rows hit-testable at all.
+  ///
+  /// This must be `onSecondaryTapUp`, not `...TapDown`: a tap-down callback
+  /// fires once the press deadline (~100 ms) passes *even before the arena is
+  /// decided*, so a held right-click on a row used to open the row's menu and
+  /// this one on top of it. Tap-up fires only for the arena winner — the row,
+  /// being deeper — so this never fires over a row.
   Widget _withRootContextMenu(Widget child) {
     return GestureDetector(
       key: const Key('tree_background_context_menu'),
       behavior: HitTestBehavior.opaque,
-      onSecondaryTapDown: (details) =>
+      onSecondaryTapUp: (details) =>
           _showRootContextMenu(context, details.globalPosition),
       child: child,
     );
