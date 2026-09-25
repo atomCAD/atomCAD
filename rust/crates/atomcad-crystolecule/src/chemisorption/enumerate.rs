@@ -2,9 +2,16 @@
 //! the sites and the adsorbate atoms that can bond, and enumerates every
 //! bonding pattern the rules allow — without relaxing anything, so it is cheap
 //! enough to run on every evaluation.
+//!
+//! The order is §5.2 of the design: first a set of transfers (none when no
+//! transfer rule is enabled), because a transfer changes valences both ways —
+//! its donor gains one (the OH leg that can now bond), its acceptor loses one;
+//! then, against the valences that set leaves, the depth-first site
+//! assignment of the bond-forming feet.
 
 use super::config::{ChemisorptionError, ChemisorptionSearch, Side};
 use super::score::{BondInventory, BondKind, is_scored_element, tabulated_enthalpy_kj};
+use super::transfer::{SideAtoms, Transfer, candidate_transfers};
 use crate::atomic_structure::AtomicStructure;
 use crate::atomic_structure::inline_bond::{
     BOND_AROMATIC, BOND_DELETED, BOND_DOUBLE, BOND_QUADRUPLE, BOND_SINGLE, BOND_TRIPLE,
@@ -19,70 +26,86 @@ use std::time::Instant;
 /// Atom ids are those of [`SearchPlan::combined`].
 #[derive(Debug, Clone, PartialEq)]
 pub struct Hypothesis {
-    /// Bonds formed, `(adsorbate atom, substrate atom)`, in adsorbate-atom
-    /// order.
+    /// Bonds formed between an adsorbate atom and a site,
+    /// `(adsorbate atom, substrate atom)`, in adsorbate-atom order. The bond a
+    /// transferred atom forms with its acceptor is not here but in
+    /// `transfers`.
     pub formed: Vec<(u32, u32)>,
-    /// Bonds broken. Empty until transfers exist (phase 3 of the design).
-    pub broken: Vec<(u32, u32)>,
-    /// Atoms moved. Empty until transfers exist.
-    pub moved: Vec<u32>,
+    /// Transfers, in enumeration order.
+    pub transfers: Vec<Transfer>,
     pub inventory: BondInventory,
 }
 
 /// The normalized bond set a hypothesis is deduplicated and tie-broken by:
-/// every pair `(min, max)`, sorted.
-pub type HypothesisKey = (Vec<(u32, u32)>, Vec<(u32, u32)>, Vec<u32>);
+/// the formed pairs `(min, max)`, sorted, and the transfers as
+/// `(donor, element, acceptor)`, sorted — the moving atom by its donor and
+/// element rather than its id, so equivalent atoms on one donor count once.
+pub type HypothesisKey = (Vec<(u32, u32)>, Vec<(u32, i16, u32)>);
+
+/// The key of a bond-change set, shared by hypotheses and candidates.
+pub fn change_key(formed: &[(u32, u32)], transfers: &[Transfer]) -> HypothesisKey {
+    let pairs: BTreeSet<(u32, u32)> = formed.iter().map(|&(a, b)| (a.min(b), a.max(b))).collect();
+    let mut moves: Vec<(u32, i16, u32)> = transfers.iter().map(Transfer::key).collect();
+    moves.sort_unstable();
+    (pairs.into_iter().collect(), moves)
+}
+
+/// The atoms whose bonds a change set touches, sorted: both ends of every
+/// formed bond, and every transfer's donor, moving atom and acceptor.
+pub fn changed_atoms(formed: &[(u32, u32)], transfers: &[Transfer]) -> Vec<u32> {
+    let set: BTreeSet<u32> = formed
+        .iter()
+        .flat_map(|&(a, b)| [a, b])
+        .chain(
+            transfers
+                .iter()
+                .flat_map(|t| [t.donor, t.moved, t.acceptor]),
+        )
+        .collect();
+    set.into_iter().collect()
+}
 
 impl Hypothesis {
     pub fn key(&self) -> HypothesisKey {
-        let norm = |pairs: &[(u32, u32)]| -> Vec<(u32, u32)> {
-            let set: BTreeSet<(u32, u32)> =
-                pairs.iter().map(|&(a, b)| (a.min(b), a.max(b))).collect();
-            set.into_iter().collect()
-        };
-        let mut moved = self.moved.clone();
-        moved.sort_unstable();
-        (norm(&self.formed), norm(&self.broken), moved)
+        change_key(&self.formed, &self.transfers)
     }
 
     /// The atoms whose bonds this hypothesis changes, sorted.
     pub fn changed_atoms(&self) -> Vec<u32> {
-        let set: BTreeSet<u32> = self
-            .formed
-            .iter()
-            .chain(self.broken.iter())
-            .flat_map(|&(a, b)| [a, b])
-            .chain(self.moved.iter().copied())
-            .collect();
-        set.into_iter().collect()
+        changed_atoms(&self.formed, &self.transfers)
     }
 }
 
-/// What `plan` found and counted. Every branch of the site-assignment search
-/// ends exactly once, so
+/// What `plan` found and counted. Every branch of the search ends exactly
+/// once, so
 /// `considered == pruned_valence + pruned_pair_tolerance + duplicates + to_relax`
 /// — plus the one complete assignment that tripped the budget, when
-/// `truncated`.
+/// `truncated`. A transfer set that breaks a valence, or repeats an earlier
+/// one, is one considered (and pruned, or duplicate) branch.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct PlanStats {
-    /// Adsorbate reactive atoms with a free valence and at least one site
-    /// within reach.
+    /// Adsorbate reactive atoms that could form a bond (a free valence, after
+    /// some transfer set, and a site within reach).
     pub feet: usize,
     /// Distinct sites within reach of at least one of them.
     pub sites_in_reach: usize,
+    /// Candidate transfers `(D, X, A)` the transfer rules allow; 0 without
+    /// rules.
+    pub transfer_candidates: usize,
     /// Assignments considered: pruned partial ones and complete ones.
     pub considered: usize,
-    /// Rejected because a site had no valence left (R6).
+    /// Rejected because an atom would exceed its valence (R6).
     pub pruned_valence: usize,
     /// Rejected by the pair tolerance (R3).
     pub pruned_pair_tolerance: usize,
-    /// Complete assignments merged with an earlier one of the same bond set.
+    /// Merged with an earlier one of the same bond set.
     pub duplicates: usize,
     /// Valid, deduplicated hypotheses: the relaxations `evaluate` will run.
     pub to_relax: usize,
     /// The budget was hit; the enumeration is **not** exhaustive.
     pub truncated: bool,
-    /// Bond kinds a hypothesis may form whose enthalpy is a Pauling estimate.
+    /// Bond kinds a hypothesis may form or break whose enthalpy is a Pauling
+    /// estimate.
     pub estimated_pairs: Vec<BondKind>,
     /// Wall time of `plan` (s).
     pub seconds: f64,
@@ -183,17 +206,22 @@ fn reactive_atoms(
     Ok(out)
 }
 
+/// A substrate reactive atom that is a site under at least one transfer set.
 struct Site {
     id: u32,
     pos: DVec3,
-    valence: usize,
+    /// Free valence before any transfer.
+    base: usize,
 }
 
+/// An adsorbate reactive atom that can bond under at least one transfer set.
 struct Foot {
     id: u32,
     element: i16,
     pos: DVec3,
-    /// Indices into the site list, ascending.
+    /// Free valence before any transfer.
+    base: usize,
+    /// Indices into the site list, ascending: within reach, not both frozen.
     sites: Vec<usize>,
 }
 
@@ -202,10 +230,25 @@ struct Enumerator<'a> {
     combined: &'a AtomicStructure,
     feet: Vec<Foot>,
     sites: Vec<Site>,
+    /// Every transfer the rules allow.
+    candidates: Vec<Transfer>,
     max_formed: usize,
+    max_transfers: usize,
+
+    // The current transfer set and what it leaves.
+    transfer_choice: Vec<usize>,
+    transfers: Vec<Transfer>,
+    site_valence: Vec<usize>,
+    active_feet: Vec<usize>,
+
+    // The current site assignment: (index into `active_feet`, site index).
     chosen: Vec<(usize, usize)>,
     site_used: Vec<usize>,
+
     seen: HashSet<HypothesisKey>,
+    seen_transfer_sets: HashSet<Vec<(u32, i16, u32)>>,
+    feet_seen: BTreeSet<u32>,
+    sites_seen: BTreeSet<u32>,
     hypotheses: Vec<Hypothesis>,
     stats: PlanStats,
 }
@@ -215,76 +258,194 @@ impl Enumerator<'_> {
         self.stats.truncated
     }
 
+    /// Transfer sets of up to `max_transfers` candidates, `start` onwards,
+    /// extending the current one. Each set is searched as it is reached, the
+    /// empty set first.
+    fn transfer_sets(&mut self, start: usize) {
+        if self.done() {
+            return;
+        }
+        self.with_transfer_set();
+        if self.transfer_choice.len() >= self.max_transfers {
+            return;
+        }
+        for i in start..self.candidates.len() {
+            if self.done() {
+                return;
+            }
+            if !self.compatible(i) {
+                continue;
+            }
+            self.transfer_choice.push(i);
+            self.transfer_sets(i + 1);
+            self.transfer_choice.pop();
+        }
+    }
+
+    /// Whether candidate `i` can join the current set: an atom moves once,
+    /// and a moving atom is never a donor or acceptor of another transfer
+    /// (that would break or form one bond twice — H₂ is the case).
+    fn compatible(&self, i: usize) -> bool {
+        let t = self.candidates[i];
+        self.transfer_choice.iter().all(|&j| {
+            let o = self.candidates[j];
+            t.moved != o.moved
+                && t.moved != o.donor
+                && t.moved != o.acceptor
+                && o.moved != t.donor
+                && o.moved != t.acceptor
+        })
+    }
+
+    /// Searches the site assignments under the current transfer set.
+    fn with_transfer_set(&mut self) {
+        self.transfers = self
+            .transfer_choice
+            .iter()
+            .map(|&i| self.candidates[i])
+            .collect();
+
+        // Valence change per atom: a donor gains one per atom it gives, an
+        // acceptor loses one per atom it takes.
+        let mut delta: FxHashMap<u32, isize> = FxHashMap::default();
+        for t in &self.transfers {
+            *delta.entry(t.donor).or_insert(0) += 1;
+            *delta.entry(t.acceptor).or_insert(0) -= 1;
+        }
+        let valence = |id: u32, base: usize| -> isize {
+            base as isize + delta.get(&id).copied().unwrap_or(0)
+        };
+
+        if !self.transfers.is_empty() {
+            let mut key: Vec<(u32, i16, u32)> = self.transfers.iter().map(Transfer::key).collect();
+            key.sort_unstable();
+            if !self.seen_transfer_sets.insert(key) {
+                self.stats.considered += 1;
+                self.stats.duplicates += 1;
+                return;
+            }
+            // R6 on the final edit: every atom the set touches stays within
+            // its valence (a transfer may free the valence another needs).
+            let broken = delta
+                .keys()
+                .any(|&id| valence(id, free_valence(self.combined, id)) < 0);
+            if broken {
+                self.stats.considered += 1;
+                self.stats.pruned_valence += 1;
+                return;
+            }
+        }
+
+        for (s, site) in self.sites.iter().enumerate() {
+            self.site_valence[s] = valence(site.id, site.base).max(0) as usize;
+        }
+        let mut active = Vec::new();
+        for (f, foot) in self.feet.iter().enumerate() {
+            if valence(foot.id, foot.base) > 0
+                && foot.sites.iter().any(|&s| self.site_valence[s] > 0)
+            {
+                active.push(f);
+            }
+        }
+        for &f in &active {
+            self.feet_seen.insert(self.feet[f].id);
+            for &s in &self.feet[f].sites {
+                if self.site_valence[s] > 0 {
+                    self.sites_seen.insert(self.sites[s].id);
+                }
+            }
+        }
+        self.active_feet = active;
+        self.dfs(0);
+    }
+
     fn dfs(&mut self, k: usize) {
         if self.done() {
             return;
         }
-        if k == self.feet.len() {
-            if !self.chosen.is_empty() {
+        if k == self.active_feet.len() {
+            if !self.chosen.is_empty() || !self.transfers.is_empty() {
                 self.leaf();
             }
             return;
         }
+        let foot = self.active_feet[k];
         if self.chosen.len() < self.max_formed {
-            for si in 0..self.feet[k].sites.len() {
+            for si in 0..self.feet[foot].sites.len() {
                 if self.done() {
                     return;
                 }
-                let s = self.feet[k].sites[si];
-                if self.site_used[s] >= self.sites[s].valence {
+                let s = self.feet[foot].sites[si];
+                if self.site_valence[s] == 0 {
+                    // Not a site under this transfer set (a transfer took its
+                    // valence, or it only has one when it donates).
+                    continue;
+                }
+                if self.site_used[s] >= self.site_valence[s] {
                     self.stats.considered += 1;
                     self.stats.pruned_valence += 1;
                     continue;
                 }
-                if !self.pair_ok(k, s) {
+                if !self.pair_ok(foot, s) {
                     self.stats.considered += 1;
                     self.stats.pruned_pair_tolerance += 1;
                     continue;
                 }
-                self.chosen.push((k, s));
+                self.chosen.push((foot, s));
                 self.site_used[s] += 1;
                 self.dfs(k + 1);
                 self.site_used[s] -= 1;
                 self.chosen.pop();
             }
         }
-        // Foot `k` forms no bond.
+        // This foot forms no bond.
         self.dfs(k + 1);
     }
 
-    /// Whether site `s` for foot `k` keeps every chosen pair within `δ`.
-    fn pair_ok(&self, k: usize, s: usize) -> bool {
+    /// Whether site `s` for foot `f` keeps every chosen pair within `δ`.
+    fn pair_ok(&self, f: usize, s: usize) -> bool {
         let delta = self.config.pair_tolerance;
         if delta <= 0.0 {
             return true;
         }
-        let (fk, sk) = (self.feet[k].pos, self.sites[s].pos);
-        self.chosen.iter().all(|&(j, t)| {
-            let foot_distance = fk.distance(self.feet[j].pos);
-            let site_distance = sk.distance(self.sites[t].pos);
+        let (fp, sp) = (self.feet[f].pos, self.sites[s].pos);
+        self.chosen.iter().all(|&(g, t)| {
+            let foot_distance = fp.distance(self.feet[g].pos);
+            let site_distance = sp.distance(self.sites[t].pos);
             (site_distance - foot_distance).abs() <= delta
         })
+    }
+
+    fn element(&self, id: u32) -> i16 {
+        self.combined.get_atom(id).map_or(0, |a| a.atomic_number)
     }
 
     fn leaf(&mut self) {
         self.stats.considered += 1;
         let mut hypothesis = Hypothesis {
             formed: Vec::with_capacity(self.chosen.len()),
-            broken: Vec::new(),
-            moved: Vec::new(),
+            transfers: self.transfers.clone(),
             inventory: BondInventory::default(),
         };
-        for &(k, s) in &self.chosen {
-            let (foot, site) = (&self.feet[k], &self.sites[s]);
+        for &(f, s) in &self.chosen {
+            let (foot, site) = (&self.feet[f], &self.sites[s]);
             hypothesis.formed.push((foot.id, site.id));
-            let site_z = self
-                .combined
-                .get_atom(site.id)
-                .map_or(0, |a| a.atomic_number);
             *hypothesis
                 .inventory
                 .formed
-                .entry(BondKind::new(foot.element, site_z, 1))
+                .entry(BondKind::new(foot.element, self.element(site.id), 1))
+                .or_insert(0) += 1;
+        }
+        for t in &self.transfers {
+            *hypothesis
+                .inventory
+                .formed
+                .entry(BondKind::new(t.element, self.element(t.acceptor), 1))
+                .or_insert(0) += 1;
+            *hypothesis
+                .inventory
+                .broken
+                .entry(BondKind::new(t.element, self.element(t.donor), 1))
                 .or_insert(0) += 1;
         }
         if !self.seen.insert(hypothesis.key()) {
@@ -299,10 +460,31 @@ impl Enumerator<'_> {
     }
 }
 
+/// Records `(a, b)` as a bond kind a hypothesis may change: a blocking error
+/// for an element that cannot be scored, a flagged estimate for a pair the
+/// table lacks.
+fn check_scorable(
+    a: i16,
+    b: i16,
+    estimated: &mut BTreeSet<BondKind>,
+) -> Result<(), ChemisorptionError> {
+    for z in [a, b] {
+        if !is_scored_element(z) {
+            return Err(ChemisorptionError::UnscoredElement {
+                element: crate::atomic_constants::element_symbol(z),
+            });
+        }
+    }
+    if tabulated_enthalpy_kj(a, b).is_none() {
+        estimated.insert(BondKind::new(a, b, 1));
+    }
+    Ok(())
+}
+
 /// Enumerates the bonding patterns of `adsorbate` over `substrate` at the
-/// given pose (§5.2 of the design): bond forming only, one new bond per
-/// adsorbate atom, a site taking as many as its free valence allows, pruned by
-/// the pair tolerance. Relaxes nothing.
+/// given pose (§5.2 of the design): transfer sets first, then bond forming —
+/// one new bond per adsorbate atom, a site taking as many as its valence
+/// allows, pruned by the pair tolerance. Relaxes nothing.
 pub fn plan(
     adsorbate: &AtomicStructure,
     substrate: &AtomicStructure,
@@ -328,28 +510,48 @@ pub fn plan(
         Side::Substrate,
     )?;
 
+    let candidates = if config.transfers.is_empty() {
+        Vec::new()
+    } else {
+        candidate_transfers(
+            &combined,
+            &SideAtoms {
+                ids: &adsorbate_ids,
+                reactive: &ads_reactive,
+            },
+            &SideAtoms {
+                ids: &substrate_ids,
+                reactive: &sub_reactive,
+            },
+            &config.transfers,
+            config.reach,
+        )
+    };
+    // Atoms that gain a valence under some transfer set.
+    let donors: BTreeSet<u32> = candidates.iter().map(|t| t.donor).collect();
+
     let atom = |id: u32| combined.get_atom(id).expect("combined atom");
     let sites: Vec<Site> = sub_reactive
         .iter()
         .filter_map(|&id| {
-            let valence = free_valence(&combined, id);
-            (valence > 0).then(|| Site {
+            let base = free_valence(&combined, id);
+            (base > 0 || donors.contains(&id)).then(|| Site {
                 id,
                 pos: atom(id).position,
-                valence,
+                base,
             })
         })
         .collect();
 
     let mut estimated: BTreeSet<BondKind> = BTreeSet::new();
-    let mut in_reach: BTreeSet<usize> = BTreeSet::new();
     let mut feet: Vec<Foot> = Vec::new();
     for &id in &ads_reactive {
-        if free_valence(&combined, id) == 0 {
+        let base = free_valence(&combined, id);
+        if base == 0 && !donors.contains(&id) {
             continue;
         }
         let a = atom(id);
-        let candidates: Vec<usize> = sites
+        let in_reach: Vec<usize> = sites
             .iter()
             .enumerate()
             .filter(|(_, site)| {
@@ -358,51 +560,62 @@ pub fn plan(
             })
             .map(|(i, _)| i)
             .collect();
-        if candidates.is_empty() {
+        if in_reach.is_empty() {
             continue;
         }
-        for &s in &candidates {
-            let site_z = atom(sites[s].id).atomic_number;
-            for z in [a.atomic_number, site_z] {
-                if !is_scored_element(z) {
-                    return Err(ChemisorptionError::UnscoredElement {
-                        element: crate::atomic_constants::element_symbol(z),
-                    });
-                }
-            }
-            if tabulated_enthalpy_kj(a.atomic_number, site_z).is_none() {
-                estimated.insert(BondKind::new(a.atomic_number, site_z, 1));
-            }
-            in_reach.insert(s);
+        for &s in &in_reach {
+            check_scorable(
+                a.atomic_number,
+                atom(sites[s].id).atomic_number,
+                &mut estimated,
+            )?;
         }
         feet.push(Foot {
             id,
             element: a.atomic_number,
             pos: a.position,
-            sites: candidates,
+            base,
+            sites: in_reach,
         });
     }
+    for t in &candidates {
+        check_scorable(t.element, atom(t.donor).atomic_number, &mut estimated)?;
+        check_scorable(t.element, atom(t.acceptor).atomic_number, &mut estimated)?;
+    }
 
-    let max_formed = config.max_formed_bonds.unwrap_or(usize::MAX);
     let site_count = sites.len();
     let mut enumerator = Enumerator {
         config,
         combined: &combined,
         feet,
         sites,
-        max_formed,
+        candidates,
+        max_formed: config.max_formed_bonds.unwrap_or(usize::MAX),
+        max_transfers: if config.transfers.is_empty() {
+            0
+        } else {
+            config.max_transfers
+        },
+        transfer_choice: Vec::new(),
+        transfers: Vec::new(),
+        site_valence: vec![0; site_count],
+        active_feet: Vec::new(),
         chosen: Vec::new(),
         site_used: vec![0; site_count],
         seen: HashSet::new(),
+        seen_transfer_sets: HashSet::new(),
+        feet_seen: BTreeSet::new(),
+        sites_seen: BTreeSet::new(),
         hypotheses: Vec::new(),
         stats: PlanStats::default(),
     };
-    enumerator.dfs(0);
+    enumerator.transfer_sets(0);
 
     let mut stats = enumerator.stats;
     let hypotheses = enumerator.hypotheses;
-    stats.feet = enumerator.feet.len();
-    stats.sites_in_reach = in_reach.len();
+    stats.feet = enumerator.feet_seen.len();
+    stats.sites_in_reach = enumerator.sites_seen.len();
+    stats.transfer_candidates = enumerator.candidates.len();
     stats.to_relax = hypotheses.len();
     stats.estimated_pairs = estimated.into_iter().collect();
     stats.seconds = start.elapsed().as_secs_f64();

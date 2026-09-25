@@ -14,6 +14,7 @@ pub mod atom_union;
 pub mod bool;
 pub mod build_script;
 pub mod build_step;
+pub mod chemisorb;
 pub mod circle;
 pub mod closure;
 pub mod collect;

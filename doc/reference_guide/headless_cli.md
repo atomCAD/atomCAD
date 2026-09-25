@@ -16,6 +16,9 @@ it is an ordinary command-line tool and nothing about it is AI-specific.
   [node network text format](../node_network_text_format.md).
 - `atomcad-cli edit` reads that same format back, either merging into the
   network (the default) or replacing it (`--replace`).
+- `atomcad-cli run <node>` presses a [`chemisorb`](./nodes/atomic.md#chemisorb)
+  node's **Run** button: evaluation never runs that search, so without `run` a
+  script only ever sees the node's plan.
 
 Query output is valid input to `edit --replace`, so a whole network can be read,
 adjusted in a text editor, and applied back.
@@ -80,7 +83,7 @@ network before and after, and which nodes the layout pass moved. Edits refused
 because the network is locked against CLI writes are recorded too; locking a
 network does not hide the attempts.
 
-Every *other* command — `query`, `evaluate`, `screenshot`, `camera`, `display`,
+Every *other* command — `query`, `evaluate`, `run`, `screenshot`, `camera`, `display`,
 `networks …`, `load`, `save`, `new` — lands on the same timeline as a one-line
 entry: the request, how it ended, how long it took. That is what makes the log
 readable as a session rather than a list of edits: it shows whether the model

@@ -658,5 +658,7 @@ mod text_format_visibility_test;
 #[path = "structure_designer/text_format_zone_body_path_test.rs"]
 mod text_format_zone_body_path_test;
 
+#[path = "structure_designer/chemisorb_node_test.rs"]
+mod chemisorb_node_test;
 #[path = "structure_designer/proxy_node_test.rs"]
 mod proxy_node_test;

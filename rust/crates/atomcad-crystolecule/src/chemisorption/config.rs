@@ -1,5 +1,6 @@
 //! What a chemisorption search is tunable by, and what can go wrong.
 
+use super::transfer::{TransferRule, is_transferable_element};
 use crate::atomic_structure::TagError;
 use crate::simulation::uff::VdwMode;
 
@@ -30,7 +31,14 @@ pub struct ChemisorptionSearch {
     /// first guess, 1.0 Å, pruned the best candidate in most poses.
     pub pair_tolerance: f64,
     /// At most this many bonds formed per hypothesis. `None` = no cap.
+    /// Transfers are not counted.
     pub max_formed_bonds: Option<usize>,
+    /// The enabled transfer kinds (§6.1 of the design). Empty = bond forming
+    /// only.
+    pub transfers: Vec<TransferRule>,
+    /// At most this many transfers per hypothesis, summed over all rules.
+    /// Read only when `transfers` is non-empty.
+    pub max_transfers: usize,
     /// At most this many valid hypotheses are relaxed; past it the search is
     /// truncated and makes no exhaustiveness claim.
     pub budget: usize,
@@ -50,6 +58,8 @@ impl Default for ChemisorptionSearch {
             reach: 3.5,
             pair_tolerance: 3.0,
             max_formed_bonds: None,
+            transfers: Vec::new(),
+            max_transfers: 1,
             budget: 10_000,
             max_iterations: 2000,
             gradient_rms_tolerance: 1e-3,
@@ -70,6 +80,19 @@ impl ChemisorptionSearch {
         }
         if self.max_formed_bonds == Some(0) {
             return invalid("max formed bonds must be at least 1");
+        }
+        if self.max_transfers == 0 {
+            return invalid("max transfers must be at least 1");
+        }
+        if let Some(rule) = self
+            .transfers
+            .iter()
+            .find(|r| !is_transferable_element(r.element))
+        {
+            return Err(ChemisorptionError::InvalidConfig(format!(
+                "a transfer moves one monovalent atom, H or a halogen; {} is not one",
+                crate::atomic_constants::element_symbol(rule.element)
+            )));
         }
         if self.budget == 0 {
             return invalid("budget must be at least 1");

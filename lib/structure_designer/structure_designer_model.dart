@@ -33,6 +33,8 @@ import 'package:flutter_cad/src/rust/api/structure_designer/mechanosynth_edit_ap
     as mechanosynth_edit_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/proxy_api.dart'
     as proxy_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/chemisorb_api.dart'
+    as chemisorb_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/tag_api.dart'
     as tag_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/profiling_api.dart'
@@ -3380,6 +3382,29 @@ class StructureDesignerModel extends ChangeNotifier {
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
+  }
+
+  /// Writes the `chemisorb` node's nine settings. The stored search is kept
+  /// on the Rust side; it goes stale if the new settings no longer match it.
+  void setChemisorbData(BigInt nodeId, APIChemisorbData data) {
+    chemisorb_api.setChemisorbData(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
+    refreshFromKernel();
+  }
+
+  /// **Run** on a `chemisorb` node: the search itself, synchronous (seconds to
+  /// minutes). Throws the kernel's message when the search cannot run. Call it
+  /// behind a modal placard (`runExecuteWithPlacard`'s recipe).
+  APIChemisorbRunResult runChemisorb(BigInt nodeId) {
+    try {
+      return chemisorb_api.runChemisorb(
+          scopePath: scopeChainToBytes(propertyEditorScopeChain),
+          nodeId: nodeId);
+    } finally {
+      refreshFromKernel();
+    }
   }
 
   void setTagData(BigInt nodeId, APITagData data) {

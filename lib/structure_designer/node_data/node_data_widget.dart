@@ -38,6 +38,9 @@ import 'package:flutter_cad/src/rust/api/structure_designer/mechanosynth_api.dar
 import 'package:flutter_cad/structure_designer/node_data/xray_editor.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/xray_api.dart'
     as xray_api;
+import 'package:flutter_cad/structure_designer/node_data/chemisorb_editor.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/chemisorb_api.dart'
+    as chemisorb_api;
 import 'package:flutter_cad/structure_designer/node_data/proxy_editor.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/proxy_api.dart'
     as proxy_api;
@@ -672,6 +675,22 @@ class NodeDataWidget extends StatelessWidget {
           nodeId: selectedNode.id,
           data: xrayData,
           model: model,
+        );
+      case 'chemisorb':
+        // Scope-aware fetch of the nine settings. The report (plan or result)
+        // is not here: it lives in the selected node's eval cache and the
+        // editor reads it itself.
+        final chemisorbData = chemisorb_api.getChemisorbData(
+          scopePath: scopePath,
+          nodeId: selectedNode.id,
+        );
+        return ChemisorbEditor(
+          nodeId: selectedNode.id,
+          data: chemisorbData,
+          model: model,
+          // Pin 2, appended after adsorbate and substrate.
+          transfersConnected: selectedNode.inputPins.length > 2 &&
+              selectedNode.inputPins[2].connected,
         );
       case 'proxy':
         // Scope-aware fetch of the eight stored properties + the input's

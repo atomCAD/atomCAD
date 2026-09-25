@@ -1762,8 +1762,13 @@ impl NodeNetwork {
         }
     }
 
-    pub fn set_node_network_data(&mut self, node_id: u64, data: Box<dyn NodeData>) {
+    /// Replaces a node's data. The new data first inherits whatever runtime
+    /// state it opts into from the data it replaces
+    /// ([`NodeData::inherit_runtime_state`]) — the path every whole-data write
+    /// takes, the undo/redo of a property edit included.
+    pub fn set_node_network_data(&mut self, node_id: u64, mut data: Box<dyn NodeData>) {
         if let Some(node) = self.nodes.get_mut(&node_id) {
+            data.inherit_runtime_state(node.data.as_ref());
             node.data = data;
         }
     }

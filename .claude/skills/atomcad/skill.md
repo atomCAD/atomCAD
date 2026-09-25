@@ -520,6 +520,31 @@ first 10 atoms:
   ...
 ```
 
+### Run a chemisorb search
+
+`chemisorb` is the one node whose result evaluation never computes: `query` and
+`evaluate` only ever see its *plan* (`stats.searched = false`, no candidates).
+The search runs on an explicit action — the panel's Run button, or:
+
+```bash
+atomcad-cli run <node>      # by custom name or id, active network
+atomcad-cli run mount
+```
+
+It prints a summary (hypotheses relaxed, candidates listed, best score and bond
+inventory, a warning if the budget truncated the search). The result is stored on
+the node and output until an input or a setting changes; it is not saved with
+the file, so after `load` run again. Seconds to minutes.
+
+H transfers (OH legs handing their H to the surface, or feet abstracting
+surface H) are enabled through the optional `transfers` pin — note the
+`Record(Name)` spelling of the element type:
+
+```
+h_off = array { element_type: Record(ChemisorbTransfer), elements: [{ element: 1, direction: "to_substrate" }] }
+mount = chemisorb { adsorbate: tool, substrate: surface, transfers: h_off, max_transfers: 3 }
+```
+
 ### Node Discovery
 
 ```bash
@@ -704,6 +729,7 @@ Commands:
 - `edit` — Enter edit mode (incremental)
 - `replace`/`r` — Enter edit mode (replace entire network)
 - `evaluate`/`e <node>` — Evaluate a node
+- `run <node>` — Run a `chemisorb` node's search
 - `nodes` — List available node types
 - `describe`/`d <node>` — Describe a node type
 - `networks` — List all node networks

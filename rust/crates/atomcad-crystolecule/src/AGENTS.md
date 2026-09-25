@@ -37,8 +37,10 @@ crates/atomcad-crystolecule/src/
 ├── chemisorption/                  # Exhaustive chemisorption search: plan (enumerate) / evaluate (UFF relax + score)
 │   ├── config.rs                   # ChemisorptionSearch, ChemisorptionError, CHANGED_TAG
 │   ├── enumerate.rs                # plan(): sites, feet, depth-first site assignment, free_valence
+│   ├── fingerprint.rs              # input_fingerprint(): hash of everything a search depends on (keys a stored result)
 │   ├── relax.rs                    # one UFF relaxation with per-term energies (StrainTerms)
 │   ├── score.rs                    # bond enthalpy + electronegativity tables, Pauling estimate, BondInventory
+│   ├── transfer.rs                 # TransferRule / Transfer: candidate (D, X, A) triples, seating X on A
 │   └── report.rs                   # evaluate() / search(): Candidate, SearchReport, ranking
 ├── crystolecule_constants.rs       # Diamond unit cell size, default motif text
 ├── drawing_plane.rs                # 2D drawing plane embedded in 3D crystal
@@ -276,6 +278,27 @@ that are easy to erode:
 - The ranking is deterministic: relaxations run in parallel (rayon) but are
   collected in plan order and sorted by score, ties by the normalized bond
   set (`rank_candidates`).
+- **Both `VdwMode`s must work** — the app's default preference is the 6 Å
+  cutoff, and the `chemisorb` node follows it. `UffForceField::vdw_params()`
+  **panics** in cutoff mode (it keeps a neighbour list, not pair parameters),
+  so `relax.rs` derives the vdW term there as energy minus the bonded terms.
+  Tests that only use `AllPairs` will not catch a regression here.
+- `input_fingerprint` hashes exactly what a search depends on — never
+  selection or display flags, and of the tags only the side's reactive one —
+  so selecting an atom does not make a stored result stale. A new
+  `ChemisorptionSearch` field must be added to it (the destructuring there
+  makes that a compile error).
+- **Transfers are enumerated before bond forming, and valence is checked on
+  the whole transfer set** (`Enumerator::with_transfer_set`): a transfer frees
+  its donor (the OH leg that can then bond) and fills its acceptor, and one
+  transfer can free the valence another needs. So a site or foot is any atom
+  with a free valence *or* a donor of some candidate transfer, and its
+  valence is recomputed per set. A transfer's moved atom is not in
+  `Hypothesis::formed` — the `X–A` bond lives in `transfers` — and dedupe keys
+  it by `(donor, element, acceptor)`, never by id, so the two H of an H₂O are
+  one move (`change_key`). Only H and the halogens transfer (a rule for any
+  other element is an `InvalidConfig`), and a moving atom is never also a
+  donor or acceptor in the same set.
 
 **Memory Layout**: `InlineBond` packs atom_id (29 bits) + bond_order (3 bits) into 4 bytes. `SmallVec<[InlineBond; 4]>` keeps up to 4 bonds inline per atom. Spatial grid (FxHashMap, cell size 4.0 Å) enables O(1) neighbor queries. `AtomicStructure` no longer carries a `frame_transform` — movement nodes bake transforms directly into atom positions (see `doc/design_lattice_space_refactoring.md` Appendix B).
 
@@ -625,7 +648,8 @@ O(n²), compares flags and tag names). Design doc:
 - `CifError` (io/cif/symmetry, structure) — symmetry operation or crystal data extraction errors
 - `CifLoadError` (io/cif/mod) — top-level load errors (wraps parse/extraction/IO)
 - `CubeError` (io/cube_loader) — Io / Parse / Unsupported / Field variants
-- `ChemisorptionError` (chemisorption/config) — InvalidConfig / UnknownTag (a
+- `ChemisorptionError` (chemisorption/config) — InvalidConfig (incl. a transfer
+  rule for a non-monovalent element) / UnknownTag (a
   reactive tag no atom carries: an error, not "found nothing") /
   UnscoredElement / Relaxation / Tag
 - `FieldError` (field) — grid description problems (zero dimension, sample-count
@@ -658,7 +682,7 @@ motif_bond_inference → Motif, UnitCellStruct, atomic_constants
 miller        →  glam only (no crystolecule types at all)
 patch         →  AtomicStructure, UnitCellStruct, weld, hydrogen_passivation, guided_placement, GeoNode
 proxy_cut     →  AtomicStructure, atomic_constants, atomic_structure_utils, hydrogen_passivation
-chemisorption →  AtomicStructure, atomic_constants, guided_placement, simulation (rayon for the relaxations)
+chemisorption →  AtomicStructure, atomic_constants, guided_placement, hydrogen_passivation (terminator_bond_length, seating a transferred atom), simulation (rayon for the relaxations)
 mechanosynth  →  AtomicStructure, atomic_constants (serde_json for the two JSON files)
 guided_placement → AtomicStructure, simulation/uff (typer, params)
 hydrogen_passivation → AtomicStructure, atomic_constants, guided_placement
@@ -692,7 +716,7 @@ tests/crystolecule/
 ├── field_test.rs                  # ScalarField contract: bounds, interpolation, gradients
 ├── patch_test.rs                  # Cell selection, region depths, apply_patch pipeline
 ├── patch_build_test.rs            # Tiling-vector validation, tile extraction
-├── chemisorption_test.rs          # plan counts/pruning/valence/tags, enthalpy tables, ranking, ethylene di-σ known answer, ignored pruning calibration
+├── chemisorption_test.rs          # plan counts/pruning/valence/tags, enthalpy tables, ranking, transfers (candidates, dedupe, seating, OH tripod), ethylene di-σ and water (a UFF tie) known answers, ignored pruning calibration
 ├── proxy_cut_test.rs              # Riders, bond distances, fill/rm_single keep set, severed-bond caps; the §4.3 bulk-silicon fill table
 ├── concave_rebond_test.rs         # Concave-corner rebonding; clash detector re-derived independently
 ├── io/

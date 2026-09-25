@@ -85,7 +85,7 @@ pub fn relax(
     };
     let result = minimize_with_force_field(&ff, &mut p, &minimization, &frozen);
 
-    let terms = StrainTerms {
+    let mut terms = StrainTerms {
         stretch: ff
             .bond_params
             .iter()
@@ -106,7 +106,17 @@ pub fn relax(
             .iter()
             .map(|i| inversion_energy(i, &p))
             .sum(),
-        vdw: ff.vdw_params().iter().map(|v| vdw_energy(v, &p)).sum(),
+        vdw: 0.0,
+    };
+    // With a cutoff the force field keeps a neighbour list instead of a pair
+    // parameter list (`vdw_params` panics), so the vdW term is what is left of
+    // the total once the bonded terms are taken out. Both ways the terms sum
+    // to the energy.
+    terms.vdw = match config.vdw_mode {
+        VdwMode::AllPairs => ff.vdw_params().iter().map(|v| vdw_energy(v, &p)).sum(),
+        VdwMode::Cutoff(_) => {
+            result.energy - (terms.stretch + terms.bend + terms.torsion + terms.inversion)
+        }
     };
     let at = |i: usize| DVec3::new(p[i * 3], p[i * 3 + 1], p[i * 3 + 2]);
     let worst_bond_ratio = ff

@@ -15,6 +15,7 @@ use super::nodes::atom_replace::get_node_type as atom_replace_get_node_type;
 use super::nodes::atom_union::get_node_type as atom_union_get_node_type;
 use super::nodes::bool::get_node_type as bool_get_node_type;
 use super::nodes::build_script::get_node_type as build_script_get_node_type;
+use super::nodes::chemisorb::get_node_type as chemisorb_get_node_type;
 use super::nodes::circle::get_node_type as circle_get_node_type;
 use super::nodes::closure::get_node_type as closure_get_node_type;
 use super::nodes::collect::get_node_type as collect_get_node_type;
@@ -870,6 +871,98 @@ impl NodeTypeRegistry {
             ),
         );
 
+        // The `chemisorb` node's records (the chemisorption search design,
+        // §6.1, §7.2): one enabled transfer kind, the input of its `transfers`
+        // pin — the `Element` / `Enum` hints make `record_construct` offer an
+        // element dropdown and the two directions, cosmetically only (the node
+        // validates both at eval); one per listed candidate, each with its structure so a single
+        // `map` can filter, label or export them; its UFF strain by term; and
+        // the whole search, including what was not listed. Fixed schemas with
+        // plain (non-`Optional`) fields, for the reasons `MechanosynthStep`
+        // gives. Append new fields last.
+        ret.built_in_record_type_defs.insert(
+            "ChemisorbTransfer".to_string(),
+            RecordTypeDef::from_hinted_fields(
+                "ChemisorbTransfer",
+                vec![
+                    (
+                        "element".to_string(),
+                        DataType::Int,
+                        Some(FieldEditorHint::Element),
+                    ),
+                    (
+                        "direction".to_string(),
+                        DataType::String,
+                        Some(FieldEditorHint::Enum(vec![
+                            "to_substrate".to_string(),
+                            "to_adsorbate".to_string(),
+                        ])),
+                    ),
+                ],
+            ),
+        );
+        ret.built_in_record_type_defs.insert(
+            "ChemisorbStrainTerms".to_string(),
+            RecordTypeDef::from_named_fields(
+                "ChemisorbStrainTerms",
+                vec![
+                    ("stretch".to_string(), DataType::Float),
+                    ("bend".to_string(), DataType::Float),
+                    ("torsion".to_string(), DataType::Float),
+                    ("inversion".to_string(), DataType::Float),
+                    ("vdw".to_string(), DataType::Float),
+                ],
+            ),
+        );
+        ret.built_in_record_type_defs.insert(
+            "ChemisorbCandidate".to_string(),
+            RecordTypeDef::from_named_fields(
+                "ChemisorbCandidate",
+                vec![
+                    ("structure".to_string(), DataType::Molecule),
+                    ("rank".to_string(), DataType::Int),
+                    ("score".to_string(), DataType::Float),
+                    ("strain".to_string(), DataType::Float),
+                    ("bond_energy".to_string(), DataType::Float),
+                    ("estimated".to_string(), DataType::Bool),
+                    ("bonds".to_string(), DataType::String),
+                    ("sites".to_string(), DataType::String),
+                    ("formed_bonds".to_string(), DataType::Int),
+                    ("transfers".to_string(), DataType::Int),
+                    ("converged".to_string(), DataType::Bool),
+                    ("worst_bond_ratio".to_string(), DataType::Float),
+                    (
+                        "terms".to_string(),
+                        DataType::Record(RecordType::Named("ChemisorbStrainTerms".to_string())),
+                    ),
+                ],
+            ),
+        );
+        ret.built_in_record_type_defs.insert(
+            "ChemisorbStats".to_string(),
+            RecordTypeDef::from_named_fields(
+                "ChemisorbStats",
+                vec![
+                    ("feet".to_string(), DataType::Int),
+                    ("sites_in_reach".to_string(), DataType::Int),
+                    ("considered".to_string(), DataType::Int),
+                    ("pruned_valence".to_string(), DataType::Int),
+                    ("pruned_pair_tolerance".to_string(), DataType::Int),
+                    ("duplicates".to_string(), DataType::Int),
+                    ("searched".to_string(), DataType::Bool),
+                    ("stale".to_string(), DataType::Bool),
+                    ("relaxed".to_string(), DataType::Int),
+                    ("to_relax".to_string(), DataType::Int),
+                    ("unconverged".to_string(), DataType::Int),
+                    ("listed".to_string(), DataType::Int),
+                    ("truncated".to_string(), DataType::Bool),
+                    ("estimated_pairs".to_string(), DataType::String),
+                    ("seconds".to_string(), DataType::Float),
+                    ("transfer_candidates".to_string(), DataType::Int),
+                ],
+            ),
+        );
+
         // Annotation nodes
         ret.add_node_type(comment_get_node_type());
 
@@ -983,6 +1076,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(export_build_script_get_node_type());
         ret.add_node_type(relax_get_node_type());
         ret.add_node_type(proxy_get_node_type());
+        ret.add_node_type(chemisorb_get_node_type());
         ret.add_node_type(passivate_get_node_type());
         ret.add_node_type(remove_hydrogen_get_node_type());
         ret.add_node_type(infer_bonds_get_node_type());

@@ -11,6 +11,8 @@ import 'package:flutter_cad/src/rust/api/structure_designer/ai_history_api.dart'
     as ai_history_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
     as sd_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/chemisorb_api.dart'
+    as chemisorb_api;
 import 'package:flutter_cad/src/rust/api/common_api.dart' as common_api;
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_cad/src/rust/api/screenshot_api.dart' as screenshot_api;
@@ -30,6 +32,8 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_p
 /// - `GET /nodes?category=<cat>&verbose=true` - List all available node types by category
 /// - `GET /describe?node=<name>` - Get detailed information about a specific node type
 /// - `GET /evaluate?node=<id>&verbose=true` - Evaluate a node and return its result
+/// - `POST /run?node=<id>` - Run a `chemisorb` node's search (the panel's Run
+///   button); returns a text summary. Seconds to minutes.
 /// - `GET /camera?eye=x,y,z&target=x,y,z&up=x,y,z&orthographic=true` - Control camera
 /// - `GET /screenshot?output=<path>&width=<w>&height=<h>` - Capture viewport to PNG
 /// - `GET /display` - Get current display preferences as JSON
@@ -221,6 +225,9 @@ class AiAssistantServer {
           break;
         case '/evaluate':
           await _handleEvaluate(request);
+          break;
+        case '/run':
+          await _handleRun(request);
           break;
         case '/camera':
           await _handleCamera(request);
@@ -434,6 +441,40 @@ class AiAssistantServer {
         request.response.write(result.displayString);
       }
     } catch (e) {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(jsonEncode({
+        'error': e.toString(),
+      }));
+    }
+  }
+
+  /// Runs a `chemisorb` node's search — the one CLI action that computes
+  /// something evaluation never will (the node's `eval` only plans). The
+  /// search is synchronous and may take minutes; the result is stored on the
+  /// node and shown by the next refresh, so the UI is told to refresh too.
+  Future<void> _handleRun(HttpRequest request) async {
+    if (request.method != 'POST') {
+      request.response.statusCode = HttpStatus.methodNotAllowed;
+      return;
+    }
+    final nodeIdentifier = request.uri.queryParameters['node'];
+    if (nodeIdentifier == null || nodeIdentifier.isEmpty) {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(jsonEncode({
+        'error': 'Missing required parameter: node',
+      }));
+      return;
+    }
+    try {
+      final summary =
+          chemisorb_api.runChemisorbNode(nodeIdentifier: nodeIdentifier);
+      onNetworkEdited?.call();
+      request.response.headers.contentType = ContentType.text;
+      request.response.write(summary);
+    } catch (e) {
+      onNetworkEdited?.call();
       request.response.statusCode = HttpStatus.badRequest;
       request.response.headers.contentType = ContentType.json;
       request.response.write(jsonEncode({

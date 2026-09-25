@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'structure_designer_api_types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `hash`
 
 /// Result of add_bond_pointer_move. Contains all info Flutter needs to draw
 /// the rubber-band preview line as a 2D overlay.
@@ -772,6 +772,323 @@ class APICanvasViewport {
           panX == other.panX &&
           panY == other.panY &&
           zoomLevel == other.zoomLevel;
+}
+
+/// Dart-facing twin of the settings of
+/// `atomcad_structure_designer::nodes::chemisorb::ChemisorbData` — its ten
+/// persisted properties. The stored search is not here: it never crosses to
+/// Dart, and the setter keeps it.
+class APIChemisorbData {
+  /// Adsorbate reactive atoms: those carrying this tag. Empty = all atoms.
+  final String adsorbateTag;
+
+  /// Substrate reactive atoms: those carrying this tag. Empty = all atoms.
+  final String substrateTag;
+
+  /// Maximum adsorbate atom to site distance for a bond (Å).
+  final double reach;
+
+  /// Pair tolerance (Å); 0 = off.
+  final double pairTolerance;
+
+  /// At most this many bonds formed per hypothesis; 0 = no cap.
+  final int maxFormedBonds;
+
+  /// At most this many transfers per hypothesis; read only while the
+  /// `transfers` pin carries a record.
+  final int maxTransfers;
+
+  /// At most this many candidates listed.
+  final int topN;
+
+  /// Only candidates within this many kcal/mol of the best are listed.
+  final double energyWindow;
+
+  /// At most this many hypotheses relaxed.
+  final int budget;
+
+  /// UFF iteration limit per relaxation.
+  final int maxIterations;
+
+  const APIChemisorbData({
+    required this.adsorbateTag,
+    required this.substrateTag,
+    required this.reach,
+    required this.pairTolerance,
+    required this.maxFormedBonds,
+    required this.maxTransfers,
+    required this.topN,
+    required this.energyWindow,
+    required this.budget,
+    required this.maxIterations,
+  });
+
+  @override
+  int get hashCode =>
+      adsorbateTag.hashCode ^
+      substrateTag.hashCode ^
+      reach.hashCode ^
+      pairTolerance.hashCode ^
+      maxFormedBonds.hashCode ^
+      maxTransfers.hashCode ^
+      topN.hashCode ^
+      energyWindow.hashCode ^
+      budget.hashCode ^
+      maxIterations.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIChemisorbData &&
+          runtimeType == other.runtimeType &&
+          adsorbateTag == other.adsorbateTag &&
+          substrateTag == other.substrateTag &&
+          reach == other.reach &&
+          pairTolerance == other.pairTolerance &&
+          maxFormedBonds == other.maxFormedBonds &&
+          maxTransfers == other.maxTransfers &&
+          topN == other.topN &&
+          energyWindow == other.energyWindow &&
+          budget == other.budget &&
+          maxIterations == other.maxIterations;
+}
+
+/// What the `chemisorb` panel renders after a root evaluation of the selected
+/// node: the plan (no rows) or the stored result.
+class APIChemisorbReport {
+  final APIChemisorbStats stats;
+  final List<APIChemisorbRow> rows;
+
+  const APIChemisorbReport({
+    required this.stats,
+    required this.rows,
+  });
+
+  @override
+  int get hashCode => stats.hashCode ^ rows.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIChemisorbReport &&
+          runtimeType == other.runtimeType &&
+          stats == other.stats &&
+          rows == other.rows;
+}
+
+/// One listed candidate (twin of `ChemisorbRowView`), kcal/mol throughout.
+class APIChemisorbRow {
+  final BigInt rank;
+  final double score;
+  final double strain;
+  final double bondEnergy;
+  final bool estimated;
+  final String bonds;
+  final String sites;
+  final BigInt formedBonds;
+  final BigInt transfers;
+  final bool converged;
+  final double worstBondRatio;
+  final double stretch;
+  final double bend;
+  final double torsion;
+  final double inversion;
+  final double vdw;
+
+  const APIChemisorbRow({
+    required this.rank,
+    required this.score,
+    required this.strain,
+    required this.bondEnergy,
+    required this.estimated,
+    required this.bonds,
+    required this.sites,
+    required this.formedBonds,
+    required this.transfers,
+    required this.converged,
+    required this.worstBondRatio,
+    required this.stretch,
+    required this.bend,
+    required this.torsion,
+    required this.inversion,
+    required this.vdw,
+  });
+
+  @override
+  int get hashCode =>
+      rank.hashCode ^
+      score.hashCode ^
+      strain.hashCode ^
+      bondEnergy.hashCode ^
+      estimated.hashCode ^
+      bonds.hashCode ^
+      sites.hashCode ^
+      formedBonds.hashCode ^
+      transfers.hashCode ^
+      converged.hashCode ^
+      worstBondRatio.hashCode ^
+      stretch.hashCode ^
+      bend.hashCode ^
+      torsion.hashCode ^
+      inversion.hashCode ^
+      vdw.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIChemisorbRow &&
+          runtimeType == other.runtimeType &&
+          rank == other.rank &&
+          score == other.score &&
+          strain == other.strain &&
+          bondEnergy == other.bondEnergy &&
+          estimated == other.estimated &&
+          bonds == other.bonds &&
+          sites == other.sites &&
+          formedBonds == other.formedBonds &&
+          transfers == other.transfers &&
+          converged == other.converged &&
+          worstBondRatio == other.worstBondRatio &&
+          stretch == other.stretch &&
+          bend == other.bend &&
+          torsion == other.torsion &&
+          inversion == other.inversion &&
+          vdw == other.vdw;
+}
+
+/// What one Run found (twin of `ChemisorbRunSummary`).
+class APIChemisorbRunResult {
+  final BigInt relaxed;
+  final BigInt listed;
+  final double? bestScore;
+  final String bestBonds;
+  final bool truncated;
+  final BigInt unconverged;
+  final double seconds;
+
+  const APIChemisorbRunResult({
+    required this.relaxed,
+    required this.listed,
+    this.bestScore,
+    required this.bestBonds,
+    required this.truncated,
+    required this.unconverged,
+    required this.seconds,
+  });
+
+  @override
+  int get hashCode =>
+      relaxed.hashCode ^
+      listed.hashCode ^
+      bestScore.hashCode ^
+      bestBonds.hashCode ^
+      truncated.hashCode ^
+      unconverged.hashCode ^
+      seconds.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIChemisorbRunResult &&
+          runtimeType == other.runtimeType &&
+          relaxed == other.relaxed &&
+          listed == other.listed &&
+          bestScore == other.bestScore &&
+          bestBonds == other.bestBonds &&
+          truncated == other.truncated &&
+          unconverged == other.unconverged &&
+          seconds == other.seconds;
+}
+
+/// The whole search, as the `stats` pin carries it (twin of
+/// `ChemisorbStatsView`).
+class APIChemisorbStats {
+  final BigInt feet;
+  final BigInt sitesInReach;
+
+  /// Candidate transfers the `transfers` records allow; 0 without them.
+  final BigInt transferCandidates;
+  final BigInt considered;
+  final BigInt prunedValence;
+  final BigInt prunedPairTolerance;
+  final BigInt duplicates;
+
+  /// The node outputs a search result for its current inputs.
+  final bool searched;
+
+  /// A result exists but was computed from other inputs: Run again.
+  final bool stale;
+  final BigInt relaxed;
+  final BigInt toRelax;
+  final BigInt unconverged;
+  final BigInt listed;
+
+  /// The budget was hit; the search is not exhaustive.
+  final bool truncated;
+
+  /// Bond pairs scored by a Pauling estimate, e.g. `"N–Si"`; empty if none.
+  final String estimatedPairs;
+  final double seconds;
+
+  const APIChemisorbStats({
+    required this.feet,
+    required this.sitesInReach,
+    required this.transferCandidates,
+    required this.considered,
+    required this.prunedValence,
+    required this.prunedPairTolerance,
+    required this.duplicates,
+    required this.searched,
+    required this.stale,
+    required this.relaxed,
+    required this.toRelax,
+    required this.unconverged,
+    required this.listed,
+    required this.truncated,
+    required this.estimatedPairs,
+    required this.seconds,
+  });
+
+  @override
+  int get hashCode =>
+      feet.hashCode ^
+      sitesInReach.hashCode ^
+      transferCandidates.hashCode ^
+      considered.hashCode ^
+      prunedValence.hashCode ^
+      prunedPairTolerance.hashCode ^
+      duplicates.hashCode ^
+      searched.hashCode ^
+      stale.hashCode ^
+      relaxed.hashCode ^
+      toRelax.hashCode ^
+      unconverged.hashCode ^
+      listed.hashCode ^
+      truncated.hashCode ^
+      estimatedPairs.hashCode ^
+      seconds.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIChemisorbStats &&
+          runtimeType == other.runtimeType &&
+          feet == other.feet &&
+          sitesInReach == other.sitesInReach &&
+          transferCandidates == other.transferCandidates &&
+          considered == other.considered &&
+          prunedValence == other.prunedValence &&
+          prunedPairTolerance == other.prunedPairTolerance &&
+          duplicates == other.duplicates &&
+          searched == other.searched &&
+          stale == other.stale &&
+          relaxed == other.relaxed &&
+          toRelax == other.toRelax &&
+          unconverged == other.unconverged &&
+          listed == other.listed &&
+          truncated == other.truncated &&
+          estimatedPairs == other.estimatedPairs &&
+          seconds == other.seconds;
 }
 
 class APICircleData {

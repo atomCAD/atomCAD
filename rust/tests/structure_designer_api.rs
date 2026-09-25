@@ -60,6 +60,8 @@ mod node_type_views_zone_body_test;
 #[path = "structure_designer_api/preferences_twin_test.rs"]
 mod preferences_twin_test;
 
+#[path = "structure_designer_api/chemisorb_api_test.rs"]
+mod chemisorb_api_test;
 #[path = "structure_designer_api/proxy_api_test.rs"]
 mod proxy_api_test;
 

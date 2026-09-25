@@ -12,6 +12,7 @@ import 'api/screenshot_api.dart';
 import 'api/structure_designer/ai_assistant_api.dart';
 import 'api/structure_designer/ai_history_api.dart';
 import 'api/structure_designer/atom_edit_api.dart';
+import 'api/structure_designer/chemisorb_api.dart';
 import 'api/structure_designer/edit_atom_api.dart';
 import 'api/structure_designer/facet_shell_api.dart';
 import 'api/structure_designer/field_distribution_api.dart';
@@ -149,6 +150,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APICanvasViewport dco_decode_api_canvas_viewport(dynamic raw);
+
+  @protected
+  APIChemisorbData dco_decode_api_chemisorb_data(dynamic raw);
+
+  @protected
+  APIChemisorbReport dco_decode_api_chemisorb_report(dynamic raw);
+
+  @protected
+  APIChemisorbRow dco_decode_api_chemisorb_row(dynamic raw);
+
+  @protected
+  APIChemisorbRunResult dco_decode_api_chemisorb_run_result(dynamic raw);
+
+  @protected
+  APIChemisorbStats dco_decode_api_chemisorb_stats(dynamic raw);
 
   @protected
   APICircleData dco_decode_api_circle_data(dynamic raw);
@@ -748,6 +764,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APICanvasViewport dco_decode_box_autoadd_api_canvas_viewport(dynamic raw);
 
   @protected
+  APIChemisorbData dco_decode_box_autoadd_api_chemisorb_data(dynamic raw);
+
+  @protected
+  APIChemisorbReport dco_decode_box_autoadd_api_chemisorb_report(dynamic raw);
+
+  @protected
   APICircleData dco_decode_box_autoadd_api_circle_data(dynamic raw);
 
   @protected
@@ -1208,6 +1230,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<APICandidateNode> dco_decode_list_api_candidate_node(dynamic raw);
 
   @protected
+  List<APIChemisorbRow> dco_decode_list_api_chemisorb_row(dynamic raw);
+
+  @protected
   List<APICommentAnchor> dco_decode_list_api_comment_anchor(dynamic raw);
 
   @protected
@@ -1463,6 +1488,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APICanvasViewport? dco_decode_opt_box_autoadd_api_canvas_viewport(
+      dynamic raw);
+
+  @protected
+  APIChemisorbData? dco_decode_opt_box_autoadd_api_chemisorb_data(dynamic raw);
+
+  @protected
+  APIChemisorbReport? dco_decode_opt_box_autoadd_api_chemisorb_report(
       dynamic raw);
 
   @protected
@@ -2054,6 +2086,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APICanvasViewport sse_decode_api_canvas_viewport(
+      SseDeserializer deserializer);
+
+  @protected
+  APIChemisorbData sse_decode_api_chemisorb_data(SseDeserializer deserializer);
+
+  @protected
+  APIChemisorbReport sse_decode_api_chemisorb_report(
+      SseDeserializer deserializer);
+
+  @protected
+  APIChemisorbRow sse_decode_api_chemisorb_row(SseDeserializer deserializer);
+
+  @protected
+  APIChemisorbRunResult sse_decode_api_chemisorb_run_result(
+      SseDeserializer deserializer);
+
+  @protected
+  APIChemisorbStats sse_decode_api_chemisorb_stats(
       SseDeserializer deserializer);
 
   @protected
@@ -2739,6 +2789,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIChemisorbData sse_decode_box_autoadd_api_chemisorb_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIChemisorbReport sse_decode_box_autoadd_api_chemisorb_report(
+      SseDeserializer deserializer);
+
+  @protected
   APICircleData sse_decode_box_autoadd_api_circle_data(
       SseDeserializer deserializer);
 
@@ -3296,6 +3354,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  List<APIChemisorbRow> sse_decode_list_api_chemisorb_row(
+      SseDeserializer deserializer);
+
+  @protected
   List<APICommentAnchor> sse_decode_list_api_comment_anchor(
       SseDeserializer deserializer);
 
@@ -3595,6 +3657,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APICanvasViewport? sse_decode_opt_box_autoadd_api_canvas_viewport(
+      SseDeserializer deserializer);
+
+  @protected
+  APIChemisorbData? sse_decode_opt_box_autoadd_api_chemisorb_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIChemisorbReport? sse_decode_opt_box_autoadd_api_chemisorb_report(
       SseDeserializer deserializer);
 
   @protected
@@ -4279,6 +4349,26 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_canvas_viewport(
       APICanvasViewport self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_chemisorb_data(
+      APIChemisorbData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_chemisorb_report(
+      APIChemisorbReport self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_chemisorb_row(
+      APIChemisorbRow self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_chemisorb_run_result(
+      APIChemisorbRunResult self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_chemisorb_stats(
+      APIChemisorbStats self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_circle_data(APICircleData self, SseSerializer serializer);
@@ -5012,6 +5102,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APICanvasViewport self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_api_chemisorb_data(
+      APIChemisorbData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_chemisorb_report(
+      APIChemisorbReport self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_api_circle_data(
       APICircleData self, SseSerializer serializer);
 
@@ -5579,6 +5677,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<APICandidateNode> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_api_chemisorb_row(
+      List<APIChemisorbRow> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_api_comment_anchor(
       List<APICommentAnchor> self, SseSerializer serializer);
 
@@ -5887,6 +5989,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_canvas_viewport(
       APICanvasViewport? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_chemisorb_data(
+      APIChemisorbData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_chemisorb_report(
+      APIChemisorbReport? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_circle_data(

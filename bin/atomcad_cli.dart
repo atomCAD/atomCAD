@@ -72,6 +72,8 @@ Future<void> main(List<String> args) async {
     ..addFlag('verbose',
         abbr: 'v', defaultsTo: false, help: 'Show detailed output');
 
+  final runParser = ArgParser();
+
   final cameraParser = ArgParser()
     ..addOption('eye', help: 'Camera position as x,y,z')
     ..addOption('target', help: 'Look-at point as x,y,z')
@@ -128,6 +130,7 @@ Future<void> main(List<String> args) async {
   parser.addCommand('nodes', nodesParser);
   parser.addCommand('describe', describeParser);
   parser.addCommand('evaluate', evaluateParser);
+  parser.addCommand('run', runParser);
   parser.addCommand('camera', cameraParser);
   parser.addCommand('screenshot', screenshotParser);
   parser.addCommand('display', displayParser);
@@ -218,6 +221,14 @@ Future<void> main(List<String> args) async {
       final verbose = command['verbose'] as bool;
       await _runEvaluate(serverUrl, nodeId, verbose);
       break;
+    case 'run':
+      if (command.rest.isEmpty) {
+        stderr.writeln('Error: Missing node identifier');
+        stderr.writeln('Usage: atomcad-cli run <node>');
+        exit(1);
+      }
+      await _runRun(serverUrl, command.rest.first);
+      break;
     case 'camera':
       await _runCamera(serverUrl, command);
       break;
@@ -275,6 +286,8 @@ void _printUsage() {
       '  atomcad-cli evaluate <node_id>        Evaluate a node and show result');
   stdout.writeln(
       '  atomcad-cli evaluate <node_id> -v     Evaluate with detailed output');
+  stdout.writeln(
+      '  atomcad-cli run <node>                Run a chemisorb search (its Run button)');
   stdout.writeln(
       '  atomcad-cli camera                    Get current camera state');
   stdout.writeln('  atomcad-cli camera --eye x,y,z --target x,y,z --up x,y,z');
@@ -348,6 +361,8 @@ void _printReplHelp() {
   stdout.writeln('  describe, d <node>  Describe a specific node type');
   stdout.writeln('  evaluate, e <node>  Evaluate a node and show result');
   stdout.writeln('  evaluate -v <node>  Evaluate with detailed output');
+  stdout
+      .writeln('  run <node>          Run a chemisorb search (its Run button)');
   stdout.writeln('  camera, c           Get current camera state');
   stdout.writeln('  camera --eye x,y,z --target x,y,z --up x,y,z');
   stdout.writeln('                      Set camera position');
@@ -572,6 +587,28 @@ Future<void> _runEvaluate(
     if (response.statusCode == 200) {
       stdout.write(response.body);
       // Ensure trailing newline
+      if (response.body.isNotEmpty && !response.body.endsWith('\n')) {
+        stdout.writeln();
+      }
+    } else {
+      stderr.writeln('Error: Server returned ${response.statusCode}');
+      stderr.writeln(response.body);
+    }
+  } catch (e) {
+    stderr.writeln('Error: Failed to connect to atomCAD: $e');
+  }
+}
+
+/// Runs a `chemisorb` node's search. Evaluation (`evaluate`, `query`) never
+/// searches — it only ever shows the plan — so this is the one way a script
+/// gets a result. A search can take minutes, hence the long timeout.
+Future<void> _runRun(String serverUrl, String nodeIdentifier) async {
+  try {
+    final uri = Uri.parse('$serverUrl/run')
+        .replace(queryParameters: {'node': nodeIdentifier});
+    final response = await _post(uri).timeout(const Duration(hours: 1));
+    if (response.statusCode == 200) {
+      stdout.write(response.body);
       if (response.body.isNotEmpty && !response.body.endsWith('\n')) {
         stdout.writeln();
       }
@@ -1178,6 +1215,14 @@ Future<void> _runRepl(String serverUrl) async {
           stdout.writeln('Usage: evaluate <node_id> [-v]');
         } else {
           await _runEvaluate(serverUrl, nodeParts.first, hasVerbose);
+        }
+        break;
+
+      case 'run':
+        if (parts.length < 2) {
+          stdout.writeln('Usage: run <node>');
+        } else {
+          await _runRun(serverUrl, parts[1]);
         }
         break;
 

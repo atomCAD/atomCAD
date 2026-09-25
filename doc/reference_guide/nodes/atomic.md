@@ -985,6 +985,202 @@ rim — the number to worry about is the 1.42 Å of a *shared site*, which is wh
 This network is in the repository as
 `rust/tests/fixtures/proxy/proxy_worked_example.cnnd`.
 
+## chemisorb
+
+Finds **every way a posed molecule can bond to a surface**, relaxes each one
+with UFF and ranks them. Typical uses: mounting a tooltip molecule on a bare
+silicon apex (which feet bond to which surface atoms?), and checking how a
+small molecule lands. One search is one **pose**: the adsorbate exactly as it
+is wired, over the substrate exactly as it is wired. To compare poses, use one
+node per pose.
+
+**The search runs only when you press Run.** A search relaxes tens to
+thousands of structures and takes seconds to minutes, so the node never runs it
+while the network evaluates — not on an edit, not when you select it, not when
+a downstream node changes. Until you press **Run** in the properties panel (or
+run `atomcad-cli run <node>`), the node shows the **plan**: `best` is the
+combined pose, unrelaxed; `candidates` is empty; `stats` counts what a run
+would do, with `searched` false. After a run the node shows the result. If an
+input or a search setting changes afterwards, the node goes back to showing the
+plan with `stale` true, and the panel asks you to run again. Undo the change
+and the result comes back. Results are **not saved** with the file; after
+reopening a project, press Run again.
+
+**What counts as a site.** A *site* is a substrate atom that has a free
+valence (a dangling bond). There is no notion of a surface plane or a facet, so
+any geometry works: terraces, other facets, step edges, clusters. An atom with
+two dangling bonds can take two new bonds. An atom capped by a hydrogen is not
+a site, so placing hydrogens on the surface by hand is how you block spots —
+absolutely, unless H abstraction (`to_adsorbate`, below) is enabled.
+
+**What the search enumerates.** Each adsorbate atom with a free valence (a
+*foot*) forms at most one new bond, to a site within `reach` of it. Every
+combination is tried, including partial ones: a tripod bound by one, two or
+three legs gives three kinds of result, all ranked together. Frozen atoms are
+respected: no bond forms between two frozen atoms, and frozen atoms stay put
+during relaxation.
+
+**Transfers** (optional). Wire the `transfers` pin to also let a monovalent
+atom (hydrogen or a halogen) move across: from its only neighbour, the
+*donor*, to an atom with a free valence on the other side. Two directions:
+
+- `to_substrate` — an adsorbate atom gives one away. This is how **OH legs**
+  mount: the H goes to a site, which frees the O to bond to another site. Without
+  this, an OH oxygen is saturated and never bonds.
+- `to_adsorbate` — a surface atom gives one away to a radical foot (H
+  abstraction). With it enabled, a hydrogen on the surface is no longer an
+  absolute block: a foot within reach may take it.
+
+The donor must be a reactive atom of its side (the tags select donors, never
+the hydrogens, so you never tag H atoms); the moving atom must be within
+`reach` of where it goes; none of the three atoms may be frozen. Moving either
+of two equivalent atoms on one donor (the two H of water) counts once. The
+moved atom starts its relaxation on its new partner, on the side it came from.
+Moves within one side (H hopping along the surface) are not searched.
+
+**Input pins**
+
+- `adsorbate` (`HasAtoms`) — the molecule, posed over the substrate. Its feet
+  are the atoms with a free valence (a radical O, a bare C).
+- `substrate` (`HasAtoms`) — the surface, typically the output of a
+  [`proxy`](#proxy) node, frozen rim included.
+- `transfers` (array of `ChemisorbTransfer`, optional) — one record per
+  allowed transfer kind: `element` (the atomic number, 1 for H) and `direction`
+  (`to_substrate` or `to_adsorbate`); two records to allow both directions.
+  Disconnected, or an empty array, means bond forming only. Build it with an
+  `array` node of element type `ChemisorbTransfer` (the panel offers an element
+  dropdown and the two directions) or a `record_construct` per record.
+
+**Properties**
+
+- `adsorbate_tag`, `substrate_tag` (default empty = all atoms) — only atoms
+  carrying this tag take part. Tag the feet to keep a reactive working end out
+  of the search. A tag no atom carries is an error, so a typo does not read as
+  "found nothing".
+- `reach` (default 3.5 Å) — the largest foot-to-site distance considered.
+- `pair_tolerance` (default 3.0 Å, 0 = off) — prunes multi-bond patterns: two
+  chosen sites must be as far apart as the two feet bonding to them, within
+  this. The default is deliberately generous. UFF lets a molecule flex a long
+  way, and in calibration a tighter value (1 Å) pruned the best binding.
+- `max_formed_bonds` (default 0 = no cap) — at most this many bonds per
+  pattern. Transfers are not counted.
+- `max_transfers` (default 1) — at most this many transfers per pattern,
+  summed over all `transfers` records. Read only while `transfers` carries a
+  record (the panel greys it out otherwise); a tripod with three OH legs needs
+  3 to mount on all three.
+- `budget` (default 10 000) — at most this many relaxations. A search that hits
+  it is **not exhaustive**, and the panel says so.
+- `max_iterations` (default 2000) — the UFF iteration limit per relaxation.
+- `top_n` (default 10) and `energy_window` (default 30 kcal/mol) — how many
+  candidates are listed, and how far above the best they may score. These only
+  choose what is shown, so changing them re-lists a result instead of making it
+  stale.
+
+The relaxations follow the van der Waals setting in Preferences (the same one
+`relax` uses); changing it makes a result stale.
+
+**Output pins**
+
+- `best` (`Molecule`) — the rank-1 structure after a run (the relaxed pose if
+  nothing bonded); the unrelaxed pose before one.
+- `candidates` (array of `ChemisorbCandidate`) — the listed candidates in rank
+  order. Each record carries its `structure` (adsorbate + substrate, relaxed),
+  `rank`, `score`, `strain`, `bond_energy`, `bonds` (e.g. `formed 3× O–Si`, or
+  `formed 1× H–Si, 1× O–Si; broken 1× H–O` with a transfer), `sites` (the
+  formed bonds by atom id, then the transfers, e.g. `O2–Si45; H3 O2→Si47`),
+  `formed_bonds` (transfers not counted), `transfers`, `converged`, `worst_bond_ratio`, `estimated`, and `terms` (the
+  strain split into `stretch`, `bend`, `torsion`, `inversion`, `vdw`). A record
+  array draws nothing in the viewport; to look at another candidate, take its
+  `structure` field (`array_at` + `record_destructure`).
+- `stats` (`ChemisorbStats`) — the whole search: `feet`, `sites_in_reach`,
+  `transfer_candidates` (the donor–atom–acceptor moves the records allow),
+  `considered`, `pruned_valence`, `pruned_pair_tolerance`, `duplicates`,
+  `to_relax`, `relaxed`, `unconverged`, `listed`, `truncated`,
+  `estimated_pairs`, `seconds`, and the two run-state flags `searched` and
+  `stale`. Downstream nodes can tell a result from a plan by `searched`.
+
+In every output structure the atoms whose bonds changed carry the tag
+`cs_changed`, so an `apply_style` rule can highlight them.
+
+**How candidates are scored.** UFF treats a bond as a spring: a bond at its
+rest length costs nothing, so UFF alone cannot say whether three bonds beat
+two. The score adds what it misses:
+
+- **strain**: the UFF energy of the relaxed candidate minus that of the same
+  pose relaxed with no bonds formed;
+- **bond energy**: the mean bond enthalpies of the bonds broken minus those of
+  the bonds formed (tabulated for H, C, N, O, F, Si, P, S, Cl, Ge, Br and I);
+- **score** = strain + bond energy, in kcal/mol. Lower is better.
+
+A pair missing from the enthalpy table (N–Si, for example) is estimated with
+Pauling's electronegativity rule. The candidate is flagged `estimated`, and the
+panel names the pair before you run. An element outside the twelve cannot be
+scored and is an error.
+
+**Read rank 1 with care.** The bond-energy term dominates: one Si–O bond is
+worth about 108 kcal/mol, while strains of 45–55 kcal/mol are routine. So the
+ranking is effectively "most bonds first, then least strain", and a badly
+distorted binding with more bonds can outrank a clean one with fewer. Before
+treating rank 1 as the answer, look at its strain, its `worst_bond_ratio` and
+its per-term breakdown (hover a row in the panel). The ranking is also crude by
+nature: a surface dimer bond and a bulk bond are both just "Si–Si", and UFF
+knows nothing about Si(100) dimer pairing. Use the node to find the handful of
+plausible patterns, then take them to a finer method (UMA, DFT).
+
+On bare Si(100)-2×1, a CH₂–CH₂ diradical posed over one dimer ranks the di-σ
+binding on that dimer first, as experiment and DFT say, but only by about
+4 kcal/mol over bridging two dimers of a row. On a smaller proxy (a frozen rim
+closer to the site) the order flips. Margins of a few kcal/mol are within UFF's
+error; check them against the proxy size.
+
+**Water shows the limit plainly.** H₂O on bare Si(100)-2×1 with an H transfer
+enabled dissociates, as it should: H + OH beats moving the H alone by the whole
+Si–O bond (about 108 kcal/mol). But the known answer — H and OH on the two
+atoms of **one** dimer — is a tie against H and OH on two neighbouring dimers:
+the two form the same bonds, and UFF has nothing that prefers pairing the
+dangling bonds of one dimer. Over several proxies and poses they differ by less
+than half a kcal/mol and either can come first. Where two patterns form the same
+bonds on the same kind of atoms, treat their order as undecided.
+
+**What "exhaustive" means here.** For the given pose, every bonding pattern the
+settings allow is relaxed, unless `truncated` is set. The assumptions are
+exactly the settings: the pose, the tags, `reach`, `pair_tolerance`, the caps
+and the enabled transfers. Patterns that need the molecule to rotate far from
+its pose, to lose a group of atoms or to break one of its own bonds (other than
+by an enabled transfer) are not searched.
+
+A known quirk: the pair check compares distances only, so a "crossed" pattern
+(foot 1 on site B, foot 2 on site A) passes it. UFF relaxes such a pattern into
+a tangled structure that ranks last, typically with a very large strain.
+
+**Reading the panel.** The panel shows the **Run** button, with the number of
+hypotheses a run would relax (or what the last run did) beside it; a red line
+when the result is stale; the search statistics, with **not exhaustive** in red
+when the budget was hit, a *Transfer candidates* row when `transfers` is wired,
+and a warning naming any estimated bond pairs; and the
+ranked candidates, one line each with score, strain and bond energy, the bond
+inventory underneath, and `est.` / `unconv.` marks. Hover a row for its sites,
+worst bond ratio and strain terms. Run blocks the application while it works,
+behind a placard. *Max transfers* is greyed out while `transfers` is not
+wired, since nothing reads it then. The statistics appear once the node is displayed. A
+`chemisorb` inside a custom network shows its result only where that network is
+called with the inputs the run used; everywhere else it shows the plan.
+
+**Example.**
+
+```
+mount = chemisorb { adsorbate: tool, substrate: surface, adsorbate_tag: "feet", reach: 3.5 }
+```
+
+Then press Run (or `atomcad-cli run mount`) and read `mount.stats` and
+`mount.candidates`. The same tool with OH legs, each allowed to hand its H to
+the surface:
+
+```
+h_off = array { element_type: Record(ChemisorbTransfer), elements: [{ element: 1, direction: "to_substrate" }] }
+mount = chemisorb { adsorbate: tool, substrate: surface, adsorbate_tag: "feet", transfers: h_off, max_transfers: 3 }
+```
+
 ## mechanosynth
 
 Replays a **mechanosynthetic build sequence** onto a workpiece: the structure

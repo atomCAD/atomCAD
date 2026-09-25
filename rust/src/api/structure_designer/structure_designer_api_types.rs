@@ -11,6 +11,7 @@ use atomcad_structure_designer::node_network::FunctionPinDisposition;
 use atomcad_structure_designer::node_network::FunctionPinRole;
 // Path-qualified rather than imported bare: the api-side twin deliberately keeps
 // the same identifier (D9a).
+use atomcad_structure_designer::chemisorb_ops::ChemisorbRunSummary;
 use atomcad_structure_designer::node_type::NodeTypeCategory as DomainNodeTypeCategory;
 use atomcad_structure_designer::nodes::atom_edit::atom_edit::{
     DragFrozenStatus as DomainDragFrozenStatus, PointerDownResult as DomainPointerDownResult,
@@ -18,6 +19,7 @@ use atomcad_structure_designer::nodes::atom_edit::atom_edit::{
     PointerMoveResult as DomainPointerMoveResult,
     PointerMoveResultKind as DomainPointerMoveResultKind, PointerUpResult as DomainPointerUpResult,
 };
+use atomcad_structure_designer::nodes::chemisorb::{ChemisorbData, ChemisorbEvalCache};
 use atomcad_structure_designer::nodes::comment::{
     CommentAnchor as DomainCommentAnchor, WireAnchor as DomainWireAnchor,
 };
@@ -955,6 +957,195 @@ impl From<&APIProxyData> for ProxyData {
             core: data.core,
             fill: data.fill,
             available_tags: std::cell::RefCell::new(Vec::new()),
+        }
+    }
+}
+
+/// Dart-facing twin of the settings of
+/// `atomcad_structure_designer::nodes::chemisorb::ChemisorbData` — its ten
+/// persisted properties. The stored search is not here: it never crosses to
+/// Dart, and the setter keeps it.
+pub struct APIChemisorbData {
+    /// Adsorbate reactive atoms: those carrying this tag. Empty = all atoms.
+    pub adsorbate_tag: String,
+    /// Substrate reactive atoms: those carrying this tag. Empty = all atoms.
+    pub substrate_tag: String,
+    /// Maximum adsorbate atom to site distance for a bond (Å).
+    pub reach: f64,
+    /// Pair tolerance (Å); 0 = off.
+    pub pair_tolerance: f64,
+    /// At most this many bonds formed per hypothesis; 0 = no cap.
+    pub max_formed_bonds: i32,
+    /// At most this many transfers per hypothesis; read only while the
+    /// `transfers` pin carries a record.
+    pub max_transfers: i32,
+    /// At most this many candidates listed.
+    pub top_n: i32,
+    /// Only candidates within this many kcal/mol of the best are listed.
+    pub energy_window: f64,
+    /// At most this many hypotheses relaxed.
+    pub budget: i32,
+    /// UFF iteration limit per relaxation.
+    pub max_iterations: i32,
+}
+
+/// The whole search, as the `stats` pin carries it (twin of
+/// `ChemisorbStatsView`).
+pub struct APIChemisorbStats {
+    pub feet: usize,
+    pub sites_in_reach: usize,
+    /// Candidate transfers the `transfers` records allow; 0 without them.
+    pub transfer_candidates: usize,
+    pub considered: usize,
+    pub pruned_valence: usize,
+    pub pruned_pair_tolerance: usize,
+    pub duplicates: usize,
+    /// The node outputs a search result for its current inputs.
+    pub searched: bool,
+    /// A result exists but was computed from other inputs: Run again.
+    pub stale: bool,
+    pub relaxed: usize,
+    pub to_relax: usize,
+    pub unconverged: usize,
+    pub listed: usize,
+    /// The budget was hit; the search is not exhaustive.
+    pub truncated: bool,
+    /// Bond pairs scored by a Pauling estimate, e.g. `"N–Si"`; empty if none.
+    pub estimated_pairs: String,
+    pub seconds: f64,
+}
+
+/// One listed candidate (twin of `ChemisorbRowView`), kcal/mol throughout.
+pub struct APIChemisorbRow {
+    pub rank: usize,
+    pub score: f64,
+    pub strain: f64,
+    pub bond_energy: f64,
+    pub estimated: bool,
+    pub bonds: String,
+    pub sites: String,
+    pub formed_bonds: usize,
+    pub transfers: usize,
+    pub converged: bool,
+    pub worst_bond_ratio: f64,
+    pub stretch: f64,
+    pub bend: f64,
+    pub torsion: f64,
+    pub inversion: f64,
+    pub vdw: f64,
+}
+
+/// What the `chemisorb` panel renders after a root evaluation of the selected
+/// node: the plan (no rows) or the stored result.
+pub struct APIChemisorbReport {
+    pub stats: APIChemisorbStats,
+    pub rows: Vec<APIChemisorbRow>,
+}
+
+/// What one Run found (twin of `ChemisorbRunSummary`).
+pub struct APIChemisorbRunResult {
+    pub relaxed: usize,
+    pub listed: usize,
+    pub best_score: Option<f64>,
+    pub best_bonds: String,
+    pub truncated: bool,
+    pub unconverged: usize,
+    pub seconds: f64,
+}
+
+impl From<&ChemisorbData> for APIChemisorbData {
+    fn from(d: &ChemisorbData) -> Self {
+        APIChemisorbData {
+            adsorbate_tag: d.adsorbate_tag.clone(),
+            substrate_tag: d.substrate_tag.clone(),
+            reach: d.reach,
+            pair_tolerance: d.pair_tolerance,
+            max_formed_bonds: d.max_formed_bonds,
+            max_transfers: d.max_transfers,
+            top_n: d.top_n,
+            energy_window: d.energy_window,
+            budget: d.budget,
+            max_iterations: d.max_iterations,
+        }
+    }
+}
+
+impl From<&APIChemisorbData> for ChemisorbData {
+    fn from(d: &APIChemisorbData) -> Self {
+        ChemisorbData {
+            adsorbate_tag: d.adsorbate_tag.clone(),
+            substrate_tag: d.substrate_tag.clone(),
+            reach: d.reach,
+            pair_tolerance: d.pair_tolerance,
+            max_formed_bonds: d.max_formed_bonds,
+            max_transfers: d.max_transfers,
+            top_n: d.top_n,
+            energy_window: d.energy_window,
+            budget: d.budget,
+            max_iterations: d.max_iterations,
+            stored: None,
+        }
+    }
+}
+
+impl From<&ChemisorbEvalCache> for APIChemisorbReport {
+    fn from(cache: &ChemisorbEvalCache) -> Self {
+        let s = &cache.stats;
+        APIChemisorbReport {
+            stats: APIChemisorbStats {
+                feet: s.feet,
+                sites_in_reach: s.sites_in_reach,
+                transfer_candidates: s.transfer_candidates,
+                considered: s.considered,
+                pruned_valence: s.pruned_valence,
+                pruned_pair_tolerance: s.pruned_pair_tolerance,
+                duplicates: s.duplicates,
+                searched: s.searched,
+                stale: s.stale,
+                relaxed: s.relaxed,
+                to_relax: s.to_relax,
+                unconverged: s.unconverged,
+                listed: s.listed,
+                truncated: s.truncated,
+                estimated_pairs: s.estimated_pairs.clone(),
+                seconds: s.seconds,
+            },
+            rows: cache
+                .rows
+                .iter()
+                .map(|r| APIChemisorbRow {
+                    rank: r.rank,
+                    score: r.score,
+                    strain: r.strain,
+                    bond_energy: r.bond_energy,
+                    estimated: r.estimated,
+                    bonds: r.bonds.clone(),
+                    sites: r.sites.clone(),
+                    formed_bonds: r.formed_bonds,
+                    transfers: r.transfers,
+                    converged: r.converged,
+                    worst_bond_ratio: r.worst_bond_ratio,
+                    stretch: r.stretch,
+                    bend: r.bend,
+                    torsion: r.torsion,
+                    inversion: r.inversion,
+                    vdw: r.vdw,
+                })
+                .collect(),
+        }
+    }
+}
+
+impl From<ChemisorbRunSummary> for APIChemisorbRunResult {
+    fn from(s: ChemisorbRunSummary) -> Self {
+        APIChemisorbRunResult {
+            relaxed: s.relaxed,
+            listed: s.listed,
+            best_score: s.best_score,
+            best_bonds: s.best_bonds,
+            truncated: s.truncated,
+            unconverged: s.unconverged,
+            seconds: s.seconds,
         }
     }
 }

@@ -1,11 +1,11 @@
 //! `evaluate`: the relaxation half of a search, and what it reports.
 
 use super::config::{CHANGED_TAG, ChemisorptionError, ChemisorptionSearch};
-use super::enumerate::{Hypothesis, HypothesisKey, SearchPlan, plan};
+use super::enumerate::{Hypothesis, HypothesisKey, SearchPlan, change_key, plan};
 use super::relax::{Relaxed, StrainTerms, relax};
 use super::score::{BondInventory, BondKind};
+use super::transfer::{Transfer, apply_transfers};
 use crate::atomic_structure::AtomicStructure;
-use crate::atomic_structure::BondReference;
 use crate::atomic_structure::inline_bond::BOND_SINGLE;
 use rayon::prelude::*;
 use std::cmp::Ordering;
@@ -17,9 +17,11 @@ pub struct Candidate {
     /// Adsorbate + substrate, relaxed; the atoms whose bonds changed carry
     /// [`CHANGED_TAG`]. Atom ids are those of [`SearchPlan::combined`].
     pub structure: AtomicStructure,
+    /// Bonds formed between an adsorbate atom and a site,
+    /// `(adsorbate atom, substrate atom)`; transfers are not here.
     pub formed: Vec<(u32, u32)>,
-    pub broken: Vec<(u32, u32)>,
-    pub moved: Vec<u32>,
+    /// Transfers: each broke `donor–moved` and formed `moved–acceptor`.
+    pub transfers: Vec<Transfer>,
     pub bond_inventory: BondInventory,
     /// `ΔE_UFF` against the reference state (kcal/mol).
     pub strain: f64,
@@ -40,13 +42,17 @@ pub struct Candidate {
 impl Candidate {
     /// The normalized bond set, the tie-breaker of the ranking (R10).
     pub fn key(&self) -> HypothesisKey {
-        Hypothesis {
-            formed: self.formed.clone(),
-            broken: self.broken.clone(),
-            moved: self.moved.clone(),
-            inventory: BondInventory::default(),
-        }
-        .key()
+        change_key(&self.formed, &self.transfers)
+    }
+
+    /// Every bond this candidate broke: one `(donor, moved)` per transfer.
+    pub fn broken(&self) -> Vec<(u32, u32)> {
+        self.transfers.iter().map(|t| (t.donor, t.moved)).collect()
+    }
+
+    /// Every atom this candidate moved to the other side.
+    pub fn moved(&self) -> Vec<u32> {
+        self.transfers.iter().map(|t| t.moved).collect()
     }
 }
 
@@ -55,6 +61,7 @@ impl Candidate {
 pub struct SearchStats {
     pub feet: usize,
     pub sites_in_reach: usize,
+    pub transfer_candidates: usize,
     pub considered: usize,
     pub pruned_valence: usize,
     pub pruned_pair_tolerance: usize,
@@ -105,15 +112,12 @@ pub fn rank_candidates(candidates: &mut [Candidate]) {
     });
 }
 
-/// Applies a hypothesis's bond changes to a copy of the combined structure.
+/// Applies a hypothesis's bond changes to a copy of the combined structure:
+/// its transfers (each moved atom re-seated on its acceptor), then its formed
+/// bonds.
 fn apply(combined: &AtomicStructure, h: &Hypothesis) -> AtomicStructure {
     let mut s = combined.clone();
-    for &(a, b) in &h.broken {
-        s.delete_bond(&BondReference {
-            atom_id1: a,
-            atom_id2: b,
-        });
-    }
+    apply_transfers(&mut s, &h.transfers);
     for &(a, b) in &h.formed {
         s.add_bond_checked(a, b, BOND_SINGLE);
     }
@@ -138,8 +142,7 @@ fn candidate(
     Ok(Candidate {
         structure,
         formed: h.formed.clone(),
-        broken: h.broken.clone(),
-        moved: h.moved.clone(),
+        transfers: h.transfers.clone(),
         bond_inventory: h.inventory.clone(),
         strain,
         bond_energy,
@@ -162,8 +165,7 @@ pub fn evaluate(
     let start = Instant::now();
     let no_change = Hypothesis {
         formed: Vec::new(),
-        broken: Vec::new(),
-        moved: Vec::new(),
+        transfers: Vec::new(),
         inventory: BondInventory::default(),
     };
 
@@ -193,6 +195,7 @@ pub fn evaluate(
     let stats = SearchStats {
         feet: p.feet,
         sites_in_reach: p.sites_in_reach,
+        transfer_candidates: p.transfer_candidates,
         considered: p.considered,
         pruned_valence: p.pruned_valence,
         pruned_pair_tolerance: p.pruned_pair_tolerance,

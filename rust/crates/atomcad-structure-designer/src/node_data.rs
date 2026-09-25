@@ -270,6 +270,18 @@ pub trait NodeData: Any + AsAny {
     /// Default implementation does nothing.
     fn clear_input_cache(&self) {}
 
+    /// Called when this data is about to **replace** `previous` on the same
+    /// node (`NodeNetwork::set_node_network_data`: a panel setter, and the
+    /// undo/redo of one, which rebuilds the data from its JSON snapshot).
+    /// Lets a node keep runtime-only, `#[serde(skip)]` state that a JSON
+    /// round trip would otherwise drop.
+    ///
+    /// Only for state that is **safe to keep whatever the new settings are** —
+    /// `chemisorb`'s stored search, which is keyed by an input fingerprint and
+    /// so can never be output for inputs it was not computed from. Default:
+    /// nothing is inherited.
+    fn inherit_runtime_state(&mut self, _previous: &dyn NodeData) {}
+
     /// Returns metadata for input parameters that cannot be derived from get_text_properties().
     ///
     /// This is used by the `describe` command to provide accurate information about inputs.

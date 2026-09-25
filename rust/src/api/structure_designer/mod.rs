@@ -4,6 +4,7 @@ pub mod atom_edit_api;
 // Not in `flutter_rust_bridge.yaml`'s `rust_input`: these two hold the
 // presentation logic D10 moved up out of the domain, and their `pub fn`s
 // take domain types. A scanned namespace exports every `pub fn` to Dart.
+pub mod chemisorb_api;
 pub mod cli_runner;
 pub mod edit_atom_api;
 pub mod facet_shell_api;

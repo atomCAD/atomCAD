@@ -1,6 +1,7 @@
 //! Tests for `chemisorption`: the `plan` enumeration on hand-built geometry,
-//! the bond-energy tables, ranking, a bond-forming known-answer case on
-//! Si(100)-2×1, and (ignored) the pruning calibration.
+//! the bond-energy tables, ranking, transfers, the two known-answer cases on
+//! Si(100)-2×1 (ethylene by bond forming, water by an H transfer), and
+//! (ignored) the pruning calibration.
 //!
 //! Fixtures are generic stand-ins, never a real tool design: a 26-carbon
 //! diamondoid cage whose (111) bottom face carries six downward C–H, turned
@@ -15,10 +16,11 @@ use atomcad_crystolecule::chemisorption::score::{
 };
 use atomcad_crystolecule::chemisorption::{
     BondInventory, BondKind, CHANGED_TAG, Candidate, ChemisorptionError, ChemisorptionSearch,
-    SearchPlan, Side, StrainTerms, evaluate, free_valence, listed_count, plan, rank_candidates,
-    search,
+    SearchPlan, Side, StrainTerms, Transfer, TransferDirection, TransferRule, evaluate,
+    free_valence, input_fingerprint, listed_count, plan, rank_candidates, search,
 };
 use atomcad_crystolecule::crystolecule_constants::DEFAULT_ZINCBLENDE_MOTIF;
+use atomcad_crystolecule::hydrogen_passivation::terminator_bond_length;
 use atomcad_crystolecule::hydrogen_passivation::{AddHydrogensOptions, add_hydrogens};
 use atomcad_crystolecule::lattice_fill::{LatticeFillConfig, LatticeFillOptions, fill_lattice};
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
@@ -700,8 +702,7 @@ fn fake(score: f64, formed: Vec<(u32, u32)>) -> Candidate {
     Candidate {
         structure: AtomicStructure::new(),
         formed,
-        broken: Vec::new(),
-        moved: Vec::new(),
+        transfers: Vec::new(),
         bond_inventory: BondInventory::default(),
         strain: score,
         bond_energy: 0.0,
@@ -787,6 +788,35 @@ fn evaluate_is_deterministic_and_self_consistent() {
         assert!(c.structure.has_bond_between(c.formed[0].0, c.formed[0].1));
     }
     assert!(a.candidates.windows(2).all(|w| w[0].score <= w[1].score));
+}
+
+/// The van der Waals cutoff — atomCAD's default simulation preference, which
+/// the `chemisorb` node follows — keeps a neighbour list instead of pair
+/// parameters. The per-term breakdown must still work (it used to panic in
+/// `vdw_params`) and still sum to the strain.
+#[test]
+fn evaluate_works_with_a_vdw_cutoff() {
+    use atomcad_crystolecule::simulation::uff::VdwMode;
+
+    let mut ads = AtomicStructure::new();
+    let o = ads.add_atom(O, DVec3::new(0.3, 0.2, 2.2));
+    let h = ads.add_atom(H, DVec3::new(0.3, 0.2, 3.17));
+    ads.add_bond(o, h, BOND_SINGLE);
+    let (mut sub, site_ids) = sites(&[DVec3::ZERO, DVec3::new(2.6, 0.0, 0.0)], 3);
+    for id in sub.atom_ids().copied().collect::<Vec<_>>() {
+        if !site_ids.contains(&id) {
+            sub.set_atom_frozen(id, true);
+        }
+    }
+    let cfg = ChemisorptionSearch {
+        vdw_mode: VdwMode::Cutoff(6.0),
+        ..config(3.5, 1.0)
+    };
+    let report = search(&ads, &sub, &cfg).unwrap();
+    assert_eq!(report.candidates.len(), 2);
+    for c in &report.candidates {
+        assert!((c.terms.total() - c.strain).abs() < 1e-6, "{:?}", c.terms);
+    }
 }
 
 #[test]
@@ -1000,5 +1030,540 @@ fn chemisorption_pruning_calibration() {
     assert_eq!(
         lost_in_window, 0,
         "the default pair tolerance prunes a candidate of the listing window"
+    );
+}
+
+// ============================================================================
+// Transfers (§6.1, §8.2)
+// ============================================================================
+
+const H_TO_SUBSTRATE: TransferRule = TransferRule {
+    element: H,
+    direction: TransferDirection::ToSubstrate,
+};
+const H_TO_ADSORBATE: TransferRule = TransferRule {
+    element: H,
+    direction: TransferDirection::ToAdsorbate,
+};
+
+fn transfer_config(
+    reach: f64,
+    rules: &[TransferRule],
+    max_transfers: usize,
+) -> ChemisorptionSearch {
+    ChemisorptionSearch {
+        transfers: rules.to_vec(),
+        max_transfers,
+        ..config(reach, 3.0)
+    }
+}
+
+/// Methanol, CH3–O–H, its O at `p`, the O–H along `h_dir`. Returns (O, C, H).
+fn add_methanol(s: &mut AtomicStructure, p: DVec3, h_dir: DVec3) -> (u32, u32, u32) {
+    let o = add_methoxy(s, p);
+    let c = s.get_atom(o).unwrap().bonds[0].other_atom_id();
+    let h = s.add_atom(H, p + h_dir.normalize() * 0.96);
+    s.add_bond(o, h, BOND_SINGLE);
+    (o, c, h)
+}
+
+/// One methanol whose O sits 2 Å above site A, its H leaning towards site B
+/// 2.5 Å away (H–A 1.95 Å, H–B 2.34 Å, O–B 3.2 Å).
+fn methanol_over_two_sites() -> (AtomicStructure, (u32, u32, u32), AtomicStructure, Vec<u32>) {
+    let mut ads = AtomicStructure::new();
+    let ids = add_methanol(
+        &mut ads,
+        DVec3::new(0.0, 0.0, 2.0),
+        DVec3::new(1.0, 0.0, -0.3),
+    );
+    let (sub, site_ids) = sites(&[DVec3::ZERO, DVec3::new(2.5, 0.0, 0.0)], 3);
+    (ads, ids, sub, site_ids)
+}
+
+/// Water with its O at `o`, both H in the vertical plane through `toward`,
+/// one leaning 20° below it, the other nearly straight up (H–O–H 104.5°).
+fn water(o: DVec3, toward: DVec3) -> AtomicStructure {
+    let u = DVec3::new(toward.x, toward.y, 0.0).normalize();
+    let dir = |deg: f64| {
+        let t = deg.to_radians();
+        u * t.cos() + DVec3::Z * t.sin()
+    };
+    let mut s = AtomicStructure::new();
+    let oid = s.add_atom(O, o);
+    for deg in [-20.0, 84.5] {
+        let h = s.add_atom(H, o + dir(deg) * 0.96);
+        s.add_bond(oid, h, BOND_SINGLE);
+    }
+    s
+}
+
+/// One planned hypothesis in input atom ids: formed `(foot, site)` and
+/// transfers `(donor, moved, acceptor)`, each sorted.
+type Change = (Vec<(u32, u32)>, Vec<(u32, u32, u32)>);
+
+fn planned_changes(p: &SearchPlan) -> BTreeSet<Change> {
+    let back: HashMap<u32, u32> = p
+        .adsorbate_ids
+        .iter()
+        .chain(p.substrate_ids.iter())
+        .map(|(&k, &v)| (v, k))
+        .collect();
+    p.hypotheses
+        .iter()
+        .map(|h| {
+            let mut formed: Vec<(u32, u32)> =
+                h.formed.iter().map(|(a, s)| (back[a], back[s])).collect();
+            formed.sort_unstable();
+            let mut moves: Vec<(u32, u32, u32)> = h
+                .transfers
+                .iter()
+                .map(|t| (back[&t.donor], back[&t.moved], back[&t.acceptor]))
+                .collect();
+            moves.sort_unstable();
+            (formed, moves)
+        })
+        .collect()
+}
+
+#[test]
+fn an_oh_oxygen_bonds_only_when_its_h_is_transferred() {
+    let (ads, (o, _, h), sub, s) = methanol_over_two_sites();
+    let (a, b) = (s[0], s[1]);
+
+    // Bond forming alone: the OH oxygen is saturated, nothing can bond.
+    let p = plan(&ads, &sub, &config(3.5, 3.0)).unwrap();
+    assert!(p.hypotheses.is_empty());
+    assert_eq!(p.stats.transfer_candidates, 0);
+
+    // With H → substrate the O can bond, but only to the site its H did not
+    // take (each site has one valence).
+    let p = plan(&ads, &sub, &transfer_config(3.5, &[H_TO_SUBSTRATE], 1)).unwrap();
+    assert_stats_add_up(&p);
+    assert_eq!(p.stats.transfer_candidates, 2);
+    assert_eq!(
+        planned_changes(&p),
+        BTreeSet::from([
+            (vec![], vec![(o, h, a)]),
+            (vec![], vec![(o, h, b)]),
+            (vec![(o, a)], vec![(o, h, b)]),
+            (vec![(o, b)], vec![(o, h, a)]),
+        ])
+    );
+    for hyp in &p.hypotheses {
+        let t = hyp.transfers[0];
+        assert!(hyp.formed.iter().all(|&(f, _)| f == t.donor));
+        assert_eq!(
+            hyp.inventory.broken,
+            [(BondKind::new(O, H, 1), 1)].into_iter().collect()
+        );
+    }
+}
+
+#[test]
+fn a_pure_abstraction_is_a_hypothesis_and_the_direction_is_respected() {
+    // A radical O foot 1.5 Å above the top H of a saturated SiH4.
+    let mut ads = AtomicStructure::new();
+    let o = add_methoxy(&mut ads, DVec3::new(0.0, 0.0, 3.0));
+    let (sub, s) = sites(&[DVec3::ZERO], 4);
+    let top_h = sub
+        .atoms_values()
+        .find(|at| at.atomic_number == H && at.position.z > 1.0)
+        .unwrap()
+        .id;
+
+    // No site: the SiH4 is saturated.
+    assert!(
+        plan(&ads, &sub, &config(3.5, 3.0))
+            .unwrap()
+            .hypotheses
+            .is_empty()
+    );
+
+    // Abstraction: the H moves to the foot, and nothing else can happen (the
+    // foot is then saturated).
+    let p = plan(&ads, &sub, &transfer_config(3.5, &[H_TO_ADSORBATE], 1)).unwrap();
+    assert_stats_add_up(&p);
+    assert_eq!(
+        planned_changes(&p),
+        BTreeSet::from([(vec![], vec![(s[0], top_h, o)])])
+    );
+
+    // The other direction offers nothing here: the adsorbate's H are methyl
+    // H, and the substrate has no atom to take one.
+    let p = plan(&ads, &sub, &transfer_config(3.5, &[H_TO_SUBSTRATE], 1)).unwrap();
+    assert!(p.hypotheses.is_empty());
+    assert_eq!(p.stats.transfer_candidates, 0);
+}
+
+#[test]
+fn transfer_candidates_respect_element_tags_frozen_atoms_and_reach() {
+    let count = |ads: &AtomicStructure, sub: &AtomicStructure, cfg: &ChemisorptionSearch| {
+        plan(ads, sub, cfg).unwrap().stats.transfer_candidates
+    };
+    let (ads, (o, c, h), sub, s) = methanol_over_two_sites();
+    let cfg = transfer_config(3.5, &[H_TO_SUBSTRATE], 1);
+    assert_eq!(count(&ads, &sub, &cfg), 2);
+
+    // The element must match (no Cl here).
+    let chlorine = TransferRule {
+        element: 17,
+        ..H_TO_SUBSTRATE
+    };
+    assert_eq!(count(&ads, &sub, &transfer_config(3.5, &[chlorine], 1)), 0);
+
+    // The donor must be reactive: tags select the donor, never the H.
+    let mut tagged = ads.clone();
+    tagged.add_atom_tag(c, "chosen").unwrap();
+    let cfg_tagged = ChemisorptionSearch {
+        adsorbate_tag: Some("chosen".to_string()),
+        ..cfg.clone()
+    };
+    assert_eq!(count(&tagged, &sub, &cfg_tagged), 0);
+    tagged.add_atom_tag(o, "chosen").unwrap();
+    assert_eq!(count(&tagged, &sub, &cfg_tagged), 2);
+
+    // Any frozen D, X or A excludes the triple.
+    for frozen in [o, h] {
+        let mut f = ads.clone();
+        f.set_atom_frozen(frozen, true);
+        assert_eq!(count(&f, &sub, &cfg), 0);
+    }
+    let mut f = sub.clone();
+    f.set_atom_frozen(s[0], true);
+    assert_eq!(count(&ads, &f, &cfg), 1);
+
+    // Reach is measured from the moving atom: at 2.5 Å the H still reaches
+    // site B (2.34 Å) although the O does not (3.2 Å).
+    let p = plan(&ads, &sub, &transfer_config(2.5, &[H_TO_SUBSTRATE], 1)).unwrap();
+    assert_eq!(p.stats.transfer_candidates, 2);
+    assert!(planned_changes(&p).contains(&(vec![(o, s[0])], vec![(o, h, s[1])])));
+    let p = plan(&ads, &sub, &transfer_config(2.0, &[H_TO_SUBSTRATE], 1)).unwrap();
+    assert_eq!(p.stats.transfer_candidates, 1);
+
+    // Settings no search can honour.
+    let oxygen = TransferRule {
+        element: O,
+        ..H_TO_SUBSTRATE
+    };
+    assert!(matches!(
+        plan(&ads, &sub, &transfer_config(3.5, &[oxygen], 1)),
+        Err(ChemisorptionError::InvalidConfig(_))
+    ));
+    assert!(matches!(
+        plan(&ads, &sub, &transfer_config(3.5, &[H_TO_SUBSTRATE], 0)),
+        Err(ChemisorptionError::InvalidConfig(_))
+    ));
+}
+
+#[test]
+fn max_transfers_bounds_the_total_over_all_rules() {
+    // Two methanols, each over its own pair of sites.
+    let mut ads = AtomicStructure::new();
+    for x in [0.0, 6.0] {
+        add_methanol(
+            &mut ads,
+            DVec3::new(x, 0.0, 2.0),
+            DVec3::new(1.0, 0.0, -0.3),
+        );
+    }
+    let (sub, _) = sites(
+        &[
+            DVec3::ZERO,
+            DVec3::new(2.5, 0.0, 0.0),
+            DVec3::new(6.0, 0.0, 0.0),
+            DVec3::new(8.5, 0.0, 0.0),
+        ],
+        3,
+    );
+    let rules = [H_TO_SUBSTRATE, H_TO_ADSORBATE];
+    let planned = |max: usize| {
+        let p = plan(&ads, &sub, &transfer_config(3.5, &rules, max)).unwrap();
+        assert_stats_add_up(&p);
+        p
+    };
+    let most = |p: &SearchPlan| {
+        p.hypotheses
+            .iter()
+            .map(|h| h.transfers.len())
+            .max()
+            .unwrap()
+    };
+    let (one, two) = (planned(1), planned(2));
+    assert_eq!(most(&one), 1);
+    assert_eq!(most(&two), 2);
+    // Both legs bonded needs both H moved.
+    assert!(one.hypotheses.iter().all(|h| h.formed.len() <= 1));
+    assert!(two.hypotheses.iter().any(|h| h.formed.len() == 2));
+}
+
+#[test]
+fn equivalent_hydrogens_on_one_donor_are_one_transfer() {
+    // Water with both H pointing down, between two sites that both reach.
+    let mut ads = AtomicStructure::new();
+    let o = ads.add_atom(O, DVec3::new(0.0, 0.0, 2.2));
+    let half_angle = 52.25f64.to_radians();
+    for sign in [-1.0, 1.0] {
+        let h = ads.add_atom(
+            H,
+            DVec3::new(
+                sign * half_angle.sin() * 0.96,
+                0.0,
+                2.2 - half_angle.cos() * 0.96,
+            ),
+        );
+        ads.add_bond(o, h, BOND_SINGLE);
+    }
+    let (sub, s) = sites(&[DVec3::new(-1.5, 0.0, 0.0), DVec3::new(1.5, 0.0, 0.0)], 3);
+
+    let p = plan(&ads, &sub, &transfer_config(3.5, &[H_TO_SUBSTRATE], 2)).unwrap();
+    assert_stats_add_up(&p);
+    assert_eq!(p.stats.transfer_candidates, 4);
+    // One H to either site, the OH then bonding to the other; or both H. Which
+    // H moved does not matter: the shapes are (formed, acceptors).
+    let back: HashMap<u32, u32> = p
+        .adsorbate_ids
+        .iter()
+        .chain(p.substrate_ids.iter())
+        .map(|(&k, &v)| (v, k))
+        .collect();
+    type Shape = (Vec<(u32, u32)>, Vec<u32>);
+    let shapes: BTreeSet<Shape> = p
+        .hypotheses
+        .iter()
+        .map(|h| {
+            let mut acceptors: Vec<u32> = h.transfers.iter().map(|t| back[&t.acceptor]).collect();
+            acceptors.sort_unstable();
+            let formed = h
+                .formed
+                .iter()
+                .map(|&(f, x)| (back[&f], back[&x]))
+                .collect();
+            (formed, acceptors)
+        })
+        .collect();
+    assert_eq!(p.hypotheses.len(), 5, "{shapes:?}");
+    assert_eq!(
+        shapes,
+        BTreeSet::from([
+            (vec![], vec![s[0]]),
+            (vec![], vec![s[1]]),
+            (vec![(o, s[1])], vec![s[0]]),
+            (vec![(o, s[0])], vec![s[1]]),
+            (vec![], vec![s[0], s[1]]),
+        ])
+    );
+    // Moving the other H, singly or crossed, was merged, not relaxed again.
+    assert!(p.stats.duplicates >= 3, "{:?}", p.stats);
+    let keys: BTreeSet<_> = p.hypotheses.iter().map(|h| h.key()).collect();
+    assert_eq!(keys.len(), p.hypotheses.len());
+}
+
+#[test]
+fn a_transferred_atom_is_seated_on_its_acceptor_from_the_side_it_came_from() {
+    let (ads, (o, _, h), sub, s) = methanol_over_two_sites();
+    let p = plan(&ads, &sub, &transfer_config(3.5, &[H_TO_SUBSTRATE], 1)).unwrap();
+    let t = Transfer {
+        donor: p.adsorbate_ids[&o],
+        moved: p.adsorbate_ids[&h],
+        acceptor: p.substrate_ids[&s[1]],
+        element: H,
+    };
+    let pos = |id: u32| p.combined.get_atom(id).unwrap().position;
+    let seat = t.seat(&p.combined);
+    let a = pos(t.acceptor);
+    assert!((seat.distance(a) - terminator_bond_length(SI, H)).abs() < 1e-9);
+    let (towards_old, placed) = ((pos(t.moved) - a).normalize(), (seat - a).normalize());
+    assert!(towards_old.dot(placed) > 1.0 - 1e-9);
+}
+
+#[test]
+fn a_transfer_candidate_is_relaxed_and_scored_with_both_bonds() {
+    let (ads, _, mut sub, s) = methanol_over_two_sites();
+    for id in sub.atom_ids().copied().collect::<Vec<_>>() {
+        if !s.contains(&id) {
+            sub.set_atom_frozen(id, true);
+        }
+    }
+    let report = search(&ads, &sub, &transfer_config(3.5, &[H_TO_SUBSTRATE], 1)).unwrap();
+    assert_eq!(report.candidates.len(), 4);
+    assert_eq!(report.stats.transfer_candidates, 2);
+    for c in &report.candidates {
+        let t = c.transfers[0];
+        assert_eq!(c.moved(), vec![t.moved]);
+        assert_eq!(c.broken(), vec![(t.donor, t.moved)]);
+        let st = &c.structure;
+        assert!(st.has_bond_between(t.moved, t.acceptor));
+        assert!(!st.has_bond_between(t.donor, t.moved));
+        let changed: BTreeSet<u32> = st.atoms_with_tag(CHANGED_TAG).into_iter().collect();
+        assert!(changed.is_superset(&BTreeSet::from([t.donor, t.moved, t.acceptor])));
+        // Break O–H, form Si–H, and Si–O when the O bonds.
+        let formed_o = if c.formed.is_empty() { 0.0 } else { 452.0 };
+        let expected = (463.0 - 318.0 - formed_o) / 4.184;
+        assert!(
+            (c.bond_energy - expected).abs() < 1e-9,
+            "{}",
+            c.bond_inventory
+        );
+        assert!((c.terms.total() - c.strain).abs() < 1e-6);
+    }
+    // The dissociated OH + H outranks a bare H transfer by the Si–O bond.
+    assert_eq!(report.candidates[0].formed.len(), 1);
+}
+
+#[test]
+fn the_fingerprint_follows_transfers_and_ignores_an_unused_max_transfers() {
+    let (ads, _, sub, _) = methanol_over_two_sites();
+    let fp = |cfg: &ChemisorptionSearch| input_fingerprint(&ads, &sub, cfg);
+    let off = config(3.5, 3.0);
+    let off_2 = ChemisorptionSearch {
+        max_transfers: 2,
+        ..off.clone()
+    };
+    assert_eq!(
+        fp(&off),
+        fp(&off_2),
+        "max_transfers is unread without rules"
+    );
+    let on = transfer_config(3.5, &[H_TO_SUBSTRATE], 1);
+    assert_ne!(fp(&off), fp(&on));
+    assert_ne!(fp(&on), fp(&transfer_config(3.5, &[H_TO_SUBSTRATE], 2)));
+    assert_ne!(fp(&on), fp(&transfer_config(3.5, &[H_TO_ADSORBATE], 1)));
+}
+
+// ============================================================================
+// Known answer (§8.5): water, by an H transfer
+// ============================================================================
+
+/// Water on Si(100)-2×1 dissociates to H + OH on the two atoms of one dimer
+/// (vibrational spectroscopy and DFT agree). Posed with its O above one dimer
+/// atom and an H leaning towards the partner, with H → substrate enabled and a
+/// reach long enough that the H and the OH can also end on two dimers.
+///
+/// **UFF does not reproduce the known answer; it ties.** Dissociation itself
+/// is clear — H + OH beats a bare H transfer by the Si–O bond, ~108 kcal/mol —
+/// but "one dimer" against "two dimers" is the same bond inventory, so only
+/// strain separates them, and UFF has no term for what really decides it (the
+/// pairing of the two dangling bonds of a dimer). Over 4-, 5- and 6-cell
+/// proxies, three poses and both vdW modes the two differ by at most
+/// 0.4 kcal/mol and the winner flips with the pose (here the one-dimer answer
+/// happens to lead by 0.2). The test pins the tie, not the order; the
+/// reference guide says the same.
+#[test]
+fn water_on_si100_dissociates_but_ties_one_dimer_against_two() {
+    let slab = si100_slab(5.0, 9.0);
+    let (site, partner) = central_dimer(&slab);
+    let (ps, pp) = (
+        slab.get_atom(site).unwrap().position,
+        slab.get_atom(partner).unwrap().position,
+    );
+    let ads = water(ps + DVec3::Z * 1.9, pp - ps);
+    let cfg = transfer_config(4.5, &[H_TO_SUBSTRATE], 1);
+    let report = search(&ads, &slab, &cfg).unwrap();
+    let s = &report.reference.structure;
+
+    let dissociated = |c: &&Candidate| c.formed.len() == 1 && c.transfers.len() == 1;
+    let across = |c: &Candidate| !s.has_bond_between(c.formed[0].1, c.transfers[0].acceptor);
+    let one_dimer = report
+        .candidates
+        .iter()
+        .filter(dissociated)
+        .find(|c| !across(c))
+        .expect("H and OH on dimer partners is enumerated");
+    let two_dimers = report
+        .candidates
+        .iter()
+        .filter(dissociated)
+        .find(|c| across(c))
+        .expect("the reach includes H and OH on two dimers");
+
+    let best = &report.candidates[0];
+    assert!(dissociated(&best), "rank 1 is H + OH");
+    assert!(best.converged);
+    assert!(
+        (one_dimer.score - two_dimers.score).abs() < 1.0,
+        "UFF ties one dimer against two: {:.2} vs {:.2}",
+        one_dimer.score,
+        two_dimers.score
+    );
+    let bare = report
+        .candidates
+        .iter()
+        .find(|c| c.formed.is_empty())
+        .unwrap();
+    assert!(
+        bare.score - best.score > 100.0,
+        "the Si–O bond separates them"
+    );
+    println!(
+        "water: H + OH on one dimer {:.1}, on two dimers {:.1}; bare H transfer {:.1}; {} relaxed, {} duplicates",
+        one_dimer.score,
+        two_dimers.score,
+        bare.score,
+        report.stats.relaxed,
+        report.stats.duplicates
+    );
+}
+
+/// The design's development sample: the stand-in tripod with its three feet
+/// protected as OH, each H leaning outwards and down. Every leg that bonds
+/// must have handed its own H to a site, and with three transfers allowed the
+/// full three-leg binding is found — over the calibration's 20 poses, since a
+/// single pose may not have six sites in reach.
+#[test]
+fn the_tripod_with_oh_feet_binds_by_handing_off_its_hydrogens() {
+    let slab = si100_slab(5.0, 9.0);
+    let (mut three_leg_poses, mut hypotheses) = (0, 0);
+    let mut slowest: f64 = 0.0;
+    for rot_deg in [0.0, 30.0, 45.0, 60.0, 90.0] {
+        for shift in [
+            DVec3::ZERO,
+            DVec3::new(1.92, 0.0, 0.0),
+            DVec3::new(0.0, 1.92, 0.0),
+            DVec3::new(1.36, 1.36, 0.0),
+        ] {
+            let (mut ads, feet_ids) = stand_in(3);
+            let mut feet_h = HashMap::new();
+            for &f in &feet_ids {
+                let p = ads.get_atom(f).unwrap().position;
+                let out = DVec3::new(p.x, p.y, 0.0).normalize();
+                let h = ads.add_atom(H, p + (out * 0.6 - DVec3::Z * 0.8).normalize() * 0.96);
+                ads.add_bond(f, h, BOND_SINGLE);
+                feet_h.insert(f, h);
+                // Only the feet are reactive, so the cage's C–H stay out of it.
+                ads.add_atom_tag(f, "feet").unwrap();
+            }
+            let q = DQuat::from_rotation_z(f64::to_radians(rot_deg));
+            ads.transform(&q, &(shift + DVec3::Z * 1.8));
+
+            let cfg = ChemisorptionSearch {
+                adsorbate_tag: Some("feet".to_string()),
+                ..transfer_config(3.5, &[H_TO_SUBSTRATE], 3)
+            };
+            let start = std::time::Instant::now();
+            let p = plan(&ads, &slab, &cfg).unwrap();
+            slowest = slowest.max(start.elapsed().as_secs_f64());
+            assert_stats_add_up(&p);
+            assert!(!p.stats.truncated);
+
+            let back: HashMap<u32, u32> = p.adsorbate_ids.iter().map(|(&k, &v)| (v, k)).collect();
+            for h in &p.hypotheses {
+                for &(f, _) in &h.formed {
+                    assert!(
+                        h.transfers
+                            .iter()
+                            .any(|t| t.donor == f && back[&t.moved] == feet_h[&back[&f]]),
+                        "a leg bonded without handing off its H"
+                    );
+                }
+            }
+            hypotheses += p.stats.to_relax;
+            if p.hypotheses.iter().any(|h| h.formed.len() == 3) {
+                three_leg_poses += 1;
+            }
+        }
+    }
+    assert!(three_leg_poses > 0);
+    println!(
+        "OH tripod: {hypotheses} hypotheses over 20 poses, three-leg binding in {three_leg_poses}; slowest plan {slowest:.3} s"
     );
 }
