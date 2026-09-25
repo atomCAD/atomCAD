@@ -8,7 +8,7 @@ made it its own crate. Consequences for anything you write here:
 - It is imported as **`atomcad_crystolecule::…`**, never `crate::crystolecule::…`,
   from every other package *and* from every test outside this crate. Inside the
   crate, use `crate::…`.
-- Its dependencies are `atomcad-util` and `atomcad-geo-tree` and nothing else.
+- Its workspace dependencies are `atomcad-util` and `atomcad-geo-tree` and nothing else.
   The "never depend on `renderer` or `display`" constraint below is now a **build
   failure**, not a review comment — which is the point of the split.
 - Its tests live in `crates/atomcad-crystolecule/tests/crystolecule/`, beside
@@ -34,6 +34,12 @@ crates/atomcad-crystolecule/src/
 ├── lib.rs                          # Crate root: module declarations (all submodules pub)
 ├── atomic_constants.rs             # Element database (symbol, radius, color)
 ├── atomic_structure_utils.rs       # Auto-bonding, selection, cleanup helpers, `empirical_formula`
+├── chemisorption/                  # Exhaustive chemisorption search: plan (enumerate) / evaluate (UFF relax + score)
+│   ├── config.rs                   # ChemisorptionSearch, ChemisorptionError, CHANGED_TAG
+│   ├── enumerate.rs                # plan(): sites, feet, depth-first site assignment, free_valence
+│   ├── relax.rs                    # one UFF relaxation with per-term energies (StrainTerms)
+│   ├── score.rs                    # bond enthalpy + electronegativity tables, Pauling estimate, BondInventory
+│   └── report.rs                   # evaluate() / search(): Candidate, SearchReport, ranking
 ├── crystolecule_constants.rs       # Diamond unit cell size, default motif text
 ├── drawing_plane.rs                # 2D drawing plane embedded in 3D crystal
 ├── motif.rs                        # Motif struct (sites, bonds, parameters)
@@ -127,6 +133,7 @@ crates/atomcad-crystolecule/src/
 | `ProxyOptions` | `proxy_cut.rs` | What a proxy cut is tunable by: `hops` / `rim` (frozen shells counted inward from the cut boundary, so the absolute free depth is `hops - rim` — `free_hops()`) / `fill` / `rm_single` / `passivate` / `passivant_element` / `core`. Unsigned — the node's "-1 means off" rules are validated before this struct is built, and `core` is the one `Option` |
 | `ProxyPlan` | `proxy_cut.rs` | Everything one cut decided and nothing mutated: per-atom bond distance, the keep/drop sets, the severed-bond caps, the frozen and `high` lists. Every `Vec` is sorted by atom id so the ids `apply_proxy` hands out are deterministic |
 | `ProxyStats` | `proxy_cut.rs` | The report `apply_proxy` returns: formula, atom counts, `farthest_hop` (a **size** figure) beside `free_hops` (the derived depth of the relaxed interior; the shielding figure is the `rim` option itself), `open_valences`, `min_cap_pair`, and `nearest_dropped` — which counts only dropped atoms the cluster is **not attached to** (`DETACHED_MIN_BOND_SEPARATION`), since the workpiece continuing past the cut is always ~2 bonds from the free region and would otherwise report a steric neighbour on every bulk cut. The `proxy` node stores it in the eval cache, never on the node data |
+| `ChemisorptionSearch` / `SearchPlan` / `SearchReport` / `Candidate` | `chemisorption/` | One search of one posed adsorbate over a substrate: the settings, what `plan` enumerated (hypotheses + pruning counts, nothing relaxed), and what `evaluate` ranked (relaxed candidates scored against the relaxed no-change reference) |
 | `LatticeFillConfig` | `lattice_fill/config.rs` | Unit cell + motif + geometry + options for filling |
 | `PlacedAtomTracker` | `lattice_fill/placed_atom_tracker.rs` | CrystallographicAddress → atom ID mapping |
 | `AtomInfo` | `atomic_constants.rs` | Element properties (symbol, radii, color) |
@@ -245,6 +252,30 @@ undetermined question with whichever vector its sweeps produced; they offer no
 mirrored candidate, because reflecting a point or a line only changes the
 rotation that was undetermined anyway. Design doc:
 `doc/design_mechanosynth_editor.md`.
+
+**Chemisorption search** (`chemisorption/`): enumerate every bonding pattern
+of an adsorbate posed over a substrate, UFF-relax each, rank by UFF strain plus
+a bond-energy term. Design doc: `design_chemisorption_search.md`, in the
+external mechanosynth working folder (it carries proprietary context). Rules
+that are easy to erode:
+
+- **`plan` never relaxes.** It is the half a node runs on every evaluation, so
+  it is enumeration only — sites, reach, valence and pair-tolerance checks.
+  Anything that needs UFF belongs in `evaluate`.
+- **A site is an atom with a free valence, nothing more.** No plane, facet or
+  passivation notion; an H placed on the substrate blocks its host by
+  saturating it. `free_valence` reads a **fixed per-element valence** against
+  the bond-order sum, not the UFF hybridization: a radical carbon with three
+  single bonds types as sp2 and would read as saturated.
+- **Every scored element is in Appendix A of the design, copied verbatim** into
+  `score.rs`. A missing pair is a flagged Pauling estimate; an element outside
+  the twelve is a blocking error at `plan` time. Never fill a gap from memory.
+- **The pair-tolerance default is calibrated** by the ignored
+  `chemisorption_pruning_calibration` test (UFF lets feet flex by >2.5 Å of
+  site mismatch within the listing window); rerun it before lowering it.
+- The ranking is deterministic: relaxations run in parallel (rayon) but are
+  collected in plan order and sorted by score, ties by the normalized bond
+  set (`rank_candidates`).
 
 **Memory Layout**: `InlineBond` packs atom_id (29 bits) + bond_order (3 bits) into 4 bytes. `SmallVec<[InlineBond; 4]>` keeps up to 4 bonds inline per atom. Spatial grid (FxHashMap, cell size 4.0 Å) enables O(1) neighbor queries. `AtomicStructure` no longer carries a `frame_transform` — movement nodes bake transforms directly into atom positions (see `doc/design_lattice_space_refactoring.md` Appendix B).
 
@@ -594,6 +625,9 @@ O(n²), compares flags and tag names). Design doc:
 - `CifError` (io/cif/symmetry, structure) — symmetry operation or crystal data extraction errors
 - `CifLoadError` (io/cif/mod) — top-level load errors (wraps parse/extraction/IO)
 - `CubeError` (io/cube_loader) — Io / Parse / Unsupported / Field variants
+- `ChemisorptionError` (chemisorption/config) — InvalidConfig / UnknownTag (a
+  reactive tag no atom carries: an error, not "found nothing") /
+  UnscoredElement / Relaxation / Tag
 - `FieldError` (field) — grid description problems (zero dimension, sample-count
   mismatch, degenerate axes, non-finite sample)
 - `MechanosynthError` (mechanosynth/schema) — Io / Json / Invalid (a validation
@@ -624,6 +658,7 @@ motif_bond_inference → Motif, UnitCellStruct, atomic_constants
 miller        →  glam only (no crystolecule types at all)
 patch         →  AtomicStructure, UnitCellStruct, weld, hydrogen_passivation, guided_placement, GeoNode
 proxy_cut     →  AtomicStructure, atomic_constants, atomic_structure_utils, hydrogen_passivation
+chemisorption →  AtomicStructure, atomic_constants, guided_placement, simulation (rayon for the relaxations)
 mechanosynth  →  AtomicStructure, atomic_constants (serde_json for the two JSON files)
 guided_placement → AtomicStructure, simulation/uff (typer, params)
 hydrogen_passivation → AtomicStructure, atomic_constants, guided_placement
@@ -657,6 +692,7 @@ tests/crystolecule/
 ├── field_test.rs                  # ScalarField contract: bounds, interpolation, gradients
 ├── patch_test.rs                  # Cell selection, region depths, apply_patch pipeline
 ├── patch_build_test.rs            # Tiling-vector validation, tile extraction
+├── chemisorption_test.rs          # plan counts/pruning/valence/tags, enthalpy tables, ranking, ethylene di-σ known answer, ignored pruning calibration
 ├── proxy_cut_test.rs              # Riders, bond distances, fill/rm_single keep set, severed-bond caps; the §4.3 bulk-silicon fill table
 ├── concave_rebond_test.rs         # Concave-corner rebonding; clash detector re-derived independently
 ├── io/

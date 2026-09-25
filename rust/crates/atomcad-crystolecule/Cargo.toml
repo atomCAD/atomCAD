@@ -17,6 +17,8 @@ atomcad-util = { path = "../atomcad-util" }
 glam = { workspace = true }
 indexmap = { workspace = true }
 lazy_static = { workspace = true }
+# `chemisorption` relaxes its hypotheses in parallel.
+rayon = { workspace = true }
 rustc-hash = { workspace = true }
 serde = { workspace = true }
 # `mechanosynth` parses its two JSON files (operation library, build script).
