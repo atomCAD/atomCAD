@@ -1008,10 +1008,7 @@ reopening a project, press Run again.
 
 **What counts as a site.** A *site* is a substrate atom that has a free
 valence (a dangling bond). There is no notion of a surface plane or a facet, so
-any geometry works: terraces, other facets, step edges, clusters. An atom with
-two dangling bonds can take two new bonds. An atom capped by a hydrogen is not
-a site, so placing hydrogens on the surface by hand is how you block spots —
-absolutely, unless H abstraction (`to_adsorbate`, below) is enabled.
+any geometry works: terraces, other facets, step edges, clusters.
 
 **What the search enumerates.** Each adsorbate atom with a free valence (a
 *foot*) forms at most one new bond, to a site within `reach` of it. Every
@@ -1028,8 +1025,7 @@ atom (hydrogen or a halogen) move across: from its only neighbour, the
   mount: the H goes to a site, which frees the O to bond to another site. Without
   this, an OH oxygen is saturated and never bonds.
 - `to_adsorbate` — a surface atom gives one away to a radical foot (H
-  abstraction). With it enabled, a hydrogen on the surface is no longer an
-  absolute block: a foot within reach may take it.
+  abstraction).
 
 The donor must be a reactive atom of its side (the tags select donors, never
 the hydrogens, so you never tag H atoms); the moving atom must be within
