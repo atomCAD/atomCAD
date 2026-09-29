@@ -1666,6 +1666,60 @@ Tests:
   smoke test (`flutter test integration_test/`) is also run by the maintainer,
   not by an agent.
 
+**Status (2026-09-29): implemented; the manual walkthrough and the smoke test
+are the maintainer's.** Files: `rust/src/api/structure_designer/library_links_api.rs`
+(+ `view_builders.rs` for the Dart shapes), `lib/structure_designer/library_link_actions.dart`,
+the panel / canvas / model / menu edits; tests
+`library_links_interaction_test.rs`, `tests/structure_designer_api/library_links_api_test.rs`,
+`test/library_links_test.dart`. Deviations and findings:
+
+- **Rust-side interactions, established.** The undo coalescing treats six
+  things as one open step: `pending_move` (node drag), `pending_atom_edit_drag`,
+  `pending_gadget_drag`, `pending_node_data_drag` (property sliders),
+  `pending_zone_resize`, `pending_comment_edit`
+  (`StructureDesigner::open_interaction`). `mechanosynth_edit`'s keystroke
+  coalescing is *not* one: it is keyed on the undo push count, so any command
+  pushed in between ends the run by itself. While one is open,
+  `check_dependencies` **skips the check entirely** rather than marking a hold
+  — nothing is observed, `last_seen` does not advance, and the first check
+  after the interaction ends finds the change and applies it as its own
+  command (a test per interaction). An explicit refresh / retarget during one
+  is refused with an error. Guarded by Flutter alone (recorded in
+  `lib/structure_designer/AGENTS.md`): a pointer held down anywhere (camera
+  drags included), a focused text field, a dialog or menu on top, a wire drag.
+- **The API-layer mutation alphabet was not run through the FFI.** Every
+  wrapper needs the global `CADInstance`, whose `Renderer` needs a GPU adapter,
+  and no Rust test constructs one. What was done instead: the API-layer sites
+  that mutate a network *without* going through a guarded `StructureDesigner`
+  method were audited (`set_active_network_canvas_viewport` — view state, never
+  dirties a linked host; `resize_comment_node` / `update_comment_node` and the
+  Text tab — guarded in P2; the `facet_shell` / `import_*` node-data accessors
+  — `get_node_network_data_mut_scoped` returns `None` on a linked network), so
+  the P2 alphabet on `StructureDesigner` still covers every path. The API tests
+  cover the view fields (`read_only`, the add-node lists without transitive
+  mounts — also in the drag-aware popup — and the mount / report shapes).
+- **The report crosses the bridge with its labels resolved** (`node_label`,
+  `source_label`, by the Find Usages helpers), and a refused refresh or
+  retarget crosses as a report whose only content is `errors` (Flutter shows
+  it as an error). One API function beyond §5.2: `check_library_alias`, so the
+  link dialog validates the alias against local names and mounts as the user
+  types.
+- **After Save As the check runs, but it cannot yet see a moved folder.**
+  Re-resolving the watched absolute paths against the new design folder is the
+  Save As work of P5; until then a Save As into another folder keeps the
+  mounts on their old absolute paths for the rest of the session (the next
+  open resolves them afresh).
+- The menu item is *Import copy…*; the link / retarget file dialogs remember
+  their own folder (`FileDialogPurpose::LibraryLink`, key `library_link`).
+  Linked rows' Dart twin of the prefix test is `mountFor` in
+  `namespace_utils.dart`, tested against the Rust table `MOUNT_FOR_CASES`.
+- The canvas gates edit gestures in the **model** (every edit entry point
+  checks `activeNetworkReadOnly` first), so the gestures are inert rather than
+  refused after a visible change; the node context menu keeps navigation,
+  copy and Execute.
+- A new shared snackbar, `showActionSnackBar` (`lib/common/error_display.dart`),
+  carries *Details* / *Undo* / *Refresh*.
+
 ### Phase 5 — Save As dependency copy and project bundle (Rust + Flutter)
 
 Work: `NodeData::file_paths` for the file-reading nodes (`import_xyz`,

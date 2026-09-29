@@ -10,13 +10,14 @@ use atomcad_structure_designer::last_directories::{
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
-const ALL_PURPOSES: [FileDialogPurpose; 6] = [
+const ALL_PURPOSES: [FileDialogPurpose; 7] = [
     FileDialogPurpose::Design,
     FileDialogPurpose::CnndLibrary,
     FileDialogPurpose::StructureImport,
     FileDialogPurpose::StructureExport,
     FileDialogPurpose::NetworkImage,
     FileDialogPurpose::AiHistory,
+    FileDialogPurpose::LibraryLink,
 ];
 
 /// A temp dir plus the store path inside it. The store's parent is created
@@ -232,6 +233,7 @@ fn test_purpose_keys_are_stable_and_distinct() {
     assert_eq!(FileDialogPurpose::StructureExport.key(), "export");
     assert_eq!(FileDialogPurpose::NetworkImage.key(), "network_image");
     assert_eq!(FileDialogPurpose::AiHistory.key(), "ai_history");
+    assert_eq!(FileDialogPurpose::LibraryLink.key(), "library_link");
 
     let keys: std::collections::HashSet<&str> = ALL_PURPOSES.iter().map(|p| p.key()).collect();
     assert_eq!(

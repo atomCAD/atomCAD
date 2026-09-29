@@ -34,6 +34,7 @@ We’d love to hear about your use case: what are you using — or planning to u
 - [Direct Editing Mode](./reference_guide/direct_editing.md) — the simplified beginner mode and the atom editor.
 - [Parts of the UI](./reference_guide/ui.md) — viewport, panels, menu bar, preferences.
 - [Node Networks](./reference_guide/node_networks.md) — core concepts: data types, subnetworks, functional programming.
+- [Linked libraries](./reference_guide/library_linking.md) — using networks from other `.cnnd` files without copying them.
 - [Nodes reference](#nodes-reference) — built-in node categories.
 - [Headless Mode (CLI)](./reference_guide/headless_cli.md)
 - [Using with Claude Code](./reference_guide/claude_code.md)

@@ -156,4 +156,4 @@ Both modes use the same `.cnnd` file format — your work is preserved when swit
 
 ## File menu differences
 
-The *File > Import from .cnnd library* menu item is available only in Node Network Mode (it is an advanced feature for importing node networks).
+The *File > Import copy…* and *File > Link library…* menu items are available only in Node Network Mode (it is an advanced feature for importing node networks).

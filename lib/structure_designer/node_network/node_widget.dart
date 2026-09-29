@@ -1743,6 +1743,9 @@ class NodeWidget extends StatelessWidget {
     );
 
     final bool isCustomNode = isCustomNodeType(nodeTypeName: node.nodeTypeName);
+    // A linked network is read-only (`doc/design_library_linking.md` §5.3):
+    // its menu keeps navigation, copying and Execute, and drops every edit.
+    final bool readOnly = model.activeNetworkReadOnly;
 
     // Landing anchor for a Find Usages jump: this node's center in the node-
     // network widget's local screen coordinates. Captured **now**, before any
@@ -1837,18 +1840,20 @@ class NodeWidget extends StatelessWidget {
     ]);
 
     addSection('Edit', [
-      const PopupMenuItem(
-        value: 'duplicate',
-        child: Text('Duplicate node (Ctrl+D)'),
-      ),
+      if (!readOnly)
+        const PopupMenuItem(
+          value: 'duplicate',
+          child: Text('Duplicate node (Ctrl+D)'),
+        ),
       const PopupMenuItem(
         value: 'copy',
         child: Text('Copy (Ctrl+C)'),
       ),
-      const PopupMenuItem(
-        value: 'cut',
-        child: Text('Cut (Ctrl+X)'),
-      ),
+      if (!readOnly)
+        const PopupMenuItem(
+          value: 'cut',
+          child: Text('Cut (Ctrl+X)'),
+        ),
       // Issue #359. The canvas error surface is a `Tooltip`, which is an
       // overlay that dismisses on pointer-exit and does not accept
       // hit-testing — there is no drag-select to be had on it, whatever
@@ -1872,7 +1877,7 @@ class NodeWidget extends StatelessWidget {
     ]);
 
     addSection('Refactor', [
-      if (isCustomNode)
+      if (isCustomNode && !readOnly)
         const PopupMenuItem(
           value: 'inline',
           child: Text('Inline'),
@@ -1882,22 +1887,22 @@ class NodeWidget extends StatelessWidget {
       // network by bare id. Offering it on a body node would mis-target a
       // colliding top-level id (per-body id counters). Bodies expose zone
       // inputs, not arbitrary parameters.
-      if (scopeChain.isEmpty)
+      if (scopeChain.isEmpty && !readOnly)
         const PopupMenuItem(
           value: 'promote_to_parameter',
           child: Text('Promote to Parameter'),
         ),
-      if (canFactor)
+      if (canFactor && !readOnly)
         const PopupMenuItem(
           value: 'factor_into_subnetwork',
           child: Text('Factor out to Subnetwork...'),
         ),
-      if (canConvertToClosure)
+      if (canConvertToClosure && !readOnly)
         const PopupMenuItem(
           value: 'convert_to_closure',
           child: Text('Convert to Closure'),
         ),
-      if (canExtractToNetwork)
+      if (canExtractToNetwork && !readOnly)
         const PopupMenuItem(
           value: 'extract_to_network',
           child: Text('Convert Closure to Network...'),
@@ -1916,18 +1921,19 @@ class NodeWidget extends StatelessWidget {
           ],
         ),
       ),
-      PopupMenuItem(
-        value: 'return',
-        child: Text(
-            node.returnNode ? 'Unset as return node' : 'Set as return node'),
-      ),
+      if (!readOnly)
+        PopupMenuItem(
+          value: 'return',
+          child: Text(
+              node.returnNode ? 'Unset as return node' : 'Set as return node'),
+        ),
     ]);
 
     // Body collapse-mode radio group (collapsable HOFs only). The check-mark
     // sits on the current `collapseMode`; picking "Auto" is the "stop
     // overriding" path. No dialog/submenu — the flat `showMenu` has no native
     // cascade and view state doesn't warrant a dialog.
-    if (isCollapsableHof) {
+    if (isCollapsableHof && !readOnly) {
       addSection('Body', [
         _collapseModeItem(
             'collapse_auto', 'Auto (follow f)', node.zone!.collapseMode),

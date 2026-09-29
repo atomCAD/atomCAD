@@ -185,10 +185,13 @@ class NodeDataWidget extends StatelessWidget {
             return Padding(
               padding: const EdgeInsets.all(2.0),
               child: BlockingAwareSingleChildScrollView(
-                child: NetworkDescriptionEditor(
-                  key: ValueKey(nodeNetworkView.name),
-                  description: description,
-                  summary: summary,
+                child: IgnorePointer(
+                  ignoring: model.activeNetworkReadOnly,
+                  child: NetworkDescriptionEditor(
+                    key: ValueKey(nodeNetworkView.name),
+                    description: description,
+                    summary: summary,
+                  ),
                 ),
               ),
             );
@@ -200,6 +203,11 @@ class NodeDataWidget extends StatelessWidget {
           // during build is safe.
           model.propertyEditorScopeChain = selected.scopeChain;
 
+          // A linked network is read-only (`doc/design_library_linking.md`
+          // §5.3): its editors render, greyed and inert. Rust refuses the
+          // edits regardless (§6).
+          final readOnly = model.activeNetworkReadOnly;
+
           // Wrap the editor widget in a SingleChildScrollView to handle tall editors
           return Padding(
             padding: const EdgeInsets.all(2.0),
@@ -207,6 +215,15 @@ class NodeDataWidget extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  if (readOnly)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 6),
+                      child: Text(
+                        'Linked from a library — read-only.',
+                        style: TextStyle(
+                            fontStyle: FontStyle.italic, color: Colors.grey),
+                      ),
+                    ),
                   // One shared, editable name strip above whichever per-type
                   // editor is dispatched below — the surface on which every
                   // node visibly *has* a name, and the only place the GUI can
@@ -225,11 +242,24 @@ class NodeDataWidget extends StatelessWidget {
                       node: selected.node,
                       scopeChain: selected.scopeChain,
                     ),
-                  _buildNodeEditor(selected.node, model),
-                  // Generic, node-type-agnostic: every node with input pins can
-                  // expose itself as a function on its `-1` pin, so the role
-                  // section sits below whatever per-type editor rendered above.
-                  FunctionOutputEditor(node: selected.node, model: model),
+                  IgnorePointer(
+                    ignoring: readOnly,
+                    child: Opacity(
+                      opacity: readOnly ? 0.5 : 1.0,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildNodeEditor(selected.node, model),
+                          // Generic, node-type-agnostic: every node with input
+                          // pins can expose itself as a function on its `-1`
+                          // pin, so the role section sits below whatever
+                          // per-type editor rendered above.
+                          FunctionOutputEditor(
+                              node: selected.node, model: model),
+                        ],
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),

@@ -7,6 +7,7 @@ import 'package:flutter_cad/structure_designer/schema_editor.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_data_widget.dart';
 import 'package:flutter_cad/structure_designer/qualified_name_header.dart';
+import 'package:flutter_cad/structure_designer/library_link_actions.dart';
 
 /// The main content area of the structure designer: the 3D viewport, the node
 /// properties panel docked to its right, and the node network editor.
@@ -147,9 +148,23 @@ class _MainContentAreaState extends State<MainContentArea> {
             defName: model.activeRecordDefName!,
           );
         }
-        return NetworkEditorTabs(
+        final tabs = NetworkEditorTabs(
           graphModel: widget.graphModel,
           nodeNetworkKey: widget.nodeNetworkKey,
+        );
+        // A linked network is browsable, not editable
+        // (`doc/design_library_linking.md` §5.3): say so above the canvas,
+        // with the way to edit it.
+        final mount = model.activeNetworkReadOnly
+            ? model.mountOf(model.nodeNetworkView!.name)
+            : null;
+        if (mount == null) return tabs;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            LinkedNetworkBanner(model: model, mount: mount),
+            Expanded(child: tabs),
+          ],
         );
       },
     );

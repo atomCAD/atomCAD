@@ -313,7 +313,13 @@ old interface read from the file) and the refresh (captured from memory into
 A refresh / retarget is one `RefreshDependenciesCommand` holding both
 versions of the mounted content and whole copies of the affected host
 networks; `check_dependencies` holds (does not apply) a change while redo
-history exists (D9). Tests go through `library_links_refresh_test.rs`'s
+history exists (D9) — and skips the check entirely while an interaction the
+undo coalescing treats as one open step is in progress
+(`StructureDesigner::open_interaction`: node / atom / gadget / property drags,
+body resizes, comment edits), since a refresh pushed mid-interaction would split
+that step. **A new `pending_*` coalescing session belongs in
+`open_interaction`**, with a test in `library_links_interaction_test.rs`.
+Tests go through `library_links_refresh_test.rs`'s
 workspace and the randomized harness `library_links_fuzz_test.rs`; a failure
 the harness finds becomes a named test before it is fixed.
 

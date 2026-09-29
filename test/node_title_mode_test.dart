@@ -75,6 +75,7 @@ NodeNetworkView _network(NodeView node) => NodeNetworkView(
       name: 'main',
       nodes: {node.id: node},
       wires: const [],
+      readOnly: false,
     );
 
 /// Pump one [NodeWidget] under [mode] and return the size its `Container`

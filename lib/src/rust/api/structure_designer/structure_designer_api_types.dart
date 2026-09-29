@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'structure_designer_api_types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `hash`
 
 /// Result of add_bond_pointer_move. Contains all info Flutter needs to draw
 /// the rubber-band preview line as a 2D overlay.
@@ -2010,6 +2010,7 @@ enum APIFileDialogPurpose {
   structureExport,
   networkImage,
   aiHistory,
+  libraryLink,
   ;
 }
 
@@ -2806,6 +2807,73 @@ enum APILevelMode {
   /// `level_fraction` is live, read as an enclosed mass fraction.
   fraction,
   ;
+}
+
+/// One linked library as mounted in the open design, direct or nested.
+class APILibraryMount {
+  /// `"libs.demolib"` (direct) or `"libs.demolib.common"` (nested) — the
+  /// folder the library's content lives under in the user-types panel.
+  final String mountPath;
+
+  /// As written by the importing file (may be dotted).
+  final String alias;
+
+  /// As written by the importing file, relative to it.
+  final String relPath;
+
+  /// Where the library file is on disk (canonical when it exists).
+  final String absPath;
+
+  /// The file name alone, for the mount folder's label.
+  final String fileName;
+
+  /// `mount_path` of the library that links this one; `None` = a direct
+  /// link of the open design.
+  final String? parent;
+  final bool direct;
+  final APIMountStatus status;
+
+  /// Human-readable status (the error text for `Error`).
+  final String statusMessage;
+
+  const APILibraryMount({
+    required this.mountPath,
+    required this.alias,
+    required this.relPath,
+    required this.absPath,
+    required this.fileName,
+    this.parent,
+    required this.direct,
+    required this.status,
+    required this.statusMessage,
+  });
+
+  @override
+  int get hashCode =>
+      mountPath.hashCode ^
+      alias.hashCode ^
+      relPath.hashCode ^
+      absPath.hashCode ^
+      fileName.hashCode ^
+      parent.hashCode ^
+      direct.hashCode ^
+      status.hashCode ^
+      statusMessage.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APILibraryMount &&
+          runtimeType == other.runtimeType &&
+          mountPath == other.mountPath &&
+          alias == other.alias &&
+          relPath == other.relPath &&
+          absPath == other.absPath &&
+          fileName == other.fileName &&
+          parent == other.parent &&
+          direct == other.direct &&
+          status == other.status &&
+          statusMessage == other.statusMessage;
 }
 
 /// One editable input pin of a node that supports inline literal editing,
@@ -4023,6 +4091,44 @@ class APIMotifSubData {
           availableParameters == other.availableParameters;
 }
 
+/// State of one linked library (`MountStatus`). `OlderThanDisk` and
+/// `ChangedOnDisk` are the neutral "older than disk" marker (click =
+/// *Refresh*); `Missing` / `Error` / `Cycle` are the red error badge.
+enum APIMountStatus {
+  loaded,
+  olderThanDisk,
+  changedOnDisk,
+  missing,
+  error,
+  cycle,
+  ;
+}
+
+/// A mount whose status an operation changed.
+class APIMountStatusChange {
+  final String mountPath;
+  final APIMountStatus status;
+  final String message;
+
+  const APIMountStatusChange({
+    required this.mountPath,
+    required this.status,
+    required this.message,
+  });
+
+  @override
+  int get hashCode => mountPath.hashCode ^ status.hashCode ^ message.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIMountStatusChange &&
+          runtimeType == other.runtimeType &&
+          mountPath == other.mountPath &&
+          status == other.status &&
+          message == other.message;
+}
+
 /// One affected network in a namespace move/rename preview: its current name,
 /// the name it would take, and whether that target name collides with an
 /// existing, non-affected user type.
@@ -4166,13 +4272,19 @@ class APINetworkWithValidationErrors {
   /// Empty when the network has no errors — the panel renders no badge.
   final List<APIValidationError> validationErrors;
 
+  /// The network belongs to a linked library (a mount): browsable, not
+  /// editable (`doc/design_library_linking.md` §5.2).
+  final bool readOnly;
+
   const APINetworkWithValidationErrors({
     required this.name,
     required this.validationErrors,
+    required this.readOnly,
   });
 
   @override
-  int get hashCode => name.hashCode ^ validationErrors.hashCode;
+  int get hashCode =>
+      name.hashCode ^ validationErrors.hashCode ^ readOnly.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -4180,7 +4292,8 @@ class APINetworkWithValidationErrors {
       other is APINetworkWithValidationErrors &&
           runtimeType == other.runtimeType &&
           name == other.name &&
-          validationErrors == other.validationErrors;
+          validationErrors == other.validationErrors &&
+          readOnly == other.readOnly;
 }
 
 class APINodeCategoryView {
@@ -5140,6 +5253,81 @@ class APIRectData {
           extent == other.extent;
 }
 
+/// What an open, a refresh or a retarget did to the design (§7.2). Every
+/// wire that is gone after the operation is in `dropped_wires`. `is_clean`
+/// chooses between the transient and the persistent snackbar (D10).
+class APIRefreshReport {
+  final List<String> refreshedMounts;
+  final List<String> refreshedDataFiles;
+  final List<APIReportedNode> reconciledNodes;
+  final List<APIReportedWire> droppedWires;
+  final List<APIReportedWire> flaggedWires;
+  final List<APIReportedWire> outputPinWarnings;
+  final List<String> removedNamesInUse;
+  final List<APIReportedNode> frozenNodes;
+  final List<APIMountStatusChange> statusChanges;
+
+  /// Changes detected but not applied because redo history exists (D9).
+  final List<String> held;
+
+  /// Direct mounts whose content changed since the file was saved (open
+  /// only; a hint).
+  final List<String> changedSinceSaved;
+  final List<String> errors;
+  final bool isClean;
+
+  const APIRefreshReport({
+    required this.refreshedMounts,
+    required this.refreshedDataFiles,
+    required this.reconciledNodes,
+    required this.droppedWires,
+    required this.flaggedWires,
+    required this.outputPinWarnings,
+    required this.removedNamesInUse,
+    required this.frozenNodes,
+    required this.statusChanges,
+    required this.held,
+    required this.changedSinceSaved,
+    required this.errors,
+    required this.isClean,
+  });
+
+  @override
+  int get hashCode =>
+      refreshedMounts.hashCode ^
+      refreshedDataFiles.hashCode ^
+      reconciledNodes.hashCode ^
+      droppedWires.hashCode ^
+      flaggedWires.hashCode ^
+      outputPinWarnings.hashCode ^
+      removedNamesInUse.hashCode ^
+      frozenNodes.hashCode ^
+      statusChanges.hashCode ^
+      held.hashCode ^
+      changedSinceSaved.hashCode ^
+      errors.hashCode ^
+      isClean.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIRefreshReport &&
+          runtimeType == other.runtimeType &&
+          refreshedMounts == other.refreshedMounts &&
+          refreshedDataFiles == other.refreshedDataFiles &&
+          reconciledNodes == other.reconciledNodes &&
+          droppedWires == other.droppedWires &&
+          flaggedWires == other.flaggedWires &&
+          outputPinWarnings == other.outputPinWarnings &&
+          removedNamesInUse == other.removedNamesInUse &&
+          frozenNodes == other.frozenNodes &&
+          statusChanges == other.statusChanges &&
+          held == other.held &&
+          changedSinceSaved == other.changedSinceSaved &&
+          errors == other.errors &&
+          isClean == other.isClean;
+}
+
 class APIRegPolyData {
   final int numSides;
   final int radius;
@@ -5178,6 +5366,94 @@ class APIRelaxData {
       other is APIRelaxData &&
           runtimeType == other.runtimeType &&
           diffMinMove == other.diffMinMove;
+}
+
+/// A host node a refresh report is about. `node_label` is resolved by Rust
+/// (the node's custom name, else its type name) so Flutter never re-derives
+/// it; empty when the node no longer exists.
+class APIReportedNode {
+  final String network;
+  final Uint64List scopePath;
+  final BigInt nodeId;
+  final String nodeLabel;
+
+  /// The linked name the node refers to.
+  final String name;
+
+  const APIReportedNode({
+    required this.network,
+    required this.scopePath,
+    required this.nodeId,
+    required this.nodeLabel,
+    required this.name,
+  });
+
+  @override
+  int get hashCode =>
+      network.hashCode ^
+      scopePath.hashCode ^
+      nodeId.hashCode ^
+      nodeLabel.hashCode ^
+      name.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIReportedNode &&
+          runtimeType == other.runtimeType &&
+          network == other.network &&
+          scopePath == other.scopePath &&
+          nodeId == other.nodeId &&
+          nodeLabel == other.nodeLabel &&
+          name == other.name;
+}
+
+/// One host wire a refresh removed, flagged or warns about.
+class APIReportedWire {
+  final String network;
+  final Uint64List scopePath;
+
+  /// The node the wire went into.
+  final BigInt nodeId;
+  final String nodeLabel;
+  final String pinName;
+
+  /// The node the wire came from.
+  final String sourceLabel;
+  final String reason;
+
+  const APIReportedWire({
+    required this.network,
+    required this.scopePath,
+    required this.nodeId,
+    required this.nodeLabel,
+    required this.pinName,
+    required this.sourceLabel,
+    required this.reason,
+  });
+
+  @override
+  int get hashCode =>
+      network.hashCode ^
+      scopePath.hashCode ^
+      nodeId.hashCode ^
+      nodeLabel.hashCode ^
+      pinName.hashCode ^
+      sourceLabel.hashCode ^
+      reason.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIReportedWire &&
+          runtimeType == other.runtimeType &&
+          network == other.network &&
+          scopePath == other.scopePath &&
+          nodeId == other.nodeId &&
+          nodeLabel == other.nodeLabel &&
+          pinName == other.pinName &&
+          sourceLabel == other.sourceLabel &&
+          reason == other.reason;
 }
 
 class APIRotationalSymmetry {
@@ -6296,14 +6572,20 @@ class NodeNetworkView {
   final Map<BigInt, NodeView> nodes;
   final List<WireView> wires;
 
+  /// The network belongs to a linked library and cannot be edited here
+  /// (`doc/design_library_linking.md` §5.3).
+  final bool readOnly;
+
   const NodeNetworkView({
     required this.name,
     required this.nodes,
     required this.wires,
+    required this.readOnly,
   });
 
   @override
-  int get hashCode => name.hashCode ^ nodes.hashCode ^ wires.hashCode;
+  int get hashCode =>
+      name.hashCode ^ nodes.hashCode ^ wires.hashCode ^ readOnly.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -6312,7 +6594,8 @@ class NodeNetworkView {
           runtimeType == other.runtimeType &&
           name == other.name &&
           nodes == other.nodes &&
-          wires == other.wires;
+          wires == other.wires &&
+          readOnly == other.readOnly;
 }
 
 /// Dart-facing twin of [`atomcad_structure_designer::node_type::NodeTypeCategory`].

@@ -967,6 +967,9 @@ Used for loading and saving a design, exporting a design to .xyz or .mol, undo/r
 - *File > Load Design*, *File > Save Design*, *File > Save Design As*: The native file format of an atomCAD design is the .cnnd file format. CNND stands for Crystal Node Network Design. It is a json based format. It contains a list of node networks. Can be used as a design file or as a design library file intended for reusing node networks from it as custom nodes in other designs.
   - *Save Design* (**Ctrl+S**) is a quick save: it writes the design straight back to the file it was loaded from or last saved to, with no dialog. A short confirmation appears at the bottom of the window ("Saved *filename*", or "No changes to save" when the design is already up to date). If the design has never been saved and so has no file yet, **Ctrl+S** opens the *Save Design As* dialog instead.
   - *Save Design As* (**Ctrl+Shift+S**) always opens the file dialog, so it is the way to write the design to a *new* file — the one you pick also becomes the target of subsequent quick saves.
+- *File > Import copy…*: Copies selected networks from another `.cnnd` file into your design, once, optionally under a name prefix. The copies are ordinary local networks and forget where they came from; to keep using another file's networks *as that file changes*, link it instead.
+- *File > Link library…*, *File > Refresh all dependencies*: Link another `.cnnd` file so its networks and record types can be used here without being copied, and re-read every linked library and data file. See [Linked libraries](library_linking.md).
+- *File > Back to …*: Appears after *Open library file* (from a linked library's context menu or the read-only strip above its canvas) and reopens the design you left.
 - *File > Export visible*: You can export visible atomic structures into `.xyz` or `.mol` format. `.mol` is a better choice because in this case bonds are saved too. `.xyz` do not support bond information so when saving into `.xyz` bond information is lost. In case of `.mol` the newer `V3000` flavor is used instead of the old `V2000` flavor because `V3000` supports more than 999 atoms.
 - *File > Export node network image...*: Saves the **whole** active node network as a `.png` — including the parts that do not fit on screen, which is what makes it usable for sharing a large network in a discussion or an issue. Available in Node Network Mode only.
   - The dialog offers a **zoom level** (the same three levels the canvas itself uses — *Normal*, *Zoomed out*, *Zoomed out far*), a **resolution** multiplier (1×, 2×, 3×) and a **margin**, the blank space around the content in pixels of the image at 1×. It shows the resulting pixel size as you change any of them, so you can see what you are about to get.
@@ -981,7 +984,8 @@ Used for loading and saving a design, exporting a design to .xyz or .mol, undo/r
   - A comment note that is too small for its text scrolls that text out of sight on the canvas, and the image is clipped in the same way. Resize the note until all of its text is visible before exporting.
 - **File dialogs remember where you were.** Every file dialog reopens in the folder you last used, so you do not have to dig down the same path each time. The folder is remembered separately for each kind of dialog, and persists across sessions:
   - designs (*Load Design*, *Save Design As*, *Open Recent*),
-  - `.cnnd` libraries (*Import from .cnnd library*),
+  - `.cnnd` libraries copied in (*Import copy…*),
+  - `.cnnd` libraries linked (*Link library…*, *Change file…*),
   - structure imports (`.xyz`, `.cif` — both the *Import XYZ* menu item and the Browse buttons on the `import_xyz` / `import_cif` nodes),
   - structure exports (`.xyz`, `.mol` — both *Export visible* and the `export_atoms` node's Browse button),
   - node network images (*Export node network image...*).
@@ -1095,7 +1099,7 @@ other preference.
 
 ## Import from library .cnnd files
 
-The *File > Import from .cnnd library* menu item allows you import selected node networks from a library .cnnd file.
+The *File > Import copy…* menu item (formerly *Import from .cnnd library*) allows you to import copies of selected node networks from a library .cnnd file. To use a library without copying it, see [Linked libraries](library_linking.md).
 
 A library .cnnd file is just a regular .cnnd file containing node networks created to be reused in other files.
 

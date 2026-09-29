@@ -21,6 +21,8 @@ import 'package:flutter_cad/src/rust/api/structure_designer/import_cube_api.dart
     as import_cube_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/import_api.dart'
     as import_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/library_links_api.dart'
+    as library_links_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/atom_edit_api.dart'
     as atom_edit_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/relax_api.dart'
@@ -48,6 +50,8 @@ import 'package:flutter_cad/src/rust/api/structure_designer/profiling_api.dart'
 import 'package:flutter_cad/src/rust/api/common_api.dart' as common_api;
 import 'package:flutter_cad/structure_designer/node_data/mechanosynth_transport.dart';
 import 'package:flutter_cad/structure_designer/namespace_utils.dart';
+import 'package:flutter_cad/structure_designer/namespace_utils.dart' as ns
+    show mountFor;
 
 /// Distinguishes the five kinds of pin slots a node can expose. Replaces the
 /// legacy `(PinType, pinIndex == -1)` discriminator pair that today
@@ -241,6 +245,16 @@ class StructureDesignerModel extends ChangeNotifier {
   /// these with the folders implied by entity names. Refreshed from the kernel
   /// alongside `nodeNetworkNames`. See `doc/design_empty_folders.md`.
   List<String> folderNames = [];
+
+  /// The linked libraries of the open design, direct and nested
+  /// (`doc/design_library_linking.md` §5.3), in mount-path order. Refreshed
+  /// from the kernel with the network list. Everything under a mount path is
+  /// read-only; [mountFor] is the prefix test.
+  List<APILibraryMount> linkedLibraries = [];
+
+  /// The design the user left through *Open library file*, for *File > Back
+  /// to …* — session-only, forgotten once it has been used.
+  String? backToDesignPath;
 
   /// Name of the record type def currently being edited in the main content
   /// area's bottom panel. When non-null, the schema editor replaces the
@@ -583,6 +597,7 @@ class StructureDesignerModel extends ChangeNotifier {
   /// command (mirrors [beginMoveNodes] / comment-node resize). No refresh — the
   /// per-frame [setZoneSize] calls drive the live update.
   void beginZoneResize(List<BigInt> scopeChain, BigInt hofNodeId) {
+    if (activeNetworkReadOnly) return;
     structure_designer_api.beginZoneResize(
       scopePath: scopeChainToBytes(scopeChain),
       hofNodeId: hofNodeId,
@@ -818,6 +833,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   /// Move all selected nodes by delta (commits position to kernel)
   void moveSelectedNodes(Offset delta, {List<BigInt> scopeChain = const []}) {
+    if (activeNetworkReadOnly) return;
     structure_designer_api.moveSelectedNodes(
       scopePath: scopeChainToBytes(scopeChain),
       deltaX: delta.dx,
@@ -871,6 +887,10 @@ class StructureDesignerModel extends ChangeNotifier {
   /// Notifies via [dragRepaint] (drag fast path), not [notifyListeners] — the
   /// commit at drag end does the full notify.
   void dragSelectedNodes(Offset delta, {List<BigInt> scopeChain = const []}) {
+    // A linked (read-only) network: every canvas edit gesture in this model
+    // starts with the same gate, so the gesture is inert rather than refused
+    // after the fact (`doc/design_library_linking.md` §5.3).
+    if (activeNetworkReadOnly) return;
     if (nodeNetworkView == null) return;
     final containerNodes = _nodesAtScope(scopeChain);
     if (containerNodes == null) return;
@@ -1148,12 +1168,99 @@ class StructureDesignerModel extends ChangeNotifier {
   /// modal.
   List<String> lastLoadParamIdRepairs = [];
 
+  /// What opening the file did to its links (`doc/design_library_linking.md`
+  /// D7, D13): wiring reconciled against changed libraries, frozen nodes,
+  /// libraries not loaded. `null` when there is nothing to say. Read by the
+  /// file-open handlers, like [lastLoadParamIdRepairs].
+  APIRefreshReport? lastLoadLibraryReport;
+
   APIResult loadNodeNetworks(String filePath) {
     final result = structure_designer_api.loadNodeNetworks(filePath: filePath);
     lastLoadParamIdRepairs =
         result.success ? structure_designer_api.takeLoadParamIdRepairs() : [];
+    lastLoadLibraryReport =
+        result.success ? library_links_api.takeLoadLibraryReport() : null;
     refreshFromKernel();
     return result;
+  }
+
+  // ===== LINKED LIBRARIES (`doc/design_library_linking.md` §5.3) =====
+  //
+  // Presentation and triggers only: Rust decides every name, path, refresh
+  // and repair, and refuses every edit of linked content on its own (§6).
+
+  /// The mount path owning [name], or `null` for local content (D3).
+  String? mountFor(String name) =>
+      ns.mountFor(name, linkedLibraries.map((m) => m.mountPath));
+
+  /// The mount record owning [name], or `null` for local content.
+  APILibraryMount? mountOf(String name) {
+    final path = mountFor(name);
+    if (path == null) return null;
+    for (final m in linkedLibraries) {
+      if (m.mountPath == path) return m;
+    }
+    return null;
+  }
+
+  /// True when [name] (a network, record def or folder) belongs to a linked
+  /// library and is therefore read-only here.
+  bool isLinkedName(String name) => mountFor(name) != null;
+
+  /// True when the network shown in the editor belongs to a linked library.
+  /// Authoritative (Rust sets `NodeNetworkView.readOnly`). Every canvas edit
+  /// gesture checks it; Rust refuses the edit regardless.
+  bool get activeNetworkReadOnly => nodeNetworkView?.readOnly ?? false;
+
+  /// Why [alias] cannot be linked, or `null`: the syntax first (instant),
+  /// then Rust's check against local names and other mounts.
+  String? checkLibraryAlias(String alias) =>
+      validateLibraryAlias(alias) ??
+      library_links_api.checkLibraryAlias(alias: alias);
+
+  /// *File > Link library…*. Returns the error, or `null` on success.
+  String? linkLibrary(String path, String alias) {
+    final result = library_links_api.linkLibrary(path: path, alias: alias);
+    refreshFromKernel();
+    return result.success ? null : result.errorMessage;
+  }
+
+  /// *Unlink* on a mount folder. Returns the error (with the list of users
+  /// when the library is still used), or `null` on success.
+  String? unlinkLibrary(String alias) {
+    final result = library_links_api.unlinkLibrary(alias: alias);
+    refreshFromKernel();
+    return result.success ? null : result.errorMessage;
+  }
+
+  /// *Change file…* on a mount folder.
+  APIRefreshReport retargetLibrary(String alias, String path) {
+    final report = library_links_api.retargetLibrary(alias: alias, path: path);
+    refreshFromKernel();
+    return report;
+  }
+
+  /// *Refresh* on a mount folder (or its "older than disk" marker).
+  APIRefreshReport refreshLibrary(String mountPath) {
+    final report = library_links_api.refreshLibrary(mountPath: mountPath);
+    refreshFromKernel();
+    return report;
+  }
+
+  /// *File > Refresh all dependencies*.
+  APIRefreshReport refreshAllDependencies() {
+    final report = library_links_api.refreshAllDependencies();
+    refreshFromKernel();
+    return report;
+  }
+
+  /// The automatic check (D7). Cheap when nothing changed: Rust only stats
+  /// the watched files, and the model is refreshed only when the kernel
+  /// reports something.
+  APIRefreshReport? checkDependencies() {
+    final report = library_links_api.checkDependencies();
+    if (report != null) refreshFromKernel();
+    return report;
   }
 
   void setActiveNodeNetwork(String nodeNetworkName) {
@@ -1289,6 +1396,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   /// Called when a node drag begins. Captures positions for undo coalescing.
   void beginMoveNodes({List<BigInt> scopeChain = const []}) {
+    if (activeNetworkReadOnly) return;
     structure_designer_api.beginMoveNodes(
       scopePath: scopeChainToBytes(scopeChain),
     );
@@ -1337,6 +1445,7 @@ class StructureDesignerModel extends ChangeNotifier {
   /// it during build), so a [dragRepaint] tick is enough — a full
   /// [notifyListeners] per pointer delta would rebuild the whole canvas.
   void dragWire(PinReference startPin, Offset wireEndPosition) {
+    if (activeNetworkReadOnly) return;
     draggedWire ??= DraggedWire(startPin, wireEndPosition);
     draggedWire!.wireEndPosition = wireEndPosition;
     dragRepaint.value++;
@@ -1354,6 +1463,7 @@ class StructureDesignerModel extends ChangeNotifier {
   /// overlay painter, so a [dragRepaint] tick suffices.
   void dragCommentAnchor(
       BigInt nodeId, List<BigInt> scopeChain, Offset endPosition) {
+    if (activeNetworkReadOnly) return;
     draggedCommentAnchor ??=
         DraggedCommentAnchor(nodeId, scopeChain, endPosition);
     draggedCommentAnchor!.endPosition = endPosition;
@@ -1500,6 +1610,7 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   void connectPins(PinReference pin1, PinReference pin2) {
+    if (activeNetworkReadOnly) return;
     if (pin1.isOutput == pin2.isOutput) {
       return;
     }
@@ -2180,6 +2291,7 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   void removeSelected({List<BigInt> scopeChain = const []}) {
+    if (activeNetworkReadOnly) return;
     if (nodeNetworkView == null) return;
     structure_designer_api.deleteSelected(
       scopePath: scopeChainToBytes(scopeChain),
@@ -2200,6 +2312,7 @@ class StructureDesignerModel extends ChangeNotifier {
   /// Pastes clipboard content at the given position (network coordinates).
   void pasteAtPosition(double x, double y,
       {List<BigInt> scopeChain = const []}) {
+    if (activeNetworkReadOnly) return;
     structure_designer_api.pasteAtPosition(
       scopePath: scopeChainToBytes(scopeChain),
       x: x,
@@ -2211,6 +2324,7 @@ class StructureDesignerModel extends ChangeNotifier {
   /// Cuts the current selection (copy + delete).
   /// Returns true if something was cut.
   bool cutSelection({List<BigInt> scopeChain = const []}) {
+    if (activeNetworkReadOnly) return false;
     final result = structure_designer_api.cutSelection(
       scopePath: scopeChainToBytes(scopeChain),
     );
@@ -2545,6 +2659,7 @@ class StructureDesignerModel extends ChangeNotifier {
     APIDragSource? dragSource,
     List<BigInt> scopeChain = const [],
   }) {
+    if (activeNetworkReadOnly) return BigInt.zero;
     if (nodeNetworkView == null) return BigInt.zero;
     final nodeId = structure_designer_api.addNode(
       scopePath: scopeChainToBytes(scopeChain),
@@ -2557,6 +2672,7 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   BigInt duplicateNode(BigInt nodeId, {List<BigInt> scopeChain = const []}) {
+    if (activeNetworkReadOnly) return BigInt.zero;
     if (nodeNetworkView == null) return BigInt.zero;
     final scopePath = scopeChainToBytes(scopeChain);
     final newNodeId = structure_designer_api.duplicateNode(
@@ -3963,6 +4079,7 @@ class StructureDesignerModel extends ChangeNotifier {
         structure_designer_api.getNodeNetworksWithValidation() ?? [];
     recordTypeDefNames = structure_designer_api.getRecordTypeDefNames() ?? [];
     folderNames = structure_designer_api.getFolderNames() ?? [];
+    linkedLibraries = library_links_api.getLinkedLibraries();
     networkUsageCounts = structure_designer_api.getNetworkUsageCounts();
     // The active record def is backend-owned (§8): mirror it here so the
     // schema-editor selection follows record renames/moves and survives

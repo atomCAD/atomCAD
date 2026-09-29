@@ -27,7 +27,8 @@ structure_designer/
 ├── preferences_window.dart           # Settings dialog
 ├── factor_into_subnetwork_dialog.dart # Extract selection to subnetwork
 ├── extract_closure_to_network_dialog.dart # Name dialog for Closure→Network conversion
-├── import_cnnd_library_dialog.dart   # Import from .cnnd library
+├── import_cnnd_library_dialog.dart   # File > Import copy… (the one-shot copy import)
+├── library_link_actions.dart         # Linked libraries: dialogs, refresh-report snackbars, open library / back
 ├── identifier_validation.dart        # Field/identifier validation rules
 ├── namespace_utils.dart              # User-type-name validation (networks + record defs share one namespace)
 ├── qualified_name_header.dart        # Qualified-name header strip (breaks after the namespace only when too long) + copy button (#207/#307)
@@ -530,6 +531,55 @@ placed at creation time rather than reflowed).
 Export (`ai_history_export.dart`) is the reason the log is worth keeping at all
 — it is memory-only, so an unexported session dies with the process. It goes
 through `file_dialog_directory.dart` like every other file dialog.
+
+## Linked libraries (`doc/design_library_linking.md` §5.3)
+
+A design can link other `.cnnd` files; their content is mounted read-only under
+the alias (`demolib.half_space`). Flutter is presentation and triggers only —
+every rule lives in Rust, which refuses edits of linked content on its own, so
+a missed gate here must at worst show an error.
+
+- **Is this linked?** `model.mountFor(name)` / `mountOf` / `isLinkedName` — the
+  Dart twin of Rust `mount_containing`, built on `mountFor` in
+  `namespace_utils.dart`. Its test table (`test/library_links_test.dart`)
+  mirrors Rust's `MOUNT_FOR_CASES` case for case; never use a bare
+  `startsWith(prefix)` (it takes `demolibx` for part of `demolib`), use
+  `isUnderNamespace`.
+- **Read-only canvas.** `model.activeNetworkReadOnly` comes from
+  `NodeNetworkView.readOnly` (authoritative). Every canvas edit gesture in the
+  model — `createNode`, `dragSelectedNodes`, `beginMoveNodes`, `dragWire`,
+  `connectPins`, paste / cut / delete / duplicate, `beginZoneResize`,
+  `dragCommentAnchor` — starts with the same gate, so a gesture is *inert*
+  rather than refused after the fact. **A new canvas edit gesture owes the same
+  gate.** The node context menu drops its edit items, the background menu is
+  not offered, the property panel greys its editors (`IgnorePointer`), and
+  `main_content_area.dart` mounts `LinkedNetworkBanner` above the canvas.
+  Selection, hover values, copy, Execute and display toggles stay.
+- **The panel.** Rows under a mount are dimmed with a link icon; the mount
+  folder is labelled `alias — file`, carries `buildMountStatusBadge`
+  (`network_row_badges.dart`), and is a folder even when the library is
+  missing (mount paths are fed into the tree as folder paths). Linked rows get
+  `linkedRowMenuItems` instead of the editing menu, and never drag, rename or
+  accept drops; a local folder holding a mount does not rename or move either
+  (it would change an alias).
+- **Change detection triggers** live in `structure_designer.dart`: an
+  `AppLifecycleListener` (`onResume`), a 2 s poll while focused, and a call
+  after Save As, each running `model.checkDependencies()` and then
+  `showRefreshReport`. **Interactions only Flutter knows about are guarded here
+  alone:** a pointer held down (any drag, camera drags included — a global
+  pointer route counts pointers), a focused text field, a dialog or menu on top
+  (`ModalRoute.isCurrent`), a wire being dragged. The interactions Rust knows
+  (node / gadget / atom / property drags, body resizes, comment edits) are
+  held Rust-side too (`StructureDesigner::open_interaction`).
+- **Reports.** `showRefreshReport` picks the surface from the report: a
+  refused operation is an error snackbar, a clean one a transient snackbar, a
+  held one (D9) a snackbar with *Refresh*, anything that disconnected, froze or
+  flagged a persistent `showActionSnackBar` with *Details* (the navigable
+  `showRefreshReportDialog`) and *Undo*. An open uses the same function with
+  `opened: true` and no *Undo* (an open is not an undo step).
+- **Open library file** replaces the document (one document is open) after
+  `confirmDiscardChanges`, and remembers `model.backToDesignPath` for
+  *File > Back to …*.
 
 ## node_networks_list/ Subdirectory
 

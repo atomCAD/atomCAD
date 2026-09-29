@@ -154,7 +154,7 @@ void main() {
       expect(
         formatDesignErrorReport([
           APINetworkWithValidationErrors(
-              name: 'net', validationErrors: const [])
+              name: 'net', validationErrors: const [], readOnly: false)
         ]),
         'atomCAD — no problems reported.',
       );
@@ -164,15 +164,17 @@ void main() {
       final report = formatDesignErrorReport([
         APINetworkWithValidationErrors(
           name: 'a.b.first',
+          readOnly: false,
           validationErrors: [
             _error('one broke', nodeId: 1, nodeLabel: 'sphere'),
             _error('two broke', nodeId: 2, nodeLabel: 'relax'),
           ],
         ),
         APINetworkWithValidationErrors(
-            name: 'clean', validationErrors: const []),
+            name: 'clean', validationErrors: const [], readOnly: false),
         APINetworkWithValidationErrors(
           name: 'second',
+          readOnly: false,
           validationErrors: [_error('three broke', nodeId: 3, nodeLabel: 'x')],
         ),
       ]);
@@ -188,6 +190,7 @@ void main() {
       final report = formatDesignErrorReport([
         APINetworkWithValidationErrors(
           name: 'only',
+          readOnly: false,
           validationErrors: [_error('boom', nodeId: 1, nodeLabel: 'sphere')],
         ),
       ]);

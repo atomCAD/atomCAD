@@ -483,6 +483,9 @@ pub struct NodeNetworkView {
     pub name: String,
     pub nodes: HashMap<u64, NodeView>,
     pub wires: Vec<WireView>,
+    /// The network belongs to a linked library and cannot be edited here
+    /// (`doc/design_library_linking.md` §5.3).
+    pub read_only: bool,
 }
 
 pub struct APIIntData {
@@ -1565,6 +1568,9 @@ pub struct APINetworkWithValidationErrors {
     /// Each entry carries enough location info to jump to the offending node.
     /// Empty when the network has no errors — the panel renders no badge.
     pub validation_errors: Vec<APIValidationError>,
+    /// The network belongs to a linked library (a mount): browsable, not
+    /// editable (`doc/design_library_linking.md` §5.2).
+    pub read_only: bool,
 }
 
 /// Which pipeline produced an error entry (`doc/design_error_management.md`
@@ -3163,6 +3169,7 @@ pub enum APIFileDialogPurpose {
     StructureExport,
     NetworkImage,
     AiHistory,
+    LibraryLink,
 }
 
 impl From<APIFileDialogPurpose> for DomainFileDialogPurpose {
@@ -3174,6 +3181,7 @@ impl From<APIFileDialogPurpose> for DomainFileDialogPurpose {
             APIFileDialogPurpose::StructureExport => DomainFileDialogPurpose::StructureExport,
             APIFileDialogPurpose::NetworkImage => DomainFileDialogPurpose::NetworkImage,
             APIFileDialogPurpose::AiHistory => DomainFileDialogPurpose::AiHistory,
+            APIFileDialogPurpose::LibraryLink => DomainFileDialogPurpose::LibraryLink,
         }
     }
 }
@@ -3187,6 +3195,105 @@ impl From<DomainFileDialogPurpose> for APIFileDialogPurpose {
             DomainFileDialogPurpose::StructureExport => APIFileDialogPurpose::StructureExport,
             DomainFileDialogPurpose::NetworkImage => APIFileDialogPurpose::NetworkImage,
             DomainFileDialogPurpose::AiHistory => APIFileDialogPurpose::AiHistory,
+            DomainFileDialogPurpose::LibraryLink => APIFileDialogPurpose::LibraryLink,
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Library linking (`doc/design_library_linking.md` §5.2)
+// ---------------------------------------------------------------------------
+
+/// State of one linked library (`MountStatus`). `OlderThanDisk` and
+/// `ChangedOnDisk` are the neutral "older than disk" marker (click =
+/// *Refresh*); `Missing` / `Error` / `Cycle` are the red error badge.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum APIMountStatus {
+    Loaded,
+    OlderThanDisk,
+    ChangedOnDisk,
+    Missing,
+    Error,
+    Cycle,
+}
+
+/// One linked library as mounted in the open design, direct or nested.
+#[derive(Debug, Clone)]
+pub struct APILibraryMount {
+    /// `"libs.demolib"` (direct) or `"libs.demolib.common"` (nested) — the
+    /// folder the library's content lives under in the user-types panel.
+    pub mount_path: String,
+    /// As written by the importing file (may be dotted).
+    pub alias: String,
+    /// As written by the importing file, relative to it.
+    pub rel_path: String,
+    /// Where the library file is on disk (canonical when it exists).
+    pub abs_path: String,
+    /// The file name alone, for the mount folder's label.
+    pub file_name: String,
+    /// `mount_path` of the library that links this one; `None` = a direct
+    /// link of the open design.
+    pub parent: Option<String>,
+    pub direct: bool,
+    pub status: APIMountStatus,
+    /// Human-readable status (the error text for `Error`).
+    pub status_message: String,
+}
+
+/// A host node a refresh report is about. `node_label` is resolved by Rust
+/// (the node's custom name, else its type name) so Flutter never re-derives
+/// it; empty when the node no longer exists.
+#[derive(Debug, Clone)]
+pub struct APIReportedNode {
+    pub network: String,
+    pub scope_path: Vec<u64>,
+    pub node_id: u64,
+    pub node_label: String,
+    /// The linked name the node refers to.
+    pub name: String,
+}
+
+/// One host wire a refresh removed, flagged or warns about.
+#[derive(Debug, Clone)]
+pub struct APIReportedWire {
+    pub network: String,
+    pub scope_path: Vec<u64>,
+    /// The node the wire went into.
+    pub node_id: u64,
+    pub node_label: String,
+    pub pin_name: String,
+    /// The node the wire came from.
+    pub source_label: String,
+    pub reason: String,
+}
+
+/// A mount whose status an operation changed.
+#[derive(Debug, Clone)]
+pub struct APIMountStatusChange {
+    pub mount_path: String,
+    pub status: APIMountStatus,
+    pub message: String,
+}
+
+/// What an open, a refresh or a retarget did to the design (§7.2). Every
+/// wire that is gone after the operation is in `dropped_wires`. `is_clean`
+/// chooses between the transient and the persistent snackbar (D10).
+#[derive(Debug, Clone)]
+pub struct APIRefreshReport {
+    pub refreshed_mounts: Vec<String>,
+    pub refreshed_data_files: Vec<String>,
+    pub reconciled_nodes: Vec<APIReportedNode>,
+    pub dropped_wires: Vec<APIReportedWire>,
+    pub flagged_wires: Vec<APIReportedWire>,
+    pub output_pin_warnings: Vec<APIReportedWire>,
+    pub removed_names_in_use: Vec<String>,
+    pub frozen_nodes: Vec<APIReportedNode>,
+    pub status_changes: Vec<APIMountStatusChange>,
+    /// Changes detected but not applied because redo history exists (D9).
+    pub held: Vec<String>,
+    /// Direct mounts whose content changed since the file was saved (open
+    /// only; a hint).
+    pub changed_since_saved: Vec<String>,
+    pub errors: Vec<String>,
+    pub is_clean: bool,
 }

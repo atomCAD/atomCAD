@@ -677,3 +677,6 @@ mod library_links_refresh_test;
 
 #[path = "structure_designer/library_links_fuzz_test.rs"]
 mod library_links_fuzz_test;
+
+#[path = "structure_designer/library_links_interaction_test.rs"]
+mod library_links_interaction_test;

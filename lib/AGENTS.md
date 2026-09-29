@@ -112,7 +112,9 @@ fully bonded") deliberately keep their plain styling and short duration — ther
 is nothing there worth reporting, and a Copy action on them is noise. They are
 `showTransientSnackBar(context, msg)`, in the same file: one bar, so a
 confirmation from a property panel looks like a confirmation from the menu bar.
-Don't hand-roll a fourth `SnackBar`.
+A report that offers follow-ups (*Details*, *Undo*, *Refresh* — the linked-library
+refresh report) is `showActionSnackBar(context, msg, actions: …, persistent:)`,
+also there. Don't hand-roll another `SnackBar`.
 
 `lib/structure_designer/error_report.dart` renders the design's unified error
 list (`doc/design_error_management.md` D1) as a plain-text report for

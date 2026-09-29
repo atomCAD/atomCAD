@@ -20,6 +20,7 @@ import 'api/structure_designer/import_api.dart';
 import 'api/structure_designer/import_cif_api.dart';
 import 'api/structure_designer/import_cube_api.dart';
 import 'api/structure_designer/import_xyz_api.dart';
+import 'api/structure_designer/library_links_api.dart';
 import 'api/structure_designer/mechanosynth_api.dart';
 import 'api/structure_designer/mechanosynth_edit_api.dart';
 import 'api/structure_designer/profiling_api.dart';
@@ -375,6 +376,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APILevelMode dco_decode_api_level_mode(dynamic raw);
 
   @protected
+  APILibraryMount dco_decode_api_library_mount(dynamic raw);
+
+  @protected
   APILiteralField dco_decode_api_literal_field(dynamic raw);
 
   @protected
@@ -450,6 +454,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIMotifSubData dco_decode_api_motif_sub_data(dynamic raw);
+
+  @protected
+  APIMountStatus dco_decode_api_mount_status(dynamic raw);
+
+  @protected
+  APIMountStatusChange dco_decode_api_mount_status_change(dynamic raw);
 
   @protected
   APIMovedNode dco_decode_api_moved_node(dynamic raw);
@@ -555,10 +565,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIRefreshProfile dco_decode_api_refresh_profile(dynamic raw);
 
   @protected
+  APIRefreshReport dco_decode_api_refresh_report(dynamic raw);
+
+  @protected
   APIRegPolyData dco_decode_api_reg_poly_data(dynamic raw);
 
   @protected
   APIRelaxData dco_decode_api_relax_data(dynamic raw);
+
+  @protected
+  APIReportedNode dco_decode_api_reported_node(dynamic raw);
+
+  @protected
+  APIReportedWire dco_decode_api_reported_wire(dynamic raw);
 
   @protected
   APIResult dco_decode_api_result(dynamic raw);
@@ -1001,6 +1020,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIRefreshProfile dco_decode_box_autoadd_api_refresh_profile(dynamic raw);
 
   @protected
+  APIRefreshReport dco_decode_box_autoadd_api_refresh_report(dynamic raw);
+
+  @protected
   APIRegPolyData dco_decode_box_autoadd_api_reg_poly_data(dynamic raw);
 
   @protected
@@ -1258,6 +1280,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<APIGhostAtom> dco_decode_list_api_ghost_atom(dynamic raw);
 
   @protected
+  List<APILibraryMount> dco_decode_list_api_library_mount(dynamic raw);
+
+  @protected
   List<APILiteralField> dco_decode_list_api_literal_field(dynamic raw);
 
   @protected
@@ -1285,6 +1310,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APIMotifParameterInfo> dco_decode_list_api_motif_parameter_info(
+      dynamic raw);
+
+  @protected
+  List<APIMountStatusChange> dco_decode_list_api_mount_status_change(
       dynamic raw);
 
   @protected
@@ -1336,6 +1365,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APIRefreshProfile> dco_decode_list_api_refresh_profile(dynamic raw);
+
+  @protected
+  List<APIReportedNode> dco_decode_list_api_reported_node(dynamic raw);
+
+  @protected
+  List<APIReportedWire> dco_decode_list_api_reported_wire(dynamic raw);
 
   @protected
   List<APIRotationalSymmetry> dco_decode_list_api_rotational_symmetry(
@@ -1741,6 +1776,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   APIRefreshProfile? dco_decode_opt_box_autoadd_api_refresh_profile(
       dynamic raw);
+
+  @protected
+  APIRefreshReport? dco_decode_opt_box_autoadd_api_refresh_report(dynamic raw);
 
   @protected
   APIRegPolyData? dco_decode_opt_box_autoadd_api_reg_poly_data(dynamic raw);
@@ -2338,6 +2376,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APILevelMode sse_decode_api_level_mode(SseDeserializer deserializer);
 
   @protected
+  APILibraryMount sse_decode_api_library_mount(SseDeserializer deserializer);
+
+  @protected
   APILiteralField sse_decode_api_literal_field(SseDeserializer deserializer);
 
   @protected
@@ -2426,6 +2467,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIMotifSubData sse_decode_api_motif_sub_data(SseDeserializer deserializer);
+
+  @protected
+  APIMountStatus sse_decode_api_mount_status(SseDeserializer deserializer);
+
+  @protected
+  APIMountStatusChange sse_decode_api_mount_status_change(
+      SseDeserializer deserializer);
 
   @protected
   APIMovedNode sse_decode_api_moved_node(SseDeserializer deserializer);
@@ -2545,10 +2593,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIRefreshReport sse_decode_api_refresh_report(SseDeserializer deserializer);
+
+  @protected
   APIRegPolyData sse_decode_api_reg_poly_data(SseDeserializer deserializer);
 
   @protected
   APIRelaxData sse_decode_api_relax_data(SseDeserializer deserializer);
+
+  @protected
+  APIReportedNode sse_decode_api_reported_node(SseDeserializer deserializer);
+
+  @protected
+  APIReportedWire sse_decode_api_reported_wire(SseDeserializer deserializer);
 
   @protected
   APIResult sse_decode_api_result(SseDeserializer deserializer);
@@ -3085,6 +3142,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIRefreshReport sse_decode_box_autoadd_api_refresh_report(
+      SseDeserializer deserializer);
+
+  @protected
   APIRegPolyData sse_decode_box_autoadd_api_reg_poly_data(
       SseDeserializer deserializer);
 
@@ -3386,6 +3447,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  List<APILibraryMount> sse_decode_list_api_library_mount(
+      SseDeserializer deserializer);
+
+  @protected
   List<APILiteralField> sse_decode_list_api_literal_field(
       SseDeserializer deserializer);
 
@@ -3416,6 +3481,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APIMotifParameterInfo> sse_decode_list_api_motif_parameter_info(
+      SseDeserializer deserializer);
+
+  @protected
+  List<APIMountStatusChange> sse_decode_list_api_mount_status_change(
       SseDeserializer deserializer);
 
   @protected
@@ -3477,6 +3546,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APIRefreshProfile> sse_decode_list_api_refresh_profile(
+      SseDeserializer deserializer);
+
+  @protected
+  List<APIReportedNode> sse_decode_list_api_reported_node(
+      SseDeserializer deserializer);
+
+  @protected
+  List<APIReportedWire> sse_decode_list_api_reported_wire(
       SseDeserializer deserializer);
 
   @protected
@@ -3958,6 +4035,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIRefreshProfile? sse_decode_opt_box_autoadd_api_refresh_profile(
+      SseDeserializer deserializer);
+
+  @protected
+  APIRefreshReport? sse_decode_opt_box_autoadd_api_refresh_report(
       SseDeserializer deserializer);
 
   @protected
@@ -4629,6 +4710,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_level_mode(APILevelMode self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_library_mount(
+      APILibraryMount self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_literal_field(
       APILiteralField self, SseSerializer serializer);
 
@@ -4724,6 +4809,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_motif_sub_data(
       APIMotifSubData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_mount_status(
+      APIMountStatus self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_mount_status_change(
+      APIMountStatusChange self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_moved_node(APIMovedNode self, SseSerializer serializer);
@@ -4851,11 +4944,23 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIRefreshProfile self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_refresh_report(
+      APIRefreshReport self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_reg_poly_data(
       APIRegPolyData self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_relax_data(APIRelaxData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_reported_node(
+      APIReportedNode self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_reported_wire(
+      APIReportedWire self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_result(APIResult self, SseSerializer serializer);
@@ -5402,6 +5507,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIRefreshProfile self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_api_refresh_report(
+      APIRefreshReport self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_api_reg_poly_data(
       APIRegPolyData self, SseSerializer serializer);
 
@@ -5712,6 +5821,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<APIGhostAtom> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_api_library_mount(
+      List<APILibraryMount> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_api_literal_field(
       List<APILiteralField> self, SseSerializer serializer);
 
@@ -5742,6 +5855,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_api_motif_parameter_info(
       List<APIMotifParameterInfo> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_api_mount_status_change(
+      List<APIMountStatusChange> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_api_moved_node(
@@ -5802,6 +5919,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_api_refresh_profile(
       List<APIRefreshProfile> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_api_reported_node(
+      List<APIReportedNode> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_api_reported_wire(
+      List<APIReportedWire> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_api_rotational_symmetry(
@@ -6285,6 +6410,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_refresh_profile(
       APIRefreshProfile? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_refresh_report(
+      APIRefreshReport? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_reg_poly_data(

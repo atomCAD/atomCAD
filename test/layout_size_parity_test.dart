@@ -192,7 +192,8 @@ void main() {
     // Logical sizes, so the transform must be the identity: `scale != 1` would
     // fold a zoom factor into the numbers Rust compares against.
     final resolver = ScopeResolver(
-      root: NodeNetworkView(name: 'parity', nodes: roots, wires: const []),
+      root: NodeNetworkView(
+          name: 'parity', nodes: roots, wires: const [], readOnly: false),
       panOffset: Offset.zero,
       scale: 1.0,
       zoomLevel: ZoomLevel.normal,

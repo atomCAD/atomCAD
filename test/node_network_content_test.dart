@@ -51,6 +51,7 @@ NodeNetworkView _network(List<NodeView> nodes) => NodeNetworkView(
       name: 'test_network',
       nodes: {for (final node in nodes) node.id: node},
       wires: const [],
+      readOnly: false,
     );
 
 void main() {

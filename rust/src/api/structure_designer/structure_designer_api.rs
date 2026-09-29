@@ -1046,6 +1046,12 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
                     name: node_network.node_type.name.clone(),
                     nodes,
                     wires,
+                    // Authoritative: the canvas disables every edit gesture
+                    // on a linked network (`doc/design_library_linking.md`
+                    // §5.3); Rust refuses them regardless (§6).
+                    read_only: cad_instance
+                        .structure_designer
+                        .is_linked_name(node_network_name),
                 })
             },
             None,

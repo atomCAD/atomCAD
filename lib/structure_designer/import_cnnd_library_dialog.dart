@@ -291,7 +291,7 @@ class _ImportCnndLibraryDialogState extends State<ImportCnndLibraryDialog> {
           children: [
             // Title
             Text(
-              'Import from .cnnd Library',
+              'Import copy from .cnnd library',
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 8),

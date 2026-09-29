@@ -38,6 +38,15 @@ impl StructureDesigner {
     /// the change is reported once in `held`. `None` when nothing was
     /// refreshed, held or changed status.
     pub fn check_dependencies(&mut self) -> Option<RefreshReport> {
+        // An open interaction (a drag, a comment being typed) is one undo
+        // step in the making; a refresh pushed in the middle of it would
+        // split it, and its snapshots would capture a half-dragged state.
+        // The check is skipped as a whole — nothing observed, so `last_seen`
+        // does not advance and the next check after the interaction ends
+        // finds the change still pending (P4, "Rust-side interactions").
+        if self.open_interaction().is_some() {
+            return None;
+        }
         let registry = &mut self.node_type_registry;
         if registry.library_links.is_empty() && registry.library_links.data_files.is_empty() {
             return None;
@@ -86,6 +95,32 @@ impl StructureDesigner {
             }
         }
         (!report.is_empty()).then_some(report)
+    }
+
+    /// The interaction the undo coalescing currently treats as one open
+    /// step, if any — what [`check_dependencies`](Self::check_dependencies)
+    /// holds a refresh for, and what refuses an explicit one. These are the
+    /// interactions Rust knows about; the ones only Flutter knows (a text
+    /// field being typed into, a modal dialog) are skipped by Flutter
+    /// (`lib/structure_designer/AGENTS.md`). `mechanosynth_edit` keystroke
+    /// coalescing is not listed: it is keyed on the undo push count, so any
+    /// command pushed in between simply ends the run.
+    pub fn open_interaction(&self) -> Option<&'static str> {
+        if self.pending_move.is_some() {
+            Some("a node drag")
+        } else if self.pending_atom_edit_drag.is_some() {
+            Some("an atom drag")
+        } else if self.pending_gadget_drag.is_some() {
+            Some("a gadget drag")
+        } else if self.pending_node_data_drag.is_some() {
+            Some("a property drag")
+        } else if self.pending_zone_resize.is_some() {
+            Some("a body resize")
+        } else if self.pending_comment_edit.is_some() {
+            Some("a comment edit")
+        } else {
+            None
+        }
     }
 
     /// *Refresh* on a mount folder: re-reads the direct mount containing
@@ -293,6 +328,9 @@ impl StructureDesigner {
         targets: &[RefreshTarget],
         host_files: &BTreeSet<PathBuf>,
     ) -> Result<RefreshReport, String> {
+        if let Some(what) = self.open_interaction() {
+            return Err(format!("finish {} before refreshing libraries", what));
+        }
         let mut report = RefreshReport::default();
         let aliases: Vec<String> = targets.iter().map(|t| t.alias.clone()).collect();
         let retarget = targets.iter().any(|t| t.new_rel_path.is_some());

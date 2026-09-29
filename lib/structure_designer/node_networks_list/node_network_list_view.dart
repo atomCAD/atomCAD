@@ -7,6 +7,7 @@ import 'package:flutter_cad/common/draggable_dialog.dart';
 import 'package:flutter_cad/common/error_display.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/structure_designer/find_usages_menu.dart';
+import 'package:flutter_cad/structure_designer/library_link_actions.dart';
 import 'package:flutter_cad/structure_designer/node_networks_list/network_row_badges.dart';
 
 /// Discriminator between the two kinds of user-defined types listed in this
@@ -107,12 +108,50 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
             ? (widget.model.networkUsageCounts[entryName] ?? 0)
             : 0;
 
+        // Library linking (§5.3): a row under a mount is dimmed with a link
+        // icon, names its file in the tooltip, carries the mount's status
+        // badge, and gets the linked-content menu (no rename / delete).
+        final linkedMount = widget.model.mountOf(entryName);
+        final bool isLinked = linkedMount != null;
+
         return Builder(
           builder: (BuildContext itemContext) {
             return GestureDetector(
               onSecondaryTap: () {
                 final RelativeRect position =
                     menuPositionForWidget(itemContext);
+
+                if (linkedMount != null) {
+                  final isNetwork = entry.kind == _UserTypeKind.network;
+                  showMenu<String>(
+                    context: context,
+                    position: position,
+                    items: <PopupMenuEntry<String>>[
+                      if (isNetwork) ...[
+                        const PopupMenuItem(
+                          value: 'find_usages',
+                          child: Text('Find Usages'),
+                        ),
+                        const PopupMenuDivider(),
+                      ],
+                      ...linkedRowMenuItems(isNetwork: isNetwork),
+                    ],
+                  ).then((value) {
+                    if (!itemContext.mounted) return;
+                    if (value == 'find_usages') {
+                      findUsagesOfNetwork(
+                        context: itemContext,
+                        model: widget.model,
+                        networkName: entryName,
+                        position: menuPositionForWidget(itemContext),
+                      );
+                      return;
+                    }
+                    handleLinkedRowMenuValue(itemContext, widget.model, value,
+                        mount: linkedMount, name: entryName);
+                  });
+                  return;
+                }
 
                 showMenu<String>(
                   context: context,
@@ -162,6 +201,7 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
                 });
               },
               onDoubleTap: () {
+                if (isLinked) return;
                 _startRenaming(entryName, entry.kind);
               },
               child: Container(
@@ -266,7 +306,34 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
                             ),
                           ),
                         )
-                      : Text(entryName, style: AppTextStyles.regular),
+                      : Tooltip(
+                          message: isLinked
+                              ? 'Linked from ${linkedMount.relPath} (read-only)'
+                              : '',
+                          child: Row(
+                            children: [
+                              Flexible(
+                                child: Opacity(
+                                  opacity: isLinked && !isActive
+                                      ? linkedRowOpacity
+                                      : 1.0,
+                                  child: Text(entryName,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: AppTextStyles.regular),
+                                ),
+                              ),
+                              if (isLinked) ...[
+                                linkedRowIcon(isActive: isActive),
+                                buildMountStatusBadge(
+                                  context: context,
+                                  mount: linkedMount,
+                                  onRefresh: () => refreshLibraryInteractive(
+                                      context, widget.model, linkedMount),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
                   // Trailing badges: the validation-error badge (clickable,
                   // navigates to the offending node) stacked above the Find
                   // Usages count. Both collapse to nothing when absent, so a

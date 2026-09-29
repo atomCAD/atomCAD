@@ -379,3 +379,66 @@ Widget _errorMenuRow(String networkName, APIValidationError error,
     ),
   );
 }
+
+/// The status badge of a linked library (`doc/design_library_linking.md`
+/// §5.3), shared by the list and tree views:
+///
+/// - `Missing` / `Error` / `Cycle` — the red error badge; the tooltip says
+///   why, and a click copies it (a tooltip cannot be selected, `lib/AGENTS.md`).
+///   Nothing is removed: the loaded version (if any) keeps evaluating.
+/// - `OlderThanDisk` (after an undone refresh) / `ChangedOnDisk` (a refresh
+///   held while redo history exists) — a small neutral "older than disk"
+///   marker whose click is *Refresh*.
+/// - `Loaded` — nothing.
+Widget buildMountStatusBadge({
+  required BuildContext context,
+  required APILibraryMount mount,
+  required VoidCallback onRefresh,
+}) {
+  switch (mount.status) {
+    case APIMountStatus.loaded:
+      return const SizedBox.shrink();
+    case APIMountStatus.olderThanDisk:
+    case APIMountStatus.changedOnDisk:
+      final why = mount.status == APIMountStatus.olderThanDisk
+          ? 'Older than the file on disk (a refresh was undone)'
+          : 'Changed on disk — refresh held while redo is available';
+      return Tooltip(
+        message: '$why. Click to refresh.',
+        child: InkWell(
+          key: Key('mount_refresh_marker_${mount.mountPath}'),
+          onTap: onRefresh,
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 4),
+            child: Icon(Icons.update, size: 15, color: Colors.blueGrey),
+          ),
+        ),
+      );
+    case APIMountStatus.missing:
+    case APIMountStatus.error:
+    case APIMountStatus.cycle:
+      final message = '${mount.relPath}: ${mount.statusMessage}';
+      return Tooltip(
+        message: '$message\n(click to copy)',
+        child: InkWell(
+          key: Key('mount_error_badge_${mount.mountPath}'),
+          onTap: () => copyTextToClipboard(context, message),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Icon(Icons.error, size: 15, color: Colors.red.shade600),
+          ),
+        ),
+      );
+  }
+}
+
+/// The link icon that marks a row under a mount.
+Widget linkedRowIcon({required bool isActive}) => Padding(
+      padding: const EdgeInsets.only(left: 4),
+      child: Icon(Icons.link,
+          size: 14,
+          color: isActive ? AppColors.selectionForeground : Colors.grey),
+    );
+
+/// Opacity of the text of a row under a mount (dimmed: read-only content).
+const double linkedRowOpacity = 0.6;

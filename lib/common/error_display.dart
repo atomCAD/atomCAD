@@ -50,6 +50,46 @@ void showTransientSnackBar(BuildContext context, String message) {
     );
 }
 
+/// A snackbar that reports what an automatic operation did and offers
+/// follow-ups — *Details*, *Undo*, *Refresh* (the library-linking refresh
+/// report, `doc/design_library_linking.md` D10). Plain styling like
+/// [showTransientSnackBar]; [persistent] keeps it up until dismissed (for a
+/// report the user should not miss: something was disconnected), otherwise it
+/// times out like a confirmation. Each action closes the bar before running.
+void showActionSnackBar(
+  BuildContext context,
+  String message, {
+  required List<(String, VoidCallback)> actions,
+  bool persistent = false,
+}) {
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  if (messenger == null) return;
+  messenger
+    ..hideCurrentSnackBar()
+    ..showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Expanded(child: Text(message)),
+            for (final (label, onPressed) in actions)
+              TextButton(
+                onPressed: () {
+                  messenger.hideCurrentSnackBar();
+                  onPressed();
+                },
+                child: Text(label),
+              ),
+          ],
+        ),
+        duration:
+            persistent ? const Duration(days: 1) : const Duration(seconds: 6),
+        showCloseIcon: persistent,
+        behavior: SnackBarBehavior.floating,
+        width: 520,
+      ),
+    );
+}
+
 /// Puts [text] on the clipboard and confirms with a short floating snackbar,
 /// matching the transient-confirmation style used by undo/redo and quick save.
 ///

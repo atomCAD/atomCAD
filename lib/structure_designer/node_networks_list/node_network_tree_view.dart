@@ -13,6 +13,7 @@ import 'package:flutter_cad/structure_designer/node_networks_list/network_row_ba
 import 'package:flutter_cad/common/draggable_dialog.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/structure_designer/find_usages_menu.dart';
+import 'package:flutter_cad/structure_designer/library_link_actions.dart';
 
 /// Discriminator between the two kinds of leaves in the user-types tree.
 enum _LeafKind { network, recordDef }
@@ -204,6 +205,11 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
     for (final f in widget.model.folderNames) {
       out.add('f:$f');
     }
+    // Mount folders are folders even when the library has no content (a
+    // missing file), so they show with their error badge.
+    for (final m in widget.model.linkedLibraries) {
+      out.add('m:${m.mountPath}');
+    }
     return out;
   }
 
@@ -219,7 +225,10 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
     final qualifiedNames =
         widget.model.nodeNetworkNames.map((n) => n.name).toList();
     final recordDefs = widget.model.recordTypeDefNames;
-    final folders = widget.model.folderNames;
+    final folders = [
+      ...widget.model.folderNames,
+      ...widget.model.linkedLibraries.map((m) => m.mountPath),
+    ];
     _lastNetworkNames = _composeKeyedNames();
 
     final roots = _buildTreeFromNames(qualifiedNames, recordDefs, folders);
@@ -324,6 +333,9 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
   }
 
   void _startRenaming(_NodeNetworkTreeNode node) {
+    // Linked content cannot be renamed here (D3); a folder holding a mount
+    // cannot either, as it would silently change an alias.
+    if (node.fullName != null && _touchesMount(node.fullName!)) return;
     setState(() {
       _editingNodeFullName = node.fullName;
       _editingIsLeaf = node.isLeaf;
@@ -643,6 +655,12 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
   bool _isValidDrop(_NodeNetworkTreeNode dragged, String destNamespace) {
     final draggedPath = dragged.fullName;
     if (draggedPath == null) return false;
+    // A mount owns its folder completely (D3): nothing moves into one, and
+    // nothing linked (or holding a mount) moves anywhere.
+    if (_touchesMount(draggedPath)) return false;
+    if (destNamespace.isNotEmpty && widget.model.isLinkedName(destNamespace)) {
+      return false;
+    }
     if (!dragged.isLeaf) {
       if (destNamespace == draggedPath ||
           destNamespace.startsWith('$draggedPath.')) {
@@ -742,6 +760,21 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
       },
     );
   }
+
+  /// The mount record whose folder *is* [path], if any.
+  APILibraryMount? _mountAt(String path) {
+    for (final m in widget.model.linkedLibraries) {
+      if (m.mountPath == path) return m;
+    }
+    return null;
+  }
+
+  /// True when [path] lies under a mount, or is a local folder holding one
+  /// (whose rename / move would change an alias, D3).
+  bool _touchesMount(String path) =>
+      widget.model.isLinkedName(path) ||
+      widget.model.linkedLibraries
+          .any((m) => isUnderNamespace(m.mountPath, path));
 
   void _cancelRename() {
     if (_editingNodeFullName != null) {
@@ -984,6 +1017,43 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
   ) {
     final position = _menuPosition(context, globalPosition);
 
+    // A row under a mount (or the mount folder itself) is read-only: it gets
+    // the linked-content menu instead (§3).
+    final linkedMount =
+        node.fullName == null ? null : widget.model.mountOf(node.fullName!);
+    if (linkedMount != null) {
+      final isNetwork = node.isLeaf && node.leafKind == _LeafKind.network;
+      final mountFolder = node.isLeaf ? null : _mountAt(node.fullName!);
+      showMenu<String>(
+        context: context,
+        position: position,
+        items: [
+          if (isNetwork) ...[
+            const PopupMenuItem(
+              value: 'find_usages',
+              child: Text('Find Usages'),
+            ),
+            const PopupMenuDivider(),
+          ],
+          ...linkedRowMenuItems(isNetwork: isNetwork, mountFolder: mountFolder),
+        ],
+      ).then((value) {
+        if (!context.mounted) return;
+        if (value == 'find_usages') {
+          findUsagesOfNetwork(
+            context: context,
+            model: widget.model,
+            networkName: node.fullName!,
+            position: position,
+          );
+          return;
+        }
+        handleLinkedRowMenuValue(context, widget.model, value,
+            mount: linkedMount, name: node.fullName);
+      });
+      return;
+    }
+
     // Check current CLI lock state for this node
     final isLocked =
         node.fullName != null && widget.model.isCliWriteLocked(node.fullName!);
@@ -1127,6 +1197,15 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
             node.fullName == activeRecordDef;
         final isActive = isActiveNetwork || isActiveRecordDef;
         final isEditing = _editingNodeFullName == node.fullName;
+        // Library linking (§5.3): rows under a mount are dimmed with a link
+        // icon; the mount folder itself shows the library's file name and
+        // its status badge.
+        final linkedMount =
+            node.fullName == null ? null : widget.model.mountOf(node.fullName!);
+        final isLinked = linkedMount != null;
+        final mountFolder = !node.isLeaf && node.fullName != null
+            ? _mountAt(node.fullName!)
+            : null;
 
         final Widget row = GestureDetector(
           key: Key(node.isLeaf
@@ -1202,18 +1281,51 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
                             Expanded(
                               child: isEditing
                                   ? _buildRenameField(isActive)
-                                  : Text(
-                                      node.label,
-                                      style: AppTextStyles.regular.copyWith(
-                                        color: isActive
-                                            ? AppColors.selectionForeground
-                                            : null,
-                                        fontWeight: node.isLeaf
-                                            ? FontWeight.normal
-                                            : FontWeight.w500,
+                                  : Opacity(
+                                      opacity: isLinked && !isActive
+                                          ? linkedRowOpacity
+                                          : 1.0,
+                                      child: Tooltip(
+                                        message: isLinked
+                                            ? 'Linked from ${linkedMount.relPath} (read-only)'
+                                            : '',
+                                        child: Text.rich(
+                                          TextSpan(children: [
+                                            TextSpan(text: node.label),
+                                            if (mountFolder != null)
+                                              TextSpan(
+                                                text:
+                                                    ' — ${mountFolder.fileName}',
+                                                style: const TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.normal,
+                                                  color: Colors.grey,
+                                                ),
+                                              ),
+                                          ]),
+                                          overflow: TextOverflow.ellipsis,
+                                          style: AppTextStyles.regular.copyWith(
+                                            color: isActive
+                                                ? AppColors.selectionForeground
+                                                : null,
+                                            fontWeight: node.isLeaf
+                                                ? FontWeight.normal
+                                                : FontWeight.w500,
+                                          ),
+                                        ),
                                       ),
                                     ),
                             ),
+                            if (isLinked &&
+                                (node.isLeaf || mountFolder != null))
+                              linkedRowIcon(isActive: isActive),
+                            if (mountFolder != null)
+                              buildMountStatusBadge(
+                                context: context,
+                                mount: mountFolder,
+                                onRefresh: () => refreshLibraryInteractive(
+                                    context, widget.model, mountFolder),
+                              ),
                             // Trailing badges, mirroring the list view: the
                             // validation-error badge (navigates to the offending
                             // node) then the Find Usages count. Networks only;
@@ -1281,7 +1393,11 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
         // field keeps its gestures.
         return Draggable<_NodeNetworkTreeNode>(
           data: node,
-          maxSimultaneousDrags: isEditing ? 0 : 1,
+          // Linked rows (and folders holding a mount) do not move (D3).
+          maxSimultaneousDrags: isEditing ||
+                  (node.fullName != null && _touchesMount(node.fullName!))
+              ? 0
+              : 1,
           feedback: _buildDragFeedback(node),
           childWhenDragging: Opacity(opacity: 0.4, child: dropTarget),
           onDragStarted: () => setState(() => _dragging = true),

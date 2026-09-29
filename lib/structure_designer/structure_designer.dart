@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -18,6 +21,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
     as structure_designer_api;
 import 'display_panel.dart';
 import 'import_cnnd_library_dialog.dart';
+import 'library_link_actions.dart';
 import 'node_networks_list/node_networks_panel.dart';
 import 'node_data/node_data_widget.dart';
 import 'camera_control_widget.dart';
@@ -67,10 +71,83 @@ class _StructureDesignerState extends State<StructureDesigner> {
   final GlobalKey<NodeNetworkState> nodeNetworkKey =
       GlobalKey<NodeNetworkState>();
 
+  // --- Library change detection (`doc/design_library_linking.md` D7) ---
+  //
+  // Rust decides what changed and refreshes it (`checkDependencies`); this
+  // state only decides *when* to ask: when the window regains focus, by a
+  // light poll while it has focus, and after Save As. It does not ask while
+  // the user is in the middle of something Rust cannot see — a pointer held
+  // down (any drag, including camera drags), a text field being typed into,
+  // or a dialog / menu open. The interactions Rust itself knows are open (node
+  // drags, gadget and atom drags, property drags, body resizes, comment edits)
+  // are held on the Rust side too (`StructureDesigner::open_interaction`).
+
+  static const Duration _dependencyPollPeriod = Duration(seconds: 2);
+  AppLifecycleListener? _lifecycleListener;
+  Timer? _dependencyPoll;
+  bool _windowFocused = true;
+  int _pointersDown = 0;
+
   @override
   void initState() {
     super.initState();
     graphModel = widget.model;
+    _lifecycleListener = AppLifecycleListener(
+      onResume: () {
+        _windowFocused = true;
+        _checkDependencies();
+      },
+      onInactive: () => _windowFocused = false,
+      onHide: () => _windowFocused = false,
+    );
+    _dependencyPoll = Timer.periodic(_dependencyPollPeriod, (_) {
+      if (_windowFocused) _checkDependencies();
+    });
+    GestureBinding.instance.pointerRouter.addGlobalRoute(_trackPointer);
+  }
+
+  @override
+  void dispose() {
+    GestureBinding.instance.pointerRouter.removeGlobalRoute(_trackPointer);
+    _dependencyPoll?.cancel();
+    _lifecycleListener?.dispose();
+    super.dispose();
+  }
+
+  void _trackPointer(PointerEvent event) {
+    if (event is PointerDownEvent) {
+      _pointersDown++;
+    } else if (event is PointerUpEvent || event is PointerCancelEvent) {
+      _pointersDown = _pointersDown > 0 ? _pointersDown - 1 : 0;
+    }
+  }
+
+  /// True when an automatic check may run now (D7: not during a drag, a text
+  /// edit or a modal dialog; it runs at the next idle moment instead).
+  bool _idleForDependencyCheck() {
+    if (!mounted) return false;
+    if (_pointersDown > 0) return false;
+    if (graphModel.draggedWire != null) return false;
+    // A dialog or a popup menu is on top of the editor.
+    final route = ModalRoute.of(context);
+    if (route != null && !route.isCurrent) return false;
+    // A text field has focus: a refresh could rebuild it under the caret.
+    final focusContext = FocusManager.instance.primaryFocus?.context;
+    if (focusContext != null &&
+        focusContext.findAncestorStateOfType<EditableTextState>() != null) {
+      return false;
+    }
+    return true;
+  }
+
+  /// The automatic check. Shows what Rust did: a transient snackbar for a
+  /// clean refresh, a persistent one with *Details* / *Undo* otherwise, and a
+  /// "held" one (once) while redo history exists (D9, D10).
+  void _checkDependencies() {
+    if (!_idleForDependencyCheck()) return;
+    final report = graphModel.checkDependencies();
+    if (report == null || !mounted) return;
+    showRefreshReport(context, graphModel, report, quietWhenClean: true);
   }
 
   @override
@@ -151,7 +228,33 @@ class _StructureDesignerState extends State<StructureDesigner> {
                             MenuItemButton(
                               key: const Key('import_from_library_item'),
                               onPressed: _importFromCnndLibrary,
-                              child: const Text('Import from .cnnd library'),
+                              child: const Text('Import copy…'),
+                            ),
+                          // Library linking (`doc/design_library_linking.md`
+                          // §3): a linked library stays a separate file.
+                          if (!model.directEditingMode) ...[
+                            const Divider(),
+                            MenuItemButton(
+                              key: const Key('link_library_item'),
+                              onPressed: () =>
+                                  linkLibraryInteractive(context, graphModel),
+                              child: const Text('Link library…'),
+                            ),
+                            MenuItemButton(
+                              key: const Key('refresh_all_dependencies_item'),
+                              onPressed: () =>
+                                  refreshAllDependenciesInteractive(
+                                      context, graphModel),
+                              child: const Text('Refresh all dependencies'),
+                            ),
+                          ],
+                          if (model.backToDesignPath != null)
+                            MenuItemButton(
+                              key: const Key('back_to_design_item'),
+                              onPressed: () =>
+                                  backToDesign(context, graphModel),
+                              child: Text(
+                                  'Back to ${fileNameOf(model.backToDesignPath!)}'),
                             ),
                         ],
                       );
@@ -849,26 +952,8 @@ class _StructureDesignerState extends State<StructureDesigner> {
   void _showTransientSnackBar(BuildContext context, String message) =>
       showTransientSnackBar(context, message);
 
-  Future<bool> _confirmDiscardChanges() async {
-    if (!graphModel.isDirty) return true;
-    final shouldProceed = await showDraggableAlertDialog<bool>(
-      context: context,
-      title: const Text('Unsaved Changes'),
-      content:
-          const Text('You have unsaved changes. Do you want to discard them?'),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Cancel'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(true),
-          child: const Text('Discard'),
-        ),
-      ],
-    );
-    return shouldProceed ?? false;
-  }
+  Future<bool> _confirmDiscardChanges() =>
+      confirmDiscardChanges(context, graphModel);
 
   Future<void> _newDesign() async {
     if (!await _confirmDiscardChanges()) return;
@@ -941,57 +1026,12 @@ class _StructureDesignerState extends State<StructureDesigner> {
     }
   }
 
-  /// Shows a one-time modal if the most recent load auto-repaired duplicate
-  /// parameter ids (F6 of `doc/design_parameter_wire_stability.md`). Per-id
-  /// details are also written to the console. The modal honestly notes that some
-  /// connections may have been mis-wired before the fix and are worth reviewing.
+  /// What the most recent load reported: auto-repaired duplicate parameter
+  /// ids (F6 of `doc/design_parameter_wire_stability.md`, a one-time modal)
+  /// and what reconciling its linked libraries did (D13, a snackbar).
   void _showLoadRepairModalIfNeeded() {
-    final repairs = graphModel.lastLoadParamIdRepairs;
-    if (repairs.isEmpty || !mounted) return;
-    final n = repairs.length;
-    showDraggableAlertDialog(
-      context: context,
-      title: const Text('Project auto-repaired'),
-      content: SizedBox(
-        width: 460,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Auto-repaired $n duplicate parameter id${n == 1 ? '' : 's'} left '
-              'by an earlier bug. Existing connections were preserved, but some '
-              'wiring in the affected networks may have been mis-connected before '
-              'the fix and is worth a quick review. Full per-parameter details '
-              'were written to the console.',
-            ),
-            const SizedBox(height: 12),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 200),
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: repairs
-                      .map(
-                        (m) => Padding(
-                          padding: const EdgeInsets.only(bottom: 6),
-                          child: Text('• $m'),
-                        ),
-                      )
-                      .toList(),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('OK'),
-        ),
-      ],
-    );
+    if (!mounted) return;
+    showAfterLoadReports(context, graphModel);
   }
 
   Future<void> _loadDesign() async {
@@ -1050,6 +1090,10 @@ class _StructureDesignerState extends State<StructureDesigner> {
       final result = graphModel.saveNodeNetworksAs(finalPath);
       if (!result.success) {
         _showSaveErrorDialog(result.errorMessage);
+      } else {
+        // The design's folder may have changed, and with it what every
+        // relative library and data-file path resolves to (D7).
+        _checkDependencies();
       }
     }
   }

@@ -22,11 +22,14 @@
 //! `structure_designer_api.rs`.
 
 use crate::api::structure_designer::structure_designer_api_types::{
-    APIErrorRootCause, APIErrorSource, APINetworkWithValidationErrors, APINodeCategoryView,
-    APINodeTypeView, APIValidationError,
+    APIErrorRootCause, APIErrorSource, APILibraryMount, APIMountStatus, APIMountStatusChange,
+    APINetworkWithValidationErrors, APINodeCategoryView, APINodeTypeView, APIRefreshReport,
+    APIReportedNode, APIReportedWire, APIValidationError,
 };
 use atomcad_structure_designer::data_type::DataType;
 use atomcad_structure_designer::eval_errors::RootCauseRef;
+use atomcad_structure_designer::library_links::{LibraryMount, MountStatus};
+use atomcad_structure_designer::library_refresh::{RefreshReport, ReportedNode, ReportedWire};
 use atomcad_structure_designer::node_type::NodeTypeCategory;
 use atomcad_structure_designer::node_type_registry::{
     NodeTypeRegistry, allowed_in_zone_body, static_match, static_match_strict,
@@ -69,6 +72,17 @@ fn group_into_category_views(
     result
 }
 
+/// A network is offered in the add-node popups unless it lies under a
+/// **transitive** library mount: the host should only use its direct links
+/// (`doc/design_library_linking.md` D4). Transitive networks stay browsable
+/// in the user-types panel.
+fn offered_in_add_node(registry: &NodeTypeRegistry, name: &str) -> bool {
+    registry
+        .library_links
+        .mount_containing(name)
+        .is_none_or(|mount| mount.is_direct())
+}
+
 /// Returns node types that have at least one pin compatible with the given source type.
 ///
 /// - When `dragging_from_output` is true: find nodes with compatible INPUT pins
@@ -96,6 +110,7 @@ pub fn get_compatible_node_types(
     let custom_iter = registry
         .node_networks
         .values()
+        .filter(|network| offered_in_add_node(registry, &network.node_type.name))
         .map(|network| (&network.node_type, NodeTypeCategory::Custom));
 
     // Two-step compatibility check per candidate node type:
@@ -174,18 +189,24 @@ pub fn get_node_type_views(registry: &NodeTypeRegistry) -> Vec<APINodeCategoryVi
     );
 
     // Add custom node networks (all have Custom category)
-    all_views.extend(registry.node_networks.values().map(|network| {
-        (
-            NodeTypeCategory::Custom,
-            APINodeTypeView {
-                name: network.node_type.name.clone(),
-                description: network.node_type.description.clone(),
-                summary: network.node_type.summary.clone(),
-                category: NodeTypeCategory::Custom.into(),
-                allowed_in_zone_body: allowed_in_zone_body(&network.node_type.name),
-            },
-        )
-    }));
+    all_views.extend(
+        registry
+            .node_networks
+            .values()
+            .filter(|network| offered_in_add_node(registry, &network.node_type.name))
+            .map(|network| {
+                (
+                    NodeTypeCategory::Custom,
+                    APINodeTypeView {
+                        name: network.node_type.name.clone(),
+                        description: network.node_type.description.clone(),
+                        summary: network.node_type.summary.clone(),
+                        category: NodeTypeCategory::Custom.into(),
+                        allowed_in_zone_body: allowed_in_zone_body(&network.node_type.name),
+                    },
+                )
+            }),
+    );
 
     // Group by category
     let mut category_map: HashMap<NodeTypeCategory, Vec<APINodeTypeView>> = HashMap::new();
@@ -260,6 +281,10 @@ pub fn get_node_networks_with_validation(
             APINetworkWithValidationErrors {
                 name: network.node_type.name.clone(),
                 validation_errors,
+                read_only: registry
+                    .library_links
+                    .mount_containing(&network.node_type.name)
+                    .is_some(),
             }
         })
         .collect();
@@ -396,4 +421,137 @@ pub fn get_node_root_cause(
         .iter()
         .find(|e| e.host_network.is_none() && e.node_id == node_id && e.scope_path == scope_path)?;
     resolve_api_root_cause(designer, entry.root.as_ref())
+}
+
+// ---------------------------------------------------------------------------
+// Library linking (`doc/design_library_linking.md` §5.2)
+// ---------------------------------------------------------------------------
+
+pub fn mount_status_view(status: &MountStatus) -> APIMountStatus {
+    match status {
+        MountStatus::Loaded => APIMountStatus::Loaded,
+        MountStatus::OlderThanDisk => APIMountStatus::OlderThanDisk,
+        MountStatus::ChangedOnDisk => APIMountStatus::ChangedOnDisk,
+        MountStatus::Missing => APIMountStatus::Missing,
+        MountStatus::Error(_) => APIMountStatus::Error,
+        MountStatus::Cycle => APIMountStatus::Cycle,
+    }
+}
+
+pub fn library_mount_view(mount: &LibraryMount) -> APILibraryMount {
+    APILibraryMount {
+        mount_path: mount.mount_path.clone(),
+        alias: mount.alias.clone(),
+        rel_path: mount.rel_path.clone(),
+        abs_path: mount.abs_path.to_string_lossy().to_string(),
+        file_name: mount
+            .abs_path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| mount.rel_path.clone()),
+        parent: mount.parent.clone(),
+        direct: mount.is_direct(),
+        status: mount_status_view(&mount.status),
+        status_message: mount.status.message(),
+    }
+}
+
+/// The label of node `node_id` in `network`'s scope `scope_path`, or `""`
+/// when it no longer exists.
+fn reported_node_label(
+    registry: &NodeTypeRegistry,
+    network: &str,
+    scope_path: &[u64],
+    node_id: u64,
+) -> String {
+    use atomcad_structure_designer::network_usages::{node_label, resolve_scope_network};
+    registry
+        .node_networks
+        .get(network)
+        .and_then(|n| resolve_scope_network(n, scope_path))
+        .and_then(|scope| scope.nodes.get(&node_id))
+        .map(node_label)
+        .unwrap_or_default()
+}
+
+fn reported_node_view(registry: &NodeTypeRegistry, node: &ReportedNode) -> APIReportedNode {
+    APIReportedNode {
+        network: node.network.clone(),
+        scope_path: node.scope_path.clone(),
+        node_id: node.node_id,
+        node_label: reported_node_label(registry, &node.network, &node.scope_path, node.node_id),
+        name: node.name.clone(),
+    }
+}
+
+fn reported_wire_view(registry: &NodeTypeRegistry, wire: &ReportedWire) -> APIReportedWire {
+    // The source lives in the same scope, or `source_scope_depth` levels up
+    // (a capture from an enclosing body).
+    let depth = (wire.source_scope_depth as usize).min(wire.scope_path.len());
+    let source_scope = &wire.scope_path[..wire.scope_path.len() - depth];
+    APIReportedWire {
+        network: wire.network.clone(),
+        scope_path: wire.scope_path.clone(),
+        node_id: wire.node_id,
+        node_label: reported_node_label(registry, &wire.network, &wire.scope_path, wire.node_id),
+        pin_name: wire.pin_name.clone(),
+        source_label: reported_node_label(
+            registry,
+            &wire.network,
+            source_scope,
+            wire.source_node_id,
+        ),
+        reason: wire.reason.clone(),
+    }
+}
+
+pub fn refresh_report_view(
+    registry: &NodeTypeRegistry,
+    report: &RefreshReport,
+) -> APIRefreshReport {
+    let wires = |ws: &[ReportedWire]| ws.iter().map(|w| reported_wire_view(registry, w)).collect();
+    let nodes = |ns: &[ReportedNode]| ns.iter().map(|n| reported_node_view(registry, n)).collect();
+    APIRefreshReport {
+        refreshed_mounts: report.refreshed_mounts.clone(),
+        refreshed_data_files: report.refreshed_data_files.clone(),
+        reconciled_nodes: nodes(&report.reconciled_nodes),
+        dropped_wires: wires(&report.dropped_wires),
+        flagged_wires: wires(&report.flagged_wires),
+        output_pin_warnings: wires(&report.output_pin_warnings),
+        removed_names_in_use: report.removed_names_in_use.clone(),
+        frozen_nodes: nodes(&report.frozen_nodes),
+        status_changes: report
+            .status_changes
+            .iter()
+            .map(|(mount_path, status)| APIMountStatusChange {
+                mount_path: mount_path.clone(),
+                status: mount_status_view(status),
+                message: status.message(),
+            })
+            .collect(),
+        held: report.held.clone(),
+        changed_since_saved: report.changed_since_saved.clone(),
+        errors: report.errors.clone(),
+        is_clean: report.is_clean(),
+    }
+}
+
+/// A report that carries only `error` — how a refused refresh or retarget
+/// crosses the bridge.
+pub fn failed_refresh_report(error: String) -> APIRefreshReport {
+    APIRefreshReport {
+        refreshed_mounts: Vec::new(),
+        refreshed_data_files: Vec::new(),
+        reconciled_nodes: Vec::new(),
+        dropped_wires: Vec::new(),
+        flagged_wires: Vec::new(),
+        output_pin_warnings: Vec::new(),
+        removed_names_in_use: Vec::new(),
+        frozen_nodes: Vec::new(),
+        status_changes: Vec::new(),
+        held: Vec::new(),
+        changed_since_saved: Vec::new(),
+        errors: vec![error],
+        is_clean: false,
+    }
 }

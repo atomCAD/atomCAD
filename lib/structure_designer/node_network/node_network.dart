@@ -1247,6 +1247,12 @@ class NodeNetworkState extends State<NodeNetwork> {
     if (HardwareKeyboard.instance.isShiftPressed) {
       return;
     }
+    // A linked network is read-only: the background menu only creates
+    // (Add Node / Paste), so it is not offered at all.
+    if (model.activeNetworkReadOnly) {
+      focusNode.requestFocus();
+      return;
+    }
 
     // Only show context menu if clicked on empty space (not on a node)
     // The nodes have their own context menu handling

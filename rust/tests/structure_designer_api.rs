@@ -67,3 +67,6 @@ mod proxy_api_test;
 
 #[path = "structure_designer_api/scoped_validation_errors_test.rs"]
 mod scoped_validation_errors_test;
+
+#[path = "structure_designer_api/library_links_api_test.rs"]
+mod library_links_api_test;
