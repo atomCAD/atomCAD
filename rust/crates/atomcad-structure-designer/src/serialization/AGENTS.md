@@ -15,7 +15,7 @@ JSON-based persistence for `.cnnd` project files.
 
 ## .cnnd File Format
 
-JSON with versioned schema (`SERIALIZATION_VERSION = 6`):
+JSON with versioned schema (`SERIALIZATION_VERSION = 9`):
 - Top-level: array of `SerializableNodeNetwork` plus `record_type_defs` (record schemas)
 - Each network: name, node_type, nodes, return_node_id, camera_settings
 - Each node: id, type_name, custom_name, position, arguments (wires), data
@@ -39,6 +39,31 @@ Loading runs in **two stages with different network orderings**, and the gap bet
 - a **truncation** (`network_validator::repair_network_arguments`) — cuts `arguments` down to the bare `[f]` count.
 
 Stage 1 stays non-destructive for `apply`: `initialize_…` uses `refresh_args = false`; `repair_node_network`'s generic populate special-cases `apply` to `refresh_args = false` and then runs the apply post-pass with the **preserving-args** variant; its argument-count fixer only *pads*, never truncates. So stage 1 leaves `apply` with an under-derived `[f]` layout but its `arguments` (incl. the unresolved `arg0` wire) intact. Stage 2's `validate_network` then runs the apply/map post-passes (preserving variants) **before** `repair_network_arguments`, so once the `f`-source is resolvable (dependency order) the real `[f, arg0, …]` layout is installed *with the wires preserved positionally*, and the now-no-op truncation/`validate_wires` follow. The `f` wire itself (index 0, and a `-1` source pin) is never at risk; only the derived `arg0…` pins are. See `structure_designer/AGENTS.md` (apply post-pass paragraph) and `doc/design_currying.md`.
+
+## Linked libraries (`imports`, v9)
+
+`doc/design_library_linking.md` is the design; the mount model itself lives in
+`library_links.rs` one level up. What matters here:
+
+- **Save writes only local content** (D5): `registry_to_serializable` filters
+  networks, record defs, folders and CLI rules through
+  `library_links.mount_containing(name).is_none()`, and writes the **direct**
+  mounts as `imports` (alias, `path` verbatim, `hash`, `uses`). Nothing under a
+  mount path is ever written. Never add a new top-level field without the same
+  filter.
+- **Load mounts the imports *before* the local networks are repaired.** The
+  repair passes consult the mounts to decide which nodes are frozen (§8); a
+  local network repaired before its libraries are mounted would have its
+  record nodes on a missing library's defs truncated. A library is loaded by
+  this same function on its own bytes (`load_node_networks_from_bytes`, with a
+  cycle stack), so its own imports recurse.
+- **Deterministic output.** Nodes are written in id order, display lists and
+  pin sets sorted, `cli_access_rules` in key order. Save → load → save must be
+  byte-identical (the missing-library guarantee depends on it); don't
+  reintroduce `HashMap` iteration order into the file.
+- **Writes are atomic**: `save_node_networks_to_file` writes a temp file beside
+  the target and renames it over (`library_links::write_atomic`, through the
+  `LinkFs` trait).
 
 ## Serialization Conventions
 

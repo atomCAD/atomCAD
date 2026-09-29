@@ -493,38 +493,53 @@ fn repair_network_arguments(network: &mut NodeNetwork, node_type_registry: &Node
     // `https://github.com/atomCAD/atomCAD/issues/331` and the
     // "bare `network.nodes` walk skips body nodes" note in
     // `structure_designer/AGENTS.md`.
-    crate::node_network::walk_all_nodes_mut(network, &mut |node| {
-        // `get_node_type_for_node` borrows from `node`, so extract the count
-        // before mutating `node.arguments`.
-        let Some(expected_count) = node_type_registry
-            .get_node_type_for_node(node)
-            .map(|nt| nt.parameters.len())
-        else {
-            return;
-        };
-        let current_count = node.arguments.len();
-        match current_count.cmp(&expected_count) {
-            Ordering::Less => {
-                // Add empty arguments when too few.
-                for _ in current_count..expected_count {
-                    node.arguments.push(Argument::new());
-                }
-            }
-            Ordering::Greater => {
-                // Remove excess arguments when too many.
-                node.arguments.truncate(expected_count);
-            }
-            Ordering::Equal => {}
+    // A frozen node's arguments — and those of a node whose layout derives
+    // from a frozen node's function pin — are neither grown nor truncated
+    // (`doc/design_library_linking.md` §8). Computed per scope, which is why
+    // this walks the scopes itself rather than through `walk_all_nodes_mut`.
+    let protected = crate::library_links::protected_node_ids(network, node_type_registry);
+    for node in network.nodes.values_mut() {
+        if !protected.contains(&node.id) {
+            repair_node_argument_count(node, node_type_registry);
         }
-        // `function_pin_roles` is pin-index-keyed like `arguments`, so it has
-        // the same exposure when a custom node type's pin layout shrinks: prune
-        // entries that no longer name a pin. (`function_pin_dispositions`
-        // ignores out-of-range entries anyway, so this is hygiene, not
-        // correctness — it keeps the map from silently re-attaching a stale
-        // role if the layout later grows back.) See
-        // `doc/design_function_pin_roles.md`.
-        node.function_pin_roles.retain(|&i, _| i < expected_count);
-    });
+        if let Some(body) = node.zone_mut() {
+            repair_network_arguments(body, node_type_registry);
+        }
+    }
+}
+
+/// The per-node half of [`repair_network_arguments`].
+fn repair_node_argument_count(node: &mut Node, node_type_registry: &NodeTypeRegistry) {
+    // `get_node_type_for_node` borrows from `node`, so extract the count
+    // before mutating `node.arguments`.
+    let Some(expected_count) = node_type_registry
+        .get_node_type_for_node(node)
+        .map(|nt| nt.parameters.len())
+    else {
+        return;
+    };
+    let current_count = node.arguments.len();
+    match current_count.cmp(&expected_count) {
+        Ordering::Less => {
+            // Add empty arguments when too few.
+            for _ in current_count..expected_count {
+                node.arguments.push(Argument::new());
+            }
+        }
+        Ordering::Greater => {
+            // Remove excess arguments when too many.
+            node.arguments.truncate(expected_count);
+        }
+        Ordering::Equal => {}
+    }
+    // `function_pin_roles` is pin-index-keyed like `arguments`, so it has
+    // the same exposure when a custom node type's pin layout shrinks: prune
+    // entries that no longer name a pin. (`function_pin_dispositions`
+    // ignores out-of-range entries anyway, so this is hygiene, not
+    // correctness — it keeps the map from silently re-attaching a stale
+    // role if the layout later grows back.) See
+    // `doc/design_function_pin_roles.md`.
+    node.function_pin_roles.retain(|&i, _| i < expected_count);
 }
 
 /// Removes wire connections that reference output pins that no longer exist on the source node.
@@ -541,9 +556,12 @@ fn repair_network_arguments(network: &mut NodeNetwork, node_type_registry: &Node
 fn repair_output_pin_wires(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegistry) {
     // First pass: build a map of node_id -> output_pin_count for THIS network's
     // own nodes.
+    // A frozen source (`doc/design_library_linking.md` §8) is left out, so the
+    // wires out of it are kept like those of an unknown source.
     let pin_counts: HashMap<u64, usize> = network
         .nodes
         .iter()
+        .filter(|(_, node)| !crate::library_links::is_frozen(node, node_type_registry))
         .filter_map(|(&node_id, node)| {
             node_type_registry
                 .get_node_type_for_node(node)
@@ -654,6 +672,11 @@ fn validate_node_wires(
     dest_node_id: u64,
     dest_node: &Node,
 ) -> Option<ValidationError> {
+    // A frozen node gets its one error from `validate_zones_recursive` (which
+    // covers every scope); nothing here may read its stale layout.
+    if crate::library_links::is_frozen(dest_node, node_type_registry) {
+        return None;
+    }
     // Check if this node references a node network and validate its validity
     if let Some(referenced_network) = node_type_registry
         .node_networks
@@ -1377,6 +1400,17 @@ fn validate_zones_recursive(
         let Some(node) = network.nodes.get(&node_id) else {
             continue;
         };
+        // Frozen node (`doc/design_library_linking.md` §8): it refers to an
+        // unresolved name under a library mount. One blocking error, which
+        // cone-poisons it; nothing else about it is checked, because its
+        // layout is stale by definition. Deliberately does not set `ok`.
+        if let Some(name) = crate::library_links::unresolved_mount_ref(node, registry) {
+            network.validation_errors.push(ValidationError::new(
+                crate::library_links::frozen_node_message(node, &name),
+                Some(node_id),
+            ));
+            continue;
+        }
         let Some(node_type) = registry.get_node_type_for_node(node) else {
             continue;
         };

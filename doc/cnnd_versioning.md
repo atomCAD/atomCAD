@@ -71,3 +71,15 @@ migration would address.
 
 ## New file format version and migartion
 
+
+### A version bump with no migration: v9 (`imports`)
+
+Version 9 (`doc/design_library_linking.md` D12) added the top-level `imports`
+list of linked libraries. The field is purely additive — `#[serde(default)]`,
+omitted when empty — so v8 files load unchanged and there is **no** v8→v9 pass.
+The version was bumped anyway, and that is the point: an older atomCAD ignores
+unknown fields, so without the bump it would open a linking file *without* its
+libraries and, on save, write it back without them. The bump makes the older
+reader refuse the file ("file is from a newer version") instead. Use the same
+reasoning for any future additive field whose silent loss on an old reader's
+save would destroy data.

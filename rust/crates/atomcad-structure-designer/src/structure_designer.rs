@@ -2520,6 +2520,13 @@ impl StructureDesigner {
     }
 
     pub fn rename_namespace(&mut self, old_prefix: &str, new_prefix: &str) -> bool {
+        // A folder that is, contains or lies inside a linked library would
+        // silently change an alias (`doc/design_library_linking.md` D3).
+        if self.namespace_touches_mount(old_prefix)
+            || (!new_prefix.is_empty() && self.namespace_touches_mount(new_prefix))
+        {
+            return false;
+        }
         let plan = self.compute_namespace_rename(old_prefix, new_prefix);
         if !plan.is_applicable() {
             return false;
@@ -2924,6 +2931,13 @@ impl StructureDesigner {
     }
 
     pub fn delete_namespace(&mut self, prefix: &str) -> Result<(), String> {
+        // `doc/design_library_linking.md` D3: never through a linked library.
+        if self.namespace_touches_mount(prefix) {
+            return Err(format!(
+                "'{}' contains or is part of a linked library; unlink it first",
+                prefix
+            ));
+        }
         // Collect affected networks AND user record defs: names under "prefix."
         let prefix_dot = format!("{}.", prefix);
         let affected_networks: Vec<String> = self
@@ -5774,6 +5788,10 @@ impl StructureDesigner {
         // document). Built-in record defs (e.g. ElementMapping) are
         // application-supplied and intentionally preserved.
         self.node_type_registry.record_type_defs.clear();
+
+        // Linked libraries belong to the old document too (their content was
+        // cleared with the maps above).
+        self.node_type_registry.library_links.clear();
 
         // Create a fresh "Main" network and set it as active
         self.add_node_network("Main");

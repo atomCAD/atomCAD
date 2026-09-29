@@ -574,6 +574,12 @@ the file; the repair and the report are shared.
   (`dedupe_param_ids_in_network`), matching falls back to names — the worst
   case is a *dropped* wire, which is reported, never a wire moved to the wrong
   pin.
+- **Record fields need the same stability, and before P3 they do not have it.**
+  Found in P1: `FieldId`s are not saved — they are re-assigned in authored
+  order on every load — so a library that inserts a field at the front shifts
+  every id, and the ids in `uses` identify nothing across versions. Decision
+  (§13 item 7): P3 starts by persisting field ids and both id counters, so
+  that neither kind of id is re-assigned or recycled across a save.
 
 **Rejected alternative: a `param_id` on every stored argument.** It is the
 general fix, but it changes the serialized shape of every node, it is exactly
@@ -636,8 +642,11 @@ pub struct LibraryLinks {
   `rename_record_type_def_unchecked` per record def — applied from the root.
   (The current copy import's hand-rolled `node_type_name` rewrite is exactly
   what misses record defs; do not copy it.)
-- **Load** (`load_node_networks_from_file`): after local networks are inserted,
-  mount each import (status failures are recorded, never fatal); then
+- **Load** (`load_node_networks_from_file`): mount each import **before** the
+  local networks are inserted — each local network is repaired as it is
+  inserted, and that repair must already know which names are under a mount
+  or it realigns the nodes that should be frozen (§8) (status failures are
+  recorded, never fatal); then
   **reconcile** (`reconcile_used_interfaces`, D13): for every entry of each
   mount's `stored_uses` whose name resolves and whose interface differs from
   the mounted one, repair the file's **local** call sites and record nodes from
@@ -1005,11 +1014,15 @@ types, parameter types, `closure` signatures). "Under a mount" is
 outside any mount keep today's behaviour.
 
 After a refresh a frozen node keeps its **last resolved** custom node type
-(already in memory), so it still draws with its pins. On load there is none; it
-is drawn the way an instance of an unknown network is drawn today, and P1
-checks that the view builder and the Flutter canvas tolerate
-`arguments.len()` greater than the pin count (wires into pins that are not
-drawn must not panic, and must survive save).
+(already in memory), so it still draws with its pins. **On load, a frozen
+node gets its layout from the recorded interface** (§13 item 6, P2): the
+`uses` entry of the name it refers to — carried over for every unresolved name
+by D13 — gives an instance its parameters and outputs and a record node its
+fields, so it keeps its pin names, draws with its pins, and can be written in
+the text format. Until P2 it has no layout on load: an instance is not drawn,
+a record node draws with no input pins, and the Flutter canvas skips wires to
+pins it does not draw (`ScopeResolver` returns `null` for them — checked in
+P1); nothing panics and everything survives save.
 
 Byte-identical save also covers the import entry itself: a `Missing` mount
 writes back its `hash` and its `uses` table exactly as read (`stored_hash`,
@@ -1310,12 +1323,25 @@ Tests (`library_links_test.rs`):
 - Version: v8 fixtures still load; a v9 file is rejected by a reader capped at 8
   (unit test on the version gate).
 
+**Status (2026-09-29): done.** Deviations and findings, all folded into the
+sections above: mounting runs *before* the local networks are inserted
+(§5.1); consumers of a frozen node's function pin are protected like frozen
+nodes (`library_links::protected_node_ids` — an `apply` fed by `@frozen` would
+otherwise lose its `arg0…` wires); save is now deterministic (node order was
+`HashMap` order, which made byte-identical saves impossible); `link_library`
+accepts an absolute path and stores it relative, refusing only when no
+relative path exists; the fixture generator is an `#[ignore]`d tool, like
+`generate_healthy_fixture`. Open for later phases: §13 items 6 and 7.
+
 ### Phase 2 — Read-only enforcement and eval base directory (Rust only)
 
 Work: `name_in_mount` in the namespace checks; `ensure_editable` + checked
 scope accessors; `ai_text_edit` guard; view-state paths don't dirty on linked
 networks; `base_dir_for_eval` and the eight file-using call sites; non-blocking
-"transitive library" warning; `mount_fingerprint`.
+"transitive library" warning; `mount_fingerprint` (already landed in P1, used
+by O5); **the recorded layout of frozen nodes and the positional pin spelling
+of the text format (§13 item 6)** — the `ai_text_edit` test below cannot pass
+without them.
 
 Tests (`library_links_readonly_test.rs`):
 - **Mutation alphabet**, table-driven: for each entry point — add node, delete
@@ -1338,6 +1364,16 @@ Tests (`library_links_readonly_test.rs`):
 - `ai_text_edit` on a host network with linked instances and frozen nodes:
   `query` then `replace` with the same text is a no-op (O1), and an unrelated
   edit statement leaves every linked instance's wires as they were (O2).
+  `--replace` mints fresh node ids, so "no-op" is judged as the text
+  round-trip corpus judges it — identical text back, same wire count, and O2
+  keyed by node *name path* rather than id. Cases: `host_missing.cnnd` (all
+  frozen nodes get recorded layouts), the same with its `uses` table deleted
+  (every frozen wire spelled `@i`), and an `apply` fed by a frozen node's
+  function pin.
+- Recorded layout: on `host_missing.cnnd`, every frozen instance and record
+  node has the pin names of its `uses` entry; `apply` fed by `@f2` derives
+  `[f, x, y]` from it; nothing unfreezes and O6 holds. A frozen node whose name
+  has no `uses` entry keeps an empty layout and its wires.
 - Browsing: activate a linked network, select, change camera/canvas viewport,
   toggle display → allowed, host **not** dirty, nothing saved.
 - Duplicate *into my file* (target namespace outside the mount) succeeds and the
@@ -1351,7 +1387,9 @@ Tests (`library_links_readonly_test.rs`):
 
 ### Phase 3 — Change detection, refresh, retarget (Rust only)
 
-Work: `FileStamp` with `loaded` / `last_seen`; the watched list (libraries plus
+Work: **first, persistent ids (§13 item 7)** — before any reconciliation
+code, since reconciliation is only as good as the ids it matches on. Then
+`FileStamp` with `loaded` / `last_seen`; the watched list (libraries plus
 data files, from the D11 collector — the collector moves forward into this
 phase, the Save As dialog stays in P5); `check_dependencies`;
 `reconcile_used_interfaces` (D13), run on open before any argument-count
@@ -1638,3 +1676,73 @@ library file never contain it.
    memory, and opening reconciles against them with the refresh's own repair
    (D13). A `param_id` on every argument was rejected as the broad refactor
    `doc/design_parameter_wire_stability.md` §5 parked.
+6. **Frozen nodes in the text format (2026-09-29, found in P1)** — the text
+   format writes wires by pin name, and a frozen node has no layout on load,
+   so its wires were omitted from `query` and a `--replace` deleted them
+   silently. Decision, two parts, both in **P2**:
+   - **Recorded layout.** When a node is frozen and has no cached layout (a
+     fresh load), install one built from the recorded interface of the name it
+     refers to — the `uses` entry, which D13 carries over for every unresolved
+     name: an instance gets the entry's `params` (with their ids) and
+     `outputs`; a `record_construct` / `record_destructure` / `product` gets
+     its `fields` (ids as the `Parameter` / output-pin ids, exactly as
+     `build_node_type_for_schema_with_defs` would stamp them). It replaces the
+     `populate_custom_node_type_cache(.., false)` call the frozen branch of
+     `repair_node_network` makes today, is installed with `refresh_args =
+     false`, and — like any frozen layout — is never rebuilt until the name
+     resolves. Types in a nested library's `uses` are written in the library's
+     namespace and must be prefixed like everything else at mount time. This
+     one mechanism gives frozen nodes their pins on the canvas (§8), their
+     names in the text format, and a function-pin signature from which an
+     `apply` fed by `@frozen` derives its `arg` pins — so
+     `protected_node_ids`' second clause stops mattering in practice (keep it
+     as the safety net).
+   - **Positional spelling as the fallback.** A wire into a pin index the
+     node's layout does not have (no `uses` entry: a hand-edited file, or a
+     name that was never recorded) is written `@<index>: source`, and an
+     output of such a node is referenced `node.@<index>`. `@` followed by
+     digits is not a valid identifier, so it cannot collide with a pin name,
+     and in key position it is currently a parse error, so nothing existing
+     changes meaning. The editor accepts `@i` **only** on a node that is
+     protected (§8) and places the wire at argument `i`, growing `arguments`
+     as needed, without a type check; on any other node it is an error
+     ("positional pin only on a node whose type is unavailable"). Named pins
+     are still used wherever the layout has a name.
+   Rejected: refusing `--replace` on a network with frozen nodes (the AI
+   could no longer edit a design whose library is missing — the case where
+   help is most needed); and positional spelling alone (the canvas would still
+   draw frozen nodes pin-less, and every AI edit would see `@0` instead of
+   `x`).
+7. **Stable record-field and id-counter identity (2026-09-29, found in P1)**
+   — record `FieldId`s are re-assigned in authored order on every load, and
+   `next_param_id` / `next_field_id` are re-derived as `max + 1`, so an id
+   deleted from the end of a list is handed out again after a save. Across
+   library versions both break D13's matching: a field inserted at the front
+   re-numbers every field, and a parameter deleted and replaced by a new one
+   gives the new one the old one's id — so a host wire recorded against the
+   old one would *move* to it, the one outcome D13 promises never happens.
+   Decision, first step of **P3**:
+   - `RecordTypeDef` serializes each field's `id` and the def's
+     `next_field_id`; `SerializableNodeNetwork` serializes `next_param_id`.
+     All additive (`#[serde(default)]`), no version bump: an older build
+     ignores them and re-derives ids as today, losing identity but no data.
+   - Load: a field with an `id` keeps it; fields without one get ids in
+     authored order starting above every present id (so a pre-P3 file gets
+     exactly the ids it gets today — which is also what the P1-written `uses`
+     tables recorded, so those stay valid); duplicates are healed like
+     `dedupe_param_ids_in_network` (first keeps it, later ones get fresh ids,
+     reported). Counters load as `max(stored, max id + 1)` — the existing
+     floor never lowers.
+   - `collect_used_interfaces` reads parameter ids from the network's
+     **parameter nodes** (`ParameterData.param_id`), not from
+     `node_type.parameters`: a network restored by an undo snapshot has no ids
+     in its interface until it is next validated (found in P1), and non-active
+     networks are not revalidated after an undo.
+   - This rewrites the `.cnnd` of every file with record defs once (the ids
+     appear); fixtures and snapshots that pin record defs are updated with it.
+   Rejected: matching record fields by name only — a renamed field would
+   become a dropped wire, and it leaves the parameter-recycling hole open.
+8. **Load order (2026-09-29, found in P1)** — imports are mounted *before* the
+   local networks are inserted, not after (§5.1): each local network is
+   repaired as it is inserted, and that repair must already know which names
+   belong to a mount. Done in P1.

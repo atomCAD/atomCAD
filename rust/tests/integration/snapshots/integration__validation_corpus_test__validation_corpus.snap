@@ -81,6 +81,61 @@ expression: out
   network 'Main' valid=true
 === lattice_space_migration/trivial_v3.cnnd
   network 'Main' valid=true
+=== library_linking/cycle_x.cnnd
+  network 'Main' valid=true
+  network 'ex' valid=true
+  network 'y.Main' valid=true
+  network 'y.why' valid=true
+=== library_linking/cycle_y.cnnd
+  network 'Main' valid=true
+  network 'why' valid=true
+  network 'x.Main' valid=true
+  network 'x.ex' valid=true
+=== library_linking/host.cnnd
+  network 'Main' valid=true
+  network 'a.bar' valid=true
+  network 'a.common.slab' valid=true
+  network 'a.crystal' valid=true
+  network 'a.foo' valid=true
+  network 'a.fv' valid=true
+  network 'a.mk' valid=true
+  network 'a.usecommon' valid=true
+  network 'b.baz' valid=true
+  network 'typed' valid=true
+=== library_linking/host_missing.cnnd
+  network 'Main' valid=true
+    scope=[17] node=1 blocking=true "Unknown record type `demolib.Miller` (linked library not available)"
+    scope=[17] node=2 blocking=true "Unknown node type `demolib.foo` (linked library not available)"
+    scope=[] node=13 blocking=true "Unknown record type `demolib.Miller` (linked library not available)"
+    scope=[] node=14 blocking=true "Unknown node type `demolib.split` (linked library not available)"
+    scope=[] node=14 blocking=true "Unknown source node type 'demolib.split'"
+    scope=[] node=16 blocking=true "Unknown record type `demolib.Miller` (linked library not available)"
+    scope=[] node=17 blocking=true "Unknown record type `demolib.Miller` (linked library not available)"
+    scope=[] node=20 blocking=true "Unknown record type `demolib.Miller` (linked library not available)"
+    scope=[] node=3 blocking=true "Unknown node type `demolib.foo` (linked library not available)"
+    scope=[] node=3 blocking=true "Unknown source node type 'demolib.foo'"
+    scope=[] node=5 blocking=true "Unknown node type `demolib.foo` (linked library not available)"
+    scope=[] node=6 blocking=true "Node has 3 arguments but type expects 1 parameters"
+    scope=[] node=7 blocking=true "Unknown record type `demolib.Miller` (linked library not available)"
+    scope=[] node=8 blocking=true "Unknown record type `demolib.Miller` (linked library not available)"
+  network 'typed' valid=true
+    scope=[] node=1 blocking=true "Unknown record type `demolib.Miller` (linked library not available)"
+=== library_linking/lib_a.cnnd
+  network 'bar' valid=true
+  network 'common.slab' valid=true
+  network 'crystal' valid=true
+  network 'foo' valid=true
+  network 'fv' valid=true
+  network 'mk' valid=true
+  network 'usecommon' valid=true
+=== library_linking/libs/common.cnnd
+  network 'slab' valid=true
+=== library_linking/libs/lib_b.cnnd
+  network 'baz' valid=true
+=== library_linking/libs/with_xyz.cnnd
+  network 'tip' valid=true
+=== library_linking/self_link.cnnd
+  network 'Main' valid=true
 === mechanosynth/mechanosynth_edit.cnnd
   network 'Main' valid=true
 === mechanosynth/mechanosynth_legacy.cnnd

@@ -1,0 +1,560 @@
+{
+  "node_networks": [
+    [
+      "Main",
+      {
+        "next_node_id": 11,
+        "node_type": {
+          "name": "Main",
+          "description": "",
+          "summary": null,
+          "category": "Custom",
+          "parameters": [],
+          "output_pins": [
+            {
+              "name": "result",
+              "data_type": "Int"
+            }
+          ]
+        },
+        "nodes": [
+          {
+            "id": 1,
+            "node_type_name": "int",
+            "custom_name": "i1",
+            "position": [
+              100.0,
+              100.0
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 3
+            },
+            "body_width": 320.0,
+            "body_height": 180.0,
+            "collapse_mode": "Auto"
+          },
+          {
+            "id": 2,
+            "node_type_name": "int",
+            "custom_name": "i2",
+            "position": [
+              100.0,
+              279.5
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 4
+            },
+            "body_width": 320.0,
+            "body_height": 180.0,
+            "collapse_mode": "Auto"
+          },
+          {
+            "id": 3,
+            "node_type_name": "a.foo",
+            "custom_name": "f",
+            "position": [
+              310.0,
+              347.0
+            ],
+            "arguments": [
+              {
+                "incoming_wires": [
+                  {
+                    "source_node_id": 1,
+                    "source_pin": {
+                      "NodeOutput": {
+                        "pin_index": 0
+                      }
+                    },
+                    "source_scope_depth": 0
+                  }
+                ]
+              },
+              {
+                "incoming_wires": [
+                  {
+                    "source_node_id": 2,
+                    "source_pin": {
+                      "NodeOutput": {
+                        "pin_index": 0
+                      }
+                    },
+                    "source_scope_depth": 0
+                  }
+                ]
+              }
+            ],
+            "data_type": "custom_node",
+            "data": {},
+            "body_width": 320.0,
+            "body_height": 180.0,
+            "collapse_mode": "Auto"
+          },
+          {
+            "id": 4,
+            "node_type_name": "record_construct",
+            "custom_name": "rc",
+            "position": [
+              310.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "incoming_wires": [
+                  {
+                    "source_node_id": 1,
+                    "source_pin": {
+                      "NodeOutput": {
+                        "pin_index": 0
+                      }
+                    },
+                    "source_scope_depth": 0
+                  }
+                ]
+              },
+              {
+                "incoming_wires": [
+                  {
+                    "source_node_id": 2,
+                    "source_pin": {
+                      "NodeOutput": {
+                        "pin_index": 0
+                      }
+                    },
+                    "source_scope_depth": 0
+                  }
+                ]
+              },
+              {
+                "incoming_wires": [
+                  {
+                    "source_node_id": 1,
+                    "source_pin": {
+                      "NodeOutput": {
+                        "pin_index": 0
+                      }
+                    },
+                    "source_scope_depth": 0
+                  }
+                ]
+              }
+            ],
+            "data_type": "record_construct",
+            "data": {
+              "literal_values": {},
+              "schema": "a.Miller"
+            },
+            "body_width": 320.0,
+            "body_height": 180.0,
+            "collapse_mode": "Auto"
+          },
+          {
+            "id": 5,
+            "node_type_name": "record_destructure",
+            "custom_name": "rd",
+            "position": [
+              520.0,
+              223.0
+            ],
+            "arguments": [
+              {
+                "incoming_wires": [
+                  {
+                    "source_node_id": 4,
+                    "source_pin": {
+                      "NodeOutput": {
+                        "pin_index": 0
+                      }
+                    },
+                    "source_scope_depth": 0
+                  }
+                ]
+              }
+            ],
+            "data_type": "record_destructure",
+            "data": {
+              "schema": "a.Miller"
+            },
+            "body_width": 320.0,
+            "body_height": 180.0,
+            "collapse_mode": "Auto"
+          },
+          {
+            "id": 6,
+            "node_type_name": "expr",
+            "custom_name": "e2",
+            "position": [
+              730.0,
+              223.0
+            ],
+            "arguments": [
+              {
+                "incoming_wires": [
+                  {
+                    "source_node_id": 5,
+                    "source_pin": {
+                      "NodeOutput": {
+                        "pin_index": 1
+                      }
+                    },
+                    "source_scope_depth": 0
+                  }
+                ]
+              }
+            ],
+            "data_type": "expr",
+            "data": {
+              "expression": "a + 1",
+              "parameters": [
+                {
+                  "data_type": "Int",
+                  "data_type_str": null,
+                  "id": 1,
+                  "name": "a"
+                }
+              ]
+            },
+            "body_width": 320.0,
+            "body_height": 180.0,
+            "collapse_mode": "Auto"
+          },
+          {
+            "id": 7,
+            "node_type_name": "a.common.slab",
+            "custom_name": "s",
+            "position": [
+              310.0,
+              254.0
+            ],
+            "arguments": [
+              {
+                "incoming_wires": [
+                  {
+                    "source_node_id": 1,
+                    "source_pin": {
+                      "NodeOutput": {
+                        "pin_index": 0
+                      }
+                    },
+                    "source_scope_depth": 0
+                  }
+                ]
+              }
+            ],
+            "data_type": "custom_node",
+            "data": {},
+            "body_width": 320.0,
+            "body_height": 180.0,
+            "collapse_mode": "Auto"
+          },
+          {
+            "id": 8,
+            "node_type_name": "b.baz",
+            "custom_name": "bz",
+            "position": [
+              100.0,
+              459.0
+            ],
+            "arguments": [],
+            "data_type": "custom_node",
+            "data": {},
+            "body_width": 320.0,
+            "body_height": 180.0,
+            "collapse_mode": "Auto"
+          },
+          {
+            "id": 9,
+            "node_type_name": "range",
+            "custom_name": "r",
+            "position": [
+              100.0,
+              552.0
+            ],
+            "arguments": [
+              {
+                "incoming_wires": []
+              },
+              {
+                "incoming_wires": []
+              },
+              {
+                "incoming_wires": []
+              }
+            ],
+            "data_type": "range",
+            "data": {
+              "count": 2,
+              "start": 0,
+              "step": 1
+            },
+            "body_width": 320.0,
+            "body_height": 180.0,
+            "collapse_mode": "Auto"
+          },
+          {
+            "id": 10,
+            "node_type_name": "map",
+            "custom_name": "mp",
+            "position": [
+              310.0,
+              552.0
+            ],
+            "arguments": [
+              {
+                "incoming_wires": [
+                  {
+                    "source_node_id": 9,
+                    "source_pin": {
+                      "NodeOutput": {
+                        "pin_index": 0
+                      }
+                    },
+                    "source_scope_depth": 0
+                  }
+                ]
+              },
+              {
+                "incoming_wires": []
+              }
+            ],
+            "data_type": "map",
+            "data": {
+              "input_type": "Int",
+              "output_type": "Int"
+            },
+            "zone": {
+              "next_node_id": 2,
+              "node_type": {
+                "name": "",
+                "description": "",
+                "summary": null,
+                "category": "OtherBuiltin",
+                "parameters": [],
+                "output_pins": [
+                  {
+                    "name": "result",
+                    "data_type": "None"
+                  }
+                ]
+              },
+              "nodes": [
+                {
+                  "id": 1,
+                  "node_type_name": "a.foo",
+                  "custom_name": "g",
+                  "position": [
+                    50.0,
+                    0.0
+                  ],
+                  "arguments": [
+                    {
+                      "incoming_wires": [
+                        {
+                          "source_node_id": 10,
+                          "source_pin": {
+                            "ZoneInput": {
+                              "pin_index": 0
+                            }
+                          },
+                          "source_scope_depth": 1
+                        }
+                      ]
+                    },
+                    {
+                      "incoming_wires": [
+                        {
+                          "source_node_id": 1,
+                          "source_pin": {
+                            "NodeOutput": {
+                              "pin_index": 0
+                            }
+                          },
+                          "source_scope_depth": 1
+                        }
+                      ]
+                    }
+                  ],
+                  "data_type": "custom_node",
+                  "data": {},
+                  "body_width": 320.0,
+                  "body_height": 180.0,
+                  "collapse_mode": "Auto"
+                }
+              ],
+              "return_node_id": null,
+              "displayed_node_ids": []
+            },
+            "zone_output_arguments": [
+              {
+                "incoming_wires": [
+                  {
+                    "source_node_id": 1,
+                    "source_pin": {
+                      "NodeOutput": {
+                        "pin_index": 0
+                      }
+                    },
+                    "source_scope_depth": 0
+                  }
+                ]
+              }
+            ],
+            "body_width": 320.0,
+            "body_height": 180.0,
+            "collapse_mode": "Auto"
+          }
+        ],
+        "return_node_id": 3,
+        "displayed_node_ids": []
+      }
+    ],
+    [
+      "typed",
+      {
+        "next_node_id": 2,
+        "node_type": {
+          "name": "typed",
+          "description": "",
+          "summary": null,
+          "category": "Custom",
+          "parameters": [
+            {
+              "name": "m",
+              "data_type": "Record(`a.Miller`)"
+            }
+          ],
+          "output_pins": [
+            {
+              "name": "result",
+              "data_type": "Record(`a.Miller`)"
+            }
+          ]
+        },
+        "nodes": [
+          {
+            "id": 1,
+            "node_type_name": "parameter",
+            "custom_name": "m",
+            "position": [
+              100.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "incoming_wires": []
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": {
+                "Record": {
+                  "Named": "a.Miller"
+                }
+              },
+              "data_type_str": null,
+              "param_id": 1,
+              "param_index": 0,
+              "param_name": "m",
+              "sort_order": 0
+            },
+            "body_width": 320.0,
+            "body_height": 180.0,
+            "collapse_mode": "Auto"
+          }
+        ],
+        "return_node_id": 1,
+        "displayed_node_ids": []
+      }
+    ]
+  ],
+  "version": 9,
+  "imports": [
+    {
+      "alias": "a",
+      "path": "lib_a.cnnd",
+      "hash": "b3:bb4938c3b9e16eed45c503ad57b94c785f0e03c81665d42f6d0cf293d5217b65",
+      "uses": {
+        "networks": {
+          "common.slab": {
+            "params": [
+              {
+                "id": 1,
+                "name": "n",
+                "type": "Int"
+              }
+            ],
+            "outputs": [
+              {
+                "name": "result",
+                "type": "Int"
+              }
+            ]
+          },
+          "foo": {
+            "params": [
+              {
+                "id": 1,
+                "name": "x",
+                "type": "Int"
+              },
+              {
+                "id": 2,
+                "name": "y",
+                "type": "Int"
+              }
+            ],
+            "outputs": [
+              {
+                "name": "result",
+                "type": "Int"
+              }
+            ]
+          }
+        },
+        "records": {
+          "Miller": {
+            "fields": [
+              {
+                "id": 0,
+                "name": "h",
+                "type": "Int"
+              },
+              {
+                "id": 1,
+                "name": "k",
+                "type": "Int"
+              },
+              {
+                "id": 2,
+                "name": "l",
+                "type": "Int"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "alias": "b",
+      "path": "libs/lib_b.cnnd",
+      "hash": "b3:1de2350b80569b55e7fbb4e531de1c2d5fb332d63e158a3f7397dc55e0d0f38e",
+      "uses": {
+        "networks": {
+          "baz": {
+            "params": [],
+            "outputs": [
+              {
+                "name": "result",
+                "type": "Int"
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

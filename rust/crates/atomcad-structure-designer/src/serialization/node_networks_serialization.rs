@@ -16,13 +16,18 @@ use atomcad_util::serialization_utils::{dvec2_serializer, dvec3_serializer};
 use glam::f64::{DVec2, DVec3};
 use serde::{Deserialize, Serialize};
 use serde_json;
-use std::fs;
-use std::io::{self, Read};
+
+use std::io;
 use std::path::Path;
 use std::sync::Arc;
 
 // The current version of the serialization format
-const SERIALIZATION_VERSION: u32 = 8;
+///
+/// v9 (`doc/design_library_linking.md` D12) adds the `imports` list. The bump
+/// has no migration pass (the field is purely additive); it exists so that an
+/// older atomCAD refuses a linking file instead of opening it without its
+/// libraries and destroying them on save.
+pub const SERIALIZATION_VERSION: u32 = 9;
 
 /// Sentinel `data_type` written for custom (user-network) node instances. Their
 /// `node_type_name` is a key in `node_networks`, not `built_in_node_types`, so
@@ -264,7 +269,11 @@ pub struct SerializableNodeTypeRegistryNetworks {
     pub direct_editing_mode: bool,
     /// CLI access rules: sparse map of namespace/network prefixes to allowed (true) / denied (false).
     /// Missing field defaults to empty map (all access allowed) for backward compatibility.
-    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
+    #[serde(
+        default,
+        skip_serializing_if = "std::collections::HashMap::is_empty",
+        serialize_with = "serialize_sorted_map"
+    )]
     pub cli_access_rules: std::collections::HashMap<String, bool>,
     /// Named record type defs. Backward-compat: missing field deserializes to
     /// an empty list, so pre-record `.cnnd` files load unchanged. Emitted
@@ -278,6 +287,43 @@ pub struct SerializableNodeTypeRegistryNetworks {
     /// `doc/design_empty_folders.md`.
     #[serde(default, skip_serializing_if = "std::collections::BTreeSet::is_empty")]
     pub folders: std::collections::BTreeSet<String>,
+    /// Linked libraries (`doc/design_library_linking.md` D12): the file's
+    /// **direct** links only, sorted by alias. Missing field = no links.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub imports: Vec<SerializableImport>,
+}
+
+/// One entry of the `imports` list (D12/D13).
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct SerializableImport {
+    pub alias: String,
+    /// Relative to the importing file's directory, forward slashes, written
+    /// back verbatim (D6).
+    pub path: String,
+    /// `b3:<hex>` of the library content the importer was saved against — a
+    /// hint only (D13).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hash: Option<String>,
+    /// The interfaces the importer is wired against (D13).
+    #[serde(
+        default,
+        skip_serializing_if = "crate::library_links::UsedInterfaces::is_empty"
+    )]
+    pub uses: crate::library_links::UsedInterfaces,
+}
+
+/// Writes a `HashMap` in key order, so the saved file does not depend on hash
+/// iteration order (a save → load → save round trip must be byte-identical).
+fn serialize_sorted_map<S, V>(
+    map: &std::collections::HashMap<String, V>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+    V: Serialize,
+{
+    let sorted: std::collections::BTreeMap<&String, &V> = map.iter().collect();
+    sorted.serialize(serializer)
 }
 
 /// Converts a NodeType to its serializable counterpart
@@ -622,19 +668,25 @@ pub fn node_network_to_serializable(
     design_dir: Option<&str>,
 ) -> io::Result<SerializableNodeNetwork> {
     // Convert each node to a SerializableNode
+    // In node-id order: the file must not depend on `HashMap` iteration order
+    // (save → load → save is byte-identical, `doc/design_library_linking.md`
+    // §8 / O4).
     let mut serializable_nodes = Vec::new();
-
-    for (id, node) in &mut network.nodes {
-        let serializable_node = node_to_serializable(*id, node, built_in_node_types, design_dir)?;
+    let mut node_ids: Vec<u64> = network.nodes.keys().copied().collect();
+    node_ids.sort_unstable();
+    for id in node_ids {
+        let node = network.nodes.get_mut(&id).expect("id came from this map");
+        let serializable_node = node_to_serializable(id, node, built_in_node_types, design_dir)?;
         serializable_nodes.push(serializable_node);
     }
 
     // Split displayed_nodes into displayed_node_ids + displayed_output_pins for serialization
-    let displayed_node_ids: Vec<(u64, NodeDisplayType)> = network
+    let mut displayed_node_ids: Vec<(u64, NodeDisplayType)> = network
         .displayed_nodes
         .iter()
         .map(|(&id, state)| (id, state.display_type))
         .collect();
+    displayed_node_ids.sort_by_key(|(id, _)| *id);
 
     // Only write displayed_output_pins for nodes with non-default pin state.
     // "Default" is the *node's* default — `{0}` globally, but an explicit set
@@ -642,7 +694,7 @@ pub fn node_network_to_serializable(
     // both `mechanosynth` nodes say `{2}`). Comparing against a hard-coded
     // `{0}` would write an entry for every node sitting at its own default and,
     // worse, write none for a node the user had explicitly put back on `{0}`.
-    let displayed_output_pins: Vec<(u64, Vec<i32>)> = network
+    let mut displayed_output_pins: Vec<(u64, Vec<i32>)> = network
         .displayed_nodes
         .iter()
         .filter(|(id, state)| {
@@ -653,8 +705,13 @@ pub fn node_network_to_serializable(
                 .unwrap_or_else(|| std::collections::HashSet::from([0]));
             state.displayed_pins != default_pins
         })
-        .map(|(&id, state)| (id, state.displayed_pins.iter().copied().collect()))
+        .map(|(&id, state)| {
+            let mut pins: Vec<i32> = state.displayed_pins.iter().copied().collect();
+            pins.sort_unstable();
+            (id, pins)
+        })
         .collect();
+    displayed_output_pins.sort_by_key(|(id, _)| *id);
 
     // Create a serializable version of the node type
     let serializable_node_type = node_type_to_serializable(&network.node_type);
@@ -948,22 +1005,20 @@ pub fn serializable_to_node_network(
     Ok(network)
 }
 
-/// Saves node networks from a NodeTypeRegistry to a JSON file
-///
-/// # Parameters
-/// * `registry` - The NodeTypeRegistry to save
-/// * `file_path` - Path to the output JSON file
-///
-/// # Returns
-/// * `io::Result<()>` - Success or an error if saving fails
-pub fn save_node_networks_to_file(
+/// Builds the serializable form of the registry's **local** content (D5):
+/// networks, record defs, folders and CLI rules not under any mount, plus the
+/// `imports` list of the direct mounts. Nothing under a mount path is ever
+/// written, so an accidental in-memory mutation of linked content can never
+/// reach a file.
+pub fn registry_to_serializable(
     registry: &mut NodeTypeRegistry,
-    file_path: &Path,
+    design_dir: Option<&str>,
     direct_editing_mode: bool,
     cli_access_rules: &std::collections::HashMap<String, bool>,
-) -> io::Result<()> {
-    // Extract design directory early
-    let design_dir = file_path.parent().and_then(|p| p.to_str());
+) -> io::Result<SerializableNodeTypeRegistryNetworks> {
+    let is_local = |links: &crate::library_links::LibraryLinks, name: &str| {
+        links.mount_containing(name).is_none()
+    };
 
     // Convert the node networks to a serializable format. Sort by name so the
     // file's network array order is deterministic across saves (HashMap
@@ -971,9 +1026,13 @@ pub fn save_node_networks_to_file(
     // serialized file and shuffle which network ends up "first" — affecting
     // any consumer that keys off `LoadResult.first_network_name`, including
     // the snapshot test suite).
-    let mut sorted_names: Vec<&String> = registry.node_networks.keys().collect();
+    let mut sorted_names: Vec<String> = registry
+        .node_networks
+        .keys()
+        .filter(|name| is_local(&registry.library_links, name))
+        .cloned()
+        .collect();
     sorted_names.sort();
-    let sorted_names: Vec<String> = sorted_names.into_iter().cloned().collect();
 
     let mut serializable_networks = Vec::new();
     for name in &sorted_names {
@@ -988,31 +1047,100 @@ pub fn save_node_networks_to_file(
 
     // Collect record type defs sorted by name for deterministic output across
     // saves (HashMap iteration order is not stable).
-    let mut record_type_defs: Vec<RecordTypeDef> =
-        registry.record_type_defs.values().cloned().collect();
+    let mut record_type_defs: Vec<RecordTypeDef> = registry
+        .record_type_defs
+        .values()
+        .filter(|def| is_local(&registry.library_links, &def.name))
+        .cloned()
+        .collect();
     record_type_defs.sort_by(|a, b| a.name.cmp(&b.name));
 
-    // Create the container with version information
-    let serializable_registry = SerializableNodeTypeRegistryNetworks {
+    let folders: std::collections::BTreeSet<String> = registry
+        .folders
+        .iter()
+        .filter(|f| is_local(&registry.library_links, f))
+        .cloned()
+        .collect();
+
+    let cli_access_rules: std::collections::HashMap<String, bool> = cli_access_rules
+        .iter()
+        .filter(|(k, _)| is_local(&registry.library_links, k))
+        .map(|(k, v)| (k.clone(), *v))
+        .collect();
+
+    // Direct links only (transitive ones are the library's business, D5),
+    // sorted by alias (the map is keyed by mount path, which for a direct
+    // mount is the alias). Paths verbatim (D6).
+    let direct: Vec<crate::library_links::LibraryMount> =
+        registry.library_links.direct_mounts().cloned().collect();
+    let imports: Vec<SerializableImport> = direct
+        .iter()
+        .map(|m| SerializableImport {
+            alias: m.alias.clone(),
+            path: m.rel_path.clone(),
+            hash: m.hash_for_save(),
+            uses: crate::library_links::collect_used_interfaces(registry, &m.mount_path),
+        })
+        .collect();
+
+    Ok(SerializableNodeTypeRegistryNetworks {
         node_networks: serializable_networks,
         version: SERIALIZATION_VERSION,
         direct_editing_mode,
-        cli_access_rules: cli_access_rules.clone(),
+        cli_access_rules,
         record_type_defs,
         // `BTreeSet` is already ordered, so the on-disk array is deterministic.
-        folders: registry.folders.clone(),
-    };
+        folders,
+        imports,
+    })
+}
 
-    // Serialize to JSON
-    let json_data = serde_json::to_string_pretty(&serializable_registry)?;
+/// The exact text [`save_node_networks_to_file`] would write.
+pub fn serialize_registry_to_string(
+    registry: &mut NodeTypeRegistry,
+    design_dir: Option<&str>,
+    direct_editing_mode: bool,
+    cli_access_rules: &std::collections::HashMap<String, bool>,
+) -> io::Result<String> {
+    let serializable =
+        registry_to_serializable(registry, design_dir, direct_editing_mode, cli_access_rules)?;
+    Ok(serde_json::to_string_pretty(&serializable)?)
+}
 
+/// Saves node networks from a NodeTypeRegistry to a JSON file
+///
+/// # Parameters
+/// * `registry` - The NodeTypeRegistry to save
+/// * `file_path` - Path to the output JSON file
+///
+/// Only the registry's local content and its import list are written
+/// (`doc/design_library_linking.md` D5). The file is written to a temp file
+/// beside the target and renamed over it, so a failed save never leaves a
+/// truncated file (§5.1).
+///
+/// # Returns
+/// * `io::Result<()>` - Success or an error if saving fails
+pub fn save_node_networks_to_file(
+    registry: &mut NodeTypeRegistry,
+    file_path: &Path,
+    direct_editing_mode: bool,
+    cli_access_rules: &std::collections::HashMap<String, bool>,
+) -> io::Result<()> {
+    // Extract design directory early
+    let design_dir = file_path.parent().and_then(|p| p.to_str());
+
+    let json_data =
+        serialize_registry_to_string(registry, design_dir, direct_editing_mode, cli_access_rules)?;
+
+    let fs = registry.library_links.fs();
     // Create the parent directory if it doesn't exist
-    if let Some(parent) = Path::new(file_path).parent() {
-        fs::create_dir_all(parent)?;
+    if let Some(parent) = Path::new(file_path).parent()
+        && !parent.as_os_str().is_empty()
+    {
+        fs.create_dir_all(parent)?;
     }
 
-    // Write to file
-    fs::write(file_path, json_data)?;
+    crate::library_links::write_atomic(fs.as_ref(), file_path, json_data.as_bytes())?;
 
     registry.design_file_name = Some(file_path.to_string_lossy().to_string());
 
@@ -1035,25 +1163,62 @@ pub struct LoadResult {
 /// * `registry` - The NodeTypeRegistry to load into
 /// * `file_path` - The file path to load from as a string
 ///
+/// The file's linked libraries are mounted too, recursively
+/// (`doc/design_library_linking.md` D4); a library that cannot be mounted is
+/// recorded with its status and never fails the load.
+///
 /// # Returns
 /// * `io::Result<LoadResult>` - Ok with load metadata if successful, Err otherwise
 pub fn load_node_networks_from_file(
     registry: &mut NodeTypeRegistry,
     file_path: &str,
 ) -> io::Result<LoadResult> {
+    let fs = registry.library_links.fs();
+    let path = Path::new(file_path);
+    let bytes = fs.read(path)?;
+    // The cycle stack starts with the file itself, so a library linking back
+    // to it (or a file linking itself) is a `Cycle` on that link.
+    let canonical = fs.canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let mut stack = vec![canonical];
+    load_node_networks_from_bytes(registry, &bytes, file_path, &mut stack)
+}
+
+/// Gate on the file's `version`: a file newer than `max_supported` is refused
+/// ("file is from a newer version"), never half-read (D12).
+pub fn check_file_version(version: u32, max_supported: u32) -> io::Result<()> {
+    if version > max_supported {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "Unsupported version: {} (this atomCAD reads up to {}); the file is from a newer version",
+                version, max_supported
+            ),
+        ));
+    }
+    Ok(())
+}
+
+/// [`load_node_networks_from_file`] on bytes already read. `file_path` is the
+/// path the bytes came from (relative paths inside resolve against its
+/// directory); `stack` holds the canonical paths of every file being loaded
+/// above this one, this one included.
+pub fn load_node_networks_from_bytes(
+    registry: &mut NodeTypeRegistry,
+    bytes: &[u8],
+    file_path: &str,
+    stack: &mut Vec<std::path::PathBuf>,
+) -> io::Result<LoadResult> {
     // Extract design directory early
     let design_dir = std::path::Path::new(file_path)
         .parent()
         .and_then(|p| p.to_str());
 
-    // Read the file content
-    let mut file = fs::File::open(file_path)?;
-    let mut json_data = String::new();
-    file.read_to_string(&mut json_data)?;
+    let json_data =
+        std::str::from_utf8(bytes).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
     // Parse to an untyped JSON value first so the version field can be inspected and any
     // pre-serde migration pass can rewrite the shape before strict deserialization.
-    let mut root_value: serde_json::Value = serde_json::from_str(&json_data)?;
+    let mut root_value: serde_json::Value = serde_json::from_str(json_data)?;
 
     // Read the version field. Missing or non-integer is treated as 0 (ancient file).
     let version: u32 = root_value
@@ -1061,12 +1226,7 @@ pub fn load_node_networks_from_file(
         .and_then(|v| v.as_u64())
         .unwrap_or(0) as u32;
 
-    if version > SERIALIZATION_VERSION {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!("Unsupported version: {}", version),
-        ));
-    }
+    check_file_version(version, SERIALIZATION_VERSION)?;
 
     // Chained historical up-converters. Each pass runs only if the loaded
     // file pre-dates the version after that pass. A v2 file chains through
@@ -1093,6 +1253,8 @@ pub fn load_node_networks_from_file(
     // `passivate` (it now places H *or* a halogen terminator). Same mechanical
     // whole-tree rename shape as v6→v7. See `doc/design_halogen_passivation.md`
     // and `migrate_v7_to_v8`.
+    //
+    // v8→v9 (library linking): no transform — `imports` is purely additive.
     if version < 3 {
         super::migrate_v2_to_v3::migrate_v2_to_v3(&mut root_value).map_err(|e| {
             io::Error::new(
@@ -1153,9 +1315,84 @@ pub fn load_node_networks_from_file(
 
     registry.node_networks.clear();
     registry.record_type_defs.clear();
+    registry.library_links.clear();
     // Empty-folder markers (doc/design_empty_folders.md). Reconciled against the
     // loaded entities after networks/records are in, below.
     registry.folders = serializable_registry.folders;
+
+    // Mount the linked libraries BEFORE the local content is repaired: the
+    // repair passes need to know which names are under a mount, so that a node
+    // referring to a missing library's content is frozen rather than realigned
+    // (`doc/design_library_linking.md` §8). An import whose alias is invalid or
+    // collides with local content or with an earlier import (a hand-edited
+    // file) is recorded as an error and not mounted — mounting it would let
+    // save drop the local content it shadows.
+    let local_names: Vec<String> = serializable_registry
+        .node_networks
+        .iter()
+        .map(|(n, _)| n.clone())
+        .chain(
+            serializable_registry
+                .record_type_defs
+                .iter()
+                .map(|d| d.name.clone()),
+        )
+        .collect();
+    let importing_file = std::path::Path::new(file_path);
+    for import in &serializable_registry.imports {
+        let spec = crate::library_links::ImportSpec {
+            alias: import.alias.clone(),
+            rel_path: import.path.clone(),
+            stored_hash: import.hash.clone(),
+            stored_uses: import.uses.clone(),
+        };
+        let conflict = if let Err(e) = crate::library_links::validate_alias(&import.alias) {
+            Some(e)
+        } else if let Some(local) = local_names
+            .iter()
+            .find(|n| crate::library_links::is_under(n, &import.alias))
+        {
+            Some(format!(
+                "alias '{}' collides with local '{}'",
+                import.alias, local
+            ))
+        } else {
+            registry
+                .library_links
+                .iter()
+                .find(|m| {
+                    crate::library_links::is_under(&m.mount_path, &import.alias)
+                        || crate::library_links::is_under(&import.alias, &m.mount_path)
+                })
+                .map(|m| {
+                    format!(
+                        "alias '{}' overlaps the link '{}'",
+                        import.alias, m.mount_path
+                    )
+                })
+        };
+        match conflict {
+            Some(message) => {
+                registry
+                    .library_links
+                    .insert(crate::library_links::LibraryMount {
+                        mount_path: spec.alias.clone(),
+                        alias: spec.alias.clone(),
+                        rel_path: spec.rel_path.clone(),
+                        abs_path: std::path::PathBuf::new(),
+                        parent: None,
+                        status: crate::library_links::MountStatus::Error(message),
+                        loaded: None,
+                        last_seen: None,
+                        stored_hash: spec.stored_hash.clone(),
+                        stored_uses: spec.stored_uses.clone(),
+                    });
+            }
+            None => {
+                crate::library_links::mount_library(registry, &spec, importing_file, stack);
+            }
+        }
+    }
 
     // Load record type defs first so any networks referencing them can resolve
     // schemas during validation. Defensive: a hand-edited file can carry a

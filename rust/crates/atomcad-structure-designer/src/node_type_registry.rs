@@ -561,6 +561,12 @@ pub struct NodeTypeRegistry {
     /// See `doc/design_empty_folders.md`.
     pub folders: BTreeSet<String>,
     pub design_file_name: Option<String>,
+    /// Linked libraries mounted into this registry
+    /// (`doc/design_library_linking.md` D1). Their content lives in the maps
+    /// above under the mount path; this records which prefixes are mounts and
+    /// where they came from. Never serialized as content — save writes only
+    /// the direct mounts, as the `imports` list.
+    pub library_links: crate::library_links::LibraryLinks,
 }
 
 impl Default for NodeTypeRegistry {
@@ -589,6 +595,7 @@ impl NodeTypeRegistry {
             built_in_record_type_defs: HashMap::new(),
             folders: BTreeSet::new(),
             design_file_name: None,
+            library_links: crate::library_links::LibraryLinks::default(),
         };
 
         // Built-in record type defs. Registered before any node type so that
@@ -2366,6 +2373,9 @@ impl NodeTypeRegistry {
             let Some(node) = network.nodes.get(&id) else {
                 continue;
             };
+            if crate::library_links::is_frozen(node, self) {
+                continue;
+            }
             if let Some(custom) = self.compute_apply_custom_type_from_wired_f(
                 node,
                 network,
@@ -2743,6 +2753,9 @@ impl NodeTypeRegistry {
             let Some(node) = network.nodes.get(&id) else {
                 continue;
             };
+            if crate::library_links::is_frozen(node, self) {
+                continue;
+            }
             if let Some(custom) = compute(self, node, network, ancestors, ancestor_hof_ids) {
                 updates.push((id, custom));
             }
@@ -2973,6 +2986,16 @@ impl NodeTypeRegistry {
     /// # Parameters
     /// * `network` - A mutable reference to the node network to repair
     pub fn repair_node_network(&self, network: &mut NodeNetwork) {
+        // Frozen nodes (`doc/design_library_linking.md` §8): a node referring
+        // to an unresolved name under a library mount keeps its arguments,
+        // its cached layout and every wire into or out of it. Computed once,
+        // before anything below can change a node's data.
+        let frozen: HashSet<u64> = network
+            .nodes
+            .iter()
+            .filter(|(_, n)| crate::library_links::is_frozen(n, self))
+            .map(|(&id, _)| id)
+            .collect();
         // R3 (`doc/design_record_field_identity.md` §4.4): capture each record
         // node's current output-pin index -> `FieldId` map BEFORE the populate
         // loop below refreshes `custom_node_type` from the (possibly just-
@@ -3028,6 +3051,20 @@ impl NodeTypeRegistry {
             // the layout. Preserve the arguments positionally (`refresh_args =
             // false`) so the post-pass can keep them. Every other node type's
             // layout *is* data-derived, so they refresh by name as before.
+            if frozen.contains(&node.id) {
+                // Keep the last resolved layout; install one only when there
+                // is none yet (a fresh load), and never touch `arguments`.
+                if node.custom_node_type.is_none() {
+                    Self::populate_custom_node_type_cache_with_types(
+                        &self.built_in_node_types,
+                        &self.record_type_defs,
+                        &self.built_in_record_type_defs,
+                        node,
+                        false,
+                    );
+                }
+                continue;
+            }
             let refresh_args = node.node_type_name != "apply";
             Self::populate_custom_node_type_cache_with_types(
                 &self.built_in_node_types,
@@ -3106,6 +3143,9 @@ impl NodeTypeRegistry {
                         if pin_index < 0 {
                             return true; // function pin
                         }
+                        if frozen.contains(&wire.source_node_id) {
+                            return true; // a frozen source keeps its layout
+                        }
                         let Some(old_ids) = record_old_pin_ids.get(&wire.source_node_id) else {
                             return true; // source is not a record node
                         };
@@ -3149,8 +3189,10 @@ impl NodeTypeRegistry {
 
         // Iterate through all nodes in the network
         for node in network.nodes.values_mut() {
-            // Get the node type for this node
-            if let Some(node_type) = self.get_node_type_for_node(node) {
+            // Get the node type for this node (a frozen node's arguments are
+            // neither grown nor truncated).
+            if frozen.contains(&node.id) {
+            } else if let Some(node_type) = self.get_node_type_for_node(node) {
                 // Phase 2 invariant: only zone-bearing types may carry a
                 // populated `zone` / `zone_output_arguments`. Cheap no-op in
                 // release; loud panic in debug.
@@ -3185,7 +3227,7 @@ impl NodeTypeRegistry {
                     if !node_ids.contains(&source_node_id) {
                         return false;
                     }
-                    if output_pin_index == -1 {
+                    if output_pin_index == -1 || frozen.contains(&source_node_id) {
                         return true;
                     }
                     if let Some(&count) = pin_counts.get(&source_node_id) {
@@ -3289,6 +3331,11 @@ impl NodeTypeRegistry {
                     .collect()
             };
 
+            // §8: a frozen body node keeps every wire, and no wire is dropped
+            // over a type check that involves an unresolved mounted name.
+            if crate::library_links::is_frozen(body.nodes.get(&body_node_id).unwrap(), self) {
+                continue;
+            }
             let body_node_mut = body.nodes.get_mut(&body_node_id).unwrap();
             for (arg_index, dest_type) in dest_types.iter().enumerate() {
                 if let Some(arg) = body_node_mut.arguments.get_mut(arg_index) {
@@ -3315,6 +3362,13 @@ impl NodeTypeRegistry {
                         let Some(src_type) = maybe_src_type.as_ref() else {
                             return true;
                         };
+                        if crate::library_links::data_type_mentions_unresolved_mount(src_type, self)
+                            || crate::library_links::data_type_mentions_unresolved_mount(
+                                dest_type, self,
+                            )
+                        {
+                            return true;
+                        }
                         DataType::can_be_converted_to(src_type, dest_type, self)
                     });
                 }
@@ -3807,6 +3861,24 @@ fn rewrite_record_name_in_registry(
     old_name: &str,
     new_name: &str,
 ) {
+    rewrite_record_names_in_registry_with(registry, &mut |name: &mut String| {
+        if name == old_name {
+            *name = new_name.to_string();
+        }
+    });
+}
+
+/// The general form of [`rewrite_record_name_in_registry`]: applies `rename`
+/// to every record-def name reachable through the registry — record def field
+/// types, network signatures, every node-data `DataType`, and the bare
+/// `schema` / `target` strings (which may be empty; `rename` must leave `""`
+/// alone) — then recomputes each node's cached custom type in place. Library
+/// linking's mount prefixing (`library_links::prefix_registry`) uses it so it
+/// covers exactly the reference sites a rename covers.
+pub(crate) fn rewrite_record_names_in_registry_with(
+    registry: &mut NodeTypeRegistry,
+    mut rename: &mut dyn FnMut(&mut String),
+) {
     use crate::nodes::apply::ApplyData;
     use crate::nodes::array::ArrayData;
     use crate::nodes::array_append::ArrayAppendData;
@@ -3825,12 +3897,6 @@ fn rewrite_record_name_in_registry(
     use crate::nodes::record_construct::RecordConstructData;
     use crate::nodes::record_destructure::RecordDestructureData;
     use crate::nodes::sequence::SequenceData;
-
-    let mut rename = |name: &mut String| {
-        if name == old_name {
-            *name = new_name.to_string();
-        }
-    };
 
     // Walk every record def's fields too — `Box = { p: Record(Old) }` should
     // see the rename. The def being renamed itself is updated by the caller.
@@ -3924,19 +3990,13 @@ fn rewrite_record_name_in_registry(
             } else if let Some(d) = data.as_any_mut().downcast_mut::<ArrayLenData>() {
                 walk_data_type_record_names_mut(&mut d.element_type, &mut rename);
             } else if let Some(d) = data.as_any_mut().downcast_mut::<RecordConstructData>() {
-                // `schema` is a bare record-def name; rewrite if it matches.
-                if d.schema == old_name {
-                    d.schema = new_name.to_string();
-                }
+                // `schema` is a bare record-def name (possibly empty).
+                rename(&mut d.schema);
             } else if let Some(d) = data.as_any_mut().downcast_mut::<RecordDestructureData>() {
-                if d.schema == old_name {
-                    d.schema = new_name.to_string();
-                }
+                rename(&mut d.schema);
             } else if let Some(d) = data.as_any_mut().downcast_mut::<ProductData>() {
-                // `target` is a bare record-def name; rewrite if it matches.
-                if d.target == old_name {
-                    d.target = new_name.to_string();
-                }
+                // `target` is a bare record-def name (possibly empty).
+                rename(&mut d.target);
             }
 
             // Recompute the cached `custom_node_type` IN PLACE from the

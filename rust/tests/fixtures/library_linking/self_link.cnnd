@@ -1,0 +1,51 @@
+{
+  "imports": [
+    {
+      "alias": "me",
+      "path": "self_link.cnnd"
+    }
+  ],
+  "node_networks": [
+    [
+      "Main",
+      {
+        "displayed_node_ids": [],
+        "next_node_id": 2,
+        "node_type": {
+          "category": "Custom",
+          "description": "",
+          "name": "Main",
+          "output_pins": [
+            {
+              "data_type": "Int",
+              "name": "result"
+            }
+          ],
+          "parameters": [],
+          "summary": null
+        },
+        "nodes": [
+          {
+            "arguments": [],
+            "body_height": 180.0,
+            "body_width": 320.0,
+            "collapse_mode": "Auto",
+            "custom_name": "v",
+            "data": {
+              "value": 5
+            },
+            "data_type": "int",
+            "id": 1,
+            "node_type_name": "int",
+            "position": [
+              100.0,
+              100.0
+            ]
+          }
+        ],
+        "return_node_id": 1
+      }
+    ]
+  ],
+  "version": 9
+}

@@ -662,3 +662,9 @@ mod text_format_zone_body_path_test;
 mod chemisorb_node_test;
 #[path = "structure_designer/proxy_node_test.rs"]
 mod proxy_node_test;
+
+#[path = "structure_designer/library_links_support.rs"]
+mod library_links_support;
+
+#[path = "structure_designer/library_links_test.rs"]
+mod library_links_test;

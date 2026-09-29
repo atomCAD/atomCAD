@@ -73,7 +73,9 @@ structure_designer/
 ├── ai_edit_diff.rs            # Diffs two AI text-format snapshots (By node / Text)
 ├── ai_edit_export.rs          # Renders the AI edit log as JSON (canonical) / Markdown (readable)
 ├── cli_runner.rs              # CLI batch execution mode
-├── node_networks_import_manager.rs # Import networks from .cnnd libraries
+├── node_networks_import_manager.rs # Import networks from .cnnd libraries (copy import)
+├── library_links.rs           # Linked libraries: mounts, prefixing, `uses`, the frozen-node predicate, LinkFs
+├── library_link_ops.rs        # StructureDesigner::link_library / unlink_library
 ├── undo/                      # Undo/redo system (command pattern)
 ├── nodes/                     # Built-in node implementations (47+)
 ├── evaluator/                 # Network evaluation engine
@@ -230,6 +232,28 @@ Body errors land on `body.validation_errors` with `node_id == Some(body_internal
 The exceptions — places where a single-frame walk is intentional — are selection state, layout/sugiyama positioning, per-network camera, text-format editing of the active network, and similar UI-frame bookkeeping. When in doubt, prefer the helper.
 
 Design docs: `doc/design_zones.md` (Rust side, phases 1–6) and `doc/design_zones_ui.md` (Flutter side, phases U1–U7).
+
+## Linked libraries and frozen nodes
+
+A `.cnnd` can link other `.cnnd` files (`doc/design_library_linking.md`). A
+library's content is **mounted by prefix** into the one registry
+(`a.foo`, `a.Miller`, nested `a.common.slab`); `library_links.mount_containing`
+is the one "is this linked?" test, and save never writes anything under a mount.
+
+**The frozen-node rule (§8) binds every repair pass.** A node that refers to an
+unresolved name under a mount (`library_links::unresolved_mount_ref` — its node
+type, a record schema, or a `Named` record in any `DataType` of its data) is
+*frozen*: its arguments are neither grown nor truncated, its cached layout is not
+rebuilt, and no pass drops a wire into or out of it, or a wire whose type check
+involves such a name (`data_type_mentions_unresolved_mount`). Consumers of a
+frozen node's function pin are protected the same way
+(`library_links::protected_node_ids`), because their layout derives from it.
+`repair_node_network`, `repair_zone_body`, `repair_network_arguments`,
+`repair_output_pin_wires`, the apply/map/zip_with layout post-passes and the
+invariant checker all honour it. **A new pass that drops or realigns wires must
+too**, or a missing library silently costs the user their wiring. Library-linking
+tests use the oracles in `tests/structure_designer/library_links_support.rs`
+rather than ad-hoc assertions.
 
 ## The AI edit choke point
 

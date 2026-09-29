@@ -28,6 +28,7 @@ undo/
     ├── set_collapse_mode.rs        # HOF body collapse mode
     ├── add_record_type_def.rs, delete_record_type_def.rs,
     │   rename_record_type_def.rs, update_record_type_def.rs  # Record type def lifecycle
+    ├── link_library.rs            # Link / Unlink a library (mount ⇄ unmount; mounting reads the disk)
     ├── atom_edit_mutation.rs      # Incremental diff deltas (includes flag changes)
     └── atom_edit_toggle_flag.rs   # Boolean flag toggles
 ```

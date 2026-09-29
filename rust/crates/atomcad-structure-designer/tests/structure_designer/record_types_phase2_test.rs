@@ -485,6 +485,7 @@ fn serialize_record_type_defs_emits_sorted_by_name() {
             v
         },
         folders: std::collections::BTreeSet::new(),
+        imports: Vec::new(),
     };
     let json = serde_json::to_value(&container).unwrap();
     let arr = json["record_type_defs"].as_array().unwrap();
@@ -590,6 +591,7 @@ fn registry_snapshot(designer: &mut StructureDesigner) -> serde_json::Value {
         cli_access_rules: std::collections::HashMap::new(),
         record_type_defs: defs,
         folders: std::collections::BTreeSet::new(),
+        imports: Vec::new(),
     };
     serde_json::to_value(&container).unwrap()
 }

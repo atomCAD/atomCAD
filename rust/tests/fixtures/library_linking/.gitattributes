@@ -1,0 +1,4 @@
+# Byte-exact fixtures: the library-linking tests compare a saved file with
+# the fixture byte for byte (doc/design_library_linking.md §8), and atomCAD
+# writes LF. Never convert line endings on checkout.
+* -text

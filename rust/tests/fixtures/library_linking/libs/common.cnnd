@@ -1,0 +1,109 @@
+{
+  "node_networks": [
+    [
+      "slab",
+      {
+        "next_node_id": 3,
+        "node_type": {
+          "name": "slab",
+          "description": "",
+          "summary": null,
+          "category": "Custom",
+          "parameters": [
+            {
+              "name": "n",
+              "data_type": "Int"
+            }
+          ],
+          "output_pins": [
+            {
+              "name": "result",
+              "data_type": "Int"
+            }
+          ]
+        },
+        "nodes": [
+          {
+            "id": 1,
+            "node_type_name": "parameter",
+            "custom_name": "n",
+            "position": [
+              100.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "incoming_wires": []
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Int",
+              "data_type_str": null,
+              "param_id": 1,
+              "param_index": 0,
+              "param_name": "n",
+              "sort_order": 0
+            },
+            "body_width": 320.0,
+            "body_height": 180.0,
+            "collapse_mode": "Auto"
+          },
+          {
+            "id": 2,
+            "node_type_name": "expr",
+            "custom_name": "d",
+            "position": [
+              310.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "incoming_wires": [
+                  {
+                    "source_node_id": 1,
+                    "source_pin": {
+                      "NodeOutput": {
+                        "pin_index": 0
+                      }
+                    },
+                    "source_scope_depth": 0
+                  }
+                ]
+              }
+            ],
+            "data_type": "expr",
+            "data": {
+              "expression": "a * 2",
+              "parameters": [
+                {
+                  "data_type": "Int",
+                  "data_type_str": null,
+                  "id": 1,
+                  "name": "a"
+                }
+              ]
+            },
+            "body_width": 320.0,
+            "body_height": 180.0,
+            "collapse_mode": "Auto"
+          }
+        ],
+        "return_node_id": 2,
+        "displayed_node_ids": []
+      }
+    ]
+  ],
+  "version": 9,
+  "record_type_defs": [
+    {
+      "name": "Pt",
+      "fields": [
+        [
+          "x",
+          "Int"
+        ]
+      ]
+    }
+  ]
+}

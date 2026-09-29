@@ -42,6 +42,8 @@ pub mod implicit_eval;
 pub mod invariants;
 pub mod last_directories;
 pub mod layout;
+pub mod library_link_ops;
+pub mod library_links;
 pub mod navigation_history;
 pub mod network_usages;
 pub mod network_validator;

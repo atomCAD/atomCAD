@@ -201,7 +201,11 @@ pub fn check_document_invariants(registry: &NodeTypeRegistry) -> Vec<InvariantVi
     for def in registry.record_type_defs.values() {
         for field in &def.fields {
             walk_data_type_record_names(&field.data_type, &mut |name| {
-                if registry.lookup_record_type_def(name).is_none() {
+                // A name under a linked library that does not resolve is
+                // accounted for by the mount's status (`doc/design_library_linking.md` §8).
+                if registry.lookup_record_type_def(name).is_none()
+                    && registry.library_links.mount_containing(name).is_none()
+                {
                     out.push(InvariantViolation {
                         scope_path: Vec::new(),
                         node_id: None,
@@ -320,9 +324,25 @@ fn check_one_scope(
         );
     }
 
+    // Frozen nodes (`doc/design_library_linking.md` §8) refer to an unresolved
+    // name under a library mount. Their arguments deliberately keep the layout
+    // they were saved with, so the count / cache checks do not apply to them,
+    // and neither does the pin-range check on wires *out of* them. Their
+    // validation error accounts for the unresolved reference itself.
+    let frozen: std::collections::HashSet<u64> = network
+        .nodes
+        .values()
+        .filter(|n| crate::library_links::is_frozen(n, registry))
+        .map(|n| n.id)
+        .collect();
+    // Frozen nodes plus the consumers of a frozen node's function pin, whose
+    // derived layout cannot be computed (their argument count is kept too).
+    let protected = crate::library_links::protected_node_ids(network, registry);
+
     // --- Per-node checks. ---
     for node in network.nodes.values() {
         let node_id = node.id;
+        let is_frozen = frozen.contains(&node_id);
         // Loose accounting: any validation error on this node means the user is
         // already being told it is broken, so a co-located reference violation
         // is not silent.
@@ -332,7 +352,18 @@ fn check_one_scope(
             .any(|e| e.node_id == Some(node_id));
 
         // R1: node type resolves.
-        let Some(node_type) = registry.get_node_type_for_node(node) else {
+        let resolved_type = if is_frozen {
+            None
+        } else {
+            registry.get_node_type_for_node(node)
+        };
+        let Some(node_type) = resolved_type else {
+            if is_frozen {
+                // Frozen: its unresolved reference is accounted for by the
+                // mount's status (and, once validated, by its own error); the
+                // count / pin checks do not apply to it.
+                continue;
+            }
             push(
                 out,
                 Some(node_id),
@@ -348,7 +379,7 @@ fn check_one_scope(
         };
 
         // B1: argument count matches resolved parameter count.
-        if node.arguments.len() != node_type.parameters.len() {
+        if node.arguments.len() != node_type.parameters.len() && !protected.contains(&node_id) {
             push(
                 out,
                 Some(node_id),
@@ -476,8 +507,10 @@ fn check_one_scope(
                 };
 
                 // R5: source pin index in range. -1 is the function pin (always
-                // allowed); 0..output_pin_count are the regular outputs.
+                // allowed); 0..output_pin_count are the regular outputs. A
+                // frozen source keeps its wires whatever its stale layout says.
                 if pin_index != -1
+                    && !frozen.contains(&wire.source_node_id)
                     && let Some(source_type) = registry.get_node_type_for_node(source)
                 {
                     let count = source_type.output_pin_count();
