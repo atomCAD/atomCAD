@@ -95,7 +95,13 @@ impl<'a> UndoContext<'a> {
 }
 
 /// Trait for undoable commands.
-pub trait UndoCommand: Debug + Send + Sync {
+///
+/// No `Send` / `Sync` bound: the stack lives on the single-threaded
+/// `StructureDesigner`, and a command may hold live `NodeNetwork`s (whose node
+/// data is neither) when a serialized snapshot would not do — restoring one
+/// re-runs the node-data loaders, which re-read data files from disk
+/// (`RefreshDependenciesCommand`, `doc/design_library_linking.md` D9).
+pub trait UndoCommand: Debug {
     /// Human-readable description for UI display (e.g., "Add cuboid node")
     fn description(&self) -> &str;
 

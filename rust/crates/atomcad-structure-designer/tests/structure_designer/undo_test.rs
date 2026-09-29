@@ -60,6 +60,8 @@ fn snapshot_all_networks(registry: &mut NodeTypeRegistry) -> Value {
         record_type_defs: Vec::new(),
         folders: std::collections::BTreeSet::new(),
         imports: Vec::new(),
+        next_param_id: None,
+        next_field_id: None,
     };
 
     let mut value = serde_json::to_value(&container).unwrap();

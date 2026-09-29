@@ -188,6 +188,9 @@ impl NodeNetworksImportManager {
                     }
                 });
 
+                // 3. A copied network is a new network of this file: ids above
+                //    every id the file handed out (callers are positional).
+                target_registry.claim_param_ids(&mut network);
                 target_registry
                     .node_networks
                     .insert(final_name.clone(), network);

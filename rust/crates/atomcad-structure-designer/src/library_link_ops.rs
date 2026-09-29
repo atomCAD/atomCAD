@@ -71,7 +71,7 @@ impl StructureDesigner {
     }
 
     /// The design file's path, which every library path is relative to.
-    fn host_file(&self) -> Option<PathBuf> {
+    pub(crate) fn host_file(&self) -> Option<PathBuf> {
         self.file_path
             .clone()
             .or_else(|| self.node_type_registry.design_file_name.clone())
@@ -82,7 +82,7 @@ impl StructureDesigner {
     /// relative path is normalized lexically; an absolute one is made relative
     /// to the host's folder, and refused when no relative path exists
     /// (another drive).
-    fn library_rel_path(&self, host: &Path, path: &str) -> Result<String, String> {
+    pub(crate) fn library_rel_path(&self, host: &Path, path: &str) -> Result<String, String> {
         let fs = self.node_type_registry.library_links.fs();
         let picked = Path::new(path);
         let rel = if picked.is_absolute() {
@@ -150,6 +150,7 @@ impl StructureDesigner {
             .cloned()
             .expect("just mounted");
         library_links::validate_all_networks(&mut self.node_type_registry);
+        crate::library_refresh::rebuild_data_watches(&mut self.node_type_registry);
         self.push_command(LinkLibraryCommand { mount });
         self.set_dirty(true);
         self.apply_node_display_policy(None);

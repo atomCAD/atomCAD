@@ -270,6 +270,17 @@ pub trait NodeData: Any + AsAny {
     /// Default implementation does nothing.
     fn clear_input_cache(&self) {}
 
+    /// The data files this node reads **when it is loaded** and caches — its
+    /// stored path, as authored (a relative one resolves against the folder
+    /// of the file that owns the node). Library linking watches them
+    /// (`doc/design_library_linking.md` D7) and, when one changes on disk,
+    /// refreshes the node by running its data loader again, which re-reads
+    /// the file and keeps every user-set field. A new node that caches file
+    /// content at load time overrides this one method. Default: none.
+    fn file_paths(&self) -> Vec<String> {
+        Vec::new()
+    }
+
     /// Called when this data is about to **replace** `previous` on the same
     /// node (`NodeNetwork::set_node_network_data`: a panel setter, and the
     /// undo/redo of one, which rebuilds the data from its JSON snapshot).

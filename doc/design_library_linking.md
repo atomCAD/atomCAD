@@ -940,13 +940,11 @@ identity is P5 of `doc/design_identity_vs_naming.md`. (The recorded output
 no-op and a rename into a reported drop; that is a possible later extension,
 not part of v1.)
 
-**To verify before Phase 3: function values.** An `apply` whose `f` is fed by
-a linked network's function pin (`-1`) or a `@network` capture derives its
-argument layout from that network's parameters. Whether a parameter reorder in
-the library mis-wires the `apply`'s `arg0…` wires — on refresh and on open
-alike — has not been checked. If it does, the recorded interface is the data
-the fix needs; the fix would extend `reconcile_used_interfaces` to those
-`apply` nodes.
+**Function values (settled in P3).** An `apply` whose `f` is fed by a linked
+network instance's function pin (`-1`, the text format's `@node`) derives its
+argument layout from that network's parameters, and a parameter reorder in the
+library did mis-wire its `arg0…` wires. Reconciliation moves them with the
+instance's own parameter mapping, on refresh and on open alike (P3 status).
 
 ## 8. Missing libraries must be lossless
 
@@ -1551,6 +1549,87 @@ refresh.
   a refresh → the refresh command is evicted like any other; the state is
   unchanged and saves correctly.
 
+**Status (2026-09-29): done** (`library_refresh.rs`, `library_refresh_ops.rs`,
+`undo/commands/refresh_dependencies.rs`; tests `library_links_refresh_test.rs`
+and the harness `library_links_fuzz_test.rs`). Deviations and findings:
+
+- **Persistent ids are written only when a load could not re-derive them.**
+  `RecordTypeDef` gains `field_ids` (parallel to `fields`) and
+  `next_field_id`, a network gains `next_param_id` — each omitted while it
+  equals what a load derives (`0..n` / `n`, `max(param_id) + 1`). No fixture
+  or snapshot changed; a def or network that was reordered, lost a field at
+  the end or gained one in the middle writes them.
+- **§7.3's function-value question: yes, it mis-wired.** An `apply` fed by an
+  instance's function pin takes its `arg…` pins positionally from the
+  instance's parameters, so a library reorder swapped them. Reconciliation
+  now moves an `apply`'s `arg…` wires by the instance's own parameter mapping
+  (through `node_network::function_pin_dispositions_for`, so the partition
+  stays single-sourced). O2 keys `apply` arguments by the parameter they
+  stand for.
+- **Found: a library file can carry stale interfaces.** A record-def edit
+  refreshes only the networks that are validated afterwards, so a saved
+  library can list a network's *old* output pins; the host then reconciled
+  against the stale list and the post-mount validation shifted its wires a
+  second time, silently. `mount_library` now validates the library's temp
+  registry (in dependency order) before anything reconciles against it.
+- **Found: ids are unique only within one network's history.** A network (or
+  record def) deleted and created again under the same name hands out the
+  same small ids afresh, so across files an id can name a different
+  parameter — a wire moved to the wrong pin. Cross-file matching
+  (`network_validator::cross_file_parameter_mapping`) distrusts ids on a
+  contradiction — an id pointing at an old parameter of another name while an
+  old parameter of its own name exists — and then matches the whole list by
+  name. **Closed (P3 follow-up):** ids are now unique across a file's whole
+  history. The registry keeps a file-level floor for parameter ids and field
+  ids (`NodeTypeRegistry::param_id_floor` / `field_id_floor`, top-level
+  `next_param_id` / `next_field_id` in the `.cnnd`, written only when above
+  every saved counter — i.e. after a deletion). Every point that *creates* a
+  network or def claims ids above it (`claim_param_ids` /
+  `claim_field_ids`): new network, duplicate, factor into subnetwork,
+  closure → network, copy import, new record def. Allocation inside a
+  network stays per-network. The floor is materialized at load and at save;
+  ids handed out after the last save by a network then deleted may be reused,
+  which is safe — no linking file can have recorded them. A re-created
+  network therefore never shares an id with its predecessor, and the host
+  falls back to names (a reported drop when the names differ too). Cost: a
+  network created after others starts above their ids, so a new design's
+  networks after the first may save a `next_param_id`; existing files do not
+  change. The contradiction rule stays as a backstop. Still not covered: a
+  retarget to an *unrelated* library whose same-named network happens to use
+  overlapping ids (two files' id histories are independent).
+- **Found by the harness: existing repair passes drop wires after a
+  retype.** `repair_zone_body` disconnects a body wire whose zone-input type
+  no longer converts, which the report called merely "flagged". Instead of
+  teaching each pass to report, the refresh and the open take a
+  positional image of every wire of the reconciled networks right after
+  reconciliation, and report whatever the repair and validation passes remove
+  afterwards (`report_wires_removed_by_repair`): the report is complete by
+  construction. Regression test `a_retype_that_breaks_a_body_wire_reports_it_dropped`.
+- A network instance's output pins can carry ids (inherited from a
+  `record_destructure` inside the network) but match by position in v1
+  (§7.3); only a `record_destructure`'s own outputs follow field ids.
+- **Refresh granularity is the direct mount.** A changed nested library or a
+  library's data file re-mounts the direct mount that contains it (the host's
+  `uses` are per direct import).
+- A held change marks the mount `ChangedOnDisk` also when it has no content
+  yet (a missing library that reappeared while redo history exists).
+- `UndoCommand` lost its `Send + Sync` bound: the refresh command keeps live
+  network copies, because restoring a serialized one re-runs the node-data
+  loaders, which re-read data files — an undo of a data-file refresh would
+  read the new file.
+- Data files: `NodeData::file_paths` (the load-time readers `import_xyz`,
+  `import_cif`, `import_cube`); a refresh re-reads a node through its own
+  saver → loader round trip, so every user-set field is kept. The watched
+  list (`watched_data_files`) moved forward from P5; the Save As parts did
+  not.
+- `repair_call_sites_for_network` repairs only callers in the network's own
+  file (the §7.1 parent filter) and moves `function_pin_roles` with the
+  arguments.
+- The open report is completed after validation
+  (`StructureDesigner::finish_library_load`): frozen host nodes, libraries
+  not `Loaded`, `changed_since_saved`; the design is dirty iff the open
+  reconciled a node.
+
 ### Phase 4 — Flutter
 
 Work: `library_links_api.rs` + codegen; model fields and methods; `mountFor`;
@@ -1794,8 +1873,10 @@ library file never contain it.
      `node_type.parameters`: a network restored by an undo snapshot has no ids
      in its interface until it is next validated (found in P1), and non-active
      networks are not revalidated after an undo.
-   - This rewrites the `.cnnd` of every file with record defs once (the ids
-     appear); fixtures and snapshots that pin record defs are updated with it.
+   - ~~This rewrites the `.cnnd` of every file with record defs once (the ids
+     appear); fixtures and snapshots that pin record defs are updated with it.~~
+     Done in P3, differently: the ids and counters are written only where a
+     load could not re-derive them, so no existing file changes.
    Rejected: matching record fields by name only — a renamed field would
    become a dropped wire, and it leaves the parameter-recycling hole open.
 8. **Load order (2026-09-29, found in P1)** — imports are mounted *before* the

@@ -44,6 +44,7 @@ fn create_serializable_node(
 
 fn create_serializable_network(nodes: Vec<SerializableNode>) -> SerializableNodeNetwork {
     SerializableNodeNetwork {
+        next_param_id: None,
         next_node_id: nodes.len() as u64 + 1,
         node_type: SerializableNodeType {
             name: "test_network".to_string(),

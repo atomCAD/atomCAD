@@ -10,6 +10,10 @@ pub struct AddNetworkCommand {
     /// created; restored on undo so the empty folder it filled reappears.
     /// See `doc/design_empty_folders.md`.
     pub pruned_folders: Vec<String>,
+    /// The new network's parameter-id counter: a new network starts above
+    /// every id the file handed out (`NodeTypeRegistry::claim_param_ids`),
+    /// and redo must re-create it the same way.
+    pub next_param_id: u64,
 }
 
 impl UndoCommand for AddNetworkCommand {
@@ -38,7 +42,7 @@ impl UndoCommand for AddNetworkCommand {
         use crate::node_type::{NodeType, generic_node_data_loader, generic_node_data_saver};
 
         // Re-add empty network with same name
-        let network = NodeNetwork::new(NodeType {
+        let mut network = NodeNetwork::new(NodeType {
             name: self.network_name.clone(),
             description: "".to_string(),
             summary: None,
@@ -54,6 +58,7 @@ impl UndoCommand for AddNetworkCommand {
             zone_output_pins: vec![],
             public: true,
         });
+        network.next_param_id = network.next_param_id.max(self.next_param_id);
         ctx.node_type_registry.add_node_network(network);
 
         // Switch active to the new network

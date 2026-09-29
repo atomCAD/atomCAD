@@ -21,6 +21,7 @@ fn convert_with_camera(
     camera: SerializableCameraSettings,
 ) -> atomcad_structure_designer::camera_settings::CameraSettings {
     let serializable = SerializableNodeNetwork {
+        next_param_id: None,
         next_node_id: 1,
         node_type: SerializableNodeType {
             name: "test_network".to_string(),

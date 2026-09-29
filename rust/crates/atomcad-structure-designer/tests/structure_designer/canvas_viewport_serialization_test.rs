@@ -16,6 +16,7 @@ fn built_in_node_types()
 
 fn minimal_network(canvas_viewport: Option<SerializableCanvasViewport>) -> SerializableNodeNetwork {
     SerializableNodeNetwork {
+        next_param_id: None,
         next_node_id: 1,
         node_type: SerializableNodeType {
             name: "test_network".to_string(),

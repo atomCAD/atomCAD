@@ -410,8 +410,14 @@ pub struct LibraryMount {
     pub last_seen: Option<FileStamp>,
     /// `hash` as read from the importing file (D13: a hint only).
     pub stored_hash: Option<String>,
-    /// `uses` as read from the importing file (D13).
+    /// `uses` as read from the importing file (D13); after a refresh, the
+    /// interfaces the importing file was wired against just before it
+    /// (§7.1 step 1).
     pub stored_uses: UsedInterfaces,
+    /// Per network of this mount (full name), the `param_id`s the load-time
+    /// duplicate-id heal found shared by several parameters. Reconciliation
+    /// matches those by name only (`network_validator::parameter_mapping`).
+    pub name_only_param_ids: BTreeMap<String, BTreeSet<u64>>,
 }
 
 impl LibraryMount {
@@ -420,20 +426,34 @@ impl LibraryMount {
     }
 
     /// The `hash` an importing file writes back for this mount: the loaded
-    /// content's when there is content, else the one read from the file.
+    /// content's when there is content in memory (also when the file has
+    /// since gone missing — the content is still what the host is wired
+    /// against), else the one read from the file.
     pub fn hash_for_save(&self) -> Option<String> {
-        match (&self.loaded, self.status.has_content()) {
-            (Some(stamp), true) => Some(stamp.hash_string()),
-            _ => self.stored_hash.clone(),
+        match &self.loaded {
+            Some(stamp) => Some(stamp.hash_string()),
+            None => self.stored_hash.clone(),
         }
     }
 }
 
-/// The mounts of one registry, keyed by mount path.
+/// The mounts of one registry, keyed by mount path, and the watch state of
+/// the data files its networks read (D7).
 #[derive(Clone)]
 pub struct LibraryLinks {
     mounts: BTreeMap<String, LibraryMount>,
     fs: Arc<dyn LinkFs>,
+    /// Data files read at load time by the host's and the libraries' nodes,
+    /// with their `loaded` / `last_seen` stamps (`library_refresh`).
+    pub data_files:
+        BTreeMap<crate::library_refresh::DataFileKey, crate::library_refresh::DataFileWatch>,
+    /// What the last load reconciled (D13), drained by
+    /// `StructureDesigner::load_node_networks`.
+    pub load_report: crate::library_refresh::RefreshReport,
+    /// The wires of the reconciled local networks right after the last load
+    /// reconciled them, so that whatever the later repair and validation
+    /// passes remove is reported too (`library_refresh::report_wires_removed_by_repair`).
+    pub load_images: Vec<(String, crate::library_refresh::WireImages)>,
 }
 
 impl Default for LibraryLinks {
@@ -441,6 +461,9 @@ impl Default for LibraryLinks {
         Self {
             mounts: BTreeMap::new(),
             fs: Arc::new(RealFs),
+            data_files: BTreeMap::new(),
+            load_report: Default::default(),
+            load_images: Vec::new(),
         }
     }
 }
@@ -490,6 +513,9 @@ impl LibraryLinks {
 
     pub fn clear(&mut self) {
         self.mounts.clear();
+        self.data_files.clear();
+        self.load_report = Default::default();
+        self.load_images.clear();
     }
 
     /// Removes and returns every mount record at or under `mount_path`.
@@ -710,7 +736,7 @@ fn parse_recorded_type(s: &str) -> DataType {
 /// the file that owns the node: the mount whose importing file is `owner`
 /// (`None` = the host) and under which `name` lies. The key is `name`
 /// relative to that mount.
-fn recorded_entry<'r, T>(
+pub(crate) fn recorded_entry<'r, T>(
     registry: &'r NodeTypeRegistry,
     name: &str,
     owner: Option<&str>,
@@ -814,7 +840,7 @@ pub fn recorded_layout(
 
 /// The record def a `record_construct` / `record_destructure` / `product`
 /// node is built on.
-fn record_node_schema(node: &Node) -> Option<String> {
+pub(crate) fn record_node_schema(node: &Node) -> Option<String> {
     let data = node.data.as_any_ref();
     if let Some(d) = data.downcast_ref::<crate::nodes::record_construct::RecordConstructData>() {
         return Some(d.schema.clone());
@@ -936,11 +962,13 @@ pub fn base_dir_for_eval(
 // Recorded interfaces (D13)
 // ---------------------------------------------------------------------------
 
-fn network_interface(network: &NodeNetwork) -> UsedNetworkInterface {
+/// The interface of `network` as recorded in a `uses` table. Parameters come
+/// from the parameter nodes (`network_validator::live_parameters`), never from
+/// `node_type.parameters`, which a network restored by an undo snapshot carries
+/// without ids until it is next validated (§13 item 7).
+pub fn network_interface(network: &NodeNetwork) -> UsedNetworkInterface {
     UsedNetworkInterface {
-        params: network
-            .node_type
-            .parameters
+        params: crate::network_validator::live_parameters(network)
             .iter()
             .map(|p| UsedParam {
                 id: p.id,
@@ -960,7 +988,8 @@ fn network_interface(network: &NodeNetwork) -> UsedNetworkInterface {
     }
 }
 
-fn record_interface(def: &RecordTypeDef) -> UsedRecordInterface {
+/// The interface of `def` as recorded in a `uses` table.
+pub fn record_interface(def: &RecordTypeDef) -> UsedRecordInterface {
     UsedRecordInterface {
         fields: def
             .fields
@@ -1174,6 +1203,10 @@ pub fn prefix_registry(temp: &mut NodeTypeRegistry, alias: &str) {
                 .for_each(|x| prefix_type(&mut x.data_type));
         }
         m.mount_path = p(&m.mount_path);
+        m.name_only_param_ids = std::mem::take(&mut m.name_only_param_ids)
+            .into_iter()
+            .map(|(k, v)| (p(&k), v))
+            .collect();
         m.parent = Some(match m.parent {
             Some(parent) => p(&parent),
             None => alias.to_string(),
@@ -1299,6 +1332,7 @@ pub fn mount_library(
         last_seen: None,
         stored_hash: spec.stored_hash.clone(),
         stored_uses: spec.stored_uses.clone(),
+        name_only_param_ids: BTreeMap::new(),
     };
 
     let status = (|| -> MountStatus {
@@ -1319,13 +1353,19 @@ pub fn mount_library(
             return MountStatus::Cycle;
         }
         // Read once: the stamp and hash describe exactly the bytes parsed.
+        // The mtime is taken *before* the read, so a change landing between
+        // the two leaves a stamp older than the file, which the next check
+        // re-hashes (D7) — never one that makes newer bytes look loaded.
+        let mtime = fs.stat(&canonical).ok().and_then(|m| m.mtime);
         let bytes = match fs.read(&canonical) {
             Ok(b) => b,
             Err(e) if e.kind() == io::ErrorKind::NotFound => return MountStatus::Missing,
             Err(e) => return MountStatus::Error(format!("cannot read '{}': {}", spec.rel_path, e)),
         };
-        let mtime = fs.stat(&canonical).ok().and_then(|m| m.mtime);
         let stamp = FileStamp::of_bytes(&bytes, mtime);
+        // Seen, whether or not it parses: an unparseable file is not tried
+        // again until it changes (D7).
+        mount.last_seen = Some(stamp.clone());
 
         let mut temp = NodeTypeRegistry::new();
         temp.library_links.set_fs(fs.clone());
@@ -1344,9 +1384,26 @@ pub fn mount_library(
 
         // Load-time heals that must see the ids the library will really have
         // before anything matches by `param_id` against it (§5.1).
-        for network in temp.node_networks.values_mut() {
-            crate::network_validator::dedupe_param_ids_in_network(network);
+        for (name, network) in temp.node_networks.iter_mut() {
+            let healed: BTreeSet<u64> =
+                crate::network_validator::dedupe_param_ids_in_network(network)
+                    .into_iter()
+                    .map(|fix| fix.old_param_id)
+                    .collect();
+            if !healed.is_empty() {
+                mount
+                    .name_only_param_ids
+                    .insert(format!("{}.{}", spec.alias, name), healed);
+            }
         }
+        // Validate the library as its own document would be on open, before
+        // anything reconciles against it: a `.cnnd` can carry stale
+        // interfaces (a record def edit refreshes only the networks that get
+        // validated — `split`'s output pins can still list the old fields), and
+        // the importing file must match its recorded interfaces against the
+        // interfaces the library really has, or the post-mount validation
+        // moves them a second time, silently (D13).
+        validate_all_networks(&mut temp);
         // A linked network starts from the default framing (§5.4).
         for network in temp.node_networks.values_mut() {
             network.camera_settings = None;

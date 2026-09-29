@@ -270,10 +270,11 @@ pub struct RecordField {
 ///
 /// **Field identity (`doc/design_record_field_identity.md`).** Each field carries
 /// a stable [`FieldId`] handed out by the per-def `next_field_id` counter
-/// (allocate-then-bump, floor-recomputed on load, never recycled). On disk the
-/// ids are **not** persisted — they are reassigned deterministically in authored
-/// order on load (see the custom `Serialize`/`Deserialize` below), so the
-/// `.cnnd` format is unchanged.
+/// (allocate-then-bump, never recycled). On disk the ids and the counter are
+/// persisted **when they differ from what a load would re-derive** (`0..n` and
+/// `n`) — see the custom `Serialize`/`Deserialize` below and
+/// `doc/design_library_linking.md` §13 item 7: a linked library's field ids
+/// must mean the same thing across versions of the file.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RecordTypeDef {
     pub name: String,
@@ -281,9 +282,11 @@ pub struct RecordTypeDef {
     /// edit-time validator). Field types may reference other record defs by
     /// name; the dependency graph must be acyclic (also enforced).
     pub fields: Vec<RecordField>,
-    /// Monotonic per-def allocator floor for [`FieldId`]s. Equal to
-    /// `max(field id) + 1` (or 0 for an empty def); recomputed on load. Never
-    /// decreases; ids are never recycled. Not serialized.
+    /// Monotonic per-def allocator floor for [`FieldId`]s. At least
+    /// `max(field id) + 1` (or 0 for an empty def). Never decreases; ids are
+    /// never recycled — which is why it is saved whenever it is above that
+    /// floor (a field deleted from the end must not hand its id to the next
+    /// field added after a save).
     pub next_field_id: u64,
 }
 
@@ -434,10 +437,51 @@ impl WireField {
 // On-disk shape: `{ "name": ..., "fields": [[name, type], ...] }` — the
 // pre-identity format (`fields` was `Vec<(String, DataType)>`), extended by the
 // optional third `hint` element (`doc/design_array_node_and_field_hints.md`
-// §Persistence). Field ids and `next_field_id` are NOT persisted; they are
-// reassigned deterministically in authored order on load. No `.cnnd` format
-// change, no version bump — old files load hint-free and hint-free saves stay
-// byte-identical. See `doc/design_record_field_identity.md` §6.
+// §Persistence), and by two optional keys (`doc/design_library_linking.md`
+// §13 item 7): `field_ids` (parallel to `fields`) and `next_field_id`. Both
+// are written only when they differ from what a load re-derives — ids `0..n`
+// in authored order and a counter of `n` — so a def that was never reordered,
+// never lost a field and never gained one in the middle saves byte-identically
+// to the older format. An older build ignores the keys and re-derives ids, which
+// loses identity but no data (no version bump).
+impl RecordTypeDef {
+    /// True when the ids and the counter are exactly what a load without
+    /// `field_ids` / `next_field_id` would assign.
+    fn ids_are_derivable(&self) -> bool {
+        self.fields
+            .iter()
+            .enumerate()
+            .all(|(i, f)| f.id.0 == i as u64)
+            && self.next_field_id == self.fields.len() as u64
+    }
+
+    /// Applies ids read from a file (`doc/design_library_linking.md` §13
+    /// item 7). A field with a stored id keeps it; fields without one (a short
+    /// or missing list) get ids in authored order starting above every stored
+    /// id — so a pre-identity file gets exactly `0..n`. A duplicate id keeps
+    /// its first occurrence and later ones get fresh ids. The counter is
+    /// `max(stored, max id + 1)`.
+    fn apply_stored_ids(&mut self, field_ids: Option<&[u64]>, next_field_id: Option<u64>) {
+        let stored = field_ids.unwrap_or(&[]);
+        let mut next_free = stored.iter().map(|id| id + 1).max().unwrap_or(0);
+        let mut seen = HashSet::new();
+        for (i, field) in self.fields.iter_mut().enumerate() {
+            let id = match stored.get(i) {
+                Some(&id) if seen.insert(id) => id,
+                _ => {
+                    let id = next_free;
+                    next_free += 1;
+                    seen.insert(id);
+                    id
+                }
+            };
+            field.id = FieldId(id);
+        }
+        self.next_field_id = next_field_id.unwrap_or(0);
+        self.recompute_next_field_id();
+    }
+}
+
 impl Serialize for RecordTypeDef {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -473,9 +517,15 @@ impl Serialize for RecordTypeDef {
         }
 
         let fields: Vec<FieldEntry> = self.fields.iter().map(FieldEntry).collect();
-        let mut s = serializer.serialize_struct("RecordTypeDef", 2)?;
+        let derivable = self.ids_are_derivable();
+        let mut s = serializer.serialize_struct("RecordTypeDef", if derivable { 2 } else { 4 })?;
         s.serialize_field("name", &self.name)?;
         s.serialize_field("fields", &fields)?;
+        if !derivable {
+            let ids: Vec<u64> = self.fields.iter().map(|f| f.id.0).collect();
+            s.serialize_field("field_ids", &ids)?;
+            s.serialize_field("next_field_id", &self.next_field_id)?;
+        }
         s.end()
     }
 }
@@ -490,14 +540,20 @@ impl<'de> Deserialize<'de> for RecordTypeDef {
             name: String,
             #[serde(default)]
             fields: Vec<WireField>,
+            #[serde(default)]
+            field_ids: Option<Vec<u64>>,
+            #[serde(default)]
+            next_field_id: Option<u64>,
         }
         let wire = Wire::deserialize(deserializer)?;
         // `from_hinted_fields` drops (and logs) any hint that does not apply to
         // its field type — a hand-corrupted file loads, it just loses the hint.
-        Ok(RecordTypeDef::from_hinted_fields(
+        let mut def = RecordTypeDef::from_hinted_fields(
             wire.name,
             wire.fields.into_iter().map(WireField::into_parts).collect(),
-        ))
+        );
+        def.apply_stored_ids(wire.field_ids.as_deref(), wire.next_field_id);
+        Ok(def)
     }
 }
 
@@ -577,6 +633,14 @@ pub struct NodeTypeRegistry {
     /// where they came from. Never serialized as content — save writes only
     /// the direct mounts, as the `imports` list.
     pub library_links: crate::library_links::LibraryLinks,
+    /// File-level floor of `param_id`s (`doc/design_library_linking.md`
+    /// §13 item 7, "re-created networks"): no id below it is handed to a
+    /// network *created* in this file, so a network deleted and created again
+    /// under the same name never reuses an id a linking file recorded. Loaded
+    /// from the file, raised on every save; see [`Self::file_param_id_floor`].
+    pub param_id_floor: u64,
+    /// The same for record-def `FieldId`s.
+    pub field_id_floor: u64,
 }
 
 impl Default for NodeTypeRegistry {
@@ -606,6 +670,8 @@ impl NodeTypeRegistry {
             folders: BTreeSet::new(),
             design_file_name: None,
             library_links: crate::library_links::LibraryLinks::default(),
+            param_id_floor: 1,
+            field_id_floor: 0,
         };
 
         // Built-in record type defs. Registered before any node type so that
@@ -1791,6 +1857,84 @@ impl NodeTypeRegistry {
         } else {
             crate::node_type::generic_node_data_loader::<crate::node_data::CustomNodeData>
         }
+    }
+
+    /// The smallest `param_id` no local network has handed out: above the
+    /// stored floor and every local network's counter. Ids issued after the
+    /// last save by a network that was then deleted may be below it — they
+    /// never reached a file, so no linking file can have recorded them.
+    pub fn file_param_id_floor(&self) -> u64 {
+        self.node_networks
+            .iter()
+            .filter(|(name, _)| self.library_links.mount_containing(name).is_none())
+            .map(|(_, n)| n.next_param_id)
+            .fold(self.param_id_floor, u64::max)
+    }
+
+    /// The smallest `FieldId` no local record def has handed out.
+    pub fn file_field_id_floor(&self) -> u64 {
+        self.record_type_defs
+            .values()
+            .filter(|d| self.library_links.mount_containing(&d.name).is_none())
+            .map(|d| d.next_field_id)
+            .fold(self.field_id_floor, u64::max)
+    }
+
+    /// Gives a network being **created** in this file (new, duplicated,
+    /// factored out, extracted from a closure) parameter ids above every id
+    /// the file has handed out, in interface order, and a counter above them.
+    /// Ids are unique within one network's history only, and a linking file
+    /// matches a library's parameters by id — so a network re-created under
+    /// an old name must not start from 1 again, or a host's wire would move
+    /// to whichever new parameter got its old id. Call it before the network
+    /// is inserted and before any undo snapshot of it; never on a restore.
+    /// Callers inside this file are unaffected: arguments are positional.
+    pub fn claim_param_ids(&self, network: &mut NodeNetwork) {
+        let base = self.file_param_id_floor();
+        let order: Vec<u64> = {
+            let mut params: Vec<(u64, i32)> = network
+                .nodes
+                .iter()
+                .filter_map(|(&id, n)| {
+                    n.data
+                        .as_any_ref()
+                        .downcast_ref::<crate::nodes::parameter::ParameterData>()
+                        .map(|p| (id, p.sort_order))
+                })
+                .collect();
+            params.sort_by_key(|&(id, order)| (order, id));
+            params.into_iter().map(|(id, _)| id).collect()
+        };
+        let mut next = base;
+        let mut renumbered: HashMap<u64, u64> = HashMap::new();
+        for node_id in order {
+            if let Some(p) = network.nodes.get_mut(&node_id).and_then(|n| {
+                n.data
+                    .as_any_mut()
+                    .downcast_mut::<crate::nodes::parameter::ParameterData>()
+            }) {
+                if let Some(old) = p.param_id {
+                    renumbered.insert(old, next);
+                }
+                p.param_id = Some(next);
+                next += 1;
+            }
+        }
+        for param in network.node_type.parameters.iter_mut() {
+            param.id = param.id.and_then(|old| renumbered.get(&old).copied());
+        }
+        network.next_param_id = network.next_param_id.max(next);
+    }
+
+    /// Gives a record def being **created** in this file field ids above
+    /// every id the file has handed out, in authored order (see
+    /// [`Self::claim_param_ids`]).
+    pub fn claim_field_ids(&self, def: &mut RecordTypeDef) {
+        let base = self.file_field_id_floor();
+        for (i, field) in def.fields.iter_mut().enumerate() {
+            field.id = FieldId(base + i as u64);
+        }
+        def.next_field_id = base + def.fields.len() as u64;
     }
 
     pub fn add_node_network(&mut self, node_network: NodeNetwork) {

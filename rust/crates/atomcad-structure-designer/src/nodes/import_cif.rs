@@ -166,6 +166,10 @@ impl NodeData for ImportCifData {
         Box::new(self.clone())
     }
 
+    fn file_paths(&self) -> Vec<String> {
+        self.file_name.iter().cloned().collect()
+    }
+
     fn get_subtitle(
         &self,
         connected_input_pins: &std::collections::HashSet<String>,

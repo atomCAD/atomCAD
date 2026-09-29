@@ -273,31 +273,153 @@ pub fn dedupe_param_ids_in_network(network: &mut NodeNetwork) -> Vec<ParamIdReas
     fixes
 }
 
+/// The parameter interface `network`'s parameter nodes define right now — the
+/// list `validate_parameters` would install as `node_type.parameters`, in the
+/// same order (sort order, then node id). Unlike `node_type.parameters`, it is
+/// never stale: a network restored by an undo snapshot, or read from a file
+/// and not validated yet, carries the ids of its parameter nodes here
+/// (`doc/design_library_linking.md` §13 item 7).
+pub fn live_parameters(network: &NodeNetwork) -> Vec<Parameter> {
+    let mut params: Vec<(u64, &ParameterData)> = network
+        .nodes
+        .iter()
+        .filter(|(_, node)| node.node_type_name == "parameter")
+        .filter_map(|(&id, node)| {
+            node.data
+                .as_any_ref()
+                .downcast_ref::<ParameterData>()
+                .map(|p| (id, p))
+        })
+        .collect();
+    params.sort_by(|(a_id, a), (b_id, b)| compare_parameters(*a_id, a, *b_id, b));
+    params
+        .into_iter()
+        .map(|(_, p)| Parameter {
+            id: p.param_id,
+            name: p.param_name.clone(),
+            data_type: p.data_type.clone(),
+        })
+        .collect()
+}
+
+/// For each parameter of `new`, the index in `old` of the same parameter:
+/// matched by id first (which follows a rename or a reorder), by name second
+/// (a parameter without an id, or whose id is unknown to `old`). `None` = a
+/// new parameter. Ids in `name_only_ids` are not trusted — they were shared by
+/// several parameters and re-assigned by the duplicate-id heal
+/// ([`dedupe_param_ids_in_network`]), so the one that kept the id need not be
+/// the one `old` knew by it — and are matched by name only, so the worst
+/// outcome is a dropped wire, never a wire moved to the wrong pin.
+pub fn parameter_mapping(
+    old: &[Parameter],
+    new: &[Parameter],
+    name_only_ids: &std::collections::BTreeSet<u64>,
+) -> Vec<Option<usize>> {
+    let by_id: HashMap<u64, usize> = old
+        .iter()
+        .enumerate()
+        .filter_map(|(i, p)| p.id.map(|id| (id, i)))
+        .collect();
+    let by_name: HashMap<&str, usize> = old
+        .iter()
+        .enumerate()
+        .map(|(i, p)| (p.name.as_str(), i))
+        .collect();
+    new.iter()
+        .map(|p| {
+            p.id.filter(|id| !name_only_ids.contains(id))
+                .and_then(|id| by_id.get(&id).copied())
+                .or_else(|| by_name.get(p.name.as_str()).copied())
+        })
+        .collect()
+}
+
+/// [`parameter_mapping`] between two files — a linked network's (or record
+/// def's) interface now against the one an importing file recorded
+/// (`doc/design_library_linking.md` D13). Ids are only unique within one
+/// network's history: a network (or def) deleted and created again under the
+/// same name hands out the same small ids afresh, so across files an id can
+/// name a *different* parameter. The tell is a contradiction: a parameter
+/// whose id points at an old parameter of another name, while an old
+/// parameter of its own name exists. Then the ids are not trusted for the
+/// whole list and everything is matched by name — which is also what a
+/// re-created network means. (Within one file ids are never recycled, so
+/// in-file repair keeps plain id-first matching.)
+pub fn cross_file_parameter_mapping(
+    old: &[Parameter],
+    new: &[Parameter],
+    name_only_ids: &std::collections::BTreeSet<u64>,
+) -> Vec<Option<usize>> {
+    let mapping = parameter_mapping(old, new, name_only_ids);
+    let contradiction = new.iter().zip(&mapping).any(|(p, m)| {
+        m.is_some_and(|o| {
+            old[o].name != p.name
+                && old
+                    .iter()
+                    .enumerate()
+                    .any(|(i, q)| i != o && q.name == p.name)
+        })
+    });
+    if !contradiction {
+        return mapping;
+    }
+    new.iter()
+        .map(|p| old.iter().position(|q| q.name == p.name))
+        .collect()
+}
+
+/// Rebuilds `node`'s arguments for a new parameter list: the argument of new
+/// parameter `i` is the old argument at `mapping[i]` (see
+/// [`parameter_mapping`]), or empty. `function_pin_roles` are index-keyed like
+/// `arguments`, so they follow the same mapping.
+pub fn remap_node_arguments(node: &mut Node, mapping: &[Option<usize>]) {
+    let old_args = std::mem::take(&mut node.arguments);
+    node.arguments = mapping
+        .iter()
+        .map(|m| {
+            m.and_then(|o| old_args.get(o).cloned())
+                .unwrap_or_else(Argument::new)
+        })
+        .collect();
+    if !node.function_pin_roles.is_empty() {
+        let old_roles = std::mem::take(&mut node.function_pin_roles);
+        for (new_index, m) in mapping.iter().enumerate() {
+            if let Some(role) = m.and_then(|o| old_roles.get(&o)) {
+                node.function_pin_roles.insert(new_index, *role);
+            }
+        }
+    }
+}
+
 /// Repairs call sites when a network's parameter interface changes.
 /// This function updates all nodes that use the given network as their type,
 /// preserving argument connections based on parameter IDs (primary) or names (fallback).
+///
+/// Only callers **in the same file** as the network are repaired
+/// (`doc/design_library_linking.md` §7.1 step 5): a linked network's callers
+/// in the importing file are wired against the interface recorded in its
+/// `uses` table, and are reconciled from that (`library_refresh`), never from
+/// the library's own in-memory change — which would apply a second, wrong
+/// mapping to them. Nothing a host owns calls into another file's callers.
 fn repair_call_sites_for_network(
     network_name: &str,
     old_parameters: &[Parameter],
     new_parameters: &[Parameter],
     node_type_registry: &mut NodeTypeRegistry,
 ) {
-    // Build mapping: parameter_id -> old_index (primary matching strategy)
-    let old_param_id_map: HashMap<u64, usize> = old_parameters
-        .iter()
-        .enumerate()
-        .filter_map(|(idx, param)| param.id.map(|id| (id, idx)))
-        .collect();
+    let mapping = parameter_mapping(
+        old_parameters,
+        new_parameters,
+        &std::collections::BTreeSet::new(),
+    );
 
-    // Build mapping: parameter_name -> old_index (fallback for backwards compatibility)
-    let old_param_name_map: HashMap<&str, usize> = old_parameters
-        .iter()
-        .enumerate()
-        .map(|(idx, param)| (param.name.as_str(), idx))
+    // Find all parent networks that use this network, in the same file.
+    let owner = crate::library_links::owner_mount(node_type_registry, network_name);
+    let parent_network_names: Vec<String> = node_type_registry
+        .find_parent_networks(network_name)
+        .into_iter()
+        .filter(|parent| crate::library_links::owner_mount(node_type_registry, parent) == owner)
         .collect();
-
-    // Find all parent networks that use this network
-    let parent_network_names = node_type_registry.find_parent_networks(network_name);
 
     // Update each parent network's call sites. Walk recursively into HOF
     // zone bodies so a body-internal node calling the renamed network has
@@ -310,33 +432,7 @@ fn repair_call_sites_for_network(
                 if node.node_type_name != network_name {
                     return;
                 }
-                let mut new_arguments = Vec::with_capacity(new_parameters.len());
-                for new_param in new_parameters {
-                    let old_idx = {
-                        // First try ID-based matching (handles renames)
-                        if let Some(new_id) = new_param.id {
-                            if let Some(&idx) = old_param_id_map.get(&new_id) {
-                                Some(idx)
-                            } else {
-                                // Fall back to name-based matching
-                                old_param_name_map.get(new_param.name.as_str()).copied()
-                            }
-                        } else {
-                            // No ID, use name-based matching (backwards compatibility)
-                            old_param_name_map.get(new_param.name.as_str()).copied()
-                        }
-                    };
-                    if let Some(old_idx) = old_idx {
-                        if old_idx < node.arguments.len() {
-                            new_arguments.push(node.arguments[old_idx].clone());
-                        } else {
-                            new_arguments.push(Argument::new());
-                        }
-                    } else {
-                        new_arguments.push(Argument::new());
-                    }
-                }
-                node.arguments = new_arguments;
+                remap_node_arguments(node, &mapping);
             });
         }
     }

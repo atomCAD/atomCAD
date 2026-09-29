@@ -29,6 +29,7 @@ pub mod move_nodes;
 pub mod node_structure_edit;
 pub mod paste_nodes;
 pub mod promote_to_parameter;
+pub mod refresh_dependencies;
 pub mod rename_helpers;
 pub mod rename_namespace;
 pub mod rename_network;

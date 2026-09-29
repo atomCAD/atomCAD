@@ -202,7 +202,7 @@ pub struct StructureDesigner {
     // Temporary storage for CLI parameters during evaluation (used in headless mode)
     pub cli_top_level_parameters: Option<HashMap<String, NetworkResult>>,
     // Navigation history for back/forward functionality
-    navigation_history: NavigationHistory,
+    pub(crate) navigation_history: NavigationHistory,
     // Clipboard for copy/paste operations (stores copied nodes as an isolated NodeNetwork)
     pub clipboard: Option<NodeNetwork>,
     // Undo/redo stack for all network mutations
@@ -2221,6 +2221,7 @@ impl StructureDesigner {
             network_name: name.clone(),
             previous_active_network,
             pruned_folders,
+            next_param_id: self.param_counter_of(&name),
         });
 
         name
@@ -2250,6 +2251,7 @@ impl StructureDesigner {
             network_name: node_network_name.to_string(),
             previous_active_network,
             pruned_folders,
+            next_param_id: self.param_counter_of(node_network_name),
         });
         Ok(())
     }
@@ -2280,21 +2282,34 @@ impl StructureDesigner {
         ) {
             return;
         }
+        let mut network = NodeNetwork::new(NodeType {
+            name: node_network_name.to_string(),
+            description: "".to_string(),
+            summary: None,
+            category: crate::node_type::NodeTypeCategory::Custom,
+            parameters: Vec::new(),
+            output_pins: OutputPinDefinition::single(DataType::None),
+            node_data_creator: || Box::new(CustomNodeData::default()),
+            node_data_saver: generic_node_data_saver::<CustomNodeData>,
+            node_data_loader: generic_node_data_loader::<CustomNodeData>,
+            zone_input_pins: vec![],
+            zone_output_pins: vec![],
+            public: true,
+        });
+        // A new network hands out ids above every id this file handed out,
+        // so re-creating a deleted name never reuses one
+        // (`NodeTypeRegistry::claim_param_ids`).
+        self.node_type_registry.claim_param_ids(&mut network);
+        self.node_type_registry.add_node_network(network);
+    }
+
+    /// The parameter-id counter of network `name` (0 when absent), recorded by
+    /// `AddNetworkCommand` so that redo re-creates the network with it.
+    fn param_counter_of(&self, name: &str) -> u64 {
         self.node_type_registry
-            .add_node_network(NodeNetwork::new(NodeType {
-                name: node_network_name.to_string(),
-                description: "".to_string(),
-                summary: None,
-                category: crate::node_type::NodeTypeCategory::Custom,
-                parameters: Vec::new(),
-                output_pins: OutputPinDefinition::single(DataType::None),
-                node_data_creator: || Box::new(CustomNodeData::default()),
-                node_data_saver: generic_node_data_saver::<CustomNodeData>,
-                node_data_loader: generic_node_data_loader::<CustomNodeData>,
-                zone_input_pins: vec![],
-                zone_output_pins: vec![],
-                public: true,
-            }));
+            .node_networks
+            .get(name)
+            .map_or(0, |n| n.next_param_id)
     }
 
     pub fn rename_node_network(&mut self, old_name: &str, new_name: &str) -> bool {
@@ -2855,6 +2870,8 @@ impl StructureDesigner {
         let previous_active_network = self.active_node_network_name.clone();
         let pruned_folders = self.node_type_registry.ancestor_folders_present(&new_name);
 
+        // A copy is a new network of this file: ids above every id handed out.
+        self.node_type_registry.claim_param_ids(&mut network);
         self.node_type_registry.add_node_network(network);
 
         // Snapshot the freshly added (renamed) network for the undo command, so
@@ -3109,8 +3126,11 @@ impl StructureDesigner {
     /// network's validation re-runs against the new registry contents.
     pub fn add_record_type_def(
         &mut self,
-        def: super::node_type_registry::RecordTypeDef,
+        mut def: super::node_type_registry::RecordTypeDef,
     ) -> Result<(), super::node_type_registry::RecordTypeDefError> {
+        // A new def hands out field ids above every id this file handed out,
+        // so re-creating a deleted name never reuses one.
+        self.node_type_registry.claim_field_ids(&mut def);
         let def_clone = def.clone();
         // Capture ancestor empty-folder markers this def will absorb (undo
         // restores them). See `doc/design_empty_folders.md`.
@@ -5922,6 +5942,9 @@ impl StructureDesigner {
         // Linked libraries belong to the old document too (their content was
         // cleared with the maps above).
         self.node_type_registry.library_links.clear();
+        // A new document starts its id history afresh.
+        self.node_type_registry.param_id_floor = 1;
+        self.node_type_registry.field_id_floor = 0;
 
         // Create a fresh "Main" network and set it as active
         self.add_node_network("Main");
@@ -8807,6 +8830,11 @@ impl StructureDesigner {
             self.direct_editing_mode = false;
         }
 
+        // Library linking (`doc/design_library_linking.md` D7, D13): complete
+        // the open report, watch the data files, and mark the design dirty
+        // when the open reconciled its wiring against a changed library.
+        self.finish_library_load();
+
         // Loading networks is a structural change requiring full refresh
         self.mark_full_refresh();
 
@@ -9334,7 +9362,7 @@ impl StructureDesigner {
             .node_networks
             .get(&network_name)
             .unwrap();
-        let new_network = selection_factoring::create_subnetwork_from_selection(
+        let mut new_network = selection_factoring::create_subnetwork_from_selection(
             source_network,
             &analysis,
             subnetwork_name,
@@ -9342,8 +9370,9 @@ impl StructureDesigner {
             &self.node_type_registry,
         );
 
-        // 7. Register subnetwork
+        // 7. Register subnetwork (a new network: ids above every id handed out)
         let num_params = new_network.node_type.parameters.len();
+        self.node_type_registry.claim_param_ids(&mut new_network);
         self.node_type_registry.add_node_network(new_network);
 
         // 8. Replace selection with custom node (using module function)
@@ -10251,7 +10280,7 @@ impl StructureDesigner {
             )?
         };
         let conv::ExtractionPlan {
-            network: new_network,
+            network: mut new_network,
             capture_wires,
             closure_param_count,
         } = plan;
@@ -10272,7 +10301,9 @@ impl StructureDesigner {
         let i_node_type = new_network.node_type.clone();
         let param_count = closure_param_count + capture_wires.len();
 
-        // 5. Register `N` (its content caches are already populated).
+        // 5. Register `N` (its content caches are already populated; a new
+        // network: ids above every id handed out).
+        self.node_type_registry.claim_param_ids(&mut new_network);
         self.node_type_registry.add_node_network(new_network);
 
         // 6. Replace `C` with the instance `I` (same id + position): closure-param

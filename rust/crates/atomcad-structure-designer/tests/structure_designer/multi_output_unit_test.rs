@@ -256,6 +256,7 @@ fn test_displayed_nodes_serialization_roundtrip_default_pins() {
     use atomcad_structure_designer::serialization::node_networks_serialization::*;
 
     let serializable = SerializableNodeNetwork {
+        next_param_id: None,
         next_node_id: 2,
         node_type: SerializableNodeType {
             name: "test".to_string(),
@@ -294,6 +295,7 @@ fn test_displayed_nodes_serialization_roundtrip_non_default_pins() {
     use atomcad_structure_designer::serialization::node_networks_serialization::*;
 
     let serializable = SerializableNodeNetwork {
+        next_param_id: None,
         next_node_id: 2,
         node_type: SerializableNodeType {
             name: "test".to_string(),

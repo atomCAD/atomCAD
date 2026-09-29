@@ -650,7 +650,15 @@ pub enum FunctionPinDisposition {
 /// applies to the whole pin, never per wire. Out-of-range entries in
 /// `function_pin_roles` (a stale index after a pin-layout change) are ignored.
 pub fn function_pin_dispositions(node: &Node, node_type: &NodeType) -> Vec<FunctionPinDisposition> {
-    (0..node_type.parameters.len())
+    function_pin_dispositions_for(node, node_type.parameters.len())
+}
+
+/// [`function_pin_dispositions`] for a node whose input-pin count is known
+/// but whose type is not at hand — the interface a linked network *had*, when
+/// reconciling an `apply` fed by an instance of it
+/// (`doc/design_library_linking.md` §7.3). The same partition, not a copy.
+pub fn function_pin_dispositions_for(node: &Node, pin_count: usize) -> Vec<FunctionPinDisposition> {
+    (0..pin_count)
         .map(|i| {
             let wired = node
                 .arguments

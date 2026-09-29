@@ -76,6 +76,8 @@ structure_designer/
 ├── node_networks_import_manager.rs # Import networks from .cnnd libraries (copy import)
 ├── library_links.rs           # Linked libraries: mounts, prefixing, `uses`, the frozen-node predicate, LinkFs
 ├── library_link_ops.rs        # StructureDesigner::link_library / unlink_library
+├── library_refresh.rs         # Reconciling wiring against recorded interfaces, change detection, data-file watches
+├── library_refresh_ops.rs     # check_dependencies / refresh / retarget / the open report
 ├── undo/                      # Undo/redo system (command pattern)
 ├── nodes/                     # Built-in node implementations (47+)
 ├── evaluator/                 # Network evaluation engine
@@ -276,6 +278,44 @@ folder. Undo snapshots look node-data savers/loaders up through
 `NodeTypeRegistry::node_data_saver_for` / `node_data_loader_for`, whose
 `CustomNodeData` fallback is what lets a frozen instance be deleted,
 duplicated or pasted and brought back.
+
+**A library changing is reconciled, never realigned (Phase 3).** Wires are
+positional, so the importing file's arguments on linked networks and record
+defs mean something only against the interface they were made against — the
+one its `uses` table records (`LibraryMount::stored_uses`).
+`library_refresh::reconcile_network` moves them to the interface mounted now,
+by `param_id` / `FieldId` first and name second
+(`network_validator::cross_file_parameter_mapping`, which distrusts ids that
+contradict the names: ids are unique only within one network's history, and a
+re-created network hands them out again). One procedure serves the open (the
+old interface read from the file) and the refresh (captured from memory into
+`stored_uses` first). Three rules that cost time to find:
+
+- **It runs before anything realigns by count** — before
+  `repair_node_network` on load and on refresh. A library is validated on
+  its own temp registry inside `mount_library` first, because a saved file
+  can carry stale interfaces (a record-def edit refreshes only the networks
+  validated after it).
+- **Every wire that is gone must be in the report.** The report is made
+  complete by construction: a positional image of the reconciled networks is
+  taken right after reconciliation and anything a later repair or validation
+  pass removes is reported too (`report_wires_removed_by_repair`). A new pass
+  needs nothing extra — but a new *reconciliation* step must image after it.
+- `repair_call_sites_for_network` repairs only callers in the network's own
+  file (`owner_mount` equal): the importing file's callers are reconciled
+  from its `uses`, and a second, in-memory mapping would move them twice.
+- **A code path that creates a network or record def must claim its ids**
+  (`NodeTypeRegistry::claim_param_ids` / `claim_field_ids`) before inserting
+  it and before any undo snapshot — never on a restore. Ids must be unique
+  across the file's history, or a network re-created under an old name hands
+  a linking file's recorded ids to different parameters.
+
+A refresh / retarget is one `RefreshDependenciesCommand` holding both
+versions of the mounted content and whole copies of the affected host
+networks; `check_dependencies` holds (does not apply) a change while redo
+history exists (D9). Tests go through `library_links_refresh_test.rs`'s
+workspace and the randomized harness `library_links_fuzz_test.rs`; a failure
+the harness finds becomes a named test before it is fixed.
 
 **A relative file path is resolved at eval time only through
 `library_links::base_dir_for_eval(network_stack, registry)`** — the directory

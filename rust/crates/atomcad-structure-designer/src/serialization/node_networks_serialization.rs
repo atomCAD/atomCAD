@@ -242,6 +242,13 @@ fn default_body_height() -> f64 {
 #[derive(Serialize, Deserialize)]
 pub struct SerializableNodeNetwork {
     pub next_node_id: u64,
+    /// The parameter-id counter (`doc/design_library_linking.md` §13 item 7),
+    /// written only when it is above what a load re-derives (`max(param_id) +
+    /// 1`, floor 1): a parameter deleted from the end must not hand its id to
+    /// the next parameter added after a save — across versions of a linked
+    /// library that would move a host wire to the wrong pin.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_param_id: Option<u64>,
     pub node_type: SerializableNodeType,
     pub nodes: Vec<SerializableNode>, // Store as vec instead of HashMap
     pub return_node_id: Option<u64>,
@@ -291,6 +298,16 @@ pub struct SerializableNodeTypeRegistryNetworks {
     /// **direct** links only, sorted by alias. Missing field = no links.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub imports: Vec<SerializableImport>,
+    /// File-level floor of parameter ids (`NodeTypeRegistry::param_id_floor`),
+    /// written only when it is above every saved network's counter — i.e.
+    /// after a network was deleted — so that a network re-created under an
+    /// old name never reuses an id a linking file recorded
+    /// (`doc/design_library_linking.md` §13 item 7).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_param_id: Option<u64>,
+    /// The same for record-def field ids.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_field_id: Option<u64>,
 }
 
 /// One entry of the `imports` list (D12/D13).
@@ -741,9 +758,14 @@ pub fn node_network_to_serializable(
             zoom_level: cv.zoom_level,
         });
 
+    // The parameter-id counter, only when a load could not re-derive it.
+    let next_param_id =
+        (network.next_param_id > derived_next_param_id(network)).then_some(network.next_param_id);
+
     // Create the serializable network
     Ok(SerializableNodeNetwork {
         next_node_id: network.next_node_id,
+        next_param_id,
         node_type: serializable_node_type,
         nodes: serializable_nodes,
         return_node_id: network.return_node_id,
@@ -752,6 +774,24 @@ pub fn node_network_to_serializable(
         camera_settings,
         canvas_viewport,
     })
+}
+
+/// The parameter-id counter a load derives from the parameter nodes alone:
+/// strictly above every `param_id`, never below 1 (`NodeNetwork::new`'s floor).
+fn derived_next_param_id(network: &NodeNetwork) -> u64 {
+    network
+        .nodes
+        .values()
+        .filter_map(|node| {
+            node.data
+                .as_ref()
+                .as_any_ref()
+                .downcast_ref::<crate::nodes::parameter::ParameterData>()
+                .and_then(|p| p.param_id)
+        })
+        .max()
+        .map_or(1, |m| m + 1)
+        .max(1)
 }
 
 /// Heal one scope's stored `custom_name`s into the D1 invariant: slash-free
@@ -889,20 +929,12 @@ pub fn serializable_to_node_network(
     // mis-rewiring instances in other networks. See
     // `doc/design_parameter_wire_stability.md` (F1). `.max(..)` keeps the
     // `NodeNetwork::new` floor of 1 and never lowers an already-higher counter.
-    let max_param_id = network
-        .nodes
-        .values()
-        .filter_map(|node| {
-            node.data
-                .as_ref()
-                .as_any_ref()
-                .downcast_ref::<crate::nodes::parameter::ParameterData>()
-                .and_then(|p| p.param_id)
-        })
-        .max();
-    if let Some(m) = max_param_id {
-        network.next_param_id = network.next_param_id.max(m + 1);
-    }
+    // A saved counter (`doc/design_library_linking.md` §13 item 7) is a floor
+    // too: it can only be above the derived one.
+    network.next_param_id = network
+        .next_param_id
+        .max(derived_next_param_id(&network))
+        .max(serializable.next_param_id.unwrap_or(0));
 
     // Migration: atom_edit output_diff → displayed_pins
     // For old files where output_diff: true was used to switch to diff view,
@@ -1073,6 +1105,25 @@ pub fn registry_to_serializable(
     // mount is the alias). Paths verbatim (D6).
     let direct: Vec<crate::library_links::LibraryMount> =
         registry.library_links.direct_mounts().cloned().collect();
+    // The file-level id floors: raised to everything handed out so far, and
+    // written only when a load could not re-derive them from the counters.
+    registry.param_id_floor = registry.file_param_id_floor();
+    registry.field_id_floor = registry.file_field_id_floor();
+    // A load re-derives the floors from the saved counters, which it restores
+    // exactly (each network's and def's counter is saved when not derivable).
+    let saved_param_counters = sorted_names
+        .iter()
+        .map(|name| registry.node_networks[name].next_param_id)
+        .fold(1, u64::max);
+    let saved_field_counters = record_type_defs
+        .iter()
+        .map(|d| d.next_field_id)
+        .fold(0, u64::max);
+    let next_param_id =
+        (registry.param_id_floor > saved_param_counters).then_some(registry.param_id_floor);
+    let next_field_id =
+        (registry.field_id_floor > saved_field_counters).then_some(registry.field_id_floor);
+
     let imports: Vec<SerializableImport> = direct
         .iter()
         .map(|m| SerializableImport {
@@ -1092,6 +1143,8 @@ pub fn registry_to_serializable(
         // `BTreeSet` is already ordered, so the on-disk array is deterministic.
         folders,
         imports,
+        next_param_id,
+        next_field_id,
     })
 }
 
@@ -1312,6 +1365,8 @@ pub fn load_node_networks_from_bytes(
 
     let direct_editing_mode = serializable_registry.direct_editing_mode;
     let cli_access_rules = serializable_registry.cli_access_rules;
+    let serializable_next_param_id = serializable_registry.next_param_id;
+    let serializable_next_field_id = serializable_registry.next_field_id;
 
     registry.node_networks.clear();
     registry.record_type_defs.clear();
@@ -1386,6 +1441,7 @@ pub fn load_node_networks_from_bytes(
                         last_seen: None,
                         stored_hash: spec.stored_hash.clone(),
                         stored_uses: spec.stored_uses.clone(),
+                        name_only_param_ids: Default::default(),
                     });
             }
             None => {
@@ -1420,6 +1476,11 @@ pub fn load_node_networks_from_bytes(
     // Track the first network name
     let mut first_network_name = String::new();
 
+    // What reconciling this file's wiring against its recorded interfaces
+    // did (`doc/design_library_linking.md` D13).
+    let mut load_report = crate::library_refresh::RefreshReport::default();
+    let mut load_images = Vec::new();
+
     // Process each network
     for (name, serializable_network) in serializable_registry.node_networks {
         // Capture the first network name
@@ -1442,6 +1503,30 @@ pub fn load_node_networks_from_bytes(
         crate::canonicalize::canonicalize_network(&mut network);
         registry.initialize_custom_node_types_for_network(&mut network);
 
+        // Move the wiring on linked networks and record defs from the
+        // interfaces this file recorded at its last save (`uses`) to the ones
+        // mounted now — BEFORE `repair_node_network`, whose count repair and
+        // by-name layout rebuilds would otherwise realign the arguments
+        // positionally and leave nothing to match by id
+        // (`doc/design_library_linking.md` D13, §5.1). A library being
+        // mounted runs this same function, so its calls into its own imports
+        // are reconciled here too, before it is prefixed.
+        crate::library_refresh::reconcile_network(
+            &mut network,
+            registry,
+            None,
+            &name,
+            &mut load_report,
+        );
+        // What reconciliation left, so that a wire a later pass removes is
+        // reported too (`StructureDesigner::finish_library_load`).
+        if crate::library_refresh::refers_to_any_mount(&network, registry) {
+            load_images.push((
+                name.clone(),
+                crate::library_refresh::wire_images(&network, registry, &name),
+            ));
+        }
+
         registry.repair_node_network(&mut network);
 
         registry.node_networks.insert(name, network);
@@ -1454,6 +1539,14 @@ pub fn load_node_networks_from_bytes(
 
     // Set the design file name after successful load
     registry.design_file_name = Some(file_path.to_string());
+    registry.library_links.load_report = load_report;
+    // Materialize the file-level id floors now: a network deleted after this
+    // load must still count, its ids are in the file linking files read.
+    registry.param_id_floor = serializable_next_param_id.unwrap_or(1);
+    registry.field_id_floor = serializable_next_field_id.unwrap_or(0);
+    registry.param_id_floor = registry.file_param_id_floor();
+    registry.field_id_floor = registry.file_field_id_floor();
+    registry.library_links.load_images = load_images;
 
     Ok(LoadResult {
         first_network_name,

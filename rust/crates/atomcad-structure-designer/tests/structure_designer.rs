@@ -671,3 +671,9 @@ mod library_links_test;
 
 #[path = "structure_designer/library_links_readonly_test.rs"]
 mod library_links_readonly_test;
+
+#[path = "structure_designer/library_links_refresh_test.rs"]
+mod library_links_refresh_test;
+
+#[path = "structure_designer/library_links_fuzz_test.rs"]
+mod library_links_fuzz_test;

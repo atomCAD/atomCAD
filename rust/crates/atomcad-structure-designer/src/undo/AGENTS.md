@@ -29,6 +29,7 @@ undo/
     ├── add_record_type_def.rs, delete_record_type_def.rs,
     │   rename_record_type_def.rs, update_record_type_def.rs  # Record type def lifecycle
     ├── link_library.rs            # Link / Unlink a library (mount ⇄ unmount; mounting reads the disk)
+    ├── refresh_dependencies.rs    # Refresh / retarget of linked libraries and data files (live copies, see below)
     ├── atom_edit_mutation.rs      # Incremental diff deltas (includes flag changes)
     └── atom_edit_toggle_flag.rs   # Boolean flag toggles
 ```
@@ -36,7 +37,7 @@ undo/
 ## Architecture
 
 - **UndoStack** lives on `StructureDesigner`. Single global stack (not per-network).
-- **UndoCommand** trait: `description()`, `undo(&self, ctx)`, `redo(&self, ctx)`, `refresh_mode()`.
+- **UndoCommand** trait: `description()`, `undo(&self, ctx)`, `redo(&self, ctx)`, `refresh_mode()`. No `Send` / `Sync` bound: `RefreshDependenciesCommand` holds live `NodeNetwork` copies, because restoring a serialized snapshot re-runs the node-data loaders, which **re-read data files from disk** (an `import_xyz` restored from JSON reads the file as it is now). Prefer serialized snapshots otherwise; reach for live copies only when a loader's side effect would make the round trip unfaithful.
 - **UndoContext** provides `&mut NodeTypeRegistry` + `&mut Option<String>` (active network name) to avoid borrow conflicts with `StructureDesigner` which owns the `UndoStack`.
 - Commands store their target `network_name` and look up the network via `ctx.network_mut(name)`.
 - `StructureDesigner::undo()`/`redo()` use `std::mem::take` to temporarily move the stack, avoiding simultaneous borrow of stack and context.

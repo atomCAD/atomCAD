@@ -218,6 +218,95 @@ fn param_id_by_name(
     })
 }
 
+/// A same-scope wire's source pin: by field id when the source is a
+/// `record_destructure` (whose outputs follow their fields by identity), else
+/// by index — a network instance's outputs match by position (§7.3), even when
+/// they carry ids inherited from a destructure inside the network.
+fn source_label(
+    registry: &NodeTypeRegistry,
+    network: &NodeNetwork,
+    w: &atomcad_structure_designer::node_network::IncomingWire,
+) -> String {
+    if w.source_scope_depth == 0
+        && let SourcePin::NodeOutput { pin_index } = w.source_pin
+        && pin_index >= 0
+        && let Some(id) = network
+            .nodes
+            .get(&w.source_node_id)
+            .filter(|src| src.node_type_name == "record_destructure")
+            .and_then(|src| registry.get_node_type_for_node(src))
+            .and_then(|t| t.output_pins.get(pin_index as usize))
+            .and_then(|p| p.id)
+    {
+        return format!("field{}", id);
+    }
+    pin_label(&w.source_pin)
+}
+
+/// The identity of `apply` argument `i` (≥ 1): the parameter of the node
+/// feeding `f` through its function pin that the argument stands for.
+fn apply_arg_slot(
+    registry: &NodeTypeRegistry,
+    network: &NodeNetwork,
+    apply: &atomcad_structure_designer::node_network::Node,
+    i: usize,
+) -> Option<(Slot, String)> {
+    use atomcad_structure_designer::node_network::{
+        FunctionPinDisposition, function_pin_dispositions,
+    };
+    if apply.node_type_name != "apply" || i == 0 {
+        return None;
+    }
+    let source = apply
+        .arguments
+        .first()?
+        .incoming_wires
+        .iter()
+        .find_map(|w| {
+            (w.source_scope_depth == 0 && w.source_pin == SourcePin::NodeOutput { pin_index: -1 })
+                .then(|| network.nodes.get(&w.source_node_id))
+                .flatten()
+        })?;
+    let source_type = registry.get_node_type_for_node(source)?;
+    let exposed: Vec<usize> = function_pin_dispositions(source, source_type)
+        .into_iter()
+        .enumerate()
+        .filter(|(_, d)| *d == FunctionPinDisposition::Parameter)
+        .map(|(k, _)| k)
+        .collect();
+    let param = source_type.parameters.get(*exposed.get(i - 1)?)?;
+    param
+        .id
+        .or_else(|| param_id_by_name(registry, source, &param.name))
+        .map(|id| (Slot::Id(id), param.name.clone()))
+}
+
+/// The identity slot of input `i` of `node`, and the input's name when it
+/// has one (a parameter / field, or the source parameter an `apply` argument
+/// stands for).
+fn slot_of(
+    registry: &NodeTypeRegistry,
+    network: &NodeNetwork,
+    node: &atomcad_structure_designer::node_network::Node,
+    i: usize,
+) -> (Slot, Option<String>) {
+    if let Some((slot, name)) = apply_arg_slot(registry, network, node, i) {
+        return (slot, Some(name));
+    }
+    let node_type = if is_frozen(node, registry) {
+        None
+    } else {
+        registry.get_node_type_for_node(node)
+    };
+    match node_type.and_then(|t| t.parameters.get(i)) {
+        Some(p) => match p.id.or_else(|| param_id_by_name(registry, node, &p.name)) {
+            Some(id) => (Slot::Id(id), Some(p.name.clone())),
+            None => (Slot::Name(p.name.clone()), Some(p.name.clone())),
+        },
+        None => (Slot::Pos(i), None),
+    }
+}
+
 fn ledger_scope(
     registry: &NodeTypeRegistry,
     network_name: &str,
@@ -226,30 +315,9 @@ fn ledger_scope(
     out: &mut BTreeSet<WireEntry>,
 ) {
     for node in network.nodes.values() {
-        let frozen = is_frozen(node, registry);
-        let node_type = if frozen {
-            None
-        } else {
-            registry.get_node_type_for_node(node)
-        };
         for (i, arg) in node.arguments.iter().enumerate() {
-            let slot = match node_type.and_then(|t| t.parameters.get(i)) {
-                Some(p) => match p.id.or_else(|| param_id_by_name(registry, node, &p.name)) {
-                    Some(id) => Slot::Id(id),
-                    None => Slot::Name(p.name.clone()),
-                },
-                None => Slot::Pos(i),
-            };
             for w in &arg.incoming_wires {
-                out.insert(WireEntry {
-                    network: network_name.to_string(),
-                    scope: scope.to_vec(),
-                    dest: node.id,
-                    slot: slot.clone(),
-                    source: w.source_node_id,
-                    source_pin: pin_label(&w.source_pin),
-                    depth: w.source_scope_depth,
-                });
+                ledger_one(registry, network_name, network, scope, node, i, w, out);
             }
         }
         for (i, arg) in node.zone_output_arguments.iter().enumerate() {
@@ -260,7 +328,7 @@ fn ledger_scope(
                     dest: node.id,
                     slot: Slot::ZoneOut(i),
                     source: w.source_node_id,
-                    source_pin: pin_label(&w.source_pin),
+                    source_pin: source_label(registry, network, w),
                     depth: w.source_scope_depth,
                 });
             }
@@ -271,6 +339,107 @@ fn ledger_scope(
             ledger_scope(registry, network_name, body, &child, out);
         }
     }
+}
+
+/// One wire keyed both ways: by position (`pos`: argument index, or
+/// zone-output index) and by identity (`id`: the O2 slot). The randomized
+/// harness judges a node that froze by position — a frozen node keeps its
+/// arguments exactly — and every other node by identity.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct WireRecord {
+    pub network: String,
+    pub scope: Vec<u64>,
+    pub dest: u64,
+    pub pos: Slot,
+    pub id: Slot,
+    /// The input's name, when it has one — what a network re-created under
+    /// its old name is matched by (its parameters' ids are new).
+    pub name: Option<String>,
+    pub source: u64,
+    pub source_pin: String,
+    pub depth: u8,
+}
+
+/// [`WireRecord`]s of every local network (bodies included).
+pub fn wire_records(d: &StructureDesigner) -> BTreeSet<WireRecord> {
+    fn walk(
+        registry: &NodeTypeRegistry,
+        name: &str,
+        net: &NodeNetwork,
+        scope: &[u64],
+        out: &mut BTreeSet<WireRecord>,
+    ) {
+        for node in net.nodes.values() {
+            for (i, arg) in node.arguments.iter().enumerate() {
+                let (id, input_name) = slot_of(registry, net, node, i);
+                for w in &arg.incoming_wires {
+                    out.insert(WireRecord {
+                        network: name.to_string(),
+                        scope: scope.to_vec(),
+                        dest: node.id,
+                        pos: Slot::Pos(i),
+                        id: id.clone(),
+                        name: input_name.clone(),
+                        source: w.source_node_id,
+                        source_pin: source_label(registry, net, w),
+                        depth: w.source_scope_depth,
+                    });
+                }
+            }
+            for (i, arg) in node.zone_output_arguments.iter().enumerate() {
+                for w in &arg.incoming_wires {
+                    out.insert(WireRecord {
+                        network: name.to_string(),
+                        scope: scope.to_vec(),
+                        dest: node.id,
+                        pos: Slot::ZoneOut(i),
+                        id: Slot::ZoneOut(i),
+                        name: None,
+                        source: w.source_node_id,
+                        source_pin: source_label(registry, net, w),
+                        depth: w.source_scope_depth,
+                    });
+                }
+            }
+            if let Some(body) = node.zone.as_deref() {
+                let mut child = scope.to_vec();
+                child.push(node.id);
+                walk(registry, name, body, &child, out);
+            }
+        }
+    }
+    let registry = &d.node_type_registry;
+    let mut out = BTreeSet::new();
+    for (name, network) in &registry.node_networks {
+        if registry.library_links.mount_containing(name).is_none() {
+            walk(registry, name, network, &[], &mut out);
+        }
+    }
+    out
+}
+
+/// The O2 entry of one wire into argument `i` of `node`.
+#[allow(clippy::too_many_arguments)]
+fn ledger_one(
+    registry: &NodeTypeRegistry,
+    network_name: &str,
+    network: &NodeNetwork,
+    scope: &[u64],
+    node: &atomcad_structure_designer::node_network::Node,
+    i: usize,
+    w: &atomcad_structure_designer::node_network::IncomingWire,
+    out: &mut BTreeSet<WireEntry>,
+) {
+    let (slot, _) = slot_of(registry, network, node, i);
+    out.insert(WireEntry {
+        network: network_name.to_string(),
+        scope: scope.to_vec(),
+        dest: node.id,
+        slot,
+        source: w.source_node_id,
+        source_pin: source_label(registry, network, w),
+        depth: w.source_scope_depth,
+    });
 }
 
 /// O2: every wire of every local network (bodies included).
@@ -310,6 +479,82 @@ pub fn check_wire_ledger(
             appeared
         ))
     }
+}
+
+/// The wires an operation's report says it removed, as ledger entries — the
+/// only allowed explanation for a missing wire in O2 (§7.2).
+pub fn reported_drops(
+    report: &atomcad_structure_designer::library_refresh::RefreshReport,
+) -> BTreeSet<WireEntry> {
+    use atomcad_structure_designer::library_refresh::WireSlot;
+    report
+        .dropped_wires
+        .iter()
+        .map(|w| WireEntry {
+            network: w.network.clone(),
+            scope: w.scope_path.clone(),
+            dest: w.node_id,
+            slot: match &w.slot {
+                WireSlot::Id(id) => Slot::Id(*id),
+                WireSlot::Name(n) => Slot::Name(n.clone()),
+                WireSlot::Pos(i) => Slot::Pos(*i),
+                WireSlot::ZoneOut(i) => Slot::ZoneOut(*i),
+            },
+            source: w.source_node_id,
+            source_pin: match w.source_pin_id {
+                Some(id) => format!("field{}", id),
+                None => pin_label(&w.source_pin),
+            },
+            depth: w.source_scope_depth,
+        })
+        .collect()
+}
+
+/// Every wire of every local network keyed by **position** — argument index
+/// and source pin index. Across an operation that must not move anything
+/// (a name freezing: its node keeps its arguments exactly, §8), this is the
+/// strictest comparison: nothing may differ at all.
+pub fn positional_ledger(d: &StructureDesigner) -> BTreeSet<WireEntry> {
+    fn walk(name: &str, net: &NodeNetwork, scope: &[u64], out: &mut BTreeSet<WireEntry>) {
+        for node in net.nodes.values() {
+            let args = node
+                .arguments
+                .iter()
+                .enumerate()
+                .map(|(i, a)| (Slot::Pos(i), a));
+            let zone = node
+                .zone_output_arguments
+                .iter()
+                .enumerate()
+                .map(|(i, a)| (Slot::ZoneOut(i), a));
+            for (slot, arg) in args.chain(zone) {
+                for w in &arg.incoming_wires {
+                    out.insert(WireEntry {
+                        network: name.to_string(),
+                        scope: scope.to_vec(),
+                        dest: node.id,
+                        slot: slot.clone(),
+                        source: w.source_node_id,
+                        source_pin: pin_label(&w.source_pin),
+                        depth: w.source_scope_depth,
+                    });
+                }
+            }
+            if let Some(body) = node.zone.as_deref() {
+                let mut child = scope.to_vec();
+                child.push(node.id);
+                walk(name, body, &child, out);
+            }
+        }
+    }
+    let registry = &d.node_type_registry;
+    let mut out = BTreeSet::new();
+    for (name, network) in &registry.node_networks {
+        if registry.library_links.mount_containing(name).is_none() {
+            walk(name, network, &[], &mut out);
+        }
+    }
+    out
 }
 
 /// Wires into or out of a frozen node, or inside a frozen HOF's body — the

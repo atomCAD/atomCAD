@@ -25,6 +25,7 @@ pub(crate) fn remount(registry: &mut NodeTypeRegistry, spec: &ImportSpec) {
     let mut stack = vec![canonical];
     library_links::mount_library(registry, spec, &host_path, &mut stack);
     library_links::validate_all_networks(registry);
+    crate::library_refresh::rebuild_data_watches(registry);
 }
 
 /// Removes the mount and everything under it, moves the active network off
@@ -48,6 +49,7 @@ pub(crate) fn detach(
         *active_network_name = local.first().map(|s| (*s).clone());
     }
     library_links::validate_all_networks(registry);
+    crate::library_refresh::rebuild_data_watches(registry);
 }
 
 fn spec_of(mount: &LibraryMount) -> ImportSpec {
