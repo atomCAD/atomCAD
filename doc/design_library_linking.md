@@ -57,11 +57,12 @@ is what you want.
   "major version in the import path", with zero machinery). Git holds the
   history within a file.
 - **No deduplication across mounts.** If two libraries both link `common.cnnd`,
-  it is mounted twice under two names (§4.4). Correct, simple, slightly wasteful.
+  it is mounted twice under two names (D4). Correct, simple, slightly wasteful.
 - **Several open, editable documents** — separate design (§12). Editing a
   library here means opening the library file.
-- **Absolute paths, URLs, search paths.** Only paths relative to the importing
-  file.
+- **Absolute library paths, URLs, search paths.** A library is linked by a path
+  relative to the importing file (D6). (Data files may keep absolute paths;
+  they are treated as external, D8.)
 - **Output-pin identity across versions.** Output pins have no stable id
   (`OutputPinDefinition.id` exists only for record destructure). A library that
   *reorders* a network's output pins will mis-wire host consumers of pins ≥ 1
@@ -85,7 +86,7 @@ is what you want.
   file…* (retarget), *Unlink*. *File > Refresh all dependencies* refreshes every
   library and data file.
 - A dependency changed on disk is **refreshed automatically** — when the window
-  regains focus, and by a light poll while it has focus (D7, D11). A snackbar
+  regains focus, and by a light poll while it has focus (D7, D10). A snackbar
   says what happened: "Refreshed demolib", or, if something was disconnected,
   "Refreshed demolib — 3 wires disconnected [Details] [Undo]". The refresh is
   one undo step.
@@ -93,7 +94,7 @@ is what you want.
   kept, the host's instances of it show errors, and nothing is deleted.
 - **Save As** into another folder lists the libraries and data files the design
   depends on and offers to copy them so every relative path still works
-  (D12). *File > Export project bundle…* zips the design together with
+  (D11). *File > Export project bundle…* zips the design together with
   everything it depends on.
 
 ## 4. Core model (decisions)
@@ -183,8 +184,8 @@ Save writes: local networks, local record defs, local folders, local
 `cli_access_rules`, and the **import list**. It never writes anything under a
 mount path. Consequences:
 
-- Any accidental in-memory mutation of linked content is **not persisted** and
-  disappears on the next refresh — defense in depth behind §6.
+- Any accidental in-memory mutation of linked content is **never saved** and is
+  gone at the next refresh or reopen — defense in depth behind §6.
 - Only *direct* links are written; transitive ones are the library's business.
 
 ### D6 — Relative paths never change meaning
@@ -197,25 +198,25 @@ folders can share one `libs/` folder next to them.
   exactly as it was authored. There is no silent re-pointing.
 - **Absolute paths are not allowed for libraries.** A library on another drive
   (Windows), where no relative path exists, cannot be linked; the link dialog
-  offers to copy it next to the host instead.
-- On disk the path is lexically normalized when the link is created
+  offers to copy it (with its own dependencies) next to the host instead (P5).
+- The stored path is lexically normalized once, when the link is created
   (`libs/../x.cnnd` → `x.cnnd`); a path that climbs above the filesystem root is
   refused.
 
 The invariant is: **a file and all of its dependencies form a fixed relative
 layout.** Whatever moves the file must move that layout with it, which is what
-the Save As dependency copy (D12) does. The smallest folder containing the file
-and every dependency is self-contained; *Export project bundle* (D12) zips
+the Save As dependency copy (D11) does. The smallest folder containing the file
+and every dependency is self-contained; *Export project bundle* (D11) zips
 exactly that folder.
 
 Rejected alternative: banning `..` so that a file's folder is always
 self-contained. It forces a flat `libs/` inside each project and makes sharing a
-library across projects impossible without copying it into each one. D12 keeps
+library across projects impossible without copying it into each one. D11 keeps
 the property that matters (paths keep their meaning) without that cost.
 
 ### D7 — Change detection
 
-**What is watched: the dependency list** — the same transitive list D12 uses
+**What is watched: the dependency list** — the same transitive list D11 uses
 for Save As: every linked library (direct and nested) and every relative or
 absolute data-file path stored in node data of the host and of every library.
 Data files matter too: `import_xyz` and friends read their file once at load
@@ -241,12 +242,17 @@ again on the next focus.
   libraries, a cloud sync, or a `git pull` finishing in the background does not
   produce a focus event. Stat-ing a handful of files is trivial; only if
   `mtime` or `size` moved is the file re-hashed;
-- after every save;
-- **on open**: the host file stores the hash of each direct import (`hash`
+- **after Save As to another folder**: the host's folder changed, so every
+  relative path now resolves to a new absolute location (the copied file, an
+  existing one kept on conflict, or nothing). Rust re-resolves all watched paths
+  and checks; a kept, different file is refreshed like any other change, a
+  missing one goes `Missing` (D10);
+- **on open**: the host file stores the hash of each **direct** import (`hash`
   field) as of its last save. If the library on disk differs, the host opens
   with the current file and the open report says "demolib changed since this
   file was last saved", with the call-site repair report (§7.2) — exactly what
-  an automatic refresh would have reported.
+  an automatic refresh would have reported. Nested libraries and data files
+  have no stored hash; they are simply loaded as they are.
 
 The check is skipped while a drag, a text edit, or a modal dialog is active and
 runs at the next idle moment.
@@ -259,10 +265,11 @@ re-hash unconditionally) are the answer for that case and for any doubt.
 
 ### D8 — Relative file paths *inside* library networks resolve against the library
 
-File-reading nodes resolve relative paths at **eval** time against
-`registry.design_file_name`, i.e. the host file — `import_xyz.rs:63`,
-`import_cif.rs:137`, `import_cube.rs:200`, `export_atoms.rs:84`,
-`build_script.rs:150`, `mechanosynth.rs:456`, `ops_library.rs:172`. (Their
+File-using nodes — the readers and the two exporters — resolve relative paths
+at **eval** time against `registry.design_file_name`, i.e. the host file:
+`import_xyz.rs:63`, `import_cif.rs:137`, `import_cube.rs:200`,
+`build_script.rs:150`, `mechanosynth.rs:456`, `ops_library.rs:172`,
+`export_atoms.rs:84`, `export_build_script.rs:104`. (Their
 *load-time* data loaders already use the file's own `design_dir`, so load and
 eval would disagree.) A library in `libs/` with `import_xyz("tip.xyz")` would
 read `host_dir/tip.xyz`.
@@ -270,17 +277,17 @@ read `host_dir/tip.xyz`.
 Fix: one helper, `base_dir_for_eval(network_stack, registry) -> Option<String>`,
 which finds the innermost frame that is a *network* (zone-body frames belong to
 their owning network), takes its name, and returns the directory of the mount
-containing it — or the host directory for a local network. The seven sites
+containing it — or the host directory for a local network. The eight sites
 switch to it. This is a real phase of work (P2), not an afterthought.
 
-**Data files follow the same path rules as libraries** (D6, D12), with one
+**Data files follow the same path rules as libraries** (D6, D11), with one
 difference: absolute paths stay allowed for them and are treated as
 **external** (never copied, listed separately). Today's behaviour already fits:
 node data stores `file_name` as authored; a relative name is written back
 verbatim, and the file picker's absolute path is made relative only when the
 file is under the design folder (`try_make_relative`), otherwise it stays
 absolute. What is missing is the other half — Save As does not move the files
-a relative path points at, so it silently breaks them. D12 fixes that for data
+a relative path points at, so it silently breaks them. D11 fixes that for data
 files and libraries together.
 
 Paths that arrive through a **wire** (a `String` computed by the network) are
@@ -308,11 +315,12 @@ dialog says so when the file contains such a node.
   Undo swaps the old content and the old call sites back; redo swaps the new
   ones in. Earlier commands stay consistent because undoing past a refresh
   always undoes the refresh first — they are replayed against the interface
-  they were recorded against. Undo marks the mount `OlderThanDisk` in the
-  panel (memory is older than the disk) but, by D7's `last_seen` rule, does not
-  trigger another automatic refresh; *Refresh* brings it forward again.
+  they were recorded against. Undo leaves memory older than the disk: the
+  affected mounts get status `OlderThanDisk` (a marker in the panel), and, by
+  D7's `last_seen` rule, no automatic refresh follows; *Refresh* or *Refresh all
+  dependencies* brings them forward again.
 
-### D11 — Refresh everything that changed, automatically
+### D10 — Refresh everything that changed, automatically
 
 Every detected change is refreshed immediately — there is no "safe / unsafe"
 classification and no pending state. This is what editors do with a file
@@ -337,10 +345,11 @@ refreshes it normally.
 
 Retarget (*Change file…*) is the same command with a different source file.
 
-### D12 — Save As copies dependencies into the same relative layout
+### D11 — Save As copies dependencies into the same relative layout
 
-When **Save As** targets a different folder and the file has relative
-dependencies, a dialog appears before anything is written.
+When **Save As** targets a different folder and at least one relative
+dependency would need copying or conflicts, a dialog appears before anything is
+written (details below).
 
 **What counts as a dependency** (collected transitively by Rust):
 
@@ -392,10 +401,10 @@ of the file plus those dependencies with their paths relative to that folder.
 Unzipping anywhere reproduces the layout. External files are not included; the
 command lists them. This is the answer to "send me the file to debug".
 
-Saving a **library** opened as its own document is the same operation — D12
+Saving a **library** opened as its own document is the same operation — D11
 does not care whether the file is a host or a library.
 
-### D10 — File format
+### D12 — File format
 
 Add one top-level field to `SerializableNodeTypeRegistryNetworks`:
 
@@ -466,13 +475,15 @@ pub struct LibraryLinks {
 - **Save**: filter by `mount_containing(name).is_none()` for networks, record
   defs, folders and CLI rules; write `imports` from direct mounts, with fresh
   hashes; paths written verbatim (D6).
-- **Dependencies** (`file_dependencies.rs`, D12): `collect_file_dependencies(target_dir)`
+- **Dependencies** (`file_dependencies.rs`, D11): `collect_file_dependencies(target_dir)`
   (transitive: imports + relative data-file paths of host and libraries, with
   per-entry target path and status), `save_as_with_dependencies(path, choice)`
-  (copy then write, all-or-nothing), `export_project_bundle(zip_path)`. The
-  data-file paths come from one registry of the file-reading node kinds (a
-  `file_paths(&self) -> Vec<&str>` method on `NodeData`, default empty), so a
-  new file-reading node is picked up by overriding one method.
+  (copy then write, all-or-nothing), `export_project_bundle(zip_path)`. Data-file
+  paths are reported by the nodes themselves through a
+  `file_paths(&self) -> Vec<&str>` method on `NodeData` (default: none), so a
+  new file-reading node is picked up by overriding one method. The same module
+  keeps the watch state for data files (`FileStamp` `loaded` / `last_seen`, D7);
+  libraries keep theirs on `LibraryMount`.
 - **Read-only guard** (§6), **refresh + call-site remap** (§7), **eval base dir**
   (D8), **check-on-disk** (D7).
 
@@ -485,10 +496,11 @@ there):
 | Function | Returns |
 |---|---|
 | `link_library(path: String, alias: String)` | `APIResult` (validates alias, path, cycle) |
+| `link_library_copying(path, target_rel_path, alias)` | `APIResult` — copies a file that has no relative path (another drive) plus its dependencies next to the host, then links it (D6) |
 | `unlink_library(alias)` | `APIResult` (refused with the list of users if used) |
 | `retarget_library(alias, path)` | `APIRefreshReport` |
 | `refresh_library(mount_path)` / `refresh_all_dependencies()` | `APIRefreshReport` (re-hash unconditionally) |
-| `check_dependencies()` | `Option<APIRefreshReport>` — stats every watched file (D7), refreshes whatever changed in one undoable command (D11); `None` if nothing changed |
+| `check_dependencies()` | `Option<APIRefreshReport>` — stats every watched file (D7), refreshes whatever changed in one undoable command (D10); `None` if nothing changed |
 | `get_linked_libraries()` | `Vec<APILibraryMount>` (no disk access) |
 | `take_load_library_report()` | report from the last file open (like `take_load_param_id_repairs`) |
 | `collect_file_dependencies(target_path)` | `APIDependencyPlan { entries: Vec<APIDependency { source_abs, target_abs, rel_path, kind: Library\|DataFile, group: Inside\|Outside\|External, status: WillCopy\|AlreadyThere\|Conflict }>, has_wired_paths }` |
@@ -520,7 +532,7 @@ Presentation and triggers only; no path logic, no hashing, no name rewriting.
   `refreshAllDependencies`, `checkDependencies`; `mountFor(name)` Dart twin of
   the prefix test (in `namespace_utils.dart`, next to `nameIsTaken`).
 - **Change triggers** (D7): an `AppLifecycleListener` (`onResume`), a ~2 s
-  `Timer.periodic` while the window has focus, and a call after save — each
+  `Timer.periodic` while the window has focus, and a call after Save As — each
   calls `checkDependencies()`. Rust decides and refreshes; Flutter only shows
   the result: `refreshFromKernel()`, then the transient snackbar for a clean
   report or the persistent one with *Details* / *Undo* otherwise. Checks are
@@ -544,10 +556,11 @@ Presentation and triggers only; no path logic, no hashing, no name rewriting.
 - **Dialogs**: *Link library…* (file picker with a new `FileDialogPurpose`
   variant — do not change existing `key()` strings — then an alias field with
   `validateUserName` + `mountFor`/`nameIsTaken` checks), *Change file…*,
-  refresh report (dropped wires and removed networks, each navigable). All draggable dialogs, errors via `showErrorSnackBar`.
+  refresh report (dropped wires and removed networks, each navigable). All
+  dialogs draggable; errors via `showErrorSnackBar`.
 - **Save As**: before saving to a different folder, call
   `collectFileDependencies`; if any entry is *will copy* or *conflict*, show the
-  D12 dialog (three groups, full target paths for the outside group), then
+  D11 dialog (three groups, full target paths for the outside group), then
   `saveAsWithDependencies`. Otherwise save as today. *Export project bundle…*
   in the File menu uses a save-file picker for the `.zip`.
 - **Open library file**: Flutter-only — `_confirmDiscardChanges()` then
@@ -623,8 +636,9 @@ All changed files found by one check are handled by one
    **old interface**: `node_type.parameters` (with `param_id`s) and output pins.
 2. Detach everything under the mount path from the registry (networks, record
    defs, folders, nested mounts) and **keep it in the command** (D9).
-3. Mount again (for retarget: from the new path). Changed host data files: the
-   node data is kept in the command and the file re-read.
+3. Mount again (for retarget: from the new path). A changed data file used by
+   a library refreshes that library's mount; a changed data file used by the
+   host keeps its node data in the command and re-reads the file.
 4. For each re-mounted network whose interface changed, snapshot the host call
    sites, then run the identity-based call-site repair on them:
    `repair_call_sites_for_network` (`network_validator.rs:279`, today private
@@ -635,8 +649,8 @@ All changed files found by one check are handled by one
    sites again after.
 5. Collect every wire the repair dropped into the report.
 6. Validate everything in dependency order; push the command (never clear the
-   undo stack); set dirty (the host now pins a different library hash); full
-   refresh.
+   undo stack); set dirty if a call site was repaired or a direct import's hash
+   changed (the host now pins a different library); full refresh.
 
 ### 7.2 Report
 
@@ -644,7 +658,7 @@ Dropped wires (parameter gone, or the retype makes the wire incompatible →
 kept but flagged by validation, consistent with the existing repair), networks
 that disappeared (host instances now show "Unknown node type"), and mount
 status changes. A clean report → transient snackbar; otherwise a persistent
-snackbar whose *Details* opens a dialog with navigable rows (D11).
+snackbar whose *Details* opens a dialog with navigable rows (D10).
 
 ### 7.3 Known limitation
 
@@ -674,7 +688,7 @@ elsewhere keep today's behaviour).
 | Names shift from files to namespaces | Mount folders show the file; thumbnails (#84) are separate |
 | Library depending on its user | Impossible: a library file never sees its importers; linked content is read-only |
 | Renaming someone else's library | Not possible in the importer; write a local wrapper network |
-| Monster all-in-one file for debugging | Files stay separate; *Export project bundle* zips the file with every dependency (D12), or vendor (§10) when one file is needed |
+| Monster all-in-one file for debugging | Files stay separate; *Export project bundle* zips the file with every dependency (D11), or vendor (§10) when one file is needed |
 | Swap demolib underneath | Retarget the alias (§7) |
 | Fragile wires on swap | Call sites repaired by `param_id` (§7.1); limitation on output pins (§7.3) |
 
@@ -753,7 +767,7 @@ Tests (`library_links_test.rs`):
 
 Work: `name_in_mount` in the namespace checks; `ensure_editable` + checked
 scope accessors; `ai_text_edit` guard; view-state paths don't dirty on linked
-networks; `base_dir_for_eval` and the seven file-reading call sites; non-blocking
+networks; `base_dir_for_eval` and the eight file-using call sites; non-blocking
 "transitive library" warning; `mount_fingerprint`.
 
 Tests (`library_links_readonly_test.rs`):
@@ -781,7 +795,7 @@ Tests (`library_links_readonly_test.rs`):
 ### Phase 3 — Change detection, refresh, retarget (Rust only)
 
 Work: `FileStamp` with `loaded` / `last_seen`; the watched list (libraries plus
-data files, from the D12 collector — the collector moves forward into this
+data files, from the D11 collector — the collector moves forward into this
 phase, the Save As dialog stays in P5); `check_dependencies`; stored-hash
 comparison on open; `RefreshDependenciesCommand` (§7.1) with
 `repair_call_sites_for_network` made `pub(crate)` and driven with captured
@@ -853,7 +867,8 @@ Work: `NodeData::file_paths` for the file-reading nodes (`import_xyz`,
 `import_cif`, `import_cube`, `build_script`, `mechanosynth`, `ops_library`;
 `export_atoms` / `export_build_script` write outputs and are not dependencies);
 `file_dependencies.rs` (collection, target computation, status, copy-then-write,
-bundle); API functions; the Flutter Save As dialog and *Export project bundle…*.
+bundle, `link_library_copying`); API functions; the Flutter Save As dialog,
+*Export project bundle…*, and the copy-in offer of the link dialog.
 
 Fixture layout for this phase (built in a `TempDir`): `ws/proj1/host.cnnd`
 linking `../libs/demolib.cnnd` and `libs_local/b.cnnd`; `ws/libs/demolib.cnnd`
@@ -882,11 +897,18 @@ Tests (`file_dependencies_test.rs`):
 - All-or-nothing: make one copy fail (read-only target file) → host not written,
   error names the file, already-copied files left in place and reported.
 - `has_wired_paths` set when a file-reading node's path pin is wired.
+- After Save As, watched paths are re-resolved against the new folder: a
+  *keep existing* conflict with different content is refreshed (one command,
+  report); *Save without dependencies* leaves the mounts `Missing`.
+- `link_library_copying`: a library (with a data file and a nested link) from a
+  second temp root is copied next to the host and linked; paths inside it are
+  unchanged.
 - Bundle: zip root is `ws/`; unzip into an empty temp dir; the host opens with
   every mount `Loaded` and evaluates identically; the external CIF is reported
   and absent.
 - Manual walkthrough: the dialog's three groups, the conflict choice, the
-  full-path display for *Outside* entries.
+  full-path display for *Outside* entries, the copy-in offer when linking a file
+  from another drive.
 
 ### Phase 6 — CLI, vendoring, documentation
 
@@ -929,19 +951,19 @@ shared by absolute path rather than duplicated per importer. Mount-by-prefix
 (D1) can stay: the prefix is a presentation of ownership, and names inside a
 library file never contain it.
 
-## 13. Resolved questions (2026-09-28)
+## 13. Resolved questions
 
-1. **Dotted aliases** — allowed (`libs.demolib`); rules in D3.
-2. **Camera / canvas state of library networks** — a library file saves its own
+1. **Dotted aliases (2026-09-28)** — allowed (`libs.demolib`); rules in D3.
+2. **Camera / canvas state of library networks (2026-09-28)** — a library file saves its own
    view state as any `.cnnd` does; when linked, that state is ignored on mount
    and browsing changes are session-only (§5.4).
 3. **Refreshing changed dependencies (revised 2026-09-29)** — everything that
    changed is refreshed automatically (focus, poll, save, open), as one undoable
    step with a report; manual *Refresh* per mount and *Refresh all
    dependencies*. The earlier safe/unsafe classification was dropped as too
-   complex for implementers and users alike (D7, D9, D11).
+   complex for implementers and users alike (D7, D9, D10).
 4. **Paths and moving files (2026-09-29)** — relative paths may use `..` and
    are never rewritten; Save As copies dependencies (libraries and data files)
    into the same relative layout around the new location, via a dialog; absolute
    paths are refused for libraries and treated as external for data files;
-   *Export project bundle* zips the file with its dependencies (D6, D12).
+   *Export project bundle* zips the file with its dependencies (D6, D11).
