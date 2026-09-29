@@ -1443,6 +1443,20 @@ interfaces; host data-file refresh through a `NodeData` hook that re-reads the
 cached file content; the report. Before starting: settle §7.3's function-value
 question.
 
+**Unfreezing must drop the recorded layout (found in P2).** A frozen
+*instance* carries its recorded layout (§13 item 6) as its cached
+`custom_node_type`, and `get_node_type_for_node` consults that cache **before**
+the network's own type. On a fresh open this never matters — a name that
+resolves is not frozen, so nothing installs a layout. But when a refresh or
+retarget makes a frozen name resolve again in the same session, the stale
+recorded layout would silently shadow the network's real interface. The
+unfreeze step must therefore clear an instance's `custom_node_type` and then
+reconcile its arguments from the recorded interface to the live one (step 5 of
+§7.1) — a by-name rebuild alone is not enough. Record nodes are not affected:
+their cache is rebuilt from the live def as soon as it resolves. The
+frozen-node matrix's unfreeze cases cover this: after unfreezing,
+`get_node_type_for_node` must return the network's own type.
+
 Tests (`library_links_refresh_test.rs`, all in temp dirs). **Every test below
 runs O2 (wire ledger) and O3 (disk tripwire), and every test that pushes a
 command runs O5 (undo inverse)** — the bullets state only what is specific to
