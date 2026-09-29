@@ -89,7 +89,10 @@ is what you want.
   regains focus, and by a light poll while it has focus (D7, D10). A snackbar
   says what happened: "Refreshed demolib", or, if something was disconnected,
   "Refreshed demolib — 3 wires disconnected [Details] [Undo]". The refresh is
-  one undo step.
+  one undo step. While there is something to redo, the refresh is **held**
+  instead, so it cannot wipe the redo history: the mount shows an "older than
+  disk" marker and applies the change after the next edit (or at once on
+  *Refresh*).
 - A missing or unreadable library shows the **red error badge**; the import is
   kept, the host's instances of it show errors, and nothing is deleted.
 - **Save As** into another folder lists the libraries and data files the design
@@ -187,6 +190,10 @@ mount path. Consequences:
 - Any accidental in-memory mutation of linked content is **never saved** and is
   gone at the next refresh or reopen — defense in depth behind §6.
 - Only *direct* links are written; transitive ones are the library's business.
+  (A host reference *into* a transitive mount is still recorded, in the direct
+  import's `uses` table — D13.)
+- Each import carries the interfaces the host is wired against (`uses`, D13),
+  taken from memory, not from disk.
 
 ### D6 — Relative paths never change meaning
 
@@ -247,12 +254,16 @@ again on the next focus.
   existing one kept on conflict, or nothing). Rust re-resolves all watched paths
   and checks; a kept, different file is refreshed like any other change, a
   missing one goes `Missing` (D10);
-- **on open**: the host file stores the hash of each **direct** import (`hash`
-  field) as of its last save. If the library on disk differs, the host opens
-  with the current file and the open report says "demolib changed since this
-  file was last saved", with the call-site repair report (§7.2) — exactly what
-  an automatic refresh would have reported. Nested libraries and data files
-  have no stored hash; they are simply loaded as they are.
+- **on open**: the host always opens with the libraries as they are on disk
+  now, and **reconciles its wiring against the interfaces it recorded at its
+  last save** (`uses`, D13) — the §7.1 procedure with the old interface read
+  from the file instead of captured from memory. If an interface changed, the
+  open report carries the same repair report (§7.2) a refresh would have
+  produced. If only the content changed (`hash` differs, interfaces equal), it
+  says "demolib changed since this file was last saved". Nested libraries
+  reconcile against *their* recorded `uses` the same way, in memory, at mount
+  time. Data files have no recorded state; they are simply loaded as they are.
+  Opening is not an undo step — there is no "before" to go back to.
 
 The check is skipped while a drag, a text edit, or a modal dialog is active and
 runs at the next idle moment.
@@ -302,28 +313,57 @@ dialog says so when the file contains such a node.
   *current* content — acceptable, and stated in the command's doc comment.)
 - **Refresh** (automatic or manual) and **Retarget** are **one undoable step
   each** — `RefreshDependenciesCommand`. The undo stack is never cleared by
-  them. The command holds:
+  them, and an automatic one never truncates the redo tail (below). The command holds:
   - for each refreshed mount, the **previously mounted content** (the networks,
     record defs, folders and nested mounts that were under the mount path — it
     is already in memory, it is simply kept instead of dropped) and the new
     content;
   - for each refreshed host data file, the node data before and after
     (like `SetNodeDataCommand`);
-  - **snapshots of the host call sites** the repair touched (§7.1 step 4), before
-    and after.
+  - each refreshed mount's `stored_uses` before and after (§7.1 step 1), so a
+    save after undo or redo records the interfaces the host is wired against
+    in that state (D13);
+  - **snapshots of every host network that refers to the mount** (§7.1 steps 2
+    and 7), before the re-mount and after validation — including those whose
+    referenced network or record def disappeared.
 
-  Undo swaps the old content and the old call sites back; redo swaps the new
-  ones in. Earlier commands stay consistent because undoing past a refresh
+  Undo swaps the old content and the old host networks back; redo swaps the
+  new ones in. Earlier commands stay consistent because undoing past a refresh
   always undoes the refresh first — they are replayed against the interface
   they were recorded against. Undo leaves memory older than the disk: the
   affected mounts get status `OlderThanDisk` (a marker in the panel), and, by
   D7's `last_seen` rule, no automatic refresh follows; *Refresh* or *Refresh all
   dependencies* brings them forward again.
+- **An automatic refresh never destroys redo history.** Pushing a command
+  truncates the redo tail (`UndoStack::push`), and a refresh cannot be slotted
+  in *before* the redo tail either: the redoable commands were recorded against
+  the old interface. So while the redo tail is **non-empty**, a detected change
+  is **held**, not applied: the mount gets status `ChangedOnDisk` (the same
+  neutral marker as `OlderThanDisk`, click = *Refresh*), and a transient
+  snackbar says "demolib changed on disk — refresh held while redo is
+  available [Refresh]". A held change does **not** advance `last_seen` (D7), so
+  it stays detected. The hold ends by itself: the next command the user pushes
+  truncates the redo tail anyway, and the next check (poll or focus) finds the
+  change still pending and applies it normally. Undoing further while a change
+  is held keeps it held. An explicit *Refresh* / *Refresh all dependencies* / *Retarget* is
+  a user action like any edit and truncates the redo tail as edits do. This is
+  the one exception to D10's "no pending state", and it is keyed on a fact Rust
+  already owns (`cursor < history.len()`), so there is no classification to get
+  wrong.
+- **Ctrl+Z can undo a refresh the user did not ask for.** An automatic refresh
+  is an ordinary entry in the history, so a user who presses Ctrl+Z to take
+  back their own last edit may take back the refresh instead. This is accepted
+  — an edit made *before* the refresh cannot be undone without undoing the
+  refresh first (the argument above) — and mitigated: the undo snackbar names
+  the command ("Undid: Refresh demolib"), and the mount then shows the
+  `OlderThanDisk` marker.
 
 ### D10 — Refresh everything that changed, automatically
 
 Every detected change is refreshed immediately — there is no "safe / unsafe"
-classification and no pending state. This is what editors do with a file
+classification and no pending state, with one exception keyed on the undo
+stack rather than on the change: while redo history exists, the refresh is
+held so that it does not destroy it (D9). This is what editors do with a file
 changed on disk when the buffer has no unsaved edits, and linked content can
 never have unsaved edits (it is read-only).
 
@@ -410,7 +450,7 @@ Add one top-level field to `SerializableNodeTypeRegistryNetworks`:
 
 ```json
 "imports": [
-  { "alias": "demolib", "path": "libs/demolib_v3.cnnd", "hash": "b3:…" }
+  { "alias": "demolib", "path": "libs/demolib_v3.cnnd", "hash": "b3:…", "uses": { … } }
 ]
 ```
 
@@ -422,6 +462,107 @@ open a linking host *without* its libraries and — on save — destroy it. Refu
 
 Files without imports serialize identically apart from the version number;
 fixtures and snapshots that pin the version string are updated once.
+
+Each import also carries a `uses` table — the interfaces the host is wired
+against (D13):
+
+```json
+"imports": [{
+  "alias": "demolib", "path": "libs/demolib_v3.cnnd", "hash": "b3:…",
+  "uses": {
+    "networks": {
+      "half_space": { "params":  [{ "id": 3, "name": "miller", "type": "IVec3" }],
+                      "outputs": [{ "name": "shape", "type": "Blueprint" }] },
+      "common.slab": { "params": [ … ], "outputs": [ … ] }
+    },
+    "records": {
+      "Miller": { "fields": [{ "id": 1, "name": "h", "type": "Int" }, … ] }
+    }
+  }
+}]
+```
+
+Keys are names **relative to the import's alias** (`half_space` means
+`demolib.half_space`; `common.slab` is a reference into a transitive mount,
+D4). Both maps are `BTreeMap`s and omitted when empty, so the output is
+deterministic. Types are written with the same `DataType` string form the
+file already uses for parameters.
+
+### D13 — The host records the interfaces it is wired against
+
+**The problem.** Wires are stored **positionally**: an `Argument` is a list of
+incoming wires and nothing else, and the serialized `SerializableParameter` has
+no `param_id`. Wires still survive interface edits today because of a
+self-check that only works inside one file: every network stores its own last
+known interface (`node_type.parameters`), and on load `check_interface_changed`
+(`network_validator.rs:445`) compares it with the network's actual parameter
+nodes and, on a difference, runs `repair_call_sites_for_network` (id first, name
+second) over every call site. The "old" interface is always there because the
+network and all its callers are in one file.
+
+Linking breaks that premise. The host calls networks whose stored interface
+lives in *another* file, and that file changes while the host is closed. With
+nothing to compare against, the host's positional arguments would be realigned
+by count alone (`repair_network_arguments`) — wires shift silently. The same
+holds for host `record_construct` / `record_destructure` / `product` nodes on a
+linked record def (their field-id matching in `set_custom_node_type` needs the
+previous pin layout, which a fresh load does not have), and one level down for
+a library's calls into its own imports. And the most common workflow hits it:
+*Open library file* replaces the document (§5.3), so "edit the library, go
+back to the host" is always a fresh open, never a refresh.
+
+**The decision.** The host stores, per import, the interface of every mounted
+network and record def it references — the `uses` table (D12) — and **opening
+is a refresh from the stored interface**. The one procedure of §7.1 serves
+both: a refresh captures the old interface from memory, an open reads it from
+the file; the repair and the report are shared.
+
+- **What is recorded.** Every name under the import's mount (direct *or*
+  transitive) that a host **local** node refers to — a custom-network instance
+  (`node_type_name`) or a record node (schema / target) — found by the same
+  reference walk as `unresolved_mount_ref` (§8), recursively into HOF bodies.
+  Networks record `params` (`param_id`, name, type) and `outputs` (name, type);
+  record defs record `fields` (`FieldId`, name, type). Named-record types used
+  only as *types* (a parameter typed `demolib.Miller`) need no entry: they carry
+  no wire position.
+- **Where the recorded interface comes from.** From the **in-memory** content
+  the host's wires have been reconciled against — never from the file on disk.
+  The invariant that makes this correct: after every load, refresh, undo and
+  redo, the host is wired against the in-memory interface of every mounted name
+  it resolves. So saving right after an undo of a refresh (`OlderThanDisk`)
+  records the *old* interface, and the next open repairs forward from it.
+- **Unresolved names carry over.** A name the host refers to that does not
+  currently resolve (mount `Missing`, or the name was dropped and the node is
+  frozen, §8) keeps the entry read from the file, verbatim. Mounts therefore
+  keep the `uses` they were loaded with (`LibraryMount.stored_uses`), and save
+  merges: resolved names from memory, unresolved names from `stored_uses`.
+  A missing library thus saves byte-identically (§8).
+- **The hash becomes a hint.** `hash` no longer decides anything about wiring;
+  it only lets the open report say "demolib changed since this file was last
+  saved" even when no interface changed (internal edits). It is the hash of
+  the **loaded** content, for the same reason as above.
+- **Nested libraries do the same.** A library file records `uses` for its own
+  imports; when `demolib.cnnd` is mounted and `common.cnnd` has changed since
+  demolib was last saved, demolib's calls into `common` are repaired **in
+  memory** at mount time, from demolib's own `uses`. Linked content is never
+  saved (D5), so this repair is recomputed identically on every load — until
+  someone opens and re-saves demolib.
+- **`param_id` stability is what makes this work** across versions:
+  `demolib_v3.cnnd` made by copying v2 keeps v2's ids, and a library edited in
+  place keeps its ids through renames and reorders (the F1 discipline of
+  `doc/design_parameter_wire_stability.md`). When ids are absent or were
+  re-assigned by the load-time duplicate-id heal
+  (`dedupe_param_ids_in_network`), matching falls back to names — the worst
+  case is a *dropped* wire, which is reported, never a wire moved to the wrong
+  pin.
+
+**Rejected alternative: a `param_id` on every stored argument.** It is the
+general fix, but it changes the serialized shape of every node, it is exactly
+the "identity-keyed wires" refactor `doc/design_parameter_wire_stability.md` §5
+parked for lack of justification, it covers neither record fields nor output
+pins by itself, and it bloats every local instance, which never needs it. D13
+extends the mechanism that already works to the one place its premise fails,
+and changes nothing for a file without imports.
 
 ## 5. Architecture: what lives where
 
@@ -442,10 +583,18 @@ pub struct LibraryMount {
     pub rel_path: String,            // as written by the importer
     pub abs_path: PathBuf,           // canonical
     pub parent: Option<String>,      // mount_path of the importing mount; None = direct
-    pub status: MountStatus,         // Loaded | OlderThanDisk | Missing | Error(String) | Cycle
+    pub status: MountStatus,         // Loaded | OlderThanDisk | ChangedOnDisk | Missing | Error(String) | Cycle
     pub loaded: Option<FileStamp>,   // (mtime, size, blake3) of the content in memory
     pub last_seen: Option<FileStamp>,// last observed on disk (D7)
-    pub stored_hash: Option<String>, // from the host file (direct mounts only)
+    pub stored_hash: Option<String>, // from the importing file (D13: a hint only)
+    pub stored_uses: UsedInterfaces, // `uses` read from the importing file (D13)
+}
+
+/// The interfaces an importing file is wired against, keyed by name relative
+/// to the import's alias. Serialized as the `uses` table (D12).
+pub struct UsedInterfaces {
+    pub networks: BTreeMap<String, UsedNetworkInterface>, // params (id, name, type) + outputs (name, type)
+    pub records: BTreeMap<String, UsedRecordInterface>,   // fields (FieldId, name, type)
 }
 
 pub struct LibraryLinks {
@@ -470,11 +619,26 @@ pub struct LibraryLinks {
   what misses record defs; do not copy it.)
 - **Load** (`load_node_networks_from_file`): after local networks are inserted,
   mount each import (status failures are recorded, never fatal); then
+  **reconcile** (`reconcile_used_interfaces`, D13): for every entry of each
+  mount's `stored_uses` whose name resolves and whose interface differs from
+  the mounted one, repair the file's **local** call sites and record nodes from
+  the stored interface to the current one (§7.1 step 5, same code). Then
   `StructureDesigner::load_node_networks` validates **everything** in dependency
-  order as today.
+  order as today. The same sequence runs inside every recursive mount, so a
+  library reconciles its own calls into its imports before it is prefixed.
+
+  **The order is load-bearing:** reconciliation must run after mounting and
+  **before** `repair_network_arguments` or any custom-node-type cache rebuild
+  with `refresh_args = true` — either of those realigns arguments by count and
+  leaves the id match nothing to work with. (Record nodes: install a previous
+  custom node type built from the stored fields — `Parameter { id: FieldId,
+  name, type }` — then rebuild with `refresh_args = true`, so
+  `set_custom_node_type`'s existing id-first matching moves the wires.)
 - **Save**: filter by `mount_containing(name).is_none()` for networks, record
-  defs, folders and CLI rules; write `imports` from direct mounts, with fresh
-  hashes; paths written verbatim (D6).
+  defs, folders and CLI rules; write `imports` from direct mounts, with the
+  hash of the loaded content and the `uses` table built by
+  `collect_used_interfaces` (D13: resolved names from memory, unresolved names
+  from `stored_uses`); paths written verbatim (D6).
 - **Dependencies** (`file_dependencies.rs`, D11): `collect_file_dependencies(target_dir)`
   (transitive: imports + relative data-file paths of host and libraries, with
   per-entry target path and status), `save_as_with_dependencies(path, choice)`
@@ -500,7 +664,7 @@ there):
 | `unlink_library(alias)` | `APIResult` (refused with the list of users if used) |
 | `retarget_library(alias, path)` | `APIRefreshReport` |
 | `refresh_library(mount_path)` / `refresh_all_dependencies()` | `APIRefreshReport` (re-hash unconditionally) |
-| `check_dependencies()` | `Option<APIRefreshReport>` — stats every watched file (D7), refreshes whatever changed in one undoable command (D10); `None` if nothing changed |
+| `check_dependencies()` | `Option<APIRefreshReport>` — stats every watched file (D7), refreshes whatever changed in one undoable command (D10) — or, while the redo tail is non-empty, holds it and reports it as `held` (D9); `None` if nothing changed or was newly held |
 | `get_linked_libraries()` | `Vec<APILibraryMount>` (no disk access) |
 | `take_load_library_report()` | report from the last file open (like `take_load_param_id_repairs`) |
 | `collect_file_dependencies(target_path)` | `APIDependencyPlan { entries: Vec<APIDependency { source_abs, target_abs, rel_path, kind: Library\|DataFile, group: Inside\|Outside\|External, status: WillCopy\|AlreadyThere\|Conflict }>, has_wired_paths }` |
@@ -510,9 +674,10 @@ there):
 `APILibraryMount { mount_path, alias, rel_path, abs_path, file_name, parent,
 direct, status, status_message }`; `APIRefreshReport { refreshed_mounts,
 refreshed_data_files, dropped_wires: Vec<APIDroppedWire { network, scope_path,
-node_id, pin_name, reason }>, removed_networks_in_use, errors }` — dropped
-wires are navigable, like validation errors. `is_clean()` decides between the
-transient and the persistent snackbar.
+node_id, pin_name, reason }>, removed_networks_in_use, frozen_nodes, held,
+errors }` — dropped wires and frozen nodes are navigable, like validation
+errors; `held` lists the changes not applied because redo history exists (D9).
+`is_clean()` decides between the transient and the persistent snackbar.
 
 Existing view types gain one field each:
 `APINetworkWithValidationErrors.read_only` and `NodeNetworkView.read_only`
@@ -535,14 +700,17 @@ Presentation and triggers only; no path logic, no hashing, no name rewriting.
   `Timer.periodic` while the window has focus, and a call after Save As — each
   calls `checkDependencies()`. Rust decides and refreshes; Flutter only shows
   the result: `refreshFromKernel()`, then the transient snackbar for a clean
-  report or the persistent one with *Details* / *Undo* otherwise. Checks are
+  report or the persistent one with *Details* / *Undo* otherwise, or the
+  "refresh held while redo is available [Refresh]" snackbar for a report that
+  is only `held` (shown once per newly held change, not on every poll). Checks are
   skipped while a drag, a text edit, or a modal dialog is active. There is no
   focus handling in `lib/` today; this is the first.
 - **Panel** (`node_networks_list/`): tree view renders a mount folder's label as
   `alias — file_name` (file name `AppTextStyles` small, dimmed); every row under
   a mount dimmed with a link icon; mount folders get the error badge
-  (`Missing` / `Error` / `Cycle`) and, after an undo of a refresh, a small
-  neutral "older than disk" marker whose click is *Refresh* — the badges go in
+  (`Missing` / `Error` / `Cycle`) and, after an undo of a refresh or while a
+  refresh is held (`OlderThanDisk` / `ChangedOnDisk`), a small neutral "older
+  than disk" marker whose click is *Refresh* — the badges go in
   `network_row_badges.dart` so list and tree share them. List view: link icon +
   dimmed text per row, file in the tooltip, badge per row. Context menus
   per §3. `_isValidDrop` refuses drops into a mount and drags of mounted rows;
@@ -630,34 +798,77 @@ mutating fails it.
 ### 7.1 Procedure (refresh and retarget alike)
 
 All changed files found by one check are handled by one
-`RefreshDependenciesCommand`:
+`RefreshDependenciesCommand`. Opening a file runs steps 4–6 of the same
+procedure, with the old interface read from the file's `uses` table instead of
+captured in step 1, and without the command (D7, D13).
 
-1. Capture, for every network under each affected mount (recursively), its
-   **old interface**: `node_type.parameters` (with `param_id`s) and output pins.
-2. Detach everything under the mount path from the registry (networks, record
+1. Capture the **old interface** of every name under each affected mount that
+   a host local node refers to, as a `UsedInterfaces` (D13) — the same
+   structure the file stores, built by the same `collect_used_interfaces`.
+   Write it into the mount's `stored_uses` too (the command keeps the previous
+   `stored_uses` for undo): a name this refresh drops must carry over the
+   interface its frozen nodes are actually wired against, not whatever the
+   file said at load time.
+2. **Snapshot the affected host nodes, before anything touches them.** The
+   affected set is every host node (in every local network, recursively into
+   HOF bodies) that refers to a name under an affected mount — an instance
+   (`node_type_name`) or a record node (schema / target) — found by the same
+   reference walk as `unresolved_mount_ref` (§8). Snapshotting *every* referring
+   node rather than only "call sites of a network whose interface changed" is
+   deliberate: which ones change is not known until after the re-mount, and
+   the ones whose target **disappears** are exactly the ones a
+   changed-interface filter would miss. The snapshot is per containing local
+   network, taken as its node map (cheap: only networks that reference the
+   mount).
+3. Detach everything under the mount path from the registry (networks, record
    defs, folders, nested mounts) and **keep it in the command** (D9).
-3. Mount again (for retarget: from the new path). A changed data file used by
+4. Mount again (for retarget: from the new path). A changed data file used by
    a library refreshes that library's mount; a changed data file used by the
    host keeps its node data in the command and re-reads the file.
-4. For each re-mounted network whose interface changed, snapshot the host call
-   sites, then run the identity-based call-site repair on them:
-   `repair_call_sites_for_network` (`network_validator.rs:279`, today private
-   and only triggered by an in-memory interface change) with the captured old
-   parameters and the new ones. It maps by `param_id` first, name second — which
-   is exactly right across versions, because `demolib_v3.cnnd` made by copying
-   v2 **keeps v2's `param_id`s** for surviving parameters. Snapshot the call
-   sites again after.
-5. Collect every wire the repair dropped into the report.
-6. Validate everything in dependency order; push the command (never clear the
-   undo stack); set dirty if a call site was repaired or a direct import's hash
-   changed (the host now pins a different library); full refresh.
+5. For each re-mounted name whose interface differs from the old one, run the
+   identity-based repair (`reconcile_used_interfaces`, shared with load):
+   instances through `repair_call_sites_for_network`
+   (`network_validator.rs:279`, today private and only triggered by an
+   in-memory interface change) with the old parameters and the new ones. It
+   maps by `param_id` first, name second — which is exactly right across
+   versions, because `demolib_v3.cnnd` made by copying v2 **keeps v2's
+   `param_id`s** for surviving parameters. Record nodes on a changed def are
+   repaired by the existing field-id matching of `set_custom_node_type`, given
+   a previous custom node type built from the old fields. Nodes whose target no
+   longer exists are frozen (§8), not repaired.
+
+   **The repair is restricted to the importing file's local networks.**
+   `repair_call_sites_for_network` today walks every parent found by
+   `find_parent_networks`, and in one registry that includes the linked
+   networks that call the refreshed network (`demolib.b` calling
+   `demolib.a`). Those were just re-mounted and are already wired against the
+   new interface; applying the old → new mapping to them again would corrupt
+   them. The function gains a parent filter (`mount_containing(parent) ==
+   the importing file's own mount`, i.e. `None` for the host).
+6. Collect every wire the repair dropped, and every frozen node, into the
+   report.
+7. Validate everything in dependency order, then **snapshot the affected host
+   networks again** — after validation, because validation-time repair is part
+   of what the refresh did to them. Push the command (D9 for when an automatic
+   refresh is held instead); set dirty if a host node changed, a recorded
+   interface changed, or a direct import's hash changed (the next save writes a
+   different `uses` / `hash`); full refresh. An open that reconciled anything
+   sets dirty for the same reason — not saving is harmless (the next open
+   repeats the same reconciliation from the same recorded interfaces), but the
+   title bar should say the file in memory is not the file on disk.
+
+Undo restores the step-2 snapshots and redo the step-7 ones, wholesale per
+network, so the round trip is exact whatever the repair and validation passes
+did in between.
 
 ### 7.2 Report
 
-Dropped wires (parameter gone, or the retype makes the wire incompatible →
+The report is the same whether it comes from a refresh or from an open
+(`take_load_library_report`). Dropped wires (parameter gone, or the retype makes the wire incompatible →
 kept but flagged by validation, consistent with the existing repair), networks
-that disappeared (host instances now show "Unknown node type"), and mount
-status changes. A clean report → transient snackbar; otherwise a persistent
+and record defs that disappeared (the host nodes referring to them are frozen,
+§8, and show "Unknown node type" / "Unknown record type"), and mount status
+changes. A clean report → transient snackbar; otherwise a persistent
 snackbar whose *Details* opens a dialog with navigable rows (D10).
 
 ### 7.3 Known limitation
@@ -665,21 +876,68 @@ snackbar whose *Details* opens a dialog with navigable rows (D10).
 Output pins are matched positionally. A library version that inserts or
 reorders a network's output pins mis-wires host consumers of pin ≥ 1. The
 report lists every host wire from an output pin ≥ 1 of a network whose output
-list changed, so it is visible, not silent. Real output-pin identity is P5 of
-`doc/design_identity_vs_naming.md`.
+list changed, so it is visible, not silent — on open as well as on refresh,
+because the recorded interface (D13) includes the output list. Real output-pin
+identity is P5 of `doc/design_identity_vs_naming.md`. (The recorded output
+*names* would also allow matching outputs by name, turning a reorder into a
+no-op and a rename into a reported drop; that is a possible later extension,
+not part of v1.)
+
+**To verify before Phase 3: function values.** An `apply` whose `f` is fed by
+a linked network's function pin (`-1`) or a `@network` capture derives its
+argument layout from that network's parameters. Whether a parameter reorder in
+the library mis-wires the `apply`'s `arg0…` wires — on refresh and on open
+alike — has not been checked. If it does, the recorded interface is the data
+the fix needs; the fix would extend `reconcile_used_interfaces` to those
+`apply` nodes.
 
 ## 8. Missing libraries must be lossless
 
 If `libs/demolib_v3.cnnd` is missing, the host must still open, show errors,
-and **save byte-identically** — the instance nodes of `demolib.*` and their
-wires must survive. This is the riskiest assumption in the design: load-time
-repair passes (`initialize_custom_node_types_for_network`,
-`repair_network_arguments`) have a history of truncating the arguments of nodes
-whose type they cannot resolve (see `serialization/AGENTS.md`, "Load pipeline &
-derived state"). **P1 starts with a red-first test for exactly this**, and if it
-fails, the fix is that argument-count repair skips nodes whose
-`node_type_name` is under a mount with a non-`Loaded` status (unknown types
-elsewhere keep today's behaviour).
+and **save byte-identically** — every host node that refers to `demolib.*` and
+its wires must survive. The same guarantee holds when a *loaded* library stops
+defining a name the host uses (a network or record def removed by a refresh or
+retarget, §7).
+
+Two kinds of host node refer to a mounted name, and they fail differently:
+
+- **Instances of a linked network** (`node_type_name == "demolib.half_space"`).
+  These are already safe: when the type does not resolve,
+  `repair_network_arguments` returns early and leaves `arguments` alone.
+- **Record nodes whose schema names a linked record def** — `record_construct`
+  / `record_destructure` (`schema`) and `product` (`target`) with
+  `"demolib.Miller"`. Their `node_type_name` is a built-in, so they resolve;
+  but `build_node_type_for_schema_with_defs` builds them with **zero
+  parameters** when the def is missing (`record_construct.rs`, the `else`
+  branch), and `repair_network_arguments` then **truncates their arguments to
+  zero**. Every wire into them is lost, on load and on refresh alike. This is
+  the real hazard.
+
+The rule: **a host node that refers to an unresolved name under a mount path is
+frozen** — its custom node type is not rebuilt, its `arguments` (and
+`zone_output_arguments`, `function_pin_roles`) are neither grown nor truncated,
+and wire repair does not disconnect its wires. It shows a blocking error
+("Unknown node type `demolib.x`" / "Unknown record type `demolib.Miller`") and
+cone-poisons as usual. "Refers to" is one predicate, `unresolved_mount_ref(node,
+registry) -> Option<String>`, which checks `node_type_name` **and** the record
+schema strings; "under a mount" is `mount_containing(name).is_some()`,
+**whatever the mount's status** (a `Loaded` mount whose new version dropped the
+name counts). Unknown names outside any mount keep today's behaviour.
+
+After a refresh a frozen node keeps its **last resolved** custom node type
+(already in memory), so it still draws with its pins. On load there is none; it
+is drawn the way an instance of an unknown network is drawn today, and P1
+checks that the view builder and the Flutter canvas tolerate
+`arguments.len()` greater than the pin count (wires into pins that are not
+drawn must not panic, and must survive save).
+
+Byte-identical save also covers the import entry itself: a `Missing` mount
+writes back its `hash` and its `uses` table exactly as read (`stored_hash`,
+`stored_uses`, D13), since there is no loaded content to derive them from.
+
+**P1 starts with a red-first test for exactly this**, using a host that has
+both an instance of `demolib.foo` *and* a `record_construct` on
+`demolib.Miller` with wired fields.
 
 ## 9. Mapping to mechadense's concerns
 
@@ -690,7 +948,7 @@ elsewhere keep today's behaviour).
 | Renaming someone else's library | Not possible in the importer; write a local wrapper network |
 | Monster all-in-one file for debugging | Files stay separate; *Export project bundle* zips the file with every dependency (D11), or vendor (§10) when one file is needed |
 | Swap demolib underneath | Retarget the alias (§7) |
-| Fragile wires on swap | Call sites repaired by `param_id` (§7.1); limitation on output pins (§7.3) |
+| Fragile wires on swap | Call sites repaired by `param_id` on refresh (§7.1) and on reopen, from the recorded interfaces (D13); limitation on output pins (§7.3) |
 
 ## 10. Existing copy import and vendoring
 
@@ -726,11 +984,24 @@ value; `cycle_x.cnnd` ↔ `cycle_y.cnnd`; `self_link.cnnd`;
 Work: `library_links.rs` (`LibraryMount`, `LibraryLinks`, `mount_containing`,
 mount/unmount), registry field, prefix batch-rename, recursive load with cycle
 stack, save filtering + `imports` field (paths verbatim, normalized at link time), version 9,
-`link_library`/`unlink_library` in `StructureDesigner` with undo commands.
+`link_library`/`unlink_library` in `StructureDesigner` with undo commands,
+`unresolved_mount_ref` and the frozen-node rule of §8 in the load-time and
+validation-time repair passes; the `uses` table (D12/D13) —
+`UsedInterfaces`, `collect_used_interfaces`, `stored_uses` read on load and
+carried over on save. *Using* it on open (reconciliation) is Phase 3, where it
+shares the refresh code; until then an open with a changed library is known to
+realign by position, which no user sees before Phase 4.
 
 Tests (`library_links_test.rs`):
-- **Red-first**: `host_missing.cnnd` loads, reports `Missing`, and
-  load → save is byte-identical (instance nodes and their wires intact) (§8).
+- **Red-first**: `host_missing.cnnd` — which has an instance of the missing
+  library's network **and** a `record_construct`, a `record_destructure` and a
+  `product` on one of its record defs, all with wired pins, one of them inside
+  a HOF body — loads, reports `Missing`, and load → save is byte-identical
+  (every such node and its wires intact) (§8).
+- Frozen-node predicate: `unresolved_mount_ref` fires for an unknown
+  `node_type_name` under a mount and for a record schema under a mount, for
+  every mount status; an unknown name *outside* any mount keeps today's
+  behaviour (arguments realigned).
 - Mount prefixes networks, record defs, folders; internal references rewritten
   including inside zone bodies, `Named` record refs, and
   `record_construct`/`record_destructure`/`product` schema strings.
@@ -744,6 +1015,14 @@ Tests (`library_links_test.rs`):
 - Save round-trip: saved host contains no `a.*`/`b.*` networks, record defs, or
   folders; `imports` sorted, relative, forward slashes; load → save → load is
   stable.
+- `uses` table: lists exactly the names host local nodes refer to (instances
+  and record nodes, including inside HOF bodies, including a reference into
+  `a.common`), keyed relative to the alias, with `param_id`s / `FieldId`s,
+  sorted; a name referred to only as a parameter *type* is not listed; a host
+  with no references to a mount writes no `uses` for it; `lib_a.cnnd` saved on
+  its own records its `uses` of `common`.
+- `uses` carry-over: on `host_missing.cnnd` the `uses` table and `hash` are
+  written back byte-identically.
 - Paths verbatim: `../libs/x.cnnd` survives load → save → Save As unchanged;
   link-time normalization (`libs/../x.cnnd` → `x.cnnd`); absolute path and a
   path climbing above the root → `Err`.
@@ -796,11 +1075,15 @@ Tests (`library_links_readonly_test.rs`):
 
 Work: `FileStamp` with `loaded` / `last_seen`; the watched list (libraries plus
 data files, from the D11 collector — the collector moves forward into this
-phase, the Save As dialog stays in P5); `check_dependencies`; stored-hash
-comparison on open; `RefreshDependenciesCommand` (§7.1) with
-`repair_call_sites_for_network` made `pub(crate)` and driven with captured
+phase, the Save As dialog stays in P5); `check_dependencies`;
+`reconcile_used_interfaces` (D13), run on open before any argument-count
+repair and inside every recursive mount, and by the refresh; stored-hash
+comparison on open (report only); `RefreshDependenciesCommand` (§7.1) with
+`repair_call_sites_for_network` made `pub(crate)`, given a parent filter
+(local networks of the importing file only), and driven with recorded
 interfaces; host data-file refresh through a `NodeData` hook that re-reads the
-cached file content; the report.
+cached file content; the report. Before starting: settle §7.3's function-value
+question.
 
 Tests (`library_links_refresh_test.rs`, all in temp dirs):
 - Detection: unchanged file → nothing; touch without content change → nothing
@@ -816,26 +1099,59 @@ Tests (`library_links_refresh_test.rs`, all in temp dirs):
   site **inside a HOF body**.
 - Network removed from the library → host instances show "Unknown node type",
   are preserved, save byte-identically (same guarantee as §8), and are listed
-  in the report.
+  in the report. The mount stays `Loaded` throughout — this is the case a
+  status-keyed exemption would miss.
+- Record def removed from the library → host `record_construct` /
+  `record_destructure` / `product` nodes on it keep every wire (frozen, §8),
+  show "Unknown record type", and are listed in the report. Record def with a
+  field removed → exactly that field's wire drops (field-id matching), in the
+  report.
 - Retarget from `lib_v2.cnnd` to `lib_v3.cnnd` created by copying v2 and
   editing it → wires preserved by `param_id`; host file's node type names
   unchanged.
 - Output-pin list change → affected host wires from pin ≥ 1 listed in the report
   (§7.3).
 - **Undo round trips** (the core of D9), for each of: clean refresh, refresh
-  that dropped wires, refresh that removed a used network, retarget, data-file
-  refresh:
+  that dropped wires, refresh that removed a used network, refresh that
+  removed a used record def, retarget, data-file refresh:
   - undo restores the host (text-format dump of every local network
-    byte-identical to before) **and** the old mounted content (mount
+    byte-identical to before — including the networks whose referenced
+    network or record def disappeared) **and** the old mounted content (mount
     fingerprint identical), and evaluation gives the old result;
-  - redo restores the refreshed state exactly;
+  - redo restores the refreshed state exactly (post-validation snapshot);
   - an edit made *before* the refresh can still be undone after undoing the
     refresh, and one made *after* it can be undone before it (interleaving);
   - the undo stack is never cleared by a refresh.
+- **Redo is never destroyed by an automatic refresh**: undo two edits, change
+  the library on disk, `check_dependencies` → nothing applied, report `held`,
+  mount `ChangedOnDisk`, both edits still redoable; repeated checks do not
+  report it again; redo both → still held; make a new edit → the next check
+  applies the refresh as one command. An explicit `refresh_library` while held
+  applies immediately and truncates the redo tail like any edit.
 - After undoing a refresh, `check_dependencies` does **not** refresh again
   (`last_seen` rule); an explicit `refresh_library` does; a *new* disk change
-  does.
-- Opening a host whose stored hash differs → `take_load_library_report` says so.
+  is held (the undone refresh is itself on the redo tail) and applied after the
+  next edit.
+- **Open after the library changed while the host was closed** (D13, the
+  common case): for every parameter edit of the list above, save the host,
+  edit the library on disk, reopen the host → wires follow `param_id` exactly
+  as a live refresh would, and `take_load_library_report` equals the report of
+  the equivalent refresh. Same for record-def field add / remove / reorder /
+  rename, and for a host call site inside a HOF body.
+- Nested: `lib_a` saved against `common` v1, `common` changed to v2 with a
+  parameter inserted in the middle, host opened → `a.common.*` call sites
+  inside `a.*` are repaired in memory; `lib_a.cnnd` on disk is untouched.
+- Refresh leaves linked callers alone: `a.bar` calls `a.foo`, `foo` gets a
+  parameter inserted, refresh → `a.bar`'s wiring equals `lib_a.cnnd` opened
+  standalone (the parent filter of §7.1 step 5).
+- Save after undo: refresh, undo it, save, reopen → the host is repaired
+  forward to the current library (the `uses` table recorded the old
+  interface), not left positionally shifted.
+- Content-only change (same interfaces) → the open report says "changed since
+  last saved", nothing is repaired, the host is not dirty.
+- Duplicate-id library: a library whose parameter nodes share a `param_id`
+  (healed on load by `dedupe_param_ids_in_network`) → host wires match by
+  name or drop with a report; none moves to the wrong pin.
 
 ### Phase 4 — Flutter
 
@@ -855,8 +1171,9 @@ Tests:
   link, browse, try every forbidden gesture on a linked canvas, edit the library
   in its own file with an internal change and return (transient snackbar), then
   with a parameter removed and return (persistent snackbar, *Details*, *Undo*,
-  "older than disk" marker, *Refresh*), change a library while atomCAD keeps
-  focus (poll picks it up), retarget v2→v3, unlink refused/allowed, missing
+  "older than disk" marker, *Refresh*), undo two edits and then change the
+  library (held snackbar, redo still works, the next edit applies the
+  refresh), change a library while atomCAD keeps focus (poll picks it up), retarget v2→v3, unlink refused/allowed, missing
   file badge. The Flutter
   smoke test (`flutter test integration_test/`) is also run by the maintainer,
   not by an agent.
@@ -921,8 +1238,10 @@ Docs (part of "done", per `AGENTS.md`):
 - Reference guide: new page `doc/reference_guide/library_linking.md` linked
   from the hub; update `ui.md` (File menu, panel, read-only canvas) and
   `headless_cli.md`.
-- `AGENTS.md` updates: `serialization/AGENTS.md` (the `imports` field, v9, save
-  filtering, "never write under a mount"); `atomcad-structure-designer/src/AGENTS.md`
+- `AGENTS.md` updates: `serialization/AGENTS.md` (the `imports` field and its
+  `uses` table, v9, save filtering, "never write under a mount", and in "Load
+  pipeline & derived state": interface reconciliation runs after mounting and
+  **before** any argument-count repair); `atomcad-structure-designer/src/AGENTS.md`
   (library links: mount-by-prefix, `ensure_editable` is required for every new
   content-mutating entry point, `base_dir_for_eval` is the only way to resolve a
   relative path at eval time); `lib/structure_designer/AGENTS.md` (read-only
@@ -961,9 +1280,18 @@ library file never contain it.
    changed is refreshed automatically (focus, poll, save, open), as one undoable
    step with a report; manual *Refresh* per mount and *Refresh all
    dependencies*. The earlier safe/unsafe classification was dropped as too
-   complex for implementers and users alike (D7, D9, D10).
+   complex for implementers and users alike (D7, D9, D10). One exception
+   (added 2026-09-29): while redo history exists, an automatic refresh is held
+   rather than truncating it (D9).
 4. **Paths and moving files (2026-09-29)** — relative paths may use `..` and
    are never rewritten; Save As copies dependencies (libraries and data files)
    into the same relative layout around the new location, via a dialog; absolute
    paths are refused for libraries and treated as external for data files;
    *Export project bundle* zips the file with its dependencies (D6, D11).
+5. **Wire identity across a closed host (2026-09-29)** — wires are positional
+   and the old interface of a linked network is not in the host file, so a
+   library changed while the host was closed would shift wires on open. The
+   host records the interfaces it is wired against per import (`uses`), from
+   memory, and opening reconciles against them with the refresh's own repair
+   (D13). A `param_id` on every argument was rejected as the broad refactor
+   `doc/design_parameter_wire_stability.md` §5 parked.
