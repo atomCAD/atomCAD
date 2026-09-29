@@ -42,8 +42,10 @@ is what you want.
 2. Linked networks and record types are usable exactly like local ones
    (instances, wires, `Named` record types, function values) and are
    **read-only** in the importer.
-3. Changing a library on disk is **detected**, and **reload** brings the new
-   version in, repairing call sites by parameter identity, never silently.
+3. Changing a dependency on disk (a library or a data file) is **detected** and
+   the new version is brought in automatically — one undoable **refresh** step
+   that repairs call sites by parameter identity and reports anything it
+   disconnected.
 4. Linked libraries may themselves link libraries (transitive), with cycle
    detection.
 5. Swapping a version = pointing the alias at another file (**retarget**).
@@ -79,13 +81,14 @@ is what you want.
 - Linked networks can be opened and browsed (canvas, properties, 3D view) but
   not edited. Their context menu offers *Find Usages*, *Open library file*,
   *Duplicate into my file*. Rename / Move / Delete / New… are absent.
-- The mount folder's context menu: *Reload*, *Open library file*, *Change
-  file…* (retarget), *Unlink*.
-- A library changed on disk is noticed when the window regains focus. If the
-  change cannot disturb the host (no interface the host uses changed), it is
-  **reloaded automatically** and a transient snackbar says so. Otherwise the
-  mount folder shows a neutral **refresh badge** and nothing happens until the
-  user clicks it; until then the old version keeps evaluating (D11).
+- The mount folder's context menu: *Refresh*, *Open library file*, *Change
+  file…* (retarget), *Unlink*. *File > Refresh all dependencies* refreshes every
+  library and data file.
+- A dependency changed on disk is **refreshed automatically** — when the window
+  regains focus, and by a light poll while it has focus (D7, D11). A snackbar
+  says what happened: "Refreshed demolib", or, if something was disconnected,
+  "Refreshed demolib — 3 wires disconnected [Details] [Undo]". The refresh is
+  one undo step.
 - A missing or unreadable library shows the **red error badge**; the import is
   kept, the host's instances of it show errors, and nothing is deleted.
 - **Save As** into another folder lists the libraries and data files the design
@@ -121,7 +124,7 @@ The alias → file binding lives in exactly one place, the host's import list.
 Hence:
 
 - **Retarget** (v2 → v3) rewrites nothing in the host — it swaps the file under
-  the alias and reloads (§7).
+  the alias and refreshes (§7).
 - **Unlink** is refused while anything in the host uses the mount (same shape as
   `check_delete_references`).
 
@@ -181,7 +184,7 @@ Save writes: local networks, local record defs, local folders, local
 mount path. Consequences:
 
 - Any accidental in-memory mutation of linked content is **not persisted** and
-  disappears on reload — defense in depth behind §6.
+  disappears on the next refresh — defense in depth behind §6.
 - Only *direct* links are written; transitive ones are the library's business.
 
 ### D6 — Relative paths never change meaning
@@ -210,18 +213,49 @@ self-contained. It forces a flat `libs/` inside each project and makes sharing a
 library across projects impossible without copying it into each one. D12 keeps
 the property that matters (paths keep their meaning) without that cost.
 
-### D7 — Change detection by content hash
+### D7 — Change detection
 
-Each loaded mount records `(abs_path, mtime, size, blake3)` of the bytes it
-was loaded from. The host file stores the hash per import (`hash` field) as of
-its last save.
+**What is watched: the dependency list** — the same transitive list D12 uses
+for Save As: every linked library (direct and nested) and every relative or
+absolute data-file path stored in node data of the host and of every library.
+Data files matter too: `import_xyz` and friends read their file once at load
+and cache the result, so an edited `.xyz` is not picked up today either.
+Paths that arrive through a wire are not watched; they are re-read on the next
+evaluation anyway.
 
-- **On open**: if the library on disk no longer matches the stored hash, the
-  host opens with the current file and reports "demolib changed since this file
-  was last saved" together with the call-site repair report (§7.2).
-- **While open**: `check_linked_libraries()` stats each file; only if
-  mtime/size moved does it re-hash. Changed → status `Changed`, then the
-  auto-reload decision of D11.
+Each watched file records a `FileStamp { mtime, size, blake3 }`. Two stamps
+per file:
+
+- `loaded` — the content currently in memory;
+- `last_seen` — the content last observed on disk.
+
+A change is detected when the disk differs from **`last_seen`**, not from
+`loaded`. The difference matters after an undo of a refresh (D9): memory is then
+deliberately older than the disk, and comparing against `loaded` would refresh
+again on the next focus.
+
+**When it is checked:**
+
+- when the window regains focus (`AppLifecycleListener.onResume`);
+- by a **poll every ~2 s while the window has focus** — a script regenerating
+  libraries, a cloud sync, or a `git pull` finishing in the background does not
+  produce a focus event. Stat-ing a handful of files is trivial; only if
+  `mtime` or `size` moved is the file re-hashed;
+- after every save;
+- **on open**: the host file stores the hash of each direct import (`hash`
+  field) as of its last save. If the library on disk differs, the host opens
+  with the current file and the open report says "demolib changed since this
+  file was last saved", with the call-site repair report (§7.2) — exactly what
+  an automatic refresh would have reported.
+
+The check is skipped while a drag, a text edit, or a modal dialog is active and
+runs at the next idle moment.
+
+**What cannot be detected:** content that changed while `mtime` and `size` both
+stayed the same. Tools that copy an older file over a library keep the *old*
+file's timestamp, which still differs from the current one, so this needs a
+deliberate timestamp forgery. *Refresh* / *Refresh all dependencies* (which
+re-hash unconditionally) are the answer for that case and for any doubt.
 
 ### D8 — Relative file paths *inside* library networks resolve against the library
 
@@ -259,50 +293,49 @@ dialog says so when the file contains such a node.
   remounts from disk. Unlink is only allowed when unused, so its undo is a
   remount too. (Redo reads the disk, so it is faithful to the library's
   *current* content — acceptable, and stated in the command's doc comment.)
-- A **safe reload** (D11 — nothing the host uses changed shape) **keeps the undo
-  stack**. Undo commands only ever hold host content (linked content cannot be
-  edited, so no command targets it), and a safe reload changes nothing those
-  commands depend on: no host call site, pin layout, or record schema the host
-  uses is different afterwards.
-- An **unsafe reload** and every **Retarget** **clear the undo stack**, like
-  opening a file. They may repair host call sites, and earlier commands hold
-  snapshots and argument lists shaped for the old interface. The confirmation
-  dialog says so. Retargeting back is the way to "undo" a retarget.
+- **Refresh** (automatic or manual) and **Retarget** are **one undoable step
+  each** — `RefreshDependenciesCommand`. The undo stack is never cleared by
+  them. The command holds:
+  - for each refreshed mount, the **previously mounted content** (the networks,
+    record defs, folders and nested mounts that were under the mount path — it
+    is already in memory, it is simply kept instead of dropped) and the new
+    content;
+  - for each refreshed host data file, the node data before and after
+    (like `SetNodeDataCommand`);
+  - **snapshots of the host call sites** the repair touched (§7.1 step 4), before
+    and after.
 
-### D11 — Auto-reload when safe, badge when not
+  Undo swaps the old content and the old call sites back; redo swaps the new
+  ones in. Earlier commands stay consistent because undoing past a refresh
+  always undoes the refresh first — they are replayed against the interface
+  they were recorded against. Undo marks the mount `OlderThanDisk` in the
+  panel (memory is older than the disk) but, by D7's `last_seen` rule, does not
+  trigger another automatic refresh; *Refresh* brings it forward again.
 
-The expected loop is: open the library, edit, save, come back to the host. The
-common edit there is *internal* (a node inside `half_space` changed) and making
-the user click a badge for it is friction with no benefit. The dangerous edits
-are the ones that change what the host is wired to. So, when a focus check finds
-a mount `Changed`:
+### D11 — Refresh everything that changed, automatically
 
-1. Rust loads the new version **into a temporary registry** (no host change yet)
-   and classifies the reload:
-   - **Safe** — for every linked network and record def that a **local** node
-     references (directly, including inside zone bodies), the interface is
-     identical: same parameters (`param_id`, name, type, order), same output pins
-     (names and types, in order), same record fields; and no referenced entity
-     disappeared. Nested mounts are classified the same way and the whole
-     change is safe only if all of them are.
-   - **Unsafe** — anything else, or the new file fails to load.
-2. **Safe → reload immediately**: swap the mount, re-validate, full refresh,
-   **keep undo** (D9), transient snackbar "Reloaded demolib (libs/demolib_v3.cnnd)".
-   The host is marked dirty only because the stored hash changes.
-3. **Unsafe → do not touch the host**: status stays `Changed`, the badge shows,
-   and its tooltip says why ("`half_space`: parameter `depth` removed; 3 wires
-   affected"). Clicking it runs the explicit reload of §7 with its report and
-   the undo-clearing confirmation.
+Every detected change is refreshed immediately — there is no "safe / unsafe"
+classification and no pending state. This is what editors do with a file
+changed on disk when the buffer has no unsaved edits, and linked content can
+never have unsaved edits (it is read-only).
 
-A missing file is never "safe": the mount goes to `Missing` (red badge), the
-loaded version keeps evaluating, and nothing is removed. Auto-reload never
-happens during an in-progress interaction: Flutter defers the check while a
-drag or a text edit is active and runs it at the next idle refresh.
+What makes that acceptable is D9: the refresh is **one undo step**, and the
+notification always says what it did:
 
-Why not always manual: it makes the common case slow. Why not always automatic:
-an unsafe reload drops wires and clears undo — the user must choose that
-moment. The classification is the same data the explicit reload's report is
-built from, so the two cannot disagree.
+- clean — transient snackbar "Refreshed demolib (libs/demolib_v3.cnnd)";
+- something disconnected, removed, or flagged — a persistent snackbar
+  "Refreshed demolib — 3 wires disconnected [Details] [Undo]". *Details* opens
+  the report of §7.2 (navigable rows); *Undo* is the ordinary undo.
+
+Several files changing at once (a `git pull`) are refreshed in **one** command
+and reported together.
+
+A file that becomes **missing or unparseable** is not a refresh: the loaded
+version keeps evaluating, the mount shows the red error badge (`Missing` /
+`Error`), and nothing is removed. When the file is back, the next check
+refreshes it normally.
+
+Retarget (*Change file…*) is the same command with a different source file.
 
 ### D12 — Save As copies dependencies into the same relative layout
 
@@ -400,8 +433,9 @@ pub struct LibraryMount {
     pub rel_path: String,            // as written by the importer
     pub abs_path: PathBuf,           // canonical
     pub parent: Option<String>,      // mount_path of the importing mount; None = direct
-    pub status: MountStatus,         // Loaded | Changed | Missing | Error(String) | Cycle
-    pub loaded: Option<FileStamp>,   // (mtime, size, blake3) of the bytes loaded
+    pub status: MountStatus,         // Loaded | OlderThanDisk | Missing | Error(String) | Cycle
+    pub loaded: Option<FileStamp>,   // (mtime, size, blake3) of the content in memory
+    pub last_seen: Option<FileStamp>,// last observed on disk (D7)
     pub stored_hash: Option<String>, // from the host file (direct mounts only)
 }
 
@@ -439,7 +473,7 @@ pub struct LibraryLinks {
   data-file paths come from one registry of the file-reading node kinds (a
   `file_paths(&self) -> Vec<&str>` method on `NodeData`, default empty), so a
   new file-reading node is picked up by overriding one method.
-- **Read-only guard** (§6), **reload + call-site remap** (§7), **eval base dir**
+- **Read-only guard** (§6), **refresh + call-site remap** (§7), **eval base dir**
   (D8), **check-on-disk** (D7).
 
 ### 5.2 Rust — `rust/src/api/` (FFI surface)
@@ -452,9 +486,9 @@ there):
 |---|---|
 | `link_library(path: String, alias: String)` | `APIResult` (validates alias, path, cycle) |
 | `unlink_library(alias)` | `APIResult` (refused with the list of users if used) |
-| `retarget_library(alias, path)` | `APILibraryReloadReport` |
-| `reload_library(mount_path)` / `reload_all_libraries()` | `APILibraryReloadReport` |
-| `check_linked_libraries()` | `APILibraryCheckResult { mounts, auto_reloaded: Vec<String>, unsafe_changes: Vec<APIUnsafeChange { mount_path, reason }> }` — re-stats, classifies, auto-reloads safe changes (D11) |
+| `retarget_library(alias, path)` | `APIRefreshReport` |
+| `refresh_library(mount_path)` / `refresh_all_dependencies()` | `APIRefreshReport` (re-hash unconditionally) |
+| `check_dependencies()` | `Option<APIRefreshReport>` — stats every watched file (D7), refreshes whatever changed in one undoable command (D11); `None` if nothing changed |
 | `get_linked_libraries()` | `Vec<APILibraryMount>` (no disk access) |
 | `take_load_library_report()` | report from the last file open (like `take_load_param_id_repairs`) |
 | `collect_file_dependencies(target_path)` | `APIDependencyPlan { entries: Vec<APIDependency { source_abs, target_abs, rel_path, kind: Library\|DataFile, group: Inside\|Outside\|External, status: WillCopy\|AlreadyThere\|Conflict }>, has_wired_paths }` |
@@ -462,9 +496,11 @@ there):
 | `export_project_bundle(zip_path)` | `APIResult` with the list of external files left out |
 
 `APILibraryMount { mount_path, alias, rel_path, abs_path, file_name, parent,
-direct, status, status_message }`; `APILibraryReloadReport { mounts_reloaded,
-dropped_wires: Vec<APIDroppedWire { network, scope_path, node_id, pin_name,
-reason }>, errors }` — dropped wires are navigable, like validation errors.
+direct, status, status_message }`; `APIRefreshReport { refreshed_mounts,
+refreshed_data_files, dropped_wires: Vec<APIDroppedWire { network, scope_path,
+node_id, pin_name, reason }>, removed_networks_in_use, errors }` — dropped
+wires are navigable, like validation errors. `is_clean()` decides between the
+transient and the persistent snackbar.
 
 Existing view types gain one field each:
 `APINetworkWithValidationErrors.read_only` and `NodeNetworkView.read_only`
@@ -480,22 +516,23 @@ Presentation and triggers only; no path logic, no hashing, no name rewriting.
 
 - **Model** (`structure_designer_model.dart`): `linkedLibraries:
   List<APILibraryMount>` refreshed in `refreshFromKernel`; methods
-  `linkLibrary`, `unlinkLibrary`, `retargetLibrary`, `reloadLibrary`,
-  `reloadAllLibraries`, `checkLinkedLibraries`; `mountFor(name)` Dart twin of
+  `linkLibrary`, `unlinkLibrary`, `retargetLibrary`, `refreshLibrary`,
+  `refreshAllDependencies`, `checkDependencies`; `mountFor(name)` Dart twin of
   the prefix test (in `namespace_utils.dart`, next to `nameIsTaken`).
-- **Focus trigger**: an `AppLifecycleListener` (`onResume`) plus a call after
-  save → `checkLinkedLibraries()`. Rust does the classification and any safe
-  auto-reload (D11) inside that one call and returns what happened; Flutter
-  shows the snackbar for auto-reloads, calls `refreshFromKernel()` if anything
-  was reloaded, and otherwise `notifyListeners()` only if a status changed. The
-  call is deferred while a drag or text edit is in progress. There is no focus
-  handling in `lib/` today; this is the first.
+- **Change triggers** (D7): an `AppLifecycleListener` (`onResume`), a ~2 s
+  `Timer.periodic` while the window has focus, and a call after save — each
+  calls `checkDependencies()`. Rust decides and refreshes; Flutter only shows
+  the result: `refreshFromKernel()`, then the transient snackbar for a clean
+  report or the persistent one with *Details* / *Undo* otherwise. Checks are
+  skipped while a drag, a text edit, or a modal dialog is active. There is no
+  focus handling in `lib/` today; this is the first.
 - **Panel** (`node_networks_list/`): tree view renders a mount folder's label as
   `alias — file_name` (file name `AppTextStyles` small, dimmed); every row under
-  a mount dimmed with a link icon; mount folders get the refresh badge
-  (`Changed`) or the error badge (`Missing` / `Error` / `Cycle`) — the new badge
-  goes in `network_row_badges.dart` so list and tree share it. List view: link
-  icon + dimmed text per row, file in the tooltip, badge per row. Context menus
+  a mount dimmed with a link icon; mount folders get the error badge
+  (`Missing` / `Error` / `Cycle`) and, after an undo of a refresh, a small
+  neutral "older than disk" marker whose click is *Refresh* — the badges go in
+  `network_row_badges.dart` so list and tree share them. List view: link icon +
+  dimmed text per row, file in the tooltip, badge per row. Context menus
   per §3. `_isValidDrop` refuses drops into a mount and drags of mounted rows;
   inline rename is not offered.
 - **Read-only canvas**: when `NodeNetworkView.read_only`, the node network
@@ -507,8 +544,7 @@ Presentation and triggers only; no path logic, no hashing, no name rewriting.
 - **Dialogs**: *Link library…* (file picker with a new `FileDialogPurpose`
   variant — do not change existing `key()` strings — then an alias field with
   `validateUserName` + `mountFor`/`nameIsTaken` checks), *Change file…*,
-  reload confirmation ("clears undo history"), reload report (dropped wires,
-  each navigable). All draggable dialogs, errors via `showErrorSnackBar`.
+  refresh report (dropped wires and removed networks, each navigable). All draggable dialogs, errors via `showErrorSnackBar`.
 - **Save As**: before saving to a different folder, call
   `collectFileDependencies`; if any entry is *will copy* or *conflict*, show the
   D12 dialog (three groups, full target paths for the outside group), then
@@ -539,7 +575,7 @@ that file.
   `set_active_network_canvas_viewport` check `mount_containing`), and none of it
   is saved, to the host (D5) or to the library (the host never writes library
   files). Display toggles on a linked network are session-only for the same
-  reason. A reload resets them.
+  reason. A refresh resets them.
 
 ## 6. Read-only enforcement
 
@@ -576,38 +612,39 @@ P2) runs the whole mutation alphabet against linked targets and asserts both
 `Err` **and** an unchanged fingerprint; a guard that errors *after* partially
 mutating fails it.
 
-## 7. Reload, retarget, and call-site repair
+## 7. Refresh, retarget, and call-site repair
 
-### 7.1 Procedure (both reload and retarget)
+### 7.1 Procedure (refresh and retarget alike)
 
-1. Capture, for every network under the mount (recursively), its **old
-   interface**: `node_type.parameters` (with `param_id`s) and output pins.
-2. Unmount: remove everything under the mount path from the registry
-   (networks, record defs, folders, nested mounts).
-3. Mount again (for retarget: from the new path).
-4. For each re-mounted network whose interface changed, run the identity-based
-   call-site repair on **host** call sites: `repair_call_sites_for_network`
-   (`network_validator.rs:279`, today private and only triggered by an in-memory
-   interface change) with the captured old parameters and the new ones. It maps
-   by `param_id` first, name second — which is exactly right across versions,
-   because `demolib_v3.cnnd` made by copying v2 **keeps v2's `param_id`s** for
-   surviving parameters.
+All changed files found by one check are handled by one
+`RefreshDependenciesCommand`:
+
+1. Capture, for every network under each affected mount (recursively), its
+   **old interface**: `node_type.parameters` (with `param_id`s) and output pins.
+2. Detach everything under the mount path from the registry (networks, record
+   defs, folders, nested mounts) and **keep it in the command** (D9).
+3. Mount again (for retarget: from the new path). Changed host data files: the
+   node data is kept in the command and the file re-read.
+4. For each re-mounted network whose interface changed, snapshot the host call
+   sites, then run the identity-based call-site repair on them:
+   `repair_call_sites_for_network` (`network_validator.rs:279`, today private
+   and only triggered by an in-memory interface change) with the captured old
+   parameters and the new ones. It maps by `param_id` first, name second — which
+   is exactly right across versions, because `demolib_v3.cnnd` made by copying
+   v2 **keeps v2's `param_id`s** for surviving parameters. Snapshot the call
+   sites again after.
 5. Collect every wire the repair dropped into the report.
-6. Validate everything in dependency order; clear the undo stack if the reload
-   was unsafe or a retarget (D9 — a safe auto-reload keeps it); set dirty (the
-   host now pins a different library hash); full refresh.
-
-The D11 classification is steps 1 and 3 run against a temporary registry and
-compared, before step 2 touches the host; the explicit reload reuses the same
-comparison to build its report.
+6. Validate everything in dependency order; push the command (never clear the
+   undo stack); set dirty (the host now pins a different library hash); full
+   refresh.
 
 ### 7.2 Report
 
 Dropped wires (parameter gone, or the retype makes the wire incompatible →
 kept but flagged by validation, consistent with the existing repair), networks
 that disappeared (host instances now show "Unknown node type"), and mount
-status changes. Flutter shows it as a dialog with navigable rows; empty report
-→ a transient snackbar.
+status changes. A clean report → transient snackbar; otherwise a persistent
+snackbar whose *Details* opens a dialog with navigable rows (D11).
 
 ### 7.3 Known limitation
 
@@ -741,56 +778,57 @@ Tests (`library_links_readonly_test.rs`):
 - Transitive warning emitted for a host node using `a.common.*`, and not for
   `a.*`.
 
-### Phase 3 — Change detection, reload, retarget (Rust only)
+### Phase 3 — Change detection, refresh, retarget (Rust only)
 
-Work: `FileStamp`, `check_linked_libraries`, stored-hash comparison on open,
-reload/retarget procedure (§7.1) with `repair_call_sites_for_network` made
-`pub(crate)` and driven with captured interfaces, the report, undo clearing,
-the D11 safe/unsafe classification and auto-reload inside
-`check_linked_libraries`.
+Work: `FileStamp` with `loaded` / `last_seen`; the watched list (libraries plus
+data files, from the D12 collector — the collector moves forward into this
+phase, the Save As dialog stays in P5); `check_dependencies`; stored-hash
+comparison on open; `RefreshDependenciesCommand` (§7.1) with
+`repair_call_sites_for_network` made `pub(crate)` and driven with captured
+interfaces; host data-file refresh through a `NodeData` hook that re-reads the
+cached file content; the report.
 
-Tests (`library_links_reload_test.rs`, all in temp dirs):
-- Unchanged file → `Loaded`; touch without content change → still `Loaded`
-  (hash decides); content change → `Changed`; delete → `Missing`.
-- Reload picks up new content (eval result changes).
+Tests (`library_links_refresh_test.rs`, all in temp dirs):
+- Detection: unchanged file → nothing; touch without content change → nothing
+  (hash decides); content change → refreshed; delete → `Missing`, nothing
+  removed, loaded version keeps evaluating; file restored → refreshed.
+- Refresh picks up new content (eval result changes) — for a library, a nested
+  library, a library's data file, and a host data file (`import_xyz`).
+- Several files changed at once → **one** command, one report.
 - Parameter edits in the library (add at end, add in middle, remove, reorder,
   rename, compatible retype, incompatible retype) → host wires follow
   `param_id`; removed parameter drops exactly its wire (in the report);
   incompatible retype is flagged by validation, not dropped. Include a host call
   site **inside a HOF body**.
 - Network removed from the library → host instances show "Unknown node type",
-  are preserved, and save byte-identically (same guarantee as §8).
+  are preserved, save byte-identically (same guarantee as §8), and are listed
+  in the report.
 - Retarget from `lib_v2.cnnd` to `lib_v3.cnnd` created by copying v2 and
   editing it → wires preserved by `param_id`; host file's node type names
   unchanged.
 - Output-pin list change → affected host wires from pin ≥ 1 listed in the report
   (§7.3).
-- Unsafe reload and retarget clear the undo stack; link/unlink before them are
-  gone from history.
-- **D11 classification**, table-driven, one library edit per row:
-  - Safe: change inside a network body; add a new network; change a network or
-    record def the host does not reference; add a field to an unreferenced
-    record def. → `check_linked_libraries` auto-reloads, `auto_reloaded` lists
-    the mount, **undo stack length and contents unchanged**, and an undo after
-    the reload still restores the host correctly.
-  - Unsafe: any parameter or output-pin change on a referenced network; a field
-    change on a referenced record def; removal of a referenced network; a change
-    that is unsafe only in a **nested** mount; the file becoming unparseable.
-    → host untouched (fingerprint of host networks unchanged), status
-    `Changed`, `unsafe_changes` carries a reason naming the entity.
-  - Missing file → `Missing`, no reload, loaded version keeps evaluating.
-  - A reference that exists only inside a HOF body in the host still counts as
-    "referenced" (walk with `walk_all_nodes`).
+- **Undo round trips** (the core of D9), for each of: clean refresh, refresh
+  that dropped wires, refresh that removed a used network, retarget, data-file
+  refresh:
+  - undo restores the host (text-format dump of every local network
+    byte-identical to before) **and** the old mounted content (mount
+    fingerprint identical), and evaluation gives the old result;
+  - redo restores the refreshed state exactly;
+  - an edit made *before* the refresh can still be undone after undoing the
+    refresh, and one made *after* it can be undone before it (interleaving);
+  - the undo stack is never cleared by a refresh.
+- After undoing a refresh, `check_dependencies` does **not** refresh again
+  (`last_seen` rule); an explicit `refresh_library` does; a *new* disk change
+  does.
 - Opening a host whose stored hash differs → `take_load_library_report` says so.
-- Nested: changing `libs/common.cnnd` marks `a.common` `Changed`; reloading `a`
-  reloads its nested mount.
 
 ### Phase 4 — Flutter
 
 Work: `library_links_api.rs` + codegen; model fields and methods; `mountFor`;
 focus listener; panel (tree label, dimming, icon, badges, menus, drag rules);
-read-only canvas and property panel; link / change-file / reload-report
-dialogs; File menu: *Link library…*, *Reload all libraries*, *Import copy…*
+read-only canvas and property panel; link / change-file / refresh-report
+dialogs; File menu: *Link library…*, *Refresh all dependencies*, *Import copy…*
 (renamed), *Back to `host.cnnd`*.
 
 Tests:
@@ -801,10 +839,11 @@ Tests:
   transitive mounts.
 - **Manual walkthrough (maintainer)** — thin editor UI is verified by hand:
   link, browse, try every forbidden gesture on a linked canvas, edit the library
-  in its own file with an internal change and return (auto-reload snackbar, undo
-  still works), then with a parameter removed and return (badge with reason, no
-  change until clicked), reload, read the report, retarget v2→v3, unlink
-  refused/allowed, missing file badge. The Flutter
+  in its own file with an internal change and return (transient snackbar), then
+  with a parameter removed and return (persistent snackbar, *Details*, *Undo*,
+  "older than disk" marker, *Refresh*), change a library while atomCAD keeps
+  focus (poll picks it up), retarget v2→v3, unlink refused/allowed, missing
+  file badge. The Flutter
   smoke test (`flutter test integration_test/`) is also run by the maintainer,
   not by an agent.
 
@@ -851,7 +890,7 @@ Tests (`file_dependencies_test.rs`):
 
 ### Phase 6 — CLI, vendoring, documentation
 
-Work: CLI `libraries` subcommand (`list`, `link <path> <alias>`, `reload
+Work: CLI `libraries` subcommand (`list`, `link <path> <alias>`, `refresh
 [<mount>]`, `unlink <alias>`) over new HTTP routes in
 `lib/ai_assistant/http_server.dart`; `query` shows a `# linked from …`
 header for a linked network; *Make local copy* (vendoring, §10).
@@ -881,7 +920,7 @@ window/tab. What this design already provides:
   `LibraryMount.abs_path`); "editable" becomes "owned by the document being
   edited", with the same `ensure_editable` choke.
 - Save that writes **only owned content** and the import list.
-- Reload with call-site repair, which is exactly what should happen in document
+- Refresh with call-site repair, which is exactly what should happen in document
   A when document B (a library of A) is saved.
 
 What it will need to change: `ensure_editable` gains a notion of the current
@@ -896,8 +935,11 @@ library file never contain it.
 2. **Camera / canvas state of library networks** — a library file saves its own
    view state as any `.cnnd` does; when linked, that state is ignored on mount
    and browsing changes are session-only (§5.4).
-3. **Auto-reload on focus** — automatic when the change is safe for the host,
-   badge + explicit reload when it is not (D11).
+3. **Refreshing changed dependencies (revised 2026-09-29)** — everything that
+   changed is refreshed automatically (focus, poll, save, open), as one undoable
+   step with a report; manual *Refresh* per mount and *Refresh all
+   dependencies*. The earlier safe/unsafe classification was dropped as too
+   complex for implementers and users alike (D7, D9, D11).
 4. **Paths and moving files (2026-09-29)** — relative paths may use `..` and
    are never rewritten; Save As copies dependencies (libraries and data files)
    into the same relative layout around the new location, via a dialog; absolute
