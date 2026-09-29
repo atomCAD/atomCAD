@@ -1233,6 +1233,23 @@ class StructureDesignerModel extends ChangeNotifier {
     return result.success ? null : result.errorMessage;
   }
 
+  /// *Make local copy* on a mount folder (§10): the library becomes part of
+  /// the design. Returns the error, or `null` on success.
+  String? makeLibraryLocal(String alias) {
+    final result = library_links_api.makeLibraryLocal(alias: alias);
+    refreshFromKernel();
+    return result.success ? null : result.errorMessage;
+  }
+
+  /// *Rename alias…* on a mount folder (D3). Returns the error, or `null`
+  /// on success.
+  String? renameLibraryAlias(String alias, String newAlias) {
+    final result =
+        library_links_api.renameLibraryAlias(alias: alias, newAlias: newAlias);
+    refreshFromKernel();
+    return result.success ? null : result.errorMessage;
+  }
+
   /// *Change file…* on a mount folder.
   APIRefreshReport retargetLibrary(String alias, String path) {
     final report = library_links_api.retargetLibrary(alias: alias, path: path);

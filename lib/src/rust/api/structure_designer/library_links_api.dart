@@ -108,3 +108,18 @@ APIResult linkLibraryCopying(
     RustLib.instance.api
         .crateApiStructureDesignerLibraryLinksApiLinkLibraryCopying(
             path: path, targetRelPath: targetRelPath, alias: alias);
+
+/// *Make local copy* on a mount folder: the direct library `alias` (with
+/// its own links) becomes part of the design, as it is in memory. One undo
+/// step; refused while the library is not loaded or something refers to a
+/// name it does not define.
+APIResult makeLibraryLocal({required String alias}) => RustLib.instance.api
+    .crateApiStructureDesignerLibraryLinksApiMakeLibraryLocal(alias: alias);
+
+/// *Rename alias…* on a mount folder: moves the direct library `alias` and
+/// every reference to it under `new_alias`. One undo step.
+APIResult renameLibraryAlias(
+        {required String alias, required String newAlias}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerLibraryLinksApiRenameLibraryAlias(
+            alias: alias, newAlias: newAlias);

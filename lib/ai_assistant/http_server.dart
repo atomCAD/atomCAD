@@ -13,6 +13,11 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
     as sd_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/chemisorb_api.dart'
     as chemisorb_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/library_links_api.dart'
+    as library_links_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
+import 'package:flutter_cad/structure_designer/library_link_actions.dart'
+    show refreshReportHeadline, refreshReportIsFailure;
 import 'package:flutter_cad/src/rust/api/common_api.dart' as common_api;
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_cad/src/rust/api/screenshot_api.dart' as screenshot_api;
@@ -43,6 +48,16 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_p
 /// - `POST /networks/delete` - Delete a node network (required: name parameter)
 /// - `POST /networks/activate` - Switch to a different node network (required: name parameter)
 /// - `POST /networks/rename` - Rename a node network (required: old, new parameters)
+/// - `GET /libraries` - List the linked libraries (direct and nested) with status
+/// - `POST /libraries/link` - Link a `.cnnd` (JSON: path, alias)
+/// - `POST /libraries/unlink` - Unlink a direct library (JSON: alias)
+/// - `POST /libraries/refresh` - Re-read one library (JSON: mount) or, without
+///   `mount`, every dependency
+/// - `POST /libraries/rename` - Rename a direct library's alias (JSON: alias, new)
+/// - `POST /libraries/make-local` - Make a direct library part of the design
+///   (JSON: alias)
+/// - `POST /save?path=<p>&deps=copy|none` - Save As; `deps` is required when
+///   linked libraries or data files would need copying to the new folder
 ///
 /// ## Every request is logged
 ///
@@ -252,6 +267,24 @@ class AiAssistantServer {
           break;
         case '/networks/rename':
           await _handleNetworksRename(request);
+          break;
+        case '/libraries':
+          await _handleLibraries(request);
+          break;
+        case '/libraries/link':
+          await _handleLibrariesLink(request);
+          break;
+        case '/libraries/unlink':
+          await _handleLibrariesUnlink(request);
+          break;
+        case '/libraries/refresh':
+          await _handleLibrariesRefresh(request);
+          break;
+        case '/libraries/rename':
+          await _handleLibrariesRename(request);
+          break;
+        case '/libraries/make-local':
+          await _handleLibrariesMakeLocal(request);
           break;
         case '/file':
           await _handleFile(request);
@@ -877,7 +910,8 @@ class AiAssistantServer {
     for (final network in networks) {
       final isActive = network.name == activeName;
       final activeMarker = isActive ? '* ' : '  ';
-      final activeSuffix = isActive ? '  (active)' : '';
+      final activeSuffix = (isActive ? '  (active)' : '') +
+          (network.readOnly ? '  (linked, read-only)' : '');
 
       if (network.validationErrors.isNotEmpty) {
         final errorText =
@@ -1127,6 +1161,215 @@ class AiAssistantServer {
     }
   }
 
+  // ---------------------------------------------------------------------
+  // Linked libraries (`doc/design_library_linking.md` Phase 6)
+  // ---------------------------------------------------------------------
+
+  /// The request body as a JSON object; empty when absent or malformed (the
+  /// handler reports the missing parameter).
+  Future<Map<String, dynamic>> _readJsonBody(HttpRequest request) async {
+    final body = await utf8.decoder.bind(request).join();
+    if (body.isEmpty) return {};
+    try {
+      final json = jsonDecode(body);
+      return json is Map<String, dynamic> ? json : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  /// Writes a 400 for a missing required parameter; returns whether it did.
+  bool _missing(
+      HttpRequest request, Map<String, dynamic> json, List<String> names) {
+    for (final name in names) {
+      final value = json[name];
+      if (value is! String || value.isEmpty) {
+        request.response.statusCode = HttpStatus.badRequest;
+        request.response.headers.contentType = ContentType.json;
+        request.response.write(jsonEncode({
+          'success': false,
+          'error': 'Missing required parameter: $name',
+        }));
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Writes the outcome of an operation that returns `APIResult`.
+  void _writeResult(
+      HttpRequest request, bool success, String errorMessage, String message) {
+    request.response.headers.contentType = ContentType.json;
+    if (success) {
+      onNetworkEdited?.call();
+      request.response.write(jsonEncode({'success': true, 'message': message}));
+    } else {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response
+          .write(jsonEncode({'success': false, 'error': errorMessage}));
+    }
+  }
+
+  static String _statusSuffix(APILibraryMount m) {
+    switch (m.status) {
+      case APIMountStatus.loaded:
+        return '';
+      case APIMountStatus.olderThanDisk:
+      case APIMountStatus.changedOnDisk:
+        return '  [${m.statusMessage}; refresh to bring it in]';
+      case APIMountStatus.missing:
+      case APIMountStatus.error:
+      case APIMountStatus.cycle:
+        return '  [ERROR: ${m.statusMessage}]';
+    }
+  }
+
+  Future<void> _handleLibraries(HttpRequest request) async {
+    if (request.method != 'GET') {
+      request.response.statusCode = HttpStatus.methodNotAllowed;
+      return;
+    }
+    final mounts = library_links_api.getLinkedLibraries();
+    final byPath = {for (final m in mounts) m.mountPath: m};
+    int depth(APILibraryMount m) {
+      var d = 0;
+      var parent = m.parent;
+      while (parent != null) {
+        d++;
+        parent = byPath[parent]?.parent;
+      }
+      return d;
+    }
+
+    final buffer = StringBuffer();
+    if (mounts.isEmpty) {
+      buffer.writeln('No linked libraries.');
+    } else {
+      buffer.writeln('Linked libraries:');
+      for (final m in mounts) {
+        final indent = '  ' * (depth(m) + 1);
+        final via = m.parent == null ? '' : '  (linked by ${m.parent})';
+        buffer.writeln(
+            '$indent${m.mountPath} — ${m.relPath}$via${_statusSuffix(m)}');
+      }
+      final direct = mounts.where((m) => m.direct).length;
+      buffer.writeln();
+      buffer.writeln('$direct direct, ${mounts.length - direct} nested');
+    }
+    request.response.headers.contentType = ContentType.text;
+    request.response.write(buffer.toString());
+  }
+
+  Future<void> _handleLibrariesLink(HttpRequest request) async {
+    if (request.method != 'POST') {
+      request.response.statusCode = HttpStatus.methodNotAllowed;
+      return;
+    }
+    final json = await _readJsonBody(request);
+    if (_missing(request, json, ['path', 'alias'])) return;
+    final path = json['path'] as String;
+    final alias = json['alias'] as String;
+    _activityDetail = '$alias ← $path';
+    final result = library_links_api.linkLibrary(path: path, alias: alias);
+    _writeResult(request, result.success, result.errorMessage,
+        "Linked '$path' as '$alias'");
+  }
+
+  Future<void> _handleLibrariesUnlink(HttpRequest request) async {
+    if (request.method != 'POST') {
+      request.response.statusCode = HttpStatus.methodNotAllowed;
+      return;
+    }
+    final json = await _readJsonBody(request);
+    if (_missing(request, json, ['alias'])) return;
+    final alias = json['alias'] as String;
+    _activityDetail = alias;
+    final result = library_links_api.unlinkLibrary(alias: alias);
+    _writeResult(
+        request, result.success, result.errorMessage, "Unlinked '$alias'");
+  }
+
+  Future<void> _handleLibrariesRename(HttpRequest request) async {
+    if (request.method != 'POST') {
+      request.response.statusCode = HttpStatus.methodNotAllowed;
+      return;
+    }
+    final json = await _readJsonBody(request);
+    if (_missing(request, json, ['alias', 'new'])) return;
+    final alias = json['alias'] as String;
+    final newAlias = json['new'] as String;
+    _activityDetail = '$alias → $newAlias';
+    final result =
+        library_links_api.renameLibraryAlias(alias: alias, newAlias: newAlias);
+    _writeResult(request, result.success, result.errorMessage,
+        "Renamed alias '$alias' to '$newAlias'");
+  }
+
+  Future<void> _handleLibrariesMakeLocal(HttpRequest request) async {
+    if (request.method != 'POST') {
+      request.response.statusCode = HttpStatus.methodNotAllowed;
+      return;
+    }
+    final json = await _readJsonBody(request);
+    if (_missing(request, json, ['alias'])) return;
+    final alias = json['alias'] as String;
+    _activityDetail = alias;
+    final result = library_links_api.makeLibraryLocal(alias: alias);
+    _writeResult(request, result.success, result.errorMessage,
+        "'$alias' is now part of the design (no longer linked)");
+  }
+
+  /// One line per thing a refresh report lists, for the CLI.
+  static List<String> _reportLines(APIRefreshReport r) {
+    String where(String network, String label) =>
+        label.isEmpty ? network : '$network/$label';
+    return [
+      for (final w in r.droppedWires)
+        'dropped: ${where(w.network, w.nodeLabel)}.${w.pinName} '
+            '(from ${w.sourceLabel}): ${w.reason}',
+      for (final w in r.flaggedWires)
+        'changed type: ${where(w.network, w.nodeLabel)}.${w.pinName} '
+            '(from ${w.sourceLabel}): ${w.reason}',
+      for (final w in r.outputPinWarnings)
+        'check wire: ${where(w.network, w.nodeLabel)}.${w.pinName} '
+            '(from ${w.sourceLabel}): ${w.reason}',
+      for (final n in r.frozenNodes)
+        'unknown: ${where(n.network, n.nodeLabel)} refers to ${n.name}',
+      for (final name in r.removedNamesInUse) 'removed while in use: $name',
+      for (final c in r.statusChanges)
+        if (c.status != APIMountStatus.loaded) '${c.mountPath}: ${c.message}',
+      for (final h in r.held) 'held (redo history exists): $h',
+      for (final e in r.errors) 'error: $e',
+    ];
+  }
+
+  Future<void> _handleLibrariesRefresh(HttpRequest request) async {
+    if (request.method != 'POST') {
+      request.response.statusCode = HttpStatus.methodNotAllowed;
+      return;
+    }
+    final json = await _readJsonBody(request);
+    final mount = json['mount'];
+    final APIRefreshReport report;
+    if (mount is String && mount.isNotEmpty) {
+      _activityDetail = mount;
+      report = library_links_api.refreshLibrary(mountPath: mount);
+    } else {
+      report = library_links_api.refreshAllDependencies();
+    }
+    final failed = refreshReportIsFailure(report);
+    if (!failed) onNetworkEdited?.call();
+    request.response.headers.contentType = ContentType.json;
+    if (failed) request.response.statusCode = HttpStatus.badRequest;
+    request.response.write(jsonEncode({
+      'success': !failed,
+      if (failed) 'error': report.errors.join('; '),
+      'message': refreshReportHeadline(report),
+      'clean': report.isClean,
+      'details': _reportLines(report),
+    }));
+  }
+
   Future<void> _handleFile(HttpRequest request) async {
     if (request.method != 'GET') {
       request.response.statusCode = HttpStatus.methodNotAllowed;
@@ -1240,17 +1483,59 @@ class AiAssistantServer {
         }));
       }
     } else {
-      // Save to specified path
-      final result = sd_api.saveNodeNetworksAs(filePath: filePath);
+      // Save to specified path — Save As, with the linked libraries and data
+      // files the design reads by relative path (`doc/design_library_linking.md`
+      // D11). When some would have to be copied, the caller must choose:
+      // `deps=copy` copies them (a different file already at a target is
+      // kept, never overwritten), `deps=none` saves the design alone.
+      final deps = params['deps'];
+      final plan =
+          library_links_api.collectFileDependencies(targetPath: filePath);
+      if (plan.error != null) {
+        request.response.write(jsonEncode({
+          'success': false,
+          'error': plan.error,
+        }));
+        return;
+      }
+      if (plan.needsConfirmation && deps != 'copy' && deps != 'none') {
+        final pending = plan.entries
+            .where((e) =>
+                e.status == APIDependencyStatus.willCopy ||
+                e.status == APIDependencyStatus.conflict)
+            .map((e) => '${e.relPath ?? e.sourceAbs} → ${e.targetAbs ?? '?'}'
+                '${e.status == APIDependencyStatus.conflict ? ' (a different file is already there)' : ''}')
+            .toList();
+        request.response.write(jsonEncode({
+          'success': false,
+          'error': 'The design reads ${pending.length} file(s) by a path '
+              'relative to it that would not be at the new location. Save '
+              'with --copy-deps to copy them (existing different files are '
+              'kept), or --no-deps to save the design alone.',
+          'details': pending,
+        }));
+        return;
+      }
+      final result = library_links_api.saveAsWithDependencies(
+          path: filePath, copy: deps != 'none', overwriteTargets: const []);
       if (result.success) {
+        onNetworkEdited?.call();
         request.response.write(jsonEncode({
           'success': true,
           'file_path': filePath,
+          'details': [
+            for (final c in result.copied) 'copied: $c',
+            for (final k in result.kept) 'kept existing: $k',
+            for (final m in result.missing) 'missing at the new location: $m',
+          ],
         }));
       } else {
         request.response.write(jsonEncode({
           'success': false,
           'error': result.errorMessage,
+          'details': [
+            for (final c in result.copied) 'copied before the error: $c'
+          ],
         }));
       }
     }

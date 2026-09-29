@@ -16,6 +16,8 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 /// # Returns
 /// A string containing the text format representation of the network.
 /// If no network is active, returns an error message starting with "#".
+/// A network of a linked library carries a `# linked from …` line under the
+/// `# Network:` header (`StructureDesigner::query_active_network_text`).
 ///
 /// # Example Output
 /// ```text

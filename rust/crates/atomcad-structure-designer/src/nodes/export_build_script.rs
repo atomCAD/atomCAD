@@ -142,6 +142,14 @@ impl NodeData for ExportBuildScriptData {
         Box::new(self.clone())
     }
 
+    /// The output path is stored like a reader's input path, so it moves with
+    /// the network too (*Make local copy*).
+    fn rebase_file_paths(&mut self, rebase: &dyn Fn(&str) -> Option<String>) {
+        if let Some(new_path) = rebase(&self.file_name) {
+            self.file_name = new_path;
+        }
+    }
+
     /// Eager feedback for the Execute-deferred checks, the way `export_atoms`
     /// recovers it: under the central skip rule `eval` does not run on a
     /// display pass, so a missing file name would otherwise be invisible until

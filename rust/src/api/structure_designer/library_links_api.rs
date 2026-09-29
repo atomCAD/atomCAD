@@ -302,3 +302,47 @@ pub fn link_library_copying(path: String, target_rel_path: String, alias: String
         )
     }
 }
+
+// ---------------------------------------------------------------------------
+// Make local copy, rename alias (§10, D3)
+// ---------------------------------------------------------------------------
+
+/// *Make local copy* on a mount folder: the direct library `alias` (with
+/// its own links) becomes part of the design, as it is in memory. One undo
+/// step; refused while the library is not loaded or something refers to a
+/// name it does not define.
+#[flutter_rust_bridge::frb(sync)]
+pub fn make_library_local(alias: String) -> APIResult {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let result = cad_instance.structure_designer.make_library_local(&alias);
+                if result.is_ok() {
+                    refresh_structure_designer_auto(cad_instance);
+                }
+                api_result(result)
+            },
+            no_instance(),
+        )
+    }
+}
+
+/// *Rename alias…* on a mount folder: moves the direct library `alias` and
+/// every reference to it under `new_alias`. One undo step.
+#[flutter_rust_bridge::frb(sync)]
+pub fn rename_library_alias(alias: String, new_alias: String) -> APIResult {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let result = cad_instance
+                    .structure_designer
+                    .rename_library_alias(&alias, &new_alias);
+                if result.is_ok() {
+                    refresh_structure_designer_auto(cad_instance);
+                }
+                api_result(result)
+            },
+            no_instance(),
+        )
+    }
+}

@@ -125,6 +125,7 @@ pub trait NodeData: Send + Sync {
     fn default_display_all_output_pins(&self) -> bool;  // default false
     fn file_paths(&self) -> Vec<String>;                 // default none
     fn file_path_pins(&self) -> &'static [&'static str]; // default none
+    fn rebase_file_paths(&mut self, rebase: &dyn Fn(&str) -> Option<String>); // default no-op
 }
 ```
 
@@ -141,6 +142,14 @@ and put in the project bundle; a wired path pin makes the Save As dialog warn
 that a file cannot be collected. At eval time a relative path resolves only
 through `library_links::base_dir_for_eval`. Output files (`export_atoms`,
 `export_build_script`) are not dependencies and override neither.
+
+Every node that **stores** a file path — read or written — also overrides
+`rebase_file_paths`, which rewrites each stored path through the given function.
+*Make local copy* uses it when a library's networks become the design's own, so a
+path authored relative to the library's folder keeps naming the same file from
+the design's folder. A new node with a stored path that omits it keeps working
+until its library is made local, and then silently reads or writes the wrong
+file.
 
 ### Default output-pin display
 

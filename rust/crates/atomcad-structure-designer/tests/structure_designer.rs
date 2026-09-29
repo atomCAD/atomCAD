@@ -683,3 +683,9 @@ mod library_links_interaction_test;
 
 #[path = "structure_designer/file_dependencies_test.rs"]
 mod file_dependencies_test;
+
+#[path = "structure_designer/library_links_vendor_test.rs"]
+mod library_links_vendor_test;
+
+#[path = "structure_designer/zone_body_load_order_test.rs"]
+mod zone_body_load_order_test;

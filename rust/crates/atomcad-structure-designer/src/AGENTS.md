@@ -75,7 +75,7 @@ structure_designer/
 ├── cli_runner.rs              # CLI batch execution mode
 ├── node_networks_import_manager.rs # Import networks from .cnnd libraries (copy import)
 ├── library_links.rs           # Linked libraries: mounts, prefixing, `uses`, the frozen-node predicate, LinkFs
-├── library_link_ops.rs        # StructureDesigner::link_library / unlink_library
+├── library_link_ops.rs        # link / unlink / make local / rename alias; `query`'s `# linked from`
 ├── library_refresh.rs         # Reconciling wiring against recorded interfaces, change detection, data-file watches
 ├── library_refresh_ops.rs     # check_dependencies / refresh / retarget / the open report
 ├── file_dependencies.rs       # Save As dependency plan + copy, project bundle (.zip), link by copying
@@ -336,6 +336,20 @@ command's undo/redo re-resolves the records it restores
 (`library_links::relocate_mounts`), since they were resolved against whatever
 folder the design had when the command was recorded. A new place that stores a
 resolved absolute path of a dependency owes the same re-resolution.
+
+**Two operations change what a link is (Phase 6).** *Rename alias…*
+(`rename_library_alias`) moves every name under the alias through the one
+rewrite `library_links::rename_prefix` — networks, record defs and every
+reference to them, folders, mount records and the types in their `uses`,
+data-file watch owners, frozen nodes' recorded layouts — and its undo is the
+same rewrite backwards; a new place that stores a linked name must be added
+there, or a rename leaves it dangling. *Make local copy* (`make_library_local`)
+only removes the mount records (the content is already in the registry under
+the alias and is saved from then on) and rebases stored data-file paths
+(`NodeData::rebase_file_paths`). It is refused while anything refers to a name
+under the mount that does not resolve (`library_links::unresolved_refs_under`):
+such a node is safe only under a mount, and would be realigned as an ordinary
+unknown name afterwards.
 
 **A relative file path is resolved at eval time only through
 `library_links::base_dir_for_eval(network_stack, registry)`** — the directory

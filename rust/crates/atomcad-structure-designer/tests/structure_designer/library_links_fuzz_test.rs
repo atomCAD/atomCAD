@@ -3,9 +3,10 @@
 //!
 //! One run is ~30 steps drawn from library edits written to disk (as another
 //! process would), host edits, and app actions (check, refresh, undo, redo,
-//! save and reopen). After every step: O2 on the operations that must not
-//! change the host's wiring except as reported (check, refresh, reopen, host
-//! edits), O5 on undo and redo, O3 (the library file changes only in the
+//! save and reopen, rename alias, make local). After every step: O2 on the
+//! operations that must not change the host's wiring except as reported
+//! (check, refresh, reopen, host edits, rename alias, make local), O5 on undo
+//! and redo, O3 (the library file changes only in the
 //! harness's own library steps), O6. At the end: O4 on the final state, then
 //! undo all the way back to the last open and require its O1.
 //!
@@ -302,13 +303,24 @@ impl Run {
             .unwrap_or_default()
     }
 
+    /// The library's alias now — renamed by a rename step, gone after a
+    /// *Make local copy* (until that is undone).
+    fn alias(&self) -> Option<String> {
+        self.d
+            .node_type_registry
+            .library_links
+            .direct_mounts()
+            .next()
+            .map(|m| m.alias.clone())
+    }
+
     fn fresh(&mut self, prefix: &str) -> String {
         self.next_name += 1;
         format!("{}{}", prefix, self.next_name)
     }
 
     fn step(&mut self) {
-        match self.rng.below(19) {
+        match self.rng.below(21) {
             // --- library edits -------------------------------------------
             0 => {
                 let name = self.fresh("p");
@@ -489,9 +501,12 @@ impl Run {
             10 | 11 => self.judged("check_dependencies", |d| {
                 d.check_dependencies().unwrap_or_default()
             }),
-            12 => self.judged("refresh_library", |d| {
-                d.refresh_library("lib").unwrap_or_default()
-            }),
+            12 => {
+                let alias = self.alias().unwrap_or_else(|| "lib".to_string());
+                self.judged("refresh_library", |d| {
+                    d.refresh_library(&alias).unwrap_or_default()
+                })
+            }
             13 | 14 => {
                 self.log.push("undo".to_string());
                 let pre = state(&mut self.d);
@@ -540,6 +555,67 @@ impl Run {
                 self.undo_states.clear();
                 self.redo_states.clear();
                 self.opened = local_fingerprint(&mut self.d);
+            }
+            // --- the two operations that change what the link is (P6) -----
+            19 => {
+                let Some(old) = self.alias() else {
+                    self.log
+                        .push("rename alias (skipped: not linked)".to_string());
+                    return;
+                };
+                let new = self.fresh("lib");
+                self.judged(&format!("rename alias {} to {}", old, new), |d| {
+                    d.rename_library_alias(&old, &new)
+                        .unwrap_or_else(|e| panic!("rename refused: {}", e));
+                    RefreshReport::default()
+                });
+            }
+            20 => {
+                let Some(alias) = self.alias() else {
+                    self.log
+                        .push("make local (skipped: not linked)".to_string());
+                    return;
+                };
+                // O2 on the networks that were the host's before: vendoring
+                // adds the library's networks — and their wires — to them.
+                let locals: BTreeSet<String> = {
+                    let registry = &self.d.node_type_registry;
+                    registry
+                        .node_networks
+                        .keys()
+                        .filter(|n| registry.library_links.mount_containing(n).is_none())
+                        .cloned()
+                        .collect()
+                };
+                let before = snapshot(&self.d);
+                let pre = state(&mut self.d);
+                let pushes = self.d.undo_stack.push_count();
+                match self.d.make_library_local(&alias) {
+                    Ok(()) => self.log.push(format!("make {} local", alias)),
+                    Err(e) => {
+                        self.log
+                            .push(format!("make {} local (refused: {})", alias, e));
+                        if state(&mut self.d) != pre {
+                            self.fail("a refused make-local changed the design");
+                        }
+                    }
+                }
+                let mut after = snapshot(&self.d);
+                after.records.retain(|r| locals.contains(&r.network));
+                after.frozen.retain(|(n, _, _)| locals.contains(n));
+                self.check(
+                    check_o2(&before, &after, &RefreshReport::default()).map_err(|e| {
+                        format!(
+                            "O2 across make local:
+{}",
+                            e
+                        )
+                    }),
+                );
+                if self.d.undo_stack.push_count() != pushes {
+                    self.undo_states.push(pre);
+                    self.redo_states.clear();
+                }
             }
             // --- host edits ----------------------------------------------
             _ => {

@@ -433,6 +433,29 @@ Node Networks:
 
 **Note:** `query` and `edit` always operate on the active network.
 
+### Linked Libraries
+
+A design can **link** other `.cnnd` files. A linked library's networks and
+record types appear under its alias (`demolib.half_space`, `demolib.Miller`,
+nested `demolib.common.slab`) and are used like local ones — but they are
+**read-only**: `edit` on a linked network is refused, and `networks` marks
+them `(linked, read-only)`. `query` on one prints a `# linked from <path>`
+line under the `# Network:` header. To change one, open the library file
+(`load <path>`), edit, save, and load the design again.
+
+```bash
+atomcad-cli libraries                                # list, with status
+atomcad-cli libraries link libs/demolib.cnnd demolib # path relative to the design
+atomcad-cli libraries refresh [demolib]              # re-read one, or all
+atomcad-cli libraries unlink demolib                 # refused while used
+atomcad-cli libraries rename demolib libs.demolib    # renames every use too
+atomcad-cli libraries make-local demolib             # copy into the design, unlink
+```
+
+Each is one undo step. `refresh` prints one line per wire it disconnected.
+Refer to a library's content by its full name in the text format, backticked
+when it contains dots: ``f = `demolib.half_space` { … }``.
+
 ### File Operations
 
 Load, save, and manage `.cnnd` project files:
@@ -445,6 +468,8 @@ atomcad-cli load design.cnnd --force  # Discard unsaved changes
 # Save current project
 atomcad-cli save                      # Save to current file
 atomcad-cli save design.cnnd          # Save to new path (overwrites if exists)
+atomcad-cli save other/design.cnnd --copy-deps  # …and copy linked libraries / data files along
+atomcad-cli save other/design.cnnd --no-deps    # …or save the design alone
 
 # Check file status
 atomcad-cli file
@@ -477,6 +502,9 @@ Networks: 1
 **Behavior notes:**
 - `load` without `--force` fails if there are unsaved changes
 - `save` without a path saves to the current file; fails if no file is loaded
+- `save <path>` into another folder fails, listing the files, when the design
+  reads libraries or data files by a relative path that would not be there;
+  choose `--copy-deps` (existing different files are kept) or `--no-deps`
 - `new` clears all networks and creates a fresh "Main" network
 - Relative paths are resolved relative to the CLI's working directory
 

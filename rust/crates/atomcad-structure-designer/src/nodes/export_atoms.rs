@@ -147,6 +147,14 @@ impl NodeData for ExportAtomsData {
         Box::new(self.clone())
     }
 
+    /// The output path is stored like a reader's input path, so it moves with
+    /// the network too (*Make local copy*).
+    fn rebase_file_paths(&mut self, rebase: &dyn Fn(&str) -> Option<String>) {
+        if let Some(new_path) = rebase(&self.file_name) {
+            self.file_name = new_path;
+        }
+    }
+
     fn get_subtitle(
         &self,
         connected_input_pins: &std::collections::HashSet<String>,

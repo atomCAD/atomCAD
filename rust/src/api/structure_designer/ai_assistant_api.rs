@@ -26,9 +26,7 @@
 use crate::api::api_common::{
     refresh_structure_designer_auto, with_cad_instance_or, with_mut_cad_instance_or,
 };
-use atomcad_structure_designer::text_format::{
-    describe_node_type, get_display_summary, serialize_network,
-};
+use atomcad_structure_designer::text_format::{describe_node_type, get_display_summary};
 
 // =============================================================================
 // FFI Functions (exposed to Flutter via flutter_rust_bridge)
@@ -42,6 +40,8 @@ use atomcad_structure_designer::text_format::{
 /// # Returns
 /// A string containing the text format representation of the network.
 /// If no network is active, returns an error message starting with "#".
+/// A network of a linked library carries a `# linked from …` line under the
+/// `# Network:` header (`StructureDesigner::query_active_network_text`).
 ///
 /// # Example Output
 /// ```text
@@ -54,33 +54,10 @@ use atomcad_structure_designer::text_format::{
 pub fn ai_query_network() -> String {
     unsafe {
         with_cad_instance_or(
-            |cad_instance| {
-                let structure_designer = &cad_instance.structure_designer;
-
-                // Get the active network name
-                let network_name = match &structure_designer.active_node_network_name {
-                    Some(name) => name,
-                    None => return "# No active node network\n".to_string(),
-                };
-
-                // Get the network from the registry
-                let network = match structure_designer
-                    .node_type_registry
-                    .node_networks
-                    .get(network_name)
-                {
-                    Some(network) => network,
-                    None => return format!("# Network '{}' not found\n", network_name),
-                };
-
-                // Serialize the network with its name
-                serialize_network(
-                    network,
-                    &structure_designer.node_type_registry,
-                    Some(network_name),
-                )
-            },
-            "# Error: Could not access structure designer\n".to_string(),
+            |cad_instance| cad_instance.structure_designer.query_active_network_text(),
+            "# Error: Could not access structure designer
+"
+            .to_string(),
         )
     }
 }

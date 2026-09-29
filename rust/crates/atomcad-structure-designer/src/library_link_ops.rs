@@ -9,9 +9,15 @@ use crate::library_links::{
     self, ImportSpec, LibraryMount, MountStatus, UsedInterfaces, is_under, normalize_rel_path,
     relative_path, validate_alias,
 };
+use crate::node_network::{NodeNetwork, walk_all_nodes_mut};
 use crate::structure_designer::StructureDesigner;
-use crate::undo::commands::link_library::{LinkLibraryCommand, UnlinkLibraryCommand};
+use crate::undo::commands::link_library::{
+    LinkLibraryCommand, RenameLibraryAliasCommand, UnlinkLibraryCommand, VendorLibraryCommand,
+};
 use std::path::{Path, PathBuf};
+
+/// Whole copies of networks, by name — one side of a command's before/after.
+type NetworkCopies = Vec<(String, NodeNetwork)>;
 
 impl StructureDesigner {
     /// The mounts of the open design, direct and nested.
@@ -193,6 +199,245 @@ impl StructureDesigner {
         self.set_dirty(true);
         self.mark_full_refresh();
         Ok(())
+    }
+
+    /// *Make local copy* on a mount folder (§10, "vendoring"): the direct
+    /// mount `alias` — nested mounts included — stops being a link, and its
+    /// content, as it is **in memory**, becomes the design's own: saved from
+    /// now on, editable, no `imports` entry. One undo step.
+    ///
+    /// Refused unless every mount in the subtree has content (there is
+    /// nothing to copy from a missing file), and while anything refers to a
+    /// name under the mount that does not resolve: such a node is safe only
+    /// while the name lies under a mount (§8). Relative data-file paths of the
+    /// library's nodes are rebased onto the design's folder so they keep
+    /// naming the same files (a path that arrives through a wire cannot be,
+    /// D8).
+    pub fn make_library_local(&mut self, alias: &str) -> Result<(), String> {
+        match self.node_type_registry.library_links.get(alias) {
+            Some(m) if m.is_direct() => {}
+            Some(_) => {
+                return Err(format!(
+                    "'{}' is linked by another library; only a direct link can be made local",
+                    alias
+                ));
+            }
+            None => return Err(format!("no linked library '{}'", alias)),
+        }
+        let registry = &self.node_type_registry;
+        if let Some(m) = registry
+            .library_links
+            .iter()
+            .find(|m| is_under(&m.mount_path, alias) && !m.status.has_content())
+        {
+            return Err(format!(
+                "cannot make '{}' local: '{}' ({}) is not loaded — {}",
+                alias,
+                m.mount_path,
+                m.rel_path,
+                m.status.message()
+            ));
+        }
+        let unresolved = library_links::unresolved_refs_under(registry, alias);
+        if !unresolved.is_empty() {
+            return Err(format!(
+                "cannot make '{}' local: these refer to names the library does not define: {}",
+                alias,
+                unresolved.join(", ")
+            ));
+        }
+
+        let (networks_before, networks_after) = self.rebased_library_networks(alias);
+        let registry = &mut self.node_type_registry;
+        let id_floors = (registry.param_id_floor, registry.field_id_floor);
+        let previous = registry.library_links.data_files.clone();
+        let mounts = registry.library_links.remove_subtree(alias);
+        for (name, network) in &networks_after {
+            registry.node_networks.insert(name.clone(), network.clone());
+        }
+        crate::undo::commands::link_library::rebuild_watches_carrying(registry, &previous);
+        library_links::validate_all_networks(registry);
+        self.push_command(VendorLibraryCommand {
+            alias: alias.to_string(),
+            mounts,
+            id_floors,
+            networks_before,
+            networks_after,
+        });
+        self.set_dirty(true);
+        self.mark_full_refresh();
+        Ok(())
+    }
+
+    /// The networks under `alias` whose stored data-file paths change when
+    /// they become the design's own, as `(before, after)` copies: a relative
+    /// path authored against a library's folder is re-spelled against the
+    /// design's folder (absolute when no relative path exists — another
+    /// drive). Networks in the design's own folder need nothing.
+    fn rebased_library_networks(&self, alias: &str) -> (NetworkCopies, NetworkCopies) {
+        let registry = &self.node_type_registry;
+        let fs = registry.library_links.fs();
+        let canonical = |p: &Path| fs.canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+        let Some(host_dir) = self
+            .host_file()
+            .and_then(|h| h.parent().map(Path::to_path_buf))
+            .map(|d| canonical(&d))
+        else {
+            return (Vec::new(), Vec::new());
+        };
+        let mut names: Vec<&String> = registry
+            .node_networks
+            .keys()
+            .filter(|k| is_under(k, alias))
+            .collect();
+        names.sort();
+        let (mut before, mut after) = (Vec::new(), Vec::new());
+        for name in names {
+            let Some(lib_dir) = crate::library_refresh::base_dir_of(registry, name) else {
+                continue;
+            };
+            let lib_dir = canonical(&lib_dir);
+            if lib_dir == host_dir {
+                continue;
+            }
+            let rebase = |stored: &str| -> Option<String> {
+                if stored.is_empty() || Path::new(stored).is_absolute() {
+                    return None;
+                }
+                let target = library_links::lexical_join(&lib_dir, stored).ok()?;
+                let spelled = relative_path(&host_dir, &target).unwrap_or_else(|| {
+                    let s = target.to_string_lossy().to_string();
+                    s.strip_prefix(r"\\?\").map(str::to_string).unwrap_or(s)
+                });
+                (spelled != stored).then_some(spelled)
+            };
+            let original = &registry.node_networks[name];
+            let mut copy = original.clone();
+            let changed = std::cell::Cell::new(false);
+            let tracked = |stored: &str| {
+                let r = rebase(stored);
+                changed.set(changed.get() || r.is_some());
+                r
+            };
+            walk_all_nodes_mut(&mut copy, &mut |node| {
+                node.data.rebase_file_paths(&tracked);
+            });
+            if changed.get() {
+                before.push((name.clone(), original.clone()));
+                after.push((name.clone(), copy));
+            }
+        }
+        (before, after)
+    }
+
+    /// *Rename alias…* on a direct mount (D3): every name under `alias` —
+    /// the library's networks, record defs and folders, its nested mounts, and
+    /// every reference to them in the design, including those of frozen nodes
+    /// and the recorded interfaces — moves under `new_alias` in one undoable
+    /// step. The library file is untouched; the next save writes the new alias.
+    pub fn rename_library_alias(&mut self, alias: &str, new_alias: &str) -> Result<(), String> {
+        match self.node_type_registry.library_links.get(alias) {
+            Some(m) if m.is_direct() => {}
+            Some(_) => {
+                return Err(format!(
+                    "'{}' is linked by another library; only a direct link's alias can be renamed",
+                    alias
+                ));
+            }
+            None => return Err(format!("no linked library '{}'", alias)),
+        }
+        if new_alias == alias {
+            return Ok(());
+        }
+        validate_alias(new_alias)?;
+        if is_under(new_alias, alias) || is_under(alias, new_alias) {
+            return Err(format!(
+                "'{}' contains or lies inside '{}'; rename in two steps through another alias",
+                new_alias, alias
+            ));
+        }
+        self.check_new_alias(new_alias)?;
+        // Nothing may already refer to a name under the new alias (a dangling
+        // reference would silently start resolving into the library).
+        let users = library_links::mount_users(&self.node_type_registry, new_alias);
+        if !users.is_empty() {
+            return Err(format!(
+                "names under '{}' are already referred to by: {}",
+                new_alias,
+                users.join(", ")
+            ));
+        }
+        let renamed: Vec<String> = self
+            .node_type_registry
+            .node_networks
+            .keys()
+            .filter(|k| is_under(k, alias))
+            .cloned()
+            .collect();
+        crate::undo::commands::link_library::apply_alias_rename(
+            &mut self.node_type_registry,
+            &mut self.active_node_network_name,
+            &mut self.active_record_def_name,
+            &mut self.eval_error_snapshots,
+            alias,
+            new_alias,
+        );
+        for old in &renamed {
+            if let Some(new) = library_links::reprefixed(old, alias, new_alias) {
+                self.navigation_history.rename_network(old, &new);
+            }
+        }
+        if let Some(clipboard) = self.clipboard.as_mut() {
+            walk_all_nodes_mut(clipboard, &mut |node| {
+                if let Some(new) = library_links::reprefixed(&node.node_type_name, alias, new_alias)
+                {
+                    node.node_type_name = new;
+                }
+            });
+        }
+        self.push_command(RenameLibraryAliasCommand {
+            old_alias: alias.to_string(),
+            new_alias: new_alias.to_string(),
+        });
+        self.set_dirty(true);
+        self.mark_full_refresh();
+        Ok(())
+    }
+
+    /// The `# linked from …` line `query` prints for a network that belongs
+    /// to a linked library (§6: read-only; the file to open to edit it).
+    pub fn linked_network_header(&self, network_name: &str) -> Option<String> {
+        let links = &self.node_type_registry.library_links;
+        let mount = links.mount_containing(network_name)?;
+        let via = match &mount.parent {
+            Some(parent) => format!(", through `{}`", parent),
+            None => String::new(),
+        };
+        Some(format!(
+            "# linked from {} (library `{}`{}) — read-only; open the library file to edit it\n",
+            mount.rel_path, mount.mount_path, via
+        ))
+    }
+
+    /// The active network in the text format, as `query` shows it: the
+    /// `# Network:` header, then — for a linked network — the `# linked from`
+    /// line.
+    pub fn query_active_network_text(&self) -> String {
+        let Some(name) = self.active_node_network_name.as_deref() else {
+            return "# No active node network\n".to_string();
+        };
+        let Some(network) = self.node_type_registry.node_networks.get(name) else {
+            return format!("# Network '{}' not found\n", name);
+        };
+        let text =
+            crate::text_format::serialize_network(network, &self.node_type_registry, Some(name));
+        match self.linked_network_header(name) {
+            Some(header) => match text.split_once('\n') {
+                Some((first, rest)) => format!("{}\n{}{}", first, header, rest),
+                None => format!("{}{}", header, text),
+            },
+            None => text,
+        }
     }
 
     /// True when `name` (a network, record def or folder) belongs to a linked

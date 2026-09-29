@@ -168,6 +168,12 @@ impl NodeData for BuildScriptData {
         self.file.iter().cloned().collect()
     }
 
+    fn rebase_file_paths(&mut self, rebase: &dyn Fn(&str) -> Option<String>) {
+        if let Some(new_path) = self.file.as_deref().and_then(rebase) {
+            self.file = Some(new_path);
+        }
+    }
+
     fn file_path_pins(&self) -> &'static [&'static str] {
         &["file"]
     }

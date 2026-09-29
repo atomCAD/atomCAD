@@ -562,7 +562,8 @@ a missed gate here must at worst show an error.
   missing (mount paths are fed into the tree as folder paths). Linked rows get
   `linkedRowMenuItems` instead of the editing menu, and never drag, rename or
   accept drops; a local folder holding a mount does not rename or move either
-  (it would change an alias).
+  (it would change an alias — *Rename alias…* on the mount folder is the way,
+  next to *Make local copy*, both Rust operations of one undo step).
 - **Change detection triggers** live in `structure_designer.dart`: an
   `AppLifecycleListener` (`onResume`), a 2 s poll while focused, and a call
   after Save As, each running `model.checkDependencies()` and then
@@ -584,7 +585,9 @@ a missed gate here must at worst show an error.
   would be copied or conflicts. The dialog passes back the conflict targets the
   user chose to overwrite — never a blanket "overwrite" flag — because Rust
   recomputes the plan at copy time and keeps any conflict it was not told about.
-  `http_server.dart`'s `/save` still writes the design alone.
+  `http_server.dart`'s `/save <path>` uses the same plan: when it would copy
+  anything it refuses unless told `deps=copy` (copies; conflicts are kept, never
+  overwritten — the CLI cannot show the dialog) or `deps=none`.
 - **Open library file** replaces the document (one document is open) after
   `confirmDiscardChanges`, and remembers `model.backToDesignPath` for
   *File > Back to …*.

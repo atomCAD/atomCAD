@@ -115,11 +115,23 @@ Future<void> main(List<String> args) async {
   networksParser.addCommand('activate', networksActivateParser);
   networksParser.addCommand('rename', networksRenameParser);
 
+  // Linked libraries: `libraries [list|link|unlink|refresh|rename|make-local]`,
+  // parsed from the positional rest so the REPL shares the same code.
+  final librariesParser = ArgParser();
+
   // File commands
   final loadParser = ArgParser()
     ..addFlag('force',
         abbr: 'f', negatable: false, help: 'Discard unsaved changes');
-  final saveParser = ArgParser();
+  final saveParser = ArgParser()
+    ..addFlag('copy-deps',
+        negatable: false,
+        help: 'Save As: copy the libraries and data files the design uses '
+            'along to the new folder')
+    ..addFlag('no-deps',
+        negatable: false,
+        help: 'Save As: save the design alone, even when it uses files by a '
+            'relative path');
   final fileParser = ArgParser();
   final newParser = ArgParser()
     ..addFlag('force',
@@ -135,6 +147,7 @@ Future<void> main(List<String> args) async {
   parser.addCommand('screenshot', screenshotParser);
   parser.addCommand('display', displayParser);
   parser.addCommand('networks', networksParser);
+  parser.addCommand('libraries', librariesParser);
   parser.addCommand('load', loadParser);
   parser.addCommand('save', saveParser);
   parser.addCommand('file', fileParser);
@@ -241,6 +254,9 @@ Future<void> main(List<String> args) async {
     case 'networks':
       await _runNetworks(serverUrl, command);
       break;
+    case 'libraries':
+      if (!await _runLibraries(serverUrl, command.rest)) exit(1);
+      break;
     case 'load':
       await _runLoad(serverUrl, command);
       break;
@@ -329,8 +345,26 @@ void _printUsage() {
   stdout.writeln('  atomcad-cli networks activate <name>  Switch to a network');
   stdout.writeln('  atomcad-cli networks rename <old> <new>');
   stdout.writeln('                                        Rename a network');
+  stdout.writeln(
+      '  atomcad-cli libraries                 List linked libraries (with status)');
+  stdout.writeln('  atomcad-cli libraries link <path> <alias>');
+  stdout.writeln(
+      '                                        Link a .cnnd file under an alias');
+  stdout.writeln(
+      '  atomcad-cli libraries refresh [<mount>]  Re-read one library, or all');
+  stdout.writeln(
+      '  atomcad-cli libraries unlink <alias>  Unlink (refused while in use)');
+  stdout.writeln('  atomcad-cli libraries rename <alias> <new-alias>');
+  stdout.writeln(
+      '                                        Rename an alias everywhere');
+  stdout.writeln('  atomcad-cli libraries make-local <alias>');
+  stdout.writeln(
+      '                                        Copy a library into the design');
   stdout.writeln('  atomcad-cli load <path> [--force]     Load a .cnnd file');
   stdout.writeln('  atomcad-cli save [path]               Save to file');
+  stdout.writeln('  atomcad-cli save <path> --copy-deps | --no-deps');
+  stdout.writeln(
+      '                                        Save As, with or without the files it uses');
   stdout.writeln(
       '  atomcad-cli file                      Show current file status');
   stdout.writeln('  atomcad-cli new [--force]             Create new project');
@@ -391,9 +425,23 @@ void _printReplHelp() {
   stdout.writeln('                      Switch to a network');
   stdout.writeln('  networks rename <old> <new>');
   stdout.writeln('                      Rename a network');
+  stdout.writeln('  libraries, libs      List linked libraries');
+  stdout.writeln('  libraries link <path> <alias>');
+  stdout.writeln('                      Link a .cnnd file under an alias');
+  stdout.writeln('  libraries refresh [<mount>]');
+  stdout.writeln('                      Re-read one library, or all');
+  stdout.writeln('  libraries unlink <alias>');
+  stdout.writeln('                      Unlink a library');
+  stdout.writeln('  libraries rename <alias> <new-alias>');
+  stdout.writeln('                      Rename an alias everywhere');
+  stdout.writeln('  libraries make-local <alias>');
+  stdout.writeln('                      Copy a library into the design');
   stdout.writeln('  load <path> [--force]');
   stdout.writeln('                      Load a .cnnd file');
   stdout.writeln('  save [path]         Save to file');
+  stdout.writeln('  save <path> --copy-deps | --no-deps');
+  stdout.writeln(
+      '                      Save As, with or without the files it uses');
   stdout.writeln('  file                Show current file status');
   stdout.writeln('  new [--force]       Create new project');
   stdout.writeln('  help, ?             Show this help');
@@ -937,6 +985,13 @@ Future<void> _runLoad(String serverUrl, ArgResults args) async {
   }
 }
 
+/// Prints the `details` lines of a `/save` response.
+void _printSaveDetails(Map<String, dynamic> result, IOSink sink) {
+  for (final line in (result['details'] as List?) ?? const []) {
+    sink.writeln('  $line');
+  }
+}
+
 Future<void> _runSave(String serverUrl, ArgResults args) async {
   final path = args.rest.isNotEmpty ? args.rest.first : null;
 
@@ -944,6 +999,8 @@ Future<void> _runSave(String serverUrl, ArgResults args) async {
     final queryParams = <String, String>{};
     if (path != null) {
       queryParams['path'] = _resolveToAbsolutePath(path);
+      if (args['copy-deps'] as bool) queryParams['deps'] = 'copy';
+      if (args['no-deps'] as bool) queryParams['deps'] = 'none';
     }
 
     final uri = Uri.parse('$serverUrl/save')
@@ -955,8 +1012,10 @@ Future<void> _runSave(String serverUrl, ArgResults args) async {
       final result = jsonDecode(response.body);
       if (result['success'] == true) {
         stdout.writeln('Saved: ${result['file_path']}');
+        _printSaveDetails(result, stdout);
       } else {
         stderr.writeln('Error: ${result['error']}');
+        _printSaveDetails(result, stderr);
         exit(1);
       }
     } else {
@@ -1244,6 +1303,11 @@ Future<void> _runRepl(String serverUrl) async {
         await _runNetworksRepl(serverUrl, parts);
         break;
 
+      case 'libraries':
+      case 'libs':
+        await _runLibraries(serverUrl, parts.sublist(1));
+        break;
+
       case 'load':
         await _runLoadRepl(serverUrl, parts);
         break;
@@ -1417,6 +1481,92 @@ Future<void> _runDisplayRepl(String serverUrl, List<String> parts) async {
   } catch (e) {
     stderr.writeln('Error: Failed to connect to atomCAD: $e');
   }
+}
+
+const String _librariesUsage =
+    'Usage: libraries [list | link <path> <alias> | refresh [<mount>] | '
+    'unlink <alias> | rename <alias> <new-alias> | make-local <alias>]';
+
+/// `libraries …` in command and REPL mode alike (`args` excludes the word
+/// `libraries`). Returns false on any failure, so command mode can exit 1.
+Future<bool> _runLibraries(String serverUrl, List<String> args) async {
+  final sub = args.isEmpty ? 'list' : args.first.toLowerCase();
+  final rest = args.isEmpty ? <String>[] : args.sublist(1);
+
+  bool usage() {
+    stderr.writeln(_librariesUsage);
+    return false;
+  }
+
+  try {
+    switch (sub) {
+      case 'list':
+      case 'ls':
+        final response = await _get(Uri.parse('$serverUrl/libraries'))
+            .timeout(const Duration(seconds: 10));
+        if (response.statusCode != 200) {
+          stderr.writeln('Error: Server returned ${response.statusCode}');
+          stderr.writeln(response.body);
+          return false;
+        }
+        stdout.write(response.body);
+        if (!response.body.endsWith('\n')) stdout.writeln();
+        return true;
+      case 'link':
+        if (rest.length < 2) return usage();
+        return _postLibraries(
+            serverUrl, 'link', {'path': rest[0], 'alias': rest[1]});
+      case 'unlink':
+        if (rest.isEmpty) return usage();
+        return _postLibraries(serverUrl, 'unlink', {'alias': rest[0]});
+      case 'rename':
+        if (rest.length < 2) return usage();
+        return _postLibraries(
+            serverUrl, 'rename', {'alias': rest[0], 'new': rest[1]});
+      case 'make-local':
+      case 'vendor':
+        if (rest.isEmpty) return usage();
+        return _postLibraries(serverUrl, 'make-local', {'alias': rest[0]});
+      case 'refresh':
+        return _postLibraries(
+            serverUrl, 'refresh', {if (rest.isNotEmpty) 'mount': rest[0]});
+      default:
+        stderr.writeln('Unknown libraries subcommand: $sub');
+        return usage();
+    }
+  } catch (e) {
+    stderr.writeln('Error: Failed to connect to atomCAD: $e');
+    return false;
+  }
+}
+
+/// POSTs one `/libraries/<route>` request and prints its outcome: the
+/// message, then any report lines (a refresh lists every wire it dropped).
+Future<bool> _postLibraries(
+    String serverUrl, String route, Map<String, String> body) async {
+  final response = await _post(
+    Uri.parse('$serverUrl/libraries/$route'),
+    headers: {'Content-Type': 'application/json'},
+    body: jsonEncode(body),
+  ).timeout(const Duration(seconds: 60));
+  final Map<String, dynamic> result;
+  try {
+    result = jsonDecode(response.body) as Map<String, dynamic>;
+  } catch (_) {
+    stderr.writeln('Error: Server returned ${response.statusCode}');
+    stderr.writeln(response.body);
+    return false;
+  }
+  final ok = response.statusCode == 200 && result['success'] == true;
+  if (ok) {
+    stdout.writeln(result['message']);
+  } else {
+    stderr.writeln('Error: ${result['error'] ?? result['message']}');
+  }
+  for (final line in (result['details'] as List?) ?? const []) {
+    (ok ? stdout : stderr).writeln('  $line');
+  }
+  return ok;
 }
 
 Future<void> _runNetworksRepl(String serverUrl, List<String> parts) async {
@@ -1611,13 +1761,16 @@ Future<void> _runLoadRepl(String serverUrl, List<String> parts) async {
 }
 
 Future<void> _runSaveRepl(String serverUrl, List<String> parts) async {
-  // Parse: save [path]
-  final path = parts.length > 1 ? parts[1] : null;
+  // Parse: save [path] [--copy-deps | --no-deps]
+  final positional = parts.skip(1).where((p) => !p.startsWith('--')).toList();
+  final path = positional.isNotEmpty ? positional.first : null;
 
   try {
     final queryParams = <String, String>{};
     if (path != null) {
       queryParams['path'] = _resolveToAbsolutePath(path);
+      if (parts.contains('--copy-deps')) queryParams['deps'] = 'copy';
+      if (parts.contains('--no-deps')) queryParams['deps'] = 'none';
     }
 
     final uri = Uri.parse('$serverUrl/save')
@@ -1629,8 +1782,10 @@ Future<void> _runSaveRepl(String serverUrl, List<String> parts) async {
       final result = jsonDecode(response.body);
       if (result['success'] == true) {
         stdout.writeln('Saved: ${result['file_path']}');
+        _printSaveDetails(result, stdout);
       } else {
         stderr.writeln('Error: ${result['error']}');
+        _printSaveDetails(result, stderr);
       }
     } else {
       stderr.writeln('Error: Server returned ${response.statusCode}');

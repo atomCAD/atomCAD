@@ -637,6 +637,14 @@ impl NodeData for MechanosynthData {
             .collect()
     }
 
+    fn rebase_file_paths(&mut self, rebase: &dyn Fn(&str) -> Option<String>) {
+        for path in [&mut self.ops_file, &mut self.build_file] {
+            if let Some(new_path) = path.as_deref().and_then(rebase) {
+                *path = Some(new_path);
+            }
+        }
+    }
+
     /// **`scene`, not `result`.** `result` and the base part of `scene` are the
     /// same atoms, so showing both draws the workpiece twice; what a user
     /// scrubbing a build with tools wants to look at is the scene. With nothing

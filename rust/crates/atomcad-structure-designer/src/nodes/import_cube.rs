@@ -225,6 +225,12 @@ impl NodeData for ImportCubeData {
         self.file_name.iter().cloned().collect()
     }
 
+    fn rebase_file_paths(&mut self, rebase: &dyn Fn(&str) -> Option<String>) {
+        if let Some(new_path) = self.file_name.as_deref().and_then(rebase) {
+            self.file_name = Some(new_path);
+        }
+    }
+
     fn file_path_pins(&self) -> &'static [&'static str] {
         &["file_name"]
     }

@@ -93,8 +93,8 @@ is what you want.
   not edited. Their context menu offers *Find Usages*, *Open library file*,
   *Duplicate into my file*. Rename / Move / Delete / New… are absent.
 - The mount folder's context menu: *Refresh*, *Open library file*, *Change
-  file…* (retarget), *Unlink*. *File > Refresh all dependencies* refreshes every
-  library and data file.
+  file…* (retarget), *Rename alias…*, *Make local copy* (§10), *Unlink*.
+  *File > Refresh all dependencies* refreshes every library and data file.
 - A dependency changed on disk is **refreshed automatically** — when the window
   regains focus, and by a light poll while it has focus (D7, D10). A snackbar
   says what happened: "Refreshed demolib", or, if something was disconnected,
@@ -1057,6 +1057,12 @@ same phase.
   Offered only on a direct mount with status `Loaded` (there is nothing to
   vendor from a missing file); the host's `imports` entry for it is removed,
   and the vendored content takes the mount's in-memory state, not the disk's.
+  (As built, P6: any status with content — `OlderThanDisk` / `ChangedOnDisk`
+  too, which is exactly when "in memory, not the disk's" matters — and only
+  when every nested mount has content as well. Refused while anything refers
+  to a name under the mount that does not resolve: a frozen node is safe only
+  under a mount. Relative data-file paths of the library's nodes are rebased
+  onto the host's folder, or they would silently read other files.)
 
 ## 11. Phased implementation plan
 
@@ -1882,6 +1888,60 @@ so they get the full treatment:
   rewritten (instances, record schemas, `DataType`s in node data, `uses`
   keys); O2, O5, O4.
 - The randomized harness gains vendor and rename-alias steps.
+
+**Status (2026-09-29): implemented; the manual walkthrough is the
+maintainer's.** Files: `library_link_ops.rs` (`make_library_local`,
+`rename_library_alias`, `query_active_network_text`), `library_links.rs`
+(`rename_prefix`, `unresolved_refs_under`, `reinstall_recorded_layouts`),
+`undo/commands/link_library.rs` (`VendorLibraryCommand`,
+`RenameLibraryAliasCommand`), `NodeData::rebase_file_paths` on the eight nodes
+that store a path, the two API functions, the HTTP routes and `atomcad-cli
+libraries`, the two mount-folder menu items; tests
+`library_links_vendor_test.rs` (9) and `zone_body_load_order_test.rs`, and the
+harness's two new steps (500 seeds clean). Deviations and findings:
+
+- **Found: a zone body lost wires on every reopen — any file, not only
+  linking ones.** A load repairs networks one by one in name order, so a HOF
+  body instance of a network whose name sorts later has no type yet, and
+  `repair_zone_body` compared its zone-input wires against `DataType::None` and
+  dropped them. Vendoring exposed it (`a.*` sorts after `Main`), but it also hit
+  every *mount* of a library whose `bar` body calls its own `foo` — including
+  the `lib_a` fixture — and every plain design with such a body, since zones
+  Phase 6. The pass now keeps a wire whose destination type does not resolve,
+  as the top-level pass always did; stage-2 validation sees the real type.
+  Regression test `zone_body_load_order_test.rs`; the pitfall is recorded in
+  `serialization/AGENTS.md`.
+- **Vendoring rebases data-file paths.** The section above said vendoring is
+  "just removing the mount record"; it is not, for a library outside the
+  design's folder: its nodes' relative paths resolve against the *library's*
+  folder (D8) and would resolve against the design's afterwards. Every node
+  that stores a path — the six readers and the two exporters — implements
+  `NodeData::rebase_file_paths`; a path with no relative spelling becomes
+  absolute. Watches carry over by canonical path, so a held change stays held.
+- **Undo of vendoring puts back the file's id floors.** A save while the
+  content is local raises `param_id_floor` / `field_id_floor` over its ids;
+  once it is linked again those ids are the library's history, and O5 caught
+  the floor surviving the undo.
+- **Rename alias refuses what would not be a bijection:** a new alias that
+  contains or lies inside the old one (rename through another name), and one
+  under which something already refers to a name (a dangling reference would
+  start resolving into the library). Everything else is `rename_prefix` one way
+  and back; frozen nodes keep their recorded layouts, whose types are
+  re-prefixed with the `uses` tables.
+- **`query`'s header** is built in the crate (`query_active_network_text`), not
+  in the api wrapper, so it is tested: `# linked from <rel_path> (library
+  `<mount>`[, through `<parent>`])` under `# Network:`.
+- **The CLI's `save <path>` does the D11 dependency copy** (P5 left it
+  writing the design alone). The CLI cannot show the dialog, so when the plan
+  would copy anything the route refuses and lists the files unless given
+  `--copy-deps` (conflicts are kept, never overwritten) or `--no-deps`.
+- Beyond the Phase 6 list: `libraries rename` and `libraries make-local`
+  subcommands, and `networks` marks linked networks `(linked, read-only)`.
+- Docs: the reference guide's `library_linking.md` (*Renaming an alias*,
+  *Making a library local*, *From the command line*) and `headless_cli.md`;
+  `ui.md`, `cnnd_versioning.md` and the `serialization/` / Flutter `AGENTS.md`
+  sections had already landed with P4/P5. The `atomcad` skill documents the
+  new commands.
 
 ## 12. Forward compatibility with multiple open documents
 

@@ -123,6 +123,34 @@ requests interleaved with the edits, in order. The session-label field beside it
 stamps a name of your choosing ("Opus 5 / skill v3") into the export — use it
 when the CLI is not sending `--label`, which says the same thing automatically.
 
+### Linked libraries: `atomcad-cli libraries`
+
+The [library links](library_linking.md) of the open design, from a script:
+
+| Command | What it does |
+|---|---|
+| `atomcad-cli libraries` | Lists every linked library — direct ones and the ones they link, indented under them — with its path and any problem (missing, unreadable, older than the file on disk). |
+| `atomcad-cli libraries link <path> <alias>` | Links a `.cnnd` file (a path relative to the design's file, or absolute) under an alias. The design must have been saved once. |
+| `atomcad-cli libraries refresh [<mount>]` | Re-reads one library (`demolib`), or, without an argument, every library and data file. Prints what changed, and one line per wire it disconnected. |
+| `atomcad-cli libraries unlink <alias>` | Unlinks a library; refused, with the nodes that use it, while anything does. |
+| `atomcad-cli libraries rename <alias> <new-alias>` | Renames an alias together with every use of it in the design. |
+| `atomcad-cli libraries make-local <alias>` | Makes a library part of the design (see [Making a library local](library_linking.md#making-a-library-local)). |
+
+Every one of them is one undo step, exactly as from the menus. In the REPL,
+`libs` is short for `libraries`.
+
+`atomcad-cli save <path>` into another folder is *Save As* with the dependency
+copy of [Moving a design](library_linking.md#moving-a-design-save-as-and-project-bundles).
+When the design links libraries or reads data files by a relative path that
+would not be at the new location, it refuses and lists them; add `--copy-deps`
+to copy them along (a different file already at a target is kept, never
+overwritten) or `--no-deps` to save the design alone.
+
+`query` on a network that belongs to a linked library prints a
+`# linked from <path> (library `<mount>`)` line under the `# Network:` header.
+Such a network can be read, but `edit` on it is refused: to change it, open the
+library file.
+
 ### Reading query output back in
 
 `query` output contains blank lines, and `atomcad-cli edit` reading from

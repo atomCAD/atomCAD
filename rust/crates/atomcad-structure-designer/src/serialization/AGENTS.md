@@ -38,6 +38,14 @@ Loading runs in **two stages with different network orderings**, and the gap bet
 - a **by-name `arguments` rebuild** (`set_custom_node_type(.., refresh_args = true)`) — has no name for the `arg0` slot the wire sits at, so it drops it;
 - a **truncation** (`network_validator::repair_network_arguments`) — cuts `arguments` down to the bare `[f]` count.
 
+The same holds for **any** type a stage-1 pass reads off another network. A
+body instance of a custom network whose name sorts later has **no type at all**
+in stage 1; `repair_zone_body` used to compare its zone-input wires against
+`DataType::None` and drop them on every reopen (found by library linking
+Phase 6 — `zone_body_load_order_test.rs`). A repair pass that meets an
+unresolved source *or* destination type keeps the wire and leaves it to stage 2,
+like the top-level dangling-wire cleanup always did.
+
 Stage 1 stays non-destructive for `apply`: `initialize_…` uses `refresh_args = false`; `repair_node_network`'s generic populate special-cases `apply` to `refresh_args = false` and then runs the apply post-pass with the **preserving-args** variant; its argument-count fixer only *pads*, never truncates. So stage 1 leaves `apply` with an under-derived `[f]` layout but its `arguments` (incl. the unresolved `arg0` wire) intact. Stage 2's `validate_network` then runs the apply/map post-passes (preserving variants) **before** `repair_network_arguments`, so once the `f`-source is resolvable (dependency order) the real `[f, arg0, …]` layout is installed *with the wires preserved positionally*, and the now-no-op truncation/`validate_wires` follow. The `f` wire itself (index 0, and a `-1` source pin) is never at risk; only the derived `arg0…` pins are. See `structure_designer/AGENTS.md` (apply post-pass paragraph) and `doc/design_currying.md`.
 
 ## Linked libraries (`imports`, v9)

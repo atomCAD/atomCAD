@@ -47,7 +47,8 @@ Right-click menus on linked content offer only what does not change it:
   to other library networks stay links);
 - a linked **record type**: *Open library file*;
 - the **library folder**: *Refresh*, *Open library file*, and for a library you
-  linked directly *Change file…* and *Unlink*.
+  linked directly *Change file…*, *Rename alias…*, *Make local copy* and
+  *Unlink*.
 
 Linked rows cannot be renamed, moved, deleted or dragged, and nothing can be
 created or dropped inside a library's folder. A local folder that holds a
@@ -143,6 +144,53 @@ says what changed. Nothing in your design is renamed.
 *Unlink* removes a library you no longer use. It is refused, with the list of
 nodes that still use the library, while anything does — so unlinking can never
 break a working node. Unlinking is one undo step.
+
+## Renaming an alias
+
+*Rename alias…* on a library folder moves the library to another alias —
+`demolib` to `libs.demolib`, say — together with **every** use of it in your
+design: custom nodes, record nodes, types that name one of its record types,
+nodes that refer to something the library no longer defines, and the libraries
+it links (`demolib.common` becomes `libs.demolib.common`). Wires are not
+touched, and the library file is not changed; the next save writes the new
+alias. It is one undo step.
+
+The new alias follows the same rules as a new link's. Two more are specific to
+a rename: it may not contain or lie inside the current alias (go through
+another name — `demolib` → `tmp` → `demolib.v2`), and it is refused when
+something in your design already refers to a name under it that does not exist,
+since that reference would suddenly start pointing into the library.
+
+## Making a library local
+
+*Make local copy* on a library folder ends the link and keeps the content: the
+library's networks, record types and folders — and those of the libraries it
+links — become part of your design, exactly as they are in memory now (also if
+the file on disk has changed since). From then on they are editable, saved in
+your design, and changes to the library file no longer reach it; the design no
+longer lists the library. Their names do not change (`demolib.half_space` stays
+`demolib.half_space`, now as an ordinary folder of your own), so every wire
+stays where it is. Use it when one self-contained file is what you need, or to
+take over a library you want to develop further inside your design.
+
+Data files the library reads by a relative path (an `import_xyz` of `tip.xyz`
+beside the library, say) keep being read from the same place: the stored paths
+are rewritten relative to your design's folder (`libs/tip.xyz`). A path that
+arrives through a wire is computed during evaluation and cannot be rewritten.
+
+It is offered only while the library is loaded, and refused while something
+refers to a name the library does not define (a node showing *Unknown node
+type*) — outside a library such a node would lose its wires. It is one undo
+step; undo makes it a link again.
+
+## From the command line
+
+A running atomCAD can be driven by
+[`atomcad-cli libraries`](headless_cli.md#linked-libraries-atomcad-cli-libraries):
+list, link, refresh, unlink, rename an alias, and make a library local.
+`atomcad-cli query` marks a network that belongs to a linked library with a
+`# linked from <path>` line under its header: it can be read, but an edit of it
+is refused.
 
 ## Moving a design: Save As and project bundles
 

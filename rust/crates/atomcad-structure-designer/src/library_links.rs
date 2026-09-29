@@ -1320,6 +1320,244 @@ pub fn restore_detached(registry: &mut NodeTypeRegistry, detached: &DetachedMoun
     }
 }
 
+/// `name` moved from under `from` to under `to`, or `None` when it does not
+/// lie under `from`.
+pub fn reprefixed(name: &str, from: &str, to: &str) -> Option<String> {
+    is_under(name, from).then(|| format!("{}{}", to, &name[from.len()..]))
+}
+
+/// Moves every name at or under `from` to lie under `to` instead, wherever a
+/// name can appear in the registry: network keys and `node_type_name`s,
+/// record defs and every record reference (`Named` types, schema strings),
+/// folders, mount records (path, parent, recorded types, healed-id keys), the
+/// data-file watches' owners, and backtick references in descriptions and
+/// comments. Unresolved references (frozen nodes) move too — they are names,
+/// whether or not anything defines them. Frozen nodes get their recorded
+/// layouts again afterwards (the record rewrite rebuilds record nodes' caches).
+///
+/// A bijection as long as nothing lay under `to` before, so
+/// `rename_prefix(r, to, from)` is its exact inverse — *Rename alias…* and its
+/// undo (`doc/design_library_linking.md` D3). Callers check that; this does not.
+pub fn rename_prefix(registry: &mut NodeTypeRegistry, from: &str, to: &str) {
+    let map = |name: &str| reprefixed(name, from, to);
+
+    // Networks: keys and names first, so that the record rewrite below finds
+    // every network under its final name.
+    let keys: Vec<String> = registry
+        .node_networks
+        .keys()
+        .filter(|k| is_under(k, from))
+        .cloned()
+        .collect();
+    let moved: Vec<(String, NodeNetwork)> = keys
+        .into_iter()
+        .filter_map(|k| registry.node_networks.remove(&k).map(|n| (k, n)))
+        .collect();
+    for (key, mut network) in moved {
+        let new_key = map(&key).expect("filtered above");
+        network.node_type.name = new_key.clone();
+        registry.node_networks.insert(new_key, network);
+    }
+
+    // Instance references and backtick references, in every network.
+    let (old_dot, new_dot) = (format!("`{}.", from), format!("`{}.", to));
+    let (old_whole, new_whole) = (format!("`{}`", from), format!("`{}`", to));
+    let rewrite_text = |text: &mut String| {
+        if text.contains(&old_dot) || text.contains(&old_whole) {
+            *text = text
+                .replace(&old_dot, &new_dot)
+                .replace(&old_whole, &new_whole);
+        }
+    };
+    let NodeTypeRegistry {
+        built_in_node_types,
+        node_networks,
+        ..
+    } = &mut *registry;
+    for network in node_networks.values_mut() {
+        rewrite_text(&mut network.node_type.description);
+        if let Some(summary) = network.node_type.summary.as_mut() {
+            rewrite_text(summary);
+        }
+        walk_all_nodes_mut(network, &mut |node| {
+            if !built_in_node_types.contains_key(&node.node_type_name)
+                && let Some(new_name) = map(&node.node_type_name)
+            {
+                node.node_type_name = new_name;
+            }
+            if let Some(comment) = node
+                .data
+                .as_any_mut()
+                .downcast_mut::<crate::nodes::comment::CommentData>()
+            {
+                rewrite_text(&mut comment.label);
+                rewrite_text(&mut comment.text);
+            }
+        });
+    }
+
+    // Record defs, then every reference to them.
+    let def_keys: Vec<String> = registry
+        .record_type_defs
+        .keys()
+        .filter(|k| is_under(k, from))
+        .cloned()
+        .collect();
+    let defs: Vec<RecordTypeDef> = def_keys
+        .into_iter()
+        .filter_map(|k| registry.record_type_defs.remove(&k))
+        .collect();
+    for mut def in defs {
+        def.name = map(&def.name).expect("filtered above");
+        registry.record_type_defs.insert(def.name.clone(), def);
+    }
+    crate::node_type_registry::rewrite_record_names_in_registry_with(registry, &mut |name| {
+        if let Some(new_name) = map(name) {
+            *name = new_name;
+        }
+    });
+
+    // Folders.
+    registry.folders = std::mem::take(&mut registry.folders)
+        .into_iter()
+        .map(|f| map(&f).unwrap_or(f))
+        .collect();
+
+    // Mount records. Recorded types are spelled in the importing file's
+    // namespace, which is the host's for a direct mount and the prefixed one
+    // for a nested mount, so every record's types are rewritten.
+    let map_type = |s: &mut String| {
+        if let Ok(mut t) = DataType::from_string(s) {
+            let mut changed = false;
+            crate::data_type::walk_data_type_record_names_mut(&mut t, &mut |name: &mut String| {
+                if let Some(new_name) = map(name) {
+                    *name = new_name;
+                    changed = true;
+                }
+            });
+            if changed {
+                *s = t.to_string();
+            }
+        }
+    };
+    let mounts: Vec<LibraryMount> = std::mem::take(&mut registry.library_links.mounts)
+        .into_values()
+        .collect();
+    for mut m in mounts {
+        for entry in m.stored_uses.networks.values_mut() {
+            entry
+                .params
+                .iter_mut()
+                .for_each(|p| map_type(&mut p.data_type));
+            entry
+                .outputs
+                .iter_mut()
+                .for_each(|o| map_type(&mut o.data_type));
+        }
+        for entry in m.stored_uses.records.values_mut() {
+            entry
+                .fields
+                .iter_mut()
+                .for_each(|f| map_type(&mut f.data_type));
+        }
+        if let Some(new_path) = map(&m.mount_path) {
+            if m.parent.is_none() {
+                m.alias = new_path.clone();
+            }
+            m.mount_path = new_path;
+            m.parent = m.parent.map(|p| map(&p).unwrap_or(p));
+            m.name_only_param_ids = std::mem::take(&mut m.name_only_param_ids)
+                .into_iter()
+                .map(|(k, v)| (map(&k).unwrap_or(k), v))
+                .collect();
+        }
+        registry.library_links.insert(m);
+    }
+
+    // Data-file watches are keyed by the owning mount.
+    registry.library_links.data_files = std::mem::take(&mut registry.library_links.data_files)
+        .into_iter()
+        .map(|(mut key, watch)| {
+            key.owner = key.owner.map(|o| map(&o).unwrap_or(o));
+            (key, watch)
+        })
+        .collect();
+
+    reinstall_recorded_layouts(registry);
+}
+
+/// Installs the recorded layout of every frozen node of every network again,
+/// each with its own owner mount (see [`install_recorded_layout`]).
+pub fn reinstall_recorded_layouts(registry: &mut NodeTypeRegistry) {
+    if registry.library_links.is_empty() {
+        return;
+    }
+    let names: Vec<String> = registry.node_networks.keys().cloned().collect();
+    for name in names {
+        let owner = owner_mount(registry, &name);
+        if let Some(mut network) = registry.node_networks.remove(&name) {
+            install_recorded_layouts(&mut network, registry, owner.as_deref());
+            registry.node_networks.insert(name, network);
+        }
+    }
+}
+
+/// Every place — in the local content *and* inside the mount — that refers to
+/// a name under `mount_path` which does not resolve: frozen nodes, and local
+/// network signatures or record defs whose types name such a record. Such a
+/// reference is safe only while the name lies under a mount (§8); *Make local
+/// copy* would turn it into an ordinary unknown name that repair passes
+/// realign, so it refuses while this is non-empty.
+pub fn unresolved_refs_under(registry: &NodeTypeRegistry, mount_path: &str) -> Vec<String> {
+    let under_unresolved = |name: &str| {
+        is_under(name, mount_path)
+            && !registry.node_networks.contains_key(name)
+            && !registry.built_in_node_types.contains_key(name)
+            && registry.lookup_record_type_def(name).is_none()
+    };
+    let type_hit = |t: &DataType| {
+        let mut hit = false;
+        walk_data_type_record_names(t, &mut |n| hit |= under_unresolved(n));
+        hit
+    };
+    let mut out = BTreeSet::new();
+    let mut names: Vec<&String> = registry.node_networks.keys().collect();
+    names.sort();
+    for name in names {
+        let network = &registry.node_networks[name];
+        if network
+            .node_type
+            .parameters
+            .iter()
+            .any(|p| type_hit(&p.data_type))
+            || network
+                .node_type
+                .output_pins
+                .iter()
+                .any(|p| p.fixed_type().is_some_and(&type_hit))
+        {
+            out.insert(format!("network `{}` (interface)", name));
+        }
+        walk_all_nodes(network, &mut |node| {
+            let mut hit = under_unresolved(&node.node_type_name);
+            collect_record_refs_in_node(node, &mut |n, _| hit |= under_unresolved(n));
+            if hit {
+                let node_name = node
+                    .custom_name
+                    .clone()
+                    .unwrap_or_else(|| node.id.to_string());
+                out.insert(format!("network `{}`: node `{}`", name, node_name));
+            }
+        });
+    }
+    for (name, def) in &registry.record_type_defs {
+        if def.fields.iter().any(|f| type_hit(&f.data_type)) {
+            out.insert(format!("record `{}`", name));
+        }
+    }
+    out.into_iter().collect()
+}
+
 /// Where a mount's file lives and what the importing file recorded about it.
 #[derive(Clone, Debug)]
 pub struct ImportSpec {

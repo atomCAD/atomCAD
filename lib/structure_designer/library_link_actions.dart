@@ -15,7 +15,8 @@
 ///   every frozen node as a row that jumps to the node.
 /// - [linkLibraryInteractive], [changeLibraryFileInteractive],
 ///   [unlinkLibraryInteractive], [refreshLibraryInteractive],
-///   [refreshAllDependenciesInteractive].
+///   [refreshAllDependenciesInteractive], [renameLibraryAliasInteractive],
+///   [makeLibraryLocalInteractive].
 /// - [openLibraryFile] / [backToDesign] — *Open library file* replaces the
 ///   document (there is one open document), remembering where to go back.
 library;
@@ -538,6 +539,168 @@ Future<void> unlinkLibraryInteractive(BuildContext context,
   }
 }
 
+/// *Rename alias…* on a direct mount folder (D3): every reference to the
+/// library moves to the new alias in one undoable step.
+Future<void> renameLibraryAliasInteractive(BuildContext context,
+    StructureDesignerModel model, APILibraryMount mount) async {
+  final newAlias = await showDialog<String>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => _RenameAliasDialog(model: model, mount: mount),
+  );
+  if (newAlias != null && context.mounted) {
+    showTransientSnackBar(context, 'Renamed ${mount.alias} to $newAlias');
+  }
+}
+
+/// *Make local copy* on a direct mount folder (§10): after a confirmation,
+/// the library's content becomes part of the design. Refused by Rust while
+/// the library is not loaded or something refers to a name it lacks.
+Future<void> makeLibraryLocalInteractive(BuildContext context,
+    StructureDesignerModel model, APILibraryMount mount) async {
+  final confirmed = await showDraggableAlertDialog<bool>(
+    context: context,
+    title: Text('Make ${mount.alias} local?'),
+    content: Text(
+        'The networks and record types of ${mount.fileName} (and of the '
+        'libraries it links) become part of this design: editable, and saved '
+        'in this file. ${mount.fileName} is no longer linked, so later '
+        'changes to it do not reach this design. Undo reverses this.'),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.of(context).pop(false),
+        child: const Text('Cancel'),
+      ),
+      TextButton(
+        onPressed: () => Navigator.of(context).pop(true),
+        child: const Text('Make local'),
+      ),
+    ],
+  );
+  if (confirmed != true || !context.mounted) return;
+  final error = model.makeLibraryLocal(mount.alias);
+  if (!context.mounted) return;
+  if (error != null) {
+    await showErrorDialog(
+        context: context,
+        title: 'Cannot make ${mount.alias} local',
+        message: error);
+  } else {
+    showTransientSnackBar(context, '${mount.alias} is now part of this design');
+  }
+}
+
+/// Asks for the new alias; renames on OK and stays open on an error.
+class _RenameAliasDialog extends StatefulWidget {
+  final StructureDesignerModel model;
+  final APILibraryMount mount;
+
+  const _RenameAliasDialog({required this.model, required this.mount});
+
+  @override
+  State<_RenameAliasDialog> createState() => _RenameAliasDialogState();
+}
+
+class _RenameAliasDialogState extends State<_RenameAliasDialog> {
+  late final TextEditingController _controller;
+  String? _aliasError;
+  String? _renameError;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.mount.alias);
+    _validate();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  bool get _unchanged => _controller.text.trim() == widget.mount.alias;
+
+  void _validate() {
+    _aliasError = _unchanged
+        ? null
+        : widget.model.checkLibraryAlias(_controller.text.trim());
+  }
+
+  void _rename() {
+    final alias = _controller.text.trim();
+    final error = widget.model.renameLibraryAlias(widget.mount.alias, alias);
+    if (error == null) {
+      Navigator.of(context).pop(alias);
+    } else {
+      setState(() => _renameError = error);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final canRename = _aliasError == null && !_unchanged;
+    return DraggableDialog(
+      width: 440,
+      dismissible: true,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Rename alias',
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 4),
+            Text(widget.mount.fileName,
+                style: AppTextStyles.regular.copyWith(color: Colors.grey)),
+            const SizedBox(height: 12),
+            TextField(
+              key: const Key('rename_library_alias_field'),
+              controller: _controller,
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: 'Alias',
+                helperText: 'Every use of ${widget.mount.alias}.… in this '
+                    'design is renamed with it. The library file is not '
+                    'changed.',
+                helperMaxLines: 2,
+                errorText: _aliasError,
+              ),
+              onChanged: (_) => setState(() {
+                _validate();
+                _renameError = null;
+              }),
+              onSubmitted: (_) {
+                if (canRename) _rename();
+              },
+            ),
+            if (_renameError != null) ...[
+              const SizedBox(height: 12),
+              ErrorBanner(message: _renameError!),
+            ],
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: canRename ? _rename : null,
+                  child: const Text('Rename'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// *Refresh* on a mount folder, or a click on its "older than disk" marker.
 void refreshLibraryInteractive(
     BuildContext context, StructureDesignerModel model, APILibraryMount mount) {
@@ -714,11 +877,20 @@ const String libMenuDuplicateLocal = 'lib_duplicate_local';
 const String libMenuRefresh = 'lib_refresh';
 const String libMenuChangeFile = 'lib_change_file';
 const String libMenuUnlink = 'lib_unlink';
+const String libMenuRenameAlias = 'lib_rename_alias';
+const String libMenuMakeLocal = 'lib_make_local';
+
+/// True when [mount] holds content that *Make local copy* can take over.
+bool _hasContent(APILibraryMount mount) =>
+    mount.status == APIMountStatus.loaded ||
+    mount.status == APIMountStatus.olderThanDisk ||
+    mount.status == APIMountStatus.changedOnDisk;
 
 /// The menu of a row under a mount (§3): no Rename / Move / Delete / New.
 /// [isNetwork] adds *Duplicate into my file*; [mountFolder] is set when the
 /// row *is* the mount folder, which adds *Refresh* and, for a direct link,
-/// *Change file…* and *Unlink*.
+/// *Change file…*, *Rename alias…*, *Make local copy* (when loaded) and
+/// *Unlink*.
 List<PopupMenuEntry<String>> linkedRowMenuItems({
   required bool isNetwork,
   APILibraryMount? mountFolder,
@@ -735,6 +907,11 @@ List<PopupMenuEntry<String>> linkedRowMenuItems({
       const PopupMenuDivider(),
       const PopupMenuItem(
           value: libMenuChangeFile, child: Text('Change file…')),
+      const PopupMenuItem(
+          value: libMenuRenameAlias, child: Text('Rename alias…')),
+      if (_hasContent(mountFolder))
+        const PopupMenuItem(
+            value: libMenuMakeLocal, child: Text('Make local copy')),
       const PopupMenuItem(value: libMenuUnlink, child: Text('Unlink')),
     ],
   ];
@@ -762,6 +939,10 @@ bool handleLinkedRowMenuValue(
       changeLibraryFileInteractive(context, model, mount);
     case libMenuUnlink:
       unlinkLibraryInteractive(context, model, mount);
+    case libMenuRenameAlias:
+      renameLibraryAliasInteractive(context, model, mount);
+    case libMenuMakeLocal:
+      makeLibraryLocalInteractive(context, model, mount);
     default:
       return false;
   }

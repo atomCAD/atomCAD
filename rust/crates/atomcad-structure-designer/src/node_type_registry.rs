@@ -3518,7 +3518,16 @@ impl NodeTypeRegistry {
         for body_node_id in body_nodes {
             // Snapshot the per-argument dest type so we don't borrow body
             // mutably and immutably at the same time.
-            let dest_types: Vec<DataType> = {
+            //
+            // A destination whose node type does not resolve *yet* yields no
+            // type at all, and its wires are kept, like the top-level pass
+            // keeps a wire from a source of unknown type: on load, networks
+            // are inserted and repaired one by one, so a body instance of a
+            // network whose name sorts later is unresolved at this point —
+            // and comparing against `DataType::None` dropped its zone-input
+            // wires on every reopen. The post-load validation sees the
+            // resolved type.
+            let dest_types: Vec<Option<DataType>> = {
                 let body_node = body.nodes.get(&body_node_id).unwrap();
                 let nt = self.get_node_type_for_node(body_node);
                 let num_args = body_node.arguments.len();
@@ -3530,7 +3539,6 @@ impl NodeTypeRegistry {
                                 .map(|p| p.data_type.clone())
                                 .unwrap_or(DataType::None)
                         })
-                        .unwrap_or(DataType::None)
                     })
                     .collect()
             };
@@ -3542,6 +3550,9 @@ impl NodeTypeRegistry {
             }
             let body_node_mut = body.nodes.get_mut(&body_node_id).unwrap();
             for (arg_index, dest_type) in dest_types.iter().enumerate() {
+                let Some(dest_type) = dest_type else {
+                    continue;
+                };
                 if let Some(arg) = body_node_mut.arguments.get_mut(arg_index) {
                     arg.incoming_wires.retain(|wire| {
                         // Only repair ZoneInput wires that point at THIS

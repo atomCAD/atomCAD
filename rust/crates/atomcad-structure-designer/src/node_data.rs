@@ -281,6 +281,16 @@ pub trait NodeData: Any + AsAny {
         Vec::new()
     }
 
+    /// Rewrites every file path this node **stores** (the ones it reads —
+    /// [`file_paths`](Self::file_paths) — and the ones it writes) through
+    /// `rebase`, which returns the new spelling or `None` to keep a path.
+    /// *Make local copy* uses it when a library's networks become the
+    /// design's own: a relative path authored against the library's folder
+    /// must keep naming the same file from the design's folder
+    /// (`doc/design_library_linking.md` §10). The cached content read from the
+    /// file stays valid — it is the same file. Default: nothing stored.
+    fn rebase_file_paths(&mut self, _rebase: &dyn Fn(&str) -> Option<String>) {}
+
     /// The input pins through which a **wired** file path can reach this
     /// node. Such a path is only known at evaluation time, so it is not a
     /// dependency the Save As copy can see (`file_dependencies`, D8); the
