@@ -1254,6 +1254,40 @@ class StructureDesignerModel extends ChangeNotifier {
     return report;
   }
 
+  /// What saving the design at [path] means for its libraries and data files
+  /// (D11). No disk writes.
+  APIDependencyPlan collectFileDependencies(String path) =>
+      library_links_api.collectFileDependencies(targetPath: path);
+
+  /// *Save As* with the dependency copy (D11): dependencies first, the design
+  /// last. [overwriteTargets] are the conflicts the user chose to overwrite.
+  APISaveAsResult saveAsWithDependencies(String path,
+      {required bool copy, List<String> overwriteTargets = const []}) {
+    final result = library_links_api.saveAsWithDependencies(
+        path: path, copy: copy, overwriteTargets: overwriteTargets);
+    refreshFromKernel();
+    return result;
+  }
+
+  /// *File > Export project bundle…* (D11).
+  APIBundleResult exportProjectBundle(String zipPath) =>
+      library_links_api.exportProjectBundle(zipPath: zipPath);
+
+  /// True when [path] has no path relative to the design's folder (another
+  /// drive), so it can only be linked by copying it (D6).
+  bool libraryNeedsCopy(String path) =>
+      library_links_api.libraryNeedsCopy(path: path);
+
+  /// Copies the library at [path] (with its dependencies) to
+  /// [targetRelPath] next to the design and links the copy. Returns the
+  /// error, or `null` on success.
+  String? linkLibraryCopying(String path, String targetRelPath, String alias) {
+    final result = library_links_api.linkLibraryCopying(
+        path: path, targetRelPath: targetRelPath, alias: alias);
+    refreshFromKernel();
+    return result.success ? null : result.errorMessage;
+  }
+
   /// The automatic check (D7). Cheap when nothing changed: Rust only stats
   /// the watched files, and the model is refreshed only when the kernel
   /// reports something.

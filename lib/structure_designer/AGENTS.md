@@ -29,6 +29,7 @@ structure_designer/
 ├── extract_closure_to_network_dialog.dart # Name dialog for Closure→Network conversion
 ├── import_cnnd_library_dialog.dart   # File > Import copy… (the one-shot copy import)
 ├── library_link_actions.dart         # Linked libraries: dialogs, refresh-report snackbars, open library / back
+├── save_as_dependencies.dart         # Save As dependency dialog (D11), File > Export project bundle…
 ├── identifier_validation.dart        # Field/identifier validation rules
 ├── namespace_utils.dart              # User-type-name validation (networks + record defs share one namespace)
 ├── qualified_name_header.dart        # Qualified-name header strip (breaks after the namespace only when too long) + copy button (#207/#307)
@@ -577,6 +578,13 @@ a missed gate here must at worst show an error.
   flagged a persistent `showActionSnackBar` with *Details* (the navigable
   `showRefreshReportDialog`) and *Undo*. An open uses the same function with
   `opened: true` and no *Undo* (an open is not an undo step).
+- **Save As** goes through `saveAsWithDependenciesInteractive`
+  (`save_as_dependencies.dart`): Rust plans where every library and data file
+  goes (`collectFileDependencies`) and the dialog appears only when something
+  would be copied or conflicts. The dialog passes back the conflict targets the
+  user chose to overwrite — never a blanket "overwrite" flag — because Rust
+  recomputes the plan at copy time and keeps any conflict it was not told about.
+  `http_server.dart`'s `/save` still writes the design alone.
 - **Open library file** replaces the document (one document is open) after
   `confirmDiscardChanges`, and remembers `model.backToDesignPath` for
   *File > Back to …*.

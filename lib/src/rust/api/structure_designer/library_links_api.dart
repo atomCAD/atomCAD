@@ -61,3 +61,50 @@ APIRefreshReport? checkDependencies() => RustLib.instance.api
 /// returns `None`.
 APIRefreshReport? takeLoadLibraryReport() => RustLib.instance.api
     .crateApiStructureDesignerLibraryLinksApiTakeLoadLibraryReport();
+
+/// What saving the design at `target_path` means for its libraries and data
+/// files (D11). Flutter shows the Save As dependency dialog when
+/// `needs_confirmation`; an `error` means that path is refused. No disk
+/// writes.
+APIDependencyPlan collectFileDependencies({required String targetPath}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerLibraryLinksApiCollectFileDependencies(
+            targetPath: targetPath);
+
+/// *Save As* with the dependency copy (D11). `copy = false` is *Save without
+/// dependencies*. A conflict is overwritten only when its target is listed in
+/// `overwrite_targets` (the conflicts the user saw and chose to overwrite);
+/// Rust recomputes the plan here, so a file that appeared since is kept.
+/// Dependencies are copied first and the design last.
+APISaveAsResult saveAsWithDependencies(
+        {required String path,
+        required bool copy,
+        required List<String> overwriteTargets}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerLibraryLinksApiSaveAsWithDependencies(
+            path: path, copy: copy, overwriteTargets: overwriteTargets);
+
+/// *File > Export project bundle…*: a zip of the design (as in memory) and
+/// every relative dependency, laid out relative to the deepest folder
+/// containing them all. External and missing files are listed, not included.
+APIBundleResult exportProjectBundle({required String zipPath}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerLibraryLinksApiExportProjectBundle(
+            zipPath: zipPath);
+
+/// True when the `.cnnd` at `path` has no path relative to the design's
+/// folder (another drive), so the link dialog offers to copy it (D6).
+bool libraryNeedsCopy({required String path}) => RustLib.instance.api
+    .crateApiStructureDesignerLibraryLinksApiLibraryNeedsCopy(path: path);
+
+/// Copies the library at `path` (with its own libraries and data files) to
+/// `target_rel_path` next to the design, then links the copy under `alias`
+/// (one undo step). Refused, before anything is copied, when a different
+/// file already sits at any target.
+APIResult linkLibraryCopying(
+        {required String path,
+        required String targetRelPath,
+        required String alias}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerLibraryLinksApiLinkLibraryCopying(
+            path: path, targetRelPath: targetRelPath, alias: alias);

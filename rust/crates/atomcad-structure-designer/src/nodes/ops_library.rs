@@ -182,6 +182,16 @@ impl NodeData for OpsLibraryData {
         Box::new(self.clone())
     }
 
+    /// The file is parsed at load and cached, so it is watched like the
+    /// importers' (D7) and copied by Save As (D11).
+    fn file_paths(&self) -> Vec<String> {
+        self.file.iter().cloned().collect()
+    }
+
+    fn file_path_pins(&self) -> &'static [&'static str] {
+        &["file"]
+    }
+
     fn get_subtitle(&self, connected_input_pins: &HashSet<String>) -> Option<String> {
         if connected_input_pins.contains("file") {
             return None;

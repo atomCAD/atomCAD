@@ -25,6 +25,7 @@ atomcad-renderer = { path = "../atomcad-renderer" }
 atomcad-util = { path = "../atomcad-util" }
 blake3 = { workspace = true }
 dirs = { workspace = true }
+flate2 = { workspace = true }
 glam = { workspace = true }
 lru = { workspace = true }
 rustc-hash = { workspace = true }

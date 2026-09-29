@@ -1,6 +1,7 @@
-//! Library linking, Phase 4 (`doc/design_library_linking.md` §11): the view
-//! fields the Flutter UI reads — `read_only` on the network list, the
-//! add-node lists without transitive mounts, and the mount / report shapes.
+//! Library linking, Phases 4 and 5 (`doc/design_library_linking.md` §11):
+//! the view fields the Flutter UI reads — `read_only` on the network list,
+//! the add-node lists without transitive mounts, the mount / report shapes,
+//! and the Save As dependency plan / outcome / bundle shapes.
 //!
 //! The FFI wrappers in `library_links_api.rs` need the global `CADInstance`,
 //! whose renderer needs a GPU, so they are not driven here; the operations
@@ -13,8 +14,9 @@ use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types:
     APIMountStatus, APINodeCategoryView,
 };
 use rust_lib_flutter_cad::api::structure_designer::view_builders::{
-    failed_refresh_report, get_compatible_node_types, get_node_networks_with_validation,
-    get_node_type_views, library_mount_view, refresh_report_view,
+    bundle_result_view, dependency_plan_view, display_path, failed_refresh_report,
+    get_compatible_node_types, get_node_networks_with_validation, get_node_type_views,
+    library_mount_view, refresh_report_view, save_as_result_view,
 };
 use std::path::Path;
 
@@ -155,4 +157,80 @@ fn a_failed_operation_crosses_as_a_report_with_only_its_error() {
     assert_eq!(view.errors, vec!["nope".to_string()]);
     assert!(!view.is_clean);
     assert!(view.refreshed_mounts.is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5: Save As dependency plan, outcome, bundle
+// ---------------------------------------------------------------------------
+
+#[test]
+fn paths_are_shown_without_the_verbatim_prefix() {
+    assert_eq!(
+        display_path(Path::new(r"\\?\C:\work\lib.cnnd")),
+        r"C:\work\lib.cnnd"
+    );
+    assert_eq!(display_path(Path::new("/work/lib.cnnd")), "/work/lib.cnnd");
+}
+
+#[test]
+fn the_dependency_plan_crosses_with_its_groups_and_statuses() {
+    use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::{
+        APIDependencyGroup, APIDependencyKind, APIDependencyStatus,
+    };
+    let (dir, d) = open_host();
+    // Deeper than the host's folder: the host's own links stay inside, the
+    // copies land in the new folder.
+    let target = dir.path().join("moved/deeper/host.cnnd");
+    let plan = dependency_plan_view(d.collect_file_dependencies(&target.to_string_lossy()));
+    assert!(plan.error.is_none(), "{:?}", plan.error);
+    assert!(plan.needs_confirmation);
+    let lib_a = plan
+        .entries
+        .iter()
+        .find(|e| e.source_abs.ends_with("lib_a.cnnd"))
+        .expect("lib_a listed");
+    assert_eq!(lib_a.kind, APIDependencyKind::Library);
+    assert_eq!(lib_a.group, APIDependencyGroup::Inside);
+    assert_eq!(lib_a.status, APIDependencyStatus::WillCopy);
+    assert_eq!(lib_a.rel_path.as_deref(), Some("lib_a.cnnd"));
+    let target_abs = lib_a.target_abs.as_ref().unwrap();
+    assert!(!target_abs.starts_with(r"\\?\"), "{}", target_abs);
+    assert!(
+        target_abs
+            .replace('\\', "/")
+            .ends_with("moved/deeper/lib_a.cnnd")
+    );
+}
+
+#[test]
+fn a_refused_plan_crosses_as_an_error_with_no_entries() {
+    let plan = dependency_plan_view(Err("refused".to_string()));
+    assert_eq!(plan.error.as_deref(), Some("refused"));
+    assert!(plan.entries.is_empty() && !plan.needs_confirmation);
+}
+
+#[test]
+fn a_failed_copy_crosses_as_a_failure_listing_the_copies() {
+    use atomcad_structure_designer::file_dependencies::CopyOutcome;
+    let view = save_as_result_view(Ok(CopyOutcome {
+        copied: vec![Path::new("a/one.cnnd").to_path_buf()],
+        error: Some("cannot copy 'x' to 'y': denied".to_string()),
+        ..Default::default()
+    }));
+    assert!(!view.success);
+    assert!(
+        view.error_message.contains("not saved"),
+        "{}",
+        view.error_message
+    );
+    assert!(
+        view.error_message.contains("one.cnnd"),
+        "{}",
+        view.error_message
+    );
+    assert_eq!(view.copied.len(), 1);
+
+    let ok = save_as_result_view(Ok(CopyOutcome::default()));
+    assert!(ok.success && ok.error_message.is_empty());
+    assert!(!bundle_result_view(Err("no".to_string())).success);
 }

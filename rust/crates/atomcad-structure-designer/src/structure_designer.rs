@@ -8645,6 +8645,8 @@ impl StructureDesigner {
     // Saves node networks to a file (Save As functionality)
     pub fn save_node_networks_as(&mut self, file_path: &str) -> std::io::Result<()> {
         use std::path::Path;
+        let previous_file = self.node_type_registry.design_file_name.clone();
+        let sites_before = crate::library_refresh::data_file_sites(&self.node_type_registry);
         let result = node_networks_serialization::save_node_networks_to_file(
             &mut self.node_type_registry,
             Path::new(file_path),
@@ -8656,6 +8658,15 @@ impl StructureDesigner {
         if result.is_ok() {
             self.is_dirty = false;
             self.file_path = Some(file_path.to_string());
+            // Every relative library and data-file path now resolves against
+            // the new folder (`doc/design_library_linking.md` D7, D11); the
+            // next `check_dependencies` sees what is there.
+            if previous_file.as_deref() != Some(file_path) {
+                crate::library_refresh::relocate_after_save(
+                    &mut self.node_type_registry,
+                    &sites_before,
+                );
+            }
         }
 
         result

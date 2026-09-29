@@ -204,6 +204,27 @@ pub trait LinkFs: Send + Sync {
     fn rename(&self, from: &Path, to: &Path) -> io::Result<()>;
     fn remove_file(&self, path: &Path) -> io::Result<()>;
     fn create_dir_all(&self, path: &Path) -> io::Result<()>;
+    /// What is at `path` itself, without following a final symlink. The Save
+    /// As copy refuses to write through a link or onto a folder (D11).
+    fn entry_kind(&self, path: &Path) -> io::Result<EntryKind> {
+        let file_type = std::fs::symlink_metadata(path)?.file_type();
+        Ok(if file_type.is_symlink() {
+            EntryKind::Symlink
+        } else if file_type.is_dir() {
+            EntryKind::Dir
+        } else {
+            EntryKind::File
+        })
+    }
+}
+
+/// What [`LinkFs::entry_kind`] reports. A Windows junction counts as a
+/// symlink.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EntryKind {
+    File,
+    Dir,
+    Symlink,
 }
 
 /// The real filesystem.
@@ -1443,6 +1464,58 @@ pub fn mount_library(
     mount.status = status.clone();
     registry.library_links.insert(mount);
     status
+}
+
+/// Where the mount record `mount_path` points now: its `rel_path` joined onto
+/// the folder of the file that imports it (the design file for a direct
+/// mount, the parent library for a nested one), canonical when the file
+/// exists — exactly what `mount_library` computes. `None` for a cycle, or
+/// when the importing file is unknown.
+pub fn resolved_mount_path(registry: &NodeTypeRegistry, mount_path: &str) -> Option<PathBuf> {
+    let mount = registry.library_links.get(mount_path)?;
+    if mount.status == MountStatus::Cycle {
+        return None;
+    }
+    let importing: PathBuf = match &mount.parent {
+        None => PathBuf::from(registry.design_file_name.as_ref()?),
+        Some(parent) => registry.library_links.get(parent)?.abs_path.clone(),
+    };
+    let joined = lexical_join(importing.parent().unwrap_or(Path::new("")), &mount.rel_path).ok()?;
+    let fs = registry.library_links.fs();
+    Some(fs.canonicalize(&joined).unwrap_or(joined))
+}
+
+/// Re-resolves every mount's `abs_path` from its `rel_path` chain, parents
+/// before children (a parent's mount path sorts before its children's). A
+/// mount whose file moved — the design was saved into another folder
+/// (D7, D11), or an undo restored a record resolved against an earlier folder
+/// — forgets the mtime of its last sighting, so the next check hashes the file
+/// it now points at instead of trusting a stat of another file. Returns the
+/// mount paths that moved.
+pub fn relocate_mounts(registry: &mut NodeTypeRegistry) -> Vec<String> {
+    let paths: Vec<String> = registry
+        .library_links
+        .iter()
+        .map(|m| m.mount_path.clone())
+        .collect();
+    let mut moved = Vec::new();
+    for mount_path in paths {
+        let Some(now) = resolved_mount_path(registry, &mount_path) else {
+            continue;
+        };
+        let mount = registry
+            .library_links
+            .get_mut(&mount_path)
+            .expect("listed above");
+        if mount.abs_path != now {
+            mount.abs_path = now;
+            if let Some(seen) = mount.last_seen.as_mut() {
+                seen.mtime = None;
+            }
+            moved.push(mount_path);
+        }
+    }
+    moved
 }
 
 /// [`owner_mount`] of a network being mounted under `alias`, whose own mount

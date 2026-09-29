@@ -225,6 +225,10 @@ impl NodeData for ImportCubeData {
         self.file_name.iter().cloned().collect()
     }
 
+    fn file_path_pins(&self) -> &'static [&'static str] {
+        &["file_name"]
+    }
+
     fn get_subtitle(
         &self,
         connected_input_pins: &std::collections::HashSet<String>,

@@ -21,8 +21,12 @@ a digit, and it may not clash with anything already in your design.
 
 The design must have been saved once first: the library is remembered by its
 path **relative to your design's file**, so the pair can be moved together
-(`../libs/demolib.cnnd` is fine). A file on another drive, which has no
-relative path, cannot be linked.
+(`../libs/demolib.cnnd` is fine). A file on another drive has no relative
+path; the dialog then says so and offers **Copy and link** instead: the file is
+copied next to your design (together with the libraries and data files it uses,
+each landing where the library's own relative paths expect it) and the copy is
+linked. Nothing is copied if a different file with the same name is already in
+the way.
 
 Linking is one undo step.
 
@@ -139,3 +143,56 @@ says what changed. Nothing in your design is renamed.
 *Unlink* removes a library you no longer use. It is refused, with the list of
 nodes that still use the library, while anything does — so unlinking can never
 break a working node. Unlinking is one undo step.
+
+## Moving a design: Save As and project bundles
+
+A design and the files it depends on — its linked libraries, the libraries they
+link, and the data files read by its nodes and by the libraries' nodes (`.xyz`,
+`.cif`, `.cube`, operation libraries, build scripts) — form a fixed layout of
+relative paths. Paths are never rewritten, so moving the design means moving
+that layout with it.
+
+**Save Design As** into another folder checks every dependency first. If each
+one is already where the design will look for it (for example, you saved from
+`proj1/` into a sibling `proj2/` and both use `../libs/`), the design is simply
+saved. Otherwise a dialog lists them in three groups:
+
+- **Inside the destination folder** — shown by their relative path;
+- **Outside the destination folder** — reached through `..`, shown with the
+  full path they would be copied to, since those copies land outside the folder
+  you picked;
+- **External** — data files referred to by an absolute path; never copied, the
+  saved design keeps pointing at them.
+
+Each entry says *will copy*, *already there* (the same file, or one with
+identical content — skipped), *different file already there*, or *missing now
+too*. The buttons:
+
+- **Copy dependencies** copies what is needed and then saves the design. If a
+  different file is already at a target, you must choose between overwriting it
+  and keeping it; keeping it means the saved design will use that other
+  version.
+- **Save without dependencies** writes only the design; hover it to see how
+  many libraries and data files will be missing at the new location. A missing
+  library loses nothing: its nodes keep their wires and show errors until the
+  file is there.
+- **Cancel**.
+
+Dependencies are copied before the design is written. If a copy fails, the
+design is not saved, and the message lists the copies already made (they are
+left in place). A copy never lands on the design file itself, on one of its
+other dependencies, on a folder, or through a link — Save As to such a place is
+refused before anything is written.
+
+A node whose file path arrives through a wire is only known when the network
+runs; the dialog warns when the design has one, since that file is not copied.
+
+After saving, the open design reads its libraries and data files from the new
+location: a copy is used silently; a different file you chose to keep is
+brought in like any other change (one undo step, with a report).
+
+**File > Export project bundle…** writes a `.zip` of the design — as it is now,
+unsaved changes included — and every dependency, with their paths relative to
+the smallest folder containing them all. Unzip it anywhere and the design opens
+with all its libraries. External and missing files are left out, and the
+message lists them. This is the way to send a design to someone else.

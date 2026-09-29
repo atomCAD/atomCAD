@@ -22,6 +22,10 @@
 //! `structure_designer_api.rs`.
 
 use crate::api::structure_designer::structure_designer_api_types::{
+    APIBundleResult, APIDependency, APIDependencyGroup, APIDependencyKind, APIDependencyPlan,
+    APIDependencyStatus, APISaveAsResult,
+};
+use crate::api::structure_designer::structure_designer_api_types::{
     APIErrorRootCause, APIErrorSource, APILibraryMount, APIMountStatus, APIMountStatusChange,
     APINetworkWithValidationErrors, APINodeCategoryView, APINodeTypeView, APIRefreshReport,
     APIReportedNode, APIReportedWire, APIValidationError,
@@ -553,5 +557,116 @@ pub fn failed_refresh_report(error: String) -> APIRefreshReport {
         changed_since_saved: Vec::new(),
         errors: vec![error],
         is_clean: false,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Save As dependency copy and project bundle (D11)
+// ---------------------------------------------------------------------------
+
+/// A path as the user should read it: without the Windows verbatim prefix
+/// (`\\?\`) that canonical paths carry.
+pub fn display_path(path: &std::path::Path) -> String {
+    let s = path.to_string_lossy();
+    s.strip_prefix(r"\\?\").unwrap_or(&s).to_string()
+}
+
+fn display_paths(paths: &[std::path::PathBuf]) -> Vec<String> {
+    paths.iter().map(|p| display_path(p)).collect()
+}
+
+pub fn dependency_plan_view(
+    plan: Result<atomcad_structure_designer::file_dependencies::DependencyPlan, String>,
+) -> APIDependencyPlan {
+    use atomcad_structure_designer::file_dependencies::{
+        DependencyGroup, DependencyKind, DependencyStatus,
+    };
+    let plan = match plan {
+        Ok(plan) => plan,
+        Err(e) => {
+            return APIDependencyPlan {
+                entries: Vec::new(),
+                has_wired_paths: false,
+                needs_confirmation: false,
+                error: Some(e),
+            };
+        }
+    };
+    APIDependencyPlan {
+        entries: plan
+            .entries
+            .iter()
+            .map(|e| APIDependency {
+                kind: match e.kind {
+                    DependencyKind::Library => APIDependencyKind::Library,
+                    DependencyKind::DataFile => APIDependencyKind::DataFile,
+                },
+                source_abs: display_path(&e.source),
+                target_abs: e.target.as_deref().map(display_path),
+                rel_path: e.rel_path.clone(),
+                group: match e.group {
+                    DependencyGroup::Inside => APIDependencyGroup::Inside,
+                    DependencyGroup::Outside => APIDependencyGroup::Outside,
+                    DependencyGroup::External => APIDependencyGroup::External,
+                },
+                status: match e.status {
+                    DependencyStatus::WillCopy => APIDependencyStatus::WillCopy,
+                    DependencyStatus::AlreadyThere => APIDependencyStatus::AlreadyThere,
+                    DependencyStatus::Conflict => APIDependencyStatus::Conflict,
+                    DependencyStatus::SourceMissing => APIDependencyStatus::SourceMissing,
+                    DependencyStatus::External => APIDependencyStatus::External,
+                },
+            })
+            .collect(),
+        has_wired_paths: plan.has_wired_paths,
+        needs_confirmation: plan.needs_confirmation(),
+        error: None,
+    }
+}
+
+pub fn save_as_result_view(
+    result: Result<atomcad_structure_designer::file_dependencies::CopyOutcome, String>,
+) -> APISaveAsResult {
+    match result {
+        Ok(outcome) => {
+            let failure = outcome.failure_message("The design was not saved.");
+            APISaveAsResult {
+                success: failure.is_none(),
+                error_message: failure.unwrap_or_default(),
+                copied: display_paths(&outcome.copied),
+                kept: display_paths(&outcome.kept),
+                missing: display_paths(&outcome.missing),
+                external: display_paths(&outcome.external),
+            }
+        }
+        Err(e) => APISaveAsResult {
+            success: false,
+            error_message: e,
+            copied: Vec::new(),
+            kept: Vec::new(),
+            missing: Vec::new(),
+            external: Vec::new(),
+        },
+    }
+}
+
+pub fn bundle_result_view(
+    result: Result<atomcad_structure_designer::file_dependencies::BundleOutcome, String>,
+) -> APIBundleResult {
+    match result {
+        Ok(outcome) => APIBundleResult {
+            success: true,
+            error_message: String::new(),
+            files: outcome.files,
+            external: display_paths(&outcome.external),
+            missing: display_paths(&outcome.missing),
+        },
+        Err(e) => APIBundleResult {
+            success: false,
+            error_message: e,
+            files: Vec::new(),
+            external: Vec::new(),
+            missing: Vec::new(),
+        },
     }
 }

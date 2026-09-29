@@ -22,6 +22,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
 import 'display_panel.dart';
 import 'import_cnnd_library_dialog.dart';
 import 'library_link_actions.dart';
+import 'save_as_dependencies.dart';
 import 'node_networks_list/node_networks_panel.dart';
 import 'node_data/node_data_widget.dart';
 import 'camera_control_widget.dart';
@@ -246,6 +247,12 @@ class _StructureDesignerState extends State<StructureDesigner> {
                                   refreshAllDependenciesInteractive(
                                       context, graphModel),
                               child: const Text('Refresh all dependencies'),
+                            ),
+                            MenuItemButton(
+                              key: const Key('export_project_bundle_item'),
+                              onPressed: () => exportProjectBundleInteractive(
+                                  context, graphModel),
+                              child: const Text('Export project bundle…'),
                             ),
                           ],
                           if (model.backToDesignPath != null)
@@ -1087,7 +1094,12 @@ class _StructureDesignerState extends State<StructureDesigner> {
         finalPath = '$outputFile.cnnd';
       }
       rememberPickedFile(APIFileDialogPurpose.design, finalPath);
-      final result = graphModel.saveNodeNetworksAs(finalPath);
+      if (!mounted) return;
+      // Libraries and data files move with the design (D11): Rust plans the
+      // copy, and the dialog appears only when something needs copying.
+      final result = await saveAsWithDependenciesInteractive(
+          context, graphModel, finalPath);
+      if (result == null) return;
       if (!result.success) {
         _showSaveErrorDialog(result.errorMessage);
       } else {

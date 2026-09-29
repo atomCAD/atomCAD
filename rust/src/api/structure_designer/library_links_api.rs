@@ -11,10 +11,11 @@ use crate::api::api_common::{
 };
 use crate::api::common_api_types::APIResult;
 use crate::api::structure_designer::structure_designer_api_types::{
-    APILibraryMount, APIRefreshReport,
+    APIBundleResult, APIDependencyPlan, APILibraryMount, APIRefreshReport, APISaveAsResult,
 };
 use crate::api::structure_designer::view_builders::{
-    failed_refresh_report, library_mount_view, refresh_report_view,
+    bundle_result_view, dependency_plan_view, failed_refresh_report, library_mount_view,
+    refresh_report_view, save_as_result_view,
 };
 use atomcad_structure_designer::library_refresh::RefreshReport;
 
@@ -190,6 +191,114 @@ pub fn take_load_library_report() -> Option<APIRefreshReport> {
                 ))
             },
             None,
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Save As dependency copy, project bundle, linking by copying (D6, D11)
+// ---------------------------------------------------------------------------
+
+/// What saving the design at `target_path` means for its libraries and data
+/// files (D11). Flutter shows the Save As dependency dialog when
+/// `needs_confirmation`; an `error` means that path is refused. No disk
+/// writes.
+#[flutter_rust_bridge::frb(sync)]
+pub fn collect_file_dependencies(target_path: String) -> APIDependencyPlan {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                dependency_plan_view(
+                    cad_instance
+                        .structure_designer
+                        .collect_file_dependencies(&target_path),
+                )
+            },
+            dependency_plan_view(Err("CAD instance not available".to_string())),
+        )
+    }
+}
+
+/// *Save As* with the dependency copy (D11). `copy = false` is *Save without
+/// dependencies*. A conflict is overwritten only when its target is listed in
+/// `overwrite_targets` (the conflicts the user saw and chose to overwrite);
+/// Rust recomputes the plan here, so a file that appeared since is kept.
+/// Dependencies are copied first and the design last.
+#[flutter_rust_bridge::frb(sync)]
+pub fn save_as_with_dependencies(
+    path: String,
+    copy: bool,
+    overwrite_targets: Vec<String>,
+) -> APISaveAsResult {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let result = cad_instance.structure_designer.save_as_with_dependencies(
+                    &path,
+                    copy,
+                    &overwrite_targets,
+                );
+                let view = save_as_result_view(result);
+                if view.success {
+                    atomcad_structure_designer::recent_files::add_recent_file(&path);
+                }
+                view
+            },
+            save_as_result_view(Err("CAD instance not available".to_string())),
+        )
+    }
+}
+
+/// *File > Export project bundle…*: a zip of the design (as in memory) and
+/// every relative dependency, laid out relative to the deepest folder
+/// containing them all. External and missing files are listed, not included.
+#[flutter_rust_bridge::frb(sync)]
+pub fn export_project_bundle(zip_path: String) -> APIBundleResult {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                bundle_result_view(
+                    cad_instance
+                        .structure_designer
+                        .export_project_bundle(&zip_path),
+                )
+            },
+            bundle_result_view(Err("CAD instance not available".to_string())),
+        )
+    }
+}
+
+/// True when the `.cnnd` at `path` has no path relative to the design's
+/// folder (another drive), so the link dialog offers to copy it (D6).
+#[flutter_rust_bridge::frb(sync)]
+pub fn library_needs_copy(path: String) -> bool {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| cad_instance.structure_designer.library_needs_copy(&path),
+            false,
+        )
+    }
+}
+
+/// Copies the library at `path` (with its own libraries and data files) to
+/// `target_rel_path` next to the design, then links the copy under `alias`
+/// (one undo step). Refused, before anything is copied, when a different
+/// file already sits at any target.
+#[flutter_rust_bridge::frb(sync)]
+pub fn link_library_copying(path: String, target_rel_path: String, alias: String) -> APIResult {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let result = cad_instance
+                    .structure_designer
+                    .link_library_copying(&path, &target_rel_path, &alias)
+                    .map(|_| ());
+                if result.is_ok() {
+                    refresh_structure_designer_auto(cad_instance);
+                }
+                api_result(result)
+            },
+            no_instance(),
         )
     }
 }

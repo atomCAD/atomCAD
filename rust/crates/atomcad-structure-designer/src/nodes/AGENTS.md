@@ -123,8 +123,24 @@ pub trait NodeData: Send + Sync {
     fn adapt_for_drag_source(&self, source: &DataType, dir: DragDirection,
                              registry: &NodeTypeRegistry) -> Option<Box<dyn NodeData>>;
     fn default_display_all_output_pins(&self) -> bool;  // default false
+    fn file_paths(&self) -> Vec<String>;                 // default none
+    fn file_path_pins(&self) -> &'static [&'static str]; // default none
 }
 ```
+
+### Nodes that read files
+
+A node that reads a data file **when it is loaded** and caches the content
+(`import_xyz` / `_cif` / `_cube`, `ops_library`, `build_script`, the deprecated
+`mechanosynth` properties) overrides `file_paths` to return its stored path(s)
+as authored, and `file_path_pins` to name the input pin a path can arrive
+through instead. That one override makes the file a dependency everywhere
+library linking needs it (`doc/design_library_linking.md` D7, D11): it is
+watched and re-read when it changes, copied by the Save As dependency copy,
+and put in the project bundle; a wired path pin makes the Save As dialog warn
+that a file cannot be collected. At eval time a relative path resolves only
+through `library_links::base_dir_for_eval`. Output files (`export_atoms`,
+`export_build_script`) are not dependencies and override neither.
 
 ### Default output-pin display
 

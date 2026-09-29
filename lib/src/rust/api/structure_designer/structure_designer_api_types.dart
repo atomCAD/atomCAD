@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'structure_designer_api_types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `hash`
 
 /// Result of add_bond_pointer_move. Contains all info Flutter needs to draw
 /// the rubber-band preview line as a 2D overlay.
@@ -720,6 +720,48 @@ class APIBuildScriptData {
           runtimeType == other.runtimeType &&
           file == other.file &&
           stepCount == other.stepCount;
+}
+
+/// The outcome of *File > Export project bundle…*.
+class APIBundleResult {
+  final bool success;
+  final String errorMessage;
+
+  /// The zip's entries, the design first.
+  final List<String> files;
+
+  /// Absolute-path data files, left out.
+  final List<String> external_;
+
+  /// Dependencies that do not exist, left out.
+  final List<String> missing;
+
+  const APIBundleResult({
+    required this.success,
+    required this.errorMessage,
+    required this.files,
+    required this.external_,
+    required this.missing,
+  });
+
+  @override
+  int get hashCode =>
+      success.hashCode ^
+      errorMessage.hashCode ^
+      files.hashCode ^
+      external_.hashCode ^
+      missing.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIBundleResult &&
+          runtimeType == other.runtimeType &&
+          success == other.success &&
+          errorMessage == other.errorMessage &&
+          files == other.files &&
+          external_ == other.external_ &&
+          missing == other.missing;
 }
 
 /// A candidate node in a viewport pick disambiguation.
@@ -1456,6 +1498,115 @@ enum APIDataTypeBase {
   /// type). See `doc/design_structural_function_and_iter_types.md`.
   function,
   custom,
+  ;
+}
+
+/// One file the design depends on, and what Save As would do with it.
+class APIDependency {
+  final APIDependencyKind kind;
+  final String sourceAbs;
+
+  /// Where the copy goes; `None` for an external file.
+  final String? targetAbs;
+
+  /// Relative to the design's current folder; `None` for an external file.
+  final String? relPath;
+  final APIDependencyGroup group;
+  final APIDependencyStatus status;
+
+  const APIDependency({
+    required this.kind,
+    required this.sourceAbs,
+    this.targetAbs,
+    this.relPath,
+    required this.group,
+    required this.status,
+  });
+
+  @override
+  int get hashCode =>
+      kind.hashCode ^
+      sourceAbs.hashCode ^
+      targetAbs.hashCode ^
+      relPath.hashCode ^
+      group.hashCode ^
+      status.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIDependency &&
+          runtimeType == other.runtimeType &&
+          kind == other.kind &&
+          sourceAbs == other.sourceAbs &&
+          targetAbs == other.targetAbs &&
+          relPath == other.relPath &&
+          group == other.group &&
+          status == other.status;
+}
+
+/// Where a dependency's copy lands relative to the folder the user picked:
+/// the Save As dialog's three groups. `Outside` entries are shown with their
+/// full target path.
+enum APIDependencyGroup {
+  inside,
+  outside,
+  external_,
+  ;
+}
+
+enum APIDependencyKind {
+  library_,
+  dataFile,
+  ;
+}
+
+/// What saving the design at another path means for its dependencies. When
+/// `error` is set, Save As to that path is refused (nothing was written).
+/// `needs_confirmation` = something would be copied or conflicts; only then
+/// is the dialog shown.
+class APIDependencyPlan {
+  final List<APIDependency> entries;
+
+  /// A file-reading node takes its path through a wire, which cannot be
+  /// collected.
+  final bool hasWiredPaths;
+  final bool needsConfirmation;
+  final String? error;
+
+  const APIDependencyPlan({
+    required this.entries,
+    required this.hasWiredPaths,
+    required this.needsConfirmation,
+    this.error,
+  });
+
+  @override
+  int get hashCode =>
+      entries.hashCode ^
+      hasWiredPaths.hashCode ^
+      needsConfirmation.hashCode ^
+      error.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIDependencyPlan &&
+          runtimeType == other.runtimeType &&
+          entries == other.entries &&
+          hasWiredPaths == other.hasWiredPaths &&
+          needsConfirmation == other.needsConfirmation &&
+          error == other.error;
+}
+
+enum APIDependencyStatus {
+  willCopy,
+  alreadyThere,
+  conflict,
+
+  /// The dependency does not exist now either; nothing to copy.
+  sourceMissing,
+  external_,
   ;
 }
 
@@ -5475,6 +5626,52 @@ class APIRotationalSymmetry {
           runtimeType == other.runtimeType &&
           axis == other.axis &&
           nFold == other.nFold;
+}
+
+/// The outcome of *Save As* with the dependency copy. `success == false`
+/// means the design was not written; `copied` then lists the copies already
+/// made (left in place).
+class APISaveAsResult {
+  final bool success;
+  final String errorMessage;
+  final List<String> copied;
+
+  /// Conflicting files kept as they were.
+  final List<String> kept;
+
+  /// Dependencies the saved design will not find.
+  final List<String> missing;
+  final List<String> external_;
+
+  const APISaveAsResult({
+    required this.success,
+    required this.errorMessage,
+    required this.copied,
+    required this.kept,
+    required this.missing,
+    required this.external_,
+  });
+
+  @override
+  int get hashCode =>
+      success.hashCode ^
+      errorMessage.hashCode ^
+      copied.hashCode ^
+      kept.hashCode ^
+      missing.hashCode ^
+      external_.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APISaveAsResult &&
+          runtimeType == other.runtimeType &&
+          success == other.success &&
+          errorMessage == other.errorMessage &&
+          copied == other.copied &&
+          kept == other.kept &&
+          missing == other.missing &&
+          external_ == other.external_;
 }
 
 class APISequenceData {

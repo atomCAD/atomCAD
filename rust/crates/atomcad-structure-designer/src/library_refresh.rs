@@ -1241,7 +1241,7 @@ pub fn stamp_file(fs: &dyn LinkFs, path: &Path) -> Option<FileStamp> {
 
 /// The folder a network's relative data-file paths resolve against: its
 /// library's for a linked network, the design's for a local one (D8).
-fn base_dir_of(registry: &NodeTypeRegistry, network_name: &str) -> Option<PathBuf> {
+pub fn base_dir_of(registry: &NodeTypeRegistry, network_name: &str) -> Option<PathBuf> {
     match registry.library_links.mount_containing(network_name) {
         Some(m) => m.abs_path.parent().map(Path::to_path_buf),
         None => registry
@@ -1262,7 +1262,17 @@ pub fn resolve_data_path(base: Option<&Path>, stored: &str) -> Option<PathBuf> {
 
 /// Every data file the registry's networks read at load time, keyed by owner.
 pub fn watched_data_files(registry: &NodeTypeRegistry) -> BTreeSet<DataFileKey> {
-    let mut out = BTreeSet::new();
+    data_file_sites(registry)
+        .into_iter()
+        .map(|(_, key)| key)
+        .collect()
+}
+
+/// Every place a data file is read at load: `(network, stored path)` with
+/// the watch key it resolves to now. Two calls around a change of folders
+/// pair the old key of a read with its new one ([`relocate_after_save`]).
+pub fn data_file_sites(registry: &NodeTypeRegistry) -> Vec<((String, String), DataFileKey)> {
+    let mut out = Vec::new();
     for (name, network) in &registry.node_networks {
         let owner = registry
             .library_links
@@ -1272,15 +1282,67 @@ pub fn watched_data_files(registry: &NodeTypeRegistry) -> BTreeSet<DataFileKey> 
         walk_all_nodes(network, &mut |node| {
             for stored in node.data.file_paths() {
                 if let Some(path) = resolve_data_path(base.as_deref(), &stored) {
-                    out.insert(DataFileKey {
-                        owner: owner.clone(),
-                        path,
-                    });
+                    out.push((
+                        (name.clone(), stored),
+                        DataFileKey {
+                            owner: owner.clone(),
+                            path,
+                        },
+                    ));
                 }
             }
         });
     }
     out
+}
+
+/// After the design was saved into another folder: every relative library
+/// and data-file path now means a file there (D7, D11). Mounts are re-pointed
+/// ([`library_links::relocate_mounts`]); each data-file watch moves to the path
+/// its reads resolve to now, keeping its `loaded` stamp (the content in
+/// memory) and forgetting the mtime of its last sighting, so the next check
+/// hashes the new file: a copy is merely *touched*, a different file kept at
+/// the new place is a change that refreshes, a missing one goes missing.
+/// `sites_before` is [`data_file_sites`] taken before the folder changed.
+pub fn relocate_after_save(
+    registry: &mut NodeTypeRegistry,
+    sites_before: &[((String, String), DataFileKey)],
+) {
+    library_links::relocate_mounts(registry);
+    let before: BTreeMap<&(String, String), &DataFileKey> =
+        sites_before.iter().map(|(site, key)| (site, key)).collect();
+    let old = std::mem::take(&mut registry.library_links.data_files);
+    let fs = registry.library_links.fs();
+    let mut watches = BTreeMap::new();
+    for (site, key) in data_file_sites(registry) {
+        if watches.contains_key(&key) {
+            continue;
+        }
+        let carried = before
+            .get(&site)
+            .and_then(|old_key| old.get(*old_key).map(|w| (*old_key, w)));
+        let watch = match carried {
+            Some((old_key, w)) => {
+                let mut w = w.clone();
+                if old_key.path != key.path
+                    && let Some(seen) = w.last_seen.as_mut()
+                {
+                    seen.mtime = None;
+                }
+                w
+            }
+            None => {
+                let stamp = stamp_file(fs.as_ref(), &key.path);
+                DataFileWatch {
+                    loaded: stamp.clone(),
+                    last_seen: stamp,
+                    held: false,
+                }
+            }
+        };
+        watches.insert(key, watch);
+    }
+    registry.library_links.data_files = watches;
 }
 
 /// Brings the data-file watch list in line with the networks: entries no

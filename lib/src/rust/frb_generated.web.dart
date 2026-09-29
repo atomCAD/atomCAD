@@ -141,6 +141,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIBuildScriptData dco_decode_api_build_script_data(dynamic raw);
 
   @protected
+  APIBundleResult dco_decode_api_bundle_result(dynamic raw);
+
+  @protected
   APICamera dco_decode_api_camera(dynamic raw);
 
   @protected
@@ -208,6 +211,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIDeltaCounts dco_decode_api_delta_counts(dynamic raw);
+
+  @protected
+  APIDependency dco_decode_api_dependency(dynamic raw);
+
+  @protected
+  APIDependencyGroup dco_decode_api_dependency_group(dynamic raw);
+
+  @protected
+  APIDependencyKind dco_decode_api_dependency_kind(dynamic raw);
+
+  @protected
+  APIDependencyPlan dco_decode_api_dependency_plan(dynamic raw);
+
+  @protected
+  APIDependencyStatus dco_decode_api_dependency_status(dynamic raw);
 
   @protected
   APIDerivedShapeView dco_decode_api_derived_shape_view(dynamic raw);
@@ -584,6 +602,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIRotationalSymmetry dco_decode_api_rotational_symmetry(dynamic raw);
+
+  @protected
+  APISaveAsResult dco_decode_api_save_as_result(dynamic raw);
 
   @protected
   APISelfCheckViolation dco_decode_api_self_check_violation(dynamic raw);
@@ -1259,6 +1280,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APIDataType> dco_decode_list_api_data_type(dynamic raw);
+
+  @protected
+  List<APIDependency> dco_decode_list_api_dependency(dynamic raw);
 
   @protected
   List<APIDiffHunk> dco_decode_list_api_diff_hunk(dynamic raw);
@@ -2113,6 +2137,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIBundleResult sse_decode_api_bundle_result(SseDeserializer deserializer);
+
+  @protected
   APICamera sse_decode_api_camera(SseDeserializer deserializer);
 
   @protected
@@ -2187,6 +2214,25 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIDeltaCounts sse_decode_api_delta_counts(SseDeserializer deserializer);
+
+  @protected
+  APIDependency sse_decode_api_dependency(SseDeserializer deserializer);
+
+  @protected
+  APIDependencyGroup sse_decode_api_dependency_group(
+      SseDeserializer deserializer);
+
+  @protected
+  APIDependencyKind sse_decode_api_dependency_kind(
+      SseDeserializer deserializer);
+
+  @protected
+  APIDependencyPlan sse_decode_api_dependency_plan(
+      SseDeserializer deserializer);
+
+  @protected
+  APIDependencyStatus sse_decode_api_dependency_status(
+      SseDeserializer deserializer);
 
   @protected
   APIDerivedShapeView sse_decode_api_derived_shape_view(
@@ -2613,6 +2659,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   APIRotationalSymmetry sse_decode_api_rotational_symmetry(
       SseDeserializer deserializer);
+
+  @protected
+  APISaveAsResult sse_decode_api_save_as_result(SseDeserializer deserializer);
 
   @protected
   APISelfCheckViolation sse_decode_api_self_check_violation(
@@ -3424,6 +3473,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APIDataType> sse_decode_list_api_data_type(SseDeserializer deserializer);
+
+  @protected
+  List<APIDependency> sse_decode_list_api_dependency(
+      SseDeserializer deserializer);
 
   @protected
   List<APIDiffHunk> sse_decode_list_api_diff_hunk(SseDeserializer deserializer);
@@ -4417,6 +4470,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIBuildScriptData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_bundle_result(
+      APIBundleResult self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_camera(APICamera self, SseSerializer serializer);
 
   @protected
@@ -4502,6 +4559,25 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_delta_counts(
       APIDeltaCounts self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_dependency(APIDependency self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_dependency_group(
+      APIDependencyGroup self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_dependency_kind(
+      APIDependencyKind self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_dependency_plan(
+      APIDependencyPlan self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_dependency_status(
+      APIDependencyStatus self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_derived_shape_view(
@@ -4968,6 +5044,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_rotational_symmetry(
       APIRotationalSymmetry self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_save_as_result(
+      APISaveAsResult self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_self_check_violation(
@@ -5796,6 +5876,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_api_data_type(
       List<APIDataType> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_api_dependency(
+      List<APIDependency> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_api_diff_hunk(

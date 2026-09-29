@@ -1783,6 +1783,68 @@ would overwrite a file of the user's that is not part of this design at all.
   full-path display for *Outside* entries, the copy-in offer when linking a file
   from another drive.
 
+**Status (2026-09-29): implemented; the manual walkthrough and the smoke test
+are the maintainer's.** Files: `file_dependencies.rs` (plan, copy, bundle,
+`link_library_copying`), `library_refresh::relocate_after_save`,
+`library_links::relocate_mounts`, the API functions in `library_links_api.rs`,
+`lib/structure_designer/save_as_dependencies.dart`, the link dialog's copy-in;
+tests `file_dependencies_test.rs` (25) and four view-shape tests in
+`library_links_api_test.rs`. The reference guide's `library_linking.md` gained
+"Moving a design". Deviations and findings:
+
+- **The overwrite choice crosses as a list, not a flag.**
+  `save_as_with_dependencies(path, copy, overwrite_targets)`: Flutter passes
+  the conflict targets the user saw and chose to overwrite. With a bare
+  `overwrite_conflicts = true`, a file that appeared at a *will copy* target
+  after the dialog would have been overwritten unseen, which the "plan is
+  recomputed at copy time" test forbids.
+- **One status beyond §5.2: `SourceMissing`** — a dependency that does not
+  exist now either (a `Missing` mount, a deleted data file). Nothing to copy;
+  it never makes the dialog appear.
+- **Found: an undo could point the mounts back at the old folder.** A refresh
+  command restores whole `LibraryMount` records, whose `abs_path` was resolved
+  against the design's folder *at the time*; after a Save As into another
+  folder, undoing an earlier refresh re-pointed the mounts (and the data-file
+  watches) at the old location. The command's install now re-resolves every
+  mount from its `rel_path` chain (`relocate_mounts`) and rebuilds the data
+  watches. Test `undoing_an_earlier_refresh_keeps_the_mounts_at_the_new_folder`.
+- **Relocation after Save As keeps the loaded stamps and forgets the mtime** of
+  the last sighting, so the next check hashes the file now pointed at: a copy
+  is merely touched (no command), a kept different file refreshes as one
+  command with a report, an absent one goes `Missing`. It runs inside
+  `save_node_networks_as` for every save to another path — plain Save As, *Save
+  without dependencies*, and the CLI's `/save` alike.
+- **`file_paths` now covers `ops_library`, `build_script` and `mechanosynth`'s
+  deprecated properties too** — they parse their file at load, exactly like
+  the importers — so those files are also *watched* from now on, not only
+  copied. One consequence to know: an `export_build_script` writing a file that
+  a `build_script` node reads triggers one refresh command after a write that
+  changed the content (not a loop — an unchanged rewrite is only *touched*).
+  `NodeData::file_path_pins` names the pin a wired path arrives through
+  (`has_wired_paths`).
+- **The bundle carries the design as it is in memory** (unsaved edits
+  included — the point is "send me what I am looking at"); libraries and data
+  files come from disk. The zip is written by a ~100-line ZIP 2.0 writer over
+  `flate2` (already in the lockfile through `png`) rather than the `zip` crate;
+  `read_zip` reads it back for the tests, and the output was checked against
+  Python's `zipfile` and PowerShell's `Expand-Archive`.
+- **`link_library_copying` never overwrites.** A different file at any target
+  (the library's or a dependency's) refuses the whole operation before anything
+  is copied; identical files are reused. The copy is linked as one undo step;
+  the copied files stay on undo. Flutter offers it when
+  `library_needs_copy(path)` — no relative path from the design's folder — and
+  names the copy after the picked file. The cross-drive case itself cannot be
+  set up in a test; the function is tested with a second temp root.
+- The "copy failure" test injects a failing write through `LinkFs` instead of
+  a read-only target file (renaming over a read-only file succeeds on Unix).
+  `LinkFs` gained `entry_kind` (default: `symlink_metadata`) for the
+  folder / link refusal.
+- FRB escapes the Dart keywords: `APIDependencyKind.library_`,
+  `APIDependencyGroup.external_`, `APIDependencyStatus.external_`,
+  `APISaveAsResult.external_`, `APIBundleResult.external_`.
+- Not done here (P6): the CLI / HTTP `/save` route still writes the design
+  alone, without a dependency copy.
+
 ### Phase 6 — CLI, vendoring, documentation
 
 Work: CLI `libraries` subcommand (`list`, `link <path> <alias>`, `refresh

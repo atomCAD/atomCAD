@@ -57,6 +57,11 @@ blake3 = "1.5"
 csgrs = { path = "../csgrs" }
 dirs = "5.0"
 dlopen = "0.1.8"
+# `flate2`: deflate + CRC-32 for the project bundle's `.zip`
+# (`file_dependencies.rs`, `doc/design_library_linking.md` D11). Already in
+# `Cargo.lock` through `png`, so no new code enters the tree; the ZIP container
+# itself is a few dozen lines rather than the `zip` crate's dependency stack.
+flate2 = "1.1"
 geo = "^0.29.3"
 glam = "0.29.2"
 image = { version = "0.25", default-features = false, features = ["png"] }

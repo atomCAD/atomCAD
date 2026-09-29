@@ -286,6 +286,7 @@ dependencies = [
  "atomcad-util",
  "blake3",
  "dirs",
+ "flate2",
  "glam",
  "insta",
  "lru",

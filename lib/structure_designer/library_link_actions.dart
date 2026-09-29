@@ -402,6 +402,11 @@ class _LinkAliasDialogState extends State<_LinkAliasDialog> {
   String? _aliasError;
   String? _linkError;
 
+  /// The file has no path relative to the design (another drive): it can
+  /// only be linked by copying it next to the design first (D6).
+  late final bool _needsCopy =
+      widget.model.libraryNeedsCopy(widget.libraryPath);
+
   @override
   void initState() {
     super.initState();
@@ -422,7 +427,10 @@ class _LinkAliasDialogState extends State<_LinkAliasDialog> {
 
   void _link() {
     final alias = _controller.text.trim();
-    final error = widget.model.linkLibrary(widget.libraryPath, alias);
+    final error = _needsCopy
+        ? widget.model.linkLibraryCopying(
+            widget.libraryPath, fileNameOf(widget.libraryPath), alias)
+        : widget.model.linkLibrary(widget.libraryPath, alias);
     if (error == null) {
       Navigator.of(context).pop(alias);
     } else {
@@ -467,6 +475,17 @@ class _LinkAliasDialogState extends State<_LinkAliasDialog> {
                 if (_aliasError == null) _link();
               },
             ),
+            if (_needsCopy) ...[
+              const SizedBox(height: 12),
+              ErrorBanner(
+                warning: true,
+                message: 'This file has no path relative to the design '
+                    '(another drive?). A library is linked by a relative '
+                    'path, so it will be copied next to the design as '
+                    '${fileNameOf(widget.libraryPath)}, together with the '
+                    'libraries and data files it uses.',
+              ),
+            ],
             if (_linkError != null) ...[
               const SizedBox(height: 12),
               ErrorBanner(message: _linkError!),
@@ -482,7 +501,7 @@ class _LinkAliasDialogState extends State<_LinkAliasDialog> {
                 const SizedBox(width: 8),
                 ElevatedButton(
                   onPressed: _aliasError == null ? _link : null,
-                  child: const Text('Link'),
+                  child: Text(_needsCopy ? 'Copy and link' : 'Link'),
                 ),
               ],
             ),

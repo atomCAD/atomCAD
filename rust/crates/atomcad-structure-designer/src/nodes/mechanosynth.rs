@@ -626,6 +626,17 @@ impl NodeData for MechanosynthData {
         Box::new(self.clone())
     }
 
+    /// The deprecated `ops_file` / `build_file` properties are parsed at load
+    /// and cached, so they are watched (D7) and copied by Save As (D11). The
+    /// `ops` / `steps` pins carry parsed values, not paths.
+    fn file_paths(&self) -> Vec<String> {
+        self.ops_file
+            .iter()
+            .chain(self.build_file.iter())
+            .cloned()
+            .collect()
+    }
+
     /// **`scene`, not `result`.** `result` and the base part of `scene` are the
     /// same atoms, so showing both draws the workpiece twice; what a user
     /// scrubbing a build with tools wants to look at is the scene. With nothing

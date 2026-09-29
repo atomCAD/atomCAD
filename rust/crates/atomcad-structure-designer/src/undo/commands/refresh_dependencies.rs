@@ -88,6 +88,9 @@ fn install(
                 .collect();
         library_links::unmount(registry, alias);
         library_links::restore_detached(registry, content);
+        // The records were resolved against the design's folder at the time;
+        // a Save As since may have moved it (D11).
+        library_links::relocate_mounts(registry);
         for m in &content.mounts {
             let Some((abs_path, last_seen)) = seen.get(&m.mount_path) else {
                 continue;
@@ -117,6 +120,9 @@ fn install(
         }
     }
     registry.library_links.data_files = watches;
+    // Likewise for the data files: a watch keyed by a path from before a
+    // Save As is dropped, and the path the node reads now is stamped as seen.
+    crate::library_refresh::rebuild_data_watches(registry);
     // The active network may have been one the other side does not have.
     if active_network_name
         .as_ref()

@@ -3297,3 +3297,89 @@ pub struct APIRefreshReport {
     pub errors: Vec<String>,
     pub is_clean: bool,
 }
+
+// ---------------------------------------------------------------------------
+// Save As dependency copy and project bundle (`doc/design_library_linking.md`
+// D11, Phase 5)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum APIDependencyKind {
+    Library,
+    DataFile,
+}
+
+/// Where a dependency's copy lands relative to the folder the user picked:
+/// the Save As dialog's three groups. `Outside` entries are shown with their
+/// full target path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum APIDependencyGroup {
+    Inside,
+    Outside,
+    External,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum APIDependencyStatus {
+    WillCopy,
+    AlreadyThere,
+    Conflict,
+    /// The dependency does not exist now either; nothing to copy.
+    SourceMissing,
+    External,
+}
+
+/// One file the design depends on, and what Save As would do with it.
+#[derive(Debug, Clone)]
+pub struct APIDependency {
+    pub kind: APIDependencyKind,
+    pub source_abs: String,
+    /// Where the copy goes; `None` for an external file.
+    pub target_abs: Option<String>,
+    /// Relative to the design's current folder; `None` for an external file.
+    pub rel_path: Option<String>,
+    pub group: APIDependencyGroup,
+    pub status: APIDependencyStatus,
+}
+
+/// What saving the design at another path means for its dependencies. When
+/// `error` is set, Save As to that path is refused (nothing was written).
+/// `needs_confirmation` = something would be copied or conflicts; only then
+/// is the dialog shown.
+#[derive(Debug, Clone)]
+pub struct APIDependencyPlan {
+    pub entries: Vec<APIDependency>,
+    /// A file-reading node takes its path through a wire, which cannot be
+    /// collected.
+    pub has_wired_paths: bool,
+    pub needs_confirmation: bool,
+    pub error: Option<String>,
+}
+
+/// The outcome of *Save As* with the dependency copy. `success == false`
+/// means the design was not written; `copied` then lists the copies already
+/// made (left in place).
+#[derive(Debug, Clone)]
+pub struct APISaveAsResult {
+    pub success: bool,
+    pub error_message: String,
+    pub copied: Vec<String>,
+    /// Conflicting files kept as they were.
+    pub kept: Vec<String>,
+    /// Dependencies the saved design will not find.
+    pub missing: Vec<String>,
+    pub external: Vec<String>,
+}
+
+/// The outcome of *File > Export project bundle…*.
+#[derive(Debug, Clone)]
+pub struct APIBundleResult {
+    pub success: bool,
+    pub error_message: String,
+    /// The zip's entries, the design first.
+    pub files: Vec<String>,
+    /// Absolute-path data files, left out.
+    pub external: Vec<String>,
+    /// Dependencies that do not exist, left out.
+    pub missing: Vec<String>,
+}

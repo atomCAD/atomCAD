@@ -78,6 +78,7 @@ structure_designer/
 ├── library_link_ops.rs        # StructureDesigner::link_library / unlink_library
 ├── library_refresh.rs         # Reconciling wiring against recorded interfaces, change detection, data-file watches
 ├── library_refresh_ops.rs     # check_dependencies / refresh / retarget / the open report
+├── file_dependencies.rs       # Save As dependency plan + copy, project bundle (.zip), link by copying
 ├── undo/                      # Undo/redo system (command pattern)
 ├── nodes/                     # Built-in node implementations (47+)
 ├── evaluator/                 # Network evaluation engine
@@ -322,6 +323,19 @@ that step. **A new `pending_*` coalescing session belongs in
 Tests go through `library_links_refresh_test.rs`'s
 workspace and the randomized harness `library_links_fuzz_test.rs`; a failure
 the harness finds becomes a named test before it is fixed.
+
+**A design and its dependencies form a fixed relative layout; paths are never
+rewritten** (D6, D11). Moving the design therefore moves the layout:
+`file_dependencies::plan_move` computes each dependency's target from absolute
+paths and refuses — before anything is written — any copy that would land on
+the design file, on another dependency, on a folder or through a link; the copy
+step recomputes the plan instead of trusting the dialog. Every successful
+Save As to another file then re-resolves every mount and data-file watch
+against the new folder (`library_refresh::relocate_after_save`), and a refresh
+command's undo/redo re-resolves the records it restores
+(`library_links::relocate_mounts`), since they were resolved against whatever
+folder the design had when the command was recorded. A new place that stores a
+resolved absolute path of a dependency owes the same re-resolution.
 
 **A relative file path is resolved at eval time only through
 `library_links::base_dir_for_eval(network_stack, registry)`** — the directory

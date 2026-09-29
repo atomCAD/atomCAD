@@ -281,6 +281,14 @@ pub trait NodeData: Any + AsAny {
         Vec::new()
     }
 
+    /// The input pins through which a **wired** file path can reach this
+    /// node. Such a path is only known at evaluation time, so it is not a
+    /// dependency the Save As copy can see (`file_dependencies`, D8); the
+    /// dialog says so when one of these pins is wired. Default: none.
+    fn file_path_pins(&self) -> &'static [&'static str] {
+        &[]
+    }
+
     /// Called when this data is about to **replace** `previous` on the same
     /// node (`NodeNetwork::set_node_network_data`: a panel setter, and the
     /// undo/redo of one, which rebuilds the data from its JSON snapshot).

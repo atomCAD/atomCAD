@@ -37,6 +37,7 @@ pub mod evaluator;
 pub mod mechanosynth_edit_ops;
 // D8: a component of the node network, not a peer module. See the crate doc.
 pub mod expr;
+pub mod file_dependencies;
 pub mod identifier;
 pub mod implicit_eval;
 pub mod invariants;
