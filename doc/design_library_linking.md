@@ -9,6 +9,16 @@ the importer. Having **several documents open and editable at once** is a
 separate, later design; this one is written so that design becomes an
 extension rather than a rewrite (§12).
 
+**Terms used throughout.** The **host** is the file open in the editor. A
+**library** is a `.cnnd` file linked by another file. The **importing file**
+of a link is whichever file declares it — the host for a direct link, a
+library for a nested one; rules stated for "the importing file" apply at every
+level. A **mount** is a linked library's content in the registry, under its
+**mount path** (`demolib`, `demolib.common`). **Local** content is content of
+the host itself, i.e. not under any mount path. A **frozen** node is a node
+whose reference into a mount does not resolve (§8). **P1…P6** are the phases
+of §11.
+
 ---
 
 ## 1. Motivation
@@ -130,7 +140,9 @@ Hence:
 - **Retarget** (v2 → v3) rewrites nothing in the host — it swaps the file under
   the alias and refreshes (§7).
 - **Unlink** is refused while anything in the host uses the mount (same shape as
-  `check_delete_references`).
+  `check_delete_references`). "Uses" is every reference kind of §8 — instances,
+  record schemas, **and** `DataType`s in node data that name a record under the
+  mount — so unlinking can never turn a working host node into a frozen one.
 
 ### D3 — A mount owns its folder completely
 
@@ -266,7 +278,8 @@ again on the next focus.
   Opening is not an undo step — there is no "before" to go back to.
 
 The check is skipped while a drag, a text edit, or a modal dialog is active and
-runs at the next idle moment.
+runs at the next idle moment. Flutter does the skipping (§5.3); Rust must not
+depend on it — see the P4 item on Rust-side interactions.
 
 **What cannot be detected:** content that changed while `mtime` and `size` both
 stayed the same. Tools that copy an older file over a library keep the *old*
@@ -317,7 +330,9 @@ dialog says so when the file contains such a node.
   - for each refreshed mount, the **previously mounted content** (the networks,
     record defs, folders and nested mounts that were under the mount path — it
     is already in memory, it is simply kept instead of dropped) and the new
-    content;
+    content, together with the `LibraryMount` record before and after (for a
+    retarget that includes `rel_path` / `abs_path`, so undo points the alias
+    back at the old file; status and stamps are part of it too);
   - for each refreshed host data file, the node data before and after
     (like `SetNodeDataCommand`);
   - each refreshed mount's `stored_uses` before and after (§7.1 step 1), so a
@@ -426,8 +441,10 @@ file already there** (conflict). Buttons:
 - **Cancel**.
 
 **Order and failure.** Dependencies are copied first; the host is written last.
-If any copy fails, the host is not written and the error lists the file. A
-target that would climb above the filesystem root is refused.
+If any copy fails, the host is not written and the error lists the file; the
+copies already made stay in place and are listed too (they are copies, so
+nothing of the user's is lost, and removing them could delete a file that was
+there before). A target that would climb above the filesystem root is refused.
 
 **Moving inside a workspace costs nothing.** `proj1/host.cnnd` linking
 `../libs/demolib.cnnd`, saved as `proj2/host.cnnd` (a sibling folder), resolves
@@ -518,9 +535,11 @@ both: a refresh captures the old interface from memory, an open reads it from
 the file; the repair and the report are shared.
 
 - **What is recorded.** Every name under the import's mount (direct *or*
-  transitive) that a host **local** node refers to — a custom-network instance
-  (`node_type_name`) or a record node (schema / target) — found by the same
-  reference walk as `unresolved_mount_ref` (§8), recursively into HOF bodies.
+  transitive) that a **local** node of the importing file refers to as a
+  custom-network instance (`node_type_name`) or a record node (schema /
+  target), recursively into HOF bodies. The walk is the same one
+  `unresolved_mount_ref` (§8) uses; of the reference kinds it finds, only these
+  two produce entries.
   Networks record `params` (`param_id`, name, type) and `outputs` (name, type);
   record defs record `fields` (`FieldId`, name, type). Named-record types used
   only as *types* (a parameter typed `demolib.Miller`) need no entry: they carry
@@ -627,6 +646,12 @@ pub struct LibraryLinks {
   order as today. The same sequence runs inside every recursive mount, so a
   library reconciles its own calls into its imports before it is prefixed.
 
+  The load-time heals that today run only in `StructureDesigner::load_node_networks`
+  — above all the duplicate-`param_id` heal (`dedupe_param_ids_in_network`) —
+  must also run on a library's temp registry inside `mount_library`, **before**
+  the importing file reconciles against it: reconciliation matches by
+  `param_id`, so it must see the ids the library will actually have.
+
   **The order is load-bearing:** reconciliation must run after mounting and
   **before** `repair_network_arguments` or any custom-node-type cache rebuild
   with `refresh_args = true` — either of those realigns arguments by count and
@@ -642,7 +667,8 @@ pub struct LibraryLinks {
 - **Dependencies** (`file_dependencies.rs`, D11): `collect_file_dependencies(target_dir)`
   (transitive: imports + relative data-file paths of host and libraries, with
   per-entry target path and status), `save_as_with_dependencies(path, choice)`
-  (copy then write, all-or-nothing), `export_project_bundle(zip_path)`. Data-file
+  (copies first, host last; the host is written only if every copy succeeded),
+  `export_project_bundle(zip_path)`. Data-file
   paths are reported by the nodes themselves through a
   `file_paths(&self) -> Vec<&str>` method on `NodeData` (default: none), so a
   new file-reading node is picked up by overriding one method. The same module
@@ -650,6 +676,15 @@ pub struct LibraryLinks {
   libraries keep theirs on `LibraryMount`.
 - **Read-only guard** (§6), **refresh + call-site remap** (§7), **eval base dir**
   (D8), **check-on-disk** (D7).
+- **Disk access** for all of the above goes through one small trait, `LinkFs`
+  (read, stat, copy, write, rename), with the real filesystem as the only
+  production impl; the tests substitute a fault-injecting impl (§11.1). Two
+  rules it makes enforceable: a library is **read once** per mount or refresh,
+  and its stamp and hash are computed from exactly the bytes that were parsed;
+  and every `.cnnd` write (host save, Save As, copies) writes a temp file in
+  the target directory and renames it over the target, so a failed write
+  never leaves a truncated file. (If today's save does not already do this,
+  this design makes it so.)
 
 ### 5.2 Rust — `rust/src/api/` (FFI surface)
 
@@ -664,9 +699,9 @@ there):
 | `unlink_library(alias)` | `APIResult` (refused with the list of users if used) |
 | `retarget_library(alias, path)` | `APIRefreshReport` |
 | `refresh_library(mount_path)` / `refresh_all_dependencies()` | `APIRefreshReport` (re-hash unconditionally) |
-| `check_dependencies()` | `Option<APIRefreshReport>` — stats every watched file (D7), refreshes whatever changed in one undoable command (D10) — or, while the redo tail is non-empty, holds it and reports it as `held` (D9); `None` if nothing changed or was newly held |
+| `check_dependencies()` | `Option<APIRefreshReport>` — stats every watched file (D7), refreshes whatever changed in one undoable command (D10) — or, while the redo tail is non-empty, holds it and reports it as `held` (D9); `None` when nothing was refreshed and nothing was newly held |
 | `get_linked_libraries()` | `Vec<APILibraryMount>` (no disk access) |
-| `take_load_library_report()` | report from the last file open (like `take_load_param_id_repairs`) |
+| `take_load_library_report()` | `Option<APIRefreshReport>` — the report of the last file open (D7, D13), drained like `take_load_param_id_repairs` |
 | `collect_file_dependencies(target_path)` | `APIDependencyPlan { entries: Vec<APIDependency { source_abs, target_abs, rel_path, kind: Library\|DataFile, group: Inside\|Outside\|External, status: WillCopy\|AlreadyThere\|Conflict }>, has_wired_paths }` |
 | `save_as_with_dependencies(path, copy: bool, overwrite_conflicts: bool)` | `APIResult` |
 | `export_project_bundle(zip_path)` | `APIResult` with the list of external files left out |
@@ -724,7 +759,8 @@ Presentation and triggers only; no path logic, no hashing, no name rewriting.
 - **Dialogs**: *Link library…* (file picker with a new `FileDialogPurpose`
   variant — do not change existing `key()` strings — then an alias field with
   `validateUserName` + `mountFor`/`nameIsTaken` checks), *Change file…*,
-  refresh report (dropped wires and removed networks, each navigable). All
+  refresh report (dropped wires, frozen nodes, removed networks and record
+  defs, each navigable). All
   dialogs draggable; errors via `showErrorSnackBar`.
 - **Save As**: before saving to a different folder, call
   `collectFileDependencies`; if any entry is *will copy* or *conflict*, show the
@@ -787,8 +823,9 @@ which today bypasses the CLI lock; they are covered by layer 2 regardless of
 caller.
 
 **Tripwire for tests**: `mount_fingerprint(registry, mount_path) -> String` —
-the canonical text-format dump (`text_format` serializer) of every network +
-record def under the mount, excluding view state. The enforcement test (§11,
+the canonical `.cnnd` JSON of every network + record def + folder under the
+mount, view state stripped — the same serialization as the local fingerprint
+O1 (§11.1), and JSON for the same reason: it records wires by exact pin index. The enforcement test (§11,
 P2) runs the whole mutation alphabet against linked targets and asserts both
 `Err` **and** an unchanged fingerprint; a guard that errors *after* partially
 mutating fails it.
@@ -798,9 +835,10 @@ mutating fails it.
 ### 7.1 Procedure (refresh and retarget alike)
 
 All changed files found by one check are handled by one
-`RefreshDependenciesCommand`. Opening a file runs steps 4–6 of the same
-procedure, with the old interface read from the file's `uses` table instead of
-captured in step 1, and without the command (D7, D13).
+`RefreshDependenciesCommand`. Opening a file runs steps 4–6 and the
+validation of step 7, with the old interface read from the file's `uses`
+table instead of captured in step 1, and without snapshots or a command — an
+open is not an undo step (D7, D13).
 
 1. Capture the **old interface** of every name under each affected mount that
    a host local node refers to, as a `UsedInterfaces` (D13) — the same
@@ -811,9 +849,9 @@ captured in step 1, and without the command (D7, D13).
    file said at load time.
 2. **Snapshot the affected host nodes, before anything touches them.** The
    affected set is every host node (in every local network, recursively into
-   HOF bodies) that refers to a name under an affected mount — an instance
-   (`node_type_name`) or a record node (schema / target) — found by the same
-   reference walk as `unresolved_mount_ref` (§8). Snapshotting *every* referring
+   HOF bodies) that refers to a name under an affected mount by **any**
+   reference kind of §8 — instance, record schema / target, or a `DataType` in
+   its data — found by the `unresolved_mount_ref` walk. Snapshotting *every* referring
    node rather than only "call sites of a network whose interface changed" is
    deliberate: which ones change is not known until after the re-mount, and
    the ones whose target **disappears** are exactly the ones a
@@ -864,19 +902,29 @@ did in between.
 ### 7.2 Report
 
 The report is the same whether it comes from a refresh or from an open
-(`take_load_library_report`). Dropped wires (parameter gone, or the retype makes the wire incompatible →
-kept but flagged by validation, consistent with the existing repair), networks
-and record defs that disappeared (the host nodes referring to them are frozen,
-§8, and show "Unknown node type" / "Unknown record type"), and mount status
-changes. A clean report → transient snackbar; otherwise a persistent
+(`take_load_library_report`). It lists:
+
+- **dropped wires** — a parameter or record field that no longer exists, or an
+  output pin that no longer exists (the output-pin-count pass drops those);
+- **flagged wires** — kept, but now incompatible after a retype; validation
+  marks them, consistent with the existing repair;
+- **frozen nodes** — host nodes whose referenced network or record def
+  disappeared (§8); they show "Unknown node type" / "Unknown record type";
+- **output-pin warnings** — §7.3;
+- **mount status changes** (`Missing`, `Error`, …).
+
+**Every wire that is gone after the operation appears in this report** — that
+is the property the wire ledger (O2, §11.1) tests. A report with only status
+changes to `Loaded` is clean → transient snackbar; anything else → persistent
 snackbar whose *Details* opens a dialog with navigable rows (D10).
 
 ### 7.3 Known limitation
 
 Output pins are matched positionally. A library version that inserts or
-reorders a network's output pins mis-wires host consumers of pin ≥ 1. The
-report lists every host wire from an output pin ≥ 1 of a network whose output
-list changed, so it is visible, not silent — on open as well as on refresh,
+reorders a network's output pins mis-wires host consumers of pin ≥ 1. (One
+that *removes* output pins drops the wires from them; those are listed as
+dropped wires, §7.2.) The report lists every host wire from an output pin ≥ 1
+of a network whose output list changed, so it is visible, not silent — on open as well as on refresh,
 because the recorded interface (D13) includes the output list. Real output-pin
 identity is P5 of `doc/design_identity_vs_naming.md`. (The recorded output
 *names* would also allow matching outputs by name, turning a reorder into a
@@ -899,7 +947,8 @@ its wires must survive. The same guarantee holds when a *loaded* library stops
 defining a name the host uses (a network or record def removed by a refresh or
 retarget, §7).
 
-Two kinds of host node refer to a mounted name, and they fail differently:
+A host node refers to a mounted name as an instance, through a record
+schema, or through a type. The first two fail on the node itself:
 
 - **Instances of a linked network** (`node_type_name == "demolib.half_space"`).
   These are already safe: when the type does not resolve,
@@ -913,16 +962,47 @@ Two kinds of host node refer to a mounted name, and they fail differently:
   zero**. Every wire into them is lost, on load and on refresh alike. This is
   the real hazard.
 
-The rule: **a host node that refers to an unresolved name under a mount path is
-frozen** — its custom node type is not rebuilt, its `arguments` (and
-`zone_output_arguments`, `function_pin_roles`) are neither grown nor truncated,
-and wire repair does not disconnect its wires. It shows a blocking error
-("Unknown node type `demolib.x`" / "Unknown record type `demolib.Miller`") and
-cone-poisons as usual. "Refers to" is one predicate, `unresolved_mount_ref(node,
-registry) -> Option<String>`, which checks `node_type_name` **and** the record
-schema strings; "under a mount" is `mount_containing(name).is_some()`,
-**whatever the mount's status** (a `Loaded` mount whose new version dropped the
-name counts). Unknown names outside any mount keep today's behaviour.
+Wires are also lost on the **outgoing** side and through **type-only**
+references, because several passes drop a wire by looking at the *source*
+node's type or at a type check:
+
+- **Wires out of a frozen `record_destructure`.** With its def missing it is
+  built with a single placeholder `result` pin (`record_destructure.rs`, the
+  `_ =>` arm). The output-pin-count passes (`repair_output_pin_wires` in
+  `network_validator.rs`, the count check in `repair_node_network`) then drop
+  every consumer wire from pin ≥ 1, and `repair_node_network`'s `FieldId`
+  remap (R3) treats every field as deleted and drops the rest.
+- **Wires whose type check mentions an unresolved name.** A dangling
+  `Named(_)` is "incompatible with anything" (`data_type.rs`), and
+  `repair_zone_body` drops body wires whose zone-input type no longer
+  converts. A `map` over `Array[demolib.Miller]` thus loses every body wire
+  reading `element` when demolib is missing — a host node that refers to the
+  library only through a *type* (HOF `input_type`, a parameter or a local
+  record field typed `demolib.Miller`).
+- `repair_node_network` runs after **every** structural edit
+  (`finish_node_structure_edit`), not only on load and refresh, so these are
+  hit the next time the user edits the network, too.
+
+The rule has two parts:
+
+1. **A host node that refers to an unresolved name under a mount path is
+   frozen.** Its custom node type is not rebuilt, its `arguments` (and
+   `zone_output_arguments`, `function_pin_roles`) are neither grown nor
+   truncated, and no repair pass disconnects a wire **into or out of** it. It
+   shows a blocking error ("Unknown node type `demolib.x`" / "Unknown record
+   type `demolib.Miller`") and cone-poisons as usual.
+2. **No repair pass disconnects a wire whose compatibility check involves an
+   unresolved name under a mount** (a `DataType` walk for a `Named` under a
+   mount), wherever that wire is — including inside the body of a frozen HOF.
+   Validation reports such a wire as an error instead.
+
+"Refers to" is one predicate, `unresolved_mount_ref(node, registry) ->
+Option<String>`, which checks `node_type_name`, the record schema strings,
+**and** every `DataType` stored in the node's data (HOF element/accumulator
+types, parameter types, `closure` signatures). "Under a mount" is
+`mount_containing(name).is_some()`, **whatever the mount's status** (a
+`Loaded` mount whose new version dropped the name counts). Unknown names
+outside any mount keep today's behaviour.
 
 After a refresh a frozen node keeps its **last resolved** custom node type
 (already in memory), so it still draws with its pins. On load there is none; it
@@ -937,7 +1017,9 @@ writes back its `hash` and its `uses` table exactly as read (`stored_hash`,
 
 **P1 starts with a red-first test for exactly this**, using a host that has
 both an instance of `demolib.foo` *and* a `record_construct` on
-`demolib.Miller` with wired fields.
+`demolib.Miller` with wired fields — and the full frozen-node matrix of §11.1
+(outgoing wires, type-only references, every repair pass) follows it in the
+same phase.
 
 ## 9. Mapping to mechadense's concerns
 
@@ -959,12 +1041,17 @@ both an instance of `demolib.foo` *and* a `record_construct` on
   into local content. Under D1/D3 that is just removing the mount record — the
   networks are already in the registry under `demolib.*` and will now be saved.
   Nested mounts are vendored with it. Undoable (restore the mount record).
+  Offered only on a direct mount with status `Loaded` (there is nothing to
+  vendor from a missing file); the host's `imports` entry for it is removed,
+  and the vendored content takes the mount's in-memory state, not the disk's.
 
 ## 11. Phased implementation plan
 
 Each phase ends green: `cargo test -j 4` (plus `--test structure_designer_api`
 and `--test integration` explicitly), `cargo clippy`, `cargo fmt`,
-`flutter analyze`. Tests go in
+`flutter analyze` — including the §11.1 oracles and, from P3 on, the fuzz seed
+set. No test of this design is ever marked `#[ignore]` to get a phase green; a
+test that cannot pass yet is a bug in the phase, not in the test. Tests go in
 `rust/crates/atomcad-structure-designer/tests/structure_designer/`, registered
 in `tests/structure_designer.rs`; fixtures under
 `rust/tests/fixtures/library_linking/`, addressed only via
@@ -979,6 +1066,168 @@ value; `cycle_x.cnnd` ↔ `cycle_y.cnnd`; `self_link.cnnd`;
 `host_missing.cnnd` (links a file that does not exist); `libs/with_xyz.cnnd` +
 `libs/tip.xyz` (relative-path eval).
 
+### 11.1 Testing strategy — no silent loss of user work
+
+The requirement that outranks every other in this design: **a user never loses
+an edit without being told.** Linking adds new ways to lose work that did not
+exist before — a library changing underneath the host, passes that realign or
+drop wires they cannot resolve, automatic commands in the undo history, and
+file copies at Save As. Example-based tests per feature (the phase lists below)
+are necessary but not enough: each one proves the case its author thought of.
+So the suite is built on **oracles that every test applies**, a **randomized
+harness** that looks for sequences nobody thought of, and **fault injection**
+for the disk.
+
+**What counts as user work.** Local networks (nodes, node data, wires including
+their pin indices, zone bodies, comments), local record defs, folders, CLI
+access rules, the import list (aliases, paths, `uses`), **every file on disk
+the user did not ask to change** (library files above all), and the **redo
+history**. View state (camera, canvas viewport, selection) is not.
+
+#### Oracles (shared helpers, land in P1, used by every later test)
+
+They live in one test-support module,
+`tests/structure_designer/library_links_support.rs`, so no test re-implements
+them:
+
+- **O1 — local fingerprint.** `local_fingerprint(designer) -> String`: the
+  canonical serialized form (`.cnnd` JSON of the local content only, the same
+  filter as D5, view state stripped) of everything under "user work" above
+  that lives in memory. JSON rather than the text format because it records
+  wires by exact pin index; a moved wire must change the fingerprint.
+- **O2 — wire ledger.** `wire_ledger(before, after, report)`: for every host
+  wire before an operation, it must be present after — keyed by identity like
+  the existing wire-identity oracle in `invariants_test.rs`
+  (`(source, source pin, dest, dest param_id / FieldId)`), so a wire that
+  *followed* its parameter to a new index counts as present — **or** be listed
+  in the operation's report (§7.2). A wire that is neither is a **silent
+  loss** and fails the test. The ledger also fails on a wire that *appears*
+  (a wire re-pointed to the wrong parameter shows up as one loss plus one
+  appearance). A wire into a **frozen** node has no resolvable `param_id`; it
+  is keyed by its positional index instead, which a frozen node must keep
+  anyway. The ledger applies to operations that are **not supposed to change
+  the host's wiring except as reported**: open, check / refresh / retarget,
+  link, unlink, vendoring, rename alias, save → reopen, and an unrelated edit
+  judged only on the wires it did not touch. Undo and redo are checked by O5
+  instead, and a user edit is checked by its own test.
+- **O3 — disk tripwire.** `DiskTripwire::arm(temp_dir)` hashes every file under
+  the test's `TempDir`; `assert_only_changed(&[allowed paths])` checks that
+  nothing else changed. Library files are never in the allowed list outside
+  Save As copies and `link_library_copying`. Every test that touches disk
+  arms one.
+- **O4 — persistence.** `assert_save_reopen_identity(designer)`: save to a temp
+  path, reopen in a fresh `StructureDesigner`, and require (a) O1 of the reopened
+  designer equals O1 before saving (with unchanged libraries on disk, an open
+  reconciles nothing), and (b) save → load → save is byte-identical.
+- **O5 — undo inverse.** `assert_undo_inverse(designer, op)`: record O1 and
+  every `mount_fingerprint`, run the op, undo, require both unchanged; redo,
+  require the post-op state exactly (O1 and mount fingerprints). Separately,
+  an automatic check run while the redo tail is non-empty leaves the redo tail
+  exactly as it was (D9).
+- **O6 — document invariants.** `check_document_invariants` (the Phase 0
+  checker) reports nothing fatal after every step, and gains one check:
+  `arguments.len()` of a node equals its type's pin count **unless** the node
+  is frozen (§8), subject to the exceptions the checker already makes for
+  derived layouts (`apply`) — so a frozen node that got realigned, or a
+  non-frozen node left misaligned, is caught by every existing invariant test
+  too.
+
+Each oracle gets a **negative control**: a test that performs a deliberate
+silent drop / wire move / library write / non-inverse undo and asserts that
+the oracle *fails*. An oracle that cannot fail protects nothing.
+
+#### The frozen-node matrix (P1, extended in P2 and P3)
+
+Table-driven over three axes, every cell asserting O2 (nothing dropped) and
+O6:
+
+- **reference kinds**: linked-network instance (single and multi-output,
+  wires in *and* out, a `-1` function-pin wire out); `record_construct`,
+  `record_destructure` (wires out of pins ≥ 1), `product` on a linked def;
+  type-only references — a `map` / `filter` / `fold` whose element type is
+  `demolib.Miller` with body wires reading `element`, a local record def with
+  a field typed `demolib.Miller` and a wired `record_construct` of it, a
+  parameter typed `demolib.Miller`; a `closure` whose signature mentions a
+  linked record; each of those **inside a HOF body** as well as at top level;
+- **causes of non-resolution**: mount `Missing`, `Error` (unparseable file),
+  `Cycle`; mount `Loaded` but the name was removed by a refresh; by a retarget;
+- **passes that could touch it**: load; `validate_active_network`;
+  `repair_node_network` via an unrelated structural edit in the same network
+  (add a node, delete a neighbour, move, connect an unrelated wire); record-def
+  add / update / rename of an unrelated **local** def (`repair_all_networks`);
+  undo and redo of each; save → reopen.
+
+And the way back: when the name resolves again (file restored, retarget back,
+library re-adds the network), every frozen node **unfreezes with its wires
+intact**, reconciled against the carried-over `uses` (D13) — including when
+the library's interface changed while the node was frozen.
+
+#### Randomized harness (P3, extended by each later phase)
+
+`library_links_fuzz_test.rs`, seeded and deterministic like the existing
+property suite in `invariants_test.rs` (same generator style; no new
+dependency). One run is a sequence of ~40 steps drawn from:
+
+- **host edits**: a subset of the mutation alphabet of Phase 2 applied to
+  local networks, including edits in networks containing frozen nodes;
+- **library edits written to disk**, as another process would: parameter add
+  (end / middle) / remove / reorder / rename / retype, record field add /
+  remove / reorder / rename, output pin add / reorder, network or record def
+  removed and re-added, file deleted and restored, file made unparseable and
+  fixed, the same edits in a nested library;
+- **app actions**: `check_dependencies`, `refresh_library`, retarget to a
+  sibling version, undo, redo (including runs of several), save, close and
+  reopen, link and unlink when allowed.
+
+Oracles after **every** step: O2 on the steps it applies to (the report of
+that step being the only allowed explanation for a missing wire); O5 on undo
+and redo steps; O3 (libraries are only written by the harness's own "library
+edit" steps); O6. At the end of a run: undo all the way back and require O1
+equal to the start (after a reopen, which starts a fresh history, undo back
+to the reopen point instead), and O4 on the final state. Runs are kept shorter
+than `max_history`, so undoing back never meets an evicted command.
+
+CI runs a fixed seed set (sized to stay under ~30 s in a `-j 4` run); a longer
+run is `LIBRARY_LINKING_FUZZ_CASES=5000 cargo test -j 4 library_links_fuzz`.
+A failure prints the seed and the step list. **Every failure found, in CI or
+locally, is minimized by hand into a named example-based regression test**
+before it is fixed, so the fix is guarded independently of the seed set.
+
+#### Fault injection (P3 and P5)
+
+Disk operations go through the `LinkFs` trait (§5.1); the test impl can fail,
+or change a file, at a chosen call. Tests:
+
+- a library read fails midway, or returns a truncated/corrupt file → the mount
+  goes `Error`, the previously loaded content keeps evaluating, O2 and O1
+  unchanged, nothing partially mounted;
+- a library changes **between** stat and read, or between two reads of one
+  refresh → the stamp and hash recorded are those of the bytes actually parsed
+  (the content is read **once** per refresh), so the next check detects the
+  newer version rather than believing it is loaded;
+- a write of the host fails midway → the file on disk is either the old file
+  or the new one, never a truncated one (the temp-file-and-rename rule of
+  §5.1);
+- Save As copy failures (P5 list).
+
+#### Rules for every test in this design
+
+- Everything that writes goes through a `TempDir`, never a committed fixture
+  path or a hard-coded scratch directory.
+- Library edits in tests are made the way a user makes them: open the library
+  file in its own `StructureDesigner`, edit through the public methods, save.
+  Hand-edited JSON is used only for the corrupt-file and legacy cases.
+- Change-detection tests never depend on the filesystem's timestamp
+  granularity (a same-size rewrite within one mtime tick is invisible to the
+  stat check by design, D7): they go through the `LinkFs` test impl, or set the
+  mtime explicitly, or call `refresh_library`. No test sleeps.
+- A test that asserts "nothing lost" also asserts that the thing was *there*
+  (non-empty wire set, non-trivial fingerprint), so a fixture that silently
+  lost its wires before the test ran cannot pass vacuously.
+- Linking hosts join the **text-format round-trip corpus** and the `.cnnd`
+  round-trip tests: `query` → `--replace` on a host network with linked
+  instances and frozen nodes must be a no-op (O1 unchanged).
+
 ### Phase 1 — Format, mounting, save (Rust only; no UI)
 
 Work: `library_links.rs` (`LibraryMount`, `LibraryLinks`, `mount_containing`,
@@ -988,20 +1237,39 @@ stack, save filtering + `imports` field (paths verbatim, normalized at link time
 `unresolved_mount_ref` and the frozen-node rule of §8 in the load-time and
 validation-time repair passes; the `uses` table (D12/D13) —
 `UsedInterfaces`, `collect_used_interfaces`, `stored_uses` read on load and
-carried over on save. *Using* it on open (reconciliation) is Phase 3, where it
+carried over on save; the `LinkFs` trait with read-once mounting and
+temp-file-and-rename writes (§5.1); the load-time heals on the temp registry
+inside `mount_library`. *Using* the `uses` table on open (reconciliation) is Phase 3, where it
 shares the refresh code; until then an open with a changed library is known to
 realign by position, which no user sees before Phase 4.
 
 Tests (`library_links_test.rs`):
+- The §11.1 oracles O1–O6 and `library_links_support.rs`, each with its
+  negative control, **before** any feature test.
 - **Red-first**: `host_missing.cnnd` — which has an instance of the missing
   library's network **and** a `record_construct`, a `record_destructure` and a
   `product` on one of its record defs, all with wired pins, one of them inside
   a HOF body — loads, reports `Missing`, and load → save is byte-identical
   (every such node and its wires intact) (§8).
 - Frozen-node predicate: `unresolved_mount_ref` fires for an unknown
-  `node_type_name` under a mount and for a record schema under a mount, for
-  every mount status; an unknown name *outside* any mount keeps today's
-  behaviour (arguments realigned).
+  `node_type_name` under a mount, for a record schema under a mount, and for a
+  `DataType` in node data that names a record under a mount, for every mount
+  status; an unknown name *outside* any mount keeps today's behaviour
+  (arguments realigned).
+- **Frozen-node matrix** (§11.1) for the causes available in P1 (`Missing`,
+  `Error`, `Cycle`) × every reference kind × load, validation, unrelated
+  structural edits in the same network, unrelated local record-def edits,
+  undo/redo of those, save → reopen: O2 and O6 in every cell. Specifically
+  covers wires **out of** a frozen `record_destructure` (pins ≥ 1) and body
+  wires of a `map` over `Array[demolib.Miller]`.
+- Save filtering never drops local content: a local network in folder `libs`
+  beside the mount `libs.demolib` is saved; a local network named `demolibx`
+  or `demolib_extra` is not taken for part of mount `demolib`; local record
+  defs and CLI rules likewise; checked by O4 on a host that has all of these.
+- Byte-identical save for every non-`Loaded` status (`Missing`, `Error`,
+  `Cycle`), not only `Missing`.
+- A failed `link_library` (bad alias, unreadable file, cycle) leaves O1 and the
+  undo stack unchanged; `link` and `unlink` pass O5.
 - Mount prefixes networks, record defs, folders; internal references rewritten
   including inside zone bodies, `Named` record refs, and
   `record_construct`/`record_destructure`/`product` schema strings.
@@ -1060,6 +1328,16 @@ Tests (`library_links_readonly_test.rs`):
   `mount_fingerprint` unchanged **and** the undo stack unchanged.
 - The same alphabet on a **local** network still succeeds (guards against a
   guard that is too broad).
+- The same alphabet on a local network that **contains frozen nodes** (§8):
+  every edit succeeds, and every frozen node with its wires in and out is
+  unchanged afterwards (O2 restricted to the frozen nodes' wires), after undo,
+  and after save → reopen. Includes copy / paste and duplicate of a frozen node
+  (the copy is frozen too, wires kept per the usual paste rules), deleting a
+  frozen node (undo restores it with its wires), and factoring a selection that
+  contains one.
+- `ai_text_edit` on a host network with linked instances and frozen nodes:
+  `query` then `replace` with the same text is a no-op (O1), and an unrelated
+  edit statement leaves every linked instance's wires as they were (O2).
 - Browsing: activate a linked network, select, change camera/canvas viewport,
   toggle display → allowed, host **not** dirty, nothing saved.
 - Duplicate *into my file* (target namespace outside the mount) succeeds and the
@@ -1085,7 +1363,15 @@ interfaces; host data-file refresh through a `NodeData` hook that re-reads the
 cached file content; the report. Before starting: settle §7.3's function-value
 question.
 
-Tests (`library_links_refresh_test.rs`, all in temp dirs):
+Tests (`library_links_refresh_test.rs`, all in temp dirs). **Every test below
+runs O2 (wire ledger) and O3 (disk tripwire), and every test that pushes a
+command runs O5 (undo inverse)** — the bullets state only what is specific to
+them. Plus the §11.1 randomized harness and the fault-injection tests of
+refresh.
+- Frozen-node matrix, P3 causes: name removed by a refresh, by a retarget;
+  and **unfreezing** — file restored / retarget back / name re-added, with and
+  without an interface change in between — every frozen node's wires intact
+  and reconciled from the carried-over `uses`.
 - Detection: unchanged file → nothing; touch without content change → nothing
   (hash decides); content change → refreshed; delete → `Missing`, nothing
   removed, loaded version keeps evaluating; file restored → refreshed.
@@ -1114,10 +1400,10 @@ Tests (`library_links_refresh_test.rs`, all in temp dirs):
 - **Undo round trips** (the core of D9), for each of: clean refresh, refresh
   that dropped wires, refresh that removed a used network, refresh that
   removed a used record def, retarget, data-file refresh:
-  - undo restores the host (text-format dump of every local network
-    byte-identical to before — including the networks whose referenced
-    network or record def disappeared) **and** the old mounted content (mount
-    fingerprint identical), and evaluation gives the old result;
+  - undo restores the host (O1 identical to before — including the networks
+    whose referenced network or record def disappeared) **and** the old
+    mounted content (`mount_fingerprint` identical), and evaluation gives the
+    old result;
   - redo restores the refreshed state exactly (post-validation snapshot);
   - an edit made *before* the refresh can still be undone after undoing the
     refresh, and one made *after* it can be undone before it (interleaving);
@@ -1152,6 +1438,24 @@ Tests (`library_links_refresh_test.rs`, all in temp dirs):
 - Duplicate-id library: a library whose parameter nodes share a `param_id`
   (healed on load by `dedupe_param_ids_in_network`) → host wires match by
   name or drop with a report; none moves to the wrong pin.
+- Missing then back with a different interface: host saved while the library
+  is `Missing` (the `uses` carried over byte-identically), library restored
+  with a parameter inserted in the middle, host reopened → reconciled from the
+  carried-over `uses`, no shift.
+- The active network, or a network in the navigation history, is under a
+  mount that a refresh removes → the editor falls back to a local network
+  without error; undo of the refresh makes it available again.
+- Host data-file refresh (`import_xyz`, `import_cif`, `import_cube`) replaces
+  only the cached file content: every user-set field of the node's data
+  (options, tags, transforms, names) is unchanged, compared field by field.
+- A refresh while the host is dirty keeps it dirty; a host edit, then a
+  refresh, then save → reopen keeps the edit (O4).
+- A held refresh (D9) survives save: undo two edits, change the library, save,
+  reopen → the reopened host is reconciled to the current library, and the
+  pre-save redo tail was usable up to the save.
+- Undo history eviction: fill the history past `max_history` with edits after
+  a refresh → the refresh command is evicted like any other; the state is
+  unchanged and saves correctly.
 
 ### Phase 4 — Flutter
 
@@ -1167,14 +1471,25 @@ Tests:
 - Rust API tests (`rust/tests/structure_designer_api/`) for the view fields:
   `read_only` set exactly on networks under a mount; add-node list excludes
   transitive mounts.
+- A missed Flutter gate must not corrupt state (§5), so the Rust side is
+  tested *without* the gates: every API mutation called on a linked target
+  returns an error (the P2 alphabet, through the API layer this time).
+- **Rust-side interactions.** First establish which interactions Rust itself
+  knows are open (a gadget drag, an `atom_edit` drag — whatever the undo
+  coalescing treats as one open step); this design has not checked. For each
+  one Rust knows about, `check_dependencies` holds the refresh (like the redo
+  hold of D9) instead of splitting the step, and applies it when the
+  interaction ends — with a test per interaction. Any interaction only Flutter
+  knows about is recorded in `lib/structure_designer/AGENTS.md` as guarded
+  by Flutter alone.
 - **Manual walkthrough (maintainer)** — thin editor UI is verified by hand:
   link, browse, try every forbidden gesture on a linked canvas, edit the library
   in its own file with an internal change and return (transient snackbar), then
   with a parameter removed and return (persistent snackbar, *Details*, *Undo*,
   "older than disk" marker, *Refresh*), undo two edits and then change the
   library (held snackbar, redo still works, the next edit applies the
-  refresh), change a library while atomCAD keeps focus (poll picks it up), retarget v2→v3, unlink refused/allowed, missing
-  file badge. The Flutter
+  refresh), change a library while atomCAD keeps focus (poll picks it up),
+  retarget v2→v3, unlink refused/allowed, missing file badge. The Flutter
   smoke test (`flutter test integration_test/`) is also run by the maintainer,
   not by an agent.
 
@@ -1193,7 +1508,21 @@ linking `common.cnnd` and using `import_xyz("tip.xyz")`; `ws/libs/common.cnnd`;
 `ws/libs/tip.xyz`; `ws/proj1/data/local.xyz` used by the host; one host
 `import_cif` with an absolute path (external).
 
-Tests (`file_dependencies_test.rs`):
+Tests (`file_dependencies_test.rs`). **Every test arms O3** with the allowed
+list equal to the plan's *will copy* targets (plus *conflict* targets only when
+`overwrite_conflicts = true`) and the new host path — Save As is where a bug
+would overwrite a file of the user's that is not part of this design at all.
+- Never overwrite what is not in the plan: a dependency whose target path is
+  the **new host path itself**, the **original host**, or the **source** of
+  another dependency → the plan refuses (error names both paths); two
+  dependencies mapping to one target → refused; a target that is a directory
+  or a symlink/junction pointing elsewhere → refused.
+- Conflicts are never overwritten silently: `overwrite_conflicts = false`
+  leaves every conflicting file byte-identical; the plan's statuses are
+  recomputed at copy time, so a file that appeared at a *will copy* target
+  after the dialog was shown is treated as a conflict, not overwritten.
+- Save As onto an existing host file: a failure anywhere leaves the old file at
+  the destination byte-identical (temp file + rename, §11.1).
 - Collection is transitive and complete: both libraries, `common.cnnd`,
   `tip.xyz` (via the library), `local.xyz`; the absolute CIF is *External*;
   nothing is listed twice.
@@ -1211,8 +1540,8 @@ Tests (`file_dependencies_test.rs`):
   before.
 - Save without dependencies: host written, paths verbatim, mounts `Missing` on
   reopen, nothing lost (§8).
-- All-or-nothing: make one copy fail (read-only target file) → host not written,
-  error names the file, already-copied files left in place and reported.
+- Copy failure: make one copy fail (read-only target file) → host not written,
+  error names the file, already-copied files left in place and reported (D11).
 - `has_wired_paths` set when a file-reading node's path pin is wired.
 - After Save As, watched paths are re-resolved against the new folder: a
   *keep existing* conflict with different content is refreshed (one command,
@@ -1244,13 +1573,26 @@ Docs (part of "done", per `AGENTS.md`):
   **before** any argument-count repair); `atomcad-structure-designer/src/AGENTS.md`
   (library links: mount-by-prefix, `ensure_editable` is required for every new
   content-mutating entry point, `base_dir_for_eval` is the only way to resolve a
-  relative path at eval time); `lib/structure_designer/AGENTS.md` (read-only
+  relative path at eval time, **every repair pass that drops or realigns a wire
+  must honour the frozen-node rule of §8** — a new such pass joins the
+  frozen-node matrix — and new library-linking tests use the §11.1 oracles
+  rather than ad-hoc assertions); `lib/structure_designer/AGENTS.md` (read-only
   rendering, `mountFor`).
 - `doc/cnnd_versioning.md`: note v9.
 
 Tests: CLI routes covered by Rust tests of the underlying `StructureDesigner`
-methods (already in P1–P3); a vendoring test (vendor → save → the file now
-contains the networks and no `imports` entry; undo restores the mount).
+methods (already in P1–P3). Vendoring and alias rename are the two operations
+that turn linked content into saved local content or rewrite host references,
+so they get the full treatment:
+- Vendoring: the mount's `mount_fingerprint` before equals the fingerprint of
+  the same names as local content after (nothing lost in the conversion,
+  including nested mounts, record defs, folders and frozen nodes' targets);
+  save → reopen with the library file deleted still evaluates identically;
+  the file contains no `imports` entry for it; O2 and O5.
+- *Rename alias…*: every host reference kind of the frozen-node matrix is
+  rewritten (instances, record schemas, `DataType`s in node data, `uses`
+  keys); O2, O5, O4.
+- The randomized harness gains vendor and rename-alias steps.
 
 ## 12. Forward compatibility with multiple open documents
 
@@ -1277,8 +1619,9 @@ library file never contain it.
    view state as any `.cnnd` does; when linked, that state is ignored on mount
    and browsing changes are session-only (§5.4).
 3. **Refreshing changed dependencies (revised 2026-09-29)** — everything that
-   changed is refreshed automatically (focus, poll, save, open), as one undoable
-   step with a report; manual *Refresh* per mount and *Refresh all
+   changed is refreshed automatically (on focus, by poll, after Save As), as one
+   undoable step with a report, and an open reconciles against the recorded
+   interfaces (D13); manual *Refresh* per mount and *Refresh all
    dependencies*. The earlier safe/unsafe classification was dropped as too
    complex for implementers and users alike (D7, D9, D10). One exception
    (added 2026-09-29): while redo history exists, an automatic refresh is held
