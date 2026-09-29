@@ -88,6 +88,10 @@ is what you want.
   user clicks it; until then the old version keeps evaluating (D11).
 - A missing or unreadable library shows the **red error badge**; the import is
   kept, the host's instances of it show errors, and nothing is deleted.
+- **Save As** into another folder lists the libraries and data files the design
+  depends on and offers to copy them so every relative path still works
+  (D12). *File > Export project bundle…* zips the design together with
+  everything it depends on.
 
 ## 4. Core model (decisions)
 
@@ -143,7 +147,7 @@ the mount itself is `libs.demolib`. Rules that keep the prefix test exact:
   lie under an existing local folder (then the mount appears inside it).
 - Namespace operations (rename / move / delete folder) on a folder that
   contains a mount are **refused** in v1, because they would silently change an
-  alias. Changing an alias is its own operation (*Rename alias…*, P5), which
+  alias. Changing an alias is its own operation (*Rename alias…*, P6), which
   rewrites the host's `libs.demolib.*` references in one undoable step.
 
 ### D4 — Transitive links nest; each mount is independent
@@ -180,12 +184,31 @@ mount path. Consequences:
   disappears on reload — defense in depth behind §6.
 - Only *direct* links are written; transitive ones are the library's business.
 
-### D6 — Relative paths, rewritten on Save As
+### D6 — Relative paths never change meaning
 
 Each import stores `path` relative to the importing file's directory, with
-forward slashes. The same folder or a `libs/` subfolder is the expected use;
-`../` is allowed. On **Save As** to another directory, Rust rewrites every
-import path so it still points at the same absolute file.
+forward slashes. `..` is allowed (`../libs/demolib.cnnd`), so several project
+folders can share one `libs/` folder next to them.
+
+- **Paths are never rewritten.** Save and Save As write every import path
+  exactly as it was authored. There is no silent re-pointing.
+- **Absolute paths are not allowed for libraries.** A library on another drive
+  (Windows), where no relative path exists, cannot be linked; the link dialog
+  offers to copy it next to the host instead.
+- On disk the path is lexically normalized when the link is created
+  (`libs/../x.cnnd` → `x.cnnd`); a path that climbs above the filesystem root is
+  refused.
+
+The invariant is: **a file and all of its dependencies form a fixed relative
+layout.** Whatever moves the file must move that layout with it, which is what
+the Save As dependency copy (D12) does. The smallest folder containing the file
+and every dependency is self-contained; *Export project bundle* (D12) zips
+exactly that folder.
+
+Rejected alternative: banning `..` so that a file's folder is always
+self-contained. It forces a flat `libs/` inside each project and makes sharing a
+library across projects impossible without copying it into each one. D12 keeps
+the property that matters (paths keep their meaning) without that cost.
 
 ### D7 — Change detection by content hash
 
@@ -215,6 +238,20 @@ which finds the innermost frame that is a *network* (zone-body frames belong to
 their owning network), takes its name, and returns the directory of the mount
 containing it — or the host directory for a local network. The seven sites
 switch to it. This is a real phase of work (P2), not an afterthought.
+
+**Data files follow the same path rules as libraries** (D6, D12), with one
+difference: absolute paths stay allowed for them and are treated as
+**external** (never copied, listed separately). Today's behaviour already fits:
+node data stores `file_name` as authored; a relative name is written back
+verbatim, and the file picker's absolute path is made relative only when the
+file is under the design folder (`try_make_relative`), otherwise it stays
+absolute. What is missing is the other half — Save As does not move the files
+a relative path points at, so it silently breaks them. D12 fixes that for data
+files and libraries together.
+
+Paths that arrive through a **wire** (a `String` computed by the network) are
+only known at evaluation time and are not collected as dependencies; the Save As
+dialog says so when the file contains such a node.
 
 ### D9 — Undo
 
@@ -266,6 +303,64 @@ Why not always manual: it makes the common case slow. Why not always automatic:
 an unsafe reload drops wires and clears undo — the user must choose that
 moment. The classification is the same data the explicit reload's report is
 built from, so the two cannot disagree.
+
+### D12 — Save As copies dependencies into the same relative layout
+
+When **Save As** targets a different folder and the file has relative
+dependencies, a dialog appears before anything is written.
+
+**What counts as a dependency** (collected transitively by Rust):
+
+- every direct and nested linked library (`imports`, recursively);
+- every relative data-file path stored in node data of the host **and** of every
+  linked library (the file-reading nodes of D8);
+- absolute data-file paths are listed as **external** and never copied.
+
+**Where each dependency goes.** For each dependency, take its canonical
+absolute path, compute its path **relative to the host file's folder**
+(normalized, may contain `..`), and join that onto the new folder. This is
+computed from absolute paths, not by concatenating each library's own relative
+paths, so a library in `../libs/` whose data file is `tip.xyz` lands at
+`<new>/../libs/tip.xyz`, where it has to be. Every relative path in every file
+keeps its meaning without being rewritten.
+
+**The dialog** shows three groups:
+
+1. inside the destination folder;
+2. **outside the destination folder** (targets reached through `..`), each shown
+   with its full absolute target path — a copy that lands outside the folder the
+   user picked must be visible;
+3. external (absolute paths) — not copied.
+
+Each entry has a status: **will copy**, **already there** (the target is the
+same file as the source, or has identical content → skipped), or **different
+file already there** (conflict). Buttons:
+
+- **Copy dependencies** (default). If there are conflicts, the user chooses
+  explicitly between *overwrite* and *keep existing*; keeping means the saved
+  file will link to a different version, and the dialog says so.
+- **Save without dependencies** — warns that N libraries and N data files will
+  be missing at the new location.
+- **Cancel**.
+
+**Order and failure.** Dependencies are copied first; the host is written last.
+If any copy fails, the host is not written and the error lists the file. A
+target that would climb above the filesystem root is refused.
+
+**Moving inside a workspace costs nothing.** `proj1/host.cnnd` linking
+`../libs/demolib.cnnd`, saved as `proj2/host.cnnd` (a sibling folder), resolves
+to the same `libs/demolib.cnnd`: status *already there*, nothing to copy, no
+dialog. The dialog appears only if at least one dependency would need copying
+or conflicts.
+
+**Export project bundle (.zip).** File menu command. Rust computes the smallest
+folder containing the file and all its relative dependencies, and writes a zip
+of the file plus those dependencies with their paths relative to that folder.
+Unzipping anywhere reproduces the layout. External files are not included; the
+command lists them. This is the answer to "send me the file to debug".
+
+Saving a **library** opened as its own document is the same operation — D12
+does not care whether the file is a host or a library.
 
 ### D10 — File format
 
@@ -336,7 +431,14 @@ pub struct LibraryLinks {
   order as today.
 - **Save**: filter by `mount_containing(name).is_none()` for networks, record
   defs, folders and CLI rules; write `imports` from direct mounts, with fresh
-  hashes; rewrite relative paths on Save As (D6).
+  hashes; paths written verbatim (D6).
+- **Dependencies** (`file_dependencies.rs`, D12): `collect_file_dependencies(target_dir)`
+  (transitive: imports + relative data-file paths of host and libraries, with
+  per-entry target path and status), `save_as_with_dependencies(path, choice)`
+  (copy then write, all-or-nothing), `export_project_bundle(zip_path)`. The
+  data-file paths come from one registry of the file-reading node kinds (a
+  `file_paths(&self) -> Vec<&str>` method on `NodeData`, default empty), so a
+  new file-reading node is picked up by overriding one method.
 - **Read-only guard** (§6), **reload + call-site remap** (§7), **eval base dir**
   (D8), **check-on-disk** (D7).
 
@@ -355,6 +457,9 @@ there):
 | `check_linked_libraries()` | `APILibraryCheckResult { mounts, auto_reloaded: Vec<String>, unsafe_changes: Vec<APIUnsafeChange { mount_path, reason }> }` — re-stats, classifies, auto-reloads safe changes (D11) |
 | `get_linked_libraries()` | `Vec<APILibraryMount>` (no disk access) |
 | `take_load_library_report()` | report from the last file open (like `take_load_param_id_repairs`) |
+| `collect_file_dependencies(target_path)` | `APIDependencyPlan { entries: Vec<APIDependency { source_abs, target_abs, rel_path, kind: Library\|DataFile, group: Inside\|Outside\|External, status: WillCopy\|AlreadyThere\|Conflict }>, has_wired_paths }` |
+| `save_as_with_dependencies(path, copy: bool, overwrite_conflicts: bool)` | `APIResult` |
+| `export_project_bundle(zip_path)` | `APIResult` with the list of external files left out |
 
 `APILibraryMount { mount_path, alias, rel_path, abs_path, file_name, parent,
 direct, status, status_message }`; `APILibraryReloadReport { mounts_reloaded,
@@ -404,6 +509,11 @@ Presentation and triggers only; no path logic, no hashing, no name rewriting.
   `validateUserName` + `mountFor`/`nameIsTaken` checks), *Change file…*,
   reload confirmation ("clears undo history"), reload report (dropped wires,
   each navigable). All draggable dialogs, errors via `showErrorSnackBar`.
+- **Save As**: before saving to a different folder, call
+  `collectFileDependencies`; if any entry is *will copy* or *conflict*, show the
+  D12 dialog (three groups, full target paths for the outside group), then
+  `saveAsWithDependencies`. Otherwise save as today. *Export project bundle…*
+  in the File menu uses a save-file picker for the `.zip`.
 - **Open library file**: Flutter-only — `_confirmDiscardChanges()` then
   `loadNodeNetworks(abs_path)`; remember the previous path for a "Back to
   `host.cnnd`" entry in the File menu for this session.
@@ -527,7 +637,7 @@ elsewhere keep today's behaviour).
 | Names shift from files to namespaces | Mount folders show the file; thumbnails (#84) are separate |
 | Library depending on its user | Impossible: a library file never sees its importers; linked content is read-only |
 | Renaming someone else's library | Not possible in the importer; write a local wrapper network |
-| Monster all-in-one file for debugging | Files stay separate; share the folder, or vendor (§10) when one file is needed |
+| Monster all-in-one file for debugging | Files stay separate; *Export project bundle* zips the file with every dependency (D12), or vendor (§10) when one file is needed |
 | Swap demolib underneath | Retarget the alias (§7) |
 | Fragile wires on swap | Call sites repaired by `param_id` (§7.1); limitation on output pins (§7.3) |
 
@@ -536,7 +646,7 @@ elsewhere keep today's behaviour).
 - The current *File > Import from .cnnd library* becomes **Import copy…**,
   behaviour unchanged. Its record-def gap is a separate bug; this design does
   not depend on fixing it.
-- **Vendor** (optional, P5): *Make local copy* on a mount folder turns a mount
+- **Vendor** (optional, P6): *Make local copy* on a mount folder turns a mount
   into local content. Under D1/D3 that is just removing the mount record — the
   networks are already in the registry under `demolib.*` and will now be saved.
   Nested mounts are vendored with it. Undoable (restore the mount record).
@@ -564,7 +674,7 @@ value; `cycle_x.cnnd` ↔ `cycle_y.cnnd`; `self_link.cnnd`;
 
 Work: `library_links.rs` (`LibraryMount`, `LibraryLinks`, `mount_containing`,
 mount/unmount), registry field, prefix batch-rename, recursive load with cycle
-stack, save filtering + `imports` field, version 9, Save As path rewrite,
+stack, save filtering + `imports` field (paths verbatim, normalized at link time), version 9,
 `link_library`/`unlink_library` in `StructureDesigner` with undo commands.
 
 Tests (`library_links_test.rs`):
@@ -583,7 +693,9 @@ Tests (`library_links_test.rs`):
 - Save round-trip: saved host contains no `a.*`/`b.*` networks, record defs, or
   folders; `imports` sorted, relative, forward slashes; load → save → load is
   stable.
-- Save As into a sibling directory rewrites `path` to still reach the same file.
+- Paths verbatim: `../libs/x.cnnd` survives load → save → Save As unchanged;
+  link-time normalization (`libs/../x.cnnd` → `x.cnnd`); absolute path and a
+  path climbing above the root → `Err`.
 - Link validation: alias taken by a local network / record def / built-in →
   `Err`; host unsaved → `Err`; path to non-`.cnnd` or unreadable file → `Err`,
   nothing mounted.
@@ -696,7 +808,48 @@ Tests:
   smoke test (`flutter test integration_test/`) is also run by the maintainer,
   not by an agent.
 
-### Phase 5 — CLI, vendoring, documentation
+### Phase 5 — Save As dependency copy and project bundle (Rust + Flutter)
+
+Work: `NodeData::file_paths` for the file-reading nodes (`import_xyz`,
+`import_cif`, `import_cube`, `build_script`, `mechanosynth`, `ops_library`;
+`export_atoms` / `export_build_script` write outputs and are not dependencies);
+`file_dependencies.rs` (collection, target computation, status, copy-then-write,
+bundle); API functions; the Flutter Save As dialog and *Export project bundle…*.
+
+Fixture layout for this phase (built in a `TempDir`): `ws/proj1/host.cnnd`
+linking `../libs/demolib.cnnd` and `libs_local/b.cnnd`; `ws/libs/demolib.cnnd`
+linking `common.cnnd` and using `import_xyz("tip.xyz")`; `ws/libs/common.cnnd`;
+`ws/libs/tip.xyz`; `ws/proj1/data/local.xyz` used by the host; one host
+`import_cif` with an absolute path (external).
+
+Tests (`file_dependencies_test.rs`):
+- Collection is transitive and complete: both libraries, `common.cnnd`,
+  `tip.xyz` (via the library), `local.xyz`; the absolute CIF is *External*;
+  nothing is listed twice.
+- Target computation: Save As to `ws/proj2/` → `../libs/*` entries are
+  *AlreadyThere* (same file), `libs_local/b.cnnd` and `data/local.xyz` are
+  *WillCopy* into `ws/proj2/`; Save As to `other/deep/proj/` → `../libs/*` go to
+  `other/deep/libs/*` (group *Outside*); a target above the filesystem root →
+  refused.
+- Status: identical content at target → *AlreadyThere*; different content →
+  *Conflict*; `overwrite_conflicts = false` keeps the existing file, `true`
+  replaces it.
+- **Round trip**: after `save_as_with_dependencies(copy = true)` the new host
+  opens with every mount `Loaded` and evaluates identically to the original
+  (eval equivalence), and every path string in every file is byte-identical to
+  before.
+- Save without dependencies: host written, paths verbatim, mounts `Missing` on
+  reopen, nothing lost (§8).
+- All-or-nothing: make one copy fail (read-only target file) → host not written,
+  error names the file, already-copied files left in place and reported.
+- `has_wired_paths` set when a file-reading node's path pin is wired.
+- Bundle: zip root is `ws/`; unzip into an empty temp dir; the host opens with
+  every mount `Loaded` and evaluates identically; the external CIF is reported
+  and absent.
+- Manual walkthrough: the dialog's three groups, the conflict choice, the
+  full-path display for *Outside* entries.
+
+### Phase 6 — CLI, vendoring, documentation
 
 Work: CLI `libraries` subcommand (`list`, `link <path> <alias>`, `reload
 [<mount>]`, `unlink <alias>`) over new HTTP routes in
@@ -745,3 +898,8 @@ library file never contain it.
    and browsing changes are session-only (§5.4).
 3. **Auto-reload on focus** — automatic when the change is safe for the host,
    badge + explicit reload when it is not (D11).
+4. **Paths and moving files (2026-09-29)** — relative paths may use `..` and
+   are never rewritten; Save As copies dependencies (libraries and data files)
+   into the same relative layout around the new location, via a dialog; absolute
+   paths are refused for libraries and treated as external for data files;
+   *Export project bundle* zips the file with its dependencies (D6, D12).
