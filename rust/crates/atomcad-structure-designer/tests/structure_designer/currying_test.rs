@@ -761,6 +761,7 @@ fn run_closure_once_prepends_pre_supplied_args_before_caller_frame() {
         param_types: vec![DataType::Int],
         return_type: base_zc.return_type.clone(),
         pre_supplied_args: Arc::new(vec![NetworkResult::Int(10)]),
+        home: None,
     };
 
     let evaluator = NetworkEvaluator::new();
@@ -798,6 +799,7 @@ fn run_closure_once_with_fully_bound_pre_supplied_args_runs_zero_arg_body() {
         param_types: vec![],
         return_type: base_zc.return_type.clone(),
         pre_supplied_args: Arc::new(vec![NetworkResult::Int(10), NetworkResult::Int(5)]),
+        home: None,
     };
 
     let evaluator = NetworkEvaluator::new();
@@ -830,6 +832,7 @@ fn zone_closure_clone_shares_pre_supplied_args_arc() {
         param_types: vec![DataType::Int],
         return_type: base_zc.return_type.clone(),
         pre_supplied_args: Arc::new(vec![NetworkResult::Int(10)]),
+        home: None,
     };
     let cloned = with_partial.clone();
     assert!(Arc::ptr_eq(

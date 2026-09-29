@@ -181,6 +181,25 @@ Here `edit1.diff` selects the `diff` output pin (pin index 1) of `atom_edit`. An
 
 **Serialization:** When the network is serialized back to text, the `.pinname` suffix is emitted only for pin indices greater than 0. Wires from pin 0 always serialize unqualified.
 
+### Positional Pins (nodes whose type is unavailable)
+
+A node that refers to a network or record type of a **linked library** that
+cannot be found (the library file is missing, or no longer defines it) keeps
+its wires, and normally still has pin names: they come from the interface the
+file recorded when it was last saved. When no name is known for a pin, the
+pin is spelled by its **position**, `@<index>`:
+
+```
+f = `demolib.foo` { @0: i1, @1: i2 }
+e1 = expr { a: rd.@1, expression: "a + 1", parameters: [...] }
+```
+
+`@0: i1` wires `i1` into input pin 0 of `f`; `rd.@1` reads output pin 1 of
+`rd`. The positional form is accepted **only** on such a node (anywhere else
+it is an error: "positional pin only on a node whose type is unavailable"),
+takes only wires, and places the wire without a type check. `query` writes it
+wherever no pin name is known, so `query` → `edit --replace` keeps every wire.
+
 ## Properties and Input Pins
 
 The format treats node properties and input pin connections uniformly. Both are specified as key-value pairs:

@@ -19,46 +19,6 @@ use std::path::{Path, PathBuf};
 // Building designs from text
 // ---------------------------------------------------------------------------
 
-/// Replaces network `network` (created if absent) with `code`, and validates.
-fn edit(d: &mut StructureDesigner, network: &str, code: &str) {
-    if !d.node_type_registry.node_networks.contains_key(network) {
-        d.add_node_network(network);
-    }
-    d.set_active_node_network_name(Some(network.to_string()));
-    let outcome = d.ai_text_edit(code, true);
-    assert!(
-        outcome.result.errors.is_empty(),
-        "edit of '{}' failed: {:?}\n{}",
-        network,
-        outcome.result.errors,
-        code
-    );
-    d.validate_active_network();
-}
-
-fn int_record(name: &str, fields: &[&str]) -> RecordTypeDef {
-    RecordTypeDef::from_named_fields(
-        name,
-        fields
-            .iter()
-            .map(|f| (f.to_string(), DataType::Int))
-            .collect(),
-    )
-}
-
-/// A fresh designer whose only network is `Main`, saved at `path`.
-fn new_design(path: &Path) -> StructureDesigner {
-    let mut d = StructureDesigner::new();
-    d.new_project();
-    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    d.save_node_networks_as(&path.to_string_lossy()).unwrap();
-    d
-}
-
-fn save(d: &mut StructureDesigner) {
-    d.save_node_networks().expect("has a path").expect("save");
-}
-
 const FOO: &str = "x = parameter { param_name: \"x\", data_type: Int, sort_order: 0 }
 y = parameter { param_name: \"y\", data_type: Int, sort_order: 1 }
 s = expr { a: x, b: y, expression: \"a + b\", parameters: [{ name: \"a\", data_type: Int }, { name: \"b\", data_type: Int }] }
@@ -317,16 +277,6 @@ fn generate_library_linking_fixtures() {
 // Small helpers
 // ---------------------------------------------------------------------------
 
-/// The top-level node of `network` named `name`.
-fn node_id(d: &StructureDesigner, network: &str, name: &str) -> u64 {
-    d.node_type_registry.node_networks[network]
-        .nodes
-        .values()
-        .find(|n| n.custom_name.as_deref() == Some(name))
-        .unwrap_or_else(|| panic!("no node '{}' in '{}'", name, network))
-        .id
-}
-
 fn status(d: &StructureDesigner, mount_path: &str) -> Option<MountStatus> {
     d.node_type_registry
         .library_links
@@ -394,47 +344,6 @@ fn expected_status(cause: Cause) -> fn(&MountStatus) -> bool {
         Cause::Error => |s| matches!(s, MountStatus::Error(_)),
         Cause::Cycle => |s| *s == MountStatus::Cycle,
     }
-}
-
-/// Wires into or out of a frozen node, or inside a frozen HOF's body — the
-/// wires §8 protects.
-fn frozen_wires(d: &StructureDesigner) -> std::collections::BTreeSet<WireEntry> {
-    let registry = &d.node_type_registry;
-    let mut frozen_ids: std::collections::BTreeSet<(String, Vec<u64>, u64)> = Default::default();
-    fn walk(
-        registry: &atomcad_structure_designer::node_type_registry::NodeTypeRegistry,
-        name: &str,
-        net: &atomcad_structure_designer::node_network::NodeNetwork,
-        scope: &[u64],
-        out: &mut std::collections::BTreeSet<(String, Vec<u64>, u64)>,
-    ) {
-        for n in net.nodes.values() {
-            if is_frozen(n, registry) {
-                out.insert((name.to_string(), scope.to_vec(), n.id));
-            }
-            if let Some(body) = n.zone.as_deref() {
-                let mut child = scope.to_vec();
-                child.push(n.id);
-                walk(registry, name, body, &child, out);
-            }
-        }
-    }
-    for (name, net) in &registry.node_networks {
-        if registry.library_links.mount_containing(name).is_none() {
-            walk(registry, name, net, &[], &mut frozen_ids);
-        }
-    }
-    wire_ledger(d)
-        .into_iter()
-        .filter(|w| {
-            frozen_ids.contains(&(w.network.clone(), w.scope.clone(), w.dest))
-                || (w.depth == 0
-                    && frozen_ids.contains(&(w.network.clone(), w.scope.clone(), w.source)))
-                || frozen_ids.iter().any(|(n, s, id)| {
-                    *n == w.network && w.scope.starts_with(&[s.as_slice(), &[*id]].concat())
-                })
-        })
-        .collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -1584,9 +1493,8 @@ fn a_failed_write_leaves_the_previous_file_intact() {
 /// spelled by pin name, means every wire came back to the same pin), and the
 /// number of wires is unchanged.
 ///
-/// Frozen nodes are *not* covered here: their wires cannot be spelled in the
-/// text format yet (no pin names to spell them with), so a replace drops them.
-/// That is the `ai_text_edit` item of Phase 2.
+/// Hosts with frozen nodes are covered by `library_links_readonly_test.rs`
+/// (recorded layouts and the positional `@i` spelling, Phase 2).
 #[test]
 fn replace_with_the_query_text_is_a_no_op_on_a_linking_host() {
     use atomcad_structure_designer::text_format::serialize_network;

@@ -269,6 +269,28 @@ The serializer still emits only the block form (D9): paths are input-only
 sugar, so `query` output stays single-valued and one node keeps one statement
 shape.
 
+## Positional pins: `@<index>` (frozen nodes)
+
+A node referring to an unresolved name under a linked library is *frozen*
+(`doc/design_library_linking.md` §8) and may have no pin names. Its wires are
+then spelled positionally — `@3: x` for input pin 3, `n.@1` for output pin 1
+(§13 item 6). The parser returns the spelling as the plain string `"@3"` in the
+existing key / pin-name slots (`expect_pin_name`), and
+`library_links::positional_pin_index` is the one reader; don't add an AST
+variant. Rules that keep it lossless:
+
+- The serializer emits `@i` only for a **protected** node
+  (`library_links::is_protected`: frozen, or fed by a frozen node's function
+  pin), and only for an index its layout has no name for; property keys of
+  that form bypass `format_identifier`.
+- The editor accepts `@i` only on a protected node, grows `arguments` as
+  needed, and does no type check; a literal on `@i` is warned about and ignored.
+- `create_node` accepts a **node type under a mount that does not resolve** —
+  a `--replace` recreates every node, so refusing it would delete the frozen
+  instance. Such a node gets its recorded layout in `refresh_node_layout` and
+  is never rebuilt with `refresh_args` (a record node rebuilt against a missing
+  def has zero fields, which would cut every wire).
+
 ## Type syntax in property position
 
 A type-valued property (`parameter.data_type`, `map.input_type`,

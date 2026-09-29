@@ -1029,6 +1029,10 @@ impl StructureDesigner {
     /// a no-op change pushes nothing. `scope_path` resolves the (possibly
     /// nested) body the HOF lives in. See `doc/design_hof_node_collapse.md`.
     pub fn set_collapse_mode(&mut self, scope_path: &[u64], hof_node_id: u64, mode: CollapseMode) {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.ensure_active_editable().is_err() {
+            return;
+        }
         let network_name = match &self.active_node_network_name {
             Some(n) => n.clone(),
             None => return,
@@ -1139,6 +1143,8 @@ impl StructureDesigner {
         node_id: u64,
         new_name: &str,
     ) -> Result<(), String> {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        self.ensure_active_editable()?;
         let network_name = match &self.active_node_network_name {
             Some(n) => n.clone(),
             None => return Err("No active node network".to_string()),
@@ -1210,6 +1216,10 @@ impl StructureDesigner {
         pin_index: usize,
         role: FunctionPinRole,
     ) {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.ensure_active_editable().is_err() {
+            return;
+        }
         let network_name = match &self.active_node_network_name {
             Some(n) => n.clone(),
             None => return,
@@ -1391,19 +1401,7 @@ impl StructureDesigner {
             let node = current.nodes.get(&node_id)?;
             let node_type_name = node.node_type_name.clone();
 
-            if let Some(node_type) = self
-                .node_type_registry
-                .built_in_node_types
-                .get(&node_type_name)
-            {
-                node_type.node_data_saver
-            } else if let Some(other_network) =
-                self.node_type_registry.node_networks.get(&node_type_name)
-            {
-                other_network.node_type.node_data_saver
-            } else {
-                return None;
-            }
+            self.node_type_registry.node_data_saver_for(&node_type_name)
         };
 
         // Now mutable walk to call the saver on the body node's data.
@@ -1431,19 +1429,7 @@ impl StructureDesigner {
                 .node_type_name
                 .clone();
 
-            if let Some(node_type) = self
-                .node_type_registry
-                .built_in_node_types
-                .get(&node_type_name)
-            {
-                node_type.node_data_saver
-            } else if let Some(other_network) =
-                self.node_type_registry.node_networks.get(&node_type_name)
-            {
-                other_network.node_type.node_data_saver
-            } else {
-                return None;
-            }
+            self.node_type_registry.node_data_saver_for(&node_type_name)
         };
 
         // Now get mutable access to the node's data to call the saver
@@ -2195,6 +2181,10 @@ impl StructureDesigner {
     /// empty namespace creates the network at the root. The simple name is
     /// auto-generated to be unique across the whole user-type namespace.
     pub fn add_new_node_network_in_namespace(&mut self, namespace: &str) -> String {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if !namespace.is_empty() && self.is_linked_name(namespace) {
+            return String::new();
+        }
         // Generate a unique name. Skip any name already taken anywhere in the
         // user-type namespace (networks, user record defs, built-in record
         // defs, built-in node types) so the auto-generated name is never a
@@ -2243,6 +2233,12 @@ impl StructureDesigner {
         node_network_name: &str,
     ) -> Result<(), super::identifier::InvalidNameReason> {
         super::identifier::is_valid_user_name(node_network_name)?;
+        if crate::library_links::name_conflicts_with_mount(
+            &self.node_type_registry,
+            node_network_name,
+        ) {
+            return Err(super::identifier::InvalidNameReason::InLinkedLibrary);
+        }
         let previous_active_network = self.active_node_network_name.clone();
         let pruned_folders = self
             .node_type_registry
@@ -2277,6 +2273,13 @@ impl StructureDesigner {
     }
 
     pub fn add_node_network(&mut self, node_network_name: &str) {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if crate::library_links::name_conflicts_with_mount(
+            &self.node_type_registry,
+            node_network_name,
+        ) {
+            return;
+        }
         self.node_type_registry
             .add_node_network(NodeNetwork::new(NodeType {
                 name: node_network_name.to_string(),
@@ -2295,6 +2298,10 @@ impl StructureDesigner {
     }
 
     pub fn rename_node_network(&mut self, old_name: &str, new_name: &str) -> bool {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.ensure_editable(old_name).is_err() {
+            return false;
+        }
         // Reject names that violate the user-name rules (empty, backtick,
         // control chars, edge whitespace).
         if super::identifier::is_valid_user_name(new_name).is_err() {
@@ -2718,6 +2725,8 @@ impl StructureDesigner {
     }
 
     pub fn delete_node_network(&mut self, network_name: &str) -> Result<(), String> {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        self.ensure_editable(network_name)?;
         if !self
             .node_type_registry
             .node_networks
@@ -2812,8 +2821,21 @@ impl StructureDesigner {
             .snapshot_network(source_name)
             .ok_or_else(|| format!("Failed to snapshot network '{}'", source_name))?;
 
-        // Pick a unique name for the copy (kept in the source's namespace).
-        let new_name = self.generate_unique_copy_name(source_name);
+        // Pick a unique name for the copy (kept in the source's namespace). A
+        // linked network is read-only and its folder belongs to the library,
+        // so its copy — *Duplicate into my file* — lands at the root of the
+        // local content under its own simple name (`a.shapes.slab` → `slab`,
+        // else `slab_copy`, …). Its references into the library stay links.
+        let new_name = if self.is_linked_name(source_name) {
+            let simple = source_name.rsplit('.').next().unwrap_or(source_name);
+            if self.node_type_registry.name_is_taken(simple) {
+                self.generate_unique_copy_name(simple)
+            } else {
+                simple.to_string()
+            }
+        } else {
+            self.generate_unique_copy_name(source_name)
+        };
 
         // Deserialize a fresh copy and give it the new name (the registry keys
         // on `node_type.name`, so the internal name must match the key).
@@ -3113,6 +3135,12 @@ impl StructureDesigner {
         &mut self,
         namespace: &str,
     ) -> Result<String, super::node_type_registry::RecordTypeDefError> {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if !namespace.is_empty() && self.is_linked_name(namespace) {
+            return Err(super::node_type_registry::RecordTypeDefError::Linked(
+                namespace.to_string(),
+            ));
+        }
         let qualify = |simple: &str| -> String {
             if namespace.is_empty() {
                 simple.to_string()
@@ -3139,6 +3167,12 @@ impl StructureDesigner {
         &mut self,
         name: &str,
     ) -> Result<(), super::node_type_registry::RecordTypeDefError> {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.is_linked_name(name) {
+            return Err(super::node_type_registry::RecordTypeDefError::Linked(
+                name.to_string(),
+            ));
+        }
         if !self.node_type_registry.record_type_defs.contains_key(name) {
             return Err(super::node_type_registry::RecordTypeDefError::NotFound(
                 name.to_string(),
@@ -3199,6 +3233,12 @@ impl StructureDesigner {
         old_name: &str,
         new_name: &str,
     ) -> Result<(), super::node_type_registry::RecordTypeDefError> {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.is_linked_name(old_name) {
+            return Err(super::node_type_registry::RecordTypeDefError::Linked(
+                old_name.to_string(),
+            ));
+        }
         self.node_type_registry
             .rename_record_type_def(old_name, new_name)?;
 
@@ -3235,6 +3275,12 @@ impl StructureDesigner {
         name: &str,
         new_fields: Vec<(String, DataType)>,
     ) -> Result<(), super::node_type_registry::RecordTypeDefError> {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.is_linked_name(name) {
+            return Err(super::node_type_registry::RecordTypeDefError::Linked(
+                name.to_string(),
+            ));
+        }
         // Resolve per-row ids by name against the current def, then delegate to
         // the identity-aware core. A name present before keeps its id; a new name
         // sends `None`. Editor hints are inexpressible here, so a surviving field
@@ -3289,6 +3335,12 @@ impl StructureDesigner {
         name: &str,
         edits: Vec<super::node_type_registry::RecordFieldEdit>,
     ) -> Result<(), super::node_type_registry::RecordTypeDefError> {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.is_linked_name(name) {
+            return Err(super::node_type_registry::RecordTypeDefError::Linked(
+                name.to_string(),
+            ));
+        }
         // Capture the exact pre-update field list + allocator floor for a
         // faithful undo restore (ids round-trip verbatim — R2/R4).
         let (old_fields, old_next_field_id) =
@@ -3355,6 +3407,10 @@ impl StructureDesigner {
         position: DVec2,
         drag_source: Option<DragSource>,
     ) -> u64 {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.ensure_active_editable().is_err() {
+            return 0;
+        }
         if scope_path.is_empty() {
             return self.add_node_with_drag_source(node_type_name, position, drag_source);
         }
@@ -3472,6 +3528,10 @@ impl StructureDesigner {
         position: DVec2,
         drag_source: Option<DragSource>,
     ) -> u64 {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.ensure_active_editable().is_err() {
+            return 0;
+        }
         // Early return if active_node_network_name is None
         let node_network_name = match &self.active_node_network_name {
             Some(name) => name.clone(),
@@ -3660,6 +3720,10 @@ impl StructureDesigner {
     }
 
     pub fn duplicate_node(&mut self, node_id: u64) -> u64 {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.ensure_active_editable().is_err() {
+            return 0;
+        }
         // Early return if active_node_network_name is None
         let node_network_name = match &self.active_node_network_name {
             Some(name) => name.clone(),
@@ -3789,6 +3853,10 @@ impl StructureDesigner {
     /// Pastes clipboard contents into the active network at the given position.
     /// Returns the list of newly created node IDs (empty if clipboard was empty).
     pub fn paste_at_position(&mut self, position: DVec2) -> Vec<u64> {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.ensure_active_editable().is_err() {
+            return Vec::new();
+        }
         let node_network_name = match &self.active_node_network_name {
             Some(name) => name.clone(),
             None => return vec![],
@@ -3908,6 +3976,10 @@ impl StructureDesigner {
     /// whole-body `EditZoneBodyCommand`, mirroring `duplicate_node_scoped` /
     /// `delete_selected_scoped`.
     pub fn paste_at_position_scoped(&mut self, scope_path: &[u64], position: DVec2) -> Vec<u64> {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.ensure_active_editable().is_err() {
+            return Vec::new();
+        }
         if scope_path.is_empty() {
             return self.paste_at_position(position);
         }
@@ -4004,6 +4076,10 @@ impl StructureDesigner {
     /// same scope so a zone-body selection is removed from its body (not the
     /// top-level network).
     pub fn cut_selection(&mut self) -> bool {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.ensure_active_editable().is_err() {
+            return false;
+        }
         if !self.copy_selection() {
             return false;
         }
@@ -4028,6 +4104,10 @@ impl StructureDesigner {
     /// with a non-empty path the move is applied inside the named HOF body.
     /// Phase U2 of `doc/design_zones_ui.md` — see §"Phase U2".
     pub fn move_node_scoped(&mut self, scope_path: &[u64], node_id: u64, position: DVec2) {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.ensure_active_editable().is_err() {
+            return;
+        }
         if let Some(node_network) = self.get_scope_network_mut(scope_path) {
             node_network.move_node(node_id, position);
             // Mark design as dirty since we moved a node
@@ -4073,6 +4153,10 @@ impl StructureDesigner {
         dest_node_id: u64,
         dest_param_index: usize,
     ) {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.ensure_active_editable().is_err() {
+            return;
+        }
         // Early return if active_node_network_name is None
         let node_network_name = match &self.active_node_network_name {
             Some(name) => name,
@@ -4277,6 +4361,10 @@ impl StructureDesigner {
         dest_node_id: u64,
         dest_param_index: usize,
     ) {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.ensure_active_editable().is_err() {
+            return;
+        }
         if scope_path.is_empty() {
             self.connect_nodes(
                 source_node_id,
@@ -4362,6 +4450,10 @@ impl StructureDesigner {
         dest_node_id: u64,
         dest_param_index: usize,
     ) {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.ensure_active_editable().is_err() {
+            return;
+        }
         // Same-scope NodeOutput wires can route through the existing
         // `connect_nodes_scoped` for parity with U4-era callers (display-policy
         // / dirty-flag bookkeeping). Cross-scope / ZoneInput wires use the
@@ -4559,6 +4651,10 @@ impl StructureDesigner {
         source_output_pin_index: i32,
         zone_output_index: usize,
     ) {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.ensure_active_editable().is_err() {
+            return;
+        }
         if body_scope_path.is_empty() {
             // Body-return wires only exist inside an HOF body, never at the
             // top level.
@@ -4636,6 +4732,10 @@ impl StructureDesigner {
     /// recorded via a whole-body `EditZoneBodyCommand` (no top-level
     /// display-policy orchestration).
     pub fn duplicate_node_scoped(&mut self, scope_path: &[u64], node_id: u64) -> u64 {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.ensure_active_editable().is_err() {
+            return 0;
+        }
         if scope_path.is_empty() {
             return self.duplicate_node(node_id);
         }
@@ -4744,6 +4844,10 @@ impl StructureDesigner {
         source_is_output: bool,
         target_node_id: u64,
     ) -> bool {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.ensure_active_editable().is_err() {
+            return false;
+        }
         // Early return if active_node_network_name is None
         let node_network_name = match &self.active_node_network_name {
             Some(name) => name.clone(),
@@ -4983,6 +5087,10 @@ impl StructureDesigner {
         node_id: u64,
         mut data: Box<dyn NodeData>,
     ) {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.ensure_active_editable().is_err() {
+            return;
+        }
         // Early return if active_node_network_name is None, clone to avoid borrow conflicts
         let network_name = match &self.active_node_network_name {
             Some(name) => name.clone(),
@@ -5128,6 +5236,8 @@ impl StructureDesigner {
         node_id: u64,
         lane_types: Vec<DataType>,
     ) -> Result<(), String> {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        self.ensure_active_editable()?;
         use crate::nodes::zip_with::ZipWithData;
 
         if lane_types.is_empty() {
@@ -5168,6 +5278,8 @@ impl StructureDesigner {
         lane_types: Vec<DataType>,
         output_type: DataType,
     ) -> Result<(), String> {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        self.ensure_active_editable()?;
         use crate::nodes::zip_with::{ZipWithData, disconnect_zip_body_wires_to_dropped_lanes};
 
         if lane_types.is_empty() {
@@ -5242,6 +5354,8 @@ impl StructureDesigner {
         node_id: u64,
         lane_index: usize,
     ) -> Result<(), String> {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        self.ensure_active_editable()?;
         use crate::nodes::zip_with::{ZipWithData, remap_zip_body_wires_for_lane_removal};
 
         let network_name = self
@@ -5323,6 +5437,8 @@ impl StructureDesigner {
         value_type: DataType,
         case_values: Vec<crate::nodes::switch::SwitchCaseValue>,
     ) -> Result<(), String> {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        self.ensure_active_editable()?;
         use crate::nodes::switch::{SwitchCaseValue, SwitchData};
 
         if !matches!(selector_type, DataType::Int | DataType::String) {
@@ -5436,6 +5552,8 @@ impl StructureDesigner {
         node_id: u64,
         element_type: DataType,
     ) -> Result<(), String> {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        self.ensure_active_editable()?;
         use crate::nodes::array::{ArrayData, is_literal_capable};
 
         if !is_literal_capable(&element_type, &self.node_type_registry) {
@@ -5586,6 +5704,10 @@ impl StructureDesigner {
     }
 
     pub fn get_node_network_data_mut(&mut self, node_id: u64) -> Option<&mut dyn NodeData> {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.ensure_active_editable().is_err() {
+            return None;
+        }
         let network_name = match &self.active_node_network_name {
             Some(name) => name.clone(),
             None => return None,
@@ -5609,6 +5731,10 @@ impl StructureDesigner {
         scope_path: &[u64],
         node_id: u64,
     ) -> Option<&mut dyn NodeData> {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.ensure_active_editable().is_err() {
+            return None;
+        }
         self.pending_changes
             .mark_node_data_changed_scoped(scope_path, node_id);
         self.get_scope_network_mut(scope_path)?
@@ -5639,6 +5765,8 @@ impl StructureDesigner {
 
     /// Sets the description of the active node network
     pub fn set_active_network_description(&mut self, description: String) -> Result<(), String> {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        self.ensure_active_editable()?;
         let network_name = self
             .active_node_network_name
             .as_ref()
@@ -5664,6 +5792,8 @@ impl StructureDesigner {
     /// Sets the summary of the active node network
     /// Pass None or empty string to clear the summary
     pub fn set_active_network_summary(&mut self, summary: Option<String>) -> Result<(), String> {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        self.ensure_active_editable()?;
         let network_name = self
             .active_node_network_name
             .as_ref()
@@ -5932,6 +6062,8 @@ impl StructureDesigner {
     /// This is used by direct editing mode for incremental imports.
     /// Must be called inside `with_atom_edit_undo` for undo support.
     pub fn import_xyz_into_atom_edit(&mut self, file_path: &str) -> Result<(), String> {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        self.ensure_active_editable()?;
         use crate::nodes::atom_edit::atom_edit::AtomEditData;
         use atomcad_crystolecule::io::xyz_loader::load_xyz;
 
@@ -6053,8 +6185,11 @@ impl StructureDesigner {
             .get_scope_network(scope_path)
             .and_then(|net| net.get_node_display_type(node_id));
 
+        // Only push command if display state actually changed. On a linked
+        // network display is session-only view state (never saved, §5.4 of
+        // `doc/design_library_linking.md`), so it is not an undo step either.
         // Only push command if display state actually changed
-        if old_display_type != new_display_type {
+        if old_display_type != new_display_type && !self.active_network_is_linked() {
             let node_type_name = self
                 .get_scope_network(scope_path)
                 .and_then(|net| net.nodes.get(&node_id))
@@ -6152,8 +6287,10 @@ impl StructureDesigner {
             .and_then(|net| net.displayed_nodes.get(&node_id))
             .cloned();
 
+        // Only push command if display state actually changed (and, as in
+        // `set_node_display_scoped`, not on a linked network).
         // Only push command if display state actually changed
-        if old_display_state != new_display_state {
+        if old_display_state != new_display_state && !self.active_network_is_linked() {
             let node_type_name = self
                 .get_scope_network(scope_path)
                 .and_then(|net| net.nodes.get(&node_id))
@@ -6174,6 +6311,10 @@ impl StructureDesigner {
     }
 
     pub fn sync_gadget_data(&mut self) -> bool {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.ensure_active_editable().is_err() {
+            return false;
+        }
         // Early return if active_node_network_name is None
         let network_name = match &self.active_node_network_name {
             Some(name) => name,
@@ -6519,6 +6660,10 @@ impl StructureDesigner {
     /// inside the named body. Phase U2 plumbing — see
     /// `doc/design_zones_ui.md`.
     pub fn move_selected_nodes_scoped(&mut self, scope_path: &[u64], delta: glam::f64::DVec2) {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.ensure_active_editable().is_err() {
+            return;
+        }
         if let Some(network) = self.get_scope_network_mut(scope_path) {
             network.move_selected_nodes(delta);
         }
@@ -6535,6 +6680,10 @@ impl StructureDesigner {
     /// top-level) so the matching [`end_move_nodes`] coalesces the drag into a
     /// single scope-aware `MoveNodesCommand`.
     pub fn begin_move_nodes_scoped(&mut self, scope_path: &[u64]) {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.ensure_active_editable().is_err() {
+            return;
+        }
         if let Some(network) = self.get_scope_network(scope_path) {
             let start_positions: Vec<(u64, glam::f64::DVec2)> = network
                 .get_selected_node_ids()
@@ -6651,6 +6800,10 @@ impl StructureDesigner {
     /// not advertise an undo in that case - `Ctrl+Z` would hit the *previous*
     /// command instead.
     pub fn layout_active_network(&mut self) -> bool {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.ensure_active_editable().is_err() {
+            return false;
+        }
         let network_name = match &self.active_node_network_name {
             Some(name) => name.clone(),
             None => return false,
@@ -7060,6 +7213,10 @@ impl StructureDesigner {
     /// machinery) and the edit is recorded via a whole-body
     /// `EditZoneBodyCommand`.
     pub fn delete_selected_scoped(&mut self, scope_path: &[u64]) {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.ensure_active_editable().is_err() {
+            return;
+        }
         if !scope_path.is_empty() {
             // Whole-body snapshot for undo. If nothing was selected the body is
             // unchanged and `push_zone_body_command`'s diff check drops the
@@ -7925,6 +8082,10 @@ impl StructureDesigner {
         ray_origin: DVec3,
         ray_direction: DVec3,
     ) {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.ensure_active_editable().is_err() {
+            return;
+        }
         // Begin atom_edit drag recording before the gadget starts dragging
         super::nodes::atom_edit::atom_edit::begin_atom_edit_drag(self);
 
@@ -7939,6 +8100,10 @@ impl StructureDesigner {
     }
 
     pub fn gadget_drag(&mut self, handle_index: i32, ray_origin: DVec3, ray_direction: DVec3) {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.ensure_active_editable().is_err() {
+            return;
+        }
         if let Some(gadget) = &mut self.gadget {
             gadget.drag(handle_index, ray_origin, ray_direction);
         }
@@ -7972,6 +8137,10 @@ impl StructureDesigner {
     }
 
     pub fn gadget_end_drag(&mut self) {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.ensure_active_editable().is_err() {
+            return;
+        }
         if let Some(gadget) = &mut self.gadget {
             gadget.end_drag();
             self.sync_gadget_data();
@@ -8011,6 +8180,10 @@ impl StructureDesigner {
     /// Snapshot the active node's data before a gadget drag starts.
     /// Skips atom_edit nodes (they have their own incremental undo mechanism).
     pub fn begin_gadget_drag_snapshot(&mut self) {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.ensure_active_editable().is_err() {
+            return;
+        }
         let network_name = match &self.active_node_network_name {
             Some(name) => name.clone(),
             None => return,
@@ -8083,6 +8256,10 @@ impl StructureDesigner {
         node_id: u64,
         anchors: Vec<CommentAnchor>,
     ) {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.ensure_active_editable().is_err() {
+            return;
+        }
         let network_name = match &self.active_node_network_name {
             Some(name) => name.clone(),
             None => return,
@@ -8143,6 +8320,10 @@ impl StructureDesigner {
     /// Called when a comment node text field gains focus or resize drag begins.
     /// Captures a snapshot of the comment data before editing starts.
     pub fn begin_comment_edit(&mut self, scope_path: Vec<u64>, node_id: u64) {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.ensure_active_editable().is_err() {
+            return;
+        }
         let network_name = match &self.active_node_network_name {
             Some(name) => name.clone(),
             None => return,
@@ -8208,6 +8389,10 @@ impl StructureDesigner {
     /// one first, so a drag whose `end` was lost (a disposed widget, a torn-down
     /// panel) cannot leave undo recording silently disabled.
     pub fn begin_node_data_drag(&mut self, scope_path: Vec<u64>, node_id: u64) {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.ensure_active_editable().is_err() {
+            return;
+        }
         if self.pending_node_data_drag.is_some() {
             self.end_node_data_drag();
         }
@@ -8266,6 +8451,10 @@ impl StructureDesigner {
     /// `SetZoneSizeCommand`. Clamps to the renderer minimum. No-op for non-HOF
     /// nodes. See `doc/design_zones_ui.md` §"Resize handles".
     pub fn set_zone_size(&mut self, scope_path: &[u64], node_id: u64, width: f64, height: f64) {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.ensure_active_editable().is_err() {
+            return;
+        }
         let width = width.max(100.0);
         let height = height.max(60.0);
         if let Some(network) = self.get_scope_network_mut(scope_path)
@@ -8280,6 +8469,10 @@ impl StructureDesigner {
     /// Called when an HOF body resize drag begins. Captures the body's current
     /// dimensions so [`end_zone_resize`] can push one coalesced command.
     pub fn begin_zone_resize(&mut self, scope_path: &[u64], node_id: u64) {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.ensure_active_editable().is_err() {
+            return;
+        }
         let network_name = match &self.active_node_network_name {
             Some(name) => name.clone(),
             None => return,
@@ -8338,6 +8531,10 @@ impl StructureDesigner {
     /// # Returns
     /// Returns true if the operation was successful, false otherwise.
     pub fn set_return_node_id(&mut self, node_id: Option<u64>) -> bool {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.ensure_active_editable().is_err() {
+            return false;
+        }
         // Early return if active_node_network_name is None
         let network_name = match &self.active_node_network_name {
             Some(name) => name.clone(),
@@ -9081,6 +9278,8 @@ impl StructureDesigner {
         subnetwork_name: &str,
         param_names: Vec<String>,
     ) -> Result<u64, String> {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        self.ensure_active_editable()?;
         use super::selection_factoring;
 
         // 1. Validate the name itself (relaxed user-name rules) and that it
@@ -9395,6 +9594,8 @@ impl StructureDesigner {
     /// differ (a whole-network `InlineNodeCommand` at top level, an
     /// `EditZoneBodyCommand` inside a body). See `doc/design_inline_custom_node.md`.
     pub fn inline_custom_node(&mut self, scope_path: Vec<u64>, node_id: u64) -> Result<(), String> {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        self.ensure_active_editable()?;
         use super::node_inlining;
         use super::node_type_registry::NodeTypeRegistry;
 
@@ -9542,6 +9743,8 @@ impl StructureDesigner {
         scope_path: &[u64],
         node_id: u64,
     ) -> Result<(), String> {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        self.ensure_active_editable()?;
         use super::nodes::build_script::BuildScriptData;
         use super::nodes::mechanosynth::{MechanosynthData, OPS_PIN, STEPS_PIN};
         use super::nodes::ops_library::OpsLibraryData;
@@ -9758,6 +9961,8 @@ impl StructureDesigner {
         scope_path: Vec<u64>,
         node_id: u64,
     ) -> Result<(), String> {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        self.ensure_active_editable()?;
         use super::closure_network_conversion as conv;
         use super::node_inlining;
 
@@ -9977,6 +10182,8 @@ impl StructureDesigner {
         node_id: u64,
         network_name: &str,
     ) -> Result<u64, String> {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        self.ensure_active_editable()?;
         use super::closure_network_conversion as conv;
         use super::node_network::{Argument, Node};
 
@@ -10172,6 +10379,8 @@ impl StructureDesigner {
     ///   or its pin 0 type is not eligible (abstract, `Function`, `Unit`,
     ///   `Iter[T]`, unresolved).
     pub fn promote_node_to_parameter(&mut self, node_id: u64) -> Result<u64, String> {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        self.ensure_active_editable()?;
         use super::promote_to_parameter;
 
         let network_name = self

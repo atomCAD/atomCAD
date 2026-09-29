@@ -432,6 +432,8 @@ impl StructureDesigner {
         index: usize,
         step: AuthoredStep,
     ) -> Result<(), String> {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        self.ensure_active_editable()?;
         self.edit_mechanosynth_block(
             scope_path,
             node_id,
@@ -461,6 +463,8 @@ impl StructureDesigner {
         node_id: u64,
         index: usize,
     ) -> Result<(), String> {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        self.ensure_active_editable()?;
         self.edit_mechanosynth_block(
             scope_path,
             node_id,
@@ -490,6 +494,8 @@ impl StructureDesigner {
         from: usize,
         to: usize,
     ) -> Result<(), String> {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        self.ensure_active_editable()?;
         self.edit_mechanosynth_block(
             scope_path,
             node_id,
@@ -542,6 +548,8 @@ impl StructureDesigner {
         scope_path: &[u64],
         node_id: u64,
     ) -> Result<usize, String> {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        self.ensure_active_editable()?;
         use crate::undo::commands::mechanosynth_edit_adopt::MechanosynthEditAdoptCommand;
 
         let network_name = self
@@ -649,6 +657,8 @@ impl StructureDesigner {
         index: usize,
         design_dir: Option<&str>,
     ) -> Result<usize, String> {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        self.ensure_active_editable()?;
         let script = crate::nodes::build_script::load_script_at(file, design_dir)?;
         if script.steps.is_empty() {
             return Err(format!("{file} has no steps"));
@@ -701,6 +711,8 @@ impl StructureDesigner {
         text: &str,
         number: i32,
     ) -> Result<(), String> {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        self.ensure_active_editable()?;
         let key = MetadataEditKey {
             node_id,
             scope_path: scope_path.to_vec(),
@@ -737,6 +749,8 @@ impl StructureDesigner {
         node_id: u64,
         cursor: i32,
     ) -> Result<(), String> {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        self.ensure_active_editable()?;
         let data = self
             .mechanosynth_edit_data_mut(scope_path, node_id)
             .ok_or("Not a mechanosynth_edit node")?;
@@ -782,6 +796,8 @@ impl StructureDesigner {
         ops: &[String],
         muted: bool,
     ) -> Result<(), String> {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        self.ensure_active_editable()?;
         let network_name = self
             .active_node_network_name
             .clone()
@@ -993,6 +1009,8 @@ impl StructureDesigner {
         op: &str,
         index: usize,
     ) -> Result<usize, String> {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        self.ensure_active_editable()?;
         let candidate = {
             let data = self
                 .mechanosynth_edit_data(scope_path, node_id)

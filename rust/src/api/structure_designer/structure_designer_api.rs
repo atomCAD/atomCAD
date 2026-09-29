@@ -1998,7 +1998,11 @@ pub fn set_active_network_canvas_viewport(pan_x: f64, pan_y: f64, zoom_level: i3
                     zoom_level,
                 });
                 // View state is saved per network, so mark design as dirty.
-                cad_instance.structure_designer.set_dirty(true);
+                // A linked network's view state is session-only (§5.4 of
+                // `doc/design_library_linking.md`): it is never saved.
+                if !cad_instance.structure_designer.active_network_is_linked() {
+                    cad_instance.structure_designer.set_dirty(true);
+                }
             }
         });
     }
@@ -8711,6 +8715,13 @@ pub fn rename_node(scope_path: Vec<u64>, node_id: u64, new_name: String) -> APIR
 pub fn resize_comment_node(scope_path: Vec<u64>, node_id: u64, width: f64, height: f64) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
+            if cad_instance
+                .structure_designer
+                .ensure_active_editable()
+                .is_err()
+            {
+                return;
+            }
             let mut mutated = false;
             if let Some(network) = cad_instance
                 .structure_designer
@@ -8739,6 +8750,13 @@ pub fn resize_comment_node(scope_path: Vec<u64>, node_id: u64, width: f64, heigh
 pub fn update_comment_node(scope_path: Vec<u64>, node_id: u64, label: String, text: String) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
+            if cad_instance
+                .structure_designer
+                .ensure_active_editable()
+                .is_err()
+            {
+                return;
+            }
             let mut mutated = false;
             if let Some(network) = cad_instance
                 .structure_designer
@@ -9410,6 +9428,10 @@ pub fn apply_text_to_active_network(code: String) -> APITextEditResult {
                     Some(name) => name.clone(),
                     None => return error_result("No active node network".to_string()),
                 };
+                // Linked content is read-only (`doc/design_library_linking.md` §6).
+                if let Err(e) = structure_designer.ensure_editable(&network_name) {
+                    return error_result(e);
+                }
 
                 // Temporarily remove network from registry (same borrow pattern as ai_edit_network)
                 let mut network = match structure_designer

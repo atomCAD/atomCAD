@@ -34,7 +34,7 @@ use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
 use atomcad_crystolecule::mechanosynth::{MechanosynthError, OpLibrary, load_library};
-use atomcad_util::path_utils::{get_parent_directory, resolve_path, try_make_relative};
+use atomcad_util::path_utils::{resolve_path, try_make_relative};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -168,10 +168,7 @@ impl NodeData for OpsLibraryData {
             Err(propagated) => return EvalOutput::single(propagated),
         };
 
-        let design_dir = registry
-            .design_file_name
-            .as_ref()
-            .and_then(|design_path| get_parent_directory(design_path));
+        let design_dir = crate::library_links::base_dir_for_eval(network_stack, registry);
 
         match self.resolve(wired, design_dir.as_deref()) {
             Ok(library) => EvalOutput::single(NetworkResult::OpLibrary(library)),

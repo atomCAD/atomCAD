@@ -1019,10 +1019,12 @@ node gets its layout from the recorded interface** (§13 item 6, P2): the
 `uses` entry of the name it refers to — carried over for every unresolved name
 by D13 — gives an instance its parameters and outputs and a record node its
 fields, so it keeps its pin names, draws with its pins, and can be written in
-the text format. Until P2 it has no layout on load: an instance is not drawn,
-a record node draws with no input pins, and the Flutter canvas skips wires to
+the text format (done in P2). A frozen node whose name has no `uses` entry (a
+hand-edited file) still has no layout on load: an instance is not drawn, a
+record node draws with no input pins, and the Flutter canvas skips wires to
 pins it does not draw (`ScopeResolver` returns `null` for them — checked in
-P1); nothing panics and everything survives save.
+P1); nothing panics, everything survives save, and the text format spells its
+wires positionally.
 
 Byte-identical save also covers the import entry itself: a `Missing` mount
 writes back its `hash` and its `uses` table exactly as read (`stored_hash`,
@@ -1385,6 +1387,46 @@ Tests (`library_links_readonly_test.rs`):
 - Transitive warning emitted for a host node using `a.common.*`, and not for
   `a.*`.
 
+**Status (2026-09-29): done.** Deviations and findings:
+
+- **Guards, not a checked-accessor split.** Every content-mutating
+  `StructureDesigner` entry point (≈60, including the mechanosynth / chemisorb
+  ops and the api-level Text tab and comment resize/update) calls
+  `ensure_editable` / `ensure_active_editable` at its top; the node-data
+  accessors `get_node_network_data_mut[_scoped]` (the atom_edit / facet_shell /
+  mechanosynth route) return `None` on a linked network. The scope accessors
+  stay unchecked, because selection, display, validation and snapshots all go
+  through them. The mutation alphabet test is what keeps new entry points
+  honest (§6).
+- `name_is_taken` also answers `true` inside a mount and for the folder
+  holding one, so layer 1 needed no per-caller change; new error variants
+  `InvalidNameReason::InLinkedLibrary`, `RecordTypeDefError::Linked`.
+- View state on a linked network: camera and canvas viewport never dirty the
+  host, and display toggles push no undo step (they are session-only).
+- *Duplicate into my file* puts the copy at the local root under its simple
+  name (`a.shapes.slab` → `slab`, else `slab_copy`).
+- **Found: undo could not bring back a frozen instance.** Five undo paths
+  looked a node's data saver/loader up by a type name that must resolve, so
+  deleting, duplicating or pasting a frozen instance recorded no undo step.
+  They now go through `node_data_saver_for` / `node_data_loader_for`, with the
+  `CustomNodeData` fallback the `.cnnd` loader already used.
+- **Found: `base_dir_for_eval` cannot find the owning network of a lazy
+  body.** The lazy walkers (`map` / `filter` are lazy) run a body on a
+  body-only stack. A `ZoneClosure` now records its `home` network and its body
+  invocation frame carries it (`NetworkStackElement::home`); a closure defined
+  in a library and run by the host reads the library's files.
+- Validation no longer invents errors around a frozen node without a layout:
+  a wire from a frozen source is not type-checked (the source carries its own
+  error, the consumer is in its cone), and a node fed by a frozen function pin
+  is not arity-checked. The validation corpus snapshot changed accordingly.
+- Recorded layouts are installed in `repair_node_network`'s frozen branch
+  (always, when a `uses` entry exists — P3's refresh writes the last resolved
+  interface into `stored_uses`, so this *is* the last resolved layout), in
+  `initialize_custom_node_types_for_network`, at mount time for a library's own
+  frozen nodes (types in nested `uses` are prefixed), and in the text editor.
+  Which file's `uses` applies is decided by the node's owner mount, threaded
+  into zone bodies.
+
 ### Phase 3 — Change detection, refresh, retarget (Rust only)
 
 Work: **first, persistent ids (§13 item 7)** — before any reconciliation
@@ -1679,7 +1721,7 @@ library file never contain it.
 6. **Frozen nodes in the text format (2026-09-29, found in P1)** — the text
    format writes wires by pin name, and a frozen node has no layout on load,
    so its wires were omitted from `query` and a `--replace` deleted them
-   silently. Decision, two parts, both in **P2**:
+   silently. Decision, two parts, both in **P2** (done 2026-09-29):
    - **Recorded layout.** When a node is frozen and has no cached layout (a
      fresh load), install one built from the recorded interface of the name it
      refers to — the `uses` entry, which D13 carries over for every unresolved

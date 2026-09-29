@@ -76,6 +76,7 @@ fn function_with_captures(captures: HashMap<CaptureKey, NetworkResult>) -> Netwo
         param_types: vec![DataType::Int],
         return_type: DataType::Int,
         pre_supplied_args: Arc::new(Vec::new()),
+        home: None,
     })
 }
 

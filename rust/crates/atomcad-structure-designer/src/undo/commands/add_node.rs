@@ -24,21 +24,9 @@ pub struct AddNodeCommand {
 impl AddNodeCommand {
     /// Look up the node_data_loader for this node type, deserialize the JSON data.
     fn load_node_data(&self, ctx: &mut UndoContext) -> Option<Box<dyn crate::node_data::NodeData>> {
-        let loader = if let Some(node_type) = ctx
+        let loader = ctx
             .node_type_registry
-            .built_in_node_types
-            .get(&self.node_type_name)
-        {
-            node_type.node_data_loader
-        } else if let Some(network) = ctx
-            .node_type_registry
-            .node_networks
-            .get(&self.node_type_name)
-        {
-            network.node_type.node_data_loader
-        } else {
-            return None;
-        };
+            .node_data_loader_for(&self.node_type_name);
 
         loader(&self.node_data_json, None).ok()
     }

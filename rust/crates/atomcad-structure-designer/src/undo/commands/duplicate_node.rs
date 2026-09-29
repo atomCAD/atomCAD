@@ -56,21 +56,9 @@ impl UndoCommand for DuplicateNodeCommand {
         let snap = &self.node_snapshot;
 
         // Load node data
-        let loader = if let Some(node_type) = ctx
+        let loader = ctx
             .node_type_registry
-            .built_in_node_types
-            .get(&snap.node_type_name)
-        {
-            node_type.node_data_loader
-        } else if let Some(network) = ctx
-            .node_type_registry
-            .node_networks
-            .get(&snap.node_type_name)
-        {
-            network.node_type.node_data_loader
-        } else {
-            return;
-        };
+            .node_data_loader_for(&snap.node_type_name);
 
         let data = match loader(&snap.node_data_json, None) {
             Ok(d) => d,

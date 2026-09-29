@@ -806,6 +806,23 @@ impl Parser {
         }
     }
 
+    /// A pin name: an identifier, or the **positional** spelling `@<index>`
+    /// (`doc/design_library_linking.md` §13 item 6) used for a pin of a node
+    /// whose type is unavailable. `@` followed by digits is not an identifier,
+    /// so the two cannot collide; the positional form is returned as the
+    /// string `"@<index>"` (`library_links::positional_pin_index` reads it).
+    fn expect_pin_name(&mut self) -> Result<String, ParseError> {
+        if self.peek() == &Token::At
+            && let Token::Int(i) = self.peek_ahead(1).clone()
+            && i >= 0
+        {
+            self.bump();
+            self.bump();
+            return Ok(crate::library_links::positional_pin_name(i as usize));
+        }
+        self.expect_identifier()
+    }
+
     /// Parse a node path: `x`, `m1/x`, or `outer/inner/x` (D7).
     ///
     /// Returns the scope prefix and the final segment, which is the node's own
@@ -1000,7 +1017,7 @@ impl Parser {
                 self.expect(&Token::RightBrace)?;
                 body = Some(statements);
             } else {
-                let prop_name = self.expect_identifier()?;
+                let prop_name = self.expect_pin_name()?;
                 self.expect(&Token::Colon)?;
                 let value = self.parse_property_value()?;
                 properties.push((prop_name, value));
@@ -1112,7 +1129,7 @@ impl Parser {
                     // Check for `.pin_name` suffix (multi-output pin reference)
                     let pin_name = if self.peek() == &Token::Dot {
                         self.bump(); // consume dot
-                        Some(self.expect_identifier()?)
+                        Some(self.expect_pin_name()?)
                     } else {
                         None
                     };
@@ -1308,7 +1325,7 @@ impl Parser {
         let name = self.expect_identifier()?;
         let pin_name = if self.peek() == &Token::Dot {
             self.bump();
-            Some(self.expect_identifier()?)
+            Some(self.expect_pin_name()?)
         } else {
             None
         };

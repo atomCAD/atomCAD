@@ -17,7 +17,7 @@ use atomcad_crystolecule::io::cif::{CifLoadResultExtended, load_cif_extended};
 use atomcad_crystolecule::motif::{Motif, MotifBond, ParameterElement, Site, SiteSpecifier};
 use atomcad_crystolecule::motif_bond_inference::infer_motif_bonds;
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
-use atomcad_util::path_utils::{get_parent_directory, resolve_path, try_make_relative};
+use atomcad_util::path_utils::{resolve_path, try_make_relative};
 use glam::DVec3;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -133,10 +133,7 @@ impl NodeData for ImportCifData {
         };
 
         // Resolve file path
-        let design_dir = registry
-            .design_file_name
-            .as_ref()
-            .and_then(|design_path| get_parent_directory(design_path));
+        let design_dir = crate::library_links::base_dir_for_eval(network_stack, registry);
 
         let resolved_path = match resolve_path(&file_name, design_dir.as_deref()) {
             Ok((path, _)) => path,

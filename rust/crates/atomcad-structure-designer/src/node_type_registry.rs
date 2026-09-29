@@ -524,7 +524,17 @@ pub enum RecordTypeDefError {
     IllFormedHint(String, String, String),
     #[error("cannot delete record type '{0}' because it is still referenced: {1}")]
     Referenced(String, String),
+    #[error("'{0}' belongs to a linked library and is read-only")]
+    Linked(String),
 }
+
+/// A node type's data saver ([`NodeType::node_data_saver`]).
+pub type NodeDataSaver =
+    fn(&mut dyn crate::node_data::NodeData, Option<&str>) -> std::io::Result<serde_json::Value>;
+
+/// A node type's data loader ([`NodeType::node_data_loader`]).
+pub type NodeDataLoader =
+    fn(&serde_json::Value, Option<&str>) -> std::io::Result<Box<dyn crate::node_data::NodeData>>;
 
 /// Kind of an existing *user-defined* type addressable by the namespace
 /// move/rename machinery. Built-in record defs and built-in node types are not
@@ -1214,6 +1224,11 @@ impl NodeTypeRegistry {
             &self.built_in_record_type_defs,
             network,
         );
+        // Frozen nodes take their layout from the recorded interface
+        // (`doc/design_library_linking.md` §13 item 6), which the type maps
+        // alone cannot supply.
+        let owner = crate::library_links::owner_mount(self, &network.node_type.name);
+        crate::library_links::install_recorded_layouts(network, self, owner.as_deref());
     }
 
     /// Static, `node_networks`-free recursive variant of
@@ -1749,6 +1764,35 @@ impl NodeTypeRegistry {
         node_type.parameters[parameter_index].name.clone()
     }
 
+    /// The function that saves the data of a node of type `node_type_name`.
+    /// A name that is neither built in nor a network — an instance of a
+    /// network a linked library no longer provides (a *frozen* node,
+    /// `doc/design_library_linking.md` §8), or any unknown instance — is a
+    /// custom-network instance, exactly as the `.cnnd` loader treats it
+    /// (`serializable_to_node`), so its data is a `CustomNodeData`. Undo
+    /// snapshots go through this so such a node can be deleted, duplicated or
+    /// pasted and brought back.
+    pub fn node_data_saver_for(&self, node_type_name: &str) -> NodeDataSaver {
+        if let Some(node_type) = self.built_in_node_types.get(node_type_name) {
+            node_type.node_data_saver
+        } else if let Some(network) = self.node_networks.get(node_type_name) {
+            network.node_type.node_data_saver
+        } else {
+            crate::node_type::generic_node_data_saver::<crate::node_data::CustomNodeData>
+        }
+    }
+
+    /// The loader counterpart of [`node_data_saver_for`](Self::node_data_saver_for).
+    pub fn node_data_loader_for(&self, node_type_name: &str) -> NodeDataLoader {
+        if let Some(node_type) = self.built_in_node_types.get(node_type_name) {
+            node_type.node_data_loader
+        } else if let Some(network) = self.node_networks.get(node_type_name) {
+            network.node_type.node_data_loader
+        } else {
+            crate::node_type::generic_node_data_loader::<crate::node_data::CustomNodeData>
+        }
+    }
+
     pub fn add_node_network(&mut self, node_network: NodeNetwork) {
         let name = node_network.node_type.name.clone();
         // A new entity gives its ancestor folders content, so they stop being
@@ -1767,6 +1811,9 @@ impl NodeTypeRegistry {
             || self.node_networks.contains_key(name)
             || self.built_in_node_types.contains_key(name)
             || self.folders.contains(name)
+            // A linked library owns its folder completely, and the folder
+            // holding a mount stays a folder (`doc/design_library_linking.md` D3).
+            || crate::library_links::name_conflicts_with_mount(self, name)
     }
 
     // ---- Empty folders (doc/design_empty_folders.md) ----
@@ -2986,6 +3033,15 @@ impl NodeTypeRegistry {
     /// # Parameters
     /// * `network` - A mutable reference to the node network to repair
     pub fn repair_node_network(&self, network: &mut NodeNetwork) {
+        let owner = crate::library_links::owner_mount(self, &network.node_type.name);
+        self.repair_node_network_owned(network, owner.as_deref());
+    }
+
+    /// [`repair_node_network`] for a network owned by the file of mount
+    /// `owner` (`None` = the host). A zone body has no name of its own, so the
+    /// owner is threaded down from the network that holds it; it decides whose
+    /// `uses` table a frozen node's recorded layout comes from.
+    fn repair_node_network_owned(&self, network: &mut NodeNetwork, owner: Option<&str>) {
         // Frozen nodes (`doc/design_library_linking.md` §8): a node referring
         // to an unresolved name under a library mount keeps its arguments,
         // its cached layout and every wire into or out of it. Computed once,
@@ -3052,9 +3108,12 @@ impl NodeTypeRegistry {
             // false`) so the post-pass can keep them. Every other node type's
             // layout *is* data-derived, so they refresh by name as before.
             if frozen.contains(&node.id) {
-                // Keep the last resolved layout; install one only when there
-                // is none yet (a fresh load), and never touch `arguments`.
-                if node.custom_node_type.is_none() {
+                // The recorded layout when there is one (§13 item 6) — after a
+                // refresh it is the last resolved interface, captured into
+                // `stored_uses` — else keep the cached layout, installing one
+                // only when there is none yet. Never touch `arguments`.
+                if crate::library_links::install_recorded_layout(node, self, owner) {
+                } else if node.custom_node_type.is_none() {
                     Self::populate_custom_node_type_cache_with_types(
                         &self.built_in_node_types,
                         &self.record_type_defs,
@@ -3278,7 +3337,7 @@ impl NodeTypeRegistry {
             if let Some(node) = network.nodes.get_mut(&hof_id)
                 && let Some(body) = node.zone_mut()
             {
-                self.repair_zone_body(body, hof_id, &zone_input_pin_types);
+                self.repair_zone_body(body, hof_id, &zone_input_pin_types, owner);
             }
         }
 
@@ -3304,6 +3363,7 @@ impl NodeTypeRegistry {
         body: &mut NodeNetwork,
         hof_id: u64,
         zone_input_pin_types: &[Option<DataType>],
+        owner: Option<&str>,
     ) {
         // First-level repair: drop now-invalid body wires sourced from this
         // HOF's zone-input pins. We need the destination's declared type to
@@ -3379,7 +3439,7 @@ impl NodeTypeRegistry {
         // zone state may have shifted. `repair_node_network` handles arg
         // counts, dangling wire cleanup, and another level of zone-body
         // repair.
-        self.repair_node_network(body);
+        self.repair_node_network_owned(body, owner);
     }
 
     /// Computes the transitive closure of node network dependencies.

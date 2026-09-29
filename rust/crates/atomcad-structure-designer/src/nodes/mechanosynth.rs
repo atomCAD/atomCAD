@@ -63,7 +63,7 @@ use atomcad_crystolecule::mechanosynth::{
     ToolMotion, apply_tool_pose, load_build_script, load_library, replay_scene_at, steps_applied,
     tool_envelope_cages,
 };
-use atomcad_util::path_utils::{get_parent_directory, resolve_path, try_make_relative};
+use atomcad_util::path_utils::{resolve_path, try_make_relative};
 use glam::DMat3;
 use glam::DVec3;
 use serde::{Deserialize, Serialize};
@@ -452,10 +452,7 @@ impl NodeData for MechanosynthData {
             }
         };
 
-        let design_dir = registry
-            .design_file_name
-            .as_ref()
-            .and_then(|design_path| get_parent_directory(design_path));
+        let design_dir = crate::library_links::base_dir_for_eval(network_stack, registry);
 
         let wired_ops = match network_evaluator.evaluate_arg(
             network_stack,

@@ -543,6 +543,7 @@ fn run_closure_on_frame(
             param_types: closure.param_types[consumed..].to_vec(),
             return_type: closure.return_type.clone(),
             pre_supplied_args: extended,
+            home: closure.home.clone(),
         })
     } else {
         run_closure_once(evaluator, &[], registry, context, closure, frame)

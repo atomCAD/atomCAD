@@ -673,8 +673,10 @@ fn validate_node_wires(
     dest_node: &Node,
 ) -> Option<ValidationError> {
     // A frozen node gets its one error from `validate_zones_recursive` (which
-    // covers every scope); nothing here may read its stale layout.
-    if crate::library_links::is_frozen(dest_node, node_type_registry) {
+    // covers every scope); nothing here may read its stale layout. The same
+    // holds for a node fed by a frozen node's function pin, whose layout is
+    // derived from a signature that is not available (`apply`).
+    if crate::library_links::is_protected(dest_node, network, node_type_registry) {
         return None;
     }
     // Check if this node references a node network and validate its validity
@@ -768,6 +770,13 @@ fn validate_node_wires(
                     ),
                     Some(*source_node_id),
                 ));
+            }
+
+            // A frozen source (`doc/design_library_linking.md` §8) carries its own
+            // blocking error, and this node is in its cone; its layout may be
+            // unknown, so the wire is not checked.
+            if crate::library_links::is_frozen(source_node, node_type_registry) {
+                continue;
             }
 
             // Get the source node type to access its output type
@@ -1376,6 +1385,15 @@ fn validate_zones_recursive(
     registry: &NodeTypeRegistry,
 ) -> bool {
     let mut ok = true;
+    // Whether this scope belongs to a local network of the file (a body has no
+    // name; its top-level network is the first ancestor).
+    let is_local_scope = {
+        let root = ancestors
+            .first()
+            .map(|a| a.node_type.name.as_str())
+            .unwrap_or(network.node_type.name.as_str());
+        registry.library_links.mount_containing(root).is_none()
+    };
 
     // Wire-cycle rule (`doc/design_error_management.md` D5): this function is
     // called exactly once per scope (the top-level network from
@@ -1410,6 +1428,21 @@ fn validate_zones_recursive(
                 Some(node_id),
             ));
             continue;
+        }
+        // A local node using a library the file does not link directly (D4):
+        // it works, but breaks when the direct library drops that link.
+        if is_local_scope
+            && let Some(name) = crate::library_links::transitive_mount_ref(node, registry)
+        {
+            let mount = registry
+                .library_links
+                .mount_containing(&name)
+                .map(|m| m.mount_path.clone())
+                .unwrap_or_default();
+            network.validation_errors.push(ValidationError::warning(
+                format!("uses transitive library `{}`; link it directly", mount),
+                Some(node_id),
+            ));
         }
         let Some(node_type) = registry.get_node_type_for_node(node) else {
             continue;

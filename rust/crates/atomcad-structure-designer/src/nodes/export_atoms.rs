@@ -10,7 +10,7 @@ use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
 use atomcad_crystolecule::io::atom_export::AtomExportFormat;
-use atomcad_util::path_utils::{get_parent_directory, resolve_path, try_make_relative};
+use atomcad_util::path_utils::{resolve_path, try_make_relative};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -80,10 +80,7 @@ impl NodeData for ExportAtomsData {
         }
 
         // Get design directory from registry
-        let design_dir = registry
-            .design_file_name
-            .as_ref()
-            .and_then(|design_path| get_parent_directory(design_path));
+        let design_dir = crate::library_links::base_dir_for_eval(network_stack, registry);
 
         // Resolve the file path (handle relative paths)
         let resolved_path = match resolve_path(&file_name, design_dir.as_deref()) {

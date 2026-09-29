@@ -46,6 +46,10 @@ impl StructureDesigner {
     /// `ChemisorbData::inherit_runtime_state`. A write to a node of another
     /// type is a no-op.
     pub fn set_chemisorb_data(&mut self, scope_path: &[u64], node_id: u64, data: ChemisorbData) {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        if self.ensure_active_editable().is_err() {
+            return;
+        }
         let is_chemisorb = self
             .get_node_network_data_scoped(scope_path, node_id)
             .is_some_and(|d| d.as_any_ref().is::<ChemisorbData>());
@@ -63,6 +67,8 @@ impl StructureDesigner {
         scope_path: &[u64],
         node_id: u64,
     ) -> Result<ChemisorbRunSummary, String> {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        self.ensure_active_editable()?;
         if !scope_path.is_empty() {
             // A body node's inputs depend on per-iteration zone values that
             // do not exist outside an iteration, as for Execute.

@@ -448,6 +448,7 @@ fn passthrough_closure(pin_index: usize, arity: usize) -> ZoneClosure {
         param_types: vec![DataType::Int; arity],
         return_type: DataType::Int,
         pre_supplied_args: Arc::new(Vec::new()),
+        home: None,
     }
 }
 

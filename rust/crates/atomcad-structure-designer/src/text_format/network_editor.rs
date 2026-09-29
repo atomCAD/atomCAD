@@ -779,15 +779,25 @@ impl<'a> NetworkEditor<'a> {
         if let Err(reason) = crate::identifier::is_valid_user_name(name) {
             return Err(format!("Invalid node name '{}': {}", path, reason));
         }
-        // Look up node type
-        let node_type = self
-            .registry
-            .get_node_type(node_type_name)
-            .ok_or_else(|| format!("Unknown node type: '{}'", node_type_name))?;
-
-        // Create node data using the factory
-        let node_data = (node_type.node_data_creator)();
-        let num_params = node_type.parameters.len();
+        // Look up node type. A name under a linked library that does not
+        // resolve (the library is missing, or no longer defines it) is a
+        // *frozen* instance (`doc/design_library_linking.md` §8): it is
+        // created like any custom-network instance and takes its pins from the
+        // recorded interface below, so `query` → `--replace` keeps it.
+        let (node_data, num_params) = match self.registry.get_node_type(node_type_name) {
+            Some(node_type) => ((node_type.node_data_creator)(), node_type.parameters.len()),
+            None if self
+                .registry
+                .library_links
+                .mount_containing(node_type_name)
+                .is_some() =>
+            {
+                let data: Box<dyn crate::node_data::NodeData> =
+                    Box::new(crate::node_data::CustomNodeData::default());
+                (data, 0)
+            }
+            None => return Err(format!("Unknown node type: '{}'", node_type_name)),
+        };
 
         // Extract input connections from properties for smart layout positioning
         let input_connections = self.extract_input_connections_for_layout(scope, properties);
@@ -850,11 +860,7 @@ impl<'a> NetworkEditor<'a> {
         // Initialize custom node type cache (for expr, parameter nodes, etc.).
         // This is also what initializes a zone-bearing node's body, via
         // `ensure_zone_init` — see `apply_body`.
-        if let Some(node) =
-            scope_net_mut(self.network, scope).and_then(|network| network.nodes.get_mut(&node_id))
-        {
-            self.registry.populate_custom_node_type_cache(node, true);
-        }
+        self.refresh_node_layout(scope, node_id, true);
 
         // Re-apply the rest of the identity snapshot (D14). Position was
         // applied at creation; body size, collapse mode and `hand_moved` are
@@ -943,14 +949,45 @@ impl<'a> NetworkEditor<'a> {
         self.apply_literal_properties(scope, node_id, path, properties)?;
 
         // Re-initialize custom node type cache in case properties changed
-        if let Some(node) =
-            scope_net_mut(self.network, scope).and_then(|network| network.nodes.get_mut(&node_id))
-        {
-            self.registry.populate_custom_node_type_cache(node, true);
-        }
+        self.refresh_node_layout(scope, node_id, false);
 
         self.result.nodes_updated.push(path.to_string());
         Ok(())
+    }
+
+    /// Rebuilds a node's cached layout after its properties were applied.
+    ///
+    /// A **frozen** node (`doc/design_library_linking.md` §8) must not be
+    /// rebuilt by name: its type does not resolve, so the rebuild would give a
+    /// record node zero fields and — with `refresh_args` — cut every wire. It
+    /// gets its recorded layout instead (§13 item 6), arguments untouched; a
+    /// freshly created one is grown to that layout's pin count, which is what
+    /// the node had when it was loaded.
+    fn refresh_node_layout(&mut self, scope: &[u64], node_id: u64, created: bool) {
+        let owner = crate::library_links::owner_mount(self.registry, &self.network.node_type.name);
+        let Some(node) =
+            scope_net_mut(self.network, scope).and_then(|network| network.nodes.get_mut(&node_id))
+        else {
+            return;
+        };
+        if !crate::library_links::is_frozen(node, self.registry) {
+            self.registry.populate_custom_node_type_cache(node, true);
+            return;
+        }
+        if !crate::library_links::install_recorded_layout(node, self.registry, owner.as_deref())
+            && node.custom_node_type.is_none()
+        {
+            self.registry.populate_custom_node_type_cache(node, false);
+        }
+        if created {
+            let pins = node
+                .custom_node_type
+                .as_ref()
+                .map_or(0, |t| t.parameters.len());
+            while node.arguments.len() < pins {
+                node.arguments.push(Argument::new());
+            }
+        }
     }
 
     // ------------------------------------------------------------------
@@ -1204,6 +1241,18 @@ impl<'a> NetworkEditor<'a> {
                 || prop_name == ANCHOR_PROPERTY
                 || prop_name == PIN_ROLES_PROPERTY
             {
+                continue;
+            }
+
+            // A positional pin (`@<index>`) names a pin of a node whose type is
+            // unavailable; it only ever takes wires.
+            if crate::library_links::positional_pin_index(prop_name).is_some() {
+                if Self::property_value_to_text_value(prop_value).is_some() {
+                    self.result.add_warning(format!(
+                        "Positional pin '{}' on '{}' takes only wires; literal value ignored",
+                        prop_name, path
+                    ));
+                }
                 continue;
             }
 
@@ -1705,9 +1754,24 @@ impl<'a> NetworkEditor<'a> {
         source_node_id: u64,
         pin_name: &str,
     ) -> Result<i32, String> {
-        let source_node = scope_net(self.network, scope)
-            .and_then(|network| network.nodes.get(&source_node_id))
+        let source_network =
+            scope_net(self.network, scope).ok_or_else(|| "Source node not found".to_string())?;
+        let source_node = source_network
+            .nodes
+            .get(&source_node_id)
             .ok_or_else(|| "Source node not found".to_string())?;
+
+        // `node.@<index>`: an output of a node whose type is unavailable
+        // (`doc/design_library_linking.md` §13 item 6).
+        if let Some(index) = crate::library_links::positional_pin_index(pin_name) {
+            if !crate::library_links::is_protected(source_node, source_network, self.registry) {
+                return Err(format!(
+                    "positional pin '{}' only on a node whose type is unavailable",
+                    pin_name
+                ));
+            }
+            return Ok(index as i32);
+        }
 
         let node_type = self
             .registry
@@ -1746,9 +1810,29 @@ impl<'a> NetworkEditor<'a> {
         node_id: u64,
         param_name: &str,
     ) -> Result<(usize, bool), String> {
-        let node = scope_net(self.network, scope)
-            .and_then(|network| network.nodes.get(&node_id))
+        let network = scope_net(self.network, scope).ok_or_else(|| "Node not found".to_string())?;
+        let node = network
+            .nodes
+            .get(&node_id)
             .ok_or_else(|| "Node not found".to_string())?;
+
+        // The positional spelling `@<index>` (`doc/design_library_linking.md`
+        // §13 item 6): a wire into pin `index` of a node whose type is
+        // unavailable, placed without a type check.
+        if let Some(index) = crate::library_links::positional_pin_index(param_name) {
+            if !crate::library_links::is_protected(node, network, self.registry) {
+                return Err(format!(
+                    "positional pin '{}' only on a node whose type is unavailable",
+                    param_name
+                ));
+            }
+            let is_multi = self
+                .registry
+                .get_node_type_for_node(node)
+                .and_then(|t| t.parameters.get(index))
+                .is_some_and(|p| p.data_type.is_array());
+            return Ok((index, is_multi));
+        }
 
         let node_type = self
             .registry

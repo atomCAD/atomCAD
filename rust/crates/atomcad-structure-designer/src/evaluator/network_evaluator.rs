@@ -83,6 +83,13 @@ pub struct NetworkStackElement<'a> {
     /// and `doc/design_eval_memoization.md` needs it in every pass. A counter
     /// that is only correct while profiling is on is a trap.
     pub env_epoch: u64,
+    /// For a zone-body **invocation** frame: the network the invoked closure
+    /// was defined in (its [`ZoneClosure::home`](crate::evaluator::zone_closure::ZoneClosure::home)).
+    /// A lazy walker runs a body on a body-only stack, so the defining network
+    /// is otherwise nowhere on the stack; `None` on every other frame, whose
+    /// network is found by walking down. Used to resolve a relative file path
+    /// against the file that owns the code (`library_links::base_dir_for_eval`).
+    pub home: Option<std::sync::Arc<str>>,
 }
 
 impl<'a> NetworkStackElement<'a> {
@@ -93,6 +100,7 @@ impl<'a> NetworkStackElement<'a> {
             node_id: 0,
             is_zone_body: false,
             env_epoch: 0,
+            home: None,
         }
     }
 
@@ -105,6 +113,7 @@ impl<'a> NetworkStackElement<'a> {
             node_id,
             is_zone_body: false,
             env_epoch: 0,
+            home: None,
         }
     }
 
@@ -116,12 +125,14 @@ impl<'a> NetworkStackElement<'a> {
         node_network: &'a NodeNetwork,
         owner_node_id: u64,
         env_epoch: u64,
+        home: Option<std::sync::Arc<str>>,
     ) -> Self {
         Self {
             node_network,
             node_id: owner_node_id,
             is_zone_body: true,
             env_epoch,
+            home,
         }
     }
 
@@ -134,6 +145,7 @@ impl<'a> NetworkStackElement<'a> {
             node_id: owner_node_id,
             is_zone_body: true,
             env_epoch: 0,
+            home: None,
         }
     }
 

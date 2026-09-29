@@ -255,6 +255,34 @@ too**, or a missing library silently costs the user their wiring. Library-linkin
 tests use the oracles in `tests/structure_designer/library_links_support.rs`
 rather than ad-hoc assertions.
 
+A frozen node takes its pins from the **recorded interface** of the name it
+refers to (`library_links::recorded_layout`, from the importing file's `uses`
+table): `repair_node_network`'s frozen branch, `initialize_custom_node_types_for_network`
+and the text editor install it, never with `refresh_args`. Which file's `uses`
+applies is decided by the node's *owner* mount (`owner_mount`), which is why
+`repair_node_network` threads it into zone bodies (a body has no name).
+
+**Linked content is read-only (§6), and the guard is explicit.** Every
+`StructureDesigner` entry point that mutates the *content* of a network or a
+record def calls `ensure_editable(name)` / `ensure_active_editable()` **before
+touching anything** (no partial mutation, no undo entry, no dirty flag). A new
+content-mutating entry point must too — `library_links_readonly_test.rs`'s
+mutation alphabet is where it joins. View state (selection, camera, canvas
+viewport, display toggles) is not content: it stays allowed on a linked
+network, but never dirties the host and pushes no undo step. `name_is_taken`
+also answers `true` for any name inside a mount or naming the folder that
+holds one, which is what keeps every create/rename/move out of a library's
+folder. Undo snapshots look node-data savers/loaders up through
+`NodeTypeRegistry::node_data_saver_for` / `node_data_loader_for`, whose
+`CustomNodeData` fallback is what lets a frozen instance be deleted,
+duplicated or pasted and brought back.
+
+**A relative file path is resolved at eval time only through
+`library_links::base_dir_for_eval(network_stack, registry)`** — the directory
+of the file owning the code on top of the stack (a library's folder inside a
+linked network). A zone body belongs to the network its closure was defined in
+(`ZoneClosure::home`, see `evaluator/AGENTS.md`), not to whatever runs it.
+
 ## The AI edit choke point
 
 Every AI edit — the HTTP server's `/edit`, the CLI REPL's `edit` / `replace`,

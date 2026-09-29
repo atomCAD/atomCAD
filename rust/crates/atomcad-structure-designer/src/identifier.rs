@@ -22,6 +22,9 @@ pub enum InvalidNameReason {
     /// (`map4/e1`). A slash inside a name makes a path ambiguous, so it is
     /// reserved. See `doc/design_node_names_in_ui.md` (D1, D8).
     ContainsSlash,
+    /// The name lies inside a linked library, or is the folder holding one
+    /// (`doc/design_library_linking.md` D3).
+    InLinkedLibrary,
 }
 
 impl fmt::Display for InvalidNameReason {
@@ -39,6 +42,9 @@ impl fmt::Display for InvalidNameReason {
             }
             InvalidNameReason::ContainsSlash => {
                 f.write_str("name cannot contain a slash (reserved as the node-path separator)")
+            }
+            InvalidNameReason::InLinkedLibrary => {
+                f.write_str("name lies inside a linked library, which is read-only")
             }
         }
     }

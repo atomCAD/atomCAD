@@ -235,6 +235,7 @@ impl NodeData for ApplyData {
                     param_types: f_current.param_types[drained_len..].to_vec(),
                     return_type: f_current.return_type.clone(),
                     pre_supplied_args: extended,
+                    home: f_current.home.clone(),
                 };
                 return EvalOutput::single(NetworkResult::Function(partial));
             }

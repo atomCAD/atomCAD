@@ -194,6 +194,49 @@ impl StructureDesigner {
         Ok(())
     }
 
+    /// True when `name` (a network, record def or folder) belongs to a linked
+    /// library (D3's prefix test).
+    pub fn is_linked_name(&self, name: &str) -> bool {
+        self.node_type_registry
+            .library_links
+            .mount_containing(name)
+            .is_some()
+    }
+
+    /// True when the active network belongs to a linked library.
+    pub fn active_network_is_linked(&self) -> bool {
+        self.active_node_network_name
+            .as_deref()
+            .is_some_and(|n| self.is_linked_name(n))
+    }
+
+    /// The entity-layer read-only guard (§6): `Err` when `name` belongs to a
+    /// linked library. Every `StructureDesigner` entry point that mutates the
+    /// *content* of a network or a record def calls this (or
+    /// [`ensure_active_editable`](Self::ensure_active_editable)) before it
+    /// touches anything, so a refused edit leaves no partial mutation and no
+    /// undo entry. View state (selection, camera, canvas viewport, display
+    /// toggles) is not content and is not guarded (§5.4).
+    pub fn ensure_editable(&self, name: &str) -> Result<(), String> {
+        match self.node_type_registry.library_links.mount_containing(name) {
+            Some(mount) => Err(format!(
+                "'{}' is linked from '{}' and is read-only; open the library file to edit it",
+                name, mount.rel_path
+            )),
+            None => Ok(()),
+        }
+    }
+
+    /// [`ensure_editable`](Self::ensure_editable) for the active network
+    /// (which is where every scoped edit lands). `Ok` when there is no active
+    /// network — the caller's own "no active network" path handles that.
+    pub fn ensure_active_editable(&self) -> Result<(), String> {
+        match self.active_node_network_name.as_deref() {
+            Some(name) => self.ensure_editable(name),
+            None => Ok(()),
+        }
+    }
+
     /// True when a namespace operation on `prefix` would silently change a
     /// mount's alias (D3): the prefix is a mount, contains one, or lies inside
     /// one.

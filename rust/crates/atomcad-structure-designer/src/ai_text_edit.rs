@@ -100,6 +100,12 @@ impl StructureDesigner {
             return self.reject_ai_edit(network_name, code, replace, vec![message]);
         }
 
+        // --- Rejection path 2b: linked content is read-only --------------
+        // (`doc/design_library_linking.md` §6). Logged like the CLI lock.
+        if let Err(message) = self.ensure_editable(&network_name) {
+            return self.reject_ai_edit(network_name, code, replace, vec![message]);
+        }
+
         // --- The log's "before" pair (D2, D9) ----------------------------
         //
         // Taken while the network is still in the registry and before the

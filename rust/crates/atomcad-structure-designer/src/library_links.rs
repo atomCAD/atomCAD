@@ -622,6 +622,30 @@ pub fn protected_node_ids(
     out
 }
 
+/// [`protected_node_ids`] for a single node of `network`: frozen, or fed by a
+/// frozen node's function pin.
+pub fn is_protected(node: &Node, network: &NodeNetwork, registry: &NodeTypeRegistry) -> bool {
+    if registry.library_links.is_empty() {
+        return false;
+    }
+    if is_frozen(node, registry) {
+        return true;
+    }
+    node.arguments.iter().any(|arg| {
+        arg.incoming_wires.iter().any(|w| {
+            w.source_scope_depth == 0
+                && matches!(
+                    w.source_pin,
+                    crate::node_network::SourcePin::NodeOutput { pin_index: -1 }
+                )
+                && network
+                    .nodes
+                    .get(&w.source_node_id)
+                    .is_some_and(|source| is_frozen(source, registry))
+        })
+    })
+}
+
 /// The validation message for a frozen node.
 pub fn frozen_node_message(node: &Node, name: &str) -> String {
     if node.node_type_name == name {
@@ -634,6 +658,277 @@ pub fn frozen_node_message(node: &Node, name: &str) -> String {
             "Unknown record type `{}` (linked library not available)",
             name
         )
+    }
+}
+
+/// The mount path of the mount owning `network_name` — `None` for a local
+/// network of the file the registry belongs to. This identifies **which
+/// file** a node lives in, and so whose `uses` tables describe its wiring.
+pub fn owner_mount(registry: &NodeTypeRegistry, network_name: &str) -> Option<String> {
+    registry
+        .library_links
+        .mount_containing(network_name)
+        .map(|m| m.mount_path.clone())
+}
+
+/// True when `name` is at or under a mount path, or is a strict prefix of one
+/// (a folder that holds a mount). A new local entity or folder may be neither
+/// (D3): the first would put local content into a library's folder, the second
+/// would turn the folder holding a mount into an entity.
+pub fn name_conflicts_with_mount(registry: &NodeTypeRegistry, name: &str) -> bool {
+    registry
+        .library_links
+        .iter()
+        .any(|m| is_under(name, &m.mount_path) || is_under(&m.mount_path, name))
+}
+
+/// The positional pin spelling of the text format (§13 item 6): `@<index>`.
+/// `@` followed by digits is not a valid identifier, so it can never be a pin
+/// name. Returns the index when `name` is such a spelling.
+pub fn positional_pin_index(name: &str) -> Option<usize> {
+    let digits = name.strip_prefix('@')?;
+    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    digits.parse().ok()
+}
+
+/// The positional pin spelling of index `i`.
+pub fn positional_pin_name(i: usize) -> String {
+    format!("@{}", i)
+}
+
+// ---------------------------------------------------------------------------
+// Recorded layouts of frozen nodes (§13 item 6)
+// ---------------------------------------------------------------------------
+
+fn parse_recorded_type(s: &str) -> DataType {
+    DataType::from_string(s).unwrap_or(DataType::None)
+}
+
+/// The recorded interface a frozen name refers to, from the `uses` table of
+/// the file that owns the node: the mount whose importing file is `owner`
+/// (`None` = the host) and under which `name` lies. The key is `name`
+/// relative to that mount.
+fn recorded_entry<'r, T>(
+    registry: &'r NodeTypeRegistry,
+    name: &str,
+    owner: Option<&str>,
+    pick: impl Fn(&'r UsedInterfaces, &str) -> Option<&'r T>,
+) -> Option<&'r T> {
+    registry
+        .library_links
+        .iter()
+        .filter(|m| m.parent.as_deref() == owner)
+        .filter(|m| name.len() > m.mount_path.len() && is_under(name, &m.mount_path))
+        .find_map(|m| pick(&m.stored_uses, &name[m.mount_path.len() + 1..]))
+}
+
+/// The pin layout a **frozen** node gets from the recorded interface of the
+/// name it refers to (§13 item 6): an instance gets the entry's parameters
+/// (with their ids) and outputs; a `record_construct` / `record_destructure`
+/// / `product` gets the entry's fields, stamped exactly as
+/// `build_node_type_for_schema_with_defs` would stamp them from a live def.
+/// `None` when the node is not frozen, refers to the name only through a type,
+/// or no `uses` entry records the name.
+///
+/// `owner` is the mount owning the network the node lives in (see
+/// [`owner_mount`]).
+pub fn recorded_layout(
+    node: &Node,
+    registry: &NodeTypeRegistry,
+    owner: Option<&str>,
+) -> Option<crate::node_type::NodeType> {
+    use crate::node_type::{NodeTypeCategory, OutputPinDefinition, Parameter};
+    let name = unresolved_mount_ref(node, registry)?;
+    if node.node_type_name == name {
+        let entry = recorded_entry(registry, &name, owner, |u, k| u.networks.get(k))?;
+        return Some(crate::node_type::NodeType {
+            name: name.clone(),
+            description: String::new(),
+            summary: None,
+            category: NodeTypeCategory::Custom,
+            parameters: entry
+                .params
+                .iter()
+                .map(|p| Parameter {
+                    id: p.id,
+                    name: p.name.clone(),
+                    data_type: parse_recorded_type(&p.data_type),
+                })
+                .collect(),
+            output_pins: entry
+                .outputs
+                .iter()
+                .map(|o| OutputPinDefinition::fixed(&o.name, parse_recorded_type(&o.data_type)))
+                .collect(),
+            node_data_creator: || Box::new(crate::node_data::CustomNodeData::default()),
+            node_data_saver: crate::node_type::generic_node_data_saver::<
+                crate::node_data::CustomNodeData,
+            >,
+            node_data_loader: crate::node_type::generic_node_data_loader::<
+                crate::node_data::CustomNodeData,
+            >,
+            zone_input_pins: vec![],
+            zone_output_pins: vec![],
+            public: true,
+        });
+    }
+    let schema = record_node_schema(node)?;
+    if schema != name {
+        return None;
+    }
+    let entry = recorded_entry(registry, &name, owner, |u, k| u.records.get(k))?;
+    let def = RecordTypeDef {
+        name: name.clone(),
+        fields: entry
+            .fields
+            .iter()
+            .map(|f| crate::node_type_registry::RecordField {
+                id: crate::node_type_registry::FieldId(f.id),
+                name: f.name.clone(),
+                data_type: parse_recorded_type(&f.data_type),
+                hint: None,
+            })
+            .collect(),
+        next_field_id: entry.fields.iter().map(|f| f.id + 1).max().unwrap_or(0),
+    };
+    let defs: std::collections::HashMap<String, RecordTypeDef> =
+        std::iter::once((name.clone(), def)).collect();
+    let base = registry.built_in_node_types.get(&node.node_type_name)?;
+    let built_in = &registry.built_in_record_type_defs;
+    Some(match node.node_type_name.as_str() {
+        "record_construct" => crate::nodes::record_construct::build_node_type_for_schema_with_defs(
+            base, &name, &defs, built_in,
+        ),
+        "record_destructure" => {
+            crate::nodes::record_destructure::build_node_type_for_schema_with_defs(
+                base, &name, &defs, built_in,
+            )
+        }
+        _ => crate::nodes::product::build_node_type_for_target_with_defs(
+            base, &name, &defs, built_in,
+        ),
+    })
+}
+
+/// The record def a `record_construct` / `record_destructure` / `product`
+/// node is built on.
+fn record_node_schema(node: &Node) -> Option<String> {
+    let data = node.data.as_any_ref();
+    if let Some(d) = data.downcast_ref::<crate::nodes::record_construct::RecordConstructData>() {
+        return Some(d.schema.clone());
+    }
+    if let Some(d) = data.downcast_ref::<crate::nodes::record_destructure::RecordDestructureData>()
+    {
+        return Some(d.schema.clone());
+    }
+    data.downcast_ref::<crate::nodes::product::ProductData>()
+        .map(|d| d.target.clone())
+}
+
+/// Installs the recorded layout (§13 item 6) on `node` if it is frozen and
+/// one is recorded. Never touches `arguments` (`refresh_args = false`).
+/// Returns whether a layout was installed.
+pub fn install_recorded_layout(
+    node: &mut Node,
+    registry: &NodeTypeRegistry,
+    owner: Option<&str>,
+) -> bool {
+    match recorded_layout(node, registry, owner) {
+        Some(layout) => {
+            node.set_custom_node_type(Some(layout), false);
+            true
+        }
+        None => false,
+    }
+}
+
+/// [`install_recorded_layout`] over every node of `network`, bodies included.
+pub fn install_recorded_layouts(
+    network: &mut NodeNetwork,
+    registry: &NodeTypeRegistry,
+    owner: Option<&str>,
+) {
+    if registry.library_links.is_empty() {
+        return;
+    }
+    walk_all_nodes_mut(network, &mut |node| {
+        install_recorded_layout(node, registry, owner);
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Transitive references (D4)
+// ---------------------------------------------------------------------------
+
+/// A name `node` refers to (as an instance or a record schema) that lies under
+/// a **transitive** mount — one the owning file does not link directly. Such a
+/// reference works, but breaks when the direct library stops linking it, so
+/// validation warns about it (D4, Go's rule). Only meaningful for nodes of
+/// local networks.
+pub fn transitive_mount_ref(node: &Node, registry: &NodeTypeRegistry) -> Option<String> {
+    if registry.library_links.is_empty() {
+        return None;
+    }
+    let transitive = |name: &str| {
+        registry
+            .library_links
+            .mount_containing(name)
+            .is_some_and(|m| !m.is_direct())
+    };
+    if transitive(&node.node_type_name) {
+        return Some(node.node_type_name.clone());
+    }
+    record_node_schema(node).filter(|s| transitive(s))
+}
+
+// ---------------------------------------------------------------------------
+// Evaluation base directory (D8)
+// ---------------------------------------------------------------------------
+
+/// The name of the network the code on top of `network_stack` belongs to:
+/// the innermost frame that is a *network*, or the innermost zone-body frame
+/// that records the network its closure was defined in (a lazy walker runs a
+/// body on a body-only stack). A zone-body frame without a record belongs to
+/// the network below it.
+pub fn stack_home(
+    network_stack: &[crate::evaluator::network_evaluator::NetworkStackElement<'_>],
+) -> Option<Arc<str>> {
+    network_stack.iter().rev().find_map(|f| {
+        if f.is_zone_body {
+            f.home.clone()
+        } else {
+            Some(Arc::from(f.node_network.node_type.name.as_str()))
+        }
+    })
+}
+
+/// The directory a relative file path read or written by a node resolves
+/// against **at evaluation time** (D8): the directory of the file that owns
+/// the network the node lives in — the library's folder for a node in a linked
+/// network, the design's folder for a local one. That network is
+/// [`stack_home`]'s (a zone body belongs to the network it was defined in).
+/// This is the only way to resolve a relative path at eval time.
+pub fn base_dir_for_eval(
+    network_stack: &[crate::evaluator::network_evaluator::NetworkStackElement<'_>],
+    registry: &NodeTypeRegistry,
+) -> Option<String> {
+    let host_dir = || {
+        registry
+            .design_file_name
+            .as_ref()
+            .and_then(|p| atomcad_util::path_utils::get_parent_directory(p))
+    };
+    let Some(home) = stack_home(network_stack) else {
+        return host_dir();
+    };
+    match registry.library_links.mount_containing(&home) {
+        Some(mount) => mount
+            .abs_path
+            .parent()
+            .map(|p| p.to_string_lossy().to_string()),
+        None => host_dir(),
     }
 }
 
@@ -848,7 +1143,36 @@ pub fn prefix_registry(temp: &mut NodeTypeRegistry, alias: &str) {
     // Mounts become nested mounts.
     let mounts: Vec<LibraryMount> = temp.library_links.mounts.values().cloned().collect();
     temp.library_links.mounts.clear();
+    // The `uses` tables of the library's own links spell types in the
+    // library's namespace; they describe prefixed names from now on.
+    let prefix_type = |s: &mut String| {
+        if let Ok(mut t) = DataType::from_string(s) {
+            crate::data_type::walk_data_type_record_names_mut(&mut t, &mut |name: &mut String| {
+                if !name.is_empty() && !built_in_records.contains(name.as_str()) {
+                    *name = p(name);
+                }
+            });
+            *s = t.to_string();
+        }
+    };
     for mut m in mounts {
+        let uses = &mut m.stored_uses;
+        for entry in uses.networks.values_mut() {
+            entry
+                .params
+                .iter_mut()
+                .for_each(|x| prefix_type(&mut x.data_type));
+            entry
+                .outputs
+                .iter_mut()
+                .for_each(|x| prefix_type(&mut x.data_type));
+        }
+        for entry in uses.records.values_mut() {
+            entry
+                .fields
+                .iter_mut()
+                .for_each(|x| prefix_type(&mut x.data_type));
+        }
         m.mount_path = p(&m.mount_path);
         m.parent = Some(match m.parent {
             Some(parent) => p(&parent),
@@ -1030,9 +1354,7 @@ pub fn mount_library(
         }
 
         prefix_registry(&mut temp, &spec.alias);
-        for (name, network) in temp.node_networks.drain() {
-            registry.node_networks.insert(name, network);
-        }
+        let networks: Vec<(String, NodeNetwork)> = temp.node_networks.drain().collect();
         for (name, def) in temp.record_type_defs.drain() {
             registry.record_type_defs.insert(name, def);
         }
@@ -1042,6 +1364,20 @@ pub fn mount_library(
         for m in temp.library_links.mounts.values() {
             registry.library_links.insert(m.clone());
         }
+        // Frozen nodes of the library get their recorded layouts again, now
+        // that names and recorded types carry the prefix (prefixing rebuilt
+        // record nodes' layouts from the — missing — defs).
+        // Everything is inserted first, so that only names that really do not
+        // resolve count as frozen.
+        let names: Vec<String> = networks.iter().map(|(n, _)| n.clone()).collect();
+        registry.node_networks.extend(networks);
+        for name in names {
+            let owner = owner_of_prefixed(registry, &name, &spec.alias);
+            if let Some(mut network) = registry.node_networks.remove(&name) {
+                install_recorded_layouts(&mut network, registry, owner.as_deref());
+                registry.node_networks.insert(name, network);
+            }
+        }
         mount.loaded = Some(stamp.clone());
         mount.last_seen = Some(stamp);
         MountStatus::Loaded
@@ -1050,6 +1386,18 @@ pub fn mount_library(
     mount.status = status.clone();
     registry.library_links.insert(mount);
     status
+}
+
+/// [`owner_mount`] of a network being mounted under `alias`, whose own mount
+/// record is not inserted yet: its nested mount if it lies in one, else the
+/// mount `alias` itself.
+fn owner_of_prefixed(registry: &NodeTypeRegistry, name: &str, alias: &str) -> Option<String> {
+    registry
+        .library_links
+        .mount_containing(name)
+        .map(|m| m.mount_path.clone())
+        .filter(|p| is_under(p, alias))
+        .or_else(|| Some(alias.to_string()))
 }
 
 /// Validates every network of `registry` in dependency order — what a load

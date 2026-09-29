@@ -81,6 +81,12 @@ pub struct ZoneClosure {
     /// No node yet *produces* a non-empty value in Phase 2; Phase 3's `apply`
     /// rewrite is what will. See `doc/design_currying.md`.
     pub pre_supplied_args: Arc<Vec<NetworkResult>>,
+    /// The network the closure was defined in: the innermost network of the
+    /// stack it was built on (`library_links::stack_home`). Its body frames
+    /// carry it, so a relative file path read inside the body resolves against
+    /// the file that owns the body even when a lazy walker runs it on a
+    /// body-only stack (`doc/design_library_linking.md` D8).
+    pub home: Option<Arc<str>>,
 }
 
 impl ZoneClosure {
@@ -188,6 +194,7 @@ pub fn build_inline_closure<'a>(
         param_types,
         return_type,
         pre_supplied_args: Arc::new(Vec::new()),
+        home: crate::library_links::stack_home(network_stack),
     })
 }
 
@@ -392,6 +399,7 @@ pub fn build_node_function_closure<'a>(
         param_types,
         return_type,
         pre_supplied_args: Arc::new(Vec::new()),
+        home: crate::library_links::stack_home(network_stack),
     })
 }
 
@@ -508,6 +516,7 @@ pub fn run_closure_once<'a>(
         closure.body.as_ref(),
         closure.owner_node_id,
         env_epoch,
+        closure.home.clone(),
     ));
 
     let result = eval_step(

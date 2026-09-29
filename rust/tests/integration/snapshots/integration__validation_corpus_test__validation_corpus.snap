@@ -93,6 +93,7 @@ expression: out
   network 'x.ex' valid=true
 === library_linking/host.cnnd
   network 'Main' valid=true
+    scope=[] node=7 blocking=false "uses transitive library `a.common`; link it directly"
   network 'a.bar' valid=true
   network 'a.common.slab' valid=true
   network 'a.crystal' valid=true
@@ -108,14 +109,11 @@ expression: out
     scope=[17] node=2 blocking=true "Unknown node type `demolib.foo` (linked library not available)"
     scope=[] node=13 blocking=true "Unknown record type `demolib.Miller` (linked library not available)"
     scope=[] node=14 blocking=true "Unknown node type `demolib.split` (linked library not available)"
-    scope=[] node=14 blocking=true "Unknown source node type 'demolib.split'"
     scope=[] node=16 blocking=true "Unknown record type `demolib.Miller` (linked library not available)"
     scope=[] node=17 blocking=true "Unknown record type `demolib.Miller` (linked library not available)"
     scope=[] node=20 blocking=true "Unknown record type `demolib.Miller` (linked library not available)"
     scope=[] node=3 blocking=true "Unknown node type `demolib.foo` (linked library not available)"
-    scope=[] node=3 blocking=true "Unknown source node type 'demolib.foo'"
     scope=[] node=5 blocking=true "Unknown node type `demolib.foo` (linked library not available)"
-    scope=[] node=6 blocking=true "Node has 3 arguments but type expects 1 parameters"
     scope=[] node=7 blocking=true "Unknown record type `demolib.Miller` (linked library not available)"
     scope=[] node=8 blocking=true "Unknown record type `demolib.Miller` (linked library not available)"
   network 'typed' valid=true

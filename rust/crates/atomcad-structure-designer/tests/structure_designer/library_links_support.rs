@@ -17,10 +17,11 @@
 
 #![allow(dead_code)]
 
+use atomcad_structure_designer::data_type::DataType;
 use atomcad_structure_designer::invariants::check_document_invariants;
 use atomcad_structure_designer::library_links::{is_frozen, mount_fingerprint};
 use atomcad_structure_designer::node_network::{NodeNetwork, SourcePin};
-use atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
+use atomcad_structure_designer::node_type_registry::{NodeTypeRegistry, RecordTypeDef};
 use atomcad_structure_designer::serialization::node_networks_serialization::serialize_registry_to_string;
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 use atomcad_test_support::fixture_path;
@@ -73,6 +74,58 @@ fn design_dir(d: &StructureDesigner) -> Option<PathBuf> {
     d.file_path
         .as_ref()
         .and_then(|p| Path::new(p).parent().map(|p| p.to_path_buf()))
+}
+
+// Building designs
+
+/// Replaces network `network` (created if absent) with `code`, and validates.
+pub fn edit(d: &mut StructureDesigner, network: &str, code: &str) {
+    if !d.node_type_registry.node_networks.contains_key(network) {
+        d.add_node_network(network);
+    }
+    d.set_active_node_network_name(Some(network.to_string()));
+    let outcome = d.ai_text_edit(code, true);
+    assert!(
+        outcome.result.errors.is_empty(),
+        "edit of '{}' failed: {:?}\n{}",
+        network,
+        outcome.result.errors,
+        code
+    );
+    d.validate_active_network();
+}
+
+pub fn int_record(name: &str, fields: &[&str]) -> RecordTypeDef {
+    RecordTypeDef::from_named_fields(
+        name,
+        fields
+            .iter()
+            .map(|f| (f.to_string(), DataType::Int))
+            .collect(),
+    )
+}
+
+/// A fresh designer whose only network is `Main`, saved at `path`.
+pub fn new_design(path: &Path) -> StructureDesigner {
+    let mut d = StructureDesigner::new();
+    d.new_project();
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    d.save_node_networks_as(&path.to_string_lossy()).unwrap();
+    d
+}
+
+pub fn save(d: &mut StructureDesigner) {
+    d.save_node_networks().expect("has a path").expect("save");
+}
+
+/// The top-level node of `network` named `name`.
+pub fn node_id(d: &StructureDesigner, network: &str, name: &str) -> u64 {
+    d.node_type_registry.node_networks[network]
+        .nodes
+        .values()
+        .find(|n| n.custom_name.as_deref() == Some(name))
+        .unwrap_or_else(|| panic!("no node '{}' in '{}'", name, network))
+        .id
 }
 
 // ---------------------------------------------------------------------------
@@ -257,6 +310,47 @@ pub fn check_wire_ledger(
             appeared
         ))
     }
+}
+
+/// Wires into or out of a frozen node, or inside a frozen HOF's body — the
+/// wires §8 protects.
+pub fn frozen_wires(d: &StructureDesigner) -> std::collections::BTreeSet<WireEntry> {
+    let registry = &d.node_type_registry;
+    let mut frozen_ids: std::collections::BTreeSet<(String, Vec<u64>, u64)> = Default::default();
+    fn walk(
+        registry: &atomcad_structure_designer::node_type_registry::NodeTypeRegistry,
+        name: &str,
+        net: &atomcad_structure_designer::node_network::NodeNetwork,
+        scope: &[u64],
+        out: &mut std::collections::BTreeSet<(String, Vec<u64>, u64)>,
+    ) {
+        for n in net.nodes.values() {
+            if is_frozen(n, registry) {
+                out.insert((name.to_string(), scope.to_vec(), n.id));
+            }
+            if let Some(body) = n.zone.as_deref() {
+                let mut child = scope.to_vec();
+                child.push(n.id);
+                walk(registry, name, body, &child, out);
+            }
+        }
+    }
+    for (name, net) in &registry.node_networks {
+        if registry.library_links.mount_containing(name).is_none() {
+            walk(registry, name, net, &[], &mut frozen_ids);
+        }
+    }
+    wire_ledger(d)
+        .into_iter()
+        .filter(|w| {
+            frozen_ids.contains(&(w.network.clone(), w.scope.clone(), w.dest))
+                || (w.depth == 0
+                    && frozen_ids.contains(&(w.network.clone(), w.scope.clone(), w.source)))
+                || frozen_ids.iter().any(|(n, s, id)| {
+                    *n == w.network && w.scope.starts_with(&[s.as_slice(), &[*id]].concat())
+                })
+        })
+        .collect()
 }
 
 // ---------------------------------------------------------------------------

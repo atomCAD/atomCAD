@@ -620,8 +620,12 @@ pub fn sync_camera_to_active_network(cad_instance: &mut CADInstance) {
             nav_up_label: camera.nav_up_label.clone(),
         });
     }
-    // Camera settings are saved per network, so mark design as dirty
-    cad_instance.structure_designer.set_dirty(true);
+    // Camera settings are saved per network, so mark design as dirty — except
+    // on a linked network, whose view state is session-only and never saved
+    // (`doc/design_library_linking.md` §5.4).
+    if !cad_instance.structure_designer.active_network_is_linked() {
+        cad_instance.structure_designer.set_dirty(true);
+    }
 }
 
 /// Applies camera settings to the renderer (if Some).

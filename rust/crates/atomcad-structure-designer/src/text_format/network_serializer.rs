@@ -364,11 +364,22 @@ impl<'a> NetworkSerializer<'a> {
         // Track which parameters have connections
         let mut connected_params: HashSet<String> = HashSet::new();
 
+        // A node whose type is unavailable (frozen, `doc/design_library_linking.md`
+        // §8, or fed by a frozen node's function pin) keeps wires into pins its
+        // layout may not have; those are spelled positionally, `@<index>`
+        // (§13 item 6), so a `--replace` does not drop them.
+        let positional = crate::library_links::is_protected(node, network, self.registry);
+
         // First pass: gather connections
-        if let Some(nt) = node_type {
+        if node_type.is_some() || positional {
             for (arg_index, argument) in node.arguments.iter().enumerate() {
-                if !argument.is_empty() && arg_index < nt.parameters.len() {
-                    let param_name = &nt.parameters[arg_index].name;
+                let named = node_type.and_then(|nt| nt.parameters.get(arg_index));
+                if !argument.is_empty() && (named.is_some() || positional) {
+                    let param_name = match named {
+                        Some(param) => param.name.clone(),
+                        None => crate::library_links::positional_pin_name(arg_index),
+                    };
+                    let param_name = &param_name;
                     connected_params.insert(param_name.clone());
 
                     // Check if this is a multi-input parameter
@@ -483,8 +494,15 @@ impl<'a> NetworkSerializer<'a> {
         let props_str: Vec<String> = properties
             .iter()
             // A property key is an identifier position too: a custom node's
-            // parameter can be named after a dotted network.
-            .map(|(k, v)| format!("{}: {}", format_identifier(k), v))
+            // parameter can be named after a dotted network. The positional
+            // spelling `@<index>` is written as is.
+            .map(|(k, v)| {
+                if crate::library_links::positional_pin_index(k).is_some() {
+                    format!("{}: {}", k, v)
+                } else {
+                    format!("{}: {}", format_identifier(k), v)
+                }
+            })
             .collect();
 
         match body_block {
@@ -622,8 +640,10 @@ impl<'a> NetworkSerializer<'a> {
                             formatted_name,
                             format_identifier(&pin_name)
                         ),
-                        // Fallback: use numeric index if pin name unavailable
-                        None => format!("{}{}.pin{}", carets, formatted_name, pin_index),
+                        // No name for the pin (a frozen source without a
+                        // recorded layout): the positional spelling `.@<index>`
+                        // (`doc/design_library_linking.md` §13 item 6).
+                        None => format!("{}{}.@{}", carets, formatted_name, pin_index),
                     }
                 } else {
                     // Pin 0: regular output reference (no qualifier for

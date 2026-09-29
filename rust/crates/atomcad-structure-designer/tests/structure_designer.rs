@@ -668,3 +668,6 @@ mod library_links_support;
 
 #[path = "structure_designer/library_links_test.rs"]
 mod library_links_test;
+
+#[path = "structure_designer/library_links_readonly_test.rs"]
+mod library_links_readonly_test;

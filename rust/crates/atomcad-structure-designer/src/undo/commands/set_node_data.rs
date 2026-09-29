@@ -36,21 +36,9 @@ impl SetNodeDataCommand {
     /// deserialize the given JSON, and set it on the node.
     fn apply_data(&self, ctx: &mut UndoContext, data_json: &Value) {
         // Look up the loader function (fn pointer is Copy)
-        let loader = if let Some(node_type) = ctx
+        let loader = ctx
             .node_type_registry
-            .built_in_node_types
-            .get(&self.node_type_name)
-        {
-            node_type.node_data_loader
-        } else if let Some(network) = ctx
-            .node_type_registry
-            .node_networks
-            .get(&self.node_type_name)
-        {
-            network.node_type.node_data_loader
-        } else {
-            return;
-        };
+            .node_data_loader_for(&self.node_type_name);
 
         // Deserialize the data.
         //

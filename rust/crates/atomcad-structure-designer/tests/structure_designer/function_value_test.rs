@@ -36,6 +36,7 @@ fn make_function_value(param_types: Vec<DataType>, return_type: DataType) -> Net
         param_types,
         return_type,
         pre_supplied_args: Arc::new(Vec::new()),
+        home: None,
     })
 }
 

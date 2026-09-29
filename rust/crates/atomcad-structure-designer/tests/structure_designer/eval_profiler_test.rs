@@ -1451,11 +1451,11 @@ fn the_body_network_address_is_not_an_input_to_the_env_key() {
 
     let stack_a = vec![
         NetworkStackElement::root(&root),
-        NetworkStackElement::body_invocation(&body_a, 12, 7),
+        NetworkStackElement::body_invocation(&body_a, 12, 7, None),
     ];
     let stack_b = vec![
         NetworkStackElement::root(&root),
-        NetworkStackElement::body_invocation(&body_b, 12, 7),
+        NetworkStackElement::body_invocation(&body_b, 12, 7, None),
     ];
     assert_eq!(
         eval_env_key(&stack_a, 5, false),
@@ -1468,7 +1468,7 @@ fn the_body_network_address_is_not_an_input_to_the_env_key() {
     // the enclosing frames are hashed too.
     let stack_c = vec![
         NetworkStackElement::root(&root),
-        NetworkStackElement::body_invocation(&body_a, 13, 7),
+        NetworkStackElement::body_invocation(&body_a, 13, 7, None),
     ];
     assert_ne!(
         eval_env_key(&stack_a, 5, false),
@@ -1515,11 +1515,11 @@ fn the_env_key_separates_epochs_decorate_and_instances() {
 
     let base = vec![
         NetworkStackElement::root(&root),
-        NetworkStackElement::body_invocation(&body, 12, 7),
+        NetworkStackElement::body_invocation(&body, 12, 7, None),
     ];
     let next_epoch = vec![
         NetworkStackElement::root(&root),
-        NetworkStackElement::body_invocation(&body, 12, 8),
+        NetworkStackElement::body_invocation(&body, 12, 8, None),
     ];
     assert_ne!(
         eval_env_key(&base, 5, false),

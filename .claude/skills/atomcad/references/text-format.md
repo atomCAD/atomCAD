@@ -95,6 +95,12 @@ For array inputs (multiple wires):
 combined = union { shapes: [part1, part2, part3] }
 ```
 
+**Positional pins.** A node referring to a linked library's network or record
+type that cannot be found keeps its wires; where no pin name is known, `query`
+spells the pin by position: `@0: i1` (input pin 0), `rd.@1` (output pin 1).
+Write it back unchanged — it is accepted only on such a node, and anywhere
+else it is an error.
+
 ### Removing a wire
 
 Mentioning an input assigns its **whole** wire set, so you remove a wire by
