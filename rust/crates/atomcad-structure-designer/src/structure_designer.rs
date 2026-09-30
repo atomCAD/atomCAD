@@ -2652,7 +2652,7 @@ impl StructureDesigner {
     /// registry, addressed by `(host_network, scope_path, node_id)` and sorted
     /// for a stable order. Read-only — see `doc/design_find_usages.md`.
     ///
-    /// Deliberately *not* the basis of [`check_delete_references`]: that one
+    /// Deliberately *not* the basis of [`network_delete_blockers`](Self::network_delete_blockers): that one
     /// takes a set of targets and exempts intra-set references (bulk namespace
     /// delete), which is a different walk, not a per-target usage list.
     pub fn network_usages(&self, network_name: &str) -> Vec<super::network_usages::NetworkUsage> {
@@ -2695,16 +2695,22 @@ impl StructureDesigner {
         super::node_name_search::resolve_node_path(&self.node_type_registry, network_name, path)
     }
 
-    /// Check if any network outside `targets` references any network in `targets`.
-    /// Returns Ok(()) if safe to delete, or Err with details if blocked.
+    /// The networks in `targets` that some network outside `targets` still
+    /// instantiates, each with the (sorted) names of the networks doing so —
+    /// empty means the delete is safe. Only the targets actually in use are
+    /// listed, so a namespace delete names what blocks it rather than
+    /// everything it would delete. Callers format their own message
+    /// (single network vs namespace), like
+    /// [`record_delete_blockers`](Self::record_delete_blockers).
     ///
     /// Intra-set references (networks in `targets` referencing each other) are not blocking —
     /// they're all being deleted together.
-    fn check_delete_references(
+    fn network_delete_blockers(
         &self,
         targets: &std::collections::HashSet<&str>,
-    ) -> Result<(), String> {
-        let mut referencing_networks = Vec::new();
+    ) -> std::collections::BTreeMap<String, std::collections::BTreeSet<String>> {
+        let mut users: std::collections::BTreeMap<String, std::collections::BTreeSet<String>> =
+            std::collections::BTreeMap::new();
         for (current_network_name, network) in self.node_type_registry.node_networks.iter() {
             // Skip networks that are themselves being deleted
             if targets.contains(current_network_name.as_str()) {
@@ -2712,31 +2718,16 @@ impl StructureDesigner {
             }
             // Walk recursively into HOF zone bodies — a body-internal
             // reference to a target still blocks the deletion.
-            let mut found = false;
             crate::node_network::walk_all_nodes(network, &mut |node| {
-                if !found && targets.contains(node.node_type_name.as_str()) {
-                    found = true;
+                if targets.contains(node.node_type_name.as_str()) {
+                    users
+                        .entry(node.node_type_name.clone())
+                        .or_default()
+                        .insert(current_network_name.clone());
                 }
             });
-            if found {
-                referencing_networks.push(current_network_name.clone());
-            }
         }
-
-        if referencing_networks.is_empty() {
-            Ok(())
-        } else {
-            let target_names: Vec<&str> = targets.iter().copied().collect();
-            Err(format!(
-                "Cannot delete {} because referenced by nodes in: {}",
-                if target_names.len() == 1 {
-                    format!("network '{}'", target_names[0])
-                } else {
-                    format!("networks under prefix ({})", target_names.join(", "))
-                },
-                referencing_networks.join(", ")
-            ))
-        }
+        users
     }
 
     pub fn delete_node_network(&mut self, network_name: &str) -> Result<(), String> {
@@ -2753,7 +2744,13 @@ impl StructureDesigner {
         // Check references using shared helper
         let targets: std::collections::HashSet<&str> =
             std::collections::HashSet::from([network_name]);
-        self.check_delete_references(&targets)?;
+        if let Some(users) = self.network_delete_blockers(&targets).get(network_name) {
+            return Err(format!(
+                "Cannot delete network '{}' because referenced by nodes in: {}",
+                network_name,
+                users.iter().cloned().collect::<Vec<_>>().join(", ")
+            ));
+        }
 
         // Snapshot the network before deletion (for undo)
         let network_snapshot = self.snapshot_network(network_name);
@@ -3013,17 +3010,34 @@ impl StructureDesigner {
 
         // Reference checks: block on references from outside the deleted set,
         // for both kinds (chosen policy — a batch delete never silently dangles).
+        // Both kinds are reported together, one blocker per line, naming only
+        // what is in use — never the whole contents of the namespace, which
+        // for an imported library runs to dozens of names.
         let network_targets: std::collections::HashSet<&str> =
             affected_networks.iter().map(|s| s.as_str()).collect();
-        self.check_delete_references(&network_targets)?;
-
         let record_targets: std::collections::HashSet<&str> =
             affected_records.iter().map(|s| s.as_str()).collect();
-        let record_blockers = self.record_delete_blockers(&record_targets, &network_targets);
-        if !record_blockers.is_empty() {
+        let mut blockers: Vec<String> = self
+            .network_delete_blockers(&network_targets)
+            .into_iter()
+            .map(|(target, users)| {
+                format!(
+                    "network '{}' is used in: {}",
+                    target,
+                    users.into_iter().collect::<Vec<_>>().join(", ")
+                )
+            })
+            .collect();
+        blockers.extend(self.record_delete_blockers(&record_targets, &network_targets));
+        if !blockers.is_empty() {
             return Err(format!(
-                "Cannot delete namespace because referenced from outside: {}",
-                record_blockers.join(", ")
+                "Cannot delete namespace '{}' because it is still used from outside:\n{}",
+                prefix,
+                blockers
+                    .iter()
+                    .map(|b| format!("  • {}", b))
+                    .collect::<Vec<_>>()
+                    .join("\n")
             ));
         }
 

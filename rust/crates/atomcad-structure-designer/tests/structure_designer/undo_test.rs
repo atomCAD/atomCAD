@@ -2553,6 +2553,32 @@ fn delete_namespace_blocked_by_external_reference() {
     );
 }
 
+/// The refusal names only the networks that are in use, each with its users —
+/// not every network in the namespace (an imported library lists dozens, and
+/// the blockers used to trail after all of them).
+#[test]
+fn delete_namespace_refusal_lists_only_used_networks() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("Lib.Used");
+    designer.add_node_network("Lib.Unused1");
+    designer.add_node_network("Lib.Unused2");
+    designer.add_node_network("Main");
+    designer.add_node_network("Other");
+    designer.set_active_node_network_name(Some("Main".to_string()));
+    designer.add_node("Lib.Used", DVec2::ZERO);
+    designer.set_active_node_network_name(Some("Other".to_string()));
+    designer.add_node("Lib.Used", DVec2::ZERO);
+
+    let err = designer.delete_namespace("Lib").unwrap_err();
+    assert!(err.contains("namespace 'Lib'"), "got: {}", err);
+    assert!(
+        err.contains("network 'Lib.Used' is used in: Main, Other"),
+        "got: {}",
+        err
+    );
+    assert!(!err.contains("Unused"), "got: {}", err);
+}
+
 #[test]
 fn delete_namespace_allows_intra_set_references() {
     let mut designer = StructureDesigner::new();

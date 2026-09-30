@@ -838,16 +838,10 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
           ? widget.model.deleteNodeNetwork(name)
           : widget.model.deleteRecordTypeDef(name);
       if (errorMessage != null && context.mounted) {
-        await showDraggableAlertDialog(
+        await showErrorDialog(
           context: context,
-          title: Text('Cannot Delete $titleLabel'),
-          content: Text(errorMessage),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('OK'),
-            ),
-          ],
+          title: 'Cannot Delete $titleLabel',
+          message: errorMessage,
         );
       }
     }
@@ -903,16 +897,12 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
     if (confirmed == true && context.mounted) {
       final errorMessage = widget.model.deleteNamespace(prefix);
       if (errorMessage != null && context.mounted) {
-        await showDraggableAlertDialog(
+        // Height-capped and scrolling: a refusal can list many blockers, and
+        // an unbounded message pushed OK off-screen.
+        await showErrorDialog(
           context: context,
-          title: const Text('Cannot Delete Namespace'),
-          content: Text(errorMessage),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('OK'),
-            ),
-          ],
+          title: 'Cannot Delete Namespace',
+          message: errorMessage,
         );
       }
     }

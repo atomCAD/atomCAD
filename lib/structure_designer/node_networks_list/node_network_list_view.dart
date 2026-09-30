@@ -463,16 +463,10 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
           ? widget.model.deleteNodeNetwork(name)
           : widget.model.deleteRecordTypeDef(name);
       if (errorMessage != null && context.mounted) {
-        await showDraggableAlertDialog(
+        await showErrorDialog(
           context: context,
-          title: Text('Cannot Delete $titleLabel'),
-          content: Text(errorMessage),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('OK'),
-            ),
-          ],
+          title: 'Cannot Delete $titleLabel',
+          message: errorMessage,
         );
       }
     }
