@@ -77,9 +77,16 @@ Non-goals (for this design):
 
 ## 3. User-visible model
 
-- A **tab bar** sits above the node-network canvas. Each tab shows the file
-  name (*Untitled* for a new design), a `*` when dirty, and a close button.
-  Hovering shows the full path. Clicking a tab activates it.
+- Open documents are listed as **tabs**. Each tab shows the file name
+  (*Untitled* for a new design), a `*` when dirty, and a close button. Hovering
+  shows the full path. Clicking a tab activates it, and dragging one reorders
+  the tabs. A preference sets **where the tabs are placed** (D10):
+  - **Vertical, left of the viewport** (the default): a list, one document per
+    row, docked to the viewport's left edge and as tall as the viewport, the
+    mirror image of the properties panel on the viewport's right edge. A
+    divider sets its width.
+  - **Horizontal, above the node network editor**: a strip of tabs, like a
+    browser's.
 - **File > New** opens a new *Untitled* tab.
 - **File > Open…** and **Open Recent** open the file in a **new tab**, except
   when the active tab is a *pristine* Untitled design (no path, not dirty, empty
@@ -327,6 +334,43 @@ source's registry. In every other respect the origin is a snapshot: closing
 the source, Save As or a later refresh does not change it, and the interface
 check at paste time catches whatever drifted.
 
+### D10 — Tab placement is a preference; vertical is the default
+
+There are two placements, because the two main users of today prefer different
+ones:
+
+- **Vertical**, docked to the viewport's left edge (mechadense's request). Each
+  row has room for a long file name, and a design with several libraries open
+  does not run out of width.
+- **Horizontal**, above the node network editor, like a browser.
+
+The default is **vertical**, because mechadense is the main user today.
+
+The setting is a persisted application preference, not view state: it is a
+standing choice, unlike panel folding or the layout orientation, which are
+changed in passing. It lives in a new `InterfacePreferences` group
+(`document_tab_placement: DocumentTabPlacement { LeftOfViewport,
+AboveNetworkEditor }`, `#[serde(default)]` → `LeftOfViewport`). It goes in a
+new group because the existing `LayoutPreferences` is about node-network
+auto-layout, not the window. It is shown in the Preferences dialog under a new
+*Interface* section and takes effect immediately, without a restart.
+
+Both placements show the same tabs and offer the same gestures (click, close,
+drag to reorder, middle-click close, tooltip). Only the arrangement differs.
+Rules that follow from the window layout (`doc/reference_guide/ui.md`,
+*Arranging the window*):
+
+- **Vertical**: the list is taken off the viewport's left edge, after the
+  properties panel is taken off its right edge. The list is as tall as the
+  viewport, so folding the network editor (`Ctrl+2`) makes it full height,
+  as it does the properties panel. The width divider is view state, like the
+  other dividers.
+- **Horizontal**: when the network editor is folded, the strip moves to the
+  top edge of the viewport instead of disappearing with the editor. Otherwise
+  the only way to switch documents would be `Ctrl+Tab`.
+- **Presentation Mode** (`Ctrl+0`) hides the tabs in either placement, since
+  it exists to leave only the viewport. `Ctrl+Tab` still switches documents.
+
 ## 5. Architecture
 
 ### 5.1 Rust — `atomcad-structure-designer`
@@ -462,10 +506,19 @@ document. Additions:
 
 UI:
 
-- `DocumentTabBar` above the node-network canvas: tabs, close buttons,
-  drag-to-reorder, middle-click close, tooltip with the full path. Disabled
-  while a pointer is down on the canvas or viewport (the same pointer count
-  `structure_designer.dart` keeps for the dependency check).
+- The tabs (D10). One `DocumentTabs` model of the gestures (activate, close,
+  reorder, middle-click close, tooltip) and two thin layouts over it:
+  `DocumentTabStrip` (horizontal, above the network editor, or above the
+  viewport while the editor is folded) and `DocumentTabList` (vertical, a dock
+  on the viewport's left edge with its own width divider, built like the
+  properties-panel dock). The window layout picks one from
+  `preferences.interfacePreferences.documentTabPlacement` and hides both in
+  Presentation Mode. Both are disabled while a pointer is down on the canvas
+  or viewport (the same pointer count `structure_designer.dart` keeps for the
+  dependency check).
+- Preferences dialog: a new *Interface* section with a *Document tabs*
+  dropdown (*Vertical, left of the viewport* / *Horizontal, above the node
+  network*).
 - File menu: *New* → `newDocument`; *Open…* / *Open Recent* → `openDocument`;
   *Close Tab* (`Ctrl+W`); *Back to …* removed. The `confirmDiscardChanges`
   calls before New/Open are dropped (nothing is being discarded any more) and
@@ -661,15 +714,20 @@ Plus:
 ### Phase 3 — Flutter: tabs
 
 Work: model mirror and methods; the per-tab Dart stash (enumerate the
-Flutter-only per-document fields — §5.3); `DocumentTabBar`; File menu
-changes; `Ctrl+W`, `Ctrl+Tab`; quit dialog; dependency check after switch;
+Flutter-only per-document fields — §5.3); `DocumentTabStrip` and
+`DocumentTabList` (D10); the `InterfacePreferences` group in Rust (domain
+struct, the `api` twin with its `From` impls, codegen) and its dialog section;
+File menu changes; `Ctrl+W`, `Ctrl+Tab`; quit dialog; dependency check after switch;
 the paste-refusal dialog (`showErrorDialog`, so it is copyable — #359).
-Reference guide: `doc/reference_guide/ui.md` (tab bar, File menu, shortcuts,
-copy and paste across tabs); `lib/structure_designer/AGENTS.md` (the model
+Reference guide: `doc/reference_guide/ui.md` (the tabs in both placements,
+*Arranging the window* with the vertical list as a fourth step, the
+Preferences dialog's *Interface* section, File menu, shortcuts, copy and paste
+across tabs); `lib/structure_designer/AGENTS.md` (the model
 mirrors the active document; the stash).
 
 Tests: Dart unit tests for the stash round trip and the quit-dialog document
-list. The tab bar itself is thin UI — manual walkthrough.
+list; a Rust test that a `preferences.json` without the new group loads with
+`LeftOfViewport`. The two tab layouts are thin UI — manual walkthrough.
 
 ### Phase 4 — Library actions, CLI guard, docs
 
@@ -703,10 +761,16 @@ guard passes).
 7. Copy nodes that use one of the host's own networks; paste into an
    unrelated design: refused, naming the network and the file it lives in.
 8. Start a drag in the viewport and try to switch tabs: nothing happens.
-9. Close a dirty tab (prompt), close the last tab (fresh Untitled), quit with
+9. Tab placement: a fresh preferences file shows the vertical list left of
+   the viewport; drag its divider; fold the network editor (`Ctrl+2`) and see
+   it grow to full height. Switch the preference to horizontal: the strip
+   appears above the network editor without a restart; fold the editor and
+   the strip moves above the viewport. `Ctrl+0` hides the tabs in both
+   placements.
+10. Close a dirty tab (prompt), close the last tab (fresh Untitled), quit with
    two dirty tabs (both listed).
-10. Change a preference in one tab; switch: it applies in the other.
-11. Run the Flutter smoke test (`flutter test integration_test/`) — human-only.
+11. Change a preference in one tab; switch: it applies in the other.
+12. Run the Flutter smoke test (`flutter test integration_test/`) — human-only.
 
 ## 10. Effort
 
@@ -714,7 +778,7 @@ guard passes).
 |---|---|
 | P1 Rust: documents and the swap | 1–2 days |
 | P2 Rust: clipboard and translated paste | 2–3 days, most of it the test matrix |
-| P3 Flutter: tabs | 3–4 days |
+| P3 Flutter: tabs (both placements) and the preference | 4–5 days |
 | P4 Library actions, CLI guard, docs | 1 day |
 
 Copy and paste costs this little because library linking already built the
