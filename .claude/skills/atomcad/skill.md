@@ -441,7 +441,9 @@ nested `demolib.common.slab`) and are used like local ones — but they are
 **read-only**: `edit` on a linked network is refused, and `networks` marks
 them `(linked, read-only)`. `query` on one prints a `# linked from <path>`
 line under the `# Network:` header. To change one, open the library file
-(`load <path>`), edit, save, and load the design again.
+(`load <path>` — it opens in its own tab), edit, save, then `load` the design's
+path again: that switches back to the design's tab, which picks up the saved
+library on the way.
 
 ```bash
 atomcad-cli libraries                                # list, with status
@@ -458,12 +460,12 @@ when it contains dots: ``f = `demolib.half_space` { … }``.
 
 ### File Operations
 
-Load, save, and manage `.cnnd` project files:
+Load, save, and manage `.cnnd` project files. The application has **tabs**,
+one open design per tab, and every command acts on the **active** tab:
 
 ```bash
-# Load a .cnnd file
+# Open a .cnnd file in a new tab (or switch to its tab if already open)
 atomcad-cli load design.cnnd
-atomcad-cli load design.cnnd --force  # Discard unsaved changes
 
 # Save current project
 atomcad-cli save                      # Save to current file
@@ -474,16 +476,17 @@ atomcad-cli save other/design.cnnd --no-deps    # …or save the design alone
 # Check file status
 atomcad-cli file
 
-# Create new project
+# Create new project (in a new tab)
 atomcad-cli new
-atomcad-cli new --force               # Discard unsaved changes
 ```
 
 **Output examples:**
 
 ```bash
 # load success
-Loaded: /path/to/design.cnnd (3 networks)
+Loaded: /path/to/design.cnnd (3 networks, document 2)
+# load of a file already open in a tab
+Already open; switched to its tab: /path/to/design.cnnd (3 networks, document 2)
 
 # save success
 Saved: /path/to/design.cnnd
@@ -500,12 +503,14 @@ Networks: 1
 ```
 
 **Behavior notes:**
-- `load` without `--force` fails if there are unsaved changes
+- `load` and `new` never discard anything: they open a tab (an untouched
+  empty *Untitled* tab is replaced). `--force` is accepted and does nothing.
+  The user may switch tabs too, so `query` again before editing after a pause.
 - `save` without a path saves to the current file; fails if no file is loaded
 - `save <path>` into another folder fails, listing the files, when the design
   reads libraries or data files by a relative path that would not be there;
   choose `--copy-deps` (existing different files are kept) or `--no-deps`
-- `new` clears all networks and creates a fresh "Main" network
+- `new` opens a fresh design with one "Main" network in a new tab
 - Relative paths are resolved relative to the CLI's working directory
 
 ### Evaluate Node Results
@@ -768,10 +773,10 @@ Commands:
 - `camera`/`c` — Get/set camera state
 - `display` — Get/set display preferences
 - `screenshot`/`s <path>` — Capture viewport to PNG
-- `load <path> [--force]` — Load a .cnnd file
+- `load <path>` — Open a .cnnd file in a tab
 - `save [path]` — Save to file
 - `file` — Show current file status
-- `new [--force]` — Create new project
+- `new` — New project in a new tab
 - `help`/`?` — Show help
 - `quit`/`exit` — Exit REPL
 

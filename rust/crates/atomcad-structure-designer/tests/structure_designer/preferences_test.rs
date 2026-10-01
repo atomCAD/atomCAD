@@ -3,10 +3,10 @@
 use atomcad_crystolecule::visualization::AtomicStructureVisualization;
 use atomcad_structure_designer::preferences::{
     AtomicRenderingMethod, AtomicStructureVisualizationPreferences, BackgroundPreferences,
-    GeometryVisualization, GeometryVisualizationPreferences, LayoutAlgorithmPreference,
-    LayoutPreferences, MemoryPreferences, MeshSmoothing, NodeDisplayPolicy, NodeDisplayPreferences,
-    NodeTitleMode, PrefColor, SimulationPreferences, StructureDesignerPreferences,
-    SurfaceTransparencyMode,
+    DocumentTabPlacement, GeometryVisualization, GeometryVisualizationPreferences,
+    InterfacePreferences, LayoutAlgorithmPreference, LayoutPreferences, MemoryPreferences,
+    MeshSmoothing, NodeDisplayPolicy, NodeDisplayPreferences, NodeTitleMode, PrefColor,
+    SimulationPreferences, StructureDesignerPreferences, SurfaceTransparencyMode,
 };
 
 /// Test round-trip serialization: serialize preferences to JSON and deserialize back.
@@ -483,6 +483,9 @@ fn test_non_default_values_roundtrip() {
             invisible_node_cache_mb: 512,
             eval_memo_cache_mb: 2048,
         },
+        interface_preferences: InterfacePreferences {
+            document_tab_placement: DocumentTabPlacement::AboveNetworkEditor,
+        },
     };
 
     // Roundtrip
@@ -938,5 +941,40 @@ fn test_node_title_mode_defaults_to_type() {
     assert_eq!(
         prefs.node_display_preferences.title_mode,
         NodeTitleMode::Type
+    );
+}
+
+/// The document-tab placement (`doc/design_multiple_documents.md` D10)
+/// survives a round trip, and a `preferences.json` written before the
+/// *Interface* group existed loads with the default: the vertical list left of
+/// the viewport.
+#[test]
+fn document_tab_placement_roundtrips_and_defaults_to_left_of_viewport() {
+    let prefs = StructureDesignerPreferences {
+        interface_preferences: InterfacePreferences {
+            document_tab_placement: DocumentTabPlacement::AboveNetworkEditor,
+        },
+        ..Default::default()
+    };
+    let json = serde_json::to_string(&prefs).unwrap();
+    let loaded: StructureDesignerPreferences = serde_json::from_str(&json).unwrap();
+    assert_eq!(
+        loaded.interface_preferences.document_tab_placement,
+        DocumentTabPlacement::AboveNetworkEditor
+    );
+
+    // An older file: no `interface_preferences` key at all.
+    let old: StructureDesignerPreferences =
+        serde_json::from_str(r#"{"layout_preferences": {}}"#).unwrap();
+    assert_eq!(
+        old.interface_preferences.document_tab_placement,
+        DocumentTabPlacement::LeftOfViewport
+    );
+    // And an empty group.
+    let empty: StructureDesignerPreferences =
+        serde_json::from_str(r#"{"interface_preferences": {}}"#).unwrap();
+    assert_eq!(
+        empty.interface_preferences.document_tab_placement,
+        DocumentTabPlacement::LeftOfViewport
     );
 }

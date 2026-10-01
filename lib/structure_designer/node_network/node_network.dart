@@ -539,9 +539,18 @@ class NodeNetworkState extends State<NodeNetwork> {
 
   @override
   void dispose() {
-    // Clear the callbacks when disposing
-    widget.graphModel.onWireDroppedInEmptySpace = null;
-    widget.graphModel.onScrollToNode = null;
+    // Clear the callbacks when disposing — but only if they are still ours.
+    // A document switch rebuilds the editor under a new key (D11 of
+    // `doc/design_multiple_documents.md`), and the new state registers its
+    // callbacks *before* this one is disposed; clearing them unconditionally
+    // would leave the new editor deaf to click-to-activate and wire drops.
+    if (widget.graphModel.onWireDroppedInEmptySpace ==
+        _handleWireDropInEmptySpace) {
+      widget.graphModel.onWireDroppedInEmptySpace = null;
+    }
+    if (widget.graphModel.onScrollToNode == _scrollToNode) {
+      widget.graphModel.onScrollToNode = null;
+    }
     focusNode.dispose();
     super.dispose();
   }

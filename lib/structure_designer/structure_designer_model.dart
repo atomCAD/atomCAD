@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show listEquals;
+import 'package:flutter/foundation.dart' show listEquals, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
@@ -48,6 +48,9 @@ import 'package:flutter_cad/src/rust/api/structure_designer/ai_history_api.dart'
 import 'package:flutter_cad/src/rust/api/structure_designer/profiling_api.dart'
     show APIRefreshMode, APIRefreshProfile;
 import 'package:flutter_cad/src/rust/api/common_api.dart' as common_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/documents_api.dart'
+    as documents_api;
+import 'package:flutter_cad/structure_designer/document_switch.dart';
 import 'package:flutter_cad/structure_designer/node_data/mechanosynth_transport.dart';
 import 'package:flutter_cad/structure_designer/namespace_utils.dart';
 import 'package:flutter_cad/structure_designer/namespace_utils.dart' as ns
@@ -224,6 +227,73 @@ class MechanosynthToolResult<T> {
   const MechanosynthToolResult({this.value, this.error});
 }
 
+/// The Flutter-only state that describes one open document rather than the
+/// session (`doc/design_multiple_documents.md` §5.3). Everything else the
+/// model shows is mirrored from the kernel, which already keeps it per
+/// document, so a switch re-reads it; these fields exist only in Dart and are
+/// stashed per tab instead.
+///
+/// The list was enumerated by walking every model field that
+/// `refreshFromKernel` does not overwrite:
+///
+/// - the two scope chains (which body keyboard shortcuts act on, which node
+///   the property panel addresses) — node ids repeat across documents, so a
+///   chain carried into another document would address an arbitrary node;
+/// - the AI History selection, version and unread count — the edit log is per
+///   document (D8), and its sequence numbers are only unique within one log;
+/// - what the document's open reported, which [showAfterLoadReports] reads.
+///
+/// Not stashed, deliberately: tool choices (`atom_edit` tool, bond mode,
+/// element — session state, D11), panel visibility, the Console and the
+/// profiler (app state, §6), and transient drag state (cleared on a switch;
+/// Rust refuses a switch during a drag anyway, D4).
+class DocumentUiState {
+  final List<BigInt> activeScopeChain;
+  final List<BigInt> propertyEditorScopeChain;
+  final BigInt? selectedAiHistorySeq;
+  final BigInt aiHistoryVersion;
+  final int unreadAiEditCount;
+  final APIRefreshReport? lastLoadLibraryReport;
+  final List<String> lastLoadParamIdRepairs;
+
+  const DocumentUiState({
+    this.activeScopeChain = const [],
+    this.propertyEditorScopeChain = const [],
+    this.selectedAiHistorySeq,
+    required this.aiHistoryVersion,
+    this.unreadAiEditCount = 0,
+    this.lastLoadLibraryReport,
+    this.lastLoadParamIdRepairs = const [],
+  });
+
+  /// What a document with no stash entry starts with — the state right after
+  /// a load.
+  static final DocumentUiState postLoadDefaults =
+      DocumentUiState(aiHistoryVersion: BigInt.zero);
+
+  @override
+  bool operator ==(Object other) =>
+      other is DocumentUiState &&
+      listEquals(activeScopeChain, other.activeScopeChain) &&
+      listEquals(propertyEditorScopeChain, other.propertyEditorScopeChain) &&
+      selectedAiHistorySeq == other.selectedAiHistorySeq &&
+      aiHistoryVersion == other.aiHistoryVersion &&
+      unreadAiEditCount == other.unreadAiEditCount &&
+      lastLoadLibraryReport == other.lastLoadLibraryReport &&
+      listEquals(lastLoadParamIdRepairs, other.lastLoadParamIdRepairs);
+
+  @override
+  int get hashCode => Object.hash(
+        Object.hashAll(activeScopeChain),
+        Object.hashAll(propertyEditorScopeChain),
+        selectedAiHistorySeq,
+        aiHistoryVersion,
+        unreadAiEditCount,
+        lastLoadLibraryReport,
+        Object.hashAll(lastLoadParamIdRepairs),
+      );
+}
+
 class StructureDesignerModel extends ChangeNotifier {
   List<APINetworkWithValidationErrors> nodeNetworkNames = [];
 
@@ -255,6 +325,33 @@ class StructureDesignerModel extends ChangeNotifier {
   /// The design the user left through *Open library file*, for *File > Back
   /// to …* — session-only, forgotten once it has been used.
   String? backToDesignPath;
+
+  // ===== OPEN DOCUMENTS (`doc/design_multiple_documents.md`) =====
+
+  /// The open documents in tab order, mirrored from the kernel by
+  /// [refreshFromKernel]. The model as a whole mirrors the **active** one.
+  List<APIDocumentTab> documents = [];
+
+  /// The id of the active document, or `null` before the first refresh. The
+  /// document-dependent UI is keyed by it (D11), so a switch rebuilds it.
+  BigInt? get activeDocumentId {
+    for (final tab in documents) {
+      if (tab.isActive) return tab.id;
+    }
+    return null;
+  }
+
+  /// The document the model's Dart-only fields currently describe.
+  BigInt? _mirroredDocumentId;
+
+  /// The per-tab stash of [DocumentUiState], keyed by document id.
+  final Map<BigInt, DocumentUiState> _documentUiStash = {};
+
+  /// Serializes every change of the active document (D11).
+  final DocumentSwitcher _documentSwitcher = DocumentSwitcher();
+
+  /// True while a document switch is queued or waiting for its frame.
+  bool get isSwitchingDocument => _documentSwitcher.isSwitching;
 
   /// Name of the record type def currently being edited in the main content
   /// area's bottom panel. When non-null, the schema editor replaces the
@@ -1116,15 +1213,6 @@ class StructureDesignerModel extends ChangeNotifier {
     return null;
   }
 
-  void newProject() {
-    if (directEditingMode) {
-      structure_designer_api.newProjectDirectEditing();
-    } else {
-      structure_designer_api.newProject();
-    }
-    refreshFromKernel();
-  }
-
   APIResult saveNodeNetworksAs(String filePath) {
     final result =
         structure_designer_api.saveNodeNetworksAs(filePath: filePath);
@@ -1183,6 +1271,165 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
     return result;
   }
+
+  // ===== DOCUMENT SWITCHING (`doc/design_multiple_documents.md` D11) =====
+  //
+  // Every change of the active document goes through
+  // [withDocumentSwitch]: it commits pending field edits into the *outgoing*
+  // document first, and queues switches so they never interleave. Keyboard
+  // shortcuts, menu items, tab clicks and the AI server all reach the
+  // documents API through the methods below; none calls it directly.
+
+  /// Runs [action] — an API call that may change the active document — after
+  /// unfocusing and waiting for the end of the frame (see
+  /// `document_switch.dart`), then mirrors the kernel.
+  Future<T> withDocumentSwitch<T>(T Function() action) =>
+      _documentSwitcher.run(() {
+        final result = action();
+        refreshFromKernel();
+        return result;
+      });
+
+  /// Makes document [id] active. The result carries what the activation's
+  /// dependency check did (library linking D7), for the caller to show.
+  Future<APIActivateResult> activateDocument(BigInt id) =>
+      withDocumentSwitch(() => documents_api.activateDocument(id: id));
+
+  /// `Ctrl+Tab` / `Ctrl+Shift+Tab`: activates the tab [delta] places from the
+  /// active one, wrapping. The target is resolved when the switch **runs**, so
+  /// two quick presses move two tabs, not one. `null` when there is only one
+  /// tab.
+  Future<APIActivateResult?> activateRelativeDocument(int delta) =>
+      withDocumentSwitch(() {
+        final tabs = documents_api.listDocuments();
+        if (tabs.length < 2) return null;
+        final current = tabs.indexWhere((t) => t.isActive);
+        final next = (current + delta) % tabs.length;
+        return documents_api.activateDocument(id: tabs[next].id);
+      });
+
+  /// *File > New*: a fresh Untitled tab after the active one. Takes the active
+  /// tab's mode unless [directEditing] says otherwise (the CLI's `/new` passes
+  /// `false`, as its old `newProject` call did).
+  ///
+  /// [inSameStretch] is as for [openDocument].
+  Future<APIResult> newDocument(
+          {bool? directEditing, void Function()? inSameStretch}) =>
+      withDocumentSwitch(() {
+        final result = documents_api.newDocument(
+            directEditing: directEditing ?? directEditingMode);
+        inSameStretch?.call();
+        return result;
+      });
+
+  /// *File > Open* / *Open Recent* / the CLI's `/load`: activates the tab
+  /// that has [filePath] open (D5), or opens it in a new tab — replacing a
+  /// pristine Untitled one. A failed open changes nothing.
+  ///
+  /// [inSameStretch] runs right after the API call, in the same synchronous
+  /// stretch — for a caller (the AI server) that must read the document it
+  /// just opened before anything else can switch (D8).
+  Future<APIOpenDocumentResult> openDocument(String filePath,
+          {void Function()? inSameStretch}) =>
+      withDocumentSwitch(() {
+        final result = documents_api.openDocument(filePath: filePath);
+        inSameStretch?.call();
+        return result;
+      }).then((result) {
+        // `withDocumentSwitch` has refreshed by now, so these land on the new
+        // document's side of the stash.
+        if (result.result.success && !result.alreadyOpen) {
+          lastLoadParamIdRepairs = result.paramIdRepairs;
+          lastLoadLibraryReport = result.loadLibraryReport;
+        }
+        return result;
+      });
+
+  /// Closes document [id] — no dirty check here, the caller asks first.
+  /// Closing the active tab activates its neighbour (whose dependency report
+  /// the result carries); closing the last leaves a fresh Untitled tab.
+  Future<APIActivateResult> closeDocument(BigInt id) =>
+      withDocumentSwitch(() => documents_api.closeDocument(id: id));
+
+  /// Moves tab [id] to [newIndex] of the tab order (a tab drag). Does not
+  /// change the active document, so it needs no switch.
+  void moveDocument(BigInt id, int newIndex) {
+    documents_api.moveDocument(id: id, newIndex: newIndex);
+    documents = documents_api.listDocuments();
+    notifyListeners();
+  }
+
+  /// Re-reads the tab list (dirty flags included) without a full refresh —
+  /// for the quit dialog.
+  List<APIDocumentTab> refreshDocumentList() {
+    documents = documents_api.listDocuments();
+    return documents;
+  }
+
+  /// The Dart-only per-document state as it is now (§5.3).
+  @visibleForTesting
+  DocumentUiState captureDocumentUiState() => DocumentUiState(
+        activeScopeChain: List<BigInt>.of(activeScopeChain),
+        propertyEditorScopeChain: List<BigInt>.of(propertyEditorScopeChain),
+        selectedAiHistorySeq: selectedAiHistorySeq,
+        aiHistoryVersion: _aiHistoryVersion,
+        unreadAiEditCount: unreadAiEditCount,
+        lastLoadLibraryReport: lastLoadLibraryReport,
+        lastLoadParamIdRepairs: List<String>.of(lastLoadParamIdRepairs),
+      );
+
+  /// Puts [state] back, or the post-load defaults when the document has no
+  /// stash entry. Also drops the transient state that belonged to the
+  /// outgoing document (a dragged wire, an open in-place comment editor) and
+  /// the AI History rows, which are another document's log.
+  @visibleForTesting
+  void restoreDocumentUiState(DocumentUiState? state) {
+    final s = state ?? DocumentUiState.postLoadDefaults;
+    activeScopeChain = List<BigInt>.of(s.activeScopeChain);
+    propertyEditorScopeChain = List<BigInt>.of(s.propertyEditorScopeChain);
+    selectedAiHistorySeq = s.selectedAiHistorySeq;
+    _aiHistoryVersion = s.aiHistoryVersion;
+    unreadAiEditCount = s.unreadAiEditCount;
+    lastLoadLibraryReport = s.lastLoadLibraryReport;
+    lastLoadParamIdRepairs = List<String>.of(s.lastLoadParamIdRepairs);
+    aiHistory = [];
+    aiActivity = [];
+    draggedWire = null;
+    draggedCommentAnchor = null;
+    inPlaceEditRef = null;
+  }
+
+  /// Takes a fresh tab list from the kernel and, when the active document
+  /// changed, stashes the outgoing document's Dart-only state and restores
+  /// the incoming one's. Stash entries of closed (or renumbered, D8)
+  /// documents are dropped. Returns whether the active document changed.
+  ///
+  /// Pure Dart — the tab list is passed in — so it is unit-tested without
+  /// the Rust library.
+  @visibleForTesting
+  bool adoptDocuments(List<APIDocumentTab> tabs) {
+    BigInt? incoming;
+    for (final tab in tabs) {
+      if (tab.isActive) incoming = tab.id;
+    }
+    final outgoing = _mirroredDocumentId;
+    final switched = outgoing != null && incoming != outgoing;
+    if (switched) {
+      if (tabs.any((t) => t.id == outgoing)) {
+        _documentUiStash[outgoing] = captureDocumentUiState();
+      }
+      restoreDocumentUiState(
+          incoming == null ? null : _documentUiStash.remove(incoming));
+    }
+    _documentUiStash.removeWhere((id, _) => !tabs.any((t) => t.id == id));
+    documents = tabs;
+    _mirroredDocumentId = incoming;
+    return switched;
+  }
+
+  /// The stashed state of document [id], if any (tests).
+  @visibleForTesting
+  DocumentUiState? stashedDocumentUiState(BigInt id) => _documentUiStash[id];
 
   // ===== LINKED LIBRARIES (`doc/design_library_linking.md` §5.3) =====
   //
@@ -4156,6 +4403,17 @@ class StructureDesignerModel extends ChangeNotifier {
     filePath = structure_designer_api.getDesignFilePath();
     directEditingMode = structure_designer_api.getDirectEditingMode();
 
+    // The tab list, and the per-document stash when the active document
+    // changed (D11). After a switch the AI History mirror describes another
+    // document's log, so it is re-read rather than diffed.
+    if (adoptDocuments(documents_api.listDocuments())) {
+      aiHistorySessionLabel = ai_history_api.aiHistoryGetSessionLabel();
+      if (aiHistoryPanelVisible) {
+        _aiHistoryVersion = ai_history_api.aiHistoryVersion();
+        _fetchAiHistoryList(keepSelection: true);
+      }
+    }
+
     // Drain any `print` node entries pushed during this refresh's eval pass
     // into the Console panel buffer. Drain-on-read keeps the Rust-side
     // `print_log` from growing indefinitely as long as the panel is
@@ -4266,9 +4524,12 @@ class StructureDesignerModel extends ChangeNotifier {
     }
   }
 
-  void _fetchAiHistoryList() {
-    final wasNewest = aiHistory.isEmpty ||
+  /// [keepSelection] keeps a selection that is still in the log even when
+  /// the mirror was empty — after a document switch restored it.
+  void _fetchAiHistoryList({bool keepSelection = false}) {
+    final wasNewest = (aiHistory.isEmpty && !keepSelection) ||
         (selectedAiHistorySeq != null &&
+            aiHistory.isNotEmpty &&
             selectedAiHistorySeq == aiHistory.last.seq);
     aiHistory = ai_history_api.aiHistoryList();
     aiActivity = ai_history_api.aiHistoryActivityList();

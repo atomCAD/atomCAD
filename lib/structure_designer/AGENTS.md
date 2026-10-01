@@ -29,6 +29,8 @@ structure_designer/
 ├── extract_closure_to_network_dialog.dart # Name dialog for Closure→Network conversion
 ├── import_cnnd_library_dialog.dart   # File > Import copy… (the one-shot copy import)
 ├── library_link_actions.dart         # Linked libraries: dialogs, refresh-report snackbars, open library / back
+├── document_tabs.dart                # Document tabs: gesture model + vertical list / horizontal strip
+├── document_switch.dart              # DocumentSwitcher: unfocus → end of frame → switch, queued
 ├── save_as_dependencies.dart         # Save As dependency dialog (D11), File > Export project bundle…
 ├── identifier_validation.dart        # Field/identifier validation rules
 ├── namespace_utils.dart              # User-type-name validation (networks + record defs share one namespace)
@@ -58,6 +60,51 @@ User interaction → Model method → Rust API call → refreshFromKernel() → 
 Access via `Provider.of<StructureDesignerModel>(context)` or `Consumer<StructureDesignerModel>`.
 
 All Rust state is fetched into `NodeNetworkView` (the model's snapshot of current network state).
+
+## Open documents (tabs)
+
+Several `.cnnd` files can be open, one per tab (`doc/design_multiple_documents.md`).
+Rust swaps the active document into `CADInstance.structure_designer`, so every
+existing API call — and the whole model — acts on the **active** document. The
+model is one object that mirrors whichever document is active; there is no
+per-document model.
+
+- **Every change of the active document goes through
+  `StructureDesignerModel.withDocumentSwitch`** — `activateDocument`,
+  `activateRelativeDocument`, `newDocument`, `openDocument`, `closeDocument`.
+  Never call `documents_api.activateDocument` / `openDocument` / … directly. The
+  switcher (`document_switch.dart`) unfocuses and waits for the end of the frame
+  first, so a property field's commit-on-focus-loss lands in the *outgoing*
+  document; without it the value is silently written into the incoming one, on
+  whatever node there shares the network name and node id. Switches are
+  queued; resolve a relative target ("next tab") inside the action.
+- **Flutter-only per-document state is stashed per tab** (`DocumentUiState`,
+  `adoptDocuments` — run by `refreshFromKernel` whenever the active id
+  changes). **A new model field that describes the document rather than the
+  session must join `DocumentUiState`** (capture, restore, defaults), or it
+  leaks from one tab into the next. If the kernel already holds the value,
+  mirror it in `refreshFromKernel` instead and stash nothing.
+- **The document-dependent UI is keyed by the active document id**: the
+  properties panel, the network editor, the user-types panel, the display
+  panel and the AI History panel sit under `KeyedSubtree(ValueKey(documentId))`
+  and rebuild from scratch on a switch (their own keys are network name + node
+  id, which repeat across documents). `nodeNetworkKey` is a `GlobalKey` and is
+  **replaced** per document (`_nodeNetworkKeyFor`) — a surviving GlobalKey
+  would reparent the old editor's `State` across the switch. A widget that
+  registers a callback on the model in `initState` must clear it in `dispose`
+  only if it is still its own: the new subtree's `initState` runs *before* the
+  old one's `dispose` (see `node_network.dart`).
+- **The tab gestures** (`DocumentTabs`) take data and callbacks and are
+  unit-tested; the host keeps one instance for its lifetime, because the
+  pointer gate is armed at pointer *down* (by the tap, the tab's own pointer is
+  counted as down too). Placement is the persisted
+  `InterfacePreferences.documentTabPlacement`; the layout lives in
+  `main_content_area.dart`.
+- **The AI server** (`lib/ai_assistant/http_server.dart`) runs each request as
+  one synchronous stretch after reading the body; only `/load` and `/new`
+  await, because they are switches (`onOpenDocument` / `onNewDocument`, wired
+  to the model in `main.dart`). A new handler must not `await` after its first
+  API call.
 
 ## DISPLAY panel (sidebar)
 
@@ -588,9 +635,11 @@ a missed gate here must at worst show an error.
   `http_server.dart`'s `/save <path>` uses the same plan: when it would copy
   anything it refuses unless told `deps=copy` (copies; conflicts are kept, never
   overwritten — the CLI cannot show the dialog) or `deps=none`.
-- **Open library file** replaces the document (one document is open) after
-  `confirmDiscardChanges`, and remembers `model.backToDesignPath` for
-  *File > Back to …*.
+- **Open library file** still replaces the active tab's document after
+  `confirmDiscardChanges` (an in-place load, which takes a fresh document id)
+  and remembers `model.backToDesignPath` for *File > Back to …*. Phase 4 of
+  `doc/design_multiple_documents.md` turns it into `openDocument` and removes
+  *Back to …*.
 
 ## node_networks_list/ Subdirectory
 

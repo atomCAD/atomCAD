@@ -122,7 +122,10 @@ Future<void> main(List<String> args) async {
   // File commands
   final loadParser = ArgParser()
     ..addFlag('force',
-        abbr: 'f', negatable: false, help: 'Discard unsaved changes');
+        abbr: 'f',
+        negatable: false,
+        help: 'Accepted for compatibility; does nothing (nothing is '
+            'discarded: the file opens in its own tab)');
   final saveParser = ArgParser()
     ..addFlag('copy-deps',
         negatable: false,
@@ -135,7 +138,10 @@ Future<void> main(List<String> args) async {
   final fileParser = ArgParser();
   final newParser = ArgParser()
     ..addFlag('force',
-        abbr: 'f', negatable: false, help: 'Discard unsaved changes');
+        abbr: 'f',
+        negatable: false,
+        help: 'Accepted for compatibility; does nothing (nothing is '
+            'discarded: the file opens in its own tab)');
 
   parser.addCommand('query', queryParser);
   parser.addCommand('edit', editParser);
@@ -360,14 +366,16 @@ void _printUsage() {
   stdout.writeln('  atomcad-cli libraries make-local <alias>');
   stdout.writeln(
       '                                        Copy a library into the design');
-  stdout.writeln('  atomcad-cli load <path> [--force]     Load a .cnnd file');
+  stdout.writeln(
+      '  atomcad-cli load <path> [--force]     Open a .cnnd file in a tab');
   stdout.writeln('  atomcad-cli save [path]               Save to file');
   stdout.writeln('  atomcad-cli save <path> --copy-deps | --no-deps');
   stdout.writeln(
       '                                        Save As, with or without the files it uses');
   stdout.writeln(
       '  atomcad-cli file                      Show current file status');
-  stdout.writeln('  atomcad-cli new [--force]             Create new project');
+  stdout.writeln(
+      '  atomcad-cli new [--force]             New project in a new tab');
   stdout.writeln('');
   stdout.writeln('Options:');
   stdout.writeln('  -h, --help     Show this help');
@@ -443,7 +451,7 @@ void _printReplHelp() {
   stdout.writeln(
       '                      Save As, with or without the files it uses');
   stdout.writeln('  file                Show current file status');
-  stdout.writeln('  new [--force]       Create new project');
+  stdout.writeln('  new [--force]       New project in a new tab');
   stdout.writeln('  help, ?             Show this help');
   stdout.writeln('  quit, exit          Exit REPL');
   stdout.writeln('');
@@ -944,6 +952,17 @@ Future<void> _runNetworksRename(
   }
 }
 
+/// What `load` prints. It opens a tab (or activates the tab that has the
+/// file open), so the line names the document id that `--document` takes
+/// (`doc/design_multiple_documents.md` D8).
+String _loadedMessage(Map<String, dynamic> result) {
+  final how = result['already_open'] == true
+      ? 'Already open; switched to its tab'
+      : 'Loaded';
+  return '$how: ${result['file_path']} (${result['network_count']} networks, '
+      'document ${result['document_id']})';
+}
+
 Future<void> _runLoad(String serverUrl, ArgResults args) async {
   if (args.rest.isEmpty) {
     stderr.writeln('Usage: atomcad-cli load <path> [--force]');
@@ -968,8 +987,7 @@ Future<void> _runLoad(String serverUrl, ArgResults args) async {
     if (response.statusCode == 200) {
       final result = jsonDecode(response.body);
       if (result['success'] == true) {
-        stdout.writeln(
-            'Loaded: ${result['file_path']} (${result['network_count']} networks)');
+        stdout.writeln(_loadedMessage(result));
       } else {
         stderr.writeln('Error: ${result['error']}');
         exit(1);
@@ -1075,7 +1093,8 @@ Future<void> _runNew(String serverUrl, ArgResults args) async {
     if (response.statusCode == 200) {
       final result = jsonDecode(response.body);
       if (result['success'] == true) {
-        stdout.writeln('New project created.');
+        stdout.writeln(
+            'New project created in a new tab (document ${result['document_id']}).');
       } else {
         stderr.writeln('Error: ${result['error']}');
         exit(1);
@@ -1746,8 +1765,7 @@ Future<void> _runLoadRepl(String serverUrl, List<String> parts) async {
     if (response.statusCode == 200) {
       final result = jsonDecode(response.body);
       if (result['success'] == true) {
-        stdout.writeln(
-            'Loaded: ${result['file_path']} (${result['network_count']} networks)');
+        stdout.writeln(_loadedMessage(result));
       } else {
         stderr.writeln('Error: ${result['error']}');
       }
@@ -1840,7 +1858,8 @@ Future<void> _runNewRepl(String serverUrl, List<String> parts) async {
     if (response.statusCode == 200) {
       final result = jsonDecode(response.body);
       if (result['success'] == true) {
-        stdout.writeln('New project created.');
+        stdout.writeln(
+            'New project created in a new tab (document ${result['document_id']}).');
       } else {
         stderr.writeln('Error: ${result['error']}');
       }

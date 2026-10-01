@@ -1068,6 +1068,25 @@ Manual (walkthrough): the two tab layouts, the document-keyed subtree
 rebuilding, and D11 end to end — the value really lands in the outgoing
 document and the incoming one is unchanged (step 8).
 
+*As implemented (P3):* the stash (`DocumentUiState`) holds the two scope
+chains, the AI History selection **and its version and unread count** (the
+edit log is per document, so its version is too), and what the open reported;
+`backToDesignPath` is left to P4, which removes it. Beyond the plan:
+(1) The AI History panel is keyed by the document as well — it memoises
+entries by sequence number, which only one log makes unique. (2) Keying the
+network editor is not enough on its own: it holds a `GlobalKey`, which would
+reparent the old editor's `State` across the switch, so the key is replaced
+per document. And `NodeNetwork.dispose` cleared the model's callbacks
+unconditionally, which after a keyed rebuild runs *after* the new editor
+registered its own — it now clears only its own. (3) The tab gate is armed at
+pointer **down**: by the time a tap is recognised the tab's own pointer
+already counts as down, so a check at the tap would refuse every click.
+(4) The AI server reads every body up front and its handlers are plain `void`
+functions; the activity record moved before the response close (the close is
+an `await`). (5) `withDocumentSwitch` does not wait for a frame while frames
+are disabled (minimized window) — no frame would come, and a CLI `load` would
+hang. (6) The CLI prints the document id after `load` / `new`.
+
 ### Phase 4 — Library actions, CLI guard, docs
 
 Work: *Open library file* → `openDocument`; remove *Back to …*,

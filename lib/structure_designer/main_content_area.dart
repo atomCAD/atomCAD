@@ -8,6 +8,9 @@ import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_data_widget.dart';
 import 'package:flutter_cad/structure_designer/qualified_name_header.dart';
 import 'package:flutter_cad/structure_designer/library_link_actions.dart';
+import 'package:flutter_cad/structure_designer/document_tabs.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_preferences.dart'
+    show DocumentTabPlacement;
 
 /// The main content area of the structure designer: the 3D viewport, the node
 /// properties panel docked to its right, and the node network editor.
@@ -28,6 +31,26 @@ import 'package:flutter_cad/structure_designer/library_link_actions.dart';
 /// never be taller than that — which is exactly the case a mechanosynth build
 /// walkthrough needs. Now it gets the viewport's height (65% by default), and
 /// with the network editor collapsed it gets the whole window.
+///
+/// ## The document tabs (`doc/design_multiple_documents.md` D10)
+///
+/// - **Vertical** (the default): the list is taken off the viewport's *left*
+///   edge, after the properties panel is taken off its right edge — the
+///   mirror image of the properties dock, as tall as the viewport, with its
+///   own width divider.
+/// - **Horizontal**: a strip above the network editor; whenever the editor is
+///   not shown (folded, or a direct-editing document), the strip moves to the
+///   top of the viewport instead of disappearing with it.
+///
+/// [showDocumentTabs] is false in Presentation Mode, which hides both.
+///
+/// ## The document key (D11)
+///
+/// The properties panel and the network editor sit under
+/// `KeyedSubtree(ValueKey(documentKey))`, so a document switch rebuilds them
+/// from scratch: their widgets are keyed by network name and node id, which
+/// repeat across documents, and no `State` may survive from one document into
+/// another. The viewport is outside it — there is one renderer.
 class MainContentArea extends StatefulWidget {
   final StructureDesignerModel graphModel;
   final GlobalKey nodeNetworkKey;
@@ -46,6 +69,19 @@ class MainContentArea extends StatefulWidget {
   /// Whether the node properties panel (the viewport's right dock) is shown.
   final bool nodeDataPanelVisible;
 
+  /// The document tabs' gestures, or `null` for no tabs at all.
+  final DocumentTabs? documentTabs;
+
+  /// Where the document tabs go (the *Interface* preference).
+  final DocumentTabPlacement documentTabPlacement;
+
+  /// False in Presentation Mode.
+  final bool showDocumentTabs;
+
+  /// The active document's id; the document-dependent subtrees are keyed by
+  /// it.
+  final Object? documentKey;
+
   const MainContentArea({
     required this.graphModel,
     required this.nodeNetworkKey,
@@ -53,6 +89,10 @@ class MainContentArea extends StatefulWidget {
     this.directEditingMode = false,
     this.networkEditorVisible = true,
     this.nodeDataPanelVisible = true,
+    this.documentTabs,
+    this.documentTabPlacement = DocumentTabPlacement.leftOfViewport,
+    this.showDocumentTabs = true,
+    this.documentKey,
     super.key,
   });
 
@@ -68,11 +108,78 @@ class _MainContentAreaState extends State<MainContentArea> {
   static const double _nodeDataPanelMinWidth = 250;
   static const double _nodeDataPanelMaxWidth = 800;
 
+  /// Width of the vertical document tab list. View state, like the other
+  /// dividers.
+  double _documentTabListWidth = 180;
+
+  static const double _documentTabListMinWidth = 100;
+  static const double _documentTabListMaxWidth = 500;
+
+  bool get _tabsVertical =>
+      widget.showDocumentTabs &&
+      widget.documentTabs != null &&
+      widget.documentTabPlacement == DocumentTabPlacement.leftOfViewport;
+
+  bool get _tabsHorizontal =>
+      widget.showDocumentTabs &&
+      widget.documentTabs != null &&
+      widget.documentTabPlacement == DocumentTabPlacement.aboveNetworkEditor;
+
+  /// The vertical tab list and its divider, for the left end of the
+  /// viewport's row.
+  List<Widget> _buildDocumentTabListDock() {
+    if (!_tabsVertical) return const [];
+    return [
+      DocumentTabList(
+        gestures: widget.documentTabs!,
+        width: _documentTabListWidth,
+      ),
+      GestureDetector(
+        onHorizontalDragUpdate: (details) {
+          setState(() {
+            _documentTabListWidth = (_documentTabListWidth + details.delta.dx)
+                .clamp(_documentTabListMinWidth, _documentTabListMaxWidth);
+          });
+        },
+        child: MouseRegion(
+          cursor: SystemMouseCursors.resizeColumn,
+          child: Container(width: 6, color: Colors.grey.shade300),
+        ),
+      ),
+    ];
+  }
+
+  /// [child] with the horizontal tab strip on top, when the strip is shown.
+  Widget _withDocumentTabStrip(Widget child) {
+    if (!_tabsHorizontal) return child;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        DocumentTabStrip(gestures: widget.documentTabs!),
+        Expanded(child: child),
+      ],
+    );
+  }
+
+  Widget _keyed(Widget child) =>
+      KeyedSubtree(key: ValueKey(widget.documentKey), child: child);
+
   @override
   Widget build(BuildContext context) {
     if (widget.directEditingMode) {
+      // No network editor: a horizontal strip sits above the viewport.
       return Expanded(
-        child: StructureDesignerViewport(graphModel: widget.graphModel),
+        child: _withDocumentTabStrip(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ..._buildDocumentTabListDock(),
+              Expanded(
+                child: StructureDesignerViewport(graphModel: widget.graphModel),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
@@ -87,6 +194,7 @@ class _MainContentAreaState extends State<MainContentArea> {
           final viewportArea = Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              ..._buildDocumentTabListDock(),
               Expanded(
                 child: StructureDesignerViewport(graphModel: widget.graphModel),
               ),
@@ -98,7 +206,9 @@ class _MainContentAreaState extends State<MainContentArea> {
           );
 
           if (!widget.networkEditorVisible) {
-            return viewportArea;
+            // The strip moves to the viewport rather than disappearing with
+            // the network editor (D10).
+            return _withDocumentTabStrip(viewportArea);
           }
 
           return ResizableContainer(
@@ -127,7 +237,7 @@ class _MainContentAreaState extends State<MainContentArea> {
               ResizableChild(
                 size: ResizableSize.ratio(0.35,
                     min: widget.verticalDivision ? 100 : 300),
-                child: _buildNetworkEditor(),
+                child: _withDocumentTabStrip(_buildNetworkEditor()),
               ),
             ],
           );
@@ -143,10 +253,10 @@ class _MainContentAreaState extends State<MainContentArea> {
     return Consumer<StructureDesignerModel>(
       builder: (context, model, _) {
         if (model.activeRecordDefName != null) {
-          return SchemaEditor(
+          return _keyed(SchemaEditor(
             model: model,
             defName: model.activeRecordDefName!,
-          );
+          ));
         }
         final tabs = NetworkEditorTabs(
           graphModel: widget.graphModel,
@@ -158,14 +268,14 @@ class _MainContentAreaState extends State<MainContentArea> {
         final mount = model.activeNetworkReadOnly
             ? model.mountOf(model.nodeNetworkView!.name)
             : null;
-        if (mount == null) return tabs;
-        return Column(
+        if (mount == null) return _keyed(tabs);
+        return _keyed(Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             LinkedNetworkBanner(model: model, mount: mount),
             Expanded(child: tabs),
           ],
-        );
+        ));
       },
     );
   }
@@ -222,7 +332,7 @@ class _MainContentAreaState extends State<MainContentArea> {
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(8.0),
-              child: NodeDataWidget(graphModel: widget.graphModel),
+              child: _keyed(NodeDataWidget(graphModel: widget.graphModel)),
             ),
           ),
         ],

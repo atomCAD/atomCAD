@@ -1209,6 +1209,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ConversionResult dco_decode_conversion_result(dynamic raw);
 
   @protected
+  DocumentTabPlacement dco_decode_document_tab_placement(dynamic raw);
+
+  @protected
   DragFrozenStatus dco_decode_drag_frozen_status(dynamic raw);
 
   @protected
@@ -1253,6 +1256,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   InputPinView dco_decode_input_pin_view(dynamic raw);
+
+  @protected
+  InterfacePreferences dco_decode_interface_preferences(dynamic raw);
 
   @protected
   LayoutAlgorithmPreference dco_decode_layout_algorithm_preference(dynamic raw);
@@ -3404,6 +3410,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ConversionResult sse_decode_conversion_result(SseDeserializer deserializer);
 
   @protected
+  DocumentTabPlacement sse_decode_document_tab_placement(
+      SseDeserializer deserializer);
+
+  @protected
   DragFrozenStatus sse_decode_drag_frozen_status(SseDeserializer deserializer);
 
   @protected
@@ -3454,6 +3464,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   InputPinView sse_decode_input_pin_view(SseDeserializer deserializer);
+
+  @protected
+  InterfacePreferences sse_decode_interface_preferences(
+      SseDeserializer deserializer);
 
   @protected
   LayoutAlgorithmPreference sse_decode_layout_algorithm_preference(
@@ -5824,6 +5838,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       ConversionResult self, SseSerializer serializer);
 
   @protected
+  void sse_encode_document_tab_placement(
+      DocumentTabPlacement self, SseSerializer serializer);
+
+  @protected
   void sse_encode_drag_frozen_status(
       DragFrozenStatus self, SseSerializer serializer);
 
@@ -5875,6 +5893,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_input_pin_view(InputPinView self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_interface_preferences(
+      InterfacePreferences self, SseSerializer serializer);
 
   @protected
   void sse_encode_layout_algorithm_preference(

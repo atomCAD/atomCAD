@@ -14,8 +14,8 @@
 use atomcad_structure_designer::preferences as domain;
 use rust_lib_flutter_cad::api::common_api_types::APIIVec3;
 use rust_lib_flutter_cad::api::structure_designer::structure_designer_preferences::{
-    AtomicStructureVisualizationPreferences, NodeDisplayPolicy, NodeDisplayPreferences,
-    NodeTitleMode,
+    AtomicStructureVisualizationPreferences, DocumentTabPlacement, InterfacePreferences,
+    NodeDisplayPolicy, NodeDisplayPreferences, NodeTitleMode, StructureDesignerPreferences,
 };
 
 #[test]
@@ -93,4 +93,53 @@ fn the_tool_envelope_defaults_are_off_and_amber() {
 
     let down: domain::AtomicStructureVisualizationPreferences = (&api).into();
     assert!(down == domain::AtomicStructureVisualizationPreferences::default());
+}
+
+/// The document-tab placement (`doc/design_multiple_documents.md` D10)
+/// converts both ways, and the twin's default is the domain's: the vertical
+/// list left of the viewport. A `preferences.json` without the group loads
+/// with it through the twin too, since the dialog round-trips the twin.
+#[test]
+fn document_tab_placement_converts_both_ways() {
+    for (api, dom) in [
+        (
+            DocumentTabPlacement::LeftOfViewport,
+            domain::DocumentTabPlacement::LeftOfViewport,
+        ),
+        (
+            DocumentTabPlacement::AboveNetworkEditor,
+            domain::DocumentTabPlacement::AboveNetworkEditor,
+        ),
+    ] {
+        let prefs = InterfacePreferences {
+            document_tab_placement: api,
+        };
+        let down: domain::InterfacePreferences = (&prefs).into();
+        assert_eq!(down.document_tab_placement, dom);
+        let up: InterfacePreferences = (&down).into();
+        assert_eq!(up.document_tab_placement, api);
+    }
+
+    let whole = StructureDesignerPreferences {
+        interface_preferences: InterfacePreferences {
+            document_tab_placement: DocumentTabPlacement::AboveNetworkEditor,
+        },
+        ..Default::default()
+    };
+    let down: domain::StructureDesignerPreferences = (&whole).into();
+    assert_eq!(
+        down.interface_preferences.document_tab_placement,
+        domain::DocumentTabPlacement::AboveNetworkEditor
+    );
+
+    assert_eq!(
+        InterfacePreferences::default().document_tab_placement,
+        DocumentTabPlacement::LeftOfViewport
+    );
+    let old: StructureDesignerPreferences =
+        serde_json::from_str(r#"{"layout_preferences": {}}"#).unwrap();
+    assert_eq!(
+        old.interface_preferences.document_tab_placement,
+        DocumentTabPlacement::LeftOfViewport
+    );
 }

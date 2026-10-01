@@ -15,6 +15,8 @@ import 'package:flutter_cad/src/rust/api/structure_designer/chemisorb_api.dart'
     as chemisorb_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/library_links_api.dart'
     as library_links_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/documents_api.dart'
+    as documents_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/structure_designer/library_link_actions.dart'
     show refreshReportHeadline, refreshReportIsFailure;
@@ -58,6 +60,21 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_p
 ///   (JSON: alias)
 /// - `POST /save?path=<p>&deps=copy|none` - Save As; `deps` is required when
 ///   linked libraries or data files would need copying to the new folder
+///
+/// - `POST /load?path=<p>` - Open a file in a new tab, or activate the tab
+///   that has it open (`doc/design_multiple_documents.md` D8)
+/// - `POST /new` - Open a new Untitled tab
+///
+/// ## One synchronous stretch per request
+///
+/// Every request acts on the **active** document, and a tab switch (a click,
+/// `Ctrl+Tab`) can run at any `await` of a handler. So all asynchronous work —
+/// reading the body, file-system checks — happens first, and everything from
+/// the first API call to the activity record runs with no `await` in between
+/// (D8). The handlers are plain `void` functions for that reason; `/load` and
+/// `/new` are the exceptions because they *are* switches: they await the
+/// model's `withDocumentSwitch`, and their API calls run inside its action.
+/// **A new handler must not `await` after its first API call.**
 ///
 /// ## Every request is logged
 ///
@@ -151,6 +168,18 @@ class AiAssistantServer {
   /// Set this to trigger a UI refresh after successful edits.
   void Function()? onNetworkEdited;
 
+  /// Opens a file the way *File > Open* does — in a new tab, or by activating
+  /// the tab that has it open (`doc/design_multiple_documents.md` D8). The
+  /// second argument runs right after the API call, in the same synchronous
+  /// stretch, so the handler reads the document it opened. Set by `main.dart`
+  /// to the model's `openDocument`; `/load` refuses without it.
+  Future<APIOpenDocumentResult> Function(
+      String path, void Function() inSameStretch)? onOpenDocument;
+
+  /// Opens a new Untitled tab the way *File > New* does (D8), with the same
+  /// same-stretch hook as [onOpenDocument].
+  Future<APIResult> Function(void Function() inSameStretch)? onNewDocument;
+
   /// Callback to request a viewport re-render (without re-evaluating nodes).
   /// Used for camera changes that only need visual refresh.
   void Function()? onRenderingNeeded;
@@ -211,92 +240,110 @@ class AiAssistantServer {
     }
 
     final path = request.uri.path;
+    final stopwatch = Stopwatch()..start();
+
+    // Every asynchronous step of a request comes first (D8 of
+    // `doc/design_multiple_documents.md`): reading the body. From here to the
+    // activity record below, a request is one synchronous stretch, so a tab
+    // switch — which can run at any `await` — cannot land between two of its
+    // API calls and send the second one to another document. The handlers are
+    // therefore plain `void` functions; the only exceptions are `/load` and
+    // `/new`, which *are* document switches and await one (their API calls
+    // run inside the switch's own synchronous action).
+    final String body;
+    try {
+      body = await utf8.decoder.bind(request).join();
+    } catch (e) {
+      request.response.statusCode = HttpStatus.badRequest;
+      await request.response.close();
+      return;
+    }
 
     // Phase 5 recording, half one: announce who is calling *before* dispatch,
     // so that an `/edit` in this request — whose record is pushed deep inside
     // the domain crate, which knows nothing about HTTP — carries the label too.
-    final stopwatch = Stopwatch()..start();
     _activityDetail = null;
-    ai_history_api.aiHistorySetClientLabel(
-      label: request.headers.value(clientLabelHeader)?.trim() ?? '',
-    );
+    _announceClient(request);
 
     try {
       switch (path) {
         case '/health':
-          await _handleHealth(request);
+          _handleHealth(request);
           break;
         case '/query':
-          await _handleQuery(request);
+          _handleQuery(request);
           break;
         case '/edit':
-          await _handleEdit(request);
+          _handleEdit(request, body);
           break;
         case '/nodes':
-          await _handleNodes(request);
+          _handleNodes(request);
           break;
         case '/describe':
-          await _handleDescribe(request);
+          _handleDescribe(request);
           break;
         case '/evaluate':
-          await _handleEvaluate(request);
+          _handleEvaluate(request);
           break;
         case '/run':
-          await _handleRun(request);
+          _handleRun(request);
           break;
         case '/camera':
-          await _handleCamera(request);
+          _handleCamera(request);
           break;
         case '/screenshot':
-          await _handleScreenshot(request);
+          _handleScreenshot(request);
           break;
         case '/display':
-          await _handleDisplay(request);
+          _handleDisplay(request);
           break;
         case '/networks':
-          await _handleNetworks(request);
+          _handleNetworks(request);
           break;
         case '/networks/add':
-          await _handleNetworksAdd(request);
+          _handleNetworksAdd(request, body);
           break;
         case '/networks/delete':
-          await _handleNetworksDelete(request);
+          _handleNetworksDelete(request, body);
           break;
         case '/networks/activate':
-          await _handleNetworksActivate(request);
+          _handleNetworksActivate(request, body);
           break;
         case '/networks/rename':
-          await _handleNetworksRename(request);
+          _handleNetworksRename(request, body);
           break;
         case '/libraries':
-          await _handleLibraries(request);
+          _handleLibraries(request);
           break;
         case '/libraries/link':
-          await _handleLibrariesLink(request);
+          _handleLibrariesLink(request, body);
           break;
         case '/libraries/unlink':
-          await _handleLibrariesUnlink(request);
+          _handleLibrariesUnlink(request, body);
           break;
         case '/libraries/refresh':
-          await _handleLibrariesRefresh(request);
+          _handleLibrariesRefresh(request, body);
           break;
         case '/libraries/rename':
-          await _handleLibrariesRename(request);
+          _handleLibrariesRename(request, body);
           break;
         case '/libraries/make-local':
-          await _handleLibrariesMakeLocal(request);
+          _handleLibrariesMakeLocal(request, body);
           break;
         case '/file':
-          await _handleFile(request);
+          _handleFile(request);
           break;
         case '/load':
           await _handleLoad(request);
+          // The log is per document: label the one now active.
+          _announceClient(request);
           break;
         case '/save':
-          await _handleSave(request);
+          _handleSave(request);
           break;
         case '/new':
           await _handleNew(request);
+          _announceClient(request);
           break;
         default:
           request.response.statusCode = HttpStatus.notFound;
@@ -316,14 +363,21 @@ class AiAssistantServer {
       }));
     }
 
-    // Read before the close: the status is settled by now, and reaching into a
-    // closed response for it is asking for trouble as dart:io evolves.
+    // …and half two: one entry per request. Recorded *before* the close, so
+    // the record lands in the document the request acted on — the close is an
+    // `await`, and a tab switch can run there (D8). The duration therefore
+    // stops short of flushing the response, which is negligible on loopback.
     final status = request.response.statusCode;
-    await request.response.close();
-
-    // …and half two: one entry per request, after the response is written so
-    // the duration is the whole round trip.
     _recordActivity(request, path, status, stopwatch);
+    await request.response.close();
+  }
+
+  /// Tells the kernel who is calling (`X-Client-Label`), for the active
+  /// document's AI History log.
+  void _announceClient(HttpRequest request) {
+    ai_history_api.aiHistorySetClientLabel(
+      label: request.headers.value(clientLabelHeader)?.trim() ?? '',
+    );
   }
 
   /// Push one timeline entry for a finished request (Phase 5).
@@ -354,7 +408,7 @@ class AiAssistantServer {
     }
   }
 
-  Future<void> _handleHealth(HttpRequest request) async {
+  void _handleHealth(HttpRequest request) {
     if (request.method != 'GET') {
       request.response.statusCode = HttpStatus.methodNotAllowed;
       return;
@@ -364,7 +418,7 @@ class AiAssistantServer {
     request.response.write(jsonEncode({'status': 'ok'}));
   }
 
-  Future<void> _handleQuery(HttpRequest request) async {
+  void _handleQuery(HttpRequest request) {
     if (request.method != 'GET') {
       request.response.statusCode = HttpStatus.methodNotAllowed;
       return;
@@ -377,14 +431,12 @@ class AiAssistantServer {
     request.response.write(result);
   }
 
-  Future<void> _handleEdit(HttpRequest request) async {
+  void _handleEdit(HttpRequest request, String body) {
     if (request.method != 'POST') {
       request.response.statusCode = HttpStatus.methodNotAllowed;
       return;
     }
 
-    // Read request body
-    final body = await utf8.decoder.bind(request).join();
     final replace = request.uri.queryParameters['replace'] == 'true';
 
     // Call Rust API to apply edits
@@ -397,7 +449,7 @@ class AiAssistantServer {
     request.response.write(resultJson);
   }
 
-  Future<void> _handleNodes(HttpRequest request) async {
+  void _handleNodes(HttpRequest request) {
     if (request.method != 'GET') {
       request.response.statusCode = HttpStatus.methodNotAllowed;
       return;
@@ -414,7 +466,7 @@ class AiAssistantServer {
     request.response.write(result);
   }
 
-  Future<void> _handleDescribe(HttpRequest request) async {
+  void _handleDescribe(HttpRequest request) {
     if (request.method != 'GET') {
       request.response.statusCode = HttpStatus.methodNotAllowed;
       return;
@@ -438,7 +490,7 @@ class AiAssistantServer {
     request.response.write(result);
   }
 
-  Future<void> _handleEvaluate(HttpRequest request) async {
+  void _handleEvaluate(HttpRequest request) {
     if (request.method != 'GET') {
       request.response.statusCode = HttpStatus.methodNotAllowed;
       return;
@@ -486,7 +538,7 @@ class AiAssistantServer {
   /// something evaluation never will (the node's `eval` only plans). The
   /// search is synchronous and may take minutes; the result is stored on the
   /// node and shown by the next refresh, so the UI is told to refresh too.
-  Future<void> _handleRun(HttpRequest request) async {
+  void _handleRun(HttpRequest request) {
     if (request.method != 'POST') {
       request.response.statusCode = HttpStatus.methodNotAllowed;
       return;
@@ -516,7 +568,7 @@ class AiAssistantServer {
     }
   }
 
-  Future<void> _handleCamera(HttpRequest request) async {
+  void _handleCamera(HttpRequest request) {
     if (request.method != 'GET') {
       request.response.statusCode = HttpStatus.methodNotAllowed;
       return;
@@ -598,7 +650,7 @@ class AiAssistantServer {
     }
   }
 
-  Future<void> _handleScreenshot(HttpRequest request) async {
+  void _handleScreenshot(HttpRequest request) {
     if (request.method != 'GET') {
       request.response.statusCode = HttpStatus.methodNotAllowed;
       return;
@@ -683,7 +735,7 @@ class AiAssistantServer {
     }
   }
 
-  Future<void> _handleDisplay(HttpRequest request) async {
+  void _handleDisplay(HttpRequest request) {
     if (request.method != 'GET') {
       request.response.statusCode = HttpStatus.methodNotAllowed;
       return;
@@ -881,7 +933,7 @@ class AiAssistantServer {
     return APIVec3(x: parts[0], y: parts[1], z: parts[2]);
   }
 
-  Future<void> _handleNetworks(HttpRequest request) async {
+  void _handleNetworks(HttpRequest request) {
     if (request.method != 'GET') {
       request.response.statusCode = HttpStatus.methodNotAllowed;
       return;
@@ -935,14 +987,12 @@ class AiAssistantServer {
     request.response.write(buffer.toString());
   }
 
-  Future<void> _handleNetworksAdd(HttpRequest request) async {
+  void _handleNetworksAdd(HttpRequest request, String body) {
     if (request.method != 'POST') {
       request.response.statusCode = HttpStatus.methodNotAllowed;
       return;
     }
 
-    // Read request body as JSON (optional)
-    final body = await utf8.decoder.bind(request).join();
     String? name;
     if (body.isNotEmpty) {
       try {
@@ -1004,14 +1054,12 @@ class AiAssistantServer {
     }
   }
 
-  Future<void> _handleNetworksDelete(HttpRequest request) async {
+  void _handleNetworksDelete(HttpRequest request, String body) {
     if (request.method != 'POST') {
       request.response.statusCode = HttpStatus.methodNotAllowed;
       return;
     }
 
-    // Read request body as JSON
-    final body = await utf8.decoder.bind(request).join();
     String? name;
     if (body.isNotEmpty) {
       try {
@@ -1050,14 +1098,12 @@ class AiAssistantServer {
     }
   }
 
-  Future<void> _handleNetworksActivate(HttpRequest request) async {
+  void _handleNetworksActivate(HttpRequest request, String body) {
     if (request.method != 'POST') {
       request.response.statusCode = HttpStatus.methodNotAllowed;
       return;
     }
 
-    // Read request body as JSON
-    final body = await utf8.decoder.bind(request).join();
     String? name;
     if (body.isNotEmpty) {
       try {
@@ -1102,14 +1148,12 @@ class AiAssistantServer {
     }));
   }
 
-  Future<void> _handleNetworksRename(HttpRequest request) async {
+  void _handleNetworksRename(HttpRequest request, String body) {
     if (request.method != 'POST') {
       request.response.statusCode = HttpStatus.methodNotAllowed;
       return;
     }
 
-    // Read request body as JSON
-    final body = await utf8.decoder.bind(request).join();
     String? oldName;
     String? newName;
     if (body.isNotEmpty) {
@@ -1167,8 +1211,7 @@ class AiAssistantServer {
 
   /// The request body as a JSON object; empty when absent or malformed (the
   /// handler reports the missing parameter).
-  Future<Map<String, dynamic>> _readJsonBody(HttpRequest request) async {
-    final body = await utf8.decoder.bind(request).join();
+  Map<String, dynamic> _parseJsonBody(String body) {
     if (body.isEmpty) return {};
     try {
       final json = jsonDecode(body);
@@ -1224,7 +1267,7 @@ class AiAssistantServer {
     }
   }
 
-  Future<void> _handleLibraries(HttpRequest request) async {
+  void _handleLibraries(HttpRequest request) {
     if (request.method != 'GET') {
       request.response.statusCode = HttpStatus.methodNotAllowed;
       return;
@@ -1260,12 +1303,12 @@ class AiAssistantServer {
     request.response.write(buffer.toString());
   }
 
-  Future<void> _handleLibrariesLink(HttpRequest request) async {
+  void _handleLibrariesLink(HttpRequest request, String body) {
     if (request.method != 'POST') {
       request.response.statusCode = HttpStatus.methodNotAllowed;
       return;
     }
-    final json = await _readJsonBody(request);
+    final json = _parseJsonBody(body);
     if (_missing(request, json, ['path', 'alias'])) return;
     final path = json['path'] as String;
     final alias = json['alias'] as String;
@@ -1275,12 +1318,12 @@ class AiAssistantServer {
         "Linked '$path' as '$alias'");
   }
 
-  Future<void> _handleLibrariesUnlink(HttpRequest request) async {
+  void _handleLibrariesUnlink(HttpRequest request, String body) {
     if (request.method != 'POST') {
       request.response.statusCode = HttpStatus.methodNotAllowed;
       return;
     }
-    final json = await _readJsonBody(request);
+    final json = _parseJsonBody(body);
     if (_missing(request, json, ['alias'])) return;
     final alias = json['alias'] as String;
     _activityDetail = alias;
@@ -1289,12 +1332,12 @@ class AiAssistantServer {
         request, result.success, result.errorMessage, "Unlinked '$alias'");
   }
 
-  Future<void> _handleLibrariesRename(HttpRequest request) async {
+  void _handleLibrariesRename(HttpRequest request, String body) {
     if (request.method != 'POST') {
       request.response.statusCode = HttpStatus.methodNotAllowed;
       return;
     }
-    final json = await _readJsonBody(request);
+    final json = _parseJsonBody(body);
     if (_missing(request, json, ['alias', 'new'])) return;
     final alias = json['alias'] as String;
     final newAlias = json['new'] as String;
@@ -1305,12 +1348,12 @@ class AiAssistantServer {
         "Renamed alias '$alias' to '$newAlias'");
   }
 
-  Future<void> _handleLibrariesMakeLocal(HttpRequest request) async {
+  void _handleLibrariesMakeLocal(HttpRequest request, String body) {
     if (request.method != 'POST') {
       request.response.statusCode = HttpStatus.methodNotAllowed;
       return;
     }
-    final json = await _readJsonBody(request);
+    final json = _parseJsonBody(body);
     if (_missing(request, json, ['alias'])) return;
     final alias = json['alias'] as String;
     _activityDetail = alias;
@@ -1343,12 +1386,12 @@ class AiAssistantServer {
     ];
   }
 
-  Future<void> _handleLibrariesRefresh(HttpRequest request) async {
+  void _handleLibrariesRefresh(HttpRequest request, String body) {
     if (request.method != 'POST') {
       request.response.statusCode = HttpStatus.methodNotAllowed;
       return;
     }
-    final json = await _readJsonBody(request);
+    final json = _parseJsonBody(body);
     final mount = json['mount'];
     final APIRefreshReport report;
     if (mount is String && mount.isNotEmpty) {
@@ -1370,7 +1413,7 @@ class AiAssistantServer {
     }));
   }
 
-  Future<void> _handleFile(HttpRequest request) async {
+  void _handleFile(HttpRequest request) {
     if (request.method != 'GET') {
       request.response.statusCode = HttpStatus.methodNotAllowed;
       return;
@@ -1389,6 +1432,10 @@ class AiAssistantServer {
     }));
   }
 
+  /// `/load` — *File > Open* for the CLI (D8): opens the file in a new tab,
+  /// or activates the tab that already has it open (D5); a pristine Untitled
+  /// tab is replaced. Nothing is discarded, so there is no unsaved-changes
+  /// refusal any more; `force` is still accepted and does nothing.
   Future<void> _handleLoad(HttpRequest request) async {
     if (request.method != 'POST') {
       request.response.statusCode = HttpStatus.methodNotAllowed;
@@ -1397,7 +1444,6 @@ class AiAssistantServer {
 
     final params = request.uri.queryParameters;
     final filePath = params['path'];
-    final force = params['force'] == 'true';
 
     request.response.headers.contentType = ContentType.json;
 
@@ -1409,19 +1455,9 @@ class AiAssistantServer {
       return;
     }
 
-    // Check for unsaved changes
-    if (!force && sd_api.isDesignDirty()) {
-      request.response.write(jsonEncode({
-        'success': false,
-        'error':
-            "Unsaved changes exist. Use 'save <path>' to save first, or --force to discard.",
-      }));
-      return;
-    }
-
-    // Check if file exists
-    final file = File(filePath);
-    if (!await file.exists()) {
+    // File-system checks are asynchronous work, so they come before the
+    // switch, never between it and the API calls (D8).
+    if (!await File(filePath).exists()) {
       request.response.write(jsonEncode({
         'success': false,
         'error': 'File not found: $filePath',
@@ -1429,26 +1465,38 @@ class AiAssistantServer {
       return;
     }
 
-    // Load the file
-    final result = sd_api.loadNodeNetworks(filePath: filePath);
+    final open = onOpenDocument;
+    if (open == null) {
+      request.response.statusCode = HttpStatus.serviceUnavailable;
+      request.response.write(jsonEncode({
+        'success': false,
+        'error': 'The application is not ready to open documents',
+      }));
+      return;
+    }
 
-    if (result.success) {
-      final networkCount = sd_api.getNetworkCount();
-      onNetworkEdited?.call();
+    var networkCount = 0;
+    final result = await open(filePath, () {
+      networkCount = sd_api.getNetworkCount();
+    });
+
+    if (result.result.success) {
       request.response.write(jsonEncode({
         'success': true,
-        'file_path': filePath,
+        'file_path': result.filePath ?? filePath,
+        'document_id': result.documentId.toString(),
+        'already_open': result.alreadyOpen,
         'network_count': networkCount,
       }));
     } else {
       request.response.write(jsonEncode({
         'success': false,
-        'error': 'Failed to load file: ${result.errorMessage}',
+        'error': 'Failed to load file: ${result.result.errorMessage}',
       }));
     }
   }
 
-  Future<void> _handleSave(HttpRequest request) async {
+  void _handleSave(HttpRequest request) {
     if (request.method != 'POST') {
       request.response.statusCode = HttpStatus.methodNotAllowed;
       return;
@@ -1541,32 +1589,45 @@ class AiAssistantServer {
     }
   }
 
+  /// `/new` — *File > New* for the CLI (D8): a new Untitled tab in node
+  /// network mode. Nothing is discarded, so there is no unsaved-changes
+  /// refusal any more; `force` is still accepted and does nothing.
   Future<void> _handleNew(HttpRequest request) async {
     if (request.method != 'POST') {
       request.response.statusCode = HttpStatus.methodNotAllowed;
       return;
     }
 
-    final params = request.uri.queryParameters;
-    final force = params['force'] == 'true';
-
     request.response.headers.contentType = ContentType.json;
 
-    // Check for unsaved changes
-    if (!force && sd_api.isDesignDirty()) {
+    final create = onNewDocument;
+    if (create == null) {
+      request.response.statusCode = HttpStatus.serviceUnavailable;
       request.response.write(jsonEncode({
         'success': false,
-        'error':
-            "Unsaved changes exist. Use 'save <path>' to save first, or --force to discard.",
+        'error': 'The application is not ready to open documents',
       }));
       return;
     }
 
-    sd_api.newProject();
-    onNetworkEdited?.call();
+    BigInt? documentId;
+    final result = await create(() {
+      for (final tab in documents_api.listDocuments()) {
+        if (tab.isActive) documentId = tab.id;
+      }
+    });
 
-    request.response.write(jsonEncode({
-      'success': true,
-    }));
+    if (result.success) {
+      request.response.write(jsonEncode({
+        'success': true,
+        'document_id': documentId?.toString(),
+        'file_path': null,
+      }));
+    } else {
+      request.response.write(jsonEncode({
+        'success': false,
+        'error': result.errorMessage,
+      }));
+    }
   }
 }

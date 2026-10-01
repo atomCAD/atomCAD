@@ -8,7 +8,7 @@ import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `default_background_color`, `default_ball_and_stick_cull_depth`, `default_csg_mesh_cache_mb`, `default_csg_sketch_cache_mb`, `default_drawing_plane_grid_color`, `default_drawing_plane_grid_strong_color`, `default_eval_memo_cache_mb`, `default_grid_color`, `default_grid_size`, `default_grid_strong_color`, `default_hide_coplanar_wireframe_edges`, `default_invisible_node_cache_mb`, `default_isosurface_cell_budget`, `default_isosurface_fallback_spacing`, `default_isosurface_quality_multiplier`, `default_label_scale`, `default_lattice_grid_color`, `default_lattice_grid_strong_color`, `default_max_displacement`, `default_samples_per_unit_cell`, `default_scene_alpha`, `default_settle_steps`, `default_sharpness_angle_threshold`, `default_show_axes`, `default_show_geometry_shell_for_atomic`, `default_show_grid`, `default_show_lattice_axes`, `default_space_filling_cull_depth`, `default_steps_per_frame`, `default_tool_envelope_color`, `default_true`, `default_unit_cell_wireframe_color`, `default_wireframe_active_color`, `default_wireframe_inactive_color`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 enum AtomicRenderingMethod {
   triangleMesh,
@@ -184,6 +184,20 @@ class BackgroundPreferences {
           unitCellWireframeColor == other.unitCellWireframeColor;
 }
 
+/// Where the document tabs are placed (`doc/design_multiple_documents.md`
+/// D10). Twin of the domain enum.
+enum DocumentTabPlacement {
+  /// A vertical list docked to the viewport's left edge (the default).
+  leftOfViewport,
+
+  /// A horizontal strip above the node network editor.
+  aboveNetworkEditor,
+  ;
+
+  static Future<DocumentTabPlacement> default_() => RustLib.instance.api
+      .crateApiStructureDesignerStructureDesignerPreferencesDocumentTabPlacementDefault();
+}
+
 enum GeometryVisualization {
   surfaceSplatting,
   explicitMesh,
@@ -294,6 +308,29 @@ class GeometryVisualizationPreferences {
           isosurfaceFallbackSpacing == other.isosurfaceFallbackSpacing &&
           isosurfaceCellBudget == other.isosurfaceCellBudget &&
           surfaceTransparencyMode == other.surfaceTransparencyMode;
+}
+
+/// Preferences about the application window. Twin of the domain struct.
+class InterfacePreferences {
+  /// Where the document tabs go (D10).
+  DocumentTabPlacement documentTabPlacement;
+
+  InterfacePreferences({
+    required this.documentTabPlacement,
+  });
+
+  static Future<InterfacePreferences> default_() => RustLib.instance.api
+      .crateApiStructureDesignerStructureDesignerPreferencesInterfacePreferencesDefault();
+
+  @override
+  int get hashCode => documentTabPlacement.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is InterfacePreferences &&
+          runtimeType == other.runtimeType &&
+          documentTabPlacement == other.documentTabPlacement;
 }
 
 /// Layout algorithm preference for full network auto-layout operations.
@@ -535,6 +572,7 @@ class StructureDesignerPreferences {
   final LayoutPreferences layoutPreferences;
   final SimulationPreferences simulationPreferences;
   final MemoryPreferences memoryPreferences;
+  final InterfacePreferences interfacePreferences;
 
   const StructureDesignerPreferences.raw({
     required this.geometryVisualizationPreferences,
@@ -544,6 +582,7 @@ class StructureDesignerPreferences {
     required this.layoutPreferences,
     required this.simulationPreferences,
     required this.memoryPreferences,
+    required this.interfacePreferences,
   });
 
   StructureDesignerPreferences cloneSelf() => RustLib.instance.api
@@ -565,7 +604,8 @@ class StructureDesignerPreferences {
       backgroundPreferences.hashCode ^
       layoutPreferences.hashCode ^
       simulationPreferences.hashCode ^
-      memoryPreferences.hashCode;
+      memoryPreferences.hashCode ^
+      interfacePreferences.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -580,7 +620,8 @@ class StructureDesignerPreferences {
           backgroundPreferences == other.backgroundPreferences &&
           layoutPreferences == other.layoutPreferences &&
           simulationPreferences == other.simulationPreferences &&
-          memoryPreferences == other.memoryPreferences;
+          memoryPreferences == other.memoryPreferences &&
+          interfacePreferences == other.interfacePreferences;
 }
 
 /// Dart-facing twin of [`domain::SurfaceTransparencyMode`].

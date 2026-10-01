@@ -13,6 +13,7 @@ import 'package:flutter_cad/common/mouse_wheel_block_service.dart';
 import 'package:flutter_window_close/flutter_window_close.dart';
 import 'package:flutter_cad/common/draggable_dialog.dart';
 import 'package:flutter_cad/ai_assistant/http_server.dart';
+import 'package:flutter_cad/structure_designer/document_tabs.dart';
 
 /// Global AI assistant server instance.
 /// This is set in main() and accessed by _MyAppState to connect the UI refresh callback.
@@ -172,6 +173,14 @@ class _MyAppState extends State<MyApp> {
       structureDesignerModel.refreshAiHistoryOnly();
     };
 
+    // The CLI's `load` and `new` open tabs, like File > Open and File > New
+    // (`doc/design_multiple_documents.md` D8): they go through the model's
+    // document switch, never through the in-place API calls.
+    _aiServer?.onOpenDocument = (path, inSameStretch) =>
+        structureDesignerModel.openDocument(path, inSameStretch: inSameStretch);
+    _aiServer?.onNewDocument = (inSameStretch) => structureDesignerModel
+        .newDocument(directEditing: false, inSameStretch: inSameStretch);
+
     // Connect AI assistant server to request re-render (for camera changes)
     _aiServer?.onRenderingNeeded = () {
       SchedulerBinding.instance.scheduleFrame();
@@ -184,7 +193,11 @@ class _MyAppState extends State<MyApp> {
     // Set up window close handler after the first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
       FlutterWindowClose.setWindowShouldCloseHandler(() async {
-        if (structureDesignerModel.isDirty) {
+        // One dialog for every dirty document (`doc/design_multiple_documents.md`
+        // §3), not one per tab.
+        final dirty =
+            dirtyDocumentNames(structureDesignerModel.refreshDocumentList());
+        if (dirty.isNotEmpty) {
           final context = _navigatorKey.currentContext;
           if (context == null) {
             return false;
@@ -193,8 +206,19 @@ class _MyAppState extends State<MyApp> {
             context: context,
             barrierDismissible: false,
             title: const Text('atomCAD'),
-            content: Text(
-                'Do you want to quit without saving changes to ${structureDesignerModel.displayFileName}?'),
+            content: dirty.length == 1
+                ? Text(
+                    'Do you want to quit without saving changes to ${dirty.single}?')
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                          'Do you want to quit without saving changes to these documents?'),
+                      const SizedBox(height: 8),
+                      for (final name in dirty) Text('• $name'),
+                    ],
+                  ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(false),

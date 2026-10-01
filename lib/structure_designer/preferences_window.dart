@@ -91,6 +91,10 @@ class PreferencesKeys {
       Key('pref_unit_cell_wireframe_color_input');
 
   // Layout settings
+  // Interface
+  static const Key documentTabPlacementDropdown =
+      Key('pref_document_tab_placement_dropdown');
+
   static const Key layoutAlgorithmDropdown =
       Key('pref_layout_algorithm_dropdown');
   static const Key respectHandMovedInReflowCheckbox =
@@ -1110,6 +1114,64 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                               const SizedBox(width: 8),
                               const Text('Display camera pivot point'),
                             ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.medium),
+
+                    // Interface Section — the window itself
+                    // (`doc/design_multiple_documents.md` D10). Takes effect
+                    // immediately: the window layout reads the preference on
+                    // every build.
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(AppSpacing.medium),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[200],
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Interface',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.medium),
+                          const Text('Document tabs'),
+                          const SizedBox(height: 4),
+                          DropdownButtonFormField<DocumentTabPlacement>(
+                            key: PreferencesKeys.documentTabPlacementDropdown,
+                            decoration: const InputDecoration(
+                              border: OutlineInputBorder(),
+                              contentPadding: AppSpacing.fieldContentPadding,
+                            ),
+                            value: _preferences
+                                .interfacePreferences.documentTabPlacement,
+                            items: const [
+                              DropdownMenuItem(
+                                value: DocumentTabPlacement.leftOfViewport,
+                                child: Text('Vertical, left of the viewport'),
+                              ),
+                              DropdownMenuItem(
+                                value: DocumentTabPlacement.aboveNetworkEditor,
+                                child:
+                                    Text('Horizontal, above the node network'),
+                              ),
+                            ],
+                            onChanged: (value) {
+                              if (value != null) {
+                                setState(() {
+                                  _preferences.interfacePreferences
+                                      .documentTabPlacement = value;
+                                });
+                                _applyPreferences();
+                              }
+                            },
                           ),
                         ],
                       ),

@@ -17,9 +17,12 @@ import 'node_network/export_network_image.dart';
 import 'node_network/find_node_picker.dart';
 import 'node_network/node_network.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_preferences.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart'
+    show APIActivateResult, APIDocumentTab;
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
     as structure_designer_api;
 import 'display_panel.dart';
+import 'document_tabs.dart';
 import 'import_cnnd_library_dialog.dart';
 import 'library_link_actions.dart';
 import 'save_as_dependencies.dart';
@@ -68,9 +71,22 @@ class _StructureDesignerState extends State<StructureDesigner> {
   // it restores the arrangement rather than a blanket "everything on".
   List<bool>? _savedPanelVisibility;
 
-  // GlobalKey to access the NodeNetwork widget state
-  final GlobalKey<NodeNetworkState> nodeNetworkKey =
-      GlobalKey<NodeNetworkState>();
+  // GlobalKey to access the NodeNetwork widget state. Replaced whenever the
+  // active document changes: the editor sits in a subtree keyed by the
+  // document id (D11 of `doc/design_multiple_documents.md`), and a GlobalKey
+  // that survived the switch would carry the old editor's `State` across it.
+  GlobalKey<NodeNetworkState> nodeNetworkKey = GlobalKey<NodeNetworkState>();
+  BigInt? _nodeNetworkKeyDocument;
+
+  /// [nodeNetworkKey], renewed when [documentId] differs from the document it
+  /// was made for.
+  GlobalKey<NodeNetworkState> _nodeNetworkKeyFor(BigInt? documentId) {
+    if (documentId != _nodeNetworkKeyDocument) {
+      _nodeNetworkKeyDocument = documentId;
+      nodeNetworkKey = GlobalKey<NodeNetworkState>();
+    }
+    return nodeNetworkKey;
+  }
 
   // --- Library change detection (`doc/design_library_linking.md` D7) ---
   //
@@ -129,6 +145,9 @@ class _StructureDesignerState extends State<StructureDesigner> {
     if (!mounted) return false;
     if (_pointersDown > 0) return false;
     if (graphModel.draggedWire != null) return false;
+    // A tab switch is on its way; the incoming document is checked as part
+    // of its activation.
+    if (graphModel.isSwitchingDocument) return false;
     // A dialog or a popup menu is on top of the editor.
     final route = ModalRoute.of(context);
     if (route != null && !route.isCurrent) return false;
@@ -191,6 +210,14 @@ class _StructureDesignerState extends State<StructureDesigner> {
                             child: const Text('Load Design'),
                           ),
                           _buildRecentFilesSubmenu(),
+                          MenuItemButton(
+                            key: const Key('close_tab_item'),
+                            onPressed: _closeActiveDocument,
+                            shortcut: const SingleActivator(
+                                LogicalKeyboardKey.keyW,
+                                control: true),
+                            child: const Text('Close Tab'),
+                          ),
                           MenuItemButton(
                             key: const Key('save_design_item'),
                             onPressed: model.canSave ? _saveDesign : null,
@@ -575,6 +602,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
             Expanded(
               child: Consumer<StructureDesignerModel>(
                 builder: (context, model, child) {
+                  final documentId = model.activeDocumentId;
                   return Stack(
                     children: [
                       Row(
@@ -582,16 +610,25 @@ class _StructureDesignerState extends State<StructureDesigner> {
                           // Left sidebar
                           if (_leftPanelVisible)
                             model.directEditingMode
-                                ? _buildDirectEditingSidebar()
-                                : _buildNodeNetworkSidebar(),
+                                ? _buildDirectEditingSidebar(documentId)
+                                : _buildNodeNetworkSidebar(documentId),
                           // Main content area
                           MainContentArea(
                             graphModel: graphModel,
-                            nodeNetworkKey: nodeNetworkKey,
+                            nodeNetworkKey: _nodeNetworkKeyFor(documentId),
                             verticalDivision: verticalDivision,
                             directEditingMode: model.directEditingMode,
                             networkEditorVisible: _networkEditorVisible,
                             nodeDataPanelVisible: _nodeDataPanelVisible,
+                            documentTabs: _buildDocumentTabs(model),
+                            documentTabPlacement: model
+                                    .preferences
+                                    ?.interfacePreferences
+                                    .documentTabPlacement ??
+                                DocumentTabPlacement.leftOfViewport,
+                            // Presentation Mode leaves only the viewport.
+                            showDocumentTabs: _anyPanelVisible,
+                            documentKey: documentId,
                           ),
                         ],
                       ),
@@ -611,7 +648,14 @@ class _StructureDesignerState extends State<StructureDesigner> {
             const ProfilerPanel(),
             // Bottom-docked AI History panel (collapses to zero height
             // when hidden). See `doc/design_ai_edit_history.md` (D11).
-            const AiHistoryPanel(),
+            // Keyed by the document: the edit log is per document, and the
+            // panel memoises entries by sequence number, which only one log
+            // makes unique (`doc/design_multiple_documents.md` D8, D11).
+            Selector<StructureDesignerModel, BigInt?>(
+              selector: (_, model) => model.activeDocumentId,
+              builder: (_, documentId, __) =>
+                  AiHistoryPanel(key: ValueKey(documentId)),
+            ),
             // Always-on refresh phase readout. Repaints off its own
             // ValueNotifier, never with the model — see
             // `doc/design_eval_profiling.md` (D8a).
@@ -624,7 +668,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
 
   /// Builds the left sidebar for Direct Editing Mode.
   /// Contains simplified Display, Camera Control, and the atom edit editor.
-  Widget _buildDirectEditingSidebar() {
+  Widget _buildDirectEditingSidebar(BigInt? documentId) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -646,8 +690,11 @@ class _StructureDesignerState extends State<StructureDesigner> {
                 content: Padding(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 8.0, vertical: 4.0),
-                  child:
-                      DisplayPanel(model: graphModel, directEditingMode: true),
+                  child: KeyedSubtree(
+                    key: ValueKey(documentId),
+                    child: DisplayPanel(
+                        model: graphModel, directEditingMode: true),
+                  ),
                 ),
                 expand: false,
               ),
@@ -670,9 +717,12 @@ class _StructureDesignerState extends State<StructureDesigner> {
               Expanded(
                 child: Section(
                   title: 'Editor',
-                  content: NodeDataWidget(
-                    graphModel: graphModel,
-                    directEditingMode: true,
+                  content: KeyedSubtree(
+                    key: ValueKey(documentId),
+                    child: NodeDataWidget(
+                      graphModel: graphModel,
+                      directEditingMode: true,
+                    ),
                   ),
                   expand: true,
                 ),
@@ -703,13 +753,13 @@ class _StructureDesignerState extends State<StructureDesigner> {
 
   /// Builds the left sidebar for Node Network Mode.
   /// Contains full Display, Camera Control, and Node Networks panel.
-  Widget _buildNodeNetworkSidebar() {
+  Widget _buildNodeNetworkSidebar(BigInt? documentId) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         SizedBox(
           width: _nodeNetworkSidebarWidth,
-          child: _buildNodeNetworkSidebarContent(),
+          child: _buildNodeNetworkSidebarContent(documentId),
         ),
         // Drag handle for resizing the sidebar
         GestureDetector(
@@ -732,7 +782,9 @@ class _StructureDesignerState extends State<StructureDesigner> {
   }
 
   /// Builds the content of the node network sidebar (without the resize handle).
-  Widget _buildNodeNetworkSidebarContent() {
+  /// The display panel and the user-types panel are document-dependent and
+  /// keyed by [documentId] (D11); the camera control is session UI.
+  Widget _buildNodeNetworkSidebarContent(BigInt? documentId) {
     return Column(
       children: [
         // Display settings section
@@ -740,7 +792,10 @@ class _StructureDesignerState extends State<StructureDesigner> {
           title: 'Display',
           content: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-            child: DisplayPanel(model: graphModel),
+            child: KeyedSubtree(
+              key: ValueKey(documentId),
+              child: DisplayPanel(model: graphModel),
+            ),
           ),
           expand: false,
         ),
@@ -760,7 +815,10 @@ class _StructureDesignerState extends State<StructureDesigner> {
           flex: 5,
           child: Section(
             title: 'User types',
-            content: NodeNetworksPanel(model: graphModel),
+            content: KeyedSubtree(
+              key: ValueKey(documentId),
+              child: NodeNetworksPanel(model: graphModel),
+            ),
             expand: true,
           ),
         ),
@@ -816,6 +874,21 @@ class _StructureDesignerState extends State<StructureDesigner> {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
 
     if (HardwareKeyboard.instance.isControlPressed) {
+      // Ctrl+Tab / Ctrl+Shift+Tab: cycle through the document tabs. Not while
+      // a pointer is down (D4) — Rust would refuse the switch anyway.
+      if (event.logicalKey == LogicalKeyboardKey.tab) {
+        if (_pointersDown == 0) {
+          _activateRelativeDocument(
+              HardwareKeyboard.instance.isShiftPressed ? -1 : 1);
+        }
+        return KeyEventResult.handled;
+      }
+      // Ctrl+W: close the active tab.
+      if (event.logicalKey == LogicalKeyboardKey.keyW &&
+          !HardwareKeyboard.instance.isShiftPressed) {
+        _closeActiveDocument();
+        return KeyEventResult.handled;
+      }
       // Ctrl+Shift+Z or Ctrl+Y: Redo
       if ((HardwareKeyboard.instance.isShiftPressed &&
               event.logicalKey == LogicalKeyboardKey.keyZ) ||
@@ -959,12 +1032,121 @@ class _StructureDesignerState extends State<StructureDesigner> {
   void _showTransientSnackBar(BuildContext context, String message) =>
       showTransientSnackBar(context, message);
 
-  Future<bool> _confirmDiscardChanges() =>
-      confirmDiscardChanges(context, graphModel);
+  // ===== Document tabs (`doc/design_multiple_documents.md`) =====
+  //
+  // Every change of the active document goes through the model's
+  // `withDocumentSwitch` methods (D11); this state only asks the questions
+  // (discard changes?) and shows what came back.
 
+  /// The gestures of the tab list — one instance for the life of the editor
+  /// (its pointer gate must survive a rebuild between pointer down and tap),
+  /// fed the model's current tabs on every build.
+  late final DocumentTabs _documentTabs = DocumentTabs(
+    tabs: const [],
+    onActivate: (tab) => _activateDocument(tab.id),
+    onClose: _closeDocument,
+    onMove: graphModel.moveDocument,
+    pointerBusy: () => _pointersDown > 0,
+  );
+
+  DocumentTabs _buildDocumentTabs(StructureDesignerModel model) =>
+      _documentTabs..tabs = model.documents;
+
+  /// Shows what a switch reported: a refusal (D4) as an error, and the
+  /// incoming document's dependency check (library linking D7) the way the
+  /// poll shows it.
+  void _showActivation(APIActivateResult? result) {
+    if (result == null || !mounted) return;
+    if (!result.result.success) {
+      showErrorSnackBar(context, result.result.errorMessage);
+      return;
+    }
+    final report = result.libraryReport;
+    if (report != null) {
+      showRefreshReport(context, graphModel, report, quietWhenClean: true);
+    }
+  }
+
+  Future<void> _activateDocument(BigInt id) async {
+    _showActivation(await graphModel.activateDocument(id));
+  }
+
+  Future<void> _activateRelativeDocument(int delta) async {
+    _showActivation(await graphModel.activateRelativeDocument(delta));
+  }
+
+  /// Closes [tab], asking first when it has unsaved changes. Closing the
+  /// active tab activates its neighbour; closing the last leaves a fresh
+  /// Untitled tab.
+  Future<void> _closeDocument(APIDocumentTab tab) async {
+    // Commit a pending field edit first, so the dirty flag asked about below
+    // includes it, then read the flag fresh rather than from the last build.
+    FocusManager.instance.primaryFocus?.unfocus();
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    final fresh = graphModel.refreshDocumentList().where((t) => t.id == tab.id);
+    if (fresh.isEmpty) return; // closed meanwhile
+    tab = fresh.first;
+    if (tab.isDirty) {
+      final discard = await showDraggableAlertDialog<bool>(
+        context: context,
+        title: const Text('Unsaved Changes'),
+        content: Text(
+            '${tab.displayName} has unsaved changes. Close it and discard them?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Discard'),
+          ),
+        ],
+      );
+      if (discard != true) return;
+    }
+    _showActivation(await graphModel.closeDocument(tab.id));
+  }
+
+  /// *File > Close Tab* and `Ctrl+W`.
+  Future<void> _closeActiveDocument() async {
+    for (final tab in graphModel.documents) {
+      if (tab.isActive) {
+        await _closeDocument(tab);
+        return;
+      }
+    }
+  }
+
+  /// *File > New*: a new Untitled tab, in the active tab's mode. Nothing is
+  /// discarded, so nothing is asked.
   Future<void> _newDesign() async {
-    if (!await _confirmDiscardChanges()) return;
-    graphModel.newProject();
+    final result = await graphModel.newDocument();
+    if (!result.success && mounted) {
+      showErrorSnackBar(context, result.errorMessage);
+    }
+  }
+
+  /// *File > Load Design* / *Open Recent*: opens [filePath] in a new tab, or
+  /// switches to the tab that has it open (D5).
+  Future<void> _openDesignFile(String filePath) async {
+    rememberPickedFile(APIFileDialogPurpose.design, filePath);
+    final result = await graphModel.openDocument(filePath);
+    if (!mounted) return;
+    if (!result.result.success) {
+      showErrorDialog(
+        context: context,
+        title: 'Load Error',
+        message: result.result.errorMessage,
+      );
+      return;
+    }
+    if (!result.alreadyOpen) _showLoadRepairModalIfNeeded();
+    final report = result.libraryReport;
+    if (report != null) {
+      showRefreshReport(context, graphModel, report, quietWhenClean: true);
+    }
   }
 
   Future<void> _importXyz() async {
@@ -1016,21 +1198,8 @@ class _StructureDesignerState extends State<StructureDesigner> {
   }
 
   Future<void> _openRecentFile(String filePath) async {
-    if (!await _confirmDiscardChanges()) return;
-
     debugPrint('Opening recent file: $filePath');
-    rememberPickedFile(APIFileDialogPurpose.design, filePath);
-    final loadResult = graphModel.loadNodeNetworks(filePath);
-
-    if (!loadResult.success && mounted) {
-      showErrorDialog(
-        context: context,
-        title: 'Load Error',
-        message: loadResult.errorMessage,
-      );
-    } else if (loadResult.success) {
-      _showLoadRepairModalIfNeeded();
-    }
+    await _openDesignFile(filePath);
   }
 
   /// What the most recent load reported: auto-repaired duplicate parameter
@@ -1042,8 +1211,6 @@ class _StructureDesignerState extends State<StructureDesigner> {
   }
 
   Future<void> _loadDesign() async {
-    if (!await _confirmDiscardChanges()) return;
-
     // Open file picker for CNND files
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
@@ -1055,21 +1222,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
     if (result != null && result.files.isNotEmpty) {
       String filePath = result.files.first.path!;
       debugPrint('Design file selected: $filePath');
-      rememberPickedFile(APIFileDialogPurpose.design, filePath);
-      final loadResult = graphModel.loadNodeNetworks(filePath);
-
-      if (!loadResult.success) {
-        // Show error dialog
-        if (mounted) {
-          showErrorDialog(
-            context: context,
-            title: 'Load Error',
-            message: loadResult.errorMessage,
-          );
-        }
-      } else {
-        _showLoadRepairModalIfNeeded();
-      }
+      await _openDesignFile(filePath);
     } else {
       debugPrint('No design file selected');
     }

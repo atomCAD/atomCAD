@@ -9,6 +9,7 @@ This is how the full window looks like:
 
 We will discuss the different parts of the UI in detail. The parts are:
 
+- Document tabs
 - 3D Viewport
 - Node Networks List Panel
 - Node Network Editor Panel
@@ -20,9 +21,72 @@ We will discuss the different parts of the UI in detail. The parts are:
 - AI History panel
 - Preferences Dialog (Edit > Preferences)
 
+## Document tabs
+
+Several designs can be open at once, one per **tab**. Each tab shows the file
+name — *Untitled* for a design that was never saved — with a `*` while it has
+unsaved changes, and a close button. Hovering over a tab shows the full path.
+
+- **Click** a tab to switch to it, or press `Ctrl+Tab` / `Ctrl+Shift+Tab` to
+  cycle through the tabs.
+- **Drag** a tab (press and hold, then move) to reorder the tabs.
+- **Close** a tab with its `×` button, a **middle click**, or *File > Close
+  Tab* (`Ctrl+W`) for the active one. If it has unsaved changes you are asked
+  first. Closing the last tab leaves a fresh *Untitled* one: there is always a
+  document open.
+
+*File > New* opens a new *Untitled* tab, and *File > Load Design* and *Open
+Recent* open the file in a new tab — except when the active tab is an empty,
+untouched *Untitled* design (as after starting the app), which the file then
+replaces. A file that is already open is not opened twice: you are switched to
+its tab instead. For the same reason, *Save Design As* refuses a file that is
+open in another tab.
+
+**Each tab is its own document.** It has its own undo history (`Ctrl+Z`
+undoes in the active tab only), its own camera, selection and node network
+view, and its own unsaved-changes flag. Switching tabs is not an undo step and
+never marks a design as changed. Switching re-evaluates the design you switch
+to, which takes a moment for very large atomic designs. The preferences, the
+Console, the Profiler, *Open Recent* and the remembered file-dialog folders
+belong to the application and stay the same whatever tab is active. The AI
+History panel shows the active tab's history.
+
+A value you typed into a property field and did not confirm with Enter is
+applied to the design you typed it into before the switch happens, never to
+the one you switch to.
+
+Tabs cannot be switched in the middle of a drag (in the viewport or on the
+node network canvas); finish the drag first.
+
+**Copy and paste work across tabs.** Copy nodes in one tab and paste them in
+another: an instance of a linked library's network keeps referring to the same
+network — `demolib.slab` in the design becomes `slab` when pasted into
+`demolib.cnnd`'s own tab, and the reverse — and relative file paths are
+rewritten so they still point at the same file. When the target cannot see a
+network or record type the nodes need, nothing is pasted and a dialog lists
+what is missing and why. See [Linked libraries](library_linking.md).
+
+When you switch to a design that links a library you have just saved in
+another tab, the change is picked up as part of the switch, and reported the
+same way as when the application notices it on its own.
+
+**Quitting** with unsaved changes in several tabs asks once, listing every
+design that would lose changes.
+
+Where the tabs are shown is a preference — see [Interface](#interface):
+
+- **Vertical, left of the viewport** (the default): a list, one design per row,
+  docked to the viewport's left edge and as tall as the viewport. Drag the
+  divider on its right to change its width.
+- **Horizontal, above the node network**: a strip of tabs like a browser's.
+  While the node network editor is not shown — folded with `Ctrl+2`, or in a
+  Direct Editing Mode design — the strip sits on top of the viewport instead.
+
+*Presentation Mode* (`Ctrl+0`) hides the tabs too; `Ctrl+Tab` still switches.
+
 ## Arranging the window
 
-The window is divided in three steps, and knowing the order explains why each
+The window is divided in steps, and knowing the order explains why each
 panel grows the way it does.
 
 1. The **left sidebar** is taken off the side of the window first, so it always
@@ -30,13 +94,17 @@ panel grows the way it does.
 2. The **node network editor** is taken off next, below the viewport (or beside
    it in horizontal layout). It gets the full width of what remains, because
    node networks are wide.
-3. The **node properties panel** is taken off last, from the viewport's right
+3. The **node properties panel** is taken off from the viewport's right
    edge. It is docked to the viewport, not to the network editor, so it is as
    tall as the viewport is.
+4. The vertical **document tab list** (in its default placement) is taken off
+   last, from the viewport's left edge — the mirror image of the properties
+   panel, and as tall as the viewport.
 
 Drag any of the dividers to change the split. The divider between the viewport
-and the properties panel sets the panel's width, and the divider between the
-viewport and the network editor sets how the height is shared.
+and the properties panel sets the panel's width, the one between the tab list
+and the viewport sets the list's width, and the divider between the viewport
+and the network editor sets how the height is shared.
 
 ### Folding panels away
 
@@ -49,14 +117,15 @@ viewport.
 | *View > Hide Left Panel* | `Ctrl+1` | The display, camera and user types sidebar |
 | *View > Hide Node Network* | `Ctrl+2` | The node network editor |
 | *View > Hide Properties Panel* | `Ctrl+3` | The node properties panel |
-| *View > Presentation Mode* | `Ctrl+0` | All three at once |
+| *View > Presentation Mode* | `Ctrl+0` | All three at once, and the document tabs |
 
 Each item turns into its *Show* counterpart while the panel is folded.
 *Presentation Mode* remembers which panels were open and puts back exactly that
 arrangement when you leave it.
 
 Folding the node network editor away hands its share of the window to the
-viewport and the properties panel together. **That is how you get a tall
+viewport and the properties panel together (and to the vertical tab list, which
+then runs the full height too). **That is how you get a tall
 properties panel**: with the network editor folded, a panel that walks you
 through something step by step, such as the [mechanosynth](nodes/atomic.md#mechanosynth)
 node's build panel, gets the full height of the window beside a full-height
@@ -965,10 +1034,12 @@ Used for loading and saving a design, exporting a design to .xyz or .mol, undo/r
 
 ![](../atomCAD_images/menu_bar.png)
 
-- *File > New*: Creates a new blank design.
+- *File > New*: Opens a new blank design in a new [tab](#document-tabs).
+- *File > Load Design*, *File > Open Recent*: Open a design in a new [tab](#document-tabs), or switch to its tab if it is already open.
+- *File > Close Tab* (**Ctrl+W**): Closes the active tab, asking first if it has unsaved changes.
 - *File > Load Design*, *File > Save Design*, *File > Save Design As*: The native file format of an atomCAD design is the .cnnd file format. CNND stands for Crystal Node Network Design. It is a json based format. It contains a list of node networks. Can be used as a design file or as a design library file intended for reusing node networks from it as custom nodes in other designs.
   - *Save Design* (**Ctrl+S**) is a quick save: it writes the design straight back to the file it was loaded from or last saved to, with no dialog. A short confirmation appears at the bottom of the window ("Saved *filename*", or "No changes to save" when the design is already up to date). If the design has never been saved and so has no file yet, **Ctrl+S** opens the *Save Design As* dialog instead.
-  - *Save Design As* (**Ctrl+Shift+S**) always opens the file dialog, so it is the way to write the design to a *new* file — the one you pick also becomes the target of subsequent quick saves. When the design links libraries or reads data files by relative paths and some of them are not yet where the new location expects them, a dialog offers to copy them along first. See [Moving a design](library_linking.md#moving-a-design-save-as-and-project-bundles).
+  - *Save Design As* (**Ctrl+Shift+S**) always opens the file dialog, so it is the way to write the design to a *new* file — the one you pick also becomes the target of subsequent quick saves. A file that is open in another tab is refused: close that tab first. When the design links libraries or reads data files by relative paths and some of them are not yet where the new location expects them, a dialog offers to copy them along first. See [Moving a design](library_linking.md#moving-a-design-save-as-and-project-bundles).
 - *File > Import copy…*: Copies selected networks from another `.cnnd` file into your design, once, optionally under a name prefix. The copies are ordinary local networks and forget where they came from; to keep using another file's networks *as that file changes*, link it instead.
 - *File > Link library…*, *File > Refresh all dependencies*: Link another `.cnnd` file so its networks and record types can be used here without being copied, and re-read every linked library and data file. See [Linked libraries](library_linking.md).
 - *File > Export project bundle…*: Writes a `.zip` of the design and every library and data file it depends on, laid out so that it opens complete wherever it is unzipped. See [Moving a design](library_linking.md#moving-a-design-save-as-and-project-bundles).
@@ -1005,6 +1076,7 @@ Used for loading and saving a design, exporting a design to .xyz or .mol, undo/r
 - *View > Presentation Mode* (**Ctrl+0**): Folds all three panels away at once, leaving only the viewport. Picking it again puts back the arrangement you had. See [Folding panels away](#folding-panels-away).
 - *View > Node titles: names* (**Ctrl+Shift+N**): Switches node title bars between the node's type and the node's own name, and back. Ticked while names are shown. The same setting as the *Node titles* group in the [Display Preferences panel](#node-titles); see there for what it does to each kind of node. Available in Node Network Mode only.
 - *View > Show/Hide Console* (**Ctrl + backtick**): Toggles the [Console panel](#console-panel) docked at the bottom of the window.
+- `Ctrl+Tab` / `Ctrl+Shift+Tab`: Switch to the next / previous [document tab](#document-tabs).
 - *View > Show/Hide AI History*: Toggles the [AI History panel](#ai-history-panel) docked at the bottom of the window. A dot and a count on the menu entry say how many AI edits arrived while the panel was closed.
 
 ## Preferences Dialog
@@ -1050,6 +1122,12 @@ The panel's **Isosurface extraction** group governs how an [`isosurface`](nodes/
 | Setting | Description |
 |---------|-------------|
 | Display camera pivot point | Shows or hides the camera pivot point as a small red cube. |
+
+### Interface
+
+| Setting | Description |
+|---------|-------------|
+| Document tabs | Where the [document tabs](#document-tabs) are shown: *Vertical, left of the viewport* (the default) or *Horizontal, above the node network*. Takes effect immediately. |
 
 ### Layout
 

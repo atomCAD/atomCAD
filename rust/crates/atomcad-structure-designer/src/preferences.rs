@@ -604,6 +604,28 @@ impl Default for LayoutPreferences {
     }
 }
 
+/// Where the document tabs are placed in the window
+/// (`doc/design_multiple_documents.md` D10).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DocumentTabPlacement {
+    /// A vertical list docked to the viewport's left edge, one document per
+    /// row. The default (mechadense's request: room for long file names).
+    #[default]
+    LeftOfViewport,
+    /// A horizontal strip above the node network editor, like a browser's.
+    AboveNetworkEditor,
+}
+
+/// Preferences about the application window itself — as opposed to
+/// [`LayoutPreferences`], which is about node-network auto-layout.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct InterfacePreferences {
+    /// Where the document tabs go (D10). A standing choice, so persisted,
+    /// unlike panel folding or the layout orientation.
+    #[serde(default)]
+    pub document_tab_placement: DocumentTabPlacement,
+}
+
 #[derive(Clone, Serialize, Deserialize, Default)]
 pub struct StructureDesignerPreferences {
     #[serde(default)]
@@ -620,6 +642,8 @@ pub struct StructureDesignerPreferences {
     pub simulation_preferences: SimulationPreferences,
     #[serde(default)]
     pub memory_preferences: MemoryPreferences,
+    #[serde(default)]
+    pub interface_preferences: InterfacePreferences,
 }
 
 const CONFIG_DIR_NAME: &str = "atomCAD";

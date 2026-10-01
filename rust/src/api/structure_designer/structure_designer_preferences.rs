@@ -679,6 +679,28 @@ impl Default for LayoutPreferences {
     }
 }
 
+/// Where the document tabs are placed (`doc/design_multiple_documents.md`
+/// D10). Twin of the domain enum.
+#[frb]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DocumentTabPlacement {
+    /// A vertical list docked to the viewport's left edge (the default).
+    #[default]
+    LeftOfViewport,
+    /// A horizontal strip above the node network editor.
+    AboveNetworkEditor,
+}
+
+/// Preferences about the application window. Twin of the domain struct.
+#[frb]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct InterfacePreferences {
+    /// Where the document tabs go (D10).
+    #[frb(non_final)]
+    #[serde(default)]
+    pub document_tab_placement: DocumentTabPlacement,
+}
+
 #[frb]
 #[derive(Clone, Serialize, Deserialize, Default)]
 pub struct StructureDesignerPreferences {
@@ -696,6 +718,8 @@ pub struct StructureDesignerPreferences {
     pub simulation_preferences: SimulationPreferences,
     #[serde(default)]
     pub memory_preferences: MemoryPreferences,
+    #[serde(default)]
+    pub interface_preferences: InterfacePreferences,
 }
 
 impl StructureDesignerPreferences {
@@ -1082,6 +1106,44 @@ impl From<&domain::LayoutPreferences> for LayoutPreferences {
     }
 }
 
+impl From<&DocumentTabPlacement> for domain::DocumentTabPlacement {
+    fn from(v: &DocumentTabPlacement) -> Self {
+        match v {
+            DocumentTabPlacement::LeftOfViewport => domain::DocumentTabPlacement::LeftOfViewport,
+            DocumentTabPlacement::AboveNetworkEditor => {
+                domain::DocumentTabPlacement::AboveNetworkEditor
+            }
+        }
+    }
+}
+
+impl From<&domain::DocumentTabPlacement> for DocumentTabPlacement {
+    fn from(v: &domain::DocumentTabPlacement) -> Self {
+        match v {
+            domain::DocumentTabPlacement::LeftOfViewport => DocumentTabPlacement::LeftOfViewport,
+            domain::DocumentTabPlacement::AboveNetworkEditor => {
+                DocumentTabPlacement::AboveNetworkEditor
+            }
+        }
+    }
+}
+
+impl From<&InterfacePreferences> for domain::InterfacePreferences {
+    fn from(p: &InterfacePreferences) -> Self {
+        domain::InterfacePreferences {
+            document_tab_placement: (&p.document_tab_placement).into(),
+        }
+    }
+}
+
+impl From<&domain::InterfacePreferences> for InterfacePreferences {
+    fn from(p: &domain::InterfacePreferences) -> Self {
+        InterfacePreferences {
+            document_tab_placement: (&p.document_tab_placement).into(),
+        }
+    }
+}
+
 impl From<&StructureDesignerPreferences> for domain::StructureDesignerPreferences {
     fn from(p: &StructureDesignerPreferences) -> Self {
         domain::StructureDesignerPreferences {
@@ -1094,6 +1156,7 @@ impl From<&StructureDesignerPreferences> for domain::StructureDesignerPreference
             layout_preferences: (&p.layout_preferences).into(),
             simulation_preferences: (&p.simulation_preferences).into(),
             memory_preferences: (&p.memory_preferences).into(),
+            interface_preferences: (&p.interface_preferences).into(),
         }
     }
 }
@@ -1116,6 +1179,7 @@ impl From<&domain::StructureDesignerPreferences> for StructureDesignerPreference
             layout_preferences: (&p.layout_preferences).into(),
             simulation_preferences: (&p.simulation_preferences).into(),
             memory_preferences: (&p.memory_preferences).into(),
+            interface_preferences: (&p.interface_preferences).into(),
         }
     }
 }
