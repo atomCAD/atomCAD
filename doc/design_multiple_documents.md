@@ -210,8 +210,8 @@ the mounts of it.
 Consequences, all of them existing behaviour:
 
 - Saving library `L` in tab B changes the file; tab A detects it with the D7
-  check, which runs when A is activated (§5.3), and refreshes with call-site
-  repair. The refresh is an undoable step in A (library linking D9).
+  check, which runs as part of activating A (§5.2), and refreshes with
+  call-site repair. The refresh is an undoable step in A (library linking D9).
 - Unsaved edits to `L` in tab B are invisible to A until saved.
 - A library open in a tab is editable there and read-only in every document
   that links it.
@@ -229,9 +229,11 @@ Opening, closing and switching tabs are not recorded anywhere.
 The AI assistant's HTTP server calls the same API as the UI, so it edits the
 active document. An agent working while the user switches tabs would then edit
 a different document than it read. P4 adds a guard: CLI requests may carry
-`--document <path>`, and a request whose path is not the active document's
-fails with a message naming the active one. Agents (the `atomcad` skill) pass
-it. The AI edit log (`ai_edit_log`) is per document, since its entries refer to
+`--document <path-or-id>`, and a request naming anything but the active
+document fails with a message naming the active one. A path names a saved
+document. An Untitled document has no path, so it is named by its document id,
+which a new `atomcad-cli documents` command lists (id, path or *Untitled*,
+dirty, active). Agents (the `atomcad` skill) pass the guard on every request. The AI edit log (`ai_edit_log`) is per document, since its entries refer to
 nodes of that document's networks.
 
 ### D9 — One clipboard; names are translated through the file that owns them
@@ -327,9 +329,13 @@ no interface to check.
 renaming a library alias, already rewrite or clear the clipboard
 (`structure_designer.rs`, `library_link_ops.rs`). These keep doing so only
 when the clipboard's origin is the document being edited. A rename in some
-other document must not rewrite names that belong to the source.
-`StructureDesigner` gains a `document_id` field so this check is one
-comparison. After such a rewrite the recorded owners are recomputed from the
+other document must not rewrite names that belong to the source. The sites
+include the undo and redo paths: `structure_designer.rs` rewrites the
+clipboard in the rename code that undo and redo of a rename also run.
+`StructureDesigner` gains a `document_id` field, and every site goes through
+one helper, `own_clipboard_mut() -> Option<&mut Clipboard>`, which returns the
+clipboard only when its origin is this document. No site touches
+`self.clipboard` directly, so the guard cannot be forgotten at one of them. After such a rewrite the recorded owners are recomputed from the
 source's registry. In every other respect the origin is a snapshot: closing
 the source, Save As or a later refresh does not change it, and the interface
 check at paste time catches whatever drifted.
@@ -365,11 +371,49 @@ Rules that follow from the window layout (`doc/reference_guide/ui.md`,
   viewport, so folding the network editor (`Ctrl+2`) makes it full height,
   as it does the properties panel. The width divider is view state, like the
   other dividers.
-- **Horizontal**: when the network editor is folded, the strip moves to the
-  top edge of the viewport instead of disappearing with the editor. Otherwise
-  the only way to switch documents would be `Ctrl+Tab`.
+- **Horizontal**: whenever the network editor is not shown — folded with
+  `Ctrl+2`, or hidden because the document is in direct editing mode — the
+  strip moves to the top edge of the viewport instead of disappearing with
+  the editor. Otherwise the only way to switch documents would be `Ctrl+Tab`.
+  Direct editing mode is per document (§6), so the strip can move on a switch.
 - **Presentation Mode** (`Ctrl+0`) hides the tabs in either placement, since
   it exists to leave only the viewport. `Ctrl+Tab` still switches documents.
+
+### D11 — Flutter flushes pending edits before a switch and rebuilds per document
+
+Rust keeps documents apart (D1, D4). Flutter could still mix them up, in two
+ways.
+
+- **Late commits.** Input fields write their value when they lose focus
+  (`lib/inputs/float_input.dart` and its siblings, and several node-data
+  editors). The write goes through the model to the API, which acts on
+  whichever document is active *at that moment*. If a switch happens first —
+  `Ctrl+Tab` while a field has focus, or a click on a tab that does not take
+  focus on desktop — the pending value is written into the newly active
+  document, on whatever node there has the same network name and node id.
+  Node ids restart in every network and most designs have a `Main`, so such a
+  node almost always exists. The result is a silent edit of the wrong design.
+- **Reused widget state.** Widgets are keyed by network name and node id
+  (e.g. `'${network}|${scope}|${node.id}'` in `node_data_widget.dart`), and
+  those keys collide across documents for the same reason. Flutter would keep
+  A's `State` — a half-typed text, a scroll position, an expanded section — on
+  B's node.
+
+The decisions:
+
+- **Every switch goes through one Flutter function**, `switchDocument(id)`.
+  `activateDocument`, `closeDocument` of the active tab, `openDocument` and
+  `newDocument` all call it. It (1) unfocuses the primary focus, (2) waits for
+  the end of the current frame, so the focus listeners have run and their
+  writes have reached the *outgoing* document, and (3) only then calls the
+  Rust API. Keyboard shortcuts and tab clicks share this path; none of them
+  calls the API directly.
+- **The document-dependent UI is keyed by the document id**: the node network
+  editor, the properties panel, the user-types panel and the display panel sit
+  under one `KeyedSubtree(key: ValueKey(activeDocumentId))`. A switch rebuilds
+  all of them from scratch, so no `State` survives from one document into
+  another. Session UI (the menu bar, the tabs, the console, the camera control
+  panel) sits outside that subtree.
 
 ## 5. Architecture
 
@@ -389,9 +433,22 @@ pub struct DocumentSet {
 ```
 
 It knows nothing about the renderer, which keeps all of it testable in the
-crate's `tests/`. Operations: `insert_parked`, `take_parked`, `put_parked`,
-`order`, `find_by_path(canonical) -> Option<DocumentId>`, `neighbour_of(id)`
-(for close: the tab to the right, else to the left).
+crate's `tests/`. It owns every rule about which document is active and which
+are parked. The active designer itself stays in `CADInstance` (D1), so the
+operations that change the active document take it as a `&mut` slot:
+
+- `activate(&mut self, active: &mut StructureDesigner, target) ->
+  Result<(), SwitchRefused>` — the data half of the swap (§5.2, steps 1–4):
+  refuse during an open interaction (D4), take `target` out of `parked`,
+  `hand_over_app_state`, `mem::swap`, `park` the outgoing designer and put it
+  back under its id. Its doc comment states the raw-pointer rule of §5.2.
+- `insert(&mut self, designer, after: DocumentId) -> DocumentId` — adds a
+  parked document (new or freshly loaded) to the tab order and assigns its id.
+- `close(&mut self, active: &mut StructureDesigner, id)` — a parked tab is
+  simply dropped. The active tab first activates its neighbour (the tab to the
+  right, else to the left) and is then dropped. The last tab is replaced by a
+  fresh Untitled.
+- `order`, `move_to(id, index)`, `find_by_path(canonical) -> Option<DocumentId>`.
 
 On `StructureDesigner`:
 
@@ -402,12 +459,13 @@ On `StructureDesigner`:
 - `park(&mut self)` — D3: replaces the scene with an empty one (same
   invisible-node cache capacity) and clears the CSG caches. Asserts no open
   interaction.
-- `new_with_app_state_of(other: &StructureDesigner) -> StructureDesigner` — a
-  fresh designer for a new or opened document, starting from a copy of the
-  active one's settings rather than re-reading preferences from disk.
 - `is_pristine()` — no path, not dirty, empty undo stack (§3).
 - `document_id: u64` — set by `DocumentSet` when the designer joins it; `0` in
   headless mode. Used only by the clipboard upkeep guard (D9).
+
+A new or opened document starts as a plain `StructureDesigner::new()` and
+receives the app state through the same `hand_over_app_state` when it is
+activated. There is no second transfer path to drift from the first.
 
 New module `clipboard.rs` (D9). `clipboard: Option<NodeNetwork>` becomes
 `Option<Clipboard>`:
@@ -447,20 +505,41 @@ pub struct Owner {
 `CADInstance` gains `documents: DocumentSet` (D1). `initialize_cad_instance_async`
 registers the initial designer as document 1.
 
-**The swap** (`activate_document_internal(instance, target)`):
+**The swap** (`activate_document_internal(instance, target)`). Steps 1–4 are
+`DocumentSet::activate` in the domain crate; the API layer adds the renderer,
+the dependency check and the refresh:
 
 1. If `target` is active: nothing to do. If `open_interaction()` is `Some`:
    refuse (D4).
-2. `sync_camera_to_active_network` (normally already current).
-3. `incoming = documents.take_parked(target)`.
-4. `instance.structure_designer.hand_over_app_state(&mut incoming)`.
-5. `mem::swap(&mut instance.structure_designer, &mut incoming)`; `incoming` now
-   holds the outgoing document. `incoming.park()`, then
-   `documents.put_parked(old_active, incoming)`; mark `target` active.
-6. `apply_camera_settings(renderer, active network's camera_settings)`.
-7. `mark_full_refresh()`, `refresh_structure_designer_auto(instance)`.
+2. `incoming = take(target)`; `active.hand_over_app_state(&mut incoming)`.
+3. `mem::swap(active, &mut incoming)`; `incoming` now holds the outgoing
+   document.
+4. `incoming.park()`, put it back under its id, mark `target` active.
+5. (API) `apply_camera_settings(renderer, active network's camera_settings)`.
+   The outgoing camera was synced to its network before step 1.
+6. (API) `check_dependencies()` — library linking D7's check, run *before* the
+   refresh, so a library saved in another tab is applied and the document is
+   evaluated once, not twice. Its report is returned to Flutter.
+7. (API) `mark_full_refresh()`, `refresh_structure_designer_auto(instance)`.
 
-No step after 4 can fail, so a switch either happens completely or not at all.
+Nothing after step 1 can fail, so a switch either happens completely or not
+at all.
+
+**Why the swap is safe, and the one assumption it rests on.** `mem::swap`
+exchanges the inline bytes of the two `StructureDesigner` values. Their heap
+data (networks, atoms, undo stack, caches) does not move; only the owning
+handles change hands. This is an ordinary Rust move: there is no `Pin` or
+self-referential state in the structure-designer crate or `rust/src/api/`, and
+the two `&mut` borrows guarantee nothing else observes either value during the
+swap. What it relies on is that **no code keeps a raw pointer into the active
+`StructureDesigner` across API calls**: such a pointer would point at the
+other document after a switch. The raw pointers that exist today
+(`ai_text_edit.rs`, `structure_designer.rs` and `structure_designer_api.rs`,
+all to split a borrow of `node_type_registry` for `validate_network`) live
+inside one block. The evaluation memo's address-based keys
+(`eval_frame_key`) point into the heap and are rebuilt every pass. The doc
+comment of `DocumentSet::activate` states this assumption, and
+`rust/AGENTS.md` repeats it.
 
 **New FRB module** `rust/src/api/structure_designer/documents_api.rs` (must be
 added to `rust_input` in `flutter_rust_bridge.yaml`), all `#[frb(sync)]`:
@@ -468,9 +547,9 @@ added to `rust_input` in `flutter_rust_bridge.yaml`), all `#[frb(sync)]`:
 | Function | Behaviour |
 |---|---|
 | `list_documents() -> Vec<APIDocumentTab>` | Tab order; each `{ id, display_name, file_path, is_dirty, is_active }`. |
-| `new_document() -> u64` | Fresh designer (`new_with_app_state_of`; direct-editing mode as for `new_project_direct_editing`), inserted after the active tab and activated. |
+| `new_document() -> u64` | Fresh designer (`StructureDesigner::new()`, then direct-editing mode as for `new_project_direct_editing`), inserted after the active tab and activated. |
 | `open_document(file_path) -> APIOpenDocumentResult` | Already open (D5) → activate it, `already_open: true`. Otherwise build a fresh designer, **load into it while detached**, and only on success insert and activate it. A failed load drops the fresh designer; the active document was never touched. If the active document `is_pristine()`, the new one takes its place in the tab order and the pristine one is dropped. Carries the same post-load reports as `load_node_networks` (param-id repairs, library report). |
-| `activate_document(id) -> APIResult` | The swap. Error when refused (D4) or unknown id. |
+| `activate_document(id) -> APIActivateResult` | The swap. `{ result: APIResult, library_report: Option<APIRefreshReport> }`: an error when refused (D4) or the id is unknown; otherwise what the dependency check of step 6 did, shown by Flutter exactly like a report from the 2 s poll. |
 | `close_document(id) -> APIResult` | No dirty check — Flutter asks first. Closing the active tab activates its neighbour first, then drops the closed designer. Closing the last tab leaves a fresh Untitled. Refused during an open interaction. |
 | `move_document(id, new_index)` | Tab reordering by drag. |
 
@@ -499,17 +578,20 @@ document. Additions:
   `selectedAiHistorySeq`, `lastLoadLibraryReport`. Where the kernel already
   holds a value, nothing is stashed. Tool choices (`activeAtomEditTool`, bond
   mode, element) are session state and stay put. `backToDesignPath` is removed.
-- **After every switch**, the dependency check that `structure_designer.dart`
-  runs on focus and on the 2 s poll (`_checkDependencies`) runs once more,
-  immediately. This is what makes a library saved in another tab show up
-  (D6). The poll itself keeps checking only the active document.
+- **`switchDocument(id)`** (D11): unfocus, wait for the end of the frame, then
+  call the API. Every way of switching, opening, creating or closing the
+  active tab goes through it. It shows the `library_report` of the activation
+  (§5.2 step 6) with the same snackbar the poll uses. The 2 s poll itself keeps
+  checking only the active document.
+- **`KeyedSubtree(ValueKey(activeDocumentId))`** around the document-dependent
+  UI (D11).
 
 UI:
 
 - The tabs (D10). One `DocumentTabs` model of the gestures (activate, close,
   reorder, middle-click close, tooltip) and two thin layouts over it:
   `DocumentTabStrip` (horizontal, above the network editor, or above the
-  viewport while the editor is folded) and `DocumentTabList` (vertical, a dock
+  viewport while the editor is not shown) and `DocumentTabList` (vertical, a dock
   on the viewport's left edge with its own width divider, built like the
   properties-panel dock). The window layout picks one from
   `preferences.interfacePreferences.documentTabPlacement` and hides both in
@@ -622,14 +704,19 @@ Rust tests go in the owning crate's `tests/` directory: domain tests in
 
 ### Phase 1 — Rust: `DocumentSet`, the swap, the API
 
-Work: `document_set.rs`; `hand_over_app_state` (exhaustive destructure),
-`park`, `new_with_app_state_of`, `is_pristine`; `CADInstance.documents`;
+Work: `document_set.rs` with `activate`, `insert`, `close`;
+`hand_over_app_state` (exhaustive destructure), `park`, `is_pristine`;
+`CADInstance.documents`; the activation-time dependency check;
 `documents_api.rs` + `flutter_rust_bridge.yaml` + codegen; Save As refusal
 (D5). The clipboard stays per document until P2. Update `rust/AGENTS.md`
-(`CADInstance` holds the active document; parked ones live in `documents`) and the structure-designer `AGENTS.md` (a new field
-needs a side in `hand_over_app_state`; §6 is the reference).
+(`CADInstance` holds the active document; parked ones live in `documents`;
+never keep a raw pointer into the active `StructureDesigner` across API calls,
+because a tab switch swaps it, §5.2) and the structure-designer `AGENTS.md` (a
+new field needs a side in `hand_over_app_state`; §6 is the reference). The
+doc comment of `DocumentSet::activate` states the same raw-pointer rule.
 
-Tests:
+Tests (`DocumentSet` as domain tests in the crate's `tests/`; the renderer,
+dependency-check and refresh parts as API tests):
 - **Isolation.** Open A and B; edit each; switch back and forth: each
   registry, dirty flag, undo stack and redo stack is the one it was. Undo in B
   does not touch A. Network names that exist in both are independent.
@@ -649,9 +736,10 @@ Tests:
   end); closing the last tab leaves a pristine Untitled; pristine replacement
   on open.
 - **D6 end to end.** Host A links L; open L in tab B; edit and save in B;
-  activate A; run the dependency check: A's networks reflect the change, the
-  refresh is one undo step in A, and A's call sites were repaired as library
-  linking §7 specifies.
+  activate A: the activation's report names L, A's networks reflect the
+  change, the refresh is one undo step in A, A's call sites were repaired as
+  library linking §7 specifies, and A was evaluated once (count the refresh
+  profiles).
 - **Park.** A parked document's scene is empty and its CSG cache is cleared;
   activating it produces the same scene as before parking (compare the
   evaluated outputs).
@@ -660,9 +748,9 @@ Tests:
 
 Work: `clipboard.rs` (`Clipboard`, `ClipboardOrigin`, `Owner`, `capture`,
 `for_target`, `PasteRefusal`); the clipboard moves to app state in
-`hand_over_app_state`; the `document_id` field and the upkeep guard on the
-existing clipboard walks (network rename/delete, record-def rename/delete,
-alias rename); the per-node split of `rewrite_record_names_in_registry_with`;
+`hand_over_app_state`; the `document_id` field and `own_clipboard_mut`,
+through which every existing clipboard walk goes (network rename/delete,
+record-def rename/delete, alias rename, and the undo/redo of each); the per-node split of `rewrite_record_names_in_registry_with`;
 `rebase_file_paths` on every paste; `APIPasteResult` + codegen. Add the
 clipboard rule to the structure-designer `AGENTS.md`: a new kind of name
 reference in node data must be added to `collect_record_refs_in_node`, the
@@ -705,8 +793,9 @@ Plus:
   is rebased. Write this test first and check that it fails on `main`; then
   check *Duplicate into my file* the same way.
 - **Upkeep guard.** Copy in A; rename the copied network in A: the clipboard
-  follows. Rename a network of the same name in B: the clipboard does not
-  change. Delete in A: the clipboard is cleared, as today.
+  follows; undo the rename in A: it follows back. Rename, undo and redo a
+  network of the same name in B: the clipboard does not change. Delete in A:
+  the clipboard is cleared, as today.
 - **Frozen nodes** paste in their own document and are refused elsewhere.
 - **Same-document paste is unchanged.** The existing paste tests pass
   untouched.
@@ -717,7 +806,8 @@ Work: model mirror and methods; the per-tab Dart stash (enumerate the
 Flutter-only per-document fields — §5.3); `DocumentTabStrip` and
 `DocumentTabList` (D10); the `InterfacePreferences` group in Rust (domain
 struct, the `api` twin with its `From` impls, codegen) and its dialog section;
-File menu changes; `Ctrl+W`, `Ctrl+Tab`; quit dialog; dependency check after switch;
+`switchDocument` and the document-keyed subtree (D11); File menu changes;
+`Ctrl+W`, `Ctrl+Tab`; quit dialog; the activation's library report;
 the paste-refusal dialog (`showErrorDialog`, so it is copyable — #359).
 Reference guide: `doc/reference_guide/ui.md` (the tabs in both placements,
 *Arranging the window* with the vertical list as a fourth step, the
@@ -726,21 +816,25 @@ across tabs); `lib/structure_designer/AGENTS.md` (the model
 mirrors the active document; the stash).
 
 Tests: Dart unit tests for the stash round trip and the quit-dialog document
-list; a Rust test that a `preferences.json` without the new group loads with
+list; a widget test for D11 — two documents with a `Main` network and a node
+of the same id, a value typed into a focused `FloatInput`, `Ctrl+Tab`: the
+value lands in the outgoing document, the incoming one is unchanged, and the
+field shows the incoming node's value; a Rust test that a `preferences.json` without the new group loads with
 `LeftOfViewport`. The two tab layouts are thin UI — manual walkthrough.
 
 ### Phase 4 — Library actions, CLI guard, docs
 
 Work: *Open library file* → `openDocument`; remove *Back to …*,
-`backToDesignPath`, `backToDesign`; `--document` guard in the CLI and the
-`atomcad` skill (D8). Reference guide: `doc/reference_guide/library_linking.md`
+`backToDesignPath`, `backToDesign`; the `--document <path-or-id>` guard and the
+`documents` command in the CLI, and both in the `atomcad` skill (D8). Reference guide: `doc/reference_guide/library_linking.md`
 (Open library file opens a tab; the edit–test loop; moving nodes between a
 design and its library by copy and paste) and
 `doc/reference_guide/headless_cli.md` / `claude_code.md` (`--document`).
 Update `doc/design_library_linking.md` §12 to point here.
 
-Tests: API test for the guard (matching path passes, other path fails, no
-guard passes).
+Tests: API tests for the guard (matching path passes, the id of an active
+Untitled document passes, any other path or id fails, no guard passes) and for
+the `documents` listing.
 
 ### Manual walkthrough (P3 + P4, for the maintainer)
 
@@ -761,12 +855,15 @@ guard passes).
 7. Copy nodes that use one of the host's own networks; paste into an
    unrelated design: refused, naming the network and the file it lives in.
 8. Start a drag in the viewport and try to switch tabs: nothing happens.
+   Type a number into a property field without pressing Enter, then press
+   `Ctrl+Tab`: switching back shows the value applied in the first document,
+   and the second document is unchanged.
 9. Tab placement: a fresh preferences file shows the vertical list left of
    the viewport; drag its divider; fold the network editor (`Ctrl+2`) and see
    it grow to full height. Switch the preference to horizontal: the strip
    appears above the network editor without a restart; fold the editor and
-   the strip moves above the viewport. `Ctrl+0` hides the tabs in both
-   placements.
+   the strip moves above the viewport, as it does in a direct-editing
+   document. `Ctrl+0` hides the tabs in both placements.
 10. Close a dirty tab (prompt), close the last tab (fresh Untitled), quit with
    two dirty tabs (both listed).
 11. Change a preference in one tab; switch: it applies in the other.
