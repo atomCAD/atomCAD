@@ -169,10 +169,9 @@ node data (imported `.xyz` atoms, `atom_edit` diffs), which cannot be dropped.
 The price is that **activating a document re-evaluates it**: one full refresh,
 as after opening the file but without the disk read and migration. With the
 evaluation memo this is well under a second for typical designs; for the very
-large atomic demos it can take seconds. P1 measures it on the T-centre demo. If
-it turns out to matter, keeping the parked scene (and only its tessellated
-meshes being rebuilt) is a contained change to D3 — not something to build
-before it is measured.
+large atomic demos it can take seconds. That is accepted for this design.
+Keeping parked scenes so activation skips the evaluation is deferred; if it is
+ever wanted, it is a contained change to D3.
 
 ### D4 — Switching is refused during an open interaction
 
@@ -603,8 +602,6 @@ Tests:
 - **Park.** A parked document's scene is empty and its CSG cache is cleared;
   activating it produces the same scene as before parking (compare the
   evaluated outputs).
-- **Measurement.** Time the activation of the largest demo design. Record it
-  in this document.
 
 ### Phase 2 — Rust: one clipboard, translated paste
 
@@ -729,16 +726,13 @@ of D9.
 
 ## 11. Open questions
 
-1. **Activation cost on very large designs** (D3) — answered by the P1
-   measurement. If it is several seconds, keep parked scenes for the most
-   recently used tab only.
-2. **Should a library opened via *Open library file* be visually tied to the
+1. **Should a library opened via *Open library file* be visually tied to the
    tab it came from** (placed next to it, a link icon on the tab)? Default:
    placed right after the active tab, no extra marking.
-3. **Console per document?** Default: one session-wide console (§6). Revisit if
+2. **Console per document?** Default: one session-wide console (§6). Revisit if
    prints from two documents become confusing; prefixing entries with the
    document name is the cheap fix.
-4. **Should a refused paste offer a fix?** When every unreachable name is
+3. **Should a refused paste offer a fix?** When every unreachable name is
    owned by one saved file, the dialog could offer *Link `x.cnnd`…*, which runs
    the ordinary link dialog and then retries the paste. Default: no, the
    dialog only explains; add it if the refusal turns out to be common.
