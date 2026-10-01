@@ -9,7 +9,31 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'structure_designer_api_types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `hash`
+
+/// The outcome of a tab switch (activate, or close of the active tab).
+/// `library_report` is what the dependency check did on activation
+/// (library linking D7), shown exactly like a report from the 2 s poll.
+class APIActivateResult {
+  final APIResult result;
+  final APIRefreshReport? libraryReport;
+
+  const APIActivateResult({
+    required this.result,
+    this.libraryReport,
+  });
+
+  @override
+  int get hashCode => result.hashCode ^ libraryReport.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIActivateResult &&
+          runtimeType == other.runtimeType &&
+          result == other.result &&
+          libraryReport == other.libraryReport;
+}
 
 /// Result of add_bond_pointer_move. Contains all info Flutter needs to draw
 /// the rubber-band preview line as a 2D overlay.
@@ -1697,6 +1721,44 @@ class APIDiffStats {
           unmatchedDeleteMarkers == other.unmatchedDeleteMarkers &&
           orphanedBonds == other.orphanedBonds &&
           unchangedReferences == other.unchangedReferences;
+}
+
+/// One tab: an open document.
+class APIDocumentTab {
+  final BigInt id;
+
+  /// The file name, or *Untitled* for a design that was never saved.
+  final String displayName;
+  final String? filePath;
+  final bool isDirty;
+  final bool isActive;
+
+  const APIDocumentTab({
+    required this.id,
+    required this.displayName,
+    this.filePath,
+    required this.isDirty,
+    required this.isActive,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      displayName.hashCode ^
+      filePath.hashCode ^
+      isDirty.hashCode ^
+      isActive.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIDocumentTab &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          displayName == other.displayName &&
+          filePath == other.filePath &&
+          isDirty == other.isDirty &&
+          isActive == other.isActive;
 }
 
 /// Source pin context for the drag-aware add-node popup. When the user drags
@@ -4647,6 +4709,64 @@ class APINodeTypeView {
           summary == other.summary &&
           category == other.category &&
           allowedInZoneBody == other.allowedInZoneBody;
+}
+
+/// The outcome of *File > Open* into a tab.
+class APIOpenDocumentResult {
+  /// An error when refused during an interaction or when the file could not
+  /// be loaded; no tab was added then, and the active document is untouched.
+  final APIResult result;
+
+  /// The document now active (0 on failure).
+  final BigInt documentId;
+  final String? filePath;
+
+  /// The file was open already and its tab was activated; nothing was read.
+  final bool alreadyOpen;
+
+  /// The load's parameter-id repair messages (what
+  /// `take_load_param_id_repairs` returns after `load_node_networks`).
+  final List<String> paramIdRepairs;
+
+  /// The load's library report (what `take_load_library_report` returns
+  /// after `load_node_networks`).
+  final APIRefreshReport? loadLibraryReport;
+
+  /// What the activation's dependency check did.
+  final APIRefreshReport? libraryReport;
+
+  const APIOpenDocumentResult({
+    required this.result,
+    required this.documentId,
+    this.filePath,
+    required this.alreadyOpen,
+    required this.paramIdRepairs,
+    this.loadLibraryReport,
+    this.libraryReport,
+  });
+
+  @override
+  int get hashCode =>
+      result.hashCode ^
+      documentId.hashCode ^
+      filePath.hashCode ^
+      alreadyOpen.hashCode ^
+      paramIdRepairs.hashCode ^
+      loadLibraryReport.hashCode ^
+      libraryReport.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIOpenDocumentResult &&
+          runtimeType == other.runtimeType &&
+          result == other.result &&
+          documentId == other.documentId &&
+          filePath == other.filePath &&
+          alreadyOpen == other.alreadyOpen &&
+          paramIdRepairs == other.paramIdRepairs &&
+          loadLibraryReport == other.loadLibraryReport &&
+          libraryReport == other.libraryReport;
 }
 
 /// The stored data of an `ops_library` node plus what the panel cannot compute

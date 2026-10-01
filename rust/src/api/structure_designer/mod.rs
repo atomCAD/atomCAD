@@ -6,6 +6,7 @@ pub mod atom_edit_api;
 // take domain types. A scanned namespace exports every `pub fn` to Dart.
 pub mod chemisorb_api;
 pub mod cli_runner;
+pub mod documents_api;
 pub mod edit_atom_api;
 pub mod facet_shell_api;
 pub mod field_distribution_api;

@@ -233,7 +233,10 @@ pub fn save_as_with_dependencies(
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
-                let result = cad_instance.structure_designer.save_as_with_dependencies(
+                // Refused onto a path open in another tab
+                // (`doc/design_multiple_documents.md` D5).
+                let result = cad_instance.documents.save_as_with_dependencies(
+                    &mut cad_instance.structure_designer,
                     &path,
                     copy,
                     &overwrite_targets,

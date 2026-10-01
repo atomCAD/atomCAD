@@ -115,8 +115,14 @@ lazy_static::lazy_static! {
 
 async fn initialize_cad_instance_async() {
     unsafe {
+        let mut structure_designer = StructureDesigner::new();
+        // The initial designer is document 1 (`doc/design_multiple_documents.md`
+        // §5.2).
+        let documents =
+            atomcad_structure_designer::document_set::DocumentSet::new(&mut structure_designer);
         CAD_INSTANCE = Some(CADInstance {
-            structure_designer: StructureDesigner::new(),
+            structure_designer,
+            documents,
             renderer: Renderer::new(INITIAL_VIEWPORT_WIDTH, INITIAL_VIEWPORT_HEIGHT).await,
         });
 

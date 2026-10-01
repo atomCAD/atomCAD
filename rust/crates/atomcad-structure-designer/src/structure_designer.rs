@@ -1,5 +1,6 @@
 use super::ai_edit_log::{AI_EDIT_COMMAND_DESCRIPTION, AiEditLog, AiEditRecord};
 use super::camera_settings::CameraSettings;
+use super::document_set::DocumentId;
 use super::eval_errors::{EvalErrorEntry, harvest_eval_errors};
 use super::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement, PrintLogEntry,
@@ -336,6 +337,13 @@ pub struct StructureDesigner {
     // What the most recent pass's memo did, parked here for the same reason and
     // taken by the same paths as `last_eval_profile`.
     last_memo_counts: Option<MemoCounts>,
+
+    // Which open document this designer is (`doc/design_multiple_documents.md`
+    // §5.1). Assigned by `DocumentSet` when the designer joins it and replaced
+    // with a fresh id when an in-place load or new project replaces its
+    // content (D8), so an id names one document for its whole life.
+    // `DocumentId(0)` in headless mode, where there is no `DocumentSet`.
+    pub document_id: DocumentId,
 }
 
 impl Default for StructureDesigner {
@@ -403,6 +411,7 @@ impl StructureDesigner {
             eval_memo_enabled: true,
             last_memo_counts: None,
             last_eval_profile: None,
+            document_id: DocumentId::HEADLESS,
         }
     }
 }
@@ -8058,6 +8067,128 @@ impl StructureDesigner {
             .set_csg_cache_capacities(mesh_bytes, sketch_bytes);
         self.last_generated_structure_designer_scene
             .set_invisible_node_cache_capacity(invisible_bytes);
+    }
+
+    // -------------------------------------------------------------------------------------------------------------------------
+    // --- Multiple documents (`doc/design_multiple_documents.md`)                                                          ---
+    // -------------------------------------------------------------------------------------------------------------------------
+
+    /// Hands the **app state** (§6) over to `to`, the designer about to become
+    /// active (D2). Settings are cloned, session logs are moved, and the
+    /// preference-driven cache budgets are re-applied to `to`, whose
+    /// preferences may be older than the session's: they could have changed
+    /// while `to` was parked.
+    ///
+    /// The destructure below is **exhaustive on purpose** (no `..`): adding a
+    /// field to `StructureDesigner` fails to compile here until its author
+    /// decides which side it is on. A field forgotten on the wrong side would
+    /// leak state between tabs or silently lose it on a switch. §6 of the
+    /// design document is the reference table.
+    pub fn hand_over_app_state(&mut self, to: &mut StructureDesigner) {
+        let StructureDesigner {
+            // --- Document state: stays with its document. ---
+            node_type_registry: _,
+            network_evaluator: _,
+            gadget: _,
+            active_node_network_name: _,
+            active_record_def_name: _,
+            last_generated_structure_designer_scene: _,
+            node_display_policy_resolver: _,
+            import_manager: _,
+            is_dirty: _,
+            file_path: _,
+            pending_changes: _,
+            cli_top_level_parameters: _,
+            navigation_history: _,
+            // Document state until multiple-documents Phase 2 makes the
+            // clipboard app state (D9).
+            clipboard: _,
+            undo_stack: _,
+            // The open interactions: always `None` here, because every switch
+            // is refused while one is open (D4).
+            pending_move: _,
+            pending_atom_edit_drag: _,
+            pending_gadget_drag: _,
+            pending_comment_edit: _,
+            pending_zone_resize: _,
+            pending_node_data_drag: _,
+            // Not an open interaction; `park` clears it (D4).
+            pending_step_metadata_edit: _,
+            direct_editing_mode: _,
+            cli_access_rules: _,
+            ai_edit_log: _,
+            eval_error_snapshots: _,
+            pending_load_param_id_repairs: _,
+            last_eval_profile: _,
+            last_memo_counts: _,
+            document_id: _,
+            // --- App state: follows the session. ---
+            preferences,
+            gadget_pick_context,
+            print_log,
+            refresh_profiles,
+            eval_profiling_enabled,
+            eval_self_check_enabled,
+            eval_self_check_key_mode,
+            eval_memo_enabled,
+        } = self;
+
+        let node_display_prefs_changed =
+            to.preferences.node_display_preferences != preferences.node_display_preferences;
+        to.preferences = preferences.clone();
+        to.gadget_pick_context = *gadget_pick_context;
+        // A parked designer never evaluates, so nothing was printed into or
+        // profiled on `to` meanwhile: moving is lossless.
+        to.print_log = std::mem::take(print_log);
+        to.refresh_profiles = std::mem::take(refresh_profiles);
+        to.eval_profiling_enabled = *eval_profiling_enabled;
+        to.eval_self_check_enabled = *eval_self_check_enabled;
+        to.eval_self_check_key_mode = *eval_self_check_key_mode;
+        to.eval_memo_enabled = *eval_memo_enabled;
+
+        // What `set_preferences` would have done had `to` been active when the
+        // preferences changed. Geometry-visualization changes need nothing:
+        // activation refreshes in full anyway.
+        to.apply_memory_preferences();
+        if node_display_prefs_changed {
+            to.apply_node_display_policy(None);
+        }
+    }
+
+    /// Prepares the outgoing designer for being parked (D3): drops what can be
+    /// recomputed — the evaluated scene and the CSG conversion caches — so an
+    /// open tab costs little more than its node data, and ends any
+    /// `mechanosynth_edit` metadata-typing run (D4), which would otherwise
+    /// merge the next keystroke after a switch back with the ones typed
+    /// before the switch. Activating the document again re-evaluates it.
+    pub fn park(&mut self) {
+        debug_assert!(
+            self.open_interaction().is_none(),
+            "a document is parked only when no interaction is open (D4)"
+        );
+        self.last_generated_structure_designer_scene = self.fresh_scene();
+        self.network_evaluator.clear_csg_cache();
+        self.pending_step_metadata_edit = None;
+        self.last_eval_profile = None;
+        self.last_memo_counts = None;
+    }
+
+    /// A design nobody has done anything with yet: no file, no unsaved change,
+    /// no undo history. *File > Open* replaces a pristine active tab instead
+    /// of opening beside it, so starting the app and opening a file does not
+    /// leave an empty tab behind (§3).
+    pub fn is_pristine(&self) -> bool {
+        self.file_path.is_none()
+            && !self.is_dirty
+            && !self.undo_stack.can_undo()
+            && !self.undo_stack.can_redo()
+    }
+
+    /// The stored camera of the active network, which is what the renderer
+    /// shows after this designer becomes active.
+    pub fn active_network_camera_settings(&self) -> Option<CameraSettings> {
+        self.get_active_node_network()
+            .and_then(|network| network.camera_settings.clone())
     }
 
     /// A replacement scene carrying the configured invisible-node cache budget.

@@ -10,6 +10,7 @@ import 'api/structure_designer/ai_assistant_api.dart';
 import 'api/structure_designer/ai_history_api.dart';
 import 'api/structure_designer/atom_edit_api.dart';
 import 'api/structure_designer/chemisorb_api.dart';
+import 'api/structure_designer/documents_api.dart';
 import 'api/structure_designer/edit_atom_api.dart';
 import 'api/structure_designer/facet_shell_api.dart';
 import 'api/structure_designer/field_distribution_api.dart';
@@ -56,6 +57,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   String dco_decode_String(dynamic raw);
+
+  @protected
+  APIActivateResult dco_decode_api_activate_result(dynamic raw);
 
   @protected
   APIAddBondMoveResult dco_decode_api_add_bond_move_result(dynamic raw);
@@ -245,6 +249,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIDistributionState dco_decode_api_distribution_state(dynamic raw);
+
+  @protected
+  APIDocumentTab dco_decode_api_document_tab(dynamic raw);
 
   @protected
   APIDragSource dco_decode_api_drag_source(dynamic raw);
@@ -514,6 +521,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APINodeTypeView dco_decode_api_node_type_view(dynamic raw);
+
+  @protected
+  APIOpenDocumentResult dco_decode_api_open_document_result(dynamic raw);
 
   @protected
   APIOpsLibraryData dco_decode_api_ops_library_data(dynamic raw);
@@ -1289,6 +1299,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<APIDiffLine> dco_decode_list_api_diff_line(dynamic raw);
 
   @protected
+  List<APIDocumentTab> dco_decode_list_api_document_tab(dynamic raw);
+
+  @protected
   List<APIExprParameter> dco_decode_list_api_expr_parameter(dynamic raw);
 
   @protected
@@ -2044,6 +2057,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
+  APIActivateResult sse_decode_api_activate_result(
+      SseDeserializer deserializer);
+
+  @protected
   APIAddBondMoveResult sse_decode_api_add_bond_move_result(
       SseDeserializer deserializer);
 
@@ -2254,6 +2271,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   APIDistributionState sse_decode_api_distribution_state(
       SseDeserializer deserializer);
+
+  @protected
+  APIDocumentTab sse_decode_api_document_tab(SseDeserializer deserializer);
 
   @protected
   APIDragSource sse_decode_api_drag_source(SseDeserializer deserializer);
@@ -2561,6 +2581,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APINodeTypeView sse_decode_api_node_type_view(SseDeserializer deserializer);
+
+  @protected
+  APIOpenDocumentResult sse_decode_api_open_document_result(
+      SseDeserializer deserializer);
 
   @protected
   APIOpsLibraryData sse_decode_api_ops_library_data(
@@ -3483,6 +3507,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<APIDiffLine> sse_decode_list_api_diff_line(SseDeserializer deserializer);
 
   @protected
+  List<APIDocumentTab> sse_decode_list_api_document_tab(
+      SseDeserializer deserializer);
+
+  @protected
   List<APIExprParameter> sse_decode_list_api_expr_parameter(
       SseDeserializer deserializer);
 
@@ -4365,6 +4393,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_activate_result(
+      APIActivateResult self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_add_bond_move_result(
       APIAddBondMoveResult self, SseSerializer serializer);
 
@@ -4601,6 +4633,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_distribution_state(
       APIDistributionState self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_document_tab(
+      APIDocumentTab self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_drag_source(APIDragSource self, SseSerializer serializer);
@@ -4937,6 +4973,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_node_type_view(
       APINodeTypeView self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_open_document_result(
+      APIOpenDocumentResult self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_ops_library_data(
@@ -5886,6 +5926,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_api_diff_line(
       List<APIDiffLine> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_api_document_tab(
+      List<APIDocumentTab> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_api_expr_parameter(

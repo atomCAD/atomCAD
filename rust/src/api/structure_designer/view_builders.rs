@@ -21,6 +21,10 @@
 //! `#[frb(sync)]` wrappers that Dart actually calls live in
 //! `structure_designer_api.rs`.
 
+use crate::api::common_api_types::APIResult;
+use crate::api::structure_designer::structure_designer_api_types::{
+    APIActivateResult, APIDocumentTab, APIOpenDocumentResult,
+};
 use crate::api::structure_designer::structure_designer_api_types::{
     APIBundleResult, APIDependency, APIDependencyGroup, APIDependencyKind, APIDependencyPlan,
     APIDependencyStatus, APISaveAsResult,
@@ -31,6 +35,9 @@ use crate::api::structure_designer::structure_designer_api_types::{
     APIReportedNode, APIReportedWire, APIValidationError,
 };
 use atomcad_structure_designer::data_type::DataType;
+use atomcad_structure_designer::document_set::{
+    DocumentSet, DocumentTab, OpenError, OpenOutcome, SwitchRefused,
+};
 use atomcad_structure_designer::eval_errors::RootCauseRef;
 use atomcad_structure_designer::library_links::{LibraryMount, MountStatus};
 use atomcad_structure_designer::library_refresh::{RefreshReport, ReportedNode, ReportedWire};
@@ -668,5 +675,117 @@ pub fn bundle_result_view(
             external: Vec::new(),
             missing: Vec::new(),
         },
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Multiple open documents (`doc/design_multiple_documents.md` §5.2)
+// ---------------------------------------------------------------------------
+
+fn ok_result() -> APIResult {
+    APIResult {
+        success: true,
+        error_message: String::new(),
+    }
+}
+
+fn error_result(message: String) -> APIResult {
+    APIResult {
+        success: false,
+        error_message: message,
+    }
+}
+
+/// One tab of the tab list.
+pub fn document_tab_view(tab: &DocumentTab) -> APIDocumentTab {
+    APIDocumentTab {
+        id: tab.id.0,
+        display_name: tab.display_name.clone(),
+        file_path: tab.file_path.clone(),
+        is_dirty: tab.is_dirty,
+        is_active: tab.is_active,
+    }
+}
+
+/// The tab list of `documents`, `active` being the active designer.
+pub fn document_tabs_view(
+    documents: &DocumentSet,
+    active: &StructureDesigner,
+) -> Vec<APIDocumentTab> {
+    documents
+        .tabs(active)
+        .iter()
+        .map(document_tab_view)
+        .collect()
+}
+
+/// The outcome of an activation (or of closing the active tab). `active` is
+/// the designer active *after* the operation, whose registry the report's
+/// names are resolved against.
+pub fn activate_result_view(
+    outcome: Result<Option<RefreshReport>, SwitchRefused>,
+    active: &StructureDesigner,
+) -> APIActivateResult {
+    match outcome {
+        Ok(report) => APIActivateResult {
+            result: ok_result(),
+            library_report: report
+                .as_ref()
+                .map(|r| refresh_report_view(&active.node_type_registry, r)),
+        },
+        Err(refused) => APIActivateResult {
+            result: error_result(refused.to_string()),
+            library_report: None,
+        },
+    }
+}
+
+/// An `APIResult` for an operation that only switches or refuses.
+pub fn switch_result_view<T>(outcome: Result<T, SwitchRefused>) -> APIResult {
+    match outcome {
+        Ok(_) => ok_result(),
+        Err(refused) => error_result(refused.to_string()),
+    }
+}
+
+/// The outcome of *File > Open* into a tab. `active` is the designer active
+/// after the operation.
+pub fn open_document_result_view(
+    outcome: Result<OpenOutcome, OpenError>,
+    active: &StructureDesigner,
+) -> APIOpenDocumentResult {
+    let report = |r: &RefreshReport| refresh_report_view(&active.node_type_registry, r);
+    match outcome {
+        Ok(o) => APIOpenDocumentResult {
+            result: ok_result(),
+            document_id: o.id.0,
+            file_path: active.file_path.clone(),
+            already_open: o.already_open,
+            param_id_repairs: o.param_id_repairs,
+            load_library_report: o.load_report.as_ref().map(report),
+            library_report: o.activation_report.as_ref().map(report),
+        },
+        Err(e) => failed_open_document_result(e.to_string()),
+    }
+}
+
+/// A failed *File > Open*: no tab was added.
+pub fn failed_open_document_result(message: String) -> APIOpenDocumentResult {
+    APIOpenDocumentResult {
+        result: error_result(message),
+        document_id: 0,
+        file_path: None,
+        already_open: false,
+        param_id_repairs: Vec::new(),
+        load_library_report: None,
+        library_report: None,
+    }
+}
+
+/// An `APIResult` for a domain result whose error is a message.
+pub fn api_result_view(outcome: Result<(), String>) -> APIResult {
+    match outcome {
+        Ok(()) => ok_result(),
+        Err(message) => error_result(message),
     }
 }

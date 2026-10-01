@@ -3383,3 +3383,48 @@ pub struct APIBundleResult {
     /// Dependencies that do not exist, left out.
     pub missing: Vec<String>,
 }
+
+// ---------------------------------------------------------------------------
+// Multiple open documents (`doc/design_multiple_documents.md` §5.2)
+// ---------------------------------------------------------------------------
+
+/// One tab: an open document.
+#[derive(Debug, Clone)]
+pub struct APIDocumentTab {
+    pub id: u64,
+    /// The file name, or *Untitled* for a design that was never saved.
+    pub display_name: String,
+    pub file_path: Option<String>,
+    pub is_dirty: bool,
+    pub is_active: bool,
+}
+
+/// The outcome of a tab switch (activate, or close of the active tab).
+/// `library_report` is what the dependency check did on activation
+/// (library linking D7), shown exactly like a report from the 2 s poll.
+#[derive(Debug, Clone)]
+pub struct APIActivateResult {
+    pub result: crate::api::common_api_types::APIResult,
+    pub library_report: Option<APIRefreshReport>,
+}
+
+/// The outcome of *File > Open* into a tab.
+#[derive(Debug, Clone)]
+pub struct APIOpenDocumentResult {
+    /// An error when refused during an interaction or when the file could not
+    /// be loaded; no tab was added then, and the active document is untouched.
+    pub result: crate::api::common_api_types::APIResult,
+    /// The document now active (0 on failure).
+    pub document_id: u64,
+    pub file_path: Option<String>,
+    /// The file was open already and its tab was activated; nothing was read.
+    pub already_open: bool,
+    /// The load's parameter-id repair messages (what
+    /// `take_load_param_id_repairs` returns after `load_node_networks`).
+    pub param_id_repairs: Vec<String>,
+    /// The load's library report (what `take_load_library_report` returns
+    /// after `load_node_networks`).
+    pub load_library_report: Option<APIRefreshReport>,
+    /// What the activation's dependency check did.
+    pub library_report: Option<APIRefreshReport>,
+}

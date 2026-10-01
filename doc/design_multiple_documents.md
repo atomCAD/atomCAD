@@ -535,7 +535,13 @@ as a `&mut` slot:
   with the message naming the active one.
 - `tabs(&self, active) -> Vec<DocumentTab>` (the domain twin of
   `APIDocumentTab`: id, display name, path, dirty, active, in tab order),
-  `move_to(id, index)`, `find_by_path(canonical) -> Option<DocumentId>`.
+  `move_to(id, index)`, `find_by_path(active, key) -> Option<DocumentId>`
+  (the active designer is not in `parked`, so lookups take it too).
+- `save_as`, `save_as_with_dependencies`, `load_in_place`,
+  `new_project_in_place` — the D5 refusal and the D8 renumbering wrapped
+  around the existing `StructureDesigner` calls, so that the changed FFI
+  wrappers (`save_node_networks_as`, `save_as_with_dependencies`,
+  `load_node_networks`, `new_project*`) still make exactly one domain call.
 
 **Every rule lives here; the FFI wrappers stay thin.** The functions of §5.2
 need the global `CADInstance`, whose renderer needs a GPU, so no Rust test can

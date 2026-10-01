@@ -79,6 +79,7 @@ structure_designer/
 ├── library_refresh.rs         # Reconciling wiring against recorded interfaces, change detection, data-file watches
 ├── library_refresh_ops.rs     # check_dependencies / refresh / retarget / the open report
 ├── file_dependencies.rs       # Save As dependency plan + copy, project bundle (.zip), link by copying
+├── document_set.rs            # Multiple open documents: tab order, parked designers, the swap
 ├── undo/                      # Undo/redo system (command pattern)
 ├── nodes/                     # Built-in node implementations (47+)
 ├── evaluator/                 # Network evaluation engine
@@ -475,6 +476,21 @@ When an edit grows a node's **rendered footprint in place** — without the user
 **How room is made is per axis, and that is load-bearing** (`doc/design_incremental_layout.md` D6/D11, Phase 2). The width delta is a rigid half-plane shift of everything right of the old right edge; the height delta is a *collision-driven* downward cascade. A neighbour out in the lower right therefore takes the width and stays exactly where it was vertically — the old quadrant shift moved it on both axes, including when nothing was going to collide with it. Expect per-axis expectations in any test you write against a reflow, and see `layout/AGENTS.md` for the primitives and the `measure_scope`-before-the-mutable-borrow rule they impose on call sites.
 
 Pre-edit footprints **must be captured before mutating** (the bodies have already grown by the time reflow runs): `capture_footprint_chain(scope_path, node_id)` for a node growing in its own scope, `capture_body_owner_footprint_chain(scope_path)` for a body edit that grows the owning HOF one scope up (Case C). Triggers currently wired: HOF expand on `f`-disconnect (`delete_selected_scoped`), `set_collapse_mode`, in-body add·paste·duplicate·connect (`add_node_scoped` / `paste_at_position_scoped` / `duplicate_node_scoped` / `connect_nodes_scoped` / `connect_wire_scoped`), and `convert_instance_to_closure`. **Shrinks need no reflow** (pulling neighbours inward would be surprising — delta clamps to ≥ 0). The undo side bundles the moves into the same step via `CompositeCommand` — see `undo/AGENTS.md` ("Composite Commands & Reflow Bundling"). No Flutter change is needed: positions are authoritative in Rust and the `ScopeResolver` re-derives layout from them each frame. Design doc: `doc/design_reflow_on_footprint_change.md`.
+
+## Multiple documents: every field has a side
+
+A `StructureDesigner` is one open document (`doc/design_multiple_documents.md`
+D1); `document_set.rs` keeps the parked ones and swaps them into the active
+slot. Each field is either **document state** (stays with its document) or
+**app state** (follows the session across a switch: preferences, the print
+log, refresh profiles, the eval toggles, the gadget pick context).
+
+**A new field on `StructureDesigner` needs a side in `hand_over_app_state`.**
+That function destructures `self` exhaustively, so the build fails until you
+choose; §6 of the design document is the reference table. App state is cloned
+or moved there; document state is named with `_`. If the field is a
+recomputable cache, also drop it in `park`; if it is a new `pending_*`
+interaction, it belongs in `open_interaction` (which refuses a switch, D4).
 
 ## Change Tracking & Refresh
 

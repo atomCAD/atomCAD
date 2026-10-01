@@ -102,80 +102,119 @@ fn check_hold(
     assert_eq!(d.undo_stack.undo_description().map(str::to_string), top);
 }
 
-#[test]
-fn a_node_drag_holds_the_refresh() {
-    check_hold(
-        |d| {
+/// One interaction `open_interaction` reports, on the workspace host: how to
+/// begin it, how to end it, and whether ending it pushes a command. Shared
+/// with `document_set_test.rs`, whose tab switches are refused during each.
+pub type Interaction = (
+    Box<dyn FnOnce(&mut StructureDesigner)>,
+    Box<dyn FnOnce(&mut StructureDesigner)>,
+    bool,
+);
+
+pub fn a_node_drag() -> Interaction {
+    (
+        Box::new(|d| {
             let f = node_id(d, "Main", "f");
             d.select_node(f);
             d.begin_move_nodes();
             d.move_selected_nodes(DVec2::new(40.0, 0.0));
-        },
-        |d| d.end_move_nodes(),
+        }),
+        Box::new(|d| d.end_move_nodes()),
         true,
-    );
+    )
+}
+
+pub fn a_property_drag() -> Interaction {
+    (
+        Box::new(|d| {
+            let i1 = node_id(d, "Main", "i1");
+            d.begin_node_data_drag(vec![], i1);
+        }),
+        Box::new(|d| d.end_node_data_drag()),
+        false,
+    )
+}
+
+pub fn a_body_resize() -> Interaction {
+    (
+        Box::new(|d| {
+            let mp = node_id(d, "Main", "mp");
+            d.begin_zone_resize(&[], mp);
+        }),
+        Box::new(|d| d.end_zone_resize()),
+        false,
+    )
+}
+
+pub fn a_comment_edit() -> Interaction {
+    (
+        Box::new(|d| {
+            let c = d.add_node("Comment", DVec2::new(0.0, 300.0));
+            d.begin_comment_edit(vec![], c);
+        }),
+        Box::new(|d| d.end_comment_edit()),
+        false,
+    )
+}
+
+pub fn a_gadget_drag() -> Interaction {
+    (
+        Box::new(|d| {
+            let i1 = node_id(d, "Main", "i1");
+            d.select_node(i1);
+            d.begin_gadget_drag_snapshot();
+        }),
+        Box::new(|d| d.end_gadget_drag_snapshot()),
+        false,
+    )
+}
+
+pub fn an_atom_drag() -> Interaction {
+    (
+        Box::new(|d| {
+            let ae = d.add_node("atom_edit", DVec2::new(0.0, 300.0));
+            d.select_node(ae);
+            begin_atom_edit_drag(d);
+        }),
+        Box::new(end_atom_edit_drag),
+        false,
+    )
+}
+
+#[test]
+fn a_node_drag_holds_the_refresh() {
+    let (begin, end, pushes) = a_node_drag();
+    check_hold(begin, end, pushes);
 }
 
 #[test]
 fn a_property_drag_holds_the_refresh() {
-    check_hold(
-        |d| {
-            let i1 = node_id(d, "Main", "i1");
-            d.begin_node_data_drag(vec![], i1);
-        },
-        |d| d.end_node_data_drag(),
-        false,
-    );
+    let (begin, end, pushes) = a_property_drag();
+    check_hold(begin, end, pushes);
 }
 
 #[test]
 fn a_body_resize_holds_the_refresh() {
-    check_hold(
-        |d| {
-            let mp = node_id(d, "Main", "mp");
-            d.begin_zone_resize(&[], mp);
-        },
-        |d| d.end_zone_resize(),
-        false,
-    );
+    let (begin, end, pushes) = a_body_resize();
+    check_hold(begin, end, pushes);
 }
 
 #[test]
 fn a_comment_edit_holds_the_refresh() {
-    check_hold(
-        |d| {
-            let c = d.add_node("Comment", DVec2::new(0.0, 300.0));
-            d.begin_comment_edit(vec![], c);
-        },
-        |d| d.end_comment_edit(),
-        false,
-    );
+    let (begin, end, pushes) = a_comment_edit();
+    check_hold(begin, end, pushes);
 }
 
 #[test]
 fn a_gadget_drag_holds_the_refresh() {
-    check_hold(
-        |d| {
-            let i1 = node_id(d, "Main", "i1");
-            d.select_node(i1);
-            d.begin_gadget_drag_snapshot();
-        },
-        |d| d.end_gadget_drag_snapshot(),
-        false,
-    );
+    let (begin, end, pushes) = a_gadget_drag();
+    check_hold(begin, end, pushes);
 }
 
 #[test]
 fn an_atom_drag_holds_the_refresh() {
-    check_hold(
-        |d| {
-            let ae = d.add_node("atom_edit", DVec2::new(0.0, 300.0));
-            d.select_node(ae);
-            begin_atom_edit_drag(d);
-        },
-        |d| end_atom_edit_drag(d),
-        false,
-    );
+    let (begin, end, pushes) = an_atom_drag();
+    check_hold(begin, end, pushes);
 }
 
 // ---------------------------------------------------------------------------

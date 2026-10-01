@@ -58,7 +58,7 @@ fn fixture(name: &str) -> String {
     fixture_path_str(&format!("mechanosynth/{name}"))
 }
 
-fn setup_designer() -> StructureDesigner {
+pub fn setup_designer() -> StructureDesigner {
     let mut designer = StructureDesigner::new();
     designer.add_node_network(NET);
     designer.set_active_node_network_name(Some(NET.to_string()));
@@ -170,7 +170,7 @@ fn add_editor(
     node_id
 }
 
-fn editor_data(designer: &StructureDesigner, node_id: u64) -> &MechanosynthEditData {
+pub fn editor_data(designer: &StructureDesigner, node_id: u64) -> &MechanosynthEditData {
     designer
         .mechanosynth_edit_data(&[], node_id)
         .expect("a mechanosynth_edit node")
@@ -500,7 +500,7 @@ fn assert_undo_restores_the_tuple(
     assert_eq!((data.authored.clone(), data.cursor), after);
 }
 
-fn editor_with_block(designer: &mut StructureDesigner) -> u64 {
+pub fn editor_with_block(designer: &mut StructureDesigner) -> u64 {
     let base_id = add_value_node(designer, molecule_value(methane()));
     let node_id = add_editor(designer, base_id, methylate_steps(), -1);
     // The setup writes through `with_data`, which records nothing; start the

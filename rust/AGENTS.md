@@ -245,6 +245,28 @@ Rules — do not regress these:
 
 See `crates/atomcad-structure-designer/src/AGENTS.md` (Zones) for the body model and `walk_all_nodes` (the parallel "bare iteration skips body nodes" lesson).
 
+## `CADInstance` holds the *active* document
+
+Several `.cnnd` files can be open at once, one per tab
+(`doc/design_multiple_documents.md`). `CADInstance.structure_designer` is
+always the **active** document — which is why the API functions need no
+document parameter — and the parked ones live in `CADInstance.documents`, a
+`DocumentSet` (`atomcad_structure_designer::document_set`). A tab switch
+`mem::swap`s a parked `StructureDesigner` into that field.
+
+- **Never keep a raw pointer into the active `StructureDesigner` across API
+  calls.** After a switch it points at another document. The raw pointers
+  that exist (a split borrow of `node_type_registry` for `validate_network`)
+  live inside one block; keep it that way.
+- **A wrapper that changes the active document does one `DocumentSet` call**,
+  plus the renderer work (camera, refresh) and a view builder. Refusals,
+  lookups and fallbacks belong in `DocumentSet`, where they are tested —
+  `documents_api.rs` is the model.
+- Code that replaces the active designer's content *in place*
+  (`load_node_networks`, `new_project*`) goes through
+  `DocumentSet::load_in_place` / `new_project_in_place`, which give it a fresh
+  `DocumentId` (D8).
+
 ## Code Conventions
 
 - **Edition:** Rust 2024 (requires Rust 1.85+)

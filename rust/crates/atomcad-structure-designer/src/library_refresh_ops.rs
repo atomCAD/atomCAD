@@ -99,7 +99,8 @@ impl StructureDesigner {
 
     /// The interaction the undo coalescing currently treats as one open
     /// step, if any — what [`check_dependencies`](Self::check_dependencies)
-    /// holds a refresh for, and what refuses an explicit one. These are the
+    /// holds a refresh for, and what refuses an explicit one and a tab switch
+    /// (`doc/design_multiple_documents.md` D4). These are the
     /// interactions Rust knows about; the ones only Flutter knows (a text
     /// field being typed into, a modal dialog) are skipped by Flutter
     /// (`lib/structure_designer/AGENTS.md`). `mechanosynth_edit` keystroke

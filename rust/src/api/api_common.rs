@@ -2,6 +2,7 @@ use super::common_api_types::{APIIVec2, APIIVec3, APITransform, APIVec2, APIVec3
 use atomcad_display::preferences as display_prefs;
 use atomcad_renderer::renderer::Renderer;
 use atomcad_structure_designer::camera_settings::CameraSettings;
+use atomcad_structure_designer::document_set::DocumentSet;
 use atomcad_structure_designer::preferences as domain_prefs;
 use atomcad_structure_designer::refresh_profile::{RefreshProfile, elapsed_ms};
 use atomcad_structure_designer::structure_designer::StructureDesigner;
@@ -316,8 +317,17 @@ pub fn from_api_transform(api_transform: &APITransform) -> Transform {
     }
 }
 
+/// The application's one instance.
+///
+/// **`structure_designer` is the active document**, and every API function
+/// acts on it. The parked documents live in `documents`, and a tab switch swaps
+/// one of them into `structure_designer` (`doc/design_multiple_documents.md`
+/// D1, §5.2). Consequently **never keep a raw pointer into
+/// `structure_designer` across API calls**: after a switch it would point at
+/// another document.
 pub struct CADInstance {
     pub structure_designer: StructureDesigner,
+    pub documents: DocumentSet,
     pub renderer: Renderer,
 }
 

@@ -681,6 +681,9 @@ mod library_links_fuzz_test;
 #[path = "structure_designer/library_links_interaction_test.rs"]
 mod library_links_interaction_test;
 
+#[path = "structure_designer/document_set_test.rs"]
+mod document_set_test;
+
 #[path = "structure_designer/file_dependencies_test.rs"]
 mod file_dependencies_test;
 

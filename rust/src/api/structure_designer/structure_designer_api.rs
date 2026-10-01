@@ -8049,10 +8049,11 @@ pub fn save_node_networks_as(file_path: String) -> APIResult {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
-                // Call the method in StructureDesigner
+                // Refused onto a path open in another tab
+                // (`doc/design_multiple_documents.md` D5).
                 match cad_instance
-                    .structure_designer
-                    .save_node_networks_as(&file_path)
+                    .documents
+                    .save_as(&mut cad_instance.structure_designer, &file_path)
                 {
                     Ok(_) => {
                         atomcad_structure_designer::recent_files::add_recent_file(&file_path);
@@ -8063,7 +8064,7 @@ pub fn save_node_networks_as(file_path: String) -> APIResult {
                     }
                     Err(e) => APIResult {
                         success: false,
-                        error_message: e.to_string(),
+                        error_message: e,
                     },
                 }
             },
@@ -8175,10 +8176,13 @@ pub fn load_node_networks(file_path: String) -> APIResult {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
-                // Call the method in StructureDesigner
+                // Loads into the *active* document, replacing it. Refused for
+                // a path open in another tab; the active document gets a fresh
+                // id (`doc/design_multiple_documents.md` D8). File > Open uses
+                // `open_document` instead.
                 let result = cad_instance
-                    .structure_designer
-                    .load_node_networks(&file_path);
+                    .documents
+                    .load_in_place(&mut cad_instance.structure_designer, &file_path);
 
                 print!("Result: {:?}", result);
 
@@ -8200,7 +8204,7 @@ pub fn load_node_networks(file_path: String) -> APIResult {
                     }
                     Err(e) => APIResult {
                         success: false,
-                        error_message: e.to_string(),
+                        error_message: e,
                     },
                 }
             },
@@ -8219,22 +8223,30 @@ pub fn load_node_networks(file_path: String) -> APIResult {
 /// - Creates a fresh "Main" network
 /// - Clears the file path
 /// - Clears the dirty flag
+///
+/// It replaces the *active* document in place, which then gets a fresh id
+/// (`doc/design_multiple_documents.md` D8). File > New uses `new_document`.
 #[flutter_rust_bridge::frb(sync)]
 pub fn new_project() {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            cad_instance.structure_designer.new_project();
+            cad_instance
+                .documents
+                .new_project_in_place(&mut cad_instance.structure_designer, false);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
-/// Creates a new project in direct editing mode with a single atom_edit node.
+/// Creates a new project in direct editing mode with a single atom_edit node,
+/// in place, like [`new_project`].
 #[flutter_rust_bridge::frb(sync)]
 pub fn new_project_direct_editing() {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            cad_instance.structure_designer.new_project_direct_editing();
+            cad_instance
+                .documents
+                .new_project_in_place(&mut cad_instance.structure_designer, true);
             refresh_structure_designer_auto(cad_instance);
         });
     }

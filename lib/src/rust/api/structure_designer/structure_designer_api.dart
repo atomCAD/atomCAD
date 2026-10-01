@@ -2098,10 +2098,14 @@ APIResult loadNodeNetworks({required String filePath}) => RustLib.instance.api
 /// - Creates a fresh "Main" network
 /// - Clears the file path
 /// - Clears the dirty flag
+///
+/// It replaces the *active* document in place, which then gets a fresh id
+/// (`doc/design_multiple_documents.md` D8). File > New uses `new_document`.
 void newProject() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiNewProject();
 
-/// Creates a new project in direct editing mode with a single atom_edit node.
+/// Creates a new project in direct editing mode with a single atom_edit node,
+/// in place, like [`new_project`].
 void newProjectDirectEditing() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiNewProjectDirectEditing();
 

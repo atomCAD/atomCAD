@@ -32,6 +32,7 @@ pub mod closure_network_conversion;
 pub mod common_constants;
 pub mod data_type;
 pub mod displayed_node_refs;
+pub mod document_set;
 pub mod eval_errors;
 pub mod evaluator;
 pub mod mechanosynth_edit_ops;
