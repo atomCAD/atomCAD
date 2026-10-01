@@ -23,7 +23,7 @@
 
 use crate::api::common_api_types::APIResult;
 use crate::api::structure_designer::structure_designer_api_types::{
-    APIActivateResult, APIDocumentTab, APIOpenDocumentResult,
+    APIActivateResult, APIDocumentTab, APIOpenDocumentResult, APIPasteResult,
 };
 use crate::api::structure_designer::structure_designer_api_types::{
     APIBundleResult, APIDependency, APIDependencyGroup, APIDependencyKind, APIDependencyPlan,
@@ -34,6 +34,7 @@ use crate::api::structure_designer::structure_designer_api_types::{
     APINetworkWithValidationErrors, APINodeCategoryView, APINodeTypeView, APIRefreshReport,
     APIReportedNode, APIReportedWire, APIValidationError,
 };
+use atomcad_structure_designer::clipboard::PasteRefusal;
 use atomcad_structure_designer::data_type::DataType;
 use atomcad_structure_designer::document_set::{
     DocumentSet, DocumentTab, OpenError, OpenOutcome, SwitchRefused,
@@ -787,5 +788,19 @@ pub fn api_result_view(outcome: Result<(), String>) -> APIResult {
     match outcome {
         Ok(()) => ok_result(),
         Err(message) => error_result(message),
+    }
+}
+
+/// The outcome of a paste: the new node ids, or the refusal's message.
+pub fn paste_result_view(outcome: Result<Vec<u64>, PasteRefusal>) -> APIPasteResult {
+    match outcome {
+        Ok(node_ids) => APIPasteResult {
+            node_ids,
+            error: None,
+        },
+        Err(refusal) => APIPasteResult {
+            node_ids: Vec::new(),
+            error: Some(refusal.to_string()),
+        },
     }
 }

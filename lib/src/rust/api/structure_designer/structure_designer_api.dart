@@ -2537,7 +2537,11 @@ bool copySelection({required Uint64List scopePath}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiCopySelection(
         scopePath: scopePath);
 
-Uint64List pasteAtPosition(
+/// Pastes the clipboard into `scope_path` of the active network. Refused,
+/// with `error` set and nothing pasted, when the clipboard came from another
+/// document whose names this one cannot see
+/// (`doc/design_multiple_documents.md` D9).
+APIPasteResult pasteAtPosition(
         {required Uint64List scopePath,
         required double x,
         required double y}) =>

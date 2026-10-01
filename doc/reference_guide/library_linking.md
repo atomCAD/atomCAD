@@ -44,7 +44,9 @@ Right-click menus on linked content offer only what does not change it:
 
 - a linked **network**: *Find Usages*, *Open library file*, *Duplicate into my
   file* (a local, editable copy at the top level of your design; its references
-  to other library networks stay links);
+  to other library networks stay links, and the data files its nodes read by a
+  relative path keep being read from the same place — the paths are re-spelled
+  from your design's folder, as *Make local copy* does);
 - a linked **record type**: *Open library file*;
 - the **library folder**: *Refresh*, *Open library file*, and for a library you
   linked directly *Change file…*, *Rename alias…*, *Make local copy* and

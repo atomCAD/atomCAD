@@ -2361,15 +2361,19 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   /// Pastes clipboard content at the given position (network coordinates).
-  void pasteAtPosition(double x, double y,
+  /// Returns why nothing was pasted when the clipboard came from another
+  /// document whose names this one cannot see, else null
+  /// (`doc/design_multiple_documents.md` D9).
+  String? pasteAtPosition(double x, double y,
       {List<BigInt> scopeChain = const []}) {
-    if (activeNetworkReadOnly) return;
-    structure_designer_api.pasteAtPosition(
+    if (activeNetworkReadOnly) return null;
+    final result = structure_designer_api.pasteAtPosition(
       scopePath: scopeChainToBytes(scopeChain),
       x: x,
       y: y,
     );
     refreshFromKernel();
+    return result.error;
   }
 
   /// Cuts the current selection (copy + delete).

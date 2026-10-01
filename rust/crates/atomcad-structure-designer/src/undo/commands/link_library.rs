@@ -296,6 +296,7 @@ impl RenameLibraryAliasCommand {
             from,
             to,
         );
+        ctx.clipboard.reprefix(from, to);
     }
 }
 

@@ -232,6 +232,7 @@ fn undo_stack_empty_stack_returns_none() {
         active_network_name: &mut designer.active_node_network_name,
         active_record_def_name: &mut designer.active_record_def_name,
         eval_error_snapshots: &mut designer.eval_error_snapshots,
+        clipboard: atomcad_structure_designer::clipboard::ClipboardSlot::none(),
     };
 
     assert!(!stack.can_undo());
@@ -260,6 +261,7 @@ fn undo_stack_push_undo_redo_cursor_behavior() {
         active_network_name: &mut designer.active_node_network_name,
         active_record_def_name: &mut designer.active_record_def_name,
         eval_error_snapshots: &mut designer.eval_error_snapshots,
+        clipboard: atomcad_structure_designer::clipboard::ClipboardSlot::none(),
     };
     assert!(stack.undo(&mut ctx).is_some());
 
@@ -293,6 +295,7 @@ fn undo_stack_redo_tail_truncation_on_push() {
         active_network_name: &mut designer.active_node_network_name,
         active_record_def_name: &mut designer.active_record_def_name,
         eval_error_snapshots: &mut designer.eval_error_snapshots,
+        clipboard: atomcad_structure_designer::clipboard::ClipboardSlot::none(),
     };
 
     stack.push(Box::new(DummyCommand::new("cmd1")));
@@ -333,6 +336,7 @@ fn undo_stack_max_history_eviction() {
         active_network_name: &mut designer.active_node_network_name,
         active_record_def_name: &mut designer.active_record_def_name,
         eval_error_snapshots: &mut designer.eval_error_snapshots,
+        clipboard: atomcad_structure_designer::clipboard::ClipboardSlot::none(),
     };
 
     // Can only undo 3 times (cmd4, cmd3, cmd2), not 4
@@ -375,6 +379,7 @@ fn undo_stack_suppression() {
         active_network_name: &mut designer.active_node_network_name,
         active_record_def_name: &mut designer.active_record_def_name,
         eval_error_snapshots: &mut designer.eval_error_snapshots,
+        clipboard: atomcad_structure_designer::clipboard::ClipboardSlot::none(),
     };
 
     stack.undo(&mut ctx);
@@ -1070,7 +1075,7 @@ fn undo_paste_nodes() {
 
     // Paste and verify undo/redo roundtrip
     assert_undo_redo_roundtrip(&mut designer, |d| {
-        d.paste_at_position(DVec2::new(200.0, 100.0));
+        d.paste_at_position(DVec2::new(200.0, 100.0)).unwrap();
     });
 }
 
@@ -1095,7 +1100,7 @@ fn undo_paste_connected_nodes() {
 
     // Paste and verify undo/redo roundtrip (wires between pasted nodes should be preserved)
     assert_undo_redo_roundtrip(&mut designer, |d| {
-        d.paste_at_position(DVec2::new(0.0, 200.0));
+        d.paste_at_position(DVec2::new(0.0, 200.0)).unwrap();
     });
 }
 
@@ -1129,9 +1134,9 @@ fn undo_paste_multiple_times() {
     let initial = snapshot_all_networks(&mut designer.node_type_registry);
 
     // Paste 3 times
-    designer.paste_at_position(DVec2::new(100.0, 0.0));
-    designer.paste_at_position(DVec2::new(200.0, 0.0));
-    designer.paste_at_position(DVec2::new(300.0, 0.0));
+    designer.paste_at_position(DVec2::new(100.0, 0.0)).unwrap();
+    designer.paste_at_position(DVec2::new(200.0, 0.0)).unwrap();
+    designer.paste_at_position(DVec2::new(300.0, 0.0)).unwrap();
 
     // Undo all 3 pastes
     assert!(designer.undo());
@@ -3520,7 +3525,7 @@ fn paste_comment_with_target_remaps_the_anchor() {
 
     designer.select_nodes(vec![sphere_id, comment_id]);
     designer.copy_selection();
-    let pasted = designer.paste_at_position(DVec2::new(0.0, 400.0));
+    let pasted = designer.paste_at_position(DVec2::new(0.0, 400.0)).unwrap();
 
     let new_comment = only_of_type(&designer, &pasted, "Comment");
     let new_sphere = only_of_type(&designer, &pasted, "sphere");
@@ -3542,7 +3547,7 @@ fn paste_comment_without_target_drops_the_anchor() {
 
     designer.select_nodes(vec![comment_id]);
     designer.copy_selection();
-    let pasted = designer.paste_at_position(DVec2::new(0.0, 400.0));
+    let pasted = designer.paste_at_position(DVec2::new(0.0, 400.0)).unwrap();
 
     assert_eq!(pasted.len(), 1, "only the comment was copied");
     assert!(
@@ -3566,7 +3571,7 @@ fn paste_comment_with_partial_wire_endpoints_drops_the_anchor() {
 
     designer.select_nodes(vec![sphere_id, comment_id]);
     designer.copy_selection();
-    let pasted = designer.paste_at_position(DVec2::new(0.0, 400.0));
+    let pasted = designer.paste_at_position(DVec2::new(0.0, 400.0)).unwrap();
 
     let new_comment = only_of_type(&designer, &pasted, "Comment");
     assert!(
@@ -3822,7 +3827,7 @@ fn undo_redo_of_a_paste_restores_the_suffixed_name() {
     designer.copy_selection();
     designer.undo_stack.clear();
 
-    let pasted = designer.paste_at_position(DVec2::new(100.0, 0.0));
+    let pasted = designer.paste_at_position(DVec2::new(100.0, 0.0)).unwrap();
     assert_eq!(
         designer
             .node_type_registry

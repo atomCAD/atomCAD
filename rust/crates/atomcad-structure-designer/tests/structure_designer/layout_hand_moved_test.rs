@@ -134,7 +134,9 @@ fn a_pasted_copy_inherits_the_flag() {
     drag(&mut designer, id, DVec2::new(40.0, 0.0));
 
     assert!(designer.copy_selection());
-    let pasted = designer.paste_at_position(DVec2::new(400.0, 400.0));
+    let pasted = designer
+        .paste_at_position(DVec2::new(400.0, 400.0))
+        .unwrap();
     assert_eq!(pasted.len(), 1);
     assert!(
         node(&designer, pasted[0]).hand_moved,

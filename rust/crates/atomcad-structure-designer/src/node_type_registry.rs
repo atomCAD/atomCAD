@@ -3901,8 +3901,9 @@ pub enum RecordRefSite {
 /// omission; see `doc/design_identity_vs_naming_phase0.md` §9).
 ///
 /// **Keep this list in sync with `canonicalize::canonicalize_node_data` and
-/// `rewrite_record_name_in_registry`** — every node-data variant that embeds a
-/// `DataType` or a schema/target name must appear here.
+/// [`rewrite_record_names_in_node`]** — every node-data variant that embeds a
+/// `DataType` or a schema/target name must appear here. The clipboard's
+/// cross-document paste (`clipboard.rs`) relies on both.
 pub fn collect_record_refs_in_node(
     node: &crate::node_network::Node,
     f: &mut impl FnMut(&str, RecordRefSite),
@@ -4083,15 +4084,18 @@ fn rewrite_record_name_in_registry(
     });
 }
 
-/// The general form of [`rewrite_record_name_in_registry`]: applies `rename`
-/// to every record-def name reachable through the registry — record def field
-/// types, network signatures, every node-data `DataType`, and the bare
-/// `schema` / `target` strings (which may be empty; `rename` must leave `""`
-/// alone) — then recomputes each node's cached custom type in place. Library
-/// linking's mount prefixing (`library_links::prefix_registry`) uses it so it
-/// covers exactly the reference sites a rename covers.
-pub(crate) fn rewrite_record_names_in_registry_with(
-    registry: &mut NodeTypeRegistry,
+/// Applies `rename` to every record-def name `node`'s **own data** refers to
+/// — each `Named` record inside a node-data `DataType`, and the bare `schema`
+/// / `target` strings (which may be empty; `rename` must leave `""` alone).
+/// The mutable twin of [`collect_record_refs_in_node`]: the two are the single
+/// collect and the single rewrite enumeration, and must cover the same
+/// variants. It does not recurse into the node's zone body (callers walk
+/// bodies with `walk_all_nodes_mut`) and does not refresh the node's cached
+/// custom type — the caller does, against whichever registry the node lives
+/// in. Used by the registry-wide rewrite below and by the clipboard's
+/// cross-document paste (`doc/design_multiple_documents.md` D9).
+pub fn rewrite_record_names_in_node(
+    node: &mut crate::node_network::Node,
     mut rename: &mut dyn FnMut(&mut String),
 ) {
     use crate::nodes::apply::ApplyData;
@@ -4113,6 +4117,79 @@ pub(crate) fn rewrite_record_names_in_registry_with(
     use crate::nodes::record_destructure::RecordDestructureData;
     use crate::nodes::sequence::SequenceData;
 
+    // Per-node data containers that embed a DataType.
+    let data: &mut dyn crate::node_data::NodeData = node.data.as_mut();
+    if let Some(d) = data.as_any_mut().downcast_mut::<ParameterData>() {
+        walk_data_type_record_names_mut(&mut d.data_type, &mut rename);
+        // Refresh the cached display string so save round-trips agree
+        // with the in-memory type.
+        if d.data_type_str.is_some() {
+            d.data_type_str = Some(d.data_type.to_string());
+        }
+    } else if let Some(d) = data.as_any_mut().downcast_mut::<ClosureData>() {
+        for t in d.type_args.iter_mut() {
+            walk_data_type_record_names_mut(t, &mut rename);
+        }
+    } else if let Some(d) = data.as_any_mut().downcast_mut::<ApplyData>() {
+        for t in d.type_args.iter_mut() {
+            walk_data_type_record_names_mut(t, &mut rename);
+        }
+    } else if let Some(d) = data.as_any_mut().downcast_mut::<CollectData>() {
+        walk_data_type_record_names_mut(&mut d.element_type, &mut rename);
+    } else if let Some(d) = data.as_any_mut().downcast_mut::<ExprData>() {
+        for p in d.parameters.iter_mut() {
+            walk_data_type_record_names_mut(&mut p.data_type, &mut rename);
+            if p.data_type_str.is_some() {
+                p.data_type_str = Some(p.data_type.to_string());
+            }
+        }
+        if let Some(out) = d.output_type.as_mut() {
+            walk_data_type_record_names_mut(out, &mut rename);
+        }
+    } else if let Some(d) = data.as_any_mut().downcast_mut::<MapData>() {
+        walk_data_type_record_names_mut(&mut d.input_type, &mut rename);
+        walk_data_type_record_names_mut(&mut d.output_type, &mut rename);
+    } else if let Some(d) = data.as_any_mut().downcast_mut::<SequenceData>() {
+        walk_data_type_record_names_mut(&mut d.element_type, &mut rename);
+    } else if let Some(d) = data.as_any_mut().downcast_mut::<FilterData>() {
+        walk_data_type_record_names_mut(&mut d.element_type, &mut rename);
+    } else if let Some(d) = data.as_any_mut().downcast_mut::<FoldData>() {
+        walk_data_type_record_names_mut(&mut d.element_type, &mut rename);
+        walk_data_type_record_names_mut(&mut d.accumulator_type, &mut rename);
+    } else if let Some(d) = data.as_any_mut().downcast_mut::<ForeachData>() {
+        walk_data_type_record_names_mut(&mut d.input_type, &mut rename);
+    } else if let Some(d) = data.as_any_mut().downcast_mut::<ArrayData>() {
+        walk_data_type_record_names_mut(&mut d.element_type, &mut rename);
+    } else if let Some(d) = data.as_any_mut().downcast_mut::<ArrayAtData>() {
+        walk_data_type_record_names_mut(&mut d.element_type, &mut rename);
+    } else if let Some(d) = data.as_any_mut().downcast_mut::<ArrayAppendData>() {
+        walk_data_type_record_names_mut(&mut d.element_type, &mut rename);
+    } else if let Some(d) = data.as_any_mut().downcast_mut::<ArrayConcatData>() {
+        walk_data_type_record_names_mut(&mut d.element_type, &mut rename);
+    } else if let Some(d) = data.as_any_mut().downcast_mut::<ArrayLenData>() {
+        walk_data_type_record_names_mut(&mut d.element_type, &mut rename);
+    } else if let Some(d) = data.as_any_mut().downcast_mut::<RecordConstructData>() {
+        // `schema` is a bare record-def name (possibly empty).
+        rename(&mut d.schema);
+    } else if let Some(d) = data.as_any_mut().downcast_mut::<RecordDestructureData>() {
+        rename(&mut d.schema);
+    } else if let Some(d) = data.as_any_mut().downcast_mut::<ProductData>() {
+        // `target` is a bare record-def name (possibly empty).
+        rename(&mut d.target);
+    }
+}
+
+/// The general form of [`rewrite_record_name_in_registry`]: applies `rename`
+/// to every record-def name reachable through the registry — record def field
+/// types, network signatures, every node-data `DataType`, and the bare
+/// `schema` / `target` strings (which may be empty; `rename` must leave `""`
+/// alone) — then recomputes each node's cached custom type in place. Library
+/// linking's mount prefixing (`library_links::prefix_registry`) uses it so it
+/// covers exactly the reference sites a rename covers.
+pub(crate) fn rewrite_record_names_in_registry_with(
+    registry: &mut NodeTypeRegistry,
+    mut rename: &mut dyn FnMut(&mut String),
+) {
     // Walk every record def's fields too — `Box = { p: Record(Old) }` should
     // see the rename. The def being renamed itself is updated by the caller.
     for def in registry.record_type_defs.values_mut() {
@@ -4153,66 +4230,7 @@ pub(crate) fn rewrite_record_names_in_registry_with(
         // node may carry the renamed `Named` reference in its per-node data type
         // fields just like a top-level one.
         crate::node_network::walk_all_nodes_mut(network, &mut |node| {
-            // Per-node data containers that embed a DataType.
-            let data: &mut dyn crate::node_data::NodeData = node.data.as_mut();
-            if let Some(d) = data.as_any_mut().downcast_mut::<ParameterData>() {
-                walk_data_type_record_names_mut(&mut d.data_type, &mut rename);
-                // Refresh the cached display string so save round-trips agree
-                // with the in-memory type.
-                if d.data_type_str.is_some() {
-                    d.data_type_str = Some(d.data_type.to_string());
-                }
-            } else if let Some(d) = data.as_any_mut().downcast_mut::<ClosureData>() {
-                for t in d.type_args.iter_mut() {
-                    walk_data_type_record_names_mut(t, &mut rename);
-                }
-            } else if let Some(d) = data.as_any_mut().downcast_mut::<ApplyData>() {
-                for t in d.type_args.iter_mut() {
-                    walk_data_type_record_names_mut(t, &mut rename);
-                }
-            } else if let Some(d) = data.as_any_mut().downcast_mut::<CollectData>() {
-                walk_data_type_record_names_mut(&mut d.element_type, &mut rename);
-            } else if let Some(d) = data.as_any_mut().downcast_mut::<ExprData>() {
-                for p in d.parameters.iter_mut() {
-                    walk_data_type_record_names_mut(&mut p.data_type, &mut rename);
-                    if p.data_type_str.is_some() {
-                        p.data_type_str = Some(p.data_type.to_string());
-                    }
-                }
-                if let Some(out) = d.output_type.as_mut() {
-                    walk_data_type_record_names_mut(out, &mut rename);
-                }
-            } else if let Some(d) = data.as_any_mut().downcast_mut::<MapData>() {
-                walk_data_type_record_names_mut(&mut d.input_type, &mut rename);
-                walk_data_type_record_names_mut(&mut d.output_type, &mut rename);
-            } else if let Some(d) = data.as_any_mut().downcast_mut::<SequenceData>() {
-                walk_data_type_record_names_mut(&mut d.element_type, &mut rename);
-            } else if let Some(d) = data.as_any_mut().downcast_mut::<FilterData>() {
-                walk_data_type_record_names_mut(&mut d.element_type, &mut rename);
-            } else if let Some(d) = data.as_any_mut().downcast_mut::<FoldData>() {
-                walk_data_type_record_names_mut(&mut d.element_type, &mut rename);
-                walk_data_type_record_names_mut(&mut d.accumulator_type, &mut rename);
-            } else if let Some(d) = data.as_any_mut().downcast_mut::<ForeachData>() {
-                walk_data_type_record_names_mut(&mut d.input_type, &mut rename);
-            } else if let Some(d) = data.as_any_mut().downcast_mut::<ArrayData>() {
-                walk_data_type_record_names_mut(&mut d.element_type, &mut rename);
-            } else if let Some(d) = data.as_any_mut().downcast_mut::<ArrayAtData>() {
-                walk_data_type_record_names_mut(&mut d.element_type, &mut rename);
-            } else if let Some(d) = data.as_any_mut().downcast_mut::<ArrayAppendData>() {
-                walk_data_type_record_names_mut(&mut d.element_type, &mut rename);
-            } else if let Some(d) = data.as_any_mut().downcast_mut::<ArrayConcatData>() {
-                walk_data_type_record_names_mut(&mut d.element_type, &mut rename);
-            } else if let Some(d) = data.as_any_mut().downcast_mut::<ArrayLenData>() {
-                walk_data_type_record_names_mut(&mut d.element_type, &mut rename);
-            } else if let Some(d) = data.as_any_mut().downcast_mut::<RecordConstructData>() {
-                // `schema` is a bare record-def name (possibly empty).
-                rename(&mut d.schema);
-            } else if let Some(d) = data.as_any_mut().downcast_mut::<RecordDestructureData>() {
-                rename(&mut d.schema);
-            } else if let Some(d) = data.as_any_mut().downcast_mut::<ProductData>() {
-                // `target` is a bare record-def name (possibly empty).
-                rename(&mut d.target);
-            }
+            rewrite_record_names_in_node(node, &mut *rename);
 
             // Recompute the cached `custom_node_type` IN PLACE from the
             // (now-renamed) per-node data, using the split-borrowed type maps.

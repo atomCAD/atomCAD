@@ -3408,6 +3408,16 @@ pub struct APIActivateResult {
     pub library_report: Option<APIRefreshReport>,
 }
 
+/// The outcome of a paste (`doc/design_multiple_documents.md` D9). `error`
+/// is set when the clipboard came from another document and a name it needs
+/// is unreachable here or has a different interface; nothing was pasted then,
+/// and the message lists every offending name with what to do.
+#[derive(Debug, Clone)]
+pub struct APIPasteResult {
+    pub node_ids: Vec<u64>,
+    pub error: Option<String>,
+}
+
 /// The outcome of *File > Open* into a tab.
 #[derive(Debug, Clone)]
 pub struct APIOpenDocumentResult {

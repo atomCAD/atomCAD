@@ -24,6 +24,7 @@ impl RenameRecordTypeDefCommand {
         if ctx.active_record_def_name.as_deref() == Some(from) {
             *ctx.active_record_def_name = Some(to.to_string());
         }
+        ctx.clipboard.rename(&[(from.to_string(), to.to_string())]);
     }
 }
 

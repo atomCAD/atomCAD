@@ -61,6 +61,11 @@ pub struct UndoContext<'a> {
     /// `apply_rename_core` so a renamed network's dimmed panel errors follow
     /// it across undo/redo too.
     pub eval_error_snapshots: &'a mut HashMap<String, Vec<EvalErrorEntry>>,
+    /// The document's own clipboard (`doc/design_multiple_documents.md` D9).
+    /// Commands that rename or delete a network or record def keep it up
+    /// exactly as the forward operation did, so an undone rename takes the
+    /// clipboard's references back with it.
+    pub clipboard: crate::clipboard::ClipboardSlot<'a>,
 }
 
 impl<'a> UndoContext<'a> {

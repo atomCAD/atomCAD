@@ -684,6 +684,9 @@ mod library_links_interaction_test;
 #[path = "structure_designer/document_set_test.rs"]
 mod document_set_test;
 
+#[path = "structure_designer/clipboard_test.rs"]
+mod clipboard_test;
+
 #[path = "structure_designer/file_dependencies_test.rs"]
 mod file_dependencies_test;
 

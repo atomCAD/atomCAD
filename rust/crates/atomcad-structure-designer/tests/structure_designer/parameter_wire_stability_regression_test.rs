@@ -876,7 +876,7 @@ fn regression_paste_param_node_mints_fresh_param_id() {
     designer.set_active_node_network_name(Some("Filt".to_string()));
     designer.select_nodes(vec![ids[0]]);
     assert!(designer.copy_selection(), "copy should succeed");
-    let pasted = designer.paste_at_position(DVec2::new(0.0, 300.0));
+    let pasted = designer.paste_at_position(DVec2::new(0.0, 300.0)).unwrap();
     assert_eq!(pasted.len(), 1, "one node pasted");
 
     assert_ne!(
@@ -904,7 +904,7 @@ fn guard_paste_param_into_other_network_keeps_name() {
     designer.select_nodes(vec![ids[0]]);
     assert!(designer.copy_selection(), "copy should succeed");
     designer.set_active_node_network_name(Some("Dst".to_string()));
-    let pasted = designer.paste_at_position(DVec2::new(0.0, 200.0));
+    let pasted = designer.paste_at_position(DVec2::new(0.0, 200.0)).unwrap();
     assert_eq!(pasted.len(), 1, "one node pasted");
 
     assert_eq!(

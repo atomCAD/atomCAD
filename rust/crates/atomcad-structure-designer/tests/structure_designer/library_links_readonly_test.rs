@@ -185,7 +185,11 @@ fn alphabet() -> Vec<(&'static str, OpFn)> {
             let x = id(d, t, "x");
             d.select_node(x);
             d.copy_selection();
-            Some(d.paste_at_position(DVec2::new(900.0, 0.0)).is_empty())
+            Some(
+                d.paste_at_position(DVec2::new(900.0, 0.0))
+                    .unwrap()
+                    .is_empty(),
+            )
         }),
         ("cut", |d, t| {
             let x = id(d, t, "x");
@@ -533,7 +537,7 @@ fn frozen_host_edits() -> Vec<(
             let rc = nid(d, "rc");
             d.select_node(rc);
             d.copy_selection();
-            let pasted = d.paste_at_position(DVec2::new(1200.0, 0.0));
+            let pasted = d.paste_at_position(DVec2::new(1200.0, 0.0)).unwrap();
             assert_eq!(pasted.len(), 1);
             let node = &d.node_type_registry.node_networks["Main"].nodes[&pasted[0]];
             assert!(

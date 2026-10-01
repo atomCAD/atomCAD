@@ -56,6 +56,7 @@ impl UndoCommand for DeleteRecordTypeDefCommand {
         {
             *ctx.active_record_def_name = None;
         }
+        ctx.clipboard.clear_if_refers_to(&|n| n == self.def.name);
     }
 
     fn refresh_mode(&self) -> UndoRefreshMode {

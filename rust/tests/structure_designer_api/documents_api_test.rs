@@ -2,11 +2,12 @@
 //! the Dart-facing shapes. The FFI wrappers need the GPU-backed `CADInstance`
 //! and are not called here; the view builders they end in are.
 
+use atomcad_structure_designer::clipboard::PasteRefusal;
 use atomcad_structure_designer::document_set::{DocumentId, DocumentSet, OpenError, UNTITLED};
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 use rust_lib_flutter_cad::api::structure_designer::view_builders::{
     activate_result_view, api_result_view, document_tabs_view, failed_open_document_result,
-    open_document_result_view, switch_result_view,
+    open_document_result_view, paste_result_view, switch_result_view,
 };
 use std::path::{Path, PathBuf};
 
@@ -133,4 +134,27 @@ fn guard_result_shape() {
     let refused = api_result_view(set.check_guard(&active, "elsewhere.cnnd"));
     assert!(!refused.success);
     assert!(refused.error_message.contains(UNTITLED));
+}
+
+#[test]
+fn a_paste_result_carries_the_ids_or_the_refusal() {
+    let ok = paste_result_view(Ok(vec![3, 4]));
+    assert_eq!(ok.node_ids, vec![3, 4]);
+    assert_eq!(ok.error, None);
+
+    let refused = paste_result_view(Err(PasteRefusal {
+        lines: vec![
+            ("a".to_string(), "`a` is gone.".to_string()),
+            ("b".to_string(), "`b` is gone too.".to_string()),
+        ],
+    }));
+    assert!(refused.node_ids.is_empty());
+    assert_eq!(
+        refused.error.as_deref(),
+        Some(
+            "Nothing was pasted:
+- `a` is gone.
+- `b` is gone too."
+        )
+    );
 }

@@ -39,6 +39,7 @@ undo/
 - **UndoStack** lives on `StructureDesigner`. Single global stack (not per-network).
 - **UndoCommand** trait: `description()`, `undo(&self, ctx)`, `redo(&self, ctx)`, `refresh_mode()`. No `Send` / `Sync` bound: `RefreshDependenciesCommand` holds live `NodeNetwork` copies, because restoring a serialized snapshot re-runs the node-data loaders, which **re-read data files from disk** (an `import_xyz` restored from JSON reads the file as it is now). Prefer serialized snapshots otherwise; reach for live copies only when a loader's side effect would make the round trip unfaithful.
 - **UndoContext** provides `&mut NodeTypeRegistry` + `&mut Option<String>` (active network name) to avoid borrow conflicts with `StructureDesigner` which owns the `UndoStack`.
+- **`UndoContext::clipboard`** is the document's own clipboard (a `ClipboardSlot`; empty when the clipboard was copied in another document). A command that renames or deletes a network, record def or library alias must apply the same clipboard upkeep in `undo`/`redo` that the forward operation applied (`rename`, `reprefix`, `clear_if_refers_to`), or an undone rename leaves the clipboard naming something that no longer exists. Tests that build an `UndoContext` by hand pass `ClipboardSlot::none()`.
 - Commands store their target `network_name` and look up the network via `ctx.network_mut(name)`.
 - `StructureDesigner::undo()`/`redo()` use `std::mem::take` to temporarily move the stack, avoiding simultaneous borrow of stack and context.
 

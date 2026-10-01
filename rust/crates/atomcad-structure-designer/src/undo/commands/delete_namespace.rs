@@ -100,6 +100,10 @@ impl UndoCommand for DeleteNamespaceCommand {
         }
         *ctx.active_network_name = self.active_network_after.clone();
         *ctx.active_record_def_name = self.active_record_def_after.clone();
+        ctx.clipboard.clear_if_refers_to(&|n| {
+            self.network_snapshots.iter().any(|(name, _)| name == n)
+                || self.record_snapshots.iter().any(|(name, _)| name == n)
+        });
     }
 
     fn refresh_mode(&self) -> UndoRefreshMode {

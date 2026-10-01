@@ -544,6 +544,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIPassivateData dco_decode_api_passivate_data(dynamic raw);
 
   @protected
+  APIPasteResult dco_decode_api_paste_result(dynamic raw);
+
+  @protected
   APIPatchBuildData dco_decode_api_patch_build_data(dynamic raw);
 
   @protected
@@ -2607,6 +2610,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIPassivateData sse_decode_api_passivate_data(SseDeserializer deserializer);
+
+  @protected
+  APIPasteResult sse_decode_api_paste_result(SseDeserializer deserializer);
 
   @protected
   APIPatchBuildData sse_decode_api_patch_build_data(
@@ -5001,6 +5007,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_passivate_data(
       APIPassivateData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_paste_result(
+      APIPasteResult self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_patch_build_data(

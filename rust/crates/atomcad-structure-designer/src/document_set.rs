@@ -31,6 +31,11 @@ impl DocumentId {
     /// The id of a designer that belongs to no `DocumentSet` (headless mode,
     /// tests that build a bare `StructureDesigner`).
     pub const HEADLESS: DocumentId = DocumentId(0);
+
+    /// The source of a clipboard copied in content that was since replaced in
+    /// place (`StructureDesigner::detach_own_clipboard`). No document has it,
+    /// so a paste always takes the cross-document path.
+    pub const REPLACED: DocumentId = DocumentId(u64::MAX);
 }
 
 impl fmt::Display for DocumentId {

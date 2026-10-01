@@ -1251,6 +1251,27 @@ pub fn base_dir_of(registry: &NodeTypeRegistry, network_name: &str) -> Option<Pa
     }
 }
 
+/// The spelling of a stored data-file path once the node holding it moves
+/// from a network whose paths resolve against `from_dir` to one whose paths
+/// resolve against `to_dir` (*Make local copy*, *Duplicate into my file*,
+/// paste — `doc/design_multiple_documents.md` D9): relative to `to_dir`, or
+/// absolute when there is no relative path (another drive) or no `to_dir`
+/// (an Untitled design). `None` keeps the path: it is absolute or empty, or
+/// already names the same file. Both folders are expected canonical.
+pub fn rebase_data_path(from_dir: &Path, to_dir: Option<&Path>, stored: &str) -> Option<String> {
+    if stored.is_empty() || Path::new(stored).is_absolute() || to_dir == Some(from_dir) {
+        return None;
+    }
+    let target = library_links::lexical_join(from_dir, stored).ok()?;
+    let spelled = to_dir
+        .and_then(|dir| library_links::relative_path(dir, &target))
+        .unwrap_or_else(|| {
+            let s = target.to_string_lossy().to_string();
+            s.strip_prefix(r"\\?\").map(str::to_string).unwrap_or(s)
+        });
+    (spelled != stored).then_some(spelled)
+}
+
 /// Resolves a data-file path as stored in node data.
 pub fn resolve_data_path(base: Option<&Path>, stored: &str) -> Option<PathBuf> {
     let p = Path::new(stored);

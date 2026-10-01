@@ -348,7 +348,10 @@ name for it:
 3. otherwise the name is **unreachable** from `T`.
 
 Then the definition `T` has under that name must have the **recorded
-interface**. Two files that should agree can disagree when one side is stale —
+interface**. Record types inside an interface (a parameter of type
+`Record(demolib.Miller)`) are compared by owner, not by spelling: both sides
+write each user record name as `<file>::<name in file>` before comparing, since
+the host and the library tab spell the same type differently. Two files that should agree can disagree when one side is stale —
 the library tab has unsaved changes, or `T`'s mount has not been refreshed —
 and a paste across a mismatched interface would leave nodes whose arguments
 were built for a different pin layout.
@@ -386,16 +389,26 @@ across documents: their definition does not resolve in the source, so there is
 no interface to check.
 
 **Clipboard upkeep.** Renaming or deleting a network or record def, and
-renaming a library alias, already rewrite or clear the clipboard
-(`structure_designer.rs`, `library_link_ops.rs`). These keep doing so only
-when the clipboard's origin is the document being edited. A rename in some
-other document must not rewrite names that belong to the source. The sites
-include the undo and redo paths: `structure_designer.rs` rewrites the
-clipboard in the rename code that undo and redo of a rename also run.
+renaming a library alias, rewrite or clear the clipboard
+(`structure_designer.rs`, `library_link_ops.rs`) — but only when the
+clipboard's origin is the document being edited. A rename in some other
+document must not rewrite names that belong to the source.
 `StructureDesigner` gains a `document_id` field, and every site goes through
-one helper, `own_clipboard_mut() -> Option<&mut Clipboard>`, which returns the
-clipboard only when its origin is this document. No site touches
-`self.clipboard` directly, so the guard cannot be forgotten at one of them.
+one helper, `edit_own_clipboard` (built on `own_clipboard_mut() ->
+Option<&mut Clipboard>`), which acts only when the clipboard's origin is this
+document. No site touches `self.clipboard` directly, so the guard cannot be
+forgotten at one of them.
+
+*As implemented (P2):* before P2 only the forward network rename, namespace
+rename, network delete, namespace delete and alias rename touched the
+clipboard, and only for `node_type_name`. Record renames and deletes did not,
+and **undo and redo did not either**: they run `apply_rename_core` through an
+`UndoContext` that had no clipboard, so undoing a rename left the clipboard
+naming a network that no longer existed. P2 adds `UndoContext::clipboard` (a
+`ClipboardSlot` holding the document's own clipboard, or nothing), and the
+rename, alias-rename and delete commands apply the forward operation's upkeep
+in their `undo` / `redo`. Record names are rewritten too, through the per-node
+rewrite.
 After such a rewrite the recorded owners are recomputed from the source's
 registry. In every other respect the origin is a snapshot: closing
 the source, Save As or a later refresh does not change it, and the interface
@@ -983,6 +996,24 @@ Plus:
 - **The clipboard is app state.** P1's field-side table now lists the
   clipboard on the app side. Copy in A, switch to B: B holds the clipboard and
   the parked A does not.
+
+*As implemented:* two things landed in P2 that the plan above puts
+elsewhere or does not mention. (1) The Dart paste callers already show the
+refusal (`showErrorDialog`, *Cannot Paste*): P1's D8 backstop gives the
+document a fresh id on every in-place *File > Open*, so copy → open another
+design → paste is a cross-document paste before any tab exists. (2) Besides
+the `.unwrap()`s, existing tests changed mechanically in two ways: the two
+helpers in `copy_paste_test.rs` that read the clipboard's nodes now go through
+`Clipboard::nodes`, and the hand-built `UndoContext`s pass
+`ClipboardSlot::none()`. *Duplicate into my file* had the latent path bug as
+well; it is fixed the same way (and its loaders now read against the source's
+folder instead of none).
+(3) Without a `DocumentSet` (headless, a bare designer) an in-place load or
+new project keeps `DocumentId(0)`, so a clipboard copied before it would have
+pasted the old content's names unchecked into the new one. `load_node_networks`
+and `new_project` now mark their own clipboard's origin as
+`DocumentId::REPLACED`, a never-assigned id, so the paste takes the
+cross-document path in every mode.
 
 ### Phase 3 — Flutter: tabs
 

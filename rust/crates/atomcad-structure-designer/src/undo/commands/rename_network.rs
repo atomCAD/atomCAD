@@ -21,6 +21,8 @@ impl UndoCommand for RenameNetworkCommand {
             &self.new_name,
             &self.old_name,
         );
+        ctx.clipboard
+            .rename(&[(self.new_name.clone(), self.old_name.clone())]);
     }
 
     fn redo(&self, ctx: &mut UndoContext) {
@@ -31,6 +33,8 @@ impl UndoCommand for RenameNetworkCommand {
             &self.old_name,
             &self.new_name,
         );
+        ctx.clipboard
+            .rename(&[(self.old_name.clone(), self.new_name.clone())]);
     }
 
     fn refresh_mode(&self) -> UndoRefreshMode {

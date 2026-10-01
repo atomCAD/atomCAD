@@ -608,6 +608,7 @@ fn run_undo_redo_cycle(designer: &mut StructureDesigner) {
             active_network_name: &mut designer.active_node_network_name,
             active_record_def_name: &mut designer.active_record_def_name,
             eval_error_snapshots: &mut designer.eval_error_snapshots,
+            clipboard: atomcad_structure_designer::clipboard::ClipboardSlot::none(),
         };
         stack.undo(&mut ctx);
     }
@@ -622,6 +623,7 @@ fn run_redo_cycle(designer: &mut StructureDesigner) {
             active_network_name: &mut designer.active_node_network_name,
             active_record_def_name: &mut designer.active_record_def_name,
             eval_error_snapshots: &mut designer.eval_error_snapshots,
+            clipboard: atomcad_structure_designer::clipboard::ClipboardSlot::none(),
         };
         stack.redo(&mut ctx);
     }

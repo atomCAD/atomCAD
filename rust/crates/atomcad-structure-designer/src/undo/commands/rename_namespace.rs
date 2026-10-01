@@ -85,6 +85,18 @@ impl RenameNamespaceCommand {
         if touched_record {
             ctx.node_type_registry.repair_all_networks();
         }
+        let pairs: Vec<(String, String)> = self
+            .renames
+            .iter()
+            .map(|r| {
+                if forward {
+                    (r.old_name.clone(), r.new_name.clone())
+                } else {
+                    (r.new_name.clone(), r.old_name.clone())
+                }
+            })
+            .collect();
+        ctx.clipboard.rename(&pairs);
     }
 }
 

@@ -58,6 +58,7 @@ use super::structure_designer_api_types::APINodeNameMatch;
 use super::structure_designer_api_types::APINodeRef;
 use super::structure_designer_api_types::APIParameterData;
 use super::structure_designer_api_types::APIPassivateData;
+use super::structure_designer_api_types::APIPasteResult;
 use super::structure_designer_api_types::APIPatchBuildData;
 use super::structure_designer_api_types::APIPatchLatticeFillData;
 use super::structure_designer_api_types::APIPlaneTilingVectorsData;
@@ -9336,19 +9337,28 @@ pub fn copy_selection(scope_path: Vec<u64>) -> bool {
     }
 }
 
+/// Pastes the clipboard into `scope_path` of the active network. Refused,
+/// with `error` set and nothing pasted, when the clipboard came from another
+/// document whose names this one cannot see
+/// (`doc/design_multiple_documents.md` D9).
 #[flutter_rust_bridge::frb(sync)]
-pub fn paste_at_position(scope_path: Vec<u64>, x: f64, y: f64) -> Vec<u64> {
+pub fn paste_at_position(scope_path: Vec<u64>, x: f64, y: f64) -> APIPasteResult {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
                 let position = glam::f64::DVec2::new(x, y);
-                let new_ids = cad_instance
+                let outcome = cad_instance
                     .structure_designer
                     .paste_at_position_scoped(&scope_path, position);
-                refresh_structure_designer_auto(cad_instance);
-                new_ids
+                if outcome.is_ok() {
+                    refresh_structure_designer_auto(cad_instance);
+                }
+                view_builders::paste_result_view(outcome)
             },
-            vec![],
+            APIPasteResult {
+                node_ids: Vec::new(),
+                error: None,
+            },
         )
     }
 }

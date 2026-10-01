@@ -275,6 +275,15 @@ fn app_state_follows_the_session() {
         orthographic: true,
     };
     let pick = format!("{:?}", tabs.active.gadget_pick_context);
+    edit(
+        &mut tabs.active,
+        "Main",
+        "k = int { value: 1 }
+",
+    );
+    let k = node_id(&tabs.active, "Main", "k");
+    tabs.active.select_node(k);
+    assert!(tabs.active.copy_selection());
     let mb = tabs
         .active
         .preferences
@@ -305,10 +314,14 @@ fn app_state_follows_the_session() {
     assert!(!d.eval_memo_enabled);
     assert_eq!(format!("{:?}", d.gadget_pick_context), pick);
 
+    // The clipboard is app state since P2 (D9).
+    assert_eq!(d.clipboard.as_ref().unwrap().origin.document, a);
+
     // The moved rows are gone from the parked A.
     let parked = tabs.set.parked(a).unwrap();
     assert!(parked.print_log.is_empty());
     assert!(parked.refresh_profiles.is_empty());
+    assert!(parked.clipboard.is_none());
 }
 
 #[test]
@@ -336,9 +349,6 @@ fn document_state_stays_with_its_document() {
     tabs.active
         .set_active_node_network_name(Some("Main".to_string()));
     tabs.active.direct_editing_mode = false;
-    let a_node = node_id(&tabs.active, "Main", "a");
-    tabs.active.select_node(a_node);
-    assert!(tabs.active.copy_selection());
     incr(&mut tabs.active, "Main", "c = int { value: 7 }\n");
 
     for _ in 0..2 {
@@ -358,9 +368,6 @@ fn document_state_stays_with_its_document() {
     assert_eq!(db.cli_access_rules.get("Other"), Some(&false));
     assert!(db.eval_error_snapshots.contains_key("Other"));
     assert!(!da.eval_error_snapshots.contains_key("Other"));
-    // P1: the clipboard is still document state (D9 moves it in P2).
-    assert!(da.clipboard.is_some());
-    assert!(db.clipboard.is_none());
     assert!(da.is_dirty);
     assert!(da.undo_stack.can_undo());
     assert_eq!(da.document_id, a);

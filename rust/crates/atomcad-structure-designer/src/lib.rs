@@ -28,6 +28,7 @@ pub mod camera_settings;
 pub mod canonicalize;
 pub mod canvas_viewport;
 pub mod chemisorb_ops;
+pub mod clipboard;
 pub mod closure_network_conversion;
 pub mod common_constants;
 pub mod data_type;

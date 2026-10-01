@@ -16,6 +16,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
     as sd_api;
 import 'package:flutter_cad/common/api_utils.dart';
+import 'package:flutter_cad/common/error_display.dart';
 
 // Zoom levels
 enum ZoomLevel {
@@ -1303,8 +1304,13 @@ class NodeNetworkState extends State<NodeNetwork> {
                 scopeChain: scopeChain);
           }
         } else if (value == 'paste') {
-          model.pasteAtPosition(logicalPosition.dx, logicalPosition.dy,
+          final error = model.pasteAtPosition(
+              logicalPosition.dx, logicalPosition.dy,
               scopeChain: scopeChain);
+          if (error != null && context.mounted) {
+            showErrorDialog(
+                context: context, title: 'Cannot Paste', message: error);
+          }
         }
       } else {
         String? selectedNode =
@@ -1752,8 +1758,15 @@ class NodeNetworkState extends State<NodeNetwork> {
                       screenToLogical(_lastMousePosition, _panOffset,
                           getZoomScale(_zoomLevel));
                   final pasteScope = scopeHit?.scopeChain ?? const <BigInt>[];
-                  model.pasteAtPosition(logicalPos.dx, logicalPos.dy,
+                  final error = model.pasteAtPosition(
+                      logicalPos.dx, logicalPos.dy,
                       scopeChain: pasteScope);
+                  if (error != null) {
+                    showErrorDialog(
+                        context: context,
+                        title: 'Cannot Paste',
+                        message: error);
+                  }
                 }
                 return KeyEventResult.handled;
               }

@@ -28,7 +28,9 @@ fn test_copy_single_node_and_paste() {
     assert!(designer.copy_selection());
 
     // Paste at a new position
-    let new_ids = designer.paste_at_position(DVec2::new(300.0, 400.0));
+    let new_ids = designer
+        .paste_at_position(DVec2::new(300.0, 400.0))
+        .unwrap();
     assert_eq!(new_ids.len(), 1);
 
     let network = designer
@@ -79,7 +81,7 @@ fn test_copy_connected_nodes_preserves_internal_wires() {
     }
     assert!(designer.copy_selection());
 
-    let new_ids = designer.paste_at_position(DVec2::new(0.0, 300.0));
+    let new_ids = designer.paste_at_position(DVec2::new(0.0, 300.0)).unwrap();
     assert_eq!(new_ids.len(), 2);
 
     let network = designer
@@ -128,7 +130,7 @@ fn test_copy_drops_external_wires() {
     }
     assert!(designer.copy_selection());
 
-    let new_ids = designer.paste_at_position(DVec2::new(0.0, 300.0));
+    let new_ids = designer.paste_at_position(DVec2::new(0.0, 300.0)).unwrap();
     assert_eq!(new_ids.len(), 1);
 
     let network = designer
@@ -162,7 +164,7 @@ fn test_paste_empty_clipboard_returns_empty() {
 
     // No copy performed — clipboard is None
     assert!(!designer.has_clipboard_content());
-    let new_ids = designer.paste_at_position(DVec2::new(0.0, 0.0));
+    let new_ids = designer.paste_at_position(DVec2::new(0.0, 0.0)).unwrap();
     assert!(new_ids.is_empty());
 }
 
@@ -184,8 +186,12 @@ fn test_repeated_paste_creates_fresh_ids() {
     }
     designer.copy_selection();
 
-    let ids1 = designer.paste_at_position(DVec2::new(200.0, 200.0));
-    let ids2 = designer.paste_at_position(DVec2::new(300.0, 300.0));
+    let ids1 = designer
+        .paste_at_position(DVec2::new(200.0, 200.0))
+        .unwrap();
+    let ids2 = designer
+        .paste_at_position(DVec2::new(300.0, 300.0))
+        .unwrap();
 
     assert_eq!(ids1.len(), 1);
     assert_eq!(ids2.len(), 1);
@@ -222,8 +228,8 @@ fn test_repeated_paste_unique_display_names() {
     }
     designer.copy_selection();
 
-    let ids1 = designer.paste_at_position(DVec2::new(100.0, 0.0));
-    let ids2 = designer.paste_at_position(DVec2::new(200.0, 0.0));
+    let ids1 = designer.paste_at_position(DVec2::new(100.0, 0.0)).unwrap();
+    let ids2 = designer.paste_at_position(DVec2::new(200.0, 0.0)).unwrap();
 
     let network = designer
         .node_type_registry
@@ -268,7 +274,9 @@ fn test_cut_removes_original_and_fills_clipboard() {
     assert!(!network.nodes.contains_key(&float_id));
 
     // Paste should work from the clipboard
-    let new_ids = designer.paste_at_position(DVec2::new(200.0, 200.0));
+    let new_ids = designer
+        .paste_at_position(DVec2::new(200.0, 200.0))
+        .unwrap();
     assert_eq!(new_ids.len(), 1);
 }
 
@@ -303,7 +311,7 @@ fn test_paste_into_different_network() {
     designer.add_node_network("network_b");
     designer.set_active_node_network_name(Some("network_b".to_string()));
 
-    let new_ids = designer.paste_at_position(DVec2::new(50.0, 50.0));
+    let new_ids = designer.paste_at_position(DVec2::new(50.0, 50.0)).unwrap();
     assert_eq!(new_ids.len(), 1);
 
     // Verify the pasted node is in network_b
@@ -392,7 +400,7 @@ fn test_clipboard_updates_node_type_name_on_rename() {
     // Clipboard should still exist and its node_type_name should be updated
     assert!(designer.has_clipboard_content());
     let clipboard = designer.clipboard.as_ref().unwrap();
-    let clipboard_node = clipboard.nodes.values().next().unwrap();
+    let clipboard_node = clipboard.nodes.nodes.values().next().unwrap();
     assert_eq!(clipboard_node.node_type_name, "helper_v2");
 }
 
@@ -412,6 +420,7 @@ fn test_clipboard_updates_node_type_name_on_rename() {
 fn clipboard_body_instance_type_name(designer: &StructureDesigner) -> String {
     let clipboard = designer.clipboard.as_ref().expect("clipboard present");
     let hof = clipboard
+        .nodes
         .nodes
         .values()
         .find(|n| n.zone.is_some())
@@ -595,7 +604,9 @@ fn test_pasted_nodes_are_not_return_node() {
     }
 
     designer.copy_selection();
-    let new_ids = designer.paste_at_position(DVec2::new(200.0, 200.0));
+    let new_ids = designer
+        .paste_at_position(DVec2::new(200.0, 200.0))
+        .unwrap();
 
     let network = designer
         .node_type_registry
@@ -629,7 +640,9 @@ fn test_copy_centers_clipboard_at_origin() {
     designer.copy_selection();
 
     // Paste at (500, 500) — nodes should be at (400, 500) and (600, 500)
-    let new_ids = designer.paste_at_position(DVec2::new(500.0, 500.0));
+    let new_ids = designer
+        .paste_at_position(DVec2::new(500.0, 500.0))
+        .unwrap();
     assert_eq!(new_ids.len(), 2);
 
     let network = designer
@@ -687,7 +700,7 @@ fn test_pasted_nodes_become_selected() {
     }
     designer.copy_selection();
 
-    let new_ids = designer.paste_at_position(DVec2::new(0.0, 200.0));
+    let new_ids = designer.paste_at_position(DVec2::new(0.0, 200.0)).unwrap();
 
     let network = designer
         .node_type_registry
@@ -735,7 +748,9 @@ fn test_paste_preserves_hidden_display_state_top_level() {
     }
     assert!(designer.copy_selection());
 
-    let new_ids = designer.paste_at_position(DVec2::new(200.0, 200.0));
+    let new_ids = designer
+        .paste_at_position(DVec2::new(200.0, 200.0))
+        .unwrap();
     assert_eq!(new_ids.len(), 1);
 
     let network = designer
@@ -768,7 +783,7 @@ fn test_paste_preserves_mixed_display_state_top_level() {
     }
     assert!(designer.copy_selection());
 
-    let new_ids = designer.paste_at_position(DVec2::new(0.0, 300.0));
+    let new_ids = designer.paste_at_position(DVec2::new(0.0, 300.0)).unwrap();
     assert_eq!(new_ids.len(), 2);
 
     let network = designer
@@ -804,7 +819,9 @@ fn test_paste_hidden_display_state_survives_undo_redo() {
     }
     assert!(designer.copy_selection());
 
-    let new_ids = designer.paste_at_position(DVec2::new(200.0, 200.0));
+    let new_ids = designer
+        .paste_at_position(DVec2::new(200.0, 200.0))
+        .unwrap();
     assert_eq!(new_ids.len(), 1);
     let pasted = new_ids[0];
 
@@ -876,7 +893,9 @@ fn test_copy_body_selection_and_paste_into_same_body() {
     assert!(designer.copy_selection());
 
     // Paste into the same body.
-    let new_ids = designer.paste_at_position_scoped(&[map_id], DVec2::new(0.0, 300.0));
+    let new_ids = designer
+        .paste_at_position_scoped(&[map_id], DVec2::new(0.0, 300.0))
+        .unwrap();
     assert_eq!(new_ids.len(), 2);
 
     let body = designer.get_scope_network(&[map_id]).unwrap();
@@ -935,7 +954,9 @@ fn test_paste_into_body_leaves_node_hidden() {
     designer.select_node_scoped(&[], float_id);
     assert!(designer.copy_selection());
 
-    let new_ids = designer.paste_at_position_scoped(&[map_id], DVec2::new(10.0, 10.0));
+    let new_ids = designer
+        .paste_at_position_scoped(&[map_id], DVec2::new(10.0, 10.0))
+        .unwrap();
     assert_eq!(new_ids.len(), 1);
 
     let body = designer.get_scope_network(&[map_id]).unwrap();
@@ -966,7 +987,9 @@ fn test_copy_from_body_and_paste_to_top_level_is_hidden() {
     designer.select_node_scoped(&[map_id], inner);
     assert!(designer.copy_selection());
 
-    let new_ids = designer.paste_at_position(DVec2::new(300.0, 300.0));
+    let new_ids = designer
+        .paste_at_position(DVec2::new(300.0, 300.0))
+        .unwrap();
     assert_eq!(new_ids.len(), 1);
 
     let main = designer
@@ -992,7 +1015,9 @@ fn test_paste_body_to_body_leaves_node_hidden() {
     designer.select_node_scoped(&[map_id], inner);
     assert!(designer.copy_selection());
 
-    let new_ids = designer.paste_at_position_scoped(&[map_id], DVec2::new(80.0, 80.0));
+    let new_ids = designer
+        .paste_at_position_scoped(&[map_id], DVec2::new(80.0, 80.0))
+        .unwrap();
     assert_eq!(new_ids.len(), 1);
 
     let body = designer.get_scope_network(&[map_id]).unwrap();
@@ -1013,7 +1038,9 @@ fn test_scoped_paste_hidden_state_survives_undo_redo() {
     designer.select_node_scoped(&[], float_id);
     designer.copy_selection();
 
-    let new_ids = designer.paste_at_position_scoped(&[map_id], DVec2::new(10.0, 10.0));
+    let new_ids = designer
+        .paste_at_position_scoped(&[map_id], DVec2::new(10.0, 10.0))
+        .unwrap();
     assert_eq!(new_ids.len(), 1);
     let pasted = new_ids[0];
     assert!(
@@ -1047,7 +1074,9 @@ fn test_copy_top_level_and_paste_into_body() {
     assert!(designer.copy_selection());
 
     // Paste into the map's body.
-    let new_ids = designer.paste_at_position_scoped(&[map_id], DVec2::new(10.0, 10.0));
+    let new_ids = designer
+        .paste_at_position_scoped(&[map_id], DVec2::new(10.0, 10.0))
+        .unwrap();
     assert_eq!(new_ids.len(), 1);
 
     // The pasted node lives in the body.
@@ -1097,7 +1126,9 @@ fn test_copy_body_node_drops_cross_scope_capture_on_paste() {
     // Copy just the body node, then paste it at the top level.
     designer.select_node_scoped(&[map_id], body_node);
     assert!(designer.copy_selection());
-    let new_ids = designer.paste_at_position_scoped(&[], DVec2::new(0.0, 300.0));
+    let new_ids = designer
+        .paste_at_position_scoped(&[], DVec2::new(0.0, 300.0))
+        .unwrap();
     assert_eq!(new_ids.len(), 1);
 
     // The cross-scope capture is dropped — the pasted node has no incoming wire.
@@ -1129,7 +1160,9 @@ fn test_cut_body_selection_removes_from_body() {
     assert!(!body.nodes.contains_key(&collect_id));
 
     // Paste back into the body restores two nodes.
-    let new_ids = designer.paste_at_position_scoped(&[map_id], DVec2::new(0.0, 0.0));
+    let new_ids = designer
+        .paste_at_position_scoped(&[map_id], DVec2::new(0.0, 0.0))
+        .unwrap();
     assert_eq!(new_ids.len(), 2);
 }
 
@@ -1144,7 +1177,9 @@ fn test_scoped_paste_undo_redo_round_trip() {
     let body_count = |d: &StructureDesigner| d.get_scope_network(&[map_id]).unwrap().nodes.len();
     assert_eq!(body_count(&designer), 0);
 
-    let new_ids = designer.paste_at_position_scoped(&[map_id], DVec2::new(10.0, 10.0));
+    let new_ids = designer
+        .paste_at_position_scoped(&[map_id], DVec2::new(10.0, 10.0))
+        .unwrap();
     assert_eq!(new_ids.len(), 1);
     assert_eq!(body_count(&designer), 1);
 
@@ -1188,7 +1223,9 @@ fn test_paste_into_body_shifts_content_inside_rect() {
 
     // Paste at a body-local position that would land the node above/left of
     // the body interior origin (negative coords).
-    let new_ids = designer.paste_at_position_scoped(&[map_id], DVec2::new(-50.0, -30.0));
+    let new_ids = designer
+        .paste_at_position_scoped(&[map_id], DVec2::new(-50.0, -30.0))
+        .unwrap();
     assert_eq!(new_ids.len(), 1);
 
     let body = designer.get_scope_network(&[map_id]).unwrap();
@@ -1229,7 +1266,9 @@ fn test_paste_into_body_preserves_relative_layout_when_shifting() {
     let float_id = designer.add_node("float", DVec2::new(0.0, 0.0));
     designer.select_node_scoped(&[], float_id);
     designer.copy_selection();
-    let new_ids = designer.paste_at_position_scoped(&[map_id], DVec2::new(-42.0, -42.0));
+    let new_ids = designer
+        .paste_at_position_scoped(&[map_id], DVec2::new(-42.0, -42.0))
+        .unwrap();
     assert_eq!(new_ids.len(), 1);
 
     let body = designer.get_scope_network(&[map_id]).unwrap();
@@ -1254,7 +1293,9 @@ fn test_paste_into_body_no_shift_when_already_inside() {
     designer.select_node_scoped(&[], float_id);
     designer.copy_selection();
 
-    let new_ids = designer.paste_at_position_scoped(&[map_id], DVec2::new(120.0, 90.0));
+    let new_ids = designer
+        .paste_at_position_scoped(&[map_id], DVec2::new(120.0, 90.0))
+        .unwrap();
     assert_eq!(new_ids.len(), 1);
 
     let body = designer.get_scope_network(&[map_id]).unwrap();
@@ -1274,7 +1315,9 @@ fn test_paste_scoped_empty_path_matches_top_level() {
     designer.select_node_scoped(&[], float_id);
     designer.copy_selection();
 
-    let new_ids = designer.paste_at_position_scoped(&[], DVec2::new(50.0, 50.0));
+    let new_ids = designer
+        .paste_at_position_scoped(&[], DVec2::new(50.0, 50.0))
+        .unwrap();
     assert_eq!(new_ids.len(), 1);
     let main = designer
         .node_type_registry
@@ -1328,7 +1371,7 @@ fn test_paste_beside_the_source_suffixes_the_copied_name() {
 
     designer.select_node_scoped(&[], id);
     assert!(designer.copy_selection());
-    let pasted = designer.paste_at_position(DVec2::new(100.0, 0.0));
+    let pasted = designer.paste_at_position(DVec2::new(100.0, 0.0)).unwrap();
 
     assert_eq!(name_of(&designer, "main", pasted[0]), "x_2");
 }
@@ -1341,7 +1384,7 @@ fn test_paste_keeps_a_user_chosen_name() {
 
     designer.select_node_scoped(&[], id);
     assert!(designer.copy_selection());
-    let pasted = designer.paste_at_position(DVec2::new(100.0, 0.0));
+    let pasted = designer.paste_at_position(DVec2::new(100.0, 0.0)).unwrap();
 
     // The old behaviour minted `union2` here, which is what made a rename
     // worthless — the name did not survive its own copy.
@@ -1358,7 +1401,7 @@ fn test_paste_of_a_selection_suffixes_in_ascending_source_id_order() {
 
     designer.select_nodes_scoped(&[], vec![a, b]);
     assert!(designer.copy_selection());
-    let pasted = designer.paste_at_position(DVec2::new(0.0, 300.0));
+    let pasted = designer.paste_at_position(DVec2::new(0.0, 300.0)).unwrap();
     assert_eq!(pasted.len(), 2);
 
     // Ascending source-id order — the order `unique_node_names` walks — so
@@ -1407,7 +1450,9 @@ fn test_paste_into_a_body_ignores_a_top_level_name_collision() {
 
     designer.select_node_scoped(&[], top);
     assert!(designer.copy_selection());
-    let pasted = designer.paste_at_position_scoped(&[map_id], DVec2::new(0.0, 200.0));
+    let pasted = designer
+        .paste_at_position_scoped(&[map_id], DVec2::new(0.0, 200.0))
+        .unwrap();
     assert_eq!(pasted.len(), 1);
 
     let body = designer.get_scope_network(&[map_id]).unwrap();

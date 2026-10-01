@@ -300,16 +300,8 @@ impl StructureDesigner {
             if lib_dir == host_dir {
                 continue;
             }
-            let rebase = |stored: &str| -> Option<String> {
-                if stored.is_empty() || Path::new(stored).is_absolute() {
-                    return None;
-                }
-                let target = library_links::lexical_join(&lib_dir, stored).ok()?;
-                let spelled = relative_path(&host_dir, &target).unwrap_or_else(|| {
-                    let s = target.to_string_lossy().to_string();
-                    s.strip_prefix(r"\\?\").map(str::to_string).unwrap_or(s)
-                });
-                (spelled != stored).then_some(spelled)
+            let rebase = |stored: &str| {
+                crate::library_refresh::rebase_data_path(&lib_dir, Some(&host_dir), stored)
             };
             let original = &registry.node_networks[name];
             let mut copy = original.clone();
@@ -387,14 +379,13 @@ impl StructureDesigner {
                 self.navigation_history.rename_network(old, &new);
             }
         }
-        if let Some(clipboard) = self.clipboard.as_mut() {
-            walk_all_nodes_mut(clipboard, &mut |node| {
-                if let Some(new) = library_links::reprefixed(&node.node_type_name, alias, new_alias)
-                {
-                    node.node_type_name = new;
-                }
-            });
-        }
+        self.edit_own_clipboard(|clipboard| {
+            if clipboard.reprefix(alias, new_alias) {
+                crate::clipboard::ClipboardEdit::Changed
+            } else {
+                crate::clipboard::ClipboardEdit::Unchanged
+            }
+        });
         self.push_command(RenameLibraryAliasCommand {
             old_alias: alias.to_string(),
             new_alias: new_alias.to_string(),

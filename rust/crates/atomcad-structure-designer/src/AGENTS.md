@@ -80,6 +80,7 @@ structure_designer/
 ├── library_refresh_ops.rs     # check_dependencies / refresh / retarget / the open report
 ├── file_dependencies.rs       # Save As dependency plan + copy, project bundle (.zip), link by copying
 ├── document_set.rs            # Multiple open documents: tab order, parked designers, the swap
+├── clipboard.rs               # The session clipboard: origin, owners, the cross-document paste translation
 ├── undo/                      # Undo/redo system (command pattern)
 ├── nodes/                     # Built-in node implementations (47+)
 ├── evaluator/                 # Network evaluation engine
@@ -483,7 +484,8 @@ A `StructureDesigner` is one open document (`doc/design_multiple_documents.md`
 D1); `document_set.rs` keeps the parked ones and swaps them into the active
 slot. Each field is either **document state** (stays with its document) or
 **app state** (follows the session across a switch: preferences, the print
-log, refresh profiles, the eval toggles, the gadget pick context).
+log, refresh profiles, the eval toggles, the gadget pick context, the
+clipboard).
 
 **A new field on `StructureDesigner` needs a side in `hand_over_app_state`.**
 That function destructures `self` exhaustively, so the build fails until you
@@ -491,6 +493,23 @@ choose; §6 of the design document is the reference table. App state is cloned
 or moved there; document state is named with `_`. If the field is a
 recomputable cache, also drop it in `park`; if it is a new `pending_*`
 interaction, it belongs in `open_interaction` (which refuses a switch, D4).
+
+**The clipboard is the session's, so its names belong to its source**
+(`clipboard.rs`, D9). It records which document it was copied in and, for
+every user name it refers to, the file that defines it and its interface; a
+paste into another document maps the names through that file and refuses,
+all or nothing, when it cannot. Two rules follow:
+
+- **Rename/delete upkeep goes through `edit_own_clipboard`**, never
+  `self.clipboard` directly: it does nothing when the clipboard came from
+  another document, whose same-named network is a different one. Undo and
+  redo reach it through `UndoContext::clipboard` (see `undo/AGENTS.md`).
+- **A new kind of name reference in node data** must go into
+  `collect_record_refs_in_node` *and* `rewrite_record_names_in_node` (the
+  single collect and the single rewrite enumeration, which the clipboard's
+  capture and translation use), or a cross-document paste silently keeps the
+  old name. A new stored file path needs `NodeData::rebase_file_paths`, or a
+  paste keeps a relative path that now resolves against the wrong folder.
 
 ## Change Tracking & Refresh
 

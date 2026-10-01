@@ -1369,7 +1369,7 @@ abstract class RustLibApi extends BaseApi {
   APIOpenDocumentResult crateApiStructureDesignerDocumentsApiOpenDocument(
       {required String filePath});
 
-  Uint64List crateApiStructureDesignerStructureDesignerApiPasteAtPosition(
+  APIPasteResult crateApiStructureDesignerStructureDesignerApiPasteAtPosition(
       {required Uint64List scopePath, required double x, required double y});
 
   List<String> crateApiStructureDesignerImportApiPreviewImportNames(
@@ -12764,7 +12764,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
 
   @override
-  Uint64List crateApiStructureDesignerStructureDesignerApiPasteAtPosition(
+  APIPasteResult crateApiStructureDesignerStructureDesignerApiPasteAtPosition(
       {required Uint64List scopePath, required double x, required double y}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
@@ -12775,7 +12775,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 377)!;
       },
       codec: SseCodec(
-        decodeSuccessData: sse_decode_list_prim_u_64_strict,
+        decodeSuccessData: sse_decode_api_paste_result,
         decodeErrorData: null,
       ),
       constMeta:
@@ -20778,6 +20778,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIPasteResult dco_decode_api_paste_result(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return APIPasteResult(
+      nodeIds: dco_decode_list_prim_u_64_strict(arr[0]),
+      error: dco_decode_opt_String(arr[1]),
+    );
+  }
+
+  @protected
   APIPatchBuildData dco_decode_api_patch_build_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -27139,6 +27151,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_element = sse_decode_i_16(deserializer);
     return APIPassivateData(element: var_element);
+  }
+
+  @protected
+  APIPasteResult sse_decode_api_paste_result(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_nodeIds = sse_decode_list_prim_u_64_strict(deserializer);
+    var var_error = sse_decode_opt_String(deserializer);
+    return APIPasteResult(nodeIds: var_nodeIds, error: var_error);
   }
 
   @protected
@@ -33956,6 +33976,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       APIPassivateData self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_16(self.element, serializer);
+  }
+
+  @protected
+  void sse_encode_api_paste_result(
+      APIPasteResult self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_prim_u_64_strict(self.nodeIds, serializer);
+    sse_encode_opt_String(self.error, serializer);
   }
 
   @protected

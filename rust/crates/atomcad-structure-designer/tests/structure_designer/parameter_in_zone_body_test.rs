@@ -252,7 +252,9 @@ fn paste_into_body_drops_parameter_nodes() {
     designer.select_nodes(vec![param_id, int_id]);
     assert!(designer.copy_selection());
 
-    let new_ids = designer.paste_at_position_scoped(&[map_id], DVec2::new(40.0, 20.0));
+    let new_ids = designer
+        .paste_at_position_scoped(&[map_id], DVec2::new(40.0, 20.0))
+        .unwrap();
     assert_eq!(new_ids.len(), 1, "only the `int` should have pasted");
 
     let body = designer.get_scope_network(&[map_id]).unwrap();

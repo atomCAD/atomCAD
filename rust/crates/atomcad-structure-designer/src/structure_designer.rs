@@ -1,5 +1,6 @@
 use super::ai_edit_log::{AI_EDIT_COMMAND_DESCRIPTION, AiEditLog, AiEditRecord};
 use super::camera_settings::CameraSettings;
+use super::clipboard::{Clipboard, ClipboardEdit, ClipboardSlot, PasteRefusal, own_clipboard};
 use super::document_set::DocumentId;
 use super::eval_errors::{EvalErrorEntry, harvest_eval_errors};
 use super::evaluator::network_evaluator::{
@@ -204,8 +205,11 @@ pub struct StructureDesigner {
     pub cli_top_level_parameters: Option<HashMap<String, NetworkResult>>,
     // Navigation history for back/forward functionality
     pub(crate) navigation_history: NavigationHistory,
-    // Clipboard for copy/paste operations (stores copied nodes as an isolated NodeNetwork)
-    pub clipboard: Option<NodeNetwork>,
+    // The session's clipboard (`doc/design_multiple_documents.md` D9): app
+    // state, handed over at every tab switch. Its origin says which document
+    // the nodes were copied in; rename/delete upkeep goes through
+    // `edit_own_clipboard`, never through this field directly.
+    pub clipboard: Option<Clipboard>,
     // Undo/redo stack for all network mutations
     pub undo_stack: UndoStack,
     // Temporary state during a node drag operation (for move coalescing)
@@ -976,13 +980,19 @@ impl StructureDesigner {
 
         // Temporarily take the undo stack to avoid borrow conflict
         let mut stack = std::mem::take(&mut self.undo_stack);
-        let result = stack.undo(&mut UndoContext {
+        let mut ctx = UndoContext {
             node_type_registry: &mut self.node_type_registry,
             active_network_name: &mut self.active_node_network_name,
             active_record_def_name: &mut self.active_record_def_name,
             eval_error_snapshots: &mut self.eval_error_snapshots,
-        });
+            clipboard: ClipboardSlot::own(&mut self.clipboard, self.document_id),
+        };
+        let result = stack.undo(&mut ctx);
+        let clipboard_changed = ctx.clipboard.changed;
         self.undo_stack = stack;
+        if clipboard_changed {
+            self.recapture_own_clipboard_owners();
+        }
 
         if let Some(refresh_mode) = result {
             if undoing_ai_edit {
@@ -1006,13 +1016,19 @@ impl StructureDesigner {
             self.undo_stack.redo_description() == Some(AI_EDIT_COMMAND_DESCRIPTION);
 
         let mut stack = std::mem::take(&mut self.undo_stack);
-        let result = stack.redo(&mut UndoContext {
+        let mut ctx = UndoContext {
             node_type_registry: &mut self.node_type_registry,
             active_network_name: &mut self.active_node_network_name,
             active_record_def_name: &mut self.active_record_def_name,
             eval_error_snapshots: &mut self.eval_error_snapshots,
-        });
+            clipboard: ClipboardSlot::own(&mut self.clipboard, self.document_id),
+        };
+        let result = stack.redo(&mut ctx);
+        let clipboard_changed = ctx.clipboard.changed;
         self.undo_stack = stack;
+        if clipboard_changed {
+            self.recapture_own_clipboard_owners();
+        }
 
         if let Some(refresh_mode) = result {
             if redoing_ai_edit {
@@ -1031,6 +1047,59 @@ impl StructureDesigner {
     /// Push a new undo command onto the stack.
     pub fn push_command(&mut self, command: impl UndoCommand + 'static) {
         self.undo_stack.push(Box::new(command));
+    }
+
+    // --- Clipboard upkeep (`doc/design_multiple_documents.md` D9) ---
+
+    /// The clipboard, if it was copied in this document. A rename or delete
+    /// here must not touch names a clipboard from another document refers
+    /// to, which belong to *its* source.
+    pub fn own_clipboard_mut(&mut self) -> Option<&mut Clipboard> {
+        own_clipboard(&mut self.clipboard, self.document_id)
+    }
+
+    /// Applies `edit` to this document's own clipboard (nothing when the
+    /// clipboard came from another document), then clears it or recomputes
+    /// its owners as the edit reports. Every rename/delete site goes through
+    /// here.
+    pub(crate) fn edit_own_clipboard(
+        &mut self,
+        edit: impl FnOnce(&mut Clipboard) -> ClipboardEdit,
+    ) {
+        let Some(clipboard) = self.own_clipboard_mut() else {
+            return;
+        };
+        match edit(clipboard) {
+            ClipboardEdit::Unchanged => {}
+            ClipboardEdit::Clear => self.clipboard = None,
+            ClipboardEdit::Changed => self.recapture_own_clipboard_owners(),
+        }
+    }
+
+    /// Marks a clipboard copied in this designer as copied in *another*
+    /// document, because the designer's content is about to be replaced in
+    /// place (`load_node_networks`, `new_project`). A paste into the new
+    /// content then maps the names through the files that own them and
+    /// refuses what it cannot see, instead of pasting names of the old
+    /// content unchecked. With tabs the fresh `DocumentId` (D8) has the same
+    /// effect; without a `DocumentSet` (headless, a bare designer) the id
+    /// never changes, so this is what keeps the two contents apart.
+    fn detach_own_clipboard(&mut self) {
+        if let Some(clipboard) = self.own_clipboard_mut() {
+            clipboard.origin.document = DocumentId::REPLACED;
+        }
+    }
+
+    /// Recomputes the recorded owners of this document's own clipboard from
+    /// the registry, after its names were rewritten.
+    fn recapture_own_clipboard_owners(&mut self) {
+        if self.own_clipboard_mut().is_none() {
+            return;
+        }
+        if let Some(mut clipboard) = self.clipboard.take() {
+            clipboard.recapture_owners(self);
+            self.clipboard = Some(clipboard);
+        }
     }
 
     /// Set an HOF node's collapse mode, capturing the before-state and pushing
@@ -2355,17 +2424,12 @@ impl StructureDesigner {
         // Navigation history (not available in UndoContext)
         self.navigation_history.rename_network(old_name, new_name);
 
-        // Clipboard node_type_names (not available in UndoContext). Walk into
-        // HOF/closure zone bodies too — a copied body's instance of the renamed
-        // network must be updated or it dangles on paste (mirrors
-        // `apply_rename_core`, which recurses for the same reason).
-        if let Some(ref mut clipboard) = self.clipboard {
-            crate::node_network::walk_all_nodes_mut(clipboard, &mut |node| {
-                if node.node_type_name == old_name {
-                    node.node_type_name = new_name.to_string();
-                }
-            });
-        }
+        // The clipboard's references, zone bodies included — a copied body's
+        // instance of the renamed network must be updated or it dangles on
+        // paste (mirrors `apply_rename_core`, which recurses for the same
+        // reason).
+        let renames = [(old_name.to_string(), new_name.to_string())];
+        self.edit_own_clipboard(|clipboard| clipboard_renamed(clipboard.rename(&renames)));
 
         self.set_dirty(true);
         self.mark_full_refresh();
@@ -2622,21 +2686,14 @@ impl StructureDesigner {
             }
         }
 
-        // Update clipboard node_type_name refs for network renames. Walk into
-        // HOF/closure zone bodies too so a copied body's instance of a renamed
-        // network is updated and doesn't dangle on paste (same body-skip class
-        // as the single rename). Clipboard record refs are out of scope (matches
-        // standalone `rename_record_type_def`).
-        if let Some(ref mut clipboard) = self.clipboard {
-            crate::node_network::walk_all_nodes_mut(clipboard, &mut |node| {
-                for r in &renames {
-                    if r.kind == UserTypeKind::Network && node.node_type_name == r.old_name {
-                        node.node_type_name = r.new_name.clone();
-                        break;
-                    }
-                }
-            });
-        }
+        // The clipboard's references to the moved networks and record defs,
+        // zone bodies included, so a copied body's instance doesn't dangle on
+        // paste (same body-skip class as the single rename).
+        let pairs: Vec<(String, String)> = renames
+            .iter()
+            .map(|r| (r.old_name.clone(), r.new_name.clone()))
+            .collect();
+        self.edit_own_clipboard(|clipboard| clipboard_renamed(clipboard.rename(&pairs)));
 
         // Helper 2: refresh record-node pin layouts if any record moved (the
         // `Named` rewrite cleared their `custom_node_type`).
@@ -2786,15 +2843,10 @@ impl StructureDesigner {
         // Remove the deleted network from navigation history
         self.navigation_history.remove_network(network_name);
 
-        // Clear clipboard if it references the deleted network type
-        if let Some(ref clipboard) = self.clipboard
-            && clipboard
-                .nodes
-                .values()
-                .any(|n| n.node_type_name == network_name)
-        {
-            self.clipboard = None;
-        }
+        // Clear the clipboard if it references the deleted network.
+        self.edit_own_clipboard(|clipboard| {
+            clipboard_cleared_if(clipboard.refers_to_any(&|n| n == network_name))
+        });
 
         // Capture active network after deletion
         let active_network_after = self.active_node_network_name.clone();
@@ -2860,13 +2912,39 @@ impl StructureDesigner {
 
         // Deserialize a fresh copy and give it the new name (the registry keys
         // on `node_type.name`, so the internal name must match the key).
+        // The loaders read data files against the source's folder; a linked
+        // source's relative paths are then re-spelled against the design's
+        // folder, so they keep naming the same file
+        // (`doc/design_multiple_documents.md` D9, as *Make local copy* does).
+        let fs = self.node_type_registry.library_links.fs();
+        let canonical =
+            |p: &std::path::Path| crate::file_dependencies::canonical_or_lexical(fs.as_ref(), p);
+        let source_dir = crate::library_refresh::base_dir_of(&self.node_type_registry, source_name)
+            .map(|d| canonical(&d));
         let mut network = serializable_to_node_network(
             &snapshot,
             &self.node_type_registry.built_in_node_types,
-            None,
+            source_dir
+                .as_ref()
+                .map(|d| d.to_string_lossy().to_string())
+                .as_deref(),
         )
         .map_err(|e| format!("Failed to duplicate network: {}", e))?;
         network.node_type.name = new_name.clone();
+        if let Some(from_dir) = source_dir.as_deref()
+            && self.is_linked_name(source_name)
+        {
+            let to_dir = self
+                .file_path
+                .as_ref()
+                .and_then(|p| std::path::Path::new(p).parent().map(canonical));
+            let rebase = |stored: &str| {
+                crate::library_refresh::rebase_data_path(from_dir, to_dir.as_deref(), stored)
+            };
+            crate::node_network::walk_all_nodes_mut(&mut network, &mut |node| {
+                node.data.rebase_file_paths(&rebase);
+            });
+        }
 
         // Repopulate per-node custom-type caches (incl. nodes inside zone
         // bodies), mirroring `FactorSelectionCommand::restore_network`.
@@ -3108,15 +3186,13 @@ impl StructureDesigner {
             self.navigation_history.remove_network(name);
         }
 
-        // Clear clipboard if it references any deleted network.
-        if let Some(ref clipboard) = self.clipboard
-            && clipboard
-                .nodes
-                .values()
-                .any(|n| network_targets.contains(n.node_type_name.as_str()))
-        {
-            self.clipboard = None;
-        }
+        // Clear the clipboard if it references any deleted network or record.
+        self.edit_own_clipboard(|clipboard| {
+            clipboard_cleared_if(
+                clipboard
+                    .refers_to_any(&|n| network_targets.contains(n) || record_targets.contains(n)),
+            )
+        });
 
         let active_network_after = self.active_node_network_name.clone();
         let active_record_def_after = self.active_record_def_name.clone();
@@ -3251,6 +3327,9 @@ impl StructureDesigner {
         if was_active {
             self.active_record_def_name = None;
         }
+        self.edit_own_clipboard(|clipboard| {
+            clipboard_cleared_if(clipboard.refers_to_any(&|n| n == name))
+        });
 
         self.set_dirty(true);
         self.mark_full_refresh();
@@ -3291,6 +3370,8 @@ impl StructureDesigner {
         if self.active_record_def_name.as_deref() == Some(old_name) {
             self.active_record_def_name = Some(new_name.to_string());
         }
+        let renames = [(old_name.to_string(), new_name.to_string())];
+        self.edit_own_clipboard(|clipboard| clipboard_renamed(clipboard.rename(&renames)));
 
         self.set_dirty(true);
         self.mark_full_refresh();
@@ -3889,35 +3970,38 @@ impl StructureDesigner {
         if !scope.is_empty() {
             clipboard.displayed_nodes.clear();
         }
-        self.clipboard = Some(clipboard);
+        let network_name = self.active_node_network_name.clone().unwrap_or_default();
+        self.clipboard = Some(Clipboard::capture(self, &network_name, clipboard));
         true
     }
 
     /// Pastes clipboard contents into the active network at the given position.
-    /// Returns the list of newly created node IDs (empty if clipboard was empty).
-    pub fn paste_at_position(&mut self, position: DVec2) -> Vec<u64> {
+    /// Returns the list of newly created node IDs (empty if clipboard was empty),
+    /// or why nothing was pasted when the clipboard came from another document
+    /// whose names this one cannot see ([`Clipboard::for_target`]).
+    pub fn paste_at_position(&mut self, position: DVec2) -> Result<Vec<u64>, PasteRefusal> {
         // Read-only guard (`doc/design_library_linking.md` §6).
         if self.ensure_active_editable().is_err() {
-            return Vec::new();
+            return Ok(Vec::new());
         }
         let node_network_name = match &self.active_node_network_name {
             Some(name) => name.clone(),
-            None => return vec![],
+            None => return Ok(vec![]),
         };
 
         let clipboard = match &self.clipboard {
-            Some(cb) => cb,
-            None => return vec![],
+            Some(cb) => cb.for_target(self, &node_network_name)?,
+            None => return Ok(vec![]),
         };
 
         let all_clipboard_ids: HashSet<u64> = clipboard.nodes.keys().copied().collect();
         if all_clipboard_ids.is_empty() {
-            return vec![];
+            return Ok(vec![]);
         }
 
         // Snapshot the clipboard since we need to borrow self mutably for the active network
         let mut clipboard_snapshot = NodeNetwork::new_empty();
-        clipboard_snapshot.copy_nodes_from(clipboard, &all_clipboard_ids, DVec2::ZERO);
+        clipboard_snapshot.copy_nodes_from(&clipboard, &all_clipboard_ids, DVec2::ZERO);
         let snapshot_ids: HashSet<u64> = clipboard_snapshot.nodes.keys().copied().collect();
 
         // Capture the id counters before paste for undo. `next_param_id` matters
@@ -3935,7 +4019,7 @@ impl StructureDesigner {
             .get_mut(&node_network_name)
         {
             Some(network) => network,
-            None => return vec![],
+            None => return Ok(vec![]),
         };
 
         let new_ids = active_network.copy_nodes_from(&clipboard_snapshot, &snapshot_ids, position);
@@ -4009,7 +4093,7 @@ impl StructureDesigner {
             });
         }
 
-        new_ids
+        Ok(new_ids)
     }
 
     /// Scope-aware variant of [`paste_at_position`]. With an empty `scope_path`
@@ -4018,10 +4102,14 @@ impl StructureDesigner {
     /// clipboard into the addressed zone body and records the edit as a
     /// whole-body `EditZoneBodyCommand`, mirroring `duplicate_node_scoped` /
     /// `delete_selected_scoped`.
-    pub fn paste_at_position_scoped(&mut self, scope_path: &[u64], position: DVec2) -> Vec<u64> {
+    pub fn paste_at_position_scoped(
+        &mut self,
+        scope_path: &[u64],
+        position: DVec2,
+    ) -> Result<Vec<u64>, PasteRefusal> {
         // Read-only guard (`doc/design_library_linking.md` §6).
         if self.ensure_active_editable().is_err() {
-            return Vec::new();
+            return Ok(Vec::new());
         }
         if scope_path.is_empty() {
             return self.paste_at_position(position);
@@ -4030,9 +4118,10 @@ impl StructureDesigner {
         // Snapshot the clipboard into a fresh network first — `copy_nodes_from`
         // needs an immutable borrow of the clipboard while we later borrow the
         // body mutably, so decouple them up front.
+        let network_name = self.active_node_network_name.clone().unwrap_or_default();
         let clipboard = match &self.clipboard {
-            Some(cb) => cb,
-            None => return vec![],
+            Some(cb) => cb.for_target(self, &network_name)?,
+            None => return Ok(vec![]),
         };
         // Issue #417: `parameter` nodes are not allowed in a zone body, so a
         // clipboard captured at top level drops them on the way in. Wires that
@@ -4046,10 +4135,10 @@ impl StructureDesigner {
             .map(|(id, _)| *id)
             .collect();
         if all_clipboard_ids.is_empty() {
-            return vec![];
+            return Ok(vec![]);
         }
         let mut clipboard_snapshot = NodeNetwork::new_empty();
-        clipboard_snapshot.copy_nodes_from(clipboard, &all_clipboard_ids, DVec2::ZERO);
+        clipboard_snapshot.copy_nodes_from(&clipboard, &all_clipboard_ids, DVec2::ZERO);
         let snapshot_ids: HashSet<u64> = clipboard_snapshot.nodes.keys().copied().collect();
 
         // Whole-body before-state for undo (captured before mutation).
@@ -4083,11 +4172,11 @@ impl StructureDesigner {
                 body.select_nodes(ids.clone());
                 ids
             }
-            None => return vec![],
+            None => return Ok(vec![]),
         };
 
         if new_ids.is_empty() {
-            return vec![];
+            return Ok(vec![]);
         }
 
         // Single-scope selection invariant: the pasted nodes are now the
@@ -4109,7 +4198,7 @@ impl StructureDesigner {
             &old_ancestor_sizes,
         );
 
-        new_ids
+        Ok(new_ids)
     }
 
     /// Cuts the currently selected nodes (copy + delete).
@@ -5949,6 +6038,8 @@ impl StructureDesigner {
     /// - Clears navigation history
     /// - Clears evaluation cache
     pub fn new_project(&mut self) {
+        self.detach_own_clipboard();
+
         // Clear all networks
         self.node_type_registry.node_networks.clear();
 
@@ -8100,9 +8191,6 @@ impl StructureDesigner {
             pending_changes: _,
             cli_top_level_parameters: _,
             navigation_history: _,
-            // Document state until multiple-documents Phase 2 makes the
-            // clipboard app state (D9).
-            clipboard: _,
             undo_stack: _,
             // The open interactions: always `None` here, because every switch
             // is refused while one is open (D4).
@@ -8131,6 +8219,9 @@ impl StructureDesigner {
             eval_self_check_enabled,
             eval_self_check_key_mode,
             eval_memo_enabled,
+            // One clipboard per session (D9): copy in one tab, paste in
+            // another. Its origin names the document it was copied in.
+            clipboard,
         } = self;
 
         let node_display_prefs_changed =
@@ -8145,6 +8236,7 @@ impl StructureDesigner {
         to.eval_self_check_enabled = *eval_self_check_enabled;
         to.eval_self_check_key_mode = *eval_self_check_key_mode;
         to.eval_memo_enabled = *eval_memo_enabled;
+        to.clipboard = clipboard.take();
 
         // What `set_preferences` would have done had `to` been active when the
         // preferences changed. Geometry-visualization changes need nothing:
@@ -8871,6 +8963,8 @@ impl StructureDesigner {
         &mut self,
         file_path: &str,
     ) -> std::io::Result<Option<CameraSettings>> {
+        // Before the load: a failed load may already have changed the registry.
+        self.detach_own_clipboard();
         let load_result = node_networks_serialization::load_node_networks_from_file(
             &mut self.node_type_registry,
             file_path,
@@ -9117,15 +9211,17 @@ impl StructureDesigner {
                     }
                 }
 
-                // Clear clipboard if it contains nodes of the changed type
-                if interface_changed
-                    && let Some(ref clipboard) = self.clipboard
-                    && clipboard
-                        .nodes
-                        .values()
-                        .any(|n| n.node_type_name == current_network_name)
-                {
-                    self.clipboard = None;
+                // Clear the clipboard if it contains nodes of the changed type.
+                if interface_changed {
+                    self.edit_own_clipboard(|clipboard| {
+                        clipboard_cleared_if(
+                            clipboard
+                                .nodes
+                                .nodes
+                                .values()
+                                .any(|n| n.node_type_name == current_network_name),
+                        )
+                    });
                 }
             }
         }
@@ -10952,4 +11048,24 @@ fn find_node_at_scope<'a>(
         current = hof.zone.as_deref()?;
     }
     current.nodes.get(&node_ref.node_id)
+}
+
+/// The [`ClipboardEdit`] of a rename that did (`true`) or did not change the
+/// clipboard.
+fn clipboard_renamed(changed: bool) -> ClipboardEdit {
+    if changed {
+        ClipboardEdit::Changed
+    } else {
+        ClipboardEdit::Unchanged
+    }
+}
+
+/// The [`ClipboardEdit`] of a delete whose target the clipboard does
+/// (`true`) or does not refer to.
+fn clipboard_cleared_if(refers: bool) -> ClipboardEdit {
+    if refers {
+        ClipboardEdit::Clear
+    } else {
+        ClipboardEdit::Unchanged
+    }
 }

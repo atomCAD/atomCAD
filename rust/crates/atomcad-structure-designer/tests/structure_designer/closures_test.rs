@@ -2248,7 +2248,7 @@ fn paste_closure_and_apply_remaps_zone_input_and_evaluates() {
         network.select_nodes(vec![closure_id, arg_id, apply_id]);
     }
     assert!(designer.copy_selection());
-    let new_ids = designer.paste_at_position(DVec2::new(0.0, 400.0));
+    let new_ids = designer.paste_at_position(DVec2::new(0.0, 400.0)).unwrap();
     assert_eq!(new_ids.len(), 3);
 
     let pasted_closure = find_pasted(&designer, "main", &new_ids, "closure");
@@ -2339,7 +2339,7 @@ fn cut_then_paste_closure_and_apply_evaluates() {
         assert!(!network.nodes.contains_key(&apply_id));
     }
 
-    let new_ids = designer.paste_at_position(DVec2::new(0.0, 400.0));
+    let new_ids = designer.paste_at_position(DVec2::new(0.0, 400.0)).unwrap();
     assert_eq!(new_ids.len(), 3);
     let pasted_apply = find_pasted(&designer, "main", &new_ids, "apply");
     assert_eq!(
@@ -2392,7 +2392,7 @@ fn paste_closure_with_capture_remaps_capture_wire() {
         network.select_nodes(vec![k_id, closure_id, arg_id, apply_id]);
     }
     assert!(designer.copy_selection());
-    let new_ids = designer.paste_at_position(DVec2::new(0.0, 400.0));
+    let new_ids = designer.paste_at_position(DVec2::new(0.0, 400.0)).unwrap();
     assert_eq!(new_ids.len(), 4);
 
     let pasted_closure = find_pasted(&designer, "main", &new_ids, "closure");

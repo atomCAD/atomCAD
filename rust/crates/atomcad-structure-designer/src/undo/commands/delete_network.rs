@@ -55,6 +55,8 @@ impl UndoCommand for DeleteNetworkCommand {
 
         // Restore active network to what it was after deletion
         *ctx.active_network_name = self.active_network_after.clone();
+        ctx.clipboard
+            .clear_if_refers_to(&|n| n == self.network_name);
     }
 
     fn refresh_mode(&self) -> UndoRefreshMode {
