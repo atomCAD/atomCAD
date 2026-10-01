@@ -17,8 +17,8 @@
 ///   [unlinkLibraryInteractive], [refreshLibraryInteractive],
 ///   [refreshAllDependenciesInteractive], [renameLibraryAliasInteractive],
 ///   [makeLibraryLocalInteractive].
-/// - [openLibraryFile] / [backToDesign] — *Open library file* replaces the
-///   document (there is one open document), remembering where to go back.
+/// - [openDesignInTab], [openLibraryFile] — open a file in a tab (or switch
+///   to the tab that has it), showing what the open reported.
 library;
 
 import 'package:file_picker/file_picker.dart';
@@ -718,31 +718,8 @@ void refreshAllDependenciesInteractive(
 }
 
 // ---------------------------------------------------------------------------
-// Open library file / back
+// Opening files in tabs
 // ---------------------------------------------------------------------------
-
-/// The "discard unsaved changes?" question every document switch asks.
-Future<bool> confirmDiscardChanges(
-    BuildContext context, StructureDesignerModel model) async {
-  if (!model.isDirty) return true;
-  final shouldProceed = await showDraggableAlertDialog<bool>(
-    context: context,
-    title: const Text('Unsaved Changes'),
-    content:
-        const Text('You have unsaved changes. Do you want to discard them?'),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.of(context).pop(false),
-        child: const Text('Cancel'),
-      ),
-      TextButton(
-        onPressed: () => Navigator.of(context).pop(true),
-        child: const Text('Discard'),
-      ),
-    ],
-  );
-  return shouldProceed ?? false;
-}
 
 /// Shows what the last open reported: the auto-repaired parameter ids
 /// (F6 of `doc/design_parameter_wire_stability.md`) and the links (D13).
@@ -800,36 +777,37 @@ void showAfterLoadReports(BuildContext context, StructureDesignerModel model) {
   );
 }
 
-Future<bool> _openDesign(BuildContext context, StructureDesignerModel model,
-    String path, String? backTo) async {
-  if (!await confirmDiscardChanges(context, model)) return false;
-  if (!context.mounted) return false;
-  final result = model.loadNodeNetworks(path);
-  if (!result.success) {
+/// Opens [path] in a new tab, or switches to the tab that has it open (D5
+/// of `doc/design_multiple_documents.md`), and shows what the open reported:
+/// a load error, the load's repairs and library report, the activation's
+/// dependency check. Shared by *File > Open…*, *Open Recent* and *Open
+/// library file*. Returns whether [path] is now the active document.
+Future<bool> openDesignInTab(
+    BuildContext context, StructureDesignerModel model, String path) async {
+  final result = await model.openDocument(path);
+  if (!context.mounted) return result.result.success;
+  if (!result.result.success) {
     await showErrorDialog(
-        context: context, title: 'Load Error', message: result.errorMessage);
+        context: context,
+        title: 'Load Error',
+        message: result.result.errorMessage);
     return false;
   }
-  model.backToDesignPath = backTo;
-  if (context.mounted) showAfterLoadReports(context, model);
+  if (!result.alreadyOpen) showAfterLoadReports(context, model);
+  final report = result.libraryReport;
+  if (report != null) {
+    showRefreshReport(context, model, report, quietWhenClean: true);
+  }
   return true;
 }
 
-/// *Open library file*: replaces the open design with the library (there is
-/// one open document) and offers *File > Back to …* for this session.
+/// *Open library file*: opens the library in a tab of its own, or switches
+/// to it when it is open already. The design stays open in its tab; a save
+/// in the library tab is picked up when the design is activated again
+/// (library linking D7).
 Future<void> openLibraryFile(BuildContext context, StructureDesignerModel model,
     APILibraryMount mount) async {
-  await _openDesign(context, model, mount.absPath, model.filePath);
-}
-
-/// *File > Back to …*: reopens the design left through *Open library file*.
-/// Its libraries are reconciled on open, so an edit just saved in the
-/// library shows up here.
-Future<void> backToDesign(
-    BuildContext context, StructureDesignerModel model) async {
-  final path = model.backToDesignPath;
-  if (path == null) return;
-  await _openDesign(context, model, path, null);
+  await openDesignInTab(context, model, mount.absPath);
 }
 
 /// The strip above the canvas of a linked network: where it comes from, that

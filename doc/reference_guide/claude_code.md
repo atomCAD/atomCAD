@@ -38,4 +38,11 @@ This installs the CLI to your PATH and copies the skill file to Claude Code's gl
 - "Add a cylindrical hole through the center of the current shape"
 - "Take a screenshot from a 45-degree angle"
 
+**Tabs.** Claude works on the design in the **active** tab. It names that
+design on every command (`--document`, see
+[Tabs](./headless_cli.md#tabs-documents-and---document)), so if you switch
+tabs while it is working, its next command is refused instead of landing in
+the other design; it tells you, and asks how to go on. Asking it to open a
+file (`load`) opens it in a new tab.
+
 To explore atomcad-cli features, run `atomcad-cli --help`. For the complete CLI reference and text format specification, see the skill file at `.claude/skills/atomcad/skill.md` in your atomCAD installation.

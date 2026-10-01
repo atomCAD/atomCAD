@@ -322,10 +322,6 @@ class StructureDesignerModel extends ChangeNotifier {
   /// read-only; [mountFor] is the prefix test.
   List<APILibraryMount> linkedLibraries = [];
 
-  /// The design the user left through *Open library file*, for *File > Back
-  /// to …* — session-only, forgotten once it has been used.
-  String? backToDesignPath;
-
   // ===== OPEN DOCUMENTS (`doc/design_multiple_documents.md`) =====
 
   /// The open documents in tab order, mirrored from the kernel by

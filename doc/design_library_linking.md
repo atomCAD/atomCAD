@@ -68,8 +68,9 @@ is what you want.
   history within a file.
 - **No deduplication across mounts.** If two libraries both link `common.cnnd`,
   it is mounted twice under two names (D4). Correct, simple, slightly wasteful.
-- **Several open, editable documents** — separate design (§12). Editing a
-  library here means opening the library file.
+- **Several open, editable documents** — separate design (§12), since
+  implemented as tabs (`doc/design_multiple_documents.md`). Editing a library
+  means opening the library file, now in a tab of its own.
 - **Absolute library paths, URLs, search paths.** A library is linked by a path
   relative to the importing file (D6). (Data files may keep absolute paths;
   they are treated as external, D8.)
@@ -1944,6 +1945,13 @@ harness's two new steps (500 seeds clean). Deviations and findings:
   new commands.
 
 ## 12. Forward compatibility with multiple open documents
+
+*Superseded by `doc/design_multiple_documents.md` (implemented): several
+documents are open as tabs, *Open library file* opens the library in a tab
+of its own, and *File > Back to …* is gone. That design kept `ensure_editable`
+unchanged (each tab is a whole document, so "owned by the document being
+edited" is what it already checks) and mounts per importer (documents talk only
+through files). Kept below as written.*
 
 The multi-document design will want each open file to be editable in its own
 window/tab. What this design already provides:

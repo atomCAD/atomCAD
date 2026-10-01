@@ -26,20 +26,61 @@ const String clientLabelEnvVar = 'ATOMCAD_CLIENT_LABEL';
 /// property of the process, not of a command.
 String _clientLabel = '';
 
-/// Headers for one request: the caller's own, plus the client label when there
-/// is one. Every HTTP call in this file goes through [_get] / [_post] so that
-/// no route can quietly forget it.
+/// The header that names the document a request is meant for — the
+/// `--document <path-or-id>` guard of `doc/design_multiple_documents.md` (D8).
+/// atomCAD refuses the request with `409 Conflict` when another tab is active.
+const String documentHeader = 'X-Atomcad-Document';
+
+/// The `--document` this process sends (a resolved path, or a document id),
+/// set once in [main]; empty when not given.
+String _document = '';
+
+/// Headers for one request: the caller's own, plus the client label and the
+/// `--document` guard when there are any. Every HTTP call in this file goes
+/// through [_get] / [_post] so that no route can quietly forget them.
 Map<String, String>? _headers([Map<String, String>? extra]) {
-  if (_clientLabel.isEmpty) return extra;
-  return {...?extra, clientLabelHeader: _clientLabel};
+  if (_clientLabel.isEmpty && _document.isEmpty) return extra;
+  return {
+    ...?extra,
+    if (_clientLabel.isNotEmpty) clientLabelHeader: _clientLabel,
+    if (_document.isNotEmpty) documentHeader: _document,
+  };
 }
 
 Future<http.Response> _get(Uri uri, {Map<String, String>? headers}) =>
-    http.get(uri, headers: _headers(headers));
+    http.get(uri, headers: _headers(headers)).then(_exitIfGuardRefused);
 
 Future<http.Response> _post(Uri uri,
         {Object? body, Map<String, String>? headers}) =>
-    http.post(uri, headers: _headers(headers), body: body);
+    http
+        .post(uri, headers: _headers(headers), body: body)
+        .then(_exitIfGuardRefused);
+
+/// A request refused by the `--document` guard ends the process with the
+/// server's message, which names the active document: every later request of
+/// this process carries the same `--document` and would be refused too.
+http.Response _exitIfGuardRefused(http.Response response) {
+  if (response.statusCode == 409) {
+    try {
+      final result = jsonDecode(response.body);
+      if (result is Map && result['document_guard'] == true) {
+        stderr.writeln('Error: ${result['error']}');
+        exit(1);
+      }
+    } on FormatException {
+      // Not a guard refusal; the caller reports it.
+    }
+  }
+  return response;
+}
+
+/// `--document`: a document id stays as it is, anything else is a path and is
+/// made absolute against the CLI's working directory, like `load`'s.
+String _resolveDocumentSpec(String spec) {
+  final trimmed = spec.trim();
+  if (trimmed.isEmpty || int.tryParse(trimmed) != null) return trimmed;
+  return _resolveToAbsolutePath(trimmed);
+}
 
 Future<void> main(List<String> args) async {
   final parser = ArgParser()
@@ -49,7 +90,11 @@ Future<void> main(List<String> args) async {
     ..addOption('label',
         abbr: 'l',
         help: 'Identify this client to atomCAD\'s AI History '
-            '(or set $clientLabelEnvVar)');
+            '(or set $clientLabelEnvVar)')
+    ..addOption('document',
+        abbr: 'd',
+        help: 'Refuse unless this document (a path, or the id '
+            '`documents` lists) is the active tab');
 
   final queryParser = ArgParser();
 
@@ -158,6 +203,17 @@ Future<void> main(List<String> args) async {
   parser.addCommand('save', saveParser);
   parser.addCommand('file', fileParser);
   parser.addCommand('new', newParser);
+  parser.addCommand('documents', ArgParser());
+
+  // `--document` may follow the command too (`edit --document x.cnnd …`), so
+  // every command accepts it as well as the top level.
+  void acceptDocument(ArgParser command) {
+    command.addOption('document',
+        help: 'Refuse unless this document is the active tab');
+    command.commands.values.forEach(acceptDocument);
+  }
+
+  parser.commands.values.forEach(acceptDocument);
 
   ArgResults results;
   try {
@@ -182,6 +238,11 @@ Future<void> main(List<String> args) async {
           Platform.environment[clientLabelEnvVar] ??
           '')
       .trim();
+  _document = _resolveDocumentSpec(
+      (results.command?.command?['document'] as String?) ??
+          (results.command?['document'] as String?) ??
+          (results['document'] as String?) ??
+          '');
 
   // No command = REPL mode
   if (results.command == null) {
@@ -274,6 +335,9 @@ Future<void> main(List<String> args) async {
       break;
     case 'new':
       await _runNew(serverUrl, command);
+      break;
+    case 'documents':
+      if (!await _runDocuments(serverUrl)) exit(1);
       break;
     default:
       stderr.writeln('Unknown command: ${command.name}');
@@ -376,6 +440,8 @@ void _printUsage() {
       '  atomcad-cli file                      Show current file status');
   stdout.writeln(
       '  atomcad-cli new [--force]             New project in a new tab');
+  stdout.writeln(
+      '  atomcad-cli documents                 List the open documents (tabs)');
   stdout.writeln('');
   stdout.writeln('Options:');
   stdout.writeln('  -h, --help     Show this help');
@@ -383,6 +449,10 @@ void _printUsage() {
   stdout.writeln('  -l, --label    Identify this client in atomCAD\'s AI');
   stdout.writeln('                 History panel, e.g. "Opus 5 / skill v3"');
   stdout.writeln('                 (or set $clientLabelEnvVar)');
+  stdout.writeln('  -d, --document Refuse the command unless this document is');
+  stdout.writeln('                 the active tab: a path, or the id that');
+  stdout.writeln('                 `documents` lists (for an Untitled one).');
+  stdout.writeln('                 Also accepted after the command.');
   stdout.writeln('');
   stdout.writeln('Categories:');
   stdout.writeln('  Annotation, MathAndProgramming, Geometry2D, Geometry3D,');
@@ -452,6 +522,7 @@ void _printReplHelp() {
       '                      Save As, with or without the files it uses');
   stdout.writeln('  file                Show current file status');
   stdout.writeln('  new [--force]       New project in a new tab');
+  stdout.writeln('  documents           List the open documents (tabs)');
   stdout.writeln('  help, ?             Show this help');
   stdout.writeln('  quit, exit          Exit REPL');
   stdout.writeln('');
@@ -562,8 +633,7 @@ String _resolveScreenshotOutput(String output) {
 
 Future<void> _runQuery(String serverUrl) async {
   try {
-    final response = await http
-        .get(Uri.parse('$serverUrl/query'))
+    final response = await _get(Uri.parse('$serverUrl/query'))
         .timeout(const Duration(seconds: 10));
 
     if (response.statusCode == 200) {
@@ -834,8 +904,7 @@ Future<void> _runNetworks(String serverUrl, ArgResults args) async {
 
 Future<void> _runNetworksList(String serverUrl) async {
   try {
-    final response = await http
-        .get(Uri.parse('$serverUrl/networks'))
+    final response = await _get(Uri.parse('$serverUrl/networks'))
         .timeout(const Duration(seconds: 10));
 
     if (response.statusCode == 200) {
@@ -857,13 +926,11 @@ Future<void> _runNetworksList(String serverUrl) async {
 Future<void> _runNetworksAdd(String serverUrl, String? name) async {
   try {
     final body = name != null ? jsonEncode({'name': name}) : '';
-    final response = await http
-        .post(
-          Uri.parse('$serverUrl/networks/add'),
-          headers: {'Content-Type': 'application/json'},
-          body: body,
-        )
-        .timeout(const Duration(seconds: 10));
+    final response = await _post(
+      Uri.parse('$serverUrl/networks/add'),
+      headers: {'Content-Type': 'application/json'},
+      body: body,
+    ).timeout(const Duration(seconds: 10));
 
     if (response.statusCode == 200) {
       final result = jsonDecode(response.body);
@@ -881,13 +948,11 @@ Future<void> _runNetworksAdd(String serverUrl, String? name) async {
 
 Future<void> _runNetworksDelete(String serverUrl, String name) async {
   try {
-    final response = await http
-        .post(
-          Uri.parse('$serverUrl/networks/delete'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'name': name}),
-        )
-        .timeout(const Duration(seconds: 10));
+    final response = await _post(
+      Uri.parse('$serverUrl/networks/delete'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'name': name}),
+    ).timeout(const Duration(seconds: 10));
 
     if (response.statusCode == 200) {
       final result = jsonDecode(response.body);
@@ -905,13 +970,11 @@ Future<void> _runNetworksDelete(String serverUrl, String name) async {
 
 Future<void> _runNetworksActivate(String serverUrl, String name) async {
   try {
-    final response = await http
-        .post(
-          Uri.parse('$serverUrl/networks/activate'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'name': name}),
-        )
-        .timeout(const Duration(seconds: 10));
+    final response = await _post(
+      Uri.parse('$serverUrl/networks/activate'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'name': name}),
+    ).timeout(const Duration(seconds: 10));
 
     if (response.statusCode == 200) {
       final result = jsonDecode(response.body);
@@ -930,13 +993,11 @@ Future<void> _runNetworksActivate(String serverUrl, String name) async {
 Future<void> _runNetworksRename(
     String serverUrl, String oldName, String newName) async {
   try {
-    final response = await http
-        .post(
-          Uri.parse('$serverUrl/networks/rename'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'old': oldName, 'new': newName}),
-        )
-        .timeout(const Duration(seconds: 10));
+    final response = await _post(
+      Uri.parse('$serverUrl/networks/rename'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'old': oldName, 'new': newName}),
+    ).timeout(const Duration(seconds: 10));
 
     if (response.statusCode == 200) {
       final result = jsonDecode(response.body);
@@ -1049,8 +1110,7 @@ Future<void> _runSave(String serverUrl, ArgResults args) async {
 
 Future<void> _runFile(String serverUrl) async {
   try {
-    final response = await http
-        .get(Uri.parse('$serverUrl/file'))
+    final response = await _get(Uri.parse('$serverUrl/file'))
         .timeout(const Duration(seconds: 10));
 
     if (response.statusCode == 200) {
@@ -1063,6 +1123,9 @@ Future<void> _runFile(String serverUrl) async {
         stdout.writeln('File: $filePath');
         stdout.writeln('Modified: $modified');
         stdout.writeln('Networks: $networkCount');
+        if (result['document_id'] != null) {
+          stdout.writeln('Document: ${result['document_id']}');
+        }
       } else {
         stderr.writeln('Error: ${result['error']}');
         exit(1);
@@ -1207,6 +1270,32 @@ List<String>? _readStdinToEof() {
   return lines.isEmpty ? null : lines;
 }
 
+/// `documents`: the open tabs, in tab order — the ids and paths that
+/// `--document` accepts. The active tab is marked `*`, a dirty one
+/// `(modified)`.
+Future<bool> _runDocuments(String serverUrl) async {
+  try {
+    final response = await _get(Uri.parse('$serverUrl/documents'))
+        .timeout(const Duration(seconds: 10));
+    if (response.statusCode != 200) {
+      stderr.writeln('Error: Server returned ${response.statusCode}');
+      stderr.writeln(response.body);
+      return false;
+    }
+    final result = jsonDecode(response.body);
+    for (final doc in (result['documents'] as List)) {
+      final marker = doc['active'] == true ? '*' : ' ';
+      final name = doc['file_path'] ?? doc['display_name'];
+      final dirty = doc['dirty'] == true ? '  (modified)' : '';
+      stdout.writeln('$marker ${doc['id']}  $name$dirty');
+    }
+    return true;
+  } catch (e) {
+    stderr.writeln('Error: Failed to connect to atomCAD: $e');
+    return false;
+  }
+}
+
 Future<void> _runRepl(String serverUrl) async {
   // Check connection first
   final isRunning = await _checkHealth(serverUrl);
@@ -1341,6 +1430,10 @@ Future<void> _runRepl(String serverUrl) async {
 
       case 'new':
         await _runNewRepl(serverUrl, parts);
+        break;
+
+      case 'documents':
+        await _runDocuments(serverUrl);
         break;
 
       case 'help':
@@ -1646,13 +1739,11 @@ Future<void> _runNetworksRepl(String serverUrl, List<String> parts) async {
 Future<void> _runNetworksAddRepl(String serverUrl, String? name) async {
   try {
     final body = name != null ? jsonEncode({'name': name}) : '';
-    final response = await http
-        .post(
-          Uri.parse('$serverUrl/networks/add'),
-          headers: {'Content-Type': 'application/json'},
-          body: body,
-        )
-        .timeout(const Duration(seconds: 10));
+    final response = await _post(
+      Uri.parse('$serverUrl/networks/add'),
+      headers: {'Content-Type': 'application/json'},
+      body: body,
+    ).timeout(const Duration(seconds: 10));
 
     if (response.statusCode == 200) {
       final result = jsonDecode(response.body);
@@ -1668,13 +1759,11 @@ Future<void> _runNetworksAddRepl(String serverUrl, String? name) async {
 
 Future<void> _runNetworksDeleteRepl(String serverUrl, String name) async {
   try {
-    final response = await http
-        .post(
-          Uri.parse('$serverUrl/networks/delete'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'name': name}),
-        )
-        .timeout(const Duration(seconds: 10));
+    final response = await _post(
+      Uri.parse('$serverUrl/networks/delete'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'name': name}),
+    ).timeout(const Duration(seconds: 10));
 
     if (response.statusCode == 200) {
       final result = jsonDecode(response.body);
@@ -1690,13 +1779,11 @@ Future<void> _runNetworksDeleteRepl(String serverUrl, String name) async {
 
 Future<void> _runNetworksActivateRepl(String serverUrl, String name) async {
   try {
-    final response = await http
-        .post(
-          Uri.parse('$serverUrl/networks/activate'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'name': name}),
-        )
-        .timeout(const Duration(seconds: 10));
+    final response = await _post(
+      Uri.parse('$serverUrl/networks/activate'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'name': name}),
+    ).timeout(const Duration(seconds: 10));
 
     if (response.statusCode == 200) {
       final result = jsonDecode(response.body);
@@ -1713,13 +1800,11 @@ Future<void> _runNetworksActivateRepl(String serverUrl, String name) async {
 Future<void> _runNetworksRenameRepl(
     String serverUrl, String oldName, String newName) async {
   try {
-    final response = await http
-        .post(
-          Uri.parse('$serverUrl/networks/rename'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'old': oldName, 'new': newName}),
-        )
-        .timeout(const Duration(seconds: 10));
+    final response = await _post(
+      Uri.parse('$serverUrl/networks/rename'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'old': oldName, 'new': newName}),
+    ).timeout(const Duration(seconds: 10));
 
     if (response.statusCode == 200) {
       final result = jsonDecode(response.body);
@@ -1816,8 +1901,7 @@ Future<void> _runSaveRepl(String serverUrl, List<String> parts) async {
 
 Future<void> _runFileRepl(String serverUrl) async {
   try {
-    final response = await http
-        .get(Uri.parse('$serverUrl/file'))
+    final response = await _get(Uri.parse('$serverUrl/file'))
         .timeout(const Duration(seconds: 10));
 
     if (response.statusCode == 200) {
@@ -1830,6 +1914,9 @@ Future<void> _runFileRepl(String serverUrl) async {
         stdout.writeln('File: $filePath');
         stdout.writeln('Modified: $modified');
         stdout.writeln('Networks: $networkCount');
+        if (result['document_id'] != null) {
+          stdout.writeln('Document: ${result['document_id']}');
+        }
       } else {
         stderr.writeln('Error: ${result['error']}');
       }

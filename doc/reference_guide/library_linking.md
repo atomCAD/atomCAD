@@ -79,10 +79,44 @@ delete, move or wire nodes, and the property editors are greyed out. What you
 change while browsing (camera, canvas position, displayed nodes) is not saved
 and does not mark your design as changed.
 
-To edit a library, open it: *Open library file* replaces your design with the
-library file (you are asked to save changes first). Edit it and save it, then
-use *File > Back to …* to return to your design, which picks up the new
-version as it opens.
+To edit a library, open it: *Open library file* opens the library file in a
+[tab](ui.md#document-tabs) of its own next to your design — or switches to that
+tab, if the library is open already. There it is an ordinary design: every
+network is editable, with its own undo history. Your design stays open, with
+its undo history and selection, in its own tab.
+
+### The edit–test loop
+
+1. In the library's tab, change a network and **save** (`Ctrl+S`).
+2. Click your design's tab. The saved library is picked up as part of the
+   switch, as [one undo step](#when-a-library-changes), and reported the usual
+   way — `Ctrl+Z` in the design takes the change back out.
+3. Look at the result, and click the library's tab to go on.
+
+Your design sees what the library's **file** says, not what its tab shows:
+unsaved edits in the library's tab are not picked up until you save. And if your
+design has something to redo when you switch back, the change is
+[held](#when-a-library-changes) rather than applied; *Refresh* on the library
+folder applies it.
+
+### Moving nodes between a design and its library
+
+Copy and paste work across tabs, and a pasted node keeps referring to the
+**same** network or record type it referred to where it was copied. Copy nodes
+in your design and paste them into the library's tab, and an instance of
+`demolib.slab` becomes an instance of the library's own `slab`; copy them back,
+and it is `demolib.slab` again. Relative file paths in pasted nodes (an
+`import_xyz`'s file, say) are rewritten so they still point at the same file
+from the target's folder.
+
+A paste is refused — nothing is pasted, and a dialog says why — when the target
+cannot see something the nodes need:
+
+- a network or record type of your design pasted into an unrelated file (it
+  lives in your design, which that file does not link);
+- a library network whose parameters or pins you changed in the library's tab
+  **without saving**: your design still sees the saved version, so save the
+  library first, let your design pick it up, and paste again.
 
 ## When a library changes
 

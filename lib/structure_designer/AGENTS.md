@@ -104,7 +104,10 @@ per-document model.
   one synchronous stretch after reading the body; only `/load` and `/new`
   await, because they are switches (`onOpenDocument` / `onNewDocument`, wired
   to the model in `main.dart`). A new handler must not `await` after its first
-  API call.
+  API call. The CLI's `--document` guard (`X-Atomcad-Document` header →
+  `check_document_guard`) is checked once, in `_handleRequest`, as the first
+  step of that stretch — a new handler gets it for free; a new path that does
+  not act on the active document belongs in `_unguardedPaths`.
 
 ## DISPLAY panel (sidebar)
 
@@ -635,11 +638,11 @@ a missed gate here must at worst show an error.
   `http_server.dart`'s `/save <path>` uses the same plan: when it would copy
   anything it refuses unless told `deps=copy` (copies; conflicts are kept, never
   overwritten — the CLI cannot show the dialog) or `deps=none`.
-- **Open library file** still replaces the active tab's document after
-  `confirmDiscardChanges` (an in-place load, which takes a fresh document id)
-  and remembers `model.backToDesignPath` for *File > Back to …*. Phase 4 of
-  `doc/design_multiple_documents.md` turns it into `openDocument` and removes
-  *Back to …*.
+- **Opening a file** — *File > Load Design*, *Open Recent* and *Open library
+  file* alike — goes through `openDesignInTab` (`library_link_actions.dart`):
+  `model.openDocument` (a new tab, or the tab that has the file), then the
+  load's reports and the activation's dependency report. Nothing loads into
+  the active tab in place any more.
 
 ## node_networks_list/ Subdirectory
 

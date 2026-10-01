@@ -74,6 +74,38 @@ zone bodies included; Ctrl+Y (redo) reapplies it.
 An edit that applied but then failed validation is still undoable — that is the
 case the step exists for.
 
+### Tabs: `documents` and `--document`
+
+The application can have several designs open, one per
+[tab](./ui.md#document-tabs), and every command acts on the **active** tab —
+whichever one the user last clicked. `load` opens a file in a new tab (or
+switches to the tab that has it), `new` opens a new *Untitled* tab; neither
+discards anything. Both print the document id and path of the tab they
+opened, and `file` prints the active tab's id (`Document: 2`).
+
+Because the user can switch tabs at any time, a script can say which design it
+means with `--document <path-or-id>`, before or after the command. A command
+naming anything but the active tab is refused before it does anything, with a
+message that names the active one:
+
+```bash
+atomcad-cli documents
+# * 2  C:/work/host.cnnd  (modified)
+#   3  Untitled
+
+atomcad-cli --document C:/work/host.cnnd query
+atomcad-cli edit --document 3 --code "s = sphere { radius: 4 }"
+# Error: The request names document '3', but the active document is
+#   C:/work/host.cnnd. Switch to that tab in atomCAD, or pass --document for
+#   the active one.
+```
+
+A saved design is named by its path — any spelling of it; a relative path is
+resolved against the CLI's working directory. An *Untitled* design has no
+path and is named by the id `documents` lists. `load`, `new` and `documents`
+are not guarded. The [Claude Code skill](./claude_code.md) passes `--document`
+on every command.
+
 ### Every request is recorded
 
 Each `atomcad-cli edit` — merge or `--replace`, applied or rejected — is
@@ -84,7 +116,7 @@ because the network is locked against CLI writes are recorded too; locking a
 network does not hide the attempts.
 
 Every *other* command — `query`, `evaluate`, `run`, `screenshot`, `camera`, `display`,
-`networks …`, `load`, `save`, `new` — lands on the same timeline as a one-line
+`networks …`, `load`, `save`, `new`, `documents` — lands on the same timeline as a one-line
 entry: the request, how it ended, how long it took. That is what makes the log
 readable as a session rather than a list of edits: it shows whether the model
 looked at the network before rewriting it, and what it did between two edits.

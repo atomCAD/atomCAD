@@ -325,7 +325,37 @@ reconstruct a previous state yourself; there is no CLI undo command.
 ```bash
 atomcad-cli --help       # Show help
 atomcad-cli --port=PORT  # Custom server port (default: 19847)
+atomcad-cli --document=DOC <command>  # Refuse unless DOC is the active tab
 ```
+
+### Tabs: always pass `--document`
+
+atomCAD has **tabs**, one open design per tab, and every command acts on
+whichever tab is **active**. The user can switch tabs at any time, so without
+a guard an `edit` meant for one design can land in another. Pass
+`--document <path-or-id>` on **every** command once you know which design
+you are working on; a command naming anything but the active tab is refused
+before it does anything, with a message naming the active one:
+
+```bash
+atomcad-cli documents                 # list the tabs: id, path, active (*), dirty
+# * 2  C:/work/host.cnnd  (modified)
+#   3  Untitled
+
+atomcad-cli --document C:/work/host.cnnd query       # a saved design: its path
+atomcad-cli edit --document 3 --code="s = sphere {}" # an Untitled one: its id
+```
+
+- `load` and `new` print the document id and path of the tab they opened;
+  use it from then on. `file` prints it too (`Document: 2`).
+- `--document` may go before or after the command. A relative path is
+  resolved against the CLI's working directory; any spelling of the path
+  works.
+- When a command is refused, **do not retry with the other document**: the
+  user switched tabs on purpose. Tell them, and ask whether to continue there
+  or wait until they switch back.
+- `load`, `new` and `documents` are not guarded (they do not act on the
+  active tab).
 
 ### Network Operations
 
@@ -441,9 +471,10 @@ nested `demolib.common.slab`) and are used like local ones — but they are
 **read-only**: `edit` on a linked network is refused, and `networks` marks
 them `(linked, read-only)`. `query` on one prints a `# linked from <path>`
 line under the `# Network:` header. To change one, open the library file
-(`load <path>` — it opens in its own tab), edit, save, then `load` the design's
-path again: that switches back to the design's tab, which picks up the saved
-library on the way.
+(`load <path>` — it opens in its own tab, or switches to it), edit with
+`--document <library path>`, save, then `load` the design's path again: that
+switches back to the design's tab, which picks up the saved library on the
+way.
 
 ```bash
 atomcad-cli libraries                                # list, with status
@@ -505,7 +536,7 @@ Networks: 1
 **Behavior notes:**
 - `load` and `new` never discard anything: they open a tab (an untouched
   empty *Untitled* tab is replaced). `--force` is accepted and does nothing.
-  The user may switch tabs too, so `query` again before editing after a pause.
+  The user may switch tabs too — pass `--document` (see *Tabs* above).
 - `save` without a path saves to the current file; fails if no file is loaded
 - `save <path>` into another folder fails, listing the files, when the design
   reads libraries or data files by a relative path that would not be there;

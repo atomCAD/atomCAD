@@ -64,6 +64,17 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_p
 /// - `POST /load?path=<p>` - Open a file in a new tab, or activate the tab
 ///   that has it open (`doc/design_multiple_documents.md` D8)
 /// - `POST /new` - Open a new Untitled tab
+/// - `GET /documents` - List the open documents (tabs): id, path or
+///   *Untitled*, dirty, active
+///
+/// ## The `--document` guard
+///
+/// A request may carry an `X-Atomcad-Document` header ([documentHeader]; the
+/// CLI's `--document <path-or-id>`) naming the document the caller means: a
+/// saved one by its path, an Untitled one by its id. When it names anything
+/// but the active document, the request is refused with `409 Conflict` and an
+/// error naming the active one, before any handler runs (D8). The paths in
+/// [_unguardedPaths] are exempt: they do not act on the active document.
 ///
 /// ## One synchronous stretch per request
 ///
@@ -71,7 +82,8 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_p
 /// `Ctrl+Tab`) can run at any `await` of a handler. So all asynchronous work —
 /// reading the body, file-system checks — happens first, and everything from
 /// the first API call to the activity record runs with no `await` in between
-/// (D8). The handlers are plain `void` functions for that reason; `/load` and
+/// (D8). The `--document` guard is the first step of that stretch. The
+/// handlers are plain `void` functions for that reason; `/load` and
 /// `/new` are the exceptions because they *are* switches: they await the
 /// model's `withDocumentSwitch`, and their API calls run inside its action.
 /// **A new handler must not `await` after its first API call.**
@@ -139,6 +151,15 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_p
 /// application cannot otherwise know which model is driving the CLI, and a
 /// manually typed session label cannot distinguish two models editing in turn.
 const String clientLabelHeader = 'X-Client-Label';
+
+/// The header that carries the CLI's `--document <path-or-id>` (D8 of
+/// `doc/design_multiple_documents.md`).
+const String documentHeader = 'X-Atomcad-Document';
+
+/// Paths the `--document` guard does not apply to: the health poll, the tab
+/// listing, and `/load` / `/new`, which open a tab rather than act on the
+/// active one.
+const Set<String> _unguardedPaths = {'/health', '/documents', '/load', '/new'};
 
 /// Paths that the request hook does **not** record.
 ///
@@ -229,8 +250,8 @@ class AiAssistantServer {
     request.response.headers.add('Access-Control-Allow-Origin', '*');
     request.response.headers
         .add('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    request.response.headers.add(
-        'Access-Control-Allow-Headers', 'Content-Type, $clientLabelHeader');
+    request.response.headers.add('Access-Control-Allow-Headers',
+        'Content-Type, $clientLabelHeader, $documentHeader');
 
     // Handle preflight requests
     if (request.method == 'OPTIONS') {
@@ -266,92 +287,101 @@ class AiAssistantServer {
     _announceClient(request);
 
     try {
-      switch (path) {
-        case '/health':
-          _handleHealth(request);
-          break;
-        case '/query':
-          _handleQuery(request);
-          break;
-        case '/edit':
-          _handleEdit(request, body);
-          break;
-        case '/nodes':
-          _handleNodes(request);
-          break;
-        case '/describe':
-          _handleDescribe(request);
-          break;
-        case '/evaluate':
-          _handleEvaluate(request);
-          break;
-        case '/run':
-          _handleRun(request);
-          break;
-        case '/camera':
-          _handleCamera(request);
-          break;
-        case '/screenshot':
-          _handleScreenshot(request);
-          break;
-        case '/display':
-          _handleDisplay(request);
-          break;
-        case '/networks':
-          _handleNetworks(request);
-          break;
-        case '/networks/add':
-          _handleNetworksAdd(request, body);
-          break;
-        case '/networks/delete':
-          _handleNetworksDelete(request, body);
-          break;
-        case '/networks/activate':
-          _handleNetworksActivate(request, body);
-          break;
-        case '/networks/rename':
-          _handleNetworksRename(request, body);
-          break;
-        case '/libraries':
-          _handleLibraries(request);
-          break;
-        case '/libraries/link':
-          _handleLibrariesLink(request, body);
-          break;
-        case '/libraries/unlink':
-          _handleLibrariesUnlink(request, body);
-          break;
-        case '/libraries/refresh':
-          _handleLibrariesRefresh(request, body);
-          break;
-        case '/libraries/rename':
-          _handleLibrariesRename(request, body);
-          break;
-        case '/libraries/make-local':
-          _handleLibrariesMakeLocal(request, body);
-          break;
-        case '/file':
-          _handleFile(request);
-          break;
-        case '/load':
-          await _handleLoad(request);
-          // The log is per document: label the one now active.
-          _announceClient(request);
-          break;
-        case '/save':
-          _handleSave(request);
-          break;
-        case '/new':
-          await _handleNew(request);
-          _announceClient(request);
-          break;
-        default:
-          request.response.statusCode = HttpStatus.notFound;
-          request.response.headers.contentType = ContentType.json;
-          request.response.write(jsonEncode({
-            'error': 'Not found',
-            'path': path,
-          }));
+      // The `--document` guard opens the synchronous stretch: nothing awaits
+      // between it and the handler's API calls (D8). A refused request still
+      // falls through to the activity record, on the timeline of the document
+      // that *was* active.
+      if (!_refusedByDocumentGuard(request, path)) {
+        switch (path) {
+          case '/health':
+            _handleHealth(request);
+            break;
+          case '/documents':
+            _handleDocuments(request);
+            break;
+          case '/query':
+            _handleQuery(request);
+            break;
+          case '/edit':
+            _handleEdit(request, body);
+            break;
+          case '/nodes':
+            _handleNodes(request);
+            break;
+          case '/describe':
+            _handleDescribe(request);
+            break;
+          case '/evaluate':
+            _handleEvaluate(request);
+            break;
+          case '/run':
+            _handleRun(request);
+            break;
+          case '/camera':
+            _handleCamera(request);
+            break;
+          case '/screenshot':
+            _handleScreenshot(request);
+            break;
+          case '/display':
+            _handleDisplay(request);
+            break;
+          case '/networks':
+            _handleNetworks(request);
+            break;
+          case '/networks/add':
+            _handleNetworksAdd(request, body);
+            break;
+          case '/networks/delete':
+            _handleNetworksDelete(request, body);
+            break;
+          case '/networks/activate':
+            _handleNetworksActivate(request, body);
+            break;
+          case '/networks/rename':
+            _handleNetworksRename(request, body);
+            break;
+          case '/libraries':
+            _handleLibraries(request);
+            break;
+          case '/libraries/link':
+            _handleLibrariesLink(request, body);
+            break;
+          case '/libraries/unlink':
+            _handleLibrariesUnlink(request, body);
+            break;
+          case '/libraries/refresh':
+            _handleLibrariesRefresh(request, body);
+            break;
+          case '/libraries/rename':
+            _handleLibrariesRename(request, body);
+            break;
+          case '/libraries/make-local':
+            _handleLibrariesMakeLocal(request, body);
+            break;
+          case '/file':
+            _handleFile(request);
+            break;
+          case '/load':
+            await _handleLoad(request);
+            // The log is per document: label the one now active.
+            _announceClient(request);
+            break;
+          case '/save':
+            _handleSave(request);
+            break;
+          case '/new':
+            await _handleNew(request);
+            _announceClient(request);
+            break;
+          default:
+            request.response.statusCode = HttpStatus.notFound;
+            request.response.headers.contentType = ContentType.json;
+            request.response.write(jsonEncode({
+              'error': 'Not found',
+              'path': path,
+            }));
+        }
       }
     } catch (e, stackTrace) {
       print('[AI Assistant] Error handling request: $e\n$stackTrace');
@@ -406,6 +436,49 @@ class AiAssistantServer {
     } finally {
       _activityDetail = null;
     }
+  }
+
+  /// The `--document` guard (D8): when the request names a document
+  /// ([documentHeader]) that is not the active one, answers `409 Conflict`
+  /// with an error naming the active document and returns true. The matching
+  /// rules (path spellings, ids) live in Rust, `DocumentSet::check_guard`.
+  bool _refusedByDocumentGuard(HttpRequest request, String path) {
+    if (_unguardedPaths.contains(path)) return false;
+    final spec = request.headers.value(documentHeader)?.trim() ?? '';
+    if (spec.isEmpty) return false;
+    final result = documents_api.checkDocumentGuard(spec: spec);
+    if (result.success) return false;
+    request.response.statusCode = HttpStatus.conflict;
+    request.response.headers.contentType = ContentType.json;
+    request.response.write(jsonEncode({
+      'success': false,
+      'error': result.errorMessage,
+      'document_guard': true,
+    }));
+    return true;
+  }
+
+  /// `GET /documents`: the open documents in tab order — what `--document`
+  /// can name (D8). An Untitled document has no path and is named by its id.
+  void _handleDocuments(HttpRequest request) {
+    if (request.method != 'GET') {
+      request.response.statusCode = HttpStatus.methodNotAllowed;
+      return;
+    }
+    request.response.headers.contentType = ContentType.json;
+    request.response.write(jsonEncode({
+      'success': true,
+      'documents': [
+        for (final tab in documents_api.listDocuments())
+          {
+            'id': tab.id.toString(),
+            'display_name': tab.displayName,
+            'file_path': tab.filePath,
+            'dirty': tab.isDirty,
+            'active': tab.isActive,
+          }
+      ],
+    }));
   }
 
   void _handleHealth(HttpRequest request) {
@@ -1422,10 +1495,15 @@ class AiAssistantServer {
     final filePath = sd_api.getDesignFilePath();
     final isDirty = sd_api.isDesignDirty();
     final networkCount = sd_api.getNetworkCount();
+    String? documentId;
+    for (final tab in documents_api.listDocuments()) {
+      if (tab.isActive) documentId = tab.id.toString();
+    }
 
     request.response.headers.contentType = ContentType.json;
     request.response.write(jsonEncode({
       'success': true,
+      'document_id': documentId,
       'file_path': filePath,
       'modified': isDirty,
       'network_count': networkCount,

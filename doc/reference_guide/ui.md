@@ -66,9 +66,14 @@ rewritten so they still point at the same file. When the target cannot see a
 network or record type the nodes need, nothing is pasted and a dialog lists
 what is missing and why. See [Linked libraries](library_linking.md).
 
+*Open library file* (on a linked library's context menu, or the read-only
+strip above a linked network's canvas) opens the library in a tab of its own,
+or switches to it if it is open already.
+
 When you switch to a design that links a library you have just saved in
 another tab, the change is picked up as part of the switch, and reported the
-same way as when the application notices it on its own.
+same way as when the application notices it on its own. See
+[the edit–test loop](library_linking.md#the-edittest-loop).
 
 **Quitting** with unsaved changes in several tabs asks once, listing every
 design that would lose changes.
@@ -1043,7 +1048,6 @@ Used for loading and saving a design, exporting a design to .xyz or .mol, undo/r
 - *File > Import copy…*: Copies selected networks from another `.cnnd` file into your design, once, optionally under a name prefix. The copies are ordinary local networks and forget where they came from; to keep using another file's networks *as that file changes*, link it instead.
 - *File > Link library…*, *File > Refresh all dependencies*: Link another `.cnnd` file so its networks and record types can be used here without being copied, and re-read every linked library and data file. See [Linked libraries](library_linking.md).
 - *File > Export project bundle…*: Writes a `.zip` of the design and every library and data file it depends on, laid out so that it opens complete wherever it is unzipped. See [Moving a design](library_linking.md#moving-a-design-save-as-and-project-bundles).
-- *File > Back to …*: Appears after *Open library file* (from a linked library's context menu or the read-only strip above its canvas) and reopens the design you left.
 - *File > Export visible*: You can export visible atomic structures into `.xyz` or `.mol` format. `.mol` is a better choice because in this case bonds are saved too. `.xyz` do not support bond information so when saving into `.xyz` bond information is lost. In case of `.mol` the newer `V3000` flavor is used instead of the old `V2000` flavor because `V3000` supports more than 999 atoms.
 - *File > Export node network image...*: Saves the **whole** active node network as a `.png` — including the parts that do not fit on screen, which is what makes it usable for sharing a large network in a discussion or an issue. Available in Node Network Mode only.
   - The dialog offers a **zoom level** (the same three levels the canvas itself uses — *Normal*, *Zoomed out*, *Zoomed out far*), a **resolution** multiplier (1×, 2×, 3×) and a **margin**, the blank space around the content in pixels of the image at 1×. It shows the resulting pixel size as you change any of them, so you can see what you are about to get.

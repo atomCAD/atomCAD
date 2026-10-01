@@ -282,14 +282,6 @@ class _StructureDesignerState extends State<StructureDesigner> {
                               child: const Text('Export project bundle…'),
                             ),
                           ],
-                          if (model.backToDesignPath != null)
-                            MenuItemButton(
-                              key: const Key('back_to_design_item'),
-                              onPressed: () =>
-                                  backToDesign(context, graphModel),
-                              child: Text(
-                                  'Back to ${fileNameOf(model.backToDesignPath!)}'),
-                            ),
                         ],
                       );
                     },
@@ -1132,21 +1124,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
   /// switches to the tab that has it open (D5).
   Future<void> _openDesignFile(String filePath) async {
     rememberPickedFile(APIFileDialogPurpose.design, filePath);
-    final result = await graphModel.openDocument(filePath);
-    if (!mounted) return;
-    if (!result.result.success) {
-      showErrorDialog(
-        context: context,
-        title: 'Load Error',
-        message: result.result.errorMessage,
-      );
-      return;
-    }
-    if (!result.alreadyOpen) _showLoadRepairModalIfNeeded();
-    final report = result.libraryReport;
-    if (report != null) {
-      showRefreshReport(context, graphModel, report, quietWhenClean: true);
-    }
+    await openDesignInTab(context, graphModel, filePath);
   }
 
   Future<void> _importXyz() async {
@@ -1200,14 +1178,6 @@ class _StructureDesignerState extends State<StructureDesigner> {
   Future<void> _openRecentFile(String filePath) async {
     debugPrint('Opening recent file: $filePath');
     await _openDesignFile(filePath);
-  }
-
-  /// What the most recent load reported: auto-repaired duplicate parameter
-  /// ids (F6 of `doc/design_parameter_wire_stability.md`, a one-time modal)
-  /// and what reconciling its linked libraries did (D13, a snackbar).
-  void _showLoadRepairModalIfNeeded() {
-    if (!mounted) return;
-    showAfterLoadReports(context, graphModel);
   }
 
   Future<void> _loadDesign() async {

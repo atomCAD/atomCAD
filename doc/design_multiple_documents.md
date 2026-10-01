@@ -1112,6 +1112,24 @@ follows a handler's guard. That one is a code-review rule, stated in the AI
 server's doc comment, because a test cannot easily schedule a switch at an
 `await`.
 
+*As implemented (P4):* `check_guard`, its FFI wrapper and its domain test had
+already landed in P1, so P4 was the wiring. (1) The guard is checked **once,
+in the request dispatcher**, not by each handler: the CLI sends `--document`
+as an `X-Atomcad-Document` header, and `_handleRequest` checks it as the first
+step of the synchronous stretch, answering `409 Conflict` (with
+`document_guard: true`) before any handler runs. One check cannot be forgotten
+by a new handler. `/health`, `/documents`, `/load` and `/new` are exempt — they
+do not act on the active document. (2) `--document` is accepted at the top
+level and after any command or subcommand; a path is made absolute like
+`load`'s, a number is an id. A refusal ends the CLI process (a REPL session
+too), since every later request carries the same `--document`. (3) Thirteen
+CLI requests called `http.get` / `http.post` directly instead of the `_get` /
+`_post` helpers, so they never sent the `--label` header either; they all go
+through the helpers now. (4) `/file` and the CLI's `file` report the active
+document's id. (5) *File > Load Design*, *Open Recent* and *Open library
+file* share one `openDesignInTab`; `confirmDiscardChanges` went with *Back to*,
+having no caller left.
+
 ### Manual walkthrough (P3 + P4, for the maintainer)
 
 1. Start the app, open a design: it replaces the empty Untitled tab.
