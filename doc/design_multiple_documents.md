@@ -281,7 +281,7 @@ document-keyed subtree not rebuilding) all assume a `DocumentId` names one
 document for its whole life. So:
 
 - The AI server's `/load` and `/new` call the model's `openDocument` and
-  `newDocument` (§5.3), which go through `withDocumentSwitch` like the menu
+  `newDocument` (§5.3; `/new` without direct editing, as today), which go through `withDocumentSwitch` like the menu
   items. Loading an already-open file activates its tab (D5), and a pristine
   Untitled tab is replaced, as in §3. Nothing is discarded, so the
   unsaved-changes refusal is dropped, as it is for File > Open. `--force` is
@@ -469,7 +469,10 @@ The decisions:
   of the current frame, so the focus listeners have run and their writes have
   reached the *outgoing* document, and (3) only then runs `action`. Keyboard
   shortcuts, menu items and tab clicks all reach the API through these model
-  methods; none of them calls it directly.
+  methods; none of them calls it directly. Switches are **queued**: one
+  requested while another is waiting for its frame runs after it, never
+  interleaved. A relative target (`Ctrl+Tab`'s "next tab") is resolved when the
+  switch runs, not when it is requested.
 - **The document-dependent UI is keyed by the document id**: the node network
   editor, the properties panel, the user-types panel and the display panel sit
   under one `KeyedSubtree(key: ValueKey(activeDocumentId))`. A switch rebuilds
@@ -506,18 +509,21 @@ as a `&mut` slot:
   `park` the outgoing designer and put it back under its id, run the
   dependency check and `mark_full_refresh`. It does **not** evaluate. The
   caller refreshes. Its doc comment states the raw-pointer rule of §5.2.
-- `new_document(&mut self, active, direct_editing: bool)` and
-  `open(&mut self, active, path) -> Result<OpenOutcome, String>` — the whole of
-  `new_document` / `open_document` in §5.2, minus the renderer: D4 refusal,
-  D5 lookup (already open → `activate`), detached load, pristine replacement,
-  insert, activate. `OpenOutcome` carries `already_open`, the post-load reports
-  and the activation's report.
+- `new_document(&mut self, active, direct_editing: bool) -> Result<(),
+  SwitchRefused>` and `open(&mut self, active, path) -> Result<OpenOutcome,
+  OpenError>` — the whole of `new_document` / `open_document` in §5.2, minus
+  the renderer: D4 refusal, D5 lookup (already open → `activate`), detached
+  load, pristine replacement, insert, activate. `OpenError` is either the D4
+  refusal or the load error. `OpenOutcome` carries `already_open`, the
+  post-load reports and the activation's report.
 - `insert(&mut self, designer, after: DocumentId) -> DocumentId` — adds a
   parked document to the tab order and assigns its id (used by the two above).
-- `close(&mut self, active: &mut StructureDesigner, id)` — a parked tab is
-  simply dropped. The active tab first activates its neighbour (the tab to the
-  right, else to the left) and is then dropped. The last tab is replaced by a
-  fresh Untitled.
+- `close(&mut self, active: &mut StructureDesigner, id) ->
+  Result<Option<RefreshReport>, SwitchRefused>` — a parked tab is simply
+  dropped (`Ok(None)`). The active tab is refused during an open interaction
+  (D4); otherwise it first activates its neighbour (the tab to the right, else
+  to the left), returning that activation's report, and is then dropped. The
+  last tab is replaced by a fresh Untitled.
 - `renumber_active(&mut self, active: &mut StructureDesigner)` — gives the
   active designer a new id after its content was replaced in place (D8).
   Flutter stash entries under the old id are dropped on the next
@@ -527,8 +533,9 @@ as a `&mut` slot:
 - `check_guard(&self, active, spec: &str) -> Result<(), String>` — D8's
   `--document` match (canonical path or id, against the active document),
   with the message naming the active one.
-- `tabs(&self, active) -> Vec<DocumentTab>`, `move_to(id, index)`,
-  `find_by_path(canonical) -> Option<DocumentId>`.
+- `tabs(&self, active) -> Vec<DocumentTab>` (the domain twin of
+  `APIDocumentTab`: id, display name, path, dirty, active, in tab order),
+  `move_to(id, index)`, `find_by_path(canonical) -> Option<DocumentId>`.
 
 **Every rule lives here; the FFI wrappers stay thin.** The functions of §5.2
 need the global `CADInstance`, whose renderer needs a GPU, so no Rust test can
@@ -642,10 +649,10 @@ added to `rust_input` in `flutter_rust_bridge.yaml`), all `#[frb(sync)]`:
 | Function | Behaviour |
 |---|---|
 | `list_documents() -> Vec<APIDocumentTab>` | Tab order; each `{ id, display_name, file_path, is_dirty, is_active }`. |
-| `new_document() -> APIResult` | Fresh designer (`StructureDesigner::new()`, then direct-editing mode as for `new_project_direct_editing`), inserted after the active tab and activated. Refused during an open interaction (D4). |
+| `new_document(direct_editing: bool) -> APIResult` | Fresh designer, set up as `new_project_direct_editing` does when `direct_editing` is true and as `new_project` does otherwise, inserted after the active tab and activated. Refused during an open interaction (D4). File > New passes the active tab's direct-editing mode, as the model's `newProject` does today. The CLI's `/new` passes `false`, as its `newProject` call does today. |
 | `open_document(file_path) -> APIOpenDocumentResult` | Already open (D5) → activate it, `already_open: true`. Otherwise build a fresh designer, **load into it while detached**, and only on success insert and activate it. A failed load drops the fresh designer; the active document was never touched. Refused during an open interaction (D4). If the active document `is_pristine()`, the new one takes its place in the tab order and the pristine one is dropped. Carries the same post-load reports as `load_node_networks` (param-id repairs, library report). |
 | `activate_document(id) -> APIActivateResult` | The swap. `{ result: APIResult, library_report: Option<APIRefreshReport> }`: an error when refused (D4) or the id is unknown; otherwise what the dependency check of step 6 did, shown by Flutter exactly like a report from the 2 s poll. |
-| `close_document(id) -> APIResult` | No dirty check — Flutter asks first. Closing the active tab activates its neighbour first, then drops the closed designer. Closing the last tab leaves a fresh Untitled. Closing the active tab is refused during an open interaction (D4). |
+| `close_document(id) -> APIActivateResult` | No dirty check — Flutter asks first. Closing the active tab activates its neighbour first (its `library_report` is that activation's), then drops the closed designer. Closing the last tab leaves a fresh Untitled. Closing the active tab is refused during an open interaction (D4). |
 | `move_document(id, new_index)` | Tab reordering by drag. |
 | `check_document_guard(spec) -> APIResult` | D8's `--document` check (`DocumentSet::check_guard`), called by every AI-server handler that receives `--document`. The matching rules live in Rust so that they can be tested. |
 
@@ -681,10 +688,10 @@ document. Additions:
   mode, element) are session state and stay put. `backToDesignPath` is removed.
 - **`withDocumentSwitch(action)`** (D11): unfocus, wait for the end of the
   frame, then run the API call. `activateDocument`, `newDocument`,
-  `openDocument` and `closeDocument` of the active tab go through it.
-  `activateDocument` shows the `library_report` of the activation (§5.2 step
-  6) with the same snackbar the poll uses. The 2 s poll itself keeps
-  checking only the active document.
+  `openDocument` and `closeDocument` of the active tab go through it. Each of
+  them shows the activation's `library_report` (§5.2 step 6) with the same
+  snackbar the poll uses. The 2 s poll itself keeps checking only the active
+  document.
 - **`KeyedSubtree(ValueKey(activeDocumentId))`** around the document-dependent
   UI (D11).
 
@@ -731,12 +738,12 @@ encodes this table; §4 D2 makes the compiler keep it complete.
 | `pending_changes` | document | overwritten by `mark_full_refresh` on activation |
 | `cli_top_level_parameters` | document | headless only; always `None` in the GUI |
 | `navigation_history` | document | kept |
-| `clipboard` | **app** | moved (D9); its origin says which document it came from |
+| `clipboard` | **app** (from P2; document in P1) | moved (D9); its origin says which document it came from |
 | `document_id` (new) | document | kept |
 | `undo_stack` | document | kept |
 | `pending_move`, `pending_atom_edit_drag`, `pending_gadget_drag`, `pending_comment_edit`, `pending_zone_resize`, `pending_node_data_drag` | document | must be `None` — guaranteed by D4 |
 | `pending_step_metadata_edit` | document | cleared on park (D4: not an open interaction) |
-| `direct_editing_mode` | document | kept (a new design starts in direct editing, an opened library does not) |
+| `direct_editing_mode` | document | kept (a new design takes it from `new_document`'s argument; an opened file has what it was saved with) |
 | `cli_access_rules` | document | kept (serialized in the `.cnnd`) |
 | `ai_edit_log` | document | kept (D8) |
 | `eval_error_snapshots` | document | kept |
@@ -838,10 +845,14 @@ there is one document".
 Work: `document_set.rs` with `activate`, `new_document`, `open`, `insert`,
 `close`, `renumber_active`, `path_open_elsewhere`, `check_guard`, `tabs`;
 the view builders for the new `API*` types; `hand_over_app_state` (exhaustive destructure), `park`,
-`is_pristine`; `CADInstance.documents`; the activation-time dependency check;
+`is_pristine`; the `document_id` field; `CADInstance.documents`;
 `documents_api.rs` + `flutter_rust_bridge.yaml` + codegen; Save As refusal
 (D5); the D8 backstop in `load_node_networks` / `new_project*` (fresh id,
-refusal of a path open in another tab). The clipboard stays per document until P2. Update `rust/AGENTS.md`
+refusal of a path open in another tab). The clipboard stays a document field
+until P2: it is classified as document state in P1's `hand_over_app_state`
+and moves to the app side in P2. New test files are registered in the
+crate's harness (`tests/structure_designer.rs`, `#[path]` + `mod`). Update
+`rust/AGENTS.md`
 (`CADInstance` holds the active document; parked ones live in `documents`;
 never keep a raw pointer into the active `StructureDesigner` across API calls,
 because a tab switch swaps it, §5.2) and the structure-designer `AGENTS.md` (a
@@ -860,7 +871,8 @@ what the wrapper does minus tessellation:
   document, as `sync_camera_to_active_network` would (§5.2, step 0).
 - **App state follows the session — every field of §6.** Table-driven over the
   app-state rows: set each to a non-default value in A (a preference, a print,
-  a refresh profile, each eval flag, the pick context, the clipboard), switch
+  a refresh profile, each eval flag, the pick context; P2 moves the clipboard
+  row from the document side to this side), switch
   to B, and assert that B has it and that the parked A no longer holds the
   moved ones. Then the reverse over the document rows: each keeps its own
   value. The exhaustive destructure makes a *new* field a compile error; this
@@ -905,7 +917,7 @@ shapes of `APIOpenDocumentResult` and `APIActivateResult`, refusal included.
 
 Work: `clipboard.rs` (`Clipboard`, `ClipboardOrigin`, `Owner`, `capture`,
 `for_target`, `PasteRefusal`); the clipboard moves to app state in
-`hand_over_app_state`; the `document_id` field and `own_clipboard_mut`,
+`hand_over_app_state`; `own_clipboard_mut` (reading P1's `document_id`),
 through which every existing clipboard walk goes (network rename/delete,
 record-def rename/delete, alias rename, and the undo/redo of each); the
 per-node split of `rewrite_record_names_in_registry_with`; `rebase_file_paths`
@@ -962,6 +974,9 @@ Plus:
   the new `Result` return type requires.
 - **Headless.** A bare `StructureDesigner` with no `DocumentSet` copies and
   pastes as today. That is the CLI's headless mode.
+- **The clipboard is app state.** P1's field-side table now lists the
+  clipboard on the app side. Copy in A, switch to B: B holds the clipboard and
+  the parked A does not.
 
 ### Phase 3 — Flutter: tabs
 
@@ -970,9 +985,11 @@ Flutter-only per-document fields — §5.3); `DocumentTabStrip` and
 `DocumentTabList` (D10); the `InterfacePreferences` group in Rust (domain
 struct, the `api` twin with its `From` impls, codegen) and its dialog section;
 `withDocumentSwitch` and the document-keyed subtree (D11); the AI server's
-`/load` and `/new` through `openDocument` / `newDocument`, and every handler
-reordered so that no `await` follows its first API call (D8). This lands with
-the tabs, because the hazards exist as soon as tabs do. File menu changes;
+`/load` and `/new` through `openDocument` / `newDocument(false)` (their
+responses carrying the document's id and path), and every handler reordered so
+that its precondition checks and API calls form one stretch with no `await`
+in it (D8; the guard joins that stretch in P4). This lands with the tabs,
+because the hazards exist as soon as tabs do. File menu changes;
 `Ctrl+W`, `Ctrl+Tab`; quit dialog; the activation's library report;
 the paste-refusal dialog (`showErrorDialog`, so it is copyable — #359).
 Reference guide: `doc/reference_guide/ui.md` (the tabs in both placements,
@@ -1085,7 +1102,7 @@ server's doc comment, because a test cannot easily schedule a switch at an
 
 | Phase | Estimate |
 |---|---|
-| P1 Rust: documents and the swap | 1–2 days |
+| P1 Rust: documents and the swap | 2–3 days |
 | P2 Rust: clipboard and translated paste | 2–3 days, most of it the test matrix |
 | P3 Flutter: tabs (both placements) and the preference | 4–5 days |
 | P4 Library actions, CLI guard, docs | 1 day |
