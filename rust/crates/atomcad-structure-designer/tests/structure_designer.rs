@@ -696,5 +696,5 @@ mod file_dependencies_test;
 #[path = "structure_designer/library_links_vendor_test.rs"]
 mod library_links_vendor_test;
 
-#[path = "structure_designer/zone_body_load_order_test.rs"]
-mod zone_body_load_order_test;
+#[path = "structure_designer/network_load_order_test.rs"]
+mod network_load_order_test;

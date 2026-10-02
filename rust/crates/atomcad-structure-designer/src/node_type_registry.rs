@@ -3668,67 +3668,70 @@ impl NodeTypeRegistry {
     /// # Returns
     /// A vector of all node network names in dependency-first order
     pub fn get_networks_in_dependency_order(&self) -> Vec<String> {
+        // Sorted, so that independent networks come out in a fixed order
+        // rather than in the map's.
+        let mut all: Vec<String> = self.node_networks.keys().cloned().collect();
+        all.sort();
+        self.networks_in_dependency_order_among(&all)
+    }
+
+    /// The networks of `names` that this registry has, callees before their
+    /// callers, each once. Only calls between members of the set count — an
+    /// instance of a network outside it does not pull that network in — and
+    /// calls from inside HOF bodies count like top-level ones.
+    ///
+    /// Deterministic: independent networks keep their order in `names`, and
+    /// a network's callees are visited in name order. A cycle is broken where
+    /// the walk meets it (the member reached second comes out first); a cycle
+    /// is an error validation reports, and the loader must still finish.
+    ///
+    /// The loader repairs a file's networks in this order
+    /// (`serialization/AGENTS.md`, "Load pipeline").
+    pub fn networks_in_dependency_order_among(&self, names: &[String]) -> Vec<String> {
+        let members: HashSet<&str> = names
+            .iter()
+            .map(String::as_str)
+            .filter(|n| self.node_networks.contains_key(*n))
+            .collect();
         let mut result = Vec::new();
-        let mut visited = HashSet::new();
-        let mut temp_mark = HashSet::new();
-
-        // Get all network names
-        let network_names: Vec<String> = self.node_networks.keys().cloned().collect();
-
-        // Visit each network (DFS post-order traversal)
-        for network_name in &network_names {
-            if !visited.contains(network_name) {
-                self.dfs_topological_sort(network_name, &mut result, &mut visited, &mut temp_mark);
-            }
+        let mut done = HashSet::new();
+        let mut in_progress = HashSet::new();
+        for name in names {
+            self.visit_callees_first(name, &members, &mut result, &mut done, &mut in_progress);
         }
-
         result
     }
 
-    /// DFS helper for topological sort. Uses post-order traversal to ensure dependencies come before dependents.
-    fn dfs_topological_sort(
+    /// Post-order DFS step of [`Self::networks_in_dependency_order_among`].
+    fn visit_callees_first(
         &self,
-        network_name: &str,
+        name: &str,
+        members: &HashSet<&str>,
         result: &mut Vec<String>,
-        visited: &mut HashSet<String>,
-        temp_mark: &mut HashSet<String>,
+        done: &mut HashSet<String>,
+        in_progress: &mut HashSet<String>,
     ) {
-        // Detect cycles (should not happen in valid designs)
-        if temp_mark.contains(network_name) {
-            return; // Circular dependency detected, skip
-        }
-
-        // Already processed
-        if visited.contains(network_name) {
+        if !members.contains(name) || done.contains(name) || in_progress.contains(name) {
             return;
         }
-
-        // Mark as temporarily visited (for cycle detection)
-        temp_mark.insert(network_name.to_string());
-
-        // Find dependencies and visit them first. Recurse into HOF zone
-        // bodies so a body-internal reference to another user-defined network
-        // pulls that network into the topological order.
-        if let Some(network) = self.node_networks.get(network_name) {
-            let mut referenced: Vec<String> = Vec::new();
+        in_progress.insert(name.to_string());
+        let mut callees: Vec<String> = Vec::new();
+        if let Some(network) = self.node_networks.get(name) {
             crate::node_network::walk_all_nodes(network, &mut |node| {
-                if self.node_networks.contains_key(&node.node_type_name) {
-                    referenced.push(node.node_type_name.clone());
+                if members.contains(node.node_type_name.as_str()) {
+                    callees.push(node.node_type_name.clone());
                 }
             });
-            for name in referenced {
-                self.dfs_topological_sort(&name, result, visited, temp_mark);
-            }
         }
-
-        // Remove temporary mark
-        temp_mark.remove(network_name);
-
-        // Mark as visited
-        visited.insert(network_name.to_string());
-
-        // Add to result AFTER visiting all dependencies (post-order)
-        result.push(network_name.to_string());
+        // `walk_all_nodes` follows the node map's order; sort for a fixed one.
+        callees.sort();
+        callees.dedup();
+        for callee in callees {
+            self.visit_callees_first(&callee, members, result, done, in_progress);
+        }
+        in_progress.remove(name);
+        done.insert(name.to_string());
+        result.push(name.to_string());
     }
 }
 

@@ -1898,7 +1898,8 @@ maintainer's.** Files: `library_link_ops.rs` (`make_library_local`,
 `RenameLibraryAliasCommand`), `NodeData::rebase_file_paths` on the eight nodes
 that store a path, the two API functions, the HTTP routes and `atomcad-cli
 libraries`, the two mount-folder menu items; tests
-`library_links_vendor_test.rs` (9) and `zone_body_load_order_test.rs`, and the
+`library_links_vendor_test.rs` (9) and `zone_body_load_order_test.rs` (since
+renamed `network_load_order_test.rs`), and the
 harness's two new steps (500 seeds clean). Deviations and findings:
 
 - **Found: a zone body lost wires on every reopen — any file, not only
@@ -1911,7 +1912,9 @@ harness's two new steps (500 seeds clean). Deviations and findings:
   Phase 6. The pass now keeps a wire whose destination type does not resolve,
   as the top-level pass always did; stage-2 validation sees the real type.
   Regression test `zone_body_load_order_test.rs`; the pitfall is recorded in
-  `serialization/AGENTS.md`.
+  `serialization/AGENTS.md`. *Later:* the load became two passes (insert every
+  network, then repair callees before callers), so a load no longer depends on
+  names at all; the tests moved to `network_load_order_test.rs`.
 - **Vendoring rebases data-file paths.** The section above said vendoring is
   "just removing the mount record"; it is not, for a library outside the
   design's folder: its nodes' relative paths resolve against the *library's*

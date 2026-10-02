@@ -27,26 +27,57 @@ Key entry points:
 
 ## Load pipeline & derived state (read before touching the load path)
 
-Loading runs in **two stages with different network orderings**, and the gap between them is a recurring source of "wires silently disappear on load" bugs.
+Loading has **two stages**, and stage 1 has **two passes**. The rule behind
+the passes: *nothing a load derives may depend on how the networks are named.*
 
-1. **`load_node_networks_from_file` — per network, in FILE order.** Deserialize (the custom `Argument` deserializer rebuilds each node's `arguments` straight from JSON) → `canonicalize_network` → `initialize_custom_node_types_for_network` → `library_refresh::reconcile_network` (moves wiring on linked names from the interfaces the file recorded in `uses` to the mounted ones; it **must** precede `repair_node_network`, whose by-name rebuilds and count repair would realign by position first — `doc/design_library_linking.md` D13) → `repair_node_network` → insert into the registry.
-2. **`StructureDesigner::load_node_networks` — all networks, in DEPENDENCY order** (`get_networks_in_dependency_order`, dependencies first), calling `validate_network` on each.
+1. **`load_node_networks_from_bytes` (stage 1).**
+   - **Pass 1 — in file order, insert only.** Deserialize every network (the
+     custom `Argument` deserializer rebuilds each node's `arguments` straight
+     from JSON) → `canonicalize_network` → insert into the registry. Imports
+     are mounted and record defs inserted before this, so after pass 1 every
+     name the file can resolve, resolves.
+   - **Pass 2 — callees before callers**
+     (`NodeTypeRegistry::networks_in_dependency_order_among`, over this file's
+     networks only). Per network, taken out of the registry while it is worked
+     on: `initialize_custom_node_types_for_network` →
+     `library_refresh::reconcile_network` (moves wiring on linked names from the
+     interfaces the file recorded in `uses` to the mounted ones; it **must**
+     precede `repair_node_network`, whose by-name rebuilds and count repair
+     would realign by position first — `doc/design_library_linking.md` D13) →
+     wire images for the library report → `repair_node_network` → reinsert.
+2. **`StructureDesigner::load_node_networks` (stage 2)** — all networks, in
+   dependency order (`get_networks_in_dependency_order`), `validate_network`
+   on each.
 
-**The core asymmetry.** A node's *wires* are authoritative serialized data (positional, in `arguments`). A node's *pin layout* (`custom_node_type`) is **not** serialized — for most nodes it's reconstructed from per-node data (`calculate_custom_node_type`), but for **`apply` the layout is derived from the type of whatever is wired into `f`** (the source's canonical-flat function arity ⇒ `[f, arg0, …, argN-1]`). That source frequently lives in **another network**, which — because stage 1 runs in file order — may not be loaded yet. So `apply`'s real shape often **cannot** be derived during stage 1; only the dependency-ordered stage 2 can complete it.
+**Why two passes.** Stage 1 used to be one pass in file order — and a file
+stores its networks *sorted by name* — so while network A was repaired, every
+network sorting after A was not in the registry yet. Whatever a pass read off
+another network came out differently depending on which side of A the other
+network's name sorted: an `apply`'s layout from the function pin wired into its
+`f`, the type check of a body wire into an instance. The visible symptom:
+`repair_zone_body` compared a body instance of a later-sorting network against
+`DataType::None` and dropped its zone-input wires on every reopen (uppercase
+sorts before lowercase, so a `TIP.*` body calling `geo.*` lost them). The
+regressions, including a whole-corpus check that a second repair after load
+changes nothing, are in `tests/structure_designer/network_load_order_test.rs`.
+
+**What two passes cannot fix.** A name the file cannot resolve is unresolved in
+any order: a missing library's (frozen, `library_links`), a member of a network
+cycle while the other member is being repaired (present but not yet repaired —
+its saved node type still gives the interface), a network's instance of
+itself (the network is out of the registry while it is worked on). So the
+other half of the rule still binds every pass: **a repair pass that meets an
+unresolved source *or* destination type keeps the wire** and leaves it to
+validation, like the top-level dangling-wire cleanup always did. Never turn
+"no type" into `DataType::None` and type-check against it.
+
+**The core asymmetry.** A node's *wires* are authoritative serialized data (positional, in `arguments`). A node's *pin layout* (`custom_node_type`) is **not** serialized — for most nodes it's reconstructed from per-node data (`calculate_custom_node_type`), but for **`apply` the layout is derived from the type of whatever is wired into `f`** (the source's canonical-flat function arity ⇒ `[f, arg0, …, argN-1]`). That source frequently lives in **another network**. With the two-pass load it is in the registry when `apply` is repaired, so stage 1 derives the layout — except when the source is unresolvable for one of the reasons above.
 
 **The invariant:** *no operation that runs before the layout is derived may destroy the positional wire data.* The two ways a wire gets dropped are both layout-shape rebuilds against an under-derived (`[f]`) layout:
 - a **by-name `arguments` rebuild** (`set_custom_node_type(.., refresh_args = true)`) — has no name for the `arg0` slot the wire sits at, so it drops it;
 - a **truncation** (`network_validator::repair_network_arguments`) — cuts `arguments` down to the bare `[f]` count.
 
-The same holds for **any** type a stage-1 pass reads off another network. A
-body instance of a custom network whose name sorts later has **no type at all**
-in stage 1; `repair_zone_body` used to compare its zone-input wires against
-`DataType::None` and drop them on every reopen (found by library linking
-Phase 6 — `zone_body_load_order_test.rs`). A repair pass that meets an
-unresolved source *or* destination type keeps the wire and leaves it to stage 2,
-like the top-level dangling-wire cleanup always did.
-
-Stage 1 stays non-destructive for `apply`: `initialize_…` uses `refresh_args = false`; `repair_node_network`'s generic populate special-cases `apply` to `refresh_args = false` and then runs the apply post-pass with the **preserving-args** variant; its argument-count fixer only *pads*, never truncates. So stage 1 leaves `apply` with an under-derived `[f]` layout but its `arguments` (incl. the unresolved `arg0` wire) intact. Stage 2's `validate_network` then runs the apply/map post-passes (preserving variants) **before** `repair_network_arguments`, so once the `f`-source is resolvable (dependency order) the real `[f, arg0, …]` layout is installed *with the wires preserved positionally*, and the now-no-op truncation/`validate_wires` follow. The `f` wire itself (index 0, and a `-1` source pin) is never at risk; only the derived `arg0…` pins are. See `structure_designer/AGENTS.md` (apply post-pass paragraph) and `doc/design_currying.md`.
+Stage 1 stays non-destructive for `apply` all the same: `initialize_…` uses `refresh_args = false`; `repair_node_network`'s generic populate special-cases `apply` to `refresh_args = false` and then runs the apply post-pass with the **preserving-args** variant; its argument-count fixer only *pads*, never truncates. So an `apply` whose `f`-source stage 1 could not resolve keeps an under-derived `[f]` layout but its `arguments` (incl. the `arg0` wire) intact, and stage 2's `validate_network` — which runs the apply/map post-passes (preserving variants) **before** `repair_network_arguments` — installs the real `[f, arg0, …]` layout *with the wires preserved positionally*. The `f` wire itself (index 0, and a `-1` source pin) is never at risk; only the derived `arg0…` pins are. See `structure_designer/AGENTS.md` (apply post-pass paragraph) and `doc/design_currying.md`.
 
 ## Linked libraries (`imports`, v9)
 

@@ -1481,7 +1481,13 @@ pub fn load_node_networks_from_bytes(
     let mut load_report = crate::library_refresh::RefreshReport::default();
     let mut load_images = Vec::new();
 
-    // Process each network
+    // Two passes, so that nothing below depends on how the networks are named
+    // (`serialization/AGENTS.md`, "Load pipeline"). Pass 1 puts every network
+    // into the registry; pass 2 derives, reconciles and repairs them, callees
+    // before callers. Done in one pass in file (= name) order, a network was
+    // repaired while every network sorting after it was still missing, and a
+    // body wire into an instance of one was compared against no type at all.
+    let mut file_order: Vec<String> = Vec::new();
     for (name, serializable_network) in serializable_registry.node_networks {
         // Capture the first network name
         if first_network_name.is_empty() {
@@ -1501,6 +1507,19 @@ pub fn load_node_networks_from_bytes(
         // walker for any path that bypassed them. See `canonicalize.rs` and
         // `doc/design_currying.md` Phase 1.
         crate::canonicalize::canonicalize_network(&mut network);
+        file_order.push(name.clone());
+        registry.node_networks.insert(name, network);
+    }
+
+    // Pass 2. A network is taken out of the registry while it is worked on
+    // (the passes take it by `&mut` beside the registry by `&`), so only its
+    // own instances of itself go unresolved — as they always did. Members of a
+    // cycle meet each other unrepaired, but present: the interface a caller
+    // needs is read off the callee's saved node type either way.
+    for name in registry.networks_in_dependency_order_among(&file_order) {
+        let Some(mut network) = registry.node_networks.remove(&name) else {
+            continue;
+        };
         registry.initialize_custom_node_types_for_network(&mut network);
 
         // Move the wiring on linked networks and record defs from the
