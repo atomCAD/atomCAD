@@ -64,6 +64,17 @@ fn arg(type_args: &[DataType], i: usize) -> DataType {
     type_args.get(i).cloned().unwrap_or(DataType::None)
 }
 
+/// Whether a zone owner may leave its `result` zone-output pin unwired
+/// (issue #439): only a `closure` node, and only when its return type is
+/// `None`. `None` has exactly one value, so the result is known without a
+/// wire — the body can then serve as a plain grouping frame. Deliberately not
+/// `Unit` (an unwired effectful body is far more likely a forgotten wire) and
+/// not the HOFs (their result types go `None` transiently while unconfigured).
+/// Shared by the validator's zone-output rule and `build_inline_closure`.
+pub fn result_may_be_unwired(node_type_name: &str, result_type: &DataType) -> bool {
+    node_type_name == "closure" && *result_type == DataType::None
+}
+
 impl ClosureKind {
     /// Number of `type_args` entries the kind expects. Preset arms are
     /// constant; `Custom` reads its arity from `param_names.len()`, so the

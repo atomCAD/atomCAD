@@ -136,39 +136,9 @@ pub fn build_inline_closure<'a>(
         }
     };
 
-    // The zone-output pin must have at least one incoming wire — otherwise the
-    // body cannot deliver a per-iteration result. Reports as an eval-time
-    // error; Phase 5 will surface this at validation time as well.
-    let zone_output_wires: Vec<IncomingWire> = match node.zone_output_arguments.first() {
-        Some(arg) if !arg.incoming_wires.is_empty() => arg.incoming_wires.clone(),
-        _ => {
-            return Err(NetworkResult::Error(format!(
-                "{label}: body has no incoming wire on zone-output pin"
-            )));
-        }
-    };
-
-    // Pre-evaluate captures. Push the body so `source_scope_depth` walks land
-    // correctly, pre-evaluate against the caller's context, then drop the
-    // pushed stack.
-    let mut body_stack = network_stack.to_vec();
-    body_stack.push(NetworkStackElement::body_static(body.as_ref(), node_id));
-
-    let captures = match build_captures(
-        evaluator,
-        &body_stack,
-        registry,
-        context,
-        body.as_ref(),
-        &zone_output_wires,
-    ) {
-        Ok(c) => c,
-        Err(err) => return Err(NetworkResult::Error(format!("{label}: {err}"))),
-    };
-
-    // Arity/type metadata mirrored from the owner's resolved zone pins. Unused
-    // in Phase 1; carried so a later `NetworkResult::Function` can infer its
-    // `DataType::Function`.
+    // Arity/type metadata mirrored from the owner's resolved zone pins. Carried
+    // so a `NetworkResult::Function` can infer its `DataType::Function`; the
+    // return type also decides below whether an unwired result is allowed.
     let (param_types, return_type) = match registry.get_node_type_for_node(node) {
         Some(nt) => {
             let param_types = nt
@@ -184,6 +154,46 @@ pub fn build_inline_closure<'a>(
             (param_types, return_type)
         }
         None => (Vec::new(), DataType::None),
+    };
+
+    // The zone-output pin must have at least one incoming wire — otherwise the
+    // body cannot deliver a per-iteration result. Reports as an eval-time
+    // error, mirroring the validator's zone-output rule — including its one
+    // waiver: a `None`-returning `closure` (issue #439) gets an empty wire
+    // list, which `run_closure_once` answers with `NetworkResult::None`.
+    let zone_output_wires: Vec<IncomingWire> = match node.zone_output_arguments.first() {
+        Some(arg) if !arg.incoming_wires.is_empty() => arg.incoming_wires.clone(),
+        _ if crate::nodes::closure::result_may_be_unwired(&node.node_type_name, &return_type) => {
+            Vec::new()
+        }
+        _ => {
+            return Err(NetworkResult::Error(format!(
+                "{label}: body has no incoming wire on zone-output pin"
+            )));
+        }
+    };
+
+    // Pre-evaluate captures. Push the body so `source_scope_depth` walks land
+    // correctly, pre-evaluate against the caller's context, then drop the
+    // pushed stack. An unwired (`None`) result never runs the body, so its
+    // captures would be dead work — and a failing one a spurious error.
+    let captures = if zone_output_wires.is_empty() {
+        Arc::new(HashMap::new())
+    } else {
+        let mut body_stack = network_stack.to_vec();
+        body_stack.push(NetworkStackElement::body_static(body.as_ref(), node_id));
+
+        match build_captures(
+            evaluator,
+            &body_stack,
+            registry,
+            context,
+            body.as_ref(),
+            &zone_output_wires,
+        ) {
+            Ok(c) => c,
+            Err(err) => return Err(NetworkResult::Error(format!("{label}: {err}"))),
+        }
     };
 
     Ok(ZoneClosure {
@@ -471,6 +481,14 @@ pub fn run_closure_once<'a>(
     closure: &ZoneClosure,
     args: Vec<NetworkResult>,
 ) -> NetworkResult {
+    // A `None`-returning `closure` with an unwired result (issue #439): the
+    // only value it can return is `None`, and nothing in the body is needed to
+    // produce it. `build_inline_closure` is the only producer of an empty wire
+    // list, and only for this case.
+    if closure.zone_output_wires.is_empty() && closure.return_type == DataType::None {
+        return NetworkResult::None;
+    }
+
     // Swap captures in for the duration of the step.
     let saved_captures = std::mem::replace(
         &mut context.captured_source_values,

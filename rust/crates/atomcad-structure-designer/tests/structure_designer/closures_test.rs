@@ -2616,3 +2616,154 @@ fn new_closure_node_defaults_to_zero_ary_function() {
         &DataType::Function(FunctionType::new(vec![], DataType::Float))
     );
 }
+
+// ============================================================================
+// Unwired `None` result (issue #439): a `closure` whose return type is `None`
+// may leave its body's result pin unwired — the body then serves as a plain
+// grouping frame. `closure` only, `None` only.
+// ============================================================================
+
+/// Add a `Custom` `closure` with the given parameters (all `Int`) and return
+/// type, and no body wiring. Returns the closure node's id.
+fn add_unwired_custom_closure(
+    designer: &mut StructureDesigner,
+    network: &str,
+    param_names: &[&str],
+    return_type: DataType,
+) -> u64 {
+    let closure_id = designer.add_node("closure", DVec2::new(150.0, 0.0));
+    let mut type_args = vec![DataType::Int; param_names.len()];
+    type_args.push(return_type);
+    set_node_data(
+        designer,
+        network,
+        closure_id,
+        Box::new(ClosureData {
+            kind: ClosureKind::Custom,
+            type_args,
+            param_names: param_names.iter().map(|s| s.to_string()).collect(),
+            custom_label: None,
+        }),
+    );
+    closure_id
+}
+
+fn has_missing_zone_output_error(errors: &[String]) -> bool {
+    errors.iter().any(|e| {
+        let l = e.to_lowercase();
+        l.contains("zone-output") && l.contains("no incoming wire")
+    })
+}
+
+/// `() -> None` and `(Int) -> None` closures with nothing wired to `result`
+/// validate without the missing-zone-output-wire error, at any arity.
+#[test]
+fn none_result_closure_unwired_has_no_error() {
+    for params in [&[][..], &["x"][..]] {
+        let mut designer = setup_designer_with_network("main");
+        add_unwired_custom_closure(&mut designer, "main", params, DataType::None);
+
+        let (valid, errors) = validate_and_collect_errors(&mut designer, "main");
+        assert!(valid, "arity {}: got errors {:?}", params.len(), errors);
+        assert!(
+            errors.is_empty(),
+            "arity {}: an unwired `None` result must not be an error; got {:?}",
+            params.len(),
+            errors
+        );
+    }
+}
+
+/// The waiver is `None` only: a `() -> Unit` closure with an unwired result
+/// still reports the missing wire (an unwired effectful body is far more likely
+/// a forgotten wire than an intentional no-op).
+#[test]
+fn unit_result_closure_unwired_still_errors() {
+    let mut designer = setup_designer_with_network("main");
+    add_unwired_custom_closure(&mut designer, "main", &[], DataType::Unit);
+
+    let (_, errors) = validate_and_collect_errors(&mut designer, "main");
+    assert!(
+        has_missing_zone_output_error(&errors),
+        "expected the missing-zone-output-wire error; got {:?}",
+        errors
+    );
+}
+
+/// The waiver is `closure` only: a `map` whose output type is `None` and whose
+/// inline body is unwired still reports the missing wire.
+#[test]
+fn none_output_map_unwired_still_errors() {
+    let mut designer = setup_designer_with_network("main");
+
+    let range_id = add_range(&mut designer, "main", 0, 1, 3, 0.0);
+    let map_id = designer.add_node("map", DVec2::new(350.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        map_id,
+        Box::new(MapData {
+            input_type: DataType::Int,
+            output_type: DataType::None,
+        }),
+    );
+    designer.connect_nodes(range_id, 0, map_id, 0); // xs; no `f`, no body wire
+
+    let (_, errors) = validate_and_collect_errors(&mut designer, "main");
+    assert!(
+        has_missing_zone_output_error(&errors),
+        "expected the missing-zone-output-wire error on the map; got {:?}",
+        errors
+    );
+}
+
+/// Calling an unwired `(Int) -> None` closure through `apply` yields `None`
+/// rather than an error.
+#[test]
+fn none_result_closure_unwired_applies_to_none() {
+    let mut designer = setup_designer_with_network("main");
+
+    let closure_id = add_unwired_custom_closure(&mut designer, "main", &["x"], DataType::None);
+    let arg_id = add_int(&mut designer, "main", 10, 0.0);
+
+    let apply_id = designer.add_node("apply", DVec2::new(350.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        apply_id,
+        Box::new(ApplyData {
+            kind: ClosureKind::Custom,
+            type_args: vec![DataType::Int, DataType::None],
+            param_names: vec!["x".into()],
+        }),
+    );
+    designer.connect_nodes(closure_id, 0, apply_id, 0); // f
+    designer.connect_nodes(arg_id, 0, apply_id, 1); // x
+
+    let result = evaluate_node(&designer, "main", apply_id);
+    assert!(
+        matches!(result, NetworkResult::None),
+        "expected None, got {}",
+        result.to_display_string()
+    );
+}
+
+/// The `closure` node itself still evaluates to a `Function` value when its
+/// `None` result is unwired.
+#[test]
+fn none_result_closure_unwired_evaluates_to_function() {
+    let mut designer = setup_designer_with_network("main");
+    let closure_id = add_unwired_custom_closure(&mut designer, "main", &[], DataType::None);
+
+    // `add_node` validated the default `() -> Float` shape, and evaluation
+    // reports a blocking validation error it finds; re-validate as the app does
+    // after an edit.
+    designer.validate_active_network();
+
+    let result = evaluate_node(&designer, "main", closure_id);
+    assert!(
+        matches!(result, NetworkResult::Function(_)),
+        "expected a Function value, got {}",
+        result.to_display_string()
+    );
+}

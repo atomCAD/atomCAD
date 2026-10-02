@@ -1586,6 +1586,9 @@ fn validate_zones_recursive(
         // so an empty body is fine (closures `doc/design_closures.md`,
         // §"Validation" check 1). The `closure` node has no `f` *input* pin, so
         // this never suspends its own "body is complete" check (check 2).
+        //
+        // Also waived for a `closure` whose result type is `None` (issue #439,
+        // `closure::result_may_be_unwired`): its result is known without a wire.
         if node_type.has_zone() && !function_input_pin_connected(node, node_type) {
             for (i, pin) in node_type.zone_output_pins.iter().enumerate() {
                 let has_wire = node
@@ -1593,7 +1596,12 @@ fn validate_zones_recursive(
                     .get(i)
                     .map(|arg| !arg.incoming_wires.is_empty())
                     .unwrap_or(false);
-                if !has_wire {
+                if !has_wire
+                    && !crate::nodes::closure::result_may_be_unwired(
+                        &node.node_type_name,
+                        &pin.data_type,
+                    )
+                {
                     // **Blocking** since the D9 severity sweep
                     // (`doc/design_error_management.md` Phase 6). This rule was
                     // a warning only because the runtime already localized the

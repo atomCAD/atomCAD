@@ -930,7 +930,7 @@ Exposes its inline zone body as a first-class `Function` value on its output pin
 **Body (inline)**
 
 - Zone-input pins (inner-left): one per parameter — the preset kinds use `element` and `acc` to match the matching HOF; `Custom` uses the user-supplied parameter names. A 0-ary closure has no zone-input pins.
-- Zone-output pin (inner-right): the result — `result`, `new_acc`, or `out` by preset kind, or `result` for `Custom`. Must have at least one incoming wire (an empty body fails validation, like any HOF body).
+- Zone-output pin (inner-right): the result — `result`, `new_acc`, or `out` by preset kind, or `result` for `Custom`. Must have at least one incoming wire (an empty body fails validation, like any HOF body) — **except when the result type is `None`**: `None` has only one value, so the pin may stay unwired and calling the function returns `None` without running the body. This lets a `closure` body serve as a plain frame for grouping nodes. The exception is for `None` only (an unwired `Unit` result still reports an error) and for the `closure` node only.
 
 The body is authored exactly like an HOF body: click into the region to make it the active scope, add nodes, and drag capture wires across the boundary. Captures are ordinary capture wires drawn into the body — they are *not* part of the shape, so the kind/type editor only ever describes parameters and result.
 
