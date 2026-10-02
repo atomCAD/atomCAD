@@ -42,12 +42,12 @@ library directly if you want to use it.
 
 Right-click menus on linked content offer only what does not change it:
 
-- a linked **network**: *Find Usages*, *Open library file*, *Duplicate into my
+- a linked **network**: *Find Usages*, *Open in library file*, *Duplicate into my
   file* (a local, editable copy at the top level of your design; its references
   to other library networks stay links, and the data files its nodes read by a
   relative path keep being read from the same place — the paths are re-spelled
   from your design's folder, as *Make local copy* does);
-- a linked **record type**: *Open library file*;
+- a linked **record type**: *Open in library file*;
 - the **library folder**: *Refresh*, *Open library file*, and for a library you
   linked directly *Change file…*, *Rename alias…*, *Make local copy* and
   *Unlink*.
@@ -73,15 +73,19 @@ alias.
 
 Clicking a linked network opens it like any other: canvas, properties panel
 and 3D view. A strip above the canvas says where it is linked from, with an
-*Open library file* button. You can select nodes, read hover values, copy
+*Open in library file* button. You can select nodes, read hover values, copy
 nodes, toggle what is displayed in the 3D view and move around; you cannot add,
 delete, move or wire nodes, and the property editors are greyed out. What you
 change while browsing (camera, canvas position, displayed nodes) is not saved
 and does not mark your design as changed.
 
-To edit a library, open it: *Open library file* opens the library file in a
-[tab](ui.md#document-tabs) of its own next to your design — or switches to that
-tab, if the library is open already. There it is an ordinary design: every
+To edit a library, open it: *Open library file* (on the library folder) opens
+the library file in a [tab](ui.md#document-tabs) of its own next to your design
+— or switches to that tab, if the library is open already. *Open in library
+file* (on a linked network or record type, or the strip above a linked
+network's canvas) does the same and then opens that network or record type in
+the library, so you land on exactly what you want to change. There it is an
+ordinary design: every
 network is editable, with its own undo history. Your design stays open, with
 its undo history and selection, in its own tab.
 

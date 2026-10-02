@@ -1013,6 +1013,7 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
         node.fullName == null ? null : widget.model.mountOf(node.fullName!);
     if (linkedMount != null) {
       final isNetwork = node.isLeaf && node.leafKind == _LeafKind.network;
+      final isRecordDef = node.isLeaf && node.leafKind == _LeafKind.recordDef;
       final mountFolder = node.isLeaf ? null : _mountAt(node.fullName!);
       showMenu<String>(
         context: context,
@@ -1025,7 +1026,10 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
             ),
             const PopupMenuDivider(),
           ],
-          ...linkedRowMenuItems(isNetwork: isNetwork, mountFolder: mountFolder),
+          ...linkedRowMenuItems(
+              isNetwork: isNetwork,
+              isRecordDef: isRecordDef,
+              mountFolder: mountFolder),
         ],
       ).then((value) {
         if (!context.mounted) return;
@@ -1039,7 +1043,7 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
           return;
         }
         handleLinkedRowMenuValue(context, widget.model, value,
-            mount: linkedMount, name: node.fullName);
+            mount: linkedMount, name: node.fullName, isRecordDef: isRecordDef);
       });
       return;
     }

@@ -5,13 +5,25 @@ import 'package:flutter_cad/structure_designer/node_networks_list/node_network_l
 import 'package:flutter_cad/structure_designer/node_networks_list/node_network_tree_view.dart';
 import 'package:flutter_cad/structure_designer/node_networks_list/node_networks_action_bar.dart';
 
+/// Index of the **Tree** tab, the default view of the panel.
+const int NODE_NETWORKS_TREE_TAB_INDEX = 1;
+
 /// A widget that displays node networks in list and tree views with tabs.
+///
+/// The panel is rebuilt from scratch on every document switch (it is keyed by
+/// the document id), so which tab is showing is session UI owned by the
+/// caller: [initialTabIndex] seeds the tab controller and [onTabChanged]
+/// reports the user's choice back so the next document opens on the same view.
 class NodeNetworksPanel extends StatefulWidget {
   final StructureDesignerModel model;
+  final int initialTabIndex;
+  final ValueChanged<int>? onTabChanged;
 
   const NodeNetworksPanel({
     super.key,
     required this.model,
+    this.initialTabIndex = NODE_NETWORKS_TREE_TAB_INDEX,
+    this.onTabChanged,
   });
 
   @override
@@ -25,11 +37,23 @@ class _NodeNetworksPanelState extends State<NodeNetworksPanel>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(
+      length: 2,
+      vsync: this,
+      initialIndex: widget.initialTabIndex,
+    );
+    _tabController.addListener(_onTabControllerChanged);
+  }
+
+  void _onTabControllerChanged() {
+    if (!_tabController.indexIsChanging) {
+      widget.onTabChanged?.call(_tabController.index);
+    }
   }
 
   @override
   void dispose() {
+    _tabController.removeListener(_onTabControllerChanged);
     _tabController.dispose();
     super.dispose();
   }

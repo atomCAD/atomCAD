@@ -66,9 +66,11 @@ rewritten so they still point at the same file. When the target cannot see a
 network or record type the nodes need, nothing is pasted and a dialog lists
 what is missing and why. See [Linked libraries](library_linking.md).
 
-*Open library file* (on a linked library's context menu, or the read-only
-strip above a linked network's canvas) opens the library in a tab of its own,
-or switches to it if it is open already.
+*Open library file* (on a linked library's folder) opens the library in a tab
+of its own, or switches to it if it is open already. *Open in library file* (on
+a linked network or record type, or the read-only strip above a linked
+network's canvas) does the same and then activates that network or record type
+in the library's tab.
 
 When you switch to a design that links a library you have just saved in
 another tab, the change is picked up as part of the switch, and reported the
@@ -175,7 +177,7 @@ A structure design consists of node networks. The list of node networks in the c
 
 ![](../atomCAD_images/node_networks_list_panel.png)
 
-Node networks in a design can be browsed in the **List** tab or in the **Tree** tab. Especially in larger designs or in reusable part libraries it is beneficial to organize your node networks in a namespace hierarchy. The hierarchy can be created by simply naming your node networks using the '.' character as a separator.
+Node networks in a design can be browsed in the **List** tab or in the **Tree** tab. The panel opens on the **Tree** tab; whichever tab you pick stays selected when you switch between open documents. Especially in larger designs or in reusable part libraries it is beneficial to organize your node networks in a namespace hierarchy. The hierarchy can be created by simply naming your node networks using the '.' character as a separator.
 
 ![](../atomCAD_images/node_networks_tree_panel.png)
 

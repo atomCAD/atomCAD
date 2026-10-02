@@ -17,8 +17,9 @@
 ///   [unlinkLibraryInteractive], [refreshLibraryInteractive],
 ///   [refreshAllDependenciesInteractive], [renameLibraryAliasInteractive],
 ///   [makeLibraryLocalInteractive].
-/// - [openDesignInTab], [openLibraryFile] — open a file in a tab (or switch
-///   to the tab that has it), showing what the open reported.
+/// - [openDesignInTab], [openLibraryFile], [openInLibraryFile] — open a file
+///   in a tab (or switch to the tab that has it), showing what the open
+///   reported; the last one also activates a linked item in the library.
 library;
 
 import 'package:file_picker/file_picker.dart';
@@ -810,14 +811,60 @@ Future<void> openLibraryFile(BuildContext context, StructureDesignerModel model,
   await openDesignInTab(context, model, mount.absPath);
 }
 
+/// *Open in library file*: [openLibraryFile], then activates [name] — a
+/// linked network or record def under [mount], as the host names it — in the
+/// library, where it is editable. The library knows it by its name relative
+/// to [mount] (`libs.demolib.common.foo` is `foo` in `common.cnnd`).
+///
+/// The row or banner that asked is keyed by the document id, so it is gone
+/// once the tab switches; everything after the open is shown on the
+/// navigator's context, which outlives the switch.
+Future<void> openInLibraryFile(BuildContext context,
+    StructureDesignerModel model, APILibraryMount mount, String name,
+    {bool isRecordDef = false}) async {
+  final stableContext = Navigator.of(context, rootNavigator: true).context;
+  final prefix = '${mount.mountPath}.';
+  if (!name.startsWith(prefix)) {
+    await openLibraryFile(stableContext, model, mount);
+    return;
+  }
+  final localName = name.substring(prefix.length);
+  final opened = await openDesignInTab(stableContext, model, mount.absPath);
+  if (!opened) return;
+  final exists = isRecordDef
+      ? model.recordTypeDefNames.contains(localName)
+      : model.nodeNetworkNames.any((n) => n.name == localName);
+  if (!exists) {
+    // The host's copy is older than the file on disk (renamed or deleted
+    // since the last refresh).
+    if (stableContext.mounted) {
+      final what = isRecordDef ? 'record type' : 'network';
+      showErrorSnackBar(
+          stableContext, '${mount.fileName} has no $what named $localName');
+    }
+    return;
+  }
+  if (isRecordDef) {
+    model.setActiveRecordDef(localName);
+  } else {
+    model.setActiveNodeNetwork(localName);
+  }
+}
+
 /// The strip above the canvas of a linked network: where it comes from, that
 /// it is read-only, and the way to edit it (§5.3).
 class LinkedNetworkBanner extends StatelessWidget {
   final StructureDesignerModel model;
   final APILibraryMount mount;
 
+  /// The linked network shown on the canvas, as the host names it.
+  final String networkName;
+
   const LinkedNetworkBanner(
-      {super.key, required this.model, required this.mount});
+      {super.key,
+      required this.model,
+      required this.mount,
+      required this.networkName});
 
   @override
   Widget build(BuildContext context) {
@@ -837,8 +884,9 @@ class LinkedNetworkBanner extends StatelessWidget {
             ),
           ),
           TextButton(
-            onPressed: () => openLibraryFile(context, model, mount),
-            child: const Text('Open library file'),
+            onPressed: () =>
+                openInLibraryFile(context, model, mount, networkName),
+            child: const Text('Open in library file'),
           ),
         ],
       ),
@@ -851,6 +899,7 @@ class LinkedNetworkBanner extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 const String libMenuOpenFile = 'lib_open_file';
+const String libMenuOpenInFile = 'lib_open_in_file';
 const String libMenuDuplicateLocal = 'lib_duplicate_local';
 const String libMenuRefresh = 'lib_refresh';
 const String libMenuChangeFile = 'lib_change_file';
@@ -865,19 +914,25 @@ bool _hasContent(APILibraryMount mount) =>
     mount.status == APIMountStatus.changedOnDisk;
 
 /// The menu of a row under a mount (§3): no Rename / Move / Delete / New.
-/// [isNetwork] adds *Duplicate into my file*; [mountFolder] is set when the
-/// row *is* the mount folder, which adds *Refresh* and, for a direct link,
-/// *Change file…*, *Rename alias…*, *Make local copy* (when loaded) and
-/// *Unlink*.
+/// A network or record def row ([isNetwork], [isRecordDef]) offers *Open in
+/// library file*, a folder row *Open library file*. [isNetwork] adds
+/// *Duplicate into my file*; [mountFolder] is set when the row *is* the mount
+/// folder, which adds *Refresh* and, for a direct link, *Change file…*,
+/// *Rename alias…*, *Make local copy* (when loaded) and *Unlink*.
 List<PopupMenuEntry<String>> linkedRowMenuItems({
   required bool isNetwork,
+  bool isRecordDef = false,
   APILibraryMount? mountFolder,
 }) {
   return [
     if (mountFolder != null)
       const PopupMenuItem(value: libMenuRefresh, child: Text('Refresh')),
-    const PopupMenuItem(
-        value: libMenuOpenFile, child: Text('Open library file')),
+    if (isNetwork || isRecordDef)
+      const PopupMenuItem(
+          value: libMenuOpenInFile, child: Text('Open in library file'))
+    else
+      const PopupMenuItem(
+          value: libMenuOpenFile, child: Text('Open library file')),
     if (isNetwork)
       const PopupMenuItem(
           value: libMenuDuplicateLocal, child: Text('Duplicate into my file')),
@@ -903,10 +958,14 @@ bool handleLinkedRowMenuValue(
   String? value, {
   required APILibraryMount mount,
   String? name,
+  bool isRecordDef = false,
 }) {
   switch (value) {
     case libMenuOpenFile:
       openLibraryFile(context, model, mount);
+    case libMenuOpenInFile:
+      if (name == null) return true;
+      openInLibraryFile(context, model, mount, name, isRecordDef: isRecordDef);
     case libMenuDuplicateLocal:
       if (name == null) return true;
       final error = model.duplicateNodeNetwork(name);

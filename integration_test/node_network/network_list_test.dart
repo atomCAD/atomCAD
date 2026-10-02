@@ -126,12 +126,12 @@ void main() {
     testWidgets('Switch between List and Tree tabs', (tester) async {
       await pumpApp(tester, model);
 
-      // Initially on List tab, switch to Tree
-      await tester.tap(find.byKey(TestKeys.networkTreeTab));
+      // Initially on Tree tab, switch to List
+      await tester.tap(find.byKey(TestKeys.networkListTab));
       await tester.pumpAndSettle();
 
-      // Switch back to List
-      await tester.tap(find.byKey(TestKeys.networkListTab));
+      // Switch back to Tree
+      await tester.tap(find.byKey(TestKeys.networkTreeTab));
       await tester.pumpAndSettle();
 
       // Both tabs should still exist
@@ -173,6 +173,10 @@ void main() {
       await tester.tap(find.byKey(TestKeys.addNetworkButton));
       await tester.pumpAndSettle();
       final networkName = model.nodeNetworkView!.name;
+
+      // The panel opens on the Tree tab; list items only exist on the List tab
+      await tester.tap(find.byKey(TestKeys.networkListTab));
+      await tester.pumpAndSettle();
 
       // Verify the network item exists with the expected Key
       expect(TestFinders.networkListItem(networkName), findsOneWidget);

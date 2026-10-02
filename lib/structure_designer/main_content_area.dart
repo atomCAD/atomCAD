@@ -272,7 +272,10 @@ class _MainContentAreaState extends State<MainContentArea> {
         return _keyed(Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            LinkedNetworkBanner(model: model, mount: mount),
+            LinkedNetworkBanner(
+                model: model,
+                mount: mount,
+                networkName: model.nodeNetworkView!.name),
             Expanded(child: tabs),
           ],
         ));

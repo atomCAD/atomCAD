@@ -93,7 +93,12 @@ per-document model.
   would reparent the old editor's `State` across the switch. A widget that
   registers a callback on the model in `initState` must clear it in `dispose`
   only if it is still its own: the new subtree's `initState` runs *before* the
-  old one's `dispose` (see `node_network.dart`).
+  old one's `dispose` (see `node_network.dart`). Two consequences: session UI
+  shown inside such a subtree (the user-types panel's List/Tree tab) is owned
+  by the host and passed in, or it resets on every switch; and an action
+  started from inside one that switches documents (*Open in library file*)
+  must carry on with a context that outlives the switch (the root
+  navigator's), since its own `context` is unmounted by then.
 - **The tab gestures** (`DocumentTabs`) take data and callbacks and are
   unit-tested; the host keeps one instance for its lifetime, because the
   pointer gate is armed at pointer *down* (by the tap, the tab's own pointer is

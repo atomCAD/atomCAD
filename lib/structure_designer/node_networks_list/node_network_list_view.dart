@@ -134,7 +134,8 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
                         ),
                         const PopupMenuDivider(),
                       ],
-                      ...linkedRowMenuItems(isNetwork: isNetwork),
+                      ...linkedRowMenuItems(
+                          isNetwork: isNetwork, isRecordDef: !isNetwork),
                     ],
                   ).then((value) {
                     if (!itemContext.mounted) return;
@@ -148,7 +149,9 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
                       return;
                     }
                     handleLinkedRowMenuValue(itemContext, widget.model, value,
-                        mount: linkedMount, name: entryName);
+                        mount: linkedMount,
+                        name: entryName,
+                        isRecordDef: !isNetwork);
                   });
                   return;
                 }
