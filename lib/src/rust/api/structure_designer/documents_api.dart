@@ -8,7 +8,7 @@ import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'structure_designer_api_types.dart';
 
-// These functions are ignored because they are not marked as `pub`: `no_instance`, `show_active`, `store_outgoing_camera`
+// These functions are ignored because they are not marked as `pub`: `navigate`, `no_instance`, `show_active`, `store_outgoing_camera`
 
 /// The open documents in tab order.
 List<APIDocumentTab> listDocuments() =>
@@ -27,6 +27,31 @@ APIResult newDocument({required bool directEditing}) =>
 APIOpenDocumentResult openDocument({required String filePath}) =>
     RustLib.instance.api
         .crateApiStructureDesignerDocumentsApiOpenDocument(filePath: filePath);
+
+/// *Open in library file*: [`open_document`], then shows `network_name` in the
+/// opened document when it exists there, as one back/forward step.
+APIOpenDocumentResult openDocumentAtNetwork(
+        {required String filePath, required String networkName}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerDocumentsApiOpenDocumentAtNetwork(
+            filePath: filePath, networkName: networkName);
+
+/// *Back*: the previous visited network, in whichever tab it is (the history
+/// is the session's). Nothing to go back to is a successful no-op.
+APIActivateResult navigateBack() =>
+    RustLib.instance.api.crateApiStructureDesignerDocumentsApiNavigateBack();
+
+/// *Forward* (see [`navigate_back`]).
+APIActivateResult navigateForward() =>
+    RustLib.instance.api.crateApiStructureDesignerDocumentsApiNavigateForward();
+
+/// Whether *Back* has somewhere to go.
+bool canNavigateBack() =>
+    RustLib.instance.api.crateApiStructureDesignerDocumentsApiCanNavigateBack();
+
+/// Whether *Forward* has somewhere to go.
+bool canNavigateForward() => RustLib.instance.api
+    .crateApiStructureDesignerDocumentsApiCanNavigateForward();
 
 /// Makes document `id` the active one (the swap of §5.2). Refused during an
 /// open interaction (D4) or for an unknown id.

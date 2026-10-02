@@ -1341,6 +1341,20 @@ class StructureDesignerModel extends ChangeNotifier {
         return result;
       });
 
+  /// *Open in library file*: [openDocument], then shows [networkName] in it
+  /// (when it exists there) — one back/forward step, so *Back* returns to
+  /// where the user came from.
+  Future<APIOpenDocumentResult> openDocumentAtNetwork(
+          String filePath, String networkName) =>
+      withDocumentSwitch(() => documents_api.openDocumentAtNetwork(
+          filePath: filePath, networkName: networkName)).then((result) {
+        if (result.result.success && !result.alreadyOpen) {
+          lastLoadParamIdRepairs = result.paramIdRepairs;
+          lastLoadLibraryReport = result.loadLibraryReport;
+        }
+        return result;
+      });
+
   /// Closes document [id] — no dirty check here, the caller asks first.
   /// Closing the active tab activates its neighbour (whose dependency report
   /// the result carries); closing the last leaves a fresh Untitled tab.
@@ -2498,33 +2512,21 @@ class StructureDesignerModel extends ChangeNotifier {
     return null;
   }
 
-  /// Navigates back in node network history
-  bool navigateBack() {
-    final success = structure_designer_api.navigateBack();
-    if (success) {
-      refreshFromKernel();
-    }
-    return success;
-  }
+  /// *Back* to the previously visited network. The history is the
+  /// session's, so this may switch tabs — hence [withDocumentSwitch]. The
+  /// result carries the activation's library report when it did.
+  Future<APIActivateResult> navigateBack() =>
+      withDocumentSwitch(() => documents_api.navigateBack());
 
-  /// Navigates forward in node network history
-  bool navigateForward() {
-    final success = structure_designer_api.navigateForward();
-    if (success) {
-      refreshFromKernel();
-    }
-    return success;
-  }
+  /// *Forward* (see [navigateBack]).
+  Future<APIActivateResult> navigateForward() =>
+      withDocumentSwitch(() => documents_api.navigateForward());
 
-  /// Checks if we can navigate backward in network history
-  bool canNavigateBack() {
-    return structure_designer_api.canNavigateBack();
-  }
+  /// Whether *Back* has somewhere to go, in any open tab.
+  bool canNavigateBack() => documents_api.canNavigateBack();
 
-  /// Checks if we can navigate forward in network history
-  bool canNavigateForward() {
-    return structure_designer_api.canNavigateForward();
-  }
+  /// Whether *Forward* has somewhere to go, in any open tab.
+  bool canNavigateForward() => documents_api.canNavigateForward();
 
   void setSelectedWire(BigInt sourceNodeId, BigInt sourceOutputPinIndex,
       BigInt destNodeId, BigInt destParamIndex,

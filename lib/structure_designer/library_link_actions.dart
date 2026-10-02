@@ -782,10 +782,15 @@ void showAfterLoadReports(BuildContext context, StructureDesignerModel model) {
 /// of `doc/design_multiple_documents.md`), and shows what the open reported:
 /// a load error, the load's repairs and library report, the activation's
 /// dependency check. Shared by *File > Open…*, *Open Recent* and *Open
-/// library file*. Returns whether [path] is now the active document.
+/// library file*. [network] is shown in the opened document when it exists
+/// there (*Open in library file*). Returns whether [path] is now the active
+/// document.
 Future<bool> openDesignInTab(
-    BuildContext context, StructureDesignerModel model, String path) async {
-  final result = await model.openDocument(path);
+    BuildContext context, StructureDesignerModel model, String path,
+    {String? network}) async {
+  final result = network == null
+      ? await model.openDocument(path)
+      : await model.openDocumentAtNetwork(path, network);
   if (!context.mounted) return result.result.success;
   if (!result.result.success) {
     await showErrorDialog(
@@ -829,7 +834,9 @@ Future<void> openInLibraryFile(BuildContext context,
     return;
   }
   final localName = name.substring(prefix.length);
-  final opened = await openDesignInTab(stableContext, model, mount.absPath);
+  // A network is shown by the open itself, so the history gets one step.
+  final opened = await openDesignInTab(stableContext, model, mount.absPath,
+      network: isRecordDef ? null : localName);
   if (!opened) return;
   final exists = isRecordDef
       ? model.recordTypeDefNames.contains(localName)
@@ -844,10 +851,25 @@ Future<void> openInLibraryFile(BuildContext context,
     }
     return;
   }
-  if (isRecordDef) {
-    model.setActiveRecordDef(localName);
-  } else {
-    model.setActiveNodeNetwork(localName);
+  if (isRecordDef) model.setActiveRecordDef(localName);
+}
+
+/// Shows what a *Back* / *Forward* step reported: a refusal, or the library
+/// report of the tab it led into. The button that asked may be gone by then
+/// (the panel is keyed by the document), so [context] is only used to find
+/// the navigator, whose context outlives the switch.
+Future<void> navigateHistory(BuildContext context, StructureDesignerModel model,
+    {required bool back}) async {
+  final stableContext = Navigator.of(context, rootNavigator: true).context;
+  final result = await (back ? model.navigateBack() : model.navigateForward());
+  if (!stableContext.mounted) return;
+  if (!result.result.success) {
+    showErrorSnackBar(stableContext, result.result.errorMessage);
+    return;
+  }
+  final report = result.libraryReport;
+  if (report != null) {
+    showRefreshReport(stableContext, model, report, quietWhenClean: true);
   }
 }
 

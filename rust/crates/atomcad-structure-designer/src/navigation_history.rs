@@ -1,143 +1,164 @@
-/// Manages navigation history for node networks, similar to back/forward in code IDEs
-pub struct NavigationHistory {
-    /// Stack of visited node network names
-    history: Vec<Option<String>>,
-    /// Current position in the history (index into history vector)
-    current_index: usize,
+//! Back/forward navigation between node networks, like back/forward in a code
+//! IDE.
+//!
+//! The history is the **session's**, not a document's
+//! (`doc/design_multiple_documents.md` §6): every entry names the document it
+//! was recorded in, and *Back* can lead into another tab. The active
+//! `StructureDesigner` holds it and `hand_over_app_state` passes it on at
+//! every switch, so rename/delete upkeep — which only ever happens in the
+//! active document — names that document's id.
+//!
+//! Entries are never validated when recorded. Whether one can still be
+//! visited (its tab is open, its network exists) is the caller's question,
+//! asked through the `usable` predicate at the moment of navigating: an entry
+//! that fails it is stepped over, not removed, since an undo can make it
+//! valid again.
+use crate::document_set::DocumentId;
+
+/// One visited place: a network (or no network) in a document.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NavigationEntry {
+    pub document: DocumentId,
+    pub network: Option<String>,
 }
 
-impl Default for NavigationHistory {
-    fn default() -> Self {
-        Self::new()
+impl NavigationEntry {
+    pub fn new(document: DocumentId, network: Option<String>) -> Self {
+        Self { document, network }
     }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct NavigationHistory {
+    /// The visited places, oldest first. Empty until the first visit.
+    entries: Vec<NavigationEntry>,
+    /// The current place: an index into `entries` (0 while it is empty).
+    index: usize,
 }
 
 impl NavigationHistory {
     pub fn new() -> Self {
-        Self {
-            history: vec![None], // Start with None (no network)
-            current_index: 0,
-        }
+        Self::default()
     }
 
-    /// Records a navigation to a new network
-    /// Truncates forward history if we're not at the end
-    pub fn navigate_to(&mut self, network_name: Option<String>) {
-        // Don't record if we're navigating to the same network
-        if self.history.get(self.current_index) == Some(&network_name) {
+    /// Records a visit. Drops the forward history; a visit to the current
+    /// place records nothing.
+    pub fn navigate_to(&mut self, entry: NavigationEntry) {
+        if self.current() == Some(&entry) {
             return;
         }
-
-        // Special case: if history only contains the initial None entry, replace it
-        // This prevents users from navigating back to a state they never experienced
-        if self.history.len() == 1 && self.history[0].is_none() && self.current_index == 0 {
-            self.history[0] = network_name;
-            return;
+        if !self.entries.is_empty() {
+            self.entries.truncate(self.index + 1);
         }
-
-        // Truncate forward history
-        self.history.truncate(self.current_index + 1);
-
-        // Add new entry
-        self.history.push(network_name);
-        self.current_index += 1;
+        self.entries.push(entry);
+        self.index = self.entries.len() - 1;
     }
 
-    /// Navigates backward in history
-    /// Returns the network name to navigate to, or None if can't go back
-    pub fn navigate_back(&mut self) -> Option<Option<String>> {
-        if !self.can_navigate_back() {
+    /// The current place, `None` before the first visit.
+    pub fn current(&self) -> Option<&NavigationEntry> {
+        self.entries.get(self.index)
+    }
+
+    /// Every entry, oldest first (tests and diagnostics).
+    pub fn entries(&self) -> &[NavigationEntry] {
+        &self.entries
+    }
+
+    /// The index *Back* would move to: the nearest earlier entry that is
+    /// `usable` and differs from the current one.
+    pub fn back_target(&self, usable: impl Fn(&NavigationEntry) -> bool) -> Option<usize> {
+        let current = self.current()?;
+        (0..self.index)
+            .rev()
+            .find(|&i| self.entries[i] != *current && usable(&self.entries[i]))
+    }
+
+    /// The index *Forward* would move to (see [`back_target`](Self::back_target)).
+    pub fn forward_target(&self, usable: impl Fn(&NavigationEntry) -> bool) -> Option<usize> {
+        let current = self.current()?;
+        (self.index + 1..self.entries.len())
+            .find(|&i| self.entries[i] != *current && usable(&self.entries[i]))
+    }
+
+    pub fn can_navigate_back(&self, usable: impl Fn(&NavigationEntry) -> bool) -> bool {
+        self.back_target(usable).is_some()
+    }
+
+    pub fn can_navigate_forward(&self, usable: impl Fn(&NavigationEntry) -> bool) -> bool {
+        self.forward_target(usable).is_some()
+    }
+
+    /// Makes entry `index` the current place, without recording anything.
+    /// Returns it, or `None` (and changes nothing) for an index out of range.
+    pub fn move_to(&mut self, index: usize) -> Option<&NavigationEntry> {
+        if index >= self.entries.len() {
             return None;
         }
-
-        self.current_index -= 1;
-        Some(self.history[self.current_index].clone())
+        self.index = index;
+        self.entries.get(index)
     }
 
-    /// Navigates forward in history
-    /// Returns the network name to navigate to, or None if can't go forward
-    pub fn navigate_forward(&mut self) -> Option<Option<String>> {
-        if !self.can_navigate_forward() {
-            return None;
-        }
-
-        self.current_index += 1;
-        Some(self.history[self.current_index].clone())
+    /// Moves back to [`back_target`](Self::back_target) and returns it.
+    pub fn navigate_back(
+        &mut self,
+        usable: impl Fn(&NavigationEntry) -> bool,
+    ) -> Option<NavigationEntry> {
+        let target = self.back_target(usable)?;
+        self.move_to(target).cloned()
     }
 
-    /// Checks if we can navigate backward
-    pub fn can_navigate_back(&self) -> bool {
-        self.current_index > 0
+    /// Moves forward to [`forward_target`](Self::forward_target) and returns it.
+    pub fn navigate_forward(
+        &mut self,
+        usable: impl Fn(&NavigationEntry) -> bool,
+    ) -> Option<NavigationEntry> {
+        let target = self.forward_target(usable)?;
+        self.move_to(target).cloned()
     }
 
-    /// Checks if we can navigate forward
-    pub fn can_navigate_forward(&self) -> bool {
-        self.current_index < self.history.len() - 1
-    }
-
-    /// Gets the current network name
-    pub fn current(&self) -> Option<String> {
-        self.history.get(self.current_index).cloned().flatten()
-    }
-
-    /// Clears the navigation history and resets to initial state
-    /// Used when loading a new design file
+    /// Forgets everything.
     pub fn clear(&mut self) {
-        self.history = vec![None];
-        self.current_index = 0;
+        self.entries.clear();
+        self.index = 0;
     }
 
-    /// Updates all occurrences of an old network name to a new name
-    pub fn rename_network(&mut self, old_name: &str, new_name: &str) {
-        for entry in &mut self.history {
-            if let Some(name) = entry
-                && name == old_name
-            {
-                *entry = Some(new_name.to_string());
+    /// Follows a rename of network `old_name` of `document`.
+    pub fn rename_network(&mut self, document: DocumentId, old_name: &str, new_name: &str) {
+        for entry in &mut self.entries {
+            if entry.document == document && entry.network.as_deref() == Some(old_name) {
+                entry.network = Some(new_name.to_string());
             }
         }
     }
 
-    /// Removes all occurrences of a deleted network from history
-    /// Adjusts current_index if necessary
-    pub fn remove_network(&mut self, network_name: &str) {
-        // Track if current position is being removed
-        let current_being_removed = match &self.history[self.current_index] {
-            Some(name) => name == network_name,
-            None => false,
-        };
+    /// Forgets the visits to network `network_name` of `document`, which was
+    /// deleted.
+    pub fn remove_network(&mut self, document: DocumentId, network_name: &str) {
+        self.retain(|e| !(e.document == document && e.network.as_deref() == Some(network_name)));
+    }
 
-        // Filter out the deleted network
-        let mut new_history = Vec::new();
-        let mut new_index = self.current_index;
+    /// Forgets every visit to `document`: its tab was closed, or its content
+    /// replaced in place.
+    pub fn remove_document(&mut self, document: DocumentId) {
+        self.retain(|e| e.document != document);
+    }
 
-        for (i, entry) in self.history.iter().enumerate() {
-            let should_keep = match entry {
-                Some(name) => name != network_name,
-                None => true, // Keep None entries
-            };
-
-            if should_keep {
-                new_history.push(entry.clone());
-            } else {
-                // This entry is being removed
-                if i < self.current_index {
-                    // Entry before current position - decrement index
-                    new_index = new_index.saturating_sub(1);
-                }
+    /// Keeps the entries `keep` accepts. The current place stays current when
+    /// kept; otherwise the nearest kept entry before it becomes current (the
+    /// first one when there is none). Neighbours that became equal are merged,
+    /// so *Back* never steps to where it already is.
+    fn retain(&mut self, keep: impl Fn(&NavigationEntry) -> bool) {
+        let mut kept: Vec<NavigationEntry> = Vec::with_capacity(self.entries.len());
+        let mut new_index = 0;
+        for (i, entry) in self.entries.drain(..).enumerate() {
+            if keep(&entry) && kept.last() != Some(&entry) {
+                kept.push(entry);
+            }
+            if i == self.index {
+                new_index = kept.len().saturating_sub(1);
             }
         }
-
-        // Ensure we have at least one entry (None)
-        if new_history.is_empty() {
-            new_history.push(None);
-            new_index = 0;
-        } else if current_being_removed {
-            // Current position was removed, clamp index to valid range
-            new_index = new_index.min(new_history.len() - 1);
-        }
-
-        self.history = new_history;
-        self.current_index = new_index;
+        self.entries = kept;
+        self.index = new_index;
     }
 }

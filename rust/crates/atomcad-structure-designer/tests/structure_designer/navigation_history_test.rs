@@ -1,265 +1,274 @@
-use atomcad_structure_designer::navigation_history::NavigationHistory;
+//! `NavigationHistory` on its own: the session's back/forward list, whose
+//! entries name a document and a network. Cross-tab behaviour through
+//! `DocumentSet` is in `document_navigation_test.rs`.
+
+use atomcad_structure_designer::document_set::DocumentId;
+use atomcad_structure_designer::navigation_history::{NavigationEntry, NavigationHistory};
+
+const A: DocumentId = DocumentId(1);
+const B: DocumentId = DocumentId(2);
+
+fn at(document: DocumentId, network: &str) -> NavigationEntry {
+    NavigationEntry::new(document, Some(network.to_string()))
+}
+
+fn any(_: &NavigationEntry) -> bool {
+    true
+}
+
+fn visit(history: &mut NavigationHistory, document: DocumentId, network: &str) {
+    history.navigate_to(at(document, network));
+}
+
+/// The networks of `document` in history order.
+fn names(history: &NavigationHistory) -> Vec<String> {
+    history
+        .entries()
+        .iter()
+        .map(|e| format!("{}:{}", e.document, e.network.as_deref().unwrap_or("-")))
+        .collect()
+}
 
 #[test]
-fn test_initial_state() {
+fn starts_empty() {
     let history = NavigationHistory::new();
     assert_eq!(history.current(), None);
-    assert!(!history.can_navigate_back());
-    assert!(!history.can_navigate_forward());
+    assert!(history.entries().is_empty());
+    assert!(!history.can_navigate_back(any));
+    assert!(!history.can_navigate_forward(any));
 }
 
 #[test]
-fn test_basic_navigation() {
+fn the_first_visit_has_nothing_behind_it() {
     let mut history = NavigationHistory::new();
+    visit(&mut history, A, "N1");
+    assert_eq!(history.current(), Some(&at(A, "N1")));
+    assert!(!history.can_navigate_back(any));
 
-    // First navigation replaces initial None, so can't navigate back
-    history.navigate_to(Some("Network1".to_string()));
-    assert_eq!(history.current(), Some("Network1".to_string()));
-    assert!(!history.can_navigate_back()); // Changed: initial None was replaced
-    assert!(!history.can_navigate_forward());
-
-    // Second navigation adds to history, now we can navigate back
-    history.navigate_to(Some("Network2".to_string()));
-    assert_eq!(history.current(), Some("Network2".to_string()));
-    assert!(history.can_navigate_back());
-    assert!(!history.can_navigate_forward());
+    visit(&mut history, A, "N2");
+    assert!(history.can_navigate_back(any));
+    assert!(!history.can_navigate_forward(any));
 }
 
 #[test]
-fn test_back_forward() {
+fn back_and_forward_walk_the_visits() {
     let mut history = NavigationHistory::new();
+    visit(&mut history, A, "N1");
+    visit(&mut history, A, "N2");
+    visit(&mut history, B, "N3");
 
-    history.navigate_to(Some("Network1".to_string()));
-    history.navigate_to(Some("Network2".to_string()));
-    history.navigate_to(Some("Network3".to_string()));
+    assert_eq!(history.navigate_back(any), Some(at(A, "N2")));
+    assert_eq!(history.navigate_back(any), Some(at(A, "N1")));
+    assert_eq!(history.navigate_back(any), None, "nothing before the first");
+    assert_eq!(history.current(), Some(&at(A, "N1")));
 
-    // Go back twice
-    assert_eq!(history.navigate_back(), Some(Some("Network2".to_string())));
-    assert_eq!(history.current(), Some("Network2".to_string()));
-
-    assert_eq!(history.navigate_back(), Some(Some("Network1".to_string())));
-    assert_eq!(history.current(), Some("Network1".to_string()));
-
-    // Can't go back further (initial None was replaced)
-    assert!(!history.can_navigate_back());
-
-    // Go forward
+    assert_eq!(history.navigate_forward(any), Some(at(A, "N2")));
+    assert_eq!(history.navigate_forward(any), Some(at(B, "N3")));
+    assert_eq!(history.navigate_forward(any), None);
     assert_eq!(
-        history.navigate_forward(),
-        Some(Some("Network2".to_string()))
+        names(&history),
+        ["1:N1", "1:N2", "2:N3"],
+        "moving records nothing"
     );
+}
+
+#[test]
+fn a_visit_after_going_back_drops_the_forward_history() {
+    let mut history = NavigationHistory::new();
+    visit(&mut history, A, "N1");
+    visit(&mut history, B, "N2");
+    visit(&mut history, A, "N3");
+    history.navigate_back(any);
+    history.navigate_back(any);
+
+    visit(&mut history, B, "X");
+    assert!(!history.can_navigate_forward(any));
+    assert_eq!(names(&history), ["1:N1", "2:X"]);
+}
+
+#[test]
+fn a_visit_to_the_current_place_records_nothing() {
+    let mut history = NavigationHistory::new();
+    visit(&mut history, A, "N1");
+    visit(&mut history, A, "N1");
+    assert_eq!(names(&history), ["1:N1"]);
+
+    // The same network name in another document is another place.
+    visit(&mut history, B, "N1");
+    assert_eq!(names(&history), ["1:N1", "2:N1"]);
+}
+
+#[test]
+fn unusable_entries_are_stepped_over_not_removed() {
+    let mut history = NavigationHistory::new();
+    visit(&mut history, A, "N1");
+    visit(&mut history, B, "gone");
+    visit(&mut history, A, "N3");
+    let usable = |e: &NavigationEntry| e.network.as_deref() != Some("gone");
+
+    assert_eq!(history.back_target(usable), Some(0));
+    assert_eq!(history.navigate_back(usable), Some(at(A, "N1")));
+    assert_eq!(history.navigate_forward(usable), Some(at(A, "N3")));
     assert_eq!(
-        history.navigate_forward(),
-        Some(Some("Network3".to_string()))
+        names(&history),
+        ["1:N1", "2:gone", "1:N3"],
+        "kept for an undo"
     );
-    assert!(!history.can_navigate_forward());
+
+    // With every earlier entry unusable there is no Back.
+    assert!(!history.can_navigate_back(|e| e.document == A && e.network.as_deref() == Some("N3")));
 }
 
 #[test]
-fn test_truncate_forward_history() {
+fn entries_equal_to_the_current_place_are_stepped_over() {
     let mut history = NavigationHistory::new();
-
-    history.navigate_to(Some("Network1".to_string()));
-    history.navigate_to(Some("Network2".to_string()));
-    history.navigate_to(Some("Network3".to_string()));
-
-    // Go back twice
-    history.navigate_back();
-    history.navigate_back();
-    assert_eq!(history.current(), Some("Network1".to_string()));
-
-    // Navigate to a new network - should truncate forward history
-    history.navigate_to(Some("NetworkX".to_string()));
-    assert_eq!(history.current(), Some("NetworkX".to_string()));
-    assert!(!history.can_navigate_forward());
-
-    // Network2 and Network3 should be gone, can only go back to Network1
-    history.navigate_back();
-    assert_eq!(history.current(), Some("Network1".to_string()));
-    assert!(!history.can_navigate_back()); // At the beginning (initial None was replaced)
+    visit(&mut history, A, "N1");
+    visit(&mut history, B, "gone");
+    visit(&mut history, A, "N1");
+    // "gone" is unusable, so the only earlier usable entry is where we are.
+    let usable = |e: &NavigationEntry| e.network.as_deref() != Some("gone");
+    assert!(!history.can_navigate_back(usable), "Back must visibly move");
 }
 
 #[test]
-fn test_no_duplicate_consecutive_entries() {
+fn move_to_out_of_range_changes_nothing() {
     let mut history = NavigationHistory::new();
-
-    history.navigate_to(Some("Network1".to_string()));
-    history.navigate_to(Some("Network1".to_string())); // Should not add duplicate
-
-    // History should only have 1 entry: Network1 (initial None was replaced)
-    assert!(!history.can_navigate_back()); // Can't go back (only one entry)
-    assert_eq!(history.current(), Some("Network1".to_string()));
+    visit(&mut history, A, "N1");
+    assert_eq!(history.move_to(5), None);
+    assert_eq!(history.current(), Some(&at(A, "N1")));
 }
 
 #[test]
-fn test_rename_network() {
+fn a_rename_follows_only_its_own_document() {
     let mut history = NavigationHistory::new();
+    visit(&mut history, A, "Physics");
+    visit(&mut history, B, "Physics");
+    visit(&mut history, A, "Math");
+    visit(&mut history, A, "Physics");
 
-    history.navigate_to(Some("Physics".to_string()));
-    history.navigate_to(Some("Math".to_string()));
-    history.navigate_to(Some("Physics".to_string())); // Navigate back to Physics
-
-    // Current is Physics, history contains: Physics, Math, Physics (initial None was replaced)
-    assert_eq!(history.current(), Some("Physics".to_string()));
-
-    // Rename Physics to Mechanics
-    history.rename_network("Physics", "Mechanics");
-
-    // Current should now be Mechanics
-    assert_eq!(history.current(), Some("Mechanics".to_string()));
-
-    // Navigate through history to verify all occurrences were renamed
-    history.navigate_back();
-    assert_eq!(history.current(), Some("Math".to_string()));
-
-    history.navigate_back();
-    assert_eq!(history.current(), Some("Mechanics".to_string())); // Was Physics
-
-    // Can't navigate back further (at the beginning)
-    assert!(!history.can_navigate_back());
+    history.rename_network(A, "Physics", "Mechanics");
+    assert_eq!(
+        names(&history),
+        ["1:Mechanics", "2:Physics", "1:Math", "1:Mechanics"]
+    );
+    assert_eq!(history.current(), Some(&at(A, "Mechanics")));
 }
 
 #[test]
-fn test_remove_network_not_current() {
+fn removing_a_network_not_current() {
     let mut history = NavigationHistory::new();
+    visit(&mut history, A, "Physics");
+    visit(&mut history, A, "Math");
+    visit(&mut history, A, "Chemistry");
+    history.navigate_back(any);
 
-    history.navigate_to(Some("Physics".to_string()));
-    history.navigate_to(Some("Math".to_string()));
-    history.navigate_to(Some("Chemistry".to_string()));
-
-    // Go back to Math
-    history.navigate_back();
-    assert_eq!(history.current(), Some("Math".to_string()));
-
-    // Remove Chemistry (which is in forward history)
-    history.remove_network("Chemistry");
-
-    // Current should still be Math
-    assert_eq!(history.current(), Some("Math".to_string()));
-
-    // Should not be able to navigate forward to Chemistry anymore
-    assert!(!history.can_navigate_forward());
-
-    // Can still navigate back
-    history.navigate_back();
-    assert_eq!(history.current(), Some("Physics".to_string()));
+    history.remove_network(A, "Chemistry");
+    assert_eq!(history.current(), Some(&at(A, "Math")));
+    assert!(!history.can_navigate_forward(any));
+    assert_eq!(history.navigate_back(any), Some(at(A, "Physics")));
 }
 
 #[test]
-fn test_remove_network_current() {
+fn removing_the_current_network_makes_the_previous_one_current() {
     let mut history = NavigationHistory::new();
+    visit(&mut history, A, "Physics");
+    visit(&mut history, A, "Math");
+    visit(&mut history, A, "Chemistry");
+    history.navigate_back(any); // at Math, Chemistry ahead
 
-    history.navigate_to(Some("Physics".to_string()));
-    history.navigate_to(Some("Math".to_string()));
-    history.navigate_to(Some("Chemistry".to_string()));
-
-    // Current is Chemistry
-    assert_eq!(history.current(), Some("Chemistry".to_string()));
-
-    // Remove the current network
-    history.remove_network("Chemistry");
-
-    // Current should now be Math (the previous entry)
-    assert_eq!(history.current(), Some("Math".to_string()));
-
-    // Should still be able to navigate backward
-    assert!(history.can_navigate_back());
-    history.navigate_back();
-    assert_eq!(history.current(), Some("Physics".to_string()));
+    history.remove_network(A, "Math");
+    assert_eq!(history.current(), Some(&at(A, "Physics")));
+    assert_eq!(history.navigate_forward(any), Some(at(A, "Chemistry")));
 }
 
 #[test]
-fn test_remove_network_multiple_occurrences() {
+fn removing_the_first_current_entry_keeps_the_next_one() {
     let mut history = NavigationHistory::new();
+    visit(&mut history, A, "Physics");
+    visit(&mut history, A, "Math");
+    history.navigate_back(any);
 
-    history.navigate_to(Some("Physics".to_string()));
-    history.navigate_to(Some("Math".to_string()));
-    history.navigate_to(Some("Physics".to_string()));
-    history.navigate_to(Some("Chemistry".to_string()));
-
-    // History: Physics, Math, Physics, Chemistry (initial None was replaced)
-    // Current: Chemistry
-
-    history.remove_network("Physics");
-
-    // History should now be: Math, Chemistry
-    // Current should still be Chemistry
-    assert_eq!(history.current(), Some("Chemistry".to_string()));
-
-    history.navigate_back();
-    assert_eq!(history.current(), Some("Math".to_string()));
-
-    // Can't navigate back further (at the beginning)
-    assert!(!history.can_navigate_back());
+    history.remove_network(A, "Physics");
+    assert_eq!(history.current(), Some(&at(A, "Math")));
+    assert!(!history.can_navigate_back(any));
 }
 
 #[test]
-fn test_remove_all_networks_leaves_none() {
+fn removing_a_network_is_scoped_to_its_document() {
     let mut history = NavigationHistory::new();
+    visit(&mut history, A, "Main");
+    visit(&mut history, B, "Main");
+    visit(&mut history, A, "Other");
 
-    history.navigate_to(Some("Physics".to_string()));
-    history.navigate_to(Some("Physics".to_string()));
-    history.navigate_to(Some("Physics".to_string()));
+    history.remove_network(B, "Main");
+    assert_eq!(names(&history), ["1:Main", "1:Other"]);
+}
 
-    // Remove all Physics entries
-    history.remove_network("Physics");
+#[test]
+fn removal_merges_neighbours_that_became_equal() {
+    let mut history = NavigationHistory::new();
+    visit(&mut history, A, "Physics");
+    visit(&mut history, A, "Math");
+    visit(&mut history, A, "Physics");
+    visit(&mut history, A, "Chemistry");
 
-    // Should be left with just None
+    history.remove_network(A, "Math");
+    assert_eq!(names(&history), ["1:Physics", "1:Chemistry"]);
+    assert_eq!(history.current(), Some(&at(A, "Chemistry")));
+    assert_eq!(history.navigate_back(any), Some(at(A, "Physics")));
+    assert!(!history.can_navigate_back(any));
+}
+
+#[test]
+fn removing_every_entry_leaves_an_empty_history() {
+    let mut history = NavigationHistory::new();
+    visit(&mut history, A, "Physics");
+    visit(&mut history, B, "Physics");
+    history.remove_document(A);
+    history.remove_document(B);
     assert_eq!(history.current(), None);
-    assert!(!history.can_navigate_back());
-    assert!(!history.can_navigate_forward());
+    assert!(!history.can_navigate_back(any));
+    assert!(!history.can_navigate_forward(any));
+
+    visit(&mut history, A, "Again");
+    assert_eq!(names(&history), ["1:Again"]);
 }
 
 #[test]
-fn test_clear() {
+fn removing_a_document_forgets_all_its_visits() {
     let mut history = NavigationHistory::new();
+    visit(&mut history, A, "N1");
+    visit(&mut history, B, "M1");
+    visit(&mut history, A, "N2");
+    visit(&mut history, B, "M2");
+    history.navigate_back(any); // at A:N2
 
-    // Build up some history
-    history.navigate_to(Some("Physics".to_string()));
-    history.navigate_to(Some("Math".to_string()));
-    history.navigate_to(Some("Chemistry".to_string()));
+    history.remove_document(B);
+    assert_eq!(names(&history), ["1:N1", "1:N2"]);
+    assert_eq!(history.current(), Some(&at(A, "N2")));
+    assert!(!history.can_navigate_forward(any));
+}
 
-    // Go back to create forward history too
-    history.navigate_back();
-    assert_eq!(history.current(), Some("Math".to_string()));
-    assert!(history.can_navigate_back());
-    assert!(history.can_navigate_forward());
+#[test]
+fn a_visit_without_a_network_is_a_place_too() {
+    let mut history = NavigationHistory::new();
+    visit(&mut history, A, "N1");
+    history.navigate_to(NavigationEntry::new(B, None));
+    assert_eq!(history.navigate_back(any), Some(at(A, "N1")));
+    assert_eq!(
+        history.navigate_forward(any),
+        Some(NavigationEntry::new(B, None))
+    );
+}
 
-    // Clear should reset to initial state
+#[test]
+fn clear_forgets_everything() {
+    let mut history = NavigationHistory::new();
+    visit(&mut history, A, "N1");
+    visit(&mut history, B, "N2");
+    history.navigate_back(any);
     history.clear();
-
-    // Should be back to initial state
     assert_eq!(history.current(), None);
-    assert!(!history.can_navigate_back());
-    assert!(!history.can_navigate_forward());
-
-    // Should be able to start navigating again
-    // First navigation replaces initial None, so can't navigate back yet
-    history.navigate_to(Some("NewNetwork".to_string()));
-    assert_eq!(history.current(), Some("NewNetwork".to_string()));
-    assert!(!history.can_navigate_back()); // Changed: initial None was replaced
-}
-
-#[test]
-fn test_initial_none_replacement() {
-    let mut history = NavigationHistory::new();
-
-    // Initial state has one None entry
-    assert_eq!(history.current(), None);
-    assert!(!history.can_navigate_back());
-
-    // First navigation should REPLACE the initial None, not append to it
-    history.navigate_to(Some("FirstNetwork".to_string()));
-    assert_eq!(history.current(), Some("FirstNetwork".to_string()));
-    assert!(!history.can_navigate_back()); // Can't go back to a state we never experienced
-
-    // Second navigation should now append normally
-    history.navigate_to(Some("SecondNetwork".to_string()));
-    assert_eq!(history.current(), Some("SecondNetwork".to_string()));
-    assert!(history.can_navigate_back()); // Now we can go back to FirstNetwork
-
-    // Verify we go back to FirstNetwork, not None
-    history.navigate_back();
-    assert_eq!(history.current(), Some("FirstNetwork".to_string()));
-    assert!(!history.can_navigate_back()); // At the beginning of history
+    assert!(!history.can_navigate_back(any));
+    assert!(!history.can_navigate_forward(any));
 }

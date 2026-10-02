@@ -485,7 +485,7 @@ D1); `document_set.rs` keeps the parked ones and swaps them into the active
 slot. Each field is either **document state** (stays with its document) or
 **app state** (follows the session across a switch: preferences, the print
 log, refresh profiles, the eval toggles, the gadget pick context, the
-clipboard).
+clipboard, the back/forward history).
 
 **A new field on `StructureDesigner` needs a side in `hand_over_app_state`.**
 That function destructures `self` exhaustively, so the build fails until you
@@ -493,6 +493,13 @@ choose; §6 of the design document is the reference table. App state is cloned
 or moved there; document state is named with `_`. If the field is a
 recomputable cache, also drop it in `park`; if it is a new `pending_*`
 interaction, it belongs in `open_interaction` (which refuses a switch, D4).
+
+**The back/forward history is the session's** (D12): entries are
+`(DocumentId, network)`, so upkeep on a rename or delete passes
+`self.document_id`. Every activation records a visit through
+`DocumentSet::activate_at`; a new way of changing the active document must go
+through it (or call `record_navigation`), and only a back/forward step may
+swap without recording (`swap_in`).
 
 **The clipboard is the session's, so its names belong to its source**
 (`clipboard.rs`, D9). It records which document it was copied in and, for

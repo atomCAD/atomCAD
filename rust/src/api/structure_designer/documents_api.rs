@@ -122,6 +122,100 @@ pub fn open_document(file_path: String) -> APIOpenDocumentResult {
     }
 }
 
+/// *Open in library file*: [`open_document`], then shows `network_name` in the
+/// opened document when it exists there, as one back/forward step.
+#[flutter_rust_bridge::frb(sync)]
+pub fn open_document_at_network(file_path: String, network_name: String) -> APIOpenDocumentResult {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                store_outgoing_camera(cad_instance);
+                let outcome = cad_instance.documents.open_at(
+                    &mut cad_instance.structure_designer,
+                    &file_path,
+                    Some(&network_name),
+                );
+                if outcome.is_ok() {
+                    show_active(cad_instance);
+                    atomcad_structure_designer::recent_files::add_recent_file(&file_path);
+                }
+                open_document_result_view(outcome, &cad_instance.structure_designer)
+            },
+            failed_open_document_result("CAD instance not available".to_string()),
+        )
+    }
+}
+
+/// *Back*: the previous visited network, in whichever tab it is (the history
+/// is the session's). Nothing to go back to is a successful no-op.
+#[flutter_rust_bridge::frb(sync)]
+pub fn navigate_back() -> APIActivateResult {
+    navigate(true)
+}
+
+/// *Forward* (see [`navigate_back`]).
+#[flutter_rust_bridge::frb(sync)]
+pub fn navigate_forward() -> APIActivateResult {
+    navigate(false)
+}
+
+fn navigate(back: bool) -> APIActivateResult {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                store_outgoing_camera(cad_instance);
+                let active = &mut cad_instance.structure_designer;
+                let outcome = if back {
+                    cad_instance.documents.navigate_back(active)
+                } else {
+                    cad_instance.documents.navigate_forward(active)
+                };
+                if outcome.as_ref().is_ok_and(|o| o.moved) {
+                    show_active(cad_instance);
+                }
+                activate_result_view(
+                    outcome.map(|o| o.activation_report),
+                    &cad_instance.structure_designer,
+                )
+            },
+            APIActivateResult {
+                result: no_instance(),
+                library_report: None,
+            },
+        )
+    }
+}
+
+/// Whether *Back* has somewhere to go.
+#[flutter_rust_bridge::frb(sync)]
+pub fn can_navigate_back() -> bool {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                cad_instance
+                    .documents
+                    .can_navigate_back(&cad_instance.structure_designer)
+            },
+            false,
+        )
+    }
+}
+
+/// Whether *Forward* has somewhere to go.
+#[flutter_rust_bridge::frb(sync)]
+pub fn can_navigate_forward() -> bool {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                cad_instance
+                    .documents
+                    .can_navigate_forward(&cad_instance.structure_designer)
+            },
+            false,
+        )
+    }
+}
+
 /// Makes document `id` the active one (the swap of §5.2). Refused during an
 /// open interaction (D4) or for an unknown id.
 #[flutter_rust_bridge::frb(sync)]

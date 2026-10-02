@@ -12,7 +12,7 @@ active.
 
 **Terms.** A **document** is one open `.cnnd` file (or an unsaved *Untitled*
 design) together with everything that belongs to editing it: its registry,
-undo stack, dirty flag, file path, navigation history. The **active**
+undo stack, dirty flag, file path. The **active**
 document is the one shown in the editor and viewport; every other document is
 **parked**. **App state** is state that belongs to the application session,
 not to any document (preferences, the console, the profiler switches). In Rust
@@ -52,7 +52,8 @@ users of every other CAD and code editor expect.
 Goals:
 
 - Several documents open at once, each with its own undo history, dirty flag,
-  file path, camera and node-canvas view, selection and navigation history.
+  file path, camera and node-canvas view and selection. (Back/forward
+  navigation was per document too until D12 made it the session's.)
 - *Open library file* opens the library in a tab (or switches to it).
 - A library saved in one tab is picked up by every document that links it, by
   the existing change detection (library linking D7) — no new mechanism.
@@ -493,6 +494,36 @@ The decisions:
   another. Session UI (the menu bar, the tabs, the console, the camera control
   panel) sits outside that subtree.
 
+### D12 — One back/forward history; *Back* can change tabs
+
+*Added after P4.* Navigation was first per document (kept on park). That made
+*Open in library file* and *Find Usages* one-way trips: in the library's tab,
+*Back* walked the library's own old history and could never return to the
+host network the user came from. Code editors settle this the same way:
+VS Code's *Go Back* is global across editors by default
+(`workbench.editor.navigationScope`), as are JetBrains' and Visual Studio's.
+
+- The history is **app state**, moved by `hand_over_app_state` like the
+  clipboard. An entry is `(DocumentId, network)`. Rename/delete upkeep stays
+  where it was — only the active document is ever edited — and names
+  `self.document_id`.
+- **What is a step:** activating a network (as before), and every activation
+  of a document — tab click, `Ctrl+Tab`, open, new, closing the active tab —
+  which records the incoming document's active network.
+  `DocumentSet::activate_at` / `open_at` show a given network as part of the
+  switch, so *Open in library file* is one step, not two.
+- **Moving** is `DocumentSet::navigate_back` / `navigate_forward`: an entry in
+  another document goes through the ordinary swap (D4 refusal, the library
+  check and its report) and records nothing. Flutter routes it through
+  `withDocumentSwitch` (D11).
+- **Stale entries are stepped over, not removed.** An entry is visitable while
+  its document is open and its network exists. Undo cannot reach the history,
+  so an undone rename leaves an entry naming a network that is gone — which
+  another undo could bring back.
+- **Upkeep:** closing a tab drops its entries; content replaced in place (D8)
+  drops the old id's entries and records the new content. Reopening a closed
+  file from the history (VS Code does) is not done.
+
 ## 5. Architecture
 
 ### 5.1 Rust — `atomcad-structure-designer`
@@ -756,8 +787,8 @@ encodes this table; §4 D2 makes the compiler keep it complete.
 | `is_dirty`, `file_path` | document | kept |
 | `pending_changes` | document | overwritten by `mark_full_refresh` on activation |
 | `cli_top_level_parameters` | document | headless only; always `None` in the GUI |
-| `navigation_history` | document | kept |
 | `clipboard` | **app** (from P2; document in P1) | moved (D9); its origin says which document it came from |
+| `navigation_history` | **app** (D12; document before) | moved; each entry names its document |
 | `document_id` (new) | document | kept |
 | `undo_stack` | document | kept |
 | `pending_move`, `pending_atom_edit_drag`, `pending_gadget_drag`, `pending_comment_edit`, `pending_zone_resize`, `pending_node_data_drag` | document | must be `None` — guaranteed by D4 |

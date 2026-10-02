@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_cad/common/draggable_dialog.dart';
 import 'package:flutter_cad/common/error_display.dart';
 import 'package:flutter_cad/structure_designer/identifier_validation.dart';
+import 'package:flutter_cad/structure_designer/library_link_actions.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/namespace_utils.dart';
 import 'package:flutter_cad/structure_designer/node_networks_list/new_folder_dialog.dart';
@@ -44,8 +45,9 @@ class NodeNetworksActionBar extends StatelessWidget {
             message: 'Go Back',
             child: IconButton(
               key: const Key('back_button'),
-              onPressed:
-                  model.canNavigateBack() ? () => model.navigateBack() : null,
+              onPressed: model.canNavigateBack()
+                  ? () => navigateHistory(context, model, back: true)
+                  : null,
               icon: Icon(
                 Icons.arrow_back,
                 size: 20,
@@ -60,7 +62,7 @@ class NodeNetworksActionBar extends StatelessWidget {
             child: IconButton(
               key: const Key('forward_button'),
               onPressed: model.canNavigateForward()
-                  ? () => model.navigateForward()
+                  ? () => navigateHistory(context, model, back: false)
                   : null,
               icon: Icon(
                 Icons.arrow_forward,

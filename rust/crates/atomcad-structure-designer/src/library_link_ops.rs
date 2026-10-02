@@ -376,7 +376,8 @@ impl StructureDesigner {
         );
         for old in &renamed {
             if let Some(new) = library_links::reprefixed(old, alias, new_alias) {
-                self.navigation_history.rename_network(old, &new);
+                self.navigation_history
+                    .rename_network(self.document_id, old, &new);
             }
         }
         self.edit_own_clipboard(|clipboard| {

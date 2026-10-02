@@ -271,6 +271,11 @@ The **Node Networks** panel includes browser-like navigation buttons at the top:
 
 These buttons are grayed out when navigation in that direction is unavailable.
 
+The history covers every open [tab](#document-tabs), not just the current one:
+switching tabs is a step of its own, and *Back* can take you into another tab
+— for example back to your design after *Open in library file* took you into
+the library. Closing a tab removes its places from the history.
+
 Each node network stores its own camera settings (position, orientation, orthographic mode). When you switch between node networks, the camera automatically restores to the saved view for that network. Camera settings are saved as part of the `.cnnd` file.
 
 ## Node network editor panel

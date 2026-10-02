@@ -13,6 +13,9 @@ mod node_dependency_analysis_tests;
 #[path = "structure_designer/navigation_history_test.rs"]
 mod navigation_history_test;
 
+#[path = "structure_designer/document_navigation_test.rs"]
+mod document_navigation_test;
+
 #[path = "structure_designer/last_directories_test.rs"]
 mod last_directories_test;
 

@@ -562,7 +562,8 @@ impl StructureDesigner {
         }
         for name in linked_before {
             if !self.node_type_registry.node_networks.contains_key(&name) {
-                self.navigation_history.remove_network(&name);
+                self.navigation_history
+                    .remove_network(self.document_id, &name);
             }
         }
 

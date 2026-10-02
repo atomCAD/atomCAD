@@ -17,6 +17,7 @@ use crate::camera_settings::CameraSettings;
 use crate::file_dependencies::{canonical_or_lexical, path_key};
 use crate::library_links::RealFs;
 use crate::library_refresh::RefreshReport;
+use crate::navigation_history::NavigationEntry;
 use crate::structure_designer::StructureDesigner;
 use std::collections::HashMap;
 use std::fmt;
@@ -107,6 +108,16 @@ pub struct OpenOutcome {
     pub activation_report: Option<RefreshReport>,
 }
 
+/// What a *Back* / *Forward* step did.
+#[derive(Debug, Default)]
+pub struct NavigateOutcome {
+    /// False when there was nowhere to go; nothing changed then.
+    pub moved: bool,
+    /// The step led into another tab, and this is what that activation's
+    /// dependency check did (as for [`DocumentSet::activate`]).
+    pub activation_report: Option<RefreshReport>,
+}
+
 /// One row of the tab list: the domain twin of `APIDocumentTab`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DocumentTab {
@@ -143,6 +154,10 @@ impl DocumentSet {
     pub fn new(active: &mut StructureDesigner) -> Self {
         let first = DocumentId(1);
         active.document_id = first;
+        // Anything visited before the set existed was recorded under the
+        // headless id.
+        active.navigation_history.clear();
+        active.record_navigation();
         DocumentSet {
             active: first,
             order: vec![first],
@@ -216,14 +231,48 @@ impl DocumentSet {
     /// split a borrow of `node_type_registry` inside one block, and the
     /// evaluation memo's address-based keys point into the heap and are
     /// rebuilt every pass.
+    ///
+    /// The incoming document's active network is recorded as a visit in the
+    /// session's back/forward history.
     pub fn activate(
         &mut self,
         active: &mut StructureDesigner,
         target: DocumentId,
     ) -> Result<Option<RefreshReport>, SwitchRefused> {
-        if target == self.active {
-            return Ok(None);
+        self.activate_at(active, target, None)
+    }
+
+    /// [`activate`](Self::activate), then shows `network` in `target` when
+    /// given and it exists there — recorded as **one** visit, so *Back* from
+    /// it leads to where the user came from, not to the network `target`
+    /// happened to have open (*Open in library file*).
+    pub fn activate_at(
+        &mut self,
+        active: &mut StructureDesigner,
+        target: DocumentId,
+        network: Option<&str>,
+    ) -> Result<Option<RefreshReport>, SwitchRefused> {
+        let report = if target == self.active {
+            None
+        } else {
+            self.swap_in(active, target)?
+        };
+        if let Some(name) = network
+            && active.can_show_network(Some(name))
+        {
+            active.show_navigated_network(Some(name.to_string()));
         }
+        active.record_navigation();
+        Ok(report)
+    }
+
+    /// The swap of [`activate`](Self::activate), recording nothing: a
+    /// back/forward step moves the history itself.
+    fn swap_in(
+        &mut self,
+        active: &mut StructureDesigner,
+        target: DocumentId,
+    ) -> Result<Option<RefreshReport>, SwitchRefused> {
         Self::refuse_during_interaction(active)?;
         let mut incoming = self
             .parked
@@ -293,10 +342,21 @@ impl DocumentSet {
         active: &mut StructureDesigner,
         path: &str,
     ) -> Result<OpenOutcome, OpenError> {
+        self.open_at(active, path, None)
+    }
+
+    /// [`open`](Self::open), showing `network` in the opened document as
+    /// [`activate_at`](Self::activate_at) does.
+    pub fn open_at(
+        &mut self,
+        active: &mut StructureDesigner,
+        path: &str,
+        network: Option<&str>,
+    ) -> Result<OpenOutcome, OpenError> {
         Self::refuse_during_interaction(active)?;
         let key = document_path_key(path);
         if let Some(id) = self.find_by_path(active, &key) {
-            let activation_report = self.activate(active, id)?;
+            let activation_report = self.activate_at(active, id, network)?;
             return Ok(OpenOutcome {
                 id,
                 already_open: true,
@@ -314,9 +374,9 @@ impl DocumentSet {
 
         let replaced = active.is_pristine().then_some(self.active);
         let id = self.insert(designer, self.active);
-        let activation_report = self.activate(active, id)?;
+        let activation_report = self.activate_at(active, id, network)?;
         if let Some(pristine) = replaced {
-            self.drop_parked(pristine);
+            self.drop_parked(active, pristine);
         }
         Ok(OpenOutcome {
             id,
@@ -327,9 +387,16 @@ impl DocumentSet {
         })
     }
 
-    fn drop_parked(&mut self, id: DocumentId) -> Option<StructureDesigner> {
+    /// Drops a parked document, and its visits from the history `active`
+    /// holds.
+    fn drop_parked(
+        &mut self,
+        active: &mut StructureDesigner,
+        id: DocumentId,
+    ) -> Option<StructureDesigner> {
         let designer = self.parked.remove(&id)?;
         self.order.retain(|d| *d != id);
+        active.navigation_history.remove_document(id);
         Some(designer)
     }
 
@@ -345,7 +412,7 @@ impl DocumentSet {
         id: DocumentId,
     ) -> Result<Option<RefreshReport>, SwitchRefused> {
         if id != self.active {
-            return match self.drop_parked(id) {
+            return match self.drop_parked(active, id) {
                 Some(_) => Ok(None),
                 None => Err(SwitchRefused::UnknownDocument(id)),
             };
@@ -362,19 +429,106 @@ impl DocumentSet {
             None => self.insert(Self::new_designer(true), id),
         };
         let report = self.activate(active, neighbour)?;
-        self.drop_parked(id);
+        self.drop_parked(active, id);
         Ok(report)
     }
 
     /// Gives the active designer a new id after its content was replaced in
     /// place (D8), so an id never names two different documents.
+    ///
+    /// The old id's visits are forgotten (they name content that is gone) and
+    /// the new content is recorded as a visit.
     pub fn renumber_active(&mut self, active: &mut StructureDesigner) {
         let new_id = self.fresh_id();
         if let Some(slot) = self.order.iter_mut().find(|d| **d == self.active) {
             *slot = new_id;
         }
+        active.navigation_history.remove_document(self.active);
         active.document_id = new_id;
         self.active = new_id;
+        active.record_navigation();
+    }
+
+    // ===== Back / forward across tabs =====
+    //
+    // The history is the session's (`navigation_history.rs`) and lives in the
+    // active designer. An entry can be visited while its document is open
+    // and its network exists there; others are stepped over.
+
+    /// Whether the history entry `entry` can be visited now.
+    fn navigable(&self, active: &StructureDesigner, entry: &NavigationEntry) -> bool {
+        self.designer(active, entry.document)
+            .is_some_and(|d| d.can_show_network(entry.network.as_deref()))
+    }
+
+    pub fn can_navigate_back(&self, active: &StructureDesigner) -> bool {
+        active
+            .navigation_history
+            .can_navigate_back(|e| self.navigable(active, e))
+    }
+
+    pub fn can_navigate_forward(&self, active: &StructureDesigner) -> bool {
+        active
+            .navigation_history
+            .can_navigate_forward(|e| self.navigable(active, e))
+    }
+
+    /// *Back*: to the previous visited network, switching tabs when it is in
+    /// another document. Refused during an open interaction (D4) only when it
+    /// would switch. Like [`activate`](Self::activate), it does not evaluate:
+    /// the caller refreshes and applies the active network's camera.
+    pub fn navigate_back(
+        &mut self,
+        active: &mut StructureDesigner,
+    ) -> Result<NavigateOutcome, SwitchRefused> {
+        let target = active
+            .navigation_history
+            .back_target(|e| self.navigable(active, e));
+        self.navigate_to_index(active, target)
+    }
+
+    /// *Forward* (see [`navigate_back`](Self::navigate_back)).
+    pub fn navigate_forward(
+        &mut self,
+        active: &mut StructureDesigner,
+    ) -> Result<NavigateOutcome, SwitchRefused> {
+        let target = active
+            .navigation_history
+            .forward_target(|e| self.navigable(active, e));
+        self.navigate_to_index(active, target)
+    }
+
+    fn navigate_to_index(
+        &mut self,
+        active: &mut StructureDesigner,
+        target: Option<usize>,
+    ) -> Result<NavigateOutcome, SwitchRefused> {
+        let Some(index) = target else {
+            return Ok(NavigateOutcome::default());
+        };
+        let document = active.navigation_history.entries()[index].document;
+        let mut activation_report = None;
+        if document != self.active {
+            // Checked before the history moves, so a refusal changes nothing.
+            Self::refuse_during_interaction(active)?;
+            active.navigation_history.move_to(index);
+            // The history travels with the swap (`hand_over_app_state`).
+            activation_report = self.swap_in(active, document)?;
+        } else {
+            active.navigation_history.move_to(index);
+        }
+        // The activation's dependency check may have removed the network
+        // since `navigable` said yes; the document's own network stays then.
+        if let Some(entry) = active.navigation_history.current().cloned()
+            && entry.document == self.active
+            && active.can_show_network(entry.network.as_deref())
+        {
+            active.show_navigated_network(entry.network);
+        }
+        Ok(NavigateOutcome {
+            moved: true,
+            activation_report,
+        })
     }
 
     /// The parked document that has `path` open, if any — the D5 refusal of

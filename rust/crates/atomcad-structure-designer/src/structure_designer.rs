@@ -7,7 +7,7 @@ use super::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement, PrintLogEntry,
 };
 use super::evaluator::network_result::NetworkResult;
-use super::navigation_history::NavigationHistory;
+use super::navigation_history::{NavigationEntry, NavigationHistory};
 use super::network_validator::{NetworkValidationResult, validate_network};
 use super::node_display_policy_resolver::NodeDisplayPolicyResolver;
 use super::node_network::{
@@ -2422,7 +2422,8 @@ impl StructureDesigner {
         );
 
         // Navigation history (not available in UndoContext)
-        self.navigation_history.rename_network(old_name, new_name);
+        self.navigation_history
+            .rename_network(self.document_id, old_name, new_name);
 
         // The clipboard's references, zone bodies included — a copied body's
         // instance of the renamed network must be updated or it dangles on
@@ -2682,7 +2683,7 @@ impl StructureDesigner {
         for r in &renames {
             if r.kind == UserTypeKind::Network {
                 self.navigation_history
-                    .rename_network(&r.old_name, &r.new_name);
+                    .rename_network(self.document_id, &r.old_name, &r.new_name);
             }
         }
 
@@ -2841,7 +2842,8 @@ impl StructureDesigner {
         }
 
         // Remove the deleted network from navigation history
-        self.navigation_history.remove_network(network_name);
+        self.navigation_history
+            .remove_network(self.document_id, network_name);
 
         // Clear the clipboard if it references the deleted network.
         self.edit_own_clipboard(|clipboard| {
@@ -3183,7 +3185,8 @@ impl StructureDesigner {
 
         // Remove networks from navigation history.
         for name in &affected_networks {
-            self.navigation_history.remove_network(name);
+            self.navigation_history
+                .remove_network(self.document_id, name);
         }
 
         // Clear the clipboard if it references any deleted network or record.
@@ -5972,8 +5975,10 @@ impl StructureDesigner {
         &mut self,
         node_network_name: Option<String>,
     ) -> Option<CameraSettings> {
-        self.navigation_history
-            .navigate_to(node_network_name.clone());
+        self.navigation_history.navigate_to(NavigationEntry::new(
+            self.document_id,
+            node_network_name.clone(),
+        ));
         self.active_node_network_name = node_network_name;
         // Activating a network leaves the schema editor: the active record def
         // is backend-owned (see `doc/design_hierarchical_records.md` §8), so we
@@ -6069,8 +6074,9 @@ impl StructureDesigner {
         self.is_dirty = false;
         self.direct_editing_mode = false;
 
-        // Clear navigation history
-        self.navigation_history.clear();
+        // This document's visits name the old content. The history is the
+        // session's, so other documents' visits stay.
+        self.navigation_history.remove_document(self.document_id);
 
         // Clear undo stack — new project has no history
         self.undo_stack.clear();
@@ -6227,46 +6233,79 @@ impl StructureDesigner {
         Ok(())
     }
 
-    /// Navigates back in network history
-    /// Returns (success, camera_settings) where success indicates if navigation occurred
-    /// and camera_settings contains the camera settings to apply (if any)
+    /// The session's back/forward history (see `navigation_history.rs`).
+    pub fn navigation_history(&self) -> &NavigationHistory {
+        &self.navigation_history
+    }
+
+    /// Records the current place — this document and its active network — as
+    /// a visit. `DocumentSet` calls it when a document becomes active.
+    pub fn record_navigation(&mut self) {
+        self.navigation_history.navigate_to(NavigationEntry::new(
+            self.document_id,
+            self.active_node_network_name.clone(),
+        ));
+    }
+
+    /// Whether this document can show `network`: no network at all, or one
+    /// that exists.
+    pub fn can_show_network(&self, network: Option<&str>) -> bool {
+        network.is_none_or(|name| self.node_type_registry.node_networks.contains_key(name))
+    }
+
+    /// Shows `network` as a back/forward step: like
+    /// [`set_active_node_network_name`](Self::set_active_node_network_name),
+    /// but records no visit — the history has already moved. Returns the
+    /// camera settings to apply.
+    pub fn show_navigated_network(&mut self, network: Option<String>) -> Option<CameraSettings> {
+        self.active_node_network_name = network;
+        self.active_record_def_name = None;
+        self.mark_full_refresh();
+        // As in `set_active_node_network_name`: repair before the first frame.
+        self.validate_active_network();
+        self.active_network_camera_settings()
+    }
+
+    /// Whether `entry` can be visited without a `DocumentSet`: it is in this
+    /// document and its network exists. With tabs, `DocumentSet` asks the same
+    /// of every open document.
+    fn navigable_here(&self, entry: &NavigationEntry) -> bool {
+        entry.document == self.document_id && self.can_show_network(entry.network.as_deref())
+    }
+
+    /// *Back* within this document (headless mode, tests; the GUI goes
+    /// through `DocumentSet::navigate_back`, which can change tabs). Returns
+    /// (moved, camera settings to apply).
     pub fn navigate_back(&mut self) -> (bool, Option<CameraSettings>) {
-        if let Some(network_name) = self.navigation_history.navigate_back() {
-            self.active_node_network_name = network_name;
-            self.mark_full_refresh();
-            let camera_settings = self
-                .get_active_node_network()
-                .and_then(|n| n.camera_settings.clone());
-            (true, camera_settings)
-        } else {
-            (false, None)
-        }
+        let target = self
+            .navigation_history
+            .back_target(|e| self.navigable_here(e));
+        self.navigate_to_index(target)
     }
 
-    /// Navigates forward in network history
-    /// Returns (success, camera_settings) where success indicates if navigation occurred
-    /// and camera_settings contains the camera settings to apply (if any)
+    /// *Forward* within this document (see [`navigate_back`](Self::navigate_back)).
     pub fn navigate_forward(&mut self) -> (bool, Option<CameraSettings>) {
-        if let Some(network_name) = self.navigation_history.navigate_forward() {
-            self.active_node_network_name = network_name;
-            self.mark_full_refresh();
-            let camera_settings = self
-                .get_active_node_network()
-                .and_then(|n| n.camera_settings.clone());
-            (true, camera_settings)
-        } else {
-            (false, None)
-        }
+        let target = self
+            .navigation_history
+            .forward_target(|e| self.navigable_here(e));
+        self.navigate_to_index(target)
     }
 
-    /// Checks if we can navigate backward in network history
+    fn navigate_to_index(&mut self, target: Option<usize>) -> (bool, Option<CameraSettings>) {
+        let Some(entry) = target.and_then(|i| self.navigation_history.move_to(i).cloned()) else {
+            return (false, None);
+        };
+        (true, self.show_navigated_network(entry.network))
+    }
+
     pub fn can_navigate_back(&self) -> bool {
-        self.navigation_history.can_navigate_back()
+        self.navigation_history
+            .can_navigate_back(|e| self.navigable_here(e))
     }
 
-    /// Checks if we can navigate forward in network history
     pub fn can_navigate_forward(&self) -> bool {
-        self.navigation_history.can_navigate_forward()
+        self.navigation_history
+            .can_navigate_forward(|e| self.navigable_here(e))
     }
 }
 
@@ -8190,7 +8229,6 @@ impl StructureDesigner {
             file_path: _,
             pending_changes: _,
             cli_top_level_parameters: _,
-            navigation_history: _,
             undo_stack: _,
             // The open interactions: always `None` here, because every switch
             // is refused while one is open (D4).
@@ -8222,6 +8260,9 @@ impl StructureDesigner {
             // One clipboard per session (D9): copy in one tab, paste in
             // another. Its origin names the document it was copied in.
             clipboard,
+            // One back/forward history per session: *Back* can lead into
+            // another tab. Each entry names its document.
+            navigation_history,
         } = self;
 
         let node_display_prefs_changed =
@@ -8237,6 +8278,7 @@ impl StructureDesigner {
         to.eval_self_check_key_mode = *eval_self_check_key_mode;
         to.eval_memo_enabled = *eval_memo_enabled;
         to.clipboard = clipboard.take();
+        to.navigation_history = std::mem::take(navigation_history);
 
         // What `set_preferences` would have done had `to` been active when the
         // preferences changed. Geometry-visualization changes need nothing:
@@ -9026,8 +9068,9 @@ impl StructureDesigner {
             }
         }
 
-        // Clear navigation history since we're loading a new design file
-        self.navigation_history.clear();
+        // This document's visits name the old content. The history is the
+        // session's, so other documents' visits stay.
+        self.navigation_history.remove_document(self.document_id);
 
         // Eval-error snapshots belong to the previous document — clear them,
         // or a same-named network in the loaded file would inherit ghost
