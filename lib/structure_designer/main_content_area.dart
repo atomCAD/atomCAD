@@ -38,9 +38,13 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_p
 ///   edge, after the properties panel is taken off its right edge — the
 ///   mirror image of the properties dock, as tall as the viewport, with its
 ///   own width divider.
-/// - **Horizontal**: a strip above the network editor; whenever the editor is
-///   not shown (folded, or a direct-editing document), the strip moves to the
-///   top of the viewport instead of disappearing with it.
+/// - **Horizontal**: a strip across the top of this whole area — above the
+///   viewport and the properties panel, and above the network editor too when
+///   it sits beside the viewport. It heads everything that belongs to the
+///   document, so it stays put whether the editor is shown, folded, or absent
+///   (a direct-editing document). It used to sit above the network editor,
+///   where it stacked onto the editor's own Graph/Text tab bar and read as a
+///   list of networks.
 ///
 /// [showDocumentTabs] is false in Presentation Mode, which hides both.
 ///
@@ -123,7 +127,7 @@ class _MainContentAreaState extends State<MainContentArea> {
   bool get _tabsHorizontal =>
       widget.showDocumentTabs &&
       widget.documentTabs != null &&
-      widget.documentTabPlacement == DocumentTabPlacement.aboveNetworkEditor;
+      widget.documentTabPlacement == DocumentTabPlacement.aboveViewport;
 
   /// The vertical tab list and its divider, for the left end of the
   /// viewport's row.
@@ -149,7 +153,8 @@ class _MainContentAreaState extends State<MainContentArea> {
     ];
   }
 
-  /// [child] with the horizontal tab strip on top, when the strip is shown.
+  /// [child] (all of the content) with the horizontal tab strip on top, when
+  /// the strip is shown.
   Widget _withDocumentTabStrip(Widget child) {
     if (!_tabsHorizontal) return child;
     return Column(
@@ -166,83 +171,77 @@ class _MainContentAreaState extends State<MainContentArea> {
 
   @override
   Widget build(BuildContext context) {
+    // The horizontal strip heads everything below it, whatever is shown, so
+    // it never moves (D10).
+    return Expanded(child: _withDocumentTabStrip(_buildContent()));
+  }
+
+  Widget _buildContent() {
     if (widget.directEditingMode) {
-      // No network editor: a horizontal strip sits above the viewport.
-      return Expanded(
-        child: _withDocumentTabStrip(
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              ..._buildDocumentTabListDock(),
-              Expanded(
-                child: StructureDesignerViewport(graphModel: widget.graphModel),
-              ),
-            ],
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ..._buildDocumentTabListDock(),
+          Expanded(
+            child: StructureDesignerViewport(graphModel: widget.graphModel),
           ),
-        ),
+        ],
       );
     }
 
-    return Expanded(
-      child: Consumer<StructureDesignerModel>(
-        builder: (context, model, _) {
-          // Record defs have no per-node properties, so the schema editor
-          // takes the panel's place entirely (it carries its own name header).
-          final isSchemaEditor = model.activeRecordDefName != null;
-          final showNodeData = widget.nodeDataPanelVisible && !isSchemaEditor;
+    return Consumer<StructureDesignerModel>(
+      builder: (context, model, _) {
+        // Record defs have no per-node properties, so the schema editor
+        // takes the panel's place entirely (it carries its own name header).
+        final isSchemaEditor = model.activeRecordDefName != null;
+        final showNodeData = widget.nodeDataPanelVisible && !isSchemaEditor;
 
-          final viewportArea = Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              ..._buildDocumentTabListDock(),
-              Expanded(
-                child: StructureDesignerViewport(graphModel: widget.graphModel),
-              ),
-              if (showNodeData) ...[
-                _buildNodeDataResizeHandle(),
-                _buildNodeDataPanel(model: model),
-              ],
+        final viewportArea = Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ..._buildDocumentTabListDock(),
+            Expanded(
+              child: StructureDesignerViewport(graphModel: widget.graphModel),
+            ),
+            if (showNodeData) ...[
+              _buildNodeDataResizeHandle(),
+              _buildNodeDataPanel(model: model),
             ],
-          );
+          ],
+        );
 
-          if (!widget.networkEditorVisible) {
-            // The strip moves to the viewport rather than disappearing with
-            // the network editor (D10).
-            return _withDocumentTabStrip(viewportArea);
-          }
+        if (!widget.networkEditorVisible) return viewportArea;
 
-          return ResizableContainer(
-            // The key forces a fresh subtree when the orientation flips, and
-            // is what the integration tests look for.
-            key: ValueKey(widget.verticalDivision
-                ? 'vertical_layout'
-                : 'horizontal_layout'),
-            direction:
-                widget.verticalDivision ? Axis.vertical : Axis.horizontal,
-            children: [
-              // Viewport + properties panel - initially 65% of height/width.
-              ResizableChild(
-                size: ResizableSize.ratio(0.65, min: 200),
-                // Custom divider that appears below/beside this panel
-                divider: ResizableDivider(
-                  thickness: 8,
-                  color: Colors.grey.shade300,
-                  cursor: widget.verticalDivision
-                      ? SystemMouseCursors.resizeRow
-                      : SystemMouseCursors.resizeColumn,
-                ),
-                child: viewportArea,
+        return ResizableContainer(
+          // The key forces a fresh subtree when the orientation flips, and
+          // is what the integration tests look for.
+          key: ValueKey(widget.verticalDivision
+              ? 'vertical_layout'
+              : 'horizontal_layout'),
+          direction: widget.verticalDivision ? Axis.vertical : Axis.horizontal,
+          children: [
+            // Viewport + properties panel - initially 65% of height/width.
+            ResizableChild(
+              size: ResizableSize.ratio(0.65, min: 200),
+              // Custom divider that appears below/beside this panel
+              divider: ResizableDivider(
+                thickness: 8,
+                color: Colors.grey.shade300,
+                cursor: widget.verticalDivision
+                    ? SystemMouseCursors.resizeRow
+                    : SystemMouseCursors.resizeColumn,
               ),
-              // Node network editor - initially 35% of height/width.
-              ResizableChild(
-                size: ResizableSize.ratio(0.35,
-                    min: widget.verticalDivision ? 100 : 300),
-                child: _withDocumentTabStrip(_buildNetworkEditor()),
-              ),
-            ],
-          );
-        },
-      ),
+              child: viewportArea,
+            ),
+            // Node network editor - initially 35% of height/width.
+            ResizableChild(
+              size: ResizableSize.ratio(0.35,
+                  min: widget.verticalDivision ? 100 : 300),
+              child: _buildNetworkEditor(),
+            ),
+          ],
+        );
+      },
     );
   }
 

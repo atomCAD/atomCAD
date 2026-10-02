@@ -4,8 +4,8 @@
 ///
 /// - [DocumentTabList] — vertical, one document per row, docked to the
 ///   viewport's left edge (the default placement);
-/// - [DocumentTabStrip] — horizontal, like a browser's, above the node
-///   network editor (or above the viewport while the editor is not shown).
+/// - [DocumentTabStrip] — horizontal, like a browser's, across the top of
+///   the main content area (above the viewport).
 ///
 /// Both offer the same gestures: click to activate, the close button or a
 /// middle click to close, drag to reorder, and a tooltip with the full path.

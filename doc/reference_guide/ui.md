@@ -80,14 +80,18 @@ same way as when the application notices it on its own. See
 **Quitting** with unsaved changes in several tabs asks once, listing every
 design that would lose changes.
 
-Where the tabs are shown is a preference — see [Interface](#interface):
+Where the tabs are shown is a preference — see [Interface](#interface) — which
+*View > Switch to Horizontal Document Tabs* / *Switch to Vertical Document Tabs*
+also flips:
 
 - **Vertical, left of the viewport** (the default): a list, one design per row,
   docked to the viewport's left edge and as tall as the viewport. Drag the
   divider on its right to change its width.
-- **Horizontal, above the node network**: a strip of tabs like a browser's.
-  While the node network editor is not shown — folded with `Ctrl+2`, or in a
-  Direct Editing Mode design — the strip sits on top of the viewport instead.
+- **Horizontal, above the viewport**: a strip of tabs like a browser's, across
+  the top of everything right of the left sidebar — the viewport, the
+  properties panel, and the node network editor too when it sits beside the
+  viewport. It stays in the same place whether the network editor is shown,
+  folded with `Ctrl+2`, or absent in a Direct Editing Mode design.
 
 *Presentation Mode* (`Ctrl+0`) hides the tabs too; `Ctrl+Tab` still switches.
 
@@ -106,7 +110,9 @@ panel grows the way it does.
    tall as the viewport is.
 4. The vertical **document tab list** (in its default placement) is taken off
    last, from the viewport's left edge — the mirror image of the properties
-   panel, and as tall as the viewport.
+   panel, and as tall as the viewport. In the horizontal placement the strip
+   is instead taken off the top of everything right of the sidebar, before
+   step 2.
 
 Drag any of the dividers to change the split. The divider between the viewport
 and the properties panel sets the panel's width, the one between the tab list
@@ -1083,6 +1089,7 @@ Used for loading and saving a design, exporting a design to .xyz or .mol, undo/r
 - *Edit > Auto-Layout Network*: Automatically arranges nodes in the current node network for a clean, readable layout, using whichever algorithm is selected under *Auto-layout algorithm* in [Preferences](#preferences-dialog). **This is the only thing that rearranges a whole network, and it only runs when you pick it** — see [Where nodes end up](node_networks.md#where-nodes-end-up-your-arrangement-and-what-may-move-it). It reaches inside higher-order nodes too: each body is arranged in its own right, deepest first, so an expanded `map` ends up neither overlapping its neighbours nor too small for what it holds. Turn on *Auto-Layout keeps manually placed nodes in place* in Preferences to have it leave your own placements alone. The view is refitted around the result. This is a single undoable step — if you don't like the new arrangement, `Ctrl+Z` puts every node back where it was. Comment notes are not laid out as graph nodes: each is placed afterwards, an anchored one beside what it documents and an unanchored one keeping its position relative to the drawing — see [Comment notes and automatic layout](nodes/annotation.md#comment).
 - *Edit > Copy all problems*: Copies every problem in the design — across all networks — to the clipboard as a plain-text report, for pasting into a bug report. Greyed out when the design has no problems. Available in both modes. See [Where is the error?](#node-networks-panel) above.
 - *View > Switch to Horizontal Layout* / *View > Switch to Vertical Layout*: Changes the orientation of the node network editor panel — stacked below the viewport, or beside it. The node properties panel stays on the viewport's right edge either way. Available in Node Network Mode only.
+- *View > Switch to Horizontal Document Tabs* / *View > Switch to Vertical Document Tabs*: Moves the [document tabs](#document-tabs) between their two placements. This is the *Document tabs* preference, so the choice is remembered.
 - *View > Hide Left Panel* / *View > Show Left Panel* (**Ctrl+1**), *View > Hide Node Network* / *View > Show Node Network* (**Ctrl+2**), *View > Hide Properties Panel* / *View > Show Properties Panel* (**Ctrl+3**): Folds one panel away and brings it back. See [Folding panels away](#folding-panels-away). The network and properties entries are available in Node Network Mode only.
 - *View > Presentation Mode* (**Ctrl+0**): Folds all three panels away at once, leaving only the viewport. Picking it again puts back the arrangement you had. See [Folding panels away](#folding-panels-away).
 - *View > Node titles: names* (**Ctrl+Shift+N**): Switches node title bars between the node's type and the node's own name, and back. Ticked while names are shown. The same setting as the *Node titles* group in the [Display Preferences panel](#node-titles); see there for what it does to each kind of node. Available in Node Network Mode only.
@@ -1138,7 +1145,7 @@ The panel's **Isosurface extraction** group governs how an [`isosurface`](nodes/
 
 | Setting | Description |
 |---------|-------------|
-| Document tabs | Where the [document tabs](#document-tabs) are shown: *Vertical, left of the viewport* (the default) or *Horizontal, above the node network*. Takes effect immediately. |
+| Document tabs | Where the [document tabs](#document-tabs) are shown: *Vertical, left of the viewport* (the default) or *Horizontal, above the viewport*. Also on the *View* menu. Takes effect immediately. |
 
 ### Layout
 

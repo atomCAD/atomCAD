@@ -190,8 +190,8 @@ enum DocumentTabPlacement {
   /// A vertical list docked to the viewport's left edge (the default).
   leftOfViewport,
 
-  /// A horizontal strip above the node network editor.
-  aboveNetworkEditor,
+  /// A horizontal strip across the top of the main content area.
+  aboveViewport,
   ;
 
   static Future<DocumentTabPlacement> default_() => RustLib.instance.api

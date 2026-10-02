@@ -107,8 +107,8 @@ fn document_tab_placement_converts_both_ways() {
             domain::DocumentTabPlacement::LeftOfViewport,
         ),
         (
-            DocumentTabPlacement::AboveNetworkEditor,
-            domain::DocumentTabPlacement::AboveNetworkEditor,
+            DocumentTabPlacement::AboveViewport,
+            domain::DocumentTabPlacement::AboveViewport,
         ),
     ] {
         let prefs = InterfacePreferences {
@@ -122,14 +122,14 @@ fn document_tab_placement_converts_both_ways() {
 
     let whole = StructureDesignerPreferences {
         interface_preferences: InterfacePreferences {
-            document_tab_placement: DocumentTabPlacement::AboveNetworkEditor,
+            document_tab_placement: DocumentTabPlacement::AboveViewport,
         },
         ..Default::default()
     };
     let down: domain::StructureDesignerPreferences = (&whole).into();
     assert_eq!(
         down.interface_preferences.document_tab_placement,
-        domain::DocumentTabPlacement::AboveNetworkEditor
+        domain::DocumentTabPlacement::AboveViewport
     );
 
     assert_eq!(

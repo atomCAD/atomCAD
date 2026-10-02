@@ -19871,7 +19871,7 @@ impl SseDecode
         let mut inner = <i32>::sse_decode(deserializer);
         return match inner {
             0 => crate::api::structure_designer::structure_designer_preferences::DocumentTabPlacement::LeftOfViewport,
-1 => crate::api::structure_designer::structure_designer_preferences::DocumentTabPlacement::AboveNetworkEditor,
+1 => crate::api::structure_designer::structure_designer_preferences::DocumentTabPlacement::AboveViewport,
             _ => unreachable!("Invalid variant for DocumentTabPlacement: {}", inner),
         };
     }
@@ -30629,7 +30629,7 @@ impl flutter_rust_bridge::IntoDart
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         match self {
             Self::LeftOfViewport => 0.into_dart(),
-            Self::AboveNetworkEditor => 1.into_dart(),
+            Self::AboveViewport => 1.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -34598,7 +34598,7 @@ impl SseEncode
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(match self {crate::api::structure_designer::structure_designer_preferences::DocumentTabPlacement::LeftOfViewport => { 0 }
-crate::api::structure_designer::structure_designer_preferences::DocumentTabPlacement::AboveNetworkEditor => { 1 }
+crate::api::structure_designer::structure_designer_preferences::DocumentTabPlacement::AboveViewport => { 1 }
  _ => { unimplemented!(""); }}, serializer);
     }
 }

@@ -687,8 +687,9 @@ pub enum DocumentTabPlacement {
     /// A vertical list docked to the viewport's left edge (the default).
     #[default]
     LeftOfViewport,
-    /// A horizontal strip above the node network editor.
-    AboveNetworkEditor,
+    /// A horizontal strip across the top of the main content area.
+    #[serde(alias = "AboveNetworkEditor")]
+    AboveViewport,
 }
 
 /// Preferences about the application window. Twin of the domain struct.
@@ -1110,9 +1111,7 @@ impl From<&DocumentTabPlacement> for domain::DocumentTabPlacement {
     fn from(v: &DocumentTabPlacement) -> Self {
         match v {
             DocumentTabPlacement::LeftOfViewport => domain::DocumentTabPlacement::LeftOfViewport,
-            DocumentTabPlacement::AboveNetworkEditor => {
-                domain::DocumentTabPlacement::AboveNetworkEditor
-            }
+            DocumentTabPlacement::AboveViewport => domain::DocumentTabPlacement::AboveViewport,
         }
     }
 }
@@ -1121,9 +1120,7 @@ impl From<&domain::DocumentTabPlacement> for DocumentTabPlacement {
     fn from(v: &domain::DocumentTabPlacement) -> Self {
         match v {
             domain::DocumentTabPlacement::LeftOfViewport => DocumentTabPlacement::LeftOfViewport,
-            domain::DocumentTabPlacement::AboveNetworkEditor => {
-                DocumentTabPlacement::AboveNetworkEditor
-            }
+            domain::DocumentTabPlacement::AboveViewport => DocumentTabPlacement::AboveViewport,
         }
     }
 }

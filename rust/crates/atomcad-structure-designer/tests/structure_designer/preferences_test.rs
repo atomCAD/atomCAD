@@ -484,7 +484,7 @@ fn test_non_default_values_roundtrip() {
             eval_memo_cache_mb: 2048,
         },
         interface_preferences: InterfacePreferences {
-            document_tab_placement: DocumentTabPlacement::AboveNetworkEditor,
+            document_tab_placement: DocumentTabPlacement::AboveViewport,
         },
     };
 
@@ -952,7 +952,7 @@ fn test_node_title_mode_defaults_to_type() {
 fn document_tab_placement_roundtrips_and_defaults_to_left_of_viewport() {
     let prefs = StructureDesignerPreferences {
         interface_preferences: InterfacePreferences {
-            document_tab_placement: DocumentTabPlacement::AboveNetworkEditor,
+            document_tab_placement: DocumentTabPlacement::AboveViewport,
         },
         ..Default::default()
     };
@@ -960,7 +960,7 @@ fn document_tab_placement_roundtrips_and_defaults_to_left_of_viewport() {
     let loaded: StructureDesignerPreferences = serde_json::from_str(&json).unwrap();
     assert_eq!(
         loaded.interface_preferences.document_tab_placement,
-        DocumentTabPlacement::AboveNetworkEditor
+        DocumentTabPlacement::AboveViewport
     );
 
     // An older file: no `interface_preferences` key at all.
@@ -976,5 +976,19 @@ fn document_tab_placement_roundtrips_and_defaults_to_left_of_viewport() {
     assert_eq!(
         empty.interface_preferences.document_tab_placement,
         DocumentTabPlacement::LeftOfViewport
+    );
+}
+
+/// The horizontal placement was saved as `AboveNetworkEditor` before the strip
+/// moved above the viewport; such a file must still load as horizontal.
+#[test]
+fn document_tab_placement_reads_the_old_horizontal_name() {
+    let old: StructureDesignerPreferences = serde_json::from_str(
+        r#"{"interface_preferences": {"document_tab_placement": "AboveNetworkEditor"}}"#,
+    )
+    .unwrap();
+    assert_eq!(
+        old.interface_preferences.document_tab_placement,
+        DocumentTabPlacement::AboveViewport
     );
 }

@@ -810,6 +810,25 @@ class StructureDesignerModel extends ChangeNotifier {
         : NodeTitleMode.name);
   }
 
+  /// Where the document tabs go (`doc/design_multiple_documents.md` D10).
+  /// Reads the persisted default before the first refresh, like
+  /// [nodeTitleMode].
+  DocumentTabPlacement get documentTabPlacement =>
+      preferences?.interfacePreferences.documentTabPlacement ??
+      DocumentTabPlacement.leftOfViewport;
+
+  /// The *View* menu's tab-placement gesture: the same persisted preference
+  /// the Preferences dialog's *Interface* section edits.
+  void toggleDocumentTabPlacement() {
+    final prefs = preferences;
+    if (prefs == null) return;
+    prefs.interfacePreferences.documentTabPlacement =
+        documentTabPlacement == DocumentTabPlacement.leftOfViewport
+            ? DocumentTabPlacement.aboveViewport
+            : DocumentTabPlacement.leftOfViewport;
+    setPreferences(prefs);
+  }
+
   void selectFacetShellFacetByRay(
       vector_math.Vector3 rayStart, vector_math.Vector3 rayDir) {
     facet_shell_api.selectFacetByRay(

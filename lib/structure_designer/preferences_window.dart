@@ -1158,9 +1158,8 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                                 child: Text('Vertical, left of the viewport'),
                               ),
                               DropdownMenuItem(
-                                value: DocumentTabPlacement.aboveNetworkEditor,
-                                child:
-                                    Text('Horizontal, above the node network'),
+                                value: DocumentTabPlacement.aboveViewport,
+                                child: Text('Horizontal, above the viewport'),
                               ),
                             ],
                             onChanged: (value) {

@@ -329,6 +329,18 @@ class _StructureDesignerState extends State<StructureDesigner> {
                                   ? 'Switch to Horizontal Layout'
                                   : 'Switch to Vertical Layout'),
                             ),
+                          // The Preferences dialog's *Interface* setting, one
+                          // click away (persisted, unlike the layout above).
+                          MenuItemButton(
+                            key:
+                                const Key('toggle_document_tab_placement_item'),
+                            onPressed: () =>
+                                graphModel.toggleDocumentTabPlacement(),
+                            child: Text(model.documentTabPlacement ==
+                                    DocumentTabPlacement.leftOfViewport
+                                ? 'Switch to Horizontal Document Tabs'
+                                : 'Switch to Vertical Document Tabs'),
+                          ),
                           const Divider(),
                           // Panel folding. Ordered the way the window nests:
                           // left sidebar, then network editor, then the
@@ -618,11 +630,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
                             networkEditorVisible: _networkEditorVisible,
                             nodeDataPanelVisible: _nodeDataPanelVisible,
                             documentTabs: _buildDocumentTabs(model),
-                            documentTabPlacement: model
-                                    .preferences
-                                    ?.interfacePreferences
-                                    .documentTabPlacement ??
-                                DocumentTabPlacement.leftOfViewport,
+                            documentTabPlacement: model.documentTabPlacement,
                             // Presentation Mode leaves only the viewport.
                             showDocumentTabs: _anyPanelVisible,
                             documentKey: documentId,

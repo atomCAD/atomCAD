@@ -612,8 +612,11 @@ pub enum DocumentTabPlacement {
     /// row. The default (mechadense's request: room for long file names).
     #[default]
     LeftOfViewport,
-    /// A horizontal strip above the node network editor, like a browser's.
-    AboveNetworkEditor,
+    /// A horizontal strip across the top of the main content area (above the
+    /// viewport), like a browser's. Saved as `AboveNetworkEditor` while the
+    /// strip sat above the network editor; the alias keeps those files loading.
+    #[serde(alias = "AboveNetworkEditor")]
+    AboveViewport,
 }
 
 /// Preferences about the application window itself — as opposed to

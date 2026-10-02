@@ -91,8 +91,8 @@ Non-goals (for this design):
     row, docked to the viewport's left edge and as tall as the viewport, the
     mirror image of the properties panel on the viewport's right edge. A
     divider sets its width.
-  - **Horizontal, above the node network editor**: a strip of tabs, like a
-    browser's.
+  - **Horizontal, above the viewport**: a strip of tabs, like a browser's,
+    across the top of the main content area.
 - **File > New** opens a new *Untitled* tab.
 - **File > Open…** and **Open Recent** open the file in a **new tab**, except
   when the active tab is a *pristine* Untitled design (no path, not dirty, empty
@@ -423,18 +423,30 @@ ones:
 - **Vertical**, docked to the viewport's left edge (mechadense's request). Each
   row has room for a long file name, and a design with several libraries open
   does not run out of width.
-- **Horizontal**, above the node network editor, like a browser.
+- **Horizontal**, across the top of the main content area (above the
+  viewport), like a browser.
 
 The default is **vertical**, because mechadense is the main user today.
+
+*Revised after P4.* The horizontal strip first sat above the node network
+editor. In use that was wrong in three ways: it stacked onto the editor's own
+Graph/Text tab bar, so it read as a list of *networks* rather than of whole
+designs; in the middle of the window it looked like a detail, when it is the
+thing the whole layout is arranged under; and it had to jump to the viewport
+whenever the editor was folded or absent. Above the viewport it comes *before*
+the viewport in reading order, as the vertical list does, and never moves.
 
 The setting is a persisted application preference, not view state: it is a
 standing choice, unlike panel folding or the layout orientation, which are
 changed in passing. It lives in a new `InterfacePreferences` group
 (`document_tab_placement: DocumentTabPlacement { LeftOfViewport,
-AboveNetworkEditor }`, `#[serde(default)]` → `LeftOfViewport`). It goes in a
-new group because the existing `LayoutPreferences` is about node-network
-auto-layout, not the window. It is shown in the Preferences dialog under a new
-*Interface* section and takes effect immediately, without a restart.
+AboveViewport }`, `#[serde(default)]` → `LeftOfViewport`; `AboveViewport`
+also reads the earlier name `AboveNetworkEditor` through a serde alias). It
+goes in a new group because the existing `LayoutPreferences` is about
+node-network auto-layout, not the window. It is shown in the Preferences
+dialog under a new *Interface* section, and toggled from the *View* menu
+(*Switch to Horizontal/Vertical Document Tabs*); either takes effect
+immediately, without a restart.
 
 Both placements show the same tabs and offer the same gestures (click, close,
 drag to reorder, middle-click close, tooltip). Only the arrangement differs.
@@ -446,11 +458,12 @@ Rules that follow from the window layout (`doc/reference_guide/ui.md`,
   viewport, so folding the network editor (`Ctrl+2`) makes it full height,
   as it does the properties panel. The width divider is view state, like the
   other dividers.
-- **Horizontal**: whenever the network editor is not shown — folded with
-  `Ctrl+2`, or hidden because the document is in direct editing mode — the
-  strip moves to the top edge of the viewport instead of disappearing with
-  the editor. Otherwise the only way to switch documents would be `Ctrl+Tab`.
-  Direct editing mode is per document (§6), so the strip can move on a switch.
+- **Horizontal**: the strip is taken off the top of the main content area
+  (everything right of the left sidebar) before the network editor is split
+  off. It spans the viewport and the properties panel, and the network editor
+  as well when the layout puts that beside the viewport. It is in the same
+  place whether the editor is shown, folded with `Ctrl+2`, or absent because
+  the document is in direct editing mode.
 - **Presentation Mode** (`Ctrl+0`) hides the tabs in either placement, since
   it exists to leave only the viewport. `Ctrl+Tab` still switches documents.
 
@@ -749,8 +762,8 @@ UI:
 
 - The tabs (D10). One `DocumentTabs` model of the gestures (activate, close,
   reorder, middle-click close, tooltip) and two thin layouts over it:
-  `DocumentTabStrip` (horizontal, above the network editor, or above the
-  viewport while the editor is not shown) and `DocumentTabList` (vertical, a
+  `DocumentTabStrip` (horizontal, across the top of the main content area)
+  and `DocumentTabList` (vertical, a
   dock on the viewport's left edge with its own width divider, built like the
   properties-panel dock). The window layout picks one from
   `preferences.interfacePreferences.documentTabPlacement` and hides both in
@@ -1188,10 +1201,11 @@ having no caller left.
    and the second document is unchanged.
 9. Tab placement: a fresh preferences file shows the vertical list left of
    the viewport; drag its divider; fold the network editor (`Ctrl+2`) and see
-   it grow to full height. Switch the preference to horizontal: the strip
-   appears above the network editor without a restart; fold the editor and
-   the strip moves above the viewport, as it does in a direct-editing
-   document. `Ctrl+0` hides the tabs in both placements.
+   it grow to full height. Switch to horizontal (the preference or *View >
+   Switch to Horizontal Document Tabs*): the strip appears above the viewport
+   and properties panel without a restart; fold the editor, switch the layout
+   to side-by-side, and open a direct-editing document — the strip stays at
+   the top throughout. `Ctrl+0` hides the tabs in both placements.
 10. Close a dirty tab (prompt), close the last tab (fresh Untitled), quit with
     two dirty tabs (both listed).
 11. Change a preference in one tab; switch: it applies in the other.
