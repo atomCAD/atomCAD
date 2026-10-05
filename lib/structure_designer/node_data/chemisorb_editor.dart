@@ -148,12 +148,12 @@ class _ChemisorbEditorState extends State<ChemisorbEditor> {
         showErrorSnackBarOn(messenger, 'Chemisorption search failed: $thrown');
       }
     } else if (result != null && mounted) {
-      final best = result.bestScore;
+      final best = result.bestStrain;
       showTransientSnackBar(
           context,
           best == null
-              ? 'Search done: no bonding pattern found.'
-              : 'Search done: ${result.relaxed} relaxed, best '
+              ? 'Search done: ${result.relaxed} relaxed, none listed.'
+              : 'Search done: ${result.relaxed} relaxed, best listed '
                   '${formatNatural(best, 4)} kcal/mol.');
     }
   }
@@ -370,16 +370,6 @@ class _StatsCard extends StatelessWidget {
                     ),
                   ),
                 ),
-              if (stats.estimatedPairs.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 6.0),
-                  child: Text(
-                    'Bond energies estimated (Pauling) for: '
-                    '${stats.estimatedPairs}',
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: theme.colorScheme.error),
-                  ),
-                ),
               _Row('Feet / sites in reach',
                   '${stats.feet} / ${stats.sitesInReach}'),
               if (stats.transferCandidates > BigInt.zero)
@@ -401,9 +391,9 @@ class _StatsCard extends StatelessWidget {
   }
 }
 
-/// The listed candidates in rank order. The strain is shown beside the score
-/// on purpose: the bond-energy term dominates the score, so rank 1 can be a
-/// heavily strained binding with more bonds than a clean one.
+/// The listed candidates in rank order, by strain (UFF energy against the
+/// same pose relaxed with no bonds formed). The bond inventory is shown under
+/// every row because strains of different inventories do not compare cleanly.
 class _CandidatesCard extends StatelessWidget {
   final List<APIChemisorbRow> rows;
 
@@ -422,7 +412,7 @@ class _CandidatesCard extends StatelessWidget {
           children: [
             Text('Candidates (kcal/mol)', style: theme.textTheme.titleSmall),
             const SizedBox(height: 4),
-            Text('rank  score  strain  bond', style: mono),
+            Text('rank  strain', style: mono),
             const Divider(height: 8),
             for (final row in rows)
               Tooltip(
@@ -439,10 +429,7 @@ class _CandidatesCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '#${row.rank}  ${formatNatural(row.score, 4)}  '
-                        '${formatNatural(row.strain, 3)}  '
-                        '${formatNatural(row.bondEnergy, 4)}'
-                        '${row.estimated ? '  est.' : ''}'
+                        '#${row.rank}  ${formatNatural(row.strain, 4)}'
                         '${row.converged ? '' : '  unconv.'}',
                         style: mono?.copyWith(
                           color: row.converged ? null : theme.colorScheme.error,

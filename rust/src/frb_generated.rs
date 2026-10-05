@@ -16342,10 +16342,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_rank = <usize>::sse_decode(deserializer);
-        let mut var_score = <f64>::sse_decode(deserializer);
         let mut var_strain = <f64>::sse_decode(deserializer);
-        let mut var_bondEnergy = <f64>::sse_decode(deserializer);
-        let mut var_estimated = <bool>::sse_decode(deserializer);
         let mut var_bonds = <String>::sse_decode(deserializer);
         let mut var_sites = <String>::sse_decode(deserializer);
         let mut var_formedBonds = <usize>::sse_decode(deserializer);
@@ -16359,10 +16356,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_vdw = <f64>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIChemisorbRow {
             rank: var_rank,
-            score: var_score,
             strain: var_strain,
-            bond_energy: var_bondEnergy,
-            estimated: var_estimated,
             bonds: var_bonds,
             sites: var_sites,
             formed_bonds: var_formedBonds,
@@ -16385,12 +16379,12 @@ impl SseDecode
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_relaxed = <usize>::sse_decode(deserializer);
         let mut var_listed = <usize>::sse_decode(deserializer);
-        let mut var_bestScore = <Option<f64>>::sse_decode(deserializer);
+        let mut var_bestStrain = <Option<f64>>::sse_decode(deserializer);
         let mut var_bestBonds = <String>::sse_decode(deserializer);
         let mut var_truncated = <bool>::sse_decode(deserializer);
         let mut var_unconverged = <usize>::sse_decode(deserializer);
         let mut var_seconds = <f64>::sse_decode(deserializer);
-        return crate::api::structure_designer::structure_designer_api_types::APIChemisorbRunResult{relaxed: var_relaxed, listed: var_listed, best_score: var_bestScore, best_bonds: var_bestBonds, truncated: var_truncated, unconverged: var_unconverged, seconds: var_seconds};
+        return crate::api::structure_designer::structure_designer_api_types::APIChemisorbRunResult{relaxed: var_relaxed, listed: var_listed, best_strain: var_bestStrain, best_bonds: var_bestBonds, truncated: var_truncated, unconverged: var_unconverged, seconds: var_seconds};
     }
 }
 
@@ -16410,7 +16404,6 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_unconverged = <usize>::sse_decode(deserializer);
         let mut var_listed = <usize>::sse_decode(deserializer);
         let mut var_truncated = <bool>::sse_decode(deserializer);
-        let mut var_estimatedPairs = <String>::sse_decode(deserializer);
         let mut var_seconds = <f64>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIChemisorbStats {
             feet: var_feet,
@@ -16426,7 +16419,6 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             unconverged: var_unconverged,
             listed: var_listed,
             truncated: var_truncated,
-            estimated_pairs: var_estimatedPairs,
             seconds: var_seconds,
         };
     }
@@ -24970,10 +24962,7 @@ impl flutter_rust_bridge::IntoDart
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.rank.into_into_dart().into_dart(),
-            self.score.into_into_dart().into_dart(),
             self.strain.into_into_dart().into_dart(),
-            self.bond_energy.into_into_dart().into_dart(),
-            self.estimated.into_into_dart().into_dart(),
             self.bonds.into_into_dart().into_dart(),
             self.sites.into_into_dart().into_dart(),
             self.formed_bonds.into_into_dart().into_dart(),
@@ -25012,7 +25001,7 @@ impl flutter_rust_bridge::IntoDart
         [
             self.relaxed.into_into_dart().into_dart(),
             self.listed.into_into_dart().into_dart(),
-            self.best_score.into_into_dart().into_dart(),
+            self.best_strain.into_into_dart().into_dart(),
             self.best_bonds.into_into_dart().into_dart(),
             self.truncated.into_into_dart().into_dart(),
             self.unconverged.into_into_dart().into_dart(),
@@ -25055,7 +25044,6 @@ impl flutter_rust_bridge::IntoDart
             self.unconverged.into_into_dart().into_dart(),
             self.listed.into_into_dart().into_dart(),
             self.truncated.into_into_dart().into_dart(),
-            self.estimated_pairs.into_into_dart().into_dart(),
             self.seconds.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -32161,10 +32149,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <usize>::sse_encode(self.rank, serializer);
-        <f64>::sse_encode(self.score, serializer);
         <f64>::sse_encode(self.strain, serializer);
-        <f64>::sse_encode(self.bond_energy, serializer);
-        <bool>::sse_encode(self.estimated, serializer);
         <String>::sse_encode(self.bonds, serializer);
         <String>::sse_encode(self.sites, serializer);
         <usize>::sse_encode(self.formed_bonds, serializer);
@@ -32186,7 +32171,7 @@ impl SseEncode
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <usize>::sse_encode(self.relaxed, serializer);
         <usize>::sse_encode(self.listed, serializer);
-        <Option<f64>>::sse_encode(self.best_score, serializer);
+        <Option<f64>>::sse_encode(self.best_strain, serializer);
         <String>::sse_encode(self.best_bonds, serializer);
         <bool>::sse_encode(self.truncated, serializer);
         <usize>::sse_encode(self.unconverged, serializer);
@@ -32210,7 +32195,6 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <usize>::sse_encode(self.unconverged, serializer);
         <usize>::sse_encode(self.listed, serializer);
         <bool>::sse_encode(self.truncated, serializer);
-        <String>::sse_encode(self.estimated_pairs, serializer);
         <f64>::sse_encode(self.seconds, serializer);
     }
 }

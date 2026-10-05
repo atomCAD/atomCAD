@@ -1,7 +1,8 @@
 //! Tests for `chemisorption`: the `plan` enumeration on hand-built geometry,
-//! the bond-energy tables, ranking, transfers, the two known-answer cases on
-//! Si(100)-2×1 (ethylene by bond forming, water by an H transfer), and
-//! (ignored) the pruning calibration.
+//! ranking and the listing filters, transfers, and the two known-answer cases
+//! on Si(100)-2×1 (ethylene by bond forming, water by an H transfer). The bond
+//! enthalpy tables the search no longer uses are tested in
+//! `bond_enthalpy_test.rs`.
 //!
 //! Fixtures are generic stand-ins, never a real tool design: a 26-carbon
 //! diamondoid cage whose (111) bottom face carries six downward C–H, turned
@@ -11,13 +12,11 @@
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
 use atomcad_crystolecule::atomic_structure_utils::{auto_create_bonds, remove_single_bond_atoms};
-use atomcad_crystolecule::chemisorption::score::{
-    bond_enthalpy, pauling_estimate_kj, tabulated_enthalpy_kj,
-};
 use atomcad_crystolecule::chemisorption::{
     BondInventory, BondKind, CHANGED_TAG, Candidate, ChemisorptionError, ChemisorptionSearch,
-    SearchPlan, Side, StrainTerms, Transfer, TransferDirection, TransferRule, evaluate,
-    free_valence, input_fingerprint, listed_count, plan, rank_candidates, search,
+    Listed, Listing, SearchPlan, Side, StrainTerms, Transfer, TransferDirection, TransferRule,
+    free_valence, input_fingerprint, inventory_options, list_candidates, plan, rank_candidates,
+    search,
 };
 use atomcad_crystolecule::crystolecule_constants::DEFAULT_ZINCBLENDE_MOTIF;
 use atomcad_crystolecule::hydrogen_passivation::terminator_bond_length;
@@ -605,49 +604,14 @@ fn plan_on_the_stand_in_hexapod_is_fast() {
 }
 
 // ============================================================================
-// Scoring (§8.3)
+// Ranking and listing
 // ============================================================================
 
+/// Bond forming no longer depends on a bond-enthalpy table, so an element the
+/// old table lacked (boron) or a pair it lacked (N–Si) is searched like any
+/// other.
 #[test]
-fn the_enthalpy_table_is_symmetric_and_converted_once() {
-    assert_eq!(tabulated_enthalpy_kj(SI, O), Some(452.0));
-    assert_eq!(tabulated_enthalpy_kj(O, SI), Some(452.0));
-    assert_eq!(tabulated_enthalpy_kj(C, SI), Some(318.0));
-    assert_eq!(tabulated_enthalpy_kj(32, 32), Some(186.0));
-    let (d, estimated) = bond_enthalpy(SI, O).unwrap();
-    assert!((d - 452.0 / 4.184).abs() < 1e-12);
-    assert!(!estimated);
-}
-
-#[test]
-fn pauling_estimates_track_the_table() {
-    // A self-check that catches a mistyped value: for pairs the table has,
-    // Pauling's estimate from the homonuclear values is within 15 %.
-    for (a, b) in [(SI, O), (SI, H), (SI, 17), (C, H), (O, H), (C, O)] {
-        let table = tabulated_enthalpy_kj(a, b).unwrap();
-        let estimate = pauling_estimate_kj(a, b).unwrap();
-        let rel = (estimate - table).abs() / table;
-        assert!(
-            rel < 0.15,
-            "{a}–{b}: estimate {estimate:.1} vs table {table}"
-        );
-    }
-    let si_o = pauling_estimate_kj(SI, O).unwrap();
-    assert!((si_o - 412.9).abs() < 0.5, "Si–O estimate {si_o}");
-}
-
-#[test]
-fn a_missing_pair_is_estimated_and_an_unknown_element_is_an_error() {
-    assert_eq!(tabulated_enthalpy_kj(SI, N), None);
-    let (d, estimated) = bond_enthalpy(SI, N).unwrap();
-    assert!(estimated);
-    assert!(d > 0.0);
-    assert!(matches!(
-        bond_enthalpy(SI, B),
-        Err(ChemisorptionError::UnscoredElement { ref element }) if element == "B"
-    ));
-
-    // `plan` knows the estimated pairs before anything is relaxed…
+fn any_element_can_take_part() {
     let mut ads = AtomicStructure::new();
     let n = ads.add_atom(N, DVec3::new(0.0, 0.0, 2.0));
     for d in tetrahedral_below(-DVec3::Z).into_iter().take(2) {
@@ -655,45 +619,49 @@ fn a_missing_pair_is_estimated_and_an_unknown_element_is_an_error() {
         ads.add_bond(n, h, BOND_SINGLE);
     }
     let (sub, _) = sites(&[DVec3::ZERO], 3);
-    let p = plan(&ads, &sub, &config(3.5)).unwrap();
-    assert_eq!(p.stats.estimated_pairs, vec![BondKind::new(N, SI, 1)]);
-    assert_eq!(p.stats.estimated_pairs[0].pair_label(), "N–Si");
+    assert_eq!(plan(&ads, &sub, &config(3.5)).unwrap().stats.to_relax, 1);
 
-    // …and refuses an element it cannot score.
     let mut boron = AtomicStructure::new();
     boron.add_atom(B, DVec3::new(0.0, 0.0, 2.0));
-    assert!(matches!(
-        plan(&boron, &sub, &config(3.5)),
-        Err(ChemisorptionError::UnscoredElement { ref element }) if element == "B"
-    ));
+    assert!(plan(&boron, &sub, &config(3.5)).unwrap().stats.to_relax > 0);
 }
 
 #[test]
-fn a_bond_inventory_reads_and_scores() {
+fn a_bond_inventory_reads_as_its_bond_changes() {
     let mut inv = BondInventory::default();
     inv.formed.insert(BondKind::new(O, SI, 1), 1);
     inv.formed.insert(BondKind::new(H, SI, 1), 1);
     inv.broken.insert(BondKind::new(O, H, 1), 1);
     assert_eq!(inv.to_string(), "formed 1× H–Si, 1× O–Si; broken 1× H–O");
-    let (e, estimated) = inv.bond_energy().unwrap();
-    assert!((e - (463.0 - 452.0 - 318.0) / 4.184).abs() < 1e-9);
-    assert!(!estimated);
+    assert_eq!(BondInventory::default().to_string(), "no bond changes");
 }
 
-fn fake(score: f64, formed: Vec<(u32, u32)>) -> Candidate {
+fn fake(strain: f64, formed: Vec<(u32, u32)>) -> Candidate {
+    let mut bond_inventory = BondInventory::default();
+    if !formed.is_empty() {
+        bond_inventory
+            .formed
+            .insert(BondKind::new(O, SI, 1), formed.len());
+    }
     Candidate {
         structure: AtomicStructure::new(),
         formed,
         transfers: Vec::new(),
-        bond_inventory: BondInventory::default(),
-        strain: score,
-        bond_energy: 0.0,
-        score,
-        estimated: false,
+        bond_inventory,
+        strain,
         terms: StrainTerms::default(),
         converged: true,
         worst_bond_ratio: 1.0,
         energy: 0.0,
+    }
+}
+
+fn listing(top_n: usize, energy_window: f64) -> Listing {
+    Listing {
+        formed_bonds: None,
+        inventory: None,
+        top_n,
+        energy_window,
     }
 }
 
@@ -718,10 +686,90 @@ fn ranking_breaks_ties_by_the_bond_set_and_lists_top_n_within_the_window() {
             vec![(1, 8)],
         ]
     );
-    assert_eq!(listed_count(&cs, 10, 30.0), 4, "15 is 35 above the best");
-    assert_eq!(listed_count(&cs, 2, 30.0), 2);
-    assert_eq!(listed_count(&cs, 10, 5.0), 1);
-    assert_eq!(listed_count(&[], 10, 30.0), 0);
+    let count = |l: Listing| list_candidates(&cs, &l).indices.len();
+    assert_eq!(count(listing(10, 30.0)), 4, "15 is 35 above the best");
+    assert_eq!(count(listing(2, 30.0)), 2);
+    assert_eq!(count(listing(10, 5.0)), 1);
+    assert_eq!(list_candidates(&[], &listing(10, 30.0)), Listed::default());
+}
+
+/// The two filters pick one formed-bond count or one inventory, and the
+/// window is measured from the best candidate that passes them — so a
+/// two-bond group 40 kcal/mol above the best single bond is still listed.
+#[test]
+fn the_listing_filters_by_formed_bonds_and_inventory() {
+    let mut cs = vec![
+        fake(-30.0, vec![(1, 7)]),
+        fake(-28.0, vec![(2, 8)]),
+        fake(10.0, vec![(1, 7), (2, 8)]),
+        fake(12.0, vec![(1, 8), (2, 7)]),
+        fake(60.0, vec![(1, 7), (2, 9)]),
+    ];
+    // A two-bond candidate of another inventory: one O–Si, one C–Si.
+    let mut mixed = fake(11.0, vec![(3, 7), (2, 9)]);
+    mixed.bond_inventory = BondInventory::default();
+    mixed
+        .bond_inventory
+        .formed
+        .insert(BondKind::new(O, SI, 1), 1);
+    mixed
+        .bond_inventory
+        .formed
+        .insert(BondKind::new(C, SI, 1), 1);
+    cs.push(mixed);
+    rank_candidates(&mut cs);
+
+    let all = list_candidates(&cs, &listing(10, 30.0));
+    assert_eq!(
+        all.indices,
+        vec![0, 1],
+        "unfiltered, the window hides the doubles"
+    );
+    assert_eq!(all.matching, 6);
+
+    let two = Listing {
+        formed_bonds: Some(2),
+        ..listing(10, 30.0)
+    };
+    let listed = list_candidates(&cs, &two);
+    let strains: Vec<f64> = listed.indices.iter().map(|&i| cs[i].strain).collect();
+    assert_eq!(
+        strains,
+        vec![10.0, 11.0, 12.0],
+        "60 is 50 above the best double"
+    );
+    assert_eq!(listed.matching, 4);
+
+    let o_si = Listing {
+        inventory: Some("formed 2× O–Si".to_string()),
+        ..two.clone()
+    };
+    let listed = list_candidates(&cs, &o_si);
+    let strains: Vec<f64> = listed.indices.iter().map(|&i| cs[i].strain).collect();
+    assert_eq!(strains, vec![10.0, 12.0]);
+    assert_eq!(listed.matching, 3);
+
+    let none = Listing {
+        formed_bonds: Some(3),
+        ..listing(10, 30.0)
+    };
+    assert_eq!(list_candidates(&cs, &none), Listed::default());
+
+    // The inventory dropdown: distinct inventories with their counts, by
+    // formed-bond count then label, narrowed by the count filter.
+    let inventories = || cs.iter().map(|c| (&c.bond_inventory, c.formed.len()));
+    assert_eq!(
+        inventory_options(inventories(), None),
+        vec![
+            ("formed 1× O–Si".to_string(), 2),
+            ("formed 1× C–Si, 1× O–Si".to_string(), 1),
+            ("formed 2× O–Si".to_string(), 3),
+        ]
+    );
+    assert_eq!(
+        inventory_options(inventories(), Some(1)),
+        vec![("formed 1× O–Si".to_string(), 2)]
+    );
 }
 
 #[test]
@@ -750,17 +798,15 @@ fn evaluate_is_deterministic_and_self_consistent() {
     assert_eq!(a.candidates.len(), 3);
     for (x, y) in a.candidates.iter().zip(&b.candidates) {
         assert_eq!(x.formed, y.formed);
-        assert_eq!(x.score.to_bits(), y.score.to_bits());
+        assert_eq!(x.strain.to_bits(), y.strain.to_bits());
     }
     assert_eq!(a.stats.relaxed, 3);
     assert_eq!(a.stats.to_relax, 3);
-    assert_eq!(a.reference.score, 0.0);
+    assert_eq!(a.reference.strain, 0.0);
     assert!(a.reference.formed.is_empty());
     for c in &a.candidates {
-        assert!((c.score - (c.strain + c.bond_energy)).abs() < 1e-9);
         assert!((c.terms.total() - c.strain).abs() < 1e-6, "{:?}", c.terms);
-        // One O–Si bond formed.
-        assert!((c.bond_energy + 452.0 / 4.184).abs() < 1e-9);
+        assert_eq!(c.bond_inventory.to_string(), "formed 1× O–Si");
         let changed: BTreeSet<u32> = c
             .structure
             .atoms_with_tag(CHANGED_TAG)
@@ -769,7 +815,7 @@ fn evaluate_is_deterministic_and_self_consistent() {
         assert_eq!(changed, BTreeSet::from([c.formed[0].0, c.formed[0].1]));
         assert!(c.structure.has_bond_between(c.formed[0].0, c.formed[0].1));
     }
-    assert!(a.candidates.windows(2).all(|w| w[0].score <= w[1].score));
+    assert!(a.candidates.windows(2).all(|w| w[0].strain <= w[1].strain));
 }
 
 /// The van der Waals cutoff — atomCAD's default simulation preference, which
@@ -802,7 +848,7 @@ fn evaluate_works_with_a_vdw_cutoff() {
 }
 
 #[test]
-fn more_legs_outrank_fewer_by_the_bond_energy_term() {
+fn the_formed_bond_filter_lists_one_leg_count_in_strain_order() {
     // The stand-in hexapod over six frozen silyl radicals, one straight below
     // each foot, the reach short enough that a foot sees only its own site:
     // the 63 hypotheses are the non-empty subsets of legs.
@@ -821,31 +867,36 @@ fn more_legs_outrank_fewer_by_the_bond_energy_term() {
     };
     let report = search(&ads, &sub, &cfg).unwrap();
     assert_eq!(report.candidates.len(), 63);
+    // C(6, n) candidates per leg count, each group in strain order.
+    for (n, expected) in [(1, 6), (2, 15), (3, 20), (4, 15), (5, 6), (6, 1)] {
+        let listed = list_candidates(
+            &report.candidates,
+            &Listing {
+                formed_bonds: Some(n),
+                ..listing(100, f64::INFINITY)
+            },
+        );
+        assert_eq!(listed.indices.len(), expected, "{n} legs");
+        let c = &report.candidates;
+        assert!(listed.indices.iter().all(|&i| c[i].formed.len() == n));
+        assert!(
+            listed
+                .indices
+                .windows(2)
+                .all(|w| c[w[0]].strain <= c[w[1]].strain)
+        );
+    }
     let best = &report.candidates[0];
-    assert_eq!(best.formed.len(), 6, "all six legs bound ranks first");
-    let four: Vec<&Candidate> = report
+    let six = report
         .candidates
         .iter()
-        .filter(|c| c.formed.len() == 4)
-        .collect();
-    assert!(four.iter().all(|c| c.score > best.score));
-    // ΔE_bond is what orders them: six O–Si bonds against four.
-    let d_osi = 452.0 / 4.184;
-    assert!((best.bond_energy + 6.0 * d_osi).abs() < 1e-9);
-    assert!((four[0].bond_energy + 4.0 * d_osi).abs() < 1e-9);
-    // Candidates with the same inventory rank in strain order.
-    for n in 1..=6 {
-        let same: Vec<f64> = report
-            .candidates
-            .iter()
-            .filter(|c| c.formed.len() == n)
-            .map(|c| c.strain)
-            .collect();
-        assert!(same.windows(2).all(|w| w[0] <= w[1]), "{n} legs: {same:?}");
-    }
+        .find(|c| c.formed.len() == 6)
+        .unwrap();
     println!(
-        "hexapod: 6 legs strain {:.1} score {:.1}; best 4 legs strain {:.1} score {:.1}",
-        best.strain, best.score, four[0].strain, four[0].score
+        "hexapod: rank 1 has {} legs, strain {:.1}; six legs strain {:.1}",
+        best.formed.len(),
+        best.strain,
+        six.strain
     );
 }
 
@@ -860,11 +911,13 @@ fn more_legs_outrank_fewer_by_the_bond_energy_term() {
 /// and the reach long enough to include the neighbouring dimers, so the
 /// end-bridge alternatives are relaxed and ranked, not pruned.
 ///
-/// UFF gets the order right with little to spare: on this proxy the di-σ
-/// beats the best end-bridge by ~4 kcal/mol (−104.2 against −100.4), and on a
-/// 3-cell slab, whose frozen rim is closer, the end-bridge won by 4.7.
+/// Every two-bond binding has the same inventory (2× C–Si), so UFF strain
+/// compares them cleanly. It gets the order right with little to spare: on
+/// this proxy the di-σ beats the best end-bridge by ~4 kcal/mol, and on a
+/// 3-cell slab, whose frozen rim is closer, the end-bridge won by 4.7. A
+/// single bond is not compared: it is a different inventory.
 #[test]
-fn ethanediyl_on_si100_ranks_di_sigma_on_one_dimer_first() {
+fn ethanediyl_on_si100_ranks_di_sigma_first_among_two_bond_bindings() {
     let slab = si100_slab(5.0, 9.0);
     let (site, partner) = central_dimer(&slab);
     let (ps, pp) = (
@@ -890,23 +943,19 @@ fn ethanediyl_on_si100_ranks_di_sigma_on_one_dimer_first() {
         })
         .expect("the reach includes a binding across two dimers");
 
-    // Rank 1 bonds the two atoms of one dimer (the one below, or an
-    // equivalent neighbour the molecule slid to).
-    let best = &report.candidates[0];
-    assert_eq!(best.formed.len(), 2);
+    // The best two-bond binding bonds the two atoms of one dimer (the one
+    // below, or an equivalent neighbour the molecule slid to).
+    let best = doubles[0];
     let (a, b) = site_pair(best);
-    assert!(s.has_bond_between(a, b), "rank 1 bonds dimer partners");
+    assert!(
+        s.has_bond_between(a, b),
+        "the best double bonds dimer partners"
+    );
     assert!(best.converged);
-    assert!(best.score < end_bridge.score);
-    let best_single = report
-        .candidates
-        .iter()
-        .find(|c| c.formed.len() == 1)
-        .unwrap();
-    assert!(best.score < best_single.score);
+    assert!(best.strain < end_bridge.strain);
     println!(
-        "di-σ: score {:.1} (strain {:.1}); best end-bridge {:.1}; best single {:.1}",
-        best.score, best.strain, end_bridge.score, best_single.score
+        "di-σ: strain {:.1}; best end-bridge {:.1}",
+        best.strain, end_bridge.strain
     );
 }
 
@@ -1254,7 +1303,7 @@ fn a_transferred_atom_is_seated_on_its_acceptor_from_the_side_it_came_from() {
 }
 
 #[test]
-fn a_transfer_candidate_is_relaxed_and_scored_with_both_bonds() {
+fn a_transfer_candidate_is_relaxed_with_both_bonds() {
     let (ads, _, mut sub, s) = methanol_over_two_sites();
     for id in sub.atom_ids().copied().collect::<Vec<_>>() {
         if !s.contains(&id) {
@@ -1274,17 +1323,14 @@ fn a_transfer_candidate_is_relaxed_and_scored_with_both_bonds() {
         let changed: BTreeSet<u32> = st.atoms_with_tag(CHANGED_TAG).into_iter().collect();
         assert!(changed.is_superset(&BTreeSet::from([t.donor, t.moved, t.acceptor])));
         // Break O–H, form Si–H, and Si–O when the O bonds.
-        let formed_o = if c.formed.is_empty() { 0.0 } else { 452.0 };
-        let expected = (463.0 - 318.0 - formed_o) / 4.184;
-        assert!(
-            (c.bond_energy - expected).abs() < 1e-9,
-            "{}",
-            c.bond_inventory
-        );
+        let expected = if c.formed.is_empty() {
+            "formed 1× H–Si; broken 1× H–O"
+        } else {
+            "formed 1× H–Si, 1× O–Si; broken 1× H–O"
+        };
+        assert_eq!(c.bond_inventory.to_string(), expected);
         assert!((c.terms.total() - c.strain).abs() < 1e-6);
     }
-    // The dissociated OH + H outranks a bare H transfer by the Si–O bond.
-    assert_eq!(report.candidates[0].formed.len(), 1);
 }
 
 #[test]
@@ -1316,17 +1362,18 @@ fn the_fingerprint_follows_transfers_and_ignores_an_unused_max_transfers() {
 /// atom and an H leaning towards the partner, with H → substrate enabled and a
 /// reach long enough that the H and the OH can also end on two dimers.
 ///
-/// **UFF does not reproduce the known answer; it ties.** Dissociation itself
-/// is clear — H + OH beats a bare H transfer by the Si–O bond, ~108 kcal/mol —
-/// but "one dimer" against "two dimers" is the same bond inventory, so only
-/// strain separates them, and UFF has no term for what really decides it (the
-/// pairing of the two dangling bonds of a dimer). Over 4-, 5- and 6-cell
+/// **UFF does not reproduce the known answer; it ties.** "One dimer" against
+/// "two dimers" is the same bond inventory, so strain compares them cleanly,
+/// but UFF has no term for what really decides it (the pairing of the two
+/// dangling bonds of a dimer). Whether water dissociates at all is a question
+/// across inventories, which UFF energy alone cannot answer and the search no
+/// longer pretends to. Over 4-, 5- and 6-cell
 /// proxies, three poses and both vdW modes the two differ by at most
 /// 0.4 kcal/mol and the winner flips with the pose (here the one-dimer answer
 /// happens to lead by 0.2). The test pins the tie, not the order; the
 /// reference guide says the same.
 #[test]
-fn water_on_si100_dissociates_but_ties_one_dimer_against_two() {
+fn water_on_si100_ties_one_dimer_against_two() {
     let slab = si100_slab(5.0, 9.0);
     let (site, partner) = central_dimer(&slab);
     let (ps, pp) = (
@@ -1353,31 +1400,16 @@ fn water_on_si100_dissociates_but_ties_one_dimer_against_two() {
         .find(|c| across(c))
         .expect("the reach includes H and OH on two dimers");
 
-    let best = &report.candidates[0];
-    assert!(dissociated(&best), "rank 1 is H + OH");
-    assert!(best.converged);
+    assert!(one_dimer.converged && two_dimers.converged);
     assert!(
-        (one_dimer.score - two_dimers.score).abs() < 1.0,
+        (one_dimer.strain - two_dimers.strain).abs() < 1.0,
         "UFF ties one dimer against two: {:.2} vs {:.2}",
-        one_dimer.score,
-        two_dimers.score
-    );
-    let bare = report
-        .candidates
-        .iter()
-        .find(|c| c.formed.is_empty())
-        .unwrap();
-    assert!(
-        bare.score - best.score > 100.0,
-        "the Si–O bond separates them"
+        one_dimer.strain,
+        two_dimers.strain
     );
     println!(
-        "water: H + OH on one dimer {:.1}, on two dimers {:.1}; bare H transfer {:.1}; {} relaxed, {} duplicates",
-        one_dimer.score,
-        two_dimers.score,
-        bare.score,
-        report.stats.relaxed,
-        report.stats.duplicates
+        "water: H + OH on one dimer {:.1}, on two dimers {:.1}; {} relaxed, {} duplicates",
+        one_dimer.strain, two_dimers.strain, report.stats.relaxed, report.stats.duplicates
     );
 }
 

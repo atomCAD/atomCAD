@@ -173,5 +173,7 @@ mod mechanosynth_trajectory_test;
 #[path = "crystolecule/mechanosynth_place_test.rs"]
 mod mechanosynth_place_test;
 
+#[path = "crystolecule/bond_enthalpy_test.rs"]
+mod bond_enthalpy_test;
 #[path = "crystolecule/chemisorption_test.rs"]
 mod chemisorption_test;

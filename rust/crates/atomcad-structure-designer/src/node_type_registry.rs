@@ -1004,10 +1004,7 @@ impl NodeTypeRegistry {
                 vec![
                     ("structure".to_string(), DataType::Molecule),
                     ("rank".to_string(), DataType::Int),
-                    ("score".to_string(), DataType::Float),
                     ("strain".to_string(), DataType::Float),
-                    ("bond_energy".to_string(), DataType::Float),
-                    ("estimated".to_string(), DataType::Bool),
                     ("bonds".to_string(), DataType::String),
                     ("sites".to_string(), DataType::String),
                     ("formed_bonds".to_string(), DataType::Int),
@@ -1038,7 +1035,6 @@ impl NodeTypeRegistry {
                     ("unconverged".to_string(), DataType::Int),
                     ("listed".to_string(), DataType::Int),
                     ("truncated".to_string(), DataType::Bool),
-                    ("estimated_pairs".to_string(), DataType::String),
                     ("seconds".to_string(), DataType::Float),
                     ("transfer_candidates".to_string(), DataType::Int),
                 ],

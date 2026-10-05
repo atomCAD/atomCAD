@@ -19096,25 +19096,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIChemisorbRow dco_decode_api_chemisorb_row(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 16)
-      throw Exception('unexpected arr length: expect 16 but see ${arr.length}');
+    if (arr.length != 13)
+      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
     return APIChemisorbRow(
       rank: dco_decode_usize(arr[0]),
-      score: dco_decode_f_64(arr[1]),
-      strain: dco_decode_f_64(arr[2]),
-      bondEnergy: dco_decode_f_64(arr[3]),
-      estimated: dco_decode_bool(arr[4]),
-      bonds: dco_decode_String(arr[5]),
-      sites: dco_decode_String(arr[6]),
-      formedBonds: dco_decode_usize(arr[7]),
-      transfers: dco_decode_usize(arr[8]),
-      converged: dco_decode_bool(arr[9]),
-      worstBondRatio: dco_decode_f_64(arr[10]),
-      stretch: dco_decode_f_64(arr[11]),
-      bend: dco_decode_f_64(arr[12]),
-      torsion: dco_decode_f_64(arr[13]),
-      inversion: dco_decode_f_64(arr[14]),
-      vdw: dco_decode_f_64(arr[15]),
+      strain: dco_decode_f_64(arr[1]),
+      bonds: dco_decode_String(arr[2]),
+      sites: dco_decode_String(arr[3]),
+      formedBonds: dco_decode_usize(arr[4]),
+      transfers: dco_decode_usize(arr[5]),
+      converged: dco_decode_bool(arr[6]),
+      worstBondRatio: dco_decode_f_64(arr[7]),
+      stretch: dco_decode_f_64(arr[8]),
+      bend: dco_decode_f_64(arr[9]),
+      torsion: dco_decode_f_64(arr[10]),
+      inversion: dco_decode_f_64(arr[11]),
+      vdw: dco_decode_f_64(arr[12]),
     );
   }
 
@@ -19127,7 +19124,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return APIChemisorbRunResult(
       relaxed: dco_decode_usize(arr[0]),
       listed: dco_decode_usize(arr[1]),
-      bestScore: dco_decode_opt_box_autoadd_f_64(arr[2]),
+      bestStrain: dco_decode_opt_box_autoadd_f_64(arr[2]),
       bestBonds: dco_decode_String(arr[3]),
       truncated: dco_decode_bool(arr[4]),
       unconverged: dco_decode_usize(arr[5]),
@@ -19139,8 +19136,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIChemisorbStats dco_decode_api_chemisorb_stats(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 15)
-      throw Exception('unexpected arr length: expect 15 but see ${arr.length}');
+    if (arr.length != 14)
+      throw Exception('unexpected arr length: expect 14 but see ${arr.length}');
     return APIChemisorbStats(
       feet: dco_decode_usize(arr[0]),
       sitesInReach: dco_decode_usize(arr[1]),
@@ -19155,8 +19152,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       unconverged: dco_decode_usize(arr[10]),
       listed: dco_decode_usize(arr[11]),
       truncated: dco_decode_bool(arr[12]),
-      estimatedPairs: dco_decode_String(arr[13]),
-      seconds: dco_decode_f_64(arr[14]),
+      seconds: dco_decode_f_64(arr[13]),
     );
   }
 
@@ -25324,10 +25320,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIChemisorbRow sse_decode_api_chemisorb_row(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_rank = sse_decode_usize(deserializer);
-    var var_score = sse_decode_f_64(deserializer);
     var var_strain = sse_decode_f_64(deserializer);
-    var var_bondEnergy = sse_decode_f_64(deserializer);
-    var var_estimated = sse_decode_bool(deserializer);
     var var_bonds = sse_decode_String(deserializer);
     var var_sites = sse_decode_String(deserializer);
     var var_formedBonds = sse_decode_usize(deserializer);
@@ -25341,10 +25334,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_vdw = sse_decode_f_64(deserializer);
     return APIChemisorbRow(
         rank: var_rank,
-        score: var_score,
         strain: var_strain,
-        bondEnergy: var_bondEnergy,
-        estimated: var_estimated,
         bonds: var_bonds,
         sites: var_sites,
         formedBonds: var_formedBonds,
@@ -25364,7 +25354,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_relaxed = sse_decode_usize(deserializer);
     var var_listed = sse_decode_usize(deserializer);
-    var var_bestScore = sse_decode_opt_box_autoadd_f_64(deserializer);
+    var var_bestStrain = sse_decode_opt_box_autoadd_f_64(deserializer);
     var var_bestBonds = sse_decode_String(deserializer);
     var var_truncated = sse_decode_bool(deserializer);
     var var_unconverged = sse_decode_usize(deserializer);
@@ -25372,7 +25362,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return APIChemisorbRunResult(
         relaxed: var_relaxed,
         listed: var_listed,
-        bestScore: var_bestScore,
+        bestStrain: var_bestStrain,
         bestBonds: var_bestBonds,
         truncated: var_truncated,
         unconverged: var_unconverged,
@@ -25396,7 +25386,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_unconverged = sse_decode_usize(deserializer);
     var var_listed = sse_decode_usize(deserializer);
     var var_truncated = sse_decode_bool(deserializer);
-    var var_estimatedPairs = sse_decode_String(deserializer);
     var var_seconds = sse_decode_f_64(deserializer);
     return APIChemisorbStats(
         feet: var_feet,
@@ -25412,7 +25401,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         unconverged: var_unconverged,
         listed: var_listed,
         truncated: var_truncated,
-        estimatedPairs: var_estimatedPairs,
         seconds: var_seconds);
   }
 
@@ -32715,10 +32703,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       APIChemisorbRow self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_usize(self.rank, serializer);
-    sse_encode_f_64(self.score, serializer);
     sse_encode_f_64(self.strain, serializer);
-    sse_encode_f_64(self.bondEnergy, serializer);
-    sse_encode_bool(self.estimated, serializer);
     sse_encode_String(self.bonds, serializer);
     sse_encode_String(self.sites, serializer);
     sse_encode_usize(self.formedBonds, serializer);
@@ -32738,7 +32723,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_usize(self.relaxed, serializer);
     sse_encode_usize(self.listed, serializer);
-    sse_encode_opt_box_autoadd_f_64(self.bestScore, serializer);
+    sse_encode_opt_box_autoadd_f_64(self.bestStrain, serializer);
     sse_encode_String(self.bestBonds, serializer);
     sse_encode_bool(self.truncated, serializer);
     sse_encode_usize(self.unconverged, serializer);
@@ -32762,7 +32747,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_usize(self.unconverged, serializer);
     sse_encode_usize(self.listed, serializer);
     sse_encode_bool(self.truncated, serializer);
-    sse_encode_String(self.estimatedPairs, serializer);
     sse_encode_f_64(self.seconds, serializer);
   }
 

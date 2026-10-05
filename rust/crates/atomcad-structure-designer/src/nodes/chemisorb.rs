@@ -58,8 +58,8 @@ use crate::text_format::TextValue;
 use atomcad_crystolecule::atomic_constants::element_symbol;
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::chemisorption::{
-    Candidate, ChemisorptionSearch, SearchReport, TransferDirection, TransferRule,
-    input_fingerprint, is_transferable_element, listed_count, plan,
+    Candidate, ChemisorptionSearch, Listing, SearchReport, TransferDirection, TransferRule,
+    input_fingerprint, is_transferable_element, list_candidates, plan,
 };
 use atomcad_crystolecule::simulation::uff::VdwMode;
 use serde::{Deserialize, Serialize};
@@ -189,8 +189,6 @@ pub struct ChemisorbStatsView {
     pub listed: usize,
     /// The budget was hit; the search is **not** exhaustive.
     pub truncated: bool,
-    /// Bond pairs scored by a Pauling estimate, e.g. `"N–Si"`; empty if none.
-    pub estimated_pairs: String,
     /// Wall time of the search, or of `plan` when `searched` is false (s).
     pub seconds: f64,
 }
@@ -199,10 +197,9 @@ pub struct ChemisorbStatsView {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ChemisorbRowView {
     pub rank: usize,
-    pub score: f64,
+    /// UFF energy against the same pose relaxed with no bonds formed
+    /// (kcal/mol): the ranking key, lower is better.
     pub strain: f64,
-    pub bond_energy: f64,
-    pub estimated: bool,
     /// The bond inventory, e.g. `"formed 3× O–Si"`.
     pub bonds: String,
     /// The formed bonds by atom id in the output structure, then the
@@ -278,10 +275,24 @@ impl ChemisorbData {
         Ok(config)
     }
 
-    /// The listed prefix of a ranked candidate list.
-    fn listed<'a>(&self, candidates: &'a [Candidate]) -> &'a [Candidate] {
-        let n = listed_count(candidates, self.top_n.max(1) as usize, self.energy_window);
-        &candidates[..n]
+    /// Which candidates of a finished search are listed. Never part of the
+    /// search, so never fingerprinted.
+    pub fn listing(&self) -> Listing {
+        Listing {
+            formed_bonds: None,
+            inventory: None,
+            top_n: self.top_n.max(1) as usize,
+            energy_window: self.energy_window,
+        }
+    }
+
+    /// The listed candidates of a ranked candidate list, in rank order.
+    pub fn listed<'a>(&self, candidates: &'a [Candidate]) -> Vec<&'a Candidate> {
+        list_candidates(candidates, &self.listing())
+            .indices
+            .into_iter()
+            .map(|i| &candidates[i])
+            .collect()
     }
 
     /// The stored report, when it was computed from inputs with this
@@ -418,10 +429,7 @@ fn row_view(rank: usize, c: &Candidate) -> ChemisorbRowView {
         .join("; ");
     ChemisorbRowView {
         rank,
-        score: c.score,
         strain: c.strain,
-        bond_energy: c.bond_energy,
-        estimated: c.estimated,
         bonds: c.bond_inventory.to_string(),
         sites,
         formed_bonds: c.formed.len(),
@@ -442,10 +450,7 @@ fn candidate_record(row: &ChemisorbRowView, structure: &AtomicStructure) -> Netw
     NetworkResult::record(vec![
         ("structure".to_string(), molecule(structure.clone())),
         ("rank".to_string(), int(row.rank)),
-        ("score".to_string(), float(row.score)),
         ("strain".to_string(), float(row.strain)),
-        ("bond_energy".to_string(), float(row.bond_energy)),
-        ("estimated".to_string(), NetworkResult::Bool(row.estimated)),
         (
             "bonds".to_string(),
             NetworkResult::String(row.bonds.clone()),
@@ -490,20 +495,8 @@ fn stats_record(s: &ChemisorbStatsView) -> NetworkResult {
         ("unconverged".to_string(), int(s.unconverged)),
         ("listed".to_string(), int(s.listed)),
         ("truncated".to_string(), NetworkResult::Bool(s.truncated)),
-        (
-            "estimated_pairs".to_string(),
-            NetworkResult::String(s.estimated_pairs.clone()),
-        ),
         ("seconds".to_string(), NetworkResult::Float(s.seconds)),
     ])
-}
-
-fn estimated_label(kinds: &[atomcad_crystolecule::chemisorption::BondKind]) -> String {
-    kinds
-        .iter()
-        .map(|k| k.pair_label())
-        .collect::<Vec<_>>()
-        .join(", ")
 }
 
 /// The three outputs and the panel's data for one evaluation, from the
@@ -538,7 +531,6 @@ pub fn chemisorb_outputs(
             unconverged: s.unconverged,
             listed: rows.len(),
             truncated: s.truncated,
-            estimated_pairs: estimated_label(&s.estimated_pairs),
             seconds: s.seconds,
         };
         // With nothing found, `best` is the relaxed pose: still the most
@@ -549,7 +541,7 @@ pub fn chemisorb_outputs(
             .map_or(&report.reference.structure, |c| &c.structure);
         let records = rows
             .iter()
-            .zip(listed)
+            .zip(&listed)
             .map(|(row, c)| candidate_record(row, &c.structure))
             .collect();
         let outputs = vec![
@@ -576,7 +568,6 @@ pub fn chemisorb_outputs(
         unconverged: 0,
         listed: 0,
         truncated: p.truncated,
-        estimated_pairs: estimated_label(&p.estimated_pairs),
         seconds: p.seconds,
     };
     let outputs = vec![
@@ -815,10 +806,10 @@ pub fn get_node_type() -> NodeType {
                       donors, never the H). **max_transfers** (default 1) caps them per \
                       pattern, over all records.\n\
                       \n\
-                      **Score** = UFF strain + bond-energy term (mean bond enthalpies, \
-                      kcal/mol, relative to the same pose with no bonds formed); lower is \
-                      better. The bond term dominates: more bonds usually rank first, so read \
-                      the strain and `worst_bond_ratio` before trusting rank 1. **top_n** and \
+                      **Ranking** is by `strain`: the UFF energy against the same pose \
+                      relaxed with no bonds formed (kcal/mol), lower first. There is no \
+                      bond-energy term, so fewer bonds usually rank first, and candidates \
+                      with different bond inventories do not compare cleanly. **top_n** and \
                       **energy_window** (kcal/mol above the best) choose the listed \
                       candidates. Changed atoms carry the `cs_changed` tag."
             .to_string(),

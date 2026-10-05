@@ -114,13 +114,6 @@ pub enum ChemisorptionError {
     /// searched, since a mistyped tag would otherwise read as "found nothing".
     #[error("no {side} atom carries the tag '{tag}'")]
     UnknownTag { side: Side, tag: String },
-    /// A bond change involves an element with no bond enthalpy, tabulated or
-    /// estimable, so the candidate cannot be scored.
-    #[error(
-        "no bond enthalpy for {element}: it is outside the 12 scored elements \
-         (H, C, N, O, F, Si, P, S, Cl, Ge, Br, I); untag it to keep it out of the search"
-    )]
-    UnscoredElement { element: String },
     #[error("relaxation failed: {0}")]
     Relaxation(String),
     #[error("tagging the result failed: {0}")]

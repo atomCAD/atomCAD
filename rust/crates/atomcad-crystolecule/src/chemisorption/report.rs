@@ -2,8 +2,8 @@
 
 use super::config::{CHANGED_TAG, ChemisorptionError, ChemisorptionSearch};
 use super::enumerate::{Hypothesis, HypothesisKey, SearchPlan, change_key, plan};
+use super::inventory::BondInventory;
 use super::relax::{Relaxed, StrainTerms, relax};
-use super::score::{BondInventory, BondKind};
 use super::transfer::{Transfer, apply_transfers};
 use crate::atomic_structure::AtomicStructure;
 use crate::atomic_structure::inline_bond::BOND_SINGLE;
@@ -11,7 +11,7 @@ use rayon::prelude::*;
 use std::cmp::Ordering;
 use std::time::Instant;
 
-/// One hypothesis after relaxation and scoring.
+/// One hypothesis after relaxation.
 #[derive(Debug, Clone)]
 pub struct Candidate {
     /// Adsorbate + substrate, relaxed; the atoms whose bonds changed carry
@@ -23,14 +23,10 @@ pub struct Candidate {
     /// Transfers: each broke `donor–moved` and formed `moved–acceptor`.
     pub transfers: Vec<Transfer>,
     pub bond_inventory: BondInventory,
-    /// `ΔE_UFF` against the reference state (kcal/mol).
+    /// `ΔE_UFF` against the reference state (kcal/mol): the ranking key,
+    /// lower is better. Between candidates of different bond inventories it is
+    /// not purely strain — a different bond graph shifts the UFF energy too.
     pub strain: f64,
-    /// `ΔE_bond = Σ D(broken) − Σ D(formed)` (kcal/mol).
-    pub bond_energy: f64,
-    /// `strain + bond_energy`, the ranking key; lower is better.
-    pub score: f64,
-    /// `bond_energy` uses a Pauling estimate.
-    pub estimated: bool,
     /// Strain by UFF term, against the reference state; sums to `strain`.
     pub terms: StrainTerms,
     pub converged: bool,
@@ -72,7 +68,6 @@ pub struct SearchStats {
     pub unconverged: usize,
     /// The budget was hit; the search is **not** exhaustive.
     pub truncated: bool,
-    pub estimated_pairs: Vec<BondKind>,
     /// Wall time of the `plan` half (s).
     pub plan_seconds: f64,
     /// Wall time of the whole search (s).
@@ -81,31 +76,102 @@ pub struct SearchStats {
 
 #[derive(Debug, Clone)]
 pub struct SearchReport {
-    /// The pose with no bond changes, relaxed the same way. Its `strain`,
-    /// `bond_energy` and `score` are zero by definition.
+    /// The pose with no bond changes, relaxed the same way. Its `strain` is
+    /// zero by definition.
     pub reference: Candidate,
-    /// Ranked by score, ties broken by the normalized bond set; deduplicated.
+    /// Ranked by strain, ties broken by the normalized bond set; deduplicated.
     pub candidates: Vec<Candidate>,
     pub stats: SearchStats,
 }
 
-/// How many leading candidates a caller lists: at most `top_n`, and only
-/// those within `energy_window` (kcal/mol) of the best score.
-pub fn listed_count(candidates: &[Candidate], top_n: usize, energy_window: f64) -> usize {
-    let Some(best) = candidates.first() else {
-        return 0;
-    };
-    candidates
-        .iter()
-        .take(top_n)
-        .take_while(|c| c.score - best.score <= energy_window)
-        .count()
+/// Which candidates a caller lists. Applied to a finished, ranked report:
+/// nothing here is a search setting, so changing it never calls for a new
+/// search.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Listing {
+    /// Only candidates with exactly this many formed bonds (transfers not
+    /// counted). `None` = any count.
+    pub formed_bonds: Option<usize>,
+    /// Only candidates whose bond inventory reads exactly this
+    /// (`BondInventory`'s display form, e.g. `"formed 2× O–Si"`). `None` = any.
+    pub inventory: Option<String>,
+    /// At most this many listed…
+    pub top_n: usize,
+    /// …and only those within this many kcal/mol of the best candidate that
+    /// passes the two filters above.
+    pub energy_window: f64,
 }
 
-/// Sorts by score, lowest first, ties broken by the normalized bond set, so
+impl Listing {
+    /// Whether `c` passes the two filters (not the window or the count).
+    pub fn admits(&self, c: &Candidate) -> bool {
+        self.formed_bonds.is_none_or(|n| c.formed.len() == n)
+            && self
+                .inventory
+                .as_ref()
+                .is_none_or(|label| c.bond_inventory.to_string() == *label)
+    }
+}
+
+/// What a [`Listing`] picked from a ranked candidate list.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Listed {
+    /// Indices into the candidate list, in rank order.
+    pub indices: Vec<usize>,
+    /// Candidates that pass the filters, listed or not; the rest of the
+    /// candidates were filtered out, and `matching - indices.len()` are past
+    /// `top_n` or the energy window.
+    pub matching: usize,
+}
+
+/// Applies a [`Listing`] to a ranked candidate list. The window is measured
+/// from the best candidate that passes the filters, so it works within one
+/// formed-bond count or one inventory.
+pub fn list_candidates(candidates: &[Candidate], listing: &Listing) -> Listed {
+    let matching: Vec<usize> = (0..candidates.len())
+        .filter(|&i| listing.admits(&candidates[i]))
+        .collect();
+    let Some(&best) = matching.first() else {
+        return Listed::default();
+    };
+    let best = candidates[best].strain;
+    let indices = matching
+        .iter()
+        .copied()
+        .take(listing.top_n)
+        .take_while(|&i| candidates[i].strain - best <= listing.energy_window)
+        .collect();
+    Listed {
+        indices,
+        matching: matching.len(),
+    }
+}
+
+/// The distinct bond inventories among `inventories`, as display labels with
+/// how many there are of each, restricted to `formed_bonds` formed bonds when
+/// it is set. Ordered by formed-bond count, then label — an inventory is
+/// topology, not a ranking. The input is each candidate's (or hypothesis's)
+/// inventory with its formed-bond count.
+pub fn inventory_options<'a>(
+    inventories: impl IntoIterator<Item = (&'a BondInventory, usize)>,
+    formed_bonds: Option<usize>,
+) -> Vec<(String, usize)> {
+    let mut counts: std::collections::BTreeMap<(usize, String), usize> = Default::default();
+    for (inventory, formed) in inventories {
+        if formed_bonds.is_none_or(|n| n == formed) {
+            *counts.entry((formed, inventory.to_string())).or_insert(0) += 1;
+        }
+    }
+    counts
+        .into_iter()
+        .map(|((_, label), n)| (label, n))
+        .collect()
+}
+
+/// Sorts by strain, lowest first, ties broken by the normalized bond set, so
 /// the order never depends on which relaxation finished first (R10).
 pub fn rank_candidates(candidates: &mut [Candidate]) {
-    candidates.sort_by(|a, b| match a.score.total_cmp(&b.score) {
+    candidates.sort_by(|a, b| match a.strain.total_cmp(&b.strain) {
         Ordering::Equal => a.key().cmp(&b.key()),
         other => other,
     });
@@ -135,27 +201,22 @@ fn candidate(
     h: &Hypothesis,
     relaxed: &Relaxed,
     reference: &Relaxed,
-) -> Result<Candidate, ChemisorptionError> {
-    let (bond_energy, estimated) = h.inventory.bond_energy()?;
-    let strain = relaxed.energy - reference.energy;
-    Ok(Candidate {
+) -> Candidate {
+    Candidate {
         structure,
         formed: h.formed.clone(),
         transfers: h.transfers.clone(),
         bond_inventory: h.inventory.clone(),
-        strain,
-        bond_energy,
-        score: strain + bond_energy,
-        estimated,
+        strain: relaxed.energy - reference.energy,
         terms: relaxed.terms.minus(&reference.terms),
         converged: relaxed.converged,
         worst_bond_ratio: relaxed.worst_bond_ratio,
         energy: relaxed.energy,
-    })
+    }
 }
 
-/// Relaxes the reference state and every planned hypothesis (in parallel),
-/// scores them and ranks them. The order is independent of which relaxation
+/// Relaxes the reference state and every planned hypothesis (in parallel)
+/// and ranks them. The order is independent of which relaxation
 /// finishes first (R10).
 pub fn evaluate(
     plan: &SearchPlan,
@@ -175,7 +236,7 @@ pub fn evaluate(
         &no_change,
         &reference_relaxed,
         &reference_relaxed,
-    )?;
+    );
 
     let mut candidates = plan
         .hypotheses
@@ -184,9 +245,9 @@ pub fn evaluate(
             let mut s = apply(&plan.combined, h);
             let relaxed = relax(&mut s, config)?;
             tag_changed(&mut s, h)?;
-            candidate(s, h, &relaxed, &reference_relaxed)
+            Ok(candidate(s, h, &relaxed, &reference_relaxed))
         })
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>, ChemisorptionError>>()?;
 
     rank_candidates(&mut candidates);
 
@@ -202,7 +263,6 @@ pub fn evaluate(
         relaxed: candidates.len(),
         unconverged: candidates.iter().filter(|c| !c.converged).count(),
         truncated: p.truncated,
-        estimated_pairs: p.estimated_pairs.clone(),
         plan_seconds: p.seconds,
         seconds: p.seconds + start.elapsed().as_secs_f64(),
     };

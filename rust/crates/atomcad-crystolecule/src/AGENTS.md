@@ -34,12 +34,13 @@ crates/atomcad-crystolecule/src/
 ├── lib.rs                          # Crate root: module declarations (all submodules pub)
 ├── atomic_constants.rs             # Element database (symbol, radius, color)
 ├── atomic_structure_utils.rs       # Auto-bonding, selection, cleanup helpers, `empirical_formula`
-├── chemisorption/                  # Exhaustive chemisorption search: plan (enumerate) / evaluate (UFF relax + score)
+├── bond_enthalpy.rs                # Mean single-bond enthalpies (12 elements) + Pauling estimate; currently unused
+├── chemisorption/                  # Exhaustive chemisorption search: plan (enumerate) / evaluate (UFF relax + rank)
 │   ├── config.rs                   # ChemisorptionSearch, ChemisorptionError, CHANGED_TAG
 │   ├── enumerate.rs                # plan(): sites, feet, depth-first site assignment, free_valence
 │   ├── fingerprint.rs              # input_fingerprint(): hash of everything a search depends on (keys a stored result)
 │   ├── relax.rs                    # one UFF relaxation with per-term energies (StrainTerms)
-│   ├── score.rs                    # bond enthalpy + electronegativity tables, Pauling estimate, BondInventory
+│   ├── inventory.rs                # BondKind / BondInventory: the bonds a candidate forms and breaks, by kind
 │   ├── transfer.rs                 # TransferRule / Transfer: candidate (D, X, A) triples, seating X on A
 │   └── report.rs                   # evaluate() / search(): Candidate, SearchReport, ranking
 ├── crystolecule_constants.rs       # Diamond unit cell size, default motif text
@@ -135,7 +136,7 @@ crates/atomcad-crystolecule/src/
 | `ProxyOptions` | `proxy_cut.rs` | What a proxy cut is tunable by: `hops` / `rim` (frozen shells counted inward from the cut boundary, so the absolute free depth is `hops - rim` — `free_hops()`) / `fill` / `rm_single` / `passivate` / `passivant_element` / `core`. Unsigned — the node's "-1 means off" rules are validated before this struct is built, and `core` is the one `Option` |
 | `ProxyPlan` | `proxy_cut.rs` | Everything one cut decided and nothing mutated: per-atom bond distance, the keep/drop sets, the severed-bond caps, the frozen and `high` lists. Every `Vec` is sorted by atom id so the ids `apply_proxy` hands out are deterministic |
 | `ProxyStats` | `proxy_cut.rs` | The report `apply_proxy` returns: formula, atom counts, `farthest_hop` (a **size** figure) beside `free_hops` (the derived depth of the relaxed interior; the shielding figure is the `rim` option itself), `open_valences`, `min_cap_pair`, and `nearest_dropped` — which counts only dropped atoms the cluster is **not attached to** (`DETACHED_MIN_BOND_SEPARATION`), since the workpiece continuing past the cut is always ~2 bonds from the free region and would otherwise report a steric neighbour on every bulk cut. The `proxy` node stores it in the eval cache, never on the node data |
-| `ChemisorptionSearch` / `SearchPlan` / `SearchReport` / `Candidate` | `chemisorption/` | One search of one posed adsorbate over a substrate: the settings, what `plan` enumerated (hypotheses + valence/duplicate counts, nothing relaxed), and what `evaluate` ranked (relaxed candidates scored against the relaxed no-change reference) |
+| `ChemisorptionSearch` / `SearchPlan` / `SearchReport` / `Candidate` | `chemisorption/` | One search of one posed adsorbate over a substrate: the settings, what `plan` enumerated (hypotheses + valence/duplicate counts, nothing relaxed), and what `evaluate` ranked (relaxed candidates, by UFF energy against the relaxed no-change reference). `Listing` / `list_candidates` pick what a caller lists |
 | `LatticeFillConfig` | `lattice_fill/config.rs` | Unit cell + motif + geometry + options for filling |
 | `PlacedAtomTracker` | `lattice_fill/placed_atom_tracker.rs` | CrystallographicAddress → atom ID mapping |
 | `AtomInfo` | `atomic_constants.rs` | Element properties (symbol, radii, color) |
@@ -256,8 +257,8 @@ rotation that was undetermined anyway. Design doc:
 `doc/design_mechanosynth_editor.md`.
 
 **Chemisorption search** (`chemisorption/`): enumerate every bonding pattern
-of an adsorbate posed over a substrate, UFF-relax each, rank by UFF strain plus
-a bond-energy term. Design doc: `design_chemisorption_search.md`, in the
+of an adsorbate posed over a substrate, UFF-relax each, rank by UFF energy
+against the same pose relaxed unbonded. Design doc: `design_chemisorption_search.md`, in the
 external mechanosynth working folder (it carries proprietary context). Rules
 that are easy to erode:
 
@@ -269,15 +270,25 @@ that are easy to erode:
   saturating it. `free_valence` reads a **fixed per-element valence** against
   the bond-order sum, not the UFF hybridization: a radical carbon with three
   single bonds types as sp2 and would read as saturated.
-- **Every scored element is in Appendix A of the design, copied verbatim** into
-  `score.rs`. A missing pair is a flagged Pauling estimate; an element outside
-  the twelve is a blocking error at `plan` time. Never fill a gap from memory.
+- **The ranking is UFF energy alone — no bond-energy term.** The search serves
+  kinetic control, where a product's absolute energy says little about whether
+  it forms, and tabulated enthalpies are too crude to supply it anyway. The
+  consequence is that fewer bonds usually rank first and that energies compare
+  cleanly only within one `BondInventory`, which is why `Listing` can filter
+  by formed-bond count and by inventory. **An inventory is a filter, never a
+  sort key.** Do not reintroduce enthalpies here without that decision being
+  revisited; the tables live on, unused, in `bond_enthalpy.rs` (copied
+  verbatim from Appendix A of the design — never fill a gap from memory).
+- **Listing is not searching.** `Listing` (filters, `top_n`, window) is applied
+  to a finished report and is not a `ChemisorptionSearch` field, so it never
+  enters `input_fingerprint`: changing it re-lists, never re-runs. The window is
+  measured from the best candidate that passes the filters.
 - **No geometric pruning of multi-bond patterns.** A site-spacing filter
   (pair tolerance) existed and was removed: UFF lets feet flex by >2.5 Å of
   site mismatch within the listing window, so any useful tolerance pruned
   real candidates, and users could not tune it.
 - The ranking is deterministic: relaxations run in parallel (rayon) but are
-  collected in plan order and sorted by score, ties by the normalized bond
+  collected in plan order and sorted by strain, ties by the normalized bond
   set (`rank_candidates`).
 - **Both `VdwMode`s must work** — the app's default preference is the 6 Å
   cutoff, and the `chemisorb` node follows it. `UffForceField::vdw_params()`
@@ -652,7 +663,7 @@ O(n²), compares flags and tag names). Design doc:
 - `ChemisorptionError` (chemisorption/config) — InvalidConfig (incl. a transfer
   rule for a non-monovalent element) / UnknownTag (a
   reactive tag no atom carries: an error, not "found nothing") /
-  UnscoredElement / Relaxation / Tag
+  Relaxation / Tag
 - `FieldError` (field) — grid description problems (zero dimension, sample-count
   mismatch, degenerate axes, non-finite sample)
 - `MechanosynthError` (mechanosynth/schema) — Io / Json / Invalid (a validation
@@ -717,7 +728,8 @@ tests/crystolecule/
 ├── field_test.rs                  # ScalarField contract: bounds, interpolation, gradients
 ├── patch_test.rs                  # Cell selection, region depths, apply_patch pipeline
 ├── patch_build_test.rs            # Tiling-vector validation, tile extraction
-├── chemisorption_test.rs          # plan counts/pruning/valence/tags, enthalpy tables, ranking, transfers (candidates, dedupe, seating, OH tripod), ethylene di-σ and water (a UFF tie) known answers
+├── bond_enthalpy_test.rs          # The (unused) enthalpy table: symmetry, conversion, Pauling estimates
+├── chemisorption_test.rs          # plan counts/valence/tags, ranking and listing filters, transfers (candidates, dedupe, seating, OH tripod), ethylene di-σ and water (a UFF tie) known answers
 ├── proxy_cut_test.rs              # Riders, bond distances, fill/rm_single keep set, severed-bond caps; the §4.3 bulk-silicon fill table
 ├── concave_rebond_test.rs         # Concave-corner rebonding; clash detector re-derived independently
 ├── io/

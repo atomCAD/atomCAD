@@ -1010,18 +1010,13 @@ pub struct APIChemisorbStats {
     pub listed: usize,
     /// The budget was hit; the search is not exhaustive.
     pub truncated: bool,
-    /// Bond pairs scored by a Pauling estimate, e.g. `"N–Si"`; empty if none.
-    pub estimated_pairs: String,
     pub seconds: f64,
 }
 
 /// One listed candidate (twin of `ChemisorbRowView`), kcal/mol throughout.
 pub struct APIChemisorbRow {
     pub rank: usize,
-    pub score: f64,
     pub strain: f64,
-    pub bond_energy: f64,
-    pub estimated: bool,
     pub bonds: String,
     pub sites: String,
     pub formed_bonds: usize,
@@ -1046,7 +1041,7 @@ pub struct APIChemisorbReport {
 pub struct APIChemisorbRunResult {
     pub relaxed: usize,
     pub listed: usize,
-    pub best_score: Option<f64>,
+    pub best_strain: Option<f64>,
     pub best_bonds: String,
     pub truncated: bool,
     pub unconverged: usize,
@@ -1104,7 +1099,6 @@ impl From<&ChemisorbEvalCache> for APIChemisorbReport {
                 unconverged: s.unconverged,
                 listed: s.listed,
                 truncated: s.truncated,
-                estimated_pairs: s.estimated_pairs.clone(),
                 seconds: s.seconds,
             },
             rows: cache
@@ -1112,10 +1106,7 @@ impl From<&ChemisorbEvalCache> for APIChemisorbReport {
                 .iter()
                 .map(|r| APIChemisorbRow {
                     rank: r.rank,
-                    score: r.score,
                     strain: r.strain,
-                    bond_energy: r.bond_energy,
-                    estimated: r.estimated,
                     bonds: r.bonds.clone(),
                     sites: r.sites.clone(),
                     formed_bonds: r.formed_bonds,
@@ -1138,7 +1129,7 @@ impl From<ChemisorbRunSummary> for APIChemisorbRunResult {
         APIChemisorbRunResult {
             relaxed: s.relaxed,
             listed: s.listed,
-            best_score: s.best_score,
+            best_strain: s.best_strain,
             best_bonds: s.best_bonds,
             truncated: s.truncated,
             unconverged: s.unconverged,

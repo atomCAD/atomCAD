@@ -167,10 +167,10 @@ fn run_resolves_names_and_summarises_in_text() {
 
     let truncated = APIChemisorbRunResult {
         truncated: true,
-        best_score: None,
+        best_strain: None,
         ..result
     };
     let text = format_run_result(&truncated);
-    assert!(text.contains("No bonding pattern found."), "{text}");
+    assert!(text.contains("No candidate listed."), "{text}");
     assert!(text.contains("NOT exhaustive"), "{text}");
 }

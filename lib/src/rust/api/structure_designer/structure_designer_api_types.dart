@@ -939,10 +939,7 @@ class APIChemisorbReport {
 /// One listed candidate (twin of `ChemisorbRowView`), kcal/mol throughout.
 class APIChemisorbRow {
   final BigInt rank;
-  final double score;
   final double strain;
-  final double bondEnergy;
-  final bool estimated;
   final String bonds;
   final String sites;
   final BigInt formedBonds;
@@ -957,10 +954,7 @@ class APIChemisorbRow {
 
   const APIChemisorbRow({
     required this.rank,
-    required this.score,
     required this.strain,
-    required this.bondEnergy,
-    required this.estimated,
     required this.bonds,
     required this.sites,
     required this.formedBonds,
@@ -977,10 +971,7 @@ class APIChemisorbRow {
   @override
   int get hashCode =>
       rank.hashCode ^
-      score.hashCode ^
       strain.hashCode ^
-      bondEnergy.hashCode ^
-      estimated.hashCode ^
       bonds.hashCode ^
       sites.hashCode ^
       formedBonds.hashCode ^
@@ -999,10 +990,7 @@ class APIChemisorbRow {
       other is APIChemisorbRow &&
           runtimeType == other.runtimeType &&
           rank == other.rank &&
-          score == other.score &&
           strain == other.strain &&
-          bondEnergy == other.bondEnergy &&
-          estimated == other.estimated &&
           bonds == other.bonds &&
           sites == other.sites &&
           formedBonds == other.formedBonds &&
@@ -1020,7 +1008,7 @@ class APIChemisorbRow {
 class APIChemisorbRunResult {
   final BigInt relaxed;
   final BigInt listed;
-  final double? bestScore;
+  final double? bestStrain;
   final String bestBonds;
   final bool truncated;
   final BigInt unconverged;
@@ -1029,7 +1017,7 @@ class APIChemisorbRunResult {
   const APIChemisorbRunResult({
     required this.relaxed,
     required this.listed,
-    this.bestScore,
+    this.bestStrain,
     required this.bestBonds,
     required this.truncated,
     required this.unconverged,
@@ -1040,7 +1028,7 @@ class APIChemisorbRunResult {
   int get hashCode =>
       relaxed.hashCode ^
       listed.hashCode ^
-      bestScore.hashCode ^
+      bestStrain.hashCode ^
       bestBonds.hashCode ^
       truncated.hashCode ^
       unconverged.hashCode ^
@@ -1053,7 +1041,7 @@ class APIChemisorbRunResult {
           runtimeType == other.runtimeType &&
           relaxed == other.relaxed &&
           listed == other.listed &&
-          bestScore == other.bestScore &&
+          bestStrain == other.bestStrain &&
           bestBonds == other.bestBonds &&
           truncated == other.truncated &&
           unconverged == other.unconverged &&
@@ -1084,9 +1072,6 @@ class APIChemisorbStats {
 
   /// The budget was hit; the search is not exhaustive.
   final bool truncated;
-
-  /// Bond pairs scored by a Pauling estimate, e.g. `"N–Si"`; empty if none.
-  final String estimatedPairs;
   final double seconds;
 
   const APIChemisorbStats({
@@ -1103,7 +1088,6 @@ class APIChemisorbStats {
     required this.unconverged,
     required this.listed,
     required this.truncated,
-    required this.estimatedPairs,
     required this.seconds,
   });
 
@@ -1122,7 +1106,6 @@ class APIChemisorbStats {
       unconverged.hashCode ^
       listed.hashCode ^
       truncated.hashCode ^
-      estimatedPairs.hashCode ^
       seconds.hashCode;
 
   @override
@@ -1143,7 +1126,6 @@ class APIChemisorbStats {
           unconverged == other.unconverged &&
           listed == other.listed &&
           truncated == other.truncated &&
-          estimatedPairs == other.estimatedPairs &&
           seconds == other.seconds;
 }
 

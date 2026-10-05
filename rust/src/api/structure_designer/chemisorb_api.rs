@@ -79,13 +79,13 @@ pub fn format_run_result(result: &APIChemisorbRunResult) -> String {
         format_natural(result.seconds, 3),
         result.listed
     )];
-    match result.best_score {
-        Some(score) => lines.push(format!(
-            "Best: score {} kcal/mol, {}.",
-            format_natural(score, 4),
+    match result.best_strain {
+        Some(strain) => lines.push(format!(
+            "Best listed: strain {} kcal/mol, {}.",
+            format_natural(strain, 4),
             result.best_bonds
         )),
-        None => lines.push("No bonding pattern found.".to_string()),
+        None => lines.push("No candidate listed.".to_string()),
     }
     if result.unconverged > 0 {
         lines.push(format!(

@@ -10,7 +10,7 @@
 //! assignment of the bond-forming feet.
 
 use super::config::{ChemisorptionError, ChemisorptionSearch, Side};
-use super::score::{BondInventory, BondKind, is_scored_element, tabulated_enthalpy_kj};
+use super::inventory::{BondInventory, BondKind};
 use super::transfer::{SideAtoms, Transfer, candidate_transfers};
 use crate::atomic_structure::AtomicStructure;
 use crate::atomic_structure::inline_bond::{
@@ -102,9 +102,6 @@ pub struct PlanStats {
     pub to_relax: usize,
     /// The budget was hit; the enumeration is **not** exhaustive.
     pub truncated: bool,
-    /// Bond kinds a hypothesis may form or break whose enthalpy is a Pauling
-    /// estimate.
-    pub estimated_pairs: Vec<BondKind>,
     /// Wall time of `plan` (s).
     pub seconds: f64,
 }
@@ -122,7 +119,7 @@ pub struct SearchPlan {
     pub stats: PlanStats,
 }
 
-/// The largest total bond order an element carries, for the twelve scored
+/// The largest total bond order an element carries, for the common main-group
 /// elements; `None` elsewhere.
 fn tabulated_valence(z: i16) -> Option<usize> {
     match z {
@@ -152,8 +149,7 @@ fn half_order(order: u8) -> usize {
 ///
 /// The valence is a fixed per-element table rather than one derived from the
 /// atom's current hybridization, because a radical carbon with three single
-/// bonds types as sp2 and would read as saturated. Outside the table (the
-/// elements that cannot be scored anyway) it falls back to the geometric
+/// bonds types as sp2 and would read as saturated. Outside the table it falls back to the geometric
 /// neighbour limit the passivation path uses.
 pub fn free_valence(structure: &AtomicStructure, id: u32) -> usize {
     let Some(atom) = structure.get_atom(id) else {
@@ -438,27 +434,6 @@ impl Enumerator<'_> {
     }
 }
 
-/// Records `(a, b)` as a bond kind a hypothesis may change: a blocking error
-/// for an element that cannot be scored, a flagged estimate for a pair the
-/// table lacks.
-fn check_scorable(
-    a: i16,
-    b: i16,
-    estimated: &mut BTreeSet<BondKind>,
-) -> Result<(), ChemisorptionError> {
-    for z in [a, b] {
-        if !is_scored_element(z) {
-            return Err(ChemisorptionError::UnscoredElement {
-                element: crate::atomic_constants::element_symbol(z),
-            });
-        }
-    }
-    if tabulated_enthalpy_kj(a, b).is_none() {
-        estimated.insert(BondKind::new(a, b, 1));
-    }
-    Ok(())
-}
-
 /// Enumerates the bonding patterns of `adsorbate` over `substrate` at the
 /// given pose (§5.2 of the design): transfer sets first, then bond forming —
 /// one new bond per adsorbate atom, a site taking as many as its valence
@@ -521,7 +496,6 @@ pub fn plan(
         })
         .collect();
 
-    let mut estimated: BTreeSet<BondKind> = BTreeSet::new();
     let mut feet: Vec<Foot> = Vec::new();
     for &id in &ads_reactive {
         let base = free_valence(&combined, id);
@@ -541,23 +515,12 @@ pub fn plan(
         if in_reach.is_empty() {
             continue;
         }
-        for &s in &in_reach {
-            check_scorable(
-                a.atomic_number,
-                atom(sites[s].id).atomic_number,
-                &mut estimated,
-            )?;
-        }
         feet.push(Foot {
             id,
             element: a.atomic_number,
             base,
             sites: in_reach,
         });
-    }
-    for t in &candidates {
-        check_scorable(t.element, atom(t.donor).atomic_number, &mut estimated)?;
-        check_scorable(t.element, atom(t.acceptor).atomic_number, &mut estimated)?;
     }
 
     let site_count = sites.len();
@@ -594,7 +557,6 @@ pub fn plan(
     stats.sites_in_reach = enumerator.sites_seen.len();
     stats.transfer_candidates = enumerator.candidates.len();
     stats.to_relax = hypotheses.len();
-    stats.estimated_pairs = estimated.into_iter().collect();
     stats.seconds = start.elapsed().as_secs_f64();
 
     Ok(SearchPlan {

@@ -20,7 +20,7 @@ use crate::nodes::chemisorb::{
     atomic_inputs, transfer_rules,
 };
 use crate::structure_designer::StructureDesigner;
-use atomcad_crystolecule::chemisorption::{input_fingerprint, listed_count, search};
+use atomcad_crystolecule::chemisorption::{input_fingerprint, list_candidates, search};
 use std::sync::Arc;
 
 /// What one Run found, for a caller that reports it (the CLI prints it).
@@ -30,9 +30,11 @@ pub struct ChemisorbRunSummary {
     pub relaxed: usize,
     /// Candidates the node lists under its current `top_n` / `energy_window`.
     pub listed: usize,
-    /// The best score (kcal/mol), `None` when nothing was found.
-    pub best_score: Option<f64>,
-    /// The bond inventory of the best candidate, empty when nothing was found.
+    /// The strain of the best listed candidate (kcal/mol), `None` when
+    /// nothing is listed.
+    pub best_strain: Option<f64>,
+    /// The bond inventory of the best listed candidate, empty when nothing is
+    /// listed.
     pub best_bonds: String,
     /// The budget was hit; the search is not exhaustive.
     pub truncated: bool,
@@ -117,15 +119,12 @@ impl StructureDesigner {
         let report =
             search(&adsorbate, &substrate, &config).map_err(|e| format!("chemisorb: {e}"))?;
 
-        let best = report.candidates.first();
+        let listed = list_candidates(&report.candidates, &data.listing()).indices;
+        let best = listed.first().map(|&i| &report.candidates[i]);
         let summary = ChemisorbRunSummary {
             relaxed: report.stats.relaxed,
-            listed: listed_count(
-                &report.candidates,
-                data.top_n.max(1) as usize,
-                data.energy_window,
-            ),
-            best_score: best.map(|c| c.score),
+            listed: listed.len(),
+            best_strain: best.map(|c| c.strain),
             best_bonds: best.map_or_else(String::new, |c| c.bond_inventory.to_string()),
             truncated: report.stats.truncated,
             unconverged: report.stats.unconverged,

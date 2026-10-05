@@ -282,7 +282,6 @@ fn before_run_the_node_outputs_the_plan_and_relaxes_nothing() {
     assert!(!boolean(&s, "searched"));
     assert!(!boolean(&s, "stale"));
     assert!(!boolean(&s, "truncated"));
-    assert_eq!(string(&s, "estimated_pairs"), "");
     assert_eq!(
         int(&s, "considered"),
         int(&s, "pruned_valence") + int(&s, "duplicates") + int(&s, "to_relax")
@@ -328,16 +327,13 @@ fn after_run_the_result_is_output_and_evaluations_never_search_again() {
     // Candidates in rank order, every field filled, changed atoms tagged.
     let rows = array(&out[1]);
     assert_eq!(rows.len(), 3);
-    let mut last_score = f64::NEG_INFINITY;
+    let mut last_strain = f64::NEG_INFINITY;
     for (i, row) in rows.iter().enumerate() {
         let f = fields(row);
         assert_eq!(int(&f, "rank"), i as i32 + 1);
-        let score = float(&f, "score");
-        assert!(score >= last_score);
-        last_score = score;
-        assert!((score - (float(&f, "strain") + float(&f, "bond_energy"))).abs() < 1e-9);
-        assert!((float(&f, "bond_energy") + 452.0 / 4.184).abs() < 1e-9);
-        assert!(!boolean(&f, "estimated"));
+        let strain = float(&f, "strain");
+        assert!(strain >= last_strain);
+        last_strain = strain;
         assert_eq!(string(&f, "bonds"), "formed 1× O–Si");
         assert!(
             string(&f, "sites").starts_with('O'),
@@ -636,12 +632,13 @@ fn the_selected_node_eval_cache_carries_the_stats_and_the_rows() {
     assert_eq!(after.rows.len(), 3);
     assert_eq!(after.rows[0].rank, 1);
     assert_eq!(after.rows[0].bonds, "formed 1× O–Si");
-    assert!(after.rows.windows(2).all(|w| w[0].score <= w[1].score));
+    assert!(after.rows.windows(2).all(|w| w[0].strain <= w[1].strain));
 }
 
+/// Without a bond-enthalpy table the search has no element restriction: an
+/// N–Si pair, which the old table lacked, plans like any other.
 #[test]
-fn an_estimated_pair_is_named_before_run() {
-    // •NH2 over the silyls: N–Si is not in the enthalpy table.
+fn an_nh2_foot_plans_without_an_enthalpy_table() {
     let mut ads = AtomicStructure::new();
     let n = ads.add_atom(7, DVec3::new(0.3, 0.2, 2.2));
     for d in [DVec3::new(0.9, 0.0, 0.4), DVec3::new(-0.45, 0.8, 0.4)] {
@@ -656,7 +653,7 @@ fn an_estimated_pair_is_named_before_run() {
     } = network();
     set_value(&mut designer, name, adsorbate, molecule(ads));
     let s = fields(&outputs(&mut designer, name, node)[2]);
-    assert_eq!(string(&s, "estimated_pairs"), "N–Si");
+    assert_eq!(int(&s, "to_relax"), 3);
 }
 
 // ============================================================================

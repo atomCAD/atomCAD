@@ -988,7 +988,7 @@ This network is in the repository as
 ## chemisorb
 
 Finds **every way a posed molecule can bond to a surface**, relaxes each one
-with UFF and ranks them. Typical uses: mounting a tooltip molecule on a bare
+with UFF and ranks them by UFF energy. Typical uses: mounting a tooltip molecule on a bare
 silicon apex (which feet bond to which surface atoms?), and checking how a
 small molecule lands. One search is one **pose**: the adsorbate exactly as it
 is wired, over the substrate exactly as it is wired. To compare poses, use one
@@ -1013,7 +1013,7 @@ any geometry works: terraces, other facets, step edges, clusters.
 **What the search enumerates.** Each adsorbate atom with a free valence (a
 *foot*) forms at most one new bond, to a site within `reach` of it. Every
 combination is tried, including partial ones: a tripod bound by one, two or
-three legs gives three kinds of result, all ranked together. Frozen atoms are
+three legs gives three kinds of result. Frozen atoms are
 respected: no bond forms between two frozen atoms, and frozen atoms stay put
 during relaxation.
 
@@ -1064,9 +1064,9 @@ Moves within one side (H hopping along the surface) are not searched.
   it is **not exhaustive**, and the panel says so.
 - `max_iterations` (default 2000) — the UFF iteration limit per relaxation.
 - `top_n` (default 10) and `energy_window` (default 30 kcal/mol) — how many
-  candidates are listed, and how far above the best they may score. These only
-  choose what is shown, so changing them re-lists a result instead of making it
-  stale.
+  candidates are listed, and how far above the best (lowest strain) they may
+  lie. These only choose what is shown, so changing them re-lists a result
+  instead of making it stale.
 
 The relaxations follow the van der Waals setting in Preferences (the same one
 `relax` uses); changing it makes a result stale.
@@ -1077,62 +1077,63 @@ The relaxations follow the van der Waals setting in Preferences (the same one
   nothing bonded); the unrelaxed pose before one.
 - `candidates` (array of `ChemisorbCandidate`) — the listed candidates in rank
   order. Each record carries its `structure` (adsorbate + substrate, relaxed),
-  `rank`, `score`, `strain`, `bond_energy`, `bonds` (e.g. `formed 3× O–Si`, or
+  `rank`, `strain`, `bonds` (the bond inventory, e.g. `formed 3× O–Si`, or
   `formed 1× H–Si, 1× O–Si; broken 1× H–O` with a transfer), `sites` (the
   formed bonds by atom id, then the transfers, e.g. `O2–Si45; H3 O2→Si47`),
-  `formed_bonds` (transfers not counted), `transfers`, `converged`, `worst_bond_ratio`, `estimated`, and `terms` (the
+  `formed_bonds` (transfers not counted), `transfers`, `converged`,
+  `worst_bond_ratio`, and `terms` (the
   strain split into `stretch`, `bend`, `torsion`, `inversion`, `vdw`). A record
   array draws nothing in the viewport; to look at another candidate, take its
   `structure` field (`array_at` + `record_destructure`).
 - `stats` (`ChemisorbStats`) — the whole search: `feet`, `sites_in_reach`,
   `transfer_candidates` (the donor–atom–acceptor moves the records allow),
   `considered`, `pruned_valence`, `duplicates`,
-  `to_relax`, `relaxed`, `unconverged`, `listed`, `truncated`,
-  `estimated_pairs`, `seconds`, and the two run-state flags `searched` and
+  `to_relax`, `relaxed`, `unconverged`, `listed`, `truncated`, `seconds`,
+  and the two run-state flags `searched` and
   `stale`. Downstream nodes can tell a result from a plan by `searched`.
 
 In every output structure the atoms whose bonds changed carry the tag
 `cs_changed`, so an `apply_style` rule can highlight them.
 
-**How candidates are scored.** UFF treats a bond as a spring: a bond at its
-rest length costs nothing, so UFF alone cannot say whether three bonds beat
-two. The score adds what it misses:
+**How candidates are ranked.** By `strain`: the UFF energy of the relaxed
+candidate minus that of the same pose relaxed with no bonds formed, in
+kcal/mol. Lower ranks first. There is no bond-energy term. The node is meant
+for **kinetic control**, where what a reaction can reach matters more than the
+absolute energy of the product, and tabulated bond enthalpies are too crude to
+supply that energy anyway. Any element UFF knows can take part.
 
-- **strain**: the UFF energy of the relaxed candidate minus that of the same
-  pose relaxed with no bonds formed;
-- **bond energy**: the mean bond enthalpies of the bonds broken minus those of
-  the bonds formed (tabulated for H, C, N, O, F, Si, P, S, Cl, Ge, Br and I);
-- **score** = strain + bond energy, in kcal/mol. Lower is better.
+Two consequences:
 
-A pair missing from the enthalpy table (N–Si, for example) is estimated with
-Pauling's electronegativity rule. The candidate is flagged `estimated`, and the
-panel names the pair before you run. An element outside the twelve cannot be
-scored and is an error.
+- **Fewer bonds usually rank first.** UFF treats a bond as a spring, so every
+  bond a molecule has to stretch to form adds strain and nothing pays it back.
+  A single leg down typically beats all three legs down.
+- **Strains compare cleanly only between candidates with the same bond
+  inventory** — the same bonds formed and broken, by element pair (the `bonds`
+  field). A different bond graph shifts the UFF energy for reasons that are
+  not strain, so "two O–Si bonds" against "one O–Si bond", or "one O–Si" against
+  "one O–Si plus an H moved", is not a like-for-like comparison.
 
-**Read rank 1 with care.** The bond-energy term dominates: one Si–O bond is
-worth about 108 kcal/mol, while strains of 45–55 kcal/mol are routine. So the
-ranking is effectively "most bonds first, then least strain", and a badly
-distorted binding with more bonds can outrank a clean one with fewer. Before
-treating rank 1 as the answer, look at its strain, its `worst_bond_ratio` and
-its per-term breakdown (hover a row in the panel). The ranking is also crude by
-nature: a surface dimer bond and a bulk bond are both just "Si–Si", and UFF
-knows nothing about Si(100) dimer pairing. Use the node to find the handful of
-plausible patterns, then take them to a finer method (UMA, DFT).
+So read the ranking within one kind of binding: look at the candidates with the
+bond inventory you are interested in, then compare their strains, their
+`worst_bond_ratio` and their per-term breakdown (hover a row in the panel). The
+ranking is crude by nature: a surface dimer bond and a bulk bond are both just
+"Si–Si", and UFF knows nothing about Si(100) dimer pairing. Use the node to
+find the handful of plausible patterns, then take them to a finer method (UMA,
+DFT).
 
 On bare Si(100)-2×1, a CH₂–CH₂ diradical posed over one dimer ranks the di-σ
-binding on that dimer first, as experiment and DFT say, but only by about
-4 kcal/mol over bridging two dimers of a row. On a smaller proxy (a frozen rim
-closer to the site) the order flips. Margins of a few kcal/mol are within UFF's
-error; check them against the proxy size.
+binding on that dimer first among its two-bond bindings, as experiment and DFT
+say, but only by about 4 kcal/mol over bridging two dimers of a row. On a
+smaller proxy (a frozen rim closer to the site) the order flips. Margins of a
+few kcal/mol are within UFF's error; check them against the proxy size.
 
-**Water shows the limit plainly.** H₂O on bare Si(100)-2×1 with an H transfer
-enabled dissociates, as it should: H + OH beats moving the H alone by the whole
-Si–O bond (about 108 kcal/mol). But the known answer — H and OH on the two
-atoms of **one** dimer — is a tie against H and OH on two neighbouring dimers:
-the two form the same bonds, and UFF has nothing that prefers pairing the
-dangling bonds of one dimer. Over several proxies and poses they differ by less
-than half a kcal/mol and either can come first. Where two patterns form the same
-bonds on the same kind of atoms, treat their order as undecided.
+**Water shows the limit plainly.** For H₂O on bare Si(100)-2×1 with an H
+transfer enabled, the known answer — H and OH on the two atoms of **one** dimer
+— is a tie against H and OH on two neighbouring dimers: the two form the same
+bonds, and UFF has nothing that prefers pairing the dangling bonds of one dimer.
+Over several proxies and poses they differ by less than half a kcal/mol and
+either can come first. Where two patterns form the same bonds on the same kind
+of atoms, treat their order as undecided.
 
 **What "exhaustive" means here.** For the given pose, every bonding pattern the
 settings allow is relaxed, unless `truncated` is set. The assumptions are
@@ -1150,10 +1151,10 @@ very large strain.
 **Reading the panel.** The panel shows the **Run** button, with the number of
 hypotheses a run would relax (or what the last run did) beside it; a red line
 when the result is stale; the search statistics, with **not exhaustive** in red
-when the budget was hit, a *Transfer candidates* row when `transfers` is wired,
-and a warning naming any estimated bond pairs; and the
-ranked candidates, one line each with score, strain and bond energy, the bond
-inventory underneath, and `est.` / `unconv.` marks. Hover a row for its sites,
+when the budget was hit and a *Transfer candidates* row when `transfers` is
+wired; and the ranked candidates, one line each with the strain, the bond
+inventory underneath, and an `unconv.` mark on a relaxation that did not
+converge. Hover a row for its sites,
 worst bond ratio and strain terms. Run blocks the application while it works,
 behind a placard. *Max transfers* is greyed out while `transfers` is not
 wired, since nothing reads it then. The statistics appear once the node is displayed. A
