@@ -229,11 +229,15 @@ fn params_of_fields(fields: &[UsedField]) -> Vec<Parameter> {
         .collect()
 }
 
+/// Whether the recorded inputs `a` and the live inputs `b` are the same list.
+/// A recorded input with no id (a library from before `param_id` existed,
+/// which a load now gives ids — `assign_missing_param_ids`) is the same
+/// input as a live one of its name.
 fn same_identity(a: &[Parameter], b: &[Parameter]) -> bool {
     a.len() == b.len()
         && a.iter()
             .zip(b)
-            .all(|(x, y)| x.id == y.id && x.name == y.name)
+            .all(|(x, y)| (x.id.is_none() || x.id == y.id) && x.name == y.name)
 }
 
 /// New inputs whose type differs from the old input they continue.

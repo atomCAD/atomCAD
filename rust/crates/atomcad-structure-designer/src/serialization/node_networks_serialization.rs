@@ -936,6 +936,11 @@ pub fn serializable_to_node_network(
         .max(derived_next_param_id(&network))
         .max(serializable.next_param_id.unwrap_or(0));
 
+    // A file from before `param_id` existed has parameters without one; give
+    // them ids above the counter just restored, or call sites can match them
+    // only by name and a rename drops their wires.
+    crate::network_validator::assign_missing_param_ids(&mut network);
+
     // Migration: atom_edit output_diff → displayed_pins
     // For old files where output_diff: true was used to switch to diff view,
     // migrate to displayed_pins: {1} (show diff pin only) if the node wasn't

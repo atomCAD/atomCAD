@@ -131,6 +131,8 @@ mod layout_corpus_test;
 #[path = "structure_designer/parameter_wire_preservation_test.rs"]
 mod parameter_wire_preservation_test;
 
+#[path = "structure_designer/legacy_param_rename_test.rs"]
+mod legacy_param_rename_test;
 #[path = "structure_designer/parameter_wire_stability_regression_test.rs"]
 mod parameter_wire_stability_regression_test;
 

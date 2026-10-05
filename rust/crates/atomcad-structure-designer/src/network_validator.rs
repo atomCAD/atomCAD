@@ -273,6 +273,58 @@ pub fn dedupe_param_ids_in_network(network: &mut NodeNetwork) -> Vec<ParamIdReas
     fixes
 }
 
+/// Gives every parameter node that has no `param_id` one, from
+/// `network.next_param_id` upward in interface order (sort order, then node
+/// id), and stamps the same ids on the matching `node_type.parameters`.
+///
+/// Files written before `param_id` existed carry none, and nothing else ever
+/// assigns one to an existing parameter — so call sites could match such a
+/// parameter only by name, and renaming it silently dropped its wire at every
+/// call site. Run on load, before anything compares interfaces. Deterministic
+/// (the same file always gets the same ids), idempotent, and moves no wire:
+/// wires are positional. Returns how many ids were assigned.
+pub fn assign_missing_param_ids(network: &mut NodeNetwork) -> usize {
+    let mut missing: Vec<(u64, &ParameterData)> = network
+        .nodes
+        .iter()
+        .filter_map(|(&nid, node)| {
+            node.data
+                .as_ref()
+                .as_any_ref()
+                .downcast_ref::<ParameterData>()
+                .filter(|p| p.param_id.is_none())
+                .map(|p| (nid, p))
+        })
+        .collect();
+    missing.sort_by(|(a, pa), (b, pb)| compare_parameters(*a, pa, *b, pb));
+    let order: Vec<u64> = missing.into_iter().map(|(nid, _)| nid).collect();
+
+    for nid in &order {
+        let id = network.next_param_id;
+        network.next_param_id += 1;
+        let Some(p) = network
+            .nodes
+            .get_mut(nid)
+            .and_then(|n| n.data.as_any_mut().downcast_mut::<ParameterData>())
+        else {
+            continue;
+        };
+        p.param_id = Some(id);
+        // The saved interface names the same parameter; an id-less entry of
+        // that name takes the id, so the interface agrees with its nodes
+        // before the first validation rebuilds it.
+        if let Some(param) = network
+            .node_type
+            .parameters
+            .iter_mut()
+            .find(|param| param.id.is_none() && param.name == p.param_name)
+        {
+            param.id = Some(id);
+        }
+    }
+    order.len()
+}
+
 /// The parameter interface `network`'s parameter nodes define right now — the
 /// list `validate_parameters` would install as `node_type.parameters`, in the
 /// same order (sort order, then node id). Unlike `node_type.parameters`, it is
