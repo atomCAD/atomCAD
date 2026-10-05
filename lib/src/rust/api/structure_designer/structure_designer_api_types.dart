@@ -861,10 +861,18 @@ class APIChemisorbData {
   /// `transfers` pin carries a record.
   final int maxTransfers;
 
+  /// Listing filter: exactly this many formed bonds; `None` = any.
+  final int? filterFormedBonds;
+
+  /// Listing filter: exactly this bond inventory (a candidate's `bonds`
+  /// label); `None` = any.
+  final String? filterBonds;
+
   /// At most this many candidates listed.
   final int topN;
 
-  /// Only candidates within this many kcal/mol of the best are listed.
+  /// Only candidates within this many kcal/mol of the best that passes the
+  /// filters are listed.
   final double energyWindow;
 
   /// At most this many hypotheses relaxed.
@@ -879,6 +887,8 @@ class APIChemisorbData {
     required this.reach,
     required this.maxFormedBonds,
     required this.maxTransfers,
+    this.filterFormedBonds,
+    this.filterBonds,
     required this.topN,
     required this.energyWindow,
     required this.budget,
@@ -892,6 +902,8 @@ class APIChemisorbData {
       reach.hashCode ^
       maxFormedBonds.hashCode ^
       maxTransfers.hashCode ^
+      filterFormedBonds.hashCode ^
+      filterBonds.hashCode ^
       topN.hashCode ^
       energyWindow.hashCode ^
       budget.hashCode ^
@@ -907,10 +919,35 @@ class APIChemisorbData {
           reach == other.reach &&
           maxFormedBonds == other.maxFormedBonds &&
           maxTransfers == other.maxTransfers &&
+          filterFormedBonds == other.filterFormedBonds &&
+          filterBonds == other.filterBonds &&
           topN == other.topN &&
           energyWindow == other.energyWindow &&
           budget == other.budget &&
           maxIterations == other.maxIterations;
+}
+
+/// One choice of the `filter_bonds` dropdown: a bond inventory and how many
+/// candidates (or, before a run, hypotheses) have it.
+class APIChemisorbInventoryOption {
+  final String label;
+  final BigInt count;
+
+  const APIChemisorbInventoryOption({
+    required this.label,
+    required this.count,
+  });
+
+  @override
+  int get hashCode => label.hashCode ^ count.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIChemisorbInventoryOption &&
+          runtimeType == other.runtimeType &&
+          label == other.label &&
+          count == other.count;
 }
 
 /// What the `chemisorb` panel renders after a root evaluation of the selected
@@ -919,13 +956,18 @@ class APIChemisorbReport {
   final APIChemisorbStats stats;
   final List<APIChemisorbRow> rows;
 
+  /// The `filter_bonds` choices, narrowed by `filter_formed_bonds`.
+  final List<APIChemisorbInventoryOption> inventoryOptions;
+
   const APIChemisorbReport({
     required this.stats,
     required this.rows,
+    required this.inventoryOptions,
   });
 
   @override
-  int get hashCode => stats.hashCode ^ rows.hashCode;
+  int get hashCode =>
+      stats.hashCode ^ rows.hashCode ^ inventoryOptions.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -933,7 +975,8 @@ class APIChemisorbReport {
       other is APIChemisorbReport &&
           runtimeType == other.runtimeType &&
           stats == other.stats &&
-          rows == other.rows;
+          rows == other.rows &&
+          inventoryOptions == other.inventoryOptions;
 }
 
 /// One listed candidate (twin of `ChemisorbRowView`), kcal/mol throughout.
@@ -1068,6 +1111,9 @@ class APIChemisorbStats {
   final BigInt relaxed;
   final BigInt toRelax;
   final BigInt unconverged;
+
+  /// Candidates that pass the listing filters, listed or not.
+  final BigInt matching;
   final BigInt listed;
 
   /// The budget was hit; the search is not exhaustive.
@@ -1086,6 +1132,7 @@ class APIChemisorbStats {
     required this.relaxed,
     required this.toRelax,
     required this.unconverged,
+    required this.matching,
     required this.listed,
     required this.truncated,
     required this.seconds,
@@ -1104,6 +1151,7 @@ class APIChemisorbStats {
       relaxed.hashCode ^
       toRelax.hashCode ^
       unconverged.hashCode ^
+      matching.hashCode ^
       listed.hashCode ^
       truncated.hashCode ^
       seconds.hashCode;
@@ -1124,6 +1172,7 @@ class APIChemisorbStats {
           relaxed == other.relaxed &&
           toRelax == other.toRelax &&
           unconverged == other.unconverged &&
+          matching == other.matching &&
           listed == other.listed &&
           truncated == other.truncated &&
           seconds == other.seconds;

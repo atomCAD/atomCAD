@@ -5,8 +5,9 @@
 //! `chemisorption_test.rs`. What is exercised here is what the node adds: the
 //! run model (evaluation shows the plan and never searches; Run stores a result
 //! keyed by an input fingerprint; a mismatch falls back to the plan and says
-//! `stale`), the three outputs and their records, the eval cache the panel
-//! reads, the text format and the `.cnnd` round trip.
+//! `stale`), the three outputs and their records, the listing filters (applied
+//! to a stored result without a new Run), the eval cache the panel reads, the
+//! text format and the `.cnnd` round trip.
 //!
 //! The fixture is the phase-1 •OH over three silyl radicals: three single-bond
 //! hypotheses, small enough that a debug-build Run takes well under a second.
@@ -511,6 +512,108 @@ fn top_n_and_energy_window_relist_without_making_the_result_stale() {
     assert!(boolean(&fields(&out[2]), "searched"));
 }
 
+/// The two listing filters, like `top_n` and the window, re-list a stored
+/// result and never make it stale. The fixture with an H transfer enabled has
+/// three bond inventories: three plain O–Si bonds, two O–Si bonds with the H
+/// moved to a silyl, and one bare H move (no formed bond).
+#[test]
+fn the_listing_filters_relist_a_result_without_a_new_run() {
+    let (
+        Net {
+            mut designer,
+            name,
+            node,
+            ..
+        },
+        _,
+    ) = network_with_transfers(vec![transfer_record(1, "to_substrate")]);
+    set_props(
+        &mut designer,
+        name,
+        node,
+        &[("energy_window", TextValue::Float(1000.0))],
+    );
+
+    // Before a run the inventory choices come from the plan.
+    let cache = designer_eval_cache(&mut designer, name, node);
+    let plain = "formed 1× O–Si".to_string();
+    let with_h = "formed 1× H–Si, 1× O–Si; broken 1× H–O".to_string();
+    let bare_h = "formed 1× H–Si; broken 1× H–O".to_string();
+    assert_eq!(
+        cache.inventory_options,
+        vec![(bare_h.clone(), 1), (with_h.clone(), 2), (plain.clone(), 3)],
+        "by formed-bond count, then label"
+    );
+
+    designer.run_chemisorb(&[], node).unwrap();
+    let all = designer_eval_cache(&mut designer, name, node);
+    assert_eq!((all.stats.matching, all.stats.listed), (6, 6));
+
+    set_props(
+        &mut designer,
+        name,
+        node,
+        &[("filter_formed_bonds", TextValue::Int(1))],
+    );
+    let one = designer_eval_cache(&mut designer, name, node);
+    assert!(
+        one.stats.searched && !one.stats.stale,
+        "re-listed, not stale"
+    );
+    assert_eq!((one.stats.matching, one.stats.listed), (5, 5));
+    assert!(one.rows.iter().all(|r| r.formed_bonds == 1));
+    assert_eq!(
+        one.inventory_options,
+        vec![(with_h.clone(), 2), (plain.clone(), 3)],
+        "the dropdown narrows to the count"
+    );
+
+    set_props(
+        &mut designer,
+        name,
+        node,
+        &[("filter_bonds", TextValue::String(plain.clone()))],
+    );
+    let out = outputs(&mut designer, name, node);
+    let rows = array(&out[1]);
+    assert_eq!(rows.len(), 3);
+    assert!(rows.iter().all(|r| string(&fields(r), "bonds") == plain));
+    // `rank` is the place in the whole ranking, so it may skip.
+    let ranks: Vec<i32> = rows.iter().map(|r| int(&fields(r), "rank")).collect();
+    assert!(ranks.windows(2).all(|w| w[0] < w[1]), "{ranks:?}");
+    // `best` is the best candidate that passes the filters.
+    let first = fields(&rows[0]);
+    assert_eq!(
+        positions(atoms(&out[0])),
+        positions(atoms(&first["structure"]))
+    );
+    let s = fields(&out[2]);
+    assert_eq!((int(&s, "matching"), int(&s, "listed")), (3, 3));
+    assert!(boolean(&s, "searched"));
+
+    // Nothing passes: nothing listed, and `best` is the unbonded relaxed pose.
+    set_props(
+        &mut designer,
+        name,
+        node,
+        &[("filter_formed_bonds", TextValue::Int(3))],
+    );
+    let out = outputs(&mut designer, name, node);
+    assert!(array(&out[1]).is_empty());
+    assert!(atoms(&out[0]).atoms_with_tag(CHANGED_TAG).is_empty());
+    assert_eq!(int(&fields(&out[2]), "matching"), 0);
+    assert!(boolean(&fields(&out[2]), "searched"));
+
+    // The Run summary lists under the filters too.
+    let mut cleared = data(&designer, name, node);
+    cleared.filter_formed_bonds = Some(1);
+    cleared.filter_bonds = Some(with_h.clone());
+    designer.set_chemisorb_data(&[], node, cleared);
+    let summary = designer.run_chemisorb(&[], node).unwrap();
+    assert_eq!(summary.listed, 2);
+    assert_eq!(summary.best_bonds, with_h);
+}
+
 // ============================================================================
 // Subnetwork call sites
 // ============================================================================
@@ -694,6 +797,15 @@ fn every_property_round_trips_through_the_text_format() {
     assert!(serialized.contains(FULL), "got:\n{serialized}");
     assert_eq!(serialized, author_and_serialize(&serialized));
 
+    // The two listing filters are written only when set.
+    const FILTERED: &str = "c = chemisorb { adsorbate_tag: \"\", substrate_tag: \"\", reach: 3.5, \
+                            max_formed_bonds: 0, max_transfers: 1, top_n: 10, \
+                            energy_window: 30.0, budget: 10000, max_iterations: 2000, \
+                            filter_formed_bonds: 2, filter_bonds: \"formed 2× O–Si\" }";
+    let serialized = author_and_serialize(&format!("{FILTERED}\n"));
+    assert!(serialized.contains(FILTERED), "got:\n{serialized}");
+    assert_eq!(serialized, author_and_serialize(&serialized));
+
     // The short form expands to the documented defaults.
     let short = author_and_serialize("c = chemisorb { }\n");
     assert!(
@@ -751,6 +863,7 @@ fn a_saved_and_reloaded_node_keeps_its_settings_and_not_its_result() {
     .expect("save");
     let json = std::fs::read_to_string(&path).unwrap();
     assert!(!json.contains("stored"), "the result is never written");
+    assert!(!json.contains("filter_"), "unset filters are not written");
 
     let mut registry = NodeTypeRegistry::new();
     load_node_networks_from_file(&mut registry, path.to_str().unwrap()).expect("load");
@@ -792,6 +905,11 @@ fn invalid_settings_are_reported_in_the_nodes_words() {
             "max_formed_bonds must be >= 0",
         ),
         ("top_n", TextValue::Int(0), "top_n must be at least 1"),
+        (
+            "filter_formed_bonds",
+            TextValue::Int(0),
+            "filter_formed_bonds must be at least 1",
+        ),
         ("budget", TextValue::Int(0), "budget must be at least 1"),
     ] {
         let restore = data(&designer, name, node);
@@ -895,8 +1013,8 @@ fn a_wired_transfer_record_is_planned_run_and_listed() {
         },
         _,
     ) = network_with_transfers(vec![transfer_record(1, "to_substrate")]);
-    // A transfer pattern breaks O–H for a weaker Si–H: ~35 kcal/mol above the
-    // plain O–Si bond, past the default 30 kcal/mol window. List everything.
+    // Transfer patterns are other bond inventories, whose strains need not be
+    // near the plain O–Si bond's. List everything.
     set_props(
         &mut designer,
         name,

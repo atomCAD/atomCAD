@@ -1033,6 +1033,7 @@ impl NodeTypeRegistry {
                     ("relaxed".to_string(), DataType::Int),
                     ("to_relax".to_string(), DataType::Int),
                     ("unconverged".to_string(), DataType::Int),
+                    ("matching".to_string(), DataType::Int),
                     ("listed".to_string(), DataType::Int),
                     ("truncated".to_string(), DataType::Bool),
                     ("seconds".to_string(), DataType::Float),

@@ -19065,18 +19065,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIChemisorbData dco_decode_api_chemisorb_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 9)
-      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    if (arr.length != 11)
+      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
     return APIChemisorbData(
       adsorbateTag: dco_decode_String(arr[0]),
       substrateTag: dco_decode_String(arr[1]),
       reach: dco_decode_f_64(arr[2]),
       maxFormedBonds: dco_decode_i_32(arr[3]),
       maxTransfers: dco_decode_i_32(arr[4]),
-      topN: dco_decode_i_32(arr[5]),
-      energyWindow: dco_decode_f_64(arr[6]),
-      budget: dco_decode_i_32(arr[7]),
-      maxIterations: dco_decode_i_32(arr[8]),
+      filterFormedBonds: dco_decode_opt_box_autoadd_i_32(arr[5]),
+      filterBonds: dco_decode_opt_String(arr[6]),
+      topN: dco_decode_i_32(arr[7]),
+      energyWindow: dco_decode_f_64(arr[8]),
+      budget: dco_decode_i_32(arr[9]),
+      maxIterations: dco_decode_i_32(arr[10]),
+    );
+  }
+
+  @protected
+  APIChemisorbInventoryOption dco_decode_api_chemisorb_inventory_option(
+      dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return APIChemisorbInventoryOption(
+      label: dco_decode_String(arr[0]),
+      count: dco_decode_usize(arr[1]),
     );
   }
 
@@ -19084,11 +19099,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIChemisorbReport dco_decode_api_chemisorb_report(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
     return APIChemisorbReport(
       stats: dco_decode_api_chemisorb_stats(arr[0]),
       rows: dco_decode_list_api_chemisorb_row(arr[1]),
+      inventoryOptions: dco_decode_list_api_chemisorb_inventory_option(arr[2]),
     );
   }
 
@@ -19136,8 +19152,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIChemisorbStats dco_decode_api_chemisorb_stats(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 14)
-      throw Exception('unexpected arr length: expect 14 but see ${arr.length}');
+    if (arr.length != 15)
+      throw Exception('unexpected arr length: expect 15 but see ${arr.length}');
     return APIChemisorbStats(
       feet: dco_decode_usize(arr[0]),
       sitesInReach: dco_decode_usize(arr[1]),
@@ -19150,9 +19166,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       relaxed: dco_decode_usize(arr[8]),
       toRelax: dco_decode_usize(arr[9]),
       unconverged: dco_decode_usize(arr[10]),
-      listed: dco_decode_usize(arr[11]),
-      truncated: dco_decode_bool(arr[12]),
-      seconds: dco_decode_f_64(arr[13]),
+      matching: dco_decode_usize(arr[11]),
+      listed: dco_decode_usize(arr[12]),
+      truncated: dco_decode_bool(arr[13]),
+      seconds: dco_decode_f_64(arr[14]),
     );
   }
 
@@ -22955,6 +22972,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<APIChemisorbInventoryOption>
+      dco_decode_list_api_chemisorb_inventory_option(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_api_chemisorb_inventory_option)
+        .toList();
+  }
+
+  @protected
   List<APIChemisorbRow> dco_decode_list_api_chemisorb_row(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_api_chemisorb_row).toList();
@@ -25291,6 +25317,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_reach = sse_decode_f_64(deserializer);
     var var_maxFormedBonds = sse_decode_i_32(deserializer);
     var var_maxTransfers = sse_decode_i_32(deserializer);
+    var var_filterFormedBonds = sse_decode_opt_box_autoadd_i_32(deserializer);
+    var var_filterBonds = sse_decode_opt_String(deserializer);
     var var_topN = sse_decode_i_32(deserializer);
     var var_energyWindow = sse_decode_f_64(deserializer);
     var var_budget = sse_decode_i_32(deserializer);
@@ -25301,10 +25329,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         reach: var_reach,
         maxFormedBonds: var_maxFormedBonds,
         maxTransfers: var_maxTransfers,
+        filterFormedBonds: var_filterFormedBonds,
+        filterBonds: var_filterBonds,
         topN: var_topN,
         energyWindow: var_energyWindow,
         budget: var_budget,
         maxIterations: var_maxIterations);
+  }
+
+  @protected
+  APIChemisorbInventoryOption sse_decode_api_chemisorb_inventory_option(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_label = sse_decode_String(deserializer);
+    var var_count = sse_decode_usize(deserializer);
+    return APIChemisorbInventoryOption(label: var_label, count: var_count);
   }
 
   @protected
@@ -25313,7 +25352,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_stats = sse_decode_api_chemisorb_stats(deserializer);
     var var_rows = sse_decode_list_api_chemisorb_row(deserializer);
-    return APIChemisorbReport(stats: var_stats, rows: var_rows);
+    var var_inventoryOptions =
+        sse_decode_list_api_chemisorb_inventory_option(deserializer);
+    return APIChemisorbReport(
+        stats: var_stats,
+        rows: var_rows,
+        inventoryOptions: var_inventoryOptions);
   }
 
   @protected
@@ -25384,6 +25428,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_relaxed = sse_decode_usize(deserializer);
     var var_toRelax = sse_decode_usize(deserializer);
     var var_unconverged = sse_decode_usize(deserializer);
+    var var_matching = sse_decode_usize(deserializer);
     var var_listed = sse_decode_usize(deserializer);
     var var_truncated = sse_decode_bool(deserializer);
     var var_seconds = sse_decode_f_64(deserializer);
@@ -25399,6 +25444,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         relaxed: var_relaxed,
         toRelax: var_toRelax,
         unconverged: var_unconverged,
+        matching: var_matching,
         listed: var_listed,
         truncated: var_truncated,
         seconds: var_seconds);
@@ -29465,6 +29511,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<APIChemisorbInventoryOption>
+      sse_decode_list_api_chemisorb_inventory_option(
+          SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <APIChemisorbInventoryOption>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_api_chemisorb_inventory_option(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<APIChemisorbRow> sse_decode_list_api_chemisorb_row(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -32684,10 +32744,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_f_64(self.reach, serializer);
     sse_encode_i_32(self.maxFormedBonds, serializer);
     sse_encode_i_32(self.maxTransfers, serializer);
+    sse_encode_opt_box_autoadd_i_32(self.filterFormedBonds, serializer);
+    sse_encode_opt_String(self.filterBonds, serializer);
     sse_encode_i_32(self.topN, serializer);
     sse_encode_f_64(self.energyWindow, serializer);
     sse_encode_i_32(self.budget, serializer);
     sse_encode_i_32(self.maxIterations, serializer);
+  }
+
+  @protected
+  void sse_encode_api_chemisorb_inventory_option(
+      APIChemisorbInventoryOption self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.label, serializer);
+    sse_encode_usize(self.count, serializer);
   }
 
   @protected
@@ -32696,6 +32766,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_api_chemisorb_stats(self.stats, serializer);
     sse_encode_list_api_chemisorb_row(self.rows, serializer);
+    sse_encode_list_api_chemisorb_inventory_option(
+        self.inventoryOptions, serializer);
   }
 
   @protected
@@ -32745,6 +32817,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_usize(self.relaxed, serializer);
     sse_encode_usize(self.toRelax, serializer);
     sse_encode_usize(self.unconverged, serializer);
+    sse_encode_usize(self.matching, serializer);
     sse_encode_usize(self.listed, serializer);
     sse_encode_bool(self.truncated, serializer);
     sse_encode_f_64(self.seconds, serializer);
@@ -36000,6 +36073,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_api_candidate_node(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_api_chemisorb_inventory_option(
+      List<APIChemisorbInventoryOption> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_api_chemisorb_inventory_option(item, serializer);
     }
   }
 

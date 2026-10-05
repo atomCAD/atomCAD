@@ -16304,6 +16304,8 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_reach = <f64>::sse_decode(deserializer);
         let mut var_maxFormedBonds = <i32>::sse_decode(deserializer);
         let mut var_maxTransfers = <i32>::sse_decode(deserializer);
+        let mut var_filterFormedBonds = <Option<i32>>::sse_decode(deserializer);
+        let mut var_filterBonds = <Option<String>>::sse_decode(deserializer);
         let mut var_topN = <i32>::sse_decode(deserializer);
         let mut var_energyWindow = <f64>::sse_decode(deserializer);
         let mut var_budget = <i32>::sse_decode(deserializer);
@@ -16314,11 +16316,24 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             reach: var_reach,
             max_formed_bonds: var_maxFormedBonds,
             max_transfers: var_maxTransfers,
+            filter_formed_bonds: var_filterFormedBonds,
+            filter_bonds: var_filterBonds,
             top_n: var_topN,
             energy_window: var_energyWindow,
             budget: var_budget,
             max_iterations: var_maxIterations,
         };
+    }
+}
+
+impl SseDecode
+    for crate::api::structure_designer::structure_designer_api_types::APIChemisorbInventoryOption
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_label = <String>::sse_decode(deserializer);
+        let mut var_count = <usize>::sse_decode(deserializer);
+        return crate::api::structure_designer::structure_designer_api_types::APIChemisorbInventoryOption{label: var_label, count: var_count};
     }
 }
 
@@ -16331,9 +16346,11 @@ impl SseDecode
         let mut var_rows = <Vec<
             crate::api::structure_designer::structure_designer_api_types::APIChemisorbRow,
         >>::sse_decode(deserializer);
+        let mut var_inventoryOptions = <Vec<crate::api::structure_designer::structure_designer_api_types::APIChemisorbInventoryOption>>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIChemisorbReport {
             stats: var_stats,
             rows: var_rows,
+            inventory_options: var_inventoryOptions,
         };
     }
 }
@@ -16402,6 +16419,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_relaxed = <usize>::sse_decode(deserializer);
         let mut var_toRelax = <usize>::sse_decode(deserializer);
         let mut var_unconverged = <usize>::sse_decode(deserializer);
+        let mut var_matching = <usize>::sse_decode(deserializer);
         let mut var_listed = <usize>::sse_decode(deserializer);
         let mut var_truncated = <bool>::sse_decode(deserializer);
         let mut var_seconds = <f64>::sse_decode(deserializer);
@@ -16417,6 +16435,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             relaxed: var_relaxed,
             to_relax: var_toRelax,
             unconverged: var_unconverged,
+            matching: var_matching,
             listed: var_listed,
             truncated: var_truncated,
             seconds: var_seconds,
@@ -20205,6 +20224,22 @@ impl SseDecode
         let mut ans_ = vec![];
         for idx_ in 0..len_ {
             ans_.push(<crate::api::structure_designer::structure_designer_api_types::APICandidateNode>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode
+    for Vec<
+        crate::api::structure_designer::structure_designer_api_types::APIChemisorbInventoryOption,
+    >
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::structure_designer::structure_designer_api_types::APIChemisorbInventoryOption>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -24905,6 +24940,8 @@ impl flutter_rust_bridge::IntoDart
             self.reach.into_into_dart().into_dart(),
             self.max_formed_bonds.into_into_dart().into_dart(),
             self.max_transfers.into_into_dart().into_dart(),
+            self.filter_formed_bonds.into_into_dart().into_dart(),
+            self.filter_bonds.into_into_dart().into_dart(),
             self.top_n.into_into_dart().into_dart(),
             self.energy_window.into_into_dart().into_dart(),
             self.budget.into_into_dart().into_dart(),
@@ -24930,12 +24967,42 @@ impl
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart
+    for crate::api::structure_designer::structure_designer_api_types::APIChemisorbInventoryOption
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.label.into_into_dart().into_dart(),
+            self.count.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::structure_designer::structure_designer_api_types::APIChemisorbInventoryOption
+{
+}
+impl
+    flutter_rust_bridge::IntoIntoDart<
+        crate::api::structure_designer::structure_designer_api_types::APIChemisorbInventoryOption,
+    >
+    for crate::api::structure_designer::structure_designer_api_types::APIChemisorbInventoryOption
+{
+    fn into_into_dart(
+        self,
+    ) -> crate::api::structure_designer::structure_designer_api_types::APIChemisorbInventoryOption
+    {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
     for crate::api::structure_designer::structure_designer_api_types::APIChemisorbReport
 {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.stats.into_into_dart().into_dart(),
             self.rows.into_into_dart().into_dart(),
+            self.inventory_options.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -25042,6 +25109,7 @@ impl flutter_rust_bridge::IntoDart
             self.relaxed.into_into_dart().into_dart(),
             self.to_relax.into_into_dart().into_dart(),
             self.unconverged.into_into_dart().into_dart(),
+            self.matching.into_into_dart().into_dart(),
             self.listed.into_into_dart().into_dart(),
             self.truncated.into_into_dart().into_dart(),
             self.seconds.into_into_dart().into_dart(),
@@ -32128,10 +32196,22 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <f64>::sse_encode(self.reach, serializer);
         <i32>::sse_encode(self.max_formed_bonds, serializer);
         <i32>::sse_encode(self.max_transfers, serializer);
+        <Option<i32>>::sse_encode(self.filter_formed_bonds, serializer);
+        <Option<String>>::sse_encode(self.filter_bonds, serializer);
         <i32>::sse_encode(self.top_n, serializer);
         <f64>::sse_encode(self.energy_window, serializer);
         <i32>::sse_encode(self.budget, serializer);
         <i32>::sse_encode(self.max_iterations, serializer);
+    }
+}
+
+impl SseEncode
+    for crate::api::structure_designer::structure_designer_api_types::APIChemisorbInventoryOption
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.label, serializer);
+        <usize>::sse_encode(self.count, serializer);
     }
 }
 
@@ -32142,6 +32222,7 @@ impl SseEncode
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <crate::api::structure_designer::structure_designer_api_types::APIChemisorbStats>::sse_encode(self.stats, serializer);
         <Vec<crate::api::structure_designer::structure_designer_api_types::APIChemisorbRow>>::sse_encode(self.rows, serializer);
+        <Vec<crate::api::structure_designer::structure_designer_api_types::APIChemisorbInventoryOption>>::sse_encode(self.inventory_options, serializer);
     }
 }
 
@@ -32193,6 +32274,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <usize>::sse_encode(self.relaxed, serializer);
         <usize>::sse_encode(self.to_relax, serializer);
         <usize>::sse_encode(self.unconverged, serializer);
+        <usize>::sse_encode(self.matching, serializer);
         <usize>::sse_encode(self.listed, serializer);
         <bool>::sse_encode(self.truncated, serializer);
         <f64>::sse_encode(self.seconds, serializer);
@@ -34850,6 +34932,20 @@ impl SseEncode
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::api::structure_designer::structure_designer_api_types::APICandidateNode>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode
+    for Vec<
+        crate::api::structure_designer::structure_designer_api_types::APIChemisorbInventoryOption,
+    >
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::structure_designer::structure_designer_api_types::APIChemisorbInventoryOption>::sse_encode(item, serializer);
         }
     }
 }

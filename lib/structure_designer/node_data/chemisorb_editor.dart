@@ -15,6 +15,13 @@ import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 /// Editor for the `chemisorb` node — every way a posed adsorbate can bond to
 /// a substrate, relaxed and ranked.
 ///
+/// The settings are two groups, and the panel keeps them visibly apart:
+/// **search settings** (changing one needs a new Run) and **filters after
+/// search** (formed bonds, bond inventory, top N, energy window), which only
+/// choose what a finished search lists and apply at once. The split is a
+/// Rust-side rule — the filters are not fingerprinted — that the layout makes
+/// legible; it is not something the panel decides.
+///
 /// Bond forming is always on; transfers are enabled by wiring the `transfers`
 /// pin, and `max_transfers` stays visible but greyed while it is not — a value
 /// nothing reads now, which a wire makes live again unchanged.
@@ -69,12 +76,17 @@ class _ChemisorbEditorState extends State<ChemisorbEditor> {
     }
   }
 
+  /// Writes the settings with the given fields replaced. The two filters are
+  /// nullable — `null` means "no filter" — so they take [_keep] as their
+  /// "leave unchanged" default instead.
   void _commit({
     String? adsorbateTag,
     String? substrateTag,
     double? reach,
     int? maxFormedBonds,
     int? maxTransfers,
+    Object? filterFormedBonds = _keep,
+    Object? filterBonds = _keep,
     int? topN,
     double? energyWindow,
     int? budget,
@@ -90,6 +102,12 @@ class _ChemisorbEditorState extends State<ChemisorbEditor> {
         reach: reach ?? data.reach,
         maxFormedBonds: maxFormedBonds ?? data.maxFormedBonds,
         maxTransfers: maxTransfers ?? data.maxTransfers,
+        filterFormedBonds: identical(filterFormedBonds, _keep)
+            ? data.filterFormedBonds
+            : filterFormedBonds as int?,
+        filterBonds: identical(filterBonds, _keep)
+            ? data.filterBonds
+            : filterBonds as String?,
         topN: topN ?? data.topN,
         energyWindow: energyWindow ?? data.energyWindow,
         budget: budget ?? data.budget,
@@ -180,7 +198,12 @@ class _ChemisorbEditorState extends State<ChemisorbEditor> {
           _RunRow(report: _report, onRun: _run),
           const SizedBox(height: 12),
 
-          // ---- reactive atoms ---------------------------------------------
+          // ==== search settings: a change needs a new Run ===================
+          const _SectionHeader(
+            title: 'Search settings',
+            note: 'Changing these needs a new Run.',
+          ),
+          const SizedBox(height: 8),
           StringInput(
             key: ValueKey('chemisorb_ads_tag_${data.adsorbateTag}'),
             label: 'Adsorbate tag (empty = all atoms)',
@@ -194,9 +217,7 @@ class _ChemisorbEditorState extends State<ChemisorbEditor> {
             value: data.substrateTag,
             onChanged: (v) => _commit(substrateTag: v.trim()),
           ),
-          const SizedBox(height: 12),
-
-          // ---- geometry ---------------------------------------------------
+          const SizedBox(height: 8),
           FloatInput(
             label: 'Reach (Å)',
             value: data.reach,
@@ -233,9 +254,7 @@ class _ChemisorbEditorState extends State<ChemisorbEditor> {
                     ?.copyWith(fontStyle: FontStyle.italic),
               ),
             ),
-          const SizedBox(height: 12),
-
-          // ---- cost -------------------------------------------------------
+          const SizedBox(height: 8),
           IntInput(
             label: 'Budget (relaxations)',
             value: data.budget,
@@ -249,9 +268,42 @@ class _ChemisorbEditorState extends State<ChemisorbEditor> {
             minimumValue: 1,
             onChanged: (v) => _commit(maxIterations: v),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 20),
 
-          // ---- listing (re-lists a result, never makes it stale) ----------
+          // ==== filters after search: re-list, never re-run ===============
+          const _SectionHeader(
+            title: 'Filters after search',
+            note: 'These only choose what is listed from the last search and '
+                'apply at once — no new Run needed.',
+          ),
+          const SizedBox(height: 4),
+          CheckboxListTile(
+            title: const Text('Only a number of formed bonds'),
+            value: data.filterFormedBonds != null,
+            onChanged: (value) => _commit(
+              filterFormedBonds:
+                  (value ?? false) ? _DEFAULT_FORMED_BONDS_FILTER : null,
+            ),
+            controlAffinity: ListTileControlAffinity.leading,
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+          ),
+          if (data.filterFormedBonds != null)
+            Padding(
+              padding: const EdgeInsets.only(left: 16.0, bottom: 8.0),
+              child: IntInput(
+                label: 'Formed bonds (exactly)',
+                value: data.filterFormedBonds!,
+                minimumValue: 1,
+                onChanged: (v) => _commit(filterFormedBonds: v),
+              ),
+            ),
+          _InventoryDropdown(
+            value: data.filterBonds,
+            options: _report?.inventoryOptions ?? const [],
+            onChanged: (v) => _commit(filterBonds: v),
+          ),
+          const SizedBox(height: 8),
           IntInput(
             label: 'Top N',
             value: data.topN,
@@ -260,7 +312,7 @@ class _ChemisorbEditorState extends State<ChemisorbEditor> {
           ),
           const SizedBox(height: 8),
           FloatInput(
-            label: 'Energy window (kcal/mol above best)',
+            label: 'Energy window (kcal/mol above the best listed)',
             value: data.energyWindow,
             onChanged: (v) => _commit(energyWindow: v),
           ),
@@ -269,8 +321,8 @@ class _ChemisorbEditorState extends State<ChemisorbEditor> {
           // ---- the report -------------------------------------------------
           _StatsCard(report: _report),
           const SizedBox(height: 12),
-          if (_report != null && _report!.rows.isNotEmpty)
-            _CandidatesCard(rows: _report!.rows),
+          if (_report != null && _report!.stats.searched)
+            _CandidatesCard(report: _report!),
           const SizedBox(height: 16),
         ],
       ),
@@ -380,7 +432,10 @@ class _StatsCard extends StatelessWidget {
               _Row('To relax', '${stats.toRelax}'),
               _Row('Relaxed', '${stats.relaxed}'),
               _Row('Unconverged', '${stats.unconverged}'),
-              _Row('Listed', '${stats.listed}'),
+              if (stats.searched) ...[
+                _Row('Pass the filters', '${stats.matching}'),
+                _Row('Listed', '${stats.listed}'),
+              ],
               _Row(stats.searched ? 'Search time' : 'Plan time',
                   '${formatNatural(stats.seconds, 3)} s'),
             ],
@@ -394,15 +449,30 @@ class _StatsCard extends StatelessWidget {
 /// The listed candidates in rank order, by strain (UFF energy against the
 /// same pose relaxed with no bonds formed). The bond inventory is shown under
 /// every row because strains of different inventories do not compare cleanly.
+/// `rank` is the place in the whole ranking, so a filtered list may skip
+/// numbers; the line under the title says what the filters left out.
 class _CandidatesCard extends StatelessWidget {
-  final List<APIChemisorbRow> rows;
+  final APIChemisorbReport report;
 
-  const _CandidatesCard({required this.rows});
+  const _CandidatesCard({required this.report});
+
+  /// What the filters and the window/top N leave out, in one line.
+  static String _hiddenLine(APIChemisorbStats s) {
+    final filtered = s.relaxed - s.matching;
+    final beyond = s.matching - s.listed;
+    final parts = <String>[
+      if (filtered > BigInt.zero) '$filtered filtered out',
+      if (beyond > BigInt.zero) '$beyond past top N / energy window',
+    ];
+    return parts.isEmpty ? '' : 'Not listed: ${parts.join(', ')}.';
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final mono = theme.textTheme.bodySmall?.copyWith(fontFamily: 'monospace');
+    final rows = report.rows;
+    final hidden = _hiddenLine(report.stats);
     return Card(
       elevation: 1,
       child: Padding(
@@ -411,9 +481,23 @@ class _CandidatesCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Candidates (kcal/mol)', style: theme.textTheme.titleSmall),
+            if (hidden.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 2.0),
+                child: Text(
+                  hidden,
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(fontStyle: FontStyle.italic),
+                ),
+              ),
             const SizedBox(height: 4),
-            Text('rank  strain', style: mono),
-            const Divider(height: 8),
+            if (rows.isEmpty)
+              Text('No candidate passes the filters.',
+                  style: theme.textTheme.bodySmall)
+            else ...[
+              Text('rank  strain', style: mono),
+              const Divider(height: 8),
+            ],
             for (final row in rows)
               Tooltip(
                 message: 'sites: ${row.sites}\n'
@@ -443,6 +527,87 @@ class _CandidatesCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The `formed bonds` filter's value when it is first ticked.
+const int _DEFAULT_FORMED_BONDS_FILTER = 1;
+
+/// The "leave unchanged" default of [_ChemisorbEditorState._commit]'s two
+/// nullable filter arguments, where `null` already means "no filter".
+const Object _keep = Object();
+
+/// A section title with a one-line note under it.
+class _SectionHeader extends StatelessWidget {
+  final String title;
+  final String note;
+
+  const _SectionHeader({required this.title, required this.note});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: theme.textTheme.titleSmall),
+        const SizedBox(height: 2),
+        Text(
+          note,
+          style:
+              theme.textTheme.bodySmall?.copyWith(fontStyle: FontStyle.italic),
+        ),
+        const Divider(height: 10),
+      ],
+    );
+  }
+}
+
+/// The bond-inventory filter: "any", or one of the inventories the current
+/// result (or, before a run, the plan) contains, each with its count. A stored
+/// choice the current result does not contain stays selectable, with a count
+/// of 0, so the dropdown never silently drops it.
+class _InventoryDropdown extends StatelessWidget {
+  final String? value;
+  final List<APIChemisorbInventoryOption> options;
+  final ValueChanged<String?> onChanged;
+
+  const _InventoryDropdown({
+    required this.value,
+    required this.options,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = <(String, BigInt)>[
+      for (final o in options) (o.label, o.count),
+      if (value != null && !options.any((o) => o.label == value))
+        (value!, BigInt.zero),
+    ];
+    return DropdownButtonFormField<String?>(
+      key: ValueKey('chemisorb_bonds_filter_$value'),
+      decoration: const InputDecoration(
+        labelText: 'Bond inventory',
+        border: OutlineInputBorder(),
+        isDense: true,
+        contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      ),
+      isExpanded: true,
+      value: value,
+      items: [
+        const DropdownMenuItem<String?>(
+          value: null,
+          child: Text('Any'),
+        ),
+        for (final (label, count) in entries)
+          DropdownMenuItem<String?>(
+            value: label,
+            child: Text('$label  ($count)', overflow: TextOverflow.ellipsis),
+          ),
+      ],
+      onChanged: onChanged,
     );
   }
 }
