@@ -135,7 +135,7 @@ crates/atomcad-crystolecule/src/
 | `ProxyOptions` | `proxy_cut.rs` | What a proxy cut is tunable by: `hops` / `rim` (frozen shells counted inward from the cut boundary, so the absolute free depth is `hops - rim` — `free_hops()`) / `fill` / `rm_single` / `passivate` / `passivant_element` / `core`. Unsigned — the node's "-1 means off" rules are validated before this struct is built, and `core` is the one `Option` |
 | `ProxyPlan` | `proxy_cut.rs` | Everything one cut decided and nothing mutated: per-atom bond distance, the keep/drop sets, the severed-bond caps, the frozen and `high` lists. Every `Vec` is sorted by atom id so the ids `apply_proxy` hands out are deterministic |
 | `ProxyStats` | `proxy_cut.rs` | The report `apply_proxy` returns: formula, atom counts, `farthest_hop` (a **size** figure) beside `free_hops` (the derived depth of the relaxed interior; the shielding figure is the `rim` option itself), `open_valences`, `min_cap_pair`, and `nearest_dropped` — which counts only dropped atoms the cluster is **not attached to** (`DETACHED_MIN_BOND_SEPARATION`), since the workpiece continuing past the cut is always ~2 bonds from the free region and would otherwise report a steric neighbour on every bulk cut. The `proxy` node stores it in the eval cache, never on the node data |
-| `ChemisorptionSearch` / `SearchPlan` / `SearchReport` / `Candidate` | `chemisorption/` | One search of one posed adsorbate over a substrate: the settings, what `plan` enumerated (hypotheses + pruning counts, nothing relaxed), and what `evaluate` ranked (relaxed candidates scored against the relaxed no-change reference) |
+| `ChemisorptionSearch` / `SearchPlan` / `SearchReport` / `Candidate` | `chemisorption/` | One search of one posed adsorbate over a substrate: the settings, what `plan` enumerated (hypotheses + valence/duplicate counts, nothing relaxed), and what `evaluate` ranked (relaxed candidates scored against the relaxed no-change reference) |
 | `LatticeFillConfig` | `lattice_fill/config.rs` | Unit cell + motif + geometry + options for filling |
 | `PlacedAtomTracker` | `lattice_fill/placed_atom_tracker.rs` | CrystallographicAddress → atom ID mapping |
 | `AtomInfo` | `atomic_constants.rs` | Element properties (symbol, radii, color) |
@@ -262,7 +262,7 @@ external mechanosynth working folder (it carries proprietary context). Rules
 that are easy to erode:
 
 - **`plan` never relaxes.** It is the half a node runs on every evaluation, so
-  it is enumeration only — sites, reach, valence and pair-tolerance checks.
+  it is enumeration only — sites, reach and valence checks.
   Anything that needs UFF belongs in `evaluate`.
 - **A site is an atom with a free valence, nothing more.** No plane, facet or
   passivation notion; an H placed on the substrate blocks its host by
@@ -272,9 +272,10 @@ that are easy to erode:
 - **Every scored element is in Appendix A of the design, copied verbatim** into
   `score.rs`. A missing pair is a flagged Pauling estimate; an element outside
   the twelve is a blocking error at `plan` time. Never fill a gap from memory.
-- **The pair-tolerance default is calibrated** by the ignored
-  `chemisorption_pruning_calibration` test (UFF lets feet flex by >2.5 Å of
-  site mismatch within the listing window); rerun it before lowering it.
+- **No geometric pruning of multi-bond patterns.** A site-spacing filter
+  (pair tolerance) existed and was removed: UFF lets feet flex by >2.5 Å of
+  site mismatch within the listing window, so any useful tolerance pruned
+  real candidates, and users could not tune it.
 - The ranking is deterministic: relaxations run in parallel (rayon) but are
   collected in plan order and sorted by score, ties by the normalized bond
   set (`rank_candidates`).
@@ -716,7 +717,7 @@ tests/crystolecule/
 ├── field_test.rs                  # ScalarField contract: bounds, interpolation, gradients
 ├── patch_test.rs                  # Cell selection, region depths, apply_patch pipeline
 ├── patch_build_test.rs            # Tiling-vector validation, tile extraction
-├── chemisorption_test.rs          # plan counts/pruning/valence/tags, enthalpy tables, ranking, transfers (candidates, dedupe, seating, OH tripod), ethylene di-σ and water (a UFF tie) known answers, ignored pruning calibration
+├── chemisorption_test.rs          # plan counts/pruning/valence/tags, enthalpy tables, ranking, transfers (candidates, dedupe, seating, OH tripod), ethylene di-σ and water (a UFF tie) known answers
 ├── proxy_cut_test.rs              # Riders, bond distances, fill/rm_single keep set, severed-bond caps; the §4.3 bulk-silicon fill table
 ├── concave_rebond_test.rs         # Concave-corner rebonding; clash detector re-derived independently
 ├── io/

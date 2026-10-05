@@ -975,8 +975,6 @@ pub struct APIChemisorbData {
     pub substrate_tag: String,
     /// Maximum adsorbate atom to site distance for a bond (Å).
     pub reach: f64,
-    /// Pair tolerance (Å); 0 = off.
-    pub pair_tolerance: f64,
     /// At most this many bonds formed per hypothesis; 0 = no cap.
     pub max_formed_bonds: i32,
     /// At most this many transfers per hypothesis; read only while the
@@ -1001,7 +999,6 @@ pub struct APIChemisorbStats {
     pub transfer_candidates: usize,
     pub considered: usize,
     pub pruned_valence: usize,
-    pub pruned_pair_tolerance: usize,
     pub duplicates: usize,
     /// The node outputs a search result for its current inputs.
     pub searched: bool,
@@ -1062,7 +1059,6 @@ impl From<&ChemisorbData> for APIChemisorbData {
             adsorbate_tag: d.adsorbate_tag.clone(),
             substrate_tag: d.substrate_tag.clone(),
             reach: d.reach,
-            pair_tolerance: d.pair_tolerance,
             max_formed_bonds: d.max_formed_bonds,
             max_transfers: d.max_transfers,
             top_n: d.top_n,
@@ -1079,7 +1075,6 @@ impl From<&APIChemisorbData> for ChemisorbData {
             adsorbate_tag: d.adsorbate_tag.clone(),
             substrate_tag: d.substrate_tag.clone(),
             reach: d.reach,
-            pair_tolerance: d.pair_tolerance,
             max_formed_bonds: d.max_formed_bonds,
             max_transfers: d.max_transfers,
             top_n: d.top_n,
@@ -1101,7 +1096,6 @@ impl From<&ChemisorbEvalCache> for APIChemisorbReport {
                 transfer_candidates: s.transfer_candidates,
                 considered: s.considered,
                 pruned_valence: s.pruned_valence,
-                pruned_pair_tolerance: s.pruned_pair_tolerance,
                 duplicates: s.duplicates,
                 searched: s.searched,
                 stale: s.stale,

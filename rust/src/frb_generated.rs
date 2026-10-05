@@ -16302,7 +16302,6 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_adsorbateTag = <String>::sse_decode(deserializer);
         let mut var_substrateTag = <String>::sse_decode(deserializer);
         let mut var_reach = <f64>::sse_decode(deserializer);
-        let mut var_pairTolerance = <f64>::sse_decode(deserializer);
         let mut var_maxFormedBonds = <i32>::sse_decode(deserializer);
         let mut var_maxTransfers = <i32>::sse_decode(deserializer);
         let mut var_topN = <i32>::sse_decode(deserializer);
@@ -16313,7 +16312,6 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             adsorbate_tag: var_adsorbateTag,
             substrate_tag: var_substrateTag,
             reach: var_reach,
-            pair_tolerance: var_pairTolerance,
             max_formed_bonds: var_maxFormedBonds,
             max_transfers: var_maxTransfers,
             top_n: var_topN,
@@ -16404,7 +16402,6 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_transferCandidates = <usize>::sse_decode(deserializer);
         let mut var_considered = <usize>::sse_decode(deserializer);
         let mut var_prunedValence = <usize>::sse_decode(deserializer);
-        let mut var_prunedPairTolerance = <usize>::sse_decode(deserializer);
         let mut var_duplicates = <usize>::sse_decode(deserializer);
         let mut var_searched = <bool>::sse_decode(deserializer);
         let mut var_stale = <bool>::sse_decode(deserializer);
@@ -16421,7 +16418,6 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             transfer_candidates: var_transferCandidates,
             considered: var_considered,
             pruned_valence: var_prunedValence,
-            pruned_pair_tolerance: var_prunedPairTolerance,
             duplicates: var_duplicates,
             searched: var_searched,
             stale: var_stale,
@@ -24915,7 +24911,6 @@ impl flutter_rust_bridge::IntoDart
             self.adsorbate_tag.into_into_dart().into_dart(),
             self.substrate_tag.into_into_dart().into_dart(),
             self.reach.into_into_dart().into_dart(),
-            self.pair_tolerance.into_into_dart().into_dart(),
             self.max_formed_bonds.into_into_dart().into_dart(),
             self.max_transfers.into_into_dart().into_dart(),
             self.top_n.into_into_dart().into_dart(),
@@ -25052,7 +25047,6 @@ impl flutter_rust_bridge::IntoDart
             self.transfer_candidates.into_into_dart().into_dart(),
             self.considered.into_into_dart().into_dart(),
             self.pruned_valence.into_into_dart().into_dart(),
-            self.pruned_pair_tolerance.into_into_dart().into_dart(),
             self.duplicates.into_into_dart().into_dart(),
             self.searched.into_into_dart().into_dart(),
             self.stale.into_into_dart().into_dart(),
@@ -32144,7 +32138,6 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <String>::sse_encode(self.adsorbate_tag, serializer);
         <String>::sse_encode(self.substrate_tag, serializer);
         <f64>::sse_encode(self.reach, serializer);
-        <f64>::sse_encode(self.pair_tolerance, serializer);
         <i32>::sse_encode(self.max_formed_bonds, serializer);
         <i32>::sse_encode(self.max_transfers, serializer);
         <i32>::sse_encode(self.top_n, serializer);
@@ -32209,7 +32202,6 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <usize>::sse_encode(self.transfer_candidates, serializer);
         <usize>::sse_encode(self.considered, serializer);
         <usize>::sse_encode(self.pruned_valence, serializer);
-        <usize>::sse_encode(self.pruned_pair_tolerance, serializer);
         <usize>::sse_encode(self.duplicates, serializer);
         <bool>::sse_encode(self.searched, serializer);
         <bool>::sse_encode(self.stale, serializer);

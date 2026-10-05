@@ -87,9 +87,6 @@ const VDW_CUTOFF: f64 = 6.0;
 fn default_reach() -> f64 {
     3.5
 }
-fn default_pair_tolerance() -> f64 {
-    ChemisorptionSearch::default().pair_tolerance
-}
 fn default_max_transfers() -> i32 {
     1
 }
@@ -126,9 +123,6 @@ pub struct ChemisorbData {
     /// Maximum adsorbate atom to site distance for a bond to be considered (Å).
     #[serde(default = "default_reach")]
     pub reach: f64,
-    /// Pair tolerance `δ` (Å); `0` switches the check off.
-    #[serde(default = "default_pair_tolerance")]
-    pub pair_tolerance: f64,
     /// At most this many bonds formed per hypothesis; `0` = no cap.
     #[serde(default)]
     pub max_formed_bonds: i32,
@@ -162,7 +156,6 @@ impl Default for ChemisorbData {
             adsorbate_tag: String::new(),
             substrate_tag: String::new(),
             reach: default_reach(),
-            pair_tolerance: default_pair_tolerance(),
             max_formed_bonds: 0,
             max_transfers: default_max_transfers(),
             top_n: default_top_n(),
@@ -185,7 +178,6 @@ pub struct ChemisorbStatsView {
     pub transfer_candidates: usize,
     pub considered: usize,
     pub pruned_valence: usize,
-    pub pruned_pair_tolerance: usize,
     pub duplicates: usize,
     /// The outputs are a search result for the current inputs.
     pub searched: bool,
@@ -270,7 +262,6 @@ impl ChemisorbData {
             adsorbate_tag: tag(&self.adsorbate_tag),
             substrate_tag: tag(&self.substrate_tag),
             reach: self.reach,
-            pair_tolerance: self.pair_tolerance,
             max_formed_bonds: (self.max_formed_bonds > 0).then_some(self.max_formed_bonds as usize),
             transfers,
             max_transfers: self.max_transfers as usize,
@@ -491,10 +482,6 @@ fn stats_record(s: &ChemisorbStatsView) -> NetworkResult {
         ),
         ("considered".to_string(), int(s.considered)),
         ("pruned_valence".to_string(), int(s.pruned_valence)),
-        (
-            "pruned_pair_tolerance".to_string(),
-            int(s.pruned_pair_tolerance),
-        ),
         ("duplicates".to_string(), int(s.duplicates)),
         ("searched".to_string(), NetworkResult::Bool(s.searched)),
         ("stale".to_string(), NetworkResult::Bool(s.stale)),
@@ -543,7 +530,6 @@ pub fn chemisorb_outputs(
             transfer_candidates: s.transfer_candidates,
             considered: s.considered,
             pruned_valence: s.pruned_valence,
-            pruned_pair_tolerance: s.pruned_pair_tolerance,
             duplicates: s.duplicates,
             searched: true,
             stale: false,
@@ -582,7 +568,6 @@ pub fn chemisorb_outputs(
         transfer_candidates: p.transfer_candidates,
         considered: p.considered,
         pruned_valence: p.pruned_valence,
-        pruned_pair_tolerance: p.pruned_pair_tolerance,
         duplicates: p.duplicates,
         searched: false,
         stale: data.stored.is_some(),
@@ -691,7 +676,7 @@ impl NodeData for ChemisorbData {
     }
 
     fn get_subtitle(&self, connected_input_pins: &HashSet<String>) -> Option<String> {
-        let mut subtitle = format!("reach {} Å · δ {} Å", self.reach, self.pair_tolerance);
+        let mut subtitle = format!("reach {} Å", self.reach);
         if connected_input_pins.contains("transfers") {
             subtitle.push_str(&format!(" · ≤{} transfers", self.max_transfers));
         }
@@ -717,10 +702,6 @@ impl NodeData for ChemisorbData {
                 TextValue::String(self.substrate_tag.clone()),
             ),
             ("reach".to_string(), TextValue::Float(self.reach)),
-            (
-                "pair_tolerance".to_string(),
-                TextValue::Float(self.pair_tolerance),
-            ),
             (
                 "max_formed_bonds".to_string(),
                 TextValue::Int(self.max_formed_bonds),
@@ -780,9 +761,6 @@ impl NodeData for ChemisorbData {
         if let Some(v) = float("reach")? {
             self.reach = v;
         }
-        if let Some(v) = float("pair_tolerance")? {
-            self.pair_tolerance = v;
-        }
         if let Some(v) = int("max_formed_bonds")? {
             self.max_formed_bonds = v;
         }
@@ -824,9 +802,7 @@ pub fn get_node_type() -> NodeType {
                       on the substrate blocks its host. Each adsorbate reactive atom with a \
                       free valence forms at most one bond, to a site within **reach** (Å). \
                       Every partial binding is enumerated too, up to **max_formed_bonds** \
-                      (0 = no cap). **pair_tolerance** (Å, 0 = off) prunes multi-bond \
-                      patterns whose site spacing differs from the adsorbate atoms' spacing by \
-                      more than this. **adsorbate_tag** / **substrate_tag** restrict the \
+                      (0 = no cap). **adsorbate_tag** / **substrate_tag** restrict the \
                       reactive atoms (empty = all). **budget** caps the relaxations; a \
                       truncated search is not exhaustive.\n\
                       \n\

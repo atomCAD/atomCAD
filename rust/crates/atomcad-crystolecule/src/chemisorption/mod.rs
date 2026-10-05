@@ -14,8 +14,8 @@
 //!
 //! Two reaction kinds. **Bond forming** is always on: each adsorbate reactive
 //! atom with a free valence forms at most one new bond, to a site within
-//! `reach`; a site takes as many as its free valence allows; multi-bond
-//! hypotheses are pruned by the pair tolerance. **Transfers** are opt-in, one
+//! `reach`; a site takes as many as its free valence allows. **Transfers** are
+//! opt-in, one
 //! [`TransferRule`] per enabled (element, direction): a monovalent atom moves
 //! from its donor to an acceptor on the other side (an OH leg handing its H to
 //! a site, a radical foot abstracting surface H). Scores are relative to the

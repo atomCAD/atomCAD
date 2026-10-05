@@ -1030,7 +1030,6 @@ impl NodeTypeRegistry {
                     ("sites_in_reach".to_string(), DataType::Int),
                     ("considered".to_string(), DataType::Int),
                     ("pruned_valence".to_string(), DataType::Int),
-                    ("pruned_pair_tolerance".to_string(), DataType::Int),
                     ("duplicates".to_string(), DataType::Int),
                     ("searched".to_string(), DataType::Bool),
                     ("stale".to_string(), DataType::Bool),

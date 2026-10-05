@@ -60,7 +60,6 @@ pub fn input_fingerprint(
         adsorbate_tag,
         substrate_tag,
         reach,
-        pair_tolerance,
         max_formed_bonds,
         transfers,
         max_transfers,
@@ -72,7 +71,6 @@ pub fn input_fingerprint(
     adsorbate_tag.hash(&mut h);
     substrate_tag.hash(&mut h);
     reach.to_bits().hash(&mut h);
-    pair_tolerance.to_bits().hash(&mut h);
     max_formed_bonds.hash(&mut h);
     // `max_transfers` is read only when a transfer rule is enabled, so without
     // one it must not make a result stale.

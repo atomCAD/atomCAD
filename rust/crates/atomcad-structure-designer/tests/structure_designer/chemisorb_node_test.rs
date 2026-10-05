@@ -285,10 +285,7 @@ fn before_run_the_node_outputs_the_plan_and_relaxes_nothing() {
     assert_eq!(string(&s, "estimated_pairs"), "");
     assert_eq!(
         int(&s, "considered"),
-        int(&s, "pruned_valence")
-            + int(&s, "pruned_pair_tolerance")
-            + int(&s, "duplicates")
-            + int(&s, "to_relax")
+        int(&s, "pruned_valence") + int(&s, "duplicates") + int(&s, "to_relax")
     );
 
     // However often it is evaluated, nothing is stored and nothing relaxed.
@@ -694,7 +691,7 @@ fn author_and_serialize(source: &str) -> String {
 #[test]
 fn every_property_round_trips_through_the_text_format() {
     const FULL: &str = "c = chemisorb { adsorbate_tag: \"feet\", substrate_tag: \"top\", \
-                        reach: 4.5, pair_tolerance: 0.0, max_formed_bonds: 3, max_transfers: 2, top_n: 5, \
+                        reach: 4.5, max_formed_bonds: 3, max_transfers: 2, top_n: 5, \
                         energy_window: 12.5, budget: 500, max_iterations: 800 }";
     let serialized = author_and_serialize(&format!("{FULL}\n"));
     assert!(serialized.contains(FULL), "got:\n{serialized}");
@@ -705,8 +702,7 @@ fn every_property_round_trips_through_the_text_format() {
     assert!(
         short.contains(
             "c = chemisorb { adsorbate_tag: \"\", substrate_tag: \"\", reach: 3.5, \
-             pair_tolerance: 3.0, max_formed_bonds: 0, max_transfers: 1, top_n: 10, \
-             energy_window: 30.0, \
+             max_formed_bonds: 0, max_transfers: 1, top_n: 10, energy_window: 30.0, \
              budget: 10000, max_iterations: 2000 }"
         ),
         "got:\n{short}"

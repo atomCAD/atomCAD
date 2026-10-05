@@ -19065,19 +19065,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIChemisorbData dco_decode_api_chemisorb_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 10)
-      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
     return APIChemisorbData(
       adsorbateTag: dco_decode_String(arr[0]),
       substrateTag: dco_decode_String(arr[1]),
       reach: dco_decode_f_64(arr[2]),
-      pairTolerance: dco_decode_f_64(arr[3]),
-      maxFormedBonds: dco_decode_i_32(arr[4]),
-      maxTransfers: dco_decode_i_32(arr[5]),
-      topN: dco_decode_i_32(arr[6]),
-      energyWindow: dco_decode_f_64(arr[7]),
-      budget: dco_decode_i_32(arr[8]),
-      maxIterations: dco_decode_i_32(arr[9]),
+      maxFormedBonds: dco_decode_i_32(arr[3]),
+      maxTransfers: dco_decode_i_32(arr[4]),
+      topN: dco_decode_i_32(arr[5]),
+      energyWindow: dco_decode_f_64(arr[6]),
+      budget: dco_decode_i_32(arr[7]),
+      maxIterations: dco_decode_i_32(arr[8]),
     );
   }
 
@@ -19140,25 +19139,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIChemisorbStats dco_decode_api_chemisorb_stats(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 16)
-      throw Exception('unexpected arr length: expect 16 but see ${arr.length}');
+    if (arr.length != 15)
+      throw Exception('unexpected arr length: expect 15 but see ${arr.length}');
     return APIChemisorbStats(
       feet: dco_decode_usize(arr[0]),
       sitesInReach: dco_decode_usize(arr[1]),
       transferCandidates: dco_decode_usize(arr[2]),
       considered: dco_decode_usize(arr[3]),
       prunedValence: dco_decode_usize(arr[4]),
-      prunedPairTolerance: dco_decode_usize(arr[5]),
-      duplicates: dco_decode_usize(arr[6]),
-      searched: dco_decode_bool(arr[7]),
-      stale: dco_decode_bool(arr[8]),
-      relaxed: dco_decode_usize(arr[9]),
-      toRelax: dco_decode_usize(arr[10]),
-      unconverged: dco_decode_usize(arr[11]),
-      listed: dco_decode_usize(arr[12]),
-      truncated: dco_decode_bool(arr[13]),
-      estimatedPairs: dco_decode_String(arr[14]),
-      seconds: dco_decode_f_64(arr[15]),
+      duplicates: dco_decode_usize(arr[5]),
+      searched: dco_decode_bool(arr[6]),
+      stale: dco_decode_bool(arr[7]),
+      relaxed: dco_decode_usize(arr[8]),
+      toRelax: dco_decode_usize(arr[9]),
+      unconverged: dco_decode_usize(arr[10]),
+      listed: dco_decode_usize(arr[11]),
+      truncated: dco_decode_bool(arr[12]),
+      estimatedPairs: dco_decode_String(arr[13]),
+      seconds: dco_decode_f_64(arr[14]),
     );
   }
 
@@ -25295,7 +25293,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_adsorbateTag = sse_decode_String(deserializer);
     var var_substrateTag = sse_decode_String(deserializer);
     var var_reach = sse_decode_f_64(deserializer);
-    var var_pairTolerance = sse_decode_f_64(deserializer);
     var var_maxFormedBonds = sse_decode_i_32(deserializer);
     var var_maxTransfers = sse_decode_i_32(deserializer);
     var var_topN = sse_decode_i_32(deserializer);
@@ -25306,7 +25303,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         adsorbateTag: var_adsorbateTag,
         substrateTag: var_substrateTag,
         reach: var_reach,
-        pairTolerance: var_pairTolerance,
         maxFormedBonds: var_maxFormedBonds,
         maxTransfers: var_maxTransfers,
         topN: var_topN,
@@ -25392,7 +25388,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_transferCandidates = sse_decode_usize(deserializer);
     var var_considered = sse_decode_usize(deserializer);
     var var_prunedValence = sse_decode_usize(deserializer);
-    var var_prunedPairTolerance = sse_decode_usize(deserializer);
     var var_duplicates = sse_decode_usize(deserializer);
     var var_searched = sse_decode_bool(deserializer);
     var var_stale = sse_decode_bool(deserializer);
@@ -25409,7 +25404,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         transferCandidates: var_transferCandidates,
         considered: var_considered,
         prunedValence: var_prunedValence,
-        prunedPairTolerance: var_prunedPairTolerance,
         duplicates: var_duplicates,
         searched: var_searched,
         stale: var_stale,
@@ -32700,7 +32694,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.adsorbateTag, serializer);
     sse_encode_String(self.substrateTag, serializer);
     sse_encode_f_64(self.reach, serializer);
-    sse_encode_f_64(self.pairTolerance, serializer);
     sse_encode_i_32(self.maxFormedBonds, serializer);
     sse_encode_i_32(self.maxTransfers, serializer);
     sse_encode_i_32(self.topN, serializer);
@@ -32761,7 +32754,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_usize(self.transferCandidates, serializer);
     sse_encode_usize(self.considered, serializer);
     sse_encode_usize(self.prunedValence, serializer);
-    sse_encode_usize(self.prunedPairTolerance, serializer);
     sse_encode_usize(self.duplicates, serializer);
     sse_encode_bool(self.searched, serializer);
     sse_encode_bool(self.stale, serializer);

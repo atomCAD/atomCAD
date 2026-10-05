@@ -1054,10 +1054,6 @@ Moves within one side (H hopping along the surface) are not searched.
   of the search. A tag no atom carries is an error, so a typo does not read as
   "found nothing".
 - `reach` (default 3.5 Å) — the largest foot-to-site distance considered.
-- `pair_tolerance` (default 3.0 Å, 0 = off) — prunes multi-bond patterns: two
-  chosen sites must be as far apart as the two feet bonding to them, within
-  this. The default is deliberately generous. UFF lets a molecule flex a long
-  way, and in calibration a tighter value (1 Å) pruned the best binding.
 - `max_formed_bonds` (default 0 = no cap) — at most this many bonds per
   pattern. Transfers are not counted.
 - `max_transfers` (default 1) — at most this many transfers per pattern,
@@ -1090,7 +1086,7 @@ The relaxations follow the van der Waals setting in Preferences (the same one
   `structure` field (`array_at` + `record_destructure`).
 - `stats` (`ChemisorbStats`) — the whole search: `feet`, `sites_in_reach`,
   `transfer_candidates` (the donor–atom–acceptor moves the records allow),
-  `considered`, `pruned_valence`, `pruned_pair_tolerance`, `duplicates`,
+  `considered`, `pruned_valence`, `duplicates`,
   `to_relax`, `relaxed`, `unconverged`, `listed`, `truncated`,
   `estimated_pairs`, `seconds`, and the two run-state flags `searched` and
   `stale`. Downstream nodes can tell a result from a plan by `searched`.
@@ -1140,14 +1136,16 @@ bonds on the same kind of atoms, treat their order as undecided.
 
 **What "exhaustive" means here.** For the given pose, every bonding pattern the
 settings allow is relaxed, unless `truncated` is set. The assumptions are
-exactly the settings: the pose, the tags, `reach`, `pair_tolerance`, the caps
+exactly the settings: the pose, the tags, `reach`, the caps
 and the enabled transfers. Patterns that need the molecule to rotate far from
 its pose, to lose a group of atoms or to break one of its own bonds (other than
 by an enabled transfer) are not searched.
 
-A known quirk: the pair check compares distances only, so a "crossed" pattern
-(foot 1 on site B, foot 2 on site A) passes it. UFF relaxes such a pattern into
-a tangled structure that ranks last, typically with a very large strain.
+Patterns are not filtered by geometry: any combination of sites within
+`reach` is tried, however well or badly its spacing matches the feet. A
+"crossed" pattern (foot 1 on site B, foot 2 on site A) is therefore searched
+too; UFF relaxes it into a tangled structure that ranks last, typically with a
+very large strain.
 
 **Reading the panel.** The panel shows the **Run** button, with the number of
 hypotheses a run would relax (or what the last run did) beside it; a red line

@@ -20,16 +20,6 @@ pub struct ChemisorptionSearch {
     /// Maximum distance between an adsorbate reactive atom and a site for a
     /// bond between them to be considered (Å).
     pub reach: f64,
-    /// Pair tolerance `δ` (Å): two chosen sites must be as far apart as the
-    /// two adsorbate atoms bonding to them, within this. `0.0` switches the
-    /// check off.
-    ///
-    /// The default is calibrated, not guessed (the ignored
-    /// `chemisorption_pruning_calibration` test): UFF lets a tripod's feet flex
-    /// far enough that its best binding on Si(100) can need 1.45 Å, and its
-    /// full three-leg binding, 23 kcal/mol above that, 2.64 Å. The design's
-    /// first guess, 1.0 Å, pruned the best candidate in most poses.
-    pub pair_tolerance: f64,
     /// At most this many bonds formed per hypothesis. `None` = no cap.
     /// Transfers are not counted.
     pub max_formed_bonds: Option<usize>,
@@ -56,7 +46,6 @@ impl Default for ChemisorptionSearch {
             adsorbate_tag: None,
             substrate_tag: None,
             reach: 3.5,
-            pair_tolerance: 3.0,
             max_formed_bonds: None,
             transfers: Vec::new(),
             max_transfers: 1,
@@ -74,9 +63,6 @@ impl ChemisorptionSearch {
         let invalid = |msg: &str| Err(ChemisorptionError::InvalidConfig(msg.to_string()));
         if !(self.reach.is_finite() && self.reach > 0.0) {
             return invalid("reach must be a positive distance");
-        }
-        if !(self.pair_tolerance.is_finite() && self.pair_tolerance >= 0.0) {
-            return invalid("pair tolerance must be zero (off) or a positive distance");
         }
         if self.max_formed_bonds == Some(0) {
             return invalid("max formed bonds must be at least 1");

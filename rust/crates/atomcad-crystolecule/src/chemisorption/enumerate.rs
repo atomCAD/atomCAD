@@ -78,7 +78,7 @@ impl Hypothesis {
 
 /// What `plan` found and counted. Every branch of the search ends exactly
 /// once, so
-/// `considered == pruned_valence + pruned_pair_tolerance + duplicates + to_relax`
+/// `considered == pruned_valence + duplicates + to_relax`
 /// — plus the one complete assignment that tripped the budget, when
 /// `truncated`. A transfer set that breaks a valence, or repeats an earlier
 /// one, is one considered (and pruned, or duplicate) branch.
@@ -96,8 +96,6 @@ pub struct PlanStats {
     pub considered: usize,
     /// Rejected because an atom would exceed its valence (R6).
     pub pruned_valence: usize,
-    /// Rejected by the pair tolerance (R3).
-    pub pruned_pair_tolerance: usize,
     /// Merged with an earlier one of the same bond set.
     pub duplicates: usize,
     /// Valid, deduplicated hypotheses: the relaxations `evaluate` will run.
@@ -218,7 +216,6 @@ struct Site {
 struct Foot {
     id: u32,
     element: i16,
-    pos: DVec3,
     /// Free valence before any transfer.
     base: usize,
     /// Indices into the site list, ascending: within reach, not both frozen.
@@ -386,11 +383,6 @@ impl Enumerator<'_> {
                     self.stats.pruned_valence += 1;
                     continue;
                 }
-                if !self.pair_ok(foot, s) {
-                    self.stats.considered += 1;
-                    self.stats.pruned_pair_tolerance += 1;
-                    continue;
-                }
                 self.chosen.push((foot, s));
                 self.site_used[s] += 1;
                 self.dfs(k + 1);
@@ -400,20 +392,6 @@ impl Enumerator<'_> {
         }
         // This foot forms no bond.
         self.dfs(k + 1);
-    }
-
-    /// Whether site `s` for foot `f` keeps every chosen pair within `δ`.
-    fn pair_ok(&self, f: usize, s: usize) -> bool {
-        let delta = self.config.pair_tolerance;
-        if delta <= 0.0 {
-            return true;
-        }
-        let (fp, sp) = (self.feet[f].pos, self.sites[s].pos);
-        self.chosen.iter().all(|&(g, t)| {
-            let foot_distance = fp.distance(self.feet[g].pos);
-            let site_distance = sp.distance(self.sites[t].pos);
-            (site_distance - foot_distance).abs() <= delta
-        })
     }
 
     fn element(&self, id: u32) -> i16 {
@@ -484,7 +462,7 @@ fn check_scorable(
 /// Enumerates the bonding patterns of `adsorbate` over `substrate` at the
 /// given pose (§5.2 of the design): transfer sets first, then bond forming —
 /// one new bond per adsorbate atom, a site taking as many as its valence
-/// allows, pruned by the pair tolerance. Relaxes nothing.
+/// allows. Relaxes nothing.
 pub fn plan(
     adsorbate: &AtomicStructure,
     substrate: &AtomicStructure,
@@ -573,7 +551,6 @@ pub fn plan(
         feet.push(Foot {
             id,
             element: a.atomic_number,
-            pos: a.position,
             base,
             sites: in_reach,
         });

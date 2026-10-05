@@ -64,7 +64,6 @@ pub struct SearchStats {
     pub transfer_candidates: usize,
     pub considered: usize,
     pub pruned_valence: usize,
-    pub pruned_pair_tolerance: usize,
     pub duplicates: usize,
     /// Valid hypotheses found by `plan`.
     pub to_relax: usize,
@@ -198,7 +197,6 @@ pub fn evaluate(
         transfer_candidates: p.transfer_candidates,
         considered: p.considered,
         pruned_valence: p.pruned_valence,
-        pruned_pair_tolerance: p.pruned_pair_tolerance,
         duplicates: p.duplicates,
         to_relax: p.to_relax,
         relaxed: candidates.len(),

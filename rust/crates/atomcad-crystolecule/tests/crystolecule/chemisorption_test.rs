@@ -95,10 +95,9 @@ fn sites(positions: &[DVec3], h_count: usize) -> (AtomicStructure, Vec<u32>) {
     (s, ids)
 }
 
-fn config(reach: f64, pair_tolerance: f64) -> ChemisorptionSearch {
+fn config(reach: f64) -> ChemisorptionSearch {
     ChemisorptionSearch {
         reach,
-        pair_tolerance,
         ..Default::default()
     }
 }
@@ -125,11 +124,7 @@ fn assert_stats_add_up(p: &SearchPlan) {
     let s = &p.stats;
     assert_eq!(
         s.considered,
-        s.pruned_valence
-            + s.pruned_pair_tolerance
-            + s.duplicates
-            + s.to_relax
-            + usize::from(s.truncated),
+        s.pruned_valence + s.duplicates + s.to_relax + usize::from(s.truncated),
         "{s:?}"
     );
     assert_eq!(s.to_relax, p.hypotheses.len());
@@ -358,7 +353,7 @@ fn two_dimers() -> [DVec3; 4] {
 fn one_foot_over_two_dimers_bonds_to_each_site_within_reach() {
     let (ads, foot_ids) = feet(&[DVec3::new(1.2, 0.0, 2.0)]);
     let (sub, site_ids) = sites(&two_dimers(), 3);
-    let p = plan(&ads, &sub, &config(3.5, 1.0)).unwrap();
+    let p = plan(&ads, &sub, &config(3.5)).unwrap();
     // Both atoms of the dimer beneath are within 3.5 Å; the other dimer (4.3 Å
     // and more) is not.
     assert_eq!(p.stats.feet, 1);
@@ -392,39 +387,31 @@ fn two_feet_three_sites() -> (AtomicStructure, Vec<u32>, AtomicStructure, Vec<u3
 }
 
 #[test]
-fn pair_tolerance_prunes_a_site_pair_that_misses_the_foot_spacing() {
+fn every_site_pair_is_a_candidate_whatever_its_spacing() {
     let (ads, feet_ids, sub, site_ids) = two_feet_three_sites();
     let (f1, f2) = (feet_ids[0], feet_ids[1]);
     let (a, b, c) = (site_ids[0], site_ids[1], site_ids[2]);
 
-    let p = plan(&ads, &sub, &config(3.5, 0.3)).unwrap();
+    let p = plan(&ads, &sub, &config(3.5)).unwrap();
     let sets = planned_sets(&p);
-    // Six single bonds, and the two double bindings whose site spacing
-    // matches: A–B straight and crossed.
-    assert_eq!(p.stats.to_relax, 8, "{sets:?}");
+    // Six single bonds and six double bindings: no geometric pruning, so the
+    // pairings with C, whose spacing misses the feet's by 0.37 Å, count too.
+    assert_eq!(p.stats.to_relax, 12, "{sets:?}");
     assert!(sets.contains(&vec![(f1, a), (f2, b)]));
     assert!(sets.contains(&vec![(f1, b), (f2, a)]));
-    assert!(!sets.contains(&vec![(f1, a), (f2, c)]));
+    assert!(sets.contains(&vec![(f1, a), (f2, c)]));
     // Per first-foot site the second foot tries A, B and C: one of them is
-    // the same site (valence), and every pairing with C misses by 0.37 Å.
+    // the same site (valence).
     assert_eq!(p.stats.pruned_valence, 3);
-    assert_eq!(p.stats.pruned_pair_tolerance, 4);
     assert_eq!(p.stats.considered, 15);
     assert_stats_add_up(&p);
-
-    // With the check off, the C pairings are valid too.
-    let off = plan(&ads, &sub, &config(3.5, 0.0)).unwrap();
-    assert_eq!(off.stats.to_relax, 12);
-    assert_eq!(off.stats.pruned_pair_tolerance, 0);
-    assert!(planned_sets(&off).contains(&vec![(f1, a), (f2, c)]));
-    assert_stats_add_up(&off);
 }
 
 #[test]
 fn an_h_capped_atom_is_never_a_site() {
     let (ads, _) = feet(&[DVec3::new(0.0, 0.0, 2.0)]);
     let (sub, _) = sites(&[DVec3::ZERO], 4);
-    let p = plan(&ads, &sub, &config(3.5, 1.0)).unwrap();
+    let p = plan(&ads, &sub, &config(3.5)).unwrap();
     assert_eq!(p.stats.feet, 0);
     assert_eq!(p.stats.to_relax, 0);
     assert!(p.hypotheses.is_empty());
@@ -435,21 +422,17 @@ fn a_two_dangling_bond_site_takes_two_bonds() {
     let (ads, feet_ids) = feet(&[DVec3::new(-1.2, 0.0, 2.0), DVec3::new(1.2, 0.0, 2.0)]);
     let (f1, f2) = (feet_ids[0], feet_ids[1]);
 
-    // SiH2: valence 2. Both feet on it passes the valence rule; the pair
-    // tolerance (site distance 0 against foot distance 2.4) is what prunes it.
+    // SiH2: valence 2, so both feet on it passes the valence rule.
     let (sub, site_ids) = sites(&[DVec3::ZERO], 2);
     let s = site_ids[0];
-    let on = plan(&ads, &sub, &config(3.5, 1.0)).unwrap();
-    assert_eq!(on.stats.pruned_pair_tolerance, 1);
-    assert_eq!(on.stats.pruned_valence, 0);
-    assert!(!planned_sets(&on).contains(&vec![(f1, s), (f2, s)]));
-    let off = plan(&ads, &sub, &config(3.5, 0.0)).unwrap();
-    assert!(planned_sets(&off).contains(&vec![(f1, s), (f2, s)]));
-    assert_eq!(off.stats.to_relax, 3);
+    let two = plan(&ads, &sub, &config(3.5)).unwrap();
+    assert_eq!(two.stats.pruned_valence, 0);
+    assert!(planned_sets(&two).contains(&vec![(f1, s), (f2, s)]));
+    assert_eq!(two.stats.to_relax, 3);
 
     // SiH3: valence 1, so the second bond is a valence prune.
     let (sub, _) = sites(&[DVec3::ZERO], 3);
-    let one = plan(&ads, &sub, &config(3.5, 0.0)).unwrap();
+    let one = plan(&ads, &sub, &config(3.5)).unwrap();
     assert_eq!(one.stats.pruned_valence, 1);
     assert_eq!(one.stats.to_relax, 2);
     assert_stats_add_up(&one);
@@ -461,7 +444,7 @@ fn no_bond_forms_between_two_frozen_atoms() {
     let (mut sub, site_ids) = sites(&[DVec3::new(-1.2, 0.0, 0.0), DVec3::new(1.2, 0.0, 0.0)], 3);
     ads.set_atom_frozen(feet_ids[0], true);
     sub.set_atom_frozen(site_ids[0], true);
-    let p = plan(&ads, &sub, &config(3.5, 1.0)).unwrap();
+    let p = plan(&ads, &sub, &config(3.5)).unwrap();
     // Frozen foot and frozen site: excluded. Frozen foot, free site: allowed.
     assert_eq!(
         planned_sets(&p),
@@ -472,7 +455,7 @@ fn no_bond_forms_between_two_frozen_atoms() {
 #[test]
 fn partial_binding_is_enumerated_and_capped_and_never_empty() {
     let (ads, _, sub, _) = two_feet_three_sites();
-    let all = plan(&ads, &sub, &config(3.5, 0.3)).unwrap();
+    let all = plan(&ads, &sub, &config(3.5)).unwrap();
     let counts: BTreeSet<usize> = all.hypotheses.iter().map(|h| h.formed.len()).collect();
     assert_eq!(counts, BTreeSet::from([1, 2]), "no zero-change hypothesis");
 
@@ -481,7 +464,7 @@ fn partial_binding_is_enumerated_and_capped_and_never_empty() {
         &sub,
         &ChemisorptionSearch {
             max_formed_bonds: Some(1),
-            ..config(3.5, 0.3)
+            ..config(3.5)
         },
     )
     .unwrap();
@@ -493,8 +476,8 @@ fn partial_binding_is_enumerated_and_capped_and_never_empty() {
 #[test]
 fn plan_is_deterministic_and_deduplicated() {
     let (ads, _, sub, _) = two_feet_three_sites();
-    let a = plan(&ads, &sub, &config(3.5, 0.0)).unwrap();
-    let b = plan(&ads, &sub, &config(3.5, 0.0)).unwrap();
+    let a = plan(&ads, &sub, &config(3.5)).unwrap();
+    let b = plan(&ads, &sub, &config(3.5)).unwrap();
     assert_eq!(a.hypotheses, b.hypotheses);
     let keys: BTreeSet<_> = a.hypotheses.iter().map(|h| h.key()).collect();
     assert_eq!(keys.len(), a.hypotheses.len());
@@ -511,7 +494,7 @@ fn the_budget_truncates_and_says_so() {
         &sub,
         &ChemisorptionSearch {
             budget: 3,
-            ..config(3.5, 0.3)
+            ..config(3.5)
         },
     )
     .unwrap();
@@ -524,12 +507,12 @@ fn the_budget_truncates_and_says_so() {
         &ads,
         &sub,
         &ChemisorptionSearch {
-            budget: 8,
-            ..config(3.5, 0.3)
+            budget: 12,
+            ..config(3.5)
         },
     )
     .unwrap();
-    assert_eq!(exact.stats.to_relax, 8);
+    assert_eq!(exact.stats.to_relax, 12);
     assert!(!exact.stats.truncated);
 }
 
@@ -544,7 +527,7 @@ fn reactive_tags_select_atoms_per_side() {
         &ChemisorptionSearch {
             adsorbate_tag: Some("foot".into()),
             substrate_tag: Some("site".into()),
-            ..config(3.5, 0.3)
+            ..config(3.5)
         },
     )
     .unwrap();
@@ -559,11 +542,11 @@ fn reactive_tags_select_atoms_per_side() {
         &sub,
         &ChemisorptionSearch {
             adsorbate_tag: Some(String::new()),
-            ..config(3.5, 0.3)
+            ..config(3.5)
         },
     )
     .unwrap();
-    assert_eq!(all.stats.to_relax, 8);
+    assert_eq!(all.stats.to_relax, 12);
 
     // A tag no atom carries is an error, not "found nothing".
     let err = plan(
@@ -571,7 +554,7 @@ fn reactive_tags_select_atoms_per_side() {
         &sub,
         &ChemisorptionSearch {
             substrate_tag: Some("sites".into()),
-            ..config(3.5, 0.3)
+            ..config(3.5)
         },
     )
     .unwrap_err();
@@ -585,8 +568,7 @@ fn reactive_tags_select_atoms_per_side() {
 fn invalid_settings_are_rejected() {
     let (ads, _, sub, _) = two_feet_three_sites();
     for bad in [
-        config(0.0, 1.0),
-        config(3.5, -1.0),
+        config(0.0),
         ChemisorptionSearch {
             budget: 0,
             ..Default::default()
@@ -673,7 +655,7 @@ fn a_missing_pair_is_estimated_and_an_unknown_element_is_an_error() {
         ads.add_bond(n, h, BOND_SINGLE);
     }
     let (sub, _) = sites(&[DVec3::ZERO], 3);
-    let p = plan(&ads, &sub, &config(3.5, 1.0)).unwrap();
+    let p = plan(&ads, &sub, &config(3.5)).unwrap();
     assert_eq!(p.stats.estimated_pairs, vec![BondKind::new(N, SI, 1)]);
     assert_eq!(p.stats.estimated_pairs[0].pair_label(), "N–Si");
 
@@ -681,7 +663,7 @@ fn a_missing_pair_is_estimated_and_an_unknown_element_is_an_error() {
     let mut boron = AtomicStructure::new();
     boron.add_atom(B, DVec3::new(0.0, 0.0, 2.0));
     assert!(matches!(
-        plan(&boron, &sub, &config(3.5, 1.0)),
+        plan(&boron, &sub, &config(3.5)),
         Err(ChemisorptionError::UnscoredElement { ref element }) if element == "B"
     ));
 }
@@ -762,7 +744,7 @@ fn evaluate_is_deterministic_and_self_consistent() {
             sub.set_atom_frozen(id, true);
         }
     }
-    let cfg = config(3.5, 1.0);
+    let cfg = config(3.5);
     let a = search(&ads, &sub, &cfg).unwrap();
     let b = search(&ads, &sub, &cfg).unwrap();
     assert_eq!(a.candidates.len(), 3);
@@ -810,7 +792,7 @@ fn evaluate_works_with_a_vdw_cutoff() {
     }
     let cfg = ChemisorptionSearch {
         vdw_mode: VdwMode::Cutoff(6.0),
-        ..config(3.5, 1.0)
+        ..config(3.5)
     };
     let report = search(&ads, &sub, &cfg).unwrap();
     assert_eq!(report.candidates.len(), 2);
@@ -835,7 +817,7 @@ fn more_legs_outrank_fewer_by_the_bond_energy_term() {
     }
     let cfg = ChemisorptionSearch {
         max_iterations: 500,
-        ..config(2.2, 1.0)
+        ..config(2.2)
     };
     let report = search(&ads, &sub, &cfg).unwrap();
     assert_eq!(report.candidates.len(), 63);
@@ -890,7 +872,7 @@ fn ethanediyl_on_si100_ranks_di_sigma_on_one_dimer_first() {
         slab.get_atom(partner).unwrap().position,
     );
     let (ads, _) = ethanediyl((ps + pp) / 2.0 + DVec3::Z * 2.0, pp - ps);
-    let cfg = config(4.5, 0.0);
+    let cfg = config(4.5);
     let report = search(&ads, &slab, &cfg).unwrap();
     let s = &report.reference.structure;
     let site_pair = |c: &Candidate| (c.formed[0].1, c.formed[1].1);
@@ -929,111 +911,6 @@ fn ethanediyl_on_si100_ranks_di_sigma_on_one_dimer_first() {
 }
 
 // ============================================================================
-// Pruning calibration (§8.6) — by hand, release build:
-//   cargo test --release -j 4 -p atomcad-crystolecule --test crystolecule \
-//       chemisorption_pruning_calibration -- --ignored --nocapture
-// ============================================================================
-
-/// The largest `| |s_i − s_j| − |f_i − f_j| |` over a hypothesis's bond pairs
-/// at the unrelaxed pose: the pair tolerance it needs to survive pruning.
-fn needed_tolerance(combined: &AtomicStructure, formed: &[(u32, u32)]) -> f64 {
-    let pos = |id: u32| combined.get_atom(id).unwrap().position;
-    let mut worst: f64 = 0.0;
-    for (i, &(fi, si)) in formed.iter().enumerate() {
-        for &(fj, sj) in &formed[i + 1..] {
-            worst = worst.max((pos(si).distance(pos(sj)) - pos(fi).distance(pos(fj))).abs());
-        }
-    }
-    worst
-}
-
-/// The stand-in tripod over bare Si(100)-2×1 in 20 poses (5 rotations × 4
-/// shifts), brute force (pair tolerance off) against `plan` at the default
-/// tolerance: no candidate within the listing window (30 kcal/mol) of its
-/// pose's best may be pruned.
-///
-/// Result of 2026-09-24 (recorded in the design doc, §8.6): the best
-/// candidate is a two-leg binding in every pose and needs up to 1.45 Å; the
-/// full three-leg binding, ~23 kcal/mol higher, needs 2.64 Å (feet 5.04 Å
-/// apart on sites a dimer row apart). The design's 1.0 Å lost the best
-/// candidate in most poses, 2.0 Å lost the three-leg binding in 14 of 20; the
-/// default is 3.0 Å, which keeps ~75 % of the brute-force relaxations.
-#[test]
-#[ignore]
-fn chemisorption_pruning_calibration() {
-    let slab = si100_slab(5.0, 11.0);
-    let default_delta = ChemisorptionSearch::default().pair_tolerance;
-    let window = 30.0;
-    let mut needed_best: f64 = 0.0;
-    let mut needed_window: f64 = 0.0;
-    let mut lost_in_window = 0;
-    let (mut brute_total, mut pruned_total) = (0, 0);
-    for rot_deg in [0.0, 30.0, 45.0, 60.0, 90.0] {
-        for shift in [
-            DVec3::ZERO,
-            DVec3::new(1.92, 0.0, 0.0),
-            DVec3::new(0.0, 1.92, 0.0),
-            DVec3::new(1.36, 1.36, 0.0),
-        ] {
-            let (mut ads, _) = stand_in(3);
-            let q = DQuat::from_rotation_z(f64::to_radians(rot_deg));
-            ads.transform(&q, &(shift + DVec3::Z * 1.8));
-            let brute_cfg = ChemisorptionSearch {
-                pair_tolerance: 0.0,
-                ..Default::default()
-            };
-            let brute_plan = plan(&ads, &slab, &brute_cfg).unwrap();
-            let brute = evaluate(&brute_plan, &brute_cfg).unwrap();
-            let pruned = plan(&ads, &slab, &ChemisorptionSearch::default()).unwrap();
-            let kept: BTreeSet<_> = pruned.hypotheses.iter().map(|h| h.key()).collect();
-            brute_total += brute.stats.relaxed;
-            pruned_total += pruned.stats.to_relax;
-
-            let best = &brute.candidates[0];
-            needed_best = needed_best.max(needed_tolerance(&brute_plan.combined, &best.formed));
-            let mut lost = Vec::new();
-            for c in brute
-                .candidates
-                .iter()
-                .filter(|c| c.score - best.score <= window)
-            {
-                let n = needed_tolerance(&brute_plan.combined, &c.formed);
-                needed_window = needed_window.max(n);
-                if !kept.contains(&c.key()) {
-                    lost.push(format!(
-                        "+{:.1} ({} legs, δ {:.2})",
-                        c.score - best.score,
-                        c.formed.len(),
-                        n
-                    ));
-                }
-            }
-            lost_in_window += lost.len();
-            println!(
-                "rot {rot_deg:>4}° shift ({:.2},{:.2}): brute {} / pruned {}; \
-                 best {:.1} kcal/mol, {} legs; lost within window: {:?}",
-                shift.x,
-                shift.y,
-                brute.stats.relaxed,
-                pruned.stats.to_relax,
-                best.score,
-                best.formed.len(),
-                lost
-            );
-        }
-    }
-    println!(
-        "calibration at δ = {default_delta} Å: {pruned_total} of {brute_total} brute-force \
-         relaxations kept; best candidates need δ ≤ {needed_best:.2} Å; the {window} kcal/mol \
-         window needs δ ≤ {needed_window:.2} Å ({lost_in_window} candidates lost)"
-    );
-    assert_eq!(
-        lost_in_window, 0,
-        "the default pair tolerance prunes a candidate of the listing window"
-    );
-}
-
-// ============================================================================
 // Transfers (§6.1, §8.2)
 // ============================================================================
 
@@ -1054,7 +931,7 @@ fn transfer_config(
     ChemisorptionSearch {
         transfers: rules.to_vec(),
         max_transfers,
-        ..config(reach, 3.0)
+        ..config(reach)
     }
 }
 
@@ -1131,7 +1008,7 @@ fn an_oh_oxygen_bonds_only_when_its_h_is_transferred() {
     let (a, b) = (s[0], s[1]);
 
     // Bond forming alone: the OH oxygen is saturated, nothing can bond.
-    let p = plan(&ads, &sub, &config(3.5, 3.0)).unwrap();
+    let p = plan(&ads, &sub, &config(3.5)).unwrap();
     assert!(p.hypotheses.is_empty());
     assert_eq!(p.stats.transfer_candidates, 0);
 
@@ -1173,7 +1050,7 @@ fn a_pure_abstraction_is_a_hypothesis_and_the_direction_is_respected() {
 
     // No site: the SiH4 is saturated.
     assert!(
-        plan(&ads, &sub, &config(3.5, 3.0))
+        plan(&ads, &sub, &config(3.5))
             .unwrap()
             .hypotheses
             .is_empty()
@@ -1414,7 +1291,7 @@ fn a_transfer_candidate_is_relaxed_and_scored_with_both_bonds() {
 fn the_fingerprint_follows_transfers_and_ignores_an_unused_max_transfers() {
     let (ads, _, sub, _) = methanol_over_two_sites();
     let fp = |cfg: &ChemisorptionSearch| input_fingerprint(&ads, &sub, cfg);
-    let off = config(3.5, 3.0);
+    let off = config(3.5);
     let off_2 = ChemisorptionSearch {
         max_transfers: 2,
         ..off.clone()

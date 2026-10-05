@@ -854,9 +854,6 @@ class APIChemisorbData {
   /// Maximum adsorbate atom to site distance for a bond (Å).
   final double reach;
 
-  /// Pair tolerance (Å); 0 = off.
-  final double pairTolerance;
-
   /// At most this many bonds formed per hypothesis; 0 = no cap.
   final int maxFormedBonds;
 
@@ -880,7 +877,6 @@ class APIChemisorbData {
     required this.adsorbateTag,
     required this.substrateTag,
     required this.reach,
-    required this.pairTolerance,
     required this.maxFormedBonds,
     required this.maxTransfers,
     required this.topN,
@@ -894,7 +890,6 @@ class APIChemisorbData {
       adsorbateTag.hashCode ^
       substrateTag.hashCode ^
       reach.hashCode ^
-      pairTolerance.hashCode ^
       maxFormedBonds.hashCode ^
       maxTransfers.hashCode ^
       topN.hashCode ^
@@ -910,7 +905,6 @@ class APIChemisorbData {
           adsorbateTag == other.adsorbateTag &&
           substrateTag == other.substrateTag &&
           reach == other.reach &&
-          pairTolerance == other.pairTolerance &&
           maxFormedBonds == other.maxFormedBonds &&
           maxTransfers == other.maxTransfers &&
           topN == other.topN &&
@@ -1076,7 +1070,6 @@ class APIChemisorbStats {
   final BigInt transferCandidates;
   final BigInt considered;
   final BigInt prunedValence;
-  final BigInt prunedPairTolerance;
   final BigInt duplicates;
 
   /// The node outputs a search result for its current inputs.
@@ -1102,7 +1095,6 @@ class APIChemisorbStats {
     required this.transferCandidates,
     required this.considered,
     required this.prunedValence,
-    required this.prunedPairTolerance,
     required this.duplicates,
     required this.searched,
     required this.stale,
@@ -1122,7 +1114,6 @@ class APIChemisorbStats {
       transferCandidates.hashCode ^
       considered.hashCode ^
       prunedValence.hashCode ^
-      prunedPairTolerance.hashCode ^
       duplicates.hashCode ^
       searched.hashCode ^
       stale.hashCode ^
@@ -1144,7 +1135,6 @@ class APIChemisorbStats {
           transferCandidates == other.transferCandidates &&
           considered == other.considered &&
           prunedValence == other.prunedValence &&
-          prunedPairTolerance == other.prunedPairTolerance &&
           duplicates == other.duplicates &&
           searched == other.searched &&
           stale == other.stale &&
