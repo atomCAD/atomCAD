@@ -224,21 +224,20 @@ class _ChemisorbEditorState extends State<ChemisorbEditor> {
             onChanged: (v) => _commit(reach: v),
           ),
           const SizedBox(height: 8),
-          IntInput(
-            label: 'Max formed bonds (0 = no cap)',
+          _CapField(
+            checkboxLabel: 'Limit formed bonds',
+            fieldLabel: 'Max formed bonds',
             value: data.maxFormedBonds,
-            minimumValue: 0,
             onChanged: (v) => _commit(maxFormedBonds: v),
           ),
-          const SizedBox(height: 8),
           Opacity(
             opacity: widget.transfersConnected ? 1.0 : 0.5,
             child: IgnorePointer(
               ignoring: !widget.transfersConnected,
-              child: IntInput(
-                label: 'Max transfers',
+              child: _CapField(
+                checkboxLabel: 'Limit transfers',
+                fieldLabel: 'Max transfers',
                 value: data.maxTransfers,
-                minimumValue: 1,
                 onChanged: (v) => _commit(maxTransfers: v),
               ),
             ),
@@ -530,6 +529,56 @@ class _CandidatesCard extends StatelessWidget {
     );
   }
 }
+
+/// A cap that can be switched off: a checkbox, and the value only while it
+/// is ticked. The node stores `0` for "no cap" (so files and the text format
+/// keep their meaning); that encoding stays out of the panel. Ticking seeds
+/// [_DEFAULT_CAP].
+class _CapField extends StatelessWidget {
+  final String checkboxLabel;
+  final String fieldLabel;
+  final int value;
+  final ValueChanged<int> onChanged;
+
+  const _CapField({
+    required this.checkboxLabel,
+    required this.fieldLabel,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final capped = value > 0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CheckboxListTile(
+          title: Text(checkboxLabel),
+          value: capped,
+          onChanged: (ticked) =>
+              onChanged((ticked ?? false) ? _DEFAULT_CAP : 0),
+          controlAffinity: ListTileControlAffinity.leading,
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+        ),
+        if (capped)
+          Padding(
+            padding: const EdgeInsets.only(left: 16.0, bottom: 8.0),
+            child: IntInput(
+              label: fieldLabel,
+              value: value,
+              minimumValue: 1,
+              onChanged: onChanged,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// The value a cap takes when its checkbox is first ticked.
+const int _DEFAULT_CAP = 1;
 
 /// The `formed bonds` filter's value when it is first ticked.
 const int _DEFAULT_FORMED_BONDS_FILTER = 1;

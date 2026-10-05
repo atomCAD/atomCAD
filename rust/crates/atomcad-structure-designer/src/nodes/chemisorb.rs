@@ -132,7 +132,9 @@ pub struct ChemisorbData {
     #[serde(default)]
     pub max_formed_bonds: i32,
     /// At most this many transfers per hypothesis, over all `transfers`
-    /// records. Read only while the pin carries at least one record.
+    /// records; `0` = no cap. Read only while the pin carries at least one
+    /// record. (The panel shows both caps as a checkbox plus a value; the
+    /// stored and text form keep `0` for "off", so old files load unchanged.)
     #[serde(default = "default_max_transfers")]
     pub max_transfers: i32,
     /// Listing filter: only candidates with exactly this many formed bonds
@@ -260,8 +262,8 @@ impl ChemisorbData {
         if self.max_formed_bonds < 0 {
             return Err("chemisorb: max_formed_bonds must be >= 0 (0 = no cap)".to_string());
         }
-        if self.max_transfers < 1 {
-            return Err("chemisorb: max_transfers must be at least 1".to_string());
+        if self.max_transfers < 0 {
+            return Err("chemisorb: max_transfers must be >= 0 (0 = no cap)".to_string());
         }
         if self.budget < 1 {
             return Err("chemisorb: budget must be at least 1".to_string());
@@ -291,7 +293,7 @@ impl ChemisorbData {
             reach: self.reach,
             max_formed_bonds: (self.max_formed_bonds > 0).then_some(self.max_formed_bonds as usize),
             transfers,
-            max_transfers: self.max_transfers as usize,
+            max_transfers: (self.max_transfers > 0).then_some(self.max_transfers as usize),
             budget: self.budget as usize,
             max_iterations: self.max_iterations as u32,
             vdw_mode: if use_vdw_cutoff {
@@ -730,7 +732,11 @@ impl NodeData for ChemisorbData {
             ));
         }
         if connected_input_pins.contains("transfers") {
-            subtitle.push_str(&format!(" · ≤{} transfers", self.max_transfers));
+            if self.max_transfers > 0 {
+                subtitle.push_str(&format!(" · ≤{} transfers", self.max_transfers));
+            } else {
+                subtitle.push_str(" · transfers");
+            }
         }
         Some(subtitle)
     }
@@ -877,7 +883,7 @@ pub fn get_node_type() -> NodeType {
                       within **reach** of the moving atom. `to_substrate` lets an OH leg hand \
                       its H to a site so its O can bond; `to_adsorbate` lets a radical foot \
                       abstract surface H. The donor must be a reactive atom (the tag selects \
-                      donors, never the H). **max_transfers** (default 1) caps them per \
+                      donors, never the H). **max_transfers** (default 1, 0 = no cap) caps them per \
                       pattern, over all records.\n\
                       \n\
                       **Ranking** is by `strain`: the UFF energy against the same pose \

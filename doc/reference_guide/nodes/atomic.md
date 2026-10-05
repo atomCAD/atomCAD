@@ -1057,12 +1057,16 @@ result stale: press Run again.
   of the search. A tag no atom carries is an error, so a typo does not read as
   "found nothing".
 - `reach` (default 3.5 Å) — the largest foot-to-site distance considered.
-- `max_formed_bonds` (default 0 = no cap) — at most this many bonds per
-  pattern. Transfers are not counted.
+- `max_formed_bonds` (default: no cap) — at most this many bonds per
+  pattern. Transfers are not counted. In the panel, tick *Limit formed bonds*
+  to set it; in the text format, `0` means no cap.
 - `max_transfers` (default 1) — at most this many transfers per pattern,
-  summed over all `transfers` records. Read only while `transfers` carries a
-  record (the panel greys it out otherwise); a tripod with three OH legs needs
-  3 to mount on all three.
+  summed over all `transfers` records. In the panel, untick *Limit transfers*
+  for no cap; in the text format that is `0`. Read only while `transfers`
+  carries a record (the panel greys it out otherwise); a tripod with three OH
+  legs needs 3, or no cap, to mount on all three. Without a cap the number of
+  patterns grows quickly with the number of donors and acceptors, so watch the
+  hypothesis count beside **Run**.
 - `budget` (default 10 000) — at most this many relaxations. A search that hits
   it is **not exhaustive**, and the panel says so.
 - `max_iterations` (default 2000) — the UFF iteration limit per relaxation.
@@ -1181,7 +1185,7 @@ inventory underneath, and an `unconv.` mark on a relaxation that did not
 converge. A line over the list says how many candidates the filters, and
 `top_n` / the energy window, left out. Hover a row for its sites,
 worst bond ratio and strain terms. Run blocks the application while it works,
-behind a placard. *Max transfers* is greyed out while `transfers` is not
+behind a placard. *Limit transfers* is greyed out while `transfers` is not
 wired, since nothing reads it then. The statistics appear once the node is displayed. A
 `chemisorb` inside a custom network shows its result only where that network is
 called with the inputs the run used; everywhere else it shows the plan.

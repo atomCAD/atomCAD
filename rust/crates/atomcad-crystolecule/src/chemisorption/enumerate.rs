@@ -534,7 +534,7 @@ pub fn plan(
         max_transfers: if config.transfers.is_empty() {
             0
         } else {
-            config.max_transfers
+            config.max_transfers.unwrap_or(usize::MAX)
         },
         transfer_choice: Vec::new(),
         transfers: Vec::new(),

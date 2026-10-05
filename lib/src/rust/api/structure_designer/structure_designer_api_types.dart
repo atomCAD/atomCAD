@@ -857,8 +857,8 @@ class APIChemisorbData {
   /// At most this many bonds formed per hypothesis; 0 = no cap.
   final int maxFormedBonds;
 
-  /// At most this many transfers per hypothesis; read only while the
-  /// `transfers` pin carries a record.
+  /// At most this many transfers per hypothesis, 0 = no cap; read only
+  /// while the `transfers` pin carries a record.
   final int maxTransfers;
 
   /// Listing filter: exactly this many formed bonds; `None` = any.

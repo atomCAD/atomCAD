@@ -979,7 +979,7 @@ fn transfer_config(
 ) -> ChemisorptionSearch {
     ChemisorptionSearch {
         transfers: rules.to_vec(),
-        max_transfers,
+        max_transfers: Some(max_transfers),
         ..config(reach)
     }
 }
@@ -1217,6 +1217,21 @@ fn max_transfers_bounds_the_total_over_all_rules() {
     let (one, two) = (planned(1), planned(2));
     assert_eq!(most(&one), 1);
     assert_eq!(most(&two), 2);
+    // No cap: everything a cap of 2 plans, and more (both directions can
+    // chain three moves); still finite, bounded by donors and acceptors.
+    let uncapped = plan(
+        &ads,
+        &sub,
+        &ChemisorptionSearch {
+            max_transfers: None,
+            ..transfer_config(3.5, &rules, 1)
+        },
+    )
+    .unwrap();
+    assert_stats_add_up(&uncapped);
+    let keys: std::collections::HashSet<_> = uncapped.hypotheses.iter().map(|h| h.key()).collect();
+    assert!(two.hypotheses.iter().all(|h| keys.contains(&h.key())));
+    assert!(most(&uncapped) > 2, "{}", most(&uncapped));
     // Both legs bonded needs both H moved.
     assert!(one.hypotheses.iter().all(|h| h.formed.len() <= 1));
     assert!(two.hypotheses.iter().any(|h| h.formed.len() == 2));
@@ -1339,7 +1354,7 @@ fn the_fingerprint_follows_transfers_and_ignores_an_unused_max_transfers() {
     let fp = |cfg: &ChemisorptionSearch| input_fingerprint(&ads, &sub, cfg);
     let off = config(3.5);
     let off_2 = ChemisorptionSearch {
-        max_transfers: 2,
+        max_transfers: Some(2),
         ..off.clone()
     };
     assert_eq!(

@@ -27,8 +27,8 @@ pub struct ChemisorptionSearch {
     /// only.
     pub transfers: Vec<TransferRule>,
     /// At most this many transfers per hypothesis, summed over all rules.
-    /// Read only when `transfers` is non-empty.
-    pub max_transfers: usize,
+    /// `None` = no cap. Read only when `transfers` is non-empty.
+    pub max_transfers: Option<usize>,
     /// At most this many valid hypotheses are relaxed; past it the search is
     /// truncated and makes no exhaustiveness claim.
     pub budget: usize,
@@ -48,7 +48,7 @@ impl Default for ChemisorptionSearch {
             reach: 3.5,
             max_formed_bonds: None,
             transfers: Vec::new(),
-            max_transfers: 1,
+            max_transfers: Some(1),
             budget: 10_000,
             max_iterations: 2000,
             gradient_rms_tolerance: 1e-3,
@@ -67,7 +67,7 @@ impl ChemisorptionSearch {
         if self.max_formed_bonds == Some(0) {
             return invalid("max formed bonds must be at least 1");
         }
-        if self.max_transfers == 0 {
+        if self.max_transfers == Some(0) {
             return invalid("max transfers must be at least 1");
         }
         if let Some(rule) = self

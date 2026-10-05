@@ -904,6 +904,11 @@ fn invalid_settings_are_reported_in_the_nodes_words() {
             TextValue::Int(-1),
             "max_formed_bonds must be >= 0",
         ),
+        (
+            "max_transfers",
+            TextValue::Int(-1),
+            "max_transfers must be >= 0",
+        ),
         ("top_n", TextValue::Int(0), "top_n must be at least 1"),
         (
             "filter_formed_bonds",
@@ -1101,6 +1106,20 @@ fn a_transfer_record_edit_makes_the_result_stale_and_max_transfers_counts_only_w
         &fields_of_stats(&mut designer, name, node),
         "stale"
     ));
+    // 0 = no cap: a valid setting, and another search.
+    set_props(
+        &mut designer,
+        name,
+        node,
+        &[("max_transfers", TextValue::Int(0))],
+    );
+    let s = fields_of_stats(&mut designer, name, node);
+    assert!(boolean(&s, "stale"));
+    assert_eq!(
+        int(&s, "to_relax"),
+        6,
+        "one donor H: no cap plans what a cap of 1 does"
+    );
     set_props(
         &mut designer,
         name,

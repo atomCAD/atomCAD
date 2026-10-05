@@ -977,8 +977,8 @@ pub struct APIChemisorbData {
     pub reach: f64,
     /// At most this many bonds formed per hypothesis; 0 = no cap.
     pub max_formed_bonds: i32,
-    /// At most this many transfers per hypothesis; read only while the
-    /// `transfers` pin carries a record.
+    /// At most this many transfers per hypothesis, 0 = no cap; read only
+    /// while the `transfers` pin carries a record.
     pub max_transfers: i32,
     /// Listing filter: exactly this many formed bonds; `None` = any.
     pub filter_formed_bonds: Option<i32>,
