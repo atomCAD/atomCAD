@@ -572,16 +572,23 @@ fn invalid_settings_are_rejected() {
             budget: 0,
             ..Default::default()
         },
-        ChemisorptionSearch {
-            max_formed_bonds: Some(0),
-            ..Default::default()
-        },
     ] {
         assert!(matches!(
             plan(&ads, &sub, &bad),
             Err(ChemisorptionError::InvalidConfig(_))
         ));
     }
+    // A cap of 0 formed bonds is valid: without transfers it leaves nothing.
+    let none = plan(
+        &ads,
+        &sub,
+        &ChemisorptionSearch {
+            max_formed_bonds: Some(0),
+            ..config(3.5)
+        },
+    )
+    .unwrap();
+    assert!(none.hypotheses.is_empty());
 }
 
 #[test]
@@ -1175,10 +1182,11 @@ fn transfer_candidates_respect_element_tags_frozen_atoms_and_reach() {
         plan(&ads, &sub, &transfer_config(3.5, &[oxygen], 1)),
         Err(ChemisorptionError::InvalidConfig(_))
     ));
-    assert!(matches!(
-        plan(&ads, &sub, &transfer_config(3.5, &[H_TO_SUBSTRATE], 0)),
-        Err(ChemisorptionError::InvalidConfig(_))
-    ));
+    // A cap of 0 bans transfers: the same plan as no rules at all.
+    let banned = plan(&ads, &sub, &transfer_config(3.5, &[H_TO_SUBSTRATE], 0)).unwrap();
+    let none = plan(&ads, &sub, &config(3.5)).unwrap();
+    assert_eq!(banned.hypotheses, none.hypotheses);
+    assert_eq!(banned.stats.transfer_candidates, 0);
 }
 
 #[test]

@@ -92,6 +92,10 @@ const VDW_CUTOFF: f64 = 6.0;
 fn default_reach() -> f64 {
     3.5
 }
+/// "No cap", for both caps.
+fn no_cap() -> i32 {
+    -1
+}
 fn default_max_transfers() -> i32 {
     1
 }
@@ -128,13 +132,15 @@ pub struct ChemisorbData {
     /// Maximum adsorbate atom to site distance for a bond to be considered (Å).
     #[serde(default = "default_reach")]
     pub reach: f64,
-    /// At most this many bonds formed per hypothesis; `0` = no cap.
-    #[serde(default)]
+    /// At most this many bonds formed per hypothesis: `-1` = no cap, `0` =
+    /// none (only patterns that form no bond, i.e. pure transfers). The panel
+    /// shows it as a checkbox plus a value; `-1` is the unticked state.
+    #[serde(default = "no_cap")]
     pub max_formed_bonds: i32,
     /// At most this many transfers per hypothesis, over all `transfers`
-    /// records; `0` = no cap. Read only while the pin carries at least one
-    /// record. (The panel shows both caps as a checkbox plus a value; the
-    /// stored and text form keep `0` for "off", so old files load unchanged.)
+    /// records: `-1` = no cap, `0` = none (transfers banned while the pin
+    /// stays wired). Read only while the pin carries at least one record. The
+    /// panel shows it as a checkbox plus a value; `-1` is the unticked state.
     #[serde(default = "default_max_transfers")]
     pub max_transfers: i32,
     /// Listing filter: only candidates with exactly this many formed bonds
@@ -173,7 +179,7 @@ impl Default for ChemisorbData {
             adsorbate_tag: String::new(),
             substrate_tag: String::new(),
             reach: default_reach(),
-            max_formed_bonds: 0,
+            max_formed_bonds: no_cap(),
             max_transfers: default_max_transfers(),
             filter_formed_bonds: None,
             filter_bonds: None,
@@ -259,11 +265,15 @@ impl ChemisorbData {
         use_vdw_cutoff: bool,
         transfers: Vec<TransferRule>,
     ) -> Result<ChemisorptionSearch, String> {
-        if self.max_formed_bonds < 0 {
-            return Err("chemisorb: max_formed_bonds must be >= 0 (0 = no cap)".to_string());
+        if self.max_formed_bonds < -1 {
+            return Err(
+                "chemisorb: max_formed_bonds must be >= -1 (-1 = no cap, 0 = none)".to_string(),
+            );
         }
-        if self.max_transfers < 0 {
-            return Err("chemisorb: max_transfers must be >= 0 (0 = no cap)".to_string());
+        if self.max_transfers < -1 {
+            return Err(
+                "chemisorb: max_transfers must be >= -1 (-1 = no cap, 0 = none)".to_string(),
+            );
         }
         if self.budget < 1 {
             return Err("chemisorb: budget must be at least 1".to_string());
@@ -291,9 +301,10 @@ impl ChemisorbData {
             adsorbate_tag: tag(&self.adsorbate_tag),
             substrate_tag: tag(&self.substrate_tag),
             reach: self.reach,
-            max_formed_bonds: (self.max_formed_bonds > 0).then_some(self.max_formed_bonds as usize),
+            max_formed_bonds: (self.max_formed_bonds >= 0)
+                .then_some(self.max_formed_bonds as usize),
             transfers,
-            max_transfers: (self.max_transfers > 0).then_some(self.max_transfers as usize),
+            max_transfers: (self.max_transfers >= 0).then_some(self.max_transfers as usize),
             budget: self.budget as usize,
             max_iterations: self.max_iterations as u32,
             vdw_mode: if use_vdw_cutoff {
@@ -732,10 +743,10 @@ impl NodeData for ChemisorbData {
             ));
         }
         if connected_input_pins.contains("transfers") {
-            if self.max_transfers > 0 {
-                subtitle.push_str(&format!(" · ≤{} transfers", self.max_transfers));
-            } else {
-                subtitle.push_str(" · transfers");
+            match self.max_transfers {
+                -1 => subtitle.push_str(" · transfers"),
+                0 => subtitle.push_str(" · no transfers"),
+                n => subtitle.push_str(&format!(" · ≤{n} transfers")),
             }
         }
         Some(subtitle)
@@ -873,7 +884,7 @@ pub fn get_node_type() -> NodeType {
                       on the substrate blocks its host. Each adsorbate reactive atom with a \
                       free valence forms at most one bond, to a site within **reach** (Å). \
                       Every partial binding is enumerated too, up to **max_formed_bonds** \
-                      (0 = no cap). **adsorbate_tag** / **substrate_tag** restrict the \
+                      (-1 = no cap). **adsorbate_tag** / **substrate_tag** restrict the \
                       reactive atoms (empty = all). **budget** caps the relaxations; a \
                       truncated search is not exhaustive.\n\
                       \n\
@@ -883,7 +894,7 @@ pub fn get_node_type() -> NodeType {
                       within **reach** of the moving atom. `to_substrate` lets an OH leg hand \
                       its H to a site so its O can bond; `to_adsorbate` lets a radical foot \
                       abstract surface H. The donor must be a reactive atom (the tag selects \
-                      donors, never the H). **max_transfers** (default 1, 0 = no cap) caps them per \
+                      donors, never the H). **max_transfers** (default 1; -1 = no cap, 0 = none) caps them per \
                       pattern, over all records.\n\
                       \n\
                       **Ranking** is by `strain`: the UFF energy against the same pose \

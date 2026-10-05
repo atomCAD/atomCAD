@@ -799,7 +799,7 @@ fn every_property_round_trips_through_the_text_format() {
 
     // The two listing filters are written only when set.
     const FILTERED: &str = "c = chemisorb { adsorbate_tag: \"\", substrate_tag: \"\", reach: 3.5, \
-                            max_formed_bonds: 0, max_transfers: 1, top_n: 10, \
+                            max_formed_bonds: -1, max_transfers: 1, top_n: 10, \
                             energy_window: 30.0, budget: 10000, max_iterations: 2000, \
                             filter_formed_bonds: 2, filter_bonds: \"formed 2× O–Si\" }";
     let serialized = author_and_serialize(&format!("{FILTERED}\n"));
@@ -811,7 +811,7 @@ fn every_property_round_trips_through_the_text_format() {
     assert!(
         short.contains(
             "c = chemisorb { adsorbate_tag: \"\", substrate_tag: \"\", reach: 3.5, \
-             max_formed_bonds: 0, max_transfers: 1, top_n: 10, energy_window: 30.0, \
+             max_formed_bonds: -1, max_transfers: 1, top_n: 10, energy_window: 30.0, \
              budget: 10000, max_iterations: 2000 }"
         ),
         "got:\n{short}"
@@ -901,13 +901,13 @@ fn invalid_settings_are_reported_in_the_nodes_words() {
         ),
         (
             "max_formed_bonds",
-            TextValue::Int(-1),
-            "max_formed_bonds must be >= 0",
+            TextValue::Int(-2),
+            "max_formed_bonds must be >= -1",
         ),
         (
             "max_transfers",
-            TextValue::Int(-1),
-            "max_transfers must be >= 0",
+            TextValue::Int(-2),
+            "max_transfers must be >= -1",
         ),
         ("top_n", TextValue::Int(0), "top_n must be at least 1"),
         (
@@ -1106,12 +1106,12 @@ fn a_transfer_record_edit_makes_the_result_stale_and_max_transfers_counts_only_w
         &fields_of_stats(&mut designer, name, node),
         "stale"
     ));
-    // 0 = no cap: a valid setting, and another search.
+    // -1 = no cap: a valid setting, and another search.
     set_props(
         &mut designer,
         name,
         node,
-        &[("max_transfers", TextValue::Int(0))],
+        &[("max_transfers", TextValue::Int(-1))],
     );
     let s = fields_of_stats(&mut designer, name, node);
     assert!(boolean(&s, "stale"));
@@ -1120,6 +1120,16 @@ fn a_transfer_record_edit_makes_the_result_stale_and_max_transfers_counts_only_w
         6,
         "one donor H: no cap plans what a cap of 1 does"
     );
+    // 0 = none: the record stays wired but nothing moves.
+    set_props(
+        &mut designer,
+        name,
+        node,
+        &[("max_transfers", TextValue::Int(0))],
+    );
+    let s = fields_of_stats(&mut designer, name, node);
+    assert_eq!(int(&s, "to_relax"), 3, "bond forming only");
+    assert_eq!(int(&s, "transfer_candidates"), 0);
     set_props(
         &mut designer,
         name,

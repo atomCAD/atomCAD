@@ -226,7 +226,7 @@ class _ChemisorbEditorState extends State<ChemisorbEditor> {
           const SizedBox(height: 8),
           _CapField(
             checkboxLabel: 'Limit formed bonds',
-            fieldLabel: 'Max formed bonds',
+            fieldLabel: 'Max formed bonds (0 = none)',
             value: data.maxFormedBonds,
             onChanged: (v) => _commit(maxFormedBonds: v),
           ),
@@ -236,7 +236,7 @@ class _ChemisorbEditorState extends State<ChemisorbEditor> {
               ignoring: !widget.transfersConnected,
               child: _CapField(
                 checkboxLabel: 'Limit transfers',
-                fieldLabel: 'Max transfers',
+                fieldLabel: 'Max transfers (0 = none)',
                 value: data.maxTransfers,
                 onChanged: (v) => _commit(maxTransfers: v),
               ),
@@ -531,8 +531,8 @@ class _CandidatesCard extends StatelessWidget {
 }
 
 /// A cap that can be switched off: a checkbox, and the value only while it
-/// is ticked. The node stores `0` for "no cap" (so files and the text format
-/// keep their meaning); that encoding stays out of the panel. Ticking seeds
+/// is ticked. The node stores "no cap" as [_NO_CAP] (`-1`), so `0` can mean
+/// what it says; that encoding stays out of the panel. Ticking seeds
 /// [_DEFAULT_CAP].
 class _CapField extends StatelessWidget {
   final String checkboxLabel;
@@ -549,7 +549,7 @@ class _CapField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final capped = value > 0;
+    final capped = value != _NO_CAP;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -557,7 +557,7 @@ class _CapField extends StatelessWidget {
           title: Text(checkboxLabel),
           value: capped,
           onChanged: (ticked) =>
-              onChanged((ticked ?? false) ? _DEFAULT_CAP : 0),
+              onChanged((ticked ?? false) ? _DEFAULT_CAP : _NO_CAP),
           controlAffinity: ListTileControlAffinity.leading,
           contentPadding: EdgeInsets.zero,
           dense: true,
@@ -568,7 +568,7 @@ class _CapField extends StatelessWidget {
             child: IntInput(
               label: fieldLabel,
               value: value,
-              minimumValue: 1,
+              minimumValue: 0,
               onChanged: onChanged,
             ),
           ),
@@ -576,6 +576,9 @@ class _CapField extends StatelessWidget {
     );
   }
 }
+
+/// How the node stores "no cap" for `max_formed_bonds` and `max_transfers`.
+const int _NO_CAP = -1;
 
 /// The value a cap takes when its checkbox is first ticked.
 const int _DEFAULT_CAP = 1;

@@ -20,14 +20,16 @@ pub struct ChemisorptionSearch {
     /// Maximum distance between an adsorbate reactive atom and a site for a
     /// bond between them to be considered (Å).
     pub reach: f64,
-    /// At most this many bonds formed per hypothesis. `None` = no cap.
+    /// At most this many bonds formed per hypothesis. `None` = no cap;
+    /// `Some(0)` leaves only the patterns that form no bond (pure transfers).
     /// Transfers are not counted.
     pub max_formed_bonds: Option<usize>,
     /// The enabled transfer kinds (§6.1 of the design). Empty = bond forming
     /// only.
     pub transfers: Vec<TransferRule>,
     /// At most this many transfers per hypothesis, summed over all rules.
-    /// `None` = no cap. Read only when `transfers` is non-empty.
+    /// `None` = no cap; `Some(0)` = none, the same search as no rules. Read
+    /// only when `transfers` is non-empty.
     pub max_transfers: Option<usize>,
     /// At most this many valid hypotheses are relaxed; past it the search is
     /// truncated and makes no exhaustiveness claim.
@@ -63,12 +65,6 @@ impl ChemisorptionSearch {
         let invalid = |msg: &str| Err(ChemisorptionError::InvalidConfig(msg.to_string()));
         if !(self.reach.is_finite() && self.reach > 0.0) {
             return invalid("reach must be a positive distance");
-        }
-        if self.max_formed_bonds == Some(0) {
-            return invalid("max formed bonds must be at least 1");
-        }
-        if self.max_transfers == Some(0) {
-            return invalid("max transfers must be at least 1");
         }
         if let Some(rule) = self
             .transfers

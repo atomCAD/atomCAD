@@ -854,11 +854,11 @@ class APIChemisorbData {
   /// Maximum adsorbate atom to site distance for a bond (Å).
   final double reach;
 
-  /// At most this many bonds formed per hypothesis; 0 = no cap.
+  /// At most this many bonds formed per hypothesis: -1 = no cap, 0 = none.
   final int maxFormedBonds;
 
-  /// At most this many transfers per hypothesis, 0 = no cap; read only
-  /// while the `transfers` pin carries a record.
+  /// At most this many transfers per hypothesis: -1 = no cap, 0 = none.
+  /// Read only while the `transfers` pin carries a record.
   final int maxTransfers;
 
   /// Listing filter: exactly this many formed bonds; `None` = any.

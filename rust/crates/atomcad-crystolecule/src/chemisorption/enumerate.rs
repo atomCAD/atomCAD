@@ -463,7 +463,7 @@ pub fn plan(
         Side::Substrate,
     )?;
 
-    let candidates = if config.transfers.is_empty() {
+    let candidates = if config.transfers.is_empty() || config.max_transfers == Some(0) {
         Vec::new()
     } else {
         candidate_transfers(

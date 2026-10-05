@@ -1058,13 +1058,15 @@ result stale: press Run again.
   "found nothing".
 - `reach` (default 3.5 Å) — the largest foot-to-site distance considered.
 - `max_formed_bonds` (default: no cap) — at most this many bonds per
-  pattern. Transfers are not counted. In the panel, tick *Limit formed bonds*
-  to set it; in the text format, `0` means no cap.
+  pattern. Transfers are not counted; `0` leaves only the patterns that form
+  no bond (pure transfers). In the panel, tick *Limit formed bonds* to set it;
+  in the text format, `-1` means no cap.
 - `max_transfers` (default 1) — at most this many transfers per pattern,
-  summed over all `transfers` records. In the panel, untick *Limit transfers*
-  for no cap; in the text format that is `0`. Read only while `transfers`
-  carries a record (the panel greys it out otherwise); a tripod with three OH
-  legs needs 3, or no cap, to mount on all three. Without a cap the number of
+  summed over all `transfers` records. `0` bans transfers while keeping the
+  `transfers` wire. In the panel, untick *Limit transfers* for no cap; in the
+  text format that is `-1`. Read only while `transfers` carries a record (the
+  panel greys it out otherwise); a tripod with three OH legs needs 3, or no
+  cap, to mount on all three. Without a cap the number of
   patterns grows quickly with the number of donors and acceptors, so watch the
   hypothesis count beside **Run**.
 - `budget` (default 10 000) — at most this many relaxations. A search that hits
