@@ -432,8 +432,8 @@ class _StatsCard extends StatelessWidget {
               _Row('Relaxed', '${stats.relaxed}'),
               _Row('Unconverged', '${stats.unconverged}'),
               if (stats.searched) ...[
-                _Row('Pass the filters', '${stats.matching}'),
-                _Row('Listed', '${stats.listed}'),
+                _Row('Match formed bonds / inventory', '${stats.matching}'),
+                _Row('Listed (after top N / window)', '${stats.listed}'),
               ],
               _Row(stats.searched ? 'Search time' : 'Plan time',
                   '${formatNatural(stats.seconds, 3)} s'),

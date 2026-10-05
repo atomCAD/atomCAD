@@ -1180,11 +1180,13 @@ hypotheses a run would relax (or what the last run did) beside it, and a red
 line when the result is stale. Below it are the two groups of properties,
 **Search settings** and **Filters after search**, each under its own heading
 with a one-line reminder of whether it needs a new run. Then the search
-statistics (including how many candidates pass the filters), with **not exhaustive** in red
+statistics, with **not exhaustive** in red
 when the budget was hit and a *Transfer candidates* row when `transfers` is
 wired; and the ranked candidates, one line each with the strain, the bond
 inventory underneath, and an `unconv.` mark on a relaxation that did not
-converge. A line over the list says how many candidates the filters, and
+converge. After a run the statistics count down in three steps: *Relaxed*
+(everything the search produced), *Match formed bonds / inventory* (those that
+pass the two filters), and *Listed (after top N / window)*. A line over the list says how many candidates the filters, and
 `top_n` / the energy window, left out. Hover a row for its sites,
 worst bond ratio and strain terms. Run blocks the application while it works,
 behind a placard. *Limit transfers* is greyed out while `transfers` is not
