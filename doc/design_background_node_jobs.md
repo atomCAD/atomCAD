@@ -55,11 +55,18 @@ traits.
   CLI's `run` command, by node name, returning text (`format_run_result`).
 - `search` = `plan` + `evaluate` (`chemisorption/report.rs`). `evaluate`
   relaxes the no-change reference first, then every hypothesis with
-  `plan.hypotheses.par_iter()` on the **global** rayon pool, collects in plan
-  order and ranks. The number of relaxations is known once `plan` returns
-  (`plan.stats.to_relax`, plus one for the reference). The data crossing
-  rayon's threads (`AtomicStructure`, `ChemisorptionSearch`, `Candidate`) is
-  already `Send + Sync` — that is what `par_iter` requires.
+  `plan.hypotheses.par_iter().try_for_each(…)` on the **global** rayon pool,
+  keeping each relaxed candidate only while it is among the best `top_n`
+  (`keep_best` under a `Mutex`), then applies the energy window. The number of
+  relaxations is known once `plan` returns (`plan.stats.to_relax`, plus one
+  for the reference). The data crossing rayon's threads (`AtomicStructure`,
+  `ChemisorptionSearch`, `Candidate`) is already `Send + Sync` — that is what
+  `par_iter` requires.
+- **Every `chemisorb` setting is a search setting.** The filters (formed-bond
+  count, bond inventory) prune in `plan`; `top_n` and the energy window are
+  applied while relaxing. All of them are in `ChemisorptionSearch` and
+  therefore in `input_fingerprint`: changing any of them makes a stored result
+  stale and needs a new Run. There is no "re-list a stored result" path.
 - Each relaxation is one `minimize_with_force_field` call (L-BFGS, up to
   `max_iterations`, ≤ 2000 free atoms by `check_minimize_limits`). It has no
   progress or cancellation hook.
@@ -112,9 +119,9 @@ compiler enforces for us: everything a job's `run` half owns must be `Send`,
 and nothing reachable from `CAD_INSTANCE` is.
 
 **D3 — Edits during a run are allowed and need no handling.** The fingerprint
-(`input_fingerprint`) covers every input and every *search* setting; listing
-filters are excluded on purpose, so changing `top_n` while a search runs simply
-re-lists the result when it lands. A run-on-demand node that adopts this
+(`input_fingerprint`) covers every input and every setting — since every
+`chemisorb` setting is a search setting, a change to *any* of them during a run
+makes the result land stale. A run-on-demand node that adopts this
 design **must** key its stored result by such a fingerprint — it is the
 correctness argument of this whole document. A node that cannot fingerprint its
 inputs is not a candidate for a node job.
@@ -227,9 +234,10 @@ pub fn search(adsorbate: &AtomicStructure, substrate: &AtomicStructure,
 - `search` sets phase "Planning" before `plan`, then `set_total(to_relax + 1)`
   and phase "Relaxing".
 - `evaluate` checks `is_cancelled()` before the reference relaxation and at the
-  top of the `par_iter` closure, returning
-  `Err(ChemisorptionError::Cancelled)`; `collect::<Result<…>>` short-circuits
-  the remaining work. It calls `advance(1)` after each finished relaxation.
+  top of the `try_for_each` closure, returning
+  `Err(ChemisorptionError::Cancelled)`; `try_for_each` short-circuits the
+  remaining work, and the candidates kept so far are dropped with the `Mutex`.
+  It calls `advance(1)` after each finished relaxation.
 - New variant `ChemisorptionError::Cancelled` (`"search cancelled"`).
 - `None` keeps today's behaviour byte for byte — every existing caller and test
   passes `None`. Cancellation never produces a partial report.
@@ -310,11 +318,13 @@ editability check, because a network can become read-only while a search runs
 
 - `ChemisorbData::prepare_job` evaluates the three pins, builds the config with
   `search_config`, the `transfer_rules` and the fingerprint, and returns a
-  `ChemisorbWork { adsorbate, substrate, config, fingerprint, listing }`.
+  `ChemisorbWork { adsorbate, substrate, config, fingerprint }`. The config
+  carries every setting, filters and `top_n` included, so the work needs
+  nothing else from the node.
 - `ChemisorbWork::run` calls `search(…, control)` and returns a
   `ChemisorbOutcome { stored: StoredSearch, summary: ChemisorbRunSummary }`.
-  The summary is computed **on the worker** from the job's own `listing`
-  snapshot, so it is reported even if the result later misses.
+  The summary is computed **on the worker** from the report itself, so it is
+  reported even if the result later misses.
 - `ChemisorbOutcome::install` downcasts to `ChemisorbData`, sets `stored`, and
   returns `format_run_result`'s text (moved down from the api layer to sit
   beside `ChemisorbRunSummary`).
@@ -487,7 +497,6 @@ the tab cover every place a running search can be.
 | Situation | Behaviour |
 |---|---|
 | User edits inputs or search settings during the run | Allowed. The result installs and shows stale. (D3) |
-| User edits listing filters during the run | Allowed. The result installs and is listed with the new filters. |
 | Node deleted during the run | Install finds no node → `Dropped`. |
 | Node deleted, then undone, during the run | Same id, same type → installs; the fingerprint decides whether it shows. |
 | A different `chemisorb` node later gets the same id | Installs into it; can only miss (D3). |
@@ -615,7 +624,8 @@ Each phase is independently mergeable and leaves the application working.
    - Cancel mid-run: "Cancelling…", then "Search cancelled.", outputs
      unchanged, Run available again.
    - Edit an input pose mid-run: the result lands stale.
-   - Change `top_n` mid-run: the result lands listed with the new value.
+   - Change `top_n` (or a filter) mid-run: the result lands stale, and the
+     panel asks for a new Run.
    - Start a run, switch tabs: the tab spinner shows; switch back after it
      finishes: the result is there.
    - Start a run, delete the node: "the node no longer exists".
