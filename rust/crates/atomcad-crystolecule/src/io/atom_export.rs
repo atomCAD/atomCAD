@@ -22,6 +22,21 @@ pub enum AtomExportFormat {
     Mol,
 }
 
+/// Format-specific export choices. A format ignores the options that do not
+/// apply to it (`.mol` has no frozen-atom convention).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AtomExportOptions {
+    /// `.xyz` only: append a `FREEZEXYZ` line listing the frozen atoms
+    /// (see `xyz_saver::FREEZE_KEYWORD`).
+    pub write_frozen: bool,
+}
+
+impl Default for AtomExportOptions {
+    fn default() -> Self {
+        Self { write_frozen: true }
+    }
+}
+
 /// Error from saving an atomic structure through [`AtomExportFormat::save`].
 #[derive(Debug, Error)]
 pub enum AtomExportError {
@@ -68,7 +83,7 @@ impl AtomExportFormat {
     /// A one-line description of what the format captures.
     pub fn description(&self) -> &'static str {
         match self {
-            AtomExportFormat::Xyz => "Atomic coordinates only",
+            AtomExportFormat::Xyz => "Atomic coordinates and frozen atoms, no bonds",
             AtomExportFormat::Mol => "Molecular structure with bond information",
         }
     }
@@ -85,9 +100,14 @@ impl AtomExportFormat {
     }
 
     /// Saves `structure` to `path` in this format.
-    pub fn save(&self, structure: &AtomicStructure, path: &str) -> Result<(), AtomExportError> {
+    pub fn save(
+        &self,
+        structure: &AtomicStructure,
+        path: &str,
+        options: &AtomExportOptions,
+    ) -> Result<(), AtomExportError> {
         match self {
-            AtomExportFormat::Xyz => save_xyz(structure, path)?,
+            AtomExportFormat::Xyz => save_xyz(structure, path, options.write_frozen)?,
             AtomExportFormat::Mol => save_mol_v3000(structure, path)?,
         }
         Ok(())

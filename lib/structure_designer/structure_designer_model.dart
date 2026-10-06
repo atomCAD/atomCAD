@@ -4824,9 +4824,11 @@ class StructureDesignerModel extends ChangeNotifier {
 
   /// Exports all visible atomic structures as a single file (XYZ or MOL format)
   /// File format is determined by the file extension (.xyz or .mol)
-  APIResult exportVisibleAtomicStructures(String filePath) {
+  /// [writeFrozen] (.xyz only) appends a `FREEZEXYZ` line listing frozen atoms.
+  APIResult exportVisibleAtomicStructures(String filePath,
+      {bool writeFrozen = true}) {
     final ret = structure_designer_api.exportVisibleAtomicStructures(
-        filePath: filePath);
+        filePath: filePath, writeFrozen: writeFrozen);
     refreshFromKernel();
     return ret;
   }

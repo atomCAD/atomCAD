@@ -1,4 +1,5 @@
 use crate::api::structure_designer::structure_designer_api_types::{BatchCliConfig, CliConfig};
+use atomcad_crystolecule::io::atom_export::AtomExportOptions;
 use atomcad_structure_designer::data_type::contains_iterator;
 use atomcad_structure_designer::evaluator::network_result::NetworkResult;
 use atomcad_structure_designer::structure_designer::StructureDesigner;
@@ -183,7 +184,7 @@ fn export_with_directory_creation(
     }
 
     designer
-        .export_visible_atomic_structures(output_file)
+        .export_visible_atomic_structures(output_file, &AtomExportOptions::default())
         .map_err(|e| format!("Export failed: {}", e))?;
     Ok(())
 }

@@ -2414,6 +2414,8 @@ pub struct APIAtomReplaceRule {
 
 pub struct APIExportAtomsData {
     pub file_name: String,
+    /// `.xyz` only: append a `FREEZEXYZ` line listing the frozen atoms.
+    pub write_frozen: bool,
 }
 
 /// A single supported atom-export format, projected from

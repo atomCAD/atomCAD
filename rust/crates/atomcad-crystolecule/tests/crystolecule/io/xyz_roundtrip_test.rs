@@ -84,7 +84,7 @@ fn test_xyz_roundtrip_simple() {
     let file_path = temp_dir.path().join("simple.xyz");
     let file_path_str = file_path.to_str().unwrap();
 
-    save_xyz(&original, file_path_str).expect("Failed to save XYZ");
+    save_xyz(&original, file_path_str, true).expect("Failed to save XYZ");
     let loaded = load_xyz(file_path_str, false).expect("Failed to load XYZ");
 
     assert_structures_equal(&original, &loaded);
@@ -97,7 +97,7 @@ fn test_xyz_roundtrip_water() {
     let file_path = temp_dir.path().join("water.xyz");
     let file_path_str = file_path.to_str().unwrap();
 
-    save_xyz(&original, file_path_str).expect("Failed to save XYZ");
+    save_xyz(&original, file_path_str, true).expect("Failed to save XYZ");
     let loaded = load_xyz(file_path_str, false).expect("Failed to load XYZ");
 
     assert_structures_equal(&original, &loaded);
@@ -110,7 +110,7 @@ fn test_xyz_roundtrip_methane() {
     let file_path = temp_dir.path().join("methane.xyz");
     let file_path_str = file_path.to_str().unwrap();
 
-    save_xyz(&original, file_path_str).expect("Failed to save XYZ");
+    save_xyz(&original, file_path_str, true).expect("Failed to save XYZ");
     let loaded = load_xyz(file_path_str, false).expect("Failed to load XYZ");
 
     assert_structures_equal(&original, &loaded);
@@ -123,7 +123,7 @@ fn test_xyz_roundtrip_empty() {
     let file_path = temp_dir.path().join("empty.xyz");
     let file_path_str = file_path.to_str().unwrap();
 
-    save_xyz(&original, file_path_str).expect("Failed to save XYZ");
+    save_xyz(&original, file_path_str, true).expect("Failed to save XYZ");
     let loaded = load_xyz(file_path_str, false).expect("Failed to load XYZ");
 
     assert_eq!(loaded.get_num_of_atoms(), 0);
@@ -143,7 +143,7 @@ fn test_xyz_roundtrip_various_elements() {
     let file_path = temp_dir.path().join("elements.xyz");
     let file_path_str = file_path.to_str().unwrap();
 
-    save_xyz(&original, file_path_str).expect("Failed to save XYZ");
+    save_xyz(&original, file_path_str, true).expect("Failed to save XYZ");
     let loaded = load_xyz(file_path_str, false).expect("Failed to load XYZ");
 
     assert_structures_equal(&original, &loaded);
@@ -160,7 +160,7 @@ fn test_xyz_roundtrip_precision() {
     let file_path = temp_dir.path().join("precision.xyz");
     let file_path_str = file_path.to_str().unwrap();
 
-    save_xyz(&original, file_path_str).expect("Failed to save XYZ");
+    save_xyz(&original, file_path_str, true).expect("Failed to save XYZ");
     let loaded = load_xyz(file_path_str, false).expect("Failed to load XYZ");
 
     assert_structures_equal(&original, &loaded);

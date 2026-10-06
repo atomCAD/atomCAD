@@ -1095,6 +1095,7 @@ fn test_materialize_roundtrip() {
 fn test_export_atoms_roundtrip() {
     test_roundtrip(&ExportAtomsData {
         file_name: "test_output.xyz".to_string(),
+        write_frozen: false,
     });
 }
 

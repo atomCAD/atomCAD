@@ -1980,19 +1980,24 @@ class APIExecuteResult {
 class APIExportAtomsData {
   final String fileName;
 
+  /// `.xyz` only: append a `FREEZEXYZ` line listing the frozen atoms.
+  final bool writeFrozen;
+
   const APIExportAtomsData({
     required this.fileName,
+    required this.writeFrozen,
   });
 
   @override
-  int get hashCode => fileName.hashCode;
+  int get hashCode => fileName.hashCode ^ writeFrozen.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is APIExportAtomsData &&
           runtimeType == other.runtimeType &&
-          fileName == other.fileName;
+          fileName == other.fileName &&
+          writeFrozen == other.writeFrozen;
 }
 
 /// The stored data of an `export_build_script` node.

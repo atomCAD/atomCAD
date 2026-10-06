@@ -250,6 +250,7 @@ fn write_v6_export_file(dir: &std::path::Path) -> (String, u64, u64) {
         export_id,
         Box::new(ExportAtomsData {
             file_name: "stored.xyz".to_string(),
+            write_frozen: true,
         }),
     );
     // Wire the string into the `file_name` pin (index 1).
@@ -340,6 +341,7 @@ fn v7_file_skips_the_migration_pass() {
         export_id,
         Box::new(ExportAtomsData {
             file_name: "out.xyz".to_string(),
+            write_frozen: true,
         }),
     );
 

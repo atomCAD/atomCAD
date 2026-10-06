@@ -51,8 +51,30 @@ class _ExportAtomsEditorState extends State<ExportAtomsEditor> {
   void _updateFileName(String fileName) {
     widget.model.setExportAtomsData(
       widget.nodeId,
-      APIExportAtomsData(fileName: fileName),
+      APIExportAtomsData(
+        fileName: fileName,
+        writeFrozen: widget.data?.writeFrozen ?? true,
+      ),
     );
+  }
+
+  void _updateWriteFrozen(bool writeFrozen) {
+    widget.model.setExportAtomsData(
+      widget.nodeId,
+      APIExportAtomsData(
+        fileName: widget.data?.fileName ?? '',
+        writeFrozen: writeFrozen,
+      ),
+    );
+  }
+
+  /// The frozen-atom line is an `.xyz` convention. The checkbox is disabled
+  /// only when the stored file name names another known format; with a wired
+  /// file name the format is not known until Execute.
+  bool _writeFrozenApplies() {
+    if (_isFileNamePinConnected()) return true;
+    final format = _formatForFileName(widget.data?.fileName ?? '');
+    return format == null || format.extension_ == 'xyz';
   }
 
   /// True when the `file_name` input pin is wired — the extension (and hence
@@ -209,6 +231,23 @@ class _ExportAtomsEditorState extends State<ExportAtomsEditor> {
             style: ElevatedButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),
+          ),
+          const SizedBox(height: 8),
+
+          CheckboxListTile(
+            key: const Key('export_atoms_write_frozen'),
+            title: const Text('Write frozen atoms'),
+            subtitle: const Text(
+                '.xyz only: appends a "FREEZEXYZ" line listing the 1-based '
+                'indices of frozen atoms'),
+            value: widget.data!.writeFrozen,
+            onChanged: _writeFrozenApplies()
+                ? (newValue) {
+                    if (newValue != null) _updateWriteFrozen(newValue);
+                  }
+                : null,
+            controlAffinity: ListTileControlAffinity.leading,
+            contentPadding: EdgeInsets.zero,
           ),
 
           const SizedBox(height: 16),

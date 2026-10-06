@@ -600,7 +600,7 @@ abstract class RustLibApi extends BaseApi {
 
   APIResult
       crateApiStructureDesignerStructureDesignerApiExportVisibleAtomicStructures(
-          {required String filePath});
+          {required String filePath, required bool writeFrozen});
 
   ConversionResult
       crateApiStructureDesignerStructureDesignerApiExtractClosureToNetwork(
@@ -6366,11 +6366,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @override
   APIResult
       crateApiStructureDesignerStructureDesignerApiExportVisibleAtomicStructures(
-          {required String filePath}) {
+          {required String filePath, required bool writeFrozen}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(filePath, serializer);
+        sse_encode_bool(writeFrozen, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 145)!;
       },
       codec: SseCodec(
@@ -6379,7 +6380,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiExportVisibleAtomicStructuresConstMeta,
-      argValues: [filePath],
+      argValues: [filePath, writeFrozen],
       apiImpl: this,
     ));
   }
@@ -6388,7 +6389,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiExportVisibleAtomicStructuresConstMeta =>
           const TaskConstMeta(
             debugName: "export_visible_atomic_structures",
-            argNames: ["filePath"],
+            argNames: ["filePath", "writeFrozen"],
           );
 
   @override
@@ -19630,10 +19631,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIExportAtomsData dco_decode_api_export_atoms_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 1)
-      throw Exception('unexpected arr length: expect 1 but see ${arr.length}');
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
     return APIExportAtomsData(
       fileName: dco_decode_String(arr[0]),
+      writeFrozen: dco_decode_bool(arr[1]),
     );
   }
 
@@ -25985,7 +25987,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_fileName = sse_decode_String(deserializer);
-    return APIExportAtomsData(fileName: var_fileName);
+    var var_writeFrozen = sse_decode_bool(deserializer);
+    return APIExportAtomsData(
+        fileName: var_fileName, writeFrozen: var_writeFrozen);
   }
 
   @protected
@@ -33329,6 +33333,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       APIExportAtomsData self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.fileName, serializer);
+    sse_encode_bool(self.writeFrozen, serializer);
   }
 
   @protected

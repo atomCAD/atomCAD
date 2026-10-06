@@ -154,7 +154,7 @@ use crate::api::structure_designer::structure_designer_api_types::{
 };
 use crate::api::structure_designer::view_builders;
 use atomcad_crystolecule::field::Colormap;
-use atomcad_crystolecule::io::atom_export::AtomExportFormat;
+use atomcad_crystolecule::io::atom_export::{AtomExportFormat, AtomExportOptions};
 use atomcad_crystolecule::patch::CompatibilityReport;
 use atomcad_crystolecule::unit_cell_symmetries::{
     CrystalSystem, analyze_unit_cell_complete, classify_crystal_system,
@@ -3794,6 +3794,7 @@ pub fn get_export_atoms_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIEx
                     };
                 Some(APIExportAtomsData {
                     file_name: export_atoms_data.file_name.clone(),
+                    write_frozen: export_atoms_data.write_frozen,
                 })
             },
             None,
@@ -6269,6 +6270,7 @@ pub fn set_export_atoms_data(scope_path: Vec<u64>, node_id: u64, data: APIExport
         with_mut_cad_instance(|cad_instance| {
             let export_atoms_data = Box::new(ExportAtomsData {
                 file_name: data.file_name.clone(),
+                write_frozen: data.write_frozen,
             });
             cad_instance
                 .structure_designer
@@ -8327,15 +8329,17 @@ pub fn set_structure_designer_preferences(preferences: StructureDesignerPreferen
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn export_visible_atomic_structures(file_path: String) -> APIResult {
+pub fn export_visible_atomic_structures(file_path: String, write_frozen: bool) -> APIResult {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 // Call the method in StructureDesigner
                 match cad_instance
                     .structure_designer
-                    .export_visible_atomic_structures(&file_path)
-                {
+                    .export_visible_atomic_structures(
+                        &file_path,
+                        &AtomExportOptions { write_frozen },
+                    ) {
                     Ok(_) => APIResult {
                         success: true,
                         error_message: String::new(),

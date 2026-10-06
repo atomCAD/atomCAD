@@ -1148,3 +1148,80 @@ fn export_atoms_writes_sidecar_next_to_mol_with_v2_keys() {
     assert_eq!(doc["parameters"]["width"], 4);
     assert_eq!(doc["parameters"]["height"], 2);
 }
+
+// ============================================================================
+// export_atoms — `write_frozen` (`.xyz` FREEZEXYZ line)
+// ============================================================================
+
+/// Exports a two-carbon molecule whose second atom is frozen and returns the
+/// written file's text.
+fn export_with_frozen_atom(write_frozen: Option<bool>) -> String {
+    let mut designer = setup_designer_with_network("main");
+    let import_id = add_inline_import_xyz(&mut designer, "main");
+    {
+        let data = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap()
+            .get_node_network_data_mut(import_id)
+            .unwrap()
+            .as_any_mut()
+            .downcast_mut::<ImportXYZData>()
+            .unwrap();
+        let structure = data.atomic_structure.as_mut().unwrap();
+        let frozen = structure.add_atom(6, DVec3::new(1.5, 0.0, 0.0));
+        structure.set_atom_frozen(frozen, true);
+    }
+    let export_id = designer.add_node("export_atoms", DVec2::ZERO);
+    designer.connect_nodes(import_id, 0, export_id, 0);
+
+    let tmp = TempDir::new().expect("tempdir");
+    let out_path = tmp.path().join("frozen.xyz");
+    set_export_atoms_file_name(&mut designer, "main", export_id, out_path.to_str().unwrap());
+    if let Some(write_frozen) = write_frozen {
+        designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap()
+            .get_node_network_data_mut(export_id)
+            .unwrap()
+            .as_any_mut()
+            .downcast_mut::<ExportAtomsData>()
+            .unwrap()
+            .write_frozen = write_frozen;
+    }
+
+    let result = evaluate_with_execute(&designer, "main", export_id, true);
+    assert!(matches!(result, NetworkResult::Unit), "expected Unit");
+    std::fs::read_to_string(&out_path).expect("export written")
+}
+
+#[test]
+fn export_atoms_writes_frozen_line_by_default() {
+    assert!(ExportAtomsData::default().write_frozen);
+    let text = export_with_frozen_atom(None);
+    assert_eq!(text.lines().last(), Some("FREEZEXYZ 2"));
+}
+
+#[test]
+fn export_atoms_omits_frozen_line_when_disabled() {
+    let text = export_with_frozen_atom(Some(false));
+    assert!(
+        !text.contains("FREEZEXYZ"),
+        "unexpected frozen line:\n{text}"
+    );
+}
+
+#[test]
+fn export_atoms_data_without_write_frozen_loads_as_true() {
+    // Projects saved before the property existed have no `write_frozen` key.
+    let legacy = serde_json::json!({ "file_name": "old.xyz" });
+    let data =
+        atomcad_structure_designer::nodes::export_atoms::export_atoms_data_loader(&legacy, None)
+            .expect("legacy data loads");
+    let data = data.as_any_ref().downcast_ref::<ExportAtomsData>().unwrap();
+    assert_eq!(data.file_name, "old.xyz");
+    assert!(data.write_frozen);
+}

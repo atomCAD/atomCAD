@@ -9,7 +9,7 @@ use crate::node_type::{NodeType, OutputPinDefinition, Parameter};
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
-use atomcad_crystolecule::io::atom_export::AtomExportFormat;
+use atomcad_crystolecule::io::atom_export::{AtomExportFormat, AtomExportOptions};
 use atomcad_util::path_utils::{resolve_path, try_make_relative};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -19,6 +19,14 @@ use std::io;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExportAtomsData {
     pub file_name: String, // If empty, the file name is not given yet.
+    /// `.xyz` only: append a `FREEZEXYZ` line listing the frozen atoms.
+    /// Defaults to `true`, including for projects saved before the field existed.
+    #[serde(default = "default_true")]
+    pub write_frozen: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl NodeData for ExportAtomsData {
@@ -109,7 +117,10 @@ impl NodeData for ExportAtomsData {
             }
         };
 
-        if let Err(err) = format.save(&atomic_structure, &resolved_path) {
+        let options = AtomExportOptions {
+            write_frozen: self.write_frozen,
+        };
+        if let Err(err) = format.save(&atomic_structure, &resolved_path, &options) {
             return EvalOutput::single(NetworkResult::Error(format!(
                 "Failed to save {} file '{}': {}",
                 format.label(),
@@ -179,10 +190,16 @@ impl NodeData for ExportAtomsData {
     }
 
     fn get_text_properties(&self) -> Vec<(String, TextValue)> {
-        vec![(
-            "file_name".to_string(),
-            TextValue::String(self.file_name.clone()),
-        )]
+        vec![
+            (
+                "file_name".to_string(),
+                TextValue::String(self.file_name.clone()),
+            ),
+            (
+                "write_frozen".to_string(),
+                TextValue::Bool(self.write_frozen),
+            ),
+        ]
     }
 
     fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
@@ -191,6 +208,11 @@ impl NodeData for ExportAtomsData {
                 .as_string()
                 .ok_or_else(|| "file_name must be a string".to_string())?
                 .to_string();
+        }
+        if let Some(v) = props.get("write_frozen") {
+            self.write_frozen = v
+                .as_bool()
+                .ok_or_else(|| "write_frozen must be a boolean".to_string())?;
         }
         Ok(())
     }
@@ -206,6 +228,7 @@ impl ExportAtomsData {
     pub fn new() -> Self {
         Self {
             file_name: String::new(),
+            write_frozen: true,
         }
     }
 }
@@ -327,7 +350,7 @@ pub fn get_node_type() -> NodeType {
     NodeType {
         name: "export_atoms".to_string(),
         description: "Exports the atomic structure on its `molecule` input to a file; the \
-            format is chosen by the file extension (.xyz, .mol). When a record is wired into \
+            format is chosen by the file extension (.xyz, .mol). For .xyz, the `write_frozen`             property (on by default) appends a `FREEZEXYZ` line listing the 1-based indices of             frozen atoms. When a record is wired into \
             the optional `metadata` pin, also writes a `<file>.params.json` sidecar containing \
             those parameters plus a BLAKE3 hash of the exported file for machine-readable \
             verification."

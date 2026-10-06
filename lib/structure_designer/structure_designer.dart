@@ -42,6 +42,10 @@ import 'profiler_panel.dart';
 import 'refresh_profile_strip.dart';
 
 /// The structure designer editor.
+/// *Export visible*'s "Write frozen atoms" choice (the `.xyz` `FREEZEXYZ`
+/// line). On by default, remembered for the session.
+bool _exportVisibleWriteFrozen = true;
+
 class StructureDesigner extends StatefulWidget {
   final StructureDesignerModel model;
 
@@ -1477,11 +1481,15 @@ class _StructureDesignerState extends State<StructureDesigner> {
 
   /// Export visible atomic structures as XYZ or MOL file
   Future<void> _exportVisible() async {
+    final writeFrozen = ValueNotifier<bool>(_exportVisibleWriteFrozen);
     try {
       // First, let user select the format (shared with the export_atoms node
       // editor's Browse button — see lib/common/export_format_dialog.dart).
       if (!mounted) return;
-      String? selectedFormat = await showAtomExportFormatDialog(context);
+      String? selectedFormat =
+          await showAtomExportFormatDialog(context, writeFrozen: writeFrozen);
+      // Remembered for the session, whether or not the export goes ahead.
+      _exportVisibleWriteFrozen = writeFrozen.value;
 
       if (selectedFormat == null) return;
 
@@ -1503,7 +1511,8 @@ class _StructureDesignerState extends State<StructureDesigner> {
         rememberPickedFile(APIFileDialogPurpose.structureExport, outputFile);
 
         // Call the export method
-        final result = graphModel.exportVisibleAtomicStructures(outputFile);
+        final result = graphModel.exportVisibleAtomicStructures(outputFile,
+            writeFrozen: _exportVisibleWriteFrozen);
 
         // Check if there was an error
         if (!result.success) {
@@ -1538,6 +1547,8 @@ class _StructureDesignerState extends State<StructureDesigner> {
           ],
         );
       }
+    } finally {
+      writeFrozen.dispose();
     }
   }
 }

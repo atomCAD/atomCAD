@@ -2136,10 +2136,11 @@ void setStructureDesignerPreferences(
         .crateApiStructureDesignerStructureDesignerApiSetStructureDesignerPreferences(
             preferences: preferences);
 
-APIResult exportVisibleAtomicStructures({required String filePath}) => RustLib
-    .instance.api
-    .crateApiStructureDesignerStructureDesignerApiExportVisibleAtomicStructures(
-        filePath: filePath);
+APIResult exportVisibleAtomicStructures(
+        {required String filePath, required bool writeFrozen}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiExportVisibleAtomicStructures(
+            filePath: filePath, writeFrozen: writeFrozen);
 
 APILatticeVecsData? getLatticeVecsData(
         {required Uint64List scopePath, required BigInt nodeId}) =>

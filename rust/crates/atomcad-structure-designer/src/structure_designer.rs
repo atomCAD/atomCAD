@@ -43,7 +43,7 @@ use crate::serialization::node_networks_serialization;
 use crate::structure_designer_scene::StructureDesignerScene;
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::atomic_structure_utils::calc_selection_transform;
-use atomcad_crystolecule::io::atom_export::AtomExportFormat;
+use atomcad_crystolecule::io::atom_export::{AtomExportFormat, AtomExportOptions};
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
 use atomcad_crystolecule::visualization::AtomicStructureVisualization as DomainAtomicStructureVisualization;
 use atomcad_display::atomic_tessellator::{BAS_STICK_RADIUS, effective_displayed_atom_radius};
@@ -9541,7 +9541,12 @@ impl StructureDesigner {
     /// Exports all visible atomic structures as a single file (XYZ or MOL format)
     /// Merges all atomic structures from the last generated scene into one structure before saving
     /// File format is determined by the file extension (.xyz or .mol)
-    pub fn export_visible_atomic_structures(&self, file_path: &str) -> Result<(), String> {
+    /// `options` carries the format-specific choices (e.g. the `.xyz` frozen-atom line)
+    pub fn export_visible_atomic_structures(
+        &self,
+        file_path: &str,
+        options: &AtomExportOptions,
+    ) -> Result<(), String> {
         use crate::structure_designer_scene::NodeOutput;
 
         // Create a new merged atomic structure
@@ -9576,14 +9581,16 @@ impl StructureDesigner {
 
         // Determine file format from extension and save accordingly
         match AtomExportFormat::from_path(file_path) {
-            Some(format) => format.save(&merged_structure, file_path).map_err(|err| {
-                format!(
-                    "Failed to save {} file '{}': {}",
-                    format.label(),
-                    file_path,
-                    err
-                )
-            }),
+            Some(format) => format
+                .save(&merged_structure, file_path, options)
+                .map_err(|err| {
+                    format!(
+                        "Failed to save {} file '{}': {}",
+                        format.label(),
+                        file_path,
+                        err
+                    )
+                }),
             None => Err(format!(
                 "Unsupported file format. Please use {} extension. Got: {}",
                 AtomExportFormat::supported_extensions_display(),

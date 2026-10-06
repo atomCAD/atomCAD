@@ -14,7 +14,12 @@ import 'draggable_dialog.dart';
 /// which is why the OS save dialog cannot carry the choice (its file-type
 /// filter collapses multiple extensions into one combined filter; see the git
 /// archaeology in `doc/design_export_atoms_node.md`).
-Future<String?> showAtomExportFormatDialog(BuildContext context) {
+///
+/// When [writeFrozen] is given, the dialog also shows a "Write frozen atoms"
+/// checkbox bound to it (the `.xyz` `FREEZEXYZ` line). *Export visible* passes
+/// one; the node editor does not, since the node stores its own property.
+Future<String?> showAtomExportFormatDialog(BuildContext context,
+    {ValueNotifier<bool>? writeFrozen}) {
   final formats = structure_designer_api.getAtomExportFormats();
 
   return showDraggableAlertDialog<String>(
@@ -33,6 +38,25 @@ Future<String?> showAtomExportFormatDialog(BuildContext context) {
             subtitle: Text(format.description),
             onTap: () => Navigator.of(context).pop(format.extension_),
           ),
+        if (writeFrozen != null) ...[
+          const Divider(),
+          ValueListenableBuilder<bool>(
+            valueListenable: writeFrozen,
+            builder: (context, value, _) => CheckboxListTile(
+              key: const Key('export_write_frozen_checkbox'),
+              title: const Text('Write frozen atoms'),
+              subtitle: const Text(
+                  '.xyz only: appends a "FREEZEXYZ" line listing the 1-based '
+                  'indices of frozen atoms'),
+              value: value,
+              onChanged: (newValue) {
+                if (newValue != null) writeFrozen.value = newValue;
+              },
+              controlAffinity: ListTileControlAffinity.leading,
+              contentPadding: EdgeInsets.zero,
+            ),
+          ),
+        ],
       ],
     ),
     actions: [
