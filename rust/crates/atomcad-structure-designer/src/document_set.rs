@@ -18,6 +18,7 @@ use crate::file_dependencies::{canonical_or_lexical, path_key};
 use crate::library_links::RealFs;
 use crate::library_refresh::RefreshReport;
 use crate::navigation_history::NavigationEntry;
+use crate::node_jobs::{JobRunner, default_job_threads};
 use crate::structure_designer::StructureDesigner;
 use std::collections::HashMap;
 use std::fmt;
@@ -147,6 +148,11 @@ pub struct DocumentSet {
     order: Vec<DocumentId>,
     parked: HashMap<DocumentId, StructureDesigner>,
     next_id: u64,
+    /// The session's node jobs (`doc/design_background_node_jobs.md` D8): a
+    /// job outlives a tab switch, so it cannot live on a designer. Started,
+    /// cancelled and polled through `node_jobs::document_ops`; cancelled here
+    /// in `drop_parked` and `renumber_active`.
+    pub jobs: JobRunner,
 }
 
 impl DocumentSet {
@@ -163,6 +169,7 @@ impl DocumentSet {
             order: vec![first],
             parked: HashMap::new(),
             next_id: 2,
+            jobs: JobRunner::new(default_job_threads()),
         }
     }
 
@@ -388,13 +395,17 @@ impl DocumentSet {
     }
 
     /// Drops a parked document, and its visits from the history `active`
-    /// holds.
+    /// holds. Every close goes through here, the active tab's included, so
+    /// this is where the document's node jobs are cancelled (D8 of
+    /// `doc/design_background_node_jobs.md`); their late outcome is
+    /// `Dropped("the document was closed")`.
     fn drop_parked(
         &mut self,
         active: &mut StructureDesigner,
         id: DocumentId,
     ) -> Option<StructureDesigner> {
         let designer = self.parked.remove(&id)?;
+        self.jobs.cancel_document(id);
         self.order.retain(|d| *d != id);
         active.navigation_history.remove_document(id);
         Some(designer)
@@ -437,8 +448,11 @@ impl DocumentSet {
     /// place (D8), so an id never names two different documents.
     ///
     /// The old id's visits are forgotten (they name content that is gone) and
-    /// the new content is recorded as a visit.
+    /// the new content is recorded as a visit. The old id's node jobs are
+    /// cancelled: their results belong to content that is gone, and the fresh
+    /// id makes them miss anyway.
     pub fn renumber_active(&mut self, active: &mut StructureDesigner) {
+        self.jobs.cancel_document(self.active);
         let new_id = self.fresh_id();
         if let Some(slot) = self.order.iter_mut().find(|d| **d == self.active) {
             *slot = new_id;

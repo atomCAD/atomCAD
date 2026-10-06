@@ -56,6 +56,7 @@ pub mod node_data;
 pub mod node_dependency_analysis;
 pub mod node_display_policy_resolver;
 pub mod node_inlining;
+pub mod node_jobs;
 pub mod node_layout;
 pub mod node_name_search;
 pub mod node_network;

@@ -38,9 +38,13 @@ Built-in node type implementations. Each file defines one node type's behavior v
   `atomcad_crystolecule::chemisorption`) is the one node whose real work
   **never runs in `eval`**: a search relaxes hundreds of structures, and the
   evaluator re-evaluates a node on selection, downstream edits and every full
-  refresh. `eval` runs only the cheap `plan`; the search is an explicit action,
-  `StructureDesigner::run_chemisorb` (`chemisorb_ops.rs`), behind the panel's
-  Run button, the API and the CLI's `run`. The result is stored on the node
+  refresh. `eval` runs only the cheap `plan`; the search is an explicit action
+  behind the panel's Run button and the CLI's `run`, implemented as the node's
+  **node job** (`NodeData::prepare_job`, `node_jobs/`,
+  `doc/design_background_node_jobs.md`): prepare evaluates the inputs into an
+  owned `JobWork`, the search runs off the UI thread, and a `JobResult`
+  installs the report (the three halves are in `chemisorb_ops.rs`). The
+  result is stored on the node
   data (`#[serde(skip)]`, not undoable) **with the fingerprint of the inputs it
   was computed from**, and `eval` outputs it only while the current inputs hash
   the same — which is also what makes reading node data in `eval` safe here
@@ -48,7 +52,9 @@ Built-in node type implementations. Each file defines one node type's behavior v
   survives whole-data replacement (a settings edit, and that edit's JSON-based
   undo) through `NodeData::inherit_runtime_state`, the one trait hook for
   runtime-only state that must outlive a `set_node_network_data`. Copy this
-  shape for the next expensive node rather than caching in `eval`. **Every
+  shape — fingerprinted stored result plus a `prepare_job` — for the next
+  expensive node rather than caching in `eval`; the fingerprint is what makes
+  installing a job's result safe whatever was edited while it ran. **Every
   property is a search setting** (fingerprinted; a change makes the result
   stale), including the two filters and `top_n` / `energy_window`, because the
   engine applies them before or while relaxing and keeps only what is listed.

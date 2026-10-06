@@ -17,9 +17,9 @@ use crate::api::api_common::{
 use crate::api::structure_designer::structure_designer_api_types::{
     APIChemisorbData, APIChemisorbReport, APIChemisorbRunResult,
 };
+use atomcad_structure_designer::chemisorb_ops::{self, ChemisorbRunSummary};
 use atomcad_structure_designer::nodes::chemisorb::{ChemisorbData, ChemisorbEvalCache};
 use atomcad_structure_designer::structure_designer::StructureDesigner;
-use atomcad_util::number_format::format_natural;
 
 /// The stored settings of a `chemisorb` node. `None` when `node_id` names no
 /// node in `scope_path` or a node of another type.
@@ -70,33 +70,19 @@ pub fn resolve_node_identifier(designer: &StructureDesigner, identifier: &str) -
         .or_else(|| designer.find_node_id_by_name(identifier))
 }
 
-/// One line per fact, for the CLI's `run`.
+/// One line per fact, for the CLI's `run`: the domain's
+/// `chemisorb_ops::format_run_result` over the api twin.
 #[flutter_rust_bridge::frb(ignore)]
 pub fn format_run_result(result: &APIChemisorbRunResult) -> String {
-    let mut lines = vec![format!(
-        "Relaxed {} hypotheses in {} s; {} listed.",
-        result.relaxed,
-        format_natural(result.seconds, 3),
-        result.listed
-    )];
-    match result.best_strain {
-        Some(strain) => lines.push(format!(
-            "Best listed: strain {} kcal/mol, {}.",
-            format_natural(strain, 4),
-            result.best_bonds
-        )),
-        None => lines.push("No candidate listed.".to_string()),
-    }
-    if result.unconverged > 0 {
-        lines.push(format!(
-            "{} relaxation(s) did not converge.",
-            result.unconverged
-        ));
-    }
-    if result.truncated {
-        lines.push("Budget hit: the search is NOT exhaustive.".to_string());
-    }
-    lines.join("\n")
+    chemisorb_ops::format_run_result(&ChemisorbRunSummary {
+        relaxed: result.relaxed,
+        listed: result.listed,
+        best_strain: result.best_strain,
+        best_bonds: result.best_bonds.clone(),
+        truncated: result.truncated,
+        unconverged: result.unconverged,
+        seconds: result.seconds,
+    })
 }
 
 // ============================================================================

@@ -665,6 +665,12 @@ mod text_format_zone_body_path_test;
 
 #[path = "structure_designer/chemisorb_node_test.rs"]
 mod chemisorb_node_test;
+
+#[path = "structure_designer/node_jobs_support.rs"]
+mod node_jobs_support;
+
+#[path = "structure_designer/node_jobs_test.rs"]
+mod node_jobs_test;
 #[path = "structure_designer/proxy_node_test.rs"]
 mod proxy_node_test;
 

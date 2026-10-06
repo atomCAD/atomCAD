@@ -10,9 +10,10 @@
 //! the evaluator re-evaluates a node on far more than its own edits
 //! (selection, downstream edits, every full refresh), so `eval` only ever runs
 //! the cheap `plan` and reads a stored result. The search itself runs on an
-//! explicit action — the panel's Run button, the API's `run_chemisorb`, the
-//! CLI's `run` — which is `StructureDesigner::run_chemisorb`
-//! (`chemisorb_ops.rs`).
+//! explicit action — the panel's Run button, the CLI's `run` — which is this
+//! node's **node job** (`prepare_job`; the halves are in `chemisorb_ops.rs`,
+//! the layer in `node_jobs/`): the search runs off the UI thread and its
+//! result is installed on the node when it lands.
 //!
 //! **The stored result is a cache keyed by an input fingerprint.**
 //! [`ChemisorbData::stored`] holds the last report with the
@@ -57,6 +58,7 @@ use crate::evaluator::network_evaluator::NetworkEvaluator;
 use crate::evaluator::network_evaluator::NetworkStackElement;
 use crate::evaluator::network_result::{MoleculeData, NetworkResult, first_array_element_error};
 use crate::node_data::{EvalOutput, NodeData};
+use crate::node_jobs::{JobInputs, JobWork};
 use crate::node_network_gadget::NodeNetworkGadget;
 use crate::node_type::NodeTypeCategory;
 use crate::node_type::{
@@ -169,7 +171,8 @@ pub struct ChemisorbData {
     /// UFF iteration limit per relaxation.
     #[serde(default = "default_max_iterations")]
     pub max_iterations: i32,
-    /// The last search, written only by `StructureDesigner::run_chemisorb`.
+    /// The last search, written only by the node job's install
+    /// (`ChemisorbOutcome`, `chemisorb_ops.rs`).
     /// Never saved and never an undo step: it is a pure function of the
     /// inputs, and the fingerprint keeps a copied or outdated one harmless.
     #[serde(skip)]
@@ -728,6 +731,14 @@ impl NodeData for ChemisorbData {
         {
             self.stored = previous.stored.clone();
         }
+    }
+
+    /// Run is this node's job (`chemisorb_ops.rs`).
+    fn prepare_job(&self, inputs: &mut JobInputs) -> Option<Result<Box<dyn JobWork>, String>> {
+        Some(
+            self.prepare_work(inputs)
+                .map(|work| Box::new(work) as Box<dyn JobWork>),
+        )
     }
 
     fn get_subtitle(&self, connected_input_pins: &HashSet<String>) -> Option<String> {

@@ -3,6 +3,7 @@ use crate::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::evaluator::network_evaluator::NetworkEvaluator;
 use crate::evaluator::network_evaluator::NetworkStackElement;
 use crate::evaluator::network_result::NetworkResult;
+use crate::node_jobs::{JobInputs, JobWork};
 use crate::node_network_gadget::NodeNetworkGadget;
 use crate::node_type::NodeType;
 use crate::node_type_registry::NodeTypeRegistry;
@@ -310,6 +311,19 @@ pub trait NodeData: Any + AsAny {
     /// so can never be output for inputs it was not computed from. Default:
     /// nothing is inherited.
     fn inherit_runtime_state(&mut self, _previous: &dyn NodeData) {}
+
+    /// A run-on-demand node's explicit action (`doc/design_background_node_jobs.md`):
+    /// evaluate what it needs through `inputs` and return the work to do off
+    /// the UI thread, owning everything it reads. `None` = this node has no
+    /// job; `Some(Err)` = it has one but cannot run now (broken inputs or
+    /// settings), with a message for the user.
+    ///
+    /// The result the work produces must be stored keyed by a fingerprint of
+    /// every input and setting (D3) — that is what makes installing it safe
+    /// whatever was edited while it ran. Default: no job.
+    fn prepare_job(&self, _inputs: &mut JobInputs) -> Option<Result<Box<dyn JobWork>, String>> {
+        None
+    }
 
     /// Returns metadata for input parameters that cannot be derived from get_text_properties().
     ///

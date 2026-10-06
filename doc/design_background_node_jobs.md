@@ -305,6 +305,8 @@ pub struct JobTarget {
 
 /// The worker half: owned inputs, no access to the designer.
 pub trait JobWork: Send + 'static {
+    /// What the job is called in the UI ("Chemisorption search").
+    fn label(&self) -> String;
     fn run(self: Box<Self>, control: Option<&JobControl>)
         -> Result<Box<dyn JobResult>, String>;
 }
@@ -422,8 +424,9 @@ impl JobRunner {
     /// runner's pool; the closure writes its outcome into the slot. A panic
     /// inside `run` is caught (`catch_unwind`) and becomes
     /// `Err("internal error …")`.
-    pub fn start(&mut self, target: JobTarget, label: String,
-                 work: Box<dyn JobWork>) -> Result<u64, String>;
+    /// The label comes from `work.label()`.
+    pub fn start(&mut self, target: JobTarget, work: Box<dyn JobWork>)
+        -> Result<u64, String>;
     pub fn cancel(&self, id: u64);
     pub fn cancel_document(&self, document_id: DocumentId);
     /// Jobs whose worker has not returned yet, cancelling ones included.

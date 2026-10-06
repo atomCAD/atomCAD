@@ -28,6 +28,7 @@ dirs = { workspace = true }
 flate2 = { workspace = true }
 glam = { workspace = true }
 lru = { workspace = true }
+rayon = { workspace = true }
 rustc-hash = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

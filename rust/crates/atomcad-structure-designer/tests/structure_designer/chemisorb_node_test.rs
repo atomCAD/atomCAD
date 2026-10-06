@@ -1310,3 +1310,366 @@ fn the_transfers_wire_round_trips_through_the_text_format_and_cnnd() {
         .expect("the transfers wire survives");
     assert_eq!(loaded.nodes[&source].node_type_name, "array");
 }
+
+// ============================================================================
+// Run as a node job (`doc/design_background_node_jobs.md`, Phase 2)
+// ============================================================================
+//
+// Prepare, run and install are called one after the other here, with edits
+// in between, as a background job interleaves them with the user's edits. The
+// runner and the routing are tested with gated work in `node_jobs_test.rs`.
+
+use atomcad_structure_designer::chemisorb_ops::format_run_result;
+use atomcad_structure_designer::library_links::{LibraryMount, MountStatus, UsedInterfaces};
+use atomcad_structure_designer::node_jobs::JobResult;
+
+/// The summary text without its wall time, which differs between runs.
+fn without_seconds(text: &str) -> String {
+    let (first, rest) = text.split_once('\n').unwrap_or((text, ""));
+    let (head, tail) = first.split_once(" in ").expect("'in <t> s'");
+    let tail = tail.split_once(" s;").expect("'<t> s;'").1;
+    format!("{head} in _ s;{tail}\n{rest}")
+}
+
+/// Every listed candidate's strain and positions, as the outputs give them.
+type Listed = Vec<(u64, Vec<(u32, [u64; 3])>)>;
+
+fn listed(designer: &mut StructureDesigner, name: &str, node: u64) -> Listed {
+    let out = outputs(designer, name, node);
+    array(&out[1])
+        .iter()
+        .map(|row| {
+            let f = fields(row);
+            (
+                float(&f, "strain").to_bits(),
+                positions(atoms(&f["structure"])),
+            )
+        })
+        .collect()
+}
+
+type Finish = Box<dyn FnOnce(&mut StructureDesigner) -> Result<String, String>>;
+
+/// Prepare now; the returned closure runs the work and installs it later.
+fn prepare(designer: &mut StructureDesigner, node: u64) -> Finish {
+    let (target, work) = designer.prepare_node_job(&[], node).expect("prepare");
+    Box::new(move |designer: &mut StructureDesigner| {
+        let result: Box<dyn JobResult> = work.run(None)?;
+        designer.install_job_result(&target, result)
+    })
+}
+
+fn searched_and_stale(designer: &mut StructureDesigner, name: &str, node: u64) -> (bool, bool) {
+    let s = fields(&outputs(designer, name, node)[2]);
+    (boolean(&s, "searched"), boolean(&s, "stale"))
+}
+
+/// D9: the blocking job is the same search, install and summary as the
+/// typed `run_chemisorb`.
+#[test]
+fn the_blocking_job_matches_run_chemisorb() {
+    let Net {
+        mut designer,
+        name,
+        node,
+        ..
+    } = network();
+    let typed = designer.run_chemisorb(&[], node).unwrap();
+    let typed_outputs = listed(&mut designer, name, node);
+
+    let Net {
+        mut designer,
+        name,
+        node,
+        ..
+    } = network();
+    let text = designer.run_node_job_blocking(&[], node).unwrap();
+    assert_eq!(
+        without_seconds(&text),
+        without_seconds(&format_run_result(&typed))
+    );
+    assert_eq!(listed(&mut designer, name, node), typed_outputs);
+    assert_eq!(searched_and_stale(&mut designer, name, node), (true, false));
+}
+
+#[test]
+fn prepare_refuses_body_nodes_nodes_without_a_job_and_read_only_networks() {
+    let Net {
+        mut designer,
+        name,
+        adsorbate,
+        node,
+    } = network();
+    fn err<T>(r: Result<T, String>) -> String {
+        r.map(|_| ()).unwrap_err()
+    }
+
+    assert_eq!(
+        err(designer.prepare_node_job(&[], adsorbate)),
+        format!("Node {adsorbate} has no run action")
+    );
+    assert_eq!(
+        err(designer.run_node_job_blocking(&[], adsorbate)),
+        format!("Node {adsorbate} has no run action")
+    );
+    assert_eq!(
+        err(designer.prepare_node_job(&[7], node)),
+        "Cannot run a node inside a higher-order-function body"
+    );
+    assert_eq!(
+        err(designer.prepare_node_job(&[], 9999)),
+        "Node 9999 does not exist"
+    );
+
+    make_read_only(&mut designer, name);
+    let message = err(designer.prepare_node_job(&[], node));
+    assert!(message.contains("is read-only"), "{message}");
+}
+
+/// Mounts a library over `network`, which makes it read-only (library linking
+/// §6) — what a library refresh can do to a network while a job runs.
+fn make_read_only(designer: &mut StructureDesigner, network: &str) {
+    designer
+        .node_type_registry
+        .library_links
+        .insert(LibraryMount {
+            mount_path: network.to_string(),
+            alias: network.to_string(),
+            rel_path: format!("{network}.cnnd"),
+            abs_path: std::path::PathBuf::from(format!("{network}.cnnd")),
+            parent: None,
+            status: MountStatus::Loaded,
+            loaded: None,
+            last_seen: None,
+            stored_hash: None,
+            stored_uses: UsedInterfaces::default(),
+            name_only_param_ids: Default::default(),
+        });
+}
+
+/// D3, the design's correctness argument: whatever is edited while the
+/// search runs, the install lands and the fingerprint decides what shows.
+#[test]
+fn an_input_moved_during_the_run_installs_and_shows_stale() {
+    let Net {
+        mut designer,
+        name,
+        adsorbate,
+        node,
+    } = network();
+    let finish = prepare(&mut designer, node);
+    set_value(
+        &mut designer,
+        name,
+        adsorbate,
+        molecule(hydroxyl(DVec3::new(0.1, 0.0, 0.0))),
+    );
+    finish(&mut designer).expect("installs");
+    assert!(stored(&designer, name, node).is_some());
+    assert_eq!(searched_and_stale(&mut designer, name, node), (false, true));
+}
+
+#[test]
+fn top_n_changed_during_the_run_shows_stale_and_its_undo_shows_the_result() {
+    for undo in [false, true] {
+        let Net {
+            mut designer,
+            name,
+            node,
+            ..
+        } = network();
+        let finish = prepare(&mut designer, node);
+        let edited = ChemisorbData {
+            top_n: 1,
+            ..data(&designer, name, node)
+        };
+        designer.set_chemisorb_data(&[], node, edited);
+        if undo {
+            assert!(designer.undo());
+        }
+        finish(&mut designer).expect("installs");
+        let expected = if undo { (true, false) } else { (false, true) };
+        assert_eq!(
+            searched_and_stale(&mut designer, name, node),
+            expected,
+            "undo: {undo}"
+        );
+    }
+}
+
+#[test]
+fn a_node_deleted_during_the_run_drops_the_result_and_its_undo_takes_it() {
+    for undo in [false, true] {
+        let Net {
+            mut designer,
+            name,
+            node,
+            ..
+        } = network();
+        let finish = prepare(&mut designer, node);
+        let original = designer.node_type_registry.node_networks[name].nodes[&node].clone();
+        designer.select_node(node);
+        designer.delete_selected();
+        assert!(
+            !designer.node_type_registry.node_networks[name]
+                .nodes
+                .contains_key(&node)
+        );
+        if undo {
+            // What the undo of the delete restores: the same node, same id,
+            // same input wires. Not `designer.undo()` itself: its full refresh
+            // validates, and the fixture's `value` nodes (output type `None`)
+            // fail validation on a typed pin (see `network`).
+            designer
+                .node_type_registry
+                .node_networks
+                .get_mut(name)
+                .unwrap()
+                .nodes
+                .insert(node, original);
+            finish(&mut designer).expect("the restored node takes the result");
+            assert_eq!(searched_and_stale(&mut designer, name, node), (true, false));
+        } else {
+            assert_eq!(
+                finish(&mut designer).unwrap_err(),
+                "the node no longer exists"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_network_made_read_only_during_the_run_drops_the_result() {
+    let Net {
+        mut designer,
+        name,
+        node,
+        ..
+    } = network();
+    let finish = prepare(&mut designer, node);
+    make_read_only(&mut designer, name);
+    let reason = finish(&mut designer).unwrap_err();
+    assert!(reason.contains("is read-only"), "{reason}");
+    assert!(stored(&designer, name, node).is_none());
+}
+
+/// D10: an install is not an undo step, does not dirty the file, and is
+/// never saved.
+#[test]
+fn an_install_is_not_an_undo_step_not_a_dirtying_edit_and_not_saved() {
+    use atomcad_structure_designer::serialization::node_networks_serialization::{
+        load_node_networks_from_file, save_node_networks_to_file,
+    };
+
+    let Net {
+        mut designer,
+        name,
+        node,
+        ..
+    } = network();
+    let edited = ChemisorbData {
+        reach: 3.6,
+        ..data(&designer, name, node)
+    };
+    designer.set_chemisorb_data(&[], node, edited);
+    designer.is_dirty = false;
+    let history = designer.undo_stack.history_len();
+
+    let finish = prepare(&mut designer, node);
+    finish(&mut designer).expect("installs");
+    assert_eq!(designer.undo_stack.history_len(), history);
+    assert!(!designer.is_dirty());
+
+    // The next undo still undoes the user's last edit.
+    assert!(designer.undo());
+    assert_eq!(data(&designer, name, node).reach, 3.5);
+    assert!(
+        stored(&designer, name, node).is_some(),
+        "inherited across it"
+    );
+
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("job.cnnd");
+    save_node_networks_to_file(
+        &mut designer.node_type_registry,
+        &path,
+        false,
+        &HashMap::new(),
+    )
+    .expect("save");
+    assert!(!std::fs::read_to_string(&path).unwrap().contains("stored"));
+    let mut reloaded = StructureDesigner::new();
+    load_node_networks_from_file(&mut reloaded.node_type_registry, path.to_str().unwrap())
+        .expect("load");
+    assert!(
+        stored(&reloaded, name, node).is_none(),
+        "a reloaded node is in the before-Run state"
+    );
+}
+
+/// A real search through the runner into a parked document: the install
+/// marks only the node, and activating the document evaluates it (the swap's
+/// full refresh) — the panel's report then shows the result.
+#[test]
+fn a_search_landing_in_a_parked_document_shows_when_it_is_activated() {
+    use super::node_jobs_support::wait_until;
+    use atomcad_structure_designer::document_set::DocumentSet;
+    use atomcad_structure_designer::node_jobs::{JOB_ALREADY_RUNNING, JobOutcomeKind, JobRunner};
+
+    let Net {
+        mut designer,
+        name,
+        node,
+        ..
+    } = network();
+    let before = designer_eval_cache(&mut designer, name, node);
+    assert!(!before.stats.searched);
+
+    let mut active = designer;
+    let mut set = DocumentSet::new(&mut active);
+    set.jobs = JobRunner::new(2);
+    let doc = set.active_id();
+    let job = set.start_job(&mut active, &[], node).expect("start");
+    assert_eq!(
+        set.start_job(&mut active, &[], node).unwrap_err(),
+        JOB_ALREADY_RUNNING
+    );
+
+    // Park the document: open another and switch to it.
+    let mut other = StructureDesigner::new();
+    other.new_project_direct_editing();
+    let other = set.insert(other, doc);
+    set.activate(&mut active, other).unwrap();
+    let changes = active.get_pending_changes();
+    active.refresh(&changes);
+
+    wait_until("the search finishes", || set.jobs.statuses().is_empty());
+    let poll = set.poll_jobs(&mut active, false);
+    assert_eq!(poll.finished.len(), 1);
+    let outcome = &poll.finished[0];
+    assert_eq!(outcome.job_id, job);
+    assert_eq!(
+        outcome.kind,
+        JobOutcomeKind::Finished,
+        "{}",
+        outcome.message
+    );
+    assert_eq!(outcome.label, "Chemisorption search");
+    assert!(
+        outcome.message.starts_with("Relaxed 3 hypotheses in "),
+        "{}",
+        outcome.message
+    );
+    assert!(!poll.active_changed);
+
+    set.activate(&mut active, doc).unwrap();
+    let changes = active.get_pending_changes();
+    active.refresh(&changes);
+    let after = active
+        .get_selected_node_eval_cache()
+        .and_then(|c| c.downcast_ref::<ChemisorbEvalCache>())
+        .cloned()
+        .expect("chemisorb eval cache");
+    assert!(after.stats.searched);
+    assert_eq!(after.rows.len(), 3);
+}

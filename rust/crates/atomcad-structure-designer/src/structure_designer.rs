@@ -925,6 +925,13 @@ impl StructureDesigner {
         self.pending_changes.mark_node_data_changed(node_id);
     }
 
+    /// Marks the data of node `node_id` in the scope `scope_path` (of the
+    /// active network) as changed.
+    pub fn mark_node_data_changed_scoped(&mut self, scope_path: &[u64], node_id: u64) {
+        self.pending_changes
+            .mark_node_data_changed_scoped(scope_path, node_id);
+    }
+
     /// Marks that a full refresh is needed (for complex/unknown changes)
     pub fn mark_full_refresh(&mut self) {
         self.pending_changes.set_mode(RefreshMode::Full);

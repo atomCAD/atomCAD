@@ -68,7 +68,8 @@ structure_designer/
 ├── preferences.rs             # User preferences persistence
 ├── ai_text_edit.rs            # ai_text_edit: the AI edit choke point (edit → validate → layout → log → undo)
 ├── mechanosynth_edit_ops.rs   # mechanosynth_edit: block edits, cursor, and the click→place flow
-├── chemisorb_ops.rs           # chemisorb: Run (the only place its search is computed) and the settings setter
+├── chemisorb_ops.rs           # chemisorb: Run as a node job (prepare / search / install) and the settings setter
+├── node_jobs/                 # Node jobs: explicit per-node work run off the UI thread (runner, DocumentSet side)
 ├── ai_edit_log.rs             # Session log of AI edits (runtime-only, never in .cnnd)
 ├── ai_edit_diff.rs            # Diffs two AI text-format snapshots (By node / Text)
 ├── ai_edit_export.rs          # Renders the AI edit log as JSON (canonical) / Markdown (readable)
@@ -493,6 +494,16 @@ choose; §6 of the design document is the reference table. App state is cloned
 or moved there; document state is named with `_`. If the field is a
 recomputable cache, also drop it in `park`; if it is a new `pending_*`
 interaction, it belongs in `open_interaction` (which refuses a switch, D4).
+
+**Node jobs are the session's too** (`doc/design_background_node_jobs.md`
+D8): `DocumentSet.jobs` (a `JobRunner` with its own lazily built rayon pool)
+holds every running job, keyed by `(DocumentId, network, scope, node)`, and
+`poll_jobs` installs a finished result into the active or a parked designer.
+The worker gets only owned data (`JobWork: Send + 'static`), never a
+designer, so no lock is needed. Jobs are cancelled inside `drop_parked` and
+`renumber_active` — every close and in-place replacement goes through one of
+them — so a new close path must too. Install is deferred while
+`open_interaction` reports something (D11).
 
 **The back/forward history is the session's** (D12): entries are
 `(DocumentId, network)`, so upkeep on a rename or delete passes
