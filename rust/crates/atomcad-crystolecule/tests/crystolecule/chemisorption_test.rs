@@ -25,8 +25,11 @@ use atomcad_crystolecule::lattice_fill::{LatticeFillConfig, LatticeFillOptions, 
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
 use atomcad_geo_tree::GeoNode;
 use atomcad_util::daabox::DAABox;
+use atomcad_util::job_control::JobControl;
 use glam::{DQuat, DVec3};
 use std::collections::{BTreeSet, HashMap};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 const H: i16 = 1;
 const B: i16 = 5;
@@ -839,6 +842,7 @@ fn top_n_and_the_window_keep_what_a_full_ranking_would() {
                 energy_window,
                 ..config(3.5)
             },
+            None,
         )
         .unwrap()
     };
@@ -887,8 +891,8 @@ fn evaluate_is_deterministic_and_self_consistent() {
         }
     }
     let cfg = config(3.5);
-    let a = search(&ads, &sub, &cfg).unwrap();
-    let b = search(&ads, &sub, &cfg).unwrap();
+    let a = search(&ads, &sub, &cfg, None).unwrap();
+    let b = search(&ads, &sub, &cfg, None).unwrap();
     assert_eq!(a.candidates.len(), 3);
     for (x, y) in a.candidates.iter().zip(&b.candidates) {
         assert_eq!(x.formed, y.formed);
@@ -934,7 +938,7 @@ fn evaluate_works_with_a_vdw_cutoff() {
         vdw_mode: VdwMode::Cutoff(6.0),
         ..config(3.5)
     };
-    let report = search(&ads, &sub, &cfg).unwrap();
+    let report = search(&ads, &sub, &cfg, None).unwrap();
     assert_eq!(report.candidates.len(), 2);
     for c in &report.candidates {
         assert!((c.terms.total() - c.strain).abs() < 1e-6, "{:?}", c.terms);
@@ -990,6 +994,7 @@ fn the_formed_bond_filter_plans_one_leg_count() {
             energy_window: f64::INFINITY,
             ..cfg.clone()
         },
+        None,
     )
     .unwrap();
     assert_eq!(report.candidates.len(), 63);
@@ -1015,6 +1020,153 @@ fn the_formed_bond_filter_plans_one_leg_count() {
         best.strain,
         six.strain
     );
+}
+
+// ============================================================================
+// Progress and cancellation (doc/design_background_node_jobs.md, Phase 1)
+// ============================================================================
+
+/// •OH over three frozen-backed silyl radicals: three hypotheses, quick to
+/// relax even in a debug build.
+fn oh_over_three_silyls() -> (AtomicStructure, AtomicStructure) {
+    let mut ads = AtomicStructure::new();
+    let o = ads.add_atom(O, DVec3::new(0.3, 0.2, 2.2));
+    let h = ads.add_atom(H, DVec3::new(0.3, 0.2, 3.17));
+    ads.add_bond(o, h, BOND_SINGLE);
+    let (mut sub, site_ids) = sites(
+        &[
+            DVec3::ZERO,
+            DVec3::new(2.6, 0.0, 0.0),
+            DVec3::new(0.0, 2.9, 0.0),
+        ],
+        3,
+    );
+    for id in sub.atom_ids().copied().collect::<Vec<_>>() {
+        if !site_ids.contains(&id) {
+            sub.set_atom_frozen(id, true);
+        }
+    }
+    (ads, sub)
+}
+
+#[test]
+fn a_search_reports_its_phases_and_progress() {
+    let (ads, sub) = oh_over_three_silyls();
+    let cfg = config(3.5);
+    let to_relax = plan(&ads, &sub, &cfg).unwrap().stats.to_relax as u64;
+    assert_eq!(to_relax, 3);
+
+    // "Planning" before it is pinned by the next test.
+    let control = JobControl::new();
+    let report = search(&ads, &sub, &cfg, Some(&control)).unwrap();
+    let end = control.snapshot();
+    assert_eq!(end.phase, "Relaxing");
+    assert_eq!(
+        end.total,
+        Some(to_relax + 1),
+        "every hypothesis + the reference"
+    );
+    assert_eq!(end.done, to_relax + 1);
+    assert_eq!(report.stats.relaxed as u64, to_relax);
+    assert!(!control.is_cancelled());
+}
+
+#[test]
+fn a_search_is_in_the_planning_phase_until_the_plan_exists() {
+    // Planning cannot be observed from inside `search` without a hook, so
+    // this pins the order on the edge case where the plan itself fails: the
+    // phase was set before `plan` ran, and no total was set.
+    let (ads, sub) = oh_over_three_silyls();
+    let control = JobControl::new();
+    let err = search(
+        &ads,
+        &sub,
+        &ChemisorptionSearch {
+            top_n: 0,
+            ..config(3.5)
+        },
+        Some(&control),
+    )
+    .unwrap_err();
+    assert!(matches!(err, ChemisorptionError::InvalidConfig(_)));
+    let p = control.snapshot();
+    assert_eq!(p.phase, "Planning");
+    assert_eq!(p.total, None);
+    assert_eq!(p.done, 0);
+}
+
+#[test]
+fn the_control_changes_nothing() {
+    let (ads, sub) = oh_over_three_silyls();
+    let cfg = config(3.5);
+    let without = search(&ads, &sub, &cfg, None).unwrap();
+    let with = search(&ads, &sub, &cfg, Some(&JobControl::new())).unwrap();
+    assert_eq!(without.candidates.len(), with.candidates.len());
+    for (a, b) in without.candidates.iter().zip(&with.candidates) {
+        assert_eq!(a.key(), b.key());
+        assert_eq!(a.strain.to_bits(), b.strain.to_bits());
+        assert_eq!(a.energy.to_bits(), b.energy.to_bits());
+    }
+    assert_eq!(
+        without.reference.energy.to_bits(),
+        with.reference.energy.to_bits()
+    );
+}
+
+#[test]
+fn a_search_cancelled_before_it_starts_relaxes_nothing() {
+    let (ads, sub) = oh_over_three_silyls();
+    let control = JobControl::new();
+    control.cancel();
+    let err = search(&ads, &sub, &config(3.5), Some(&control)).unwrap_err();
+    assert!(matches!(err, ChemisorptionError::Cancelled), "{err}");
+    assert_eq!(err.to_string(), "search cancelled");
+    assert_eq!(control.snapshot().done, 0);
+}
+
+#[test]
+fn a_search_cancelled_midway_stops_early() {
+    // Ethanediyl over Si(100)-2×1 (the known-answer fixture below): a few
+    // dozen relaxations of a ~350-atom slab, each one slow enough (tens of ms
+    // even in a release build) that the watcher's cancel lands long before
+    // the last. One pool thread: the search advances one relaxation at a
+    // time.
+    let slab = si100_slab(5.0, 9.0);
+    let (site, partner) = central_dimer(&slab);
+    let (ps, pp) = (
+        slab.get_atom(site).unwrap().position,
+        slab.get_atom(partner).unwrap().position,
+    );
+    let (ads, _) = ethanediyl((ps + pp) / 2.0 + DVec3::Z * 2.0, pp - ps);
+    let cfg = config(4.5);
+    let total = plan(&ads, &slab, &cfg).unwrap().stats.to_relax as u64 + 1;
+    assert!(total >= 10, "only {total} relaxations");
+
+    let control = Arc::new(JobControl::new());
+    let watcher = {
+        let control = Arc::clone(&control);
+        std::thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_secs(120);
+            while control.snapshot().done < 1 {
+                assert!(Instant::now() < deadline, "the search never advanced");
+                std::thread::yield_now();
+            }
+            control.cancel();
+        })
+    };
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(1)
+        .build()
+        .unwrap();
+    let result = pool.install(|| search(&ads, &slab, &cfg, Some(&control)));
+    watcher.join().unwrap();
+    assert!(
+        matches!(result, Err(ChemisorptionError::Cancelled)),
+        "expected a cancelled search, not a (partial) report"
+    );
+    let p = control.snapshot();
+    assert_eq!(p.total, Some(total));
+    assert!(p.done >= 1 && p.done < total, "done {} of {total}", p.done);
 }
 
 // ============================================================================
@@ -1049,7 +1201,7 @@ fn ethanediyl_on_si100_ranks_di_sigma_first_among_two_bond_bindings() {
         energy_window: f64::INFINITY,
         ..config(4.5)
     };
-    let report = search(&ads, &slab, &cfg).unwrap();
+    let report = search(&ads, &slab, &cfg, None).unwrap();
     let s = &report.reference.structure;
     let site_pair = |c: &Candidate| (c.formed[0].1, c.formed[1].1);
 
@@ -1446,7 +1598,13 @@ fn a_transfer_candidate_is_relaxed_with_both_bonds() {
             sub.set_atom_frozen(id, true);
         }
     }
-    let report = search(&ads, &sub, &transfer_config(3.5, &[H_TO_SUBSTRATE], 1)).unwrap();
+    let report = search(
+        &ads,
+        &sub,
+        &transfer_config(3.5, &[H_TO_SUBSTRATE], 1),
+        None,
+    )
+    .unwrap();
     assert_eq!(report.candidates.len(), 4);
     assert_eq!(report.stats.transfer_candidates, 2);
     for c in &report.candidates {
@@ -1524,7 +1682,7 @@ fn water_on_si100_ties_one_dimer_against_two() {
         energy_window: f64::INFINITY,
         ..transfer_config(4.5, &[H_TO_SUBSTRATE], 1)
     };
-    let report = search(&ads, &slab, &cfg).unwrap();
+    let report = search(&ads, &slab, &cfg, None).unwrap();
     let s = &report.reference.structure;
 
     let dissociated = |c: &&Candidate| c.formed.len() == 1 && c.transfers.len() == 1;

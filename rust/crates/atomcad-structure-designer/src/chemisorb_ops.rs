@@ -117,7 +117,7 @@ impl StructureDesigner {
         let config = data.search_config(use_vdw_cutoff, transfer_rules(transfers)?)?;
         let fingerprint = input_fingerprint(&adsorbate, &substrate, &config);
         let report =
-            search(&adsorbate, &substrate, &config).map_err(|e| format!("chemisorb: {e}"))?;
+            search(&adsorbate, &substrate, &config, None).map_err(|e| format!("chemisorb: {e}"))?;
 
         let best = report.candidates.first();
         let summary = ChemisorbRunSummary {

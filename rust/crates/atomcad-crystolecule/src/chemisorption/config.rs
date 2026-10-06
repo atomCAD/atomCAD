@@ -140,4 +140,7 @@ pub enum ChemisorptionError {
     Relaxation(String),
     #[error("tagging the result failed: {0}")]
     Tag(#[from] TagError),
+    /// The search's `JobControl` was cancelled; no partial report is kept.
+    #[error("search cancelled")]
+    Cancelled,
 }

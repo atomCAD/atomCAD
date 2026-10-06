@@ -7,6 +7,7 @@ use super::relax::{Relaxed, StrainTerms, relax};
 use super::transfer::{Transfer, apply_transfers};
 use crate::atomic_structure::AtomicStructure;
 use crate::atomic_structure::inline_bond::BOND_SINGLE;
+use atomcad_util::job_control::JobControl;
 use rayon::prelude::*;
 use std::cmp::Ordering;
 use std::sync::Mutex;
@@ -179,22 +180,44 @@ fn candidate(
     }
 }
 
+/// `Err(Cancelled)` once `control` has been cancelled.
+fn check_cancelled(control: Option<&JobControl>) -> Result<(), ChemisorptionError> {
+    match control {
+        Some(c) if c.is_cancelled() => Err(ChemisorptionError::Cancelled),
+        _ => Ok(()),
+    }
+}
+
 /// Relaxes the reference state and every planned hypothesis (in parallel)
 /// and ranks them. The order is independent of which relaxation
 /// finishes first (R10).
+///
+/// With a `control`, each finished relaxation advances it by one, and a
+/// cancel is honoured before each relaxation starts: the search then returns
+/// [`ChemisorptionError::Cancelled`], never a partial report. Without one,
+/// nothing changes. The control's total and phase are the caller's; [`search`]
+/// sets them.
 pub fn evaluate(
     plan: &SearchPlan,
     config: &ChemisorptionSearch,
+    control: Option<&JobControl>,
 ) -> Result<SearchReport, ChemisorptionError> {
     let start = Instant::now();
+    let advance = || {
+        if let Some(c) = control {
+            c.advance(1);
+        }
+    };
     let no_change = Hypothesis {
         formed: Vec::new(),
         transfers: Vec::new(),
         inventory: BondInventory::default(),
     };
 
+    check_cancelled(control)?;
     let mut reference_structure = plan.combined.clone();
     let reference_relaxed = relax(&mut reference_structure, config)?;
+    advance();
     let reference = candidate(
         reference_structure,
         &no_change,
@@ -210,8 +233,10 @@ pub fn evaluate(
     plan.hypotheses
         .par_iter()
         .try_for_each(|h| -> Result<(), ChemisorptionError> {
+            check_cancelled(control)?;
             let mut s = apply(&plan.combined, h);
             let relaxed = relax(&mut s, config)?;
+            advance();
             if !relaxed.converged {
                 unconverged.fetch_add(1, AtomicOrdering::Relaxed);
             }
@@ -254,11 +279,24 @@ pub fn evaluate(
 }
 
 /// `plan` then `evaluate`: one whole search of one pose.
+///
+/// With a `control`: phase "Planning" while enumerating (not cancellable — it
+/// is bounded by the budget), then the total (one relaxation per hypothesis
+/// plus the reference) and phase "Relaxing". See [`evaluate`] for progress
+/// and cancellation.
 pub fn search(
     adsorbate: &AtomicStructure,
     substrate: &AtomicStructure,
     config: &ChemisorptionSearch,
+    control: Option<&JobControl>,
 ) -> Result<SearchReport, ChemisorptionError> {
+    if let Some(c) = control {
+        c.set_phase("Planning");
+    }
     let planned = plan(adsorbate, substrate, config)?;
-    evaluate(&planned, config)
+    if let Some(c) = control {
+        c.set_total(planned.hypotheses.len() as u64 + 1);
+        c.set_phase("Relaxing");
+    }
+    evaluate(&planned, config, control)
 }

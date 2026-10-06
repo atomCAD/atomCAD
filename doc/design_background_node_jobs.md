@@ -739,13 +739,16 @@ when things happen. Rules for every test below:
   a control (Phase 1) and prepare → run → install on a real `chemisorb` node
   (Phase 2), on the small fixtures `chemisorption_test.rs` and
   `chemisorb_node_test.rs` already have.
-- **Mid-search cancellation is tested without a race on machine speed.** The
-  search runs inside a 1-thread pool (`pool.install(|| search(…))`); a
-  watcher thread waits until
-  `snapshot().done >= 1` and cancels. With one worker the search advances
-  one relaxation at a time, so the assertion "`Cancelled`, and
-  `done < total`" holds for any fixture with a handful of hypotheses,
-  however fast the machine.
+- **Mid-search cancellation is tested with a wide margin, not a tight
+  race.** The search runs inside a 1-thread pool (`pool.install(|| search(…))`);
+  a watcher thread waits until `snapshot().done >= 1` and cancels. With one
+  worker the search advances one relaxation at a time — but the watcher is
+  an OS thread the scheduler may delay, so the fixture's relaxations must be
+  slow compared to that delay, not merely few. A small fixture is *not*
+  enough: the 63-hypothesis hexapod over frozen silyls finishes in 40 ms in a
+  debug build, inside one scheduler hiccup under `cargo test -j 4`. Phase 1
+  uses the Si(100) ethanediyl fixture (23 relaxations of a ~350-atom slab),
+  where the cancel lands at 1 of 23.
 - **Flutter logic is pure Dart, tested in `test/`.** The poll loop and the
   job lookup are extracted from the widgets so they take plain callbacks and
   generated API data classes (`NodeJobPoller`, `findNodeJob`; Phase 4), like
@@ -954,8 +957,11 @@ Each phase is independently mergeable and leaves the application working.
 1. **Cancellation inside a relaxation.** D6 checks per relaxation. If a single
    relaxation on realistic inputs takes more than ~1 s, add an optional stop
    check to `minimize_with_force_field` (a `&dyn Fn() -> bool` argument or a
-   field on `MinimizationConfig`) and pass `is_cancelled` through. Measure in
-   Phase 1 before deciding.
+   field on `MinimizationConfig`) and pass `is_cancelled` through. **Measured
+   in Phase 1:** ethanediyl over the Si(100)-2×1 test slab (352 atoms, 2000
+   iterations max, all converged), one thread, release build — **34 ms per
+   relaxation**. Far below the threshold; not needed unless a realistic input
+   is an order of magnitude larger (the limit is 2000 free atoms).
 2. **Job pool size and priority.** `cores − 1` leaves one core for the UI
    thread but the UI's own rayon work still competes with the job pool.
    Lowering the job threads' OS priority would help further; it is
