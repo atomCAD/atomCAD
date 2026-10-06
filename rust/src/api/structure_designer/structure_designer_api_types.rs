@@ -12,6 +12,7 @@ use atomcad_structure_designer::node_network::FunctionPinRole;
 // Path-qualified rather than imported bare: the api-side twin deliberately keeps
 // the same identifier (D9a).
 use atomcad_structure_designer::chemisorb_ops::ChemisorbRunSummary;
+use atomcad_structure_designer::node_jobs::{JobOutcome, JobOutcomeKind, JobPoll, JobStatus};
 use atomcad_structure_designer::node_type::NodeTypeCategory as DomainNodeTypeCategory;
 use atomcad_structure_designer::nodes::atom_edit::atom_edit::{
     DragFrozenStatus as DomainDragFrozenStatus, PointerDownResult as DomainPointerDownResult,
@@ -1163,6 +1164,118 @@ impl From<ChemisorbRunSummary> for APIChemisorbRunResult {
             truncated: s.truncated,
             unconverged: s.unconverged,
             seconds: s.seconds,
+        }
+    }
+}
+
+/// What one `poll_node_jobs` saw and did (twin of `node_jobs::JobPoll`,
+/// `doc/design_background_node_jobs.md`).
+pub struct APINodeJobPoll {
+    pub running: Vec<APINodeJobStatus>,
+    pub finished: Vec<APINodeJobOutcome>,
+    /// Finished jobs held back by D11 (either side's interaction). Non-zero
+    /// keeps Dart's poll timer alive, so a deferred result is not stranded.
+    pub pending_installs: u32,
+    /// True when an install touched the active document — Dart then runs
+    /// `refreshFromKernel()`.
+    pub active_changed: bool,
+}
+
+/// A job whose worker has not returned yet, cancelling ones included. Its
+/// node is identified by document + network + scope + node id: node ids are
+/// unique only within one network, so without `network_name` a job would be
+/// attributed to the same-id node of whatever network is shown.
+pub struct APINodeJobStatus {
+    pub job_id: u64,
+    pub document_id: u64,
+    pub network_name: String,
+    pub scope_path: Vec<u64>,
+    pub node_id: u64,
+    /// "Chemisorption search".
+    pub label: String,
+    /// "Planning", "Relaxing", …
+    pub phase: String,
+    pub done: u64,
+    /// `None` while the amount of work is not known (indeterminate).
+    pub total: Option<u64>,
+    /// Cancel was asked for; the worker has not returned yet.
+    pub cancelling: bool,
+}
+
+/// How a job ended, reported by exactly one poll.
+pub struct APINodeJobOutcome {
+    pub job_id: u64,
+    pub document_id: u64,
+    pub network_name: String,
+    pub node_id: u64,
+    pub label: String,
+    pub kind: APINodeJobOutcomeKind,
+    /// The install summary, the error, or why the result was dropped.
+    pub message: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum APINodeJobOutcomeKind {
+    /// The result was installed into its node.
+    Finished,
+    /// The job was cancelled and returned without a result.
+    Cancelled,
+    /// The work returned an error, or panicked.
+    Failed,
+    /// There was nowhere to put the result: the document was closed, the
+    /// node is gone or of another type, the network became read-only.
+    Dropped,
+}
+
+impl From<JobOutcomeKind> for APINodeJobOutcomeKind {
+    fn from(kind: JobOutcomeKind) -> Self {
+        match kind {
+            JobOutcomeKind::Finished => APINodeJobOutcomeKind::Finished,
+            JobOutcomeKind::Cancelled => APINodeJobOutcomeKind::Cancelled,
+            JobOutcomeKind::Failed => APINodeJobOutcomeKind::Failed,
+            JobOutcomeKind::Dropped => APINodeJobOutcomeKind::Dropped,
+        }
+    }
+}
+
+impl From<JobStatus> for APINodeJobStatus {
+    fn from(s: JobStatus) -> Self {
+        APINodeJobStatus {
+            job_id: s.job_id,
+            document_id: s.target.document_id.0,
+            network_name: s.target.network_name,
+            scope_path: s.target.scope_path,
+            node_id: s.target.node_id,
+            label: s.label,
+            phase: s.progress.phase,
+            done: s.progress.done,
+            total: s.progress.total,
+            cancelling: s.cancelling,
+        }
+    }
+}
+
+impl From<JobOutcome> for APINodeJobOutcome {
+    fn from(o: JobOutcome) -> Self {
+        APINodeJobOutcome {
+            job_id: o.job_id,
+            document_id: o.target.document_id.0,
+            network_name: o.target.network_name,
+            node_id: o.target.node_id,
+            label: o.label,
+            kind: o.kind.into(),
+            message: o.message,
+        }
+    }
+}
+
+impl From<JobPoll> for APINodeJobPoll {
+    fn from(p: JobPoll) -> Self {
+        APINodeJobPoll {
+            running: p.running.into_iter().map(Into::into).collect(),
+            finished: p.finished.into_iter().map(Into::into).collect(),
+            pending_installs: u32::try_from(p.pending_installs).unwrap_or(u32::MAX),
+            active_changed: p.active_changed,
         }
     }
 }

@@ -7,7 +7,7 @@ import '../../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'structure_designer_api_types.dart';
 
-// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `chemisorb_node_data`, `chemisorb_node_report`, `format_run_result`, `resolve_node_identifier`, `set_chemisorb_node_data`
+// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `chemisorb_node_data`, `chemisorb_node_report`, `set_chemisorb_node_data`
 
 APIChemisorbData? getChemisorbData(
         {required Uint64List scopePath, required BigInt nodeId}) =>
@@ -31,9 +31,3 @@ APIChemisorbRunResult runChemisorb(
         {required Uint64List scopePath, required BigInt nodeId}) =>
     RustLib.instance.api.crateApiStructureDesignerChemisorbApiRunChemisorb(
         scopePath: scopePath, nodeId: nodeId);
-
-/// **Run** by node name or id in the active network, for the CLI's `run`
-/// command. Returns the summary as text.
-String runChemisorbNode({required String nodeIdentifier}) =>
-    RustLib.instance.api.crateApiStructureDesignerChemisorbApiRunChemisorbNode(
-        nodeIdentifier: nodeIdentifier);

@@ -4,7 +4,8 @@
 //! The report lives in the selected node's eval cache (`ChemisorbEvalCache`),
 //! as `proxy`'s does; the search result itself lives on the node data, keyed
 //! by an input fingerprint, and is written only by Run
-//! (`StructureDesigner::run_chemisorb`). Evaluation never searches.
+//! (`StructureDesigner::run_chemisorb`, the node's job). Evaluation never
+//! searches. The CLI's `run` is the generic `node_jobs_api::run_node_job_by_name`.
 //!
 //! Each entry point is a thin FRB wrapper over an `#[frb(ignore)]` function
 //! taking an explicit designer, so the logic is testable without the global
@@ -17,7 +18,6 @@ use crate::api::api_common::{
 use crate::api::structure_designer::structure_designer_api_types::{
     APIChemisorbData, APIChemisorbReport, APIChemisorbRunResult,
 };
-use atomcad_structure_designer::chemisorb_ops::{self, ChemisorbRunSummary};
 use atomcad_structure_designer::nodes::chemisorb::{ChemisorbData, ChemisorbEvalCache};
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 
@@ -58,31 +58,6 @@ pub fn chemisorb_node_report(designer: &StructureDesigner) -> Option<APIChemisor
     let cache = designer.get_selected_node_eval_cache()?;
     let cache = cache.downcast_ref::<ChemisorbEvalCache>()?;
     Some(APIChemisorbReport::from(cache))
-}
-
-/// Resolves a node by numeric id or by name in the active network, the way
-/// the CLI's `evaluate` does.
-#[flutter_rust_bridge::frb(ignore)]
-pub fn resolve_node_identifier(designer: &StructureDesigner, identifier: &str) -> Option<u64> {
-    identifier
-        .parse::<u64>()
-        .ok()
-        .or_else(|| designer.find_node_id_by_name(identifier))
-}
-
-/// One line per fact, for the CLI's `run`: the domain's
-/// `chemisorb_ops::format_run_result` over the api twin.
-#[flutter_rust_bridge::frb(ignore)]
-pub fn format_run_result(result: &APIChemisorbRunResult) -> String {
-    chemisorb_ops::format_run_result(&ChemisorbRunSummary {
-        relaxed: result.relaxed,
-        listed: result.listed,
-        best_strain: result.best_strain,
-        best_bonds: result.best_bonds.clone(),
-        truncated: result.truncated,
-        unconverged: result.unconverged,
-        seconds: result.seconds,
-    })
 }
 
 // ============================================================================
@@ -140,27 +115,6 @@ pub fn run_chemisorb(scope_path: Vec<u64>, node_id: u64) -> Result<APIChemisorbR
                     .map(APIChemisorbRunResult::from);
                 refresh_structure_designer_auto(cad_instance);
                 result
-            },
-            Err("CAD instance not available".to_string()),
-        )
-    }
-}
-
-/// **Run** by node name or id in the active network, for the CLI's `run`
-/// command. Returns the summary as text.
-#[flutter_rust_bridge::frb(sync)]
-pub fn run_chemisorb_node(node_identifier: String) -> Result<String, String> {
-    unsafe {
-        with_mut_cad_instance_or(
-            |cad_instance| {
-                let designer = &mut cad_instance.structure_designer;
-                let node_id = resolve_node_identifier(designer, &node_identifier)
-                    .ok_or_else(|| format!("Node not found: {node_identifier}"))?;
-                let result = designer
-                    .run_chemisorb(&[], node_id)
-                    .map(APIChemisorbRunResult::from);
-                refresh_structure_designer_auto(cad_instance);
-                result.map(|r| format_run_result(&r))
             },
             Err("CAD instance not available".to_string()),
         )

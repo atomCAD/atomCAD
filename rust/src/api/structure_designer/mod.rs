@@ -17,6 +17,7 @@ pub mod import_xyz_api;
 pub mod library_links_api;
 pub mod mechanosynth_api;
 pub mod mechanosynth_edit_api;
+pub mod node_jobs_api;
 pub mod profiling_api;
 pub mod proxy_api;
 pub mod relax_api;

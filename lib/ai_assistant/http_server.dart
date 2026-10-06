@@ -11,8 +11,8 @@ import 'package:flutter_cad/src/rust/api/structure_designer/ai_history_api.dart'
     as ai_history_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
     as sd_api;
-import 'package:flutter_cad/src/rust/api/structure_designer/chemisorb_api.dart'
-    as chemisorb_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/node_jobs_api.dart'
+    as node_jobs_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/library_links_api.dart'
     as library_links_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/documents_api.dart'
@@ -607,10 +607,11 @@ class AiAssistantServer {
     }
   }
 
-  /// Runs a `chemisorb` node's search — the one CLI action that computes
-  /// something evaluation never will (the node's `eval` only plans). The
-  /// search is synchronous and may take minutes; the result is stored on the
-  /// node and shown by the next refresh, so the UI is told to refresh too.
+  /// Runs a node's job (`chemisorb`'s search) — the CLI action that computes
+  /// something evaluation never will (the node's `eval` only plans). Unlike
+  /// the panel's Run it is blocking and may take minutes; the result is stored
+  /// on the node and shown by the next refresh, so the UI is told to refresh
+  /// too.
   void _handleRun(HttpRequest request) {
     if (request.method != 'POST') {
       request.response.statusCode = HttpStatus.methodNotAllowed;
@@ -627,7 +628,7 @@ class AiAssistantServer {
     }
     try {
       final summary =
-          chemisorb_api.runChemisorbNode(nodeIdentifier: nodeIdentifier);
+          node_jobs_api.runNodeJobByName(nodeIdentifier: nodeIdentifier);
       onNetworkEdited?.call();
       request.response.headers.contentType = ContentType.text;
       request.response.write(summary);

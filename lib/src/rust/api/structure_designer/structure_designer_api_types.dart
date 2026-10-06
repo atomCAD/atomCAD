@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'structure_designer_api_types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `hash`
 
 /// The outcome of a tab switch (activate, or close of the active tab).
 /// `library_report` is what the dependency check did on activation
@@ -4611,6 +4611,174 @@ class APINodeEvaluationResult {
           detailedString == other.detailedString &&
           success == other.success &&
           errorMessage == other.errorMessage;
+}
+
+/// How a job ended, reported by exactly one poll.
+class APINodeJobOutcome {
+  final BigInt jobId;
+  final BigInt documentId;
+  final String networkName;
+  final BigInt nodeId;
+  final String label;
+  final APINodeJobOutcomeKind kind;
+
+  /// The install summary, the error, or why the result was dropped.
+  final String message;
+
+  const APINodeJobOutcome({
+    required this.jobId,
+    required this.documentId,
+    required this.networkName,
+    required this.nodeId,
+    required this.label,
+    required this.kind,
+    required this.message,
+  });
+
+  @override
+  int get hashCode =>
+      jobId.hashCode ^
+      documentId.hashCode ^
+      networkName.hashCode ^
+      nodeId.hashCode ^
+      label.hashCode ^
+      kind.hashCode ^
+      message.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APINodeJobOutcome &&
+          runtimeType == other.runtimeType &&
+          jobId == other.jobId &&
+          documentId == other.documentId &&
+          networkName == other.networkName &&
+          nodeId == other.nodeId &&
+          label == other.label &&
+          kind == other.kind &&
+          message == other.message;
+}
+
+enum APINodeJobOutcomeKind {
+  /// The result was installed into its node.
+  finished,
+
+  /// The job was cancelled and returned without a result.
+  cancelled,
+
+  /// The work returned an error, or panicked.
+  failed,
+
+  /// There was nowhere to put the result: the document was closed, the
+  /// node is gone or of another type, the network became read-only.
+  dropped,
+  ;
+}
+
+/// What one `poll_node_jobs` saw and did (twin of `node_jobs::JobPoll`,
+/// `doc/design_background_node_jobs.md`).
+class APINodeJobPoll {
+  final List<APINodeJobStatus> running;
+  final List<APINodeJobOutcome> finished;
+
+  /// Finished jobs held back by D11 (either side's interaction). Non-zero
+  /// keeps Dart's poll timer alive, so a deferred result is not stranded.
+  final int pendingInstalls;
+
+  /// True when an install touched the active document — Dart then runs
+  /// `refreshFromKernel()`.
+  final bool activeChanged;
+
+  const APINodeJobPoll({
+    required this.running,
+    required this.finished,
+    required this.pendingInstalls,
+    required this.activeChanged,
+  });
+
+  @override
+  int get hashCode =>
+      running.hashCode ^
+      finished.hashCode ^
+      pendingInstalls.hashCode ^
+      activeChanged.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APINodeJobPoll &&
+          runtimeType == other.runtimeType &&
+          running == other.running &&
+          finished == other.finished &&
+          pendingInstalls == other.pendingInstalls &&
+          activeChanged == other.activeChanged;
+}
+
+/// A job whose worker has not returned yet, cancelling ones included. Its
+/// node is identified by document + network + scope + node id: node ids are
+/// unique only within one network, so without `network_name` a job would be
+/// attributed to the same-id node of whatever network is shown.
+class APINodeJobStatus {
+  final BigInt jobId;
+  final BigInt documentId;
+  final String networkName;
+  final Uint64List scopePath;
+  final BigInt nodeId;
+
+  /// "Chemisorption search".
+  final String label;
+
+  /// "Planning", "Relaxing", …
+  final String phase;
+  final BigInt done;
+
+  /// `None` while the amount of work is not known (indeterminate).
+  final BigInt? total;
+
+  /// Cancel was asked for; the worker has not returned yet.
+  final bool cancelling;
+
+  const APINodeJobStatus({
+    required this.jobId,
+    required this.documentId,
+    required this.networkName,
+    required this.scopePath,
+    required this.nodeId,
+    required this.label,
+    required this.phase,
+    required this.done,
+    this.total,
+    required this.cancelling,
+  });
+
+  @override
+  int get hashCode =>
+      jobId.hashCode ^
+      documentId.hashCode ^
+      networkName.hashCode ^
+      scopePath.hashCode ^
+      nodeId.hashCode ^
+      label.hashCode ^
+      phase.hashCode ^
+      done.hashCode ^
+      total.hashCode ^
+      cancelling.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APINodeJobStatus &&
+          runtimeType == other.runtimeType &&
+          jobId == other.jobId &&
+          documentId == other.documentId &&
+          networkName == other.networkName &&
+          scopePath == other.scopePath &&
+          nodeId == other.nodeId &&
+          label == other.label &&
+          phase == other.phase &&
+          done == other.done &&
+          total == other.total &&
+          cancelling == other.cancelling;
 }
 
 /// One node found by the Find Node picker, addressed by network + scope path +

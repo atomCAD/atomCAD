@@ -21,6 +21,7 @@ import 'api/structure_designer/import_xyz_api.dart';
 import 'api/structure_designer/library_links_api.dart';
 import 'api/structure_designer/mechanosynth_api.dart';
 import 'api/structure_designer/mechanosynth_edit_api.dart';
+import 'api/structure_designer/node_jobs_api.dart';
 import 'api/structure_designer/profiling_api.dart';
 import 'api/structure_designer/proxy_api.dart';
 import 'api/structure_designer/relax_api.dart';
@@ -510,6 +511,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APINodeEvaluationResult dco_decode_api_node_evaluation_result(dynamic raw);
+
+  @protected
+  APINodeJobOutcome dco_decode_api_node_job_outcome(dynamic raw);
+
+  @protected
+  APINodeJobOutcomeKind dco_decode_api_node_job_outcome_kind(dynamic raw);
+
+  @protected
+  APINodeJobPoll dco_decode_api_node_job_poll(dynamic raw);
+
+  @protected
+  APINodeJobStatus dco_decode_api_node_job_status(dynamic raw);
 
   @protected
   APINodeNameMatch dco_decode_api_node_name_match(dynamic raw);
@@ -1384,6 +1397,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APINodeCategoryView> dco_decode_list_api_node_category_view(dynamic raw);
+
+  @protected
+  List<APINodeJobOutcome> dco_decode_list_api_node_job_outcome(dynamic raw);
+
+  @protected
+  List<APINodeJobStatus> dco_decode_list_api_node_job_status(dynamic raw);
 
   @protected
   List<APINodeNameMatch> dco_decode_list_api_node_name_match(dynamic raw);
@@ -2587,6 +2606,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APINodeJobOutcome sse_decode_api_node_job_outcome(
+      SseDeserializer deserializer);
+
+  @protected
+  APINodeJobOutcomeKind sse_decode_api_node_job_outcome_kind(
+      SseDeserializer deserializer);
+
+  @protected
+  APINodeJobPoll sse_decode_api_node_job_poll(SseDeserializer deserializer);
+
+  @protected
+  APINodeJobStatus sse_decode_api_node_job_status(SseDeserializer deserializer);
+
+  @protected
   APINodeNameMatch sse_decode_api_node_name_match(SseDeserializer deserializer);
 
   @protected
@@ -3622,6 +3655,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APINodeCategoryView> sse_decode_list_api_node_category_view(
+      SseDeserializer deserializer);
+
+  @protected
+  List<APINodeJobOutcome> sse_decode_list_api_node_job_outcome(
+      SseDeserializer deserializer);
+
+  @protected
+  List<APINodeJobStatus> sse_decode_list_api_node_job_status(
       SseDeserializer deserializer);
 
   @protected
@@ -4997,6 +5038,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APINodeEvaluationResult self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_node_job_outcome(
+      APINodeJobOutcome self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_node_job_outcome_kind(
+      APINodeJobOutcomeKind self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_node_job_poll(
+      APINodeJobPoll self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_node_job_status(
+      APINodeJobStatus self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_node_name_match(
       APINodeNameMatch self, SseSerializer serializer);
 
@@ -6062,6 +6119,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_api_node_category_view(
       List<APINodeCategoryView> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_api_node_job_outcome(
+      List<APINodeJobOutcome> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_api_node_job_status(
+      List<APINodeJobStatus> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_api_node_name_match(

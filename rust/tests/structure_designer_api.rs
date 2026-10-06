@@ -62,6 +62,10 @@ mod preferences_twin_test;
 
 #[path = "structure_designer_api/chemisorb_api_test.rs"]
 mod chemisorb_api_test;
+
+#[path = "structure_designer_api/node_jobs_api_test.rs"]
+mod node_jobs_api_test;
+
 #[path = "structure_designer_api/proxy_api_test.rs"]
 mod proxy_api_test;
 

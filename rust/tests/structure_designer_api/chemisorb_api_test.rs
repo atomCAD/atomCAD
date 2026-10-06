@@ -1,12 +1,11 @@
 //! Phase 2 of the chemisorption search design — the `chemisorb` panel's kernel
-//! seam and the CLI's `run` summary.
+//! seam. The CLI's `run` is generic now and tested in `node_jobs_api_test.rs`.
 //!
 //! The node is covered in
 //! `crates/atomcad-structure-designer/tests/structure_designer/chemisorb_node_test.rs`.
-//! What is tested here is what the panel and the CLI read: the report travels
+//! What is tested here is what the panel reads: the report travels
 //! through the selected node's eval cache, the settings setter is scoped,
-//! undoable and keeps the stored search, and Run's text summary says what a
-//! script needs to know.
+//! undoable and keeps the stored search.
 
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
@@ -16,15 +15,12 @@ use atomcad_structure_designer::nodes::value::ValueData;
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 use glam::f64::{DVec2, DVec3};
 use rust_lib_flutter_cad::api::structure_designer::chemisorb_api::{
-    chemisorb_node_data, chemisorb_node_report, format_run_result, resolve_node_identifier,
-    set_chemisorb_node_data,
+    chemisorb_node_data, chemisorb_node_report, set_chemisorb_node_data,
 };
-use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::{
-    APIChemisorbData, APIChemisorbRunResult,
-};
+use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::APIChemisorbData;
 
 /// •OH over two silyl radicals whose hydrogens are frozen.
-fn fixture() -> (AtomicStructure, AtomicStructure) {
+pub(crate) fn fixture() -> (AtomicStructure, AtomicStructure) {
     let mut ads = AtomicStructure::new();
     let o = ads.add_atom(8, DVec3::new(0.3, 0.2, 2.2));
     let h = ads.add_atom(1, DVec3::new(0.3, 0.2, 3.17));
@@ -45,7 +41,7 @@ fn fixture() -> (AtomicStructure, AtomicStructure) {
     (ads, sub)
 }
 
-fn network() -> (StructureDesigner, u64) {
+pub(crate) fn network() -> (StructureDesigner, u64) {
     let mut designer = StructureDesigner::new();
     designer.add_node_network("main");
     designer.set_active_node_network_name(Some("main".to_string()));
@@ -148,32 +144,4 @@ fn the_setter_is_undoable_and_keeps_the_stored_search() {
     let other = APIChemisorbData { reach: 9.0, ..data };
     set_chemisorb_node_data(&mut designer, &[], 1, &other);
     assert!(chemisorb_node_data(&designer, &[], 1).is_none());
-}
-
-#[test]
-fn run_resolves_names_and_summarises_in_text() {
-    let (mut designer, node) = network();
-    designer.rename_node(&[], node, "mount").expect("rename");
-    assert_eq!(resolve_node_identifier(&designer, "mount"), Some(node));
-    assert_eq!(
-        resolve_node_identifier(&designer, &node.to_string()),
-        Some(node)
-    );
-    assert_eq!(resolve_node_identifier(&designer, "nope"), None);
-
-    let result = APIChemisorbRunResult::from(designer.run_chemisorb(&[], node).unwrap());
-    let text = format_run_result(&result);
-    assert!(text.starts_with("Relaxed 2 hypotheses in "), "{text}");
-    assert!(text.contains("2 listed"), "{text}");
-    assert!(text.contains("formed 1× O–Si"), "{text}");
-    assert!(!text.contains("NOT exhaustive"), "{text}");
-
-    let truncated = APIChemisorbRunResult {
-        truncated: true,
-        best_strain: None,
-        ..result
-    };
-    let text = format_run_result(&truncated);
-    assert!(text.contains("No candidate listed."), "{text}");
-    assert!(text.contains("NOT exhaustive"), "{text}");
 }
