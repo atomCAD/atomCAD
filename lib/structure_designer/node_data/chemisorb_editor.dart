@@ -631,6 +631,11 @@ class _SectionHeader extends StatelessWidget {
 /// produce (from the plan without this filter), each with how many relaxations
 /// it would take. A stored choice the plan does not contain stays selectable,
 /// with a count of 0, so the dropdown never silently drops it.
+///
+/// Inventory labels are long ("formed 3× H–Si, 2× O–Si; broken 3× H–O") and
+/// the menu cannot be wider than the panel, so an open-menu row is
+/// [ChemisorbInventoryOptionRow]: the label wrapped at its `;`, the count in a
+/// column of its own that is never cut. The closed field stays one line.
 class _InventoryDropdown extends StatelessWidget {
   final String? value;
   final List<APIChemisorbInventoryOption> options;
@@ -649,6 +654,7 @@ class _InventoryDropdown extends StatelessWidget {
       if (value != null && !options.any((o) => o.label == value))
         (value!, BigInt.zero),
     ];
+    final small = Theme.of(context).textTheme.bodySmall;
     return DropdownButtonFormField<String?>(
       key: ValueKey('chemisorb_bonds_filter_$value'),
       decoration: const InputDecoration(
@@ -658,7 +664,26 @@ class _InventoryDropdown extends StatelessWidget {
         contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       ),
       isExpanded: true,
+      // Rows as tall as their content: a wrapped label takes two lines.
+      itemHeight: null,
       value: value,
+      // The closed field: one line, the count still outside the ellipsis.
+      selectedItemBuilder: (context) => [
+        const Align(alignment: Alignment.centerLeft, child: Text('Any')),
+        for (final (label, count) in entries)
+          Row(
+            children: [
+              Expanded(
+                child: Text(label,
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.ellipsis),
+              ),
+              const SizedBox(width: 8),
+              Text('$count to relax', style: small),
+            ],
+          ),
+      ],
       items: [
         const DropdownMenuItem<String?>(
           value: null,
@@ -667,11 +692,78 @@ class _InventoryDropdown extends StatelessWidget {
         for (final (label, count) in entries)
           DropdownMenuItem<String?>(
             value: label,
-            child: Text('$label  ($count to relax)',
-                overflow: TextOverflow.ellipsis),
+            child: ChemisorbInventoryOptionRow(label: label, count: count),
           ),
       ],
       onChanged: onChanged,
+    );
+  }
+}
+
+/// A bond inventory label with a line break after each `;` — the formed and
+/// the broken bonds on lines of their own.
+String wrapInventoryLabel(String label) => label.replaceAll('; ', ';\n');
+
+/// The most lines an inventory label takes in the open menu.
+const int INVENTORY_LABEL_MAX_LINES = 2;
+
+/// One row of the open bond-inventory menu: the label (wrapped by
+/// [wrapInventoryLabel], at most [INVENTORY_LABEL_MAX_LINES] lines) and, in a
+/// right-aligned column of its own, the number of relaxations it would take —
+/// the figure the choice is made on, so it is never what gets cut. A label
+/// too long even for that ends in "…", and only then carries a tooltip with
+/// the whole text.
+class ChemisorbInventoryOptionRow extends StatelessWidget {
+  final String label;
+  final BigInt count;
+
+  const ChemisorbInventoryOptionRow({
+    super.key,
+    required this.label,
+    required this.count,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final small = theme.textTheme.bodySmall;
+    final wrapped = wrapInventoryLabel(label);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: LayoutBuilder(builder: (context, constraints) {
+              final style = DefaultTextStyle.of(context).style;
+              final text = Text(
+                wrapped,
+                maxLines: INVENTORY_LABEL_MAX_LINES,
+                overflow: TextOverflow.ellipsis,
+              );
+              final painter = TextPainter(
+                text: TextSpan(text: wrapped, style: style),
+                maxLines: INVENTORY_LABEL_MAX_LINES,
+                textDirection: Directionality.of(context),
+                textScaler: MediaQuery.textScalerOf(context),
+              )..layout(maxWidth: constraints.maxWidth);
+              final cut = painter.didExceedMaxLines;
+              painter.dispose();
+              return cut ? Tooltip(message: label, child: text) : text;
+            }),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('$count',
+                  style: theme.textTheme.bodyMedium
+                      ?.copyWith(fontWeight: FontWeight.w600)),
+              Text('to relax', style: small),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
