@@ -13,6 +13,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
     as sd_api;
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
+import 'package:flutter_cad/structure_designer/node_jobs.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network_painter.dart'
     show
@@ -834,6 +835,48 @@ class PinWidget extends StatelessWidget {
 }
 
 /// Widget representing a single draggable node.
+/// The title-bar spinner of a node with a job running on it
+/// (`doc/design_background_node_jobs.md`): determinate once the job knows
+/// its total, with "Chemisorption search — 31 %" as the tooltip. Listens to
+/// `model.nodeJobs` alone, so a 10 Hz progress tick rebuilds this badge and
+/// not the canvas. Renders nothing without a job — or without a model above
+/// it (a node drawn outside the editor).
+class _NodeJobBadge extends StatelessWidget {
+  final BigInt nodeId;
+  final List<BigInt> scopeChain;
+
+  const _NodeJobBadge({required this.nodeId, required this.scopeChain});
+
+  @override
+  Widget build(BuildContext context) {
+    final model = Provider.of<StructureDesignerModel?>(context, listen: false);
+    if (model == null) return const SizedBox.shrink();
+    return ValueListenableBuilder<List<APINodeJobStatus>>(
+      valueListenable: model.nodeJobs,
+      builder: (context, _, __) {
+        final job = model.jobFor(scopeChain, nodeId);
+        if (job == null) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.only(left: 4),
+          child: Tooltip(
+            message: nodeJobTooltip(job),
+            child: SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(
+                value: job.cancelling ? null : nodeJobFraction(job),
+                strokeWidth: 2,
+                color: Colors.white,
+                backgroundColor: Colors.white24,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class NodeWidget extends StatelessWidget {
   final NodeView node;
   final Offset panOffset;
@@ -1132,6 +1175,10 @@ class NodeWidget extends StatelessWidget {
                       ),
                     ),
                   ),
+                  // A node job (`chemisorb`'s Run) in progress. Editing
+                  // state, so not in an exported picture.
+                  if (!hideSelection)
+                    _NodeJobBadge(nodeId: node.id, scopeChain: scopeChain),
                   const SizedBox(width: 4),
                   // Function pin — suppressed on HOFs. The legacy function pin
                   // is never wired meaningfully on zone-owning nodes (their

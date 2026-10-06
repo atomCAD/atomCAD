@@ -50,7 +50,10 @@ import 'package:flutter_cad/src/rust/api/structure_designer/profiling_api.dart'
 import 'package:flutter_cad/src/rust/api/common_api.dart' as common_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/documents_api.dart'
     as documents_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/node_jobs_api.dart'
+    as node_jobs_api;
 import 'package:flutter_cad/structure_designer/document_switch.dart';
+import 'package:flutter_cad/structure_designer/node_jobs.dart';
 import 'package:flutter_cad/structure_designer/node_data/mechanosynth_transport.dart';
 import 'package:flutter_cad/structure_designer/namespace_utils.dart';
 import 'package:flutter_cad/structure_designer/namespace_utils.dart' as ns
@@ -3829,18 +3832,80 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
-  /// **Run** on a `chemisorb` node: the search itself, synchronous (seconds to
-  /// minutes). Throws the kernel's message when the search cannot run. Call it
-  /// behind a modal placard (`runExecuteWithPlacard`'s recipe).
-  APIChemisorbRunResult runChemisorb(BigInt nodeId) {
+  // ===== NODE JOBS (`doc/design_background_node_jobs.md`) =====
+
+  /// The jobs running in any open document, from the last
+  /// [pollNodeJobs]. A dedicated notifier, **not** [notifyListeners]: a
+  /// 10 Hz progress tick must rebuild the three widgets that show progress
+  /// (the property panel's run row, the node badge, the tab spinner), not the
+  /// whole editor — the [refreshProfile] idiom.
+  final ValueNotifier<List<APINodeJobStatus>> nodeJobs =
+      ValueNotifier(const []);
+
+  /// Set by the host to its poller's `start`, so a started job is polled.
+  VoidCallback? onNodeJobStarted;
+
+  /// Starts the job of node [nodeId] in the property panel's scope — for
+  /// `chemisorb`, its **Run**. Returns the kernel's message when the job
+  /// cannot start (no run action, one already runs on the node, read-only
+  /// network), `null` on success.
+  String? startNodeJob(BigInt nodeId) {
+    final scopePath = scopeChainToBytes(propertyEditorScopeChain);
+    final BigInt jobId;
     try {
-      return chemisorb_api.runChemisorb(
-          scopePath: scopeChainToBytes(propertyEditorScopeChain),
-          nodeId: nodeId);
-    } finally {
-      refreshFromKernel();
+      jobId = node_jobs_api.startNodeJob(scopePath: scopePath, nodeId: nodeId);
+    } catch (e) {
+      return e.toString();
     }
+    // Shown until the first poll replaces it, so the panel turns Run into
+    // Cancel on the next frame — a double click must not reach the kernel's
+    // "already running" refusal. Not a poll: a poll can carry outcomes, and
+    // only the host's poller may consume those.
+    final documentId = activeDocumentId;
+    final networkName = nodeNetworkView?.name;
+    if (documentId != null && networkName != null) {
+      nodeJobs.value = [
+        ...nodeJobs.value,
+        APINodeJobStatus(
+          jobId: jobId,
+          documentId: documentId,
+          networkName: networkName,
+          scopePath: scopePath,
+          nodeId: nodeId,
+          label: '',
+          phase: '',
+          done: BigInt.zero,
+          cancelling: false,
+        ),
+      ];
+    }
+    onNodeJobStarted?.call();
+    return null;
   }
+
+  /// Asks job [jobId] to stop; the poll reports it cancelled once its worker
+  /// has returned.
+  void cancelNodeJob(BigInt jobId) {
+    node_jobs_api.cancelNodeJob(jobId: jobId);
+  }
+
+  /// One poll of the node jobs: installs finished results (unless
+  /// [deferInstalls]), publishes the running ones on [nodeJobs], and runs
+  /// [refreshFromKernel] when an install touched the active document. The
+  /// caller reports the outcomes.
+  APINodeJobPoll pollNodeJobs(bool deferInstalls) {
+    final poll = node_jobs_api.pollNodeJobs(deferInstalls: deferInstalls);
+    nodeJobs.value = poll.running;
+    if (poll.activeChanged) refreshFromKernel();
+    return poll;
+  }
+
+  /// The job running on node [nodeId] in [scopeChain] of the network shown,
+  /// in the active document, or `null`. Matches the network too: node ids
+  /// repeat across the networks of a document.
+  APINodeJobStatus? jobFor(List<BigInt> scopeChain, BigInt nodeId) =>
+      findNodeJob(nodeJobs.value, activeDocumentId, nodeNetworkView?.name,
+          scopeChain, nodeId);
 
   void setTagData(BigInt nodeId, APITagData data) {
     tag_api.setTagData(

@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
-import 'package:flutter_cad/common/draggable_dialog.dart';
 import 'package:flutter_cad/common/error_display.dart';
 import 'package:flutter_cad/common/number_format.dart';
 import 'package:flutter_cad/inputs/float_input.dart';
@@ -10,6 +8,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/chemisorb_api.dart'
     as chemisorb_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
+import 'package:flutter_cad/structure_designer/node_jobs.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
 /// Editor for the `chemisorb` node — every way a posed adsorbate can bond to
@@ -25,9 +24,11 @@ import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 /// pin, and `max_transfers` stays visible but greyed while it is not — a value
 /// nothing reads now, which a wire makes live again unchanged.
 ///
-/// The search runs only when **Run** is pressed; until then, and whenever the
-/// inputs or settings change after a run, the node outputs the *plan* and the
-/// report says how many hypotheses a run would relax. The report (statistics,
+/// The search runs only when **Run** is pressed — in the background, as a
+/// node job (`doc/design_background_node_jobs.md`), with progress and Cancel
+/// in [ChemisorbRunRow]; until then, and whenever the inputs or settings
+/// change after a run, the node outputs the *plan* and the report says how
+/// many hypotheses a run would relax. The report (statistics,
 /// warnings and the ranked candidates) lives in the selected node's eval cache
 /// and is re-read on every model notification, as `proxy_editor.dart` does.
 class ChemisorbEditor extends StatefulWidget {
@@ -115,63 +116,14 @@ class _ChemisorbEditorState extends State<ChemisorbEditor> {
     );
   }
 
-  /// Runs the search behind a modal placard — `runExecuteWithPlacard`'s
-  /// recipe: the FFI call is synchronous and blocks the UI thread, so the
-  /// placard is painted first (`endOfFrame`), dismissed in `finally`, and the
-  /// outcome reported after it is gone. No spinner: it would freeze mid-frame.
-  Future<void> _run() async {
-    // Both captured before the await: the refresh the run ends with may
-    // rebuild this panel, and the placard must be dismissed regardless.
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    final navigator = Navigator.of(context);
-    final hypotheses = _report?.stats.toRelax;
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => DraggableDialog(
-        width: 360,
-        dismissible: false,
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.hourglass_empty),
-              const SizedBox(width: 16),
-              Flexible(
-                child: Text(hypotheses == null
-                    ? 'Searching…'
-                    : 'Relaxing $hypotheses hypotheses…'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    await SchedulerBinding.instance.endOfFrame;
-
-    APIChemisorbRunResult? result;
-    Object? thrown;
-    try {
-      result = widget.model.runChemisorb(widget.nodeId);
-    } catch (e) {
-      thrown = e;
-    } finally {
-      navigator.pop();
-    }
-
-    if (thrown != null) {
-      if (messenger != null) {
-        showErrorSnackBarOn(messenger, 'Chemisorption search failed: $thrown');
-      }
-    } else if (result != null && mounted) {
-      final best = result.bestStrain;
-      showTransientSnackBar(
-          context,
-          best == null
-              ? 'Search done: ${result.relaxed} relaxed, none listed.'
-              : 'Search done: ${result.relaxed} relaxed, best listed '
-                  '${formatNatural(best, 4)} kcal/mol.');
+  /// **Run**: starts the search as a node job on a worker thread
+  /// (`doc/design_background_node_jobs.md`). The UI stays live; progress
+  /// arrives on `model.nodeJobs`, and the outcome is reported by the host
+  /// (`structure_designer.dart`) — this panel may be gone by then.
+  void _run() {
+    final error = widget.model.startNodeJob(widget.nodeId);
+    if (error != null && mounted) {
+      showErrorSnackBar(context, 'Chemisorption search did not start: $error');
     }
   }
 
@@ -194,7 +146,22 @@ class _ChemisorbEditorState extends State<ChemisorbEditor> {
           const SizedBox(height: 12),
 
           // ---- Run, first: it is what the panel is for --------------------
-          _RunRow(report: _report, onRun: _run),
+          // Rebuilt by the 10 Hz job poll alone, not by the model.
+          ValueListenableBuilder<List<APINodeJobStatus>>(
+            valueListenable: widget.model.nodeJobs,
+            builder: (context, _, __) {
+              final job = widget.model
+                  .jobFor(widget.model.propertyEditorScopeChain, widget.nodeId);
+              return ChemisorbRunRow(
+                report: _report,
+                job: job,
+                onRun: _run,
+                onCancel: job == null
+                    ? null
+                    : () => widget.model.cancelNodeJob(job.jobId),
+              );
+            },
+          ),
           const SizedBox(height: 12),
 
           const _SectionHeader(
@@ -328,14 +295,39 @@ class _ChemisorbEditorState extends State<ChemisorbEditor> {
 
 /// The Run button, with what a run would cost next to it (or what the last
 /// one did), and the stale / not-run state in words.
-class _RunRow extends StatelessWidget {
+///
+/// While a search runs ([job] is set) it is a progress bar — indeterminate
+/// until the plan has told how many relaxations there are — the progress in
+/// words and **Cancel** in place of Run; once cancel was asked for, the
+/// button is disabled and the text says "Cancelling…" until the worker
+/// returns. The settings above stay editable meanwhile (D3): a result that
+/// lands after one changed simply shows as stale.
+///
+/// Takes the job status and callbacks rather than the model, so
+/// `test/node_jobs_test.dart` pumps it without the Rust library.
+class ChemisorbRunRow extends StatelessWidget {
   final APIChemisorbReport? report;
+
+  /// The job running on this node, or `null`.
+  final APINodeJobStatus? job;
   final VoidCallback onRun;
 
-  const _RunRow({required this.report, required this.onRun});
+  /// Cancels [job]; unused while no job runs.
+  final VoidCallback? onCancel;
+
+  const ChemisorbRunRow({
+    super.key,
+    required this.report,
+    required this.job,
+    required this.onRun,
+    required this.onCancel,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final job = this.job;
+    if (job != null) return _buildRunning(context, job);
+
     final theme = Theme.of(context);
     final stats = report?.stats;
     final String status;
@@ -380,6 +372,31 @@ class _RunRow extends StatelessWidget {
               style: theme.textTheme.bodySmall,
             ),
           ),
+      ],
+    );
+  }
+
+  Widget _buildRunning(BuildContext context, APINodeJobStatus job) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            OutlinedButton.icon(
+              onPressed: job.cancelling ? null : onCancel,
+              icon: const Icon(Icons.stop),
+              label: const Text('Cancel'),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(nodeJobProgressText(job),
+                  style: theme.textTheme.bodySmall),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        LinearProgressIndicator(value: nodeJobFraction(job)),
       ],
     );
   }

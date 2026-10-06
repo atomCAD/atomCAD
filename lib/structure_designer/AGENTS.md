@@ -31,6 +31,7 @@ structure_designer/
 ├── library_link_actions.dart         # Linked libraries: dialogs, refresh-report snackbars, open library / back
 ├── document_tabs.dart                # Document tabs: gesture model + vertical list / horizontal strip
 ├── document_switch.dart              # DocumentSwitcher: unfocus → end of frame → switch, queued
+├── node_jobs.dart                    # Node jobs: NodeJobPoller (the poll loop), findNodeJob, progress text — widget-free
 ├── save_as_dependencies.dart         # Save As dependency dialog (D11), File > Export project bundle…
 ├── identifier_validation.dart        # Field/identifier validation rules
 ├── namespace_utils.dart              # User-type-name validation (networks + record defs share one namespace)
@@ -540,11 +541,42 @@ Evaluating *during* a drag without freezing is `doc/design_background_evaluation
 (Send+Sync-ification, a lock around the global, snapshot eval, a worker thread) —
 five phases, none implemented. Do not attempt it piecemeal from a widget.
 
+## Node jobs (background Run)
+
+An explicit, expensive action on one node — today `chemisorb`'s **Run** — runs
+on a Rust worker pool (`doc/design_background_node_jobs.md`); Rust owns every
+rule (routing, deferral, outcome kinds), Flutter starts, polls and shows.
+
+- **The poll loop lives in the host** (`structure_designer.dart`, a
+  `NodeJobPoller` beside the dependency poll), not the model: its D11 guard is
+  the host's state. `_flutterInteractionOpen()` — pointer down, wire drag,
+  document switch, dialog/menu on top, focused text field — is **one** method
+  shared by both polls; while it is true, `poll_node_jobs(defer_installs:
+  true)` leaves finished results in their Rust slots. The loop runs only while
+  something is running, arriving **or pending install**, and
+  `model.onNodeJobStarted` (set to the poller's `start`) wakes it.
+- **`node_jobs.dart` is kept widget-free** — the poller over plain callbacks,
+  `findNodeJob`, the progress text — so `test/node_jobs_test.dart` runs it with
+  fake time and no Rust library. Keep new job logic there, not in a widget.
+- **`model.nodeJobs` is a dedicated `ValueNotifier`**, never
+  `notifyListeners()`: a 10 Hz tick must rebuild the run row, the node badge
+  and the tab spinner, not the editor. A new progress surface listens to it.
+- **Look a job up with `model.jobFor(scopeChain, nodeId)`**, which matches
+  document **and network** as well as scope and id — node ids repeat across
+  networks, so a document-only match badges the wrong node.
+- **Outcomes are reported by the host** (it owns a messenger that outlives the
+  property panel): finished → transient snackbar with the summary's first
+  line, failed → `showErrorSnackBarOn`, cancelled / dropped → transient.
+
+A new run-on-demand node needs only its panel button to call
+`model.startNodeJob` and to read `model.jobFor`; badge, tab spinner, polling
+and snackbars come for free.
+
 ## Execute action & Console panel
 
 Right-click a node → **Execute** triggers a one-shot evaluation pass on that node with the side-effect flag set, gating effect nodes (`export_atoms`, `foreach`, `print` with `execute_only`) to actually fire.
 
-**The FFI runs synchronously (`frb(sync)`)** because `CAD_INSTANCE` has no internal synchronization and the persistent per-frame `provide_texture` callback would race a worker-thread Rust call (`doc/design_node_execution.md`, "Why not async (worker thread) FFI"). That blocks the UI thread, so the call goes through **`runExecuteWithPlacard`** (`node_network/node_widget.dart`), whose doc comment carries the required modal-placard recipe — follow it for any future blocking sync-FFI action rather than inventing a second one.
+**The FFI runs synchronously (`frb(sync)`)** because `CAD_INSTANCE` has no internal synchronization and the persistent per-frame `provide_texture` callback would race a worker-thread Rust call (`doc/design_node_execution.md`, "Why not async (worker thread) FFI"). That blocks the UI thread, so the call goes through **`runExecuteWithPlacard`** (`node_network/node_widget.dart`), whose doc comment carries the required modal-placard recipe — follow it for any future blocking sync-FFI action rather than inventing a second one. (An expensive action on one node whose result can be fingerprinted is not such an action: make it a node job — see "Node jobs" above.)
 
 The **Console panel** (`console_panel.dart`) is a docked-bottom strip showing entries pushed by `print` nodes; its state lives on `StructureDesignerModel` (`printLog`, `consolePanelVisible`, `unreadPrintLogCount`) and `refreshFromKernel()` polls `sd_api.takePrintLog()`. The panel's own library doc covers the drain model, the "don't also push `APIExecuteResult.logs`" trap, and the `PlatformInt64` gotcha.
 

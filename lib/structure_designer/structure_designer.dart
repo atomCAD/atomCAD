@@ -18,13 +18,18 @@ import 'node_network/find_node_picker.dart';
 import 'node_network/node_network.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_preferences.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart'
-    show APIActivateResult, APIDocumentTab;
+    show
+        APIActivateResult,
+        APIDocumentTab,
+        APINodeJobOutcome,
+        APINodeJobOutcomeKind;
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
     as structure_designer_api;
 import 'display_panel.dart';
 import 'document_tabs.dart';
 import 'import_cnnd_library_dialog.dart';
 import 'library_link_actions.dart';
+import 'node_jobs.dart';
 import 'save_as_dependencies.dart';
 import 'node_networks_list/node_networks_panel.dart';
 import 'node_data/node_data_widget.dart';
@@ -126,12 +131,17 @@ class _StructureDesignerState extends State<StructureDesigner> {
       if (_windowFocused) _checkDependencies();
     });
     GestureBinding.instance.pointerRouter.addGlobalRoute(_trackPointer);
+    graphModel.onNodeJobStarted = _nodeJobPoller.start;
   }
 
   @override
   void dispose() {
     GestureBinding.instance.pointerRouter.removeGlobalRoute(_trackPointer);
     _dependencyPoll?.cancel();
+    _nodeJobPoller.stop();
+    if (graphModel.onNodeJobStarted == _nodeJobPoller.start) {
+      graphModel.onNodeJobStarted = null;
+    }
     _lifecycleListener?.dispose();
     super.dispose();
   }
@@ -144,25 +154,68 @@ class _StructureDesignerState extends State<StructureDesigner> {
     }
   }
 
-  /// True when an automatic check may run now (D7: not during a drag, a text
-  /// edit or a modal dialog; it runs at the next idle moment instead).
-  bool _idleForDependencyCheck() {
-    if (!mounted) return false;
-    if (_pointersDown > 0) return false;
-    if (graphModel.draggedWire != null) return false;
+  /// True while the user is in the middle of something Rust cannot see: a
+  /// pointer held down (any drag, camera drags included), a wire being
+  /// dragged, a document switch on its way, a dialog or menu on top, or a
+  /// text field with focus. Anything that ends in `refreshFromKernel()` would
+  /// rebuild under it. Shared by the library check (library linking D7) and
+  /// the node-job poll (background node jobs D11).
+  bool _flutterInteractionOpen() {
+    if (_pointersDown > 0) return true;
+    if (graphModel.draggedWire != null) return true;
     // A tab switch is on its way; the incoming document is checked as part
     // of its activation.
-    if (graphModel.isSwitchingDocument) return false;
+    if (graphModel.isSwitchingDocument) return true;
     // A dialog or a popup menu is on top of the editor.
     final route = ModalRoute.of(context);
-    if (route != null && !route.isCurrent) return false;
+    if (route != null && !route.isCurrent) return true;
     // A text field has focus: a refresh could rebuild it under the caret.
     final focusContext = FocusManager.instance.primaryFocus?.context;
     if (focusContext != null &&
         focusContext.findAncestorStateOfType<EditableTextState>() != null) {
-      return false;
+      return true;
     }
-    return true;
+    return false;
+  }
+
+  /// True when an automatic check may run now (D7: not during a drag, a text
+  /// edit or a modal dialog; it runs at the next idle moment instead).
+  bool _idleForDependencyCheck() => mounted && !_flutterInteractionOpen();
+
+  // --- Node jobs (`doc/design_background_node_jobs.md`) ---
+  //
+  // A node's explicit action (`chemisorb`'s Run) runs on a Rust worker pool.
+  // The poll lives here, not in the model, because its D11 guard is this
+  // state's: while [_flutterInteractionOpen], finished results stay in their
+  // Rust slots and land at the first poll after the interaction ends. The
+  // outcomes are reported here too — this messenger outlives the property
+  // panel, which may be showing another node by the time a search ends.
+
+  late final NodeJobPoller _nodeJobPoller = NodeJobPoller(
+    poll: graphModel.pollNodeJobs,
+    // Unmounted: nothing can be rebuilt under the user, install.
+    interactionOpen: () => mounted && _flutterInteractionOpen(),
+    onOutcome: _reportNodeJobOutcome,
+  );
+
+  void _reportNodeJobOutcome(APINodeJobOutcome outcome) {
+    if (!mounted) return;
+    switch (outcome.kind) {
+      case APINodeJobOutcomeKind.finished:
+        final firstLine = outcome.message.split('\n').first;
+        showTransientSnackBar(context, '${outcome.label}: $firstLine');
+      case APINodeJobOutcomeKind.failed:
+        showErrorSnackBarOn(ScaffoldMessenger.of(context),
+            '${outcome.label} failed: ${outcome.message}');
+      case APINodeJobOutcomeKind.cancelled:
+        showTransientSnackBar(context, '${outcome.label} cancelled.');
+      case APINodeJobOutcomeKind.dropped:
+        final reason = outcome.message.endsWith('.')
+            ? outcome.message
+            : '${outcome.message}.';
+        showTransientSnackBar(
+            context, '${outcome.label}: result discarded — $reason');
+    }
   }
 
   /// The automatic check. Shows what Rust did: a transient snackbar for a
@@ -1056,6 +1109,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
     onClose: _closeDocument,
     onMove: graphModel.moveDocument,
     pointerBusy: () => _pointersDown > 0,
+    nodeJobs: graphModel.nodeJobs,
   );
 
   DocumentTabs _buildDocumentTabs(StructureDesignerModel model) =>

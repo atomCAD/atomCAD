@@ -590,7 +590,11 @@ timer:
 - `startNodeJob(BigInt nodeId)` → `start_node_job` with
   `propertyEditorScopeChain`; returns the error message, if any. On success
   it calls `VoidCallback? onNodeJobStarted`, which the host sets to its
-  poller's `start`.
+  poller's `start`, and appends a placeholder status (empty label and
+  phase) to `nodeJobs` so the panel shows Cancel on the next frame rather
+  than after the first poll — otherwise a double click reaches D7's
+  refusal. It must not poll instead: a poll can carry outcomes, and only
+  the host's poller reports those.
 - `cancelNodeJob(BigInt jobId)`.
 - `APINodeJobPoll pollNodeJobs(bool deferInstalls)` — calls `poll_node_jobs`,
   updates `nodeJobs.value`, runs `refreshFromKernel()` if `activeChanged`, and

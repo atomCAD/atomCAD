@@ -1006,6 +1006,24 @@ plan with `stale` true, and the panel asks you to run again. Undo the change
 and the result comes back. Results are **not saved** with the file; after
 reopening a project, press Run again.
 
+**The search runs in the background.** While it runs, the application stays
+usable: you can orbit the view, select, edit and switch tabs. The panel shows a
+progress bar — moving without a number while the search plans, then "Relaxing
+37 / 121 (31 %)" — and a **Cancel** button in place of Run. The node shows a
+small spinner in its title bar (hover it for the percentage), and the document's
+tab shows one too, so a search running in another tab stays visible. When the
+search ends, a message at the bottom of the window reports it: the result
+(relaxed, listed, best strain), that it was cancelled, that it failed and why,
+or that its result was discarded because the node was deleted, the document
+closed or the network became read-only. **Cancel** stops the search after the
+relaxations already under way; the panel says "Cancelling…" until then, and
+the node keeps its previous outputs. You may keep editing while a search runs —
+the inputs, or any setting: the result still lands, and if what you changed
+affects it, it lands *stale* and the panel asks for a new Run. A result that
+arrives while you are typing in a field or dragging waits until you finish.
+One search per node at a time; several `chemisorb` nodes can search at once.
+`atomcad-cli run` is not affected: it runs the search and waits for it.
+
 **What counts as a site.** A *site* is a substrate atom that has a free
 valence (a dangling bond). There is no notion of a surface plane or a facet, so
 any geometry works: terraces, other facets, step edges, clusters.
@@ -1183,8 +1201,7 @@ filter cut anything; and the ranked candidates, one line each with the strain,
 the bond inventory underneath, and an `unconv.` mark on a relaxation that did
 not converge. A line over the list says how many relaxed candidates top N and
 the window dropped. Hover a row for its sites,
-worst bond ratio and strain terms. Run blocks the application while it works,
-behind a placard. *Limit transfers* is greyed out while `transfers` is not
+worst bond ratio and strain terms. *Limit transfers* is greyed out while `transfers` is not
 wired, since nothing reads it then. The statistics appear once the node is displayed. A
 `chemisorb` inside a custom network shows its result only where that network is
 called with the inputs the run used; everywhere else it shows the plan.

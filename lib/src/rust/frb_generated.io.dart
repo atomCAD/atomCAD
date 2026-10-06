@@ -172,9 +172,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIChemisorbRow dco_decode_api_chemisorb_row(dynamic raw);
 
   @protected
-  APIChemisorbRunResult dco_decode_api_chemisorb_run_result(dynamic raw);
-
-  @protected
   APIChemisorbStats dco_decode_api_chemisorb_stats(dynamic raw);
 
   @protected
@@ -2217,10 +2214,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIChemisorbRow sse_decode_api_chemisorb_row(SseDeserializer deserializer);
-
-  @protected
-  APIChemisorbRunResult sse_decode_api_chemisorb_run_result(
-      SseDeserializer deserializer);
 
   @protected
   APIChemisorbStats sse_decode_api_chemisorb_stats(
@@ -4611,10 +4604,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_chemisorb_row(
       APIChemisorbRow self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_api_chemisorb_run_result(
-      APIChemisorbRunResult self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_chemisorb_stats(

@@ -11,7 +11,6 @@ use atomcad_structure_designer::node_network::FunctionPinDisposition;
 use atomcad_structure_designer::node_network::FunctionPinRole;
 // Path-qualified rather than imported bare: the api-side twin deliberately keeps
 // the same identifier (D9a).
-use atomcad_structure_designer::chemisorb_ops::ChemisorbRunSummary;
 use atomcad_structure_designer::node_jobs::{JobOutcome, JobOutcomeKind, JobPoll, JobStatus};
 use atomcad_structure_designer::node_type::NodeTypeCategory as DomainNodeTypeCategory;
 use atomcad_structure_designer::nodes::atom_edit::atom_edit::{
@@ -1054,17 +1053,6 @@ pub struct APIChemisorbReport {
     pub inventory_options: Vec<APIChemisorbInventoryOption>,
 }
 
-/// What one Run found (twin of `ChemisorbRunSummary`).
-pub struct APIChemisorbRunResult {
-    pub relaxed: usize,
-    pub listed: usize,
-    pub best_strain: Option<f64>,
-    pub best_bonds: String,
-    pub truncated: bool,
-    pub unconverged: usize,
-    pub seconds: f64,
-}
-
 impl From<&ChemisorbData> for APIChemisorbData {
     fn from(d: &ChemisorbData) -> Self {
         APIChemisorbData {
@@ -1150,20 +1138,6 @@ impl From<&ChemisorbEvalCache> for APIChemisorbReport {
                     count: *count,
                 })
                 .collect(),
-        }
-    }
-}
-
-impl From<ChemisorbRunSummary> for APIChemisorbRunResult {
-    fn from(s: ChemisorbRunSummary) -> Self {
-        APIChemisorbRunResult {
-            relaxed: s.relaxed,
-            listed: s.listed,
-            best_strain: s.best_strain,
-            best_bonds: s.best_bonds,
-            truncated: s.truncated,
-            unconverged: s.unconverged,
-            seconds: s.seconds,
         }
     }
 }

@@ -18,10 +18,12 @@
 /// (`test/document_tabs_test.dart`).
 library;
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/gestures.dart' show kMiddleMouseButton;
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
+import 'package:flutter_cad/structure_designer/node_jobs.dart';
 
 /// The label of a tab: its file name, with a `*` while dirty.
 String documentTabLabel(APIDocumentTab tab) =>
@@ -54,6 +56,7 @@ class DocumentTabs {
     required this.onClose,
     required this.onMove,
     required this.pointerBusy,
+    this.nodeJobs,
   });
 
   /// The open documents in tab order. Updated in place by the host on every
@@ -75,6 +78,12 @@ class DocumentTabs {
   /// True while some other pointer is down (a drag in the viewport, on the
   /// canvas, on a divider).
   final bool Function() pointerBusy;
+
+  /// The running node jobs (`model.nodeJobs`): a tab whose document has one
+  /// shows a spinner — the only cue for a search running in a parked
+  /// document. A listenable of its own, so a progress tick rebuilds the
+  /// spinners and not the tab list.
+  final ValueListenable<List<APINodeJobStatus>>? nodeJobs;
 
   /// Whether the gesture that started with the last [pointerDown] may act.
   bool _armed = false;
@@ -200,6 +209,9 @@ class _DocumentTabTile extends StatelessWidget {
                     Expanded(child: label)
                   else
                     Flexible(child: label),
+                  if (gestures.nodeJobs != null)
+                    _JobSpinner(
+                        documentId: tab.id, nodeJobs: gestures.nodeJobs!),
                   const SizedBox(width: 4),
                   closeButton,
                 ],
@@ -208,6 +220,35 @@ class _DocumentTabTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// A small spinner on a tab while its document has a node job running.
+class _JobSpinner extends StatelessWidget {
+  const _JobSpinner({required this.documentId, required this.nodeJobs});
+
+  final BigInt documentId;
+  final ValueListenable<List<APINodeJobStatus>> nodeJobs;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<List<APINodeJobStatus>>(
+      valueListenable: nodeJobs,
+      builder: (context, jobs, _) {
+        if (!documentsWithNodeJobs(jobs).contains(documentId)) {
+          return const SizedBox.shrink();
+        }
+        return const Padding(
+          key: Key('document_tab_job_spinner'),
+          padding: EdgeInsets.only(left: 4),
+          child: SizedBox(
+            width: 10,
+            height: 10,
+            child: CircularProgressIndicator(strokeWidth: 1.5),
+          ),
+        );
+      },
     );
   }
 }

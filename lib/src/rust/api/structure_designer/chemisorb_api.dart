@@ -23,11 +23,3 @@ void setChemisorbData(
 
 APIChemisorbReport? getChemisorbReport() => RustLib.instance.api
     .crateApiStructureDesignerChemisorbApiGetChemisorbReport();
-
-/// **Run**: searches with the node and stores the result, then refreshes so
-/// the outputs show it. Synchronous — seconds to minutes; the panel shows a
-/// modal placard meanwhile. `Err` carries a message for the user.
-APIChemisorbRunResult runChemisorb(
-        {required Uint64List scopePath, required BigInt nodeId}) =>
-    RustLib.instance.api.crateApiStructureDesignerChemisorbApiRunChemisorb(
-        scopePath: scopePath, nodeId: nodeId);

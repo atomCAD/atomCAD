@@ -90,7 +90,7 @@ fn the_report_is_the_plan_before_run_and_the_result_after() {
     assert_eq!(report.stats.to_relax, 2);
     assert!(report.rows.is_empty());
 
-    designer.run_chemisorb(&[], node).unwrap();
+    designer.run_node_job_blocking(&[], node).unwrap();
     refresh_selected(&mut designer, node);
     let report = chemisorb_node_report(&designer).expect("report");
     assert!(report.stats.searched);
@@ -107,7 +107,7 @@ fn the_report_is_the_plan_before_run_and_the_result_after() {
 #[test]
 fn the_setter_is_undoable_and_keeps_the_stored_search() {
     let (mut designer, node) = network();
-    designer.run_chemisorb(&[], node).unwrap();
+    designer.run_node_job_blocking(&[], node).unwrap();
 
     let mut data = chemisorb_node_data(&designer, &[], node).unwrap();
     assert_eq!(data.reach, 3.5);

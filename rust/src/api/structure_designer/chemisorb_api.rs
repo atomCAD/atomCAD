@@ -1,11 +1,12 @@
-//! Kernel seam for the `chemisorb` node: its settings in and out, the report
-//! the properties panel renders, and **Run**.
+//! Kernel seam for the `chemisorb` node: its settings in and out, and the
+//! report the properties panel renders.
 //!
 //! The report lives in the selected node's eval cache (`ChemisorbEvalCache`),
 //! as `proxy`'s does; the search result itself lives on the node data, keyed
-//! by an input fingerprint, and is written only by Run
-//! (`StructureDesigner::run_chemisorb`, the node's job). Evaluation never
-//! searches. The CLI's `run` is the generic `node_jobs_api::run_node_job_by_name`.
+//! by an input fingerprint, and is written only by Run — the node's job
+//! (`doc/design_background_node_jobs.md`). Evaluation never searches. Run is
+//! the generic node-job FFI: `node_jobs_api::start_node_job` for the panel,
+//! `run_node_job_by_name` for the CLI's `run`.
 //!
 //! Each entry point is a thin FRB wrapper over an `#[frb(ignore)]` function
 //! taking an explicit designer, so the logic is testable without the global
@@ -13,10 +14,9 @@
 
 use crate::api::api_common::{
     refresh_structure_designer_auto, with_cad_instance_or, with_mut_cad_instance,
-    with_mut_cad_instance_or,
 };
 use crate::api::structure_designer::structure_designer_api_types::{
-    APIChemisorbData, APIChemisorbReport, APIChemisorbRunResult,
+    APIChemisorbData, APIChemisorbReport,
 };
 use atomcad_structure_designer::nodes::chemisorb::{ChemisorbData, ChemisorbEvalCache};
 use atomcad_structure_designer::structure_designer::StructureDesigner;
@@ -97,26 +97,6 @@ pub fn get_chemisorb_report() -> Option<APIChemisorbReport> {
         with_cad_instance_or(
             |cad_instance| chemisorb_node_report(&cad_instance.structure_designer),
             None,
-        )
-    }
-}
-
-/// **Run**: searches with the node and stores the result, then refreshes so
-/// the outputs show it. Synchronous — seconds to minutes; the panel shows a
-/// modal placard meanwhile. `Err` carries a message for the user.
-#[flutter_rust_bridge::frb(sync)]
-pub fn run_chemisorb(scope_path: Vec<u64>, node_id: u64) -> Result<APIChemisorbRunResult, String> {
-    unsafe {
-        with_mut_cad_instance_or(
-            |cad_instance| {
-                let result = cad_instance
-                    .structure_designer
-                    .run_chemisorb(&scope_path, node_id)
-                    .map(APIChemisorbRunResult::from);
-                refresh_structure_designer_auto(cad_instance);
-                result
-            },
-            Err("CAD instance not available".to_string()),
         )
     }
 }
