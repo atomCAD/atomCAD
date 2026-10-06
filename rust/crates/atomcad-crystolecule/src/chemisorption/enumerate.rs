@@ -8,6 +8,12 @@
 //! its donor gains one (the OH leg that can now bond), its acceptor loses one;
 //! then, against the valences that set leaves, the depth-first site
 //! assignment of the bond-forming feet.
+//!
+//! The two filters are pruning, not post-processing: an exact formed-bond
+//! count caps the assignment and cuts a branch that can no longer reach it,
+//! and an exact bond inventory rejects a transfer set whose moves it does not
+//! contain and cuts an assignment the moment one bond kind exceeds its count.
+//! What `plan` returns is therefore exactly what a run relaxes.
 
 use super::config::{ChemisorptionError, ChemisorptionSearch, Side};
 use super::inventory::{BondInventory, BondKind};
@@ -19,6 +25,7 @@ use crate::atomic_structure::inline_bond::{
 use crate::guided_placement::{covalent_max_neighbors, detect_hybridization};
 use glam::DVec3;
 use rustc_hash::FxHashMap;
+use std::collections::BTreeMap;
 use std::collections::{BTreeSet, HashSet};
 use std::time::Instant;
 
@@ -78,7 +85,7 @@ impl Hypothesis {
 
 /// What `plan` found and counted. Every branch of the search ends exactly
 /// once, so
-/// `considered == pruned_valence + duplicates + to_relax`
+/// `considered == pruned_valence + pruned_filter + duplicates + to_relax`
 /// — plus the one complete assignment that tripped the budget, when
 /// `truncated`. A transfer set that breaks a valence, or repeats an earlier
 /// one, is one considered (and pruned, or duplicate) branch.
@@ -96,6 +103,8 @@ pub struct PlanStats {
     pub considered: usize,
     /// Rejected because an atom would exceed its valence (R6).
     pub pruned_valence: usize,
+    /// Rejected by the formed-bond or bond-inventory filter.
+    pub pruned_filter: usize,
     /// Merged with an earlier one of the same bond set.
     pub duplicates: usize,
     /// Valid, deduplicated hypotheses: the relaxations `evaluate` will run.
@@ -228,6 +237,13 @@ struct Enumerator<'a> {
     max_formed: usize,
     max_transfers: usize,
 
+    // The two filters, as they apply to the current transfer set: the exact
+    // number of bonds to form (`None` = any), and how many of each kind may
+    // still be formed (`None` = no inventory filter).
+    need: Option<usize>,
+    remaining: Option<BTreeMap<BondKind, usize>>,
+    used_kinds: BTreeMap<BondKind, usize>,
+
     // The current transfer set and what it leaves.
     transfer_choice: Vec<usize>,
     transfers: Vec<Transfer>,
@@ -329,6 +345,12 @@ impl Enumerator<'_> {
             }
         }
 
+        if !self.filters_admit_transfer_set() {
+            self.stats.considered += 1;
+            self.stats.pruned_filter += 1;
+            return;
+        }
+
         for (s, site) in self.sites.iter().enumerate() {
             self.site_valence[s] = valence(site.id, site.base).max(0) as usize;
         }
@@ -352,8 +374,52 @@ impl Enumerator<'_> {
         self.dfs(0);
     }
 
+    /// Sets `need` and `remaining` for the current transfer set, or answers
+    /// that no assignment under it can pass the filters. Only a transfer
+    /// breaks a bond, so an inventory filter fixes the broken bonds — and so
+    /// the transfer set — exactly; what it formed beyond the transfers' own
+    /// bonds is what the feet must form.
+    fn filters_admit_transfer_set(&mut self) -> bool {
+        self.need = self.config.formed_bonds;
+        self.remaining = None;
+        self.used_kinds.clear();
+        let Some(target) = &self.config.bond_inventory else {
+            return true;
+        };
+        let mut broken: BTreeMap<BondKind, usize> = BTreeMap::new();
+        let mut remaining = target.formed.clone();
+        for t in &self.transfers {
+            *broken
+                .entry(BondKind::new(t.element, self.element(t.donor), 1))
+                .or_insert(0) += 1;
+            let kind = BondKind::new(t.element, self.element(t.acceptor), 1);
+            match remaining.get_mut(&kind) {
+                Some(n) if *n > 0 => *n -= 1,
+                _ => return false,
+            }
+        }
+        if broken != target.broken {
+            return false;
+        }
+        let implied: usize = remaining.values().sum();
+        if self.need.is_some_and(|n| n != implied) {
+            return false;
+        }
+        self.need = Some(implied);
+        self.remaining = Some(remaining);
+        true
+    }
+
     fn dfs(&mut self, k: usize) {
         if self.done() {
+            return;
+        }
+        if let Some(need) = self.need
+            && self.chosen.len() + (self.active_feet.len() - k) < need
+        {
+            // Too few feet left to reach the exact count.
+            self.stats.considered += 1;
+            self.stats.pruned_filter += 1;
             return;
         }
         if k == self.active_feet.len() {
@@ -363,7 +429,8 @@ impl Enumerator<'_> {
             return;
         }
         let foot = self.active_feet[k];
-        if self.chosen.len() < self.max_formed {
+        let cap = self.max_formed.min(self.need.unwrap_or(usize::MAX));
+        if self.chosen.len() < cap {
             for si in 0..self.feet[foot].sites.len() {
                 if self.done() {
                     return;
@@ -379,9 +446,21 @@ impl Enumerator<'_> {
                     self.stats.pruned_valence += 1;
                     continue;
                 }
+                let kind =
+                    BondKind::new(self.feet[foot].element, self.element(self.sites[s].id), 1);
+                if let Some(remaining) = &self.remaining {
+                    let used = self.used_kinds.get(&kind).copied().unwrap_or(0);
+                    if used >= remaining.get(&kind).copied().unwrap_or(0) {
+                        self.stats.considered += 1;
+                        self.stats.pruned_filter += 1;
+                        continue;
+                    }
+                }
                 self.chosen.push((foot, s));
                 self.site_used[s] += 1;
+                *self.used_kinds.entry(kind).or_insert(0) += 1;
                 self.dfs(k + 1);
+                *self.used_kinds.get_mut(&kind).expect("counted above") -= 1;
                 self.site_used[s] -= 1;
                 self.chosen.pop();
             }
@@ -422,6 +501,18 @@ impl Enumerator<'_> {
                 .entry(BondKind::new(t.element, self.element(t.donor), 1))
                 .or_insert(0) += 1;
         }
+        // The pruning above makes both checks redundant; they stay so that a
+        // pruning mistake shows as a counted rejection, never a wrong result.
+        if self.need.is_some_and(|n| n != hypothesis.formed.len())
+            || self
+                .config
+                .bond_inventory
+                .as_ref()
+                .is_some_and(|target| *target != hypothesis.inventory)
+        {
+            self.stats.pruned_filter += 1;
+            return;
+        }
         if !self.seen.insert(hypothesis.key()) {
             self.stats.duplicates += 1;
             return;
@@ -437,7 +528,8 @@ impl Enumerator<'_> {
 /// Enumerates the bonding patterns of `adsorbate` over `substrate` at the
 /// given pose (§5.2 of the design): transfer sets first, then bond forming —
 /// one new bond per adsorbate atom, a site taking as many as its valence
-/// allows. Relaxes nothing.
+/// allows — keeping only those that pass the formed-bond and inventory
+/// filters. Relaxes nothing.
 pub fn plan(
     adsorbate: &AtomicStructure,
     substrate: &AtomicStructure,
@@ -536,6 +628,9 @@ pub fn plan(
         } else {
             config.max_transfers.unwrap_or(usize::MAX)
         },
+        need: None,
+        remaining: None,
+        used_kinds: BTreeMap::new(),
         transfer_choice: Vec::new(),
         transfers: Vec::new(),
         site_valence: vec![0; site_count],

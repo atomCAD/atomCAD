@@ -1,5 +1,6 @@
 //! What a chemisorption search is tunable by, and what can go wrong.
 
+use super::inventory::BondInventory;
 use super::transfer::{TransferRule, is_transferable_element};
 use crate::atomic_structure::TagError;
 use crate::simulation::uff::VdwMode;
@@ -31,9 +32,23 @@ pub struct ChemisorptionSearch {
     /// `None` = no cap; `Some(0)` = none, the same search as no rules. Read
     /// only when `transfers` is non-empty.
     pub max_transfers: Option<usize>,
+    /// Only patterns with exactly this many formed bonds (transfers not
+    /// counted). `None` = any. Applied during enumeration, so nothing else is
+    /// relaxed.
+    pub formed_bonds: Option<usize>,
+    /// Only patterns with exactly this bond inventory. `None` = any. Applied
+    /// during enumeration, so nothing else is relaxed.
+    pub bond_inventory: Option<BondInventory>,
     /// At most this many valid hypotheses are relaxed; past it the search is
-    /// truncated and makes no exhaustiveness claim.
+    /// truncated and makes no exhaustiveness claim. Counts only hypotheses
+    /// that pass the two filters above.
     pub budget: usize,
+    /// At most this many candidates are kept, the lowest strains. The rest are
+    /// dropped as they are relaxed, so memory is bounded by this, not by the
+    /// number of hypotheses.
+    pub top_n: usize,
+    /// …and only those within this many kcal/mol of the best.
+    pub energy_window: f64,
     /// UFF iteration limit per relaxation.
     pub max_iterations: u32,
     /// UFF convergence tolerance, RMS gradient (kcal/(mol·Å)).
@@ -51,7 +66,11 @@ impl Default for ChemisorptionSearch {
             max_formed_bonds: None,
             transfers: Vec::new(),
             max_transfers: Some(1),
+            formed_bonds: None,
+            bond_inventory: None,
             budget: 10_000,
+            top_n: 10,
+            energy_window: 30.0,
             max_iterations: 2000,
             gradient_rms_tolerance: 1e-3,
             vdw_mode: VdwMode::AllPairs,
@@ -78,6 +97,13 @@ impl ChemisorptionSearch {
         }
         if self.budget == 0 {
             return invalid("budget must be at least 1");
+        }
+        if self.top_n == 0 {
+            return invalid("top N must be at least 1");
+        }
+        // Infinity is a valid window: no window.
+        if self.energy_window.is_nan() || self.energy_window < 0.0 {
+            return invalid("the energy window must be zero or positive");
         }
         if !(self.gradient_rms_tolerance.is_finite() && self.gradient_rms_tolerance > 0.0) {
             return invalid("gradient tolerance must be positive");

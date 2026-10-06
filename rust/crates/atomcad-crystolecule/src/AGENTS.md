@@ -136,7 +136,7 @@ crates/atomcad-crystolecule/src/
 | `ProxyOptions` | `proxy_cut.rs` | What a proxy cut is tunable by: `hops` / `rim` (frozen shells counted inward from the cut boundary, so the absolute free depth is `hops - rim` — `free_hops()`) / `fill` / `rm_single` / `passivate` / `passivant_element` / `core`. Unsigned — the node's "-1 means off" rules are validated before this struct is built, and `core` is the one `Option` |
 | `ProxyPlan` | `proxy_cut.rs` | Everything one cut decided and nothing mutated: per-atom bond distance, the keep/drop sets, the severed-bond caps, the frozen and `high` lists. Every `Vec` is sorted by atom id so the ids `apply_proxy` hands out are deterministic |
 | `ProxyStats` | `proxy_cut.rs` | The report `apply_proxy` returns: formula, atom counts, `farthest_hop` (a **size** figure) beside `free_hops` (the derived depth of the relaxed interior; the shielding figure is the `rim` option itself), `open_valences`, `min_cap_pair`, and `nearest_dropped` — which counts only dropped atoms the cluster is **not attached to** (`DETACHED_MIN_BOND_SEPARATION`), since the workpiece continuing past the cut is always ~2 bonds from the free region and would otherwise report a steric neighbour on every bulk cut. The `proxy` node stores it in the eval cache, never on the node data |
-| `ChemisorptionSearch` / `SearchPlan` / `SearchReport` / `Candidate` | `chemisorption/` | One search of one posed adsorbate over a substrate: the settings, what `plan` enumerated (hypotheses + valence/duplicate counts, nothing relaxed), and what `evaluate` ranked (relaxed candidates, by UFF energy against the relaxed no-change reference). `Listing` / `list_candidates` pick what a caller lists |
+| `ChemisorptionSearch` / `SearchPlan` / `SearchReport` / `Candidate` | `chemisorption/` | One search of one posed adsorbate over a substrate: the settings, what `plan` enumerated (hypotheses + valence/duplicate counts, nothing relaxed), and what `evaluate` kept (the best `top_n` relaxed candidates within the window, by UFF energy against the relaxed no-change reference) |
 | `LatticeFillConfig` | `lattice_fill/config.rs` | Unit cell + motif + geometry + options for filling |
 | `PlacedAtomTracker` | `lattice_fill/placed_atom_tracker.rs` | CrystallographicAddress → atom ID mapping |
 | `AtomInfo` | `atomic_constants.rs` | Element properties (symbol, radii, color) |
@@ -274,22 +274,30 @@ that are easy to erode:
   kinetic control, where a product's absolute energy says little about whether
   it forms, and tabulated enthalpies are too crude to supply it anyway. The
   consequence is that fewer bonds usually rank first and that energies compare
-  cleanly only within one `BondInventory`, which is why `Listing` can filter
-  by formed-bond count and by inventory. **An inventory is a filter, never a
-  sort key.** Do not reintroduce enthalpies here without that decision being
+  cleanly only within one `BondInventory`, which is why a search can be
+  restricted to one formed-bond count (`formed_bonds`) or one inventory
+  (`bond_inventory`). **An inventory is a filter, never a sort key.** Do not reintroduce enthalpies here without that decision being
   revisited; the tables live on, unused, in `bond_enthalpy.rs` (copied
   verbatim from Appendix A of the design — never fill a gap from memory).
-- **Listing is not searching.** `Listing` (filters, `top_n`, window) is applied
-  to a finished report and is not a `ChemisorptionSearch` field, so it never
-  enters `input_fingerprint`: changing it re-lists, never re-runs. The window is
-  measured from the best candidate that passes the filters.
+- **Every setting is a search setting, applied as early as it can be.** The
+  two filters are *pruning* in `plan` (an exact count caps the assignment and
+  cuts branches that cannot reach it; an exact inventory fixes the transfer
+  set and cuts a branch once a bond kind exceeds its count), so the plan is
+  exactly what a run relaxes and the budget counts only the group asked for.
+  `top_n` and the window are applied *while relaxing* (`keep_best` under a
+  mutex): a structure is held only while it is among the best `top_n`, so
+  memory is bounded by `top_n`, not by the hypothesis count. Never collect all
+  relaxed structures and filter afterwards — a hexapod at the budget would
+  hold ~1 GB. A "filters after search" split existed and was removed for
+  exactly that reason. `the_filters_plan_exactly_the_matching_subset` pins
+  that pruning changes nothing but the count.
 - **No geometric pruning of multi-bond patterns.** A site-spacing filter
   (pair tolerance) existed and was removed: UFF lets feet flex by >2.5 Å of
   site mismatch within the listing window, so any useful tolerance pruned
   real candidates, and users could not tune it.
-- The ranking is deterministic: relaxations run in parallel (rayon) but are
-  collected in plan order and sorted by strain, ties by the normalized bond
-  set (`rank_candidates`).
+- The ranking is deterministic: relaxations run in parallel (rayon) and finish
+  in any order, but "the best `top_n` by strain, ties by the normalized bond
+  set" (`rank_order`) is one answer whatever the order.
 - **Both `VdwMode`s must work** — the app's default preference is the 6 Å
   cutoff, and the `chemisorb` node follows it. `UffForceField::vdw_params()`
   **panics** in cutoff mode (it keeps a neighbour list, not pair parameters),
@@ -729,7 +737,7 @@ tests/crystolecule/
 ├── patch_test.rs                  # Cell selection, region depths, apply_patch pipeline
 ├── patch_build_test.rs            # Tiling-vector validation, tile extraction
 ├── bond_enthalpy_test.rs          # The (unused) enthalpy table: symmetry, conversion, Pauling estimates
-├── chemisorption_test.rs          # plan counts/valence/tags, ranking and listing filters, transfers (candidates, dedupe, seating, OH tripod), ethylene di-σ and water (a UFF tie) known answers
+├── chemisorption_test.rs          # plan counts/valence/tags, ranking, the filters as pruning, top_n/window while relaxing, inventory labels, transfers (candidates, dedupe, seating, OH tripod), ethylene di-σ and water (a UFF tie) known answers
 ├── proxy_cut_test.rs              # Riders, bond distances, fill/rm_single keep set, severed-bond caps; the §4.3 bulk-silicon fill table
 ├── concave_rebond_test.rs         # Concave-corner rebonding; clash detector re-derived independently
 ├── io/

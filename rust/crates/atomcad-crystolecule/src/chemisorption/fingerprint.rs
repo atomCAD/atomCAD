@@ -63,7 +63,11 @@ pub fn input_fingerprint(
         max_formed_bonds,
         transfers,
         max_transfers,
+        formed_bonds,
+        bond_inventory,
         budget,
+        top_n,
+        energy_window,
         max_iterations,
         gradient_rms_tolerance,
         vdw_mode,
@@ -78,7 +82,11 @@ pub fn input_fingerprint(
     if !transfers.is_empty() {
         max_transfers.hash(&mut h);
     }
+    formed_bonds.hash(&mut h);
+    bond_inventory.hash(&mut h);
     budget.hash(&mut h);
+    top_n.hash(&mut h);
+    energy_window.to_bits().hash(&mut h);
     max_iterations.hash(&mut h);
     gradient_rms_tolerance.to_bits().hash(&mut h);
     match vdw_mode {

@@ -26,8 +26,14 @@
 //! it forms, and tabulated bond enthalpies are too crude to supply it anyway.
 //! The ranking is UFF energy alone, which favours fewer bonds; candidates with
 //! different bond inventories ([`BondInventory`]) do not compare cleanly, which
-//! is why [`Listing`] can restrict a listing to one formed-bond count or one
+//! is why a search can be restricted to one formed-bond count or one
 //! inventory. The enthalpy tables live in [`crate::bond_enthalpy`], unused here.
+//!
+//! **Every setting is a search setting, and each is applied as early as it can
+//! be:** tags, reach, valence, the caps and the two filters during
+//! enumeration (so only the hypotheses asked for are relaxed); `top_n` and the
+//! energy window while relaxing (so only the kept structures are held). Memory
+//! is bounded by `top_n`, not by the number of hypotheses.
 
 pub mod config;
 pub mod enumerate;
@@ -42,10 +48,9 @@ pub use enumerate::{
     Hypothesis, HypothesisKey, PlanStats, SearchPlan, change_key, changed_atoms, free_valence, plan,
 };
 pub use fingerprint::input_fingerprint;
-pub use inventory::{BondInventory, BondKind};
+pub use inventory::{BondInventory, BondKind, InventoryParseError};
 pub use relax::StrainTerms;
 pub use report::{
-    Candidate, Listed, Listing, SearchReport, SearchStats, evaluate, inventory_options,
-    list_candidates, rank_candidates, search,
+    Candidate, SearchReport, SearchStats, evaluate, inventory_options, rank_candidates, search,
 };
 pub use transfer::{Transfer, TransferDirection, TransferRule, is_transferable_element};

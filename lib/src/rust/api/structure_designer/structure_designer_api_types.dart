@@ -861,18 +861,17 @@ class APIChemisorbData {
   /// Read only while the `transfers` pin carries a record.
   final int maxTransfers;
 
-  /// Listing filter: exactly this many formed bonds; `None` = any.
-  final int? filterFormedBonds;
+  /// Only patterns with exactly this many formed bonds; `None` = any.
+  final int? formedBonds;
 
-  /// Listing filter: exactly this bond inventory (a candidate's `bonds`
+  /// Only patterns with exactly this bond inventory (a candidate's `bonds`
   /// label); `None` = any.
-  final String? filterBonds;
+  final String? bondInventory;
 
-  /// At most this many candidates listed.
+  /// At most this many candidates kept and listed.
   final int topN;
 
-  /// Only candidates within this many kcal/mol of the best that passes the
-  /// filters are listed.
+  /// Only candidates within this many kcal/mol of the best are kept.
   final double energyWindow;
 
   /// At most this many hypotheses relaxed.
@@ -887,8 +886,8 @@ class APIChemisorbData {
     required this.reach,
     required this.maxFormedBonds,
     required this.maxTransfers,
-    this.filterFormedBonds,
-    this.filterBonds,
+    this.formedBonds,
+    this.bondInventory,
     required this.topN,
     required this.energyWindow,
     required this.budget,
@@ -902,8 +901,8 @@ class APIChemisorbData {
       reach.hashCode ^
       maxFormedBonds.hashCode ^
       maxTransfers.hashCode ^
-      filterFormedBonds.hashCode ^
-      filterBonds.hashCode ^
+      formedBonds.hashCode ^
+      bondInventory.hashCode ^
       topN.hashCode ^
       energyWindow.hashCode ^
       budget.hashCode ^
@@ -919,16 +918,16 @@ class APIChemisorbData {
           reach == other.reach &&
           maxFormedBonds == other.maxFormedBonds &&
           maxTransfers == other.maxTransfers &&
-          filterFormedBonds == other.filterFormedBonds &&
-          filterBonds == other.filterBonds &&
+          formedBonds == other.formedBonds &&
+          bondInventory == other.bondInventory &&
           topN == other.topN &&
           energyWindow == other.energyWindow &&
           budget == other.budget &&
           maxIterations == other.maxIterations;
 }
 
-/// One choice of the `filter_bonds` dropdown: a bond inventory and how many
-/// candidates (or, before a run, hypotheses) have it.
+/// One choice of the `bond_inventory` dropdown: a bond inventory and how many
+/// hypotheses (relaxations) it would take.
 class APIChemisorbInventoryOption {
   final String label;
   final BigInt count;
@@ -956,7 +955,7 @@ class APIChemisorbReport {
   final APIChemisorbStats stats;
   final List<APIChemisorbRow> rows;
 
-  /// The `filter_bonds` choices, narrowed by `filter_formed_bonds`.
+  /// The `bond_inventory` choices, narrowed by `formed_bonds`.
   final List<APIChemisorbInventoryOption> inventoryOptions;
 
   const APIChemisorbReport({
@@ -1101,6 +1100,9 @@ class APIChemisorbStats {
   final BigInt transferCandidates;
   final BigInt considered;
   final BigInt prunedValence;
+
+  /// Rejected by `formed_bonds` or `bond_inventory` while enumerating.
+  final BigInt prunedFilter;
   final BigInt duplicates;
 
   /// The node outputs a search result for its current inputs.
@@ -1111,9 +1113,6 @@ class APIChemisorbStats {
   final BigInt relaxed;
   final BigInt toRelax;
   final BigInt unconverged;
-
-  /// Candidates that pass the listing filters, listed or not.
-  final BigInt matching;
   final BigInt listed;
 
   /// The budget was hit; the search is not exhaustive.
@@ -1126,13 +1125,13 @@ class APIChemisorbStats {
     required this.transferCandidates,
     required this.considered,
     required this.prunedValence,
+    required this.prunedFilter,
     required this.duplicates,
     required this.searched,
     required this.stale,
     required this.relaxed,
     required this.toRelax,
     required this.unconverged,
-    required this.matching,
     required this.listed,
     required this.truncated,
     required this.seconds,
@@ -1145,13 +1144,13 @@ class APIChemisorbStats {
       transferCandidates.hashCode ^
       considered.hashCode ^
       prunedValence.hashCode ^
+      prunedFilter.hashCode ^
       duplicates.hashCode ^
       searched.hashCode ^
       stale.hashCode ^
       relaxed.hashCode ^
       toRelax.hashCode ^
       unconverged.hashCode ^
-      matching.hashCode ^
       listed.hashCode ^
       truncated.hashCode ^
       seconds.hashCode;
@@ -1166,13 +1165,13 @@ class APIChemisorbStats {
           transferCandidates == other.transferCandidates &&
           considered == other.considered &&
           prunedValence == other.prunedValence &&
+          prunedFilter == other.prunedFilter &&
           duplicates == other.duplicates &&
           searched == other.searched &&
           stale == other.stale &&
           relaxed == other.relaxed &&
           toRelax == other.toRelax &&
           unconverged == other.unconverged &&
-          matching == other.matching &&
           listed == other.listed &&
           truncated == other.truncated &&
           seconds == other.seconds;

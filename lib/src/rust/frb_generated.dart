@@ -19073,8 +19073,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       reach: dco_decode_f_64(arr[2]),
       maxFormedBonds: dco_decode_i_32(arr[3]),
       maxTransfers: dco_decode_i_32(arr[4]),
-      filterFormedBonds: dco_decode_opt_box_autoadd_i_32(arr[5]),
-      filterBonds: dco_decode_opt_String(arr[6]),
+      formedBonds: dco_decode_opt_box_autoadd_i_32(arr[5]),
+      bondInventory: dco_decode_opt_String(arr[6]),
       topN: dco_decode_i_32(arr[7]),
       energyWindow: dco_decode_f_64(arr[8]),
       budget: dco_decode_i_32(arr[9]),
@@ -19160,13 +19160,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       transferCandidates: dco_decode_usize(arr[2]),
       considered: dco_decode_usize(arr[3]),
       prunedValence: dco_decode_usize(arr[4]),
-      duplicates: dco_decode_usize(arr[5]),
-      searched: dco_decode_bool(arr[6]),
-      stale: dco_decode_bool(arr[7]),
-      relaxed: dco_decode_usize(arr[8]),
-      toRelax: dco_decode_usize(arr[9]),
-      unconverged: dco_decode_usize(arr[10]),
-      matching: dco_decode_usize(arr[11]),
+      prunedFilter: dco_decode_usize(arr[5]),
+      duplicates: dco_decode_usize(arr[6]),
+      searched: dco_decode_bool(arr[7]),
+      stale: dco_decode_bool(arr[8]),
+      relaxed: dco_decode_usize(arr[9]),
+      toRelax: dco_decode_usize(arr[10]),
+      unconverged: dco_decode_usize(arr[11]),
       listed: dco_decode_usize(arr[12]),
       truncated: dco_decode_bool(arr[13]),
       seconds: dco_decode_f_64(arr[14]),
@@ -25317,8 +25317,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_reach = sse_decode_f_64(deserializer);
     var var_maxFormedBonds = sse_decode_i_32(deserializer);
     var var_maxTransfers = sse_decode_i_32(deserializer);
-    var var_filterFormedBonds = sse_decode_opt_box_autoadd_i_32(deserializer);
-    var var_filterBonds = sse_decode_opt_String(deserializer);
+    var var_formedBonds = sse_decode_opt_box_autoadd_i_32(deserializer);
+    var var_bondInventory = sse_decode_opt_String(deserializer);
     var var_topN = sse_decode_i_32(deserializer);
     var var_energyWindow = sse_decode_f_64(deserializer);
     var var_budget = sse_decode_i_32(deserializer);
@@ -25329,8 +25329,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         reach: var_reach,
         maxFormedBonds: var_maxFormedBonds,
         maxTransfers: var_maxTransfers,
-        filterFormedBonds: var_filterFormedBonds,
-        filterBonds: var_filterBonds,
+        formedBonds: var_formedBonds,
+        bondInventory: var_bondInventory,
         topN: var_topN,
         energyWindow: var_energyWindow,
         budget: var_budget,
@@ -25422,13 +25422,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_transferCandidates = sse_decode_usize(deserializer);
     var var_considered = sse_decode_usize(deserializer);
     var var_prunedValence = sse_decode_usize(deserializer);
+    var var_prunedFilter = sse_decode_usize(deserializer);
     var var_duplicates = sse_decode_usize(deserializer);
     var var_searched = sse_decode_bool(deserializer);
     var var_stale = sse_decode_bool(deserializer);
     var var_relaxed = sse_decode_usize(deserializer);
     var var_toRelax = sse_decode_usize(deserializer);
     var var_unconverged = sse_decode_usize(deserializer);
-    var var_matching = sse_decode_usize(deserializer);
     var var_listed = sse_decode_usize(deserializer);
     var var_truncated = sse_decode_bool(deserializer);
     var var_seconds = sse_decode_f_64(deserializer);
@@ -25438,13 +25438,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         transferCandidates: var_transferCandidates,
         considered: var_considered,
         prunedValence: var_prunedValence,
+        prunedFilter: var_prunedFilter,
         duplicates: var_duplicates,
         searched: var_searched,
         stale: var_stale,
         relaxed: var_relaxed,
         toRelax: var_toRelax,
         unconverged: var_unconverged,
-        matching: var_matching,
         listed: var_listed,
         truncated: var_truncated,
         seconds: var_seconds);
@@ -32744,8 +32744,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_f_64(self.reach, serializer);
     sse_encode_i_32(self.maxFormedBonds, serializer);
     sse_encode_i_32(self.maxTransfers, serializer);
-    sse_encode_opt_box_autoadd_i_32(self.filterFormedBonds, serializer);
-    sse_encode_opt_String(self.filterBonds, serializer);
+    sse_encode_opt_box_autoadd_i_32(self.formedBonds, serializer);
+    sse_encode_opt_String(self.bondInventory, serializer);
     sse_encode_i_32(self.topN, serializer);
     sse_encode_f_64(self.energyWindow, serializer);
     sse_encode_i_32(self.budget, serializer);
@@ -32811,13 +32811,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_usize(self.transferCandidates, serializer);
     sse_encode_usize(self.considered, serializer);
     sse_encode_usize(self.prunedValence, serializer);
+    sse_encode_usize(self.prunedFilter, serializer);
     sse_encode_usize(self.duplicates, serializer);
     sse_encode_bool(self.searched, serializer);
     sse_encode_bool(self.stale, serializer);
     sse_encode_usize(self.relaxed, serializer);
     sse_encode_usize(self.toRelax, serializer);
     sse_encode_usize(self.unconverged, serializer);
-    sse_encode_usize(self.matching, serializer);
     sse_encode_usize(self.listed, serializer);
     sse_encode_bool(self.truncated, serializer);
     sse_encode_f_64(self.seconds, serializer);

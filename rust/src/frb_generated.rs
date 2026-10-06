@@ -16304,8 +16304,8 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_reach = <f64>::sse_decode(deserializer);
         let mut var_maxFormedBonds = <i32>::sse_decode(deserializer);
         let mut var_maxTransfers = <i32>::sse_decode(deserializer);
-        let mut var_filterFormedBonds = <Option<i32>>::sse_decode(deserializer);
-        let mut var_filterBonds = <Option<String>>::sse_decode(deserializer);
+        let mut var_formedBonds = <Option<i32>>::sse_decode(deserializer);
+        let mut var_bondInventory = <Option<String>>::sse_decode(deserializer);
         let mut var_topN = <i32>::sse_decode(deserializer);
         let mut var_energyWindow = <f64>::sse_decode(deserializer);
         let mut var_budget = <i32>::sse_decode(deserializer);
@@ -16316,8 +16316,8 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             reach: var_reach,
             max_formed_bonds: var_maxFormedBonds,
             max_transfers: var_maxTransfers,
-            filter_formed_bonds: var_filterFormedBonds,
-            filter_bonds: var_filterBonds,
+            formed_bonds: var_formedBonds,
+            bond_inventory: var_bondInventory,
             top_n: var_topN,
             energy_window: var_energyWindow,
             budget: var_budget,
@@ -16413,13 +16413,13 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_transferCandidates = <usize>::sse_decode(deserializer);
         let mut var_considered = <usize>::sse_decode(deserializer);
         let mut var_prunedValence = <usize>::sse_decode(deserializer);
+        let mut var_prunedFilter = <usize>::sse_decode(deserializer);
         let mut var_duplicates = <usize>::sse_decode(deserializer);
         let mut var_searched = <bool>::sse_decode(deserializer);
         let mut var_stale = <bool>::sse_decode(deserializer);
         let mut var_relaxed = <usize>::sse_decode(deserializer);
         let mut var_toRelax = <usize>::sse_decode(deserializer);
         let mut var_unconverged = <usize>::sse_decode(deserializer);
-        let mut var_matching = <usize>::sse_decode(deserializer);
         let mut var_listed = <usize>::sse_decode(deserializer);
         let mut var_truncated = <bool>::sse_decode(deserializer);
         let mut var_seconds = <f64>::sse_decode(deserializer);
@@ -16429,13 +16429,13 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             transfer_candidates: var_transferCandidates,
             considered: var_considered,
             pruned_valence: var_prunedValence,
+            pruned_filter: var_prunedFilter,
             duplicates: var_duplicates,
             searched: var_searched,
             stale: var_stale,
             relaxed: var_relaxed,
             to_relax: var_toRelax,
             unconverged: var_unconverged,
-            matching: var_matching,
             listed: var_listed,
             truncated: var_truncated,
             seconds: var_seconds,
@@ -24940,8 +24940,8 @@ impl flutter_rust_bridge::IntoDart
             self.reach.into_into_dart().into_dart(),
             self.max_formed_bonds.into_into_dart().into_dart(),
             self.max_transfers.into_into_dart().into_dart(),
-            self.filter_formed_bonds.into_into_dart().into_dart(),
-            self.filter_bonds.into_into_dart().into_dart(),
+            self.formed_bonds.into_into_dart().into_dart(),
+            self.bond_inventory.into_into_dart().into_dart(),
             self.top_n.into_into_dart().into_dart(),
             self.energy_window.into_into_dart().into_dart(),
             self.budget.into_into_dart().into_dart(),
@@ -25103,13 +25103,13 @@ impl flutter_rust_bridge::IntoDart
             self.transfer_candidates.into_into_dart().into_dart(),
             self.considered.into_into_dart().into_dart(),
             self.pruned_valence.into_into_dart().into_dart(),
+            self.pruned_filter.into_into_dart().into_dart(),
             self.duplicates.into_into_dart().into_dart(),
             self.searched.into_into_dart().into_dart(),
             self.stale.into_into_dart().into_dart(),
             self.relaxed.into_into_dart().into_dart(),
             self.to_relax.into_into_dart().into_dart(),
             self.unconverged.into_into_dart().into_dart(),
-            self.matching.into_into_dart().into_dart(),
             self.listed.into_into_dart().into_dart(),
             self.truncated.into_into_dart().into_dart(),
             self.seconds.into_into_dart().into_dart(),
@@ -32196,8 +32196,8 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <f64>::sse_encode(self.reach, serializer);
         <i32>::sse_encode(self.max_formed_bonds, serializer);
         <i32>::sse_encode(self.max_transfers, serializer);
-        <Option<i32>>::sse_encode(self.filter_formed_bonds, serializer);
-        <Option<String>>::sse_encode(self.filter_bonds, serializer);
+        <Option<i32>>::sse_encode(self.formed_bonds, serializer);
+        <Option<String>>::sse_encode(self.bond_inventory, serializer);
         <i32>::sse_encode(self.top_n, serializer);
         <f64>::sse_encode(self.energy_window, serializer);
         <i32>::sse_encode(self.budget, serializer);
@@ -32268,13 +32268,13 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <usize>::sse_encode(self.transfer_candidates, serializer);
         <usize>::sse_encode(self.considered, serializer);
         <usize>::sse_encode(self.pruned_valence, serializer);
+        <usize>::sse_encode(self.pruned_filter, serializer);
         <usize>::sse_encode(self.duplicates, serializer);
         <bool>::sse_encode(self.searched, serializer);
         <bool>::sse_encode(self.stale, serializer);
         <usize>::sse_encode(self.relaxed, serializer);
         <usize>::sse_encode(self.to_relax, serializer);
         <usize>::sse_encode(self.unconverged, serializer);
-        <usize>::sse_encode(self.matching, serializer);
         <usize>::sse_encode(self.listed, serializer);
         <bool>::sse_encode(self.truncated, serializer);
         <f64>::sse_encode(self.seconds, serializer);

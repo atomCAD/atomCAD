@@ -28,14 +28,19 @@
 //! to another call site, or to an older pose, can only fail to match — it is
 //! never output for inputs it was not computed from.
 //!
-//! **Search settings and listing filters are two different things**, and the
-//! panel shows them as two groups. `filter_formed_bonds`, `filter_bonds`,
-//! `top_n` and `energy_window` choose which candidates of a finished search are
-//! *listed* ([`ChemisorbData::listing`]); they are not part of the search, so
-//! they stay out of the fingerprint and changing them re-lists the stored
-//! result instead of making it stale. Every other setting is a search setting.
-//! The filters exist because the ranking is UFF energy alone: fewer bonds
-//! rank first, and strains compare cleanly only within one bond inventory.
+//! **Every property is a search setting.** `formed_bonds` and
+//! `bond_inventory` restrict what is enumerated (so only that group is
+//! relaxed), and `top_n` / `energy_window` what is kept while relaxing (so only
+//! the listed structures are ever held); all four are fingerprinted, and a
+//! change makes a stored result stale like any other. The filters exist because
+//! the ranking is UFF energy alone: fewer bonds rank first, and strains compare
+//! cleanly only within one bond inventory. (A split into search settings and
+//! "filters after search" was tried and removed: it was arbitrary, harder to
+//! understand, and forced every relaxed structure to be kept.)
+//!
+//! The `bond_inventory` dropdown's choices come from a second `plan` without
+//! the inventory filter — with it, the plan would only ever contain the
+//! current choice.
 //!
 //! Bond forming is always on; transfers are enabled by wiring the `transfers`
 //! pin, an array of `ChemisorbTransfer { element, direction }` records (one
@@ -63,8 +68,8 @@ use crate::text_format::TextValue;
 use atomcad_crystolecule::atomic_constants::element_symbol;
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::chemisorption::{
-    Candidate, ChemisorptionSearch, Listed, Listing, SearchReport, TransferDirection, TransferRule,
-    input_fingerprint, inventory_options, is_transferable_element, list_candidates, plan,
+    BondInventory, Candidate, ChemisorptionSearch, SearchReport, TransferDirection, TransferRule,
+    input_fingerprint, inventory_options, is_transferable_element, plan,
 };
 use atomcad_crystolecule::simulation::uff::VdwMode;
 use serde::{Deserialize, Serialize};
@@ -143,20 +148,18 @@ pub struct ChemisorbData {
     /// panel shows it as a checkbox plus a value; `-1` is the unticked state.
     #[serde(default = "default_max_transfers")]
     pub max_transfers: i32,
-    /// Listing filter: only candidates with exactly this many formed bonds
-    /// (transfers not counted). `None` = any count.
+    /// Only patterns with exactly this many formed bonds (transfers not
+    /// counted). `None` = any count.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub filter_formed_bonds: Option<i32>,
-    /// Listing filter: only candidates whose bond inventory reads exactly
-    /// this, e.g. `"formed 2× O–Si"` (a candidate's `bonds` field). `None` =
-    /// any inventory.
+    pub formed_bonds: Option<i32>,
+    /// Only patterns with exactly this bond inventory, written as a
+    /// candidate's `bonds` field reads, e.g. `"formed 2× O–Si"`. `None` = any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub filter_bonds: Option<String>,
-    /// At most this many candidates are listed…
+    pub bond_inventory: Option<String>,
+    /// At most this many candidates are kept and listed…
     #[serde(default = "default_top_n")]
     pub top_n: i32,
-    /// …and only those within this many kcal/mol of the best candidate that
-    /// passes the two filters.
+    /// …and only those within this many kcal/mol of the best.
     #[serde(default = "default_energy_window")]
     pub energy_window: f64,
     /// At most this many hypotheses are relaxed; past it the search is
@@ -181,8 +184,8 @@ impl Default for ChemisorbData {
             reach: default_reach(),
             max_formed_bonds: no_cap(),
             max_transfers: default_max_transfers(),
-            filter_formed_bonds: None,
-            filter_bonds: None,
+            formed_bonds: None,
+            bond_inventory: None,
             top_n: default_top_n(),
             energy_window: default_energy_window(),
             budget: default_budget(),
@@ -203,6 +206,8 @@ pub struct ChemisorbStatsView {
     pub transfer_candidates: usize,
     pub considered: usize,
     pub pruned_valence: usize,
+    /// Rejected by `formed_bonds` or `bond_inventory` while enumerating.
+    pub pruned_filter: usize,
     pub duplicates: usize,
     /// The outputs are a search result for the current inputs.
     pub searched: bool,
@@ -211,9 +216,7 @@ pub struct ChemisorbStatsView {
     pub relaxed: usize,
     pub to_relax: usize,
     pub unconverged: usize,
-    /// Candidates that pass the listing filters; `matching - listed` are past
-    /// `top_n` or the energy window, `relaxed - matching` were filtered out.
-    pub matching: usize,
+    /// Candidates kept: the best `top_n` within the window.
     pub listed: usize,
     /// The budget was hit; the search is **not** exhaustive.
     pub truncated: bool,
@@ -250,9 +253,9 @@ pub struct ChemisorbRowView {
 pub struct ChemisorbEvalCache {
     pub stats: ChemisorbStatsView,
     pub rows: Vec<ChemisorbRowView>,
-    /// The `filter_bonds` choices: each distinct bond inventory with how many
-    /// candidates have it (hypotheses, before a run), narrowed by
-    /// `filter_formed_bonds`, by formed-bond count then label.
+    /// The `bond_inventory` choices: each distinct bond inventory with how
+    /// many hypotheses have it, from a plan without the inventory filter (but
+    /// with `formed_bonds`), by formed-bond count then label.
     pub inventory_options: Vec<(String, usize)>,
 }
 
@@ -284,15 +287,20 @@ impl ChemisorbData {
         if self.top_n < 1 {
             return Err("chemisorb: top_n must be at least 1".to_string());
         }
-        if self.filter_formed_bonds.is_some_and(|n| n < 1) {
+        if self.formed_bonds.is_some_and(|n| n < 0) {
             return Err(
-                "chemisorb: filter_formed_bonds must be at least 1 (leave it unset for any)"
-                    .to_string(),
+                "chemisorb: formed_bonds must be >= 0 (leave it unset for any)".to_string(),
             );
         }
         if !(self.energy_window.is_finite() && self.energy_window >= 0.0) {
             return Err("chemisorb: energy_window must be >= 0".to_string());
         }
+        let bond_inventory = self
+            .bond_inventory
+            .as_deref()
+            .map(str::parse::<BondInventory>)
+            .transpose()
+            .map_err(|e| format!("chemisorb: bond_inventory: {e}"))?;
         let tag = |t: &str| {
             let t = t.trim();
             (!t.is_empty()).then(|| t.to_string())
@@ -305,7 +313,11 @@ impl ChemisorbData {
                 .then_some(self.max_formed_bonds as usize),
             transfers,
             max_transfers: (self.max_transfers >= 0).then_some(self.max_transfers as usize),
+            formed_bonds: self.formed_bonds.map(|n| n as usize),
+            bond_inventory,
             budget: self.budget as usize,
+            top_n: self.top_n as usize,
+            energy_window: self.energy_window,
             max_iterations: self.max_iterations as u32,
             vdw_mode: if use_vdw_cutoff {
                 VdwMode::Cutoff(VDW_CUTOFF)
@@ -316,24 +328,6 @@ impl ChemisorbData {
         };
         config.validate().map_err(|e| format!("chemisorb: {e}"))?;
         Ok(config)
-    }
-
-    /// Which candidates of a finished search are listed. Never part of the
-    /// search, so never fingerprinted.
-    pub fn listing(&self) -> Listing {
-        Listing {
-            formed_bonds: self
-                .filter_formed_bonds
-                .filter(|&n| n >= 1)
-                .map(|n| n as usize),
-            inventory: self.filter_bonds.clone(),
-            top_n: self.top_n.max(1) as usize,
-            energy_window: self.energy_window,
-        }
-    }
-
-    fn formed_bonds_filter(&self) -> Option<usize> {
-        self.listing().formed_bonds
     }
 
     /// The stored report, when it was computed from inputs with this
@@ -528,13 +522,13 @@ fn stats_record(s: &ChemisorbStatsView) -> NetworkResult {
         ),
         ("considered".to_string(), int(s.considered)),
         ("pruned_valence".to_string(), int(s.pruned_valence)),
+        ("pruned_filter".to_string(), int(s.pruned_filter)),
         ("duplicates".to_string(), int(s.duplicates)),
         ("searched".to_string(), NetworkResult::Bool(s.searched)),
         ("stale".to_string(), NetworkResult::Bool(s.stale)),
         ("relaxed".to_string(), int(s.relaxed)),
         ("to_relax".to_string(), int(s.to_relax)),
         ("unconverged".to_string(), int(s.unconverged)),
-        ("matching".to_string(), int(s.matching)),
         ("listed".to_string(), int(s.listed)),
         ("truncated".to_string(), NetworkResult::Bool(s.truncated)),
         ("seconds".to_string(), NetworkResult::Float(s.seconds)),
@@ -551,22 +545,33 @@ pub fn chemisorb_outputs(
 ) -> Result<(Vec<NetworkResult>, ChemisorbEvalCache), String> {
     let fingerprint = input_fingerprint(adsorbate, substrate, config);
 
+    // The plan, and the dropdown's choices from a plan without the inventory
+    // filter (the same plan when there is none). Cheap: nothing is relaxed.
+    let planned = plan(adsorbate, substrate, config).map_err(|e| format!("chemisorb: {e}"))?;
+    let options_of = |p: &atomcad_crystolecule::chemisorption::SearchPlan| {
+        inventory_options(
+            p.hypotheses.iter().map(|h| (&h.inventory, h.formed.len())),
+            None,
+        )
+    };
+    let inventory_options = if config.bond_inventory.is_some() {
+        let unfiltered = ChemisorptionSearch {
+            bond_inventory: None,
+            ..config.clone()
+        };
+        let all = plan(adsorbate, substrate, &unfiltered).map_err(|e| format!("chemisorb: {e}"))?;
+        options_of(&all)
+    } else {
+        options_of(&planned)
+    };
+
     if let Some(report) = data.matching_report(fingerprint) {
-        let candidates = &report.candidates;
-        let Listed { indices, matching } = list_candidates(candidates, &data.listing());
-        let listed: Vec<&Candidate> = indices.iter().map(|&i| &candidates[i]).collect();
-        // `rank` is the position in the whole ranking, so a filtered list
-        // shows where its candidates stand overall.
-        let rows: Vec<ChemisorbRowView> = indices
+        let listed: Vec<&Candidate> = report.candidates.iter().collect();
+        let rows: Vec<ChemisorbRowView> = listed
             .iter()
-            .map(|&i| row_view(i + 1, &candidates[i]))
+            .enumerate()
+            .map(|(i, c)| row_view(i + 1, c))
             .collect();
-        let inventory_options = inventory_options(
-            candidates
-                .iter()
-                .map(|c| (&c.bond_inventory, c.formed.len())),
-            data.formed_bonds_filter(),
-        );
         let s = &report.stats;
         let stats = ChemisorbStatsView {
             feet: s.feet,
@@ -574,20 +579,19 @@ pub fn chemisorb_outputs(
             transfer_candidates: s.transfer_candidates,
             considered: s.considered,
             pruned_valence: s.pruned_valence,
+            pruned_filter: s.pruned_filter,
             duplicates: s.duplicates,
             searched: true,
             stale: false,
             relaxed: s.relaxed,
             to_relax: s.to_relax,
             unconverged: s.unconverged,
-            matching,
             listed: rows.len(),
             truncated: s.truncated,
             seconds: s.seconds,
         };
-        // The best candidate that passes the filters (the window and `top_n`
-        // never exclude it). With none, `best` is the relaxed pose: still the
-        // most honest picture of what the search looked at.
+        // With nothing found, `best` is the relaxed pose: still the most
+        // honest picture of what the search looked at.
         let best = listed
             .first()
             .map_or(&report.reference.structure, |c| &c.structure);
@@ -611,7 +615,6 @@ pub fn chemisorb_outputs(
         ));
     }
 
-    let planned = plan(adsorbate, substrate, config).map_err(|e| format!("chemisorb: {e}"))?;
     let p = &planned.stats;
     let stats = ChemisorbStatsView {
         feet: p.feet,
@@ -619,24 +622,17 @@ pub fn chemisorb_outputs(
         transfer_candidates: p.transfer_candidates,
         considered: p.considered,
         pruned_valence: p.pruned_valence,
+        pruned_filter: p.pruned_filter,
         duplicates: p.duplicates,
         searched: false,
         stale: data.stored.is_some(),
         relaxed: 0,
         to_relax: p.to_relax,
         unconverged: 0,
-        matching: 0,
         listed: 0,
         truncated: p.truncated,
         seconds: p.seconds,
     };
-    let inventory_options = inventory_options(
-        planned
-            .hypotheses
-            .iter()
-            .map(|h| (&h.inventory, h.formed.len())),
-        data.formed_bonds_filter(),
-    );
     let outputs = vec![
         molecule(planned.combined),
         NetworkResult::Array(Vec::new()),
@@ -736,9 +732,9 @@ impl NodeData for ChemisorbData {
 
     fn get_subtitle(&self, connected_input_pins: &HashSet<String>) -> Option<String> {
         let mut subtitle = format!("reach {} Å", self.reach);
-        if let Some(n) = self.formed_bonds_filter() {
+        if let Some(n) = self.formed_bonds {
             subtitle.push_str(&format!(
-                " · listing {n} bond{}",
+                " · {n} bond{} formed",
                 if n == 1 { "" } else { "s" }
             ));
         }
@@ -790,11 +786,14 @@ impl NodeData for ChemisorbData {
                 TextValue::Int(self.max_iterations),
             ),
         ];
-        if let Some(n) = self.filter_formed_bonds {
-            props.push(("filter_formed_bonds".to_string(), TextValue::Int(n)));
+        if let Some(n) = self.formed_bonds {
+            props.push(("formed_bonds".to_string(), TextValue::Int(n)));
         }
-        if let Some(bonds) = &self.filter_bonds {
-            props.push(("filter_bonds".to_string(), TextValue::String(bonds.clone())));
+        if let Some(bonds) = &self.bond_inventory {
+            props.push((
+                "bond_inventory".to_string(),
+                TextValue::String(bonds.clone()),
+            ));
         }
         props
     }
@@ -855,11 +854,11 @@ impl NodeData for ChemisorbData {
         if let Some(v) = int("max_iterations")? {
             self.max_iterations = v;
         }
-        if let Some(v) = int("filter_formed_bonds")? {
-            self.filter_formed_bonds = Some(v);
+        if let Some(v) = int("formed_bonds")? {
+            self.formed_bonds = Some(v);
         }
-        if let Some(v) = string("filter_bonds")? {
-            self.filter_bonds = Some(v);
+        if let Some(v) = string("bond_inventory")? {
+            self.bond_inventory = Some(v);
         }
         Ok(())
     }
@@ -902,13 +901,14 @@ pub fn get_node_type() -> NodeType {
                       bond-energy term, so fewer bonds usually rank first, and candidates \
                       with different bond inventories do not compare cleanly.\n\
                       \n\
-                      **Filters after search** choose which candidates of a finished search \
-                      are listed, and apply without a new Run: **filter_formed_bonds** (exactly \
-                      this many formed bonds; unset = any), **filter_bonds** (exactly this bond \
-                      inventory, as in a candidate's `bonds` field; unset = any), **top_n**, and \
-                      **energy_window** (kcal/mol above the best candidate that passes the two \
-                      filters). `best` is that candidate. Changed atoms carry the `cs_changed` \
-                      tag."
+                      **What to search for:** **formed_bonds** (exactly this many formed \
+                      bonds; unset = any) and **bond_inventory** (exactly this bond inventory, \
+                      as in a candidate's `bonds` field; unset = any) restrict what is \
+                      enumerated, so only that group is relaxed — run once per group to \
+                      compare like with like. **top_n** and **energy_window** (kcal/mol above \
+                      the best) choose which relaxed candidates are kept; the rest are dropped \
+                      as they finish. Every setting needs a new Run. Changed atoms carry the \
+                      `cs_changed` tag."
             .to_string(),
         summary: Some("Enumerate and rank chemisorption bonding patterns".to_string()),
         category: NodeTypeCategory::AtomicStructure,

@@ -1047,10 +1047,8 @@ Moves within one side (H hopping along the surface) are not searched.
   `array` node of element type `ChemisorbTransfer` (the panel offers an element
   dropdown and the two directions) or a `record_construct` per record.
 
-**Properties** come in two groups, and the panel shows them apart.
-
-*Search settings* decide what is searched. Changing one after a run makes the
-result stale: press Run again.
+**Properties.** Every property is a search setting: changing one after a run
+makes the result stale, and you press Run again.
 
 - `adsorbate_tag`, `substrate_tag` (default empty = all atoms) — only atoms
   carrying this tag take part. Tag the feet to keep a reactive working end out
@@ -1069,41 +1067,40 @@ result stale: press Run again.
   cap, to mount on all three. Without a cap the number of
   patterns grows quickly with the number of donors and acceptors, so watch the
   hypothesis count beside **Run**.
-- `budget` (default 10 000) — at most this many relaxations. A search that hits
-  it is **not exhaustive**, and the panel says so.
+- `formed_bonds` (default unset = any) — only patterns with exactly this many
+  formed bonds (transfers not counted). Applied while the patterns are
+  enumerated, so a run relaxes only that group: run once per group to compare
+  like with like.
+- `bond_inventory` (default unset = any) — only patterns with exactly this bond
+  inventory, written as in a candidate's `bonds` field, e.g. `formed 2× O–Si`.
+  Also applied while enumerating. The panel offers every inventory the search
+  can produce (narrowed by `formed_bonds`), each with how many relaxations it
+  would take.
+- `top_n` (default 10) — at most this many candidates are kept and listed. The
+  rest are dropped as they are relaxed, so memory stays at `top_n` structures
+  however many patterns there are.
+- `energy_window` (default 30 kcal/mol) — of those, only candidates within this
+  many kcal/mol of the best. Without a filter the best is usually a single
+  bond, so the default window often drops every full binding — set
+  `formed_bonds` to see them.
+- `budget` (default 10 000) — at most this many relaxations, counting only the
+  patterns that pass the two filters. A search that hits it is **not
+  exhaustive**, and the panel says so.
 - `max_iterations` (default 2000) — the UFF iteration limit per relaxation.
 
 The relaxations also follow the van der Waals setting in Preferences (the same
 one `relax` uses); changing it makes a result stale.
 
-*Filters after search* only choose which candidates of the last search are
-listed. They apply at once, to the stored result, with no new run — so you can
-run once and then look at the one-bond, two-bond and three-bond groups in turn.
+In the text format `formed_bonds` and `bond_inventory` appear only when set:
+`formed_bonds: 3, bond_inventory: "formed 3× O–Si"`.
 
-- `filter_formed_bonds` (default unset = any) — only candidates with exactly
-  this many formed bonds (transfers not counted).
-- `filter_bonds` (default unset = any) — only candidates with exactly this bond
-  inventory, written as in a candidate's `bonds` field, e.g. `formed 2× O–Si`.
-  The panel offers the inventories the result contains, each with its count
-  (before a run, the plan's), narrowed by `filter_formed_bonds`.
-- `top_n` (default 10) — at most this many listed.
-- `energy_window` (default 30 kcal/mol) — only candidates within this many
-  kcal/mol of the best candidate that passes the two filters above. Unfiltered,
-  that is the best overall, usually a single bond — so the default window
-  often hides every full binding. Filter by formed bonds to see them.
+**Output pins****Output pins**
 
-In the text format the two filters appear only when set:
-`filter_formed_bonds: 3, filter_bonds: "formed 3× O–Si"`.
-
-**Output pins**
-
-- `best` (`Molecule`) — after a run, the best candidate that passes the
-  filters (the relaxed pose with no bonds formed if none does); the unrelaxed
-  pose before a run.
-- `candidates` (array of `ChemisorbCandidate`) — the listed candidates in rank
+- `best` (`Molecule`) — the rank-1 candidate after a run (the relaxed pose with
+  no bonds formed if nothing was found); the unrelaxed pose before a run.
+- `candidates` (array of `ChemisorbCandidate`) — the kept candidates in rank
   order. Each record carries its `structure` (adsorbate + substrate, relaxed),
-  `rank` (its place in the whole ranking, so a filtered list may skip numbers),
-  `strain`, `bonds` (the bond inventory, e.g. `formed 3× O–Si`, or
+  `rank`, `strain`, `bonds` (the bond inventory, e.g. `formed 3× O–Si`, or
   `formed 1× H–Si, 1× O–Si; broken 1× H–O` with a transfer), `sites` (the
   formed bonds by atom id, then the transfers, e.g. `O2–Si45; H3 O2→Si47`),
   `formed_bonds` (transfers not counted), `transfers`, `converged`,
@@ -1113,9 +1110,9 @@ In the text format the two filters appear only when set:
   `structure` field (`array_at` + `record_destructure`).
 - `stats` (`ChemisorbStats`) — the whole search: `feet`, `sites_in_reach`,
   `transfer_candidates` (the donor–atom–acceptor moves the records allow),
-  `considered`, `pruned_valence`, `duplicates`,
-  `to_relax`, `relaxed`, `unconverged`, `matching` (candidates that pass the
-  filters), `listed`, `truncated`, `seconds`,
+  `considered`, `pruned_valence`, `pruned_filter` (patterns the two filters cut
+  before relaxing), `duplicates`, `to_relax`, `relaxed`, `unconverged`,
+  `listed` (kept after top N and the window), `truncated`, `seconds`,
   and the two run-state flags `searched` and
   `stale`. Downstream nodes can tell a result from a plan by `searched`.
 
@@ -1140,8 +1137,8 @@ Two consequences:
   not strain, so "two O–Si bonds" against "one O–Si bond", or "one O–Si" against
   "one O–Si plus an H moved", is not a like-for-like comparison.
 
-So read the ranking within one kind of binding: filter by formed bonds or by
-bond inventory, then compare the listed candidates' strains, their
+So read the ranking within one kind of binding: search with `formed_bonds` or
+`bond_inventory` set, then compare the candidates' strains, their
 `worst_bond_ratio` and their per-term breakdown (hover a row in the panel). The
 ranking is crude by nature: a surface dimer bond and a bulk bond are both just
 "Si–Si", and UFF knows nothing about Si(100) dimer pairing. Use the node to
@@ -1177,17 +1174,15 @@ very large strain.
 
 **Reading the panel.** The panel shows the **Run** button, with the number of
 hypotheses a run would relax (or what the last run did) beside it, and a red
-line when the result is stale. Below it are the two groups of properties,
-**Search settings** and **Filters after search**, each under its own heading
-with a one-line reminder of whether it needs a new run. Then the search
-statistics, with **not exhaustive** in red
-when the budget was hit and a *Transfer candidates* row when `transfers` is
-wired; and the ranked candidates, one line each with the strain, the bond
-inventory underneath, and an `unconv.` mark on a relaxation that did not
-converge. After a run the statistics count down in three steps: *Relaxed*
-(everything the search produced), *Match formed bonds / inventory* (those that
-pass the two filters), and *Listed (after top N / window)*. A line over the list says how many candidates the filters, and
-`top_n` / the energy window, left out. Hover a row for its sites,
+line when the result is stale. Below it are the search settings, with the
+filters (*Only an exact number of formed bonds*, *Bond inventory*) and then
+*Top N* and the energy window. Then the search statistics, with **not
+exhaustive** in red when the budget was hit, a *Transfer candidates* row when
+`transfers` is wired and a *Pruned: formed bonds / inventory* row when a
+filter cut anything; and the ranked candidates, one line each with the strain,
+the bond inventory underneath, and an `unconv.` mark on a relaxation that did
+not converge. A line over the list says how many relaxed candidates top N and
+the window dropped. Hover a row for its sites,
 worst bond ratio and strain terms. Run blocks the application while it works,
 behind a placard. *Limit transfers* is greyed out while `transfers` is not
 wired, since nothing reads it then. The statistics appear once the node is displayed. A
@@ -1201,9 +1196,9 @@ mount = chemisorb { adsorbate: tool, substrate: surface, adsorbate_tag: "feet", 
 ```
 
 Then press Run (or `atomcad-cli run mount`) and read `mount.stats` and
-`mount.candidates`. To review the three-leg bindings, set
-`filter_formed_bonds: 3`; no new run is needed. The same tool with OH legs, each allowed to hand its H to
-the surface:
+`mount.candidates`. To review the three-leg bindings, set `formed_bonds: 3` and
+run again: only those are relaxed. The same tool with OH legs, each allowed to
+hand its H to the surface:
 
 ```
 h_off = array { element_type: Record(ChemisorbTransfer), elements: [{ element: 1, direction: "to_substrate" }] }

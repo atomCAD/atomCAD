@@ -132,14 +132,17 @@ fn the_setter_is_undoable_and_keeps_the_stored_search() {
     refresh_selected(&mut designer, node);
     let report = chemisorb_node_report(&designer).unwrap();
     assert!(
-        report.stats.searched,
-        "top_n re-lists, it does not go stale"
+        report.stats.stale && !report.stats.searched,
+        "top_n is a search setting: the result goes stale"
     );
-    assert_eq!(report.rows.len(), 1);
 
     assert!(designer.undo());
     assert_eq!(chemisorb_node_data(&designer, &[], node).unwrap().top_n, 10);
     assert!(stored(&designer));
+    refresh_selected(&mut designer, node);
+    let report = chemisorb_node_report(&designer).unwrap();
+    assert!(report.stats.searched, "undo brings the stored result back");
+    assert_eq!(report.rows.len(), 2);
 
     // A write addressed to a node of another type does nothing.
     let other = APIChemisorbData { reach: 9.0, ..data };

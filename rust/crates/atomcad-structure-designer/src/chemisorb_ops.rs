@@ -20,7 +20,7 @@ use crate::nodes::chemisorb::{
     atomic_inputs, transfer_rules,
 };
 use crate::structure_designer::StructureDesigner;
-use atomcad_crystolecule::chemisorption::{input_fingerprint, list_candidates, search};
+use atomcad_crystolecule::chemisorption::{input_fingerprint, search};
 use std::sync::Arc;
 
 /// What one Run found, for a caller that reports it (the CLI prints it).
@@ -28,7 +28,7 @@ use std::sync::Arc;
 pub struct ChemisorbRunSummary {
     /// Hypotheses relaxed.
     pub relaxed: usize,
-    /// Candidates the node lists under its current `top_n` / `energy_window`.
+    /// Candidates kept and listed: the best `top_n` within the window.
     pub listed: usize,
     /// The strain of the best listed candidate (kcal/mol), `None` when
     /// nothing is listed.
@@ -119,11 +119,10 @@ impl StructureDesigner {
         let report =
             search(&adsorbate, &substrate, &config).map_err(|e| format!("chemisorb: {e}"))?;
 
-        let listed = list_candidates(&report.candidates, &data.listing()).indices;
-        let best = listed.first().map(|&i| &report.candidates[i]);
+        let best = report.candidates.first();
         let summary = ChemisorbRunSummary {
             relaxed: report.stats.relaxed,
-            listed: listed.len(),
+            listed: report.candidates.len(),
             best_strain: best.map(|c| c.strain),
             best_bonds: best.map_or_else(String::new, |c| c.bond_inventory.to_string()),
             truncated: report.stats.truncated,

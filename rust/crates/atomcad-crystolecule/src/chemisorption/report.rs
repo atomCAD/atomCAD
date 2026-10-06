@@ -9,6 +9,8 @@ use crate::atomic_structure::AtomicStructure;
 use crate::atomic_structure::inline_bond::BOND_SINGLE;
 use rayon::prelude::*;
 use std::cmp::Ordering;
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
 use std::time::Instant;
 
 /// One hypothesis after relaxation.
@@ -60,6 +62,8 @@ pub struct SearchStats {
     pub transfer_candidates: usize,
     pub considered: usize,
     pub pruned_valence: usize,
+    /// Rejected by the formed-bond or bond-inventory filter.
+    pub pruned_filter: usize,
     pub duplicates: usize,
     /// Valid hypotheses found by `plan`.
     pub to_relax: usize,
@@ -79,72 +83,11 @@ pub struct SearchReport {
     /// The pose with no bond changes, relaxed the same way. Its `strain` is
     /// zero by definition.
     pub reference: Candidate,
-    /// Ranked by strain, ties broken by the normalized bond set; deduplicated.
+    /// The kept candidates: the best `top_n` by strain (ties broken by the
+    /// normalized bond set), cut to the energy window above the first. Every
+    /// other relaxed hypothesis was dropped as it finished.
     pub candidates: Vec<Candidate>,
     pub stats: SearchStats,
-}
-
-/// Which candidates a caller lists. Applied to a finished, ranked report:
-/// nothing here is a search setting, so changing it never calls for a new
-/// search.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Listing {
-    /// Only candidates with exactly this many formed bonds (transfers not
-    /// counted). `None` = any count.
-    pub formed_bonds: Option<usize>,
-    /// Only candidates whose bond inventory reads exactly this
-    /// (`BondInventory`'s display form, e.g. `"formed 2× O–Si"`). `None` = any.
-    pub inventory: Option<String>,
-    /// At most this many listed…
-    pub top_n: usize,
-    /// …and only those within this many kcal/mol of the best candidate that
-    /// passes the two filters above.
-    pub energy_window: f64,
-}
-
-impl Listing {
-    /// Whether `c` passes the two filters (not the window or the count).
-    pub fn admits(&self, c: &Candidate) -> bool {
-        self.formed_bonds.is_none_or(|n| c.formed.len() == n)
-            && self
-                .inventory
-                .as_ref()
-                .is_none_or(|label| c.bond_inventory.to_string() == *label)
-    }
-}
-
-/// What a [`Listing`] picked from a ranked candidate list.
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct Listed {
-    /// Indices into the candidate list, in rank order.
-    pub indices: Vec<usize>,
-    /// Candidates that pass the filters, listed or not; the rest of the
-    /// candidates were filtered out, and `matching - indices.len()` are past
-    /// `top_n` or the energy window.
-    pub matching: usize,
-}
-
-/// Applies a [`Listing`] to a ranked candidate list. The window is measured
-/// from the best candidate that passes the filters, so it works within one
-/// formed-bond count or one inventory.
-pub fn list_candidates(candidates: &[Candidate], listing: &Listing) -> Listed {
-    let matching: Vec<usize> = (0..candidates.len())
-        .filter(|&i| listing.admits(&candidates[i]))
-        .collect();
-    let Some(&best) = matching.first() else {
-        return Listed::default();
-    };
-    let best = candidates[best].strain;
-    let indices = matching
-        .iter()
-        .copied()
-        .take(listing.top_n)
-        .take_while(|&i| candidates[i].strain - best <= listing.energy_window)
-        .collect();
-    Listed {
-        indices,
-        matching: matching.len(),
-    }
 }
 
 /// The distinct bond inventories among `inventories`, as display labels with
@@ -168,13 +111,34 @@ pub fn inventory_options<'a>(
         .collect()
 }
 
-/// Sorts by strain, lowest first, ties broken by the normalized bond set, so
-/// the order never depends on which relaxation finished first (R10).
-pub fn rank_candidates(candidates: &mut [Candidate]) {
-    candidates.sort_by(|a, b| match a.strain.total_cmp(&b.strain) {
+/// The ranking order: strain, lowest first, ties broken by the normalized bond
+/// set, so the order never depends on which relaxation finished first (R10).
+fn rank_order(a: &Candidate, b: &Candidate) -> Ordering {
+    match a.strain.total_cmp(&b.strain) {
         Ordering::Equal => a.key().cmp(&b.key()),
         other => other,
-    });
+    }
+}
+
+/// Sorts into the ranking order.
+pub fn rank_candidates(candidates: &mut [Candidate]) {
+    candidates.sort_by(rank_order);
+}
+
+/// Adds `c` to `kept`, which stays sorted and at most `top_n` long; whatever
+/// falls off the end, `c` included, is dropped. The result is the best `top_n`
+/// of everything offered, whatever the order of the offers.
+fn keep_best(kept: &mut Vec<Candidate>, c: Candidate, top_n: usize) {
+    if kept.len() >= top_n
+        && kept
+            .last()
+            .is_some_and(|worst| rank_order(&c, worst) != Ordering::Less)
+    {
+        return;
+    }
+    let at = kept.partition_point(|k| rank_order(k, &c) == Ordering::Less);
+    kept.insert(at, c);
+    kept.truncate(top_n);
 }
 
 /// Applies a hypothesis's bond changes to a copy of the combined structure:
@@ -238,18 +202,33 @@ pub fn evaluate(
         &reference_relaxed,
     );
 
-    let mut candidates = plan
-        .hypotheses
+    // Relaxed in parallel; each result is kept only while it is among the
+    // best `top_n` so far, so at most `top_n` structures (plus one per thread
+    // in flight) are ever held, however many hypotheses there are.
+    let kept: Mutex<Vec<Candidate>> = Mutex::new(Vec::with_capacity(config.top_n + 1));
+    let unconverged = AtomicUsize::new(0);
+    plan.hypotheses
         .par_iter()
-        .map(|h| {
+        .try_for_each(|h| -> Result<(), ChemisorptionError> {
             let mut s = apply(&plan.combined, h);
             let relaxed = relax(&mut s, config)?;
+            if !relaxed.converged {
+                unconverged.fetch_add(1, AtomicOrdering::Relaxed);
+            }
             tag_changed(&mut s, h)?;
-            Ok(candidate(s, h, &relaxed, &reference_relaxed))
-        })
-        .collect::<Result<Vec<_>, ChemisorptionError>>()?;
-
-    rank_candidates(&mut candidates);
+            let c = candidate(s, h, &relaxed, &reference_relaxed);
+            keep_best(
+                &mut kept.lock().expect("no panics under the lock"),
+                c,
+                config.top_n,
+            );
+            Ok(())
+        })?;
+    let mut candidates = kept.into_inner().expect("no panics under the lock");
+    // The window is measured from the best, which is necessarily kept.
+    if let Some(best) = candidates.first().map(|c| c.strain) {
+        candidates.retain(|c| c.strain - best <= config.energy_window);
+    }
 
     let p = &plan.stats;
     let stats = SearchStats {
@@ -258,10 +237,11 @@ pub fn evaluate(
         transfer_candidates: p.transfer_candidates,
         considered: p.considered,
         pruned_valence: p.pruned_valence,
+        pruned_filter: p.pruned_filter,
         duplicates: p.duplicates,
         to_relax: p.to_relax,
-        relaxed: candidates.len(),
-        unconverged: candidates.iter().filter(|c| !c.converged).count(),
+        relaxed: plan.hypotheses.len(),
+        unconverged: unconverged.into_inner(),
         truncated: p.truncated,
         plan_seconds: p.seconds,
         seconds: p.seconds + start.elapsed().as_secs_f64(),

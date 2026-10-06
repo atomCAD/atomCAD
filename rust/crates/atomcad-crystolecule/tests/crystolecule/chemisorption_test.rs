@@ -1,5 +1,6 @@
 //! Tests for `chemisorption`: the `plan` enumeration on hand-built geometry,
-//! ranking and the listing filters, transfers, and the two known-answer cases
+//! ranking, the formed-bond and inventory filters (applied while enumerating),
+//! `top_n` and the window (applied while relaxing), transfers, and the two known-answer cases
 //! on Si(100)-2×1 (ethylene by bond forming, water by an H transfer). The bond
 //! enthalpy tables the search no longer uses are tested in
 //! `bond_enthalpy_test.rs`.
@@ -14,9 +15,8 @@ use atomcad_crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
 use atomcad_crystolecule::atomic_structure_utils::{auto_create_bonds, remove_single_bond_atoms};
 use atomcad_crystolecule::chemisorption::{
     BondInventory, BondKind, CHANGED_TAG, Candidate, ChemisorptionError, ChemisorptionSearch,
-    Listed, Listing, SearchPlan, Side, StrainTerms, Transfer, TransferDirection, TransferRule,
-    free_valence, input_fingerprint, inventory_options, list_candidates, plan, rank_candidates,
-    search,
+    Hypothesis, SearchPlan, Side, StrainTerms, Transfer, TransferDirection, TransferRule,
+    free_valence, input_fingerprint, inventory_options, plan, rank_candidates, search,
 };
 use atomcad_crystolecule::crystolecule_constants::DEFAULT_ZINCBLENDE_MOTIF;
 use atomcad_crystolecule::hydrogen_passivation::terminator_bond_length;
@@ -123,7 +123,7 @@ fn assert_stats_add_up(p: &SearchPlan) {
     let s = &p.stats;
     assert_eq!(
         s.considered,
-        s.pruned_valence + s.duplicates + s.to_relax + usize::from(s.truncated),
+        s.pruned_valence + s.pruned_filter + s.duplicates + s.to_relax + usize::from(s.truncated),
         "{s:?}"
     );
     assert_eq!(s.to_relax, p.hypotheses.len());
@@ -663,17 +663,8 @@ fn fake(strain: f64, formed: Vec<(u32, u32)>) -> Candidate {
     }
 }
 
-fn listing(top_n: usize, energy_window: f64) -> Listing {
-    Listing {
-        formed_bonds: None,
-        inventory: None,
-        top_n,
-        energy_window,
-    }
-}
-
 #[test]
-fn ranking_breaks_ties_by_the_bond_set_and_lists_top_n_within_the_window() {
+fn ranking_breaks_ties_by_the_bond_set() {
     let mut cs = vec![
         fake(-10.0, vec![(3, 9)]),
         fake(-20.0, vec![(1, 7)]),
@@ -693,90 +684,186 @@ fn ranking_breaks_ties_by_the_bond_set_and_lists_top_n_within_the_window() {
             vec![(1, 8)],
         ]
     );
-    let count = |l: Listing| list_candidates(&cs, &l).indices.len();
-    assert_eq!(count(listing(10, 30.0)), 4, "15 is 35 above the best");
-    assert_eq!(count(listing(2, 30.0)), 2);
-    assert_eq!(count(listing(10, 5.0)), 1);
-    assert_eq!(list_candidates(&[], &listing(10, 30.0)), Listed::default());
 }
 
-/// The two filters pick one formed-bond count or one inventory, and the
-/// window is measured from the best candidate that passes them — so a
-/// two-bond group 40 kcal/mol above the best single bond is still listed.
 #[test]
-fn the_listing_filters_by_formed_bonds_and_inventory() {
-    let mut cs = vec![
-        fake(-30.0, vec![(1, 7)]),
-        fake(-28.0, vec![(2, 8)]),
-        fake(10.0, vec![(1, 7), (2, 8)]),
-        fake(12.0, vec![(1, 8), (2, 7)]),
-        fake(60.0, vec![(1, 7), (2, 9)]),
+fn a_bond_inventory_label_reads_back() {
+    for label in [
+        "formed 3× O–Si",
+        "formed 1× H–Si, 1× O–Si; broken 1× H–O",
+        "formed 1× H–Si; broken 1× H–O",
+        "no bond changes",
+    ] {
+        let inv: BondInventory = label.parse().unwrap();
+        assert_eq!(inv.to_string(), label);
+    }
+    // Typed by hand: `x` for `×`, `-` for `–`, either element order.
+    let typed: BondInventory = " formed 2x Si-O ".parse().unwrap();
+    assert_eq!(typed.to_string(), "formed 2× O–Si");
+    for bad in [
+        "formed 2× O–Qq",
+        "made 1× O–Si",
+        "formed two× O–Si",
+        "formed 0× O–Si",
+    ] {
+        assert!(bad.parse::<BondInventory>().is_err(), "{bad}");
+    }
+}
+
+/// The plan's hypotheses, as comparable bond-change keys, in enumeration
+/// order.
+fn keys(hypotheses: &[Hypothesis]) -> Vec<atomcad_crystolecule::chemisorption::HypothesisKey> {
+    hypotheses.iter().map(Hypothesis::key).collect()
+}
+
+/// The filters are pruning, and pruning must change nothing but the count:
+/// for every formed-bond count and every inventory the unfiltered plan
+/// contains, the filtered plan is exactly the matching subset of the
+/// unfiltered one, in the same order. Checked on bond forming alone and with
+/// H transfers, where an inventory also fixes the transfer set.
+#[test]
+fn the_filters_plan_exactly_the_matching_subset() {
+    let (ads, _, sub, _) = two_feet_three_sites();
+    let (m_ads, _, m_sub, _) = methanol_over_two_sites();
+    let cases = [
+        (ads, sub, config(3.5)),
+        (
+            m_ads,
+            m_sub,
+            transfer_config(3.5, &[H_TO_SUBSTRATE, H_TO_ADSORBATE], 2),
+        ),
     ];
-    // A two-bond candidate of another inventory: one O–Si, one C–Si.
-    let mut mixed = fake(11.0, vec![(3, 7), (2, 9)]);
-    mixed.bond_inventory = BondInventory::default();
-    mixed
-        .bond_inventory
-        .formed
-        .insert(BondKind::new(O, SI, 1), 1);
-    mixed
-        .bond_inventory
-        .formed
-        .insert(BondKind::new(C, SI, 1), 1);
-    cs.push(mixed);
-    rank_candidates(&mut cs);
+    for (ads, sub, cfg) in &cases {
+        let all = plan(ads, sub, cfg).unwrap();
+        assert!(!all.stats.truncated);
+        let most = all.hypotheses.iter().map(|h| h.formed.len()).max().unwrap();
+        for n in 0..=most + 1 {
+            let only = plan(
+                ads,
+                sub,
+                &ChemisorptionSearch {
+                    formed_bonds: Some(n),
+                    ..cfg.clone()
+                },
+            )
+            .unwrap();
+            let expected: Vec<Hypothesis> = all
+                .hypotheses
+                .iter()
+                .filter(|h| h.formed.len() == n)
+                .cloned()
+                .collect();
+            assert_eq!(keys(&only.hypotheses), keys(&expected), "{n} formed bonds");
+            assert_stats_add_up(&only);
+        }
+        let options = inventory_options(
+            all.hypotheses
+                .iter()
+                .map(|h| (&h.inventory, h.formed.len())),
+            None,
+        );
+        assert!(options.len() > 1, "{options:?}");
+        for (label, count) in &options {
+            let target: BondInventory = label.parse().unwrap();
+            let only = plan(
+                ads,
+                sub,
+                &ChemisorptionSearch {
+                    bond_inventory: Some(target.clone()),
+                    ..cfg.clone()
+                },
+            )
+            .unwrap();
+            assert_eq!(only.stats.to_relax, *count, "{label}");
+            assert!(only.hypotheses.iter().all(|h| h.inventory == target));
+            let expected: Vec<Hypothesis> = all
+                .hypotheses
+                .iter()
+                .filter(|h| h.inventory == target)
+                .cloned()
+                .collect();
+            assert_eq!(keys(&only.hypotheses), keys(&expected), "{label}");
+            assert_stats_add_up(&only);
+        }
+        // Two filters that disagree leave nothing; ones that agree, the group.
+        let (label, _) = &options[options.len() - 1];
+        let target: BondInventory = label.parse().unwrap();
+        let n = target.formed_count() - target.broken_count();
+        for (count, expect_any) in [(n, true), (n + 1, false)] {
+            let both = plan(
+                ads,
+                sub,
+                &ChemisorptionSearch {
+                    formed_bonds: Some(count),
+                    bond_inventory: Some(target.clone()),
+                    ..cfg.clone()
+                },
+            )
+            .unwrap();
+            assert_eq!(
+                !both.hypotheses.is_empty(),
+                expect_any,
+                "{label} with {count}"
+            );
+        }
+    }
+}
 
-    let all = list_candidates(&cs, &listing(10, 30.0));
-    assert_eq!(
-        all.indices,
-        vec![0, 1],
-        "unfiltered, the window hides the doubles"
+/// `top_n` and the window are applied while relaxing, and must keep exactly
+/// what ranking everything and cutting afterwards would.
+#[test]
+fn top_n_and_the_window_keep_what_a_full_ranking_would() {
+    let mut ads = AtomicStructure::new();
+    let o = ads.add_atom(O, DVec3::new(0.3, 0.2, 2.2));
+    let h = ads.add_atom(H, DVec3::new(0.3, 0.2, 3.17));
+    ads.add_bond(o, h, BOND_SINGLE);
+    let (mut sub, site_ids) = sites(
+        &[
+            DVec3::ZERO,
+            DVec3::new(2.6, 0.0, 0.0),
+            DVec3::new(0.0, 2.9, 0.0),
+        ],
+        3,
     );
-    assert_eq!(all.matching, 6);
-
-    let two = Listing {
-        formed_bonds: Some(2),
-        ..listing(10, 30.0)
+    for id in sub.atom_ids().copied().collect::<Vec<_>>() {
+        if !site_ids.contains(&id) {
+            sub.set_atom_frozen(id, true);
+        }
+    }
+    let run = |top_n: usize, energy_window: f64| {
+        search(
+            &ads,
+            &sub,
+            &ChemisorptionSearch {
+                top_n,
+                energy_window,
+                ..config(3.5)
+            },
+        )
+        .unwrap()
     };
-    let listed = list_candidates(&cs, &two);
-    let strains: Vec<f64> = listed.indices.iter().map(|&i| cs[i].strain).collect();
-    assert_eq!(
-        strains,
-        vec![10.0, 11.0, 12.0],
-        "60 is 50 above the best double"
-    );
-    assert_eq!(listed.matching, 4);
-
-    let o_si = Listing {
-        inventory: Some("formed 2× O–Si".to_string()),
-        ..two.clone()
+    let full = run(100, f64::INFINITY);
+    assert_eq!(full.candidates.len(), 3);
+    let strains = |r: &atomcad_crystolecule::chemisorption::SearchReport| -> Vec<u64> {
+        r.candidates.iter().map(|c| c.strain.to_bits()).collect()
     };
-    let listed = list_candidates(&cs, &o_si);
-    let strains: Vec<f64> = listed.indices.iter().map(|&i| cs[i].strain).collect();
-    assert_eq!(strains, vec![10.0, 12.0]);
-    assert_eq!(listed.matching, 3);
-
-    let none = Listing {
-        formed_bonds: Some(3),
-        ..listing(10, 30.0)
-    };
-    assert_eq!(list_candidates(&cs, &none), Listed::default());
-
-    // The inventory dropdown: distinct inventories with their counts, by
-    // formed-bond count then label, narrowed by the count filter.
-    let inventories = || cs.iter().map(|c| (&c.bond_inventory, c.formed.len()));
-    assert_eq!(
-        inventory_options(inventories(), None),
-        vec![
-            ("formed 1× O–Si".to_string(), 2),
-            ("formed 1× C–Si, 1× O–Si".to_string(), 1),
-            ("formed 2× O–Si".to_string(), 3),
-        ]
-    );
-    assert_eq!(
-        inventory_options(inventories(), Some(1)),
-        vec![("formed 1× O–Si".to_string(), 2)]
-    );
+    let two = run(2, f64::INFINITY);
+    assert_eq!(strains(&two), strains(&full)[..2].to_vec());
+    assert_eq!(two.stats.relaxed, 3, "everything is relaxed, two are kept");
+    let gap = full.candidates[1].strain - full.candidates[0].strain;
+    let window = run(100, gap * 0.5);
+    assert_eq!(strains(&window), strains(&full)[..1].to_vec());
+    assert!(matches!(
+        plan(
+            &ads,
+            &sub,
+            &ChemisorptionSearch {
+                top_n: 0,
+                ..config(3.5)
+            }
+        ),
+        Err(ChemisorptionError::InvalidConfig(_))
+    ));
 }
 
 #[test]
@@ -855,7 +942,7 @@ fn evaluate_works_with_a_vdw_cutoff() {
 }
 
 #[test]
-fn the_formed_bond_filter_lists_one_leg_count_in_strain_order() {
+fn the_formed_bond_filter_plans_one_leg_count() {
     // The stand-in hexapod over six frozen silyl radicals, one straight below
     // each foot, the reach short enough that a foot sees only its own site:
     // the 63 hypotheses are the non-empty subsets of legs.
@@ -872,26 +959,49 @@ fn the_formed_bond_filter_lists_one_leg_count_in_strain_order() {
         max_iterations: 500,
         ..config(2.2)
     };
-    let report = search(&ads, &sub, &cfg).unwrap();
-    assert_eq!(report.candidates.len(), 63);
-    // C(6, n) candidates per leg count, each group in strain order.
+    // C(6, n) hypotheses per leg count, all of one inventory, n× O–Si.
     for (n, expected) in [(1, 6), (2, 15), (3, 20), (4, 15), (5, 6), (6, 1)] {
-        let listed = list_candidates(
-            &report.candidates,
-            &Listing {
+        let by_count = plan(
+            &ads,
+            &sub,
+            &ChemisorptionSearch {
                 formed_bonds: Some(n),
-                ..listing(100, f64::INFINITY)
+                ..cfg.clone()
             },
-        );
-        assert_eq!(listed.indices.len(), expected, "{n} legs");
-        let c = &report.candidates;
-        assert!(listed.indices.iter().all(|&i| c[i].formed.len() == n));
-        assert!(
-            listed
-                .indices
-                .windows(2)
-                .all(|w| c[w[0]].strain <= c[w[1]].strain)
-        );
+        )
+        .unwrap();
+        assert_eq!(by_count.stats.to_relax, expected, "{n} legs");
+        let by_inventory = plan(
+            &ads,
+            &sub,
+            &ChemisorptionSearch {
+                bond_inventory: Some(format!("formed {n}× O–Si").parse().unwrap()),
+                ..cfg.clone()
+            },
+        )
+        .unwrap();
+        assert_eq!(keys(&by_inventory.hypotheses), keys(&by_count.hypotheses));
+    }
+    let report = search(
+        &ads,
+        &sub,
+        &ChemisorptionSearch {
+            top_n: 100,
+            energy_window: f64::INFINITY,
+            ..cfg.clone()
+        },
+    )
+    .unwrap();
+    assert_eq!(report.candidates.len(), 63);
+    // Within one leg count the kept candidates are in strain order.
+    for n in 1..=6 {
+        let group: Vec<f64> = report
+            .candidates
+            .iter()
+            .filter(|c| c.formed.len() == n)
+            .map(|c| c.strain)
+            .collect();
+        assert!(group.windows(2).all(|w| w[0] <= w[1]), "{n} legs");
     }
     let best = &report.candidates[0];
     let six = report
@@ -932,16 +1042,19 @@ fn ethanediyl_on_si100_ranks_di_sigma_first_among_two_bond_bindings() {
         slab.get_atom(partner).unwrap().position,
     );
     let (ads, _) = ethanediyl((ps + pp) / 2.0 + DVec3::Z * 2.0, pp - ps);
-    let cfg = config(4.5);
+    // Only the two-bond bindings are searched, and all of them are kept.
+    let cfg = ChemisorptionSearch {
+        formed_bonds: Some(2),
+        top_n: 1000,
+        energy_window: f64::INFINITY,
+        ..config(4.5)
+    };
     let report = search(&ads, &slab, &cfg).unwrap();
     let s = &report.reference.structure;
     let site_pair = |c: &Candidate| (c.formed[0].1, c.formed[1].1);
 
-    let doubles: Vec<&Candidate> = report
-        .candidates
-        .iter()
-        .filter(|c| c.formed.len() == 2)
-        .collect();
+    let doubles: Vec<&Candidate> = report.candidates.iter().collect();
+    assert!(doubles.iter().all(|c| c.formed.len() == 2));
     let end_bridge = doubles
         .iter()
         .find(|c| {
@@ -1404,7 +1517,13 @@ fn water_on_si100_ties_one_dimer_against_two() {
         slab.get_atom(partner).unwrap().position,
     );
     let ads = water(ps + DVec3::Z * 1.9, pp - ps);
-    let cfg = transfer_config(4.5, &[H_TO_SUBSTRATE], 1);
+    // Only H + OH patterns are searched, and all of them are kept.
+    let cfg = ChemisorptionSearch {
+        bond_inventory: Some("formed 1× H–Si, 1× O–Si; broken 1× H–O".parse().unwrap()),
+        top_n: 1000,
+        energy_window: f64::INFINITY,
+        ..transfer_config(4.5, &[H_TO_SUBSTRATE], 1)
+    };
     let report = search(&ads, &slab, &cfg).unwrap();
     let s = &report.reference.structure;
 

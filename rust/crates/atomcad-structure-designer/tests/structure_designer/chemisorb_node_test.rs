@@ -5,9 +5,9 @@
 //! `chemisorption_test.rs`. What is exercised here is what the node adds: the
 //! run model (evaluation shows the plan and never searches; Run stores a result
 //! keyed by an input fingerprint; a mismatch falls back to the plan and says
-//! `stale`), the three outputs and their records, the listing filters (applied
-//! to a stored result without a new Run), the eval cache the panel reads, the
-//! text format and the `.cnnd` round trip.
+//! `stale`), the three outputs and their records, the filters and `top_n` (search
+//! settings like any other), the eval cache the panel reads, the text format
+//! and the `.cnnd` round trip.
 //!
 //! The fixture is the phase-1 •OH over three silyl radicals: three single-bond
 //! hypotheses, small enough that a debug-build Run takes well under a second.
@@ -477,8 +477,10 @@ fn a_settings_edit_makes_the_result_stale_and_its_undo_restores_it() {
     assert!(!boolean(&s, "stale"));
 }
 
+/// `top_n` and the window are search settings: a change makes the result
+/// stale, and the next run keeps only what they allow.
 #[test]
-fn top_n_and_energy_window_relist_without_making_the_result_stale() {
+fn top_n_and_energy_window_are_search_settings() {
     let Net {
         mut designer,
         name,
@@ -486,13 +488,19 @@ fn top_n_and_energy_window_relist_without_making_the_result_stale() {
         ..
     } = network();
     designer.run_chemisorb(&[], node).unwrap();
+    assert_eq!(
+        int(&fields(&outputs(&mut designer, name, node)[2]), "listed"),
+        3
+    );
 
     set_props(&mut designer, name, node, &[("top_n", TextValue::Int(2))]);
+    let s = fields(&outputs(&mut designer, name, node)[2]);
+    assert!(boolean(&s, "stale") && !boolean(&s, "searched"));
+    let summary = designer.run_chemisorb(&[], node).unwrap();
+    assert_eq!((summary.relaxed, summary.listed), (3, 2));
     let out = outputs(&mut designer, name, node);
     assert_eq!(array(&out[1]).len(), 2);
-    let s = fields(&out[2]);
-    assert!(boolean(&s, "searched"));
-    assert_eq!(int(&s, "listed"), 2);
+    assert_eq!(int(&fields(&out[2]), "listed"), 2);
 
     set_props(
         &mut designer,
@@ -503,21 +511,22 @@ fn top_n_and_energy_window_relist_without_making_the_result_stale() {
             ("energy_window", TextValue::Float(0.0)),
         ],
     );
+    designer.run_chemisorb(&[], node).unwrap();
     let out = outputs(&mut designer, name, node);
     assert_eq!(
         array(&out[1]).len(),
         1,
         "only the best is within a zero window"
     );
-    assert!(boolean(&fields(&out[2]), "searched"));
 }
 
-/// The two listing filters, like `top_n` and the window, re-list a stored
-/// result and never make it stale. The fixture with an H transfer enabled has
-/// three bond inventories: three plain O–Si bonds, two O–Si bonds with the H
-/// moved to a silyl, and one bare H move (no formed bond).
+/// The two filters restrict what is enumerated: the plan shows the group's
+/// relaxation count, a run relaxes only the group, and a change makes the
+/// result stale. The fixture with an H transfer enabled has three bond
+/// inventories: three plain O–Si bonds, two O–Si bonds with the H moved to a
+/// silyl, and one bare H move (no formed bond).
 #[test]
-fn the_listing_filters_relist_a_result_without_a_new_run() {
+fn the_filters_restrict_the_search_and_feed_the_dropdown() {
     let (
         Net {
             mut designer,
@@ -533,85 +542,84 @@ fn the_listing_filters_relist_a_result_without_a_new_run() {
         node,
         &[("energy_window", TextValue::Float(1000.0))],
     );
-
-    // Before a run the inventory choices come from the plan.
-    let cache = designer_eval_cache(&mut designer, name, node);
     let plain = "formed 1× O–Si".to_string();
     let with_h = "formed 1× H–Si, 1× O–Si; broken 1× H–O".to_string();
     let bare_h = "formed 1× H–Si; broken 1× H–O".to_string();
+
+    let cache = designer_eval_cache(&mut designer, name, node);
+    assert_eq!(cache.stats.to_relax, 6);
     assert_eq!(
         cache.inventory_options,
         vec![(bare_h.clone(), 1), (with_h.clone(), 2), (plain.clone(), 3)],
         "by formed-bond count, then label"
     );
 
-    designer.run_chemisorb(&[], node).unwrap();
-    let all = designer_eval_cache(&mut designer, name, node);
-    assert_eq!((all.stats.matching, all.stats.listed), (6, 6));
-
+    // One formed bond: the bare H move is not even planned.
     set_props(
         &mut designer,
         name,
         node,
-        &[("filter_formed_bonds", TextValue::Int(1))],
+        &[("formed_bonds", TextValue::Int(1))],
     );
     let one = designer_eval_cache(&mut designer, name, node);
-    assert!(
-        one.stats.searched && !one.stats.stale,
-        "re-listed, not stale"
-    );
-    assert_eq!((one.stats.matching, one.stats.listed), (5, 5));
-    assert!(one.rows.iter().all(|r| r.formed_bonds == 1));
+    assert_eq!(one.stats.to_relax, 5);
+    assert!(one.stats.pruned_filter > 0);
     assert_eq!(
         one.inventory_options,
         vec![(with_h.clone(), 2), (plain.clone(), 3)],
         "the dropdown narrows to the count"
     );
 
+    // One inventory: the dropdown still offers every inventory of the count.
     set_props(
         &mut designer,
         name,
         node,
-        &[("filter_bonds", TextValue::String(plain.clone()))],
+        &[("bond_inventory", TextValue::String(plain.clone()))],
     );
+    let only = designer_eval_cache(&mut designer, name, node);
+    assert_eq!(only.stats.to_relax, 3);
+    assert_eq!(only.inventory_options, one.inventory_options);
+
+    let summary = designer.run_chemisorb(&[], node).unwrap();
+    assert_eq!((summary.relaxed, summary.listed), (3, 3));
+    assert_eq!(summary.best_bonds, plain);
     let out = outputs(&mut designer, name, node);
     let rows = array(&out[1]);
-    assert_eq!(rows.len(), 3);
     assert!(rows.iter().all(|r| string(&fields(r), "bonds") == plain));
-    // `rank` is the place in the whole ranking, so it may skip.
     let ranks: Vec<i32> = rows.iter().map(|r| int(&fields(r), "rank")).collect();
-    assert!(ranks.windows(2).all(|w| w[0] < w[1]), "{ranks:?}");
-    // `best` is the best candidate that passes the filters.
-    let first = fields(&rows[0]);
+    assert_eq!(ranks, vec![1, 2, 3]);
     assert_eq!(
         positions(atoms(&out[0])),
-        positions(atoms(&first["structure"]))
+        positions(atoms(&fields(&rows[0])["structure"])),
+        "best is rank 1"
     );
-    let s = fields(&out[2]);
-    assert_eq!((int(&s, "matching"), int(&s, "listed")), (3, 3));
-    assert!(boolean(&s, "searched"));
 
-    // Nothing passes: nothing listed, and `best` is the unbonded relaxed pose.
+    // Another inventory is another search: stale until run.
     set_props(
         &mut designer,
         name,
         node,
-        &[("filter_formed_bonds", TextValue::Int(3))],
+        &[("bond_inventory", TextValue::String(with_h.clone()))],
     );
-    let out = outputs(&mut designer, name, node);
-    assert!(array(&out[1]).is_empty());
-    assert!(atoms(&out[0]).atoms_with_tag(CHANGED_TAG).is_empty());
-    assert_eq!(int(&fields(&out[2]), "matching"), 0);
-    assert!(boolean(&fields(&out[2]), "searched"));
+    let s = fields(&outputs(&mut designer, name, node)[2]);
+    assert!(boolean(&s, "stale"));
+    assert_eq!(int(&s, "to_relax"), 2);
 
-    // The Run summary lists under the filters too.
-    let mut cleared = data(&designer, name, node);
-    cleared.filter_formed_bonds = Some(1);
-    cleared.filter_bonds = Some(with_h.clone());
-    designer.set_chemisorb_data(&[], node, cleared);
-    let summary = designer.run_chemisorb(&[], node).unwrap();
-    assert_eq!(summary.listed, 2);
-    assert_eq!(summary.best_bonds, with_h);
+    // A label that is not an inventory is reported in the node's words.
+    set_props(
+        &mut designer,
+        name,
+        node,
+        &[(
+            "bond_inventory",
+            TextValue::String("formed 1× O–Qq".to_string()),
+        )],
+    );
+    match &outputs(&mut designer, name, node)[2] {
+        NetworkResult::Error(e) => assert!(e.contains("bond_inventory"), "{e}"),
+        other => panic!("expected an error, got {:?}", other.infer_data_type()),
+    }
 }
 
 // ============================================================================
@@ -797,11 +805,11 @@ fn every_property_round_trips_through_the_text_format() {
     assert!(serialized.contains(FULL), "got:\n{serialized}");
     assert_eq!(serialized, author_and_serialize(&serialized));
 
-    // The two listing filters are written only when set.
+    // The two filters are written only when set.
     const FILTERED: &str = "c = chemisorb { adsorbate_tag: \"\", substrate_tag: \"\", reach: 3.5, \
                             max_formed_bonds: -1, max_transfers: 1, top_n: 10, \
                             energy_window: 30.0, budget: 10000, max_iterations: 2000, \
-                            filter_formed_bonds: 2, filter_bonds: \"formed 2× O–Si\" }";
+                            formed_bonds: 2, bond_inventory: \"formed 2× O–Si\" }";
     let serialized = author_and_serialize(&format!("{FILTERED}\n"));
     assert!(serialized.contains(FILTERED), "got:\n{serialized}");
     assert_eq!(serialized, author_and_serialize(&serialized));
@@ -863,7 +871,10 @@ fn a_saved_and_reloaded_node_keeps_its_settings_and_not_its_result() {
     .expect("save");
     let json = std::fs::read_to_string(&path).unwrap();
     assert!(!json.contains("stored"), "the result is never written");
-    assert!(!json.contains("filter_"), "unset filters are not written");
+    assert!(
+        !json.contains("\"formed_bonds\"") && !json.contains("bond_inventory"),
+        "unset filters are not written"
+    );
 
     let mut registry = NodeTypeRegistry::new();
     load_node_networks_from_file(&mut registry, path.to_str().unwrap()).expect("load");
@@ -911,9 +922,9 @@ fn invalid_settings_are_reported_in_the_nodes_words() {
         ),
         ("top_n", TextValue::Int(0), "top_n must be at least 1"),
         (
-            "filter_formed_bonds",
-            TextValue::Int(0),
-            "filter_formed_bonds must be at least 1",
+            "formed_bonds",
+            TextValue::Int(-1),
+            "formed_bonds must be >= 0",
         ),
         ("budget", TextValue::Int(0), "budget must be at least 1"),
     ] {

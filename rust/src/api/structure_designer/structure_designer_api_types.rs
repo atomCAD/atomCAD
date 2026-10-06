@@ -980,15 +980,14 @@ pub struct APIChemisorbData {
     /// At most this many transfers per hypothesis: -1 = no cap, 0 = none.
     /// Read only while the `transfers` pin carries a record.
     pub max_transfers: i32,
-    /// Listing filter: exactly this many formed bonds; `None` = any.
-    pub filter_formed_bonds: Option<i32>,
-    /// Listing filter: exactly this bond inventory (a candidate's `bonds`
+    /// Only patterns with exactly this many formed bonds; `None` = any.
+    pub formed_bonds: Option<i32>,
+    /// Only patterns with exactly this bond inventory (a candidate's `bonds`
     /// label); `None` = any.
-    pub filter_bonds: Option<String>,
-    /// At most this many candidates listed.
+    pub bond_inventory: Option<String>,
+    /// At most this many candidates kept and listed.
     pub top_n: i32,
-    /// Only candidates within this many kcal/mol of the best that passes the
-    /// filters are listed.
+    /// Only candidates within this many kcal/mol of the best are kept.
     pub energy_window: f64,
     /// At most this many hypotheses relaxed.
     pub budget: i32,
@@ -1005,6 +1004,8 @@ pub struct APIChemisorbStats {
     pub transfer_candidates: usize,
     pub considered: usize,
     pub pruned_valence: usize,
+    /// Rejected by `formed_bonds` or `bond_inventory` while enumerating.
+    pub pruned_filter: usize,
     pub duplicates: usize,
     /// The node outputs a search result for its current inputs.
     pub searched: bool,
@@ -1013,16 +1014,14 @@ pub struct APIChemisorbStats {
     pub relaxed: usize,
     pub to_relax: usize,
     pub unconverged: usize,
-    /// Candidates that pass the listing filters, listed or not.
-    pub matching: usize,
     pub listed: usize,
     /// The budget was hit; the search is not exhaustive.
     pub truncated: bool,
     pub seconds: f64,
 }
 
-/// One choice of the `filter_bonds` dropdown: a bond inventory and how many
-/// candidates (or, before a run, hypotheses) have it.
+/// One choice of the `bond_inventory` dropdown: a bond inventory and how many
+/// hypotheses (relaxations) it would take.
 pub struct APIChemisorbInventoryOption {
     pub label: String,
     pub count: usize,
@@ -1050,7 +1049,7 @@ pub struct APIChemisorbRow {
 pub struct APIChemisorbReport {
     pub stats: APIChemisorbStats,
     pub rows: Vec<APIChemisorbRow>,
-    /// The `filter_bonds` choices, narrowed by `filter_formed_bonds`.
+    /// The `bond_inventory` choices, narrowed by `formed_bonds`.
     pub inventory_options: Vec<APIChemisorbInventoryOption>,
 }
 
@@ -1073,8 +1072,8 @@ impl From<&ChemisorbData> for APIChemisorbData {
             reach: d.reach,
             max_formed_bonds: d.max_formed_bonds,
             max_transfers: d.max_transfers,
-            filter_formed_bonds: d.filter_formed_bonds,
-            filter_bonds: d.filter_bonds.clone(),
+            formed_bonds: d.formed_bonds,
+            bond_inventory: d.bond_inventory.clone(),
             top_n: d.top_n,
             energy_window: d.energy_window,
             budget: d.budget,
@@ -1091,8 +1090,8 @@ impl From<&APIChemisorbData> for ChemisorbData {
             reach: d.reach,
             max_formed_bonds: d.max_formed_bonds,
             max_transfers: d.max_transfers,
-            filter_formed_bonds: d.filter_formed_bonds,
-            filter_bonds: d.filter_bonds.clone(),
+            formed_bonds: d.formed_bonds,
+            bond_inventory: d.bond_inventory.clone(),
             top_n: d.top_n,
             energy_window: d.energy_window,
             budget: d.budget,
@@ -1112,13 +1111,13 @@ impl From<&ChemisorbEvalCache> for APIChemisorbReport {
                 transfer_candidates: s.transfer_candidates,
                 considered: s.considered,
                 pruned_valence: s.pruned_valence,
+                pruned_filter: s.pruned_filter,
                 duplicates: s.duplicates,
                 searched: s.searched,
                 stale: s.stale,
                 relaxed: s.relaxed,
                 to_relax: s.to_relax,
                 unconverged: s.unconverged,
-                matching: s.matching,
                 listed: s.listed,
                 truncated: s.truncated,
                 seconds: s.seconds,
