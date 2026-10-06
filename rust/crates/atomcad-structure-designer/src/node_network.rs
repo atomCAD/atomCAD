@@ -1,5 +1,6 @@
 use crate::camera_settings::CameraSettings;
 use crate::canvas_viewport::CanvasViewport;
+use crate::network_thumbnail::{NetworkThumbnail, next_thumbnail_revision};
 use crate::node_data::NodeData;
 use crate::node_network_gadget::NodeNetworkGadget;
 use crate::node_type::{NodeType, OutputPinDefinition};
@@ -1045,6 +1046,24 @@ pub struct NodeNetwork {
     /// When None, the editor auto-frames the top-left node. See
     /// `doc/design_find_usages.md` D7.
     pub canvas_viewport: Option<CanvasViewport>,
+    /// A picture of what the network builds
+    /// (`doc/design_network_thumbnails.md` D7). Opaque PNG bytes here; the
+    /// API layer captures and compares them.
+    pub thumbnail: Option<NetworkThumbnail>,
+    /// Session-only identity of `thumbnail` for the UI's image cache, drawn
+    /// from the process-wide [`next_thumbnail_revision`] counter: fresh
+    /// whenever the thumbnail is set and whenever the network is created or
+    /// deserialized, so two different images never share a value (D7). Not
+    /// serialized.
+    pub thumbnail_revision: u64,
+}
+
+impl NodeNetwork {
+    /// Replaces the thumbnail and takes a fresh revision (D7).
+    pub fn set_thumbnail(&mut self, thumbnail: Option<NetworkThumbnail>) {
+        self.thumbnail = thumbnail;
+        self.thumbnail_revision = next_thumbnail_revision();
+    }
 }
 
 /// Resolve the source side of an `IncomingWire` into a `NodeRef` against
@@ -1262,6 +1281,8 @@ impl NodeNetwork {
             validation_errors: Vec::new(),
             camera_settings: None, // Will be populated on first use or from saved file
             canvas_viewport: None, // Populated on pan/zoom settle or from saved file
+            thumbnail: None,       // Captured by the GUI, or read from a saved file
+            thumbnail_revision: next_thumbnail_revision(),
         }
     }
 

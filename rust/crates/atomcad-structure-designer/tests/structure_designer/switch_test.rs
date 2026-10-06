@@ -1337,7 +1337,7 @@ fn assert_cnnd_roundtrip(designer: &mut StructureDesigner, name: &str) {
     let built_in = &designer.node_type_registry.built_in_node_types;
     let mut net2 =
         serializable_to_node_network(&reloaded, built_in, None).expect("load network back");
-    let snap2 = node_network_to_serializable(&mut net2, built_in, None).unwrap();
+    let snap2 = node_network_to_serializable(&mut net2, built_in, None, false).unwrap();
     let mut after = serde_json::to_value(&snap2).unwrap();
     normalize_network_json(&mut after);
 

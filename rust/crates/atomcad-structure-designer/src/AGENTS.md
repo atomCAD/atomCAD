@@ -66,6 +66,8 @@ structure_designer/
 ├── navigation_history.rs      # Back/forward network navigation
 ├── common_constants.rs        # Shared constants
 ├── preferences.rs             # User preferences persistence
+├── network_thumbnail.rs       # NetworkThumbnail (opaque PNG) + the process-wide revision counter
+├── thumbnail_ops.rs           # Thumbnails: which network a capture lands on, store, set/reset (D2/D6)
 ├── ai_text_edit.rs            # ai_text_edit: the AI edit choke point (edit → validate → layout → log → undo)
 ├── mechanosynth_edit_ops.rs   # mechanosynth_edit: block edits, cursor, and the click→place flow
 ├── chemisorb_ops.rs           # chemisorb: Run as a node job (prepare / search / install) and the settings setter

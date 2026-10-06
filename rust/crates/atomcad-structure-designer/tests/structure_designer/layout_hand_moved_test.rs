@@ -158,7 +158,7 @@ fn it_round_trips_through_cnnd_and_an_older_file_loads_without_it() {
         .node_networks
         .get_mut("test")
         .unwrap();
-    let serializable = node_network_to_serializable(network, &built_ins, None).unwrap();
+    let serializable = node_network_to_serializable(network, &built_ins, None, false).unwrap();
 
     // The flag is skipped when false, so a network nobody has dragged
     // serializes byte-identically to a pre-flag file — no migration, no bump.

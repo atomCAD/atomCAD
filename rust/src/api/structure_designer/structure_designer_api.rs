@@ -79,11 +79,14 @@ use super::structure_designer_api_types::OutputPinView;
 use super::structure_designer_api_types::ZoneView;
 use super::structure_designer_preferences::StructureDesignerPreferences;
 use crate::api::api_common::apply_camera_settings;
+use crate::api::api_common::capture_active_network_thumbnail;
 use crate::api::api_common::from_api_ivec2;
 use crate::api::api_common::from_api_ivec3;
 use crate::api::api_common::from_api_vec2;
 use crate::api::api_common::from_api_vec3;
 use crate::api::api_common::refresh_structure_designer_auto;
+use crate::api::api_common::render_active_automatic_thumbnail;
+use crate::api::api_common::render_current_view_thumbnail;
 use crate::api::api_common::to_api_ivec2;
 use crate::api::api_common::to_api_ivec3;
 use crate::api::api_common::to_api_vec2;
@@ -7994,6 +7997,9 @@ pub fn save_node_networks_as(file_path: String) -> APIResult {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
+                // The network worked on last reaches the file even if the user
+                // never left it (`doc/design_network_thumbnails.md` D2).
+                capture_active_network_thumbnail(cad_instance);
                 // Refused onto a path open in another tab
                 // (`doc/design_multiple_documents.md` D5).
                 match cad_instance
@@ -8026,6 +8032,9 @@ pub fn save_node_networks() -> APIResult {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
+                // The network worked on last reaches the file even if the user
+                // never left it (`doc/design_network_thumbnails.md` D2).
+                capture_active_network_thumbnail(cad_instance);
                 // Call the method in StructureDesigner
                 match cad_instance.structure_designer.save_node_networks() {
                     Some(Ok(_)) => APIResult {
@@ -8056,6 +8065,109 @@ pub fn is_design_dirty() -> bool {
         with_cad_instance_or(
             |cad_instance| cad_instance.structure_designer.is_dirty(),
             false,
+        )
+    }
+}
+
+/// Automatic thumbnails were captured since the last save, load or new
+/// (`doc/design_network_thumbnails.md` D8). *Save* is available when this or
+/// `is_design_dirty` is true; the unsaved-changes prompt looks at
+/// `is_design_dirty` only.
+#[flutter_rust_bridge::frb(sync)]
+pub fn has_unsaved_thumbnails() -> bool {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| cad_instance.structure_designer.has_unsaved_thumbnails(),
+            false,
+        )
+    }
+}
+
+/// The PNG bytes of a network's thumbnail in the active document, or `None`
+/// when it has none (`doc/design_network_thumbnails.md` D9).
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_network_thumbnail_png(network_name: String) -> Option<Vec<u8>> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                cad_instance
+                    .structure_designer
+                    .network_thumbnail(&network_name)
+                    .map(|t| t.png.clone())
+            },
+            None,
+        )
+    }
+}
+
+/// *Set current view as thumbnail* (`doc/design_network_thumbnails.md` D6):
+/// renders the live view of the **active** network — square, the centre of
+/// the viewport — without gadgets, grid or labels, and stores it as a user-set
+/// thumbnail that automatic capture leaves alone. Undoable; marks the document
+/// dirty. Refused for an inactive or linked network and when nothing is
+/// displayed.
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_current_view_as_thumbnail(network_name: String) -> APIResult {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let result = cad_instance
+                    .structure_designer
+                    .ensure_editable(&network_name)
+                    .and_then(|_| render_current_view_thumbnail(cad_instance, &network_name))
+                    .and_then(|png| {
+                        cad_instance
+                            .structure_designer
+                            .set_user_thumbnail(&network_name, png)
+                    });
+                match result {
+                    Ok(()) => APIResult {
+                        success: true,
+                        error_message: String::new(),
+                    },
+                    Err(e) => APIResult {
+                        success: false,
+                        error_message: e,
+                    },
+                }
+            },
+            APIResult {
+                success: false,
+                error_message: "CAD instance not available".to_string(),
+            },
+        )
+    }
+}
+
+/// *Reset to automatic thumbnail* (`doc/design_network_thumbnails.md` D6):
+/// clears the user-set flag and immediately captures an automatic image when
+/// the network is active and displays something; otherwise the current image
+/// stays, now automatic. Undoable; marks the document dirty. Refused for a
+/// linked network and when the thumbnail is not user-set.
+#[flutter_rust_bridge::frb(sync)]
+pub fn reset_network_thumbnail(network_name: String) -> APIResult {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let automatic = render_active_automatic_thumbnail(cad_instance, &network_name);
+                match cad_instance
+                    .structure_designer
+                    .reset_network_thumbnail(&network_name, automatic)
+                {
+                    Ok(()) => APIResult {
+                        success: true,
+                        error_message: String::new(),
+                    },
+                    Err(e) => APIResult {
+                        success: false,
+                        error_message: e,
+                    },
+                }
+            },
+            APIResult {
+                success: false,
+                error_message: "CAD instance not available".to_string(),
+            },
         )
     }
 }
@@ -9467,6 +9579,7 @@ pub fn apply_text_to_active_network(code: String) -> APITextEditResult {
                     &mut network,
                     &structure_designer.node_type_registry.built_in_node_types,
                     None,
+                    false,
                 )
                 .ok();
 
@@ -9504,6 +9617,7 @@ pub fn apply_text_to_active_network(code: String) -> APITextEditResult {
                     &mut network,
                     &structure_designer.node_type_registry.built_in_node_types,
                     None,
+                    false,
                 )
                 .ok();
 

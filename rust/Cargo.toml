@@ -47,6 +47,9 @@ default-members = [".", "crates/*"]
 # crate (D11), so nothing else may depend on it.
 # ---------------------------------------------------------------------------
 [workspace.dependencies]
+# base64: a network thumbnail is stored in the `.cnnd` as base64 PNG
+# (`doc/design_network_thumbnails.md` D7). Already in `Cargo.lock` transitively.
+base64 = "0.22"
 bytemuck = { version = "1.16", features = ["derive"] }
 blake3 = "1.5"
 # csgrs: Using local copy with increased EPSILON for precision fix

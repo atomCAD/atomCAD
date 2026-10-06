@@ -154,7 +154,12 @@ void main() {
       expect(
         formatDesignErrorReport([
           APINetworkWithValidationErrors(
-              name: 'net', validationErrors: const [], readOnly: false)
+              name: 'net',
+              validationErrors: const [],
+              readOnly: false,
+              hasThumbnail: false,
+              thumbnailRevision: BigInt.zero,
+              thumbnailUserSet: false)
         ]),
         'atomCAD — no problems reported.',
       );
@@ -165,16 +170,27 @@ void main() {
         APINetworkWithValidationErrors(
           name: 'a.b.first',
           readOnly: false,
+          hasThumbnail: false,
+          thumbnailRevision: BigInt.zero,
+          thumbnailUserSet: false,
           validationErrors: [
             _error('one broke', nodeId: 1, nodeLabel: 'sphere'),
             _error('two broke', nodeId: 2, nodeLabel: 'relax'),
           ],
         ),
         APINetworkWithValidationErrors(
-            name: 'clean', validationErrors: const [], readOnly: false),
+            name: 'clean',
+            validationErrors: const [],
+            readOnly: false,
+            hasThumbnail: false,
+            thumbnailRevision: BigInt.zero,
+            thumbnailUserSet: false),
         APINetworkWithValidationErrors(
           name: 'second',
           readOnly: false,
+          hasThumbnail: false,
+          thumbnailRevision: BigInt.zero,
+          thumbnailUserSet: false,
           validationErrors: [_error('three broke', nodeId: 3, nodeLabel: 'x')],
         ),
       ]);
@@ -191,6 +207,9 @@ void main() {
         APINetworkWithValidationErrors(
           name: 'only',
           readOnly: false,
+          hasThumbnail: false,
+          thumbnailRevision: BigInt.zero,
+          thumbnailUserSet: false,
           validationErrors: [_error('boom', nodeId: 1, nodeLabel: 'sphere')],
         ),
       ]);

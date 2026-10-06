@@ -266,6 +266,15 @@ document parameter — and the parked ones live in `CADInstance.documents`, a
   (`load_node_networks`, `new_project*`) goes through
   `DocumentSet::load_in_place` / `new_project_in_place`, which give it a fresh
   `DocumentId` (D8).
+- **Content meshes reach the GPU only through `refresh_structure_designer`**,
+  and that is where node network thumbnails are captured
+  (`doc/design_network_thumbnails.md` D2): the renderer records which
+  `(document, network)` its content belongs to, and an upload for another
+  owner pictures the outgoing network first, in whichever document now holds
+  it. That is why no switch path needs thumbnail code — and why a new path
+  that uploads content some other way would silently skip the capture.
+  Thumbnails render through their own `RenderTarget` and camera buffer
+  (`Renderer::render_thumbnail`), never by resizing the live viewport.
 
 ## Code Conventions
 

@@ -192,12 +192,8 @@ pub fn provide_texture(texture_ptr: u64) -> f64 {
                 background_color.y as u8,
                 background_color.z as u8,
             ]);
-            send_texture(
-                texture_ptr,
-                cad_instance.renderer.texture_size.width,
-                cad_instance.renderer.texture_size.height,
-                v,
-            );
+            let (width, height) = cad_instance.renderer.get_viewport_size();
+            send_texture(texture_ptr, width, height, v);
         })
         .is_none()
         {

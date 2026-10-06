@@ -162,6 +162,7 @@ impl StructureDesigner {
             &mut network,
             &self.node_type_registry.built_in_node_types,
             None,
+            false,
         )
         .ok();
 
@@ -363,6 +364,7 @@ impl StructureDesigner {
                     &mut network,
                     &self.node_type_registry.built_in_node_types,
                     None,
+                    false,
                 )
                 .ok();
                 self.node_type_registry

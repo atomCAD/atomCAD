@@ -1,12 +1,14 @@
 use super::common_api_types::{APIIVec2, APIIVec3, APITransform, APIVec2, APIVec3};
 use atomcad_display::preferences as display_prefs;
+use atomcad_renderer::camera::Camera;
 use atomcad_renderer::renderer::Renderer;
 use atomcad_structure_designer::camera_settings::CameraSettings;
-use atomcad_structure_designer::document_set::DocumentSet;
+use atomcad_structure_designer::document_set::{DocumentId, DocumentSet};
 use atomcad_structure_designer::preferences as domain_prefs;
 use atomcad_structure_designer::refresh_profile::{RefreshProfile, elapsed_ms};
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 use atomcad_structure_designer::structure_designer_changes::StructureDesignerChanges;
+use atomcad_structure_designer::thumbnail_ops::{ContentOwner, outgoing_content_owner};
 use atomcad_util::transform::Transform;
 use glam::DQuat;
 use glam::f64::DVec2;
@@ -542,6 +544,22 @@ pub fn refresh_structure_designer(
     let tessellate_ms = elapsed_ms(tessellate_start);
 
     let gpu_upload_start = Instant::now();
+    // The content meshes on the GPU are about to be replaced. When they belong
+    // to another network than the one being uploaded, picture them first: the
+    // outgoing network's thumbnail (`doc/design_network_thumbnails.md` D2).
+    // Hooking the upload rather than the switch commands covers every path
+    // that changes the active network or document.
+    let incoming_owner = if renderer_lightweight {
+        None
+    } else {
+        Some(cad_instance.structure_designer.content_owner())
+    };
+    if let Some(incoming) = &incoming_owner
+        && let Some(outgoing) =
+            outgoing_content_owner(gpu_content_owner(cad_instance).as_ref(), incoming.as_ref())
+    {
+        capture_gpu_content_thumbnail(cad_instance, &outgoing);
+    }
     // A draw-time setting, not a mesh input, so it is pushed separately — and
     // pushed on every refresh, which is what makes a preference change take
     // effect (`set_structure_designer_preferences` refreshes).
@@ -567,6 +585,9 @@ pub fn refresh_structure_designer(
         &gadget_atom_impostor_mesh,
         &gadget_bond_impostor_mesh,
         !renderer_lightweight,
+        incoming_owner
+            .flatten()
+            .map(|(document, network)| (document.0, network)),
     );
     let gpu_upload_ms = elapsed_ms(gpu_upload_start);
 
@@ -601,6 +622,151 @@ pub fn refresh_structure_designer(
     cad_instance
         .structure_designer
         .record_refresh_profile(profile);
+}
+
+/// Who the content meshes on the GPU belong to (`Renderer::content_owner`,
+/// D2), with the document id put back into its domain type.
+fn gpu_content_owner(cad_instance: &CADInstance) -> Option<ContentOwner> {
+    cad_instance
+        .renderer
+        .content_owner()
+        .map(|(document, network)| (DocumentId(*document), network.clone()))
+}
+
+/// The camera an automatic thumbnail starts from (D4): the network's saved
+/// camera — its viewing direction and roll — or the default pose for a
+/// network that has none. The fit then replaces the distance.
+fn thumbnail_base_camera(settings: Option<&CameraSettings>, fovy: f64) -> Camera {
+    let mut camera = Camera::default_pose(1.0);
+    camera.fovy = fovy;
+    if let Some(s) = settings {
+        camera.eye = s.eye;
+        camera.target = s.target;
+        camera.up = s.up;
+        camera.orthographic = s.orthographic;
+        camera.ortho_half_height = s.ortho_half_height;
+        camera.pivot_point = s.pivot_point;
+        camera.nav_up = s.nav_up;
+        camera.nav_up_label = s.nav_up_label.clone();
+    }
+    camera
+}
+
+/// Renders the content meshes on the GPU as an automatic thumbnail (D4/D5),
+/// framed from the owning network's `camera_settings`, and returns it as
+/// `(rgba, png)`. `None` when the scene displays nothing (D3: an empty
+/// picture is never useful). Stores nothing.
+fn render_automatic_thumbnail(
+    renderer: &mut Renderer,
+    camera_settings: Option<&CameraSettings>,
+) -> Option<(Vec<u8>, Vec<u8>)> {
+    use atomcad_renderer::thumbnail::{THUMBNAIL_SIZE, encode_png, fit_camera_to_bounds};
+    let bounds = renderer.content_bounds()?;
+    let base = thumbnail_base_camera(camera_settings, renderer.camera.fovy);
+    let camera = fit_camera_to_bounds(&base, bounds);
+    let rgba = renderer.render_thumbnail(&camera);
+    let png = encode_png(&rgba, THUMBNAIL_SIZE, THUMBNAIL_SIZE).ok()?;
+    Some((rgba, png))
+}
+
+/// Captures the content meshes on the GPU as the automatic thumbnail of the
+/// network `owner` names — `(document id, network name)`, which need not be
+/// the active document (D2). Skipped when the document or network no longer
+/// exists (closed, replaced in place, deleted, renamed), when the network is
+/// linked or its thumbnail is user-set, and when the scene is empty. The
+/// stored image is replaced only when the picture really changed (D3).
+///
+/// Never marks the document dirty and pushes no undo step (D8); the owning
+/// designer's `has_unsaved_thumbnails` is set when an image is stored.
+/// Returns whether an image was stored.
+pub fn capture_gpu_content_thumbnail(cad_instance: &mut CADInstance, owner: &ContentOwner) -> bool {
+    use atomcad_renderer::thumbnail::{THUMBNAIL_SIZE, thumbnail_changed};
+    let (document, network_name) = owner;
+    let CADInstance {
+        structure_designer,
+        documents,
+        renderer,
+    } = cad_instance;
+    let Some(designer) = documents.designer_mut(structure_designer, *document) else {
+        return false;
+    };
+    if !designer.accepts_automatic_thumbnail(network_name) {
+        return false;
+    }
+    let camera_settings = designer
+        .node_type_registry
+        .node_networks
+        .get(network_name)
+        .and_then(|n| n.camera_settings.clone());
+    let Some((rgba, png)) = render_automatic_thumbnail(renderer, camera_settings.as_ref()) else {
+        return false;
+    };
+    let stored = designer
+        .network_thumbnail(network_name)
+        .map(|t| t.png.as_slice());
+    if !thumbnail_changed(stored, &rgba, THUMBNAIL_SIZE, THUMBNAIL_SIZE) {
+        return false;
+    }
+    designer.store_automatic_thumbnail(network_name, png)
+}
+
+/// The before-save capture (D2): pictures the active network, whose content is
+/// on the GPU, so the network the user worked on last reaches the file even if
+/// they never leave it. Call before every *Save* / *Save As*.
+pub fn capture_active_network_thumbnail(cad_instance: &mut CADInstance) {
+    let Some(owner) = gpu_content_owner(cad_instance) else {
+        return;
+    };
+    if cad_instance.structure_designer.content_owner().as_ref() == Some(&owner) {
+        capture_gpu_content_thumbnail(cad_instance, &owner);
+    }
+}
+
+/// The automatic thumbnail of the **active** network as PNG, for *Reset to
+/// automatic thumbnail* (D6). `None` when `network_name` is not the network
+/// whose content is on the GPU, or the scene is empty.
+pub fn render_active_automatic_thumbnail(
+    cad_instance: &mut CADInstance,
+    network_name: &str,
+) -> Option<Vec<u8>> {
+    let owner = cad_instance.structure_designer.content_owner()?;
+    if owner.1 != network_name || gpu_content_owner(cad_instance) != Some(owner) {
+        return None;
+    }
+    let camera_settings = cad_instance
+        .structure_designer
+        .node_type_registry
+        .node_networks
+        .get(network_name)
+        .and_then(|n| n.camera_settings.clone());
+    render_automatic_thumbnail(&mut cad_instance.renderer, camera_settings.as_ref())
+        .map(|(_, png)| png)
+}
+
+/// *Set current view as thumbnail* (D6): the live camera exactly as the user
+/// sees it — square, same vertical field of view, so the centre of the
+/// viewport — in thumbnail render mode, as PNG. Refused unless `network_name`
+/// is the active network and its content is on the GPU, and when the scene
+/// displays nothing.
+pub fn render_current_view_thumbnail(
+    cad_instance: &mut CADInstance,
+    network_name: &str,
+) -> Result<Vec<u8>, String> {
+    use atomcad_renderer::thumbnail::{THUMBNAIL_SIZE, encode_png, square_camera};
+    let owner = cad_instance
+        .structure_designer
+        .content_owner()
+        .filter(|owner| owner.1 == network_name)
+        .ok_or_else(|| format!("'{}' is not the active network", network_name))?;
+    if gpu_content_owner(cad_instance) != Some(owner) {
+        return Err(format!("'{}' has not been rendered yet", network_name));
+    }
+    if cad_instance.renderer.content_bounds().is_none() {
+        return Err("Nothing is displayed".to_string());
+    }
+    let camera = square_camera(&cad_instance.renderer.camera);
+    let rgba = cad_instance.renderer.render_thumbnail(&camera);
+    encode_png(&rgba, THUMBNAIL_SIZE, THUMBNAIL_SIZE)
 }
 
 /// Convenience wrapper that gets pending changes and refreshes both StructureDesigner and Renderer

@@ -14,6 +14,7 @@ pub enum CameraCanonicalView {
     Right,
 }
 
+#[derive(Clone, Debug)]
 pub struct Camera {
     pub eye: DVec3,
     pub target: DVec3,
@@ -37,6 +38,31 @@ pub struct Camera {
 }
 
 impl Camera {
+    /// The pose a fresh viewport starts with: looking at the origin from
+    /// `(0, -30, 10)`, `+Z` up. Also the viewing direction a thumbnail uses
+    /// for a network that has no saved camera
+    /// (`doc/design_network_thumbnails.md` D4).
+    pub fn default_pose(aspect: f64) -> Camera {
+        Camera {
+            // +z is out of the screen
+            eye: DVec3::new(0.0, -30.0, 10.0),
+            target: DVec3::new(0.0, 0.0, 0.0),
+            // Perpendicular to the view direction (0, 30, -10) — the pose is
+            // canonical from the start, which is the invariant
+            // `Camera::orthonormalize_up` maintains everywhere else.
+            up: DVec3::new(0.0, 1.0, 3.0).normalize(),
+            aspect,
+            fovy: std::f64::consts::PI * 0.15,
+            znear: 1.5,
+            zfar: 2400.0,
+            orthographic: false,
+            ortho_half_height: 10.0,
+            pivot_point: DVec3::new(0.0, 0.0, 0.0),
+            nav_up: DVec3::Z,
+            nav_up_label: "Z".to_string(),
+        }
+    }
+
     pub fn build_view_matrix(&self) -> DMat4 {
         DMat4::look_at_rh(self.eye, self.target, self.up)
     }

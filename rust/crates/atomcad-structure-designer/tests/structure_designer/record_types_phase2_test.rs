@@ -441,7 +441,8 @@ fn snapshot_one_network(
 ) -> atomcad_structure_designer::serialization::node_networks_serialization::SerializableNodeNetwork
 {
     let mut net = registry.node_networks.remove(name).unwrap();
-    let snap = node_network_to_serializable(&mut net, &registry.built_in_node_types, None).unwrap();
+    let snap =
+        node_network_to_serializable(&mut net, &registry.built_in_node_types, None, false).unwrap();
     registry.node_networks.insert(name.to_string(), net);
     snap
 }
@@ -582,6 +583,7 @@ fn registry_snapshot(designer: &mut StructureDesigner) -> serde_json::Value {
                 net,
                 &designer.node_type_registry.built_in_node_types,
                 None,
+                false,
             )
             .unwrap(),
         ));

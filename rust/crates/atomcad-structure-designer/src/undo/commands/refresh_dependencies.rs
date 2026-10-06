@@ -111,7 +111,8 @@ fn install(
         }
     }
     for (name, network) in host {
-        registry.node_networks.insert(name.clone(), network.clone());
+        // A host network's thumbnail is view state, not part of the refresh.
+        registry.replace_network_keeping_thumbnail(name.clone(), network.clone());
     }
     let mut watches = data.clone();
     for (key, watch) in watches.iter_mut() {

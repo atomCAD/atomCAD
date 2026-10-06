@@ -43,6 +43,7 @@ fn convert_with_camera(
         displayed_output_pins: vec![],
         camera_settings: Some(camera),
         canvas_viewport: None,
+        thumbnail: None,
     };
 
     let network =

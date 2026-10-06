@@ -66,6 +66,7 @@ fn create_serializable_network(nodes: Vec<SerializableNode>) -> SerializableNode
         displayed_output_pins: vec![],
         camera_settings: None,
         canvas_viewport: None,
+        thumbnail: None,
     }
 }
 

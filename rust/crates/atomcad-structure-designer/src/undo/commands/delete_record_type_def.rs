@@ -80,7 +80,9 @@ pub fn snapshot_all_networks_for_record_def_change(
         // network mutably (the serializer needs mutable access to refresh some
         // node-data caches before saving).
         if let Some(mut network) = registry.node_networks.remove(&name) {
-            if let Ok(snap) = node_network_to_serializable(&mut network, built_in_types, None) {
+            if let Ok(snap) =
+                node_network_to_serializable(&mut network, built_in_types, None, false)
+            {
                 snapshots.push((name.clone(), snap));
             }
             registry.node_networks.insert(name, network);

@@ -70,8 +70,7 @@ impl UndoCommand for UpdateRecordTypeDefCommand {
                 None,
             ) {
                 ctx.node_type_registry
-                    .node_networks
-                    .insert(network_name.clone(), network);
+                    .replace_network_keeping_thumbnail(network_name.clone(), network);
             }
         }
     }

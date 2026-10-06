@@ -1941,6 +1941,21 @@ impl NodeTypeRegistry {
         self.node_networks.insert(name, node_network);
     }
 
+    /// Puts `network` under `name`, keeping the thumbnail (and its revision)
+    /// of the network it replaces, if there is one
+    /// (`doc/design_network_thumbnails.md` D8). This is how an undo/redo
+    /// restore of a whole-network snapshot inserts: the snapshot carries no
+    /// thumbnail, and undoing an unrelated edit must neither put back an old
+    /// image nor drop the current one. When no network is replaced (the
+    /// network was deleted), the snapshot's own thumbnail is kept.
+    pub fn replace_network_keeping_thumbnail(&mut self, name: String, mut network: NodeNetwork) {
+        if let Some(live) = self.node_networks.get(&name) {
+            network.thumbnail = live.thumbnail.clone();
+            network.thumbnail_revision = live.thumbnail_revision;
+        }
+        self.node_networks.insert(name, network);
+    }
+
     /// True iff `name` is in use by a user record type def, a built-in record
     /// type def, a custom node network, a built-in node type, or an empty
     /// folder marker. Used as the namespace-collision check before adding or

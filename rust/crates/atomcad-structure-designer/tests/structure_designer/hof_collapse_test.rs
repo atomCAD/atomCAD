@@ -182,7 +182,7 @@ fn serialization_preserves_explicit_mode() {
     let network = networks.get_mut("main").unwrap();
 
     // Round-trip through JSON to exercise the serde Serialize/Deserialize path.
-    let serializable = node_network_to_serializable(network, built_in, None).unwrap();
+    let serializable = node_network_to_serializable(network, built_in, None, false).unwrap();
     let value = serde_json::to_value(&serializable).unwrap();
     let restored_ser: SerializableNodeNetwork = serde_json::from_value(value).unwrap();
     let restored = serializable_to_node_network(&restored_ser, built_in, None).unwrap();
@@ -205,7 +205,7 @@ fn deserialize_without_field_yields_auto() {
     let (built_in, networks) = (&registry.built_in_node_types, &mut registry.node_networks);
     let network = networks.get_mut("main").unwrap();
 
-    let serializable = node_network_to_serializable(network, built_in, None).unwrap();
+    let serializable = node_network_to_serializable(network, built_in, None, false).unwrap();
     let mut value = serde_json::to_value(&serializable).unwrap();
 
     // Strip `collapse_mode` from every top-level node object, simulating an

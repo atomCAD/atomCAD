@@ -775,7 +775,7 @@ fn snapshot_main(designer: &mut StructureDesigner) -> serde_json::Value {
     let (built_in_types, node_networks) =
         (&registry.built_in_node_types, &mut registry.node_networks);
     let network = node_networks.get_mut("main").unwrap();
-    let serializable = node_network_to_serializable(network, built_in_types, None).unwrap();
+    let serializable = node_network_to_serializable(network, built_in_types, None, false).unwrap();
     let mut value = serde_json::to_value(&serializable).unwrap();
     normalize_json(&mut value);
     value
@@ -996,7 +996,7 @@ fn snapshot_body(designer: &mut StructureDesigner, map_id: u64) -> serde_json::V
         (&registry.built_in_node_types, &mut registry.node_networks);
     let main = node_networks.get_mut("main").unwrap();
     let body = main.nodes.get_mut(&map_id).unwrap().zone_mut().unwrap();
-    let serializable = node_network_to_serializable(body, built_in_types, None).unwrap();
+    let serializable = node_network_to_serializable(body, built_in_types, None, false).unwrap();
     let mut value = serde_json::to_value(&serializable).unwrap();
     normalize_json(&mut value);
     value

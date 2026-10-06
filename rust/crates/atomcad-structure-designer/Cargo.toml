@@ -23,6 +23,7 @@ atomcad-display = { path = "../atomcad-display" }
 atomcad-geo-tree = { path = "../atomcad-geo-tree" }
 atomcad-renderer = { path = "../atomcad-renderer" }
 atomcad-util = { path = "../atomcad-util" }
+base64 = { workspace = true }
 blake3 = { workspace = true }
 dirs = { workspace = true }
 flate2 = { workspace = true }

@@ -4470,15 +4470,35 @@ class APINetworkWithValidationErrors {
   /// editable (`doc/design_library_linking.md` §5.2).
   final bool readOnly;
 
+  /// The network has a thumbnail (`doc/design_network_thumbnails.md` D9);
+  /// fetch it with `get_network_thumbnail_png`.
+  final bool hasThumbnail;
+
+  /// Identity of the current thumbnail, unique for the whole process and
+  /// never reused (D7), so an image cache can key on it alone.
+  final BigInt thumbnailRevision;
+
+  /// The thumbnail was set by *Set current view as thumbnail* (D6): the
+  /// context menu then offers *Reset to automatic thumbnail*.
+  final bool thumbnailUserSet;
+
   const APINetworkWithValidationErrors({
     required this.name,
     required this.validationErrors,
     required this.readOnly,
+    required this.hasThumbnail,
+    required this.thumbnailRevision,
+    required this.thumbnailUserSet,
   });
 
   @override
   int get hashCode =>
-      name.hashCode ^ validationErrors.hashCode ^ readOnly.hashCode;
+      name.hashCode ^
+      validationErrors.hashCode ^
+      readOnly.hashCode ^
+      hasThumbnail.hashCode ^
+      thumbnailRevision.hashCode ^
+      thumbnailUserSet.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -4487,7 +4507,10 @@ class APINetworkWithValidationErrors {
           runtimeType == other.runtimeType &&
           name == other.name &&
           validationErrors == other.validationErrors &&
-          readOnly == other.readOnly;
+          readOnly == other.readOnly &&
+          hasThumbnail == other.hasThumbnail &&
+          thumbnailRevision == other.thumbnailRevision &&
+          thumbnailUserSet == other.thumbnailUserSet;
 }
 
 class APINodeCategoryView {

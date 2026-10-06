@@ -1805,6 +1805,7 @@ pub fn mount_fingerprint(registry: &NodeTypeRegistry, mount_path: &str) -> Strin
                 &mut clone,
                 &registry.built_in_node_types,
                 None,
+                false,
             )
             .ok()
             .and_then(|s| serde_json::to_value(s).ok())

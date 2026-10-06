@@ -45,7 +45,8 @@ fn snapshot_all_networks(registry: &mut NodeTypeRegistry) -> Value {
             (&registry.built_in_node_types, &mut registry.node_networks);
 
         let network = node_networks.get_mut(&name).unwrap();
-        let serializable = node_network_to_serializable(network, built_in_types, None).unwrap();
+        let serializable =
+            node_network_to_serializable(network, built_in_types, None, false).unwrap();
         serializable_networks.push((name, serializable));
     }
 
@@ -1457,6 +1458,7 @@ fn apply_text_edit_inner(
         &mut network,
         &designer.node_type_registry.built_in_node_types,
         None,
+        false,
     )
     .ok();
 
@@ -1468,6 +1470,7 @@ fn apply_text_edit_inner(
         &mut network,
         &designer.node_type_registry.built_in_node_types,
         None,
+        false,
     )
     .ok();
 

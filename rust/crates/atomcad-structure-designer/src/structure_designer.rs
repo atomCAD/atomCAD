@@ -198,6 +198,11 @@ pub struct StructureDesigner {
     pub node_display_policy_resolver: NodeDisplayPolicyResolver,
     pub import_manager: NodeNetworksImportManager,
     pub is_dirty: bool,
+    /// Automatic thumbnail captures stored since the last save, load or new
+    /// (`doc/design_network_thumbnails.md` D8). Session-only. Makes *Save*
+    /// available without marking the document dirty, so browsing networks
+    /// never produces an "unsaved changes" prompt.
+    pub has_unsaved_thumbnails: bool,
     pub file_path: Option<String>,
     // Tracks pending changes since last refresh to determine what needs to be refreshed
     pending_changes: StructureDesignerChanges,
@@ -389,6 +394,7 @@ impl StructureDesigner {
             node_display_policy_resolver,
             import_manager: NodeNetworksImportManager::new(),
             is_dirty: false,
+            has_unsaved_thumbnails: false,
             file_path: None,
             pending_changes: StructureDesignerChanges::default(),
             cli_top_level_parameters: None,
@@ -1550,7 +1556,8 @@ impl StructureDesigner {
         // closure brings its body contents back (issue #415).
         let zone_json = if let Some(arc_body) = node.zone.as_mut() {
             let body = std::sync::Arc::make_mut(arc_body);
-            let serializable = node_network_to_serializable(body, built_in_types, None).ok()?;
+            let serializable =
+                node_network_to_serializable(body, built_in_types, None, false).ok()?;
             Some(serde_json::to_value(serializable).ok()?)
         } else {
             None
@@ -1583,9 +1590,34 @@ impl StructureDesigner {
     }
 
     /// Snapshot an entire network to a serializable form for undo purposes.
+    ///
+    /// Leaves the thumbnail out (`doc/design_network_thumbnails.md` D8): the
+    /// command restoring it replaces a network that exists, and the restore
+    /// keeps that network's live thumbnail
+    /// (`NodeTypeRegistry::replace_network_keeping_thumbnail`). A command that
+    /// brings back a network that no longer exists uses
+    /// [`Self::snapshot_network_with_thumbnail`].
     pub fn snapshot_network(
         &mut self,
         network_name: &str,
+    ) -> Option<super::serialization::node_networks_serialization::SerializableNodeNetwork> {
+        self.snapshot_network_impl(network_name, false)
+    }
+
+    /// [`Self::snapshot_network`] with the thumbnail, for the snapshots of
+    /// delete network, delete namespace and duplicate network, whose restore
+    /// brings back a network that does not exist at that point (D8).
+    pub fn snapshot_network_with_thumbnail(
+        &mut self,
+        network_name: &str,
+    ) -> Option<super::serialization::node_networks_serialization::SerializableNodeNetwork> {
+        self.snapshot_network_impl(network_name, true)
+    }
+
+    fn snapshot_network_impl(
+        &mut self,
+        network_name: &str,
+        include_thumbnail: bool,
     ) -> Option<super::serialization::node_networks_serialization::SerializableNodeNetwork> {
         use super::serialization::node_networks_serialization::node_network_to_serializable;
 
@@ -1595,7 +1627,7 @@ impl StructureDesigner {
         );
 
         let network = node_networks.get_mut(network_name)?;
-        node_network_to_serializable(network, built_in_types, None).ok()
+        node_network_to_serializable(network, built_in_types, None, include_thumbnail).ok()
     }
 
     /// Snapshot an HOF body for body-scoped undo: the body network at
@@ -1634,7 +1666,7 @@ impl StructureDesigner {
 
         // Body-internal state lives in the HOF's owned zone network.
         let body = hof.zone_mut()?;
-        let serialized = node_network_to_serializable(body, built_in_types, None).ok()?;
+        let serialized = node_network_to_serializable(body, built_in_types, None, false).ok()?;
 
         Some(ZoneBodySnapshot {
             body: serialized,
@@ -2826,8 +2858,9 @@ impl StructureDesigner {
             ));
         }
 
-        // Snapshot the network before deletion (for undo)
-        let network_snapshot = self.snapshot_network(network_name);
+        // Snapshot the network before deletion (for undo). With the
+        // thumbnail: undo brings back a network that no longer exists.
+        let network_snapshot = self.snapshot_network_with_thumbnail(network_name);
 
         // Capture active network before deletion
         let active_network_before = self.active_node_network_name.clone();
@@ -2898,9 +2931,10 @@ impl StructureDesigner {
             return Err(format!("Node network '{}' does not exist", source_name));
         }
 
-        // Snapshot the source network.
+        // Snapshot the source network, thumbnail included: the copy starts
+        // with the source's picture (`doc/design_network_thumbnails.md` D7).
         let snapshot = self
-            .snapshot_network(source_name)
+            .snapshot_network_with_thumbnail(source_name)
             .ok_or_else(|| format!("Failed to snapshot network '{}'", source_name))?;
 
         // Pick a unique name for the copy (kept in the source's namespace). A
@@ -2970,7 +3004,7 @@ impl StructureDesigner {
         // Snapshot the freshly added (renamed) network for the undo command, so
         // redo restores it under the correct name.
         let copy_snapshot = self
-            .snapshot_network(&new_name)
+            .snapshot_network_with_thumbnail(&new_name)
             .ok_or_else(|| format!("Failed to snapshot duplicated network '{}'", new_name))?;
 
         // The API layer activates the new copy (so it can apply camera
@@ -3140,7 +3174,7 @@ impl StructureDesigner {
         // Snapshot all affected networks (for undo).
         let mut network_snapshots = Vec::new();
         for name in &affected_networks {
-            if let Some(snapshot) = self.snapshot_network(name) {
+            if let Some(snapshot) = self.snapshot_network_with_thumbnail(name) {
                 network_snapshots.push((name.clone(), snapshot));
             }
         }
@@ -6079,6 +6113,7 @@ impl StructureDesigner {
         // Clear file state
         self.file_path = None;
         self.is_dirty = false;
+        self.has_unsaved_thumbnails = false;
         self.direct_editing_mode = false;
 
         // This document's visits name the old content. The history is the
@@ -6141,6 +6176,7 @@ impl StructureDesigner {
 
         // Clear dirty flag — this is a fresh project
         self.is_dirty = false;
+        self.has_unsaved_thumbnails = false;
     }
 
     /// Checks whether the current state allows switching to direct editing mode.
@@ -8233,6 +8269,7 @@ impl StructureDesigner {
             node_display_policy_resolver: _,
             import_manager: _,
             is_dirty: _,
+            has_unsaved_thumbnails: _,
             file_path: _,
             pending_changes: _,
             cli_top_level_parameters: _,
@@ -8943,6 +8980,7 @@ impl StructureDesigner {
         // Clear dirty flag and set file path if save was successful
         if result.is_ok() {
             self.is_dirty = false;
+            self.has_unsaved_thumbnails = false;
             self.file_path = Some(file_path.to_string());
             // Every relative library and data-file path now resolves against
             // the new folder (`doc/design_library_linking.md` D7, D11); the
@@ -9111,6 +9149,7 @@ impl StructureDesigner {
 
         // Clear dirty flag since we just loaded a saved state
         self.is_dirty = false;
+        self.has_unsaved_thumbnails = false;
 
         // Set the file path since we just loaded from this file
         self.file_path = Some(file_path.to_string());

@@ -20,3 +20,8 @@ mod transparent_sort_test;
 // (doc/design_isosurface_node.md P4).
 #[path = "renderer/surface_alpha_test.rs"]
 mod surface_alpha_test;
+
+// Node network thumbnails: bounds, framing, downsample, PNG and the change
+// comparison (doc/design_network_thumbnails.md, Phase 1).
+#[path = "renderer/thumbnail_test.rs"]
+mod thumbnail_test;

@@ -18,6 +18,7 @@ undo/
     ├── duplicate_node.rs, paste_nodes.rs
     ├── add_network.rs, delete_network.rs, rename_network.rs
     ├── text_edit_network.rs, factor_selection.rs
+    ├── set_network_thumbnail.rs   # Set / reset a user thumbnail (the only command that changes one)
     ├── inline_node.rs             # Inline a custom node (top-level; whole-network snapshot, like text_edit)
     ├── convert_files_to_nodes.rs  # mechanosynth "Convert to nodes" (same whole-network snapshot shape)
     ├── mechanosynth_edit_block.rs # mechanosynth_edit's authored block + cursor (one command, four constructors)
@@ -66,6 +67,10 @@ It has **two** call sites, and both must keep pushing: `apply_text_to_active_net
 - **What gates the push.** `ai_edit_network` gates on `edit_applied` (did the statements parse and apply), **not** on the post-validation `success`. An edit that applied and then failed validation is still on the network, and it is exactly the one the user wants to undo.
 
 The whole-network snapshot carries `SerializableNode::zone`, so one command covers zone-body edits with no extra machinery — which is what makes the AI's new body-reaching powers recoverable.
+
+### Whole-network snapshots and thumbnails
+
+A network's thumbnail (`doc/design_network_thumbnails.md` D8) is **not** undo content. `snapshot_network` leaves it out, and a command that restores a snapshot over a network that exists must insert through **`NodeTypeRegistry::replace_network_keeping_thumbnail`**, never `node_networks.insert` — otherwise undoing an unrelated edit drops the current picture. A command that brings back a network that no longer exists (delete network, delete namespace, duplicate's redo) snapshots with `snapshot_network_with_thumbnail` instead, so the image returns with the network.
 
 ### Refresh After Undo/Redo
 

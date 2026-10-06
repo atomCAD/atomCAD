@@ -109,6 +109,11 @@ Stage 1 stays non-destructive for `apply` all the same: `initialize_…` uses `r
 - `HashMap` → `Vec` conversion for deterministic JSON output
 - `Node.custom_name` assigned during migration if missing (uses type name)
 - Camera settings persisted per network (optional)
+- A network's thumbnail is the **last** field of its object, base64 PNG
+  (`doc/design_network_thumbnails.md` D7). `node_network_to_serializable`
+  takes `include_thumbnail`: `true` only for the file and for snapshots that
+  bring back a deleted network; every other caller passes `false` (undo
+  snapshots, fingerprints). A malformed image is dropped on load, never fatal.
 - Version field enables forward-compatible migrations
 
 ## Version Migrations (chained dispatch)

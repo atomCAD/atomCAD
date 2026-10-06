@@ -38,6 +38,7 @@ fn minimal_network(canvas_viewport: Option<SerializableCanvasViewport>) -> Seria
         displayed_output_pins: vec![],
         camera_settings: None,
         canvas_viewport,
+        thumbnail: None,
     }
 }
 

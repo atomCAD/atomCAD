@@ -706,3 +706,8 @@ mod library_links_vendor_test;
 
 #[path = "structure_designer/network_load_order_test.rs"]
 mod network_load_order_test;
+
+// Node network thumbnails: storage, serialization, dirty flag, undo, linked
+// networks and the capture hand-over (doc/design_network_thumbnails.md P1).
+#[path = "structure_designer/network_thumbnail_test.rs"]
+mod network_thumbnail_test;

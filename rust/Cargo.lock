@@ -284,6 +284,7 @@ dependencies = [
  "atomcad-renderer",
  "atomcad-test-support",
  "atomcad-util",
+ "base64",
  "blake3",
  "dirs",
  "flate2",

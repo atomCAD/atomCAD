@@ -278,6 +278,7 @@ fn test_displayed_nodes_serialization_roundtrip_default_pins() {
         displayed_output_pins: vec![], // default pins
         camera_settings: None,
         canvas_viewport: None,
+        thumbnail: None,
     };
 
     // Serialize to JSON and back
@@ -323,6 +324,7 @@ fn test_displayed_nodes_serialization_roundtrip_non_default_pins() {
         displayed_output_pins: vec![(1, vec![0, 1])], // both pins displayed
         camera_settings: None,
         canvas_viewport: None,
+        thumbnail: None,
     };
 
     // Serialize to JSON and back

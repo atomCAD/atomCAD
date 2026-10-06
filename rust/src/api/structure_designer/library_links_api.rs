@@ -233,6 +233,9 @@ pub fn save_as_with_dependencies(
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
+                // The network worked on last reaches the file even if the user
+                // never left it (`doc/design_network_thumbnails.md` D2).
+                crate::api::api_common::capture_active_network_thumbnail(cad_instance);
                 // Refused onto a path open in another tab
                 // (`doc/design_multiple_documents.md` D5).
                 let result = cad_instance.documents.save_as_with_dependencies(

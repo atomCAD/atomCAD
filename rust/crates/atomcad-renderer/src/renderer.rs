@@ -83,6 +83,49 @@ impl CameraUniform {
 
 const DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32Float;
 
+/// What one draw renders into: colour and depth textures of one size and the
+/// buffer the colour is read back through. The live viewport owns one and the
+/// thumbnail owns another, so a thumbnail capture never resizes or
+/// reallocates the viewport's (`doc/design_network_thumbnails.md` D5).
+struct RenderTarget {
+    texture: Texture,
+    texture_view: TextureView,
+    depth_texture_view: TextureView,
+    output_buffer: Buffer,
+    size: Extent3d,
+}
+
+impl RenderTarget {
+    fn new(device: &Device, width: u32, height: u32) -> Self {
+        let size = Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        };
+        let texture = Renderer::create_texture(device, &size);
+        let texture_view = texture.create_view(&TextureViewDescriptor::default());
+        let depth_texture = Renderer::create_depth_texture(device, &size);
+        let depth_texture_view = depth_texture.create_view(&TextureViewDescriptor::default());
+        let output_buffer = Renderer::create_output_buffer(device, &size);
+        Self {
+            texture,
+            texture_view,
+            depth_texture_view,
+            output_buffer,
+            size,
+        }
+    }
+}
+
+/// Which parts of the scene a draw includes.
+#[derive(Clone, Copy)]
+struct PassFlags {
+    /// The editing aids: background grid lines, atom labels and the whole
+    /// gadget pass (gadgets and the lightweight pivot cube). Off for a
+    /// thumbnail, which shows only the content (D5).
+    editing_aids: bool,
+}
+
 pub struct Renderer {
     device: Device,
     queue: Queue,
@@ -148,15 +191,25 @@ pub struct Renderer {
     label_atlas_bind_group: wgpu::BindGroup,
     gadget_atom_impostor_mesh: GPUMesh,
     gadget_bond_impostor_mesh: GPUMesh,
-    texture: Texture,
-    texture_view: TextureView,
-    depth_texture: Texture,
-    depth_texture_view: TextureView,
-    output_buffer: Buffer,
-    pub texture_size: Extent3d,
+    /// The live viewport's render target.
+    target: RenderTarget,
     pub camera: Camera,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
+    /// The thumbnail's own render target and camera uniform, created once and
+    /// reused, so a capture never touches the live target or the live camera
+    /// buffer (`doc/design_network_thumbnails.md` D5).
+    thumbnail_target: RenderTarget,
+    thumbnail_camera_buffer: wgpu::Buffer,
+    thumbnail_camera_bind_group: wgpu::BindGroup,
+    /// Axis-aligned bounds of the content meshes on the GPU, recorded at
+    /// upload (D4). `None` when the content is empty.
+    content_bounds: Option<(DVec3, DVec3)>,
+    /// Which network the content meshes on the GPU belong to, as
+    /// `(document id, network name)` (D2). The document id is the structure
+    /// designer's `DocumentId`, which this crate cannot name. Set by every
+    /// content upload; `None` only when no network was active.
+    content_owner: Option<(u64, String)>,
     render_mutex: Mutex<()>,
 }
 
@@ -164,28 +217,7 @@ impl Renderer {
     pub async fn new(width: u32, height: u32) -> Self {
         //let start_time = Instant::now();
 
-        let camera = Camera {
-            // position the camera at new coordinates
-            // +z is out of the screen
-            eye: DVec3::new(0.0, -30.0, 10.0),
-            // have it look at the origin
-            target: DVec3::new(0.0, 0.0, 0.0),
-            // Perpendicular to the view direction (0, 30, -10) — the pose is
-            // canonical from the start, which is the invariant
-            // `Camera::orthonormalize_up` maintains everywhere else. (The value
-            // this replaced, (0, 0.32, 0.95), was off by 0.2°, and its comment
-            // named a view direction the eye/target above do not produce.)
-            up: DVec3::new(0.0, 1.0, 3.0).normalize(),
-            aspect: width as f64 / height as f64,
-            fovy: std::f64::consts::PI * 0.15,
-            znear: 1.5,
-            zfar: 2400.0,
-            orthographic: false,     // Default to perspective mode
-            ortho_half_height: 10.0, // Default orthographic half height
-            pivot_point: DVec3::new(0.0, 0.0, 0.0),
-            nav_up: DVec3::Z,
-            nav_up_label: "Z".to_string(),
-        };
+        let camera = Camera::default_pose(width as f64 / height as f64);
 
         // Initialize GPU
         let instance = Instance::default();
@@ -264,26 +296,12 @@ impl Renderer {
         let gadget_bond_impostor_mesh =
             GPUMesh::new_empty_bond_impostor_mesh(&device, &model_bind_group_layout);
 
-        let texture_size = Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        };
-
-        // Create texture
-        let texture = Self::create_texture(&device, &texture_size);
-
-        // Texture view
-        let texture_view = texture.create_view(&TextureViewDescriptor::default());
-
-        // Create depth texture
-        let depth_texture = Self::create_depth_texture(&device, &texture_size);
-
-        // Create depth texture view
-        let depth_texture_view = depth_texture.create_view(&TextureViewDescriptor::default());
-
-        // Create output buffer for readback
-        let output_buffer = Self::create_output_buffer(&device, &texture_size);
+        let target = RenderTarget::new(&device, width, height);
+        let thumbnail_target = RenderTarget::new(
+            &device,
+            crate::thumbnail::THUMBNAIL_RENDER_SIZE,
+            crate::thumbnail::THUMBNAIL_RENDER_SIZE,
+        );
 
         let mut camera_uniform = CameraUniform::new();
         camera_uniform.refresh(&camera);
@@ -357,6 +375,21 @@ impl Renderer {
                 resource: camera_buffer.as_entire_binding(),
             }],
             label: Some("camera_bind_group"),
+        });
+
+        let thumbnail_camera_buffer =
+            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Thumbnail Camera Buffer"),
+                contents: bytemuck::cast_slice(&[camera_uniform]),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            });
+        let thumbnail_camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &camera_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: thumbnail_camera_buffer.as_entire_binding(),
+            }],
+            label: Some("thumbnail_camera_bind_group"),
         });
 
         // Model bind group layout is already created above
@@ -484,15 +517,15 @@ impl Renderer {
             label_atlas_bind_group,
             gadget_atom_impostor_mesh,
             gadget_bond_impostor_mesh,
-            texture,
-            texture_view,
-            depth_texture,
-            depth_texture_view,
-            output_buffer,
-            texture_size,
+            target,
             camera,
             camera_buffer,
             camera_bind_group,
+            thumbnail_target,
+            thumbnail_camera_buffer,
+            thumbnail_camera_bind_group,
+            content_bounds: None,
+            content_owner: None,
             render_mutex: Mutex::new(()),
         }
     }
@@ -1054,11 +1087,11 @@ impl Renderer {
 
     /// Gets the current viewport size as (width, height)
     pub fn get_viewport_size(&self) -> (u32, u32) {
-        (self.texture_size.width, self.texture_size.height)
+        (self.target.size.width, self.target.size.height)
     }
 
     pub fn set_viewport_size(&mut self, width: u32, height: u32) {
-        if self.texture_size.width == width && self.texture_size.height == height {
+        if self.target.size.width == width && self.target.size.height == height {
             return;
         }
 
@@ -1069,23 +1102,7 @@ impl Renderer {
 
         self.device.poll(Maintain::Wait);
 
-        self.texture_size = Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        };
-
-        let texture = Self::create_texture(&self.device, &self.texture_size);
-        let texture_view = texture.create_view(&TextureViewDescriptor::default());
-        let depth_texture = Self::create_depth_texture(&self.device, &self.texture_size);
-        let depth_texture_view = depth_texture.create_view(&TextureViewDescriptor::default());
-        let output_buffer = Self::create_output_buffer(&self.device, &self.texture_size);
-
-        self.texture = texture;
-        self.texture_view = texture_view;
-        self.depth_texture = depth_texture;
-        self.depth_texture_view = depth_texture_view;
-        self.output_buffer = output_buffer;
+        self.target = RenderTarget::new(&self.device, width, height);
 
         self.device.poll(Maintain::Wait);
     }
@@ -1105,6 +1122,7 @@ impl Renderer {
         gadget_atom_impostor_mesh: &AtomImpostorMesh,
         gadget_bond_impostor_mesh: &BondImpostorMesh,
         update_non_lightweight: bool,
+        content_owner: Option<(u64, String)>,
     ) {
         self.lightweight_mesh
             .update_from_mesh(&self.device, lightweight_mesh, "Lightweight");
@@ -1115,6 +1133,17 @@ impl Renderer {
         self.gadget_line_mesh.set_identity_transform(&self.queue);
 
         if update_non_lightweight {
+            // The content changes hands here, and only here (D2, D4).
+            self.content_owner = content_owner;
+            self.content_bounds = crate::thumbnail::content_bounds(
+                main_mesh,
+                wireframe_mesh,
+                atom_impostor_mesh,
+                bond_impostor_mesh,
+                transparent_impostor_mesh,
+                &isosurface_transparent_mesh.mesh,
+            );
+
             self.main_mesh
                 .update_from_mesh(&self.device, main_mesh, "Main");
             self.wireframe_mesh
@@ -1204,32 +1233,132 @@ impl Renderer {
     pub fn render(&mut self, background_color_rgb: [u8; 3]) -> Vec<u8> {
         let _lock = self.render_mutex.lock().unwrap();
 
-        // Lazily re-sort the transparent impostors back-to-front for the current
-        // camera before the pass draws them. Recomputes and re-uploads the index
-        // buffer only when the camera view has changed or a new transparent mesh
-        // was uploaded since the last sort — so a resting camera costs nothing,
-        // and orbiting re-sorts once per moved frame (§Sorting of
-        // `doc/design_xray_node.md`). The sort is a fixed-size permutation of the
-        // existing index buffer, so this `write_buffer` never reallocates. This
-        // is written out over disjoint fields (not a `&mut self` helper) because
-        // `_lock` holds an immutable borrow of `self` for the whole method.
-        if self.transparent_impostor_mesh.num_indices > 0 {
-            let view = self.camera.build_view_matrix().as_mat4();
-            let up_to_date = self.transparent_sorted_generation
-                == Some(self.transparent_mesh_generation)
-                && self.transparent_sorted_view == Some(view);
-            if !up_to_date {
-                let indices = sorted_transparent_indices(&self.transparent_quad_centers, &view);
-                self.queue.write_buffer(
-                    &self.transparent_impostor_mesh.index_buffer,
-                    0,
-                    bytemuck::cast_slice(&indices),
-                );
-                self.transparent_sorted_generation = Some(self.transparent_mesh_generation);
-                self.transparent_sorted_view = Some(view);
-            }
-        }
+        let view = self.camera.build_view_matrix().as_mat4();
+        Self::resort_transparent_impostors(
+            &self.queue,
+            &self.transparent_impostor_mesh,
+            &self.transparent_quad_centers,
+            self.transparent_mesh_generation,
+            &mut self.transparent_sorted_generation,
+            &mut self.transparent_sorted_view,
+            view,
+        );
 
+        self.draw_to_target(
+            &self.target,
+            &self.camera_bind_group,
+            view,
+            background_color_rgb,
+            PassFlags { editing_aids: true },
+        )
+    }
+
+    /// Renders the content meshes on the GPU from `camera` in thumbnail mode
+    /// (`doc/design_network_thumbnails.md` D5): content only, no gadgets,
+    /// pivot cube, grid or labels, on a fixed background, at
+    /// `THUMBNAIL_RENDER_SIZE` and box-downsampled to `THUMBNAIL_SIZE`.
+    /// Returns tightly packed **RGBA**. `camera.aspect` is ignored: the
+    /// thumbnail is square.
+    ///
+    /// Uses its own render target and camera buffer, so the live viewport's
+    /// textures and camera uniform are untouched. The one shared resource is
+    /// the transparent impostors' sorted index buffer: it is re-sorted for
+    /// this camera, and the next live frame re-sorts it back because the sort
+    /// cache is keyed on the view matrix.
+    pub fn render_thumbnail(&mut self, camera: &Camera) -> Vec<u8> {
+        let _lock = self.render_mutex.lock().unwrap();
+
+        let mut camera = camera.clone();
+        camera.aspect = 1.0;
+        let mut camera_uniform = CameraUniform::new();
+        camera_uniform.refresh(&camera);
+        self.queue.write_buffer(
+            &self.thumbnail_camera_buffer,
+            0,
+            bytemuck::cast_slice(&[camera_uniform]),
+        );
+
+        let view = camera.build_view_matrix().as_mat4();
+        Self::resort_transparent_impostors(
+            &self.queue,
+            &self.transparent_impostor_mesh,
+            &self.transparent_quad_centers,
+            self.transparent_mesh_generation,
+            &mut self.transparent_sorted_generation,
+            &mut self.transparent_sorted_view,
+            view,
+        );
+
+        let mut pixels = self.draw_to_target(
+            &self.thumbnail_target,
+            &self.thumbnail_camera_bind_group,
+            view,
+            crate::thumbnail::THUMBNAIL_BACKGROUND_RGB,
+            PassFlags {
+                editing_aids: false,
+            },
+        );
+        crate::thumbnail::bgra_to_rgba_in_place(&mut pixels);
+        crate::thumbnail::downsample_2x2(
+            &pixels,
+            self.thumbnail_target.size.width,
+            self.thumbnail_target.size.height,
+        )
+    }
+
+    /// Bounds of the content meshes on the GPU (D4); `None` when the content
+    /// is empty, in which case no thumbnail is captured (D3).
+    pub fn content_bounds(&self) -> Option<(DVec3, DVec3)> {
+        self.content_bounds
+    }
+
+    /// Which network the content meshes on the GPU belong to (D2), as
+    /// `(document id, network name)`.
+    pub fn content_owner(&self) -> Option<&(u64, String)> {
+        self.content_owner.as_ref()
+    }
+
+    /// Lazily re-sorts the transparent impostors back-to-front for `view`
+    /// before a pass draws them. Recomputes and re-uploads the index buffer
+    /// only when the view has changed or a new transparent mesh was uploaded
+    /// since the last sort — so a resting camera costs nothing, and orbiting
+    /// re-sorts once per moved frame (§Sorting of `doc/design_xray_node.md`).
+    /// The sort is a fixed-size permutation of the existing index buffer, so
+    /// this `write_buffer` never reallocates. Takes the fields it needs one
+    /// by one (not `&mut self`) because callers hold the render lock, an
+    /// immutable borrow of `self`.
+    #[allow(clippy::too_many_arguments)]
+    fn resort_transparent_impostors(
+        queue: &Queue,
+        mesh: &GPUMesh,
+        quad_centers: &[Vec3],
+        mesh_generation: u64,
+        sorted_generation: &mut Option<u64>,
+        sorted_view: &mut Option<Mat4>,
+        view: Mat4,
+    ) {
+        if mesh.num_indices == 0 {
+            return;
+        }
+        let up_to_date = *sorted_generation == Some(mesh_generation) && *sorted_view == Some(view);
+        if !up_to_date {
+            let indices = sorted_transparent_indices(quad_centers, &view);
+            queue.write_buffer(&mesh.index_buffer, 0, bytemuck::cast_slice(&indices));
+            *sorted_generation = Some(mesh_generation);
+            *sorted_view = Some(view);
+        }
+    }
+
+    /// One frame into `target`, drawn with the camera bound in
+    /// `camera_bind_group` (whose view matrix is `view`), read back as BGRA.
+    fn draw_to_target(
+        &self,
+        target: &RenderTarget,
+        camera_bind_group: &wgpu::BindGroup,
+        view: Mat4,
+        background_color_rgb: [u8; 3],
+        flags: PassFlags,
+    ) -> Vec<u8> {
         let mut encoder = self
             .device
             .create_command_encoder(&CommandEncoderDescriptor {
@@ -1249,7 +1378,7 @@ impl Renderer {
             let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[Some(RenderPassColorAttachment {
-                    view: &self.texture_view,
+                    view: &target.texture_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(bg_color),
@@ -1257,7 +1386,7 @@ impl Renderer {
                     },
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &self.depth_texture_view,
+                    view: &target.depth_texture_view,
                     depth_ops: Some(wgpu::Operations {
                         load: wgpu::LoadOp::Clear(1.0), // Clear depth to the farthest value
                         store: wgpu::StoreOp::Store,
@@ -1269,7 +1398,7 @@ impl Renderer {
             });
 
             // Set camera bind group (shared for both pipelines)
-            render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+            render_pass.set_bind_group(0, camera_bind_group, &[]);
 
             // Each mesh now has its own model bind group
 
@@ -1293,32 +1422,34 @@ impl Renderer {
             render_pass.set_pipeline(&self.bond_impostor_pipeline);
             self.render_mesh(&mut render_pass, &self.bond_impostor_mesh);
 
-            // Set identity transform for background mesh and render it
-            self.background_mesh.set_identity_transform(&self.queue);
-            render_pass.set_pipeline(&self.background_line_pipeline);
-            self.render_mesh(&mut render_pass, &self.background_mesh);
+            if flags.editing_aids {
+                // Set identity transform for background mesh and render it
+                self.background_mesh.set_identity_transform(&self.queue);
+                render_pass.set_pipeline(&self.background_line_pipeline);
+                self.render_mesh(&mut render_pass, &self.background_mesh);
 
-            // Atom labels: after everything opaque (they blend over it) and,
-            // critically, BEFORE the transparent pass. The order is forced by
-            // the depth-write asymmetry — labels write depth, ghosts do not.
-            // Labels-then-ghosts is correct both ways round (a ghost behind a
-            // label is depth-rejected at the glyph; a ghost in front passes
-            // `Less` and tints the label). Ghosts-then-labels would be wrong: a
-            // ghost in front wrote no depth, so the label would pass the test
-            // and paint over a ghost that is actually nearer.
-            //
-            // Group 2 (the font atlas) is bound once here, after the pipeline
-            // that declares it — `render_mesh` only knows about group 1.
-            self.label_mesh.set_identity_transform(&self.queue);
-            render_pass.set_pipeline(&self.label_pipeline);
-            render_pass.set_bind_group(2, &self.label_atlas_bind_group, &[]);
-            self.render_mesh(&mut render_pass, &self.label_mesh);
+                // Atom labels: after everything opaque (they blend over it) and,
+                // critically, BEFORE the transparent pass. The order is forced by
+                // the depth-write asymmetry — labels write depth, ghosts do not.
+                // Labels-then-ghosts is correct both ways round (a ghost behind a
+                // label is depth-rejected at the glyph; a ghost in front passes
+                // `Less` and tints the label). Ghosts-then-labels would be wrong: a
+                // ghost in front wrote no depth, so the label would pass the test
+                // and paint over a ghost that is actually nearer.
+                //
+                // Group 2 (the font atlas) is bound once here, after the pipeline
+                // that declares it — `render_mesh` only knows about group 1.
+                self.label_mesh.set_identity_transform(&self.queue);
+                render_pass.set_pipeline(&self.label_pipeline);
+                render_pass.set_bind_group(2, &self.label_atlas_bind_group, &[]);
+                self.render_mesh(&mut render_pass, &self.label_mesh);
+            }
 
             // Transparent impostors (x-ray) draw last in the main pass — after
             // ALL opaque content, including the background lines — with alpha
             // blending and depth writes off. The index buffer is kept in
-            // back-to-front order for the current camera by
-            // `resort_transparent_indices_if_needed` (called above).
+            // back-to-front order for this camera by
+            // `resort_transparent_impostors` (called before this draw).
             self.transparent_impostor_mesh
                 .set_identity_transform(&self.queue);
             render_pass.set_pipeline(&self.transparent_impostor_pipeline);
@@ -1335,15 +1466,15 @@ impl Renderer {
             // enough, and the input to any future OIT decision.
             self.isosurface_transparent_mesh
                 .set_identity_transform(&self.queue);
-            self.draw_transparent_surfaces(&mut render_pass);
+            self.draw_transparent_surfaces(&mut render_pass, &view);
         }
 
         // Second render pass for gadgets - clear depth buffer but preserve color
-        {
+        if flags.editing_aids {
             let mut gadget_render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
                 label: Some("Gadget Render Pass"),
                 color_attachments: &[Some(RenderPassColorAttachment {
-                    view: &self.texture_view,
+                    view: &target.texture_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Load, // Preserve existing color buffer
@@ -1351,7 +1482,7 @@ impl Renderer {
                     },
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &self.depth_texture_view,
+                    view: &target.depth_texture_view,
                     depth_ops: Some(wgpu::Operations {
                         load: wgpu::LoadOp::Clear(1.0), // Clear depth buffer for gadgets
                         store: wgpu::StoreOp::Store,
@@ -1363,7 +1494,7 @@ impl Renderer {
             });
 
             // Set camera bind group for gadget render pass
-            gadget_render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+            gadget_render_pass.set_bind_group(0, camera_bind_group, &[]);
 
             // Render gadget lines first
             self.gadget_line_mesh.set_identity_transform(&self.queue);
@@ -1389,43 +1520,43 @@ impl Renderer {
         }
 
         // Calculate bytes per row with proper alignment (256-byte boundary for WebGPU)
-        let bytes_per_row = 4 * self.texture_size.width;
+        let bytes_per_row = 4 * target.size.width;
         let aligned_bytes_per_row = (bytes_per_row + 255) & !255;
 
         // Copy texture to output buffer with aligned bytes per row
         encoder.copy_texture_to_buffer(
             ImageCopyTexture {
-                texture: &self.texture,
+                texture: &target.texture,
                 mip_level: 0,
                 origin: Origin3d::ZERO,
                 aspect: TextureAspect::All,
             },
             ImageCopyBuffer {
-                buffer: &self.output_buffer,
+                buffer: &target.output_buffer,
                 layout: ImageDataLayout {
                     offset: 0,
                     bytes_per_row: Some(aligned_bytes_per_row),
-                    rows_per_image: Some(self.texture_size.height),
+                    rows_per_image: Some(target.size.height),
                 },
             },
-            self.texture_size,
+            target.size,
         );
 
         // Submit commands
         self.queue.submit(Some(encoder.finish()));
 
         // Read data
-        let buffer_slice = self.output_buffer.slice(..);
+        let buffer_slice = target.output_buffer.slice(..);
         buffer_slice.map_async(MapMode::Read, |_| {});
         self.device.poll(Maintain::Wait);
 
         // Get the data and handle alignment if needed
         let data = if aligned_bytes_per_row != bytes_per_row {
             let aligned_data = buffer_slice.get_mapped_range();
-            let mut data = Vec::with_capacity((bytes_per_row * self.texture_size.height) as usize);
+            let mut data = Vec::with_capacity((bytes_per_row * target.size.height) as usize);
 
             // Extract each row, skipping the padding
-            for row in 0..self.texture_size.height {
+            for row in 0..target.size.height {
                 let start = row as usize * aligned_bytes_per_row as usize;
                 let end = start + bytes_per_row as usize;
                 data.extend_from_slice(&aligned_data[start..end]);
@@ -1438,7 +1569,7 @@ impl Renderer {
             buffer_slice.get_mapped_range().to_vec()
         };
 
-        self.output_buffer.unmap();
+        target.output_buffer.unmap();
         data
     }
 
@@ -1454,7 +1585,7 @@ impl Renderer {
     /// permutation of a single-digit-length list, so recomputing it per frame
     /// is free and needs no laziness (contrast the impostor sort, which
     /// rewrites and re-uploads an index buffer).
-    fn draw_transparent_surfaces<'a>(&'a self, render_pass: &mut RenderPass<'a>) {
+    fn draw_transparent_surfaces<'a>(&'a self, render_pass: &mut RenderPass<'a>, view: &Mat4) {
         let mesh = &self.isosurface_transparent_mesh;
         if mesh.num_indices == 0 {
             return;
@@ -1475,8 +1606,7 @@ impl Renderer {
             render_pass.set_pipeline(&self.surface_no_cull_pipeline);
             render_pass.draw_indexed(0..mesh.num_indices, 0, 0..1);
         } else if sorted {
-            let view = self.camera.build_view_matrix().as_mat4();
-            for index in sorted_component_order(&self.isosurface_components, &view) {
+            for index in sorted_component_order(&self.isosurface_components, view) {
                 let component = self.isosurface_components[index];
                 let range = component.first_index..component.first_index + component.index_count;
                 // Back faces, then front faces, within this component.

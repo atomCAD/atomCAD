@@ -428,6 +428,16 @@ describes the thumbnails, when they update and the two menu items.
    node headers?
 4. **Hiding thumbnails:** should the network panel have a *Show thumbnails*
    toggle for people who prefer the compact list?
+5. **Selection in the picture** (found in Phase 1): selection highlighting
+   *is* part of the content meshes — the atomic tessellator colours selected
+   atoms and bonds (`atomic_tessellator.rs`, `is_selected` /
+   `is_bond_selected`). D5 asks to suppress it the way the image export does,
+   but a capture draws the meshes already on the GPU, built with the
+   selection, and by the time a switch triggers the capture the CPU scene is
+   already the incoming network's. Suppressing it would mean tessellating the
+   outgoing scene a second time without selection before the switch — the
+   cost D2 set out to avoid. Phase 1 therefore shows the selection; D3's
+   tolerance hides a few selected atoms but not a large selection.
 
 ## Phases
 
@@ -460,6 +470,22 @@ describes the thumbnails, when they update and the two menu items.
   undoing a text edit keeps the current thumbnail, undoing a delete brings
   the image back; revisions never repeat across an undo restore or a reload;
   linked networks are never captured.
+
+**Phase 1 implementation notes** (where the code differs from, or adds to,
+the text above):
+
+- `APINetworkWithValidationErrors` also carries `thumbnail_user_set`, which
+  the context menu needs to decide whether to offer *Reset* (D9).
+- *Set current view as thumbnail* is refused when nothing is displayed, for
+  the reason D3 gives for automatic capture.
+- An undo restore that keeps the live thumbnail keeps its revision too: the
+  image is unchanged, so the cache entry stays valid, and D7's guarantee —
+  two different images never share a revision — still holds.
+- The GPU-free half of the hand-over rule (`thumbnail_ops::ContentOwner`,
+  `outgoing_content_owner`, `DocumentSet::designer_mut`) lives in the
+  structure-designer crate so the switch paths are tested without a GPU; the
+  empty-scene skip is in the API layer and is covered by the manual
+  walkthrough only.
 
 ### Phase 2 — Flutter: list and tree
 

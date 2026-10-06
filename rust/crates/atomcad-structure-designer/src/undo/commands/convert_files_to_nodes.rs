@@ -36,8 +36,7 @@ impl ConvertFilesToNodesCommand {
             None,
         ) {
             ctx.node_type_registry
-                .node_networks
-                .insert(name.to_string(), network);
+                .replace_network_keeping_thumbnail(name.to_string(), network);
         }
     }
 }

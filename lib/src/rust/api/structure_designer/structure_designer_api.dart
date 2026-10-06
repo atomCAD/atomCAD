@@ -2037,6 +2037,41 @@ APIResult saveNodeNetworks() => RustLib.instance.api
 bool isDesignDirty() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiIsDesignDirty();
 
+/// Automatic thumbnails were captured since the last save, load or new
+/// (`doc/design_network_thumbnails.md` D8). *Save* is available when this or
+/// `is_design_dirty` is true; the unsaved-changes prompt looks at
+/// `is_design_dirty` only.
+bool hasUnsavedThumbnails() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiHasUnsavedThumbnails();
+
+/// The PNG bytes of a network's thumbnail in the active document, or `None`
+/// when it has none (`doc/design_network_thumbnails.md` D9).
+Uint8List? getNetworkThumbnailPng({required String networkName}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetNetworkThumbnailPng(
+            networkName: networkName);
+
+/// *Set current view as thumbnail* (`doc/design_network_thumbnails.md` D6):
+/// renders the live view of the **active** network — square, the centre of
+/// the viewport — without gadgets, grid or labels, and stores it as a user-set
+/// thumbnail that automatic capture leaves alone. Undoable; marks the document
+/// dirty. Refused for an inactive or linked network and when nothing is
+/// displayed.
+APIResult setCurrentViewAsThumbnail({required String networkName}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetCurrentViewAsThumbnail(
+            networkName: networkName);
+
+/// *Reset to automatic thumbnail* (`doc/design_network_thumbnails.md` D6):
+/// clears the user-set flag and immediately captures an automatic image when
+/// the network is active and displays something; otherwise the current image
+/// stays, now automatic. Undoable; marks the document dirty. Refused for a
+/// linked network and when the thumbnail is not user-set.
+APIResult resetNetworkThumbnail({required String networkName}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiResetNetworkThumbnail(
+            networkName: networkName);
+
 String? getDesignFilePath() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetDesignFilePath();
 

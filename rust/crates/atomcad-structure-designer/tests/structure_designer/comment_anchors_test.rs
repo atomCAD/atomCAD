@@ -649,7 +649,7 @@ fn anchors_round_trip_through_the_cnnd_node_data() {
         .node_networks
         .get_mut("Main")
         .unwrap();
-    let serializable = node_network_to_serializable(net, &built_ins, None).unwrap();
+    let serializable = node_network_to_serializable(net, &built_ins, None, false).unwrap();
     let reloaded = serializable_to_node_network(&serializable, &built_ins, None).unwrap();
 
     let restored = reloaded

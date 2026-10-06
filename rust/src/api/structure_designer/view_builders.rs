@@ -297,6 +297,9 @@ pub fn get_node_networks_with_validation(
                     .library_links
                     .mount_containing(&network.node_type.name)
                     .is_some(),
+                has_thumbnail: network.thumbnail.is_some(),
+                thumbnail_revision: network.thumbnail_revision,
+                thumbnail_user_set: network.thumbnail.as_ref().is_some_and(|t| t.user_set),
             }
         })
         .collect();

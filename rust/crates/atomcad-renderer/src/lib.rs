@@ -13,6 +13,7 @@ pub mod mesh;
 pub mod renderer;
 pub mod surface_sort;
 pub mod tessellator;
+pub mod thumbnail;
 pub mod transparent_impostor_mesh;
 pub mod transparent_sort;
 pub mod transparent_surface_mesh;

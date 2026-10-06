@@ -1,5 +1,6 @@
 use super::super::camera_settings::CameraSettings;
 use super::super::canvas_viewport::CanvasViewport;
+use super::super::network_thumbnail::NetworkThumbnail;
 use super::super::node_data::CustomNodeData;
 use super::super::node_data::NoData;
 use super::super::node_data::NodeData;
@@ -263,6 +264,44 @@ pub struct SerializableNodeNetwork {
     /// (backward compatible - defaults to None for old files).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub canvas_viewport: Option<SerializableCanvasViewport>,
+    /// A picture of what the network builds (`doc/design_network_thumbnails.md`
+    /// D7). Kept **last**, so the network's real content stays at the top of
+    /// its object. Absent in old files and in undo snapshots that leave it
+    /// out (D8, `include_thumbnail`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thumbnail: Option<SerializableThumbnail>,
+}
+
+/// The `.cnnd` form of a [`NetworkThumbnail`]: base64 PNG on one line, so a
+/// changed image is one changed line in a diff (D7).
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct SerializableThumbnail {
+    pub png: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub user_set: bool,
+}
+
+impl SerializableThumbnail {
+    pub fn from_thumbnail(thumbnail: &NetworkThumbnail) -> Self {
+        use base64::Engine;
+        SerializableThumbnail {
+            png: base64::engine::general_purpose::STANDARD.encode(&thumbnail.png),
+            user_set: thumbnail.user_set,
+        }
+    }
+
+    /// `None` when the base64 is malformed: a damaged picture is dropped
+    /// rather than failing the load, and the next capture replaces it.
+    pub fn to_thumbnail(&self) -> Option<NetworkThumbnail> {
+        use base64::Engine;
+        base64::engine::general_purpose::STANDARD
+            .decode(self.png.as_bytes())
+            .ok()
+            .map(|png| NetworkThumbnail {
+                png,
+                user_set: self.user_set,
+            })
+    }
 }
 
 /// Container for serializing all node networks in the NodeTypeRegistry
@@ -569,6 +608,7 @@ pub fn node_to_serializable(
             body_ref,
             built_in_node_types,
             design_dir,
+            false,
         )?)
     } else {
         None
@@ -677,12 +717,19 @@ pub fn serializable_to_node(
 
 /// Converts a NodeNetwork to a SerializableNodeNetwork
 ///
+/// `include_thumbnail` decides whether the network's thumbnail is written
+/// (`doc/design_network_thumbnails.md` D8): `true` for the file and for the
+/// snapshots that bring back a network which no longer exists (delete network,
+/// delete namespace, duplicate); `false` for every other undo snapshot, which
+/// replaces a network that exists and keeps its live thumbnail.
+///
 /// # Returns
 /// * `io::Result<SerializableNodeNetwork>` - The serializable network or an error if serialization fails
 pub fn node_network_to_serializable(
     network: &mut NodeNetwork,
     built_in_node_types: &std::collections::HashMap<String, crate::node_type::NodeType>,
     design_dir: Option<&str>,
+    include_thumbnail: bool,
 ) -> io::Result<SerializableNodeNetwork> {
     // Convert each node to a SerializableNode
     // In node-id order: the file must not depend on `HashMap` iteration order
@@ -773,6 +820,14 @@ pub fn node_network_to_serializable(
         displayed_output_pins,
         camera_settings,
         canvas_viewport,
+        thumbnail: if include_thumbnail {
+            network
+                .thumbnail
+                .as_ref()
+                .map(SerializableThumbnail::from_thumbnail)
+        } else {
+            None
+        },
     })
 }
 
@@ -1039,6 +1094,13 @@ pub fn serializable_to_node_network(
             zoom_level: scv.zoom_level,
         });
 
+    // `NodeNetwork::new` already drew a fresh revision, so a deserialized
+    // network never shares one with the network it replaces (D7).
+    network.thumbnail = serializable
+        .thumbnail
+        .as_ref()
+        .and_then(SerializableThumbnail::to_thumbnail);
+
     Ok(network)
 }
 
@@ -1078,7 +1140,7 @@ pub fn registry_to_serializable(
             .get_mut(name)
             .expect("name came from this map's keys");
         let serializable_network =
-            node_network_to_serializable(network, &registry.built_in_node_types, design_dir)?;
+            node_network_to_serializable(network, &registry.built_in_node_types, design_dir, true)?;
         serializable_networks.push((name.clone(), serializable_network));
     }
 
