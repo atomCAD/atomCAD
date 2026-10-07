@@ -21,10 +21,19 @@ pub const THUMBNAIL_SIZE: u32 = 128;
 /// not antialiased, so the 2×2 box filter is what smooths their edges.
 pub const THUMBNAIL_RENDER_SIZE: u32 = THUMBNAIL_SIZE * 2;
 
-/// The fixed thumbnail background (D5): the default viewport background, not
-/// the user's preference, so the stored image does not depend on who saved
-/// the file. Mirrors `preferences::default_background_color`.
-pub const THUMBNAIL_BACKGROUND_RGB: [u8; 3] = [0, 0, 0];
+/// The light thumbnail background (D5), for dark content (carbon, geometry).
+pub const THUMBNAIL_LIGHT_BACKGROUND_RGB: [u8; 3] = [216, 220, 226];
+
+/// The dark thumbnail background (D5), for light content (silicon, hydrogen).
+pub const THUMBNAIL_DARK_BACKGROUND_RGB: [u8; 3] = [42, 46, 52];
+
+/// A content pixel "stands out" from a background when their luminances
+/// differ by at least this much (out of 255).
+const BACKGROUND_CONTRAST_MIN: f64 = 64.0;
+
+/// Two renders agree on a pixel — it is opaque content, not background — when
+/// no channel differs by more than this.
+const CONTENT_PIXEL_TOLERANCE: u8 = 2;
 
 /// A pixel counts as different when one of its channels differs by more than
 /// this (D3, out of 255). Tuned against renderer noise, not against small
@@ -254,4 +263,78 @@ pub fn thumbnail_changed(stored_png: Option<&[u8]>, rgba: &[u8], width: u32, hei
         Ok((stored, w, h)) if w == width && h == height => images_differ(&stored, rgba),
         _ => true,
     }
+}
+
+/// Which of the two backgrounds a thumbnail is drawn on (D5).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ThumbnailBackground {
+    Light,
+    Dark,
+}
+
+impl ThumbnailBackground {
+    pub fn rgb(self) -> [u8; 3] {
+        match self {
+            ThumbnailBackground::Light => THUMBNAIL_LIGHT_BACKGROUND_RGB,
+            ThumbnailBackground::Dark => THUMBNAIL_DARK_BACKGROUND_RGB,
+        }
+    }
+}
+
+/// Rec. 709 luma of an RGB triple, on the stored 0–255 values.
+fn luminance(rgb: &[u8]) -> f64 {
+    0.2126 * rgb[0] as f64 + 0.7152 * rgb[1] as f64 + 0.0722 * rgb[2] as f64
+}
+
+/// Picks the background the content stands out on (D5), from the same view
+/// rendered on both backgrounds (tightly packed RGBA of the same size).
+///
+/// Pixels on which the two renders agree are opaque content; everything else
+/// is background, an antialiased edge or transparent content, and is ignored.
+/// Each background scores the content pixels that differ from it in luminance
+/// by at least [`BACKGROUND_CONTRAST_MIN`]; the higher score wins. That
+/// follows the majority material in mixed content (a carbon tip with some
+/// hydrogen gets the light background) where a mean luminance would land in
+/// the middle. A tie — including no opaque content at all — goes to the
+/// background farther from the mean content luminance, then to light.
+///
+/// Depends only on the content, so the stored image still does not depend
+/// on who saved the file.
+pub fn choose_background(on_light: &[u8], on_dark: &[u8]) -> ThumbnailBackground {
+    let light = luminance(&THUMBNAIL_LIGHT_BACKGROUND_RGB);
+    let dark = luminance(&THUMBNAIL_DARK_BACKGROUND_RGB);
+    let (mut light_score, mut dark_score) = (0usize, 0usize);
+    let (mut sum, mut count) = (0.0, 0usize);
+    for (a, b) in on_light.chunks_exact(4).zip(on_dark.chunks_exact(4)) {
+        let agree = a[..3]
+            .iter()
+            .zip(&b[..3])
+            .all(|(x, y)| x.abs_diff(*y) <= CONTENT_PIXEL_TOLERANCE);
+        if !agree {
+            continue;
+        }
+        let l = luminance(a);
+        if (l - light).abs() >= BACKGROUND_CONTRAST_MIN {
+            light_score += 1;
+        }
+        if (l - dark).abs() >= BACKGROUND_CONTRAST_MIN {
+            dark_score += 1;
+        }
+        sum += l;
+        count += 1;
+    }
+    if light_score != dark_score {
+        return if light_score > dark_score {
+            ThumbnailBackground::Light
+        } else {
+            ThumbnailBackground::Dark
+        };
+    }
+    if count > 0 {
+        let mean = sum / count as f64;
+        if (mean - dark).abs() > (mean - light).abs() {
+            return ThumbnailBackground::Dark;
+        }
+    }
+    ThumbnailBackground::Light
 }

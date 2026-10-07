@@ -8,8 +8,9 @@ use atomcad_renderer::camera::Camera;
 use atomcad_renderer::line_mesh::LineMesh;
 use atomcad_renderer::mesh::{Mesh, Vertex};
 use atomcad_renderer::thumbnail::{
-    THUMBNAIL_SIZE, content_bounds, decode_png, downsample_2x2, encode_png, fit_camera_to_bounds,
-    images_differ, square_camera, thumbnail_changed,
+    THUMBNAIL_SIZE, ThumbnailBackground, choose_background, content_bounds, decode_png,
+    downsample_2x2, encode_png, fit_camera_to_bounds, images_differ, square_camera,
+    thumbnail_changed,
 };
 use atomcad_renderer::transparent_impostor_mesh::TransparentImpostorMesh;
 use glam::f64::{DVec3, DVec4};
@@ -278,4 +279,66 @@ fn thumbnail_changed_against_the_stored_png() {
         THUMBNAIL_SIZE,
         THUMBNAIL_SIZE
     ));
+}
+
+// --- Background choice (D5) ---
+
+/// A `width`-pixel strip rendered on `background`: `content` pixels of the
+/// given colour, the rest background.
+fn strip(background: [u8; 3], content: &[[u8; 3]], width: usize) -> Vec<u8> {
+    let mut pixels = Vec::with_capacity(width * 4);
+    for i in 0..width {
+        let rgb = content.get(i).copied().unwrap_or(background);
+        pixels.extend_from_slice(&[rgb[0], rgb[1], rgb[2], 255]);
+    }
+    pixels
+}
+
+fn choose_for(content: &[[u8; 3]]) -> ThumbnailBackground {
+    let width = content.len() + 20;
+    choose_background(
+        &strip(ThumbnailBackground::Light.rgb(), content, width),
+        &strip(ThumbnailBackground::Dark.rgb(), content, width),
+    )
+}
+
+const CARBON: [u8; 3] = [46, 46, 46];
+const SILICON: [u8; 3] = [240, 199, 161];
+const HYDROGEN: [u8; 3] = [255, 255, 255];
+
+#[test]
+fn dark_content_gets_the_light_background() {
+    assert_eq!(choose_for(&[CARBON; 10]), ThumbnailBackground::Light);
+}
+
+#[test]
+fn light_content_gets_the_dark_background() {
+    assert_eq!(choose_for(&[SILICON; 10]), ThumbnailBackground::Dark);
+    assert_eq!(choose_for(&[HYDROGEN; 10]), ThumbnailBackground::Dark);
+}
+
+#[test]
+fn mixed_content_follows_the_majority_material() {
+    let mut carbon_tip = vec![CARBON; 8];
+    carbon_tip.extend([HYDROGEN; 3]);
+    assert_eq!(choose_for(&carbon_tip), ThumbnailBackground::Light);
+
+    let mut passivated_silicon = vec![SILICON; 8];
+    passivated_silicon.extend([CARBON; 3]);
+    assert_eq!(choose_for(&passivated_silicon), ThumbnailBackground::Dark);
+}
+
+#[test]
+fn pixels_that_differ_between_the_renders_are_not_content() {
+    // Only background — and a "transparent" pixel that takes the background's
+    // colour in each render — so there is no opaque content: light by default.
+    let width = 10;
+    let mut on_light = strip(ThumbnailBackground::Light.rgb(), &[], width);
+    let mut on_dark = strip(ThumbnailBackground::Dark.rgb(), &[], width);
+    on_light[..4].copy_from_slice(&[250, 250, 250, 255]);
+    on_dark[..4].copy_from_slice(&[120, 120, 120, 255]);
+    assert_eq!(
+        choose_background(&on_light, &on_dark),
+        ThumbnailBackground::Light
+    );
 }

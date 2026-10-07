@@ -231,8 +231,27 @@ implementation, and if it does, the thumbnail must suppress it the same way
 the network-image export does (`hideSelection`), never by clearing the
 selection.
 
-The background is a **fixed** colour — the default viewport background, not the
-user's preference — so the stored image does not depend on who saved the file.
+The background is not the user's preference, so the stored image does not
+depend on who saved the file. It is one of **two fixed colours**, chosen per
+thumbnail for contrast with the content: light `#D8DCE2` or dark `#2A2E34`.
+No single colour works: the materials that matter most sit at both ends of the
+brightness scale (carbon ≈ 46/255, the geometry ≈ 120, silicon ≈ 205,
+hydrogen 255), so a light background loses silicon, a dark one loses carbon
+and a mid grey loses the geometry. (The first implementation used black, the
+default viewport background, and dark geometry and carbon all but vanished in
+the list.)
+
+`render_thumbnail` draws the view on both backgrounds; pixels on which the two
+renders agree are opaque content. Each background scores the content pixels
+that differ from it in luminance by at least 64; the higher score wins, so
+mixed content follows its majority material (a carbon tip with some hydrogen
+gets the light one). A tie — including no opaque content, e.g. only a
+transparent isosurface — goes to the background farther from the mean content
+luminance, then to light. The kept render is the one already drawn on the
+chosen background, so antialiased edges blend into the right colour. The
+choice depends only on the content, and the decision is a pure function
+(`thumbnail::choose_background`) with unit tests. The colours and the contrast
+threshold are starting values to tune against real files.
 
 The image is rendered at 256×256 and box-downsampled 2×2 to the stored
 128×128. Impostors are not antialiased by MSAA, so downsampling is what

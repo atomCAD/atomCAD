@@ -10,6 +10,7 @@ use crate::label_mesh::LabelVertex;
 use crate::line_mesh::LineMesh;
 use crate::line_mesh::LineVertex;
 use crate::surface_sort::sorted_component_order;
+use crate::thumbnail::ThumbnailBackground;
 use crate::transparent_impostor_mesh::TransparentImpostorMesh;
 use crate::transparent_impostor_mesh::TransparentImpostorVertex;
 use crate::transparent_sort::sorted_transparent_indices;
@@ -1255,7 +1256,8 @@ impl Renderer {
 
     /// Renders the content meshes on the GPU from `camera` in thumbnail mode
     /// (`doc/design_network_thumbnails.md` D5): content only, no gadgets,
-    /// pivot cube, grid or labels, on a fixed background, at
+    /// pivot cube, grid or labels, on a light or a dark background chosen
+    /// for contrast with the content, at
     /// `THUMBNAIL_RENDER_SIZE` and box-downsampled to `THUMBNAIL_SIZE`.
     /// Returns tightly packed **RGBA**. `camera.aspect` is ignored: the
     /// thumbnail is square.
@@ -1289,16 +1291,28 @@ impl Renderer {
             view,
         );
 
-        let mut pixels = self.draw_to_target(
-            &self.thumbnail_target,
-            &self.thumbnail_camera_bind_group,
-            view,
-            crate::thumbnail::THUMBNAIL_BACKGROUND_RGB,
-            PassFlags {
-                editing_aids: false,
-            },
-        );
-        crate::thumbnail::bgra_to_rgba_in_place(&mut pixels);
+        // The view is drawn on both backgrounds and the one the content
+        // stands out on is kept (D5). Drawing the final image on its own
+        // background, rather than compositing, keeps antialiased edges right.
+        let draw_on = |background: ThumbnailBackground| {
+            let mut pixels = self.draw_to_target(
+                &self.thumbnail_target,
+                &self.thumbnail_camera_bind_group,
+                view,
+                background.rgb(),
+                PassFlags {
+                    editing_aids: false,
+                },
+            );
+            crate::thumbnail::bgra_to_rgba_in_place(&mut pixels);
+            pixels
+        };
+        let on_light = draw_on(ThumbnailBackground::Light);
+        let on_dark = draw_on(ThumbnailBackground::Dark);
+        let pixels = match crate::thumbnail::choose_background(&on_light, &on_dark) {
+            ThumbnailBackground::Light => on_light,
+            ThumbnailBackground::Dark => on_dark,
+        };
         crate::thumbnail::downsample_2x2(
             &pixels,
             self.thumbnail_target.size.width,
