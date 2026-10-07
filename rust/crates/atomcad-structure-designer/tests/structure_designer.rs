@@ -307,6 +307,8 @@ mod isosurface_node_test;
 
 #[path = "structure_designer/isosurface_scene_test.rs"]
 mod isosurface_scene_test;
+#[path = "structure_designer/reference_lines_scene_test.rs"]
+mod reference_lines_scene_test;
 
 #[path = "structure_designer/infer_bonds_test.rs"]
 mod infer_bonds_test;

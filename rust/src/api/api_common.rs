@@ -519,6 +519,9 @@ pub fn refresh_structure_designer(
         gadget_line_mesh,
         main_mesh,
         wireframe_mesh,
+        // Drawing-plane grids: drawn live, left out of thumbnails and of the
+        // content bounds.
+        reference_line_mesh,
         atom_impostor_mesh,
         bond_impostor_mesh,
         // Merged transparent impostor mesh (x-ray), consumed by the renderer's
@@ -577,6 +580,7 @@ pub fn refresh_structure_designer(
         &gadget_line_mesh,
         &main_mesh,
         &wireframe_mesh,
+        &reference_line_mesh,
         &atom_impostor_mesh,
         &bond_impostor_mesh,
         &transparent_impostor_mesh,

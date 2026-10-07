@@ -120,6 +120,7 @@ fn tessellate_surfaces(alphas: &[f32], lightweight: bool) -> (Mesh, TransparentS
         _gadget_lines,
         main_mesh,
         _wireframe,
+        _reference_lines,
         _atoms,
         _bonds,
         _ghosts,

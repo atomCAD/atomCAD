@@ -121,9 +121,9 @@ impl RenderTarget {
 /// Which parts of the scene a draw includes.
 #[derive(Clone, Copy)]
 struct PassFlags {
-    /// The editing aids: background grid lines, atom labels and the whole
-    /// gadget pass (gadgets and the lightweight pivot cube). Off for a
-    /// thumbnail, which shows only the content (D5).
+    /// The editing aids: background grid lines, drawing-plane grids, atom
+    /// labels and the whole gadget pass (gadgets and the lightweight pivot
+    /// cube). Off for a thumbnail, which shows only the content (D5).
     editing_aids: bool,
 }
 
@@ -150,6 +150,9 @@ pub struct Renderer {
     label_pipeline: RenderPipeline,
     main_mesh: GPUMesh,
     wireframe_mesh: GPUMesh,
+    /// Drawing-plane grids and axes: drawn with the content in the live view,
+    /// but an editing aid — not in a thumbnail and not in `content_bounds`.
+    reference_line_mesh: GPUMesh,
     lightweight_mesh: GPUMesh,
     gadget_line_mesh: GPUMesh,
     background_mesh: GPUMesh,
@@ -267,6 +270,7 @@ impl Renderer {
         // Initialize meshes with the model_bind_group_layout
         let main_mesh = GPUMesh::new_empty_triangle_mesh(&device, &model_bind_group_layout);
         let wireframe_mesh = GPUMesh::new_empty_line_mesh(&device, &model_bind_group_layout);
+        let reference_line_mesh = GPUMesh::new_empty_line_mesh(&device, &model_bind_group_layout);
 
         let lightweight_mesh = GPUMesh::new_empty_triangle_mesh(&device, &model_bind_group_layout);
         let gadget_line_mesh = GPUMesh::new_empty_line_mesh(&device, &model_bind_group_layout);
@@ -501,6 +505,7 @@ impl Renderer {
             label_pipeline,
             main_mesh,
             wireframe_mesh,
+            reference_line_mesh,
             lightweight_mesh,
             gadget_line_mesh,
             background_mesh,
@@ -1115,6 +1120,7 @@ impl Renderer {
         gadget_line_mesh: &LineMesh,
         main_mesh: &Mesh,
         wireframe_mesh: &LineMesh,
+        reference_line_mesh: &LineMesh,
         atom_impostor_mesh: &AtomImpostorMesh,
         bond_impostor_mesh: &BondImpostorMesh,
         transparent_impostor_mesh: &TransparentImpostorMesh,
@@ -1149,6 +1155,11 @@ impl Renderer {
                 .update_from_mesh(&self.device, main_mesh, "Main");
             self.wireframe_mesh
                 .update_from_line_mesh(&self.device, wireframe_mesh, "Wireframe");
+            self.reference_line_mesh.update_from_line_mesh(
+                &self.device,
+                reference_line_mesh,
+                "Reference Lines",
+            );
 
             self.atom_impostor_mesh.update_from_atom_impostor_mesh(
                 &self.device,
@@ -1205,6 +1216,7 @@ impl Renderer {
 
             self.main_mesh.set_identity_transform(&self.queue);
             self.wireframe_mesh.set_identity_transform(&self.queue);
+            self.reference_line_mesh.set_identity_transform(&self.queue);
 
             self.atom_impostor_mesh.set_identity_transform(&self.queue);
             self.bond_impostor_mesh.set_identity_transform(&self.queue);
@@ -1437,6 +1449,11 @@ impl Renderer {
             self.render_mesh(&mut render_pass, &self.bond_impostor_mesh);
 
             if flags.editing_aids {
+                // Drawing-plane grids: content lines, but an editing aid.
+                self.reference_line_mesh.set_identity_transform(&self.queue);
+                render_pass.set_pipeline(&self.line_pipeline);
+                self.render_mesh(&mut render_pass, &self.reference_line_mesh);
+
                 // Set identity transform for background mesh and render it
                 self.background_mesh.set_identity_transform(&self.queue);
                 render_pass.set_pipeline(&self.background_line_pipeline);

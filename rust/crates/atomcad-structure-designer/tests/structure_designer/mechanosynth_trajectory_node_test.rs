@@ -951,9 +951,9 @@ fn cage_camera() -> Camera {
 }
 
 /// The wireframe mesh a scene tessellates to — the pass the cage shares with the
-/// unit-cell wireframe and the drawing-plane grid.
+/// unit-cell wireframe.
 fn wireframe_of(scene: &StructureDesignerScene, preferences: &DisplayPreferences) -> LineMesh {
-    let (_, _, _, wireframe, _, _, _, _, _, _, _) =
+    let (_, _, _, wireframe, _, _, _, _, _, _, _, _) =
         tessellate_scene_content(scene, &cage_camera(), false, preferences);
     wireframe
 }

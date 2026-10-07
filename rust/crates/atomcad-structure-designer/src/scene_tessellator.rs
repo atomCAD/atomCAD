@@ -36,6 +36,7 @@ pub fn tessellate_scene_content(
     LineMesh,
     Mesh,
     LineMesh,
+    LineMesh,
     AtomImpostorMesh,
     BondImpostorMesh,
     TransparentImpostorMesh,
@@ -52,6 +53,7 @@ pub fn tessellate_scene_content(
     let (
         main_mesh,
         wireframe_mesh,
+        reference_line_mesh,
         atom_impostor_mesh,
         bond_impostor_mesh,
         transparent_impostor_mesh,
@@ -66,6 +68,7 @@ pub fn tessellate_scene_content(
         // "no labels in lightweight mode" true by construction.
         (
             Mesh::new(),
+            LineMesh::new(),
             LineMesh::new(),
             AtomImpostorMesh::new(),
             BondImpostorMesh::new(),
@@ -82,6 +85,7 @@ pub fn tessellate_scene_content(
         gadget_line_mesh,
         main_mesh,
         wireframe_mesh,
+        reference_line_mesh,
         atom_impostor_mesh,
         bond_impostor_mesh,
         transparent_impostor_mesh,
@@ -136,6 +140,7 @@ fn tessellate_non_lightweight_content(
 ) -> (
     Mesh,
     LineMesh,
+    LineMesh,
     AtomImpostorMesh,
     BondImpostorMesh,
     TransparentImpostorMesh,
@@ -146,6 +151,10 @@ fn tessellate_non_lightweight_content(
 ) {
     let mut main_mesh = Mesh::new();
     let mut wireframe_mesh = LineMesh::new();
+    // Drawing-plane grids: an editing aid, not content. A separate mesh so the
+    // thumbnail pass can leave it out and its ±`grid_size` extent never enters
+    // the content bounds (`doc/design_network_thumbnails.md` D5).
+    let mut reference_line_mesh = LineMesh::new();
     let mut atom_impostor_mesh = AtomImpostorMesh::new();
     let mut bond_impostor_mesh = BondImpostorMesh::new();
     // Merged transparent impostor mesh for x-rayed (alpha < 1.0) atoms/bonds.
@@ -411,7 +420,7 @@ fn tessellate_non_lightweight_content(
 
                 NodeOutput::DrawingPlane(drawing_plane) => {
                     coordinate_system_tessellator::tessellate_drawing_plane_grid_and_axes(
-                        &mut wireframe_mesh,
+                        &mut reference_line_mesh,
                         drawing_plane,
                         &preferences.background,
                     );
@@ -479,6 +488,7 @@ fn tessellate_non_lightweight_content(
     (
         main_mesh,
         wireframe_mesh,
+        reference_line_mesh,
         atom_impostor_mesh,
         bond_impostor_mesh,
         transparent_impostor_mesh,

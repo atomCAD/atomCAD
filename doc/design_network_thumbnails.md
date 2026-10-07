@@ -224,8 +224,9 @@ live view is often zoomed in on a detail, which makes a poor thumbnail.
 
 The thumbnail draws only the content: main, wireframe, atom and bond
 impostors, transparent impostors and transparent isosurfaces. It leaves out
-gadgets, the lightweight content (pivot cube), the grid/background lines and
-atom labels (unreadable at thumbnail size). Selection highlighting is part of
+gadgets, the lightweight content (pivot cube), the grid/background lines,
+displayed drawing planes' grids and atom labels (unreadable at thumbnail
+size). Selection highlighting is part of
 the content meshes; whether it shows in the thumbnail needs checking during
 implementation, and if it does, the thumbnail must suppress it the same way
 the network-image export does (`hideSelection`), never by clearing the
@@ -564,6 +565,14 @@ the text above):
   on that title; there the picture helps most.
 - Linked library networks preview too: they are in the network list with the
   thumbnail their library was saved with.
+- **Drawing-plane grids are an editing aid** (found after Phase 3). A
+  displayed `drawing_plane` node's grid spans ±`grid_size` cells (default
+  200), and it used to be tessellated into the content wireframe mesh, so the
+  automatic framing (D4) fitted a 400-cell grid and the extruded solids beside
+  it shrank to a pixel inside a solid blue patch. The grid now goes to its own
+  `reference_line_mesh`: the live view draws it, thumbnails do not (automatic
+  and pinned alike), and it is not in `content_bounds`. A network that
+  displays nothing but a drawing plane therefore gets no automatic thumbnail.
 - Manual walkthrough: hover a custom node's title at each zoom level (preview
   appears; built-in nodes and networks without a thumbnail show the plain
   tooltip); capture a new image for the network (leave and come back, or *Set
