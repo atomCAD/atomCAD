@@ -16,13 +16,14 @@ import 'package:flutter_cad/structure_designer/find_usages_menu.dart';
 import 'package:flutter_cad/structure_designer/library_link_actions.dart';
 import 'package:flutter_cad/structure_designer/network_thumbnails.dart';
 import 'package:flutter_cad/structure_designer/node_networks_list/network_thumbnail_menu.dart';
+import 'package:flutter_cad/structure_designer/node_networks_list/user_type_drag.dart';
 
 /// Discriminator between the two kinds of leaves in the user-types tree.
 enum _LeafKind { network, recordDef }
 
 /// Tree node representing either a namespace (folder) or a leaf
 /// (a node network or record type def).
-class _NodeNetworkTreeNode {
+class _NodeNetworkTreeNode implements UserTypeDragData {
   final String label; // Simple name (last segment)
   final String?
       fullName; // Qualified name for leafs, namespace path for namespaces
@@ -40,6 +41,10 @@ class _NodeNetworkTreeNode {
     required this.isLeaf,
     this.leafKind,
   });
+
+  @override
+  String? get placeableNetworkName =>
+      isLeaf && leafKind == _LeafKind.network ? fullName : null;
 }
 
 /// Builds a tree from networks, record defs, and explicit empty folders. All
@@ -1537,18 +1542,26 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView> {
           },
         );
 
-        // Drag the row to move it; disabled while inline-renaming so the text
-        // field keeps its gestures.
+        // Drag the row to move it, or — a network row — onto the node
+        // network editor to place it as a node. Disabled while
+        // inline-renaming so the text field keeps its gestures.
+        //
+        // Linked rows (and folders holding a mount) do not move (D3), but a
+        // linked *network* still drags: placing it is the point of linking
+        // it. `_isValidDrop` refuses it on every folder target, and the
+        // "Move to top level" bar is not shown for it.
+        final movable = node.fullName == null || !_touchesMount(node.fullName!);
+        final draggable = movable || node.placeableNetworkName != null;
         return Draggable<_NodeNetworkTreeNode>(
           data: node,
-          // Linked rows (and folders holding a mount) do not move (D3).
-          maxSimultaneousDrags: isEditing ||
-                  (node.fullName != null && _touchesMount(node.fullName!))
-              ? 0
-              : 1,
+          maxSimultaneousDrags: isEditing || !draggable ? 0 : 1,
           feedback: _buildDragFeedback(node),
+          // The chip's top-left sits on the pointer, so a drop target reads
+          // the pointer straight off `DragTargetDetails.offset` — the canvas
+          // places the node there.
+          dragAnchorStrategy: pointerDragAnchorStrategy,
           childWhenDragging: Opacity(opacity: 0.4, child: dropTarget),
-          onDragStarted: () => setState(() => _dragging = true),
+          onDragStarted: () => setState(() => _dragging = movable),
           onDragUpdate: (details) => _updateAutoScroll(details.globalPosition),
           onDragEnd: (_) {
             _endDragAssists();

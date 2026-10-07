@@ -12,6 +12,7 @@ import 'package:flutter_cad/structure_designer/node_network/node_widget.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network_content.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network_painter.dart';
 import 'package:flutter_cad/structure_designer/node_network/scope_resolver.dart';
+import 'package:flutter_cad/structure_designer/node_networks_list/user_type_drag.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
     as sd_api;
@@ -1333,6 +1334,76 @@ class NodeNetworkState extends State<NodeNetwork> {
     focusNode.requestFocus();
   }
 
+  /// Whether a network dragged out of the user-types panel may be dropped on
+  /// this canvas. The candidates are exactly the custom networks the Add Node
+  /// popup offers (Rust's `get_node_type_views` — which leaves out networks
+  /// under a transitive library mount), so the drop can never place what the
+  /// popup would not. Queried once per drag-enter, not per move.
+  bool _canDropUserType(StructureDesignerModel model, UserTypeDragData data) {
+    final name = data.placeableNetworkName;
+    if (name == null) return false;
+    if (model.nodeNetworkView == null || model.activeNetworkReadOnly) {
+      return false;
+    }
+    final categories = sd_api.getNodeTypeViews() ?? const [];
+    return categories.any((c) =>
+        c.category == NodeTypeCategory.custom &&
+        c.nodes.any((n) => n.name == name));
+  }
+
+  /// Places the dropped network as a node, its top-left at the pointer. The
+  /// scope is resolved the way right-click → Add Node resolves it, so a drop
+  /// inside an HOF / closure body lands in that body.
+  void _dropUserType(
+      StructureDesignerModel model, String networkName, Offset globalPosition) {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    final localPosition = box.globalToLocal(globalPosition);
+    final scopeHit = _makeResolver()?.findContainingScope(localPosition);
+    final scopeChain = scopeHit?.scopeChain ?? const <BigInt>[];
+    final logicalPosition = scopeHit?.bodyLocal ??
+        screenToLogical(localPosition, _panOffset, getZoomScale(_zoomLevel));
+    model.setActiveScopeChain(scopeChain);
+    model.createNode(networkName, logicalPosition, scopeChain: scopeChain);
+    focusNode.requestFocus();
+  }
+
+  /// Wraps the canvas in the drop target for networks dragged out of the
+  /// user-types panel. [canvas] stays the first child of the builder's
+  /// `Stack` whether or not a drag hovers, so the highlight never remounts
+  /// the node widgets.
+  Widget _buildUserTypeDropTarget(StructureDesignerModel model, Widget canvas) {
+    return DragTarget<UserTypeDragData>(
+      onWillAcceptWithDetails: (details) =>
+          _canDropUserType(model, details.data),
+      onAcceptWithDetails: (details) {
+        final name = details.data.placeableNetworkName;
+        if (name != null) _dropUserType(model, name, details.offset);
+      },
+      builder: (context, candidates, rejected) {
+        return Stack(
+          fit: StackFit.passthrough,
+          children: [
+            canvas,
+            if (candidates.isNotEmpty)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.primary,
+                        width: 2,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
   // Left-click panning has been replaced by middle mouse button panning
 
   /// Builds the stack children for the node network. HOF body nodes are
@@ -1823,8 +1894,11 @@ class NodeNetworkState extends State<NodeNetwork> {
                   onTapDown: _handleTapDown,
                   onSecondaryTapDown: (details) =>
                       _handleSecondaryTapDown(details, context, model),
-                  child: Stack(
-                    children: _buildStackChildren(model),
+                  child: _buildUserTypeDropTarget(
+                    model,
+                    Stack(
+                      children: _buildStackChildren(model),
+                    ),
                   ),
                 ),
               ),

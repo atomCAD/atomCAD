@@ -688,6 +688,7 @@ Unified user-types panel — lists both node networks and record type defs:
 - `node_network_tree_view.dart` - Hierarchical tree view (networks + record defs in one tree)
 - `node_networks_action_bar.dart` - Add/delete/navigate buttons; the "Add" action offers both "new network" and "new record def"
 - `network_thumbnail_menu.dart` - The two thumbnail context-menu items and their handler
+- `user_type_drag.dart` - `UserTypeDragData`, the public face of a row drag: the tree node implements it so the node network editor's `DragTarget` can place a dragged network as a node (the canvas accepts exactly what the Add Node popup offers)
 
 **Network thumbnails** (`doc/design_network_thumbnails.md`): Rust captures and stores them; Flutter only shows them. The image cache is `model.networkThumbnails` (`network_thumbnails.dart`, one level up so the canvas can reuse it), keyed by `thumbnailRevision` **alone** — revisions are process-wide and never reused, so never add the network name to the key (a rename would refetch for nothing). It is pruned in `refreshFromKernel`. The canvas shows a custom node's thumbnail in its title tooltip; the image is passed into `NodeWidget` as an input (`thumbnail`), never read from the model inside it, and the image export passes none. `hasUnsavedThumbnails` makes *Save* available (`canSave` / `hasSomethingToSave`) but must stay out of the title/tab `*` and the close prompt, which look at `isDirty` only.
 

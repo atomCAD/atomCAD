@@ -215,6 +215,7 @@ Applied to a folder, the operation is a batch: the dialog lists every `old → n
 - Resting the cursor on a **collapsed folder** springs it open, so you can drop into a branch that was closed when you started dragging.
 - Dragging near the **top or bottom edge** of the panel scrolls the tree, so a destination that is off screen is still reachable in one drag.
 - Dropping a folder into itself or into one of its own descendants is refused (the row will not highlight).
+- Dropping a **node network** onto the **node network editor** places it there as a node instead — see [Add nodes](#manipulating-nodes-and-wires).
 
 A drop does not commit anything on its own: it opens the same *Move / rename…* dialog, pre-filled with the destination you dropped on. So you always get the preview, the conflict check and a **Cancel** — an accidental drop costs one click on *Cancel*, not an undo.
 
@@ -327,6 +328,8 @@ Each node network remembers its own canvas view (pan position and zoom level). W
 
 **Add nodes**
 Right-click in the node editor to open the **Add Node** window and add a new node.
+
+You can also drag one of your node networks from the user-types panel and drop it on the node editor: a node of that network is created where you release it (inside a higher-order-function or closure body, if you drop it there). The editor is outlined while it would accept the drop. The same networks can be placed this way as the *Add Node* window offers — including networks from a [linked library](./library_linking.md), but not record types or folders — and nothing can be dropped on a linked, read-only network.
 
 ![](../atomCAD_images/add_node.png)
 
