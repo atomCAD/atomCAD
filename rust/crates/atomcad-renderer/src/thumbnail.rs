@@ -162,9 +162,22 @@ pub fn fit_camera_to_bounds(camera: &Camera, bounds: (DVec3, DVec3)) -> Camera {
     fitted.eye = center + dir * distance;
     fitted.pivot_point = center;
     fitted.ortho_half_height = FIT_MARGIN * radius;
-    // `distance > 1.1 r`, so the near plane stays in front of the eye.
-    fitted.znear = (distance - 1.2 * radius).max(distance * 1e-3);
-    fitted.zfar = distance + 1.2 * radius;
+    // The clip range wanted: the sphere with a margin. `distance > 1.1 r`, so
+    // the near end stays in front of the eye.
+    let near = (distance - 1.2 * radius).max(distance * 1e-3);
+    let far = distance + 1.2 * radius;
+    fitted.zfar = far;
+    fitted.znear = if fitted.orthographic {
+        near
+    } else {
+        // `perspective_rh_gl` maps depth to [-1, 1] but wgpu clips to [0, 1],
+        // so the plane that actually clips is where GL depth is 0:
+        // `2·n·f / (n + f)`, not `n`. With the live camera's 1.5 / 2400 that is
+        // ~3 and goes unnoticed; with a clip range fitted this tightly it lands
+        // a third of the radius in front of the centre and cuts the front off
+        // the part. Solve for the `n` that puts that plane at `near`.
+        near * far / (2.0 * far - near)
+    };
     fitted.orthonormalize_up();
     fitted
 }

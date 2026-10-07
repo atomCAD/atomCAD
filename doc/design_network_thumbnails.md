@@ -573,6 +573,15 @@ the text above):
   `reference_line_mesh`: the live view draws it, thumbnails do not (automatic
   and pinned alike), and it is not in `content_bounds`. A network that
   displays nothing but a drawing plane therefore gets no automatic thumbnail.
+- **The fitted near plane must allow for the GL depth range** (found after
+  Phase 3). `Camera` builds perspective with `perspective_rh_gl`, which maps
+  depth to [-1, 1], while wgpu clips to [0, 1], so the plane that really clips
+  is at `2·n·f / (n + f)`. With D4's tight clip range that cut the front off
+  every automatic perspective thumbnail; a pinned one was fine because it keeps
+  the live camera's 1.5 / 2400. `fit_camera_to_bounds` now solves for the
+  `znear` whose effective plane is where D4 wants it. The live viewport has the
+  same offset (its real near plane is ~3, not 1.5) — harmless there, and a
+  change to the projection itself is out of this design's scope.
 - Manual walkthrough: hover a custom node's title at each zoom level (preview
   appears; built-in nodes and networks without a thumbnail show the plain
   tooltip); capture a new image for the network (leave and come back, or *Set

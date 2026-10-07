@@ -111,12 +111,30 @@ fn assert_corners_inside(camera: &Camera, bounds: (DVec3, DVec3)) {
             ndc.x.abs() <= 1.0 && ndc.y.abs() <= 1.0,
             "corner {corner} at {ndc}"
         );
-        // Inside the clip range too: perspective_rh_gl maps to [-1, 1],
-        // orthographic_rh to [0, 1].
+        // Inside the clip range too. wgpu clips depth to [0, 1] whichever
+        // projection made it — `perspective_rh_gl` produces [-1, 1], and the
+        // [-1, 0) half of that is clipped away, so checking against -1 here
+        // once hid a near plane that cut the front off every perspective
+        // thumbnail.
         assert!(
-            ndc.z >= -1.0 && ndc.z <= 1.0,
+            ndc.z >= 0.0 && ndc.z <= 1.0,
             "corner {corner} clipped: {ndc}"
         );
+    }
+}
+
+/// The nearest and farthest points of the bounding sphere along the view axis
+/// survive wgpu's [0, 1] depth clip — the corners of a flat box never reach
+/// that far forward, so they alone would not catch a near plane set too deep.
+fn assert_sphere_depth_inside(camera: &Camera, bounds: (DVec3, DVec3)) {
+    let view_proj = camera.build_view_projection_matrix();
+    let center = (bounds.0 + bounds.1) * 0.5;
+    let radius = (bounds.1 - bounds.0).length() * 0.5;
+    let dir = (camera.eye - camera.target).normalize();
+    for point in [center + dir * radius, center - dir * radius] {
+        let clip = view_proj * DVec4::new(point.x, point.y, point.z, 1.0);
+        let z = clip.z / clip.w;
+        assert!((0.0..=1.0).contains(&z), "{point} clipped: z = {z}");
     }
 }
 
@@ -142,6 +160,7 @@ fn fit_perspective_keeps_the_direction_and_frames_the_content() {
     assert!(fitted.zfar > distance + radius);
     assert!(vec_approx_eq(fitted.up, DVec3::Z));
     assert_corners_inside(&fitted, bounds);
+    assert_sphere_depth_inside(&fitted, bounds);
 }
 
 #[test]
@@ -156,6 +175,7 @@ fn fit_orthographic_sets_the_half_height() {
     assert!(fitted.orthographic);
     assert!((fitted.ortho_half_height - 1.1 * 5.0).abs() < 1e-9);
     assert_corners_inside(&fitted, bounds);
+    assert_sphere_depth_inside(&fitted, bounds);
 }
 
 #[test]
@@ -172,6 +192,7 @@ fn fit_handles_a_point_and_a_very_large_structure() {
     let fitted = fit_camera_to_bounds(&camera, huge);
     assert!(fitted.zfar > 2400.0);
     assert_corners_inside(&fitted, huge);
+    assert_sphere_depth_inside(&fitted, huge);
 }
 
 #[test]
