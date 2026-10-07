@@ -265,23 +265,43 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView> {
 
   /// Opens the folders above [name] and scrolls its row into view.
   ///
-  /// Runs after the frame rather than in `didUpdateWidget`: expanding notifies
-  /// the tree, which must not be asked to rebuild while it is being built, and
-  /// the scroll needs the rows laid out.
+  /// The folders are opened by rebuilding the tree (fresh nodes, a fresh
+  /// controller, expansion restored from [_expandedNamespaces]), **never** by
+  /// `_treeController.expand` on the live tree. The animated tree hides an
+  /// expanding folder's children until that folder's own row has played its
+  /// animation, and a lazy list does not build a row that is off screen — so a
+  /// far-away folder expanded in place stayed marked open (its icon changed)
+  /// with no children, for good. Fresh nodes have no previous state to
+  /// animate from, so they simply appear.
+  ///
+  /// Runs after the frame: it is triggered from `didUpdateWidget`, where the
+  /// tree must not be rebuilt, and the scroll needs the rows laid out.
   void _scheduleReveal(String name) {
     final generation = ++_revealGeneration;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || generation != _revealGeneration) return;
-      final expanded = _expandAncestorsOf(name);
-      // An expanding folder animates its children in as one item; the row has
-      // its own position only once the animation is over.
-      if (expanded) {
-        Future.delayed(_EXPAND_ANIMATION + const Duration(milliseconds: 50),
-            () => _scrollToActiveRow(name, generation, _REVEAL_ATTEMPTS));
-      } else {
+      final ancestors = _ancestorPathsOf(name);
+      if (_expandedNamespaces.containsAll(ancestors)) {
         _scrollToActiveRow(name, generation, _REVEAL_ATTEMPTS);
+        return;
       }
+      setState(() {
+        _expandedNamespaces.addAll(ancestors);
+        _updateTree();
+      });
+      WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _scrollToActiveRow(name, generation, _REVEAL_ATTEMPTS));
     });
+  }
+
+  /// The namespace paths above [qualifiedName], outermost first: `a.b.c`
+  /// gives `a` and `a.b`.
+  List<String> _ancestorPathsOf(String qualifiedName) {
+    final segments = getSegments(qualifiedName);
+    return [
+      for (int i = 1; i < segments.length; i++)
+        segments.sublist(0, i).join('.'),
+    ];
   }
 
   /// Scrolls the active row into view, centered, unless it is already fully
@@ -375,22 +395,17 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView> {
     _expandedNamespaces.retainAll(validNamespaces);
   }
 
-  /// Expands the folders above [qualifiedName]. Returns whether any of them
-  /// was collapsed (and is now animating open).
-  bool _expandAncestorsOf(String qualifiedName) {
-    final segments = getSegments(qualifiedName);
+  /// Expands the folders above [qualifiedName]. Only for a controller the
+  /// tree is not showing yet (see [_scheduleReveal] for why).
+  void _expandAncestorsOf(String qualifiedName) {
+    final ancestors = _ancestorPathsOf(qualifiedName);
 
     // If it's a root-level node, nothing to expand
-    if (segments.length <= 1) return false;
+    if (ancestors.isEmpty) return;
 
-    // Compute all ancestor namespace paths and add to expansion set
-    for (int i = 1; i < segments.length; i++) {
-      final namespacePath = segments.sublist(0, i).join('.');
-      _expandedNamespaces.add(namespacePath);
-    }
+    _expandedNamespaces.addAll(ancestors);
 
     // Find and expand the actual tree nodes
-    bool expandedAny = false;
     void expandInTree(List<_NodeNetworkTreeNode> nodes, String parentPath) {
       for (final node in nodes) {
         if (!node.isLeaf) {
@@ -398,10 +413,7 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView> {
               parentPath.isEmpty ? node.label : '$parentPath.${node.label}';
 
           if (_expandedNamespaces.contains(namespacePath)) {
-            if (!_treeController.getExpansionState(node)) {
-              expandedAny = true;
-              _treeController.expand(node);
-            }
+            _treeController.expand(node);
 
             // Continue traversing children
             if (node.children.isNotEmpty) {
@@ -413,7 +425,6 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView> {
     }
 
     expandInTree(_treeController.roots.toList(), '');
-    return expandedAny;
   }
 
   void _onFolderToggled(_NodeNetworkTreeNode node) {
@@ -615,10 +626,6 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView> {
 
   /// Ticker period for auto-scroll. ~60 Hz.
   static const Duration _AUTO_SCROLL_TICK = Duration(milliseconds: 16);
-
-  /// The tree's expand/collapse animation (the package default), named so a
-  /// reveal can wait it out.
-  static const Duration _EXPAND_ANIMATION = Duration(milliseconds: 300);
 
   /// Jump-and-retry rounds a reveal spends finding a row that is not built.
   static const int _REVEAL_ATTEMPTS = 3;
@@ -1303,7 +1310,6 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView> {
       key: _treeViewportKey,
       controller: _scrollController,
       treeController: _treeController,
-      duration: _EXPAND_ANIMATION,
       nodeBuilder: (context, entry) {
         final node = entry.node;
         final activeNetworkName = widget.model.nodeNetworkView?.name;
