@@ -67,11 +67,6 @@ class _StructureDesignerState extends State<StructureDesigner> {
   // Resizable sidebar width for node network mode (user types / display / camera)
   double _nodeNetworkSidebarWidth = 200;
 
-  // Which tab (List / Tree) the user-types panel shows. Session UI, not
-  // per-document: the panel itself is rebuilt on every document switch, so the
-  // choice lives here to survive it.
-  int _nodeNetworksTabIndex = NODE_NETWORKS_TREE_TAB_INDEX;
-
   // Panel visibility. Demonstrating a design — a mechanosynth build
   // walkthrough, say — wants the largest possible viewport, so each of the
   // three docks can be folded away independently, and "presentation mode"
@@ -879,11 +874,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
             title: 'User types',
             content: KeyedSubtree(
               key: ValueKey(documentId),
-              child: NodeNetworksPanel(
-                model: graphModel,
-                initialTabIndex: _nodeNetworksTabIndex,
-                onTabChanged: (index) => _nodeNetworksTabIndex = index,
-              ),
+              child: NodeNetworksPanel(model: graphModel),
             ),
             expand: true,
           ),

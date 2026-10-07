@@ -47,12 +47,10 @@ void main() {
       expect(iconButtons.evaluate().length, greaterThanOrEqualTo(4));
     });
 
-    testWidgets('finds Tab widgets', (tester) async {
+    testWidgets('finds the user-types tree view', (tester) async {
       await pumpApp(tester, model);
 
-      // Find Tab widgets - List and Tree tabs
-      final tabs = find.byType(Tab);
-      expect(tabs.evaluate().length, equals(2));
+      expect(TestFinders.networkTreeView, findsOneWidget);
     });
   });
 }

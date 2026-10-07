@@ -6,6 +6,7 @@ import 'package:flutter_cad/structure_designer/preferences_window.dart';
 import 'package:flutter_cad/structure_designer/node_network/add_node_popup.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_widget.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_data_widget.dart';
+import 'package:flutter_cad/structure_designer/node_networks_list/node_network_tree_view.dart';
 import 'package:flutter_cad/src/rust/frb_generated.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/common/mouse_wheel_block_service.dart';
@@ -47,8 +48,6 @@ class TestKeys {
 
   // Node networks panel keys
   static const Key nodeNetworksPanel = Key('node_networks_panel');
-  static const Key networkListTab = Key('network_list_tab');
-  static const Key networkTreeTab = Key('network_tree_tab');
   static const Key addNetworkButton = Key('add_network_button');
   static const Key deleteNetworkButton = Key('delete_network_button');
   static const Key backButton = Key('back_button');
@@ -65,10 +64,6 @@ class TestKeys {
   static const Key renameTextField = Key('rename_text_field');
 
   // Dynamic keys for network list items
-  /// Returns a Key for a network item in the list view
-  static Key networkListItem(String networkName) =>
-      Key('network_item_$networkName');
-
   /// Returns a Key for a network item in the tree view
   static Key networkTreeItem(String networkName) =>
       Key('network_tree_item_$networkName');
@@ -171,11 +166,8 @@ class TestFinders {
   /// Find the Forward navigation button
   static Finder get forwardButton => find.byKey(TestKeys.forwardButton);
 
-  /// Find the List tab
-  static Finder get listTab => find.byKey(TestKeys.networkListTab);
-
-  /// Find the Tree tab
-  static Finder get treeTab => find.byKey(TestKeys.networkTreeTab);
+  /// Find the user-types tree view
+  static Finder get networkTreeView => find.byType(NodeNetworkTreeView);
 
   /// Find the delete confirmation dialog
   static Finder get deleteConfirmDialog =>
@@ -183,10 +175,6 @@ class TestFinders {
 
   /// Find the rename text field
   static Finder get renameTextField => find.byKey(TestKeys.renameTextField);
-
-  /// Find a network item in the list view by name
-  static Finder networkListItem(String networkName) =>
-      find.byKey(TestKeys.networkListItem(networkName));
 
   /// Find a network item in the tree view by name
   static Finder networkTreeItem(String networkName) =>

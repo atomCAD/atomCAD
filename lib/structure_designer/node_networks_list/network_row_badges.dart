@@ -9,8 +9,7 @@ import 'package:flutter_cad/structure_designer/root_cause_navigation.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
 /// Shared trailing badges for a network row in the user-types panel — the
-/// error badge and the Find Usages count — so the flat list view and the tree
-/// view render them identically and can't drift apart.
+/// error badge and the Find Usages count.
 ///
 /// The error badge consumes the network's **unified error list** (validation
 /// + evaluation entries, `doc/design_error_management.md` D1): the color
@@ -143,8 +142,7 @@ Widget buildNetworkErrorBadge({
 }
 
 /// The Find Usages count: a bare number that opens the same usage picker as the
-/// context-menu entry. Rendered only when the count is > 0. Shared verbatim by
-/// both views (was duplicated in each).
+/// context-menu entry. Rendered only when the count is > 0.
 Widget buildNetworkUsageCountBadge({
   required BuildContext context,
   required StructureDesignerModel model,
@@ -381,7 +379,7 @@ Widget _errorMenuRow(String networkName, APIValidationError error,
 }
 
 /// The status badge of a linked library (`doc/design_library_linking.md`
-/// §5.3), shared by the list and tree views:
+/// §5.3), shown on a mount folder in the tree view:
 ///
 /// - `Missing` / `Error` / `Cycle` — the red error badge; the tooltip says
 ///   why, and a click copies it (a tooltip cannot be selected, `lib/AGENTS.md`).

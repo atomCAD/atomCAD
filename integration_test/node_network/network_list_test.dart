@@ -122,24 +122,6 @@ void main() {
     });
   });
 
-  group('Tab Navigation', () {
-    testWidgets('Switch between List and Tree tabs', (tester) async {
-      await pumpApp(tester, model);
-
-      // Initially on Tree tab, switch to List
-      await tester.tap(find.byKey(TestKeys.networkListTab));
-      await tester.pumpAndSettle();
-
-      // Switch back to Tree
-      await tester.tap(find.byKey(TestKeys.networkTreeTab));
-      await tester.pumpAndSettle();
-
-      // Both tabs should still exist
-      expect(find.byKey(TestKeys.networkListTab), findsOneWidget);
-      expect(find.byKey(TestKeys.networkTreeTab), findsOneWidget);
-    });
-  });
-
   group('Network Selection', () {
     testWidgets('Model setActiveNodeNetwork works correctly', (tester) async {
       await pumpApp(tester, model);
@@ -165,7 +147,7 @@ void main() {
       expect(model.nodeNetworkView?.name, equals(firstName));
     });
 
-    testWidgets('Network list items are displayed with correct Keys',
+    testWidgets('Network tree items are displayed with correct Keys',
         (tester) async {
       await pumpApp(tester, model);
 
@@ -174,12 +156,12 @@ void main() {
       await tester.pumpAndSettle();
       final networkName = model.nodeNetworkView!.name;
 
-      // The panel opens on the Tree tab; list items only exist on the List tab
-      await tester.tap(find.byKey(TestKeys.networkListTab));
+      // Wait for tree animation to complete (tree nodes animate in over ~1 second)
+      await tester.pump(const Duration(seconds: 2));
       await tester.pumpAndSettle();
 
-      // Verify the network item exists with the expected Key
-      expect(TestFinders.networkListItem(networkName), findsOneWidget);
+      // A new network lands at the root, so its row is a top-level tree item
+      expect(TestFinders.networkTreeItem(networkName), findsOneWidget);
     });
 
     testWidgets('Network tree view displays networks', (tester) async {
@@ -187,10 +169,6 @@ void main() {
 
       // Add a network so there's content to display
       await tester.tap(find.byKey(TestKeys.addNetworkButton));
-      await tester.pumpAndSettle();
-
-      // Switch to tree tab
-      await tester.tap(find.byKey(TestKeys.networkTreeTab));
       await tester.pumpAndSettle();
 
       // Wait for tree animation to complete (tree nodes animate in over ~1 second)

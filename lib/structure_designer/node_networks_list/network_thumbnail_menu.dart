@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_cad/common/error_display.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
-/// Context-menu values for the two thumbnail commands (D6), shared by the list
-/// and tree views.
+/// Context-menu values for the two thumbnail commands (D6) of a tree-view row.
 const String PIN_THUMBNAIL_MENU_VALUE = 'pin_thumbnail';
 const String UNPIN_THUMBNAIL_MENU_VALUE = 'unpin_thumbnail';
 

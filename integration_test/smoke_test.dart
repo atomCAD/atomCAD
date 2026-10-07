@@ -48,9 +48,8 @@ void main() {
       expect(find.text('CAMERA CONTROL'), findsOneWidget);
       expect(find.text('NODE NETWORKS'), findsOneWidget);
 
-      // Verify node networks panel tabs
-      expect(find.byKey(TestKeys.networkListTab), findsOneWidget);
-      expect(find.byKey(TestKeys.networkTreeTab), findsOneWidget);
+      // Verify the user-types tree view
+      expect(TestFinders.networkTreeView, findsOneWidget);
     });
 
     testWidgets('navigation and action buttons exist', (tester) async {

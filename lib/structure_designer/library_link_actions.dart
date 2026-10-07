@@ -917,7 +917,7 @@ class LinkedNetworkBanner extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Context-menu entries for linked content (list and tree views)
+// Context-menu entries for linked content (user-types tree view)
 // ---------------------------------------------------------------------------
 
 const String libMenuOpenFile = 'lib_open_file';

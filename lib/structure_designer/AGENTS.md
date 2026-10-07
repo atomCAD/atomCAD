@@ -95,9 +95,9 @@ per-document model.
   registers a callback on the model in `initState` must clear it in `dispose`
   only if it is still its own: the new subtree's `initState` runs *before* the
   old one's `dispose` (see `node_network.dart`). Two consequences: session UI
-  shown inside such a subtree (the user-types panel's List/Tree tab) is owned
-  by the host and passed in, or it resets on every switch; and an action
-  started from inside one that switches documents (*Open in library file*)
+  shown inside such a subtree is owned by the host and passed in, or it
+  resets on every switch; and an action started from inside one that
+  switches documents (*Open in library file*)
   must carry on with a context that outlives the switch (the root
   navigator's), since its own `context` is unmounted by then.
 - **The tab gestures** (`DocumentTabs`) take data and callbacks and are
@@ -137,7 +137,7 @@ Three docks around the viewport, **split off in a fixed order**, and the order
 is the whole design:
 
 1. **Left sidebar** (`structure_designer.dart`) — display policy, camera
-   controls, user types (tabs: List/Tree). Split from the window first, so it
+   controls, user types (a tree). Split from the window first, so it
    runs full height.
 2. **Node network editor** (`main_content_area.dart`, via `ResizableContainer`)
    — split next, taking the full width of what remains. Vertical division puts
@@ -420,7 +420,7 @@ The inverse of *Go to Definition*: from a custom-node instance, jump to the othe
 - **Backend (Phase 1)** owns the walk and the display strings: `sd_api.getNetworkUsages(networkName:)` → `List<APINetworkUsage> { hostNetwork, scopePath, nodeId, nodeLabel, bodyQualifier }`, plus a batched `getNetworkUsageCounts()` for the panel. Read-only — no refresh, no undo. Flutter never re-derives a label or a body qualifier from these.
 - **Entry point (Phase 2)** is the node context menu (`node_network/node_widget.dart` `_handleContextMenu` → `_handleFindUsages`), gated on `isCustomNodeType`. It **drops the originating instance** (active network + clicked node's scope chain + node id) — the backend deliberately returns the unfiltered set so the panel entry points (Phase 3) can reuse it. On the filtered set: 0 → SnackBar "No other usages of …", 1 → jump straight away, 2+ → a `showMenu` picker at the cursor.
 - **The 0/1/n branching and the picker are shared** — `find_usages_menu.dart` (`showNetworkUsagesMenu`, `networkUsageLabel`, `menuPositionForWidget`), which documents its own contract. Only what genuinely differs stays at the call site: the self-filter and the empty-case wording. A new entry point should call it, not re-implement the branches.
-- **Entry points (Phase 3)** are the user-types panel: a *Find Usages* row context-menu item in **both** `node_network_list_view.dart` and `node_network_tree_view.dart` (network rows only — record defs have no usage search), plus a trailing usage count in the list view. Both go through `findUsagesOfNetwork`, which queries the **unfiltered** set and passes no `screenAnchor`, so the landing is viewport-centered.
+- **Entry points (Phase 3)** are the user-types panel: a *Find Usages* row context-menu item in `node_network_tree_view.dart` (network rows only — record defs have no usage search), plus a trailing usage count on the row. Both go through `findUsagesOfNetwork`, which queries the **unfiltered** set and passes no `screenAnchor`, so the landing is viewport-centered.
 - **The jump** is `StructureDesignerModel.jumpToUsage`; the count comes from `StructureDesignerModel.networkUsageCounts`, not from a per-row query. Both carry their own doc comments (including the "look up by name, never iterate" rule), as does the landing logic in `node_network.dart::_scrollToNode` — read those before changing the jump behavior.
 
 Design doc: `doc/design_click_to_activate_node.md`.
@@ -684,11 +684,10 @@ a missed gate here must at worst show an error.
 ## node_networks_list/ Subdirectory
 
 Unified user-types panel — lists both node networks and record type defs:
-- `node_networks_panel.dart` - Tab container (List/Tree views) + action bar
-- `node_network_list_view.dart` - Flat list with rename, validation error indicators; shows kind icon (network vs record def)
+- `node_networks_panel.dart` - The panel: action bar above the tree view
 - `node_network_tree_view.dart` - Hierarchical tree view (networks + record defs in one tree)
 - `node_networks_action_bar.dart` - Add/delete/navigate buttons; the "Add" action offers both "new network" and "new record def"
-- `network_thumbnail_menu.dart` - The two thumbnail context-menu items and their handler, shared by list and tree
+- `network_thumbnail_menu.dart` - The two thumbnail context-menu items and their handler
 
 **Network thumbnails** (`doc/design_network_thumbnails.md`): Rust captures and stores them; Flutter only shows them. The image cache is `model.networkThumbnails` (`network_thumbnails.dart`, one level up so the canvas can reuse it), keyed by `thumbnailRevision` **alone** — revisions are process-wide and never reused, so never add the network name to the key (a rename would refetch for nothing). It is pruned in `refreshFromKernel`. The canvas shows a custom node's thumbnail in its title tooltip; the image is passed into `NodeWidget` as an input (`thumbnail`), never read from the model inside it, and the image export passes none. `hasUnsavedThumbnails` makes *Save* available (`canSave` / `hasSomethingToSave`) but must stay out of the title/tab `*` and the close prompt, which look at `isDirty` only.
 

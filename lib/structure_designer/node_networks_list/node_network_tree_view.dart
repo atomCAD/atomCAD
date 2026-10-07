@@ -135,8 +135,7 @@ class NodeNetworkTreeView extends StatefulWidget {
   State<NodeNetworkTreeView> createState() => _NodeNetworkTreeViewState();
 }
 
-class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
-    with AutomaticKeepAliveClientMixin {
+class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView> {
   late TreeController<_NodeNetworkTreeNode> _treeController;
   final Set<String> _expandedNamespaces = {}; // Track expanded namespace paths
   List<String>? _lastNetworkNames; // For change detection
@@ -155,9 +154,6 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
   /// Wraps the tree's scrollable so the drag handler can measure the visible
   /// viewport rect in global coordinates.
   final GlobalKey _treeViewportKey = GlobalKey();
-
-  @override
-  bool get wantKeepAlive => true; // Keep widget alive when switching tabs
 
   @override
   void initState() {
@@ -1178,8 +1174,6 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
 
   @override
   Widget build(BuildContext context) {
-    super.build(context); // Required for AutomaticKeepAliveClientMixin
-
     final nodeNetworks = widget.model.nodeNetworkNames;
     final recordDefs = widget.model.recordTypeDefNames;
     final folders = widget.model.folderNames;
@@ -1353,9 +1347,9 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
                                 onRefresh: () => refreshLibraryInteractive(
                                     context, widget.model, mountFolder),
                               ),
-                            // Trailing badges, mirroring the list view: the
-                            // validation-error badge (navigates to the offending
-                            // node) then the Find Usages count. Networks only;
+                            // Trailing badges: the validation-error badge
+                            // (navigates to the offending node) then the Find
+                            // Usages count. Networks only;
                             // each collapses to nothing when absent.
                             if (node.isLeaf &&
                                 node.leafKind == _LeafKind.network) ...[

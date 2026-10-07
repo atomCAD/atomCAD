@@ -134,7 +134,7 @@ class NetworkThumbnail extends StatelessWidget {
 }
 
 /// A thumbnail at full 128×128 with rounded corners: the body of every hover
-/// preview — list and tree rows, and custom nodes on the canvas (D9).
+/// preview — tree rows and custom nodes on the canvas (D9).
 class NetworkThumbnailPreview extends StatelessWidget {
   final MemoryImage image;
 
@@ -154,9 +154,6 @@ class NetworkThumbnailPreview extends StatelessWidget {
     );
   }
 }
-
-/// Shared size of the list view's thumbnail and its fallback icon slot.
-const double NETWORK_LIST_THUMBNAIL_SIZE = 40.0;
 
 /// Shared size of the tree view's thumbnail.
 const double NETWORK_TREE_THUMBNAIL_SIZE = 24.0;

@@ -181,9 +181,7 @@ By default the axis kept vertical on screen while orbiting is the world **Z** ax
 
 A structure design consists of node networks. The list of node networks in the current design is shown in the **Node Networks** panel. Select a network in the panel to open it in the node network editor. To create a new network, click the **Add Network** button.
 
-![](../atomCAD_images/node_networks_list_panel.png)
-
-Node networks in a design can be browsed in the **List** tab or in the **Tree** tab. The panel opens on the **Tree** tab; whichever tab you pick stays selected when you switch between open documents. Especially in larger designs or in reusable part libraries it is beneficial to organize your node networks in a namespace hierarchy. The hierarchy can be created by simply naming your node networks using the '.' character as a separator.
+The panel shows the node networks (and record type defs) of the design as a tree. Especially in larger designs or in reusable part libraries it is beneficial to organize your node networks in a namespace hierarchy. The hierarchy can be created by simply naming your node networks using the '.' character as a separator; each namespace appears as a folder in the tree.
 
 ![](../atomCAD_images/node_networks_tree_panel.png)
 
@@ -193,15 +191,12 @@ Node networks in a design can be browsed in the **List** tab or in the **Tree** 
 
 Two ways to aim somewhere else:
 
-- **Into a particular folder:** right-click that folder in the **Tree** tab and choose *Add node network*, *Add record*, or *New folder…*. The item is created inside it whatever is currently active.
-- **At the top level:** right-click the empty space below the entries in the **Tree** tab and choose *Add node network at root*, *Add record at root*, or *New folder at root…*. This is how you start a new top-level namespace while you are working deep inside an existing one.
+- **Into a particular folder:** right-click that folder and choose *Add node network*, *Add record*, or *New folder…*. The item is created inside it whatever is currently active.
+- **At the top level:** right-click the empty space below the entries and choose *Add node network at root*, *Add record at root*, or *New folder at root…*. This is how you start a new top-level namespace while you are working deep inside an existing one.
 
 A network is created under an automatic name (`UNTITLED`, `UNTITLED1`, …) and becomes active immediately, with its folder expanded so you can see where it landed; rename it in place by double-clicking its row. If it landed in the wrong folder, *Move / rename…* in its right-click menu moves it in one step, and `Ctrl+Z` undoes the creation entirely.
 
-**Renaming and moving.** Double-clicking a row renames it in place. What that in-place field edits differs between the two tabs, deliberately:
-
-- In the **List** tab it holds the whole qualified name, so you can retype the path there.
-- In the **Tree** tab it holds only the row's own name — its place in the hierarchy is already shown by where the row sits. Typing a dot into it still works and pushes the item *deeper*: renaming `myname` to `sub.myname` inside folder `a.b` gives `a.b.sub.myname`.
+**Renaming and moving.** Double-clicking a row renames it in place. The in-place field holds only the row's own name — its place in the hierarchy is already shown by where the row sits. Typing a dot into it still works and pushes the item *deeper*: renaming `myname` to `sub.myname` inside folder `a.b` gives `a.b.sub.myname`.
 
 To move something *rootwards* or sideways — the direction in-place renaming cannot express — use **Move / rename…** from the row's right-click menu. It works on a network, on a record type def, and on a whole folder, and opens a dialog holding the **full qualified path** for you to edit:
 
@@ -211,7 +206,7 @@ To move something *rootwards* or sideways — the direction in-place renaming ca
 
 Applied to a folder, the operation is a batch: the dialog lists every `old → new` rename it is about to perform, so you can see the whole subtree move before committing. Names that would collide with something already there are flagged in red and the **Apply** button stays disabled until you resolve them. Moves are undoable with `Ctrl+Z` like any other edit.
 
-**Drag and drop.** In the **Tree** tab you can also just drag a row onto its destination:
+**Drag and drop.** You can also just drag a row onto its destination:
 
 - Dropping onto a **folder** moves the item into that folder. Dropping onto another **item** moves it into *that item's* folder — the same "drop next to a sibling" convention file explorers use.
 - While a drag is in progress, a **Move to top level** bar appears at the bottom of the panel; dropping there promotes the item to the root.
@@ -221,9 +216,9 @@ Applied to a folder, the operation is a batch: the dialog lists every `old → n
 
 A drop does not commit anything on its own: it opens the same *Move / rename…* dialog, pre-filled with the destination you dropped on. So you always get the preview, the conflict check and a **Cancel** — an accidental drop costs one click on *Cancel*, not an undo.
 
-**Who uses this network?** In the **List** tab, a network that is used somewhere in the design shows a small grey number at the right edge of its row: how many nodes across the whole design are instances of it. Networks that nobody uses show no number at all. Click the number — or right-click the row (in either the **List** or the **Tree** tab) and choose *Find Usages* — to jump to a usage; when there are several, you pick one from a list. This is the same navigation described under [Find Usages](#navigating-between-node-networks) below, started from the panel instead of from a node, so the landing is centered in the editor rather than anchored on the node you came from.
+**Who uses this network?** A network that is used somewhere in the design shows a small grey number at the right edge of its row: how many nodes across the whole design are instances of it. Networks that nobody uses show no number at all. Click the number — or right-click the row and choose *Find Usages* — to jump to a usage; when there are several, you pick one from a list. This is the same navigation described under [Find Usages](#navigating-between-node-networks) below, started from the panel instead of from a node, so the landing is centered in the editor rather than anchored on the node you came from.
 
-**Thumbnails.** Each network row can show a small picture of what the network *builds* — its 3D output, not its wiring — so you can tell networks apart at a glance. The **List** tab shows it at the left of the row, the **Tree** tab shows a smaller one in place of the network icon, and hovering a thumbnail for a moment shows it full size. A network that has no picture yet keeps the plain network icon. The same picture also appears in the node network editor: hover the title of a custom node (an instance of one of your networks) and its tooltip shows the network's thumbnail under the name.
+**Thumbnails.** Each network row can show a small picture of what the network *builds* — its 3D output, not its wiring — so you can tell networks apart at a glance. The tree shows it in place of the network icon, and hovering a thumbnail for a moment shows it full size. A network that has no picture yet keeps the plain network icon. The same picture also appears in the node network editor: hover the title of a custom node (an instance of one of your networks) and its tooltip shows the network's thumbnail under the name.
 
 Pictures are taken automatically from what the viewport already shows, never by computing a network you have not opened: when you leave a network (by picking another one, going *Back* / *Forward*, adding or duplicating a network, switching tabs, …) and when you save. So a network that has never been opened has no thumbnail until you visit it. An automatic picture looks along the network's own camera direction but zooms out so the whole displayed result fits, and it is drawn without gadgets, the grid, the pivot cube or atom labels, on a light or a dark background — whichever the content stands out on better (dark for silicon, light for carbon) — so it looks the same whoever saved the file. It is only replaced when the picture really changes — revisiting a network, or opening the file on another computer, leaves it alone. Selected atoms currently show as selected in the picture.
 
@@ -234,9 +229,9 @@ Right-click a network to control its picture:
 
 Both are undoable and count as changes to the design. Thumbnails are saved inside the `.cnnd` file, so they travel with it and with [linked libraries](./library_linking.md) (whose networks show the pictures their own file was saved with and cannot be changed from here). Automatic pictures do **not** mark the design as changed — browsing never produces an unsaved-changes prompt — but they do make *Save* available, so you can keep them by saving when you choose.
 
-**Where is the error?** When something in a network is broken, its row shows a small coloured badge at the right edge (above the usage count) carrying the number of *problems* — one per underlying failure, not one per node it made dark (see [One problem, one entry](#one-problem-one-entry) below). The badge covers **both kinds of problem**: structural (validation) errors found by checking the design, and runtime (evaluation) errors that happened while computing results — a node whose relax failed or whose required input is unwired appears here just like a badly-wired one. The colour encodes severity: **red** when at least one problem makes a node's output unavailable (that node and everything downstream of it goes dark), **amber** when the problems are only advisory warnings. In the problem list, the *icon* tells the two kinds apart: a filled circle or warning triangle for structural problems, a **bolt** (⚡) for runtime ones.
+**Where is the error?** When something in a network is broken, its row shows a small coloured badge at the right edge (before the usage count) carrying the number of *problems* — one per underlying failure, not one per node it made dark (see [One problem, one entry](#one-problem-one-entry) below). The badge covers **both kinds of problem**: structural (validation) errors found by checking the design, and runtime (evaluation) errors that happened while computing results — a node whose relax failed or whose required input is unwired appears here just like a badly-wired one. The colour encodes severity: **red** when at least one problem makes a node's output unavailable (that node and everything downstream of it goes dark), **amber** when the problems are only advisory warnings. In the problem list, the *icon* tells the two kinds apart: a filled circle or warning triangle for structural problems, a **bolt** (⚡) for runtime ones.
 
-Hovering the badge lists the problems; clicking it takes you to them. If there is a single problem tied to a node, clicking jumps straight there; if there are several, a list appears and you pick one, and each entry names the offending node (and, for a problem inside a higher-order function body, which body it is in). Choosing one activates the network, selects the node, and scrolls it into view — the same oriented jump as *Find Usages* — so you no longer have to hunt through a large network for the thing that is broken. This works from both the **List** and the **Tree** tab. In the **Tree** tab, a collapsed folder that hides an errored network is marked with a small red or amber dot, so a problem is never fully concealed by a collapsed branch — the dot points at the branch to expand.
+Hovering the badge lists the problems; clicking it takes you to them. If there is a single problem tied to a node, clicking jumps straight there; if there are several, a list appears and you pick one, and each entry names the offending node (and, for a problem inside a higher-order function body, which body it is in). Choosing one activates the network, selects the node, and scrolls it into view — the same oriented jump as *Find Usages* — so you no longer have to hunt through a large network for the thing that is broken. A collapsed folder that hides an errored network is marked with a small red or amber dot, so a problem is never fully concealed by a collapsed branch — the dot points at the branch to expand.
 
 **Getting the text out.** Error messages are meant to be pasteable into a bug report, so every error surface offers a way to copy it:
 
