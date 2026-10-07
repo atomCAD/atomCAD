@@ -426,6 +426,71 @@ fn silicon_100_reconstruction_changes_atom_count() {
     );
 }
 
+/// The motif `motif_sub` produces from a zincblende motif: every PARAM
+/// substituted, so the parameters are gone and the element is baked into each
+/// site.
+fn baked_zincblende_motif(primary: i16, secondary: i16) -> Motif {
+    let mut motif = DEFAULT_ZINCBLENDE_MOTIF.clone();
+    motif.parameters.clear();
+    for (i, site) in motif.sites.iter_mut().enumerate() {
+        site.atomic_number = if i < 4 { primary } else { secondary };
+    }
+    motif
+}
+
+/// Regression: silicon baked into the sites by `motif_sub` (demolib's
+/// `14Si-silicon`) must reconstruct like silicon in the PARAM defaults does.
+/// Before the gate resolved elements per site, the missing parameters failed
+/// the zincblende check and reconstruction was silently skipped.
+#[test]
+fn silicon_baked_into_sites_reconstructs() {
+    let cell = cubic_cell(5.431);
+    let baked = baked_zincblende_motif(14, 14);
+    let off = box_atom_count(&baked, &cell, 6.0, false);
+    let on = box_atom_count(&baked, &cell, 6.0, true);
+    assert_ne!(
+        on, off,
+        "baked silicon should reconstruct (off={off}, on={on})"
+    );
+    assert_eq!(
+        on,
+        box_atom_count(&silicon_motif(), &cell, 6.0, true),
+        "baked and PARAM silicon must reconstruct identically"
+    );
+}
+
+/// Same for diamond: carbon baked into the sites reconstructs exactly like the
+/// default motif.
+#[test]
+fn diamond_baked_into_sites_reconstructs() {
+    let cell = cubic_cell(3.567);
+    let baked = baked_zincblende_motif(6, 6);
+    assert_eq!(
+        box_atom_count(&baked, &cell, 6.0, true),
+        box_atom_count(&DEFAULT_ZINCBLENDE_MOTIF, &cell, 6.0, true),
+    );
+}
+
+/// A motif mixing elements across the two sublattices is not diamond or
+/// silicon, whichever way the elements are expressed, so it does not
+/// reconstruct.
+#[test]
+fn mixed_element_zincblende_does_not_reconstruct() {
+    let cell = cubic_cell(5.431);
+    let baked = baked_zincblende_motif(14, 6);
+    assert_eq!(
+        box_atom_count(&baked, &cell, 6.0, true),
+        box_atom_count(&baked, &cell, 6.0, false),
+    );
+
+    let mut partly_baked = silicon_motif();
+    partly_baked.sites[0].atomic_number = 6;
+    assert_eq!(
+        box_atom_count(&partly_baked, &cell, 6.0, true),
+        box_atom_count(&partly_baked, &cell, 6.0, false),
+    );
+}
+
 // =============================================================================
 // Halogen passivation (doc/design_halogen_passivation.md Phase 1)
 // =============================================================================

@@ -129,6 +129,9 @@ const SI_H_ANGLE_FROM_NORMAL_DEGREES: f64 = 24.0;
 
 const UNIT_CELL_SIZE_TOLERANCE_ANGSTROM: f64 = 0.05;
 
+/// Tolerance on fractional site positions when recognising the zincblende motif.
+const MOTIF_POSITION_TOLERANCE: f64 = 1e-6;
+
 #[inline]
 fn approximately_equal(a: f64, b: f64, tolerance: f64) -> bool {
     (a - b).abs() <= tolerance
@@ -196,12 +199,12 @@ fn get_reconstruction_params(
     unit_cell: &UnitCellStruct,
     parameter_element_values: &HashMap<String, i16>,
 ) -> Option<SurfaceReconstructionParams> {
-    // Topology check only: the motif must be the zincblende lattice topology,
-    // but its PARAM elements are decided by the effective element values below
-    // (a genuine silicon motif bakes Si into its PARAM defaults, which
-    // `is_structurally_equal` would reject — see motif.rs / issue: extrude
-    // silicon reconstruction).
-    if !motif.is_topologically_equal(&DEFAULT_ZINCBLENDE_MOTIF) {
+    // Geometry check only: the motif must be the zincblende lattice. Its
+    // elements are decided per site below, because a silicon motif can carry Si
+    // in its PARAM defaults *or* baked into the sites by `motif_sub` (which
+    // removes the parameters) — comparing parameters or site element refs here
+    // would silently reject one of the two.
+    if !motif.is_geometrically_equal(&DEFAULT_ZINCBLENDE_MOTIF, MOTIF_POSITION_TOLERANCE) {
         return None;
     }
 
@@ -209,22 +212,20 @@ fn get_reconstruction_params(
         return None;
     }
 
-    let effective_params = motif.get_effective_parameter_element_values(parameter_element_values);
-
-    let primary = match effective_params.get("PRIMARY") {
-        Some(v) => *v,
-        None => return None,
-    };
-    let secondary = match effective_params.get("SECONDARY") {
-        Some(v) => *v,
-        None => return None,
-    };
+    // Every site must hold the same element: pure diamond or pure silicon.
+    let mut site_elements = (0..motif.sites.len())
+        .map(|i| motif.effective_site_atomic_number(i, parameter_element_values));
+    let element = site_elements.next()??;
+    for other in site_elements {
+        if other? != element {
+            return None;
+        }
+    }
 
     let cell_size = unit_cell.a.length();
 
     const CARBON_ATOMIC_NUMBER: i16 = 6;
-    if primary == CARBON_ATOMIC_NUMBER
-        && secondary == CARBON_ATOMIC_NUMBER
+    if element == CARBON_ATOMIC_NUMBER
         && approximately_equal(
             cell_size,
             DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
@@ -235,8 +236,7 @@ fn get_reconstruction_params(
     }
 
     const SILICON_ATOMIC_NUMBER: i16 = 14;
-    if primary == SILICON_ATOMIC_NUMBER
-        && secondary == SILICON_ATOMIC_NUMBER
+    if element == SILICON_ATOMIC_NUMBER
         && approximately_equal(
             cell_size,
             SILICON_UNIT_CELL_SIZE_ANGSTROM,

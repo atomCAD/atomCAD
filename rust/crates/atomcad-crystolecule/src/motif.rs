@@ -118,38 +118,23 @@ impl Motif {
         true
     }
 
-    /// Compares two motifs for **topological** equality, ignoring the element
-    /// assigned to each parameter.
+    /// Compares two motifs for **geometric** equality: the same sites at the
+    /// same fractional positions, joined by the same bonds — ignoring every
+    /// element, whether a site names it directly or through a parameter.
     ///
-    /// Same as [`is_structurally_equal`](Self::is_structurally_equal) except the
-    /// parameter *default atomic numbers* are **not** compared (only the
-    /// parameter names, site count/positions/element-refs, and bonds). This lets
-    /// callers recognise "this is the zincblende topology" independently of
-    /// whether its PARAMs default to carbon, silicon, etc. — the concrete
-    /// elements are checked separately via the effective parameter values.
-    ///
-    /// Used by the surface-reconstruction applicability gate: a genuine silicon
-    /// motif (PARAMs defaulting to Si) is topologically the default zincblende
-    /// motif, so it must pass the gate and let the Si element check downstream
-    /// decide the reconstruction variant. See `surface_reconstruction.rs`.
-    pub fn is_topologically_equal(&self, other: &Motif) -> bool {
-        if self.parameters.len() != other.parameters.len()
-            || self.sites.len() != other.sites.len()
-            || self.bonds.len() != other.bonds.len()
-        {
+    /// Used by the surface-reconstruction applicability gate to recognise the
+    /// zincblende lattice however its elements are expressed: PARAMs defaulting
+    /// to carbon, PARAMs defaulting to silicon, or elements baked into the sites
+    /// by `motif_sub` (which removes the parameters altogether). The elements
+    /// are checked separately, per site, via
+    /// [`effective_site_atomic_number`](Self::effective_site_atomic_number).
+    pub fn is_geometrically_equal(&self, other: &Motif, tolerance: f64) -> bool {
+        if self.sites.len() != other.sites.len() || self.bonds.len() != other.bonds.len() {
             return false;
         }
 
-        // Parameter names must match; default atomic numbers are intentionally
-        // NOT compared (that is the element, decided separately).
-        for (p1, p2) in self.parameters.iter().zip(other.parameters.iter()) {
-            if p1.name != p2.name {
-                return false;
-            }
-        }
-
         for (s1, s2) in self.sites.iter().zip(other.sites.iter()) {
-            if s1.atomic_number != s2.atomic_number || s1.position != s2.position {
+            if !s1.position.abs_diff_eq(s2.position, tolerance) {
                 return false;
             }
         }
@@ -166,6 +151,30 @@ impl Motif {
         }
 
         true
+    }
+
+    /// The element a site is filled with: its own atomic number when it names
+    /// one, otherwise its parameter's value from `parameter_element_values`,
+    /// falling back to the parameter's default. `None` for a site that refers
+    /// to a parameter the motif does not have.
+    pub fn effective_site_atomic_number(
+        &self,
+        site_index: usize,
+        parameter_element_values: &HashMap<String, i16>,
+    ) -> Option<i16> {
+        let site = self.sites.get(site_index)?;
+        if site.atomic_number > 0 {
+            return Some(site.atomic_number);
+        }
+        let parameter = self
+            .parameters
+            .get((-(site.atomic_number as i32) - 1) as usize)?;
+        Some(
+            parameter_element_values
+                .get(&parameter.name)
+                .copied()
+                .unwrap_or(parameter.default_atomic_number),
+        )
     }
 
     /// Compares two motifs with tolerance on fractional site positions.
