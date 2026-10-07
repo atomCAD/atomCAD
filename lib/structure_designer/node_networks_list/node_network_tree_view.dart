@@ -14,6 +14,8 @@ import 'package:flutter_cad/common/draggable_dialog.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/structure_designer/find_usages_menu.dart';
 import 'package:flutter_cad/structure_designer/library_link_actions.dart';
+import 'package:flutter_cad/structure_designer/network_thumbnails.dart';
+import 'package:flutter_cad/structure_designer/node_networks_list/network_thumbnail_menu.dart';
 
 /// Discriminator between the two kinds of leaves in the user-types tree.
 enum _LeafKind { network, recordDef }
@@ -1052,13 +1054,25 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
     final isLocked =
         node.fullName != null && widget.model.isCliWriteLocked(node.fullName!);
 
+    final isNetworkLeaf = node.isLeaf && node.leafKind == _LeafKind.network;
+    final isActiveNetwork = isNetworkLeaf &&
+        widget.model.activeRecordDefName == null &&
+        node.fullName == widget.model.nodeNetworkView?.name;
+    final thumbnailUserSet = isNetworkLeaf &&
+        (widget.model.networkEntry(node.fullName!)?.thumbnailUserSet ?? false);
+
     final items = <PopupMenuEntry<String>>[
       // Navigation first, separated from the editing actions. Networks only —
       // record defs have no usage search yet (design "Non-goals").
-      if (node.isLeaf && node.leafKind == _LeafKind.network) ...[
+      if (isNetworkLeaf) ...[
         const PopupMenuItem(
           value: 'find_usages',
           child: Text('Find Usages'),
+        ),
+        const PopupMenuDivider(),
+        ...thumbnailMenuItems(
+          isActiveNetwork: isActiveNetwork,
+          userSet: thumbnailUserSet,
         ),
         const PopupMenuDivider(),
       ],
@@ -1127,6 +1141,10 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
           networkName: node.fullName!,
           position: position,
         );
+      } else if ((value == SET_THUMBNAIL_MENU_VALUE ||
+              value == RESET_THUMBNAIL_MENU_VALUE) &&
+          node.fullName != null) {
+        handleThumbnailMenuValue(context, widget.model, value!, node.fullName!);
       } else if (value == 'add_folder_here') {
         _handleAddFolderIn(node.fullName ?? '');
       } else if (value == 'add_network_here') {
@@ -1260,15 +1278,25 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
                         child: Row(
                           children: [
                             // Icon for leaf nodes (inside the selection container)
+                            // Network leaves show their thumbnail in place of
+                            // the icon when they have one
+                            // (`doc/design_network_thumbnails.md` D9).
                             if (node.isLeaf) ...[
-                              Icon(
-                                node.leafKind == _LeafKind.recordDef
-                                    ? Icons.data_object
-                                    : Icons.account_tree,
-                                size: 16,
-                                color: isActive
-                                    ? AppColors.selectionForeground
-                                    : Colors.grey,
+                              NetworkThumbnail(
+                                image: node.leafKind == _LeafKind.network
+                                    ? widget.model
+                                        .networkThumbnailImage(node.fullName!)
+                                    : null,
+                                size: NETWORK_TREE_THUMBNAIL_SIZE,
+                                fallback: Icon(
+                                  node.leafKind == _LeafKind.recordDef
+                                      ? Icons.data_object
+                                      : Icons.account_tree,
+                                  size: 16,
+                                  color: isActive
+                                      ? AppColors.selectionForeground
+                                      : Colors.grey,
+                                ),
                               ),
                               const SizedBox(width: 6),
                             ],

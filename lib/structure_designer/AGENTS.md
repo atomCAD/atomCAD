@@ -688,6 +688,9 @@ Unified user-types panel — lists both node networks and record type defs:
 - `node_network_list_view.dart` - Flat list with rename, validation error indicators; shows kind icon (network vs record def)
 - `node_network_tree_view.dart` - Hierarchical tree view (networks + record defs in one tree)
 - `node_networks_action_bar.dart` - Add/delete/navigate buttons; the "Add" action offers both "new network" and "new record def"
+- `network_thumbnail_menu.dart` - The two thumbnail context-menu items and their handler, shared by list and tree
+
+**Network thumbnails** (`doc/design_network_thumbnails.md`): Rust captures and stores them; Flutter only shows them. The image cache is `model.networkThumbnails` (`network_thumbnails.dart`, one level up so the canvas can reuse it), keyed by `thumbnailRevision` **alone** — revisions are process-wide and never reused, so never add the network name to the key (a rename would refetch for nothing). It is pruned in `refreshFromKernel`. `hasUnsavedThumbnails` makes *Save* available (`canSave` / `hasSomethingToSave`) but must stay out of the title/tab `*` and the close prompt, which look at `isDirty` only.
 
 Selecting an entry sets it active in the model — networks set `activeNetworkName`, record defs set `activeRecordDefName`. `MainContentArea` swaps the editor accordingly.
 

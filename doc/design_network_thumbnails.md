@@ -502,6 +502,22 @@ the text above):
   open the saved file on a second machine and browse the networks that have
   thumbnails: no image changes and Save stays disabled.
 
+**Phase 2 implementation notes:**
+
+- The cache and the thumbnail widget are `lib/structure_designer/network_thumbnails.dart`
+  (`NetworkThumbnailCache`, owned by the model as `networkThumbnails`, and
+  `NetworkThumbnail`); the menu items are
+  `node_networks_list/network_thumbnail_menu.dart`. The hover preview is a
+  `Tooltip` with a `richMessage` image.
+- *Set current view as thumbnail* is shown on every local network row but
+  enabled only on the active one; a refusal (nothing displayed) is an error
+  snackbar.
+- Ctrl+S's "No changes to save" check uses the same rule as `canSave`
+  (`hasSomethingToSave`).
+- In the list view every row's leading slot is 40 px wide, so names stay
+  aligned whether a row has a thumbnail or the fallback icon; rows with a
+  thumbnail are taller.
+
 ### Phase 3 — Canvas
 
 - Hover preview on custom nodes.

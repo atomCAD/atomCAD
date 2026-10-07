@@ -1327,7 +1327,10 @@ class _StructureDesignerState extends State<StructureDesigner> {
       await _saveDesignAs();
       return;
     }
-    if (!graphModel.isDirty) {
+    // Unsaved automatic thumbnails count: a file that was only browsed is
+    // still worth saving when the user asks (D8 of
+    // `doc/design_network_thumbnails.md`).
+    if (!graphModel.hasSomethingToSave) {
       _showTransientSnackBar(context, 'No changes to save');
       return;
     }

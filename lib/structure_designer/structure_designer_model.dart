@@ -56,6 +56,7 @@ import 'package:flutter_cad/structure_designer/document_switch.dart';
 import 'package:flutter_cad/structure_designer/node_jobs.dart';
 import 'package:flutter_cad/structure_designer/node_data/mechanosynth_transport.dart';
 import 'package:flutter_cad/structure_designer/namespace_utils.dart';
+import 'package:flutter_cad/structure_designer/network_thumbnails.dart';
 import 'package:flutter_cad/structure_designer/namespace_utils.dart' as ns
     show mountFor;
 
@@ -476,7 +477,16 @@ class StructureDesignerModel extends ChangeNotifier {
   APIViewUpInfo? viewUpInfo;
   StructureDesignerPreferences? preferences;
   bool isDirty = false;
+
+  /// Automatic thumbnails were captured since the last save, load or new
+  /// (`doc/design_network_thumbnails.md` D8). They make *Save* available but,
+  /// unlike [isDirty], never mark the title or tab and never prompt on close.
+  bool hasUnsavedThumbnails = false;
   String? filePath;
+
+  /// Decoded network thumbnails, keyed by revision (D9). Pruned to the active
+  /// document's networks on every [refreshFromKernel].
+  final NetworkThumbnailCache networkThumbnails = NetworkThumbnailCache();
 
   /// Accumulated `print` node entries. Polled from the Rust per-CAD-instance
   /// buffer via `takePrintLog()` after each `refreshFromKernel`. Drives the
@@ -1244,8 +1254,13 @@ class StructureDesignerModel extends ChangeNotifier {
     return result;
   }
 
-  /// Returns true if Save operation is available (design is dirty and has a file path)
-  bool get canSave => isDirty && filePath != null;
+  /// There is something worth writing: edits, or automatic thumbnails that
+  /// were captured since the last save (D8).
+  bool get hasSomethingToSave => isDirty || hasUnsavedThumbnails;
+
+  /// Returns true if Save operation is available (there is something to save
+  /// and the design has a file path)
+  bool get canSave => hasSomethingToSave && filePath != null;
 
   /// Returns true if Save As operation is available (always true)
   bool get canSaveAs => true;
@@ -2391,6 +2406,41 @@ class StructureDesignerModel extends ChangeNotifier {
       return null;
     }
     return result.errorMessage;
+  }
+
+  /// The list entry of the network [name] in the active document, or null.
+  APINetworkWithValidationErrors? networkEntry(String name) {
+    for (final n in nodeNetworkNames) {
+      if (n.name == name) return n;
+    }
+    return null;
+  }
+
+  /// The decoded thumbnail of the network [name], or null when it has none
+  /// (`doc/design_network_thumbnails.md` D9).
+  MemoryImage? networkThumbnailImage(String name) {
+    final entry = networkEntry(name);
+    return entry == null ? null : networkThumbnails.imageFor(entry);
+  }
+
+  /// *Set current view as thumbnail* (D6): renders the live camera into the
+  /// active network's thumbnail and marks it user-set. Undoable. Returns null
+  /// on success or the kernel's error message.
+  String? setCurrentViewAsThumbnail(String networkName) {
+    final result = structure_designer_api.setCurrentViewAsThumbnail(
+        networkName: networkName);
+    refreshFromKernel();
+    return result.success ? null : result.errorMessage;
+  }
+
+  /// *Reset to automatic thumbnail* (D6): clears the user-set flag and captures
+  /// an automatic image right away. Undoable. Returns null on success or the
+  /// kernel's error message.
+  String? resetNetworkThumbnail(String networkName) {
+    final result =
+        structure_designer_api.resetNetworkThumbnail(networkName: networkName);
+    refreshFromKernel();
+    return result.success ? null : result.errorMessage;
   }
 
   bool renameNamespace(String oldPrefix, String newPrefix) {
@@ -4482,6 +4532,8 @@ class StructureDesignerModel extends ChangeNotifier {
     viewUpInfo = common_api.getViewUp();
     preferences = structure_designer_api.getStructureDesignerPreferences();
     isDirty = structure_designer_api.isDesignDirty();
+    hasUnsavedThumbnails = structure_designer_api.hasUnsavedThumbnails();
+    networkThumbnails.prune(nodeNetworkNames);
     filePath = structure_designer_api.getDesignFilePath();
     directEditingMode = structure_designer_api.getDirectEditingMode();
 

@@ -8,6 +8,8 @@ import 'package:flutter_cad/common/error_display.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/structure_designer/find_usages_menu.dart';
 import 'package:flutter_cad/structure_designer/library_link_actions.dart';
+import 'package:flutter_cad/structure_designer/network_thumbnails.dart';
+import 'package:flutter_cad/structure_designer/node_networks_list/network_thumbnail_menu.dart';
 import 'package:flutter_cad/structure_designer/node_networks_list/network_row_badges.dart';
 
 /// Discriminator between the two kinds of user-defined types listed in this
@@ -114,6 +116,13 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
         final linkedMount = widget.model.mountOf(entryName);
         final bool isLinked = linkedMount != null;
 
+        // Thumbnail (`doc/design_network_thumbnails.md` D9): networks only.
+        final networkEntry = entry.kind == _UserTypeKind.network
+            ? widget.model.networkEntry(entryName)
+            : null;
+        final bool isActiveNetwork =
+            entry.kind == _UserTypeKind.network && isActive;
+
         return Builder(
           builder: (BuildContext itemContext) {
             return GestureDetector(
@@ -167,6 +176,11 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
                         child: Text('Find Usages'),
                       ),
                       const PopupMenuDivider(),
+                      ...thumbnailMenuItems(
+                        isActiveNetwork: isActiveNetwork,
+                        userSet: networkEntry?.thumbnailUserSet ?? false,
+                      ),
+                      const PopupMenuDivider(),
                     ],
                     const PopupMenuItem(
                       value: 'rename',
@@ -194,6 +208,10 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
                       networkName: entryName,
                       position: menuPositionForWidget(itemContext),
                     );
+                  } else if (value == SET_THUMBNAIL_MENU_VALUE ||
+                      value == RESET_THUMBNAIL_MENU_VALUE) {
+                    handleThumbnailMenuValue(
+                        itemContext, widget.model, value!, entryName);
                   } else if (value == 'rename') {
                     _startRenaming(entryName, entry.kind);
                   } else if (value == 'duplicate') {
@@ -234,13 +252,26 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
                   visualDensity: AppSpacing.compactVerticalDensity,
                   contentPadding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-                  leading: Icon(
-                    entry.kind == _UserTypeKind.network
-                        ? Icons.account_tree
-                        : Icons.data_object,
-                    size: 16,
-                    color:
-                        isActive ? AppColors.selectionForeground : Colors.grey,
+                  leading: SizedBox(
+                    width: NETWORK_LIST_THUMBNAIL_SIZE,
+                    child: Center(
+                      child: NetworkThumbnail(
+                        image: networkEntry == null
+                            ? null
+                            : widget.model.networkThumbnails
+                                .imageFor(networkEntry),
+                        size: NETWORK_LIST_THUMBNAIL_SIZE,
+                        fallback: Icon(
+                          entry.kind == _UserTypeKind.network
+                              ? Icons.account_tree
+                              : Icons.data_object,
+                          size: 16,
+                          color: isActive
+                              ? AppColors.selectionForeground
+                              : Colors.grey,
+                        ),
+                      ),
+                    ),
                   ),
                   title: isEditing
                       ? CallbackShortcuts(
