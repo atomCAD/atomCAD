@@ -229,8 +229,8 @@ Pictures are taken automatically from what the viewport already shows, never by 
 
 Right-click a network to control its picture:
 
-- *Set current view as thumbnail* uses the centre of the viewport exactly as you see it now, and keeps it: automatic pictures no longer replace it. It is only available for the network you are viewing, and not when nothing is displayed.
-- *Reset to automatic thumbnail* (shown only after the above) goes back to automatic pictures and takes one immediately.
+- *Pin current view as thumbnail* uses the centre of the viewport exactly as you see it now and **pins** it: automatic pictures no longer replace it. Choose it again to pin a different view. It is only available for the network you are viewing, and not when nothing is displayed. A pinned thumbnail looks like any other in the row; hovering it shows *Pinned — won't update automatically* under the full-size picture.
+- *Unpin thumbnail (update automatically)* (shown only for a pinned thumbnail) goes back to automatic pictures. If you are viewing that network, a new picture is taken immediately; otherwise the pinned picture stays until the next automatic one replaces it.
 
 Both are undoable and count as changes to the design. Thumbnails are saved inside the `.cnnd` file, so they travel with it and with [linked libraries](./library_linking.md) (whose networks show the pictures their own file was saved with and cannot be changed from here). Automatic pictures do **not** mark the design as changed — browsing never produces an unsaved-changes prompt — but they do make *Save* available, so you can keep them by saving when you choose.
 

@@ -1058,8 +1058,8 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
     final isActiveNetwork = isNetworkLeaf &&
         widget.model.activeRecordDefName == null &&
         node.fullName == widget.model.nodeNetworkView?.name;
-    final thumbnailUserSet = isNetworkLeaf &&
-        (widget.model.networkEntry(node.fullName!)?.thumbnailUserSet ?? false);
+    final thumbnailPinned = isNetworkLeaf &&
+        (widget.model.networkEntry(node.fullName!)?.thumbnailPinned ?? false);
 
     final items = <PopupMenuEntry<String>>[
       // Navigation first, separated from the editing actions. Networks only —
@@ -1072,7 +1072,7 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
         const PopupMenuDivider(),
         ...thumbnailMenuItems(
           isActiveNetwork: isActiveNetwork,
-          userSet: thumbnailUserSet,
+          pinned: thumbnailPinned,
         ),
         const PopupMenuDivider(),
       ],
@@ -1141,8 +1141,8 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
           networkName: node.fullName!,
           position: position,
         );
-      } else if ((value == SET_THUMBNAIL_MENU_VALUE ||
-              value == RESET_THUMBNAIL_MENU_VALUE) &&
+      } else if ((value == PIN_THUMBNAIL_MENU_VALUE ||
+              value == UNPIN_THUMBNAIL_MENU_VALUE) &&
           node.fullName != null) {
         handleThumbnailMenuValue(context, widget.model, value!, node.fullName!);
       } else if (value == 'add_folder_here') {
@@ -1288,6 +1288,11 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
                                         .networkThumbnailImage(node.fullName!)
                                     : null,
                                 size: NETWORK_TREE_THUMBNAIL_SIZE,
+                                pinned: node.leafKind == _LeafKind.network &&
+                                    (widget.model
+                                            .networkEntry(node.fullName!)
+                                            ?.thumbnailPinned ??
+                                        false),
                                 fallback: Icon(
                                   node.leafKind == _LeafKind.recordDef
                                       ? Icons.data_object

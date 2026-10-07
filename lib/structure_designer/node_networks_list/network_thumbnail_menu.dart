@@ -4,27 +4,27 @@ import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
 /// Context-menu values for the two thumbnail commands (D6), shared by the list
 /// and tree views.
-const String SET_THUMBNAIL_MENU_VALUE = 'set_thumbnail';
-const String RESET_THUMBNAIL_MENU_VALUE = 'reset_thumbnail';
+const String PIN_THUMBNAIL_MENU_VALUE = 'pin_thumbnail';
+const String UNPIN_THUMBNAIL_MENU_VALUE = 'unpin_thumbnail';
 
-/// The thumbnail items of a local network's context menu (D9): *Set current
+/// The thumbnail items of a local network's context menu (D9): *Pin current
 /// view as thumbnail* (enabled only on the active network, the only one with a
-/// scene to render), and *Reset to automatic thumbnail* when the thumbnail is
-/// user-set. Linked networks never get these items (D8).
+/// scene to render), and *Unpin thumbnail* when the thumbnail is pinned.
+/// Linked networks never get these items (D8).
 List<PopupMenuEntry<String>> thumbnailMenuItems({
   required bool isActiveNetwork,
-  required bool userSet,
+  required bool pinned,
 }) {
   return [
     PopupMenuItem(
-      value: SET_THUMBNAIL_MENU_VALUE,
+      value: PIN_THUMBNAIL_MENU_VALUE,
       enabled: isActiveNetwork,
-      child: const Text('Set current view as thumbnail'),
+      child: const Text('Pin current view as thumbnail'),
     ),
-    if (userSet)
+    if (pinned)
       const PopupMenuItem(
-        value: RESET_THUMBNAIL_MENU_VALUE,
-        child: Text('Reset to automatic thumbnail'),
+        value: UNPIN_THUMBNAIL_MENU_VALUE,
+        child: Text('Unpin thumbnail (update automatically)'),
       ),
   ];
 }
@@ -33,9 +33,9 @@ List<PopupMenuEntry<String>> thumbnailMenuItems({
 /// reports a refusal (for example, nothing is displayed) as an error snackbar.
 void handleThumbnailMenuValue(BuildContext context,
     StructureDesignerModel model, String value, String networkName) {
-  final error = value == SET_THUMBNAIL_MENU_VALUE
-      ? model.setCurrentViewAsThumbnail(networkName)
-      : model.resetNetworkThumbnail(networkName);
+  final error = value == PIN_THUMBNAIL_MENU_VALUE
+      ? model.pinCurrentViewAsThumbnail(networkName)
+      : model.unpinNetworkThumbnail(networkName);
   if (error != null && context.mounted) {
     showErrorSnackBar(context, 'Thumbnail: $error');
   }

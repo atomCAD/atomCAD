@@ -178,7 +178,7 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
                       const PopupMenuDivider(),
                       ...thumbnailMenuItems(
                         isActiveNetwork: isActiveNetwork,
-                        userSet: networkEntry?.thumbnailUserSet ?? false,
+                        pinned: networkEntry?.thumbnailPinned ?? false,
                       ),
                       const PopupMenuDivider(),
                     ],
@@ -208,8 +208,8 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
                       networkName: entryName,
                       position: menuPositionForWidget(itemContext),
                     );
-                  } else if (value == SET_THUMBNAIL_MENU_VALUE ||
-                      value == RESET_THUMBNAIL_MENU_VALUE) {
+                  } else if (value == PIN_THUMBNAIL_MENU_VALUE ||
+                      value == UNPIN_THUMBNAIL_MENU_VALUE) {
                     handleThumbnailMenuValue(
                         itemContext, widget.model, value!, entryName);
                   } else if (value == 'rename') {
@@ -261,6 +261,7 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
                             : widget.model.networkThumbnails
                                 .imageFor(networkEntry),
                         size: NETWORK_LIST_THUMBNAIL_SIZE,
+                        pinned: networkEntry?.thumbnailPinned ?? false,
                         fallback: Icon(
                           entry.kind == _UserTypeKind.network
                               ? Icons.account_tree

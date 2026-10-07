@@ -4478,9 +4478,9 @@ class APINetworkWithValidationErrors {
   /// never reused (D7), so an image cache can key on it alone.
   final BigInt thumbnailRevision;
 
-  /// The thumbnail was set by *Set current view as thumbnail* (D6): the
-  /// context menu then offers *Reset to automatic thumbnail*.
-  final bool thumbnailUserSet;
+  /// The thumbnail is pinned (D6): automatic capture leaves it alone, the
+  /// hover preview says so and the context menu offers *Unpin thumbnail*.
+  final bool thumbnailPinned;
 
   const APINetworkWithValidationErrors({
     required this.name,
@@ -4488,7 +4488,7 @@ class APINetworkWithValidationErrors {
     required this.readOnly,
     required this.hasThumbnail,
     required this.thumbnailRevision,
-    required this.thumbnailUserSet,
+    required this.thumbnailPinned,
   });
 
   @override
@@ -4498,7 +4498,7 @@ class APINetworkWithValidationErrors {
       readOnly.hashCode ^
       hasThumbnail.hashCode ^
       thumbnailRevision.hashCode ^
-      thumbnailUserSet.hashCode;
+      thumbnailPinned.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -4510,7 +4510,7 @@ class APINetworkWithValidationErrors {
           readOnly == other.readOnly &&
           hasThumbnail == other.hasThumbnail &&
           thumbnailRevision == other.thumbnailRevision &&
-          thumbnailUserSet == other.thumbnailUserSet;
+          thumbnailPinned == other.thumbnailPinned;
 }
 
 class APINodeCategoryView {

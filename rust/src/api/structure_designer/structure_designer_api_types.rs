@@ -1678,9 +1678,9 @@ pub struct APINetworkWithValidationErrors {
     /// Identity of the current thumbnail, unique for the whole process and
     /// never reused (D7), so an image cache can key on it alone.
     pub thumbnail_revision: u64,
-    /// The thumbnail was set by *Set current view as thumbnail* (D6): the
-    /// context menu then offers *Reset to automatic thumbnail*.
-    pub thumbnail_user_set: bool,
+    /// The thumbnail is pinned (D6): automatic capture leaves it alone, the
+    /// hover preview says so and the context menu offers *Unpin thumbnail*.
+    pub thumbnail_pinned: bool,
 }
 
 /// Which pipeline produced an error entry (`doc/design_error_management.md`

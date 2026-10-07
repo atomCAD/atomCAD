@@ -278,7 +278,7 @@ pub struct SerializableNodeNetwork {
 pub struct SerializableThumbnail {
     pub png: String,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub user_set: bool,
+    pub pinned: bool,
 }
 
 impl SerializableThumbnail {
@@ -286,7 +286,7 @@ impl SerializableThumbnail {
         use base64::Engine;
         SerializableThumbnail {
             png: base64::engine::general_purpose::STANDARD.encode(&thumbnail.png),
-            user_set: thumbnail.user_set,
+            pinned: thumbnail.pinned,
         }
     }
 
@@ -299,7 +299,7 @@ impl SerializableThumbnail {
             .ok()
             .map(|png| NetworkThumbnail {
                 png,
-                user_set: self.user_set,
+                pinned: self.pinned,
             })
     }
 }

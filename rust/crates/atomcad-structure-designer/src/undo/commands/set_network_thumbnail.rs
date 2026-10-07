@@ -1,11 +1,11 @@
 use crate::network_thumbnail::NetworkThumbnail;
 use crate::undo::{UndoCommand, UndoContext, UndoRefreshMode};
 
-/// *Set current view as thumbnail* and *Reset to automatic thumbnail*
+/// *Pin current view as thumbnail* and *Unpin thumbnail*
 /// (`doc/design_network_thumbnails.md` D6): the only command that changes a
 /// thumbnail. Automatic capture is not an undo step (D8).
 ///
-/// Each side is the whole stored thumbnail — PNG bytes plus the user-set flag.
+/// Each side is the whole stored thumbnail — PNG bytes plus the pinned flag.
 /// Applying a side takes a fresh thumbnail revision, so the UI's image cache
 /// never shows the image the other side had.
 #[derive(Debug)]

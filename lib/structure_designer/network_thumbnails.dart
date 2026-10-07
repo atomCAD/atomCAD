@@ -62,17 +62,23 @@ class NetworkThumbnailCache {
 
 /// A network's thumbnail at [size]×[size] with rounded corners, or [fallback]
 /// when it has none. Hovering the image for a moment shows it at full
-/// 128×128 (D9).
+/// 128×128 (D9), with a caption when it is [pinned].
+///
+/// A pinned thumbnail is marked **only** in the hover preview, never on the
+/// small image itself: the row picture is the user's design and stays free of
+/// badges.
 class NetworkThumbnail extends StatelessWidget {
   final MemoryImage? image;
   final double size;
   final Widget fallback;
+  final bool pinned;
 
   const NetworkThumbnail({
     super.key,
     required this.image,
     required this.size,
     required this.fallback,
+    this.pinned = false,
   });
 
   @override
@@ -89,7 +95,27 @@ class NetworkThumbnail extends StatelessWidget {
           BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
         ],
       ),
-      richMessage: WidgetSpan(child: NetworkThumbnailPreview(image: image)),
+      richMessage: WidgetSpan(
+        child: pinned
+            ? Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  NetworkThumbnailPreview(image: image),
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(2, 4, 2, 2),
+                    child: SizedBox(
+                      width: NETWORK_THUMBNAIL_PREVIEW_SIZE - 4,
+                      child: Text(
+                        "Pinned — won't update automatically",
+                        style: TextStyle(color: Colors.white, fontSize: 11),
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            : NetworkThumbnailPreview(image: image),
+      ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(size >= 32 ? 4 : 3),
         child: Image(

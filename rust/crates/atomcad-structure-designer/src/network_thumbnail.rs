@@ -12,9 +12,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 pub struct NetworkThumbnail {
     /// PNG bytes, 128×128.
     pub png: Vec<u8>,
-    /// Set by *Set current view as thumbnail* (D6). Automatic capture leaves
-    /// a user-set thumbnail alone.
-    pub user_set: bool,
+    /// Set by *Pin current view as thumbnail* (D6). Automatic capture leaves
+    /// a pinned thumbnail alone.
+    pub pinned: bool,
 }
 
 /// One process-wide counter that never goes backwards (D7). A network takes a

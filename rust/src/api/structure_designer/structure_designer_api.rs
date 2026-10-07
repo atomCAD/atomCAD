@@ -8100,14 +8100,14 @@ pub fn get_network_thumbnail_png(network_name: String) -> Option<Vec<u8>> {
     }
 }
 
-/// *Set current view as thumbnail* (`doc/design_network_thumbnails.md` D6):
+/// *Pin current view as thumbnail* (`doc/design_network_thumbnails.md` D6):
 /// renders the live view of the **active** network — square, the centre of
-/// the viewport — without gadgets, grid or labels, and stores it as a user-set
+/// the viewport — without gadgets, grid or labels, and stores it as a pinned
 /// thumbnail that automatic capture leaves alone. Undoable; marks the document
 /// dirty. Refused for an inactive or linked network and when nothing is
 /// displayed.
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_current_view_as_thumbnail(network_name: String) -> APIResult {
+pub fn pin_current_view_as_thumbnail(network_name: String) -> APIResult {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
@@ -8118,7 +8118,7 @@ pub fn set_current_view_as_thumbnail(network_name: String) -> APIResult {
                     .and_then(|png| {
                         cad_instance
                             .structure_designer
-                            .set_user_thumbnail(&network_name, png)
+                            .pin_thumbnail(&network_name, png)
                     });
                 match result {
                     Ok(()) => APIResult {
@@ -8139,20 +8139,20 @@ pub fn set_current_view_as_thumbnail(network_name: String) -> APIResult {
     }
 }
 
-/// *Reset to automatic thumbnail* (`doc/design_network_thumbnails.md` D6):
-/// clears the user-set flag and immediately captures an automatic image when
+/// *Unpin thumbnail* (`doc/design_network_thumbnails.md` D6):
+/// clears the pinned flag and immediately captures an automatic image when
 /// the network is active and displays something; otherwise the current image
 /// stays, now automatic. Undoable; marks the document dirty. Refused for a
-/// linked network and when the thumbnail is not user-set.
+/// linked network and when the thumbnail is not pinned.
 #[flutter_rust_bridge::frb(sync)]
-pub fn reset_network_thumbnail(network_name: String) -> APIResult {
+pub fn unpin_network_thumbnail(network_name: String) -> APIResult {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
                 let automatic = render_active_automatic_thumbnail(cad_instance, &network_name);
                 match cad_instance
                     .structure_designer
-                    .reset_network_thumbnail(&network_name, automatic)
+                    .unpin_network_thumbnail(&network_name, automatic)
                 {
                     Ok(()) => APIResult {
                         success: true,

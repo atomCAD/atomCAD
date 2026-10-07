@@ -673,7 +673,7 @@ fn render_automatic_thumbnail(
 /// network `owner` names — `(document id, network name)`, which need not be
 /// the active document (D2). Skipped when the document or network no longer
 /// exists (closed, replaced in place, deleted, renamed), when the network is
-/// linked or its thumbnail is user-set, and when the scene is empty. The
+/// linked or its thumbnail is pinned, and when the scene is empty. The
 /// stored image is replaced only when the picture really changed (D3).
 ///
 /// Never marks the document dirty and pushes no undo step (D8); the owning
@@ -743,7 +743,7 @@ pub fn render_active_automatic_thumbnail(
         .map(|(_, png)| png)
 }
 
-/// *Set current view as thumbnail* (D6): the live camera exactly as the user
+/// *Pin current view as thumbnail* (D6): the live camera exactly as the user
 /// sees it — square, same vertical field of view, so the centre of the
 /// viewport — in thumbnail render mode, as PNG. Refused unless `network_name`
 /// is the active network and its content is on the GPU, and when the scene

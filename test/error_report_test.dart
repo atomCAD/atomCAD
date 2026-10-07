@@ -159,7 +159,7 @@ void main() {
               readOnly: false,
               hasThumbnail: false,
               thumbnailRevision: BigInt.zero,
-              thumbnailUserSet: false)
+              thumbnailPinned: false)
         ]),
         'atomCAD — no problems reported.',
       );
@@ -172,7 +172,7 @@ void main() {
           readOnly: false,
           hasThumbnail: false,
           thumbnailRevision: BigInt.zero,
-          thumbnailUserSet: false,
+          thumbnailPinned: false,
           validationErrors: [
             _error('one broke', nodeId: 1, nodeLabel: 'sphere'),
             _error('two broke', nodeId: 2, nodeLabel: 'relax'),
@@ -184,13 +184,13 @@ void main() {
             readOnly: false,
             hasThumbnail: false,
             thumbnailRevision: BigInt.zero,
-            thumbnailUserSet: false),
+            thumbnailPinned: false),
         APINetworkWithValidationErrors(
           name: 'second',
           readOnly: false,
           hasThumbnail: false,
           thumbnailRevision: BigInt.zero,
-          thumbnailUserSet: false,
+          thumbnailPinned: false,
           validationErrors: [_error('three broke', nodeId: 3, nodeLabel: 'x')],
         ),
       ]);
@@ -209,7 +209,7 @@ void main() {
           readOnly: false,
           hasThumbnail: false,
           thumbnailRevision: BigInt.zero,
-          thumbnailUserSet: false,
+          thumbnailPinned: false,
           validationErrors: [_error('boom', nodeId: 1, nodeLabel: 'sphere')],
         ),
       ]);

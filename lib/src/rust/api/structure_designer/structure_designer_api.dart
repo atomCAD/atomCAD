@@ -2051,25 +2051,25 @@ Uint8List? getNetworkThumbnailPng({required String networkName}) =>
         .crateApiStructureDesignerStructureDesignerApiGetNetworkThumbnailPng(
             networkName: networkName);
 
-/// *Set current view as thumbnail* (`doc/design_network_thumbnails.md` D6):
+/// *Pin current view as thumbnail* (`doc/design_network_thumbnails.md` D6):
 /// renders the live view of the **active** network — square, the centre of
-/// the viewport — without gadgets, grid or labels, and stores it as a user-set
+/// the viewport — without gadgets, grid or labels, and stores it as a pinned
 /// thumbnail that automatic capture leaves alone. Undoable; marks the document
 /// dirty. Refused for an inactive or linked network and when nothing is
 /// displayed.
-APIResult setCurrentViewAsThumbnail({required String networkName}) =>
+APIResult pinCurrentViewAsThumbnail({required String networkName}) =>
     RustLib.instance.api
-        .crateApiStructureDesignerStructureDesignerApiSetCurrentViewAsThumbnail(
+        .crateApiStructureDesignerStructureDesignerApiPinCurrentViewAsThumbnail(
             networkName: networkName);
 
-/// *Reset to automatic thumbnail* (`doc/design_network_thumbnails.md` D6):
-/// clears the user-set flag and immediately captures an automatic image when
+/// *Unpin thumbnail* (`doc/design_network_thumbnails.md` D6):
+/// clears the pinned flag and immediately captures an automatic image when
 /// the network is active and displays something; otherwise the current image
 /// stays, now automatic. Undoable; marks the document dirty. Refused for a
-/// linked network and when the thumbnail is not user-set.
-APIResult resetNetworkThumbnail({required String networkName}) =>
+/// linked network and when the thumbnail is not pinned.
+APIResult unpinNetworkThumbnail({required String networkName}) =>
     RustLib.instance.api
-        .crateApiStructureDesignerStructureDesignerApiResetNetworkThumbnail(
+        .crateApiStructureDesignerStructureDesignerApiUnpinNetworkThumbnail(
             networkName: networkName);
 
 String? getDesignFilePath() => RustLib.instance.api

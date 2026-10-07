@@ -23,7 +23,7 @@ stored images will be ready for it.
 
 - **In:** one thumbnail per node network, showing its **3D output** (not its
   node graph — a design is recognised by what it builds, not by its wiring).
-  Automatic capture, a manual *Set current view as thumbnail* command, storage
+  Automatic capture, a manual *Pin current view as thumbnail* command, storage
   in the `.cnnd`, display in the network list and tree, and a hover preview on
   custom nodes in the canvas.
 - **Out:** a thumbnail for the whole file shown by the operating system's file
@@ -248,9 +248,9 @@ buffer. `render_thumbnail(camera, bg) -> Vec<u8>` (RGBA, 128×128) is the public
 entry point; PNG encoding and the comparison of D3 live next to it in the
 renderer crate, which already depends on `image`.
 
-### D6 — *Set current view as thumbnail* stores pixels, nothing else
+### D6 — *Pin current view as thumbnail* stores pixels, nothing else
 
-The network's right-click menu (list and tree) gets **Set current view as
+The network's right-click menu (list and tree) gets **Pin current view as
 thumbnail**. It renders the live camera exactly as the user sees it — square,
 keeping the vertical field of view, so it is the centre of the viewport — in
 thumbnail render mode (D5), and stores the image. No camera is stored: when
@@ -260,11 +260,11 @@ position.
 The command is enabled only for the active network, which is the only one
 with a scene to render, and only for a local (not linked) network.
 
-The stored thumbnail is then marked **user-set**, and automatic capture (D2,
-D3) leaves a user-set thumbnail alone. A user-set image can go stale, but only
+The stored thumbnail is then **pinned**, and automatic capture (D2,
+D3) leaves a pinned thumbnail alone. A pinned image can go stale, but only
 because the user chose it, and they can see that and fix it: run the command
-again, or choose **Reset to automatic thumbnail** (shown only when the
-thumbnail is user-set), which clears the flag and immediately captures an
+again, or choose **Unpin thumbnail (update automatically)** (shown only when
+the thumbnail is pinned), which clears the flag and immediately captures an
 automatic image (if the scene is empty, D3 keeps the current image, now
 automatic).
 
@@ -282,7 +282,7 @@ is the PNG bytes plus the flag) and both mark the document dirty.
   "camera_settings": { "...": "..." },
   "thumbnail": {
     "png": "iVBORw0KGgoAAAANSUhEUgAA...",
-    "user_set": true
+    "pinned": true
   }
 }
 ```
@@ -290,11 +290,11 @@ is the PNG bytes plus the flag) and both mark the document dirty.
 - `SerializableNodeNetwork` gets a last field
   `thumbnail: Option<SerializableThumbnail>` with
   `#[serde(default, skip_serializing_if = "Option::is_none")]`. It is last so
-  the network's real content stays at the top of its object. `user_set` is
+  the network's real content stays at the top of its object. `pinned` is
   omitted when false. No version bump: older files load with no thumbnails,
   and older builds ignore the field (they drop it when they save).
 - In memory: `NodeNetwork.thumbnail: Option<NetworkThumbnail { png: Vec<u8>,
-  user_set: bool }>`, plus a session-only `thumbnail_revision: u64` for the UI
+  pinned: bool }>`, plus a session-only `thumbnail_revision: u64` for the UI
   cache (D9). Revisions are drawn from **one process-wide counter that never
   goes backwards** (a static `AtomicU64`), and a network takes a fresh value
   whenever its thumbnail is set or the network is created or deserialized (file
@@ -349,7 +349,7 @@ Rejected alternatives:
   (*Current state*) are written without the `thumbnail` field: an AI editing
   session pushes many of them, and each would otherwise carry about 30 KB of
   base64 per side, and undoing an unrelated text edit could put back an old
-  image or flip `user_set`. The rule for a restore:
+  image or flip `pinned`. The rule for a restore:
   - a command that **replaces a network that exists** (text edit, inline,
     convert-to-closure, factor selection, zone-body edits, …) keeps the live
     network's current `thumbnail` on the restored network;
@@ -391,8 +391,13 @@ it at full 128×128 in a tooltip-style popup.
 size, so `node_layout.rs` is untouched. An inline image in the node header is
 a possible later step (*Future work*).
 
-**Context menu** (list and tree): *Set current view as thumbnail*, and *Reset
-to automatic thumbnail* when the thumbnail is user-set (D6).
+**Context menu** (list and tree): *Pin current view as thumbnail*, and *Unpin
+thumbnail (update automatically)* when the thumbnail is pinned (D6).
+
+**Pinned state is shown only in the hover preview**, as a caption under the
+full-size image (*Pinned — won't update automatically*). The row thumbnail
+itself carries no badge: it is the user's picture and stays free of
+decoration.
 
 **Data flow:** `APINetworkWithValidationErrors` gains `has_thumbnail: bool` and
 `thumbnail_revision: u64`. A sync API call,
@@ -454,7 +459,7 @@ describes the thumbnails, when they update and the two menu items.
 - API: `capture_gpu_content_thumbnail` called from
   `refresh_structure_designer` when `content_owner` changes and before saves,
   resolving parked documents through the document set;
-  `set_current_view_as_thumbnail`, `reset_network_thumbnail`,
+  `pin_current_view_as_thumbnail`, `unpin_network_thumbnail`,
   `get_network_thumbnail_png`; the two new fields on
   `APINetworkWithValidationErrors` and `has_unsaved_thumbnails`; FRB codegen.
 - Tests (in each crate's `tests/`): serialization round-trip with and without
@@ -464,9 +469,9 @@ describes the thumbnails, when they update and the two menu items.
   `has_unsaved_thumbnails`, and save clears it; a capture fires for each
   switch path (list, back/forward, add, duplicate, tab switch) and lands on
   the outgoing network, including in a parked document; no capture when the
-  outgoing network was deleted or renamed, or its scene is empty; a user-set
+  outgoing network was deleted or renamed, or its scene is empty; a pinned
   thumbnail is never
-  replaced by automatic capture; the set/reset commands undo and redo;
+  replaced by automatic capture; the pin/unpin commands undo and redo;
   undoing a text edit keeps the current thumbnail, undoing a delete brings
   the image back; revisions never repeat across an undo restore or a reload;
   linked networks are never captured.
@@ -474,9 +479,9 @@ describes the thumbnails, when they update and the two menu items.
 **Phase 1 implementation notes** (where the code differs from, or adds to,
 the text above):
 
-- `APINetworkWithValidationErrors` also carries `thumbnail_user_set`, which
-  the context menu needs to decide whether to offer *Reset* (D9).
-- *Set current view as thumbnail* is refused when nothing is displayed, for
+- `APINetworkWithValidationErrors` also carries `thumbnail_pinned`, which
+  the context menu needs to decide whether to offer *Unpin* (D9).
+- *Pin current view as thumbnail* is refused when nothing is displayed, for
   the reason D3 gives for automatic capture.
 - An undo restore that keeps the live thumbnail keeps its revision too: the
   image is unchanged, so the cache entry stays valid, and D7's guarantee —
@@ -509,7 +514,7 @@ the text above):
   `NetworkThumbnail`); the menu items are
   `node_networks_list/network_thumbnail_menu.dart`. The hover preview is a
   `Tooltip` with a `richMessage` image.
-- *Set current view as thumbnail* is shown on every local network row but
+- *Pin current view as thumbnail* is shown on every local network row but
   enabled only on the active one; a refusal (nothing displayed) is an error
   snackbar.
 - Ctrl+S's "No changes to save" check uses the same rule as `canSave`

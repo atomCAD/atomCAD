@@ -12,7 +12,7 @@ APINetworkWithValidationErrors _network(String name,
       readOnly: false,
       hasThumbnail: hasThumbnail,
       thumbnailRevision: BigInt.from(revision),
-      thumbnailUserSet: false,
+      thumbnailPinned: false,
     );
 
 void main() {

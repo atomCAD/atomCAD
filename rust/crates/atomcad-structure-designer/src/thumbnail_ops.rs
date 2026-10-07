@@ -64,13 +64,12 @@ impl StructureDesigner {
 
     /// Whether an automatic capture may write `network_name`'s thumbnail: the
     /// network exists, is local (linked networks show their library's image,
-    /// D8) and its thumbnail is not user-set (D6).
+    /// D8) and its thumbnail is not pinned (D6).
     pub fn accepts_automatic_thumbnail(&self, network_name: &str) -> bool {
         let Some(network) = self.node_type_registry.node_networks.get(network_name) else {
             return false;
         };
-        !self.is_linked_name(network_name)
-            && !network.thumbnail.as_ref().is_some_and(|t| t.user_set)
+        !self.is_linked_name(network_name) && !network.thumbnail.as_ref().is_some_and(|t| t.pinned)
     }
 
     /// Stores an automatically captured thumbnail (D2). The caller has already
@@ -90,10 +89,7 @@ impl StructureDesigner {
             .node_networks
             .get_mut(network_name)
             .expect("accepts_automatic_thumbnail checked the network exists");
-        network.set_thumbnail(Some(NetworkThumbnail {
-            png,
-            user_set: false,
-        }));
+        network.set_thumbnail(Some(NetworkThumbnail { png, pinned: false }));
         self.has_unsaved_thumbnails = true;
         true
     }
@@ -104,25 +100,19 @@ impl StructureDesigner {
         self.has_unsaved_thumbnails
     }
 
-    /// *Set current view as thumbnail* (D6): stores `png` as the network's
-    /// user-set thumbnail, which automatic capture then leaves alone. One undo
+    /// *Pin current view as thumbnail* (D6): stores `png` as the network's
+    /// pinned thumbnail, which automatic capture then leaves alone. One undo
     /// step; marks the document dirty. Refused on a linked network.
-    pub fn set_user_thumbnail(&mut self, network_name: &str, png: Vec<u8>) -> Result<(), String> {
-        self.set_thumbnail_recorded(
-            network_name,
-            Some(NetworkThumbnail {
-                png,
-                user_set: true,
-            }),
-        )
+    pub fn pin_thumbnail(&mut self, network_name: &str, png: Vec<u8>) -> Result<(), String> {
+        self.set_thumbnail_recorded(network_name, Some(NetworkThumbnail { png, pinned: true }))
     }
 
-    /// *Reset to automatic thumbnail* (D6): clears the user-set flag, storing
+    /// *Unpin thumbnail* (D6): clears the pinned flag, storing
     /// `automatic_png` — the automatic capture the caller just made — when
     /// there is one, and otherwise keeping the current image, now automatic
     /// (an empty scene, D3). One undo step; marks the document dirty. Refused
-    /// on a linked network and when the thumbnail is not user-set.
-    pub fn reset_network_thumbnail(
+    /// on a linked network and when the thumbnail is not pinned.
+    pub fn unpin_network_thumbnail(
         &mut self,
         network_name: &str,
         automatic_png: Option<Vec<u8>>,
@@ -134,20 +124,11 @@ impl StructureDesigner {
             .ok_or_else(|| format!("Node network '{}' does not exist", network_name))?
             .thumbnail
             .clone();
-        let Some(current) = current.filter(|t| t.user_set) else {
-            return Err(format!(
-                "The thumbnail of '{}' is not user-set",
-                network_name
-            ));
+        let Some(current) = current.filter(|t| t.pinned) else {
+            return Err(format!("The thumbnail of '{}' is not pinned", network_name));
         };
         let png = automatic_png.unwrap_or(current.png);
-        self.set_thumbnail_recorded(
-            network_name,
-            Some(NetworkThumbnail {
-                png,
-                user_set: false,
-            }),
-        )
+        self.set_thumbnail_recorded(network_name, Some(NetworkThumbnail { png, pinned: false }))
     }
 
     /// Replaces a thumbnail as an undoable, dirtying edit (D6).

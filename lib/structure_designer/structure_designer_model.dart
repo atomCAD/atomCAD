@@ -2423,22 +2423,22 @@ class StructureDesignerModel extends ChangeNotifier {
     return entry == null ? null : networkThumbnails.imageFor(entry);
   }
 
-  /// *Set current view as thumbnail* (D6): renders the live camera into the
-  /// active network's thumbnail and marks it user-set. Undoable. Returns null
-  /// on success or the kernel's error message.
-  String? setCurrentViewAsThumbnail(String networkName) {
-    final result = structure_designer_api.setCurrentViewAsThumbnail(
+  /// *Pin current view as thumbnail* (D6): renders the live camera into the
+  /// active network's thumbnail and pins it, so automatic capture leaves it
+  /// alone. Undoable. Returns null on success or the kernel's error message.
+  String? pinCurrentViewAsThumbnail(String networkName) {
+    final result = structure_designer_api.pinCurrentViewAsThumbnail(
         networkName: networkName);
     refreshFromKernel();
     return result.success ? null : result.errorMessage;
   }
 
-  /// *Reset to automatic thumbnail* (D6): clears the user-set flag and captures
-  /// an automatic image right away. Undoable. Returns null on success or the
-  /// kernel's error message.
-  String? resetNetworkThumbnail(String networkName) {
+  /// *Unpin thumbnail* (D6): clears the pinned flag and captures an automatic
+  /// image right away. Undoable. Returns null on success or the kernel's error
+  /// message.
+  String? unpinNetworkThumbnail(String networkName) {
     final result =
-        structure_designer_api.resetNetworkThumbnail(networkName: networkName);
+        structure_designer_api.unpinNetworkThumbnail(networkName: networkName);
     refreshFromKernel();
     return result.success ? null : result.errorMessage;
   }

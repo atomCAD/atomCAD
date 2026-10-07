@@ -286,10 +286,10 @@ fn a_thumbnail_round_trips_through_the_file_and_sits_last() {
             "{earlier} before thumbnail"
         );
     }
-    // Base64 on one line, and `user_set` omitted when false.
+    // Base64 on one line, and `pinned` omitted when false.
     let line = text[at..].lines().nth(1).unwrap();
     assert!(line.trim_start().starts_with("\"png\": \""), "{line}");
-    assert!(!text.contains("user_set"));
+    assert!(!text.contains("pinned"));
 
     save(&mut d);
     let reopened = open(&path);
@@ -297,20 +297,20 @@ fn a_thumbnail_round_trips_through_the_file_and_sits_last() {
         thumbnail(&reopened, "Main"),
         Some(NetworkThumbnail {
             png: png(9),
-            user_set: false
+            pinned: false
         })
     );
 }
 
 #[test]
-fn a_user_set_thumbnail_round_trips_with_its_flag() {
+fn a_pinned_thumbnail_round_trips_with_its_flag() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("design.cnnd");
     let mut d = new_design(&path);
-    d.set_user_thumbnail("Main", png(3)).unwrap();
-    assert!(saved_text(&mut d, Some(dir.path())).contains("\"user_set\": true"));
+    d.pin_thumbnail("Main", png(3)).unwrap();
+    assert!(saved_text(&mut d, Some(dir.path())).contains("\"pinned\": true"));
     save(&mut d);
-    assert!(thumbnail(&open(&path), "Main").unwrap().user_set);
+    assert!(thumbnail(&open(&path), "Main").unwrap().pinned);
 }
 
 #[test]
@@ -346,7 +346,7 @@ fn a_malformed_thumbnail_is_dropped_not_fatal() {
 #[test]
 fn duplicate_carries_the_thumbnail_through_undo_and_redo() {
     let mut d = designer();
-    d.set_user_thumbnail("Main", png(5)).unwrap();
+    d.pin_thumbnail("Main", png(5)).unwrap();
     let copy = d.duplicate_node_network("Main").unwrap();
     assert_eq!(thumbnail(&d, &copy), thumbnail(&d, "Main"));
     assert!(d.undo());
@@ -360,9 +360,9 @@ fn duplicate_carries_the_thumbnail_through_undo_and_redo() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn automatic_capture_never_replaces_a_user_set_thumbnail() {
+fn automatic_capture_never_replaces_a_pinned_thumbnail() {
     let mut s = Session::new();
-    s.active.set_user_thumbnail("Main", png(1)).unwrap();
+    s.active.pin_thumbnail("Main", png(1)).unwrap();
     assert!(!s.active.accepts_automatic_thumbnail("Main"));
     assert!(!s.active.store_automatic_thumbnail("Main", png(2)));
 
@@ -374,7 +374,7 @@ fn automatic_capture_never_replaces_a_user_set_thumbnail() {
         thumbnail(&s.active, "Main"),
         Some(NetworkThumbnail {
             png: png(1),
-            user_set: true
+            pinned: true
         })
     );
 }
@@ -385,36 +385,36 @@ fn set_and_reset_are_undoable_and_mark_the_document_dirty() {
     d.store_automatic_thumbnail("Main", png(1));
     d.set_dirty(false);
 
-    d.set_user_thumbnail("Main", png(2)).unwrap();
+    d.pin_thumbnail("Main", png(2)).unwrap();
     assert!(d.is_dirty());
     assert_eq!(
         thumbnail(&d, "Main"),
         Some(NetworkThumbnail {
             png: png(2),
-            user_set: true
+            pinned: true
         })
     );
 
     // Reset with a fresh automatic capture.
     d.set_dirty(false);
-    d.reset_network_thumbnail("Main", Some(png(3))).unwrap();
+    d.unpin_network_thumbnail("Main", Some(png(3))).unwrap();
     assert!(d.is_dirty());
     assert_eq!(
         thumbnail(&d, "Main"),
         Some(NetworkThumbnail {
             png: png(3),
-            user_set: false
+            pinned: false
         })
     );
-    // Reset is offered only for a user-set thumbnail.
-    assert!(d.reset_network_thumbnail("Main", None).is_err());
+    // Unpin is offered only for a pinned thumbnail.
+    assert!(d.unpin_network_thumbnail("Main", None).is_err());
 
     assert!(d.undo());
     assert_eq!(
         thumbnail(&d, "Main").unwrap(),
         NetworkThumbnail {
             png: png(2),
-            user_set: true
+            pinned: true
         }
     );
     assert!(d.undo());
@@ -422,7 +422,7 @@ fn set_and_reset_are_undoable_and_mark_the_document_dirty() {
         thumbnail(&d, "Main").unwrap(),
         NetworkThumbnail {
             png: png(1),
-            user_set: false
+            pinned: false
         }
     );
     assert!(d.redo());
@@ -433,13 +433,13 @@ fn set_and_reset_are_undoable_and_mark_the_document_dirty() {
 #[test]
 fn reset_without_a_capture_keeps_the_image_now_automatic() {
     let mut d = designer();
-    d.set_user_thumbnail("Main", png(2)).unwrap();
-    d.reset_network_thumbnail("Main", None).unwrap();
+    d.pin_thumbnail("Main", png(2)).unwrap();
+    d.unpin_network_thumbnail("Main", None).unwrap();
     assert_eq!(
         thumbnail(&d, "Main"),
         Some(NetworkThumbnail {
             png: png(2),
-            user_set: false
+            pinned: false
         })
     );
 }
@@ -468,14 +468,14 @@ fn undoing_a_text_edit_keeps_the_current_thumbnail() {
 fn undoing_a_delete_brings_the_image_back() {
     let mut d = designer();
     d.add_node_network("Doomed");
-    d.set_user_thumbnail("Doomed", png(4)).unwrap();
+    d.pin_thumbnail("Doomed", png(4)).unwrap();
     d.delete_node_network("Doomed").unwrap();
     assert!(d.undo());
     assert_eq!(
         thumbnail(&d, "Doomed"),
         Some(NetworkThumbnail {
             png: png(4),
-            user_set: true
+            pinned: true
         })
     );
 }
@@ -506,7 +506,7 @@ fn revisions_never_repeat_across_restores_and_reloads() {
     check(&d, "new");
     d.store_automatic_thumbnail("Main", png(1));
     check(&d, "capture");
-    d.set_user_thumbnail("Main", png(2)).unwrap();
+    d.pin_thumbnail("Main", png(2)).unwrap();
     check(&d, "set");
     d.undo();
     check(&d, "undo of set");
@@ -542,7 +542,7 @@ fn linked_networks_are_never_captured_and_keep_their_library_image() {
     assert_eq!(thumbnail(&host, linked).unwrap().png, png(8));
     assert!(!host.accepts_automatic_thumbnail(linked));
     assert!(!host.store_automatic_thumbnail(linked, png(1)));
-    assert!(host.set_user_thumbnail(linked, png(1)).is_err());
+    assert!(host.pin_thumbnail(linked, png(1)).is_err());
     assert_eq!(thumbnail(&host, linked).unwrap().png, png(8));
 
     // The host file never writes the library's picture.
