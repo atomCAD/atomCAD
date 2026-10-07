@@ -183,6 +183,8 @@ A structure design consists of node networks. The list of node networks in the c
 
 The panel shows the node networks (and record type defs) of the design as a tree. Especially in larger designs or in reusable part libraries it is beneficial to organize your node networks in a namespace hierarchy. The hierarchy can be created by simply naming your node networks using the '.' character as a separator; each namespace appears as a folder in the tree.
 
+The tree always shows where you are: whenever a network becomes active, however it got there (clicking it, *Go to Definition*, the **Back** and **Forward** buttons, *Find Usages*, an error jump), its folders open and its row is scrolled into view. The same goes for a record type def opened in the schema editor.
+
 ![](../atomCAD_images/node_networks_tree_panel.png)
 
 > Terminology: a name like `dl.lib.basepoly.cube_centered` is the qualified name of the given node network, while the name `cube_centered` is the simple name of that same node network.

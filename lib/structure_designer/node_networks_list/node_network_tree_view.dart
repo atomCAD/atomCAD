@@ -139,7 +139,16 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView> {
   late TreeController<_NodeNetworkTreeNode> _treeController;
   final Set<String> _expandedNamespaces = {}; // Track expanded namespace paths
   List<String>? _lastNetworkNames; // For change detection
-  String? _lastActiveNetwork; // Track last active network for auto-expansion
+  String? _lastActiveItem; // Last revealed active network / record def
+
+  /// The list item showing the active row, recorded as it is built so a
+  /// reveal can scroll to it. Not a key on the row: adding one as a row turns
+  /// active would rebuild the row's gesture state under the click.
+  BuildContext? _activeRowContext;
+
+  /// Bumped per reveal, so a reveal still waiting out an animation gives up
+  /// when the user has already navigated somewhere else.
+  int _revealGeneration = 0;
 
   // Rename state
   String? _editingNodeFullName; // fullName of node being renamed
@@ -160,6 +169,10 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView> {
     super.initState();
     _renameFocusNode.addListener(_onRenameFocusChange);
     _updateTree();
+    // The panel is rebuilt on a document switch (Back/Forward can cross
+    // tabs), so the incoming document's active item is revealed too.
+    _lastActiveItem = _activeItemName();
+    if (_lastActiveItem != null) _scheduleReveal(_lastActiveItem!);
   }
 
   @override
@@ -169,13 +182,14 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView> {
     // Compose a single list keyed by kind so it changes whenever either
     // networks or record defs are added/removed/renamed.
     final currentNames = _composeKeyedNames();
-    final currentActiveNetwork = widget.model.nodeNetworkView?.name;
 
-    // Check if active network changed - expand ancestors if so
-    if (currentActiveNetwork != _lastActiveNetwork &&
-        currentActiveNetwork != null) {
-      _expandAncestorsOf(currentActiveNetwork);
-      _lastActiveNetwork = currentActiveNetwork;
+    // Whatever activated it (Go to Definition, Back/Forward, Find Usages, a
+    // click here), the active item's folders open and its row scrolls into
+    // view, so the user can see where they are in a large design.
+    final currentActiveItem = _activeItemName();
+    if (currentActiveItem != _lastActiveItem) {
+      _lastActiveItem = currentActiveItem;
+      if (currentActiveItem != null) _scheduleReveal(currentActiveItem);
     }
 
     // Only rebuild if network list actually changed
@@ -239,12 +253,97 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView> {
     // Restore expansion state for existing namespaces
     _restoreExpansionState(roots);
 
-    // If there's an active network, ensure its ancestors are expanded
-    final activeNetwork = widget.model.nodeNetworkView?.name;
-    if (activeNetwork != null) {
-      _expandAncestorsOf(activeNetwork);
-      _lastActiveNetwork = activeNetwork;
+    // If there's an active item, ensure its ancestors are expanded
+    final activeItem = _activeItemName();
+    if (activeItem != null) _expandAncestorsOf(activeItem);
+  }
+
+  /// The qualified name of the item the editor is showing: the active record
+  /// def when the schema editor is open, else the active network.
+  String? _activeItemName() =>
+      widget.model.activeRecordDefName ?? widget.model.nodeNetworkView?.name;
+
+  /// Opens the folders above [name] and scrolls its row into view.
+  ///
+  /// Runs after the frame rather than in `didUpdateWidget`: expanding notifies
+  /// the tree, which must not be asked to rebuild while it is being built, and
+  /// the scroll needs the rows laid out.
+  void _scheduleReveal(String name) {
+    final generation = ++_revealGeneration;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || generation != _revealGeneration) return;
+      final expanded = _expandAncestorsOf(name);
+      // An expanding folder animates its children in as one item; the row has
+      // its own position only once the animation is over.
+      if (expanded) {
+        Future.delayed(_EXPAND_ANIMATION + const Duration(milliseconds: 50),
+            () => _scrollToActiveRow(name, generation, _REVEAL_ATTEMPTS));
+      } else {
+        _scrollToActiveRow(name, generation, _REVEAL_ATTEMPTS);
+      }
+    });
+  }
+
+  /// Scrolls the active row into view, centered, unless it is already fully
+  /// visible. A list builds only the rows near the viewport, so a row far off
+  /// screen has no context yet: jump to an estimate of where it is and try
+  /// again on the next frame, when the rows around it have been built.
+  void _scrollToActiveRow(String name, int generation, int attemptsLeft) {
+    if (!mounted ||
+        generation != _revealGeneration ||
+        !_scrollController.hasClients) {
+      return;
     }
+    final rowContext = _activeRowContext;
+    if (rowContext != null && rowContext.mounted) {
+      if (!_isFullyVisible(rowContext)) {
+        Scrollable.ensureVisible(rowContext,
+            alignment: 0.5, duration: const Duration(milliseconds: 200));
+      }
+      return;
+    }
+    if (attemptsLeft <= 0) return;
+    final (index, count) = _visibleIndexOf(name);
+    if (index < 0 || count == 0) return;
+    final position = _scrollController.position;
+    // The list's extent is itself estimated from the rows built so far, so this
+    // lands near the row rather than on it; the retry corrects it.
+    final rowExtent =
+        (position.maxScrollExtent + position.viewportDimension) / count;
+    final target =
+        index * rowExtent - (position.viewportDimension - rowExtent) / 2;
+    _scrollController.jumpTo(
+        target.clamp(position.minScrollExtent, position.maxScrollExtent));
+    WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _scrollToActiveRow(name, generation, attemptsLeft - 1));
+  }
+
+  /// Whether the row at [rowContext] lies entirely inside the tree viewport.
+  bool _isFullyVisible(BuildContext rowContext) {
+    final row = rowContext.findRenderObject() as RenderBox?;
+    final viewport =
+        _treeViewportKey.currentContext?.findRenderObject() as RenderBox?;
+    if (row == null || viewport == null || !row.hasSize || !viewport.hasSize) {
+      return false;
+    }
+    final rowTop = row.localToGlobal(Offset.zero).dy;
+    final viewportTop = viewport.localToGlobal(Offset.zero).dy;
+    return rowTop >= viewportTop &&
+        rowTop + row.size.height <= viewportTop + viewport.size.height;
+  }
+
+  /// The position of the leaf [name] among the rows currently shown (folders
+  /// expanded as they are now) and the number of rows shown; -1 if hidden.
+  (int, int) _visibleIndexOf(String name) {
+    int index = 0;
+    int found = -1;
+    _treeController.depthFirstTraversal(onTraverse: (entry) {
+      if (found < 0 && entry.node.isLeaf && entry.node.fullName == name) {
+        found = index;
+      }
+      index++;
+    });
+    return (found, index);
   }
 
   void _restoreExpansionState(List<_NodeNetworkTreeNode> roots) {
@@ -276,11 +375,13 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView> {
     _expandedNamespaces.retainAll(validNamespaces);
   }
 
-  void _expandAncestorsOf(String qualifiedName) {
+  /// Expands the folders above [qualifiedName]. Returns whether any of them
+  /// was collapsed (and is now animating open).
+  bool _expandAncestorsOf(String qualifiedName) {
     final segments = getSegments(qualifiedName);
 
     // If it's a root-level node, nothing to expand
-    if (segments.length <= 1) return;
+    if (segments.length <= 1) return false;
 
     // Compute all ancestor namespace paths and add to expansion set
     for (int i = 1; i < segments.length; i++) {
@@ -289,6 +390,7 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView> {
     }
 
     // Find and expand the actual tree nodes
+    bool expandedAny = false;
     void expandInTree(List<_NodeNetworkTreeNode> nodes, String parentPath) {
       for (final node in nodes) {
         if (!node.isLeaf) {
@@ -296,7 +398,10 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView> {
               parentPath.isEmpty ? node.label : '$parentPath.${node.label}';
 
           if (_expandedNamespaces.contains(namespacePath)) {
-            _treeController.expand(node);
+            if (!_treeController.getExpansionState(node)) {
+              expandedAny = true;
+              _treeController.expand(node);
+            }
 
             // Continue traversing children
             if (node.children.isNotEmpty) {
@@ -308,6 +413,7 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView> {
     }
 
     expandInTree(_treeController.roots.toList(), '');
+    return expandedAny;
   }
 
   void _onFolderToggled(_NodeNetworkTreeNode node) {
@@ -509,6 +615,13 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView> {
 
   /// Ticker period for auto-scroll. ~60 Hz.
   static const Duration _AUTO_SCROLL_TICK = Duration(milliseconds: 16);
+
+  /// The tree's expand/collapse animation (the package default), named so a
+  /// reveal can wait it out.
+  static const Duration _EXPAND_ANIMATION = Duration(milliseconds: 300);
+
+  /// Jump-and-retry rounds a reveal spends finding a row that is not built.
+  static const int _REVEAL_ATTEMPTS = 3;
 
   Timer? _hoverExpandTimer;
 
@@ -1190,6 +1303,7 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView> {
       key: _treeViewportKey,
       controller: _scrollController,
       treeController: _treeController,
+      duration: _EXPAND_ANIMATION,
       nodeBuilder: (context, entry) {
         final node = entry.node;
         final activeNetworkName = widget.model.nodeNetworkView?.name;
@@ -1202,6 +1316,13 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView> {
             node.leafKind == _LeafKind.recordDef &&
             node.fullName == activeRecordDef;
         final isActive = isActiveNetwork || isActiveRecordDef;
+        // List items are reused as rows shift, so the slot is cleared when
+        // this item is rebuilt for another row.
+        if (isActive) {
+          _activeRowContext = context;
+        } else if (identical(_activeRowContext, context)) {
+          _activeRowContext = null;
+        }
         final isEditing = _editingNodeFullName == node.fullName;
         // Library linking (§5.3): rows under a mount are dimmed with a link
         // icon; the mount folder itself shows the library's file name and
