@@ -296,6 +296,8 @@ Each node network stores its own camera settings (position, orientation, orthogr
 
 ![](../atomCAD_images/node_network_editor_panel.png)
 
+The strip along the top of the panel names the network you are editing, by its full qualified name: the namespace in grey, the network's own name in bold. When the name is too long for the strip, the outermost folders are left out first (`…libgeo_core.2D_hexagon_centered`), so the network's own name stays readable; hover the name to see all of it, or click the copy button next to it. To its right are the **Graph** and **Text** tabs and the Find node button. When a record type def is open, the schema editor that takes the panel's place names it the same way.
+
 ### Navigating in the node network editor panel
 
 There will be a separate longer chapter in this document about node networks. Here we just discuss how to use the node network editor panel in general. If this UI chapter does not make sense yet to you, come back to it after reading the node networks chapter.

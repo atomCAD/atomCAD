@@ -169,3 +169,103 @@ class QualifiedNameHeader extends StatelessWidget {
     );
   }
 }
+
+/// A qualified name on **one line**, for a strip with no room for a second
+/// one (the network editor's tab row, the schema editor's header): namespace
+/// greyed, simple name emphasised, as in [QualifiedNameHeader].
+///
+/// **When it does not fit, the namespace loses whole segments from the left**
+/// (`…libgeo_core.2D_hexagon_centered`). The simple name is what tells two
+/// items apart, and the innermost folders are the nearest context, so both
+/// outlive the outer folders. Only a simple name too long on its own is cut,
+/// at its end. The full name is in the tooltip and on the copy button.
+class QualifiedNameLine extends StatelessWidget {
+  const QualifiedNameLine({
+    super.key,
+    required this.qualifiedName,
+    this.copyTooltip = 'Copy qualified name',
+    this.copyConfirmation = 'Name copied to clipboard',
+  });
+
+  final String qualifiedName;
+  final String copyTooltip;
+  final String copyConfirmation;
+
+  /// The namespace prefix to show, given the space: all of it, or `…` plus
+  /// the innermost segments that still fit, or `…` alone.
+  static String _namespacePrefix(BuildContext context, List<String> segments,
+      TextStyle namespaceStyle, TextSpan simpleSpan, double maxWidth) {
+    if (segments.isEmpty) return '';
+    if (!maxWidth.isFinite) return '${segments.join('.')}.';
+    final base = DefaultTextStyle.of(context).style;
+    bool fits(String prefix) {
+      final painter = TextPainter(
+        text: TextSpan(style: base, children: [
+          TextSpan(text: prefix, style: namespaceStyle),
+          simpleSpan,
+        ]),
+        maxLines: 1,
+        textDirection: Directionality.of(context),
+        textScaler: MediaQuery.textScalerOf(context),
+      )..layout(maxWidth: maxWidth);
+      final result = !painter.didExceedMaxLines;
+      painter.dispose();
+      return result;
+    }
+
+    for (int drop = 0; drop < segments.length; drop++) {
+      final kept = segments.sublist(drop).join('.');
+      final prefix = drop == 0 ? '$kept.' : '…$kept.';
+      if (fits(prefix)) return prefix;
+    }
+    return '…';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final namespace = getNamespace(qualifiedName);
+    final namespaceStyle =
+        AppTextStyles.small.copyWith(color: Colors.grey.shade700);
+    final simpleSpan = TextSpan(
+      text: getSimpleName(qualifiedName),
+      style: AppTextStyles.regular.copyWith(fontWeight: FontWeight.w600),
+    );
+    return Row(
+      children: [
+        Flexible(
+          child: Tooltip(
+            message: qualifiedName,
+            waitDuration: const Duration(milliseconds: 500),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final prefix = _namespacePrefix(
+                    context,
+                    namespace.isEmpty ? const [] : getSegments(namespace),
+                    namespaceStyle,
+                    simpleSpan,
+                    constraints.maxWidth);
+                return Text.rich(
+                  TextSpan(children: [
+                    if (prefix.isNotEmpty)
+                      TextSpan(text: prefix, style: namespaceStyle),
+                    simpleSpan,
+                  ]),
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.ellipsis,
+                );
+              },
+            ),
+          ),
+        ),
+        const SizedBox(width: 4),
+        CopyTextButton(
+          text: qualifiedName,
+          tooltip: copyTooltip,
+          confirmation: copyConfirmation,
+          size: 14,
+        ),
+      ],
+    );
+  }
+}

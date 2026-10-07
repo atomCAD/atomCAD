@@ -3,6 +3,7 @@ import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network.dart';
 import 'package:flutter_cad/structure_designer/node_network/network_text_editor.dart';
 import 'package:flutter_cad/structure_designer/node_network/find_node_picker.dart';
+import 'package:flutter_cad/structure_designer/qualified_name_header.dart';
 
 /// Tab container that switches between the visual Graph editor and the Text editor.
 class NetworkEditorTabs extends StatefulWidget {
@@ -121,16 +122,34 @@ class _NetworkEditorTabsState extends State<NetworkEditorTabs>
     });
   }
 
+  /// Width of one Graph / Text tab: room for the 14px icon and a click
+  /// target, rather than half the editor's width.
+  static const double _TAB_WIDTH = 40.0;
+
   @override
   Widget build(BuildContext context) {
+    final networkName = widget.graphModel.nodeNetworkView?.name;
     return Column(
       children: [
-        // Compact tab bar, with the Find Node button parked at its right end.
+        // One strip: the name of the network being edited (the only place it
+        // is always on screen; the properties header gives way to the
+        // selected node), then the Graph / Text tabs and Find Node.
         SizedBox(
           height: 28,
           child: Row(
             children: [
+              const SizedBox(width: 8),
               Expanded(
+                child: networkName == null
+                    ? const SizedBox.shrink()
+                    : QualifiedNameLine(
+                        key: const Key('network_editor_name'),
+                        qualifiedName: networkName,
+                      ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 2 * _TAB_WIDTH,
                 child: TabBar(
                   controller: _tabController,
                   tabs: const [

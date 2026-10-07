@@ -4,6 +4,7 @@ import 'package:flutter_cad/common/error_display.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/inputs/data_type_input.dart';
 import 'package:flutter_cad/structure_designer/identifier_validation.dart';
+import 'package:flutter_cad/structure_designer/qualified_name_header.dart';
 import 'package:flutter_cad/structure_designer/schema_field_hint_editor.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
@@ -303,10 +304,8 @@ class _SchemaEditorState extends State<SchemaEditor> {
         children: [
           const Icon(Icons.data_object, size: 18),
           const SizedBox(width: 8),
-          Text(widget.defName,
-              style:
-                  AppTextStyles.regular.copyWith(fontWeight: FontWeight.w600)),
-          const Spacer(),
+          Expanded(child: QualifiedNameLine(qualifiedName: widget.defName)),
+          const SizedBox(width: 8),
           Text(
             '${_fields.length} field${_fields.length == 1 ? '' : 's'}',
             style: AppTextStyles.small.copyWith(color: Colors.grey.shade700),

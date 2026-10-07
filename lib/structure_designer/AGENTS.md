@@ -35,7 +35,7 @@ structure_designer/
 ├── save_as_dependencies.dart         # Save As dependency dialog (D11), File > Export project bundle…
 ├── identifier_validation.dart        # Field/identifier validation rules
 ├── namespace_utils.dart              # User-type-name validation (networks + record defs share one namespace)
-├── qualified_name_header.dart        # Qualified-name header strip (breaks after the namespace only when too long) + copy button (#207/#307)
+├── qualified_name_header.dart        # Qualified-name header strip (breaks after the namespace only when too long) + copy button (#207/#307); `QualifiedNameLine` = one-line variant (editor tab strip, schema header)
 ├── node_network/                     # Node graph editor
 ├── node_data/                        # Per-node-type property editors
 └── node_networks_list/               # Unified user-types panel (networks + record defs)
