@@ -216,6 +216,7 @@ fn with_structure_motif_only_difference_is_motif_unaligned() {
         value_id,
         ValueData {
             value: NetworkResult::Structure(mutant),
+            declared_type: None,
         },
     );
 
@@ -319,7 +320,10 @@ fn with_structure_eval_rejects_crystal_shape_input() {
 
     let ws_id = designer.add_node("with_structure", DVec2::new(400.0, 100.0));
 
-    // Bypass the static validator for the Crystal -> Blueprint connection.
+    // Legitimate Structure wire on pin 1.
+    designer.connect_nodes(st_id, 0, ws_id, 1);
+    // Bypass the static validator for the Crystal -> Blueprint connection —
+    // last, since every designer-level connect re-validates.
     {
         let network = designer
             .node_type_registry
@@ -328,8 +332,6 @@ fn with_structure_eval_rejects_crystal_shape_input() {
             .unwrap();
         network.connect_nodes(mat_id, 0, ws_id, 0, false);
     }
-    // Legitimate Structure wire on pin 1.
-    designer.connect_nodes(st_id, 0, ws_id, 1);
 
     let result = evaluate_raw(&designer, network_name, ws_id);
     match result {

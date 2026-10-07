@@ -83,11 +83,11 @@
 //!   should darken its own cone, not the HOF — the same blast-radius argument D3
 //!   made for the network.
 //! - Tests (and any code) that build a body by poking the registry directly must
-//!   **re-validate** afterwards: an ordinary wire does not re-validate
-//!   (`connect_nodes` only does so for function wires; the app's real body-wiring
-//!   paths `connect_wire_scoped` / `connect_zone_output_wire` always do), so a
-//!   stale "zone-output pin has no incoming wire" error now cone-poisons the node
-//!   instead of merely showing amber.
+//!   **re-validate** afterwards: a network-level `NodeNetwork::connect_nodes`
+//!   does not validate (only the `StructureDesigner` wiring paths do — every
+//!   top-level connect/delete, and the body-wiring `connect_wire_scoped` /
+//!   `connect_zone_output_wire`), so a stale "zone-output pin has no incoming
+//!   wire" error now cone-poisons the node instead of merely showing amber.
 //!
 //! # Zone rule 4: no `parameter` node in a body (#417)
 //!

@@ -28,7 +28,9 @@ use atomcad_structure_designer::evaluator::network_result::{
 use atomcad_structure_designer::node_data::NodeData;
 use atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
 use atomcad_structure_designer::nodes::atom_replace::AtomReplaceData;
-use atomcad_structure_designer::nodes::value::ValueData;
+use atomcad_structure_designer::nodes::value::{
+    add_typed_value_node, add_value_node as insert_value_node,
+};
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 use glam::f64::{DVec2, DVec3};
 
@@ -53,8 +55,16 @@ fn add_value_node(
         .node_networks
         .get_mut(network_name)
         .unwrap();
-    let data = Box::new(ValueData { value });
-    network.add_node("value", DVec2::ZERO, 0, data)
+    // An array here is a `ElementMapping` list, often deliberately partial or
+    // malformed so the node's runtime checks can be tested — declare the pin's
+    // type rather than the (anonymous, partial) inferred one.
+    if matches!(value, NetworkResult::Array(_)) {
+        let rules = DataType::Array(Box::new(DataType::Record(RecordType::Named(
+            "ElementMapping".to_string(),
+        ))));
+        return add_typed_value_node(network, DVec2::ZERO, value, rules);
+    }
+    insert_value_node(network, DVec2::ZERO, value)
 }
 
 fn add_replace_node(

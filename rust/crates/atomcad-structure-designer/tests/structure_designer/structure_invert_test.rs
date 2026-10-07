@@ -14,7 +14,7 @@ use atomcad_structure_designer::evaluator::network_result::{
     Alignment, BlueprintData, CrystalData, MoleculeData, NetworkResult,
 };
 use atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
-use atomcad_structure_designer::nodes::value::ValueData;
+use atomcad_structure_designer::nodes::value::add_value_node as insert_value_node;
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 use atomcad_structure_designer::text_format::TextValue;
 use glam::f64::{DVec2, DVec3};
@@ -44,7 +44,7 @@ fn add_value_node(
         .node_networks
         .get_mut(network_name)
         .unwrap();
-    network.add_node("value", DVec2::ZERO, 0, Box::new(ValueData { value }))
+    insert_value_node(network, DVec2::ZERO, value)
 }
 
 fn crystal_value(structure: AtomicStructure) -> NetworkResult {

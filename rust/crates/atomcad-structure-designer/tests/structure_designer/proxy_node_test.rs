@@ -17,6 +17,7 @@ use atomcad_crystolecule::proxy_cut::{
     ProxyOptions, bond_distances, classify_riders, plan_proxy, proxy_cut,
 };
 use atomcad_crystolecule::structure::Structure;
+use atomcad_structure_designer::data_type::DataType;
 use atomcad_structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
@@ -26,7 +27,9 @@ use atomcad_structure_designer::evaluator::network_result::{
 use atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
 use atomcad_structure_designer::nodes::int::IntData;
 use atomcad_structure_designer::nodes::proxy::{ProxyData, ProxyEvalCache};
-use atomcad_structure_designer::nodes::value::ValueData;
+use atomcad_structure_designer::nodes::value::{
+    add_typed_value_node, add_value_node as insert_value_node,
+};
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 use atomcad_structure_designer::text_format::TextValue;
 use glam::f64::{DVec2, DVec3};
@@ -86,7 +89,25 @@ fn add_value_node(
         .node_networks
         .get_mut(network_name)
         .unwrap();
-    network.add_node("value", position, 0, Box::new(ValueData { value }))
+    insert_value_node(network, position, value)
+}
+
+/// A `value` node whose output declares `declared_type` regardless of the
+/// value it holds, so a deliberately wrong value reaches the consuming node's
+/// runtime check instead of stopping at the validator's static type check.
+fn add_value_node_typed(
+    designer: &mut StructureDesigner,
+    network_name: &str,
+    pos: DVec2,
+    value: NetworkResult,
+    declared_type: DataType,
+) -> u64 {
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get_mut(network_name)
+        .unwrap();
+    add_typed_value_node(network, pos, value, declared_type)
 }
 
 fn molecule_value(structure: AtomicStructure) -> NetworkResult {
@@ -718,11 +739,12 @@ fn proxy_rejects_a_disallowed_passivant() {
 fn proxy_forwards_an_upstream_error_verbatim() {
     let net = "test";
     let mut designer = setup(net);
-    let bad = add_value_node(
+    let bad = add_value_node_typed(
         &mut designer,
         net,
         DVec2::ZERO,
         NetworkResult::Error("upstream boom".to_string()),
+        DataType::Molecule,
     );
     let proxy_id = designer.add_node("proxy", DVec2::new(200.0, 0.0));
     designer.connect_nodes(bad, 0, proxy_id, 0);

@@ -19,7 +19,7 @@ use atomcad_crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
 use atomcad_crystolecule::proxy_cut::{ProxyOptions, proxy_cut};
 use atomcad_structure_designer::evaluator::network_result::{MoleculeData, NetworkResult};
 use atomcad_structure_designer::nodes::proxy::ProxyData;
-use atomcad_structure_designer::nodes::value::ValueData;
+use atomcad_structure_designer::nodes::value::add_value_node as insert_value_node;
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 use glam::f64::{DVec2, DVec3};
 use rust_lib_flutter_cad::api::structure_designer::proxy_api::{
@@ -77,15 +77,12 @@ fn add_value_node(designer: &mut StructureDesigner, position: DVec2) -> u64 {
         .node_networks
         .get_mut("test")
         .unwrap();
-    network.add_node(
-        "value",
+    insert_value_node(
+        network,
         position,
-        0,
-        Box::new(ValueData {
-            value: NetworkResult::Molecule(MoleculeData {
-                atoms: capped_chain(),
-                geo_tree_root: None,
-            }),
+        NetworkResult::Molecule(MoleculeData {
+            atoms: capped_chain(),
+            geo_tree_root: None,
         }),
     )
 }

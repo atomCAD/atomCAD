@@ -5,7 +5,7 @@ use atomcad_structure_designer::evaluator::network_evaluator::{
 };
 use atomcad_structure_designer::evaluator::network_result::{MoleculeData, NetworkResult};
 use atomcad_structure_designer::nodes::passivate::PassivateData;
-use atomcad_structure_designer::nodes::value::ValueData;
+use atomcad_structure_designer::nodes::value::add_value_node;
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 use glam::f64::{DVec2, DVec3};
 
@@ -31,13 +31,11 @@ fn add_atomic_value_node(
         .node_networks
         .get_mut(network_name)
         .unwrap();
-    let value_data = Box::new(ValueData {
-        value: NetworkResult::Molecule(MoleculeData {
-            atoms: structure,
-            geo_tree_root: None,
-        }),
+    let value = NetworkResult::Molecule(MoleculeData {
+        atoms: structure,
+        geo_tree_root: None,
     });
-    network.add_node("value", position, 0, value_data)
+    add_value_node(network, position, value)
 }
 
 fn evaluate_to_atomic(
@@ -273,10 +271,7 @@ fn add_int_value_node(
         .node_networks
         .get_mut(network_name)
         .unwrap();
-    let value_data = Box::new(ValueData {
-        value: NetworkResult::Int(value),
-    });
-    network.add_node("value", position, 0, value_data)
+    add_value_node(network, position, NetworkResult::Int(value))
 }
 
 /// Like `evaluate_to_atomic` but returns the raw result so error cases can be

@@ -27,7 +27,7 @@ use atomcad_structure_designer::nodes::float::FloatData;
 use atomcad_structure_designer::nodes::free_circle::FreeCircleData;
 use atomcad_structure_designer::nodes::free_sphere::FreeSphereData;
 use atomcad_structure_designer::nodes::int::IntData;
-use atomcad_structure_designer::nodes::value::ValueData;
+use atomcad_structure_designer::nodes::value::add_value_node;
 use atomcad_structure_designer::nodes::vec2::Vec2Data;
 use atomcad_structure_designer::nodes::vec3::Vec3Data;
 use atomcad_structure_designer::structure_designer::StructureDesigner;
@@ -201,13 +201,10 @@ fn free_sphere_is_round_on_non_cubic_lattice() {
             .node_networks
             .get_mut("t")
             .unwrap();
-        let value_id = network.add_node(
-            "value",
+        let value_id = add_value_node(
+            network,
             DVec2::new(-200.0, 0.0),
-            0,
-            Box::new(ValueData {
-                value: NetworkResult::Structure(structure),
-            }),
+            NetworkResult::Structure(structure),
         );
         // Network-level connect is untyped — fine for a `value` injector whose
         // declared output type is `None`.

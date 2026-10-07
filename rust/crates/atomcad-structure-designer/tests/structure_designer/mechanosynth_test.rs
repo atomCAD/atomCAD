@@ -31,7 +31,9 @@ use atomcad_structure_designer::nodes::build_script::BuildScriptData;
 use atomcad_structure_designer::nodes::build_step::build_step_record;
 use atomcad_structure_designer::nodes::mechanosynth::{MS_CURRENT_TAG, MechanosynthData};
 use atomcad_structure_designer::nodes::ops_library::OpsLibraryData;
-use atomcad_structure_designer::nodes::value::ValueData;
+use atomcad_structure_designer::nodes::value::{
+    add_typed_value_node, add_value_node as insert_value_node,
+};
 use atomcad_structure_designer::serialization::node_networks_serialization::{
     load_node_networks_from_file, save_node_networks_to_file,
 };
@@ -81,7 +83,20 @@ fn add_value_node(designer: &mut StructureDesigner, value: NetworkResult) -> u64
         .node_networks
         .get_mut(NET)
         .unwrap();
-    network.add_node("value", DVec2::ZERO, 0, Box::new(ValueData { value }))
+    insert_value_node(network, DVec2::ZERO, value)
+}
+
+fn add_value_node_typed(
+    designer: &mut StructureDesigner,
+    value: NetworkResult,
+    declared_type: DataType,
+) -> u64 {
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get_mut(NET)
+        .unwrap();
+    add_typed_value_node(network, DVec2::ZERO, value, declared_type)
 }
 
 fn molecule_value(atoms: AtomicStructure) -> NetworkResult {
@@ -441,7 +456,9 @@ fn the_output_keeps_the_inputs_variant() {
 #[test]
 fn a_non_atomic_base_is_rejected_by_name() {
     let mut designer = setup_designer();
-    let base_id = add_value_node(&mut designer, NetworkResult::Int(3));
+    // Declared Molecule: the wrong value must reach the node's own runtime
+    // check, not stop at the validator's static type check.
+    let base_id = add_value_node_typed(&mut designer, NetworkResult::Int(3), DataType::Molecule);
     let node_id = add_mechanosynth(
         &mut designer,
         base_id,

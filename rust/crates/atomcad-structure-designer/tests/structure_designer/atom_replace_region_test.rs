@@ -16,7 +16,7 @@ use atomcad_structure_designer::evaluator::network_result::{
 };
 use atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
 use atomcad_structure_designer::nodes::atom_replace::AtomReplaceData;
-use atomcad_structure_designer::nodes::value::ValueData;
+use atomcad_structure_designer::nodes::value::add_value_node as insert_value_node;
 use atomcad_structure_designer::serialization::node_networks_serialization::{
     load_node_networks_from_file, save_node_networks_to_file,
 };
@@ -47,7 +47,7 @@ fn add_value_node(
         .node_networks
         .get_mut(network_name)
         .unwrap();
-    network.add_node("value", pos, 0, Box::new(ValueData { value }))
+    insert_value_node(network, pos, value)
 }
 
 fn molecule_value(structure: AtomicStructure) -> NetworkResult {

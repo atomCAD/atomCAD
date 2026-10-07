@@ -28,7 +28,7 @@ use atomcad_structure_designer::nodes::extrude::ExtrudeData;
 use atomcad_structure_designer::nodes::int::IntData;
 use atomcad_structure_designer::nodes::ivec3::IVec3Data;
 use atomcad_structure_designer::nodes::sphere::SphereData;
-use atomcad_structure_designer::nodes::value::ValueData;
+use atomcad_structure_designer::nodes::value::add_value_node;
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 use glam::f64::{DMat3, DVec2, DVec3};
 use glam::i32::{IVec2, IVec3};
@@ -100,13 +100,10 @@ fn inject_structure(
         .node_networks
         .get_mut(network_name)
         .unwrap();
-    let value_id = network.add_node(
-        "value",
+    let value_id = add_value_node(
+        network,
         DVec2::new(-200.0, 0.0),
-        0,
-        Box::new(ValueData {
-            value: NetworkResult::Structure(structure),
-        }),
+        NetworkResult::Structure(structure),
     );
     network.connect_nodes(value_id, 0, sphere_id, 2, false);
 }
@@ -562,13 +559,10 @@ fn inject_drawing_plane(
         .node_networks
         .get_mut(network_name)
         .unwrap();
-    let value_id = network.add_node(
-        "value",
+    let value_id = add_value_node(
+        network,
         DVec2::new(-200.0, 0.0),
-        0,
-        Box::new(ValueData {
-            value: NetworkResult::DrawingPlane(plane),
-        }),
+        NetworkResult::DrawingPlane(plane),
     );
     network.connect_nodes(value_id, 0, circle_id, 2, false);
 }

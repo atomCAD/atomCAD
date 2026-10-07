@@ -1398,23 +1398,13 @@ impl StructureDesigner {
                 for &node_id in &node_ids {
                     self.mark_node_data_changed(node_id);
                 }
-                // If any affected node's `-1` pin is consumed as a function
-                // value, the undone/redone wire edit changed its exposed arity
-                // (a capture added or removed), which must re-derive the
-                // consumer's type. The forward connect/delete paths validate on
-                // exactly this condition; mirror it here so undo/redo don't
-                // reintroduce the staleness those triggers fixed
-                // (`doc/design_node_function_pin_captures.md` §"Revalidation
-                // triggers"). `NodeDataChanged` otherwise skips validation, so
-                // without this an undone capture-wire edit would leave the
-                // consumer's derived type stale.
-                let needs_validate = self
-                    .get_active_node_network()
-                    .map(|net| node_ids.iter().any(|&id| net.function_pin_consumed(id)))
-                    .unwrap_or(false);
-                if needs_validate {
-                    self.validate_active_network();
-                }
+                // Always re-validate, like the forward edits do: an undone or
+                // redone wire edit (or node-data edit) can change resolved
+                // types anywhere downstream — a polymorphic output becoming
+                // unresolved, a consumed `-1` pin's arity — and
+                // `NodeDataChanged` refreshes never validate on their own.
+                // Regression test: `wiring_revalidation_test.rs`.
+                self.validate_active_network();
             }
             UndoRefreshMode::Full => {
                 self.mark_full_refresh();
@@ -4339,7 +4329,7 @@ impl StructureDesigner {
             None => return,
         };
         // First validate the connection
-        let (dest_param_is_multi, dest_is_function_pin, dest_is_apply, dest_function_pin_consumed) = {
+        let dest_param_is_multi = {
             // Get the network
             let network = match self.node_type_registry.node_networks.get(node_network_name) {
                 Some(network) => network,
@@ -4352,57 +4342,17 @@ impl StructureDesigner {
                 None => return,
             };
 
-            // Wiring an *ordinary input pin* on a node whose `-1` pin is
-            // consumed changes the exposed function arity (the new wire freezes
-            // a parameter into a capture), so the consumer's derived type must
-            // re-derive. `function_pin_consumed` is the source-side trigger,
-            // the analog of `dest_is_apply` on the consumer side
-            // (`doc/design_node_function_pin_captures.md` §"Revalidation
-            // triggers").
-            let dest_function_pin_consumed = network.function_pin_consumed(dest_node_id);
-
             // Get the node type and check parameter
             match self.node_type_registry.get_node_type_for_node(dest_node) {
                 Some(node_type) => {
                     if dest_param_index >= node_type.parameters.len() {
                         return;
                     }
-                    let dt = &node_type.parameters[dest_param_index].data_type;
-                    // `dest_is_function_pin` covers both `Function(_)` and
-                    // `AnyFunction { .. }` (the destination-only constraint
-                    // added in Function-pin Unification Phase A). After Phases
-                    // B/C, `apply.f` / `map.f` are declared as `AnyFunction`,
-                    // so a wire into them must still trigger revalidation.
-                    (
-                        dt.is_array(),
-                        dt.is_function_shape(),
-                        dest_node.node_type_name == "apply",
-                        dest_function_pin_consumed,
-                    )
+                    node_type.parameters[dest_param_index].data_type.is_array()
                 }
                 None => return,
             }
         };
-
-        // A wire that carries a *function value* toggles structural rules that
-        // the connect-time type gate (`can_connect_nodes`) does not evaluate:
-        // an HOF's `f` pin suspends the "zone-output pin needs a wire" rule, the
-        // `apply` node requires its `f`, and a consumed function pin (`-1`)
-        // forces the source into function-mode. The partial refresh that follows
-        // re-evaluates but does not validate, so without an explicit re-validate
-        // those errors would go stale (e.g. the zone-output error lingering on a
-        // `map` whose `f` was just wired).
-        //
-        // Currying Phase 3 (`doc/design_currying.md`): wiring an arg pin on an
-        // `apply` node also requires revalidation because the output pin type
-        // depends on `k` (the count of wired arg pins). Without this, a wire
-        // into `apply.arg0` would leave the output type stale at its previous
-        // partial/full shape and downstream consumers would type-check against
-        // the wrong type. Apply destinations therefore always revalidate.
-        let revalidate = dest_is_function_pin
-            || source_output_pin_index < 0
-            || dest_is_apply
-            || dest_function_pin_consumed;
 
         // Capture the existing wire on this pin before connecting (for undo)
         let replaced_wire = if !dest_param_is_multi {
@@ -4465,12 +4415,17 @@ impl StructureDesigner {
             self.apply_node_display_policy(Some(&dirty_nodes));
         }
 
-        // Re-validate when a function wire was added (see `revalidate` above) so
-        // a stale structural error from a previous pass clears now that the wire
-        // satisfies the rule.
-        if revalidate {
-            self.validate_active_network();
-        }
+        // Always re-validate. The connect-time type gate (`can_connect_nodes`)
+        // only checks this one wire, but validity is not local to it: the wire
+        // re-resolves every polymorphic (`SameAsInput`) output downstream —
+        // clearing "could not be resolved" errors, or turning an existing
+        // downstream wire into a type mismatch — and a function wire toggles
+        // structural rules (an HOF's `f` suspends the zone-output rule, an
+        // `apply`'s output type depends on its wired arg count). The partial
+        // refresh that follows re-evaluates but never validates, so without
+        // this, errors go stale. Validation is a cheap whole-network pass; see
+        // `delete_selected_scoped`. Regression tests: `wiring_revalidation_test.rs`.
+        self.validate_active_network();
 
         // Push undo command
         self.push_command(super::undo::commands::connect_wire::ConnectWireCommand {
@@ -7534,23 +7489,6 @@ impl StructureDesigner {
 
         // Collect nodes that will need to be marked as dirty after deletion
         let mut dirty_nodes = HashSet::new();
-        // If the network already carries validation errors, the deletion may
-        // have removed the node or wire that caused one (e.g. a `closure`/HOF
-        // whose zone body had no zone-output wire). The targeted
-        // `should_validate` heuristics below only catch parameter /
-        // invalid-network-reference / function-pin cases, so without this a
-        // stale error could survive the deletion of its offending node. We key
-        // off `validation_errors` (not just `!valid`) so this also clears
-        // *non-blocking* errors (`ValidationError::warning`) — those keep
-        // `network.valid == true`, so a `!valid` check would miss them and the
-        // stale badge/entry would linger until the next unrelated edit.
-        let mut should_validate = self
-            .node_type_registry
-            .node_networks
-            .get(&node_network_name)
-            .map(|network| !network.validation_errors.is_empty())
-            .unwrap_or(false);
-
         if let Some(node_network) = self
             .node_type_registry
             .node_networks
@@ -7559,38 +7497,7 @@ impl StructureDesigner {
             // If nodes are selected, all connected nodes will be dirty
             if !node_network.selected_node_ids.is_empty() {
                 for &selected_node_id in &node_network.selected_node_ids {
-                    // Get all nodes connected to the selected node
                     dirty_nodes.extend(node_network.get_connected_node_ids(selected_node_id));
-
-                    // Check if the selected node requires validation
-                    if let Some(node) = node_network.nodes.get(&selected_node_id)
-                        && (node.node_type_name == "parameter" || {
-                            // Check if this node references an invalid node network
-                            self.node_type_registry
-                                .node_networks
-                                .get(&node.node_type_name)
-                                .map(|network| !network.valid)
-                                .unwrap_or(false)
-                        })
-                    {
-                        should_validate = true;
-                    }
-                }
-
-                // Deleting a node that feeds a *capture* input of a
-                // function-consumed node retypes that node's `-1` pin (the
-                // frozen capture becomes an unconnected parameter again),
-                // changing the exposed arity. Any connected node that is
-                // itself function-consumed therefore needs revalidation
-                // (`doc/design_node_function_pin_captures.md` §"Revalidation
-                // triggers"). `dirty_nodes` already enumerates the nodes
-                // connected to the deletion, so it's the natural place to test.
-                if !should_validate
-                    && dirty_nodes
-                        .iter()
-                        .any(|&id| node_network.function_pin_consumed(id))
-                {
-                    should_validate = true;
                 }
             }
             // If wires are selected, both source and destination nodes will be dirty
@@ -7598,53 +7505,6 @@ impl StructureDesigner {
                 for wire in &node_network.selected_wires {
                     dirty_nodes.insert(wire.source_node_id);
                     dirty_nodes.insert(wire.destination_node_id);
-
-                    // Removing a *function* wire un-suspends the structural rule
-                    // it satisfied — an HOF's `f` pin re-enables the "zone-output
-                    // pin needs a wire" rule, `apply` needs its `f`, and a freed
-                    // function pin (`-1`) leaves function-mode. The connect-time
-                    // gate doesn't evaluate those rules and the full refresh
-                    // below doesn't validate, so request an explicit re-validate
-                    // (the mirror of the function-wire case in `connect_nodes`).
-                    let source_is_function_pin = wire.source_pin_index().is_some_and(|p| p < 0);
-                    // Function-shape covers both `Function(_)` and
-                    // `AnyFunction { .. }` (see `DataType::is_function_shape`).
-                    // Function-pin Unification Phases B/C make `apply.f` /
-                    // `map.f` declared as `AnyFunction`.
-                    let dest_is_function_pin = node_network
-                        .nodes
-                        .get(&wire.destination_node_id)
-                        .and_then(|n| self.node_type_registry.get_node_type_for_node(n))
-                        .and_then(|nt| nt.parameters.get(wire.destination_argument_index))
-                        .is_some_and(|p| p.data_type.is_function_shape());
-                    // Currying Phase 3 / Function-pin Unification Phase D: an
-                    // `apply` node's output type depends on `k` (the count of
-                    // wired arg pins). Deleting *any* wire whose destination is
-                    // an apply changes `k`, so the post-pass that rewrites
-                    // apply's `custom_node_type` must re-run. Mirrors the
-                    // `dest_is_apply` arm in `connect_nodes`; without it the
-                    // declared output stays stale at the previous k's value
-                    // while runtime returns the partial closure, and any
-                    // downstream wire type-checks against a stale type.
-                    let dest_is_apply = node_network
-                        .nodes
-                        .get(&wire.destination_node_id)
-                        .is_some_and(|n| n.node_type_name == "apply");
-                    // Deleting an *ordinary input wire* on a node whose `-1` pin
-                    // is consumed restores a parameter (the frozen capture
-                    // becomes an unconnected pin again), changing the exposed
-                    // arity — so the consumer's derived type must re-derive
-                    // (`doc/design_node_function_pin_captures.md` §"Revalidation
-                    // triggers"). Source-side analog of `dest_is_apply`.
-                    let dest_function_pin_consumed =
-                        node_network.function_pin_consumed(wire.destination_node_id);
-                    if source_is_function_pin
-                        || dest_is_function_pin
-                        || dest_is_apply
-                        || dest_function_pin_consumed
-                    {
-                        should_validate = true;
-                    }
                 }
             }
         }
@@ -7715,11 +7575,6 @@ impl StructureDesigner {
             // in all nodes wired to the output node of the deleted node.
             self.mark_full_refresh();
         }
-
-        // Check if we're deleting the return node (needed for validation below)
-        let deleted_return_node = deletion_info
-            .as_ref()
-            .is_some_and(|info| info.was_return_node.is_some());
 
         // Build the delete command (don't push yet — Case A reflow may bundle it
         // with the neighbour moves into one undo step).
@@ -7830,10 +7685,15 @@ impl StructureDesigner {
             self.apply_node_display_policy(Some(&dirty_nodes));
         }
 
-        // Validate if we deleted a parameter node, invalid network node, or the return node
-        if should_validate || deleted_return_node {
-            self.validate_active_network();
-        }
+        // Always re-validate. Validity is not local to the deleted item: a
+        // polymorphic output (`SameAsInput`) takes its type from its whole
+        // upstream chain, so removing any wire or node can leave nodes anywhere
+        // downstream unresolved or mistyped — and can just as well remove the
+        // cause of an existing error. Validation is a cheap whole-network pass
+        // (~0.3 ms on a 150-node network); the costly part, a Full refresh, is
+        // only requested when the network's validity or interface flips.
+        // Regression tests: `wiring_revalidation_test.rs`.
+        self.validate_active_network();
     }
 
     // -------------------------------------------------------------------------------------------------------------------------

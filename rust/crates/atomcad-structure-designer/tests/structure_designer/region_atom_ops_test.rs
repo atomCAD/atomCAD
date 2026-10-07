@@ -19,7 +19,7 @@ use atomcad_structure_designer::evaluator::network_result::{
     BlueprintData, MoleculeData, NetworkResult,
 };
 use atomcad_structure_designer::nodes::infer_bonds::InferBondsData;
-use atomcad_structure_designer::nodes::value::ValueData;
+use atomcad_structure_designer::nodes::value::add_value_node as insert_value_node;
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 use glam::f64::{DVec2, DVec3};
 
@@ -45,7 +45,7 @@ fn add_value_node(
         .node_networks
         .get_mut(network_name)
         .unwrap();
-    network.add_node("value", pos, 0, Box::new(ValueData { value }))
+    insert_value_node(network, pos, value)
 }
 
 fn molecule_value(structure: AtomicStructure) -> NetworkResult {

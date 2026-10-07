@@ -28,7 +28,7 @@ use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types:
 
 fn setup_atom_edit_with_base(base: AtomicStructure) -> StructureDesigner {
     use atomcad_structure_designer::evaluator::network_result::{MoleculeData, NetworkResult};
-    use atomcad_structure_designer::nodes::value::ValueData;
+    use atomcad_structure_designer::nodes::value::add_value_node;
 
     let mut designer = StructureDesigner::new();
     designer.add_node_network("test");
@@ -39,13 +39,11 @@ fn setup_atom_edit_with_base(base: AtomicStructure) -> StructureDesigner {
         .node_networks
         .get_mut("test")
         .unwrap();
-    let value_data = Box::new(ValueData {
-        value: NetworkResult::Molecule(MoleculeData {
-            atoms: base,
-            geo_tree_root: None,
-        }),
+    let value = NetworkResult::Molecule(MoleculeData {
+        atoms: base,
+        geo_tree_root: None,
     });
-    let value_id = network.add_node("value", DVec2::ZERO, 0, value_data);
+    let value_id = add_value_node(network, DVec2::ZERO, value);
 
     let atom_edit_id = designer.add_node("atom_edit", DVec2::new(200.0, 0.0));
     designer.connect_nodes(value_id, 0, atom_edit_id, 0);

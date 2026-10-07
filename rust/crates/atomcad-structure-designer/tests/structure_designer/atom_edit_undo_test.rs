@@ -2853,7 +2853,7 @@ fn hybridization_override_appears_on_pin1_diff_output() {
 fn hybridization_override_migrated_on_base_atom_promotion() {
     use atomcad_crystolecule::atomic_structure::atom::HYBRIDIZATION_SP2;
     use atomcad_structure_designer::evaluator::network_result::{MoleculeData, NetworkResult};
-    use atomcad_structure_designer::nodes::value::ValueData;
+    use atomcad_structure_designer::nodes::value::add_value_node;
 
     // Create a base structure with one carbon atom at origin, with sp2 hybridization
     let mut base = AtomicStructure::new();
@@ -2870,13 +2870,11 @@ fn hybridization_override_migrated_on_base_atom_promotion() {
         .node_networks
         .get_mut("test")
         .unwrap();
-    let value_data = Box::new(ValueData {
-        value: NetworkResult::Molecule(MoleculeData {
-            atoms: base,
-            geo_tree_root: None,
-        }),
+    let value = NetworkResult::Molecule(MoleculeData {
+        atoms: base,
+        geo_tree_root: None,
     });
-    let value_id = network.add_node("value", DVec2::ZERO, 0, value_data);
+    let value_id = add_value_node(network, DVec2::ZERO, value);
 
     let atom_edit_id = designer.add_node("atom_edit", DVec2::new(200.0, 0.0));
     designer.connect_nodes(value_id, 0, atom_edit_id, 0);
@@ -2935,7 +2933,7 @@ fn hybridization_override_migrated_on_base_atom_promotion() {
 #[test]
 fn frozen_flag_migrated_on_base_atom_promotion() {
     use atomcad_structure_designer::evaluator::network_result::{MoleculeData, NetworkResult};
-    use atomcad_structure_designer::nodes::value::ValueData;
+    use atomcad_structure_designer::nodes::value::add_value_node;
 
     // Create a base structure with one carbon atom at origin, frozen
     let mut base = AtomicStructure::new();
@@ -2951,13 +2949,11 @@ fn frozen_flag_migrated_on_base_atom_promotion() {
         .node_networks
         .get_mut("test")
         .unwrap();
-    let value_data = Box::new(ValueData {
-        value: NetworkResult::Molecule(MoleculeData {
-            atoms: base,
-            geo_tree_root: None,
-        }),
+    let value = NetworkResult::Molecule(MoleculeData {
+        atoms: base,
+        geo_tree_root: None,
     });
-    let value_id = network.add_node("value", DVec2::ZERO, 0, value_data);
+    let value_id = add_value_node(network, DVec2::ZERO, value);
 
     let atom_edit_id = designer.add_node("atom_edit", DVec2::new(200.0, 0.0));
     designer.connect_nodes(value_id, 0, atom_edit_id, 0);
@@ -2998,7 +2994,7 @@ fn frozen_flag_migrated_on_base_atom_promotion() {
 #[test]
 fn frozen_diff_atom_appears_on_pin1_output() {
     use atomcad_structure_designer::evaluator::network_result::{MoleculeData, NetworkResult};
-    use atomcad_structure_designer::nodes::value::ValueData;
+    use atomcad_structure_designer::nodes::value::add_value_node;
 
     let mut base = AtomicStructure::new();
     base.add_atom(6, DVec3::ZERO);
@@ -3012,13 +3008,11 @@ fn frozen_diff_atom_appears_on_pin1_output() {
         .node_networks
         .get_mut("test")
         .unwrap();
-    let value_data = Box::new(ValueData {
-        value: NetworkResult::Molecule(MoleculeData {
-            atoms: base,
-            geo_tree_root: None,
-        }),
+    let value = NetworkResult::Molecule(MoleculeData {
+        atoms: base,
+        geo_tree_root: None,
     });
-    let value_id = network.add_node("value", DVec2::ZERO, 0, value_data);
+    let value_id = add_value_node(network, DVec2::ZERO, value);
 
     let atom_edit_id = designer.add_node("atom_edit", DVec2::new(200.0, 0.0));
     designer.connect_nodes(value_id, 0, atom_edit_id, 0);
@@ -3058,7 +3052,7 @@ fn frozen_diff_atom_appears_on_pin1_output() {
 /// Helper: sets up a designer with a base structure wired to an atom_edit node.
 fn setup_atom_edit_with_base(base: AtomicStructure) -> StructureDesigner {
     use atomcad_structure_designer::evaluator::network_result::{MoleculeData, NetworkResult};
-    use atomcad_structure_designer::nodes::value::ValueData;
+    use atomcad_structure_designer::nodes::value::add_value_node;
 
     let mut designer = StructureDesigner::new();
     designer.add_node_network("test");
@@ -3069,13 +3063,11 @@ fn setup_atom_edit_with_base(base: AtomicStructure) -> StructureDesigner {
         .node_networks
         .get_mut("test")
         .unwrap();
-    let value_data = Box::new(ValueData {
-        value: NetworkResult::Molecule(MoleculeData {
-            atoms: base,
-            geo_tree_root: None,
-        }),
+    let value = NetworkResult::Molecule(MoleculeData {
+        atoms: base,
+        geo_tree_root: None,
     });
-    let value_id = network.add_node("value", DVec2::ZERO, 0, value_data);
+    let value_id = add_value_node(network, DVec2::ZERO, value);
 
     let atom_edit_id = designer.add_node("atom_edit", DVec2::new(200.0, 0.0));
     designer.connect_nodes(value_id, 0, atom_edit_id, 0);

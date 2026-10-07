@@ -24,7 +24,7 @@ use atomcad_structure_designer::node_type_registry::{
 };
 use atomcad_structure_designer::nodes::array::ArrayData;
 use atomcad_structure_designer::nodes::atom_replace::AtomReplaceData;
-use atomcad_structure_designer::nodes::value::ValueData;
+use atomcad_structure_designer::nodes::value::add_value_node;
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 use atomcad_structure_designer::text_format::{TextValue, edit_network, serialize_network};
 use glam::f64::{DVec2, DVec3};
@@ -491,14 +491,7 @@ fn array_of_element_mapping_drives_atom_replace_rules() {
             .node_networks
             .get_mut("Main")
             .unwrap();
-        network.add_node(
-            "value",
-            DVec2::ZERO,
-            0,
-            Box::new(ValueData {
-                value: two_carbon_molecule(),
-            }),
-        )
+        add_value_node(network, DVec2::ZERO, two_carbon_molecule())
     };
 
     let rules_id = add_array_node(

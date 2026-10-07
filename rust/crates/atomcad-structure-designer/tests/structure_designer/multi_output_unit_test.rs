@@ -989,7 +989,7 @@ fn test_custom_network_shrink_output_pins_disconnects_wires() {
 fn test_atom_edit_preserves_crystal_variant_on_pin0() {
     use atomcad_crystolecule::structure::Structure;
     use atomcad_structure_designer::evaluator::network_result::CrystalData;
-    use atomcad_structure_designer::nodes::value::ValueData;
+    use atomcad_structure_designer::nodes::value::add_value_node;
 
     let mut designer = setup_designer_with_network("test");
 
@@ -1002,16 +1002,14 @@ fn test_atom_edit_preserves_crystal_variant_on_pin0() {
             .node_networks
             .get_mut("test")
             .unwrap();
-        let value_data = Box::new(ValueData {
-            value: NetworkResult::Crystal(CrystalData {
-                structure: crystal_structure,
-                atoms: AtomicStructure::new(),
-                geo_tree_root: None,
-                alignment: Default::default(),
-                alignment_reason: None,
-            }),
+        let value = NetworkResult::Crystal(CrystalData {
+            structure: crystal_structure,
+            atoms: AtomicStructure::new(),
+            geo_tree_root: None,
+            alignment: Default::default(),
+            alignment_reason: None,
         });
-        network.add_node("value", DVec2::new(-200.0, 0.0), 0, value_data)
+        add_value_node(network, DVec2::new(-200.0, 0.0), value)
     };
     let atom_edit_id = designer.add_node("atom_edit", DVec2::ZERO);
     designer.connect_nodes(value_id, 0, atom_edit_id, 0);
@@ -1036,7 +1034,7 @@ fn test_atom_edit_preserves_crystal_variant_on_pin0() {
 /// a Molecule on pin 0.
 #[test]
 fn test_atom_edit_preserves_molecule_variant_on_pin0() {
-    use atomcad_structure_designer::nodes::value::ValueData;
+    use atomcad_structure_designer::nodes::value::add_value_node;
 
     let mut designer = setup_designer_with_network("test");
 
@@ -1046,13 +1044,11 @@ fn test_atom_edit_preserves_molecule_variant_on_pin0() {
             .node_networks
             .get_mut("test")
             .unwrap();
-        let value_data = Box::new(ValueData {
-            value: NetworkResult::Molecule(MoleculeData {
-                atoms: AtomicStructure::new(),
-                geo_tree_root: None,
-            }),
+        let value = NetworkResult::Molecule(MoleculeData {
+            atoms: AtomicStructure::new(),
+            geo_tree_root: None,
         });
-        network.add_node("value", DVec2::new(-200.0, 0.0), 0, value_data)
+        add_value_node(network, DVec2::new(-200.0, 0.0), value)
     };
     let atom_edit_id = designer.add_node("atom_edit", DVec2::ZERO);
     designer.connect_nodes(value_id, 0, atom_edit_id, 0);

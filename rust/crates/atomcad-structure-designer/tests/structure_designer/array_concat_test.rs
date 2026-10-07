@@ -419,9 +419,11 @@ fn test_array_concat_unconnected_a_yields_none() {
     );
 
     let concat_id = designer.add_node("array_concat", DVec2::new(200.0, 0.0));
+    let collect_b = add_collect_int(&mut designer, "test", 100.0, 100.0);
     designer.validate_active_network();
 
-    designer.connect_nodes(range_b, 0, concat_id, 1);
+    designer.connect_nodes(range_b, 0, collect_b, 0);
+    designer.connect_nodes(collect_b, 0, concat_id, 1);
 
     let result = evaluate_node(&designer, "test", concat_id);
     match result {

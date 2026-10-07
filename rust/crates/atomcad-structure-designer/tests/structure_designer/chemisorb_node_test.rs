@@ -15,15 +15,18 @@
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
 use atomcad_crystolecule::chemisorption::CHANGED_TAG;
-use atomcad_structure_designer::data_type::DataType;
+use atomcad_structure_designer::data_type::{DataType, RecordType};
 use atomcad_structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use atomcad_structure_designer::evaluator::network_result::{MoleculeData, NetworkResult};
+use atomcad_structure_designer::node_data::NodeData;
 use atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
 use atomcad_structure_designer::nodes::chemisorb::{
     ChemisorbData, ChemisorbEvalCache, StoredSearch,
 };
 use atomcad_structure_designer::nodes::parameter::ParameterData;
-use atomcad_structure_designer::nodes::value::ValueData;
+use atomcad_structure_designer::nodes::value::{
+    self, ValueData, add_typed_value_node, add_value_node,
+};
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 use atomcad_structure_designer::text_format::TextValue;
 use glam::f64::{DQuat, DVec2, DVec3};
@@ -98,12 +101,19 @@ struct Net {
 }
 
 fn add_value(designer: &mut StructureDesigner, network: &str, value: NetworkResult) -> u64 {
-    designer
+    let network = designer
         .node_type_registry
         .node_networks
         .get_mut(network)
-        .unwrap()
-        .add_node("value", DVec2::ZERO, 0, Box::new(ValueData { value }))
+        .unwrap();
+    // An array here is a (possibly malformed) `ChemisorbTransfer` list.
+    if matches!(value, NetworkResult::Array(_)) {
+        let transfers = DataType::Array(Box::new(DataType::Record(RecordType::Named(
+            "ChemisorbTransfer".to_string(),
+        ))));
+        return add_typed_value_node(network, DVec2::ZERO, value, transfers);
+    }
+    add_value_node(network, DVec2::ZERO, value)
 }
 
 /// `value(•OH)` and `value(3 × SiH3)` wired into a `chemisorb`.
@@ -236,15 +246,24 @@ fn set_props(
 }
 
 fn set_value(designer: &mut StructureDesigner, network: &str, node: u64, value: NetworkResult) {
-    designer
+    let node = designer
         .node_type_registry
         .node_networks
         .get_mut(network)
         .unwrap()
         .nodes
         .get_mut(&node)
-        .unwrap()
-        .data = Box::new(ValueData { value });
+        .unwrap();
+    let data = ValueData {
+        value,
+        declared_type: None,
+    };
+    // Keep the cached output type in step with the new value.
+    node.set_custom_node_type(
+        data.calculate_custom_node_type(&value::get_node_type()),
+        false,
+    );
+    node.data = Box::new(data);
 }
 
 // ============================================================================
@@ -1279,6 +1298,14 @@ fn the_transfers_wire_round_trips_through_the_text_format_and_cnnd() {
                 ])],
             }),
         );
+    // A raw `add_node` skips the derived-layout cache that the registry-level
+    // paths populate; fill it before the connect validates the network.
+    {
+        let registry = &mut designer.node_type_registry;
+        let mut network = registry.node_networks.remove(name).unwrap();
+        registry.populate_custom_node_type_cache(network.nodes.get_mut(&array).unwrap(), true);
+        registry.node_networks.insert(name.to_string(), network);
+    }
     designer.connect_nodes(array, 0, node, 2);
     assert_eq!(
         int(

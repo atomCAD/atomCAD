@@ -9,13 +9,16 @@
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::structure::Structure;
 use atomcad_geo_tree::GeoNode;
+use atomcad_structure_designer::data_type::DataType;
 use atomcad_structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
 use atomcad_structure_designer::evaluator::network_result::{
     BlueprintData, CrystalData, MoleculeData, NetworkResult,
 };
-use atomcad_structure_designer::nodes::value::ValueData;
+use atomcad_structure_designer::nodes::value::{
+    add_typed_value_node, add_value_node as insert_value_node,
+};
 use atomcad_structure_designer::nodes::xray::{XrayData, depth_faded_alpha};
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 use atomcad_structure_designer::text_format::TextValue;
@@ -44,7 +47,25 @@ fn add_value_node(
         .node_networks
         .get_mut(network_name)
         .unwrap();
-    network.add_node("value", pos, 0, Box::new(ValueData { value }))
+    insert_value_node(network, pos, value)
+}
+
+/// A `value` node whose output declares `declared_type` regardless of the
+/// value it holds, so a deliberately wrong value reaches the consuming node's
+/// runtime check instead of stopping at the validator's static type check.
+fn add_value_node_typed(
+    designer: &mut StructureDesigner,
+    network_name: &str,
+    pos: DVec2,
+    value: NetworkResult,
+    declared_type: DataType,
+) -> u64 {
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get_mut(network_name)
+        .unwrap();
+    add_typed_value_node(network, pos, value, declared_type)
 }
 
 fn molecule_value(structure: AtomicStructure) -> NetworkResult {
@@ -699,11 +720,12 @@ fn xray_non_blueprint_region_errors() {
     );
     let xray_id = add_xray(&mut designer, DVec2::new(200.0, 0.0));
     designer.connect_nodes(value_id, 0, xray_id, 0);
-    let region_id = add_value_node(
+    let region_id = add_value_node_typed(
         &mut designer,
         net,
         DVec2::new(0.0, 200.0),
         molecule_value(carbons_at(&[5.0])),
+        DataType::Blueprint,
     );
     designer.connect_nodes(region_id, 0, xray_id, 2);
 

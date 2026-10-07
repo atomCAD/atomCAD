@@ -11,7 +11,7 @@ use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
 use atomcad_structure_designer::evaluator::network_result::{MoleculeData, NetworkResult};
 use atomcad_structure_designer::nodes::chemisorb::ChemisorbData;
-use atomcad_structure_designer::nodes::value::ValueData;
+use atomcad_structure_designer::nodes::value::add_value_node;
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 use glam::f64::{DVec2, DVec3};
 use rust_lib_flutter_cad::api::structure_designer::chemisorb_api::{
@@ -47,22 +47,19 @@ pub(crate) fn network() -> (StructureDesigner, u64) {
     designer.set_active_node_network_name(Some("main".to_string()));
     let (ads, sub) = fixture();
     let mut value = |atoms: AtomicStructure| {
-        designer
+        let network = designer
             .node_type_registry
             .node_networks
             .get_mut("main")
-            .unwrap()
-            .add_node(
-                "value",
-                DVec2::ZERO,
-                0,
-                Box::new(ValueData {
-                    value: NetworkResult::Molecule(MoleculeData {
-                        atoms,
-                        geo_tree_root: None,
-                    }),
-                }),
-            )
+            .unwrap();
+        add_value_node(
+            network,
+            DVec2::ZERO,
+            NetworkResult::Molecule(MoleculeData {
+                atoms,
+                geo_tree_root: None,
+            }),
+        )
     };
     let a = value(ads);
     let s = value(sub);

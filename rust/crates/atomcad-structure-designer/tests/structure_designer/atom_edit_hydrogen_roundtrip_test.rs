@@ -4,7 +4,7 @@ use atomcad_structure_designer::evaluator::network_result::{MoleculeData, Networ
 use atomcad_structure_designer::nodes::atom_edit::atom_edit::{
     add_hydrogen_atom_edit, remove_hydrogen_atom_edit,
 };
-use atomcad_structure_designer::nodes::value::ValueData;
+use atomcad_structure_designer::nodes::value::add_value_node;
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 /// Regression test for hydrogen depassivation → passivation in the same atom_edit node.
 ///
@@ -39,13 +39,11 @@ fn add_atomic_value_node(
         .node_networks
         .get_mut(network_name)
         .unwrap();
-    let value_data = Box::new(ValueData {
-        value: NetworkResult::Molecule(MoleculeData {
-            atoms: structure,
-            geo_tree_root: None,
-        }),
+    let value = NetworkResult::Molecule(MoleculeData {
+        atoms: structure,
+        geo_tree_root: None,
     });
-    network.add_node("value", position, 0, value_data)
+    add_value_node(network, position, value)
 }
 
 /// Trigger a full refresh on the designer to populate the scene (eval caches, etc.)
