@@ -1435,6 +1435,9 @@ class NodeNetworkState extends State<NodeNetwork> {
         panOffset: _panOffset,
         zoomLevel: _zoomLevel,
         titleMode: widget.graphModel.nodeTitleMode,
+        // Non-null only for a custom node whose network has a thumbnail: the
+        // lookup is by network name, and only networks are in the list.
+        thumbnail: widget.graphModel.networkThumbnailImage(node.nodeTypeName),
       );
 
   /// Resolver for drag-tick rebuilds of drag-affected nodes. The build-time

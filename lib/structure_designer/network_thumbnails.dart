@@ -89,17 +89,7 @@ class NetworkThumbnail extends StatelessWidget {
           BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
         ],
       ),
-      richMessage: WidgetSpan(
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(3),
-          child: Image(
-            image: image,
-            width: NETWORK_THUMBNAIL_PREVIEW_SIZE,
-            height: NETWORK_THUMBNAIL_PREVIEW_SIZE,
-            gaplessPlayback: true,
-          ),
-        ),
-      ),
+      richMessage: WidgetSpan(child: NetworkThumbnailPreview(image: image)),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(size >= 32 ? 4 : 3),
         child: Image(
@@ -112,6 +102,28 @@ class NetworkThumbnail extends StatelessWidget {
           // A thumbnail that fails to decode is no worse than none.
           errorBuilder: (context, error, stackTrace) => fallback,
         ),
+      ),
+    );
+  }
+}
+
+/// A thumbnail at full 128×128 with rounded corners: the body of every hover
+/// preview — list and tree rows, and custom nodes on the canvas (D9).
+class NetworkThumbnailPreview extends StatelessWidget {
+  final MemoryImage image;
+
+  const NetworkThumbnailPreview({super.key, required this.image});
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(3),
+      child: Image(
+        image: image,
+        width: NETWORK_THUMBNAIL_PREVIEW_SIZE,
+        height: NETWORK_THUMBNAIL_PREVIEW_SIZE,
+        gaplessPlayback: true,
+        errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
       ),
     );
   }

@@ -523,6 +523,29 @@ the text above):
 - Hover preview on custom nodes.
 - Manual walkthrough.
 
+**Phase 3 implementation notes:**
+
+- The preview lives in the title bar's **existing** tooltip rather than a
+  second one: for a custom node whose network has a thumbnail, the tooltip
+  becomes the usual header text with the 128×128 image under it
+  (`NetworkThumbnailPreview`, shared with the list and tree). Two tooltips on
+  one title would compete for the same hover.
+- The image is an **input** of `NodeWidget` (`thumbnail`), threaded through
+  `canvasNodeWidget` like `titleMode`, so the widget stays a pure function of
+  its inputs. The live canvas looks it up with
+  `model.networkThumbnailImage(node.nodeTypeName)` — only networks are in the
+  list, so built-in nodes get null without an `isCustomNodeType` call — and the
+  image export passes none (a still image has no hover).
+- The zoomed-out node levels, which show only the title, get the same tooltip
+  on that title; there the picture helps most.
+- Linked library networks preview too: they are in the network list with the
+  thumbnail their library was saved with.
+- Manual walkthrough: hover a custom node's title at each zoom level (preview
+  appears; built-in nodes and networks without a thumbnail show the plain
+  tooltip); capture a new image for the network (leave and come back, or *Set
+  current view as thumbnail*) and check the canvas preview follows; export the
+  node network image and check nothing changed in it.
+
 ## Future work
 
 - **Generate missing thumbnails:** a command that activates each network

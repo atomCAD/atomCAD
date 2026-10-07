@@ -23,6 +23,7 @@ import 'package:flutter_cad/structure_designer/node_network/node_network_painter
         GRID_MAJOR_COLOR;
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_preferences.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_name_path.dart';
+import 'package:flutter_cad/structure_designer/network_thumbnails.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_title.dart';
 import 'package:flutter_cad/structure_designer/node_network/scope_resolver.dart';
 import 'package:flutter_cad/structure_designer/namespace_utils.dart';
@@ -914,6 +915,11 @@ class NodeWidget extends StatelessWidget {
   /// rule, which never receives it, cannot start depending on it (D5).
   final NodeTitleMode titleMode;
 
+  /// The thumbnail of a custom node's network, shown in the title-bar hover
+  /// tooltip (`doc/design_network_thumbnails.md` D9). Null for built-in nodes,
+  /// networks without a thumbnail, and the image export.
+  final MemoryImage? thumbnail;
+
   NodeWidget({
     required this.node,
     required this.panOffset,
@@ -923,6 +929,7 @@ class NodeWidget extends StatelessWidget {
     this.scopeChain = const [],
     this.hideSelection = false,
     this.titleMode = NodeTitleMode.type,
+    this.thumbnail,
   }) : super(key: NodeWidgetKeys.nodeWidget(node.id, scopeChain: scopeChain));
 
   /// Selection / active state as it should be **drawn** — the styling code uses
@@ -990,7 +997,7 @@ class NodeWidget extends StatelessWidget {
       child: Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-          child: Text(
+          child: _withThumbnailTooltip(Text(
             // A closure's user-supplied label, when present, is a much better
             // identifier at zoomed-out scale than the bare type name "closure".
             // In Name mode the node's own name replaces both (D4).
@@ -1003,9 +1010,22 @@ class NodeWidget extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             maxLines: 3,
             textAlign: TextAlign.center,
-          ),
+          )),
         ),
       ),
+    );
+  }
+
+  /// Wraps the compact title in the thumbnail tooltip when there is one; the
+  /// compact node has no other tooltip on its title.
+  Widget _withThumbnailTooltip(Widget child) {
+    final richMessage = _thumbnailHeaderTooltip;
+    if (richMessage == null) return child;
+    return Tooltip(
+      richMessage: richMessage,
+      waitDuration: const Duration(milliseconds: 500),
+      preferBelow: false,
+      child: child,
     );
   }
 
@@ -1161,7 +1181,8 @@ class NodeWidget extends StatelessWidget {
                 ] else ...[
                   Expanded(
                     child: Tooltip(
-                      message: _headerTooltip,
+                      message: thumbnail == null ? _headerTooltip : null,
+                      richMessage: _thumbnailHeaderTooltip,
                       waitDuration: const Duration(milliseconds: 500),
                       preferBelow: false,
                       child: Text(
@@ -1654,6 +1675,23 @@ class NodeWidget extends StatelessWidget {
   String get _compactTitle {
     final label = _closureTitleLabel;
     return label.isNotEmpty ? label : nodeTitleText(node, titleMode);
+  }
+
+  /// The header tooltip with the network thumbnail under the text, for a
+  /// custom node whose network has one (D9); null otherwise, leaving the
+  /// plain-text tooltip. One tooltip on the title, not two competing ones.
+  InlineSpan? get _thumbnailHeaderTooltip {
+    final image = thumbnail;
+    if (image == null) return null;
+    return TextSpan(children: [
+      TextSpan(text: '$_headerTooltip\n'),
+      WidgetSpan(
+        child: Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: NetworkThumbnailPreview(image: image),
+        ),
+      ),
+    ]);
   }
 
   String get _headerTooltip {

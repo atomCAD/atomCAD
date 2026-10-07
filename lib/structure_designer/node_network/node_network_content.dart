@@ -42,6 +42,10 @@ typedef CanvasNodeWidgetBuilder = Widget Function(
 /// render type names while the rest of the editor shows names
 /// (`doc/design_node_names_in_ui.md` D4). Both canvases read it from
 /// `StructureDesignerModel.nodeTitleMode`.
+///
+/// [thumbnail] is the network thumbnail of a custom node's network, shown when
+/// its title bar is hovered (`doc/design_network_thumbnails.md` D9). Only the
+/// live canvas passes one: a still image has no hover.
 Widget canvasNodeWidget({
   required NodeView node,
   required List<BigInt> scopeChain,
@@ -51,6 +55,7 @@ Widget canvasNodeWidget({
   required ZoomLevel zoomLevel,
   required NodeTitleMode titleMode,
   bool hideSelection = false,
+  MemoryImage? thumbnail,
 }) {
   if (node.nodeTypeName == 'Comment') {
     return CommentNodeWidget(
@@ -73,6 +78,7 @@ Widget canvasNodeWidget({
     scopeChain: scopeChain,
     hideSelection: hideSelection,
     titleMode: titleMode,
+    thumbnail: thumbnail,
   );
 }
 
