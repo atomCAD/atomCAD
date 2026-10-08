@@ -181,3 +181,13 @@ mod chemisorption_test;
 // Phase 0 spike of the sequential chemisorption search (branch only, all ignored).
 #[path = "crystolecule/chemisorption_sequential_spike_test.rs"]
 mod chemisorption_sequential_spike_test;
+
+// The sequential chemisorption search (design_chemisorption_sequential.md).
+#[path = "crystolecule/chemisorption_sequential_golden_test.rs"]
+mod chemisorption_sequential_golden_test;
+#[path = "crystolecule/chemisorption_sequential_relax_test.rs"]
+mod chemisorption_sequential_relax_test;
+#[path = "crystolecule/chemisorption_sequential_support.rs"]
+mod chemisorption_sequential_support;
+#[path = "crystolecule/chemisorption_sequential_test.rs"]
+mod chemisorption_sequential_test;

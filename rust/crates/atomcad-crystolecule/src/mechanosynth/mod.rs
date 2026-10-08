@@ -36,7 +36,6 @@
 
 pub mod apply;
 pub mod compare;
-pub mod fit;
 pub mod parse;
 pub mod place;
 pub mod pose;

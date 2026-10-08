@@ -1,0 +1,15 @@
+---
+source: crates/atomcad-crystolecule/tests/crystolecule/chemisorption_sequential_golden_test.rs
+expression: "report_snapshot(&p, &r)"
+---
+relaxed 2552, unconverged 10
+    59.79  formed 3× O–Si                     41–292 42–123 49–291
+    59.80  formed 3× O–Si                     34–197 36–124 49–198
+    59.91  formed 3× O–Si                     34–209 36–210 49–298
+    59.91  formed 3× O–Si                     41–298 42–297 49–209
+    59.92  formed 3× O–Si                     41–297 42–304 49–298
+    59.93  formed 3× O–Si                     34–210 36–203 49–209
+    59.98  formed 3× O–Si                     33–124 36–197 42–123
+    59.98  formed 3× O–Si                     33–123 36–124 42–292
+    60.07  formed 3× O–Si                     41–363 42–215 49–362
+    60.07  formed 3× O–Si                     34–362 36–310 49–363

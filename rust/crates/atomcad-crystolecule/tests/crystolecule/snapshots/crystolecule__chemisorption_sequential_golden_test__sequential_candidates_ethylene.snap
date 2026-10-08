@@ -1,0 +1,13 @@
+---
+source: crates/atomcad-crystolecule/tests/crystolecule/chemisorption_sequential_golden_test.rs
+expression: "report_snapshot(&p, &r)"
+---
+relaxed 35, unconverged 0
+    39.45  formed 2× C–Si                     1–210 4–215
+    39.76  formed 2× C–Si                     1–209 4–363
+    39.76  formed 2× C–Si                     1–363 4–209
+    39.76  formed 2× C–Si                     1–298 4–362
+    43.22  formed 2× C–Si                     1–363 4–215
+    43.22  formed 2× C–Si                     1–215 4–363
+    43.22  formed 2× C–Si                     1–310 4–362
+    44.17  formed 2× C–Si                     1–363 4–362

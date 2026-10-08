@@ -34,7 +34,7 @@ use atomcad_crystolecule::chemisorption::{
 use atomcad_crystolecule::crystolecule_constants::DEFAULT_ZINCBLENDE_MOTIF;
 use atomcad_crystolecule::hydrogen_passivation::{AddHydrogensOptions, add_hydrogens};
 use atomcad_crystolecule::lattice_fill::{LatticeFillConfig, LatticeFillOptions, fill_lattice};
-use atomcad_crystolecule::mechanosynth::fit::rigid_fit;
+use atomcad_crystolecule::rigid_fit::rigid_fit;
 use atomcad_crystolecule::simulation::uff::params::{calc_bond_rest_length, get_uff_params};
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
 use atomcad_geo_tree::GeoNode;

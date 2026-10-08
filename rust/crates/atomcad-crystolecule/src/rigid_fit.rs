@@ -1,19 +1,22 @@
-//! The rigid fit shared by the placement engine and the tool binder.
+//! The rigid fit shared by the mechanosynth placement engine, its tool binder
+//! and the chemisorption search's seating.
 //!
 //! One least-squares superposition (Horn's quaternion form of Kabsch), used
-//! twice: [`place`](super::place) fits an operation's `before` pattern onto a
-//! candidate assignment of workpiece atoms, and
-//! [`tool_pose`](super::tool_pose) fits a tool type's frame onto the four
-//! tagged atoms of the molecule that plays it. Both want the same three
-//! answers — the rotation, the translation and the max per-atom residual —
-//! and a second implementation of any of them would be a second set of
-//! conventions to get wrong.
+//! three times: [`place`](crate::mechanosynth::place) fits an operation's
+//! `before` pattern onto a candidate assignment of workpiece atoms,
+//! [`tool_pose`](crate::mechanosynth::pose::tool_pose) fits a tool type's frame
+//! onto the four tagged atoms of the molecule that plays it, and
+//! [`chemisorption::sequential`](crate::chemisorption::sequential) seats an
+//! adsorbate's bonded feet on their sites. All want the same three answers —
+//! the rotation, the translation and the max per-atom residual — and a second
+//! implementation of any of them would be a second set of conventions to get
+//! wrong.
 
 use glam::{DMat3, DQuat, DVec3};
 
 /// Below this the centred pattern is treated as rank-deficient along a
 /// direction — a single point, or a collinear pair. Å.
-pub(super) const RANK_EPSILON: f64 = 1e-9;
+pub const RANK_EPSILON: f64 = 1e-9;
 
 /// A rigid transform and how well it fits: `p_world = r · p_local + t`.
 pub struct Fit {
@@ -27,7 +30,7 @@ pub struct Fit {
 /// 0 for a single point (or coincident points), 1 for a collinear set, 2 for
 /// anything that spans a plane. Distinguishing 2 from 3 is not needed: both
 /// determine a rotation.
-pub(super) fn rank_of(points: &[DVec3]) -> usize {
+pub fn rank_of(points: &[DVec3]) -> usize {
     let centroid = centroid(points);
     let centred: Vec<DVec3> = points.iter().map(|p| *p - centroid).collect();
     let Some(first) = centred

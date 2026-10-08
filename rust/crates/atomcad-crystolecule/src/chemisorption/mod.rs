@@ -41,6 +41,7 @@ pub mod fingerprint;
 pub mod inventory;
 pub mod relax;
 pub mod report;
+pub mod sequential;
 pub mod transfer;
 
 pub use config::{CHANGED_TAG, ChemisorptionError, ChemisorptionSearch, Side};

@@ -42,7 +42,13 @@ crates/atomcad-crystolecule/src/
 │   ├── relax.rs                    # one UFF relaxation with per-term energies (StrainTerms)
 │   ├── inventory.rs                # BondKind / BondInventory: the bonds a candidate forms and breaks, by kind
 │   ├── transfer.rs                 # TransferRule / Transfer: candidate (D, X, A) triples, seating X on A
-│   └── report.rs                   # evaluate() / search(): Candidate, SearchReport, ranking
+│   ├── report.rs                   # evaluate() / search(): Candidate, SearchReport, ranking
+│   └── sequential/                 # The sequential (leg-by-leg) search, geometric phase; replaces the above in Phase 3
+│       ├── config.rs               # SequentialSearch: anchor_reach / tolerance / reach / clash_filter + the shared settings
+│       ├── setup.rs                # Setup (feet, sites) + every per-leg predicate: pair_need, acceptor, local_up, mirror, seat, clashes
+│       ├── plan.rs                 # plan(): depth-first legs 1–3, change-set dedupe, PlanStats, Hypothesis
+│       ├── tree.rs                 # SearchTree: one row per path, counts + near misses, no structures (the debug view's data)
+│       └── evaluate.rs             # evaluate() / search(): relax candidates against the separated reference
 ├── crystolecule_constants.rs       # Diamond unit cell size, default motif text
 ├── drawing_plane.rs                # 2D drawing plane embedded in 3D crystal
 ├── motif.rs                        # Motif struct (sites, bonds, parameters)
@@ -52,6 +58,7 @@ crates/atomcad-crystolecule/src/
 ├── miller.rs                       # Miller-index arithmetic: reduction, enumeration, symmetry families {hkl}
 ├── patch.rs                        # Surface-patch domain model: tile extraction, cell selection, apply_patch
 ├── proxy_cut.rs                    # Bond-hop simulation-proxy cut: plan_proxy / apply_proxy (fill, rm_single, severed-bond caps)
+├── rigid_fit.rs                    # The rigid fit (Horn's quaternion Kabsch): mechanosynth place + tool pose, chemisorption seating
 ├── weld.rs                         # weld_coincident_atoms(): fuse atoms at the same position (surface patches)
 ├── structure.rs                    # `Structure` value type (lattice_vecs + motif + motif_offset)
 ├── unit_cell_struct.rs             # Unit cell geometry & coordinate conversion
@@ -87,7 +94,6 @@ crates/atomcad-crystolecule/src/
 │   ├── apply.rs                    # match_before / apply_matched / apply_step, replay
 │   ├── scene.rs                    # Scene, Participant, ToolBinding, replay_scene, event rules
 │   ├── pose.rs                     # tool_pose: a tool's transform from its four tagged atoms
-│   ├── fit.rs                      # the rigid fit (Horn's quaternion Kabsch), shared by place + pose
 │   ├── place.rs                    # placement engine: click -> candidate steps + tool readiness
 │   ├── compare.rs                  # compare_structures: position-tolerant Vec<Mismatch>
 │   └── trajectory/                 # where a tool is at every point of a step
@@ -308,6 +314,17 @@ that are easy to erode:
   so selecting an atom does not make a stored result stale. A new
   `ChemisorptionSearch` field must be added to it (the destructuring there
   makes that a compile error).
+- **The sequential search (`chemisorption/sequential/`, design
+  `design_chemisorption_sequential.md`) sits beside the engine above** until
+  the `chemisorb` node moves to it (Phase 3 of that design, which also
+  rewrites the bullets here). Its own rules are in its `mod.rs` doc. Two are
+  pitfalls that cost time: **seating reads the legs sorted** (local up, fit,
+  θ rule), or the binding order leaks into the start geometry by rounding;
+  and **collinear seating points** (sites along one dimer row) leave the
+  Kabsch turn about their line undetermined, so the solver's answer is
+  arbitrary — `seat` turns about that line by the θ rule instead. The mirror
+  check abstains on them for the same reason. With an H transfer rule and no
+  `adsorbate_tag`, every C–H carbon is a donor foot.
 - **Transfers are enumerated before bond forming, and valence is checked on
   the whole transfer set** (`Enumerator::with_transfer_set`): a transfer frees
   its donor (the OH leg that can then bond) and fills its acceptor, and one
@@ -702,8 +719,8 @@ motif_bond_inference → Motif, UnitCellStruct, atomic_constants
 miller        →  glam only (no crystolecule types at all)
 patch         →  AtomicStructure, UnitCellStruct, weld, hydrogen_passivation, guided_placement, GeoNode
 proxy_cut     →  AtomicStructure, atomic_constants, atomic_structure_utils, hydrogen_passivation
-chemisorption →  AtomicStructure, atomic_constants, guided_placement, hydrogen_passivation (terminator_bond_length, seating a transferred atom), simulation (rayon for the relaxations)
-mechanosynth  →  AtomicStructure, atomic_constants (serde_json for the two JSON files)
+chemisorption →  AtomicStructure, atomic_constants, guided_placement, hydrogen_passivation (terminator_bond_length, seating a transferred atom), simulation (rayon for the relaxations), rigid_fit (the sequential search's seating)
+mechanosynth  →  AtomicStructure, atomic_constants, rigid_fit (serde_json for the two JSON files)
 guided_placement → AtomicStructure, simulation/uff (typer, params)
 hydrogen_passivation → AtomicStructure, atomic_constants, guided_placement
 ```
@@ -738,6 +755,11 @@ tests/crystolecule/
 ├── patch_build_test.rs            # Tiling-vector validation, tile extraction
 ├── bond_enthalpy_test.rs          # The (unused) enthalpy table: symmetry, conversion, Pauling estimates
 ├── chemisorption_test.rs          # plan counts/valence/tags, ranking, the filters as pruning, top_n/window while relaxing, inventory labels, transfers (candidates, dedupe, seating, OH tripod), ethylene di-σ and water (a UFF tie) known answers
+├── chemisorption_sequential_support.rs  # Sequential search: fixtures, SplitMix64, the independent oracle (§11.1) and audit (§11.5)
+├── chemisorption_sequential_test.rs     # …plan only: predicates, hand-worked case, oracle (fixtures + 300 random), planted bindings, metamorphic, rules, tree
+├── chemisorption_sequential_relax_test.rs  # …relaxing: what is relaxed, filters commute, strain invariances, threads, budget, run control, known answers
+├── chemisorption_sequential_golden_test.rs # …against the old engine's golden data (chemisorption_golden/), coverage of the 20-pose brute force, insta snapshots
+├── chemisorption_sequential_spike_test.rs  # Phase 0 spike (all ignored); captured chemisorption_golden/old_engine.json
 ├── proxy_cut_test.rs              # Riders, bond distances, fill/rm_single keep set, severed-bond caps; the §4.3 bulk-silicon fill table
 ├── concave_rebond_test.rs         # Concave-corner rebonding; clash detector re-derived independently
 ├── io/

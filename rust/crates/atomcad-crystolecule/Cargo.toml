@@ -37,3 +37,5 @@ atomcad-test-support = { path = "../atomcad-test-support" }
 # (mechanosynth), so the UFF suite's `uff_reference.json` needs no entry here.
 nalgebra = { workspace = true }
 tempfile = { workspace = true }
+# The sequential chemisorption search's regression snapshots.
+insta = { workspace = true }

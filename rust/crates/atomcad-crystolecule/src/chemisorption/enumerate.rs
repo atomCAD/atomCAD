@@ -186,7 +186,7 @@ pub fn free_valence(structure: &AtomicStructure, id: u32) -> usize {
 }
 
 /// Reactive atoms of one side, as combined ids, sorted.
-fn reactive_atoms(
+pub(crate) fn reactive_atoms(
     input: &AtomicStructure,
     ids: &FxHashMap<u32, u32>,
     tag: &Option<String>,

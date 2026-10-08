@@ -14,8 +14,8 @@
 //! residual gate rather than binding mirrored. A tip of thousands of atoms
 //! binds in the time it takes to look up four tags.
 
-use super::fit::{RANK_EPSILON, rank_of, rigid_fit};
 use super::schema::MechanosynthError;
+use crate::rigid_fit::{RANK_EPSILON, rank_of, rigid_fit};
 use glam::{DMat3, DVec3};
 
 /// Where a bound tool molecule sits: `p_design = r · p_local + t`.

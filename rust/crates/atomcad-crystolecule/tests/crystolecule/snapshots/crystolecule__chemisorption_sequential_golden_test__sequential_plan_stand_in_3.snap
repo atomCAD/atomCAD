@@ -1,0 +1,37 @@
+---
+source: crates/atomcad-crystolecule/tests/crystolecule/chemisorption_sequential_golden_test.rs
+expression: plan_snapshot(&p)
+---
+PlanStats {
+    feet: 3,
+    sites: 155,
+    paths: 2654,
+    anchors: 6,
+    sphere_pairs: 263,
+    torus_triples: 1148,
+    duplicates: 1237,
+    pruned_valence: 0,
+    pruned_no_acceptor: 0,
+    pruned_filter: 0,
+    pruned_mirror: 459,
+    mirror_undecided: 223,
+    candidates: 952,
+    seating_clashes: 235,
+    pruned_clash: 235,
+    to_relax: 717,
+    near_misses: 1462,
+    truncated: false,
+    local_phase: false,
+    seconds: 0.0,
+}
+first 10 to relax:
+  36–124 42–87
+  36–124 42–87 49–105
+  36–124 42–87 49–106
+  36–124 42–87 49–111
+  36–124 42–87 49–118
+  36–124 42–105
+  36–124 42–105 49–117
+  36–124 42–105 49–118
+  36–124 42–105 49–123
+  36–124 42–105 49–292

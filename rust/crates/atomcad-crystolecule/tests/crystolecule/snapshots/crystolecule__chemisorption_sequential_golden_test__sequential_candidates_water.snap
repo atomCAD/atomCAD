@@ -1,0 +1,7 @@
+---
+source: crates/atomcad-crystolecule/tests/crystolecule/chemisorption_sequential_golden_test.rs
+expression: "report_snapshot(&p, &r)"
+---
+relaxed 2, unconverged 0
+    -3.41  formed 1× H–Si, 1× O–Si; broken 1× H–O 1–363 H 1→209
+    -3.21  formed 1× H–Si, 1× O–Si; broken 1× H–O 1–209 H 1→363

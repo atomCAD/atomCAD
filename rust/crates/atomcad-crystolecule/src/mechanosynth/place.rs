@@ -40,7 +40,6 @@
 //!   exists to give. See `doc/design_mechanosynth_pattern_checks.md` §4.
 
 use super::apply::{Contact, PatternMismatch, check_pattern, describe_nearest, worst_contact};
-use super::fit::{rank_of, rigid_fit};
 use super::scene::ToolBinding;
 use super::schema::{
     MechanosynthError, OpLibrary, Operation, PATTERN_POSITION_EPSILON, Pattern, PatternAtom,
@@ -52,6 +51,7 @@ use crate::guided_placement::{
     Hybridization, Sp2CandidateResult, Sp3CandidateResult, Sp3Case1Result, compute_sp1_candidates,
     compute_sp2_candidates, compute_sp3_candidates, detect_hybridization, gather_bond_directions,
 };
+use crate::rigid_fit::{rank_of, rigid_fit};
 use glam::{DMat3, DVec3};
 use rustc_hash::FxHashMap;
 
