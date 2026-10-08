@@ -302,6 +302,23 @@ pub fn si100_slab(cells: f64, mobile_radius: f64) -> AtomicStructure {
     s
 }
 
+/// The reconstructed dimer atoms of a slab within `radius` of its axis,
+/// tagged `dimer`: the facet, without the fixture's bare edges and faces.
+pub fn tag_dimers(slab: &mut AtomicStructure, radius: f64) {
+    let ids: Vec<u32> = slab
+        .atoms_values()
+        .filter(|a| {
+            a.position.z.abs() < 0.3
+                && a.bonds.len() == 3
+                && a.position.truncate().length() < radius
+        })
+        .map(|a| a.id)
+        .collect();
+    for id in ids {
+        slab.add_atom_tag(id, "dimer").unwrap();
+    }
+}
+
 /// The surface dimer nearest the axis.
 pub fn central_dimer(slab: &AtomicStructure) -> (u32, u32) {
     let in_layer = |id: u32| {
@@ -469,13 +486,33 @@ pub fn assert_stats_add_up(p: &SequentialPlan) {
         s.anchors + s.sphere_pairs + s.torus_triples,
         p.hypotheses.len()
     );
-    assert_eq!(s.candidates, s.to_relax + s.pruned_clash, "{s:?}");
+    assert_eq!(
+        s.candidates + s.parents,
+        s.to_relax + s.pruned_clash,
+        "{s:?}"
+    );
     assert_eq!(s.to_relax, p.to_relax.len());
     assert!(s.seating_clashes >= s.pruned_clash);
     assert_eq!(
         s.candidates,
         p.hypotheses.iter().filter(|h| h.candidate).count()
     );
+    assert_eq!(
+        s.parents,
+        p.hypotheses
+            .iter()
+            .filter(|h| h.parent && !h.candidate)
+            .count()
+    );
+    // Parents are the unmirrored three-leg hypotheses, and only with a local
+    // phase to follow.
+    for h in &p.hypotheses {
+        assert_eq!(
+            h.parent,
+            s.local_phase && h.legs() == GEOMETRIC_LEGS && h.mirror != Some(Mirror::Mirrored)
+        );
+        assert_eq!(h.seating.is_some(), h.candidate || h.parent);
+    }
     assert_eq!(
         s.pruned_mirror,
         p.hypotheses
@@ -868,9 +905,36 @@ pub fn audit(p: &SequentialPlan, report: &SearchReport, config: &SequentialSearc
             energy - report.reference_energy
         );
     }
-    // The statistics: the relaxations the plan predicted are the ones made.
+    // The statistics: the relaxations the plan predicted are the ones made,
+    // each local level's add up, and every relaxation is listed once.
+    let stats = &report.stats;
     if !p.stats.truncated {
-        assert_eq!(report.stats.relaxed, p.to_relax.len());
-        assert_eq!(report.relaxed.len(), p.to_relax.len());
+        assert_eq!(stats.relaxed, p.to_relax.len() + stats.local_relaxed);
     }
+    assert_eq!(report.relaxed.len(), stats.relaxed);
+    assert!(stats.relaxed <= config.budget);
+    assert_eq!(
+        stats.local_relaxed,
+        stats.local.iter().map(|l| l.relaxed).sum::<usize>()
+    );
+    assert_eq!(
+        stats.truncated,
+        p.stats.truncated || stats.local.iter().any(|l| l.truncated)
+    );
+    for (i, l) in stats.local.iter().enumerate() {
+        assert_eq!(l.legs, GEOMETRIC_LEGS + 1 + i);
+        assert_eq!(
+            l.paths,
+            l.pruned_valence + l.pruned_no_acceptor + l.pruned_filter + l.duplicates + l.hypotheses,
+            "{l:?}"
+        );
+        assert_eq!(l.relaxed == l.to_relax, !l.truncated, "{l:?}");
+        assert!(l.relaxed <= l.to_relax);
+    }
+    assert_eq!(
+        report.local.len(),
+        stats.local.iter().map(|l| l.hypotheses).sum::<usize>()
+    );
+    let rows: BTreeSet<u32> = report.relaxed.iter().map(|r| r.row).collect();
+    assert_eq!(rows.len(), report.relaxed.len(), "a row is relaxed once");
 }

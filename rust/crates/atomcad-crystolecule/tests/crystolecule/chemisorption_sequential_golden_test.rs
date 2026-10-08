@@ -493,3 +493,28 @@ fn candidate_snapshots_stand_in() {
         );
     }
 }
+
+/// The stand-in hexapod over the Si(100) facet near it (dimers within 7 Å of
+/// the axis), six legs: the local phase on a real surface, each level's
+/// statistics and the top candidates. Release only.
+#[test]
+#[ignore = "relaxes thousands of hypotheses; run in release"]
+fn local_phase_snapshot_hexapod() {
+    let mut slab = si100_slab(5.0, 11.0);
+    tag_dimers(&mut slab, 7.0);
+    let (ads, _) = posed_stand_in(6, 0.0, DVec3::ZERO);
+    let config = SequentialSearch {
+        substrate_tag: Some("dimer".into()),
+        formed_bonds: Some(6),
+        ..Default::default()
+    };
+    let p = plan(&ads, &slab, &config).unwrap();
+    let r = evaluate(&p, &config, None).unwrap();
+    audit(&p, &r, &config);
+    let mut out = String::new();
+    for l in &r.stats.local {
+        let _ = writeln!(out, "{l:?}");
+    }
+    out.push_str(&report_snapshot(&p, &r));
+    insta::assert_snapshot!("sequential_local_hexapod", out);
+}

@@ -96,23 +96,6 @@ fn planted_tripod() -> (AtomicStructure, AtomicStructure, Vec<(u32, u32)>) {
     (ads, sub, planted)
 }
 
-/// The reconstructed dimer atoms of a slab within `radius` of its axis,
-/// tagged `dimer`: the facet, without the fixture's bare edges and faces.
-fn tag_dimers(slab: &mut AtomicStructure, radius: f64) {
-    let ids: Vec<u32> = slab
-        .atoms_values()
-        .filter(|a| {
-            a.position.z.abs() < 0.3
-                && a.bonds.len() == 3
-                && a.position.truncate().length() < radius
-        })
-        .map(|a| a.id)
-        .collect();
-    for id in ids {
-        slab.add_atom_tag(id, "dimer").unwrap();
-    }
-}
-
 /// The stand-in tripod over Si(100), sites restricted to the dimers near it:
 /// a real, rigid binding problem small enough to relax in every test.
 fn tagged_tripod(radius: f64) -> (AtomicStructure, AtomicStructure) {

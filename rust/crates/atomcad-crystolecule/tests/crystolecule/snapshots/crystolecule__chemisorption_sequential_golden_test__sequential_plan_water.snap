@@ -16,6 +16,7 @@ PlanStats {
     pruned_mirror: 0,
     mirror_undecided: 0,
     candidates: 2,
+    parents: 0,
     seating_clashes: 0,
     pruned_clash: 0,
     to_relax: 2,

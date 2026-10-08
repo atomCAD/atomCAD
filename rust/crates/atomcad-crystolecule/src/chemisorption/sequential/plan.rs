@@ -41,7 +41,12 @@ pub struct Hypothesis {
     /// The filters admit it: it is relaxed (unless the clash filter or the
     /// budget stops it) and may be listed.
     pub candidate: bool,
-    /// Its start placement; computed for candidates only.
+    /// A three-leg hypothesis a local phase grows from (§4.6): relaxed even
+    /// when it is not a candidate. Mirrored ones never are.
+    pub parent: bool,
+    /// Its start placement, for the hypotheses the geometric phase relaxes
+    /// (candidates and parents) only. Always `None` for a local-phase
+    /// hypothesis: it starts from its relaxed parent instead.
     pub seating: Option<Seating>,
 }
 
@@ -68,7 +73,7 @@ impl Hypothesis {
 /// `paths == pruned_valence + pruned_no_acceptor + pruned_filter + duplicates
 ///  + anchors + sphere_pairs + torus_triples`
 ///
-/// and `candidates == to_relax + pruned_clash`.
+/// and `candidates + parents == to_relax + pruned_clash`.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct PlanStats {
     /// Adsorbate atoms that can bond: a free valence, or an atom to donate.
@@ -93,11 +98,15 @@ pub struct PlanStats {
     pub mirror_undecided: usize,
     /// Hypotheses the filters admit (mirror-pruned ones are not).
     pub candidates: usize,
-    /// Candidates whose seating clashes, and those pruned for it (only with
-    /// `clash_filter` on).
+    /// Three-leg hypotheses relaxed only as local-phase parents: the filters
+    /// do not admit them (§4.8, "What is relaxed").
+    pub parents: usize,
+    /// Seated hypotheses (candidates and parents) whose seating clashes, and
+    /// those pruned for it (only with `clash_filter` on).
     pub seating_clashes: usize,
     pub pruned_clash: usize,
-    /// The relaxations `evaluate` will run.
+    /// The relaxations `evaluate` runs in the geometric phase. The local
+    /// phase's are known only after relaxing.
     pub to_relax: usize,
     /// Near misses recorded over all rows.
     pub near_misses: usize,
@@ -124,6 +133,8 @@ pub struct SequentialPlan {
     pub to_relax: Vec<usize>,
     pub tree: SearchTree,
     pub stats: PlanStats,
+    /// The most legs the settings allow a hypothesis, local phase included.
+    pub max_legs: usize,
 }
 
 struct Planner<'a> {
@@ -131,6 +142,7 @@ struct Planner<'a> {
     config: &'a SequentialSearch,
     depth_cap: usize,
     single_foot: bool,
+    local_phase: bool,
 
     /// Valence left per site, after the current path's bonds and transfers.
     left: Vec<usize>,
@@ -242,7 +254,7 @@ impl Planner<'_> {
         };
         let step = Step { leg, acceptor };
         let (formed, broken) = step_kinds(self.setup, step);
-        if !self.inventory_allows(&formed, &broken) {
+        if !inventory_allows(self.config, &self.formed, &self.broken, &formed, &broken) {
             if let Some(a) = acceptor {
                 self.left[a] += 1;
             }
@@ -299,23 +311,6 @@ impl Planner<'_> {
         self.left[leg.site] += 1;
     }
 
-    /// Whether the `bond_inventory` filter still allows the current path plus
-    /// one step's bond kinds.
-    fn inventory_allows(&self, formed: &[BondKind], broken: &[BondKind]) -> bool {
-        let Some(target) = &self.config.bond_inventory else {
-            return true;
-        };
-        let fits = |have: &BTreeMap<BondKind, usize>,
-                    want: &BTreeMap<BondKind, usize>,
-                    adding: &[BondKind]| {
-            adding.iter().all(|k| {
-                let extra = adding.iter().filter(|o| *o == k).count();
-                have.get(k).copied().unwrap_or(0) + extra <= want.get(k).copied().unwrap_or(0)
-            })
-        };
-        fits(&self.formed, &target.formed, formed) && fits(&self.broken, &target.broken, broken)
-    }
-
     /// Records a new distinct hypothesis on `row`. Returns whether the mirror
     /// check rejected it.
     fn found(&mut self, row: u32, formed: Vec<(u32, u32)>, transfers: Vec<Transfer>) -> bool {
@@ -352,7 +347,8 @@ impl Planner<'_> {
             mirror = Some(verdict);
         }
         let mirrored = mirror == Some(Mirror::Mirrored);
-        let candidate = !mirrored && self.admits(depth, &inventory);
+        let candidate = !mirrored && admits(self.config, self.single_foot, depth, &inventory);
+        let parent = !mirrored && self.local_phase && depth == GEOMETRIC_LEGS;
         let index = self.hypotheses.len();
         let mut hypothesis = Hypothesis {
             steps: self.steps.clone(),
@@ -362,10 +358,15 @@ impl Planner<'_> {
             row,
             mirror,
             candidate,
+            parent,
             seating: None,
         };
         if candidate {
             self.stats.candidates += 1;
+        } else if parent {
+            self.stats.parents += 1;
+        }
+        if candidate || parent {
             let seating = self.setup.seat(&self.steps);
             for (t, &moved) in hypothesis.transfers.iter_mut().zip(&seating.moved) {
                 t.moved = moved;
@@ -386,20 +387,47 @@ impl Planner<'_> {
         self.hypotheses.push(hypothesis);
         mirrored
     }
+}
 
-    /// Whether the filters admit a hypothesis of `legs` legs (§4.8): two or
-    /// more legs (one only for a one-foot adsorbate, D8), the depth cap, and
-    /// the exact leg count and inventory when set.
-    fn admits(&self, legs: usize, inventory: &BondInventory) -> bool {
-        (legs >= 2 || self.single_foot)
-            && self.config.max_formed_bonds.is_none_or(|m| legs <= m)
-            && self.config.formed_bonds.is_none_or(|n| legs == n)
-            && self
-                .config
-                .bond_inventory
-                .as_ref()
-                .is_none_or(|t| t == inventory)
-    }
+/// Whether the filters admit a hypothesis of `legs` legs (§4.8): two or more
+/// legs (one only for a one-foot adsorbate, D8), the depth cap, and the exact
+/// leg count and inventory when set.
+pub(crate) fn admits(
+    config: &SequentialSearch,
+    single_foot: bool,
+    legs: usize,
+    inventory: &BondInventory,
+) -> bool {
+    (legs >= 2 || single_foot)
+        && config.max_formed_bonds.is_none_or(|m| legs <= m)
+        && config.formed_bonds.is_none_or(|n| legs == n)
+        && config
+            .bond_inventory
+            .as_ref()
+            .is_none_or(|t| t == inventory)
+}
+
+/// Whether the `bond_inventory` filter still allows a path's bond kinds so
+/// far (`have_formed`, `have_broken`) plus one step's.
+pub(crate) fn inventory_allows(
+    config: &SequentialSearch,
+    have_formed: &BTreeMap<BondKind, usize>,
+    have_broken: &BTreeMap<BondKind, usize>,
+    formed: &[BondKind],
+    broken: &[BondKind],
+) -> bool {
+    let Some(target) = &config.bond_inventory else {
+        return true;
+    };
+    let fits = |have: &BTreeMap<BondKind, usize>,
+                want: &BTreeMap<BondKind, usize>,
+                adding: &[BondKind]| {
+        adding.iter().all(|k| {
+            let extra = adding.iter().filter(|o| *o == k).count();
+            have.get(k).copied().unwrap_or(0) + extra <= want.get(k).copied().unwrap_or(0)
+        })
+    };
+    fits(have_formed, &target.formed, formed) && fits(have_broken, &target.broken, broken)
 }
 
 fn near_miss(leg: Leg, over: f64) -> NearMiss {
@@ -413,7 +441,7 @@ fn near_miss(leg: Leg, over: f64) -> NearMiss {
 /// The bond kinds one step forms and breaks: its foot–site bond, and for a
 /// donating foot the moved atom's bond to its acceptor (formed) and to its
 /// donor (broken).
-fn step_kinds(setup: &Setup, step: Step) -> (Vec<BondKind>, Vec<BondKind>) {
+pub(crate) fn step_kinds(setup: &Setup, step: Step) -> (Vec<BondKind>, Vec<BondKind>) {
     let foot = &setup.feet[step.leg.foot];
     let mut formed = vec![BondKind::new(
         foot.element,
@@ -453,17 +481,16 @@ pub fn plan(
     let setup = Setup::new(adsorbate, substrate, config)?;
     let feet = setup.feet.len();
     let cap = leg_cap(config);
-    let depth_cap = [Some(GEOMETRIC_LEGS), Some(feet), cap]
-        .into_iter()
-        .flatten()
-        .min()
-        .unwrap_or(0);
+    let max_legs = cap.map_or(feet, |c| c.min(feet));
+    let depth_cap = max_legs.min(GEOMETRIC_LEGS);
+    let local_phase = max_legs > GEOMETRIC_LEGS;
 
     let mut planner = Planner {
         setup: &setup,
         config,
         depth_cap,
         single_foot: feet == 1,
+        local_phase,
         left: setup.sites.iter().map(|s| s.valence).collect(),
         foot_used: vec![false; feet],
         steps: Vec::new(),
@@ -487,7 +514,7 @@ pub fn plan(
     stats.feet = feet;
     stats.sites = setup.sites.len();
     stats.to_relax = to_relax.len();
-    stats.local_phase = feet > GEOMETRIC_LEGS && cap.is_none_or(|c| c > GEOMETRIC_LEGS);
+    stats.local_phase = local_phase;
     stats.seconds = start.elapsed().as_secs_f64();
     Ok(SequentialPlan {
         setup,
@@ -497,5 +524,6 @@ pub fn plan(
         to_relax,
         tree,
         stats,
+        max_legs,
     })
 }

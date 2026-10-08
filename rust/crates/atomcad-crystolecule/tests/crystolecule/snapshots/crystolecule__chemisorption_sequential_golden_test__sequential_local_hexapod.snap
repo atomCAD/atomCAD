@@ -1,0 +1,18 @@
+---
+source: crates/atomcad-crystolecule/tests/crystolecule/chemisorption_sequential_golden_test.rs
+expression: out
+---
+LevelStats { legs: 4, parents: 1072, paths: 2796, hypotheses: 770, duplicates: 267, pruned_valence: 1759, pruned_no_acceptor: 0, pruned_filter: 0, candidates: 0, to_relax: 1037, relaxed: 1037, unconverged: 1, truncated: false, near_misses: 1939 }
+LevelStats { legs: 5, parents: 770, paths: 1755, hypotheses: 237, duplicates: 226, pruned_valence: 1292, pruned_no_acceptor: 0, pruned_filter: 0, candidates: 0, to_relax: 463, relaxed: 463, unconverged: 6, truncated: false, near_misses: 785 }
+LevelStats { legs: 6, parents: 237, paths: 261, hypotheses: 18, duplicates: 14, pruned_valence: 229, pruned_no_acceptor: 0, pruned_filter: 0, candidates: 18, to_relax: 32, relaxed: 32, unconverged: 0, truncated: false, near_misses: 92 }
+relaxed 2604, unconverged 8
+   400.24  formed 6× O–Si                     33–124 34–210 36–197 41–209 42–123 49–363
+   400.24  formed 6× O–Si                     33–210 34–209 36–363 41–124 42–197 49–123
+   400.25  formed 6× O–Si                     33–123 34–298 36–124 41–297 42–292 49–362
+   400.25  formed 6× O–Si                     33–297 34–123 36–292 41–298 42–362 49–124
+   400.26  formed 6× O–Si                     33–124 34–209 36–210 41–123 42–111 49–298
+   400.26  formed 6× O–Si                     33–123 34–124 36–118 41–298 42–297 49–209
+   400.30  formed 6× O–Si                     33–197 34–209 36–210 41–124 42–111 49–298
+   400.30  formed 6× O–Si                     33–124 34–197 36–111 41–209 42–298 49–210
+   400.30  formed 6× O–Si                     33–292 34–123 36–118 41–298 42–297 49–209
+   400.30  formed 6× O–Si                     33–123 34–298 36–209 41–292 42–118 49–297

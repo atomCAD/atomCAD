@@ -43,12 +43,13 @@ crates/atomcad-crystolecule/src/
 │   ├── inventory.rs                # BondKind / BondInventory: the bonds a candidate forms and breaks, by kind
 │   ├── transfer.rs                 # TransferRule / Transfer: candidate (D, X, A) triples, seating X on A
 │   ├── report.rs                   # evaluate() / search(): Candidate, SearchReport, ranking
-│   └── sequential/                 # The sequential (leg-by-leg) search, geometric phase; replaces the above in Phase 3
+│   └── sequential/                 # The sequential (leg-by-leg) search; replaces the above in Phase 3
 │       ├── config.rs               # SequentialSearch: anchor_reach / tolerance / reach / clash_filter + the shared settings
 │       ├── setup.rs                # Setup (feet, sites) + every per-leg predicate: pair_need, acceptor, local_up, mirror, seat, clashes
 │       ├── plan.rs                 # plan(): depth-first legs 1–3, change-set dedupe, PlanStats, Hypothesis
 │       ├── tree.rs                 # SearchTree: one row per path, counts + near misses, no structures (the debug view's data)
-│       └── evaluate.rs             # evaluate() / search(): relax candidates against the separated reference
+│       ├── evaluate.rs             # evaluate() / search(): relax candidates + parents against the separated reference, then the local phase
+│       └── local.rs                # The local phase (legs 4+): levels grown from relaxed parents' positions; LevelStats; replay()
 ├── crystolecule_constants.rs       # Diamond unit cell size, default motif text
 ├── drawing_plane.rs                # 2D drawing plane embedded in 3D crystal
 ├── motif.rs                        # Motif struct (sites, bonds, parameters)
@@ -324,7 +325,14 @@ that are easy to erode:
   Kabsch turn about their line undetermined, so the solver's answer is
   arbitrary — `seat` turns about that line by the θ rule instead. The mirror
   check abstains on them for the same reason. With an H transfer rule and no
-  `adsorbate_tag`, every C–H carbon is a donor foot.
+  `adsorbate_tag`, every C–H carbon is a donor foot. In the **local phase**
+  a child's start geometry depends on its relaxed parent, not only on its
+  change set, so a level deduplicates *after* relaxing (lowest strain wins)
+  and a state is rebuilt by `replay` through its canonical parents; the
+  frontier keeps movable-atom positions only (`Setup::movable`), and a
+  structure rebuilt from them (`Setup::state_structure`) must apply the bond
+  changes step by step in the order the search did, or the audit's strain
+  recomputation drifts.
 - **Transfers are enumerated before bond forming, and valence is checked on
   the whole transfer set** (`Enumerator::with_transfer_set`): a transfer frees
   its donor (the OH leg that can then bond) and fills its acceptor, and one
@@ -758,6 +766,7 @@ tests/crystolecule/
 ├── chemisorption_sequential_support.rs  # Sequential search: fixtures, SplitMix64, the independent oracle (§11.1) and audit (§11.5)
 ├── chemisorption_sequential_test.rs     # …plan only: predicates, hand-worked case, oracle (fixtures + 300 random), planted bindings, metamorphic, rules, tree
 ├── chemisorption_sequential_relax_test.rs  # …relaxing: what is relaxed, filters commute, strain invariances, threads, budget, run control, known answers
+├── chemisorption_sequential_local_test.rs  # …the local phase: planted 5-leg binding, the oracle per level (via replay), dedupe, transfers per leg (competing acceptors), budget, threads
 ├── chemisorption_sequential_golden_test.rs # …against the old engine's golden data (chemisorption_golden/), coverage of the 20-pose brute force, insta snapshots
 ├── chemisorption_sequential_spike_test.rs  # Phase 0 spike (all ignored); captured chemisorption_golden/old_engine.json
 ├── proxy_cut_test.rs              # Riders, bond distances, fill/rm_single keep set, severed-bond caps; the §4.3 bulk-silicon fill table

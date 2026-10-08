@@ -224,6 +224,10 @@ pub struct Setup {
     substrate_heavy: Vec<(u32, DVec3, f64)>,
     heavy_grid: PointGrid,
     max_heavy_radius: f64,
+    /// The atoms a relaxation can move: every adsorbate atom and every
+    /// unfrozen substrate atom, combined ids, sorted. A local-phase state
+    /// stores only their positions (§4.6, "Frontier memory").
+    pub movable: Vec<u32>,
 }
 
 impl Setup {
@@ -362,6 +366,17 @@ impl Setup {
             .collect();
         let heavy_grid = PointGrid::new(substrate_heavy.iter().map(|h| h.1).enumerate(), 2.0);
         let max_heavy_radius = substrate_heavy.iter().map(|h| h.2).fold(0.0, f64::max);
+        let mut movable: Vec<u32> = adsorbate_atoms
+            .iter()
+            .copied()
+            .chain(
+                substrate_atoms
+                    .iter()
+                    .copied()
+                    .filter(|&id| !atom(id).is_frozen()),
+            )
+            .collect();
+        movable.sort_unstable();
 
         Ok(Setup {
             combined,
@@ -382,6 +397,7 @@ impl Setup {
             substrate_heavy,
             heavy_grid,
             max_heavy_radius,
+            movable,
         })
     }
 
@@ -778,6 +794,103 @@ impl Setup {
             })
             .collect();
         (formed, transfers)
+    }
+
+    /// The positions of the [`movable`](Self::movable) atoms in `s`, in that
+    /// order: all a local-phase state keeps of a relaxed structure.
+    pub fn movable_positions(&self, s: &AtomicStructure) -> Vec<DVec3> {
+        self.movable
+            .iter()
+            .map(|&id| s.get_atom(id).expect("a combined atom").position)
+            .collect()
+    }
+
+    /// Where atom `id` is in a state stored as movable positions: its stored
+    /// position, or, for a frozen substrate atom, its input position.
+    pub fn position_in(&self, positions: &[DVec3], id: u32) -> DVec3 {
+        match self.movable.binary_search(&id) {
+            Ok(i) => positions[i],
+            Err(_) => {
+                self.combined
+                    .get_atom(id)
+                    .expect("a combined atom")
+                    .position
+            }
+        }
+    }
+
+    /// A relaxed state rebuilt from what a local-phase state keeps: the
+    /// combined structure with the bond changes of `steps` applied (each
+    /// transfer moving the atom `moved` names, one per donating step, in step
+    /// order) and the movable atoms at `positions`. Nothing is re-seated:
+    /// the positions already hold every atom where the relaxation left it.
+    pub fn state_structure(
+        &self,
+        steps: &[Step],
+        moved: &[u32],
+        positions: &[DVec3],
+    ) -> AtomicStructure {
+        let mut s = self.combined.clone();
+        for (&id, &p) in self.movable.iter().zip(positions) {
+            s.set_atom_position(id, p);
+        }
+        let (formed, transfers) = self.changes(steps, Some(moved));
+        let mut transfers = transfers.into_iter();
+        // Step by step, each bond before its transfer, so a state and its
+        // child apply their shared changes in one order.
+        for (step, bond) in steps.iter().zip(formed) {
+            s.add_bond_checked(bond.0, bond.1, BOND_SINGLE);
+            if step.acceptor.is_some() {
+                let t = transfers.next().expect("one transfer per donating step");
+                s.delete_bond(&crate::atomic_structure::BondReference {
+                    atom_id1: t.donor,
+                    atom_id2: t.moved,
+                });
+                s.add_bond_checked(t.moved, t.acceptor, BOND_SINGLE);
+            }
+        }
+        s
+    }
+
+    /// The start geometry of a local-phase hypothesis (§4.6): its relaxed
+    /// parent (`parent_steps`, `parent_moved`, `positions`) plus one more
+    /// leg, `step`. The new bond is added as it stands; a donating step moves
+    /// the donatable atom nearest its acceptor in the parent, seated on the
+    /// acceptor as in the geometric phase (§5). Returns the structure and that
+    /// atom, if any. The parent's transferred atoms stay where they are.
+    pub fn grown_structure(
+        &self,
+        parent_steps: &[Step],
+        parent_moved: &[u32],
+        positions: &[DVec3],
+        step: Step,
+    ) -> (AtomicStructure, Option<u32>) {
+        let mut s = self.state_structure(parent_steps, parent_moved, positions);
+        let foot = &self.feet[step.leg.foot];
+        s.add_bond_checked(foot.id, self.sites[step.leg.site].id, BOND_SINGLE);
+        let moved = step.acceptor.map(|a| {
+            let acceptor = self.sites[a].id;
+            let target = self.position_in(positions, acceptor);
+            let moved = *foot
+                .donatable
+                .iter()
+                .min_by(|&&a, &&b| {
+                    let d = |id: u32| self.position_in(positions, id).distance(target);
+                    d(a).total_cmp(&d(b)).then(a.cmp(&b))
+                })
+                .expect("a donating foot has a donatable atom");
+            apply_transfers(
+                &mut s,
+                &[Transfer {
+                    donor: foot.id,
+                    moved,
+                    acceptor,
+                    element: foot.donates.expect("a donating foot"),
+                }],
+            );
+            moved
+        });
+        (s, moved)
     }
 
     /// The start geometry of a seated hypothesis: the combined structure with

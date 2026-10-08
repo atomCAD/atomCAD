@@ -12,11 +12,11 @@
 //! choice fixes its own, and the adsorbate is placed by a Kabsch fit of its
 //! bonded feet onto points a bond length above their sites (seating).
 //!
-//! **Phase 1 of the design: the geometric phase only** (legs 1–3). Legs 4 and
-//! later (the local phase, relaxing three-leg parents and searching within
-//! `reach` of the relaxed feet) are Phase 2; `PlanStats::local_phase` says
-//! when one would follow. This module sits beside the original all-at-once
-//! engine until the `chemisorb` node moves over (Phase 3).
+//! Legs 4 and later are the **local phase** (`local`): `evaluate` relaxes
+//! the three-leg hypotheses as parents, then searches each unbonded foot's
+//! sites within `reach` of its relaxed position, level by level. This module
+//! sits beside the original all-at-once engine until the `chemisorb` node
+//! moves over (Phase 3 of the design).
 //!
 //! Rules that are easy to erode:
 //!
@@ -37,17 +37,25 @@
 //!   that send it to different sites are two hypotheses.
 //! - **`plan` never relaxes.** The mirror check, seating and the clash check
 //!   are geometry and run in `plan`.
-//! - Only candidates are relaxed in the geometric phase; a two-leg step on
-//!   the way to three legs is never relaxed as a step (§4.8).
+//! - A hypothesis is relaxed only as a candidate or as a local-phase parent
+//!   (a three-leg or deeper state the next leg is searched from); a two-leg
+//!   step on the way to three legs is never relaxed as a step (§4.8).
+//! - **The local phase keeps positions, never structures**, and only two
+//!   levels at a time; nothing of it outlives `evaluate`. A local state's
+//!   geometry depends on its parent's relaxation, so its change set is
+//!   deduplicated *after* relaxing (lowest strain wins), and `replay`
+//!   rebuilds any row through its canonical parents.
 
 pub mod config;
 pub mod evaluate;
+pub mod local;
 pub mod plan;
 pub mod setup;
 pub mod tree;
 
 pub use config::SequentialSearch;
 pub use evaluate::{Candidate, RelaxedRow, SearchReport, SearchStats, evaluate, search};
+pub use local::{LevelStats, Replayed, replay};
 pub use plan::{GEOMETRIC_LEGS, Hypothesis, PlanStats, SequentialPlan, plan};
 pub use setup::{
     CLASH_FRACTION, Foot, LOCAL_UP_RADIUS, Leg, MIRROR_MARGIN, Mirror, NEAR_MISS_BAND, ROUNDING,

@@ -185,6 +185,8 @@ mod chemisorption_sequential_spike_test;
 // The sequential chemisorption search (design_chemisorption_sequential.md).
 #[path = "crystolecule/chemisorption_sequential_golden_test.rs"]
 mod chemisorption_sequential_golden_test;
+#[path = "crystolecule/chemisorption_sequential_local_test.rs"]
+mod chemisorption_sequential_local_test;
 #[path = "crystolecule/chemisorption_sequential_relax_test.rs"]
 mod chemisorption_sequential_relax_test;
 #[path = "crystolecule/chemisorption_sequential_support.rs"]
