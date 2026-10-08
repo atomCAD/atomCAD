@@ -16,7 +16,7 @@ use glam::{DMat3, DQuat, DVec3};
 pub(super) const RANK_EPSILON: f64 = 1e-9;
 
 /// A rigid transform and how well it fits: `p_world = r · p_local + t`.
-pub(super) struct Fit {
+pub struct Fit {
     pub r: DMat3,
     pub t: DVec3,
     /// Max per-atom distance the fit leaves behind, Å. The **max**, not the
@@ -68,7 +68,7 @@ fn centroid(points: &[DVec3]) -> DVec3 {
 /// which would answer an undetermined question with whichever vector its sweeps
 /// happened to produce: a single point fits with the identity, a collinear pair
 /// with the shortest arc between the two axes.
-pub(super) fn rigid_fit(local: &[DVec3], world: &[DVec3], mirrored: bool) -> Option<Fit> {
+pub fn rigid_fit(local: &[DVec3], world: &[DVec3], mirrored: bool) -> Option<Fit> {
     if local.len() != world.len() || local.is_empty() {
         return None;
     }
