@@ -46,9 +46,11 @@
 //!   geometry depends on its parent's relaxation, so its change set is
 //!   deduplicated *after* relaxing (lowest strain wins), and `replay`
 //!   rebuilds any row through its canonical parents.
-//! - **The debug view (`debug`) stores nothing either.** A row's view is
+//! - **The debug view (`debug`) stores nothing either.** An item's view is
 //!   rebuilt from the tree on demand: by geometry alone when it is posed or
-//!   seated, by `replay` when it is relaxed and not a kept candidate.
+//!   seated, by `replay` when it is relaxed and not a kept candidate. Its
+//!   "next foot" steps are a grouping of the tree's rows, not rows of their
+//!   own: the tree is what the search recorded and nothing else.
 
 pub mod config;
 pub mod debug;
@@ -60,9 +62,10 @@ pub mod tree;
 
 pub use config::SequentialSearch;
 pub use debug::{
-    ChildVerdict, DebugForm, DebugShapes, DebugView, Marks, RowForms, SHAPE_ALPHA, SHAPE_COLOR,
-    SHAPE_LEVEL, Shape, Shell, child_verdict, debug_view, find_row, needs_relaxation, relaxation,
-    root_view, row_forms, row_label, row_path, shown_row, tree_of,
+    ChildVerdict, DebugForm, DebugItem, DebugShapes, DebugView, Marks, RowForms, SHAPE_ALPHA,
+    SHAPE_COLOR, SHAPE_LEVEL, Shape, Shell, child_verdict, debug_view, find_item, item_ancestors,
+    item_children, item_label, item_of_row, item_parent, item_path, needs_relaxation, next_feet,
+    relaxation, root_view, row_forms, shown_row, step_legs, step_near_misses, tree_of,
 };
 pub use evaluate::{Candidate, RelaxedRow, SearchReport, SearchStats, evaluate, search};
 pub use local::{LevelStats, Replayed, replay, replay_start};

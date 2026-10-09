@@ -1,7 +1,8 @@
 # Design: sequential chemisorption search with orientation coverage
 
-Status: **Phases 0–4 done** (Phase 4, the debug view, on 2026-10-09, §17);
-next: the tolerance calibration on a real adsorbate and the Phase 5 manual
+Status: **Phases 0–4 done** (Phase 4, the debug view, on 2026-10-09, §17;
+the debug view revised after a first look the same day, §18); next: the
+tolerance calibration on a real adsorbate and the Phase 5 manual
 walkthrough. Outcome of a design discussion and review between
 the maintainer and Claude on 2026-10-08.
 
@@ -516,9 +517,15 @@ and which one wins flips with the pose (old §11.2 finding 1). So for now
   (site to site, the same reference the rule measures from), the leg, and so
   the hypothesis, is dropped and counted as `pruned_no_acceptor`. No seated
   position takes part, so the test is not circular.
-- **Seating:** the H is placed as `Transfer::seat` does today: at bond length
-  from the acceptor, on the line from the H's position on its foot (after the
-  adsorbate is seated, or in the relaxed parent) towards the acceptor.
+- **Seating:** the H is placed at bond length from the acceptor, in the
+  acceptor's **open valence direction** — the slot guided placement offers,
+  where `passivate` would put a terminator — once the leg bonds are made. Of
+  several open slots it takes the one nearest the side the H comes from (the
+  line from the acceptor to the H's position on its foot, after the adsorbate
+  is seated, or in the relaxed parent); a bare acceptor with no slot to read
+  takes that line itself. Two H on one acceptor are seated one after the
+  other, so they take two slots. (Revised 2026-10-09, §18.4: the line alone
+  had put the H across the acceptor's own bonds.)
 - **Known limit.** A site taken by an earlier leg's H is unavailable to later
   legs, and the alternative (that H elsewhere, the site free) is not
   searched. That is right for a concerted transfer, and it is the price of
@@ -627,34 +634,44 @@ offers in place of chained nodes (§9).
 
 **The tree in the panel.**
 
+States (the root, a leg) and steps (a *next foot*: one foot's test from a
+state) alternate (revised 2026-10-09, §18):
+
 ```
 root (posed molecule)
-└─ foot O12                          anchor: 4 sites in reach
-   └─ O12–Si45                       sphere: 9 candidates, 3 near misses
-      └─ O12–Si45, O13–Si61          torus: 2 candidates, 1 clash, 1 duplicate hidden
-         └─ + O14–Si70   strain 41.2 relaxed
+└─ next foot O12                     anchor: 4
+   └─ O12–Si45
+      ├─ next foot O13               shell: 9, 3 near
+      │  └─ + O13–Si61
+      │     └─ next foot O14         ring: 2, 1 clash, 1 dup. hidden
+      │        └─ + O14–Si70         strain 41.2
+      └─ next foot O14               shell: 7
 ```
 
 With **Show duplicates** on, the hidden row appears too:
 
 ```
-         ├─ + O14–Si70   strain 41.2 relaxed
-         └─ + O14–Si52   = duplicate of …   (click jumps there)
+      │     └─ next foot O14
+      │        ├─ + O14–Si70         strain 41.2
+      │        └─ + O14–Si52         = duplicate of …   (click jumps there)
 ```
 
-- Levels: root → foot (the leg-1 foot) → leg 1 → leg 2 → leg 3 → each local
-  leg. A row's identity is its **path** of (foot, site) choices, stable for as
-  long as the input fingerprint matches.
+- Levels: root → next foot → leg 1 → next foot → leg 2 → … A row's identity
+  is its **path** of (foot, site) choices, stable for as long as the input
+  fingerprint matches; a step is its state's path plus a foot. Steps group a
+  state's children by foot; they are not rows of the recorded tree.
 - Children are **loaded lazily**: the panel asks for a row's children only
   when it is expanded, so a tree of 10⁵ rows opens at once.
-- Each row shows its counts: candidates, seating clashes (pruned only when
-  `clash_filter` is on), mirror verdicts (pruned, undecided), rejections by
-  reason (valence, no acceptor), near misses, and the strain once relaxed.
+- A step shows its test's counts: the sites accepted, and among the legs
+  they reach the seating clashes (pruned only when `clash_filter` is on) and
+  the mirror verdicts (pruned, undecided); its near misses. A leg shows its
+  strain once relaxed and its own verdict; its rejections by reason (valence,
+  no acceptor) are in its tooltip.
 - **Duplicates are hidden by default** (decided 2026-10-08). A bond set
   reached in several orders is recorded under every parent that reaches it,
   but by default the panel shows it once, under its **canonical** path: the
-  one the search kept (§4.6, §4.7). Each parent row counts what it hides
-  ("1 duplicate hidden"), so nothing disappears unseen. A **Show
+  one the search kept (§4.6, §4.7). Each step counts what it hides
+  ("1 dup. hidden"), so nothing disappears unseen. A **Show
   duplicates** toggle in the panel shows the others as "= duplicate of …"
   rows that jump to the canonical one, which makes the deduplication itself
   visible when debugging. Leg orders are tried exhaustively (every foot as
@@ -671,50 +688,35 @@ With **Show duplicates** on, the hidden row appears too:
 
 **Near misses.** Sites that fell outside a level's test by up to 1 Å (an
 internal constant): outside `anchor_reach`, outside the shell or the torus,
-or outside the local `reach`. They are recorded per row with their miss
-distance and shown in their own colour. They show exactly what raising a
-tolerance would add, which is what makes tuning practical.
+or outside the local `reach`. They are recorded per row with their foot and
+miss distance, counted on the step and listed in its tooltip and in the CLI's
+description. They are **not coloured** (§18): they are the sites just outside
+the step's drawn shape, which shows what raising a tolerance would add.
 
 **Output pins.** Two appended pins (pin 2 and pin 3, after `candidates` and
 `stats`); each can be shown in the viewport on its own, without wiring
 anything downstream:
 
-- `debug` (`Molecule`): the selected row as a structure, with per-atom colour
-  overrides set by the node itself (the mechanism `apply_style` uses):
+- `debug` (`Molecule`): the selected item as a structure, with per-atom colour
+  overrides set by the node itself (the mechanism `apply_style` uses). Atoms
+  keep their element colours unless the item marks them:
 
-  | Selected row | Molecule shown | Marked |
+  | Selected item | Molecule shown | Marked |
   |---|---|---|
-  | root | the posed molecule | every foot, and the sites within `anchor_reach` of each |
-  | foot | the posed molecule | that foot's anchor sites and near misses |
-  | one leg | seated: moved so the foot sits a bond length above its site along the local up, in the posed orientation (display-only seating) | the bonded pair; sphere candidates, near misses |
-  | two legs | seated by the θ rule (§4.5) | the bonded pairs; torus candidates, near misses; candidates pruned as mirrored and those left undecided by the mirror check; candidates whose seating clashes, and the clashing atom pairs |
-  | three or more legs | Kabsch-seated | the bonded pairs; for local-phase rows, the sites within `reach` and near misses |
+  | root | the posed molecule | nothing |
+  | a leg (a state) | relaxed when it was relaxed, else seated (a one- to three-leg row by the θ rule or Kabsch, §4.5; a local row on its replayed parent) | its bonded pairs orange; seated, its own clashing atom pairs red |
+  | a next foot (a step) | its state, in the form its test read: posed under the root, seated under one or two legs, relaxed below | the foot violet; the sites its test accepted green; the state's bonded pairs orange; the rest of the substrate transparent |
 
-  **Seated or relaxed: which one a row opens on.** A row opens on the form
-  the next step of the search uses:
-
-  1. A **one- or two-leg row with children** opens **seated**: the sphere and
-     torus searches below it work from the seating, not from a relaxation.
-     This holds even when the row is also a candidate and was relaxed; its
-     relaxed form is one of the results, while the seated form can be seen
-     nowhere else.
-  2. **Every other row opens relaxed**: leaves at any depth (a one-foot
-     adsorbate's one-leg rows, a two-leg candidate with no three-leg
-     children, a tripod's three-leg rows) and every row with three or more
-     legs (local-phase parents are searched from their relaxed positions,
-     and their `reach` markings are drawn on that structure).
-  3. **A row without a relaxation opens seated**: every row before Run, a
-     leaf that is not a candidate, a row pruned by `clash_filter`, a row the
-     budget cut off.
-  4. Where both forms exist, a panel toggle switches between them.
-
-  The rest of the substrate is drawn dimmed (the ghost rendering that
-  already exists). Bonded pairs use the orange highlight of `cs_changed`.
+  A leg with both forms can be switched to the other in the panel. The
+  transparency is per-atom alpha: the ghost rendering only desaturates,
+  which does nothing to a grey silicon (§18). Bonded pairs use the orange
+  highlight of `cs_changed`.
 - `debug_shapes` (the isosurface type the `isosurface` node outputs): the
-  selected row's search shapes, transparent. These are the `anchor_reach`
-  spheres around the feet, the inner and outer bounds of the sphere shell,
-  the leg-3 ring (the overlap of its two shells, drawn as one field: the
-  larger of the two shell distances), and the local `reach` spheres. Each is an analytic distance field
+  selected step's test shape, transparent; a state draws none. It is the
+  `anchor_reach` sphere around the posed foot, the inner and outer bounds of
+  the leg-2 shell, the leg-3 ring (the overlap of its two shells, drawn as one
+  field: the larger of the two shell distances), or the local `reach` sphere
+  around the foot's relaxed position. Each is an analytic distance field
   sampled on a grid around the shape, rendered by the existing transparent
   isosurface path. **Showing or hiding this pin is the "show shapes" checkbox**;
   no property is needed. One pin carries one type, which is why the shapes do
@@ -723,17 +725,17 @@ anything downstream:
 **The root is selected by default** (decided 2026-10-08). Without a
 selection, or when the stored selection no longer matches the fingerprint
 (the inputs or settings changed since), both debug pins show the **root**:
-the posed molecule with every foot and its anchor sites marked, and the
-`anchor_reach` spheres on `debug_shapes`. That is the view `anchor_reach` is
-tuned with, so it is there as soon as a pin is shown, with no click and no
-Run, and it follows `anchor_reach` live. The root view is the one debug
-structure **evaluation builds itself**: it is the posed inputs plus colour
-overrides and analytic spheres, with no seating and no relaxation, so it is
-as cheap as `plan` and needs no stored state. Every other row is built by
-the select action below.
+the posed molecule, unmarked, with no shape (revised 2026-10-09, §18). The
+view `anchor_reach` is tuned with is a step under the root (one foot, its
+anchor sites, its sphere); while one is selected, evaluation rebuilds it for
+the new inputs, so it follows `anchor_reach` live with no Run. These posed
+views are the only debug structures **evaluation builds itself**: the posed
+inputs plus colour overrides and an analytic sphere, with no seating and no
+relaxation, so they are as cheap as `plan`. Every other item is built by the
+select action below.
 
 **The run model (R12 holds).** Evaluation never relaxes anything and builds
-no debug structure except the root view above:
+no debug structure except the posed views above:
 
 - **Selecting a row is an API action**, `chemisorb_debug_select(node_id,
   path)`, like Run. It builds the debug structure and the shapes and stores
@@ -1947,3 +1949,127 @@ not change.
 - Phase 5: the manual walkthrough after `cargo build --release` — the panel,
   Run, the tree, the shapes at `SHAPE_GRID` 0.3 Å and the colours on a real
   proxy, and finding 1 above; the Flutter smoke test (maintainer only).
+
+## 18. Debug view revised (2026-10-09)
+
+The first look at the Phase 4 debug view on a real adsorbate (the maintainer,
+2026-10-09) found it hard to read, and the view was revised the same day. The
+search, the recorded tree, the fingerprint and the run model are unchanged;
+what changed is what an item of the panel stands for and what the viewport
+marks. §6.5 is updated in place; this section records why.
+
+### 18.1 What was wrong
+
+1. **Too many colours.** Seven overrides (bonded, foot, candidate, near miss,
+   mirrored, undecided, clash) replaced the element colours on most atoms near
+   the adsorbate, so a reader could no longer tell an O from a Si. The
+   undecided cyan was also indistinguishable from the frozen-atom rim, and the
+   bonded orange from the near-miss yellow under the viewport's lighting.
+2. **Verdicts painted on atoms.** *Mirrored* and *undecided* are verdicts on
+   the hypothesis a (foot, site) pair reaches — the mirror check prunes a
+   three-leg assignment, not a site — yet they coloured the site. The view was
+   therefore unreadable without knowing the search's internals.
+3. **Several feet at once.** A row marked every unbonded foot and the union of
+   all their sites, and drew all their shells: under a one-leg row of the
+   tripod, two feet, two overlapping shells, and no way to tell which green
+   site belonged to which foot. The violet looked like "the next foot" only
+   where a single foot was left.
+4. **Labels.** `O25`, `Si123`, `Si52 +0.27` drawn over the structure obscured
+   it.
+5. **Ghosting did nothing.** The unmarked substrate was "dimmed" with the
+   ghost flag, which blends the colour halfway to mid grey: a silicon is
+   already grey, so nothing looked ghosted.
+
+### 18.2 What it is now
+
+- **States and steps alternate.** An item is a *state* — the root or a leg
+  row: the bonds made so far — or a *step*, the "next foot" from a state for
+  one foot. A state's children are its steps (one per foot the search tried
+  next from it; the root's are the tree's foot rows), a step's children are
+  the legs its test accepted. Walking down the tree replays the search one
+  decision at a time. Steps are a grouping of a state's children by foot,
+  `DebugItem { row, foot }`, not rows of the recorded tree; the tree and the
+  search know nothing of them.
+- **A state** shows its bonds orange and, seated, its own clashing atom pairs
+  red; nothing else is recoloured, nothing faded, no shape.
+- **A step** shows its foot violet, the sites its test accepted green
+  (whatever became of the leg each reaches: that is the leg row's to say), the
+  state's bonds orange, the rest of the substrate transparent (per-atom alpha,
+  `FADED_ALPHA` 0.25), and its test's one shape on `debug_shapes`: the
+  `anchor_reach` sphere around the posed foot, the shell, the ring, or the
+  local `reach` sphere around the foot's relaxed position. The test pinning
+  "a site is inside a drawn shape iff the search's test accepts it" now holds
+  per foot.
+- **No near-miss colour, no labels.** Near misses are the sites just outside
+  the drawn shape; they stay in the step's counts and tooltip and in the CLI's
+  description. An atom's name is in its hover tooltip, which now shows its id
+  (`O25` = oxygen, id 25: element symbol plus the id in the search's combined
+  structure, where the adsorbate's atoms come first).
+- **Forms.** A step is shown in the form its test read positions from:
+  posed under the root, seated under a one- or two-leg state, relaxed under a
+  deeper one. A leg opens relaxed when it was relaxed and seated otherwise —
+  §17.3 finding 1 (a two-leg candidate opening seated) is resolved by the
+  split: its seated form is its step's. The *Seated / Relaxed* switch remains
+  for legs that have both.
+- **The root marks nothing** and draws no shape. The `anchor_reach` tuning
+  view of §6.5 is the root's step for one foot; evaluation rebuilds a selected
+  step under the root for new inputs (it is posed geometry, found again by the
+  foot's atom id), so it still follows `anchor_reach` live. Every other
+  selection still falls back to the root on a fingerprint change. Considered
+  and rejected: the root showing every foot's sphere at once (one rule with no
+  exception reads better in the reference guide; the steps are one click
+  away).
+- **Paths.** A step's path is its state's followed by the foot alone:
+  `12` under the root (as the foot row's path was), `12-45,13` below it.
+
+### 18.3 Tests
+
+`chemisorption_sequential_debug_test.rs` (14 tests): states and steps
+alternate and know their parents; each hypothesis is listed once with
+duplicates hidden; every item's path finds it; forms before and after a run
+(a relaxed two-leg row opens relaxed, its step seated); a seated state marks
+only its bonds and clashes; the root marks nothing and a root step marks its
+foot and exactly its anchor sites, from the definition, and follows
+`anchor_reach`; a step marks every accepted site whatever the verdict and
+colours no near miss; a step's shell or ring contains exactly what its foot's
+test accepts; no labels and no ghosts anywhere, the unmarked substrate faded
+on steps only; the replay tests on items. `chemisorb_node_test.rs`: a selected
+root step follows `anchor_reach` across a fingerprint change; the eval cache
+lists states and steps; the CLI selects a step by path. The API test and the
+Flutter panel test (`test/chemisorb_debug_tree_test.dart`, 5 tests) follow
+the items.
+
+### 18.4 The transferred H is seated in the acceptor's open slot
+
+The first look at a one-leg step (O24–Si203, H→Si202, seated) showed the
+transferred H tilted across the Si202 dimer towards O24 and Si203. The rule
+of §5 placed it at the Si–H length on the line from the acceptor towards
+where the H sat on the seated molecule: a direction set by the pose, blind to
+the acceptor's own bonds. That geometry is the start of every relaxation with
+a transfer, not only a picture. It now goes into the acceptor's open valence
+slot (guided placement, as `passivate` places terminators), the slot nearest
+the side it came from, after the leg bonds are added; several transfers are
+seated one at a time in a fixed order, so two H on one acceptor take two
+slots and the listed order of the transfers does not matter. The seating
+clash check is unaffected: it skips hydrogen. A new test checks the seat
+against geometry of its own: on a three-bonded acceptor the H lies along
+−Σ of the bond directions, on a two-bonded one it is tetrahedral to both.
+
+Two consequences. The water golden snapshot's H-transfer candidate relaxes
+to −2.80 kcal/mol instead of −3.21 (same bonds and acceptor, a neighbouring
+minimum). And the local-phase fixture `competing_oh` had built its two extra
+acceptors with their free valence pointing away from the adsorbate, into empty
+space; the old rule had hidden that by putting the H on the near side. They
+now point where an atom can arrive (X's sideways, out from under the planted
+sites; Y's up), and the test still finds a bond set reached with two acceptor
+choices.
+
+### 18.5 Panel options, after a second look
+
+Near misses are no longer listed in the panel at all — neither as a count in
+a step's summary nor in its tooltip; the CLI's description keeps them, and
+the shape shows where they are. Mirror-pruned legs are hidden by default like
+duplicates, behind a **Show mirrored** toggle beside **Show duplicates**: a
+display option, filtered in the node's eval cache (each step reports how many
+of its listed and of its duplicate legs are mirrored, so the panel knows
+whether a step still has anything to expand). The step's *mirr.* count stays.

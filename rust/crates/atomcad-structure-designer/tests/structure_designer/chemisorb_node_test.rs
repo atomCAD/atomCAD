@@ -1881,18 +1881,20 @@ fn a_search_landing_in_a_parked_document_shows_when_it_is_activated() {
 }
 
 // ============================================================================
-// The debug view (design §6.5, §11.8)
+// The debug view (design §6.5 as revised in §18, §11.8)
 // ============================================================================
 //
 // The cage over the three silyls: one-, two- and three-leg rows, small
 // enough to Run in well under a second. The views themselves are tested in
 // `atomcad-crystolecule`'s `chemisorption_sequential_debug_test.rs`; what is
-// exercised here is what the node adds: the two appended pins, the root view
-// evaluation builds, the select action (geometry at once, relaxation as a
-// job), the fingerprint, and that a selection is neither saved, undone nor a
-// search setting.
+// exercised here is what the node adds: the two appended pins, the posed
+// views evaluation builds, the select action (geometry at once, relaxation as
+// a job), the fingerprint, and that a selection is neither saved, undone nor
+// a search setting.
 
-use atomcad_crystolecule::chemisorption::sequential::{DebugForm, SHAPE_LEVEL};
+use atomcad_crystolecule::chemisorption::sequential::{
+    DebugForm, DebugItem, Mirror, SHAPE_LEVEL, item_of_row,
+};
 use atomcad_crystolecule::field::ScalarField;
 use atomcad_structure_designer::chemisorb_ops::{ChemisorbDebugStep, DebugRowRef};
 use atomcad_structure_designer::node_jobs::JobWork;
@@ -1924,21 +1926,38 @@ fn cage_network() -> Net {
     network_with(cage())
 }
 
-/// Selects `row` and installs the view, which must need no relaxation.
-fn select_now(designer: &mut StructureDesigner, node: u64, row: u32, form: Option<DebugForm>) {
+/// Selects `item` and installs the view, which must need no relaxation.
+fn select_now(
+    designer: &mut StructureDesigner,
+    node: u64,
+    item: DebugItem,
+    form: Option<DebugForm>,
+) {
     let prepared = designer
-        .prepare_chemisorb_debug(&[], node, DebugRowRef::Row(row), form)
+        .prepare_chemisorb_debug(&[], node, DebugRowRef::Item(item), form)
         .expect("prepare");
     let ChemisorbDebugStep::Ready(outcome) = prepared.step else {
-        panic!("row {row} should be geometry alone");
+        panic!("{item:?} should be geometry alone");
     };
     designer
         .install_job_result(&prepared.target, outcome)
         .expect("install");
 }
 
+/// The first canonical leg row with `legs` legs.
+fn leg_row(cache: &ChemisorbEvalCache, legs: u8) -> u32 {
+    let tree = cache.tree.tree();
+    (0..tree.len() as u32)
+        .find(|&r| {
+            item_of_row(tree, r) == DebugItem::state(r)
+                && tree.row(r).legs == legs
+                && tree.row(r).duplicate_of.is_none()
+        })
+        .unwrap()
+}
+
 #[test]
-fn the_debug_pins_are_appended_and_show_the_root_view_with_no_selection() {
+fn the_debug_pins_are_appended_and_show_the_root_with_no_selection() {
     let registry = NodeTypeRegistry::new();
     let node_type = registry.get_node_type("chemisorb").unwrap();
     let pins: Vec<(&str, &DataType)> = node_type
@@ -1957,39 +1976,19 @@ fn the_debug_pins_are_appended_and_show_the_root_view_with_no_selection() {
     } = cage_network();
     let out = all_outputs(&mut designer, name, node);
     let root = atoms(&out[2]);
-    // The posed inputs, every foot marked.
+    // The posed inputs, nothing marked, no shapes.
     let cache = designer_eval_cache(&mut designer, name, node);
     assert_eq!(cache.debug_selected, None);
     let setup = &cache.tree.plan().setup;
     assert_eq!(root.get_num_of_atoms(), setup.combined.get_num_of_atoms());
+    assert!(root.decorator().atom_color.is_empty());
+    assert!(root.decorator().atom_label.is_empty());
     for f in &setup.feet {
-        assert!(
-            root.decorator().atom_color.contains_key(&f.id),
-            "foot {}",
-            f.id
-        );
         assert_eq!(root.get_atom(f.id).unwrap().position, f.position);
     }
-    // The anchor spheres, radius anchor_reach (3.5 Å).
-    let field = shapes_field(&out[3]);
-    let foot = setup.feet[0].position;
-    let centre = setup.feet.iter().map(|f| f.position).sum::<DVec3>() / 3.0;
-    let out_dir = (foot - centre).normalize();
-    assert!(field.sample(foot + out_dir * 3.4) > SHAPE_LEVEL);
-    assert!(field.sample(foot + out_dir * 3.6) < SHAPE_LEVEL);
+    assert!(matches!(out[3], NetworkResult::None));
     // No UFF call: before Run, the node never searched.
     assert!(!boolean(&fields(&out[1]), "searched"));
-
-    // anchor_reach is followed live, with no click and no Run.
-    set_props(
-        &mut designer,
-        name,
-        node,
-        &[("anchor_reach", TextValue::Float(5.0))],
-    );
-    let out = all_outputs(&mut designer, name, node);
-    let field = shapes_field(&out[3]);
-    assert!(field.sample(foot + out_dir * 4.9) > SHAPE_LEVEL);
 
     // An upstream error reaches all four pins.
     set_value(
@@ -2004,7 +2003,7 @@ fn the_debug_pins_are_appended_and_show_the_root_view_with_no_selection() {
 }
 
 #[test]
-fn the_eval_cache_lists_the_tree_lazily_with_duplicates_hidden() {
+fn a_selected_step_under_the_root_follows_anchor_reach_live() {
     let Net {
         mut designer,
         name,
@@ -2012,41 +2011,175 @@ fn the_eval_cache_lists_the_tree_lazily_with_duplicates_hidden() {
         ..
     } = cage_network();
     let cache = designer_eval_cache(&mut designer, name, node);
-    let root = cache.debug_row(0).unwrap();
+    let setup = &cache.tree.plan().setup;
+    let foot = setup.feet[0].clone();
+    let centre = setup.feet.iter().map(|f| f.position).sum::<DVec3>() / 3.0;
+    let out_dir = (foot.position - centre).normalize();
+    let step = DebugItem::step(0, 0);
+    select_now(&mut designer, node, step, None);
+    let out = all_outputs(&mut designer, name, node);
+    // That foot violet, its anchor_reach (3.5 Å) sphere on the shapes pin.
+    assert!(atoms(&out[2]).decorator().atom_color.contains_key(&foot.id));
+    let field = shapes_field(&out[3]);
+    assert!(field.sample(foot.position + out_dir * 3.4) > SHAPE_LEVEL);
+    assert!(field.sample(foot.position + out_dir * 3.6) < SHAPE_LEVEL);
+
+    // A new anchor_reach is a new fingerprint, yet the step stays selected,
+    // rebuilt by evaluation (geometry alone): no click, no Run.
+    set_props(
+        &mut designer,
+        name,
+        node,
+        &[("anchor_reach", TextValue::Float(5.0))],
+    );
+    let out = all_outputs(&mut designer, name, node);
+    let field = shapes_field(&out[3]);
+    assert!(field.sample(foot.position + out_dir * 4.9) > SHAPE_LEVEL);
+    let cache = designer_eval_cache(&mut designer, name, node);
+    assert_eq!(cache.debug_selected, Some((step, DebugForm::Posed)));
+}
+
+#[test]
+fn the_eval_cache_lists_states_and_steps_lazily_with_duplicates_hidden() {
+    let Net {
+        mut designer,
+        name,
+        node,
+        ..
+    } = cage_network();
+    let cache = designer_eval_cache(&mut designer, name, node);
+    let root = cache.debug_row(DebugItem::ROOT).unwrap();
     assert_eq!(root.kind, ChemisorbDebugRowKind::Root);
     assert_eq!(root.label, "root");
-    let feet = cache.debug_children(0, false);
+    let feet = cache.debug_children(DebugItem::ROOT, false, true);
     assert_eq!(feet.len(), 3);
-    assert!(feet.iter().all(|f| f.kind == ChemisorbDebugRowKind::Foot));
-    // Somewhere below, a duplicate is hidden and shown on request.
+    assert!(
+        feet.iter()
+            .all(|f| f.kind == ChemisorbDebugRowKind::NextFoot && f.label.starts_with("next foot"))
+    );
+    // A leg's children are its next feet, and theirs are legs again.
+    let leg = leg_row(&cache, 1);
+    let steps = cache.debug_children(DebugItem::state(leg), false, true);
+    assert_eq!(steps.len(), 2, "two feet left");
+    for s in &steps {
+        assert_eq!(s.kind, ChemisorbDebugRowKind::NextFoot);
+        assert!(
+            cache
+                .debug_children(s.item, true, true)
+                .iter()
+                .all(|l| l.kind == ChemisorbDebugRowKind::Leg && l.legs == 2)
+        );
+    }
+    // Somewhere below, a step hides a duplicate and shows it on request.
     let tree = cache.tree.tree();
-    let parent = (0..tree.len() as u32)
-        .find(|&r| tree.row(r).duplicates > 0)
-        .expect("a row hiding duplicates");
-    let hidden = cache.debug_children(parent, false);
-    let all = cache.debug_children(parent, true);
+    let dup = (0..tree.len() as u32)
+        .find(|&r| tree.row(r).duplicate_of.is_some())
+        .expect("a duplicate row");
+    let step = *cache
+        .debug_ancestors(DebugItem::state(dup))
+        .iter()
+        .rev()
+        .nth(1)
+        .unwrap();
+    assert!(step.is_step());
+    let hidden = cache.debug_children(step, false, true);
+    let all = cache.debug_children(step, true, true);
     let dups: Vec<_> = all.iter().filter(|r| r.duplicate_of.is_some()).collect();
+    assert!(!dups.is_empty());
     assert_eq!(all.len() - hidden.len(), dups.len());
     assert_eq!(
-        cache.debug_row(parent).unwrap().hidden_duplicates as usize,
+        cache.debug_row(step).unwrap().hidden_duplicates as usize,
         dups.len()
     );
     // A duplicate jumps to its canonical row: the ancestors reveal it.
-    let canonical = dups[0].duplicate_of.unwrap();
+    let canonical = DebugItem::state(dups[0].duplicate_of.unwrap());
     let path = cache.debug_ancestors(canonical);
-    assert_eq!(path.first(), Some(&0));
+    assert_eq!(path.first(), Some(&DebugItem::ROOT));
     assert_eq!(path.last(), Some(&canonical));
     for w in path.windows(2) {
-        assert_eq!(cache.debug_row(w[1]).unwrap().parent, Some(w[0]));
+        assert!(
+            cache
+                .debug_children(w[0], true, true)
+                .iter()
+                .any(|c| c.item == w[1]),
+            "{:?} lists {:?}",
+            w[0],
+            w[1]
+        );
     }
+    // An item that names no foot of the search is refused, not a panic.
+    assert!(cache.debug_row(DebugItem::step(0, 99)).is_none());
+    assert!(
+        cache
+            .debug_children(DebugItem::step(0, 99), true, true)
+            .is_empty()
+    );
+    let foot_row = tree.children(0)[0];
+    assert!(cache.debug_row(DebugItem::step(foot_row, 0)).is_none());
     // Toggling the duplicates changes nothing in the tree or its identity.
     let again = designer_eval_cache(&mut designer, name, node);
     assert_eq!(again.tree_key, cache.tree_key);
     assert_eq!(again.tree.tree().len(), tree.len());
 }
 
+/// Mirror-pruned legs are hidden unless asked for, like duplicates, and each
+/// step's counts say exactly what each combination of the two toggles lists.
 #[test]
-fn selecting_a_row_before_run_shows_it_seated_and_searches_nothing() {
+fn mirrored_legs_are_hidden_unless_asked_and_the_counts_say_so() {
+    // Every step of the cage's tree, under all four combinations.
+    let Net {
+        mut designer,
+        name,
+        node,
+        ..
+    } = cage_network();
+    let cache = designer_eval_cache(&mut designer, name, node);
+    let mut stack = vec![DebugItem::ROOT];
+    let (mut steps, mut mirrored) = (0, 0);
+    while let Some(item) = stack.pop() {
+        let row = cache.debug_row(item).unwrap();
+        mirrored += row.mirrored_children;
+        let count = |d: bool, m: bool| cache.debug_children(item, d, m).len() as u32;
+        if item.is_step() {
+            let (c, hd, mc, md) = (
+                row.children,
+                row.hidden_duplicates,
+                row.mirrored_children,
+                row.mirrored_duplicates,
+            );
+            assert_eq!(count(false, true), c);
+            assert_eq!(count(false, false), c - mc);
+            assert_eq!(count(true, true), c + hd);
+            assert_eq!(count(true, false), c + hd - mc - md);
+            assert_eq!(row.mirrored, mc + md);
+            assert!(
+                cache
+                    .debug_children(item, true, false)
+                    .iter()
+                    .all(|l| l.mirror != Some(Mirror::Mirrored)
+                        && cache
+                            .tree
+                            .tree()
+                            .row(l.item.row)
+                            .duplicate_of
+                            .is_none_or(|k| {
+                                cache.debug_row(DebugItem::state(k)).unwrap().mirror
+                                    != Some(Mirror::Mirrored)
+                            })),
+                "{item:?}"
+            );
+            steps += 1;
+        }
+        for c in cache.debug_children(item, false, true) {
+            stack.push(c.item);
+        }
+    }
+    assert!(steps > 3);
+    assert!(mirrored > 0, "the cage has mirror-pruned legs to hide");
+}
+
+#[test]
+fn selecting_a_leg_before_run_shows_it_seated_and_searches_nothing() {
     let Net {
         mut designer,
         name,
@@ -2055,12 +2188,11 @@ fn selecting_a_row_before_run_shows_it_seated_and_searches_nothing() {
     } = cage_network();
     let cache = designer_eval_cache(&mut designer, name, node);
     let tree = cache.tree.tree();
-    let row = (0..tree.len() as u32)
-        .find(|&r| tree.row(r).legs == 2 && !tree.children(r).is_empty())
-        .unwrap();
+    let row = leg_row(&cache, 2);
+    let item = DebugItem::state(row);
     let history = designer.undo_stack.history_len();
     designer.is_dirty = false;
-    select_now(&mut designer, node, row, None);
+    select_now(&mut designer, node, item, None);
     assert_eq!(
         designer.undo_stack.history_len(),
         history,
@@ -2076,11 +2208,15 @@ fn selecting_a_row_before_run_shows_it_seated_and_searches_nothing() {
     let seating = h.seating.clone().unwrap_or_else(|| p.setup.seat(&h.steps));
     let expected = p.setup.start_structure(&h.steps, &seating);
     assert_eq!(positions(shown), positions(&expected), "seated");
+    assert!(
+        matches!(out[3], NetworkResult::None),
+        "a state has no shape"
+    );
     let cache = designer_eval_cache(&mut designer, name, node);
-    assert_eq!(cache.debug_selected, Some((row, DebugForm::Seated)));
+    assert_eq!(cache.debug_selected, Some((item, DebugForm::Seated)));
     // A relaxed form does not exist yet.
     let err = designer
-        .prepare_chemisorb_debug(&[], node, DebugRowRef::Row(row), Some(DebugForm::Relaxed))
+        .prepare_chemisorb_debug(&[], node, DebugRowRef::Item(item), Some(DebugForm::Relaxed))
         .err()
         .unwrap();
     assert!(err.contains("Run first"), "{err}");
@@ -2094,8 +2230,9 @@ fn a_fingerprint_change_shows_the_root_and_undoing_it_brings_the_selection_back(
         node,
         ..
     } = cage_network();
-    designer_eval_cache(&mut designer, name, node);
-    select_now(&mut designer, node, 4, None);
+    let cache = designer_eval_cache(&mut designer, name, node);
+    let item = DebugItem::state(leg_row(&cache, 2));
+    select_now(&mut designer, node, item, None);
     assert!(
         designer_eval_cache(&mut designer, name, node)
             .debug_selected
@@ -2116,7 +2253,7 @@ fn a_fingerprint_change_shows_the_root_and_undoing_it_brings_the_selection_back(
     let cache = designer_eval_cache(&mut designer, name, node);
     assert_eq!(
         cache.debug_selected.map(|s| s.0),
-        Some(4),
+        Some(item),
         "inherited across the edit"
     );
 }
@@ -2134,8 +2271,9 @@ fn a_selection_is_not_a_search_setting_and_is_not_saved() {
     } = cage_network();
     designer.run_chemisorb(&[], node).unwrap();
     assert_eq!(searched_and_stale(&mut designer, name, node), (true, false));
-    designer_eval_cache(&mut designer, name, node);
-    select_now(&mut designer, node, 4, Some(DebugForm::Seated));
+    let cache = designer_eval_cache(&mut designer, name, node);
+    let item = DebugItem::state(leg_row(&cache, 2));
+    select_now(&mut designer, node, item, Some(DebugForm::Seated));
     assert_eq!(
         searched_and_stale(&mut designer, name, node),
         (true, false),
@@ -2174,32 +2312,28 @@ fn after_run_a_relaxed_row_outside_top_n_is_a_job_that_reproduces_its_strain() {
     designer.run_chemisorb(&[], node).unwrap();
     let search = stored(&designer, name, node).unwrap();
     let report = &search.report;
-    let kept = report.candidates[0].row;
+    let kept = DebugItem::state(report.candidates[0].row);
     let other = report
         .relaxed
         .iter()
-        .find(|r| r.row != kept)
+        .find(|r| r.row != kept.row)
         .expect("a relaxation outside top N");
 
-    // The kept candidate is shown at once, from its stored structure. (The
-    // best is a two-leg binding the ring is searched from, so it opens
-    // seated: relaxed is asked for.)
+    // The kept candidate opens relaxed, at once, from its stored structure.
     designer_eval_cache(&mut designer, name, node);
-    select_now(&mut designer, node, kept, Some(DebugForm::Relaxed));
+    select_now(&mut designer, node, kept, None);
     let out = all_outputs(&mut designer, name, node);
     assert_eq!(
         positions(atoms(&out[2])),
         positions(&report.candidates[0].structure)
     );
+    let cache = designer_eval_cache(&mut designer, name, node);
+    assert_eq!(cache.debug_selected, Some((kept, DebugForm::Relaxed)));
 
     // Another relaxed row is replayed, as a job.
+    let item = DebugItem::state(other.row);
     let prepared = designer
-        .prepare_chemisorb_debug(
-            &[],
-            node,
-            DebugRowRef::Row(other.row),
-            Some(DebugForm::Relaxed),
-        )
+        .prepare_chemisorb_debug(&[], node, DebugRowRef::Item(item), None)
         .unwrap();
     let ChemisorbDebugStep::Job(work) = prepared.step else {
         panic!("a relaxed row outside top N needs relaxing");
@@ -2212,9 +2346,9 @@ fn after_run_a_relaxed_row_outside_top_n_is_a_job_that_reproduces_its_strain() {
     let view = data(&designer, name, node).debug.unwrap();
     assert!((view.view.strain.unwrap() - other.strain).abs() < 1e-6);
     let cache = designer_eval_cache(&mut designer, name, node);
-    assert_eq!(cache.debug_selected, Some((other.row, DebugForm::Relaxed)));
+    assert_eq!(cache.debug_selected, Some((item, DebugForm::Relaxed)));
     // The seated form of the same row is geometry again.
-    select_now(&mut designer, node, other.row, Some(DebugForm::Seated));
+    select_now(&mut designer, node, item, Some(DebugForm::Seated));
 }
 
 #[test]
@@ -2226,23 +2360,36 @@ fn the_cli_select_reads_a_path_and_installs_what_the_panel_would() {
         ..
     } = cage_network();
     let cache = designer_eval_cache(&mut designer, name, node);
-    let row = 5;
-    let path = cache.debug_row(row).unwrap().path;
+    let item = DebugItem::state(leg_row(&cache, 1));
+    let path = cache.debug_row(item).unwrap().path;
     let text = designer
         .chemisorb_debug_select_blocking(&[], node, DebugRowRef::Path(path.clone()), None)
         .unwrap();
-    assert!(text.starts_with(&format!("row #{row}: ")), "{text}");
+    assert!(text.starts_with(&format!("#{} ", item.row)), "{text}");
     assert!(text.contains(&format!("path: {path}")), "{text}");
-    assert!(text.contains("children"), "{text}");
+    assert!(text.contains("next foot"), "its children are steps: {text}");
     let by_path = data(&designer, name, node).debug.unwrap();
-    select_now(&mut designer, node, row, None);
-    let by_row = data(&designer, name, node).debug.unwrap();
-    assert_eq!(by_path.view.row, by_row.view.row);
-    assert_eq!(by_path.view.form, by_row.view.form);
+    select_now(&mut designer, node, item, None);
+    let by_item = data(&designer, name, node).debug.unwrap();
+    assert_eq!(by_path.view.item, by_item.view.item);
+    assert_eq!(by_path.view.form, by_item.view.form);
     assert_eq!(
         positions(&by_path.view.structure),
-        positions(&by_row.view.structure)
+        positions(&by_item.view.structure)
     );
+
+    // A step: the state's path and a foot alone.
+    let step = cache.debug_children(item, false, true)[0].clone();
+    assert_eq!(step.kind, ChemisorbDebugRowKind::NextFoot);
+    let text = designer
+        .chemisorb_debug_select_blocking(&[], node, DebugRowRef::Path(step.path.clone()), None)
+        .unwrap();
+    assert!(text.starts_with("next foot "), "{text}");
+    assert_eq!(
+        data(&designer, name, node).debug.unwrap().view.item,
+        step.item
+    );
+
     assert!(
         designer
             .chemisorb_debug_select_blocking(&[], node, DebugRowRef::Path("999-1".into()), None)

@@ -57,6 +57,17 @@ class AtomTooltip extends StatelessWidget {
               decoration: TextDecoration.none,
             ),
           ),
+          // The atom's id: how the chemisorb debug view and candidates name
+          // atoms (O25 = oxygen, id 25).
+          Text(
+            'id ${info.atomId}',
+            style: const TextStyle(
+              color: Color(0x99FFFFFF),
+              fontSize: 11,
+              fontWeight: FontWeight.normal,
+              decoration: TextDecoration.none,
+            ),
+          ),
           // Effective element (only for parameter elements with an override)
           if (info.effectiveElement.isNotEmpty)
             Text(

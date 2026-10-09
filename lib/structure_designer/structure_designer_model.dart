@@ -3911,20 +3911,21 @@ class StructureDesignerModel extends ChangeNotifier {
     return null;
   }
 
-  /// Selects row [row] of `chemisorb` node [nodeId]'s search tree for its
-  /// `debug` and `debug_shapes` pins (`design_chemisorption_sequential.md`
-  /// §6.5), in [form] or, when `null`, the form the row opens on. A view that
-  /// is geometry alone shows at once; a relaxed row the search did not keep is
+  /// Selects [item] of `chemisorb` node [nodeId]'s search tree (a state, or
+  /// the next-foot step from one) for its `debug` and `debug_shapes` pins
+  /// (`design_chemisorption_sequential.md` §6.5, §18), in [form] or, when
+  /// `null`, the form the item opens on. A view that is geometry alone shows
+  /// at once; one that reads a relaxed row the search did not keep is
   /// replayed as a node job, with the progress and the outcome of any job.
   /// Not an undo step. Returns the kernel's message when it refuses, `null`
   /// otherwise.
-  String? chemisorbDebugSelect(BigInt nodeId, int row,
+  String? chemisorbDebugSelect(BigInt nodeId, APIChemisorbDebugRef item,
       {APIChemisorbDebugForm? form}) {
     final scopePath = scopeChainToBytes(propertyEditorScopeChain);
     final BigInt? jobId;
     try {
       jobId = chemisorb_api.chemisorbDebugSelect(
-          scopePath: scopePath, nodeId: nodeId, row: row, form: form);
+          scopePath: scopePath, nodeId: nodeId, item: item, form: form);
     } catch (e) {
       return e.toString();
     }

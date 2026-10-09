@@ -3086,41 +3086,16 @@ fn wire__crate__api__structure_designer__chemisorb_api__chemisorb_debug_select_i
     rust_vec_len_: i32,
     data_len_: i32,
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "chemisorb_debug_select",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec,_>(flutter_rust_bridge::for_generated::TaskInfo{ debug_name: "chemisorb_debug_select", port: None, mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync }, move || { 
+            let message = unsafe { flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(ptr_, rust_vec_len_, data_len_) };
+            let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_scope_path = <Vec<u64>>::sse_decode(&mut deserializer);
-            let api_node_id = <u64>::sse_decode(&mut deserializer);
-            let api_row = <u32>::sse_decode(&mut deserializer);
-            let api_form = <Option<
-                crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugForm,
-            >>::sse_decode(&mut deserializer);
-            deserializer.end();
-            transform_result_sse::<_, String>((move || {
-                let output_ok =
-                    crate::api::structure_designer::chemisorb_api::chemisorb_debug_select(
-                        api_scope_path,
-                        api_node_id,
-                        api_row,
-                        api_form,
-                    )?;
-                Ok(output_ok)
-            })())
-        },
-    )
+let api_node_id = <u64>::sse_decode(&mut deserializer);
+let api_item = <crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRef>::sse_decode(&mut deserializer);
+let api_form = <Option<crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugForm>>::sse_decode(&mut deserializer);deserializer.end();
+                transform_result_sse::<_, String>((move || {
+                     let output_ok = crate::api::structure_designer::chemisorb_api::chemisorb_debug_select(api_scope_path, api_node_id, api_item, api_form)?;   Ok(output_ok)
+                })()) })
 }
 fn wire__crate__api__structure_designer__chemisorb_api__chemisorb_debug_select_by_name_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -5403,102 +5378,41 @@ fn wire__crate__api__structure_designer__chemisorb_api__get_chemisorb_debug_ance
     rust_vec_len_: i32,
     data_len_: i32,
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "get_chemisorb_debug_ancestors",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_row = <u32>::sse_decode(&mut deserializer);
-            deserializer.end();
-            transform_result_sse::<_, ()>((move || {
-                let output_ok = Result::<_, ()>::Ok(
-                    crate::api::structure_designer::chemisorb_api::get_chemisorb_debug_ancestors(
-                        api_row,
-                    ),
-                )?;
-                Ok(output_ok)
-            })())
-        },
-    )
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec,_>(flutter_rust_bridge::for_generated::TaskInfo{ debug_name: "get_chemisorb_debug_ancestors", port: None, mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync }, move || { 
+            let message = unsafe { flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(ptr_, rust_vec_len_, data_len_) };
+            let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_item = <crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRef>::sse_decode(&mut deserializer);deserializer.end();
+                transform_result_sse::<_, ()>((move || {
+                     let output_ok = Result::<_,()>::Ok(crate::api::structure_designer::chemisorb_api::get_chemisorb_debug_ancestors(api_item))?;   Ok(output_ok)
+                })()) })
 }
 fn wire__crate__api__structure_designer__chemisorb_api__get_chemisorb_debug_children_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "get_chemisorb_debug_children",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_row = <u32>::sse_decode(&mut deserializer);
-            let api_show_duplicates = <bool>::sse_decode(&mut deserializer);
-            deserializer.end();
-            transform_result_sse::<_, ()>((move || {
-                let output_ok = Result::<_, ()>::Ok(
-                    crate::api::structure_designer::chemisorb_api::get_chemisorb_debug_children(
-                        api_row,
-                        api_show_duplicates,
-                    ),
-                )?;
-                Ok(output_ok)
-            })())
-        },
-    )
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec,_>(flutter_rust_bridge::for_generated::TaskInfo{ debug_name: "get_chemisorb_debug_children", port: None, mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync }, move || { 
+            let message = unsafe { flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(ptr_, rust_vec_len_, data_len_) };
+            let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_item = <crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRef>::sse_decode(&mut deserializer);
+let api_show_duplicates = <bool>::sse_decode(&mut deserializer);
+let api_show_mirrored = <bool>::sse_decode(&mut deserializer);deserializer.end();
+                transform_result_sse::<_, ()>((move || {
+                     let output_ok = Result::<_,()>::Ok(crate::api::structure_designer::chemisorb_api::get_chemisorb_debug_children(api_item, api_show_duplicates, api_show_mirrored))?;   Ok(output_ok)
+                })()) })
 }
 fn wire__crate__api__structure_designer__chemisorb_api__get_chemisorb_debug_row_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "get_chemisorb_debug_row",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_row = <u32>::sse_decode(&mut deserializer);
-            deserializer.end();
-            transform_result_sse::<_, ()>((move || {
-                let output_ok = Result::<_, ()>::Ok(
-                    crate::api::structure_designer::chemisorb_api::get_chemisorb_debug_row(api_row),
-                )?;
-                Ok(output_ok)
-            })())
-        },
-    )
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec,_>(flutter_rust_bridge::for_generated::TaskInfo{ debug_name: "get_chemisorb_debug_row", port: None, mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync }, move || { 
+            let message = unsafe { flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(ptr_, rust_vec_len_, data_len_) };
+            let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_item = <crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRef>::sse_decode(&mut deserializer);deserializer.end();
+                transform_result_sse::<_, ()>((move || {
+                     let output_ok = Result::<_,()>::Ok(crate::api::structure_designer::chemisorb_api::get_chemisorb_debug_row(api_item))?;   Ok(output_ok)
+                })()) })
 }
 fn wire__crate__api__structure_designer__chemisorb_api__get_chemisorb_report_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -16688,12 +16602,22 @@ impl SseDecode
 }
 
 impl SseDecode
-    for crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRow
+    for crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRef
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_row = <u32>::sse_decode(deserializer);
-        let mut var_parent = <Option<u32>>::sse_decode(deserializer);
+        let mut var_foot = <Option<u32>>::sse_decode(deserializer);
+        return crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRef{row: var_row, foot: var_foot};
+    }
+}
+
+impl SseDecode
+    for crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRow
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_item = <crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRef>::sse_decode(deserializer);
         let mut var_kind = <crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRowKind>::sse_decode(deserializer);
         let mut var_legs = <u32>::sse_decode(deserializer);
         let mut var_label = <String>::sse_decode(deserializer);
@@ -16701,6 +16625,8 @@ impl SseDecode
         let mut var_duplicateOf = <Option<u32>>::sse_decode(deserializer);
         let mut var_children = <u32>::sse_decode(deserializer);
         let mut var_hiddenDuplicates = <u32>::sse_decode(deserializer);
+        let mut var_mirroredChildren = <u32>::sse_decode(deserializer);
+        let mut var_mirroredDuplicates = <u32>::sse_decode(deserializer);
         let mut var_candidates = <u32>::sse_decode(deserializer);
         let mut var_mirrored = <u32>::sse_decode(deserializer);
         let mut var_undecided = <u32>::sse_decode(deserializer);
@@ -16722,7 +16648,7 @@ impl SseDecode
         let mut var_canSeat = <bool>::sse_decode(deserializer);
         let mut var_canRelax = <bool>::sse_decode(deserializer);
         let mut var_defaultForm = <crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugForm>::sse_decode(deserializer);
-        return crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRow{row: var_row, parent: var_parent, kind: var_kind, legs: var_legs, label: var_label, path: var_path, duplicate_of: var_duplicateOf, children: var_children, hidden_duplicates: var_hiddenDuplicates, candidates: var_candidates, mirrored: var_mirrored, undecided: var_undecided, clashes: var_clashes, rejected_valence: var_rejectedValence, rejected_no_acceptor: var_rejectedNoAcceptor, rejected_filter: var_rejectedFilter, near_misses: var_nearMisses, candidate: var_candidate, local_parent: var_localParent, mirror: var_mirror, seating_clash: var_seatingClash, pruned_clash: var_prunedClash, strain: var_strain, converged: var_converged, budget_cut: var_budgetCut, can_seat: var_canSeat, can_relax: var_canRelax, default_form: var_defaultForm};
+        return crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRow{item: var_item, kind: var_kind, legs: var_legs, label: var_label, path: var_path, duplicate_of: var_duplicateOf, children: var_children, hidden_duplicates: var_hiddenDuplicates, mirrored_children: var_mirroredChildren, mirrored_duplicates: var_mirroredDuplicates, candidates: var_candidates, mirrored: var_mirrored, undecided: var_undecided, clashes: var_clashes, rejected_valence: var_rejectedValence, rejected_no_acceptor: var_rejectedNoAcceptor, rejected_filter: var_rejectedFilter, near_misses: var_nearMisses, candidate: var_candidate, local_parent: var_localParent, mirror: var_mirror, seating_clash: var_seatingClash, pruned_clash: var_prunedClash, strain: var_strain, converged: var_converged, budget_cut: var_budgetCut, can_seat: var_canSeat, can_relax: var_canRelax, default_form: var_defaultForm};
     }
 }
 
@@ -16734,7 +16660,7 @@ impl SseDecode
         let mut inner = <i32>::sse_decode(deserializer);
         return match inner {
             0 => crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRowKind::Root,
-1 => crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRowKind::Foot,
+1 => crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRowKind::NextFoot,
 2 => crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRowKind::Leg,
             _ => unreachable!("Invalid variant for APIChemisorbDebugRowKind: {}", inner),
         };
@@ -16814,7 +16740,9 @@ impl SseDecode
         >>::sse_decode(deserializer);
         let mut var_inventoryOptions = <Vec<crate::api::structure_designer::structure_designer_api_types::APIChemisorbInventoryOption>>::sse_decode(deserializer);
         let mut var_reachUsed = <bool>::sse_decode(deserializer);
-        let mut var_debugSelectedRow = <Option<u32>>::sse_decode(deserializer);
+        let mut var_debugSelected = <Option<
+            crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRef,
+        >>::sse_decode(deserializer);
         let mut var_debugSelectedForm = <Option<
             crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugForm,
         >>::sse_decode(deserializer);
@@ -16824,7 +16752,7 @@ impl SseDecode
             rows: var_rows,
             inventory_options: var_inventoryOptions,
             reach_used: var_reachUsed,
-            debug_selected_row: var_debugSelectedRow,
+            debug_selected: var_debugSelected,
             debug_selected_form: var_debugSelectedForm,
             debug_tree_key: var_debugTreeKey,
         };
@@ -17957,6 +17885,7 @@ impl SseDecode
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_atomId = <u32>::sse_decode(deserializer);
         let mut var_symbol = <String>::sse_decode(deserializer);
         let mut var_elementName = <String>::sse_decode(deserializer);
         let mut var_atomicNumber = <i32>::sse_decode(deserializer);
@@ -17972,6 +17901,7 @@ impl SseDecode
         let mut var_nodeName = <String>::sse_decode(deserializer);
         let mut var_overlappingNodeNames = <Vec<String>>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIHoveredAtomInfo {
+            atom_id: var_atomId,
             symbol: var_symbol,
             element_name: var_elementName,
             atomic_number: var_atomicNumber,
@@ -20809,6 +20739,20 @@ impl SseDecode
 }
 
 impl SseDecode
+    for Vec<crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRef>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRef>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode
     for Vec<crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRow>
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -21554,18 +21498,6 @@ impl SseDecode for Vec<i32> {
     }
 }
 
-impl SseDecode for Vec<u32> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut len_ = <i32>::sse_decode(deserializer);
-        let mut ans_ = vec![];
-        for idx_ in 0..len_ {
-            ans_.push(<u32>::sse_decode(deserializer));
-        }
-        return ans_;
-    }
-}
-
 impl SseDecode for Vec<u64> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -22145,6 +22077,19 @@ impl SseDecode
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugForm>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode
+    for Option<crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRef>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRef>::sse_decode(deserializer));
         } else {
             return None;
         }
@@ -25694,12 +25639,38 @@ impl
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart
-    for crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRow
+    for crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRef
 {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.row.into_into_dart().into_dart(),
-            self.parent.into_into_dart().into_dart(),
+            self.foot.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRef
+{
+}
+impl
+    flutter_rust_bridge::IntoIntoDart<
+        crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRef,
+    > for crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRef
+{
+    fn into_into_dart(
+        self,
+    ) -> crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRef {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
+    for crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRow
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.item.into_into_dart().into_dart(),
             self.kind.into_into_dart().into_dart(),
             self.legs.into_into_dart().into_dart(),
             self.label.into_into_dart().into_dart(),
@@ -25707,6 +25678,8 @@ impl flutter_rust_bridge::IntoDart
             self.duplicate_of.into_into_dart().into_dart(),
             self.children.into_into_dart().into_dart(),
             self.hidden_duplicates.into_into_dart().into_dart(),
+            self.mirrored_children.into_into_dart().into_dart(),
+            self.mirrored_duplicates.into_into_dart().into_dart(),
             self.candidates.into_into_dart().into_dart(),
             self.mirrored.into_into_dart().into_dart(),
             self.undecided.into_into_dart().into_dart(),
@@ -25752,7 +25725,7 @@ impl flutter_rust_bridge::IntoDart
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         match self {
             Self::Root => 0.into_dart(),
-            Self::Foot => 1.into_dart(),
+            Self::NextFoot => 1.into_dart(),
             Self::Leg => 2.into_dart(),
             _ => unreachable!(),
         }
@@ -25880,7 +25853,7 @@ impl flutter_rust_bridge::IntoDart
             self.rows.into_into_dart().into_dart(),
             self.inventory_options.into_into_dart().into_dart(),
             self.reach_used.into_into_dart().into_dart(),
-            self.debug_selected_row.into_into_dart().into_dart(),
+            self.debug_selected.into_into_dart().into_dart(),
             self.debug_selected_form.into_into_dart().into_dart(),
             self.debug_tree_key.into_into_dart().into_dart(),
         ]
@@ -27735,6 +27708,7 @@ impl flutter_rust_bridge::IntoDart
 {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
+            self.atom_id.into_into_dart().into_dart(),
             self.symbol.into_into_dart().into_dart(),
             self.element_name.into_into_dart().into_dart(),
             self.atomic_number.into_into_dart().into_dart(),
@@ -33213,12 +33187,21 @@ crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugF
 }
 
 impl SseEncode
-    for crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRow
+    for crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRef
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u32>::sse_encode(self.row, serializer);
-        <Option<u32>>::sse_encode(self.parent, serializer);
+        <Option<u32>>::sse_encode(self.foot, serializer);
+    }
+}
+
+impl SseEncode
+    for crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRow
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRef>::sse_encode(self.item, serializer);
         <crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRowKind>::sse_encode(self.kind, serializer);
         <u32>::sse_encode(self.legs, serializer);
         <String>::sse_encode(self.label, serializer);
@@ -33226,6 +33209,8 @@ impl SseEncode
         <Option<u32>>::sse_encode(self.duplicate_of, serializer);
         <u32>::sse_encode(self.children, serializer);
         <u32>::sse_encode(self.hidden_duplicates, serializer);
+        <u32>::sse_encode(self.mirrored_children, serializer);
+        <u32>::sse_encode(self.mirrored_duplicates, serializer);
         <u32>::sse_encode(self.candidates, serializer);
         <u32>::sse_encode(self.mirrored, serializer);
         <u32>::sse_encode(self.undecided, serializer);
@@ -33254,7 +33239,7 @@ impl SseEncode
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(match self {crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRowKind::Root => { 0 }
-crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRowKind::Foot => { 1 }
+crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRowKind::NextFoot => { 1 }
 crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRowKind::Leg => { 2 }
  _ => { unimplemented!(""); }}, serializer);
     }
@@ -33311,7 +33296,7 @@ impl SseEncode
         <Vec<crate::api::structure_designer::structure_designer_api_types::APIChemisorbRow>>::sse_encode(self.rows, serializer);
         <Vec<crate::api::structure_designer::structure_designer_api_types::APIChemisorbInventoryOption>>::sse_encode(self.inventory_options, serializer);
         <bool>::sse_encode(self.reach_used, serializer);
-        <Option<u32>>::sse_encode(self.debug_selected_row, serializer);
+        <Option<crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRef>>::sse_encode(self.debug_selected, serializer);
         <Option<crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugForm>>::sse_encode(self.debug_selected_form, serializer);
         <u64>::sse_encode(self.debug_tree_key, serializer);
     }
@@ -34103,6 +34088,7 @@ impl SseEncode
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u32>::sse_encode(self.atom_id, serializer);
         <String>::sse_encode(self.symbol, serializer);
         <String>::sse_encode(self.element_name, serializer);
         <i32>::sse_encode(self.atomic_number, serializer);
@@ -36082,6 +36068,18 @@ impl SseEncode
 }
 
 impl SseEncode
+    for Vec<crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRef>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRef>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode
     for Vec<crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRow>
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -36711,16 +36709,6 @@ impl SseEncode for Vec<i32> {
     }
 }
 
-impl SseEncode for Vec<u32> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(self.len() as _, serializer);
-        for item in self {
-            <u32>::sse_encode(item, serializer);
-        }
-    }
-}
-
 impl SseEncode for Vec<u64> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -37197,6 +37185,18 @@ impl SseEncode
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugForm>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode
+    for Option<crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRef>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRef>::sse_encode(value, serializer);
         }
     }
 }

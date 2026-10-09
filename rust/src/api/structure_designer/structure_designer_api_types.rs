@@ -12,7 +12,7 @@ use atomcad_structure_designer::node_network::FunctionPinRole;
 // Path-qualified rather than imported bare: the api-side twin deliberately keeps
 // the same identifier (D9a).
 use atomcad_crystolecule::chemisorption::sequential::{
-    DebugForm as DomainDebugForm, Mirror as DomainMirror,
+    DebugForm as DomainDebugForm, DebugItem as DomainDebugItem, Mirror as DomainMirror,
 };
 use atomcad_structure_designer::node_jobs::{JobOutcome, JobOutcomeKind, JobPoll, JobStatus};
 use atomcad_structure_designer::node_type::NodeTypeCategory as DomainNodeTypeCategory;
@@ -1096,18 +1096,45 @@ pub struct APIChemisorbReport {
     /// `reach` is read (a local phase follows, or `transfers` carries a
     /// record); the panel greys it out otherwise.
     pub reach_used: bool,
-    /// The row the debug pins show and its form; `None` = the root view.
-    pub debug_selected_row: Option<u32>,
+    /// The item the debug pins show and its form; `None` = the root view.
+    pub debug_selected: Option<APIChemisorbDebugRef>,
     pub debug_selected_form: Option<APIChemisorbDebugForm>,
     /// Identifies the search tree; the panel drops the rows it fetched when it
     /// changes.
     pub debug_tree_key: u64,
 }
 
-/// How a debug row is shown (twin of `sequential::DebugForm`).
+/// One item of the `chemisorb` debug tree (twin of `sequential::DebugItem`):
+/// a state row (`foot` = `None`: the root or a leg row), or the step from it
+/// for one next foot (an index into the search's feet).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct APIChemisorbDebugRef {
+    pub row: u32,
+    pub foot: Option<u32>,
+}
+
+impl From<DomainDebugItem> for APIChemisorbDebugRef {
+    fn from(i: DomainDebugItem) -> Self {
+        APIChemisorbDebugRef {
+            row: i.row,
+            foot: i.foot,
+        }
+    }
+}
+
+impl From<APIChemisorbDebugRef> for DomainDebugItem {
+    fn from(i: APIChemisorbDebugRef) -> Self {
+        DomainDebugItem {
+            row: i.row,
+            foot: i.foot,
+        }
+    }
+}
+
+/// How a debug item is shown (twin of `sequential::DebugForm`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum APIChemisorbDebugForm {
-    /// The inputs at the pose: the root and the foot rows.
+    /// The inputs at the pose: the root and its next feet.
     Posed,
     /// The start geometry the search relaxes from.
     Seated,
@@ -1115,11 +1142,14 @@ pub enum APIChemisorbDebugForm {
     Relaxed,
 }
 
-/// What a debug row stands for.
+/// What a debug item stands for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum APIChemisorbDebugRowKind {
+    /// The posed inputs.
     Root,
-    Foot,
+    /// A step: one foot's test from the state above it.
+    NextFoot,
+    /// A state: one more leg bonded.
     Leg,
 }
 
@@ -1132,22 +1162,27 @@ pub enum APIChemisorbMirror {
     Undecided,
 }
 
-/// One row of the `chemisorb` debug tree (twin of `ChemisorbDebugRowView`).
+/// One item of the `chemisorb` debug tree (twin of `ChemisorbDebugRowView`).
 pub struct APIChemisorbDebugRow {
-    pub row: u32,
-    pub parent: Option<u32>,
+    pub item: APIChemisorbDebugRef,
     pub kind: APIChemisorbDebugRowKind,
+    /// Legs bonded in the state (a step: in the state it starts from).
     pub legs: u32,
-    /// `root`, `foot O12`, or the leg the row adds, `O12–Si45`.
+    /// `root`, `next foot O13`, or the leg a state adds, `O12–Si45`.
     pub label: String,
-    /// The CLI's path to the row.
+    /// The CLI's path to the item.
     pub path: String,
     /// A duplicate path: the canonical row of its change set.
     pub duplicate_of: Option<u32>,
-    /// Children listed with duplicates hidden, and the duplicates hidden.
+    /// Children listed with duplicates hidden, and (a step) the duplicates
+    /// hidden.
     pub children: u32,
     pub hidden_duplicates: u32,
-    /// The children by verdict.
+    /// A step's mirror-pruned legs (hidden unless asked), among `children`
+    /// and among the hidden duplicates.
+    pub mirrored_children: u32,
+    pub mirrored_duplicates: u32,
+    /// A step's legs by verdict; together, the sites its test accepted.
     pub candidates: u32,
     pub mirrored: u32,
     pub undecided: u32,
@@ -1155,7 +1190,7 @@ pub struct APIChemisorbDebugRow {
     pub rejected_valence: u32,
     pub rejected_no_acceptor: u32,
     pub rejected_filter: u32,
-    /// Near misses of the next leg's test, e.g. `Si52 +0.27`.
+    /// A step's near misses, e.g. `Si52 +0.27`.
     pub near_misses: Vec<String>,
     pub candidate: bool,
     pub local_parent: bool,
@@ -1194,11 +1229,10 @@ impl From<APIChemisorbDebugForm> for DomainDebugForm {
 impl From<&ChemisorbDebugRowView> for APIChemisorbDebugRow {
     fn from(v: &ChemisorbDebugRowView) -> Self {
         APIChemisorbDebugRow {
-            row: v.row,
-            parent: v.parent,
+            item: v.item.into(),
             kind: match v.kind {
                 ChemisorbDebugRowKind::Root => APIChemisorbDebugRowKind::Root,
-                ChemisorbDebugRowKind::Foot => APIChemisorbDebugRowKind::Foot,
+                ChemisorbDebugRowKind::NextFoot => APIChemisorbDebugRowKind::NextFoot,
                 ChemisorbDebugRowKind::Leg => APIChemisorbDebugRowKind::Leg,
             },
             legs: v.legs,
@@ -1207,6 +1241,8 @@ impl From<&ChemisorbDebugRowView> for APIChemisorbDebugRow {
             duplicate_of: v.duplicate_of,
             children: v.children,
             hidden_duplicates: v.hidden_duplicates,
+            mirrored_children: v.mirrored_children,
+            mirrored_duplicates: v.mirrored_duplicates,
             candidates: v.candidates,
             mirrored: v.mirrored,
             undecided: v.undecided,
@@ -1359,7 +1395,7 @@ impl From<&ChemisorbEvalCache> for APIChemisorbReport {
                 })
                 .collect(),
             reach_used: cache.reach_used,
-            debug_selected_row: cache.debug_selected.map(|(row, _)| row),
+            debug_selected: cache.debug_selected.map(|(item, _)| item.into()),
             debug_selected_form: cache.debug_selected.map(|(_, form)| form.into()),
             debug_tree_key: cache.tree_key,
         }
@@ -1746,6 +1782,9 @@ pub enum APIMeasurement {
 #[derive(Debug, Clone)]
 pub struct APIHoveredAtomInfo {
     // Identity
+    /// The atom's id in the structure hovered: what the chemisorb debug view
+    /// and its candidates name atoms by (`O25` = oxygen, id 25).
+    pub atom_id: u32,
     pub symbol: String,
     pub element_name: String,
     pub atomic_number: i32,

@@ -12,6 +12,9 @@
 
 use crate::atomic_structure::AtomicStructure;
 use crate::atomic_structure::inline_bond::BOND_SINGLE;
+use crate::guided_placement::{
+    BondLengthMode, BondMode, GuidedPlacementMode, compute_guided_placement,
+};
 use crate::hydrogen_passivation::terminator_bond_length;
 use glam::DVec3;
 
@@ -69,17 +72,25 @@ impl Transfer {
     }
 
     /// Where `X` is placed before relaxation: on its acceptor at the
-    /// terminator bond length, on the line from `A` towards `X`'s old
-    /// position, so it arrives from the side it came from.
+    /// terminator bond length, in the acceptor's open valence direction — the
+    /// slot guided placement offers, where `passivate` would put a
+    /// terminator. Of several open slots, the one nearest the side `X` comes
+    /// from (the line from `A` towards `X`'s old position); with no slot to
+    /// read (a bare acceptor) that line itself.
+    ///
+    /// The slot reads the acceptor's bonds in `s`, so a caller seats `X`
+    /// after the acceptor's other new bonds are made.
     pub fn seat(&self, s: &AtomicStructure) -> DVec3 {
         let pos = |id: u32| s.get_atom(id).map_or(DVec3::ZERO, |a| a.position);
         let (x, a, d) = (pos(self.moved), pos(self.acceptor), pos(self.donor));
         let acceptor_z = s.get_atom(self.acceptor).map_or(0, |a| a.atomic_number);
-        let direction = [x - a, d - a, DVec3::Z]
+        let towards = [x - a, d - a, DVec3::Z]
             .into_iter()
             .find(|v| v.length_squared() > 1e-12)
             .unwrap_or(DVec3::Z)
             .normalize();
+        let direction =
+            open_slot_direction(s, self.acceptor, self.element, towards).unwrap_or(towards);
         a + direction * terminator_bond_length(acceptor_z, self.element)
     }
 }
@@ -89,11 +100,61 @@ pub fn is_transferable_element(z: i16) -> bool {
     matches!(z, 1 | 9 | 17 | 35 | 53)
 }
 
+/// The acceptor's open valence direction nearest `towards` (unit), from
+/// guided placement: one of its fixed slots, or, when the slots are free to
+/// turn about its single bond, the point of that cone nearest `towards`.
+/// `None` when there is nothing to read: no open slot, or no bond at all.
+fn open_slot_direction(
+    s: &AtomicStructure,
+    acceptor: u32,
+    element: i16,
+    towards: DVec3,
+) -> Option<DVec3> {
+    let a = s.get_atom(acceptor)?.position;
+    let placement = compute_guided_placement(
+        s,
+        acceptor,
+        element,
+        None,
+        BondMode::Covalent,
+        BondLengthMode::Crystal,
+    );
+    match placement.mode {
+        GuidedPlacementMode::FixedDots { guide_dots } => guide_dots
+            .iter()
+            .map(|g| (g.position - a).normalize_or_zero())
+            .filter(|v| v.length_squared() > 0.5)
+            .max_by(|p, q| p.dot(towards).total_cmp(&q.dot(towards))),
+        GuidedPlacementMode::FreeRing {
+            ring_center,
+            ring_normal,
+            ring_radius,
+            ..
+        } => {
+            let n = ring_normal.normalize_or_zero();
+            let off = towards - n * towards.dot(n);
+            let out = if off.length_squared() > 1e-12 {
+                off.normalize()
+            } else {
+                n.any_orthonormal_vector()
+            };
+            Some((ring_center + out * ring_radius - a).normalize_or_zero())
+                .filter(|v| v.length_squared() > 0.5)
+        }
+        GuidedPlacementMode::FreeSphere { .. } => None,
+    }
+}
+
 /// Applies transfers to `s`: breaks each `D–X`, re-seats `X` on its acceptor
-/// and bonds it there. Seats are computed from the unedited positions.
+/// and bonds it there. One at a time, in a fixed order (by acceptor, then
+/// donor), so two atoms moving to one acceptor take two different slots and
+/// the result does not depend on the order the transfers are listed in.
+/// Each `X` is seated from its own unedited position.
 pub fn apply_transfers(s: &mut AtomicStructure, transfers: &[Transfer]) {
-    let seats: Vec<DVec3> = transfers.iter().map(|t| t.seat(s)).collect();
-    for (t, seat) in transfers.iter().zip(seats) {
+    let mut ordered: Vec<&Transfer> = transfers.iter().collect();
+    ordered.sort_by_key(|t| (t.acceptor, t.donor, t.moved));
+    for t in ordered {
+        let seat = t.seat(s);
         s.delete_bond(&crate::atomic_structure::BondReference {
             atom_id1: t.donor,
             atom_id2: t.moved,

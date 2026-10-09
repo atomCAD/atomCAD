@@ -1205,12 +1205,13 @@ In the text format `formed_bonds` and `bond_inventory` appear only when set:
   `near_misses`). The two run-state flags are `searched` and `stale`;
   downstream nodes can tell a result from a plan by `searched`.
 
-- `debug` (`Molecule`) — the search-tree row selected in the panel, as a
-  structure with its markings (see **The debug view**). With no row selected,
-  the root: the posed molecule with every foot and its anchor sites marked.
-- `debug_shapes` (`Isosurface`) — that row's search shapes, translucent: the
-  `anchor_reach` spheres, the leg-2 shell, the leg-3 ring, the `reach` spheres
-  of the local phase. Display it, or not, to show or hide the shapes.
+- `debug` (`Molecule`) — the search-tree item selected in the panel, as a
+  structure with its markings (see **The debug view**). With nothing selected,
+  the root: the posed molecule, unmarked.
+- `debug_shapes` (`Isosurface`) — a selected *next foot*'s test shape,
+  translucent: the `anchor_reach` sphere, the leg-2 shell, the leg-3 ring or
+  the local phase's `reach` sphere. Empty for any other item. Display it, or
+  not, to show or hide the shape.
 
 In every output structure the atoms whose bonds changed carry the tag
 `cs_changed`, so an `apply_style` rule can highlight them.
@@ -1281,58 +1282,80 @@ The statistics appear once the node is displayed. A `chemisorb` inside a custom
 network shows its result only where that network is called with the inputs the
 run used; everywhere else it shows the plan.
 
-**The debug view.** Under the statistics, the panel's **Search tree** lists
-every path the search took: the root (the posed molecule), each foot that can
-bond first, then one leg per level — `O12–Si45`, then `+ O13–Si61` under it,
-and so on. Each row says what the next level found: how many sites its test
-accepted (*anchor*, *sphere*, *ring* or *reach*), how many of those are mirror
-images (*mirr.*), undecided by the mirror check (*undec.*) or clash when seated
-(*clash*), and how many sites missed the test by less than 1 Å (*near*). A row
-that was relaxed shows its strain; a mirror-pruned or clash-pruned row is
-greyed; *budget cut* marks one the budget stopped. Hover a row for its path,
-the rejections and the near misses with how far each missed.
+**The debug view.** Under the statistics, the panel's **Search tree** replays
+the search one decision at a time. It alternates two kinds of item:
 
-Rows are loaded when you expand them, so a large tree opens at once. A binding
+- a **state** — the root (the posed molecule), or a leg such as `O12–Si45`,
+  then `+ O13–Si61` under it, and so on: the bonds made so far;
+- a **next foot** — under each state, one item per foot the search tried to
+  bond next from it (*next foot O13*). Its children are the legs that foot's
+  test accepted, each a state again.
+
+So going down the tree reads: root → *next foot O12* → `O12–Si45` → *next foot
+O13* → `+ O13–Si61` → … A next foot says how many sites its test accepted
+(*anchor*, *shell*, *ring* or *reach*), and how many of those lead to a
+mirror image (*mirr.*), are undecided by the mirror check (*undec.*) or clash
+when seated (*clash*). A leg that was relaxed shows its strain; a clash-pruned
+leg is greyed; *budget cut* marks one the budget stopped. Hover an item for
+its path and the rejections.
+
+Items are loaded when you expand them, so a large tree opens at once. A binding
 reached in several orders of its legs is listed once, under the order the
-search kept; its other parents say *1 dup. hidden*. Tick **Show duplicates** to
-list those as *= duplicate of #N* rows — clicking one jumps to the row it
-duplicates. The checkbox changes only the list, never the search.
+search kept; the next foot it was also reached from says *1 dup. hidden*. Tick
+**Show duplicates** to list those as *= duplicate of #N* rows — clicking one
+jumps to the row it duplicates. Legs the mirror check pruned are hidden too
+(the *mirr.* count still says how many); tick **Show mirrored** to list them,
+greyed. Both toggles change only the list, never the search.
 
-**Click a row** to show it on the two debug pins (tick *debug pin* and *shapes
-pin* above the tree to display them). On `debug` the structure is drawn with
-markings: bonded feet and sites (and a transferred H and its acceptor) orange,
-unbonded feet violet, the sites the next leg's test accepts green, near misses
-yellow with a label giving the miss in ångström, mirror-pruned blue, undecided
-cyan, clashing red (for a seated row, also the atom pairs of its own clashes);
-the rest of the substrate is dimmed. A row opens in the form the search uses
-next:
+**Click an item** to show it on the two debug pins (tick *debug pin* and
+*shapes pin* above the tree to display them). Atoms keep their element colours
+unless the item has something to say about them:
 
-- the root and the foot rows: **posed**, as the inputs place the molecule;
-- a one- or two-leg row with children: **seated** — the rigid placement the
-  shell and the ring are searched from — even after a run;
-- any other row: **relaxed** when the search relaxed it, **seated** when it did
-  not (before a run, a row pruned for a clash, a row the budget cut).
+- a **state** shows its bonded feet and sites (and a transferred H and its
+  acceptor) orange, and, seated, the atom pairs of its own clashes red. It
+  draws no shape.
+- a **next foot** shows that foot violet and the sites its test accepted
+  green, draws the rest of the substrate transparent, and puts the test's shape
+  on `debug_shapes`: the `anchor_reach` sphere around the posed foot under the
+  root, the shell (one leg bonded) or the ring (two legs) its site must lie in,
+  or the `reach` sphere around the foot's relaxed position in the local phase.
+  Every green site lies inside the shape, and every site inside it with valence
+  left is green. Whether a site's leg was later pruned is the leg's to say, in
+  the tree; near misses are not coloured — they are the sites just outside the
+  shape.
 
-When a row has both forms, a *Seated / Relaxed* switch under the tree shows the
-other; the house button goes back to the root. Showing a seated row is
+To find an atom the tree names (`O25`: oxygen, id 25), hover it: the tooltip
+gives its id. An item opens in this form:
+
+- the root and its next feet: **posed**, as the inputs place the molecule;
+- a next foot below them: the form its test read — **seated** under a one- or
+  two-leg state (the rigid placement the shell and the ring are searched
+  from), **relaxed** under a deeper one;
+- a leg: **relaxed** when the search relaxed it, **seated** when it did not
+  (before a run, a leg pruned for a clash, a leg the budget cut).
+
+When a leg has both forms, a *Seated / Relaxed* switch under the tree shows the
+other; the house button goes back to the root. Showing a seated item is
 immediate. Showing a relaxed one is immediate for a listed candidate; any other
 relaxed row is relaxed again from its start (and a legs-4+ row from its relaxed
 parents, along the path the search kept), as a short background job with the
 same progress and **Cancel** as Run — the result is exactly the one the search
-recorded. Nothing of the tree is saved, and selecting a row is not an undo step
-and is not a search setting: it never makes a result stale.
+recorded. Nothing of the tree is saved, and selecting an item is not an undo
+step and is not a search setting: it never makes a result stale.
 
-With no row selected, or once an input or a setting changes, both pins show the
-root: the posed molecule, every foot, its anchor sites and the `anchor_reach`
-spheres. It follows `anchor_reach` as you type, with no Run, so it is the view
-to tune `anchor_reach` with. Use the near misses the same way for `tolerance`
-and `reach`: they show exactly which sites a larger value would add.
+With nothing selected, or once an input or a setting changes, both pins show
+the root. One exception: a selected next foot under the root stays selected
+and follows `anchor_reach` as you type, with no Run, so it is the view to tune
+`anchor_reach` with. Tune `tolerance` and `reach` the same way, from the shapes
+of the next feet below.
 
 From a script, `atomcad-cli debug-select <node> <path>` does the same as a
-click and prints what the row shows and its children with their paths. A path
-is the legs along the row as foot–site atom-id pairs (`12-45,13-61`; the ids
-are those of the candidates' `sites` field), a foot's id alone for its foot
-row, `#N` for row N, or nothing for the root; `--form seated|relaxed` picks the
+click and prints what the item shows (with the near misses: the sites just
+outside a next foot's shape, and how far) and its children with their paths. A path
+is the legs along a leg as foot–site atom-id pairs (`12-45,13-61`; the ids
+are those of the candidates' `sites` field); a next foot is its state's path
+followed by the foot's id alone (`12` under the root, `12-45,13` below); `#N`
+is tree row N, and nothing is the root. `--form seated|relaxed` picks a leg's
 form and `--show` displays the two pins.
 
 **Example.**

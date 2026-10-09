@@ -609,23 +609,29 @@ h_off = array { element_type: Record(ChemisorbTransfer), elements: [{ element: 1
 mount = chemisorb { adsorbate: tool, substrate: surface, adsorbate_tag: "feet", transfers: h_off, formed_bonds: 3 }
 ```
 
-To see what the search did at one step, select a row of its search tree — the
-same as clicking it in the panel. The row shows on the node's `debug` (pin 2,
-the structure with its markings) and `debug_shapes` (pin 3, the search shapes);
-`--show` displays both, then take a `screenshot`:
+To see what the search did at one step, select an item of its search tree —
+the same as clicking it in the panel. The tree alternates *states* (the root,
+a leg: the bonds made so far) and *next feet* (one foot's test from a state:
+the foot, the sites it accepted, the test's shape). The item shows on the
+node's `debug` (pin 2, the structure with its markings) and `debug_shapes`
+(pin 3, a next foot's test shape); `--show` displays both, then take a
+`screenshot`:
 
 ```bash
-atomcad-cli debug-select mount                  # the root: feet, anchor sites
-atomcad-cli debug-select mount 12 --show        # foot 12's anchors
-atomcad-cli debug-select mount 12-45,13-61      # two legs, seated: the leg-3 ring
-atomcad-cli debug-select mount 12-45,13-61 --form relaxed   # after run
+atomcad-cli debug-select mount                  # the root: the posed inputs
+atomcad-cli debug-select mount 12 --show        # next foot 12: its anchor sphere
+atomcad-cli debug-select mount 12-45            # one leg bonded, seated
+atomcad-cli debug-select mount 12-45,13         # next foot 13 after it: the shell
+atomcad-cli debug-select mount 12-45,13-61,14   # next foot 14: the leg-3 ring
+atomcad-cli debug-select mount 12-45,13-61 --form seated   # after run
 ```
 
 A path is the legs as foot-site atom-id pairs (the ids of a candidate's `sites`
-field), or `#N` for row N. The command prints what the row marks (bonded,
-accepted, mirrored, clashing, near misses with how far they missed) and its
-children's paths. A relaxed row that is not a listed candidate is re-relaxed
-first, so it can take a few seconds.
+field), optionally followed by a foot id alone for that next foot, or `#N` for
+tree row N. The command prints what the item marks (bonded, the foot, accepted
+sites, clashing, near misses with how far they missed) and its children's
+paths. A relaxed row that is not a listed candidate is re-relaxed first, so it
+can take a few seconds.
 
 ### Node Discovery
 
@@ -812,7 +818,7 @@ Commands:
 - `replace`/`r` — Enter edit mode (replace entire network)
 - `evaluate`/`e <node>` — Evaluate a node
 - `run <node>` — Run a `chemisorb` node's search
-- `debug-select <node> [<path>] [posed|seated|relaxed] [show]` — Show a `chemisorb` search-tree row on its debug pins
+- `debug-select <node> [<path>] [posed|seated|relaxed] [show]` — Show a `chemisorb` search-tree item on its debug pins
 - `nodes` — List available node types
 - `describe`/`d <node>` — Describe a node type
 - `networks` — List all node networks

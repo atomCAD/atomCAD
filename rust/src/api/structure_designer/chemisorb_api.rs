@@ -18,7 +18,8 @@ use crate::api::api_common::{
 };
 use crate::api::structure_designer::node_jobs_api::resolve_node_identifier;
 use crate::api::structure_designer::structure_designer_api_types::{
-    APIChemisorbData, APIChemisorbDebugForm, APIChemisorbDebugRow, APIChemisorbReport,
+    APIChemisorbData, APIChemisorbDebugForm, APIChemisorbDebugRef, APIChemisorbDebugRow,
+    APIChemisorbReport,
 };
 use atomcad_crystolecule::chemisorption::sequential::DebugForm;
 use atomcad_structure_designer::chemisorb_ops::{ChemisorbDebugStep, DebugRowRef};
@@ -75,36 +76,40 @@ fn selected_cache(designer: &StructureDesigner) -> Option<&ChemisorbEvalCache> {
         .downcast_ref::<ChemisorbEvalCache>()
 }
 
-/// Row `row` of the selected `chemisorb` node's search tree.
+/// Item `item` of the selected `chemisorb` node's debug tree.
 #[flutter_rust_bridge::frb(ignore)]
-pub fn chemisorb_debug_row(designer: &StructureDesigner, row: u32) -> Option<APIChemisorbDebugRow> {
+pub fn chemisorb_debug_row(
+    designer: &StructureDesigner,
+    item: APIChemisorbDebugRef,
+) -> Option<APIChemisorbDebugRow> {
     selected_cache(designer)?
-        .debug_row(row)
+        .debug_row(item.into())
         .map(|v| APIChemisorbDebugRow::from(&v))
 }
 
-/// The children of `row` the panel lists (lazy loading: asked for when the
-/// row is expanded).
+/// The children of `item` the panel lists (lazy loading: asked for when the
+/// item is expanded): a state's next feet, a step's legs.
 #[flutter_rust_bridge::frb(ignore)]
 pub fn chemisorb_debug_children(
     designer: &StructureDesigner,
-    row: u32,
+    item: APIChemisorbDebugRef,
     show_duplicates: bool,
+    show_mirrored: bool,
 ) -> Vec<APIChemisorbDebugRow> {
     selected_cache(designer).map_or_else(Vec::new, |c| {
-        c.debug_children(row, show_duplicates)
+        c.debug_children(item.into(), show_duplicates, show_mirrored)
             .iter()
             .map(APIChemisorbDebugRow::from)
             .collect()
     })
 }
 
-/// The CLI's `debug-select`: the row named by `path` (`sequential::find_row`)
+/// The CLI's `debug-select`: the item named by `path` (`sequential::find_item`)
 /// of the node named or numbered `node_identifier`, in `form` (`posed`,
 /// `seated`, `relaxed`; empty = the row's default), built and installed on the
 /// calling thread. With `show`, the node and its `debug` and `debug_shapes`
 /// pins are displayed too (an ordinary, undoable display change). Returns the
-/// row's description and its children. Does not refresh.
+/// item's description and its children. Does not refresh.
 #[flutter_rust_bridge::frb(ignore)]
 pub fn chemisorb_debug_select_named(
     designer: &mut StructureDesigner,
@@ -193,57 +198,71 @@ pub fn get_chemisorb_report() -> Option<APIChemisorbReport> {
     }
 }
 
-/// Row `row` of the selected `chemisorb` node's search tree; `None` when no
+/// Item `item` of the selected `chemisorb` node's debug tree; `None` when no
 /// `chemisorb` is selected and evaluated, or past the tree's end.
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_chemisorb_debug_row(row: u32) -> Option<APIChemisorbDebugRow> {
+pub fn get_chemisorb_debug_row(item: APIChemisorbDebugRef) -> Option<APIChemisorbDebugRow> {
     unsafe {
         with_cad_instance_or(
-            |cad_instance| chemisorb_debug_row(&cad_instance.structure_designer, row),
+            |cad_instance| chemisorb_debug_row(&cad_instance.structure_designer, item),
             None,
         )
     }
 }
 
-/// The children of `row` in the selected `chemisorb` node's search tree,
-/// duplicates only when `show_duplicates`.
+/// The children of `item` in the selected `chemisorb` node's debug tree,
+/// duplicates only when `show_duplicates`, mirror-pruned legs only when
+/// `show_mirrored`.
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_chemisorb_debug_children(row: u32, show_duplicates: bool) -> Vec<APIChemisorbDebugRow> {
+pub fn get_chemisorb_debug_children(
+    item: APIChemisorbDebugRef,
+    show_duplicates: bool,
+    show_mirrored: bool,
+) -> Vec<APIChemisorbDebugRow> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
-                chemisorb_debug_children(&cad_instance.structure_designer, row, show_duplicates)
+                chemisorb_debug_children(
+                    &cad_instance.structure_designer,
+                    item,
+                    show_duplicates,
+                    show_mirrored,
+                )
             },
             Vec::new(),
         )
     }
 }
 
-/// The rows from the root down to `row`: what the panel expands to reveal it
-/// (a duplicate row's "jump to the canonical one").
+/// The items from the root down to `item`: what the panel expands to reveal
+/// it (a duplicate row's "jump to the canonical one").
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_chemisorb_debug_ancestors(row: u32) -> Vec<u32> {
+pub fn get_chemisorb_debug_ancestors(item: APIChemisorbDebugRef) -> Vec<APIChemisorbDebugRef> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
-                selected_cache(&cad_instance.structure_designer)
-                    .map_or_else(Vec::new, |c| c.debug_ancestors(row))
+                selected_cache(&cad_instance.structure_designer).map_or_else(Vec::new, |c| {
+                    c.debug_ancestors(item.into())
+                        .into_iter()
+                        .map(APIChemisorbDebugRef::from)
+                        .collect()
+                })
             },
             Vec::new(),
         )
     }
 }
 
-/// Selects tree row `row` of a `chemisorb` node for its debug pins, in
-/// `form` (`None` = the row's default). A view that is geometry alone is
-/// built and shown at once (`Ok(None)`); one that needs relaxing starts as a
-/// node job, whose id is returned, and shows when it is installed. Not an
-/// undo step.
+/// Selects item `item` of a `chemisorb` node's debug tree for its debug
+/// pins, in `form` (`None` = the item's default). A view that is geometry
+/// alone is built and shown at once (`Ok(None)`); one that needs relaxing
+/// starts as a node job, whose id is returned, and shows when it is
+/// installed. Not an undo step.
 #[flutter_rust_bridge::frb(sync)]
 pub fn chemisorb_debug_select(
     scope_path: Vec<u64>,
     node_id: u64,
-    row: u32,
+    item: APIChemisorbDebugRef,
     form: Option<APIChemisorbDebugForm>,
 ) -> Result<Option<u64>, String> {
     unsafe {
@@ -252,7 +271,7 @@ pub fn chemisorb_debug_select(
                 let prepared = cad_instance.structure_designer.prepare_chemisorb_debug(
                     &scope_path,
                     node_id,
-                    DebugRowRef::Row(row),
+                    DebugRowRef::Item(item.into()),
                     form.map(DebugForm::from),
                 )?;
                 match prepared.step {
@@ -275,8 +294,8 @@ pub fn chemisorb_debug_select(
     }
 }
 
-/// The CLI's `debug-select`, through the AI HTTP server: blocking; the row's
-/// description and its children as text.
+/// The CLI's `debug-select`, through the AI HTTP server: blocking; the
+/// item's description and its children as text.
 #[flutter_rust_bridge::frb(sync)]
 pub fn chemisorb_debug_select_by_name(
     node_identifier: String,

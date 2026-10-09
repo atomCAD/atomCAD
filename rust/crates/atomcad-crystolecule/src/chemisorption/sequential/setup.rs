@@ -894,18 +894,19 @@ impl Setup {
     }
 
     /// The start geometry of a seated hypothesis: the combined structure with
-    /// the adsorbate moved rigidly, each transferred atom re-seated on its
-    /// acceptor, and every new bond added.
+    /// the adsorbate moved rigidly, every new bond added, and then each
+    /// transferred atom re-seated in an open slot of its acceptor — after
+    /// the bonds, so a slot a foot took is not offered to it.
     pub fn start_structure(&self, steps: &[Step], seating: &Seating) -> AtomicStructure {
         let mut s = self.combined.clone();
         for (i, &id) in self.adsorbate_atoms.iter().enumerate() {
             s.set_atom_position(id, seating.apply(self.adsorbate_posed[i]));
         }
         let (formed, transfers) = self.changes(steps, Some(&seating.moved));
-        apply_transfers(&mut s, &transfers);
         for (a, b) in formed {
             s.add_bond_checked(a, b, BOND_SINGLE);
         }
+        apply_transfers(&mut s, &transfers);
         s
     }
 }

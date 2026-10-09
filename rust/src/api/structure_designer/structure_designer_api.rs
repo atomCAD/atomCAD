@@ -9800,6 +9800,7 @@ pub fn query_hovered_atom_info(
                 };
 
                 Some(APIHoveredAtomInfo {
+                    atom_id,
                     symbol,
                     element_name,
                     atomic_number: display_atomic_number,

@@ -401,7 +401,7 @@ void _printUsage() {
   stdout.writeln(
       '  atomcad-cli debug-select <node> [<path>] [--form F] [--show]');
   stdout.writeln(
-      '                                        Show a chemisorb search-tree row on its debug pins');
+      '                                        Show a chemisorb search-tree item on its debug pins');
   stdout.writeln(
       '  atomcad-cli camera                    Get current camera state');
   stdout.writeln('  atomcad-cli camera --eye x,y,z --target x,y,z --up x,y,z');
@@ -506,7 +506,7 @@ void _printReplHelp() {
   stdout
       .writeln('  debug-select <node> [<path>] [posed|seated|relaxed] [show]');
   stdout.writeln(
-      '                      Show a chemisorb search-tree row on its debug pins');
+      '                      Show a chemisorb search-tree item on its debug pins');
   stdout.writeln('  camera, c           Get current camera state');
   stdout.writeln('  camera --eye x,y,z --target x,y,z --up x,y,z');
   stdout.writeln('                      Set camera position');
@@ -779,11 +779,12 @@ Future<void> _runRun(String serverUrl, String nodeIdentifier) async {
   }
 }
 
-/// Selects a row of a `chemisorb` node's search tree for its `debug` and
-/// `debug_shapes` pins and prints what the row shows and its children. A path
-/// is the legs along the row as `foot-site` atom-id pairs (`12-45,13-61`), a
-/// foot's id alone for its foot row, `#N` for row N, or nothing for the root.
-/// A relaxed row the search did not keep is replayed first, hence the timeout.
+/// Selects an item of a `chemisorb` node's search tree for its `debug` and
+/// `debug_shapes` pins and prints what it shows and its children. A path is
+/// the legs along a leg as `foot-site` atom-id pairs (`12-45,13-61`), followed
+/// by a foot's id alone for the next foot from that state (`12-45,13`; `12`
+/// under the root), `#N` for tree row N, or nothing for the root. A relaxed
+/// row the search did not keep is replayed first, hence the timeout.
 Future<void> _runDebugSelect(String serverUrl, String nodeIdentifier,
     String path, String? form, bool show) async {
   try {

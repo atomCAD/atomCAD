@@ -25,42 +25,50 @@ void setChemisorbData(
 APIChemisorbReport? getChemisorbReport() => RustLib.instance.api
     .crateApiStructureDesignerChemisorbApiGetChemisorbReport();
 
-/// Row `row` of the selected `chemisorb` node's search tree; `None` when no
+/// Item `item` of the selected `chemisorb` node's debug tree; `None` when no
 /// `chemisorb` is selected and evaluated, or past the tree's end.
-APIChemisorbDebugRow? getChemisorbDebugRow({required int row}) =>
+APIChemisorbDebugRow? getChemisorbDebugRow(
+        {required APIChemisorbDebugRef item}) =>
     RustLib.instance.api
-        .crateApiStructureDesignerChemisorbApiGetChemisorbDebugRow(row: row);
+        .crateApiStructureDesignerChemisorbApiGetChemisorbDebugRow(item: item);
 
-/// The children of `row` in the selected `chemisorb` node's search tree,
-/// duplicates only when `show_duplicates`.
+/// The children of `item` in the selected `chemisorb` node's debug tree,
+/// duplicates only when `show_duplicates`, mirror-pruned legs only when
+/// `show_mirrored`.
 List<APIChemisorbDebugRow> getChemisorbDebugChildren(
-        {required int row, required bool showDuplicates}) =>
+        {required APIChemisorbDebugRef item,
+        required bool showDuplicates,
+        required bool showMirrored}) =>
     RustLib.instance.api
         .crateApiStructureDesignerChemisorbApiGetChemisorbDebugChildren(
-            row: row, showDuplicates: showDuplicates);
+            item: item,
+            showDuplicates: showDuplicates,
+            showMirrored: showMirrored);
 
-/// The rows from the root down to `row`: what the panel expands to reveal it
-/// (a duplicate row's "jump to the canonical one").
-Uint32List getChemisorbDebugAncestors({required int row}) => RustLib
-    .instance.api
-    .crateApiStructureDesignerChemisorbApiGetChemisorbDebugAncestors(row: row);
+/// The items from the root down to `item`: what the panel expands to reveal
+/// it (a duplicate row's "jump to the canonical one").
+List<APIChemisorbDebugRef> getChemisorbDebugAncestors(
+        {required APIChemisorbDebugRef item}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerChemisorbApiGetChemisorbDebugAncestors(
+            item: item);
 
-/// Selects tree row `row` of a `chemisorb` node for its debug pins, in
-/// `form` (`None` = the row's default). A view that is geometry alone is
-/// built and shown at once (`Ok(None)`); one that needs relaxing starts as a
-/// node job, whose id is returned, and shows when it is installed. Not an
-/// undo step.
+/// Selects item `item` of a `chemisorb` node's debug tree for its debug
+/// pins, in `form` (`None` = the item's default). A view that is geometry
+/// alone is built and shown at once (`Ok(None)`); one that needs relaxing
+/// starts as a node job, whose id is returned, and shows when it is
+/// installed. Not an undo step.
 BigInt? chemisorbDebugSelect(
         {required Uint64List scopePath,
         required BigInt nodeId,
-        required int row,
+        required APIChemisorbDebugRef item,
         APIChemisorbDebugForm? form}) =>
     RustLib.instance.api
         .crateApiStructureDesignerChemisorbApiChemisorbDebugSelect(
-            scopePath: scopePath, nodeId: nodeId, row: row, form: form);
+            scopePath: scopePath, nodeId: nodeId, item: item, form: form);
 
-/// The CLI's `debug-select`, through the AI HTTP server: blocking; the row's
-/// description and its children as text.
+/// The CLI's `debug-select`, through the AI HTTP server: blocking; the
+/// item's description and its children as text.
 String chemisorbDebugSelectByName(
         {required String nodeIdentifier,
         required String path,

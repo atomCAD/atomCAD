@@ -1,17 +1,18 @@
 //! The sequential chemisorption search, the debug view
-//! (`design_chemisorption_sequential.md` §6.5, §11.8): which form a row opens
-//! on, the views built from a row's data (seated by geometry alone, relaxed
-//! by replay), what they mark, the search shapes, and the paths the CLI names
-//! rows by.
+//! (`design_chemisorption_sequential.md` §6.5 as revised in §18, §11.8): the
+//! items of the panel's tree (states and next-foot steps, alternating), which
+//! form an item opens on, the views built from a row's data (seated by
+//! geometry alone, relaxed by replay), what they mark, the search shapes, and
+//! the paths the CLI names items by.
 //!
 //! The shapes are checked against the search's own test (`need_against`), a
-//! separate formula: every site inside a drawn shape is one a foot's test
+//! separate formula: every site inside a step's shape is one its foot's test
 //! accepts, and every accepted site is inside.
 
 use crate::chemisorption_sequential_support::*;
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::chemisorption::sequential::debug::{
-    BONDED_COLOR, CANDIDATE_COLOR, FOOT_COLOR, NEAR_MISS_COLOR,
+    ACCEPTED_COLOR, BONDED_COLOR, FADED_ALPHA, FOOT_COLOR,
 };
 use atomcad_crystolecule::chemisorption::sequential::*;
 use atomcad_crystolecule::field::ScalarField;
@@ -103,6 +104,10 @@ fn leg_rows(tree: &SearchTree) -> impl Iterator<Item = u32> + '_ {
     (0..tree.len() as u32).filter(|&r| matches!(tree.row(r).kind, RowKind::Leg { .. }))
 }
 
+fn canonical_leg_rows(tree: &SearchTree) -> impl Iterator<Item = u32> + '_ {
+    leg_rows(tree).filter(|&r| tree.row(r).duplicate_of.is_none())
+}
+
 fn positions(s: &AtomicStructure) -> Vec<(u32, [u64; 3])> {
     let mut v: Vec<_> = s
         .atoms_values()
@@ -121,31 +126,114 @@ fn hyp<'a>(plan: &'a SequentialPlan, report: Option<&'a SearchReport>, row: u32)
     }
 }
 
+fn set(v: &[u32]) -> BTreeSet<u32> {
+    v.iter().copied().collect()
+}
+
+/// The sites of a step's legs, from the tree: what its view must mark.
+fn step_sites(p: &SequentialPlan, tree: &SearchTree, step: DebugItem) -> BTreeSet<u32> {
+    step_legs(tree, step)
+        .into_iter()
+        .map(|c| match tree.row(c).kind {
+            RowKind::Leg { site, .. } => p.setup.sites[site as usize].id,
+            _ => unreachable!(),
+        })
+        .collect()
+}
+
+/// A view draws no labels (an atom's name is in its hover tooltip), and fades
+/// exactly the unmarked substrate on a step, nothing on a state.
+fn assert_decorated(p: &SequentialPlan, view: &DebugView) {
+    let d = view.structure.decorator();
+    assert!(d.atom_label.is_empty(), "no labels");
+    for &id in p.setup.substrate_ids.values() {
+        assert!(
+            !view.structure.get_atom(id).unwrap().is_ghost(),
+            "no ghosts"
+        );
+        let faded = view.structure.get_atom_alpha(id) < 1.0;
+        let want = view.item.is_step() && !d.atom_color.contains_key(&id);
+        assert_eq!(faded, want, "atom {id} of {:?}", view.item);
+        if faded {
+            assert_eq!(view.structure.get_atom_alpha(id), FADED_ALPHA);
+        }
+    }
+}
+
 // ============================================================================
 // The tree as the panel lists it
 // ============================================================================
+
+#[test]
+fn states_and_steps_alternate_and_each_item_knows_its_parent() {
+    let (p, _) = slab_plan();
+    let tree = &p.tree;
+    let mut stack = vec![DebugItem::ROOT];
+    let mut seen = [0, 0];
+    while let Some(item) = stack.pop() {
+        let children = item_children(p, None, item, true);
+        for &c in &children {
+            assert_eq!(c.is_step(), !item.is_step(), "{item:?} → {c:?}");
+            assert_eq!(item_parent(tree, c), Some(item));
+            let ancestors = item_ancestors(tree, c);
+            assert_eq!(ancestors.first(), Some(&DebugItem::ROOT));
+            assert_eq!(ancestors.last(), Some(&c));
+            if tree.row(c.row).duplicate_of.is_none() {
+                stack.push(c);
+            }
+        }
+        match item.foot {
+            Some(f) => {
+                // A step's children bond its foot, one more leg than its state.
+                for c in children {
+                    let r = tree.row(c.row);
+                    assert!(matches!(r.kind, RowKind::Leg { foot, .. } if foot == f));
+                    assert_eq!(r.legs, tree.row(item.row).legs + 1);
+                }
+                seen[1] += 1;
+            }
+            None => {
+                // A state's steps are the feet not bonded yet (none on the
+                // tripod's three-leg rows: the plan stops there).
+                let bonded: Vec<usize> = tree.path(item.row).iter().map(|l| l.foot).collect();
+                let want: Vec<u32> = if (tree.row(item.row).legs as usize) < p.max_legs {
+                    (0..p.setup.feet.len())
+                        .filter(|f| !bonded.contains(f))
+                        .map(|f| f as u32)
+                        .collect()
+                } else {
+                    Vec::new()
+                };
+                let got: Vec<u32> = children.iter().map(|c| c.foot.unwrap()).collect();
+                assert_eq!(got, want, "{item:?}");
+                seen[0] += 1;
+            }
+        }
+    }
+    assert!(seen[0] > 100 && seen[1] > 100, "{seen:?}");
+}
 
 #[test]
 fn with_duplicates_hidden_each_hypothesis_is_listed_once_under_its_canonical_path() {
     let (p, _) = slab_plan();
     let tree = &p.tree;
     let mut seen = BTreeSet::new();
-    let mut stack = vec![0u32];
+    let mut stack = vec![DebugItem::ROOT];
     let mut hidden_total = 0;
-    while let Some(row) = stack.pop() {
-        let shown = tree.visible_children(row, false);
-        let all = tree.visible_children(row, true);
-        let hidden = all.len() - shown.len();
-        assert_eq!(tree.row(row).duplicates as usize, hidden, "row {row}");
-        hidden_total += hidden;
-        for &c in &all {
-            if let Some(canonical) = tree.row(c).duplicate_of {
-                assert!(!shown.contains(&c));
+    while let Some(item) = stack.pop() {
+        let shown = item_children(p, None, item, false);
+        let all = item_children(p, None, item, true);
+        hidden_total += all.len() - shown.len();
+        for c in &all {
+            if let Some(canonical) = tree.row(c.row).duplicate_of {
+                assert!(!shown.contains(c));
                 assert!(tree.row(canonical).hypothesis.is_some());
             }
         }
         for c in shown {
-            if let Some(h) = tree.row(c).hypothesis {
+            if !c.is_step()
+                && let Some(h) = tree.row(c.row).hypothesis
+            {
                 assert!(seen.insert(h), "hypothesis {h} listed twice");
             }
             stack.push(c);
@@ -157,15 +245,38 @@ fn with_duplicates_hidden_each_hypothesis_is_listed_once_under_its_canonical_pat
 }
 
 #[test]
-fn every_row_path_finds_its_row() {
+fn every_item_path_finds_its_item() {
     let (p, _) = slab_plan();
     let tree = &p.tree;
-    for row in 0..tree.len() as u32 {
-        let path = row_path(&p.setup, tree, row);
-        assert_eq!(find_row(&p.setup, tree, &path), Ok(row), "path {path}");
+    let mut checked = [0, 0];
+    for row in (0..tree.len() as u32).step_by(7) {
+        let item = item_of_row(tree, row);
+        let path = item_path(&p.setup, tree, item);
+        assert_eq!(find_item(&p.setup, tree, &path), Ok(item), "path {path}");
+        for step in item_children(p, None, item, true) {
+            if step.is_step() {
+                let path = item_path(&p.setup, tree, step);
+                assert_eq!(find_item(&p.setup, tree, &path), Ok(step), "path {path}");
+                checked[1] += 1;
+            }
+        }
+        checked[0] += 1;
     }
-    assert_eq!(find_row(&p.setup, tree, ""), Ok(0));
-    assert_eq!(find_row(&p.setup, tree, "#7"), Ok(7));
+    assert!(checked[1] > 10, "{checked:?}");
+    assert_eq!(find_item(&p.setup, tree, ""), Ok(DebugItem::ROOT));
+    assert_eq!(find_item(&p.setup, tree, "root"), Ok(DebugItem::ROOT));
+    // A foot row's number names the root's step for that foot.
+    let foot_row = tree.children(0)[1];
+    assert_eq!(
+        find_item(&p.setup, tree, &format!("#{foot_row}")),
+        Ok(DebugItem::step(0, 1))
+    );
+    // A foot alone is the root's step; after legs, the step from that state.
+    let foot = &p.setup.feet[0];
+    assert_eq!(
+        find_item(&p.setup, tree, &format!("O{}", foot.id)),
+        Ok(DebugItem::step(0, 0))
+    );
     // Element prefixes, en dashes and spaces are allowed.
     let leg = leg_rows(tree).find(|&r| tree.row(r).legs == 2).unwrap();
     let named = tree
@@ -178,44 +289,60 @@ fn every_row_path_finds_its_row() {
         })
         .collect::<Vec<_>>()
         .join(", ");
-    assert_eq!(find_row(&p.setup, tree, &named), Ok(leg));
+    assert_eq!(find_item(&p.setup, tree, &named), Ok(DebugItem::state(leg)));
     // Errors name what is wrong.
-    assert!(find_row(&p.setup, tree, "#99999999").is_err());
+    assert!(find_item(&p.setup, tree, "#99999999").is_err());
     let site = p.setup.sites[0].id;
     assert!(
-        find_row(&p.setup, tree, &format!("{site}"))
+        find_item(&p.setup, tree, &format!("{site}"))
             .unwrap_err()
             .contains("not a foot")
     );
-    let foot = p.setup.feet[0].id;
-    assert!(find_row(&p.setup, tree, &format!("{foot}-{site},{foot}")).is_err());
+    assert!(
+        find_item(&p.setup, tree, &format!("{},{site}", foot.id))
+            .unwrap_err()
+            .contains("only the last")
+    );
 }
 
 // ============================================================================
-// Which form a row opens on (§6.5, "Seated or relaxed")
+// Which form an item opens on
 // ============================================================================
 
 #[test]
-fn before_a_run_every_leg_row_opens_seated_and_the_root_and_feet_posed() {
+fn before_a_run_legs_and_their_steps_are_seated_and_the_root_and_its_steps_posed() {
     let (p, _) = slab_plan();
-    for row in 0..p.tree.len() as u32 {
-        let forms = row_forms(p, None, row);
-        match p.tree.row(row).kind {
-            RowKind::Leg { .. } => {
-                assert_eq!(forms.default, DebugForm::Seated);
-                assert!(forms.seated && !forms.relaxed);
-                assert!(!needs_relaxation(p, None, row, DebugForm::Seated));
-            }
-            _ => {
-                assert_eq!(forms.default, DebugForm::Posed);
-                assert!(!forms.seated && !forms.relaxed);
-            }
+    let tree = &p.tree;
+    let root = row_forms(p, None, DebugItem::ROOT);
+    assert_eq!(root.default, DebugForm::Posed);
+    assert!(!root.seated && !root.relaxed);
+    for f in next_feet(p, None, 0) {
+        assert_eq!(
+            row_forms(p, None, DebugItem::step(0, f)).default,
+            DebugForm::Posed
+        );
+    }
+    for row in canonical_leg_rows(tree).step_by(11) {
+        let forms = row_forms(p, None, DebugItem::state(row));
+        assert_eq!(forms.default, DebugForm::Seated);
+        assert!(forms.seated && !forms.relaxed);
+        assert!(!needs_relaxation(
+            p,
+            None,
+            DebugItem::state(row),
+            DebugForm::Seated
+        ));
+        for f in next_feet(p, None, row) {
+            let step = DebugItem::step(row, f);
+            let forms = row_forms(p, None, step);
+            assert_eq!(forms.default, DebugForm::Seated, "a step reads the seating");
+            assert!(forms.seated && !forms.relaxed);
         }
     }
 }
 
 #[test]
-fn after_a_run_rows_open_on_the_form_the_next_step_uses() {
+fn after_a_run_a_leg_opens_relaxed_when_it_was_and_its_steps_keep_the_form_their_test_read() {
     // Unfiltered: two-leg candidates are relaxed and have three-leg children.
     let (ads, sub) = planted(3, &[0]);
     let r = run(
@@ -231,54 +358,33 @@ fn after_a_run_rows_open_on_the_form_the_next_step_uses() {
     );
     let (p, rep) = (&r.plan, Some(&r.report));
     let tree = &r.report.tree;
-    let mut seen = (0, 0);
-    for row in leg_rows(tree).filter(|&x| tree.row(x).duplicate_of.is_none()) {
-        let forms = row_forms(p, rep, row);
-        let legs = tree.row(row).legs;
+    let mut seen = 0;
+    for row in canonical_leg_rows(tree) {
+        let forms = row_forms(p, rep, DebugItem::state(row));
         let relaxed = relaxation(&r.report, row).is_some();
         assert_eq!(forms.relaxed, relaxed);
-        if legs == 2 && relaxed && !tree.children(row).is_empty() {
-            assert_eq!(
-                forms.default,
-                DebugForm::Seated,
-                "a two-leg row with children"
-            );
-            seen.0 += 1;
-        }
-        if legs == 3 && relaxed {
-            assert_eq!(forms.default, DebugForm::Relaxed, "a relaxed three-leg row");
-            seen.1 += 1;
-        }
-        if !relaxed {
-            assert_eq!(
-                forms.default,
-                DebugForm::Seated,
-                "row {row} has no relaxation"
-            );
-        }
-    }
-    assert!(seen.0 > 0 && seen.1 > 0, "{seen:?}");
-
-    // Two legs only: a two-leg candidate is a leaf and opens relaxed.
-    let r2 = run(
-        &ads,
-        &sub,
-        SequentialSearch {
-            formed_bonds: Some(2),
-            ..r.config.clone()
-        },
-    );
-    let leaves: Vec<u32> = leg_rows(&r2.report.tree)
-        .filter(|&x| relaxation(&r2.report, x).is_some())
-        .collect();
-    assert!(!leaves.is_empty());
-    for row in leaves {
-        assert!(r2.report.tree.children(row).is_empty());
         assert_eq!(
-            row_forms(&r2.plan, Some(&r2.report), row).default,
-            DebugForm::Relaxed
+            forms.default,
+            if relaxed {
+                DebugForm::Relaxed
+            } else {
+                DebugForm::Seated
+            },
+            "row {row}"
         );
+        // A relaxed two-leg row with children opens relaxed now; its step
+        // still shows the seating its ring was searched from.
+        if relaxed && tree.row(row).legs == 2 && !tree.children(row).is_empty() {
+            for f in next_feet(p, rep, row) {
+                assert_eq!(
+                    row_forms(p, rep, DebugItem::step(row, f)).default,
+                    DebugForm::Seated
+                );
+            }
+            seen += 1;
+        }
     }
+    assert!(seen > 0);
 }
 
 #[test]
@@ -306,10 +412,11 @@ fn a_clash_pruned_or_budget_cut_row_opens_seated() {
         })
         .expect("a candidate the budget cut");
     for row in [clash.row, cut.1.row] {
-        let forms = row_forms(p, rep, row);
+        let item = DebugItem::state(row);
+        let forms = row_forms(p, rep, item);
         assert!(!forms.relaxed);
         assert_eq!(forms.default, DebugForm::Seated);
-        assert!(debug_view(p, rep, &r.config, row, DebugForm::Relaxed).is_err());
+        assert!(debug_view(p, rep, &r.config, item, DebugForm::Relaxed).is_err());
     }
 }
 
@@ -318,11 +425,11 @@ fn a_clash_pruned_or_budget_cut_row_opens_seated() {
 // ============================================================================
 
 #[test]
-fn a_seated_view_is_the_hypothesis_seating_and_marks_its_bonds() {
+fn a_seated_state_is_the_hypothesis_seating_and_marks_only_its_bonds_and_clashes() {
     let (p, config) = slab_plan();
     let mut checked = 0;
     for row in leg_rows(&p.tree).step_by(37) {
-        let view = debug_view(p, None, config, row, DebugForm::Seated).unwrap();
+        let view = debug_view(p, None, config, DebugItem::state(row), DebugForm::Seated).unwrap();
         let h = hyp(p, None, row);
         let seating = h.seating.clone().unwrap_or_else(|| p.setup.seat(&h.steps));
         let expected = p.setup.start_structure(&h.steps, &seating);
@@ -331,21 +438,34 @@ fn a_seated_view_is_the_hypothesis_seating_and_marks_its_bonds() {
             positions(&expected),
             "row {row}"
         );
-        assert_eq!(view.row, shown_row(&p.tree, row));
+        assert_eq!(view.item, DebugItem::state(shown_row(&p.tree, row)));
         assert!(view.strain.is_none());
+        assert!(view.shapes.is_none(), "a state draws no shapes");
+        assert!(view.marks.foot.is_none() && view.marks.accepted.is_empty());
         for &(f, s) in &h.formed {
             assert!(view.marks.bonded.contains(&f) && view.marks.bonded.contains(&s));
             assert_eq!(view.structure.decorator().atom_color[&s], BONDED_COLOR);
         }
         let clashing: BTreeSet<u32> = seating.clashes.iter().flat_map(|&(a, s)| [a, s]).collect();
-        assert!(clashing.iter().all(|id| view.marks.clashing.contains(id)));
+        assert_eq!(set(&view.marks.clashing), clashing);
+        // Everything else keeps its element colour.
+        let marked: BTreeSet<u32> = set(&view.marks.bonded).union(&clashing).copied().collect();
+        let coloured: BTreeSet<u32> = view
+            .structure
+            .decorator()
+            .atom_color
+            .keys()
+            .copied()
+            .collect();
+        assert_eq!(coloured, marked);
+        assert_decorated(p, &view);
         checked += 1;
     }
     assert!(checked > 10);
 }
 
 #[test]
-fn the_root_view_marks_every_foot_and_its_anchor_sites_and_follows_anchor_reach() {
+fn the_root_view_marks_nothing_and_its_steps_mark_one_foot_and_its_anchors() {
     let (p, config) = slab_plan();
     let view = root_view(p, config);
     assert_eq!(view.form, DebugForm::Posed);
@@ -354,50 +474,54 @@ fn the_root_view_marks_every_foot_and_its_anchor_sites_and_follows_anchor_reach(
         positions(&p.setup.combined),
         "posed: nothing moved"
     );
-    let feet: Vec<u32> = p.setup.feet.iter().map(|f| f.id).collect();
-    assert_eq!(view.marks.feet, feet);
-    for f in &feet {
-        assert_eq!(view.structure.decorator().atom_color[f], FOOT_COLOR);
-        assert!(view.structure.decorator().atom_label.contains_key(f));
-    }
-    // The anchor sites, from the definition rather than the tree.
-    let anchors = |reach: f64| -> BTreeSet<u32> {
+    assert_eq!(view.marks, Marks::default());
+    assert!(view.structure.decorator().atom_color.is_empty());
+    assert!(view.shapes.is_none());
+    assert_decorated(p, &view);
+
+    // The anchor sites of one foot, from the definition rather than the tree.
+    let anchors = |f: usize, reach: f64| -> BTreeSet<u32> {
         let mut out = BTreeSet::new();
-        for (f, _) in p.setup.feet.iter().enumerate() {
-            for (s, site) in p.setup.sites.iter().enumerate() {
-                let leg = Leg { foot: f, site: s };
-                if p.setup.may_bond(leg) && p.setup.anchor_distance(leg) <= reach {
-                    out.insert(site.id);
-                }
+        for (s, site) in p.setup.sites.iter().enumerate() {
+            let leg = Leg { foot: f, site: s };
+            if p.setup.may_bond(leg) && p.setup.anchor_distance(leg) <= reach {
+                out.insert(site.id);
             }
         }
         out
     };
-    let marked: BTreeSet<u32> = view
-        .marks
-        .candidates
-        .iter()
-        .chain(&view.marks.clashing)
-        .chain(&view.marks.mirrored)
-        .chain(&view.marks.undecided)
-        .copied()
-        .collect();
-    assert_eq!(marked, anchors(config.anchor_reach));
-    // The shapes: an anchor_reach sphere per foot.
-    let shapes = view.shapes.as_ref().unwrap();
-    assert_eq!(shapes.shapes.len(), feet.len());
-    for f in &p.setup.feet {
-        assert!(shapes.contains(f.position + DVec3::X * (config.anchor_reach - 0.01)));
-        assert!(shapes.sample(f.position) > SHAPE_LEVEL);
-    }
-    // Unmarked substrate atoms are ghosted; marked ones are not.
-    for &id in p.setup.substrate_ids.values() {
-        let ghost = view.structure.get_atom(id).unwrap().is_ghost();
-        let coloured = view.structure.decorator().atom_color.contains_key(&id);
-        assert_eq!(ghost, !coloured, "atom {id}");
+    let feet = next_feet(p, None, 0);
+    assert_eq!(feet.len(), p.setup.feet.len(), "every foot is a step");
+    let mut steps = Vec::new();
+    for &f in &feet {
+        let step = DebugItem::step(0, f);
+        let view = debug_view(p, None, config, step, DebugForm::Posed).unwrap();
+        let foot = &p.setup.feet[f as usize];
+        assert_eq!(view.marks.foot, Some(foot.id));
+        let d = view.structure.decorator();
+        assert_eq!(d.atom_color[&foot.id], FOOT_COLOR);
+        assert_eq!(
+            set(&view.marks.accepted),
+            anchors(f as usize, config.anchor_reach)
+        );
+        for id in &view.marks.accepted {
+            assert_eq!(d.atom_color[id], ACCEPTED_COLOR);
+        }
+        // The other feet are not marked: they are other steps.
+        for other in p.setup.feet.iter().filter(|o| o.id != foot.id) {
+            assert!(!d.atom_color.contains_key(&other.id));
+        }
+        // The shape: this foot's anchor_reach sphere.
+        let shapes = view.shapes.as_ref().unwrap();
+        assert_eq!(shapes.shapes.len(), 1);
+        assert!(shapes.contains(foot.position + DVec3::X * (config.anchor_reach - 0.01)));
+        assert!(shapes.sample(foot.position) > SHAPE_LEVEL);
+        assert_decorated(p, &view);
+        steps.push(view);
     }
 
-    // A wider anchor_reach marks more, and draws bigger spheres.
+    // A wider anchor_reach accepts more, and the old near misses within the
+    // extra ångström are now accepted.
     let wider = SequentialSearch {
         anchor_reach: config.anchor_reach + 1.0,
         ..config.clone()
@@ -405,118 +529,109 @@ fn the_root_view_marks_every_foot_and_its_anchor_sites_and_follows_anchor_reach(
     let ads = posed_stand_in(3, 0.0, DVec3::ZERO).0;
     let sub = si100_slab(5.0, 11.0);
     let p2 = plan(&ads, &sub, &wider).unwrap();
-    let view2 = root_view(&p2, &wider);
-    let marked2: BTreeSet<u32> = view2
-        .marks
-        .candidates
-        .iter()
-        .chain(&view2.marks.clashing)
-        .chain(&view2.marks.mirrored)
-        .chain(&view2.marks.undecided)
-        .copied()
-        .collect();
-    assert_eq!(marked2, anchors(wider.anchor_reach));
-    assert!(marked2.len() > marked.len());
-    // The old near misses within the extra ångström are now anchors.
-    for &(id, miss) in &view.marks.near_misses {
-        assert!(miss > 0.0 && miss <= 1.0);
-        assert!(marked2.contains(&id), "near miss {id} +{miss}");
+    let (mut before, mut after) = (0, 0);
+    for (view, &f) in steps.iter().zip(&feet) {
+        let view2 = debug_view(&p2, None, &wider, DebugItem::step(0, f), DebugForm::Posed).unwrap();
+        let accepted2 = set(&view2.marks.accepted);
+        assert_eq!(accepted2, anchors(f as usize, wider.anchor_reach));
+        assert!(accepted2.is_superset(&set(&view.marks.accepted)));
+        for &(id, miss) in &view.marks.near_misses {
+            assert!(miss > 0.0 && miss <= 1.0);
+            assert!(accepted2.contains(&id), "near miss {id} +{miss}");
+        }
+        before += view.marks.accepted.len();
+        after += accepted2.len();
     }
+    assert!(after > before, "{before} → {after}");
 }
 
 #[test]
-fn a_row_marks_its_children_by_verdict_and_labels_its_near_misses() {
+fn a_step_marks_every_site_its_test_accepted_whatever_the_verdict() {
     let (p, config) = slab_plan();
     let tree = &p.tree;
-    // A two-leg row whose ring has mirrored children and near misses.
-    let row = leg_rows(tree)
-        .filter(|&r| tree.row(r).legs == 2 && tree.row(r).duplicate_of.is_none())
-        .find(|&r| {
-            !tree.near_misses(r).is_empty()
-                && tree
-                    .children(r)
+    // A step under a two-leg row whose ring has mirrored legs and near misses.
+    let step = canonical_leg_rows(tree)
+        .filter(|&r| tree.row(r).legs == 2)
+        .flat_map(|r| {
+            next_feet(p, None, r)
+                .into_iter()
+                .map(move |f| DebugItem::step(r, f))
+        })
+        .find(|&s| {
+            !step_near_misses(tree, s).is_empty()
+                && step_legs(tree, s)
                     .iter()
                     .any(|&c| child_verdict(p, None, c) == ChildVerdict::Mirrored)
         })
-        .expect("a two-leg row with mirrored children and near misses");
-    let view = debug_view(p, None, config, row, DebugForm::Seated).unwrap();
-    let mut want = [
-        BTreeSet::new(),
-        BTreeSet::new(),
-        BTreeSet::new(),
-        BTreeSet::new(),
-    ];
-    for &c in tree.children(row) {
-        let RowKind::Leg { site, .. } = tree.row(c).kind else {
-            unreachable!()
-        };
-        let i = match child_verdict(p, None, c) {
-            ChildVerdict::Candidate => 0,
-            ChildVerdict::Mirrored => 1,
-            ChildVerdict::Undecided => 2,
-            ChildVerdict::Clash => 3,
-        };
-        want[i].insert(p.setup.sites[site as usize].id);
+        .expect("a ring with mirrored legs and near misses");
+    let view = debug_view(p, None, config, step, DebugForm::Seated).unwrap();
+    let want = step_sites(p, tree, step);
+    assert_eq!(set(&view.marks.accepted), want);
+    let d = view.structure.decorator();
+    for id in &want {
+        assert_eq!(d.atom_color[id], ACCEPTED_COLOR, "site {id}");
     }
-    let set = |v: &Vec<u32>| v.iter().copied().collect::<BTreeSet<u32>>();
-    assert_eq!(set(&view.marks.candidates), want[0]);
-    assert_eq!(set(&view.marks.mirrored), want[1]);
-    assert_eq!(set(&view.marks.undecided), want[2]);
-    assert!(want[3].is_subset(&set(&view.marks.clashing)));
-    // Near misses: one entry per site, the smallest miss, labelled.
-    let near: BTreeSet<u32> = tree
-        .near_misses(row)
+    // The state's bonds stay orange; nothing is red on a step.
+    let h = hyp(p, None, step.row);
+    for &(_, s) in &h.formed {
+        if !want.contains(&s) {
+            assert_eq!(d.atom_color[&s], BONDED_COLOR);
+        }
+    }
+    assert!(view.marks.clashing.is_empty());
+    // Near misses: recorded for the CLI, one per site with the smallest
+    // miss, but not drawn — the shape shows them.
+    let near: BTreeSet<u32> = step_near_misses(tree, step)
         .iter()
         .map(|n| p.setup.sites[n.site as usize].id)
         .collect();
-    let marked: BTreeSet<u32> = view.marks.near_misses.iter().map(|n| n.0).collect();
-    assert_eq!(marked, near);
-    let d = view.structure.decorator();
-    for &(id, miss) in &view.marks.near_misses {
-        assert!(d.atom_label[&id].contains(&format!("+{miss:.2}")));
-        if !set(&view.marks.candidates).contains(&id)
-            && !view.marks.bonded.contains(&id)
-            && !set(&view.marks.mirrored).contains(&id)
-            && !set(&view.marks.undecided).contains(&id)
-            && !set(&view.marks.clashing).contains(&id)
-        {
-            assert_eq!(d.atom_color[&id], NEAR_MISS_COLOR);
+    let recorded: BTreeSet<u32> = view.marks.near_misses.iter().map(|n| n.0).collect();
+    assert_eq!(recorded, near);
+    for id in near.difference(&want) {
+        if !view.marks.bonded.contains(id) {
+            assert!(
+                !d.atom_color.contains_key(id),
+                "near miss {id} is not coloured"
+            );
         }
     }
-    for id in &want[0] {
-        if !view.marks.bonded.contains(id) && !view.marks.clashing.contains(id) {
-            assert_eq!(d.atom_color[id], CANDIDATE_COLOR);
-        }
-    }
+    assert_decorated(p, &view);
     let text = view.describe(&p.setup, tree);
-    assert!(text.starts_with(&format!("row #{row}: ")), "{text}");
+    assert!(text.starts_with("next foot "), "{text}");
     assert!(text.contains("shown seated"));
+    assert!(text.contains("near misses"));
 }
 
-/// The drawn shapes are the test: a site lies in one iff some unbonded foot's
+/// The drawn shape is the test: a site lies in a step's shape iff its foot's
 /// shell (one leg) or ring (two legs) test accepts it.
 #[test]
-fn the_sphere_and_ring_shapes_contain_exactly_the_sites_the_test_accepts() {
+fn a_steps_shell_or_ring_contains_exactly_the_sites_its_foot_accepts() {
     let (p, config) = slab_plan();
     let tree = &p.tree;
     let mut checked = [0, 0];
-    for row in leg_rows(tree).filter(|&r| tree.row(r).duplicate_of.is_none()) {
+    for row in canonical_leg_rows(tree) {
         let legs = tree.row(row).legs as usize;
         if legs > 2 || (legs == 2 && row % 5 != 0) {
             continue;
         }
-        let view = debug_view(p, None, config, row, DebugForm::Seated).unwrap();
-        let shapes = view.shapes.as_ref().expect("a sphere or a ring");
         let path = tree.path(row);
-        for (s, site) in p.setup.sites.iter().enumerate() {
-            let accepted = (0..p.setup.feet.len())
-                .filter(|f| path.iter().all(|l| l.foot != *f))
-                .any(|f| p.setup.need_against(&path, Leg { foot: f, site: s }) <= config.tolerance);
-            let d = shapes.distance(site.position);
-            if d.abs() < 1e-6 {
-                continue;
+        for f in next_feet(p, None, row) {
+            let step = DebugItem::step(row, f);
+            let view = debug_view(p, None, config, step, DebugForm::Seated).unwrap();
+            let shapes = view.shapes.as_ref().expect("a shell or a ring");
+            assert_eq!(shapes.shapes.len(), 1, "one foot, one shape");
+            for (s, site) in p.setup.sites.iter().enumerate() {
+                let leg = Leg {
+                    foot: f as usize,
+                    site: s,
+                };
+                let accepted = p.setup.need_against(&path, leg) <= config.tolerance;
+                let d = shapes.distance(site.position);
+                if d.abs() < 1e-6 {
+                    continue;
+                }
+                assert_eq!(d < 0.0, accepted, "{step:?}, site {}", site.id);
             }
-            assert_eq!(d < 0.0, accepted, "row {row}, site {}", site.id);
         }
         checked[legs - 1] += 1;
     }
@@ -524,13 +639,13 @@ fn the_sphere_and_ring_shapes_contain_exactly_the_sites_the_test_accepts() {
 }
 
 #[test]
-fn a_tripod_three_leg_row_draws_no_shapes() {
+fn a_tripod_three_leg_row_has_no_steps() {
     let (p, config) = slab_plan();
     let row = leg_rows(&p.tree)
         .find(|&r| p.tree.row(r).legs == 3)
         .unwrap();
-    let view = debug_view(p, None, config, row, DebugForm::Seated).unwrap();
-    assert!(view.shapes.is_none());
+    assert!(next_feet(p, None, row).is_empty());
+    assert!(debug_view(p, None, config, DebugItem::step(row, 0), DebugForm::Seated).is_err());
 }
 
 // ============================================================================
@@ -544,8 +659,9 @@ fn a_relaxed_row_outside_top_n_is_replayed_to_its_recorded_strain() {
     let tree = &r.report.tree;
     assert_eq!(r.report.candidates.len(), 1, "top N 1");
     let kept = &r.report.candidates[0];
-    assert!(!needs_relaxation(p, rep, kept.row, DebugForm::Relaxed));
-    let view = debug_view(p, rep, &r.config, kept.row, DebugForm::Relaxed).unwrap();
+    let item = DebugItem::state(kept.row);
+    assert!(!needs_relaxation(p, rep, item, DebugForm::Relaxed));
+    let view = debug_view(p, rep, &r.config, item, DebugForm::Relaxed).unwrap();
     assert_eq!(positions(&view.structure), positions(&kept.structure));
     assert_eq!(view.strain, Some(kept.strain));
 
@@ -558,8 +674,9 @@ fn a_relaxed_row_outside_top_n_is_replayed_to_its_recorded_strain() {
         if replayed[legs - 3] >= 2 {
             continue;
         }
-        assert!(needs_relaxation(p, rep, x.row, DebugForm::Relaxed));
-        let view = debug_view(p, rep, &r.config, x.row, DebugForm::Relaxed).unwrap();
+        let item = DebugItem::state(x.row);
+        assert!(needs_relaxation(p, rep, item, DebugForm::Relaxed));
+        let view = debug_view(p, rep, &r.config, item, DebugForm::Relaxed).unwrap();
         assert!(
             (view.strain.unwrap() - x.strain).abs() < 1e-6,
             "row {}: {} vs {}",
@@ -590,42 +707,53 @@ fn a_local_row_reached_by_two_binding_orders_shows_the_kept_one() {
         "different binding orders"
     );
     let recorded = relaxation(&r.report, canonical).unwrap().strain;
-    let view = debug_view(p, rep, &r.config, dup, DebugForm::Relaxed).unwrap();
-    assert_eq!(view.row, canonical, "a duplicate shows its canonical row");
+    let view = debug_view(p, rep, &r.config, DebugItem::state(dup), DebugForm::Relaxed).unwrap();
+    assert_eq!(
+        view.item,
+        DebugItem::state(canonical),
+        "a duplicate shows its canonical row"
+    );
     assert!((view.strain.unwrap() - recorded).abs() < 1e-6);
 }
 
 #[test]
-fn a_local_row_seats_on_its_replayed_parent_and_a_parent_draws_its_reach() {
+fn a_local_row_seats_on_its_replayed_parent_and_the_parents_step_draws_its_reach() {
     let r = four();
     let (p, rep) = (&r.plan, Some(&r.report));
     let tree = &r.report.tree;
-    let local = leg_rows(tree)
-        .find(|&x| tree.row(x).legs == 4 && tree.row(x).duplicate_of.is_none())
+    let local = canonical_leg_rows(tree)
+        .find(|&x| tree.row(x).legs == 4)
         .unwrap();
-    assert!(needs_relaxation(p, rep, local, DebugForm::Seated));
-    let view = debug_view(p, rep, &r.config, local, DebugForm::Seated).unwrap();
+    let item = DebugItem::state(local);
+    assert!(needs_relaxation(p, rep, item, DebugForm::Seated));
+    let view = debug_view(p, rep, &r.config, item, DebugForm::Seated).unwrap();
     let (start, _) = replay_start(p, &r.report, &r.config, local).unwrap();
     assert_eq!(positions(&view.structure), positions(&start));
-    assert!(view.shapes.is_none(), "the deepest level searches nothing");
+    assert!(view.shapes.is_none(), "a state draws no shapes");
+    assert!(
+        next_feet(p, rep, local).is_empty(),
+        "the deepest level searches nothing"
+    );
 
-    // Its parent, a relaxed three-leg state: the reach spheres around its
-    // relaxed unbonded feet contain every child's site.
+    // Its parent, a relaxed three-leg state: the step for the one unbonded
+    // foot is shown relaxed, and its reach sphere around that foot's relaxed
+    // position contains every leg's site, each marked accepted.
     let parent = tree.row(local).parent;
-    let view = debug_view(p, rep, &r.config, parent, DebugForm::Relaxed).unwrap();
-    let shapes = view.shapes.as_ref().expect("reach spheres");
-    assert_eq!(shapes.shapes.len(), 1, "one unbonded foot");
-    for &c in tree.children(parent) {
-        let RowKind::Leg { site, .. } = tree.row(c).kind else {
-            unreachable!()
-        };
-        let id = p.setup.sites[site as usize].id;
-        let at = view.structure.get_atom(id).unwrap().position;
-        assert!(shapes.contains(at), "child site {id}");
-        assert!(view.marks.candidates.contains(&id) || view.marks.bonded.contains(&id));
+    let feet = next_feet(p, rep, parent);
+    assert_eq!(feet.len(), 1, "one unbonded foot");
+    let step = DebugItem::step(parent, feet[0]);
+    assert_eq!(row_forms(p, rep, step).default, DebugForm::Relaxed);
+    let view = debug_view(p, rep, &r.config, step, DebugForm::Relaxed).unwrap();
+    let shapes = view.shapes.as_ref().expect("a reach sphere");
+    assert_eq!(shapes.shapes.len(), 1);
+    let want = step_sites(p, tree, step);
+    assert!(!want.is_empty());
+    for id in &want {
+        let at = view.structure.get_atom(*id).unwrap().position;
+        assert!(shapes.contains(at), "leg site {id}");
     }
-    // Seated, the same parent draws no reach: the local phase searches from
-    // the relaxed positions.
-    let seated = debug_view(p, rep, &r.config, parent, DebugForm::Seated).unwrap();
-    assert!(seated.shapes.is_none());
+    assert_eq!(set(&view.marks.accepted), want);
+    assert_decorated(p, &view);
+    // A step has its one form: seated, it is refused.
+    assert!(debug_view(p, rep, &r.config, step, DebugForm::Seated).is_err());
 }

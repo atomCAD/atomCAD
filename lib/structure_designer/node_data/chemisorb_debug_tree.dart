@@ -3,27 +3,39 @@ import 'package:flutter_cad/common/number_format.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 
 /// The `chemisorb` node's **search tree** — the debug view's panel half
-/// (`design_chemisorption_sequential.md` §6.5).
+/// (`design_chemisorption_sequential.md` §6.5, as revised in §18).
 ///
-/// Every path the search took is a row: the root (the posed molecule), the
-/// leg-1 foot, then one leg per level. Clicking a row selects it for the
-/// node's `debug` and `debug_shapes` pins; the kernel builds the view (at
-/// once when it is geometry alone, as a node job when a relaxed row has to be
-/// replayed), so this widget only lists and asks.
+/// The tree alternates two kinds of item, so walking down it replays the
+/// search one decision at a time:
+///
+/// - a **state** — the root or a leg: the bonds made so far. Selecting it
+///   shows them orange, everything else in its element colours.
+/// - a **step** — a *next foot* under a state: one foot's test from it.
+///   Selecting it shows the foot violet, the sites the test accepted green,
+///   the rest of the substrate faded, and the test's shape on the shapes pin.
+///   Its children are those accepted legs, each a state again.
+///
+/// Clicking an item selects it for the node's `debug` and `debug_shapes`
+/// pins; the kernel builds the view (at once when it is geometry alone, as a
+/// node job when a relaxed row has to be replayed), so this widget only lists
+/// and asks. Items are named by [APIChemisorbDebugRef] (a row, and for a step
+/// its foot).
 ///
 /// Three rules worth keeping:
 ///
-/// - **Children are loaded lazily**: a row's children are fetched when it is
-///   expanded, so a tree of 10⁵ rows opens at once. What was fetched is
+/// - **Children are loaded lazily**: an item's children are fetched when it
+///   is expanded, so a tree of 10⁵ rows opens at once. What was fetched is
 ///   dropped when the tree changes ([treeKey], the input fingerprint, or
-///   [searched]); row numbers hold while the fingerprint does — a Run only
-///   appends the local rows — so the expansion survives a Run.
+///   [searched]); items hold while the fingerprint does — a Run only appends
+///   the local rows — so the expansion survives a Run.
 /// - **Duplicates are hidden by default.** A change set reached in several
-///   binding orders is listed once, under the path the search kept; a parent
+///   binding orders is listed once, under the path the search kept; a step
 ///   says how many it hides, and **Show duplicates** lists them as
-///   "= duplicate of #N" rows that jump to the canonical one. A display option
-///   only: not saved, not an undo step, and the tree is the same either way.
-/// - **The selection is the kernel's** ([selectedRow] / [selectedForm], read
+///   "= duplicate of #N" rows that jump to the canonical one. Legs the mirror
+///   check pruned are hidden the same way until **Show mirrored** is on (the
+///   step's *mirr.* count still says how many). Display options only: not
+///   saved, not undo steps, and the tree is the same either way.
+/// - **The selection is the kernel's** ([selected] / [selectedForm], read
 ///   back from the report), so it survives this widget being rebuilt or
 ///   replaced; the expansion is this widget's own state.
 ///
@@ -36,21 +48,24 @@ class ChemisorbDebugTree extends StatefulWidget {
   /// The tree is a run's (it has relaxations and the local rows).
   final bool searched;
 
-  /// The row the debug pins show, `null` for the root view.
-  final int? selectedRow;
+  /// The item the debug pins show, `null` for the root view.
+  final APIChemisorbDebugRef? selected;
   final APIChemisorbDebugForm? selectedForm;
 
   /// Whether the `debug` / `debug_shapes` pins are displayed.
   final bool debugShown;
   final bool shapesShown;
 
-  final APIChemisorbDebugRow? Function(int row) fetchRow;
-  final List<APIChemisorbDebugRow> Function(int row, bool showDuplicates)
+  final APIChemisorbDebugRow? Function(APIChemisorbDebugRef item) fetchRow;
+  final List<APIChemisorbDebugRow> Function(
+          APIChemisorbDebugRef item, bool showDuplicates, bool showMirrored)
       fetchChildren;
-  final List<int> Function(int row) fetchAncestors;
+  final List<APIChemisorbDebugRef> Function(APIChemisorbDebugRef item)
+      fetchAncestors;
 
-  /// Selects a row; `form` = `null` opens it on its default form.
-  final void Function(int row, APIChemisorbDebugForm? form) onSelect;
+  /// Selects an item; `form` = `null` opens it on its default form.
+  final void Function(APIChemisorbDebugRef item, APIChemisorbDebugForm? form)
+      onSelect;
   final VoidCallback onToggleDebug;
   final VoidCallback onToggleShapes;
 
@@ -58,7 +73,7 @@ class ChemisorbDebugTree extends StatefulWidget {
     super.key,
     required this.treeKey,
     required this.searched,
-    required this.selectedRow,
+    required this.selected,
     required this.selectedForm,
     required this.debugShown,
     required this.shapesShown,
@@ -80,22 +95,24 @@ const double DEBUG_TREE_HEIGHT = 300;
 /// Indentation per tree level.
 const double DEBUG_TREE_INDENT = 14;
 
+/// The root item.
+const APIChemisorbDebugRef DEBUG_ROOT = APIChemisorbDebugRef(row: 0);
+
 /// The debug view's marking colours, as the kernel paints them
-/// (`sequential::debug`), for the legend.
+/// (`sequential::debug`), for the legend. Every other atom keeps its element
+/// colour; on a step the unmarked substrate is drawn transparent.
 const List<(String, Color)> DEBUG_LEGEND = [
   ('bonded', Color.fromARGB(255, 255, 140, 0)),
-  ('foot', Color.fromARGB(255, 191, 77, 255)),
+  ('next foot', Color.fromARGB(255, 191, 77, 255)),
   ('accepted', Color.fromARGB(255, 26, 204, 77)),
-  ('near miss', Color.fromARGB(255, 255, 217, 26)),
-  ('mirrored', Color.fromARGB(255, 77, 115, 255)),
-  ('undecided', Color.fromARGB(255, 51, 217, 242)),
   ('clash', Color.fromARGB(255, 242, 26, 38)),
 ];
 
 class _ChemisorbDebugTreeState extends State<ChemisorbDebugTree> {
   bool _showDuplicates = false;
-  final Set<int> _expanded = {0};
-  final Map<int, List<APIChemisorbDebugRow>> _children = {};
+  bool _showMirrored = false;
+  final Set<APIChemisorbDebugRef> _expanded = {DEBUG_ROOT};
+  final Map<APIChemisorbDebugRef, List<APIChemisorbDebugRow>> _children = {};
   APIChemisorbDebugRow? _root;
 
   @override
@@ -105,7 +122,7 @@ class _ChemisorbDebugTreeState extends State<ChemisorbDebugTree> {
       // Other inputs: other rows. Start from the root again.
       _expanded
         ..clear()
-        ..add(0);
+        ..add(DEBUG_ROOT);
       _drop();
     } else if (old.searched != widget.searched) {
       // A run: the same rows, with relaxations and the local phase.
@@ -118,18 +135,19 @@ class _ChemisorbDebugTreeState extends State<ChemisorbDebugTree> {
     _root = null;
   }
 
-  List<APIChemisorbDebugRow> _childrenOf(int row) => _children.putIfAbsent(
-      row, () => widget.fetchChildren(row, _showDuplicates));
+  List<APIChemisorbDebugRow> _childrenOf(APIChemisorbDebugRef item) =>
+      _children.putIfAbsent(item,
+          () => widget.fetchChildren(item, _showDuplicates, _showMirrored));
 
   /// The rows on screen, depth first, with their depth.
   List<(APIChemisorbDebugRow, int)> _visibleRows() {
-    final root = _root ??= widget.fetchRow(0);
+    final root = _root ??= widget.fetchRow(DEBUG_ROOT);
     if (root == null) return const [];
     final out = <(APIChemisorbDebugRow, int)>[];
     void walk(APIChemisorbDebugRow row, int depth) {
       out.add((row, depth));
-      if (_expanded.contains(row.row)) {
-        for (final c in _childrenOf(row.row)) {
+      if (_expanded.contains(row.item)) {
+        for (final c in _childrenOf(row.item)) {
           walk(c, depth + 1);
         }
       }
@@ -141,26 +159,27 @@ class _ChemisorbDebugTreeState extends State<ChemisorbDebugTree> {
 
   bool _expandable(APIChemisorbDebugRow row) =>
       row.duplicateOf == null &&
-      (row.children > 0 || (_showDuplicates && row.hiddenDuplicates > 0));
+      debugChildCount(row, _showDuplicates, _showMirrored) > 0;
 
   void _toggle(APIChemisorbDebugRow row) {
     setState(() {
-      if (!_expanded.remove(row.row)) _expanded.add(row.row);
+      if (!_expanded.remove(row.item)) _expanded.add(row.item);
     });
   }
 
   void _tap(APIChemisorbDebugRow row) {
     final canonical = row.duplicateOf;
     if (canonical == null) {
-      widget.onSelect(row.row, null);
+      widget.onSelect(row.item, null);
       return;
     }
     // A duplicate jumps to the path the search kept.
-    final path = widget.fetchAncestors(canonical);
+    final target = APIChemisorbDebugRef(row: canonical);
+    final path = widget.fetchAncestors(target);
     setState(() {
       _expanded.addAll(path.take(path.length - 1));
     });
-    widget.onSelect(canonical, null);
+    widget.onSelect(target, null);
   }
 
   @override
@@ -170,7 +189,7 @@ class _ChemisorbDebugTreeState extends State<ChemisorbDebugTree> {
     final rows = widget.treeKey == null
         ? const <(APIChemisorbDebugRow, int)>[]
         : _visibleRows();
-    final selected = widget.selectedRow;
+    final selected = widget.selected;
     final selectedRow = selected == null ? null : widget.fetchRow(selected);
     return Card(
       elevation: 1,
@@ -207,6 +226,15 @@ class _ChemisorbDebugTreeState extends State<ChemisorbDebugTree> {
                   }),
                   visualDensity: VisualDensity.compact,
                 ),
+                FilterChip(
+                  label: const Text('Show mirrored'),
+                  selected: _showMirrored,
+                  onSelected: (value) => setState(() {
+                    _showMirrored = value;
+                    _children.clear();
+                  }),
+                  visualDensity: VisualDensity.compact,
+                ),
               ],
             ),
             const SizedBox(height: 6),
@@ -223,9 +251,9 @@ class _ChemisorbDebugTreeState extends State<ChemisorbDebugTree> {
                     return _RowTile(
                       row: row,
                       depth: depth,
-                      expanded: _expanded.contains(row.row),
+                      expanded: _expanded.contains(row.item),
                       expandable: _expandable(row),
-                      selected: row.row == selected,
+                      selected: row.item == selected,
                       showDuplicates: _showDuplicates,
                       onToggle: () => _toggle(row),
                       onTap: () => _tap(row),
@@ -238,7 +266,9 @@ class _ChemisorbDebugTreeState extends State<ChemisorbDebugTree> {
               row: selectedRow,
               form: widget.selectedForm,
               onForm: (form) => widget.onSelect(selected!, form),
-              onRoot: selected == null ? null : () => widget.onSelect(0, null),
+              onRoot: selected == null || selected == DEBUG_ROOT
+                  ? null
+                  : () => widget.onSelect(DEBUG_ROOT, null),
             ),
             const SizedBox(height: 6),
             Wrap(
@@ -268,57 +298,65 @@ class _ChemisorbDebugTreeState extends State<ChemisorbDebugTree> {
   }
 }
 
-/// What a row's children are called, by the level that finds them.
-String _levelName(APIChemisorbDebugRow row) {
-  switch (row.kind) {
-    case APIChemisorbDebugRowKind.root:
-      return 'feet';
-    case APIChemisorbDebugRowKind.foot:
-      return 'anchor';
-    case APIChemisorbDebugRowKind.leg:
-      return switch (row.legs) { 1 => 'sphere', 2 => 'ring', _ => 'reach' };
+/// How many children an item lists under the two display options. A step's
+/// mirror-pruned legs are counted among its children and among its hidden
+/// duplicates (a duplicate has its canonical row's verdict).
+int debugChildCount(
+    APIChemisorbDebugRow row, bool showDuplicates, bool showMirrored) {
+  var n = row.children - (showMirrored ? 0 : row.mirroredChildren);
+  if (showDuplicates) {
+    n += row.hiddenDuplicates - (showMirrored ? 0 : row.mirroredDuplicates);
   }
+  return n;
 }
 
-/// The counts beside a row's label, most telling first.
+/// What a step's test is called, by the legs of the state it starts from.
+String _testName(APIChemisorbDebugRow step) => switch (step.legs) {
+      0 => 'anchor',
+      1 => 'shell',
+      2 => 'ring',
+      _ => 'reach',
+    };
+
+/// The counts beside an item's label, most telling first.
 String debugRowSummary(APIChemisorbDebugRow row,
     {bool showDuplicates = false}) {
   if (row.duplicateOf != null) return '= duplicate of #${row.duplicateOf}';
   final parts = <String>[];
-  if (row.strain != null) {
-    parts.add('strain ${formatNatural(row.strain!, 4)}'
-        '${row.converged ? '' : ' unconv.'}');
-  }
-  if (row.mirror == APIChemisorbMirror.mirrored) parts.add('mirrored');
-  if (row.prunedClash) {
-    parts.add('clash, pruned');
-  } else if (row.seatingClash) {
-    parts.add('clash');
-  }
-  if (row.budgetCut) parts.add('budget cut');
-  final accepted = row.candidates + row.mirrored + row.undecided + row.clashes;
-  if (row.kind == APIChemisorbDebugRowKind.root) {
-    parts.add('${row.children} feet');
-  } else if (accepted > 0 || row.nearMisses.isNotEmpty) {
-    final level = StringBuffer('${_levelName(row)}: $accepted');
-    if (row.mirrored > 0) level.write(', ${row.mirrored} mirr.');
-    if (row.undecided > 0) level.write(', ${row.undecided} undec.');
-    if (row.clashes > 0) level.write(', ${row.clashes} clash');
-    if (row.nearMisses.isNotEmpty) {
-      level.write(', ${row.nearMisses.length} near');
-    }
-    parts.add(level.toString());
-  }
-  if (!showDuplicates && row.hiddenDuplicates > 0) {
-    parts.add('${row.hiddenDuplicates} dup. hidden');
+  switch (row.kind) {
+    case APIChemisorbDebugRowKind.root:
+      parts.add('${row.children} feet');
+    case APIChemisorbDebugRowKind.nextFoot:
+      final accepted =
+          row.candidates + row.mirrored + row.undecided + row.clashes;
+      final test = StringBuffer('${_testName(row)}: $accepted');
+      if (row.mirrored > 0) test.write(', ${row.mirrored} mirr.');
+      if (row.undecided > 0) test.write(', ${row.undecided} undec.');
+      if (row.clashes > 0) test.write(', ${row.clashes} clash');
+      parts.add(test.toString());
+      if (!showDuplicates && row.hiddenDuplicates > 0) {
+        parts.add('${row.hiddenDuplicates} dup. hidden');
+      }
+    case APIChemisorbDebugRowKind.leg:
+      if (row.strain != null) {
+        parts.add('strain ${formatNatural(row.strain!, 4)}'
+            '${row.converged ? '' : ' unconv.'}');
+      }
+      if (row.mirror == APIChemisorbMirror.mirrored) parts.add('mirrored');
+      if (row.prunedClash) {
+        parts.add('clash, pruned');
+      } else if (row.seatingClash) {
+        parts.add('clash');
+      }
+      if (row.budgetCut) parts.add('budget cut');
   }
   return parts.join(' · ');
 }
 
-/// Everything about a row, for its tooltip.
+/// Everything about an item, for its tooltip.
 String debugRowDetails(APIChemisorbDebugRow row) {
   final lines = <String>[
-    '#${row.row}  ${row.label}',
+    row.item.foot == null ? '#${row.item.row}  ${row.label}' : row.label,
     'path: ${row.path}',
   ];
   if (row.candidate) lines.add('a candidate');
@@ -329,9 +367,8 @@ String debugRowDetails(APIChemisorbDebugRow row) {
     if (row.rejectedNoAcceptor > 0) '${row.rejectedNoAcceptor} no H acceptor',
     if (row.rejectedFilter > 0) '${row.rejectedFilter} inventory',
   ];
-  if (rejected.isNotEmpty) lines.add('rejected: ${rejected.join(', ')}');
-  if (row.nearMisses.isNotEmpty) {
-    lines.add('near misses (Å past the bound): ${row.nearMisses.join(', ')}');
+  if (rejected.isNotEmpty) {
+    lines.add('next legs rejected: ${rejected.join(', ')}');
   }
   return lines.join('\n');
 }
@@ -364,6 +401,7 @@ class _RowTile extends StatelessWidget {
     final dim = row.duplicateOf != null ||
         row.mirror == APIChemisorbMirror.mirrored ||
         row.prunedClash;
+    final step = row.kind == APIChemisorbDebugRowKind.nextFoot;
     return Tooltip(
       message: debugRowDetails(row),
       waitDuration: const Duration(milliseconds: 600),
@@ -389,11 +427,12 @@ class _RowTile extends StatelessWidget {
                       : null,
                 ),
                 Text(
-                  row.kind == APIChemisorbDebugRowKind.leg && depth > 2
+                  row.kind == APIChemisorbDebugRowKind.leg && row.legs > 1
                       ? '+ ${row.label}'
                       : row.label,
                   style: small?.copyWith(
                     fontFamily: 'monospace',
+                    fontStyle: step ? FontStyle.italic : null,
                     color: dim ? theme.disabledColor : null,
                   ),
                 ),
@@ -416,7 +455,7 @@ class _RowTile extends StatelessWidget {
   }
 }
 
-/// The selected row under the tree, its seated / relaxed switch when it has
+/// The selected item under the tree, its seated / relaxed switch when it has
 /// both forms, and a way back to the root view.
 class _SelectionLine extends StatelessWidget {
   final APIChemisorbDebugRow? row;
@@ -435,15 +474,17 @@ class _SelectionLine extends StatelessWidget {
   Widget build(BuildContext context) {
     final small = Theme.of(context).textTheme.bodySmall;
     final row = this.row;
-    if (row == null) {
-      return Text('Showing the root: every foot and its anchor sites.',
-          style: small);
+    if (row == null || row.kind == APIChemisorbDebugRowKind.root) {
+      return Text('Showing the root: the posed inputs.', style: small);
     }
+    final what = row.item.foot == null
+        ? '#${row.item.row} ${row.label}'
+        : '${row.label} under #${row.item.row}';
     return Row(
       children: [
         Expanded(
           child: Text(
-            'Showing #${row.row} ${row.label}, ${form?.name ?? ''}',
+            'Showing $what, ${form?.name ?? ''}',
             style: small,
             overflow: TextOverflow.ellipsis,
           ),

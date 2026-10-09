@@ -454,7 +454,7 @@ abstract class RustLibApi extends BaseApi {
   BigInt? crateApiStructureDesignerChemisorbApiChemisorbDebugSelect(
       {required Uint64List scopePath,
       required BigInt nodeId,
-      required int row,
+      required APIChemisorbDebugRef item,
       APIChemisorbDebugForm? form});
 
   String crateApiStructureDesignerChemisorbApiChemisorbDebugSelectByName(
@@ -736,16 +736,19 @@ abstract class RustLibApi extends BaseApi {
   APIChemisorbData? crateApiStructureDesignerChemisorbApiGetChemisorbData(
       {required Uint64List scopePath, required BigInt nodeId});
 
-  Uint32List crateApiStructureDesignerChemisorbApiGetChemisorbDebugAncestors(
-      {required int row});
+  List<APIChemisorbDebugRef>
+      crateApiStructureDesignerChemisorbApiGetChemisorbDebugAncestors(
+          {required APIChemisorbDebugRef item});
 
   List<APIChemisorbDebugRow>
       crateApiStructureDesignerChemisorbApiGetChemisorbDebugChildren(
-          {required int row, required bool showDuplicates});
+          {required APIChemisorbDebugRef item,
+          required bool showDuplicates,
+          required bool showMirrored});
 
   APIChemisorbDebugRow?
       crateApiStructureDesignerChemisorbApiGetChemisorbDebugRow(
-          {required int row});
+          {required APIChemisorbDebugRef item});
 
   APIChemisorbReport? crateApiStructureDesignerChemisorbApiGetChemisorbReport();
 
@@ -5229,14 +5232,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   BigInt? crateApiStructureDesignerChemisorbApiChemisorbDebugSelect(
       {required Uint64List scopePath,
       required BigInt nodeId,
-      required int row,
+      required APIChemisorbDebugRef item,
       APIChemisorbDebugForm? form}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
-        sse_encode_u_32(row, serializer);
+        sse_encode_box_autoadd_api_chemisorb_debug_ref(item, serializer);
         sse_encode_opt_box_autoadd_api_chemisorb_debug_form(form, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 106)!;
       },
@@ -5246,7 +5249,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerChemisorbApiChemisorbDebugSelectConstMeta,
-      argValues: [scopePath, nodeId, row, form],
+      argValues: [scopePath, nodeId, item, form],
       apiImpl: this,
     ));
   }
@@ -5255,7 +5258,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerChemisorbApiChemisorbDebugSelectConstMeta =>
           const TaskConstMeta(
             debugName: "chemisorb_debug_select",
-            argNames: ["scopePath", "nodeId", "row", "form"],
+            argNames: ["scopePath", "nodeId", "item", "form"],
           );
 
   @override
@@ -7521,21 +7524,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
 
   @override
-  Uint32List crateApiStructureDesignerChemisorbApiGetChemisorbDebugAncestors(
-      {required int row}) {
+  List<APIChemisorbDebugRef>
+      crateApiStructureDesignerChemisorbApiGetChemisorbDebugAncestors(
+          {required APIChemisorbDebugRef item}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_u_32(row, serializer);
+        sse_encode_box_autoadd_api_chemisorb_debug_ref(item, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 186)!;
       },
       codec: SseCodec(
-        decodeSuccessData: sse_decode_list_prim_u_32_strict,
+        decodeSuccessData: sse_decode_list_api_chemisorb_debug_ref,
         decodeErrorData: null,
       ),
       constMeta:
           kCrateApiStructureDesignerChemisorbApiGetChemisorbDebugAncestorsConstMeta,
-      argValues: [row],
+      argValues: [item],
       apiImpl: this,
     ));
   }
@@ -7544,18 +7548,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerChemisorbApiGetChemisorbDebugAncestorsConstMeta =>
           const TaskConstMeta(
             debugName: "get_chemisorb_debug_ancestors",
-            argNames: ["row"],
+            argNames: ["item"],
           );
 
   @override
   List<APIChemisorbDebugRow>
       crateApiStructureDesignerChemisorbApiGetChemisorbDebugChildren(
-          {required int row, required bool showDuplicates}) {
+          {required APIChemisorbDebugRef item,
+          required bool showDuplicates,
+          required bool showMirrored}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_u_32(row, serializer);
+        sse_encode_box_autoadd_api_chemisorb_debug_ref(item, serializer);
         sse_encode_bool(showDuplicates, serializer);
+        sse_encode_bool(showMirrored, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 187)!;
       },
       codec: SseCodec(
@@ -7564,7 +7571,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerChemisorbApiGetChemisorbDebugChildrenConstMeta,
-      argValues: [row, showDuplicates],
+      argValues: [item, showDuplicates, showMirrored],
       apiImpl: this,
     ));
   }
@@ -7573,17 +7580,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerChemisorbApiGetChemisorbDebugChildrenConstMeta =>
           const TaskConstMeta(
             debugName: "get_chemisorb_debug_children",
-            argNames: ["row", "showDuplicates"],
+            argNames: ["item", "showDuplicates", "showMirrored"],
           );
 
   @override
   APIChemisorbDebugRow?
       crateApiStructureDesignerChemisorbApiGetChemisorbDebugRow(
-          {required int row}) {
+          {required APIChemisorbDebugRef item}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_u_32(row, serializer);
+        sse_encode_box_autoadd_api_chemisorb_debug_ref(item, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 188)!;
       },
       codec: SseCodec(
@@ -7592,7 +7599,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerChemisorbApiGetChemisorbDebugRowConstMeta,
-      argValues: [row],
+      argValues: [item],
       apiImpl: this,
     ));
   }
@@ -7601,7 +7608,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerChemisorbApiGetChemisorbDebugRowConstMeta =>
           const TaskConstMeta(
             debugName: "get_chemisorb_debug_row",
-            argNames: ["row"],
+            argNames: ["item"],
           );
 
   @override
@@ -19444,40 +19451,53 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIChemisorbDebugRef dco_decode_api_chemisorb_debug_ref(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return APIChemisorbDebugRef(
+      row: dco_decode_u_32(arr[0]),
+      foot: dco_decode_opt_box_autoadd_u_32(arr[1]),
+    );
+  }
+
+  @protected
   APIChemisorbDebugRow dco_decode_api_chemisorb_debug_row(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 28)
-      throw Exception('unexpected arr length: expect 28 but see ${arr.length}');
+    if (arr.length != 29)
+      throw Exception('unexpected arr length: expect 29 but see ${arr.length}');
     return APIChemisorbDebugRow(
-      row: dco_decode_u_32(arr[0]),
-      parent: dco_decode_opt_box_autoadd_u_32(arr[1]),
-      kind: dco_decode_api_chemisorb_debug_row_kind(arr[2]),
-      legs: dco_decode_u_32(arr[3]),
-      label: dco_decode_String(arr[4]),
-      path: dco_decode_String(arr[5]),
-      duplicateOf: dco_decode_opt_box_autoadd_u_32(arr[6]),
-      children: dco_decode_u_32(arr[7]),
-      hiddenDuplicates: dco_decode_u_32(arr[8]),
-      candidates: dco_decode_u_32(arr[9]),
-      mirrored: dco_decode_u_32(arr[10]),
-      undecided: dco_decode_u_32(arr[11]),
-      clashes: dco_decode_u_32(arr[12]),
-      rejectedValence: dco_decode_u_32(arr[13]),
-      rejectedNoAcceptor: dco_decode_u_32(arr[14]),
-      rejectedFilter: dco_decode_u_32(arr[15]),
-      nearMisses: dco_decode_list_String(arr[16]),
-      candidate: dco_decode_bool(arr[17]),
-      localParent: dco_decode_bool(arr[18]),
-      mirror: dco_decode_opt_box_autoadd_api_chemisorb_mirror(arr[19]),
-      seatingClash: dco_decode_bool(arr[20]),
-      prunedClash: dco_decode_bool(arr[21]),
-      strain: dco_decode_opt_box_autoadd_f_64(arr[22]),
-      converged: dco_decode_bool(arr[23]),
-      budgetCut: dco_decode_bool(arr[24]),
-      canSeat: dco_decode_bool(arr[25]),
-      canRelax: dco_decode_bool(arr[26]),
-      defaultForm: dco_decode_api_chemisorb_debug_form(arr[27]),
+      item: dco_decode_api_chemisorb_debug_ref(arr[0]),
+      kind: dco_decode_api_chemisorb_debug_row_kind(arr[1]),
+      legs: dco_decode_u_32(arr[2]),
+      label: dco_decode_String(arr[3]),
+      path: dco_decode_String(arr[4]),
+      duplicateOf: dco_decode_opt_box_autoadd_u_32(arr[5]),
+      children: dco_decode_u_32(arr[6]),
+      hiddenDuplicates: dco_decode_u_32(arr[7]),
+      mirroredChildren: dco_decode_u_32(arr[8]),
+      mirroredDuplicates: dco_decode_u_32(arr[9]),
+      candidates: dco_decode_u_32(arr[10]),
+      mirrored: dco_decode_u_32(arr[11]),
+      undecided: dco_decode_u_32(arr[12]),
+      clashes: dco_decode_u_32(arr[13]),
+      rejectedValence: dco_decode_u_32(arr[14]),
+      rejectedNoAcceptor: dco_decode_u_32(arr[15]),
+      rejectedFilter: dco_decode_u_32(arr[16]),
+      nearMisses: dco_decode_list_String(arr[17]),
+      candidate: dco_decode_bool(arr[18]),
+      localParent: dco_decode_bool(arr[19]),
+      mirror: dco_decode_opt_box_autoadd_api_chemisorb_mirror(arr[20]),
+      seatingClash: dco_decode_bool(arr[21]),
+      prunedClash: dco_decode_bool(arr[22]),
+      strain: dco_decode_opt_box_autoadd_f_64(arr[23]),
+      converged: dco_decode_bool(arr[24]),
+      budgetCut: dco_decode_bool(arr[25]),
+      canSeat: dco_decode_bool(arr[26]),
+      canRelax: dco_decode_bool(arr[27]),
+      defaultForm: dco_decode_api_chemisorb_debug_form(arr[28]),
     );
   }
 
@@ -19542,7 +19562,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       rows: dco_decode_list_api_chemisorb_row(arr[1]),
       inventoryOptions: dco_decode_list_api_chemisorb_inventory_option(arr[2]),
       reachUsed: dco_decode_bool(arr[3]),
-      debugSelectedRow: dco_decode_opt_box_autoadd_u_32(arr[4]),
+      debugSelected: dco_decode_opt_box_autoadd_api_chemisorb_debug_ref(arr[4]),
       debugSelectedForm:
           dco_decode_opt_box_autoadd_api_chemisorb_debug_form(arr[5]),
       debugTreeKey: dco_decode_u_64(arr[6]),
@@ -20342,23 +20362,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIHoveredAtomInfo dco_decode_api_hovered_atom_info(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 14)
-      throw Exception('unexpected arr length: expect 14 but see ${arr.length}');
+    if (arr.length != 15)
+      throw Exception('unexpected arr length: expect 15 but see ${arr.length}');
     return APIHoveredAtomInfo(
-      symbol: dco_decode_String(arr[0]),
-      elementName: dco_decode_String(arr[1]),
-      atomicNumber: dco_decode_i_32(arr[2]),
-      effectiveElement: dco_decode_String(arr[3]),
-      x: dco_decode_f_64(arr[4]),
-      y: dco_decode_f_64(arr[5]),
-      z: dco_decode_f_64(arr[6]),
-      bondCount: dco_decode_u_32(arr[7]),
-      isFrozen: dco_decode_bool(arr[8]),
-      hybridizationOverride: dco_decode_u_8(arr[9]),
-      inferredHybridization: dco_decode_u_8(arr[10]),
-      tags: dco_decode_list_String(arr[11]),
-      nodeName: dco_decode_String(arr[12]),
-      overlappingNodeNames: dco_decode_list_String(arr[13]),
+      atomId: dco_decode_u_32(arr[0]),
+      symbol: dco_decode_String(arr[1]),
+      elementName: dco_decode_String(arr[2]),
+      atomicNumber: dco_decode_i_32(arr[3]),
+      effectiveElement: dco_decode_String(arr[4]),
+      x: dco_decode_f_64(arr[5]),
+      y: dco_decode_f_64(arr[6]),
+      z: dco_decode_f_64(arr[7]),
+      bondCount: dco_decode_u_32(arr[8]),
+      isFrozen: dco_decode_bool(arr[9]),
+      hybridizationOverride: dco_decode_u_8(arr[10]),
+      inferredHybridization: dco_decode_u_8(arr[11]),
+      tags: dco_decode_list_String(arr[12]),
+      nodeName: dco_decode_String(arr[13]),
+      overlappingNodeNames: dco_decode_list_String(arr[14]),
     );
   }
 
@@ -22444,6 +22465,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIChemisorbDebugRef dco_decode_box_autoadd_api_chemisorb_debug_ref(
+      dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_api_chemisorb_debug_ref(raw);
+  }
+
+  @protected
   APIChemisorbDebugRow dco_decode_box_autoadd_api_chemisorb_debug_row(
       dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -23490,6 +23518,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<APIChemisorbDebugRef> dco_decode_list_api_chemisorb_debug_ref(
+      dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_api_chemisorb_debug_ref)
+        .toList();
+  }
+
+  @protected
   List<APIChemisorbDebugRow> dco_decode_list_api_chemisorb_debug_row(
       dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -23878,12 +23915,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  Uint32List dco_decode_list_prim_u_32_strict(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw as Uint32List;
-  }
-
-  @protected
   Uint64List dco_decode_list_prim_u_64_strict(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dcoDecodeUint64List(raw);
@@ -24192,6 +24223,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return raw == null
         ? null
         : dco_decode_box_autoadd_api_chemisorb_debug_form(raw);
+  }
+
+  @protected
+  APIChemisorbDebugRef? dco_decode_opt_box_autoadd_api_chemisorb_debug_ref(
+      dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_api_chemisorb_debug_ref(raw);
   }
 
   @protected
@@ -25928,11 +25968,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  APIChemisorbDebugRow sse_decode_api_chemisorb_debug_row(
+  APIChemisorbDebugRef sse_decode_api_chemisorb_debug_ref(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_row = sse_decode_u_32(deserializer);
-    var var_parent = sse_decode_opt_box_autoadd_u_32(deserializer);
+    var var_foot = sse_decode_opt_box_autoadd_u_32(deserializer);
+    return APIChemisorbDebugRef(row: var_row, foot: var_foot);
+  }
+
+  @protected
+  APIChemisorbDebugRow sse_decode_api_chemisorb_debug_row(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_item = sse_decode_api_chemisorb_debug_ref(deserializer);
     var var_kind = sse_decode_api_chemisorb_debug_row_kind(deserializer);
     var var_legs = sse_decode_u_32(deserializer);
     var var_label = sse_decode_String(deserializer);
@@ -25940,6 +25988,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_duplicateOf = sse_decode_opt_box_autoadd_u_32(deserializer);
     var var_children = sse_decode_u_32(deserializer);
     var var_hiddenDuplicates = sse_decode_u_32(deserializer);
+    var var_mirroredChildren = sse_decode_u_32(deserializer);
+    var var_mirroredDuplicates = sse_decode_u_32(deserializer);
     var var_candidates = sse_decode_u_32(deserializer);
     var var_mirrored = sse_decode_u_32(deserializer);
     var var_undecided = sse_decode_u_32(deserializer);
@@ -25961,8 +26011,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_canRelax = sse_decode_bool(deserializer);
     var var_defaultForm = sse_decode_api_chemisorb_debug_form(deserializer);
     return APIChemisorbDebugRow(
-        row: var_row,
-        parent: var_parent,
+        item: var_item,
         kind: var_kind,
         legs: var_legs,
         label: var_label,
@@ -25970,6 +26019,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         duplicateOf: var_duplicateOf,
         children: var_children,
         hiddenDuplicates: var_hiddenDuplicates,
+        mirroredChildren: var_mirroredChildren,
+        mirroredDuplicates: var_mirroredDuplicates,
         candidates: var_candidates,
         mirrored: var_mirrored,
         undecided: var_undecided,
@@ -26060,7 +26111,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_inventoryOptions =
         sse_decode_list_api_chemisorb_inventory_option(deserializer);
     var var_reachUsed = sse_decode_bool(deserializer);
-    var var_debugSelectedRow = sse_decode_opt_box_autoadd_u_32(deserializer);
+    var var_debugSelected =
+        sse_decode_opt_box_autoadd_api_chemisorb_debug_ref(deserializer);
     var var_debugSelectedForm =
         sse_decode_opt_box_autoadd_api_chemisorb_debug_form(deserializer);
     var var_debugTreeKey = sse_decode_u_64(deserializer);
@@ -26069,7 +26121,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         rows: var_rows,
         inventoryOptions: var_inventoryOptions,
         reachUsed: var_reachUsed,
-        debugSelectedRow: var_debugSelectedRow,
+        debugSelected: var_debugSelected,
         debugSelectedForm: var_debugSelectedForm,
         debugTreeKey: var_debugTreeKey);
   }
@@ -26905,6 +26957,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIHoveredAtomInfo sse_decode_api_hovered_atom_info(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_atomId = sse_decode_u_32(deserializer);
     var var_symbol = sse_decode_String(deserializer);
     var var_elementName = sse_decode_String(deserializer);
     var var_atomicNumber = sse_decode_i_32(deserializer);
@@ -26920,6 +26973,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_nodeName = sse_decode_String(deserializer);
     var var_overlappingNodeNames = sse_decode_list_String(deserializer);
     return APIHoveredAtomInfo(
+        atomId: var_atomId,
         symbol: var_symbol,
         elementName: var_elementName,
         atomicNumber: var_atomicNumber,
@@ -29141,6 +29195,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIChemisorbDebugRef sse_decode_box_autoadd_api_chemisorb_debug_ref(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_api_chemisorb_debug_ref(deserializer));
+  }
+
+  @protected
   APIChemisorbDebugRow sse_decode_box_autoadd_api_chemisorb_debug_row(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -30329,6 +30390,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<APIChemisorbDebugRef> sse_decode_list_api_chemisorb_debug_ref(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <APIChemisorbDebugRef>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_api_chemisorb_debug_ref(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<APIChemisorbDebugRow> sse_decode_list_api_chemisorb_debug_row(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -31021,13 +31095,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  Uint32List sse_decode_list_prim_u_32_strict(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var len_ = sse_decode_i_32(deserializer);
-    return deserializer.buffer.getUint32List(len_);
-  }
-
-  @protected
   Uint64List sse_decode_list_prim_u_64_strict(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var len_ = sse_decode_i_32(deserializer);
@@ -31514,6 +31581,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_box_autoadd_api_chemisorb_debug_form(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  APIChemisorbDebugRef? sse_decode_opt_box_autoadd_api_chemisorb_debug_ref(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_api_chemisorb_debug_ref(deserializer));
     } else {
       return null;
     }
@@ -33675,11 +33754,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_api_chemisorb_debug_ref(
+      APIChemisorbDebugRef self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.row, serializer);
+    sse_encode_opt_box_autoadd_u_32(self.foot, serializer);
+  }
+
+  @protected
   void sse_encode_api_chemisorb_debug_row(
       APIChemisorbDebugRow self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_u_32(self.row, serializer);
-    sse_encode_opt_box_autoadd_u_32(self.parent, serializer);
+    sse_encode_api_chemisorb_debug_ref(self.item, serializer);
     sse_encode_api_chemisorb_debug_row_kind(self.kind, serializer);
     sse_encode_u_32(self.legs, serializer);
     sse_encode_String(self.label, serializer);
@@ -33687,6 +33773,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_box_autoadd_u_32(self.duplicateOf, serializer);
     sse_encode_u_32(self.children, serializer);
     sse_encode_u_32(self.hiddenDuplicates, serializer);
+    sse_encode_u_32(self.mirroredChildren, serializer);
+    sse_encode_u_32(self.mirroredDuplicates, serializer);
     sse_encode_u_32(self.candidates, serializer);
     sse_encode_u_32(self.mirrored, serializer);
     sse_encode_u_32(self.undecided, serializer);
@@ -33759,7 +33847,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_list_api_chemisorb_inventory_option(
         self.inventoryOptions, serializer);
     sse_encode_bool(self.reachUsed, serializer);
-    sse_encode_opt_box_autoadd_u_32(self.debugSelectedRow, serializer);
+    sse_encode_opt_box_autoadd_api_chemisorb_debug_ref(
+        self.debugSelected, serializer);
     sse_encode_opt_box_autoadd_api_chemisorb_debug_form(
         self.debugSelectedForm, serializer);
     sse_encode_u_64(self.debugTreeKey, serializer);
@@ -34377,6 +34466,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_api_hovered_atom_info(
       APIHoveredAtomInfo self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.atomId, serializer);
     sse_encode_String(self.symbol, serializer);
     sse_encode_String(self.elementName, serializer);
     sse_encode_i_32(self.atomicNumber, serializer);
@@ -36021,6 +36111,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_api_chemisorb_debug_ref(
+      APIChemisorbDebugRef self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_api_chemisorb_debug_ref(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_api_chemisorb_debug_row(
       APIChemisorbDebugRow self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -37143,6 +37240,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_api_chemisorb_debug_ref(
+      List<APIChemisorbDebugRef> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_api_chemisorb_debug_ref(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_api_chemisorb_debug_row(
       List<APIChemisorbDebugRow> self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -37679,14 +37786,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_list_prim_u_32_strict(
-      Uint32List self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    serializer.buffer.putUint32List(self);
-  }
-
-  @protected
   void sse_encode_list_prim_u_64_strict(
       Uint64List self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -38096,6 +38195,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_api_chemisorb_debug_form(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_chemisorb_debug_ref(
+      APIChemisorbDebugRef? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_api_chemisorb_debug_ref(self, serializer);
     }
   }
 

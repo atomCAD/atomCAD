@@ -548,8 +548,11 @@ fn competing_oh() -> (AtomicStructure, AtomicStructure) {
     }
     let x = mid - DVec3::Z * 1.8;
     let y = mid + across * 1.9 - DVec3::Z * 0.6;
-    for p in [x, y] {
-        let si = add_silyl_along(&mut sub, p, -DVec3::Z, 3);
+    // Their free valences point where an atom can arrive: X's sideways, out
+    // from under the planted sites (straight up it would aim between them),
+    // Y's up.
+    for (p, free) in [(x, -across), (y, DVec3::Z)] {
+        let si = add_silyl_along(&mut sub, p, free, 3);
         sub.set_atom_frozen(si, true);
     }
     // X is the nearest site to both planted sites, Y the next, both within

@@ -1476,6 +1476,71 @@ fn the_transfer_rule_takes_the_nearest_free_site() {
     assert_eq!(p.stats.pruned_no_acceptor, 1);
 }
 
+/// The moved H of a seated hypothesis sits in its acceptor's dangling bond,
+/// not on the line towards where it came from. Checked against geometry of
+/// its own: a three-bonded sp3 acceptor's free valence points along −Σ of
+/// its bond directions, and any open slot is tetrahedral to every bond the
+/// acceptor already has.
+#[test]
+fn a_transferred_atom_is_seated_in_its_acceptors_open_slot() {
+    let config = oh_feet(3.0);
+    let mut ads = AtomicStructure::new();
+    // The O–H points sideways, towards the acceptor: the old rule put the H
+    // ~47° off the acceptor's free valence (straight up).
+    add_tagged_methanol(
+        &mut ads,
+        DVec3::new(0.0, 0.0, 1.8),
+        DVec3::new(1.0, 0.0, -0.3),
+    );
+    let seated_h = |sub: &AtomicStructure| {
+        let p = plan(&ads, sub, &config).unwrap();
+        assert!(!p.hypotheses.is_empty());
+        p.hypotheses
+            .iter()
+            .map(|h| {
+                let seating = p.setup.seat(&h.steps);
+                let s = p.setup.start_structure(&h.steps, &seating);
+                let t = h.transfers[0];
+                let a = s.get_atom(t.acceptor).unwrap();
+                let x = s.get_atom(t.moved).unwrap().position;
+                let others: Vec<DVec3> = a
+                    .bonds
+                    .iter()
+                    .map(|b| b.other_atom_id())
+                    .filter(|&id| id != t.moved)
+                    .map(|id| (s.get_atom(id).unwrap().position - a.position).normalize())
+                    .collect();
+                (x - a.position, others)
+            })
+            .collect::<Vec<_>>()
+    };
+
+    // A silyl acceptor (three H below): its dangling bond points up.
+    let (sub, _) = silyl_sites(&[DVec3::ZERO, DVec3::new(2.4, 0.0, 0.0)], 3);
+    for (xa, others) in seated_h(&sub) {
+        assert_eq!(others.len(), 3);
+        let free = -others.iter().copied().sum::<DVec3>().normalize();
+        assert!(
+            xa.normalize().angle_between(free).to_degrees() < 1.0,
+            "H at {xa:?}, free valence {free:?}"
+        );
+        assert!((xa.length() - 1.48).abs() < 1e-9, "Si–H length");
+    }
+
+    // An SiH2 acceptor (two open slots): whichever slot the H takes, it is
+    // tetrahedral to the acceptor's two bonds.
+    let mut sub = AtomicStructure::new();
+    add_silyl(&mut sub, DVec3::ZERO, 3);
+    add_silyl(&mut sub, DVec3::new(2.4, 0.0, 0.0), 2);
+    let tetrahedral = (-1.0f64 / 3.0).acos().to_degrees();
+    for (xa, others) in seated_h(&sub) {
+        for o in others {
+            let angle = xa.normalize().angle_between(o).to_degrees();
+            assert!((angle - tetrahedral).abs() < 2.0, "{angle}°");
+        }
+    }
+}
+
 /// Two OH feet whose H compete for one site: the order of binding decides,
 /// and the two orders are two hypotheses. A later leg never bonds a site an
 /// earlier leg's H took.

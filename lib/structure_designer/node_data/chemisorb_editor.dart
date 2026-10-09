@@ -149,11 +149,11 @@ class _ChemisorbEditorState extends State<ChemisorbEditor> {
     }
   }
 
-  /// Selects a search-tree row for the debug pins; a refusal (a job already
+  /// Selects a search-tree item for the debug pins; a refusal (a job already
   /// runs on the node, a row with no relaxation) is reported here.
-  void _select(int row, APIChemisorbDebugForm? form) {
+  void _select(APIChemisorbDebugRef item, APIChemisorbDebugForm? form) {
     final error =
-        widget.model.chemisorbDebugSelect(widget.nodeId, row, form: form);
+        widget.model.chemisorbDebugSelect(widget.nodeId, item, form: form);
     if (error != null && mounted) {
       showErrorSnackBar(context, 'Debug view: $error');
     }
@@ -337,16 +337,18 @@ class _ChemisorbEditorState extends State<ChemisorbEditor> {
           ChemisorbDebugTree(
             treeKey: _report?.debugTreeKey,
             searched: _report?.stats.searched ?? false,
-            selectedRow: _report?.debugSelectedRow,
+            selected: _report?.debugSelected,
             selectedForm: _report?.debugSelectedForm,
             debugShown: widget.debugShown,
             shapesShown: widget.shapesShown,
-            fetchRow: (row) => chemisorb_api.getChemisorbDebugRow(row: row),
-            fetchChildren: (row, showDuplicates) =>
+            fetchRow: (item) => chemisorb_api.getChemisorbDebugRow(item: item),
+            fetchChildren: (item, showDuplicates, showMirrored) =>
                 chemisorb_api.getChemisorbDebugChildren(
-                    row: row, showDuplicates: showDuplicates),
-            fetchAncestors: (row) =>
-                chemisorb_api.getChemisorbDebugAncestors(row: row).toList(),
+                    item: item,
+                    showDuplicates: showDuplicates,
+                    showMirrored: showMirrored),
+            fetchAncestors: (item) =>
+                chemisorb_api.getChemisorbDebugAncestors(item: item),
             onSelect: _select,
             onToggleDebug: () => _togglePin(_DEBUG_PIN),
             onToggleShapes: () => _togglePin(_DEBUG_SHAPES_PIN),

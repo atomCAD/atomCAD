@@ -49,7 +49,7 @@ crates/atomcad-crystolecule/src/
 │       ├── tree.rs                 # SearchTree: one row per path, counts + near misses, no structures (the debug view's data)
 │       ├── evaluate.rs             # evaluate() / search(): relax candidates + parents against the separated reference, then the local phase
 │       ├── local.rs                # The local phase (legs 4+): levels grown from relaxed parents' positions; LevelStats; replay() / replay_start()
-│       └── debug.rs                # The debug view's data: row forms, a row's marked structure, DebugShapes (analytic field), row paths for the CLI
+│       └── debug.rs                # The debug view's data: items (states and next-foot steps) over the tree, their forms, an item's marked structure, DebugShapes (analytic field), item paths for the CLI
 ├── crystolecule_constants.rs       # Diamond unit cell size, default motif text
 ├── drawing_plane.rs                # 2D drawing plane embedded in 3D crystal
 ├── motif.rs                        # Motif struct (sites, bonds, parameters)
@@ -318,7 +318,10 @@ Rules that are easy to erode:
   site; no such site drops the leg (`pruned_no_acceptor`). Only `to_substrate`
   exists; `to_adsorbate` is a config error. Two binding orders that send an H
   to different sites are two hypotheses; the start geometry is a function of
-  the change set, which is what makes the change-set dedupe exact.
+  the change set, which is what makes the change-set dedupe exact. The moved atom is **seated in the acceptor's open
+  valence slot** (guided placement, as `passivate` places terminators), the
+  slot nearest the side it came from, after the leg bonds are made — never on
+  the line from its old position, which ignores the acceptor's bonds.
 - **Mirror check vs clash filter.** Mirror-image three-leg assignments are
   pruned always by an exact handedness test that abstains near zero (nearly
   collinear feet, a flat body); clashing seatings are pruned only with
@@ -351,17 +354,26 @@ Rules that are easy to erode:
   structure rebuilt from them (`Setup::state_structure`) must apply the bond
   changes step by step in the order the search did, or the audit's strain
   recomputation drifts.
-- **The debug view (`sequential/debug.rs`) stores nothing.** A row's view is
-  rebuilt from the tree on demand — posed and geometric seated rows by
-  geometry alone, a relaxed row from the kept candidate or by `replay` — and a
-  duplicate row is shown as its canonical row (only the path the search kept
-  produced its geometry). `needs_relaxation` is the line between "instant" and
-  "a job"; keep anything that relaxes behind it. `DebugShapes` is an analytic
+- **The debug view (`sequential/debug.rs`) stores nothing.** Its items are
+  *states* (the root, a leg row) and *steps* (`DebugItem { row, foot }`: one
+  foot's test from a state) — the steps are a grouping of the tree's rows by
+  foot, not rows of their own, so the search and the tree know nothing of
+  them. A property of a (foot, site) pair is never painted on an atom: a step
+  marks the sites its test accepted, whatever became of each leg, and the
+  verdict is the leg row's. An item's view is rebuilt from the tree on demand
+  — posed and geometric seated items by geometry alone, a relaxed row from the
+  kept candidate or by `replay` — and a duplicate row is shown as its
+  canonical row (only the path the search kept produced its geometry). A step
+  is shown in the form its test read positions from (posed / seated /
+  relaxed by the state's leg count). `needs_relaxation` is the line between
+  "instant" and "a job"; keep anything that relaxes behind it. De-emphasis is
+  `set_atom_alpha`, never the ghost flag: ghosting only desaturates, which
+  does nothing to a grey silicon. `DebugShapes` is an analytic
   field that *does* report a native grid (`SHAPE_GRID`), on purpose: the
   shells are ~20 Å across and the analytic fallback spacing would sample
   millions of points per redraw. Its shell is the shell test's envelope over
-  site elements, and a test pins that a site is inside a drawn shape iff the
-  search's own `need_against` accepts it — change one and the test fails.
+  site elements, and a test pins that a site is inside a step's shape iff its
+  foot's `need_against` accepts it — change one and the test fails.
 
 **Memory Layout**: `InlineBond` packs atom_id (29 bits) + bond_order (3 bits) into 4 bytes. `SmallVec<[InlineBond; 4]>` keeps up to 4 bonds inline per atom. Spatial grid (FxHashMap, cell size 4.0 Å) enables O(1) neighbor queries. `AtomicStructure` no longer carries a `frame_transform` — movement nodes bake transforms directly into atom positions (see `doc/design_lattice_space_refactoring.md` Appendix B).
 

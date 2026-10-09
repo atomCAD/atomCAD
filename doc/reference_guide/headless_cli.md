@@ -20,7 +20,8 @@ it is an ordinary command-line tool and nothing about it is AI-specific.
   node's **Run** button: evaluation never runs that search, so without `run` a
   script only ever sees the node's plan.
 - `atomcad-cli debug-select <node> [<path>] [--form seated|relaxed] [--show]`
-  clicks a row of a `chemisorb` node's search tree: the row shows on the node's
+  clicks an item of a `chemisorb` node's search tree (a leg `12-45,13-61`, or
+  the next foot after it, `12-45,13-61,14`): the item shows on the node's
   `debug` and `debug_shapes` pins (`--show` displays them), and the command
   prints what it marks and its children's paths, to go one level deeper.
 
