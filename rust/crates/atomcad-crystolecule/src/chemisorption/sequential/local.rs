@@ -364,7 +364,7 @@ impl Local<'_> {
             let mut left = left_after(setup, &h.steps);
             let mut misses = Vec::new();
             for f in 0..setup.feet.len() {
-                if h.steps.iter().any(|s| s.leg.foot == f) {
+                if h.steps.iter().any(|s| s.leg.foot == f) || !setup.may_be_next(f, h.steps.len()) {
                     continue;
                 }
                 let foot_at = setup.position_in(&state.positions, setup.feet[f].id);

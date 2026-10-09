@@ -216,7 +216,7 @@ pub fn next_feet(plan: &SequentialPlan, report: Option<&SearchReport>, row: u32)
             }
             let bonded: Vec<usize> = tree.path(row).iter().map(|l| l.foot).collect();
             (0..plan.setup.feet.len())
-                .filter(|f| !bonded.contains(f))
+                .filter(|&f| !bonded.contains(&f) && plan.setup.may_be_next(f, bonded.len()))
                 .map(|f| f as u32)
                 .collect()
         }

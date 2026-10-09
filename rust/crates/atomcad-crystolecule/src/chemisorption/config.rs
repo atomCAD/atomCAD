@@ -31,6 +31,10 @@ pub enum ChemisorptionError {
     /// searched, since a mistyped tag would otherwise read as "found nothing".
     #[error("no {side} atom carries the tag '{tag}'")]
     UnknownTag { side: Side, tag: String },
+    /// Numbered foot tags (`foot1`, `foot2`, …) that do not give one leg
+    /// order.
+    #[error("foot order: {0}")]
+    FootOrder(String),
     #[error("relaxation failed: {0}")]
     Relaxation(String),
     #[error("tagging the result failed: {0}")]

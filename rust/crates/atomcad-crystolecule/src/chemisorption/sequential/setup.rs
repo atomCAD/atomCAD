@@ -10,7 +10,7 @@
 use crate::atomic_constants::ATOM_INFO;
 use crate::atomic_structure::AtomicStructure;
 use crate::atomic_structure::inline_bond::BOND_SINGLE;
-use crate::chemisorption::atoms::{free_valence, reactive_atoms};
+use crate::chemisorption::atoms::{free_valence, ordered_feet, reactive_atoms};
 use crate::chemisorption::config::{ChemisorptionError, Side};
 use crate::chemisorption::transfer::{Transfer, TransferDirection, apply_transfers};
 use crate::rigid_fit::rigid_fit;
@@ -198,8 +198,11 @@ pub struct Setup {
     /// Input atom id → combined id, per side.
     pub adsorbate_ids: FxHashMap<u32, u32>,
     pub substrate_ids: FxHashMap<u32, u32>,
-    /// In combined-id order.
+    /// In combined-id order, or in leg order when [`Setup::ordered`].
     pub feet: Vec<Foot>,
+    /// The feet are numbered (`foot1`, `foot2`, …): leg `k` may only be
+    /// `feet[k - 1]` (§4.1, "Foot order").
+    pub ordered: bool,
     /// In combined-id order, so a lower index is a lower id.
     pub sites: Vec<Site>,
     /// Every adsorbate atom, combined ids, sorted, and its posed position.
@@ -240,12 +243,16 @@ impl Setup {
         let mut combined = AtomicStructure::new();
         let adsorbate_ids = combined.add_atomic_structure(adsorbate)?;
         let substrate_ids = combined.add_atomic_structure(substrate)?;
-        let ads_reactive = reactive_atoms(
-            adsorbate,
-            &adsorbate_ids,
-            &config.adsorbate_tag,
-            Side::Adsorbate,
-        )?;
+        let ordered = ordered_feet(adsorbate, &adsorbate_ids, &config.adsorbate_tag)?;
+        let ads_reactive: Vec<u32> = match &ordered {
+            Some(feet) => feet.iter().map(|(id, _)| *id).collect(),
+            None => reactive_atoms(
+                adsorbate,
+                &adsorbate_ids,
+                &config.adsorbate_tag,
+                Side::Adsorbate,
+            )?,
+        };
         let sub_reactive = reactive_atoms(
             substrate,
             &substrate_ids,
@@ -264,7 +271,7 @@ impl Setup {
         donated.dedup();
 
         let mut feet = Vec::new();
-        for &id in &ads_reactive {
+        for (rank, &id) in ads_reactive.iter().enumerate() {
             let a = atom(id);
             let mut foot = Foot {
                 id,
@@ -282,6 +289,14 @@ impl Setup {
                     let atoms = donatable_atoms(&combined, id, z);
                     (!atoms.is_empty()).then_some((z, atoms))
                 }) else {
+                    // A numbered foot that cannot bond would shift every
+                    // later leg's number without a word.
+                    if let Some(feet) = &ordered {
+                        return Err(ChemisorptionError::FootOrder(format!(
+                            "the atom tagged '{}' cannot bond: it has no free                              valence and no atom a transfer rule lets it donate",
+                            feet[rank].1
+                        )));
+                    }
                     continue;
                 };
                 foot.donates = Some(element);
@@ -383,6 +398,7 @@ impl Setup {
             adsorbate_ids,
             substrate_ids,
             feet,
+            ordered: ordered.is_some(),
             sites,
             adsorbate_atoms,
             adsorbate_posed,
@@ -404,6 +420,13 @@ impl Setup {
     /// The rest length `b` of the bond a leg forms.
     pub fn bond_length(&self, leg: Leg) -> f64 {
         self.bond[self.foot_class[leg.foot]][self.site_class[leg.site]]
+    }
+
+    /// Whether foot `f` may be the next leg of a state with `bonded` legs:
+    /// in an ordered search only the foot of that number, otherwise any
+    /// (the caller skips feet already bonded).
+    pub fn may_be_next(&self, f: usize, bonded: usize) -> bool {
+        !self.ordered || f == bonded
     }
 
     /// Whether a leg may bond at all: no bond forms between two frozen atoms.

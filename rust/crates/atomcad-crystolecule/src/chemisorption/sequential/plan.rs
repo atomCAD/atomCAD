@@ -172,6 +172,9 @@ impl Planner<'_> {
             if self.stopped() {
                 break;
             }
+            if !self.setup.may_be_next(f, 0) {
+                continue;
+            }
             let row = self.tree.push(root, RowKind::Foot(f as u32), 0);
             let mut misses = Vec::new();
             for s in 0..self.setup.sites.len() {
@@ -202,7 +205,7 @@ impl Planner<'_> {
         let bonded: Vec<Leg> = self.steps.iter().map(|s| s.leg).collect();
         let mut misses = Vec::new();
         'feet: for f in 0..self.setup.feet.len() {
-            if self.foot_used[f] {
+            if self.foot_used[f] || !self.setup.may_be_next(f, bonded.len()) {
                 continue;
             }
             for s in 0..self.setup.sites.len() {

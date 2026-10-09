@@ -1478,7 +1478,7 @@ pub fn get_node_type() -> NodeType {
                       pruned (**clash_filter**, on by default) and mirror-image three-leg \
                       assignments always are. One-leg bindings are listed only for a \
                       one-foot adsorbate. **adsorbate_tag** / **substrate_tag** restrict the \
-                      reactive atoms (empty = all; tag the facet to keep the search small). \
+                      reactive atoms (empty = all; tag the facet to keep the search small).                       **Foot order**: tag the feet `foot1`, `foot2`, … instead of `foot` (with                       adsorbate_tag `foot`) and leg k is only ever foot k, so the search                       follows that one order; the plain tag tries every order. \
                       **max_formed_bonds** caps the legs (-1 = no cap). **budget** caps the \
                       relaxations; a truncated search is not exhaustive.\n\
                       \n\

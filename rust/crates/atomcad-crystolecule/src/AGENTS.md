@@ -335,8 +335,15 @@ Rules that are easy to erode:
   **panics** in cutoff mode (it keeps a neighbour list, not pair parameters),
   so `relax.rs` derives the vdW term there as energy minus the bonded terms.
   Tests that only use `AllPairs` will not catch a regression here.
+- **Numbered feet fix the leg order.** `foot1`, `foot2`, … under
+  `adsorbate_tag` `foot` (`atoms::ordered_feet`) put `Setup::feet` in leg
+  order and set `Setup::ordered`; every place that picks a next foot (plan's
+  anchor and `extend`, the local phase, the debug view's `next_feet`, the
+  test oracle) asks `Setup::may_be_next`. A new enumeration loop must too.
+  A numbered atom that cannot be a foot is an error, never skipped.
 - `input_fingerprint` hashes exactly what a search depends on — never
-  selection or display flags, and of the tags only the side's reactive one —
+  selection or display flags, and of the tags only the side's reactive one
+  (and its numbered forms) —
   so selecting an atom does not make a stored result stale. A new
   `SequentialSearch` field must be added to it (the destructuring there
   makes that a compile error).
@@ -725,7 +732,8 @@ O(n²), compares flags and tag names). Design doc:
 - `CubeError` (io/cube_loader) — Io / Parse / Unsupported / Field variants
 - `ChemisorptionError` (chemisorption/config) — InvalidConfig (incl. a transfer
   rule for a non-monovalent element, or a `to_adsorbate` one) / UnknownTag (a
-  reactive tag no atom carries: an error, not "found nothing") /
+  reactive tag no atom carries: an error, not "found nothing") / FootOrder
+  (numbered foot tags that do not give one order) /
   Relaxation / Tag
 - `FieldError` (field) — grid description problems (zero dimension, sample-count
   mismatch, degenerate axes, non-finite sample)

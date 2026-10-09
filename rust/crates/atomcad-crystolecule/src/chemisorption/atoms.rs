@@ -98,6 +98,69 @@ pub fn free_valence(structure: &AtomicStructure, id: u32) -> usize {
     }
 }
 
+/// The leg number a tag gives under the reactive tag `base`: `foot2` → 2
+/// under `foot`. `None` unless the rest of the name is decimal digits.
+pub(crate) fn foot_number(name: &str, base: &str) -> Option<u32> {
+    let digits = name.strip_prefix(base)?;
+    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    digits.parse().ok()
+}
+
+/// The feet of an ordered search: the adsorbate atoms tagged `<base><n>`, as
+/// (combined id, tag), in leg order by `n`. `None` when no atom carries a
+/// numbered form of `base` (or `base` is empty), and the search is
+/// unordered.
+///
+/// Refused: a numbered tag beside the plain `base` on the same input, two
+/// atoms with one number, and one atom with two numbers.
+pub(crate) fn ordered_feet(
+    input: &AtomicStructure,
+    ids: &FxHashMap<u32, u32>,
+    base: &Option<String>,
+) -> Result<Option<Vec<(u32, String)>>, ChemisorptionError> {
+    let Some(base) = base.as_deref().map(str::trim).filter(|t| !t.is_empty()) else {
+        return Ok(None);
+    };
+    let mut ranked: Vec<(u32, u32, String)> = Vec::new();
+    for name in input.tag_names() {
+        if let Some(n) = foot_number(name, base) {
+            for id in input.atoms_with_tag(name) {
+                ranked.push((n, id, name.clone()));
+            }
+        }
+    }
+    if ranked.is_empty() {
+        return Ok(None);
+    }
+    let refuse = |why: String| Err(ChemisorptionError::FootOrder(why));
+    if !input.atoms_with_tag(base).is_empty() {
+        return refuse(format!(
+            "atoms carry both '{base}' and numbered '{base}<n>' tags; \
+             use one form or the other"
+        ));
+    }
+    ranked.sort();
+    for pair in ranked.windows(2) {
+        if pair[0].0 == pair[1].0 {
+            return refuse(format!("more than one atom is tagged '{}'", pair[0].2));
+        }
+    }
+    let mut seen: FxHashMap<u32, &str> = FxHashMap::default();
+    for (_, id, name) in &ranked {
+        if let Some(other) = seen.insert(*id, name) {
+            return refuse(format!("one atom is tagged both '{other}' and '{name}'"));
+        }
+    }
+    Ok(Some(
+        ranked
+            .into_iter()
+            .map(|(_, id, name)| (ids[&id], name))
+            .collect(),
+    ))
+}
+
 /// Reactive atoms of one side, as combined ids, sorted.
 pub(crate) fn reactive_atoms(
     input: &AtomicStructure,

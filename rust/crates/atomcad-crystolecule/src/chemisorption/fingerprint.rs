@@ -8,11 +8,11 @@
 //! value it was computed from, never for a pose the user has since moved.
 //!
 //! What is hashed, per input: every atom's id, element, position bits, bonds
-//! (partner and order), frozen flag, hybridization override, and whether it
-//! carries that side's reactive tag. What is **not** hashed: selection, the
-//! display-only flags, and tags other than the reactive one — none of them
-//! changes a search, and selecting an atom must not make a result stale. Of
-//! the settings, every field of [`SequentialSearch`]. `reach` is hashed even
+//! (partner and order), frozen flag, hybridization override, and which of
+//! that side's reactive tag and its numbered forms (`foot1`, …) it carries.
+//! What is **not** hashed: selection, the display-only flags, and other
+//! tags — none of them changes a search, and selecting an atom must not make
+//! a result stale. Of the settings, every field of [`SequentialSearch`]. `reach` is hashed even
 //! when nothing reads it (three feet or fewer and no transfer rule): whether
 //! it is read depends on the inputs, and a property the panel greys out is
 //! not one a user edits.
@@ -20,6 +20,7 @@
 //! The value is compared within one process and never persisted, so the
 //! standard library's hasher is enough.
 
+use super::atoms::foot_number;
 use super::sequential::SequentialSearch;
 use crate::atomic_structure::AtomicStructure;
 use crate::simulation::uff::VdwMode;
@@ -38,7 +39,15 @@ fn hash_structure(s: &AtomicStructure, tag: &Option<String>, h: &mut DefaultHash
         }
         atom.is_frozen().hash(h);
         atom.hybridization_override().hash(h);
-        tag.is_some_and(|t| s.atom_has_tag(atom.id, t)).hash(h);
+        // The reactive tag and its numbered forms (`foot1`, …): a number
+        // fixes a foot's leg.
+        if let Some(t) = tag {
+            for name in s.atom_tags(atom.id) {
+                if name == t || foot_number(name, t).is_some() {
+                    name.hash(h);
+                }
+            }
+        }
         atom.bonds.len().hash(h);
         for bond in &atom.bonds {
             bond.other_atom_id().hash(h);

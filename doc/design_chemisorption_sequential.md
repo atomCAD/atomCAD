@@ -148,6 +148,19 @@ Further:
   only, and one-leg bindings are the results. This is the only case where they
   are listed (D8).
 
+**Foot order** (added 2026-10-09, asked for by users who want to choose the
+order the legs bind in). With `adsorbate_tag` = `foot`, atoms tagged `foot1`,
+`foot2`, … (the tag followed by decimal digits only) are the feet, and the
+number fixes the order: leg *k* is only ever the *k*-th foot by number, in
+every phase (anchor, sphere, ring, local). Gaps are allowed (`foot1`, `foot3`,
+`foot7`). A numbered foot that finds no site ends its branch; a later foot is
+never bonded in its place, so the results are the order's prefixes. Plain
+`foot` keeps the exhaustive search with dedupe. Refused (`FootOrder`): the
+plain and the numbered form on one adsorbate, two atoms with one number, one
+atom with two numbers, and a numbered atom that cannot be a foot (dropping it
+silently would shift every later number). The fingerprint hashes the numbered
+tags.
+
 ### 4.2 Leg 1: anchor
 
 For each foot `f₁`, every site `s₁` within `anchor_reach` of the posed `F₁`
@@ -372,6 +385,8 @@ and relax once) was rejected after the spike (§10 Q1, §13.7).
 - Determinism (old R10) holds as today. Enumeration runs in atom-id order,
   relaxations run in parallel with `keep_best` by (strain, change set), and the
   local phase sorts each level before truncating.
+- **Numbered feet** (§4.1, "Foot order") give one order, so no two paths
+  reach one change set and the dedupe never fires; it stays in place.
 - **Not deduplicated:** translational copies, the same pattern on an
   equivalent set of sites elsewhere on the proxy. A small `anchor_reach`
   limits them. Recognising equivalent sites is deferred (§8).
@@ -675,7 +690,8 @@ With **Show duplicates** on, the hidden row appears too:
   duplicates** toggle in the panel shows the others as "= duplicate of …"
   rows that jump to the canonical one, which makes the deduplication itself
   visible when debugging. Leg orders are tried exhaustively (every foot as
-  leg 1, every remaining foot as leg 2, …), so on the stand-in tripod at
+  leg 1, every remaining foot as leg 2, …; with numbered feet, §4.1, each
+  state has one next foot), so on the stand-in tripod at
   tolerance 1.0 the leg-3 level has about 3,600 paths for 1,760 distinct
   hypotheses (§13.2): hidden, a user browses results; shown, the maintainer
   sees how each order was merged. The toggle is a **display option only**:

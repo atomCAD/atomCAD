@@ -615,6 +615,64 @@ fn two_binding_orders_with_different_acceptors_stay_two_hypotheses() {
     assert!(listed.values().any(|&n| n > 1));
 }
 
+/// Numbered feet in the local phase: leg 4 is only ever `foot4`, so nothing
+/// is deduplicated, and which competing OH is numbered first decides where
+/// the H's go.
+#[test]
+fn numbered_feet_fix_the_order_in_the_local_phase_too() {
+    let (plain, sub) = competing_oh();
+    let (_, feet) = stand_in(4);
+    let config = SequentialSearch {
+        adsorbate_tag: Some("foot".into()),
+        transfers: vec![TransferRule {
+            element: H,
+            direction: TransferDirection::ToSubstrate,
+        }],
+        ..config(Some(4))
+    };
+    // The two OH feet: the inner one (`feet[3]`) and the outer one nearest
+    // it. Each takes the shared acceptor when it bonds first: inner last,
+    // then inner first and the outer OH last.
+    let pos = |i: usize| plain.get_atom(feet[i]).unwrap().position;
+    let outer = (0..3)
+        .min_by(|&a, &b| pos(a).distance(pos(3)).total_cmp(&pos(b).distance(pos(3))))
+        .unwrap();
+    let rest: Vec<usize> = (0..3).filter(|&i| i != outer).collect();
+    let mut moves_by_order = Vec::new();
+    for order in [[rest[0], rest[1], outer, 3], [3, rest[0], rest[1], outer]] {
+        let mut ads = plain.clone();
+        for (n, &i) in order.iter().enumerate() {
+            ads.remove_atom_tag(feet[i], "foot");
+            ads.add_atom_tag(feet[i], &format!("foot{}", n + 1))
+                .unwrap();
+        }
+        let run = run(&ads, &sub, config.clone());
+        let (p, r) = (&run.plan, &run.report);
+        assert!(p.setup.ordered);
+        assert!(!r.local.is_empty());
+        for h in &r.local {
+            let feet: Vec<usize> = h.steps.iter().map(|s| s.leg.foot).collect();
+            assert_eq!(feet, vec![0, 1, 2, 3]);
+        }
+        assert_eq!(p.stats.duplicates, 0);
+        assert!(r.stats.local.iter().all(|l| l.duplicates == 0));
+        // One order: one set of moves per bond set.
+        let mut by_bonds: BTreeMap<Vec<(u32, u32)>, BTreeSet<_>> = BTreeMap::new();
+        for h in &r.local {
+            let (formed, moves) = input_change(&p.setup, &h.key());
+            by_bonds.entry(formed).or_default().insert(moves);
+        }
+        assert!(by_bonds.values().all(|m| m.len() == 1));
+        moves_by_order.push(by_bonds);
+    }
+    let (late, early) = (&moves_by_order[0], &moves_by_order[1]);
+    let differ = late
+        .iter()
+        .filter(|(bonds, m)| early.get(*bonds).is_some_and(|e| e != *m))
+        .count();
+    assert!(differ > 0, "the order never moved an H");
+}
+
 // ============================================================================
 // Filters, budget, determinism
 // ============================================================================

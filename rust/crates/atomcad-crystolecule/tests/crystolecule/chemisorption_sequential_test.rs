@@ -9,7 +9,7 @@ use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
 use atomcad_crystolecule::chemisorption::sequential::*;
 use atomcad_crystolecule::chemisorption::{
-    BondInventory, ChemisorptionError, Side, TransferDirection, TransferRule,
+    BondInventory, ChemisorptionError, Side, TransferDirection, TransferRule, input_fingerprint,
 };
 use glam::{DMat3, DQuat, DVec3};
 use std::collections::{BTreeMap, BTreeSet};
@@ -1740,6 +1740,192 @@ fn tags_select_feet_and_sites_and_unknown_tags_are_errors() {
         }) => assert_eq!(tag, "nope"),
         other => panic!("{other:?}"),
     }
+}
+
+// ============================================================================
+// Foot order: numbered feet (`foot1`, `foot2`, …)
+// ============================================================================
+
+/// The tripod with its feet tagged `<tag>` in the order given.
+fn tripod_tagged(tags: &[(usize, &str)]) -> (AtomicStructure, AtomicStructure, Vec<u32>) {
+    let (mut ads, slab) = tripod_over_slab();
+    let (_, feet) = posed_stand_in(3, 0.0, DVec3::ZERO);
+    for &(i, tag) in tags {
+        ads.add_atom_tag(feet[i], tag).unwrap();
+    }
+    (ads, slab, feet)
+}
+
+fn foot_tag(tolerance: f64) -> SequentialSearch {
+    SequentialSearch {
+        adsorbate_tag: Some("foot".into()),
+        ..cfg(3.5, tolerance)
+    }
+}
+
+#[test]
+fn numbered_feet_fix_the_leg_order() {
+    // Against the id order, so the order cannot come from the ids.
+    let (ads, slab, feet) = tripod_tagged(&[(2, "foot1"), (0, "foot2"), (1, "foot3")]);
+    let config = foot_tag(0.5);
+    let p = plan(&ads, &slab, &config).unwrap();
+    assert!(p.setup.ordered);
+    let order: Vec<u32> = p.setup.feet.iter().map(|f| f.id).collect();
+    let want: Vec<u32> = [2, 0, 1]
+        .iter()
+        .map(|&i| p.setup.adsorbate_ids[&feet[i]])
+        .collect();
+    assert_eq!(order, want);
+    assert_stats_add_up(&p);
+    assert_matches_oracle(&p, &config, "ordered tripod");
+    assert_eq!(p.stats.duplicates, 0, "one order: nothing to deduplicate");
+    // Leg k is foot k on every row, and a state offers only that foot next.
+    for (row, r) in p.tree.rows().iter().enumerate() {
+        match r.kind {
+            RowKind::Root => assert_eq!(next_feet(&p, None, 0), vec![0]),
+            RowKind::Foot(f) => assert_eq!(f, 0),
+            RowKind::Leg { foot, .. } => {
+                assert_eq!(foot as usize + 1, r.legs as usize);
+                for f in next_feet(&p, None, row as u32) {
+                    assert_eq!(f as usize, r.legs as usize);
+                }
+            }
+        }
+    }
+    // The orders the unordered search also tries, and only those.
+    let (plain, _, _) = tripod_tagged(&[(0, "foot"), (1, "foot"), (2, "foot")]);
+    let all = plan(&plain, &slab, &config).unwrap();
+    assert!(!all.setup.ordered);
+    let (ordered, every) = (plan_bond_sets(&p), plan_bond_sets(&all));
+    assert!(p.stats.torus_triples > 0);
+    assert!(ordered.is_subset(&every) && ordered.len() < every.len());
+}
+
+#[test]
+fn the_foot_order_decides_which_hydrogen_goes_first() {
+    // As in `transfers_are_fixed_when_their_leg_is_added`: o1 first sends its
+    // H to B and o2's to D; o2 first sends its H to B and o1's to E. With
+    // numbered feet only the numbered order is searched.
+    let mut base = AtomicStructure::new();
+    let (o1, _) = add_methanol(
+        &mut base,
+        DVec3::new(0.0, 0.0, 1.8),
+        DVec3::new(1.0, 0.0, -0.3),
+    );
+    let (o2, _) = add_methanol(
+        &mut base,
+        DVec3::new(4.6, 0.0, 1.8),
+        DVec3::new(-1.0, 0.0, -0.3),
+    );
+    let (sub, s) = silyl_sites(
+        &[
+            DVec3::new(-2.4, 0.0, 0.0),
+            DVec3::ZERO,
+            DVec3::new(2.3, 0.0, 0.0),
+            DVec3::new(4.6, 0.0, 0.0),
+            DVec3::new(7.0, 0.0, 0.0),
+        ],
+        3,
+    );
+    let (e, a, b, c, d) = (s[0], s[1], s[2], s[3], s[4]);
+    let mut f = vec![(o1, a), (o2, c)];
+    f.sort_unstable();
+    let change = |m: [(u32, u32); 2]| {
+        let mut m = m.to_vec();
+        m.sort_unstable();
+        (f.clone(), m)
+    };
+    let config = oh_feet(3.0);
+    for (first, second, want) in [
+        (o1, o2, change([(o1, b), (o2, d)])),
+        (o2, o1, change([(o1, e), (o2, b)])),
+    ] {
+        let mut ads = base.clone();
+        ads.add_atom_tag(first, "foot1").unwrap();
+        ads.add_atom_tag(second, "foot2").unwrap();
+        let p = plan(&ads, &sub, &config).unwrap();
+        let both: BTreeSet<InputChange> = plan_changes(&p)
+            .into_iter()
+            .filter(|(formed, _)| *formed == f)
+            .collect();
+        assert_eq!(both, BTreeSet::from([want]));
+        assert_stats_add_up(&p);
+        assert_matches_oracle(&p, &config, "numbered OH feet");
+    }
+}
+
+#[test]
+fn numbered_feet_that_give_no_order_are_errors() {
+    let config = foot_tag(0.5);
+    let refused = |tags: &[(usize, &str)]| -> String {
+        let (ads, slab, _) = tripod_tagged(tags);
+        match plan(&ads, &slab, &config) {
+            Err(ChemisorptionError::FootOrder(msg)) => msg,
+            other => panic!("{tags:?}: {other:?}"),
+        }
+    };
+    let both = refused(&[(0, "foot1"), (1, "foot2"), (2, "foot")]);
+    assert!(both.contains("both 'foot' and numbered"), "{both}");
+    let twice = refused(&[(0, "foot1"), (1, "foot1"), (2, "foot2")]);
+    assert!(
+        twice.contains("more than one atom is tagged 'foot1'"),
+        "{twice}"
+    );
+    let two = refused(&[(0, "foot1"), (0, "foot2"), (1, "foot3")]);
+    assert!(two.contains("tagged both 'foot1' and 'foot2'"), "{two}");
+
+    // A numbered atom that cannot bond: a saturated cage carbon.
+    let (mut ads, slab, feet) = tripod_tagged(&[(0, "foot1"), (1, "foot3")]);
+    let carbon = ads
+        .atoms_values()
+        .find(|a| a.atomic_number == C)
+        .unwrap()
+        .id;
+    ads.add_atom_tag(carbon, "foot2").unwrap();
+    match plan(&ads, &slab, &config) {
+        Err(ChemisorptionError::FootOrder(msg)) => {
+            assert!(msg.contains("'foot2' cannot bond"), "{msg}")
+        }
+        other => panic!("{other:?}"),
+    }
+
+    // Gaps are fine: the numbers only order the feet.
+    let (ads, slab, _) = tripod_tagged(&[(0, "foot7"), (1, "foot1"), (2, "foot3")]);
+    let p = plan(&ads, &slab, &config).unwrap();
+    let order: Vec<u32> = p.setup.feet.iter().map(|f| f.id).collect();
+    let want: Vec<u32> = [1, 2, 0]
+        .iter()
+        .map(|&i| p.setup.adsorbate_ids[&feet[i]])
+        .collect();
+    assert_eq!(order, want);
+
+    // Only digits make a number: `foot_1` and `footx` are other tags, so
+    // nothing carries `foot`.
+    let (ads, slab, _) = tripod_tagged(&[(0, "foot_1"), (1, "footx")]);
+    assert!(matches!(
+        plan(&ads, &slab, &config),
+        Err(ChemisorptionError::UnknownTag {
+            side: Side::Adsorbate,
+            ..
+        })
+    ));
+}
+
+#[test]
+fn renumbering_the_feet_changes_the_fingerprint() {
+    let config = foot_tag(0.5);
+    let print = |tags: &[(usize, &str)]| {
+        let (ads, slab, _) = tripod_tagged(tags);
+        input_fingerprint(&ads, &slab, &config)
+    };
+    let ordered = print(&[(0, "foot1"), (1, "foot2"), (2, "foot3")]);
+    assert_ne!(ordered, print(&[(0, "foot2"), (1, "foot1"), (2, "foot3")]));
+    assert_ne!(ordered, print(&[(0, "foot"), (1, "foot"), (2, "foot")]));
+    // Another tag on a foot changes no search.
+    assert_eq!(
+        ordered,
+        print(&[(0, "foot1"), (1, "foot2"), (2, "foot3"), (0, "label")])
+    );
 }
 
 #[test]

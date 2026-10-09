@@ -541,9 +541,10 @@ fn le(have: &BTreeMap<BondKind, usize>, cap: &BTreeMap<BondKind, usize>) -> bool
 }
 
 /// Naive enumeration of the geometric phase: every ordered tuple of up to
-/// three legs with distinct feet, each tuple checked against the conditions
-/// of §4.2–4.5 as the design states them, the transfer rule applied in tuple
-/// order, then normalized and deduplicated by change set.
+/// three legs with distinct feet (in foot order only, for numbered feet),
+/// each tuple checked against the conditions of §4.2–4.5 as the design
+/// states them, the transfer rule applied in tuple order, then normalized and
+/// deduplicated by change set.
 pub fn oracle(
     setup: &Setup,
     config: &SequentialSearch,
@@ -592,6 +593,11 @@ pub fn oracle(
         }
         for f in 0..feet {
             if tuple.iter().any(|l| l.foot == f) {
+                continue;
+            }
+            // Numbered feet (`foot1`, `foot2`, …): only the tuple in their
+            // order, foot k as leg k.
+            if setup.ordered && f != tuple.len() {
                 continue;
             }
             for s in 0..sites {

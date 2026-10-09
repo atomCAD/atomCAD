@@ -1093,7 +1093,19 @@ surface. Two checks run on the seating, and both are reported:
   reflected to fit their sites is pruned always. When the check cannot tell
   (nearly collinear feet, a flat molecule) the binding is kept.
 
-A binding reached in several orders of its legs is relaxed once. **One-leg
+**Foot order** (optional). By default every order of the legs is tried —
+any foot as leg 1, any remaining foot as leg 2, and so on — and a binding
+reached in several orders is relaxed once. To fix the order instead, number
+the feet: with `adsorbate_tag` set to `foot`, tag the atoms `foot1`, `foot2`,
+`foot3`, … rather than `foot`. Leg 1 is then always `foot1`, leg 2 always
+`foot2`, and so on; the numbers need not be consecutive (`foot1`, `foot3`,
+`foot7` give legs 1, 2, 3 in that order). When a numbered foot finds no site,
+that binding stops there: a later foot is never bonded in its place. The
+following are errors: plain `foot` and numbered tags in the same molecule, two
+atoms with the same number, one atom with two numbers, and a numbered atom
+that cannot bond (no free valence and nothing a transfer lets it donate).
+
+**One-leg
 bindings are listed only for a molecule with a single foot** (water, a single
 radical): a molecule with more feet is not "bound" by one of them.
 
@@ -1129,7 +1141,9 @@ makes the result stale, and you press Run again.
   of the search, and **tag the facet** you mean on the substrate: the shells of
   legs 2 and 3 are wide, and an untagged proxy offers its bare side and bottom
   faces, and any unreconstructed rim atom, as sites too. A tag no atom carries
-  is an error, so a typo does not read as "found nothing".
+  is an error, so a typo does not read as "found nothing". Numbered forms of
+  the adsorbate tag (`foot1`, `foot2`, …) fix the leg order (see **Foot
+  order** above).
 - `anchor_reach` (default 3.5 Å) — leg 1: sites within this of a posed foot.
   On a periodic surface the variety comes from the later legs, so this can stay
   small; raising it mostly adds the same patterns on neighbouring sites.
