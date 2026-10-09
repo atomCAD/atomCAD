@@ -1,16 +1,18 @@
-//! Phases 2 and 3 of the chemisorption search design — the `chemisorb` node
-//! shell, and its `transfers` pin.
+//! The `chemisorb` node: a shell over the sequential chemisorption search
+//! (`design_chemisorption_sequential.md`, Phase 3), and its `transfers` pin.
 //!
 //! The search itself is tested in `atomcad-crystolecule`'s
-//! `chemisorption_test.rs`. What is exercised here is what the node adds: the
-//! run model (evaluation shows the plan and never searches; Run stores a result
-//! keyed by an input fingerprint; a mismatch falls back to the plan and says
-//! `stale`), the three outputs and their records, the filters and `top_n` (search
-//! settings like any other), the eval cache the panel reads, the text format
-//! and the `.cnnd` round trip.
+//! `chemisorption_sequential_*` files. What is exercised here is what the node
+//! adds: the run model (evaluation shows the plan and never searches; Run
+//! stores a result keyed by an input fingerprint; a mismatch falls back to the
+//! plan and says `stale`), the two outputs and their records, the filters and
+//! `top_n` (search settings like any other), the eval cache the panel reads,
+//! the text format and the `.cnnd` round trip.
 //!
-//! The fixture is the phase-1 •OH over three silyl radicals: three single-bond
-//! hypotheses, small enough that a debug-build Run takes well under a second.
+//! The main fixture is •OH over three silyl radicals: a one-foot adsorbate, so
+//! three one-leg hypotheses, small enough that a debug-build Run takes well
+//! under a second. A three-foot cage over the same silyls exercises the
+//! filters (two- and three-leg bindings), water the H transfer rule.
 
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
@@ -60,6 +62,46 @@ fn hydroxyl(offset: DVec3) -> AtomicStructure {
     let o = s.add_atom(O, DVec3::new(0.3, 0.2, 2.2) + offset);
     let h = s.add_atom(H, DVec3::new(0.3, 0.2, 3.17) + offset);
     s.add_bond(o, h, BOND_SINGLE);
+    s
+}
+
+/// Water above the origin: its O has no free valence, so with an H transfer
+/// record it is a foot that donates one H.
+fn water() -> AtomicStructure {
+    let mut s = AtomicStructure::new();
+    let p = DVec3::new(0.3, 0.2, 2.2);
+    let o = s.add_atom(O, p);
+    for d in [DVec3::new(0.76, 0.0, 0.59), DVec3::new(-0.76, 0.0, 0.59)] {
+        let h = s.add_atom(H, p + d);
+        s.add_bond(o, h, BOND_SINGLE);
+    }
+    s
+}
+
+/// A three-foot stand-in over the three silyls: a CH carbon carrying two O
+/// radicals and one NH radical, one foot above each site. Two- and three-leg
+/// bindings, and two bond inventories of two legs.
+fn cage() -> AtomicStructure {
+    let mut s = AtomicStructure::new();
+    let sites = [
+        DVec3::ZERO,
+        DVec3::new(2.6, 0.0, 0.0),
+        DVec3::new(0.0, 2.9, 0.0),
+    ];
+    let centre = (sites[0] + sites[1] + sites[2]) / 3.0;
+    let c = s.add_atom(6, centre + DVec3::new(0.0, 0.0, 2.6));
+    let h = s.add_atom(H, centre + DVec3::new(0.0, 0.0, 3.7));
+    s.add_bond(c, h, BOND_SINGLE);
+    for (i, site) in sites.iter().enumerate() {
+        // Each foot 1.44 Å from the centre axis, towards its site.
+        let p = centre + (*site - centre).normalize() * 1.44 + DVec3::new(0.0, 0.0, 2.2);
+        let foot = s.add_atom(if i == 2 { 7 } else { O }, p);
+        s.add_bond(c, foot, BOND_SINGLE);
+        if i == 2 {
+            let nh = s.add_atom(H, p + DVec3::new(0.0, 0.6, 0.8));
+            s.add_bond(foot, nh, BOND_SINGLE);
+        }
+    }
     s
 }
 
@@ -122,11 +164,16 @@ fn add_value(designer: &mut StructureDesigner, network: &str, value: NetworkResu
 /// validator rejects on a typed pin, while the evaluator flows the payload
 /// through unchanged.
 fn network() -> Net {
+    network_with(hydroxyl(DVec3::ZERO))
+}
+
+/// [`network`] with another adsorbate over the three silyls.
+fn network_with(adsorbate: AtomicStructure) -> Net {
     let name = "main";
     let mut designer = StructureDesigner::new();
     designer.add_node_network(name);
     designer.set_active_node_network_name(Some(name.to_string()));
-    let adsorbate = add_value(&mut designer, name, molecule(hydroxyl(DVec3::ZERO)));
+    let adsorbate = add_value(&mut designer, name, molecule(adsorbate));
     let substrate = add_value(&mut designer, name, molecule(three_silyls()));
     let node = designer.add_node("chemisorb", DVec2::new(200.0, 0.0));
     designer.connect_nodes(adsorbate, 0, node, 0);
@@ -146,7 +193,7 @@ fn outputs(designer: &mut StructureDesigner, network: &str, node: u64) -> Vec<Ne
     designer.with_eval_context(false, |evaluator, registry, _prefs, context| {
         let net = registry.node_networks.get(&network).unwrap();
         let stack = vec![NetworkStackElement::root(net)];
-        (0..3)
+        (0..2)
             .map(|pin| evaluator.evaluate(&stack, node, pin, registry, false, context))
             .collect()
     })
@@ -279,40 +326,104 @@ fn before_run_the_node_outputs_the_plan_and_relaxes_nothing() {
         ..
     } = network();
     let out = outputs(&mut designer, name, node);
+    assert!(array(&out[0]).is_empty(), "no candidates before Run");
 
-    // `best` is the pose as wired: adsorbate then substrate, unrelaxed.
-    let best = atoms(&out[0]);
-    let mut expected = AtomicStructure::new();
-    expected
-        .add_atomic_structure(&hydroxyl(DVec3::ZERO))
-        .unwrap();
-    expected.add_atomic_structure(&three_silyls()).unwrap();
-    assert_eq!(positions(best), positions(&expected));
-    assert!(best.atoms_with_tag(CHANGED_TAG).is_empty());
-
-    assert!(array(&out[1]).is_empty());
-
-    let s = fields(&out[2]);
+    // One foot: the three sites within anchor_reach are the three one-leg
+    // hypotheses, and nothing deeper.
+    let s = fields(&out[1]);
     assert_eq!(int(&s, "to_relax"), 3);
+    assert_eq!(int(&s, "anchors"), 3);
+    assert_eq!(int(&s, "candidates"), 3);
+    assert_eq!(int(&s, "sphere_pairs"), 0);
+    assert_eq!(int(&s, "torus_triples"), 0);
     assert_eq!(int(&s, "relaxed"), 0);
+    assert_eq!(int(&s, "local_relaxed"), 0);
     assert_eq!(int(&s, "listed"), 0);
     assert_eq!(int(&s, "unconverged"), 0);
     assert_eq!(int(&s, "feet"), 1);
-    assert_eq!(int(&s, "sites_in_reach"), 3);
+    assert_eq!(int(&s, "sites"), 3);
     assert!(!boolean(&s, "searched"));
     assert!(!boolean(&s, "stale"));
     assert!(!boolean(&s, "truncated"));
+    assert!(!boolean(&s, "local_phase"));
+    assert!(array(&s["local"]).is_empty());
+    // Every path ends exactly once.
     assert_eq!(
-        int(&s, "considered"),
-        int(&s, "pruned_valence") + int(&s, "duplicates") + int(&s, "to_relax")
+        int(&s, "paths"),
+        [
+            "pruned_valence",
+            "pruned_no_acceptor",
+            "pruned_filter",
+            "duplicates",
+            "anchors",
+            "sphere_pairs",
+            "torus_triples"
+        ]
+        .iter()
+        .map(|k| int(&s, k))
+        .sum::<i32>()
     );
 
     // However often it is evaluated, nothing is stored and nothing relaxed.
     for _ in 0..3 {
         let again = outputs(&mut designer, name, node);
-        assert_eq!(positions(atoms(&again[0])), positions(&expected));
+        assert!(array(&again[0]).is_empty());
+        assert_eq!(int(&fields(&again[1]), "relaxed"), 0);
     }
     assert!(stored(&designer, name, node).is_none());
+}
+
+/// The `best` pin of the all-at-once engine is gone: `candidates` is pin 0,
+/// `stats` pin 1, and the records carry the sequential search's fields.
+#[test]
+fn the_outputs_are_candidates_then_stats() {
+    let registry = NodeTypeRegistry::new();
+    let node_type = registry.get_node_type("chemisorb").unwrap();
+    let pins: Vec<&str> = node_type
+        .output_pins
+        .iter()
+        .map(|p| p.name.as_str())
+        .collect();
+    assert_eq!(pins, ["candidates", "stats"]);
+    let field_names = |record: &str| -> Vec<String> {
+        registry
+            .lookup_record_type_def(record)
+            .unwrap_or_else(|| panic!("{record}"))
+            .fields
+            .iter()
+            .map(|f| f.name.clone())
+            .collect()
+    };
+    assert!(field_names("ChemisorbCandidate").contains(&"seating_clash".to_string()));
+    let stats = field_names("ChemisorbStats");
+    for f in [
+        "anchors",
+        "sphere_pairs",
+        "torus_triples",
+        "seating_clashes",
+        "pruned_clash",
+        "pruned_mirror",
+        "mirror_undecided",
+        "pruned_no_acceptor",
+        "local_relaxed",
+        "local",
+    ] {
+        assert!(stats.contains(&f.to_string()), "{f}");
+    }
+    assert!(!stats.contains(&"transfer_candidates".to_string()));
+    assert!(field_names("ChemisorbLevel").contains(&"legs".to_string()));
+
+    // The stats record evaluates to exactly the declared fields.
+    let Net {
+        mut designer,
+        name,
+        node,
+        ..
+    } = network();
+    let s = fields(&outputs(&mut designer, name, node)[1]);
+    let mut declared = stats.clone();
+    declared.sort();
+    assert_eq!(s.keys().cloned().collect::<Vec<_>>(), declared);
 }
 
 // ============================================================================
@@ -336,7 +447,7 @@ fn after_run_the_result_is_output_and_evaluations_never_search_again() {
     let first = stored(&designer, name, node).expect("stored");
     let out = outputs(&mut designer, name, node);
 
-    let s = fields(&out[2]);
+    let s = fields(&out[1]);
     assert!(boolean(&s, "searched"));
     assert!(!boolean(&s, "stale"));
     assert_eq!(int(&s, "relaxed"), 3);
@@ -345,7 +456,7 @@ fn after_run_the_result_is_output_and_evaluations_never_search_again() {
     assert_eq!(float(&s, "seconds"), first.report.stats.seconds);
 
     // Candidates in rank order, every field filled, changed atoms tagged.
-    let rows = array(&out[1]);
+    let rows = array(&out[0]);
     assert_eq!(rows.len(), 3);
     let mut last_strain = f64::NEG_INFINITY;
     for (i, row) in rows.iter().enumerate() {
@@ -363,6 +474,7 @@ fn after_run_the_result_is_output_and_evaluations_never_search_again() {
         assert!(string(&f, "sites").contains("–Si"));
         assert_eq!(int(&f, "formed_bonds"), 1);
         assert_eq!(int(&f, "transfers"), 0);
+        assert!(!boolean(&f, "seating_clash"));
         assert!(float(&f, "worst_bond_ratio") > 0.0);
         let terms = fields(&f["terms"]);
         let total: f64 = ["stretch", "bend", "torsion", "inversion", "vdw"]
@@ -376,18 +488,12 @@ fn after_run_the_result_is_output_and_evaluations_never_search_again() {
         assert_eq!(positions(structure), positions(&c.structure));
     }
 
-    // `best` is rank 1.
-    assert_eq!(
-        positions(atoms(&out[0])),
-        positions(&first.report.candidates[0].structure)
-    );
-
     // Evaluating again — as refreshes, selection changes and downstream edits
     // do — reads the same stored report and never replaces it.
     for _ in 0..3 {
         let again = outputs(&mut designer, name, node);
         assert_eq!(
-            float(&fields(&again[2]), "seconds"),
+            float(&fields(&again[1]), "seconds"),
             first.report.stats.seconds
         );
     }
@@ -449,13 +555,12 @@ fn moving_the_adsorbate_makes_the_result_stale_and_moving_it_back_restores_it() 
         molecule(hydroxyl(DVec3::new(0.1, 0.0, 0.0))),
     );
     let out = outputs(&mut designer, name, node);
-    let s = fields(&out[2]);
+    let s = fields(&out[1]);
     assert!(!boolean(&s, "searched"));
     assert!(boolean(&s, "stale"));
     assert_eq!(int(&s, "relaxed"), 0);
     assert!(int(&s, "to_relax") > 0, "the plan of the moved pose");
-    assert!(array(&out[1]).is_empty(), "a stale result is never output");
-    assert!(atoms(&out[0]).atoms_with_tag(CHANGED_TAG).is_empty());
+    assert!(array(&out[0]).is_empty(), "a stale result is never output");
 
     set_value(
         &mut designer,
@@ -463,7 +568,7 @@ fn moving_the_adsorbate_makes_the_result_stale_and_moving_it_back_restores_it() 
         adsorbate,
         molecule(hydroxyl(DVec3::ZERO)),
     );
-    let s = fields(&outputs(&mut designer, name, node)[2]);
+    let s = fields(&outputs(&mut designer, name, node)[1]);
     assert!(boolean(&s, "searched"));
     assert!(!boolean(&s, "stale"));
 }
@@ -479,19 +584,19 @@ fn a_settings_edit_makes_the_result_stale_and_its_undo_restores_it() {
     designer.run_chemisorb(&[], node).unwrap();
 
     let edited = ChemisorbData {
-        reach: 3.0,
+        tolerance: 0.2,
         ..data(&designer, name, node)
     };
     designer.set_chemisorb_data(&[], node, edited);
-    let s = fields(&outputs(&mut designer, name, node)[2]);
-    assert!(boolean(&s, "stale"), "reach is part of the fingerprint");
+    let s = fields(&outputs(&mut designer, name, node)[1]);
+    assert!(boolean(&s, "stale"), "tolerance is part of the fingerprint");
     assert!(!boolean(&s, "searched"));
 
     // Undo rebuilds the data from its JSON snapshot; the stored search is
     // inherited across that replacement and matches again.
     assert!(designer.undo());
-    assert_eq!(data(&designer, name, node).reach, 3.5);
-    let s = fields(&outputs(&mut designer, name, node)[2]);
+    assert_eq!(data(&designer, name, node).tolerance, 0.5);
+    let s = fields(&outputs(&mut designer, name, node)[1]);
     assert!(boolean(&s, "searched"));
     assert!(!boolean(&s, "stale"));
 }
@@ -508,18 +613,18 @@ fn top_n_and_energy_window_are_search_settings() {
     } = network();
     designer.run_chemisorb(&[], node).unwrap();
     assert_eq!(
-        int(&fields(&outputs(&mut designer, name, node)[2]), "listed"),
+        int(&fields(&outputs(&mut designer, name, node)[1]), "listed"),
         3
     );
 
     set_props(&mut designer, name, node, &[("top_n", TextValue::Int(2))]);
-    let s = fields(&outputs(&mut designer, name, node)[2]);
+    let s = fields(&outputs(&mut designer, name, node)[1]);
     assert!(boolean(&s, "stale") && !boolean(&s, "searched"));
     let summary = designer.run_chemisorb(&[], node).unwrap();
     assert_eq!((summary.relaxed, summary.listed), (3, 2));
     let out = outputs(&mut designer, name, node);
-    assert_eq!(array(&out[1]).len(), 2);
-    assert_eq!(int(&fields(&out[2]), "listed"), 2);
+    assert_eq!(array(&out[0]).len(), 2);
+    assert_eq!(int(&fields(&out[1]), "listed"), 2);
 
     set_props(
         &mut designer,
@@ -533,60 +638,69 @@ fn top_n_and_energy_window_are_search_settings() {
     designer.run_chemisorb(&[], node).unwrap();
     let out = outputs(&mut designer, name, node);
     assert_eq!(
-        array(&out[1]).len(),
+        array(&out[0]).len(),
         1,
         "only the best is within a zero window"
     );
 }
 
-/// The two filters restrict what is enumerated: the plan shows the group's
-/// relaxation count, a run relaxes only the group, and a change makes the
-/// result stale. The fixture with an H transfer enabled has three bond
-/// inventories: three plain O–Si bonds, two O–Si bonds with the H moved to a
-/// silyl, and one bare H move (no formed bond).
+/// The two filters choose which hypotheses are candidates: the plan shows the
+/// group's relaxation count, a run relaxes only the group, and a change makes
+/// the result stale. The three-foot cage has two-leg bindings of two
+/// inventories (O + O, N + O) and three-leg ones of a third.
 #[test]
 fn the_filters_restrict_the_search_and_feed_the_dropdown() {
-    let (
-        Net {
-            mut designer,
-            name,
-            node,
-            ..
-        },
-        _,
-    ) = network_with_transfers(vec![transfer_record(1, "to_substrate")]);
+    let Net {
+        mut designer,
+        name,
+        node,
+        ..
+    } = network_with(cage());
     set_props(
         &mut designer,
         name,
         node,
         &[("energy_window", TextValue::Float(1000.0))],
     );
-    let plain = "formed 1× O–Si".to_string();
-    let with_h = "formed 1× H–Si, 1× O–Si; broken 1× H–O".to_string();
-    let bare_h = "formed 1× H–Si; broken 1× H–O".to_string();
+    let oo = "formed 2× O–Si".to_string();
+    let no = "formed 1× N–Si, 1× O–Si".to_string();
+    let noo = "formed 1× N–Si, 2× O–Si".to_string();
 
-    let cache = designer_eval_cache(&mut designer, name, node);
-    assert_eq!(cache.stats.to_relax, 6);
+    let all = designer_eval_cache(&mut designer, name, node);
+    assert_eq!(all.stats.feet, 3);
+    assert!(!all.reach_used, "three feet and no transfer rule");
+    let labels: Vec<&str> = all
+        .inventory_options
+        .iter()
+        .map(|(l, _)| l.as_str())
+        .collect();
     assert_eq!(
-        cache.inventory_options,
-        vec![(bare_h.clone(), 1), (with_h.clone(), 2), (plain.clone(), 3)],
-        "by formed-bond count, then label"
+        labels,
+        [no.as_str(), oo.as_str(), noo.as_str()],
+        "by leg count, then label"
     );
+    let count = |options: &[(String, usize)], label: &str| {
+        options.iter().find(|(l, _)| l == label).map(|(_, n)| *n)
+    };
+    let total: usize = all.inventory_options.iter().map(|(_, n)| n).sum();
+    assert_eq!(total, all.stats.to_relax, "every relaxation is a candidate");
 
-    // One formed bond: the bare H move is not even planned.
+    // Two legs: the three-leg hypotheses are not candidates.
     set_props(
         &mut designer,
         name,
         node,
-        &[("formed_bonds", TextValue::Int(1))],
+        &[("formed_bonds", TextValue::Int(2))],
     );
-    let one = designer_eval_cache(&mut designer, name, node);
-    assert_eq!(one.stats.to_relax, 5);
-    assert!(one.stats.pruned_filter > 0);
+    let two = designer_eval_cache(&mut designer, name, node);
     assert_eq!(
-        one.inventory_options,
-        vec![(with_h.clone(), 2), (plain.clone(), 3)],
+        two.inventory_options,
+        all.inventory_options[..2].to_vec(),
         "the dropdown narrows to the count"
+    );
+    assert_eq!(
+        two.stats.to_relax,
+        count(&all.inventory_options, &oo).unwrap() + count(&all.inventory_options, &no).unwrap()
     );
 
     // One inventory: the dropdown still offers every inventory of the count.
@@ -594,36 +708,37 @@ fn the_filters_restrict_the_search_and_feed_the_dropdown() {
         &mut designer,
         name,
         node,
-        &[("bond_inventory", TextValue::String(plain.clone()))],
+        &[("bond_inventory", TextValue::String(oo.clone()))],
     );
     let only = designer_eval_cache(&mut designer, name, node);
-    assert_eq!(only.stats.to_relax, 3);
-    assert_eq!(only.inventory_options, one.inventory_options);
+    let n_oo = count(&all.inventory_options, &oo).unwrap();
+    assert_eq!(only.stats.to_relax, n_oo);
+    assert_eq!(only.inventory_options, two.inventory_options);
 
     let summary = designer.run_chemisorb(&[], node).unwrap();
-    assert_eq!((summary.relaxed, summary.listed), (3, 3));
-    assert_eq!(summary.best_bonds, plain);
+    assert_eq!(summary.relaxed, n_oo);
+    assert_eq!(summary.best_bonds, oo);
     let out = outputs(&mut designer, name, node);
-    let rows = array(&out[1]);
-    assert!(rows.iter().all(|r| string(&fields(r), "bonds") == plain));
+    let rows = array(&out[0]);
+    assert!(!rows.is_empty());
+    assert!(rows.iter().all(|r| string(&fields(r), "bonds") == oo));
+    assert!(rows.iter().all(|r| int(&fields(r), "formed_bonds") == 2));
     let ranks: Vec<i32> = rows.iter().map(|r| int(&fields(r), "rank")).collect();
-    assert_eq!(ranks, vec![1, 2, 3]);
-    assert_eq!(
-        positions(atoms(&out[0])),
-        positions(atoms(&fields(&rows[0])["structure"])),
-        "best is rank 1"
-    );
+    assert_eq!(ranks, (1..=rows.len() as i32).collect::<Vec<_>>());
 
     // Another inventory is another search: stale until run.
     set_props(
         &mut designer,
         name,
         node,
-        &[("bond_inventory", TextValue::String(with_h.clone()))],
+        &[("bond_inventory", TextValue::String(no.clone()))],
     );
-    let s = fields(&outputs(&mut designer, name, node)[2]);
+    let s = fields(&outputs(&mut designer, name, node)[1]);
     assert!(boolean(&s, "stale"));
-    assert_eq!(int(&s, "to_relax"), 2);
+    assert_eq!(
+        int(&s, "to_relax") as usize,
+        count(&all.inventory_options, &no).unwrap()
+    );
 
     // A label that is not an inventory is reported in the node's words.
     set_props(
@@ -635,7 +750,7 @@ fn the_filters_restrict_the_search_and_feed_the_dropdown() {
             TextValue::String("formed 1× O–Qq".to_string()),
         )],
     );
-    match &outputs(&mut designer, name, node)[2] {
+    match &outputs(&mut designer, name, node)[1] {
         NetworkResult::Error(e) => assert!(e.contains("bond_inventory"), "{e}"),
         other => panic!("expected an error, got {:?}", other.infer_data_type()),
     }
@@ -714,18 +829,18 @@ fn only_the_call_site_matching_the_run_outputs_the_result() {
     assert!(designer.node_type_registry.node_networks["Inner"].valid);
 
     let a = outputs(&mut designer, "main", call_a);
-    let s = fields(&a[2]);
+    let s = fields(&a[1]);
     assert!(boolean(&s, "searched"), "call site A matches the run");
-    assert_eq!(array(&a[1]).len(), 3);
+    assert_eq!(array(&a[0]).len(), 3);
 
     let b = outputs(&mut designer, "main", call_b);
-    let s = fields(&b[2]);
+    let s = fields(&b[1]);
     assert!(!boolean(&s, "searched"));
     assert!(
         boolean(&s, "stale"),
         "call site B gets the plan, marked stale"
     );
-    assert!(array(&b[1]).is_empty());
+    assert!(array(&b[0]).is_empty());
 }
 
 // ============================================================================
@@ -782,7 +897,7 @@ fn an_nh2_foot_plans_without_an_enthalpy_table() {
         node,
     } = network();
     set_value(&mut designer, name, adsorbate, molecule(ads));
-    let s = fields(&outputs(&mut designer, name, node)[2]);
+    let s = fields(&outputs(&mut designer, name, node)[1]);
     assert_eq!(int(&s, "to_relax"), 3);
 }
 
@@ -818,28 +933,30 @@ fn author_and_serialize(source: &str) -> String {
 #[test]
 fn every_property_round_trips_through_the_text_format() {
     const FULL: &str = "c = chemisorb { adsorbate_tag: \"feet\", substrate_tag: \"top\", \
-                        reach: 4.5, max_formed_bonds: 3, max_transfers: 2, top_n: 5, \
-                        energy_window: 12.5, budget: 500, max_iterations: 800 }";
+                        anchor_reach: 4.5, tolerance: 0.25, reach: 2.5, clash_filter: false, \
+                        max_formed_bonds: 3, top_n: 5, energy_window: 12.5, budget: 500, \
+                        max_iterations: 800 }";
     let serialized = author_and_serialize(&format!("{FULL}\n"));
     assert!(serialized.contains(FULL), "got:\n{serialized}");
     assert_eq!(serialized, author_and_serialize(&serialized));
 
     // The two filters are written only when set.
-    const FILTERED: &str = "c = chemisorb { adsorbate_tag: \"\", substrate_tag: \"\", reach: 3.5, \
-                            max_formed_bonds: -1, max_transfers: 1, top_n: 10, \
-                            energy_window: 30.0, budget: 10000, max_iterations: 2000, \
-                            formed_bonds: 2, bond_inventory: \"formed 2× O–Si\" }";
+    const FILTERED: &str = "c = chemisorb { adsorbate_tag: \"\", substrate_tag: \"\", \
+                            anchor_reach: 3.5, tolerance: 0.5, reach: 3.0, clash_filter: true, \
+                            max_formed_bonds: -1, top_n: 10, energy_window: 30.0, \
+                            budget: 10000, max_iterations: 2000, formed_bonds: 2, \
+                            bond_inventory: \"formed 2× O–Si\" }";
     let serialized = author_and_serialize(&format!("{FILTERED}\n"));
     assert!(serialized.contains(FILTERED), "got:\n{serialized}");
     assert_eq!(serialized, author_and_serialize(&serialized));
 
-    // The short form expands to the documented defaults.
+    // The short form expands to the documented defaults (the Phase 0 spike's).
     let short = author_and_serialize("c = chemisorb { }\n");
     assert!(
         short.contains(
-            "c = chemisorb { adsorbate_tag: \"\", substrate_tag: \"\", reach: 3.5, \
-             max_formed_bonds: -1, max_transfers: 1, top_n: 10, energy_window: 30.0, \
-             budget: 10000, max_iterations: 2000 }"
+            "c = chemisorb { adsorbate_tag: \"\", substrate_tag: \"\", anchor_reach: 3.5, \
+             tolerance: 0.5, reach: 3.0, clash_filter: true, max_formed_bonds: -1, top_n: 10, \
+             energy_window: 30.0, budget: 10000, max_iterations: 2000 }"
         ),
         "got:\n{short}"
     );
@@ -862,19 +979,11 @@ fn a_saved_and_reloaded_node_keeps_its_settings_and_not_its_result() {
         &mut designer,
         name,
         node,
-        &[("reach", TextValue::Float(4.0))],
-    );
-    set_props(
-        &mut designer,
-        name,
-        node,
-        &[("reach", TextValue::Float(3.5))],
-    );
-    set_props(
-        &mut designer,
-        name,
-        node,
-        &[("max_formed_bonds", TextValue::Int(2))],
+        &[
+            ("tolerance", TextValue::Float(0.75)),
+            ("clash_filter", TextValue::Bool(false)),
+            ("max_formed_bonds", TextValue::Int(2)),
+        ],
     );
     designer.run_chemisorb(&[], node).unwrap();
     assert!(stored(&designer, name, node).is_some());
@@ -908,11 +1017,28 @@ fn a_saved_and_reloaded_node_keeps_its_settings_and_not_its_result() {
         .downcast_ref::<ChemisorbData>()
         .unwrap();
     assert_eq!(loaded.max_formed_bonds, 2);
-    assert_eq!(loaded.reach, 3.5);
+    assert_eq!(loaded.tolerance, 0.75);
+    assert!(!loaded.clash_filter);
+    assert_eq!(loaded.anchor_reach, 3.5);
     assert!(
         loaded.stored.is_none(),
         "a reloaded node is in the before-Run state"
     );
+}
+
+/// A node saved by the all-at-once engine loads with the new defaults; the
+/// removed `max_transfers` is ignored (one user, no migration — design §6.2).
+#[test]
+fn a_node_saved_before_the_sequential_search_loads() {
+    let old = r#"{"adsorbate_tag":"","substrate_tag":"","reach":4.5,
+        "max_formed_bonds":-1,"max_transfers":1,"top_n":7,"energy_window":30.0,
+        "budget":10000,"max_iterations":2000}"#;
+    let data: ChemisorbData = serde_json::from_str(old).expect("loads");
+    assert_eq!(data.top_n, 7);
+    assert_eq!(data.anchor_reach, 3.5);
+    assert_eq!(data.tolerance, 0.5);
+    assert!(data.clash_filter);
+    assert_eq!(data.reach, 4.5, "the old reach lands on the local reach");
 }
 
 #[test]
@@ -925,6 +1051,16 @@ fn invalid_settings_are_reported_in_the_nodes_words() {
     } = network();
     for (key, value, needle) in [
         (
+            "anchor_reach",
+            TextValue::Float(0.0),
+            "anchor reach must be a positive distance",
+        ),
+        (
+            "tolerance",
+            TextValue::Float(-0.1),
+            "tolerance must be zero or a positive distance",
+        ),
+        (
             "reach",
             TextValue::Float(0.0),
             "reach must be a positive distance",
@@ -932,24 +1068,24 @@ fn invalid_settings_are_reported_in_the_nodes_words() {
         (
             "max_formed_bonds",
             TextValue::Int(-2),
-            "max_formed_bonds must be >= -1",
+            "max_formed_bonds must be -1 (no cap) or at least 1",
         ),
         (
-            "max_transfers",
-            TextValue::Int(-2),
-            "max_transfers must be >= -1",
+            "max_formed_bonds",
+            TextValue::Int(0),
+            "max_formed_bonds must be -1 (no cap) or at least 1",
         ),
         ("top_n", TextValue::Int(0), "top_n must be at least 1"),
         (
             "formed_bonds",
-            TextValue::Int(-1),
-            "formed_bonds must be >= 0",
+            TextValue::Int(0),
+            "formed_bonds must be at least 1",
         ),
         ("budget", TextValue::Int(0), "budget must be at least 1"),
     ] {
         let restore = data(&designer, name, node);
         set_props(&mut designer, name, node, &[(key, value)]);
-        match &outputs(&mut designer, name, node)[2] {
+        match &outputs(&mut designer, name, node)[1] {
             NetworkResult::Error(e) => assert!(e.contains(needle), "{key}: {e}"),
             other => panic!(
                 "{key}: expected an error, got {:?}",
@@ -969,7 +1105,7 @@ fn invalid_settings_are_reported_in_the_nodes_words() {
 }
 
 // ============================================================================
-// Transfers (phase 3)
+// Transfers
 // ============================================================================
 
 fn transfer_record(element: i32, direction: &str) -> NetworkResult {
@@ -982,13 +1118,17 @@ fn transfer_record(element: i32, direction: &str) -> NetworkResult {
     ])
 }
 
-/// The phase-2 fixture with a `value` node on the `transfers` pin. Returns the
-/// net and that value node.
-fn network_with_transfers(records: Vec<NetworkResult>) -> (Net, u64) {
-    let mut net = network();
+/// `net` with a `value` node on the `transfers` pin. Returns the net and that
+/// value node.
+fn with_transfers(mut net: Net, records: Vec<NetworkResult>) -> (Net, u64) {
     let transfers = add_value(&mut net.designer, net.name, NetworkResult::Array(records));
     net.designer.connect_nodes(transfers, 0, net.node, 2);
     (net, transfers)
+}
+
+/// The •OH fixture with a `value` node on the `transfers` pin.
+fn network_with_transfers(records: Vec<NetworkResult>) -> (Net, u64) {
+    with_transfers(network(), records)
 }
 
 #[test]
@@ -1015,16 +1155,16 @@ fn the_transfers_pin_is_appended_optional_and_typed() {
     let fields: Vec<&str> = def.fields.iter().map(|f| f.name.as_str()).collect();
     assert_eq!(fields, ["element", "direction"]);
 
-    // Disconnected, the node is the phase-2 node: bond forming only.
+    // Disconnected: bond forming only, and water has no foot.
     let Net {
         mut designer,
         name,
         node,
         ..
-    } = network();
+    } = network_with(water());
     let s = fields_of_stats(&mut designer, name, node);
-    assert_eq!(int(&s, "transfer_candidates"), 0);
-    assert_eq!(int(&s, "to_relax"), 3);
+    assert_eq!(int(&s, "feet"), 0);
+    assert_eq!(int(&s, "to_relax"), 0);
 }
 
 fn fields_of_stats(
@@ -1032,13 +1172,13 @@ fn fields_of_stats(
     network: &str,
     node: u64,
 ) -> BTreeMap<String, NetworkResult> {
-    fields(&outputs(designer, network, node)[2])
+    fields(&outputs(designer, network, node)[1])
 }
 
+/// Water's O bonds by giving one H to the site nearest the one it bonds to
+/// (the rule, §5): one transfer per leg, fixed in the plan.
 #[test]
 fn a_wired_transfer_record_is_planned_run_and_listed() {
-    // The •OH's H reaches the first silyl only; moving it there frees a second
-    // valence on the O, which then bonds to either of the other two.
     let (
         Net {
             mut designer,
@@ -1047,35 +1187,30 @@ fn a_wired_transfer_record_is_planned_run_and_listed() {
             ..
         },
         _,
-    ) = network_with_transfers(vec![transfer_record(1, "to_substrate")]);
-    // Transfer patterns are other bond inventories, whose strains need not be
-    // near the plain O–Si bond's. List everything.
-    set_props(
-        &mut designer,
-        name,
-        node,
-        &[("energy_window", TextValue::Float(1000.0))],
+    ) = with_transfers(
+        network_with(water()),
+        vec![transfer_record(1, "to_substrate")],
     );
     let s = fields_of_stats(&mut designer, name, node);
-    assert_eq!(int(&s, "transfer_candidates"), 1);
-    assert_eq!(
-        int(&s, "to_relax"),
-        6,
-        "3 bond-forming + 3 with the transfer"
-    );
+    assert_eq!(int(&s, "feet"), 1);
+    assert_eq!(int(&s, "to_relax"), 3, "one per site, each with its H");
     assert!(!boolean(&s, "searched"));
+    let cache = designer_eval_cache(&mut designer, name, node);
+    assert!(cache.reach_used, "the transfer rule reads reach");
+    assert_eq!(
+        cache.inventory_options,
+        vec![("formed 1× H–Si, 1× O–Si; broken 1× H–O".to_string(), 3)]
+    );
 
     let summary = designer.run_chemisorb(&[], node).unwrap();
-    assert_eq!(summary.relaxed, 6);
+    assert_eq!(summary.relaxed, 3);
     let out = outputs(&mut designer, name, node);
-    let s = fields(&out[2]);
-    assert!(boolean(&s, "searched"));
-    assert_eq!(int(&s, "transfer_candidates"), 1);
-    let rows: Vec<BTreeMap<String, NetworkResult>> = array(&out[1]).iter().map(fields).collect();
-    let with_transfer: Vec<&BTreeMap<String, NetworkResult>> =
-        rows.iter().filter(|r| int(r, "transfers") == 1).collect();
-    assert!(!with_transfer.is_empty());
-    for row in &with_transfer {
+    assert!(boolean(&fields(&out[1]), "searched"));
+    let rows: Vec<BTreeMap<String, NetworkResult>> = array(&out[0]).iter().map(fields).collect();
+    assert!(!rows.is_empty());
+    for row in &rows {
+        assert_eq!(int(row, "transfers"), 1);
+        assert_eq!(int(row, "formed_bonds"), 1);
         assert!(
             string(row, "sites").contains('→'),
             "{}",
@@ -1085,8 +1220,7 @@ fn a_wired_transfer_record_is_planned_run_and_listed() {
     }
     // The panel's rows say the same.
     let cache = designer_eval_cache(&mut designer, name, node);
-    assert_eq!(cache.stats.transfer_candidates, 1);
-    assert!(cache.rows.iter().any(|r| r.transfers == 1));
+    assert!(cache.rows.iter().all(|r| r.transfers == 1));
 }
 
 /// Refreshes with the node selected and displayed, and returns the panel's
@@ -1109,7 +1243,7 @@ fn designer_eval_cache(
 }
 
 #[test]
-fn a_transfer_record_edit_makes_the_result_stale_and_max_transfers_counts_only_when_wired() {
+fn a_transfer_record_edit_makes_the_result_stale() {
     let (
         Net {
             mut designer,
@@ -1118,83 +1252,43 @@ fn a_transfer_record_edit_makes_the_result_stale_and_max_transfers_counts_only_w
             ..
         },
         transfers,
-    ) = network_with_transfers(vec![transfer_record(1, "to_substrate")]);
+    ) = with_transfers(
+        network_with(water()),
+        vec![transfer_record(1, "to_substrate")],
+    );
     designer.run_chemisorb(&[], node).unwrap();
     assert!(boolean(
         &fields_of_stats(&mut designer, name, node),
         "searched"
     ));
 
-    // max_transfers is read while a record is wired: stale.
+    // reach is read by the rule: another reach is another search.
     set_props(
         &mut designer,
         name,
         node,
-        &[("max_transfers", TextValue::Int(2))],
+        &[("reach", TextValue::Float(2.0))],
     );
     assert!(boolean(
         &fields_of_stats(&mut designer, name, node),
         "stale"
     ));
-    // -1 = no cap: a valid setting, and another search.
     set_props(
         &mut designer,
         name,
         node,
-        &[("max_transfers", TextValue::Int(-1))],
-    );
-    let s = fields_of_stats(&mut designer, name, node);
-    assert!(boolean(&s, "stale"));
-    assert_eq!(
-        int(&s, "to_relax"),
-        6,
-        "one donor H: no cap plans what a cap of 1 does"
-    );
-    // 0 = none: the record stays wired but nothing moves.
-    set_props(
-        &mut designer,
-        name,
-        node,
-        &[("max_transfers", TextValue::Int(0))],
-    );
-    let s = fields_of_stats(&mut designer, name, node);
-    assert_eq!(int(&s, "to_relax"), 3, "bond forming only");
-    assert_eq!(int(&s, "transfer_candidates"), 0);
-    set_props(
-        &mut designer,
-        name,
-        node,
-        &[("max_transfers", TextValue::Int(1))],
+        &[("reach", TextValue::Float(3.0))],
     );
     assert!(boolean(
         &fields_of_stats(&mut designer, name, node),
         "searched"
     ));
 
-    // Another direction is another search.
-    set_value(
-        &mut designer,
-        name,
-        transfers,
-        NetworkResult::Array(vec![transfer_record(1, "to_adsorbate")]),
-    );
-    let s = fields_of_stats(&mut designer, name, node);
-    assert!(boolean(&s, "stale"));
-    assert_eq!(int(&s, "transfer_candidates"), 0);
-
-    // With no record, max_transfers is unread and makes nothing stale.
+    // No record: another search, and water has no foot.
     set_value(&mut designer, name, transfers, NetworkResult::Array(vec![]));
-    designer.run_chemisorb(&[], node).unwrap();
-    set_props(
-        &mut designer,
-        name,
-        node,
-        &[("max_transfers", TextValue::Int(3))],
-    );
-    assert!(boolean(
-        &fields_of_stats(&mut designer, name, node),
-        "searched"
-    ));
+    let s = fields_of_stats(&mut designer, name, node);
+    assert!(boolean(&s, "stale"));
+    assert_eq!(int(&s, "to_relax"), 0);
 }
 
 #[test]
@@ -1209,6 +1303,11 @@ fn a_bad_transfer_record_is_reported_in_the_nodes_words() {
             NetworkResult::record(vec![("element".to_string(), NetworkResult::Int(1))]),
             "direction: expected String",
         ),
+        // Abstraction has no place in a leg-by-leg search (§5).
+        (
+            transfer_record(1, "to_adsorbate"),
+            "(H, to_adsorbate) is not supported",
+        ),
     ] {
         let (
             Net {
@@ -1219,16 +1318,12 @@ fn a_bad_transfer_record_is_reported_in_the_nodes_words() {
             },
             _,
         ) = network_with_transfers(vec![record]);
-        match &outputs(&mut designer, name, node)[2] {
+        match &outputs(&mut designer, name, node)[1] {
             NetworkResult::Error(e) => assert!(e.contains(needle), "{e}"),
             other => panic!("expected an error, got {:?}", other.infer_data_type()),
         }
-        assert!(
-            designer
-                .run_chemisorb(&[], node)
-                .unwrap_err()
-                .contains(needle)
-        );
+        let err = designer.run_chemisorb(&[], node).unwrap_err();
+        assert!(err.contains(needle), "{err}");
     }
 
     // An upstream error in an element is forwarded, not re-described.
@@ -1258,13 +1353,10 @@ fn the_transfers_wire_round_trips_through_the_text_format_and_cnnd() {
 
     let source = "t = array { element_type: Record(ChemisorbTransfer), elements: \
                   [{ element: 1, direction: \"to_substrate\" }] }\n\
-                  c = chemisorb { max_transfers: 2, transfers: t }\n";
+                  c = chemisorb { reach: 2.75, transfers: t }\n";
     let serialized = author_and_serialize(source);
     assert!(serialized.contains("transfers: t"), "got:\n{serialized}");
-    assert!(
-        serialized.contains("max_transfers: 2"),
-        "got:\n{serialized}"
-    );
+    assert!(serialized.contains("reach: 2.75"), "got:\n{serialized}");
     assert!(
         serialized.contains("Record(ChemisorbTransfer)"),
         "got:\n{serialized}"
@@ -1277,7 +1369,7 @@ fn the_transfers_wire_round_trips_through_the_text_format_and_cnnd() {
         name,
         node,
         ..
-    } = network();
+    } = network_with(water());
     let array = designer
         .node_type_registry
         .node_networks
@@ -1308,11 +1400,9 @@ fn the_transfers_wire_round_trips_through_the_text_format_and_cnnd() {
     }
     designer.connect_nodes(array, 0, node, 2);
     assert_eq!(
-        int(
-            &fields_of_stats(&mut designer, name, node),
-            "transfer_candidates"
-        ),
-        1
+        int(&fields_of_stats(&mut designer, name, node), "feet"),
+        1,
+        "the record makes water's O a donating foot"
     );
 
     let tmp = tempdir().unwrap();
@@ -1336,6 +1426,95 @@ fn the_transfers_wire_round_trips_through_the_text_format_and_cnnd() {
         .get_node_id()
         .expect("the transfers wire survives");
     assert_eq!(loaded.nodes[&source].node_type_name, "array");
+}
+
+// ============================================================================
+// The local phase
+// ============================================================================
+
+/// Four O feet over four silyls, one above each: legs 4 come from the local
+/// phase, whose level statistics reach the `stats` pin only after Run.
+#[test]
+fn a_four_foot_adsorbate_reports_its_local_phase() {
+    let sites = [
+        DVec3::ZERO,
+        DVec3::new(2.6, 0.0, 0.0),
+        DVec3::new(0.0, 2.9, 0.0),
+        DVec3::new(2.6, 2.9, 0.0),
+    ];
+    let mut substrate = AtomicStructure::new();
+    let si: Vec<u32> = sites
+        .iter()
+        .map(|&p| add_silyl(&mut substrate, p))
+        .collect();
+    for id in substrate.atom_ids().copied().collect::<Vec<_>>() {
+        if !si.contains(&id) {
+            substrate.set_atom_frozen(id, true);
+        }
+    }
+    // A C2 bridge carrying the four O radicals, one over each site.
+    let mut ads = AtomicStructure::new();
+    let c1 = ads.add_atom(6, DVec3::new(1.3, 0.7, 3.3));
+    let c2 = ads.add_atom(6, DVec3::new(1.3, 2.2, 3.3));
+    ads.add_bond(c1, c2, BOND_SINGLE);
+    for c in [c1, c2] {
+        let h = ads.add_atom(
+            H,
+            ads.get_atom(c).unwrap().position + DVec3::new(0.0, 0.0, 1.09),
+        );
+        ads.add_bond(c, h, BOND_SINGLE);
+    }
+    for (i, s) in sites.iter().enumerate() {
+        let c = if i < 2 { c1 } else { c2 };
+        let o = ads.add_atom(
+            O,
+            *s + DVec3::new(0.0, 0.0, 2.1) + (DVec3::new(1.3, 1.45, 0.0) - *s) * 0.3,
+        );
+        ads.add_bond(c, o, BOND_SINGLE);
+    }
+
+    let name = "main";
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network(name);
+    designer.set_active_node_network_name(Some(name.to_string()));
+    let a = add_value(&mut designer, name, molecule(ads));
+    let s = add_value(&mut designer, name, molecule(substrate));
+    let node = designer.add_node("chemisorb", DVec2::new(200.0, 0.0));
+    designer.connect_nodes(a, 0, node, 0);
+    designer.connect_nodes(s, 0, node, 1);
+    set_props(
+        &mut designer,
+        name,
+        node,
+        &[("formed_bonds", TextValue::Int(4))],
+    );
+
+    let before = designer_eval_cache(&mut designer, name, node);
+    assert_eq!(before.stats.feet, 4);
+    assert!(before.stats.local_phase);
+    assert!(before.reach_used, "the local phase reads reach");
+    assert!(before.stats.local.is_empty(), "known only after Run");
+    assert_eq!(
+        before.stats.candidates, 0,
+        "no geometric hypothesis has four legs"
+    );
+
+    let summary = designer.run_chemisorb(&[], node).unwrap();
+    let after = designer_eval_cache(&mut designer, name, node);
+    assert!(after.stats.searched);
+    assert_eq!(after.stats.local.len(), 1);
+    let level = &after.stats.local[0];
+    assert_eq!(level.legs, 4);
+    assert_eq!(after.stats.local_relaxed, level.relaxed);
+    assert_eq!(
+        summary.relaxed,
+        after.stats.to_relax + after.stats.local_relaxed
+    );
+    assert!(after.rows.iter().all(|r| r.formed_bonds == 4));
+    let stats = fields(&outputs(&mut designer, name, node)[1]);
+    let levels = array(&stats["local"]);
+    assert_eq!(levels.len(), 1);
+    assert_eq!(int(&fields(&levels[0]), "legs"), 4);
 }
 
 // ============================================================================
@@ -1363,7 +1542,7 @@ type Listed = Vec<(u64, Vec<(u32, [u64; 3])>)>;
 
 fn listed(designer: &mut StructureDesigner, name: &str, node: u64) -> Listed {
     let out = outputs(designer, name, node);
-    array(&out[1])
+    array(&out[0])
         .iter()
         .map(|row| {
             let f = fields(row);
@@ -1387,7 +1566,7 @@ fn prepare(designer: &mut StructureDesigner, node: u64) -> Finish {
 }
 
 fn searched_and_stale(designer: &mut StructureDesigner, name: &str, node: u64) -> (bool, bool) {
-    let s = fields(&outputs(designer, name, node)[2]);
+    let s = fields(&outputs(designer, name, node)[1]);
     (boolean(&s, "searched"), boolean(&s, "stale"))
 }
 
@@ -1595,7 +1774,7 @@ fn an_install_is_not_an_undo_step_not_a_dirtying_edit_and_not_saved() {
         ..
     } = network();
     let edited = ChemisorbData {
-        reach: 3.6,
+        tolerance: 0.6,
         ..data(&designer, name, node)
     };
     designer.set_chemisorb_data(&[], node, edited);
@@ -1609,7 +1788,7 @@ fn an_install_is_not_an_undo_step_not_a_dirtying_edit_and_not_saved() {
 
     // The next undo still undoes the user's last edit.
     assert!(designer.undo());
-    assert_eq!(data(&designer, name, node).reach, 3.5);
+    assert_eq!(data(&designer, name, node).tolerance, 0.5);
     assert!(
         stored(&designer, name, node).is_some(),
         "inherited across it"

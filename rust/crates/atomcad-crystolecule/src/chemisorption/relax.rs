@@ -1,7 +1,7 @@
 //! UFF relaxation of one structure, with the per-term energies a chemist reads
 //! to see *why* a candidate is strained.
 
-use super::config::{ChemisorptionError, ChemisorptionSearch};
+use super::config::ChemisorptionError;
 use crate::atomic_structure::AtomicStructure;
 use crate::simulation::check_minimize_limits;
 use crate::simulation::minimize::{MinimizationConfig, minimize_with_force_field};
@@ -39,6 +39,27 @@ impl StrainTerms {
     }
 }
 
+/// How one relaxation runs.
+#[derive(Debug, Clone)]
+pub struct RelaxSettings {
+    /// UFF iteration limit.
+    pub max_iterations: u32,
+    /// UFF convergence tolerance, RMS gradient (kcal/(mol·Å)).
+    pub gradient_rms_tolerance: f64,
+    /// How van der Waals terms are computed.
+    pub vdw_mode: VdwMode,
+}
+
+impl Default for RelaxSettings {
+    fn default() -> Self {
+        Self {
+            max_iterations: 2000,
+            gradient_rms_tolerance: 1e-3,
+            vdw_mode: VdwMode::AllPairs,
+        }
+    }
+}
+
 /// One relaxation's outcome.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Relaxed {
@@ -56,7 +77,7 @@ pub struct Relaxed {
 /// Relaxes `structure` in place, holding its frozen atoms fixed.
 pub fn relax(
     structure: &mut AtomicStructure,
-    config: &ChemisorptionSearch,
+    config: &RelaxSettings,
 ) -> Result<Relaxed, ChemisorptionError> {
     let num_atoms = structure.get_num_of_atoms();
     let num_free = structure.atoms_values().filter(|a| !a.is_frozen()).count();

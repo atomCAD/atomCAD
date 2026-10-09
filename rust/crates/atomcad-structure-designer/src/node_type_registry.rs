@@ -976,10 +976,9 @@ impl NodeTypeRegistry {
                     (
                         "direction".to_string(),
                         DataType::String,
-                        Some(FieldEditorHint::Enum(vec![
-                            "to_substrate".to_string(),
-                            "to_adsorbate".to_string(),
-                        ])),
+                        // `to_adsorbate` (abstraction) is parsed but refused by
+                        // the search, so it is not offered.
+                        Some(FieldEditorHint::Enum(vec!["to_substrate".to_string()])),
                     ),
                 ],
             ),
@@ -1010,6 +1009,7 @@ impl NodeTypeRegistry {
                     ("formed_bonds".to_string(), DataType::Int),
                     ("transfers".to_string(), DataType::Int),
                     ("converged".to_string(), DataType::Bool),
+                    ("seating_clash".to_string(), DataType::Bool),
                     ("worst_bond_ratio".to_string(), DataType::Float),
                     (
                         "terms".to_string(),
@@ -1019,25 +1019,64 @@ impl NodeTypeRegistry {
             ),
         );
         ret.built_in_record_type_defs.insert(
+            "ChemisorbLevel".to_string(),
+            RecordTypeDef::from_named_fields(
+                "ChemisorbLevel",
+                vec![
+                    ("legs".to_string(), DataType::Int),
+                    ("parents".to_string(), DataType::Int),
+                    ("paths".to_string(), DataType::Int),
+                    ("hypotheses".to_string(), DataType::Int),
+                    ("duplicates".to_string(), DataType::Int),
+                    ("pruned_valence".to_string(), DataType::Int),
+                    ("pruned_no_acceptor".to_string(), DataType::Int),
+                    ("pruned_filter".to_string(), DataType::Int),
+                    ("candidates".to_string(), DataType::Int),
+                    ("to_relax".to_string(), DataType::Int),
+                    ("relaxed".to_string(), DataType::Int),
+                    ("unconverged".to_string(), DataType::Int),
+                    ("truncated".to_string(), DataType::Bool),
+                    ("near_misses".to_string(), DataType::Int),
+                ],
+            ),
+        );
+        ret.built_in_record_type_defs.insert(
             "ChemisorbStats".to_string(),
             RecordTypeDef::from_named_fields(
                 "ChemisorbStats",
                 vec![
                     ("feet".to_string(), DataType::Int),
-                    ("sites_in_reach".to_string(), DataType::Int),
-                    ("considered".to_string(), DataType::Int),
-                    ("pruned_valence".to_string(), DataType::Int),
-                    ("pruned_filter".to_string(), DataType::Int),
+                    ("sites".to_string(), DataType::Int),
+                    ("paths".to_string(), DataType::Int),
+                    ("anchors".to_string(), DataType::Int),
+                    ("sphere_pairs".to_string(), DataType::Int),
+                    ("torus_triples".to_string(), DataType::Int),
                     ("duplicates".to_string(), DataType::Int),
+                    ("pruned_valence".to_string(), DataType::Int),
+                    ("pruned_no_acceptor".to_string(), DataType::Int),
+                    ("pruned_filter".to_string(), DataType::Int),
+                    ("pruned_mirror".to_string(), DataType::Int),
+                    ("mirror_undecided".to_string(), DataType::Int),
+                    ("candidates".to_string(), DataType::Int),
+                    ("parents".to_string(), DataType::Int),
+                    ("seating_clashes".to_string(), DataType::Int),
+                    ("pruned_clash".to_string(), DataType::Int),
+                    ("local_phase".to_string(), DataType::Bool),
                     ("searched".to_string(), DataType::Bool),
                     ("stale".to_string(), DataType::Bool),
                     ("relaxed".to_string(), DataType::Int),
+                    ("local_relaxed".to_string(), DataType::Int),
                     ("to_relax".to_string(), DataType::Int),
                     ("unconverged".to_string(), DataType::Int),
                     ("listed".to_string(), DataType::Int),
                     ("truncated".to_string(), DataType::Bool),
                     ("seconds".to_string(), DataType::Float),
-                    ("transfer_candidates".to_string(), DataType::Int),
+                    (
+                        "local".to_string(),
+                        DataType::Array(Box::new(DataType::Record(RecordType::Named(
+                            "ChemisorbLevel".to_string(),
+                        )))),
+                    ),
                 ],
             ),
         );

@@ -19,7 +19,9 @@ use atomcad_structure_designer::nodes::atom_edit::atom_edit::{
     PointerMoveResult as DomainPointerMoveResult,
     PointerMoveResultKind as DomainPointerMoveResultKind, PointerUpResult as DomainPointerUpResult,
 };
-use atomcad_structure_designer::nodes::chemisorb::{ChemisorbData, ChemisorbEvalCache};
+use atomcad_structure_designer::nodes::chemisorb::{
+    ChemisorbData, ChemisorbEvalCache, ChemisorbLevelView,
+};
 use atomcad_structure_designer::nodes::comment::{
     CommentAnchor as DomainCommentAnchor, WireAnchor as DomainWireAnchor,
 };
@@ -965,7 +967,7 @@ impl From<&APIProxyData> for ProxyData {
 }
 
 /// Dart-facing twin of the settings of
-/// `atomcad_structure_designer::nodes::chemisorb::ChemisorbData` — its ten
+/// `atomcad_structure_designer::nodes::chemisorb::ChemisorbData` — its
 /// persisted properties. The stored search is not here: it never crosses to
 /// Dart, and the setter keeps it.
 pub struct APIChemisorbData {
@@ -973,55 +975,90 @@ pub struct APIChemisorbData {
     pub adsorbate_tag: String,
     /// Substrate reactive atoms: those carrying this tag. Empty = all atoms.
     pub substrate_tag: String,
-    /// Maximum adsorbate atom to site distance for a bond (Å).
+    /// Leg 1: sites within this of a posed foot (Å).
+    pub anchor_reach: f64,
+    /// Legs 2 and 3: how far a site may lie outside the exact shell or ring (Å).
+    pub tolerance: f64,
+    /// Legs 4 and later: sites within this of a relaxed foot; also the H
+    /// transfer reach, site to site (Å).
     pub reach: f64,
-    /// At most this many bonds formed per hypothesis: -1 = no cap, 0 = none.
+    /// Prune seatings that clash instead of relaxing them.
+    pub clash_filter: bool,
+    /// At most this many legs per hypothesis: -1 = no cap.
     pub max_formed_bonds: i32,
-    /// At most this many transfers per hypothesis: -1 = no cap, 0 = none.
-    /// Read only while the `transfers` pin carries a record.
-    pub max_transfers: i32,
-    /// Only patterns with exactly this many formed bonds; `None` = any.
+    /// Only bindings with exactly this many legs; `None` = any.
     pub formed_bonds: Option<i32>,
-    /// Only patterns with exactly this bond inventory (a candidate's `bonds`
+    /// Only bindings with exactly this bond inventory (a candidate's `bonds`
     /// label); `None` = any.
     pub bond_inventory: Option<String>,
     /// At most this many candidates kept and listed.
     pub top_n: i32,
     /// Only candidates within this many kcal/mol of the best are kept.
     pub energy_window: f64,
-    /// At most this many hypotheses relaxed.
+    /// At most this many relaxations.
     pub budget: i32,
     /// UFF iteration limit per relaxation.
     pub max_iterations: i32,
 }
 
+/// One local-phase level (twin of `ChemisorbLevelView`).
+pub struct APIChemisorbLevel {
+    pub legs: usize,
+    pub parents: usize,
+    pub paths: usize,
+    pub hypotheses: usize,
+    pub duplicates: usize,
+    pub pruned_valence: usize,
+    pub pruned_no_acceptor: usize,
+    pub pruned_filter: usize,
+    pub candidates: usize,
+    pub to_relax: usize,
+    pub relaxed: usize,
+    pub unconverged: usize,
+    pub truncated: bool,
+    pub near_misses: usize,
+}
+
 /// The whole search, as the `stats` pin carries it (twin of
-/// `ChemisorbStatsView`).
+/// `ChemisorbStatsView`). The counts up to `pruned_clash` are the plan's
+/// (legs 1–3); `local` is the local phase's, known only after Run.
 pub struct APIChemisorbStats {
     pub feet: usize,
-    pub sites_in_reach: usize,
-    /// Candidate transfers the `transfers` records allow; 0 without them.
-    pub transfer_candidates: usize,
-    pub considered: usize,
-    pub pruned_valence: usize,
-    /// Rejected by `formed_bonds` or `bond_inventory` while enumerating.
-    pub pruned_filter: usize,
+    pub sites: usize,
+    pub paths: usize,
+    pub anchors: usize,
+    pub sphere_pairs: usize,
+    pub torus_triples: usize,
     pub duplicates: usize,
+    pub pruned_valence: usize,
+    pub pruned_no_acceptor: usize,
+    /// Rejected by `bond_inventory` while enumerating.
+    pub pruned_filter: usize,
+    pub pruned_mirror: usize,
+    pub mirror_undecided: usize,
+    pub candidates: usize,
+    pub parents: usize,
+    pub seating_clashes: usize,
+    pub pruned_clash: usize,
+    /// A local phase (legs 4+) follows; its cost is known only after Run.
+    pub local_phase: bool,
     /// The node outputs a search result for its current inputs.
     pub searched: bool,
     /// A result exists but was computed from other inputs: Run again.
     pub stale: bool,
     pub relaxed: usize,
+    pub local_relaxed: usize,
     pub to_relax: usize,
     pub unconverged: usize,
     pub listed: usize,
     /// The budget was hit; the search is not exhaustive.
     pub truncated: bool,
     pub seconds: f64,
+    pub local: Vec<APIChemisorbLevel>,
 }
 
 /// One choice of the `bond_inventory` dropdown: a bond inventory and how many
-/// hypotheses (relaxations) it would take.
+/// relaxations it would take.
 pub struct APIChemisorbInventoryOption {
     pub label: String,
     pub count: usize,
@@ -1036,6 +1073,7 @@ pub struct APIChemisorbRow {
     pub formed_bonds: usize,
     pub transfers: usize,
     pub converged: bool,
+    pub seating_clash: bool,
     pub worst_bond_ratio: f64,
     pub stretch: f64,
     pub bend: f64,
@@ -1051,6 +1089,9 @@ pub struct APIChemisorbReport {
     pub rows: Vec<APIChemisorbRow>,
     /// The `bond_inventory` choices, narrowed by `formed_bonds`.
     pub inventory_options: Vec<APIChemisorbInventoryOption>,
+    /// `reach` is read (a local phase follows, or `transfers` carries a
+    /// record); the panel greys it out otherwise.
+    pub reach_used: bool,
 }
 
 impl From<&ChemisorbData> for APIChemisorbData {
@@ -1058,9 +1099,11 @@ impl From<&ChemisorbData> for APIChemisorbData {
         APIChemisorbData {
             adsorbate_tag: d.adsorbate_tag.clone(),
             substrate_tag: d.substrate_tag.clone(),
+            anchor_reach: d.anchor_reach,
+            tolerance: d.tolerance,
             reach: d.reach,
+            clash_filter: d.clash_filter,
             max_formed_bonds: d.max_formed_bonds,
-            max_transfers: d.max_transfers,
             formed_bonds: d.formed_bonds,
             bond_inventory: d.bond_inventory.clone(),
             top_n: d.top_n,
@@ -1076,9 +1119,11 @@ impl From<&APIChemisorbData> for ChemisorbData {
         ChemisorbData {
             adsorbate_tag: d.adsorbate_tag.clone(),
             substrate_tag: d.substrate_tag.clone(),
+            anchor_reach: d.anchor_reach,
+            tolerance: d.tolerance,
             reach: d.reach,
+            clash_filter: d.clash_filter,
             max_formed_bonds: d.max_formed_bonds,
-            max_transfers: d.max_transfers,
             formed_bonds: d.formed_bonds,
             bond_inventory: d.bond_inventory.clone(),
             top_n: d.top_n,
@@ -1090,26 +1135,59 @@ impl From<&APIChemisorbData> for ChemisorbData {
     }
 }
 
+impl From<&ChemisorbLevelView> for APIChemisorbLevel {
+    fn from(l: &ChemisorbLevelView) -> Self {
+        APIChemisorbLevel {
+            legs: l.legs,
+            parents: l.parents,
+            paths: l.paths,
+            hypotheses: l.hypotheses,
+            duplicates: l.duplicates,
+            pruned_valence: l.pruned_valence,
+            pruned_no_acceptor: l.pruned_no_acceptor,
+            pruned_filter: l.pruned_filter,
+            candidates: l.candidates,
+            to_relax: l.to_relax,
+            relaxed: l.relaxed,
+            unconverged: l.unconverged,
+            truncated: l.truncated,
+            near_misses: l.near_misses,
+        }
+    }
+}
+
 impl From<&ChemisorbEvalCache> for APIChemisorbReport {
     fn from(cache: &ChemisorbEvalCache) -> Self {
         let s = &cache.stats;
         APIChemisorbReport {
             stats: APIChemisorbStats {
                 feet: s.feet,
-                sites_in_reach: s.sites_in_reach,
-                transfer_candidates: s.transfer_candidates,
-                considered: s.considered,
-                pruned_valence: s.pruned_valence,
-                pruned_filter: s.pruned_filter,
+                sites: s.sites,
+                paths: s.paths,
+                anchors: s.anchors,
+                sphere_pairs: s.sphere_pairs,
+                torus_triples: s.torus_triples,
                 duplicates: s.duplicates,
+                pruned_valence: s.pruned_valence,
+                pruned_no_acceptor: s.pruned_no_acceptor,
+                pruned_filter: s.pruned_filter,
+                pruned_mirror: s.pruned_mirror,
+                mirror_undecided: s.mirror_undecided,
+                candidates: s.candidates,
+                parents: s.parents,
+                seating_clashes: s.seating_clashes,
+                pruned_clash: s.pruned_clash,
+                local_phase: s.local_phase,
                 searched: s.searched,
                 stale: s.stale,
                 relaxed: s.relaxed,
+                local_relaxed: s.local_relaxed,
                 to_relax: s.to_relax,
                 unconverged: s.unconverged,
                 listed: s.listed,
                 truncated: s.truncated,
                 seconds: s.seconds,
+                local: s.local.iter().map(APIChemisorbLevel::from).collect(),
             },
             rows: cache
                 .rows
@@ -1122,6 +1200,7 @@ impl From<&ChemisorbEvalCache> for APIChemisorbReport {
                     formed_bonds: r.formed_bonds,
                     transfers: r.transfers,
                     converged: r.converged,
+                    seating_clash: r.seating_clash,
                     worst_bond_ratio: r.worst_bond_ratio,
                     stretch: r.stretch,
                     bend: r.bend,
@@ -1138,6 +1217,7 @@ impl From<&ChemisorbEvalCache> for APIChemisorbReport {
                     count: *count,
                 })
                 .collect(),
+            reach_used: cache.reach_used,
         }
     }
 }

@@ -333,7 +333,7 @@ fn one_run_covers_the_twenty_pose_brute_force() {
         per_pose.extend(windowed(&of_pose, |c| c.strain));
     }
     // Per leg count, against the separated reference.
-    let settings = atomcad_crystolecule::chemisorption::ChemisorptionSearch::default();
+    let settings = atomcad_crystolecule::chemisorption::RelaxSettings::default();
     let (mut a, mut s) = (ads.clone(), slab.clone());
     let separated =
         relax(&mut a, &settings).unwrap().energy + relax(&mut s, &settings).unwrap().energy;

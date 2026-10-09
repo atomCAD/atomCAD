@@ -1,19 +1,20 @@
-//! `chemisorb` — every way a posed adsorbate can bond to a substrate, relaxed
-//! and ranked.
+//! `chemisorb` — the ways a posed adsorbate can bond to a substrate, found
+//! leg by leg, relaxed and ranked.
 //!
-//! Phases 2 and 3 of the chemisorption search design. A thin adapter over
-//! `atomcad_crystolecule::chemisorption`: this file reads pins and properties,
-//! builds a `ChemisorptionSearch`, and maps a report onto three outputs. It
-//! holds no chemistry.
+//! A thin adapter over `atomcad_crystolecule::chemisorption::sequential`
+//! (design `design_chemisorption_sequential.md`): this file reads pins and
+//! properties, builds a `SequentialSearch`, and maps a report onto two
+//! outputs. It holds no chemistry.
 //!
 //! **Evaluation never searches.** A search relaxes hundreds of structures, and
 //! the evaluator re-evaluates a node on far more than its own edits
 //! (selection, downstream edits, every full refresh), so `eval` only ever runs
-//! the cheap `plan` and reads a stored result. The search itself runs on an
-//! explicit action — the panel's Run button, the CLI's `run` — which is this
-//! node's **node job** (`prepare_job`; the halves are in `chemisorb_ops.rs`,
-//! the layer in `node_jobs/`): the search runs off the UI thread and its
-//! result is installed on the node when it lands.
+//! the cheap `plan` (the geometric legs, seating and the clash and mirror
+//! checks, nothing relaxed) and reads a stored result. The search itself runs
+//! on an explicit action — the panel's Run button, the CLI's `run` — which is
+//! this node's **node job** (`prepare_job`; the halves are in
+//! `chemisorb_ops.rs`, the layer in `node_jobs/`): the search runs off the UI
+//! thread and its result is installed on the node when it lands.
 //!
 //! **The stored result is a cache keyed by an input fingerprint.**
 //! [`ChemisorbData::stored`] holds the last report with the
@@ -30,24 +31,22 @@
 //! never output for inputs it was not computed from.
 //!
 //! **Every property is a search setting.** `formed_bonds` and
-//! `bond_inventory` restrict what is enumerated (so only that group is
-//! relaxed), and `top_n` / `energy_window` what is kept while relaxing (so only
-//! the listed structures are ever held); all four are fingerprinted, and a
+//! `bond_inventory` restrict which hypotheses are candidates (so only that
+//! group is relaxed), and `top_n` / `energy_window` what is kept while relaxing
+//! (so only the listed structures are ever held); all are fingerprinted, and a
 //! change makes a stored result stale like any other. The filters exist because
 //! the ranking is UFF energy alone: fewer bonds rank first, and strains compare
-//! cleanly only within one bond inventory. (A split into search settings and
-//! "filters after search" was tried and removed: it was arbitrary, harder to
-//! understand, and forced every relaxed structure to be kept.)
+//! cleanly only within one bond inventory.
 //!
 //! The `bond_inventory` dropdown's choices come from a second `plan` without
 //! the inventory filter — with it, the plan would only ever contain the
-//! current choice.
+//! current choice. The plan covers legs 1–3 only; deeper inventories are
+//! listed once a matching unfiltered result exists.
 //!
-//! Bond forming is always on; transfers are enabled by wiring the `transfers`
-//! pin, an array of `ChemisorbTransfer { element, direction }` records (one
-//! per allowed element and direction). Disconnected, or an empty array, means
-//! bond forming only — and then `max_transfers` is not read, and not
-//! fingerprinted either.
+//! Bond forming is always on; H transfer is enabled by wiring the `transfers`
+//! pin, an array of `ChemisorbTransfer { element, direction }` records. Only
+//! `to_substrate` is supported: an OH foot hands its H to the site nearest the
+//! one it bonds to (the search's one deterministic rule).
 //!
 //! The panel's data goes into `context.selected_node_eval_cache`
 //! ([`ChemisorbEvalCache`]) on root evaluations, as `proxy` and `relax` do.
@@ -69,9 +68,12 @@ use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
 use atomcad_crystolecule::atomic_constants::element_symbol;
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
+use atomcad_crystolecule::chemisorption::sequential::{
+    Candidate, LevelStats, PlanStats, SearchReport, SequentialPlan, SequentialSearch, plan,
+};
 use atomcad_crystolecule::chemisorption::{
-    BondInventory, Candidate, ChemisorptionSearch, SearchReport, TransferDirection, TransferRule,
-    input_fingerprint, inventory_options, is_transferable_element, plan,
+    BondInventory, TransferDirection, TransferRule, input_fingerprint, inventory_options,
+    is_transferable_element,
 };
 use atomcad_crystolecule::simulation::uff::VdwMode;
 use serde::{Deserialize, Serialize};
@@ -82,6 +84,7 @@ pub const CHEMISORB_TRANSFER_RECORD: &str = "ChemisorbTransfer";
 pub const CHEMISORB_CANDIDATE_RECORD: &str = "ChemisorbCandidate";
 pub const CHEMISORB_STRAIN_TERMS_RECORD: &str = "ChemisorbStrainTerms";
 pub const CHEMISORB_STATS_RECORD: &str = "ChemisorbStats";
+pub const CHEMISORB_LEVEL_RECORD: &str = "ChemisorbLevel";
 
 /// Input pin indices.
 pub const ADSORBATE_INPUT_PIN: usize = 0;
@@ -89,22 +92,27 @@ pub const SUBSTRATE_INPUT_PIN: usize = 1;
 pub const TRANSFERS_INPUT_PIN: usize = 2;
 
 /// Output pin indices.
-pub const BEST_OUTPUT_PIN: usize = 0;
-pub const CANDIDATES_OUTPUT_PIN: usize = 1;
-pub const STATS_OUTPUT_PIN: usize = 2;
+pub const CANDIDATES_OUTPUT_PIN: usize = 0;
+pub const STATS_OUTPUT_PIN: usize = 1;
 
 /// The van der Waals cutoff `relax` uses when the preference asks for one.
 const VDW_CUTOFF: f64 = 6.0;
 
-fn default_reach() -> f64 {
-    3.5
+fn default_anchor_reach() -> f64 {
+    SequentialSearch::default().anchor_reach
 }
-/// "No cap", for both caps.
+fn default_tolerance() -> f64 {
+    SequentialSearch::default().tolerance
+}
+fn default_reach() -> f64 {
+    SequentialSearch::default().reach
+}
+fn default_clash_filter() -> bool {
+    SequentialSearch::default().clash_filter
+}
+/// "No cap".
 fn no_cap() -> i32 {
     -1
-}
-fn default_max_transfers() -> i32 {
-    1
 }
 fn default_top_n() -> i32 {
     10
@@ -120,9 +128,12 @@ fn default_max_iterations() -> i32 {
 }
 
 /// A finished search and the fingerprint of the inputs it was computed from.
+/// The plan is kept beside the report: the report numbers its hypotheses
+/// after the plan's, and its tree extends the plan's.
 #[derive(Debug)]
 pub struct StoredSearch {
     pub fingerprint: u64,
+    pub plan: SequentialPlan,
     pub report: SearchReport,
 }
 
@@ -136,26 +147,33 @@ pub struct ChemisorbData {
     /// Substrate reactive atoms: those carrying this tag. Empty = all atoms.
     #[serde(default)]
     pub substrate_tag: String,
-    /// Maximum adsorbate atom to site distance for a bond to be considered (Å).
+    /// Leg 1: sites within this distance of a posed foot (Å).
+    #[serde(default = "default_anchor_reach")]
+    pub anchor_reach: f64,
+    /// Legs 2 and 3: how far a site may lie outside the exact shell or ring
+    /// the foot spacing and bond lengths allow (Å) — the molecule's own flex.
+    #[serde(default = "default_tolerance")]
+    pub tolerance: f64,
+    /// Legs 4 and later: sites within this of a relaxed foot (Å); also how far
+    /// a transferred H may go from its foot's site, site to site.
     #[serde(default = "default_reach")]
     pub reach: f64,
-    /// At most this many bonds formed per hypothesis: `-1` = no cap, `0` =
-    /// none (only patterns that form no bond, i.e. pure transfers). The panel
-    /// shows it as a checkbox plus a value; `-1` is the unticked state.
+    /// Prune seatings that clash instead of relaxing them; clashes are
+    /// reported either way.
+    #[serde(default = "default_clash_filter")]
+    pub clash_filter: bool,
+    /// At most this many legs (bonds formed) per hypothesis: `-1` = no cap.
+    /// The panel shows it as a checkbox plus a value; `-1` is the unticked
+    /// state.
     #[serde(default = "no_cap")]
     pub max_formed_bonds: i32,
-    /// At most this many transfers per hypothesis, over all `transfers`
-    /// records: `-1` = no cap, `0` = none (transfers banned while the pin
-    /// stays wired). Read only while the pin carries at least one record. The
-    /// panel shows it as a checkbox plus a value; `-1` is the unticked state.
-    #[serde(default = "default_max_transfers")]
-    pub max_transfers: i32,
-    /// Only patterns with exactly this many formed bonds (transfers not
-    /// counted). `None` = any count.
+    /// Only bindings with exactly this many legs are candidates. `None` = any
+    /// count.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub formed_bonds: Option<i32>,
-    /// Only patterns with exactly this bond inventory, written as a
-    /// candidate's `bonds` field reads, e.g. `"formed 2× O–Si"`. `None` = any.
+    /// Only bindings with exactly this bond inventory are candidates, written
+    /// as a candidate's `bonds` field reads, e.g. `"formed 2× O–Si"`. `None` =
+    /// any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bond_inventory: Option<String>,
     /// At most this many candidates are kept and listed…
@@ -164,8 +182,8 @@ pub struct ChemisorbData {
     /// …and only those within this many kcal/mol of the best.
     #[serde(default = "default_energy_window")]
     pub energy_window: f64,
-    /// At most this many hypotheses are relaxed; past it the search is
-    /// truncated and not exhaustive.
+    /// At most this many relaxations; past it the search is truncated and not
+    /// exhaustive.
     #[serde(default = "default_budget")]
     pub budget: i32,
     /// UFF iteration limit per relaxation.
@@ -184,9 +202,11 @@ impl Default for ChemisorbData {
         Self {
             adsorbate_tag: String::new(),
             substrate_tag: String::new(),
+            anchor_reach: default_anchor_reach(),
+            tolerance: default_tolerance(),
             reach: default_reach(),
+            clash_filter: default_clash_filter(),
             max_formed_bonds: no_cap(),
-            max_transfers: default_max_transfers(),
             formed_bonds: None,
             bond_inventory: None,
             top_n: default_top_n(),
@@ -198,25 +218,88 @@ impl Default for ChemisorbData {
     }
 }
 
-/// The whole search, as the `stats` pin and the panel show it.
+/// One local-phase level (legs 4, 5, …), as the `stats` pin and the panel
+/// show it.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ChemisorbLevelView {
+    pub legs: usize,
+    pub parents: usize,
+    pub paths: usize,
+    pub hypotheses: usize,
+    pub duplicates: usize,
+    pub pruned_valence: usize,
+    pub pruned_no_acceptor: usize,
+    pub pruned_filter: usize,
+    pub candidates: usize,
+    pub to_relax: usize,
+    pub relaxed: usize,
+    pub unconverged: usize,
+    pub truncated: bool,
+    pub near_misses: usize,
+}
+
+impl From<&LevelStats> for ChemisorbLevelView {
+    fn from(l: &LevelStats) -> Self {
+        Self {
+            legs: l.legs,
+            parents: l.parents,
+            paths: l.paths,
+            hypotheses: l.hypotheses,
+            duplicates: l.duplicates,
+            pruned_valence: l.pruned_valence,
+            pruned_no_acceptor: l.pruned_no_acceptor,
+            pruned_filter: l.pruned_filter,
+            candidates: l.candidates,
+            to_relax: l.to_relax,
+            relaxed: l.relaxed,
+            unconverged: l.unconverged,
+            truncated: l.truncated,
+            near_misses: l.near_misses,
+        }
+    }
+}
+
+/// The whole search, as the `stats` pin and the panel show it. The plan's
+/// counts cover the geometric legs (1–3); `local` the local phase, known only
+/// after Run.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ChemisorbStatsView {
-    /// Adsorbate reactive atoms with a free valence and a site within reach.
+    /// Adsorbate atoms that can bond: a free valence, or an H to donate.
     pub feet: usize,
-    /// Distinct sites within reach of at least one of them.
-    pub sites_in_reach: usize,
-    /// Candidate transfers `(donor, atom, acceptor)` the records allow.
-    pub transfer_candidates: usize,
-    pub considered: usize,
-    pub pruned_valence: usize,
-    /// Rejected by `formed_bonds` or `bond_inventory` while enumerating.
-    pub pruned_filter: usize,
+    /// Substrate atoms with a free valence.
+    pub sites: usize,
+    /// Every (foot, site) choice that passed its level's test.
+    pub paths: usize,
+    /// Distinct one-, two- and three-leg hypotheses.
+    pub anchors: usize,
+    pub sphere_pairs: usize,
+    pub torus_triples: usize,
     pub duplicates: usize,
+    pub pruned_valence: usize,
+    pub pruned_no_acceptor: usize,
+    /// Rejected by `bond_inventory` while enumerating.
+    pub pruned_filter: usize,
+    pub pruned_mirror: usize,
+    pub mirror_undecided: usize,
+    /// Hypotheses the filters admit (legs 1–3).
+    pub candidates: usize,
+    /// Three-leg hypotheses relaxed only to grow the local phase from.
+    pub parents: usize,
+    /// Seatings that clash (always counted), and those pruned for it (only
+    /// with `clash_filter` on).
+    pub seating_clashes: usize,
+    pub pruned_clash: usize,
+    /// A local phase (legs 4+) follows the geometric one.
+    pub local_phase: bool,
     /// The outputs are a search result for the current inputs.
     pub searched: bool,
     /// A stored result exists but was computed from other inputs.
     pub stale: bool,
+    /// Relaxations run (both phases), and those of the local phase.
     pub relaxed: usize,
+    pub local_relaxed: usize,
+    /// The relaxations the geometric phase needs; the local phase's are known
+    /// only after Run.
     pub to_relax: usize,
     pub unconverged: usize,
     /// Candidates kept: the best `top_n` within the window.
@@ -225,23 +308,57 @@ pub struct ChemisorbStatsView {
     pub truncated: bool,
     /// Wall time of the search, or of `plan` when `searched` is false (s).
     pub seconds: f64,
+    /// Per local level, in order; empty before Run or without a local phase.
+    pub local: Vec<ChemisorbLevelView>,
+}
+
+impl ChemisorbStatsView {
+    fn of_plan(p: &PlanStats) -> Self {
+        Self {
+            feet: p.feet,
+            sites: p.sites,
+            paths: p.paths,
+            anchors: p.anchors,
+            sphere_pairs: p.sphere_pairs,
+            torus_triples: p.torus_triples,
+            duplicates: p.duplicates,
+            pruned_valence: p.pruned_valence,
+            pruned_no_acceptor: p.pruned_no_acceptor,
+            pruned_filter: p.pruned_filter,
+            pruned_mirror: p.pruned_mirror,
+            mirror_undecided: p.mirror_undecided,
+            candidates: p.candidates,
+            parents: p.parents,
+            seating_clashes: p.seating_clashes,
+            pruned_clash: p.pruned_clash,
+            local_phase: p.local_phase,
+            to_relax: p.to_relax,
+            truncated: p.truncated,
+            seconds: p.seconds,
+            ..Self::default()
+        }
+    }
 }
 
 /// One listed candidate, as the `candidates` pin and the panel show it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ChemisorbRowView {
     pub rank: usize,
-    /// UFF energy against the same pose relaxed with no bonds formed
-    /// (kcal/mol): the ranking key, lower is better.
+    /// UFF energy against the separated state — the adsorbate and the
+    /// substrate each relaxed alone (kcal/mol): the ranking key, lower is
+    /// better.
     pub strain: f64,
     /// The bond inventory, e.g. `"formed 3× O–Si"`.
     pub bonds: String,
-    /// The formed bonds by atom id in the output structure, then the
-    /// transfers, e.g. `"O12–Si45, O13–Si47; H14 O13→Si48"`.
+    /// The formed bonds in binding order, by atom id in the output structure,
+    /// then the transfers, e.g. `"O12–Si45, O13–Si47; H14 O13→Si48"`.
     pub sites: String,
+    /// The leg count (transfers not counted).
     pub formed_bonds: usize,
     pub transfers: usize,
     pub converged: bool,
+    /// Its start geometry clashed (only possible with `clash_filter` off).
+    pub seating_clash: bool,
     pub worst_bond_ratio: f64,
     pub stretch: f64,
     pub bend: f64,
@@ -257,9 +374,13 @@ pub struct ChemisorbEvalCache {
     pub stats: ChemisorbStatsView,
     pub rows: Vec<ChemisorbRowView>,
     /// The `bond_inventory` choices: each distinct bond inventory with how
-    /// many hypotheses have it, from a plan without the inventory filter (but
-    /// with `formed_bonds`), by formed-bond count then label.
+    /// many relaxations it takes, from a plan without the inventory filter
+    /// (but with `formed_bonds`), by leg count then label. Legs 4 and later
+    /// appear once a matching result without the inventory filter exists.
     pub inventory_options: Vec<(String, usize)>,
+    /// `reach` is read: a local phase follows, or a transfer rule is wired.
+    /// The panel greys it out otherwise.
+    pub reach_used: bool,
 }
 
 impl ChemisorbData {
@@ -270,15 +391,10 @@ impl ChemisorbData {
         &self,
         use_vdw_cutoff: bool,
         transfers: Vec<TransferRule>,
-    ) -> Result<ChemisorptionSearch, String> {
-        if self.max_formed_bonds < -1 {
+    ) -> Result<SequentialSearch, String> {
+        if self.max_formed_bonds != -1 && self.max_formed_bonds < 1 {
             return Err(
-                "chemisorb: max_formed_bonds must be >= -1 (-1 = no cap, 0 = none)".to_string(),
-            );
-        }
-        if self.max_transfers < -1 {
-            return Err(
-                "chemisorb: max_transfers must be >= -1 (-1 = no cap, 0 = none)".to_string(),
+                "chemisorb: max_formed_bonds must be -1 (no cap) or at least 1".to_string(),
             );
         }
         if self.budget < 1 {
@@ -290,9 +406,9 @@ impl ChemisorbData {
         if self.top_n < 1 {
             return Err("chemisorb: top_n must be at least 1".to_string());
         }
-        if self.formed_bonds.is_some_and(|n| n < 0) {
+        if self.formed_bonds.is_some_and(|n| n < 1) {
             return Err(
-                "chemisorb: formed_bonds must be >= 0 (leave it unset for any)".to_string(),
+                "chemisorb: formed_bonds must be at least 1 (leave it unset for any)".to_string(),
             );
         }
         if !(self.energy_window.is_finite() && self.energy_window >= 0.0) {
@@ -308,14 +424,16 @@ impl ChemisorbData {
             let t = t.trim();
             (!t.is_empty()).then(|| t.to_string())
         };
-        let config = ChemisorptionSearch {
+        let config = SequentialSearch {
             adsorbate_tag: tag(&self.adsorbate_tag),
             substrate_tag: tag(&self.substrate_tag),
+            anchor_reach: self.anchor_reach,
+            tolerance: self.tolerance,
             reach: self.reach,
-            max_formed_bonds: (self.max_formed_bonds >= 0)
-                .then_some(self.max_formed_bonds as usize),
+            clash_filter: self.clash_filter,
             transfers,
-            max_transfers: (self.max_transfers >= 0).then_some(self.max_transfers as usize),
+            max_formed_bonds: (self.max_formed_bonds >= 1)
+                .then_some(self.max_formed_bonds as usize),
             formed_bonds: self.formed_bonds.map(|n| n as usize),
             bond_inventory,
             budget: self.budget as usize,
@@ -327,25 +445,25 @@ impl ChemisorbData {
             } else {
                 VdwMode::AllPairs
             },
-            ..ChemisorptionSearch::default()
+            ..SequentialSearch::default()
         };
         config.validate().map_err(|e| format!("chemisorb: {e}"))?;
         Ok(config)
     }
 
-    /// The stored report, when it was computed from inputs with this
+    /// The stored search, when it was computed from inputs with this
     /// fingerprint.
-    pub fn matching_report(&self, fingerprint: u64) -> Option<&SearchReport> {
+    pub fn matching_search(&self, fingerprint: u64) -> Option<&StoredSearch> {
         self.stored
-            .as_ref()
+            .as_deref()
             .filter(|s| s.fingerprint == fingerprint)
-            .map(|s| &s.report)
     }
 }
 
 /// The `transfers` pin's records. `None` (disconnected) and an empty array
 /// both mean no transfers. An upstream error comes back verbatim, as the
-/// other inputs' do.
+/// other inputs' do. A `to_substrate`-only check is the config's
+/// (`SequentialSearch::validate`), so its message names the record.
 pub fn transfer_rules(value: NetworkResult) -> Result<Vec<TransferRule>, String> {
     let items = match value {
         NetworkResult::None => return Ok(Vec::new()),
@@ -473,6 +591,7 @@ fn row_view(rank: usize, c: &Candidate) -> ChemisorbRowView {
         formed_bonds: c.formed.len(),
         transfers: c.transfers.len(),
         converged: c.converged,
+        seating_clash: c.seating_clash,
         worst_bond_ratio: c.worst_bond_ratio,
         stretch: c.terms.stretch,
         bend: c.terms.bend,
@@ -500,6 +619,10 @@ fn candidate_record(row: &ChemisorbRowView, structure: &AtomicStructure) -> Netw
         ("formed_bonds".to_string(), int(row.formed_bonds)),
         ("transfers".to_string(), int(row.transfers)),
         ("converged".to_string(), NetworkResult::Bool(row.converged)),
+        (
+            "seating_clash".to_string(),
+            NetworkResult::Bool(row.seating_clash),
+        ),
         ("worst_bond_ratio".to_string(), float(row.worst_bond_ratio)),
         (
             "terms".to_string(),
@@ -514,139 +637,166 @@ fn candidate_record(row: &ChemisorbRowView, structure: &AtomicStructure) -> Netw
     ])
 }
 
-fn stats_record(s: &ChemisorbStatsView) -> NetworkResult {
+fn level_record(l: &ChemisorbLevelView) -> NetworkResult {
     let int = |n: usize| NetworkResult::Int(n as i32);
     NetworkResult::record(vec![
-        ("feet".to_string(), int(s.feet)),
-        ("sites_in_reach".to_string(), int(s.sites_in_reach)),
-        (
-            "transfer_candidates".to_string(),
-            int(s.transfer_candidates),
-        ),
-        ("considered".to_string(), int(s.considered)),
-        ("pruned_valence".to_string(), int(s.pruned_valence)),
-        ("pruned_filter".to_string(), int(s.pruned_filter)),
-        ("duplicates".to_string(), int(s.duplicates)),
-        ("searched".to_string(), NetworkResult::Bool(s.searched)),
-        ("stale".to_string(), NetworkResult::Bool(s.stale)),
-        ("relaxed".to_string(), int(s.relaxed)),
-        ("to_relax".to_string(), int(s.to_relax)),
-        ("unconverged".to_string(), int(s.unconverged)),
-        ("listed".to_string(), int(s.listed)),
-        ("truncated".to_string(), NetworkResult::Bool(s.truncated)),
-        ("seconds".to_string(), NetworkResult::Float(s.seconds)),
+        ("legs".to_string(), int(l.legs)),
+        ("parents".to_string(), int(l.parents)),
+        ("paths".to_string(), int(l.paths)),
+        ("hypotheses".to_string(), int(l.hypotheses)),
+        ("duplicates".to_string(), int(l.duplicates)),
+        ("pruned_valence".to_string(), int(l.pruned_valence)),
+        ("pruned_no_acceptor".to_string(), int(l.pruned_no_acceptor)),
+        ("pruned_filter".to_string(), int(l.pruned_filter)),
+        ("candidates".to_string(), int(l.candidates)),
+        ("to_relax".to_string(), int(l.to_relax)),
+        ("relaxed".to_string(), int(l.relaxed)),
+        ("unconverged".to_string(), int(l.unconverged)),
+        ("truncated".to_string(), NetworkResult::Bool(l.truncated)),
+        ("near_misses".to_string(), int(l.near_misses)),
     ])
 }
 
-/// The three outputs and the panel's data for one evaluation, from the
-/// current inputs and whatever is stored. Relaxes nothing.
+fn stats_record(s: &ChemisorbStatsView) -> NetworkResult {
+    let int = |n: usize| NetworkResult::Int(n as i32);
+    let boolean = NetworkResult::Bool;
+    NetworkResult::record(vec![
+        ("feet".to_string(), int(s.feet)),
+        ("sites".to_string(), int(s.sites)),
+        ("paths".to_string(), int(s.paths)),
+        ("anchors".to_string(), int(s.anchors)),
+        ("sphere_pairs".to_string(), int(s.sphere_pairs)),
+        ("torus_triples".to_string(), int(s.torus_triples)),
+        ("duplicates".to_string(), int(s.duplicates)),
+        ("pruned_valence".to_string(), int(s.pruned_valence)),
+        ("pruned_no_acceptor".to_string(), int(s.pruned_no_acceptor)),
+        ("pruned_filter".to_string(), int(s.pruned_filter)),
+        ("pruned_mirror".to_string(), int(s.pruned_mirror)),
+        ("mirror_undecided".to_string(), int(s.mirror_undecided)),
+        ("candidates".to_string(), int(s.candidates)),
+        ("parents".to_string(), int(s.parents)),
+        ("seating_clashes".to_string(), int(s.seating_clashes)),
+        ("pruned_clash".to_string(), int(s.pruned_clash)),
+        ("local_phase".to_string(), boolean(s.local_phase)),
+        ("searched".to_string(), boolean(s.searched)),
+        ("stale".to_string(), boolean(s.stale)),
+        ("relaxed".to_string(), int(s.relaxed)),
+        ("local_relaxed".to_string(), int(s.local_relaxed)),
+        ("to_relax".to_string(), int(s.to_relax)),
+        ("unconverged".to_string(), int(s.unconverged)),
+        ("listed".to_string(), int(s.listed)),
+        ("truncated".to_string(), boolean(s.truncated)),
+        ("seconds".to_string(), NetworkResult::Float(s.seconds)),
+        (
+            "local".to_string(),
+            NetworkResult::Array(s.local.iter().map(level_record).collect()),
+        ),
+    ])
+}
+
+/// The inventories `plan` would relax as candidates, with how many of each.
+fn plan_inventories(p: &SequentialPlan) -> impl Iterator<Item = (&BondInventory, usize)> {
+    p.to_relax
+        .iter()
+        .map(|&i| &p.hypotheses[i])
+        .filter(|h| h.candidate)
+        .map(|h| (&h.inventory, h.legs()))
+}
+
+/// The two outputs and the panel's data for one evaluation, from the current
+/// inputs and whatever is stored. Relaxes nothing.
 pub fn chemisorb_outputs(
     data: &ChemisorbData,
     adsorbate: &AtomicStructure,
     substrate: &AtomicStructure,
-    config: &ChemisorptionSearch,
+    config: &SequentialSearch,
 ) -> Result<(Vec<NetworkResult>, ChemisorbEvalCache), String> {
     let fingerprint = input_fingerprint(adsorbate, substrate, config);
+    let stored = data.matching_search(fingerprint);
 
-    // The plan, and the dropdown's choices from a plan without the inventory
-    // filter (the same plan when there is none). Cheap: nothing is relaxed.
-    let planned = plan(adsorbate, substrate, config).map_err(|e| format!("chemisorb: {e}"))?;
-    let options_of = |p: &atomcad_crystolecule::chemisorption::SearchPlan| {
-        inventory_options(
-            p.hypotheses.iter().map(|h| (&h.inventory, h.formed.len())),
-            None,
-        )
+    // The plan (the stored one when it matches: the same inputs make the same
+    // plan), and the dropdown's choices from a plan without the inventory
+    // filter. Cheap: nothing is relaxed.
+    let fresh;
+    let planned = match stored {
+        Some(s) => &s.plan,
+        None => {
+            fresh = plan(adsorbate, substrate, config).map_err(|e| format!("chemisorb: {e}"))?;
+            &fresh
+        }
     };
     let inventory_options = if config.bond_inventory.is_some() {
-        let unfiltered = ChemisorptionSearch {
+        let unfiltered = SequentialSearch {
             bond_inventory: None,
             ..config.clone()
         };
         let all = plan(adsorbate, substrate, &unfiltered).map_err(|e| format!("chemisorb: {e}"))?;
-        options_of(&all)
+        inventory_options(plan_inventories(&all), None)
     } else {
-        options_of(&planned)
+        // Without the filter, a result also knows the local phase's
+        // inventories.
+        let local = stored.into_iter().flat_map(|s| {
+            s.report
+                .local
+                .iter()
+                .filter(|h| h.candidate)
+                .map(|h| (&h.inventory, h.legs()))
+        });
+        inventory_options(plan_inventories(planned).chain(local), None)
     };
+    let reach_used = planned.stats.local_phase || !config.transfers.is_empty();
 
-    if let Some(report) = data.matching_report(fingerprint) {
-        let listed: Vec<&Candidate> = report.candidates.iter().collect();
-        let rows: Vec<ChemisorbRowView> = listed
+    if let Some(stored) = stored {
+        let report = &stored.report;
+        let rows: Vec<ChemisorbRowView> = report
+            .candidates
             .iter()
             .enumerate()
             .map(|(i, c)| row_view(i + 1, c))
             .collect();
         let s = &report.stats;
         let stats = ChemisorbStatsView {
-            feet: s.feet,
-            sites_in_reach: s.sites_in_reach,
-            transfer_candidates: s.transfer_candidates,
-            considered: s.considered,
-            pruned_valence: s.pruned_valence,
-            pruned_filter: s.pruned_filter,
-            duplicates: s.duplicates,
             searched: true,
             stale: false,
             relaxed: s.relaxed,
-            to_relax: s.to_relax,
+            local_relaxed: s.local_relaxed,
             unconverged: s.unconverged,
             listed: rows.len(),
             truncated: s.truncated,
             seconds: s.seconds,
+            local: s.local.iter().map(ChemisorbLevelView::from).collect(),
+            ..ChemisorbStatsView::of_plan(&s.plan)
         };
-        // With nothing found, `best` is the relaxed pose: still the most
-        // honest picture of what the search looked at.
-        let best = listed
-            .first()
-            .map_or(&report.reference.structure, |c| &c.structure);
         let records = rows
             .iter()
-            .zip(&listed)
+            .zip(&report.candidates)
             .map(|(row, c)| candidate_record(row, &c.structure))
             .collect();
-        let outputs = vec![
-            molecule(best.clone()),
-            NetworkResult::Array(records),
-            stats_record(&stats),
-        ];
+        let outputs = vec![NetworkResult::Array(records), stats_record(&stats)];
         return Ok((
             outputs,
             ChemisorbEvalCache {
                 stats,
                 rows,
                 inventory_options,
+                reach_used,
             },
         ));
     }
 
-    let p = &planned.stats;
     let stats = ChemisorbStatsView {
-        feet: p.feet,
-        sites_in_reach: p.sites_in_reach,
-        transfer_candidates: p.transfer_candidates,
-        considered: p.considered,
-        pruned_valence: p.pruned_valence,
-        pruned_filter: p.pruned_filter,
-        duplicates: p.duplicates,
         searched: false,
         stale: data.stored.is_some(),
-        relaxed: 0,
-        to_relax: p.to_relax,
-        unconverged: 0,
-        listed: 0,
-        truncated: p.truncated,
-        seconds: p.seconds,
+        ..ChemisorbStatsView::of_plan(&planned.stats)
     };
-    let outputs = vec![
-        molecule(planned.combined),
-        NetworkResult::Array(Vec::new()),
-        stats_record(&stats),
-    ];
+    let outputs = vec![NetworkResult::Array(Vec::new()), stats_record(&stats)];
     Ok((
         outputs,
         ChemisorbEvalCache {
             stats,
             rows: Vec::new(),
             inventory_options,
+            reach_used,
         },
     ))
 }
@@ -672,7 +822,7 @@ impl NodeData for ChemisorbData {
         _decorate: bool,
         context: &mut NetworkEvaluationContext,
     ) -> EvalOutput {
-        let all_pins = |v: NetworkResult| EvalOutput::multi(vec![v.clone(), v.clone(), v]);
+        let all_pins = |v: NetworkResult| EvalOutput::multi(vec![v.clone(), v]);
 
         let adsorbate = network_evaluator.evaluate_arg_required(
             network_stack,
@@ -723,8 +873,8 @@ impl NodeData for ChemisorbData {
     }
 
     /// A settings edit, and its undo, replace the whole data; the stored
-    /// search survives them, so "change reach, undo" brings the result back.
-    /// Safe because it is only output while the fingerprint matches.
+    /// search survives them, so "change tolerance, undo" brings the result
+    /// back. Safe because it is only output while the fingerprint matches.
     fn inherit_runtime_state(&mut self, previous: &dyn NodeData) {
         if self.stored.is_none()
             && let Some(previous) = previous.as_any_ref().downcast_ref::<ChemisorbData>()
@@ -741,20 +891,10 @@ impl NodeData for ChemisorbData {
         )
     }
 
-    fn get_subtitle(&self, connected_input_pins: &HashSet<String>) -> Option<String> {
-        let mut subtitle = format!("reach {} Å", self.reach);
+    fn get_subtitle(&self, _connected_input_pins: &HashSet<String>) -> Option<String> {
+        let mut subtitle = format!("anchor {} Å · tol {} Å", self.anchor_reach, self.tolerance);
         if let Some(n) = self.formed_bonds {
-            subtitle.push_str(&format!(
-                " · {n} bond{} formed",
-                if n == 1 { "" } else { "s" }
-            ));
-        }
-        if connected_input_pins.contains("transfers") {
-            match self.max_transfers {
-                -1 => subtitle.push_str(" · transfers"),
-                0 => subtitle.push_str(" · no transfers"),
-                n => subtitle.push_str(&format!(" · ≤{n} transfers")),
-            }
+            subtitle.push_str(&format!(" · {n} leg{}", if n == 1 { "" } else { "s" }));
         }
         Some(subtitle)
     }
@@ -777,14 +917,19 @@ impl NodeData for ChemisorbData {
                 "substrate_tag".to_string(),
                 TextValue::String(self.substrate_tag.clone()),
             ),
+            (
+                "anchor_reach".to_string(),
+                TextValue::Float(self.anchor_reach),
+            ),
+            ("tolerance".to_string(), TextValue::Float(self.tolerance)),
             ("reach".to_string(), TextValue::Float(self.reach)),
+            (
+                "clash_filter".to_string(),
+                TextValue::Bool(self.clash_filter),
+            ),
             (
                 "max_formed_bonds".to_string(),
                 TextValue::Int(self.max_formed_bonds),
-            ),
-            (
-                "max_transfers".to_string(),
-                TextValue::Int(self.max_transfers),
             ),
             ("top_n".to_string(), TextValue::Int(self.top_n)),
             (
@@ -838,20 +983,32 @@ impl NodeData for ChemisorbData {
                 })
                 .transpose()
         };
+        let boolean = |key: &str| -> Result<Option<bool>, String> {
+            props
+                .get(key)
+                .map(|v| v.as_bool().ok_or_else(|| format!("{key} must be a bool")))
+                .transpose()
+        };
         if let Some(v) = string("adsorbate_tag")? {
             self.adsorbate_tag = v;
         }
         if let Some(v) = string("substrate_tag")? {
             self.substrate_tag = v;
         }
+        if let Some(v) = float("anchor_reach")? {
+            self.anchor_reach = v;
+        }
+        if let Some(v) = float("tolerance")? {
+            self.tolerance = v;
+        }
         if let Some(v) = float("reach")? {
             self.reach = v;
         }
+        if let Some(v) = boolean("clash_filter")? {
+            self.clash_filter = v;
+        }
         if let Some(v) = int("max_formed_bonds")? {
             self.max_formed_bonds = v;
-        }
-        if let Some(v) = int("max_transfers")? {
-            self.max_transfers = v;
         }
         if let Some(v) = int("top_n")? {
             self.top_n = v;
@@ -879,49 +1036,50 @@ pub fn get_node_type() -> NodeType {
     let named = |name: &str| DataType::Record(RecordType::Named(name.to_string()));
     NodeType {
         name: "chemisorb".to_string(),
-        description: "Enumerates every way a posed adsorbate can bond to a substrate, relaxes \
-                      each with UFF and ranks them. One search is one pose: the adsorbate as \
-                      wired, over the substrate as wired.\n\
+        description: "Finds the ways a posed adsorbate can bond to a substrate, leg by leg, \
+                      relaxes each with UFF and ranks them. The pose fixes only where the \
+                      first bond lands; the orientations follow from the site choices.\n\
                       \n\
                       **The search runs only when you press Run** (panel, or `run` in the \
                       CLI). Until then, and whenever an input or a search setting changes \
-                      after a run, the node shows the *plan*: `best` is the unrelaxed pose, \
-                      `candidates` is empty and `stats` counts the hypotheses a run would \
-                      relax (`searched` false, `stale` true after an earlier run). Results are \
-                      not saved with the file.\n\
+                      after a run, the node shows the *plan*: `candidates` is empty and \
+                      `stats` counts what a run would relax (`searched` false, `stale` true \
+                      after an earlier run). Results are not saved with the file. To view a \
+                      candidate, take its `structure` field downstream.\n\
                       \n\
                       A **site** is a substrate reactive atom with a free valence; a hydrogen \
-                      on the substrate blocks its host. Each adsorbate reactive atom with a \
-                      free valence forms at most one bond, to a site within **reach** (Å). \
-                      Every partial binding is enumerated too, up to **max_formed_bonds** \
-                      (-1 = no cap). **adsorbate_tag** / **substrate_tag** restrict the \
-                      reactive atoms (empty = all). **budget** caps the relaxations; a \
-                      truncated search is not exhaustive.\n\
+                      on the substrate blocks its host. A **foot** is an adsorbate reactive \
+                      atom with a free valence (or, with a transfer record, an OH oxygen); \
+                      each forms at most one bond. **Leg 1**: a site within **anchor_reach** \
+                      (Å) of a posed foot. **Legs 2 and 3**: any site the foot spacing and \
+                      the bond lengths allow, plus **tolerance** (Å) for the molecule's own \
+                      flex. **Legs 4 and later**: a site within **reach** (Å) of a foot's \
+                      relaxed position. The adsorbate is seated rigidly on its bonded sites \
+                      before relaxing; seatings that put it through the substrate are \
+                      pruned (**clash_filter**, on by default) and mirror-image three-leg \
+                      assignments always are. One-leg bindings are listed only for a \
+                      one-foot adsorbate. **adsorbate_tag** / **substrate_tag** restrict the \
+                      reactive atoms (empty = all; tag the facet to keep the search small). \
+                      **max_formed_bonds** caps the legs (-1 = no cap). **budget** caps the \
+                      relaxations; a truncated search is not exhaustive.\n\
                       \n\
                       **Transfers** (optional `transfers` pin, an array of `ChemisorbTransfer` \
-                      records): a monovalent atom (H or a halogen) moves from its only \
-                      neighbour on one side to an atom with a free valence on the other, \
-                      within **reach** of the moving atom. `to_substrate` lets an OH leg hand \
-                      its H to a site so its O can bond; `to_adsorbate` lets a radical foot \
-                      abstract surface H. The donor must be a reactive atom (the tag selects \
-                      donors, never the H). **max_transfers** (default 1; -1 = no cap, 0 = none) caps them per \
-                      pattern, over all records.\n\
+                      records, `to_substrate` only): an OH foot hands its H to the free site \
+                      nearest the site it bonds to, within **reach** of it — one fixed rule, \
+                      not a search. Tag the O feet: with no adsorbate tag, every C–H carbon \
+                      becomes a donor foot too.\n\
                       \n\
-                      **Ranking** is by `strain`: the UFF energy against the same pose \
-                      relaxed with no bonds formed (kcal/mol), lower first. There is no \
-                      bond-energy term, so fewer bonds usually rank first, and candidates \
-                      with different bond inventories do not compare cleanly.\n\
-                      \n\
-                      **What to search for:** **formed_bonds** (exactly this many formed \
-                      bonds; unset = any) and **bond_inventory** (exactly this bond inventory, \
-                      as in a candidate's `bonds` field; unset = any) restrict what is \
-                      enumerated, so only that group is relaxed — run once per group to \
-                      compare like with like. **top_n** and **energy_window** (kcal/mol above \
-                      the best) choose which relaxed candidates are kept; the rest are dropped \
-                      as they finish. Every setting needs a new Run. Changed atoms carry the \
-                      `cs_changed` tag."
+                      **Ranking** is by `strain`: the UFF energy against the separated state \
+                      (adsorbate and substrate each relaxed alone, kcal/mol), lower first. \
+                      There is no bond-energy term, so fewer bonds usually rank first, and \
+                      candidates with different bond inventories do not compare cleanly: \
+                      set **formed_bonds** (exactly this many legs) or **bond_inventory** \
+                      (exactly this inventory, as in a candidate's `bonds` field) before \
+                      reading the ranking. **top_n** and **energy_window** (kcal/mol above \
+                      the best) choose which relaxed candidates are kept. Every setting \
+                      needs a new Run. Changed atoms carry the `cs_changed` tag."
             .to_string(),
-        summary: Some("Enumerate and rank chemisorption bonding patterns".to_string()),
+        summary: Some("Find and rank chemisorption bindings leg by leg".to_string()),
         category: NodeTypeCategory::AtomicStructure,
         parameters: vec![
             Parameter {
@@ -942,8 +1100,9 @@ pub fn get_node_type() -> NodeType {
                 data_type: DataType::Array(Box::new(named(CHEMISORB_TRANSFER_RECORD))),
             },
         ],
+        // Output pins too: `best` (old pin 0) was removed, the one renumbering
+        // (design_chemisorption_sequential.md §6.2). Append from here on.
         output_pins: vec![
-            OutputPinDefinition::fixed("best", DataType::Molecule),
             OutputPinDefinition::fixed(
                 "candidates",
                 DataType::Array(Box::new(named(CHEMISORB_CANDIDATE_RECORD))),

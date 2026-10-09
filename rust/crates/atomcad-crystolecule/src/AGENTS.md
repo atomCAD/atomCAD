@@ -35,15 +35,14 @@ crates/atomcad-crystolecule/src/
 ├── atomic_constants.rs             # Element database (symbol, radius, color)
 ├── atomic_structure_utils.rs       # Auto-bonding, selection, cleanup helpers, `empirical_formula`
 ├── bond_enthalpy.rs                # Mean single-bond enthalpies (12 elements) + Pauling estimate; currently unused
-├── chemisorption/                  # Exhaustive chemisorption search: plan (enumerate) / evaluate (UFF relax + rank)
-│   ├── config.rs                   # ChemisorptionSearch, ChemisorptionError, CHANGED_TAG
-│   ├── enumerate.rs                # plan(): sites, feet, depth-first site assignment, free_valence
-│   ├── fingerprint.rs              # input_fingerprint(): hash of everything a search depends on (keys a stored result)
-│   ├── relax.rs                    # one UFF relaxation with per-term energies (StrainTerms)
-│   ├── inventory.rs                # BondKind / BondInventory: the bonds a candidate forms and breaks, by kind
-│   ├── transfer.rs                 # TransferRule / Transfer: candidate (D, X, A) triples, seating X on A
-│   ├── report.rs                   # evaluate() / search(): Candidate, SearchReport, ranking
-│   └── sequential/                 # The sequential (leg-by-leg) search; replaces the above in Phase 3
+├── chemisorption/                  # Chemisorption search: building blocks here, the search itself in sequential/
+│   ├── config.rs                   # ChemisorptionError, Side, CHANGED_TAG
+│   ├── atoms.rs                    # free_valence, reactive_atoms (by tag), change_key / HypothesisKey
+│   ├── fingerprint.rs              # input_fingerprint(): hash of both inputs + every SequentialSearch field (keys a stored result)
+│   ├── relax.rs                    # one UFF relaxation (RelaxSettings) with per-term energies (StrainTerms)
+│   ├── inventory.rs                # BondKind / BondInventory: the bonds a candidate forms and breaks, by kind; inventory_options
+│   ├── transfer.rs                 # TransferRule / Transfer: seating X on its acceptor, apply_transfers
+│   └── sequential/                 # The search: leg by leg (plan / evaluate / search, replay)
 │       ├── config.rs               # SequentialSearch: anchor_reach / tolerance / reach / clash_filter + the shared settings
 │       ├── setup.rs                # Setup (feet, sites) + every per-leg predicate: pair_need, acceptor, local_up, mirror, seat, clashes
 │       ├── plan.rs                 # plan(): depth-first legs 1–3, change-set dedupe, PlanStats, Hypothesis
@@ -143,7 +142,7 @@ crates/atomcad-crystolecule/src/
 | `ProxyOptions` | `proxy_cut.rs` | What a proxy cut is tunable by: `hops` / `rim` (frozen shells counted inward from the cut boundary, so the absolute free depth is `hops - rim` — `free_hops()`) / `fill` / `rm_single` / `passivate` / `passivant_element` / `core`. Unsigned — the node's "-1 means off" rules are validated before this struct is built, and `core` is the one `Option` |
 | `ProxyPlan` | `proxy_cut.rs` | Everything one cut decided and nothing mutated: per-atom bond distance, the keep/drop sets, the severed-bond caps, the frozen and `high` lists. Every `Vec` is sorted by atom id so the ids `apply_proxy` hands out are deterministic |
 | `ProxyStats` | `proxy_cut.rs` | The report `apply_proxy` returns: formula, atom counts, `farthest_hop` (a **size** figure) beside `free_hops` (the derived depth of the relaxed interior; the shielding figure is the `rim` option itself), `open_valences`, `min_cap_pair`, and `nearest_dropped` — which counts only dropped atoms the cluster is **not attached to** (`DETACHED_MIN_BOND_SEPARATION`), since the workpiece continuing past the cut is always ~2 bonds from the free region and would otherwise report a steric neighbour on every bulk cut. The `proxy` node stores it in the eval cache, never on the node data |
-| `ChemisorptionSearch` / `SearchPlan` / `SearchReport` / `Candidate` | `chemisorption/` | One search of one posed adsorbate over a substrate: the settings, what `plan` enumerated (hypotheses + valence/duplicate counts, nothing relaxed), and what `evaluate` kept (the best `top_n` relaxed candidates within the window, by UFF energy against the relaxed no-change reference) |
+| `SequentialSearch` / `SequentialPlan` / `SearchReport` / `Candidate` | `chemisorption/sequential/` | One chemisorption search of a posed adsorbate over a substrate: the settings, what `plan` found for legs 1–3 (hypotheses, seatings, the search tree, nothing relaxed), and what `evaluate` kept (the best `top_n` relaxed candidates within the window, by UFF energy against the separated reference, after the local phase) |
 | `LatticeFillConfig` | `lattice_fill/config.rs` | Unit cell + motif + geometry + options for filling |
 | `PlacedAtomTracker` | `lattice_fill/placed_atom_tracker.rs` | CrystallographicAddress → atom ID mapping |
 | `AtomInfo` | `atomic_constants.rs` | Element properties (symbol, radii, color) |
@@ -263,48 +262,70 @@ mirrored candidate, because reflecting a point or a line only changes the
 rotation that was undetermined anyway. Design doc:
 `doc/design_mechanosynth_editor.md`.
 
-**Chemisorption search** (`chemisorption/`): enumerate every bonding pattern
-of an adsorbate posed over a substrate, UFF-relax each, rank by UFF energy
-against the same pose relaxed unbonded. Design doc: `design_chemisorption_search.md`, in the
-external mechanosynth working folder (it carries proprietary context). Rules
-that are easy to erode:
+**Chemisorption search** (`chemisorption/`): build each binding of an
+adsorbate posed over a substrate leg by leg, UFF-relax the candidates, rank by
+UFF energy against the separated state (adsorbate and substrate each relaxed
+alone). The search is `sequential/`; its rules are in its `mod.rs` doc. Design
+doc: `doc/design_chemisorption_sequential.md` (a scrubbed copy; the original,
+with the proprietary context, is in the external mechanosynth working folder).
+Rules that are easy to erode:
 
-- **`plan` never relaxes.** It is the half a node runs on every evaluation, so
-  it is enumeration only — sites, reach and valence checks.
-  Anything that needs UFF belongs in `evaluate`.
+- **`plan` never relaxes.** It is the half a node runs on every evaluation:
+  legs 1–3, the transfer rule, seating, the mirror and clash checks — all
+  geometry. Anything that needs UFF belongs in `evaluate`. `plan` is timed
+  (`plan_is_fast_enough_for_every_evaluation`, 0.25 s on the hexapod in
+  release); if it grows past that, move the per-row seating out of it (design
+  §4.9), not the enumeration.
 - **A site is an atom with a free valence, nothing more.** No plane, facet or
   passivation notion; an H placed on the substrate blocks its host by
   saturating it. `free_valence` reads a **fixed per-element valence** against
   the bond-order sum, not the UFF hybridization: a radical carbon with three
-  single bonds types as sp2 and would read as saturated.
+  single bonds types as sp2 and would read as saturated. The *local up* is
+  estimated from atoms for seating and the mirror check only — never in a test
+  that admits or rejects a site.
 - **The ranking is UFF energy alone — no bond-energy term.** The search serves
   kinetic control, where a product's absolute energy says little about whether
   it forms, and tabulated enthalpies are too crude to supply it anyway. The
   consequence is that fewer bonds usually rank first and that energies compare
   cleanly only within one `BondInventory`, which is why a search can be
-  restricted to one formed-bond count (`formed_bonds`) or one inventory
+  restricted to one leg count (`formed_bonds`) or one inventory
   (`bond_inventory`). **An inventory is a filter, never a sort key.** Do not reintroduce enthalpies here without that decision being
   revisited; the tables live on, unused, in `bond_enthalpy.rs` (copied
   verbatim from Appendix A of the design — never fill a gap from memory).
 - **Every setting is a search setting, applied as early as it can be.** The
-  two filters are *pruning* in `plan` (an exact count caps the assignment and
-  cuts branches that cannot reach it; an exact inventory fixes the transfer
-  set and cuts a branch once a bond kind exceeds its count), so the plan is
-  exactly what a run relaxes and the budget counts only the group asked for.
-  `top_n` and the window are applied *while relaxing* (`keep_best` under a
-  mutex): a structure is held only while it is among the best `top_n`, so
-  memory is bounded by `top_n`, not by the hypothesis count. Never collect all
-  relaxed structures and filter afterwards — a hexapod at the budget would
-  hold ~1 GB. A "filters after search" split existed and was removed for
-  exactly that reason. `the_filters_plan_exactly_the_matching_subset` pins
-  that pruning changes nothing but the count.
-- **No geometric pruning of multi-bond patterns.** A site-spacing filter
-  (pair tolerance) existed and was removed: UFF lets feet flex by >2.5 Å of
-  site mismatch within the listing window, so any useful tolerance pruned
-  real candidates, and users could not tune it.
+  two filters decide which hypotheses are candidates during enumeration (an
+  inventory prunes a branch once a bond kind exceeds its count), so the plan
+  is exactly what a run relaxes; `top_n` and the window are applied *while
+  relaxing* (`keep_best`), so memory is bounded by `top_n`, not by the
+  hypothesis count. Never collect all relaxed structures and filter
+  afterwards — a hexapod at the budget would hold ~1 GB.
+- **What is relaxed: a candidate, or a local-phase parent.** A two-leg
+  hypothesis that is only a step on the way to three legs is never relaxed;
+  three-leg hypotheses are Kabsch-seated from their own bonds.
+- **Geometric pruning is deliberate here, and only because it is exact.** An
+  older all-at-once engine had a site-spacing filter (pair tolerance) that was
+  removed: UFF lets feet flex by >2.5 Å of site mismatch, so any useful
+  tolerance pruned real candidates. The sequential search's shell (leg 2) and
+  two-shell ring (leg 3) are different: foot spacing ± the two bond lengths,
+  by the triangle inequality, so **exact at `tolerance` 0 for every bond
+  direction**; the tolerance means only the molecule's own flex. Never
+  replace the ring by a distance from a circle on the site axis (not exact),
+  and never add a test that assumes a bond direction.
+- **A leg's change set includes its transfer, fixed when the leg forms.** H
+  transfer is one rule (`Setup::acceptor`): the moved atom goes to the free
+  site nearest the foot's site, never that site itself, within `reach` site to
+  site; no such site drops the leg (`pruned_no_acceptor`). Only `to_substrate`
+  exists; `to_adsorbate` is a config error. Two binding orders that send an H
+  to different sites are two hypotheses; the start geometry is a function of
+  the change set, which is what makes the change-set dedupe exact.
+- **Mirror check vs clash filter.** Mirror-image three-leg assignments are
+  pruned always by an exact handedness test that abstains near zero (nearly
+  collinear feet, a flat body); clashing seatings are pruned only with
+  `clash_filter` (on by default) and are always counted. They are separate
+  on purpose: one is geometry, the other a threshold.
 - The ranking is deterministic: relaxations run in parallel (rayon) and finish
-  in any order, but "the best `top_n` by strain, ties by the normalized bond
-  set" (`rank_order`) is one answer whatever the order.
+  in any order, but "the best `top_n` by strain, ties by the change set" is
+  one answer whatever the order, and a local level sorts before truncating.
 - **Both `VdwMode`s must work** — the app's default preference is the 6 Å
   cutoff, and the `chemisorb` node follows it. `UffForceField::vdw_params()`
   **panics** in cutoff mode (it keeps a neighbour list, not pair parameters),
@@ -313,13 +334,9 @@ that are easy to erode:
 - `input_fingerprint` hashes exactly what a search depends on — never
   selection or display flags, and of the tags only the side's reactive one —
   so selecting an atom does not make a stored result stale. A new
-  `ChemisorptionSearch` field must be added to it (the destructuring there
+  `SequentialSearch` field must be added to it (the destructuring there
   makes that a compile error).
-- **The sequential search (`chemisorption/sequential/`, design
-  `design_chemisorption_sequential.md`) sits beside the engine above** until
-  the `chemisorb` node moves to it (Phase 3 of that design, which also
-  rewrites the bullets here). Its own rules are in its `mod.rs` doc. Two are
-  pitfalls that cost time: **seating reads the legs sorted** (local up, fit,
+- Pitfalls that cost time: **seating reads the legs sorted** (local up, fit,
   θ rule), or the binding order leaks into the start geometry by rounding;
   and **collinear seating points** (sites along one dimer row) leave the
   Kabsch turn about their line undetermined, so the solver's answer is
@@ -333,17 +350,6 @@ that are easy to erode:
   structure rebuilt from them (`Setup::state_structure`) must apply the bond
   changes step by step in the order the search did, or the audit's strain
   recomputation drifts.
-- **Transfers are enumerated before bond forming, and valence is checked on
-  the whole transfer set** (`Enumerator::with_transfer_set`): a transfer frees
-  its donor (the OH leg that can then bond) and fills its acceptor, and one
-  transfer can free the valence another needs. So a site or foot is any atom
-  with a free valence *or* a donor of some candidate transfer, and its
-  valence is recomputed per set. A transfer's moved atom is not in
-  `Hypothesis::formed` — the `X–A` bond lives in `transfers` — and dedupe keys
-  it by `(donor, element, acceptor)`, never by id, so the two H of an H₂O are
-  one move (`change_key`). Only H and the halogens transfer (a rule for any
-  other element is an `InvalidConfig`), and a moving atom is never also a
-  donor or acceptor in the same set.
 
 **Memory Layout**: `InlineBond` packs atom_id (29 bits) + bond_order (3 bits) into 4 bytes. `SmallVec<[InlineBond; 4]>` keeps up to 4 bonds inline per atom. Spatial grid (FxHashMap, cell size 4.0 Å) enables O(1) neighbor queries. `AtomicStructure` no longer carries a `frame_transform` — movement nodes bake transforms directly into atom positions (see `doc/design_lattice_space_refactoring.md` Appendix B).
 
@@ -694,7 +700,7 @@ O(n²), compares flags and tag names). Design doc:
 - `CifLoadError` (io/cif/mod) — top-level load errors (wraps parse/extraction/IO)
 - `CubeError` (io/cube_loader) — Io / Parse / Unsupported / Field variants
 - `ChemisorptionError` (chemisorption/config) — InvalidConfig (incl. a transfer
-  rule for a non-monovalent element) / UnknownTag (a
+  rule for a non-monovalent element, or a `to_adsorbate` one) / UnknownTag (a
   reactive tag no atom carries: an error, not "found nothing") /
   Relaxation / Tag
 - `FieldError` (field) — grid description problems (zero dimension, sample-count
@@ -727,7 +733,7 @@ motif_bond_inference → Motif, UnitCellStruct, atomic_constants
 miller        →  glam only (no crystolecule types at all)
 patch         →  AtomicStructure, UnitCellStruct, weld, hydrogen_passivation, guided_placement, GeoNode
 proxy_cut     →  AtomicStructure, atomic_constants, atomic_structure_utils, hydrogen_passivation
-chemisorption →  AtomicStructure, atomic_constants, guided_placement, hydrogen_passivation (terminator_bond_length, seating a transferred atom), simulation (rayon for the relaxations), rigid_fit (the sequential search's seating)
+chemisorption →  AtomicStructure, atomic_constants, guided_placement, hydrogen_passivation (terminator_bond_length, seating a transferred atom), simulation (rayon for the relaxations), rigid_fit (seating)
 mechanosynth  →  AtomicStructure, atomic_constants, rigid_fit (serde_json for the two JSON files)
 guided_placement → AtomicStructure, simulation/uff (typer, params)
 hydrogen_passivation → AtomicStructure, atomic_constants, guided_placement
@@ -762,13 +768,12 @@ tests/crystolecule/
 ├── patch_test.rs                  # Cell selection, region depths, apply_patch pipeline
 ├── patch_build_test.rs            # Tiling-vector validation, tile extraction
 ├── bond_enthalpy_test.rs          # The (unused) enthalpy table: symmetry, conversion, Pauling estimates
-├── chemisorption_test.rs          # plan counts/valence/tags, ranking, the filters as pruning, top_n/window while relaxing, inventory labels, transfers (candidates, dedupe, seating, OH tripod), ethylene di-σ and water (a UFF tie) known answers
 ├── chemisorption_sequential_support.rs  # Sequential search: fixtures, SplitMix64, the independent oracle (§11.1) and audit (§11.5)
 ├── chemisorption_sequential_test.rs     # …plan only: predicates, hand-worked case, oracle (fixtures + 300 random), planted bindings, metamorphic, rules, tree
 ├── chemisorption_sequential_relax_test.rs  # …relaxing: what is relaxed, filters commute, strain invariances, threads, budget, run control, known answers
 ├── chemisorption_sequential_local_test.rs  # …the local phase: planted 5-leg binding, the oracle per level (via replay), dedupe, transfers per leg (competing acceptors), budget, threads
 ├── chemisorption_sequential_golden_test.rs # …against the old engine's golden data (chemisorption_golden/), coverage of the 20-pose brute force, insta snapshots
-├── chemisorption_sequential_spike_test.rs  # Phase 0 spike (all ignored); captured chemisorption_golden/old_engine.json
+├── chemisorption_golden/old_engine.json  # The removed all-at-once engine's bond sets and strains (captured in Phase 0); the golden test compares against it
 ├── proxy_cut_test.rs              # Riders, bond distances, fill/rm_single keep set, severed-bond caps; the §4.3 bulk-silicon fill table
 ├── concave_rebond_test.rs         # Concave-corner rebonding; clash detector re-derived independently
 ├── io/

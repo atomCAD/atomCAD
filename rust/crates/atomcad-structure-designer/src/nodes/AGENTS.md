@@ -35,7 +35,7 @@ Built-in node type implementations. Each file defines one node type's behavior v
 - **Phase transitions:** `materialize` (Blueprint → Crystal), `dematerialize` (Crystal → Blueprint), `exit_structure` (Crystal → Molecule), `enter_structure` (Molecule + Structure → Crystal)
 - **Atomic ops (HasAtoms-polymorphic):** `edit_atom/`, `atom_edit/` (plus `motif_edit` sibling node type defined in the same module), `atom_union`, `atom_cut`, `proxy` (bond-hop simulation-proxy cut — a thin adapter over `atomcad_crystolecule::proxy_cut`, `doc/design_proxy_node.md`), `relax`, `passivate`, `remove_hydrogen`, `infer_bonds`, `atom_replace`, `freeze`, `unfreeze`, `apply_diff`, `atom_composediff`
 - **Run-on-demand search:** `chemisorb` (a thin adapter over
-  `atomcad_crystolecule::chemisorption`) is the one node whose real work
+  `atomcad_crystolecule::chemisorption::sequential`) is the one node whose real work
   **never runs in `eval`**: a search relaxes hundreds of structures, and the
   evaluator re-evaluates a node on selection, downstream edits and every full
   refresh. `eval` runs only the cheap `plan`; the search is an explicit action
@@ -61,7 +61,12 @@ Built-in node type implementations. Each file defines one node type's behavior v
   A split into listing-only filters was tried and removed: it forced every
   relaxed structure to be held. The `bond_inventory` dropdown is fed by a
   second `plan` without that filter (with it, the plan only contains the
-  current choice).
+  current choice); the plan covers legs 1–3 only, so deeper inventories come
+  from a matching unfiltered result. The stored result keeps the **plan beside
+  the report** (`StoredSearch`): the report numbers its hypotheses after the
+  plan's and extends its tree, and `replay` (the debug view's re-relaxation)
+  needs both. Its outputs were renumbered once, when the `best` pin was
+  removed (`candidates` 0, `stats` 1); append from here on.
 - **Region-gated atom ops (`doc/design_blueprint_region_atom_edits.md` Part A):** `passivate`, `remove_hydrogen`, `infer_bonds`, `atom_replace`, and the metadata-edit pair `freeze`/`unfreeze` (`freeze.rs`) each carry an **optional `region: Blueprint` input pin as their last pin**, gating the op to atoms inside that volume. The shared seam and the rules for adding another such op are in **`evaluator/atom_op.rs`**'s module doc.
 - **Movement (polymorphic over abstract inputs):** `structure_move`, `structure_rot` on `HasStructure`; `free_move`, `free_rot` on `HasFreeLinOps`; `lattice_symop`. The four `structure_*`/`free_*` movement nodes keep a `same_as_input("result","input")` pin-0 (concrete type flows through) but are now **two-output** (`[result, diff]`, see the diff-output bullet below); `lattice_symop` is unchanged single-output.
 - **Diff output pins (issue #295, `doc/design_diff_outputs_for_atom_ops.md`):** `relax`, the four movement nodes (`free_move`/`free_rot`/`structure_move`/`structure_rot`), `atom_replace`, and `atom_cut` each carry a **second `diff` output pin** (pin 1) alongside `result` (pin 0) — the same two-pin shape as `atom_edit`. The snapshot→`extract_diff`→`multi` pattern, the shared helpers, and the traps (every error path must return **two**-pin errors; do not override `default_display_all_output_pins`) are in **`evaluator/atom_op.rs`**'s module doc.

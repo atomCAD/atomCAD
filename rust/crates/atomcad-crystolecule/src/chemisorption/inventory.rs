@@ -5,7 +5,7 @@
 //! cleanly only when their inventories are equal — a different bond graph
 //! shifts the UFF energy for reasons that are not strain — which is why a
 //! search can be restricted to one inventory
-//! ([`ChemisorptionSearch::bond_inventory`](super::ChemisorptionSearch)). It
+//! ([`SequentialSearch::bond_inventory`](super::sequential::SequentialSearch)). It
 //! is never a ranking key.
 
 use crate::atomic_constants::{CHEMICAL_ELEMENTS, element_symbol};
@@ -163,4 +163,25 @@ impl FromStr for BondInventory {
         }
         Ok(inventory)
     }
+}
+
+/// The distinct bond inventories among `inventories`, each with how many
+/// there are of it, restricted to `formed_bonds` formed bonds when it is set.
+/// Ordered by formed-bond count, then label — an inventory is topology, not a
+/// ranking. The input is each hypothesis's inventory with its formed-bond
+/// count.
+pub fn inventory_options<'a>(
+    inventories: impl IntoIterator<Item = (&'a BondInventory, usize)>,
+    formed_bonds: Option<usize>,
+) -> Vec<(String, usize)> {
+    let mut counts: std::collections::BTreeMap<(usize, String), usize> = Default::default();
+    for (inventory, formed) in inventories {
+        if formed_bonds.is_none_or(|n| n == formed) {
+            *counts.entry((formed, inventory.to_string())).or_insert(0) += 1;
+        }
+    }
+    counts
+        .into_iter()
+        .map(|((_, label), n)| (label, n))
+        .collect()
 }

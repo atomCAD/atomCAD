@@ -10,8 +10,8 @@
 use crate::atomic_constants::ATOM_INFO;
 use crate::atomic_structure::AtomicStructure;
 use crate::atomic_structure::inline_bond::BOND_SINGLE;
+use crate::chemisorption::atoms::{free_valence, reactive_atoms};
 use crate::chemisorption::config::{ChemisorptionError, Side};
-use crate::chemisorption::enumerate::{free_valence, reactive_atoms};
 use crate::chemisorption::transfer::{Transfer, TransferDirection, apply_transfers};
 use crate::rigid_fit::rigid_fit;
 use crate::simulation::uff::params::{calc_bond_rest_length, get_uff_params};

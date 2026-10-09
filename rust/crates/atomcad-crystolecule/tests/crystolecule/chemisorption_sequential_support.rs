@@ -818,7 +818,7 @@ pub fn audit(p: &SequentialPlan, report: &SearchReport, config: &SequentialSearc
     let base = &p.setup.combined;
     let before = bonds_of(base);
     let element = |id: u32| base.get_atom(id).unwrap().atomic_number;
-    let settings = atomcad_crystolecule::chemisorption::ChemisorptionSearch {
+    let settings = atomcad_crystolecule::chemisorption::RelaxSettings {
         max_iterations: 0,
         vdw_mode: config.vdw_mode.clone(),
         ..Default::default()

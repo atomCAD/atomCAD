@@ -107,7 +107,9 @@ fn the_setter_is_undoable_and_keeps_the_stored_search() {
     designer.run_node_job_blocking(&[], node).unwrap();
 
     let mut data = chemisorb_node_data(&designer, &[], node).unwrap();
-    assert_eq!(data.reach, 3.5);
+    assert_eq!(data.anchor_reach, 3.5);
+    assert_eq!(data.tolerance, 0.5);
+    assert!(data.clash_filter);
     data.top_n = 1;
     set_chemisorb_node_data(&mut designer, &[], node, &data);
     let stored = |d: &StructureDesigner| {

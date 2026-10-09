@@ -175,14 +175,8 @@ mod mechanosynth_place_test;
 
 #[path = "crystolecule/bond_enthalpy_test.rs"]
 mod bond_enthalpy_test;
-#[path = "crystolecule/chemisorption_test.rs"]
-mod chemisorption_test;
 
-// Phase 0 spike of the sequential chemisorption search (branch only, all ignored).
-#[path = "crystolecule/chemisorption_sequential_spike_test.rs"]
-mod chemisorption_sequential_spike_test;
-
-// The sequential chemisorption search (design_chemisorption_sequential.md).
+// The chemisorption search (design_chemisorption_sequential.md).
 #[path = "crystolecule/chemisorption_sequential_golden_test.rs"]
 mod chemisorption_sequential_golden_test;
 #[path = "crystolecule/chemisorption_sequential_local_test.rs"]

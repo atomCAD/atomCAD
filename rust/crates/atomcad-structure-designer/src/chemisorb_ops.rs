@@ -29,7 +29,8 @@ use crate::nodes::chemisorb::{
 };
 use crate::structure_designer::StructureDesigner;
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
-use atomcad_crystolecule::chemisorption::{ChemisorptionSearch, input_fingerprint, search};
+use atomcad_crystolecule::chemisorption::input_fingerprint;
+use atomcad_crystolecule::chemisorption::sequential::{SequentialSearch, evaluate, plan};
 use atomcad_util::job_control::JobControl;
 use atomcad_util::number_format::format_natural;
 use std::sync::Arc;
@@ -40,7 +41,7 @@ pub const CHEMISORB_JOB_LABEL: &str = "Chemisorption search";
 /// What one Run found, for a caller that reports it (the CLI prints it).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ChemisorbRunSummary {
-    /// Hypotheses relaxed.
+    /// Relaxations run, both phases.
     pub relaxed: usize,
     /// Candidates kept and listed: the best `top_n` within the window.
     pub listed: usize,
@@ -91,7 +92,7 @@ pub fn format_run_result(result: &ChemisorbRunSummary) -> String {
 pub struct ChemisorbWork {
     pub adsorbate: AtomicStructure,
     pub substrate: AtomicStructure,
-    pub config: ChemisorptionSearch,
+    pub config: SequentialSearch,
     pub fingerprint: u64,
 }
 
@@ -124,10 +125,20 @@ impl ChemisorbData {
 }
 
 impl ChemisorbWork {
-    /// Run: the search, and its summary.
+    /// Run: the search, and its summary. `plan` then `evaluate`, as
+    /// `sequential::search` does, but keeping the plan: the stored result
+    /// needs it (the report numbers its hypotheses after the plan's).
     pub fn search(self, control: Option<&JobControl>) -> Result<ChemisorbOutcome, String> {
-        let report = search(&self.adsorbate, &self.substrate, &self.config, control)
-            .map_err(|e| format!("chemisorb: {e}"))?;
+        let fail = |e| format!("chemisorb: {e}");
+        if let Some(c) = control {
+            c.set_phase("Planning");
+        }
+        let planned = plan(&self.adsorbate, &self.substrate, &self.config).map_err(fail)?;
+        if let Some(c) = control {
+            c.set_total(planned.to_relax.len() as u64 + 1);
+            c.set_phase("Relaxing");
+        }
+        let report = evaluate(&planned, &self.config, control).map_err(fail)?;
         let best = report.candidates.first();
         let summary = ChemisorbRunSummary {
             relaxed: report.stats.relaxed,
@@ -141,6 +152,7 @@ impl ChemisorbWork {
         Ok(ChemisorbOutcome {
             stored: StoredSearch {
                 fingerprint: self.fingerprint,
+                plan: planned,
                 report,
             },
             summary,

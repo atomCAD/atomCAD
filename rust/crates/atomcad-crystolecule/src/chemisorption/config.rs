@@ -1,116 +1,11 @@
-//! What a chemisorption search is tunable by, and what can go wrong.
+//! What can go wrong in a chemisorption search, and the tag its results
+//! carry. The settings are [`SequentialSearch`](super::sequential::SequentialSearch).
 
-use super::inventory::BondInventory;
-use super::transfer::{TransferRule, is_transferable_element};
 use crate::atomic_structure::TagError;
-use crate::simulation::uff::VdwMode;
 
 /// The tag every output structure carries on the atoms whose bonds the
 /// candidate changed, so `apply_style` can highlight them.
 pub const CHANGED_TAG: &str = "cs_changed";
-
-/// Every setting one search depends on. Plain values, validated by
-/// [`ChemisorptionSearch::validate`] before anything runs; the node's property
-/// rules are its own business.
-#[derive(Debug, Clone)]
-pub struct ChemisorptionSearch {
-    /// Adsorbate reactive atoms: those carrying this tag. `None` = all atoms.
-    pub adsorbate_tag: Option<String>,
-    /// Substrate reactive atoms: those carrying this tag. `None` = all atoms.
-    pub substrate_tag: Option<String>,
-    /// Maximum distance between an adsorbate reactive atom and a site for a
-    /// bond between them to be considered (Å).
-    pub reach: f64,
-    /// At most this many bonds formed per hypothesis. `None` = no cap;
-    /// `Some(0)` leaves only the patterns that form no bond (pure transfers).
-    /// Transfers are not counted.
-    pub max_formed_bonds: Option<usize>,
-    /// The enabled transfer kinds (§6.1 of the design). Empty = bond forming
-    /// only.
-    pub transfers: Vec<TransferRule>,
-    /// At most this many transfers per hypothesis, summed over all rules.
-    /// `None` = no cap; `Some(0)` = none, the same search as no rules. Read
-    /// only when `transfers` is non-empty.
-    pub max_transfers: Option<usize>,
-    /// Only patterns with exactly this many formed bonds (transfers not
-    /// counted). `None` = any. Applied during enumeration, so nothing else is
-    /// relaxed.
-    pub formed_bonds: Option<usize>,
-    /// Only patterns with exactly this bond inventory. `None` = any. Applied
-    /// during enumeration, so nothing else is relaxed.
-    pub bond_inventory: Option<BondInventory>,
-    /// At most this many valid hypotheses are relaxed; past it the search is
-    /// truncated and makes no exhaustiveness claim. Counts only hypotheses
-    /// that pass the two filters above.
-    pub budget: usize,
-    /// At most this many candidates are kept, the lowest strains. The rest are
-    /// dropped as they are relaxed, so memory is bounded by this, not by the
-    /// number of hypotheses.
-    pub top_n: usize,
-    /// …and only those within this many kcal/mol of the best.
-    pub energy_window: f64,
-    /// UFF iteration limit per relaxation.
-    pub max_iterations: u32,
-    /// UFF convergence tolerance, RMS gradient (kcal/(mol·Å)).
-    pub gradient_rms_tolerance: f64,
-    /// How van der Waals terms are computed during relaxation.
-    pub vdw_mode: VdwMode,
-}
-
-impl Default for ChemisorptionSearch {
-    fn default() -> Self {
-        Self {
-            adsorbate_tag: None,
-            substrate_tag: None,
-            reach: 3.5,
-            max_formed_bonds: None,
-            transfers: Vec::new(),
-            max_transfers: Some(1),
-            formed_bonds: None,
-            bond_inventory: None,
-            budget: 10_000,
-            top_n: 10,
-            energy_window: 30.0,
-            max_iterations: 2000,
-            gradient_rms_tolerance: 1e-3,
-            vdw_mode: VdwMode::AllPairs,
-        }
-    }
-}
-
-impl ChemisorptionSearch {
-    /// Rejects settings no search can honour. Called by `plan`.
-    pub fn validate(&self) -> Result<(), ChemisorptionError> {
-        let invalid = |msg: &str| Err(ChemisorptionError::InvalidConfig(msg.to_string()));
-        if !(self.reach.is_finite() && self.reach > 0.0) {
-            return invalid("reach must be a positive distance");
-        }
-        if let Some(rule) = self
-            .transfers
-            .iter()
-            .find(|r| !is_transferable_element(r.element))
-        {
-            return Err(ChemisorptionError::InvalidConfig(format!(
-                "a transfer moves one monovalent atom, H or a halogen; {} is not one",
-                crate::atomic_constants::element_symbol(rule.element)
-            )));
-        }
-        if self.budget == 0 {
-            return invalid("budget must be at least 1");
-        }
-        if self.top_n == 0 {
-            return invalid("top N must be at least 1");
-        }
-        // Infinity is a valid window: no window.
-        if self.energy_window.is_nan() || self.energy_window < 0.0 {
-            return invalid("the energy window must be zero or positive");
-        }
-        if !(self.gradient_rms_tolerance.is_finite() && self.gradient_rms_tolerance > 0.0) {
-            return invalid("gradient tolerance must be positive");
-        }
-        Ok(())
-    }
-}
 
 /// Which input a message is about.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

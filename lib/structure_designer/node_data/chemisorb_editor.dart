@@ -11,18 +11,22 @@ import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart
 import 'package:flutter_cad/structure_designer/node_jobs.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
-/// Editor for the `chemisorb` node — every way a posed adsorbate can bond to
-/// a substrate, relaxed and ranked.
+/// Editor for the `chemisorb` node — the ways a posed adsorbate can bond to a
+/// substrate, found leg by leg, relaxed and ranked
+/// (`design_chemisorption_sequential.md`).
 ///
 /// Every setting is a search setting: changing any of them makes a stored
-/// result stale. The formed-bond and bond-inventory filters restrict what is
-/// enumerated, so a run relaxes only that group; `top_n` and the energy window
-/// choose what is kept. (A split into "filters after search" existed and was
-/// removed — it was arbitrary and forced every relaxed structure to be kept.)
+/// result stale. The formed-bond and bond-inventory filters choose which
+/// hypotheses are candidates, so a run relaxes only that group; `top_n` and
+/// the energy window choose what is kept. (A split into "filters after
+/// search" existed and was removed — it was arbitrary and forced every
+/// relaxed structure to be kept.)
 ///
-/// Bond forming is always on; transfers are enabled by wiring the `transfers`
-/// pin, and `max_transfers` stays visible but greyed while it is not — a value
-/// nothing reads now, which a wire makes live again unchanged.
+/// The three distances are one per phase of the search: `anchor_reach` for
+/// leg 1, `tolerance` for legs 2 and 3, `reach` for legs 4 and later and for
+/// the H transfer rule. `reach` stays visible but greyed while nothing reads
+/// it (the report's `reachUsed`, decided Rust-side) — a value a fourth foot or
+/// a transfer record makes live again unchanged.
 ///
 /// The search runs only when **Run** is pressed — in the background, as a
 /// node job (`doc/design_background_node_jobs.md`), with progress and Cancel
@@ -36,7 +40,8 @@ class ChemisorbEditor extends StatefulWidget {
   final APIChemisorbData? data;
   final StructureDesignerModel model;
 
-  /// Whether the `transfers` pin is wired; `max_transfers` is read only then.
+  /// Whether the `transfers` pin is wired; only the hint under the settings
+  /// reads it.
   final bool transfersConnected;
 
   const ChemisorbEditor({
@@ -82,9 +87,11 @@ class _ChemisorbEditorState extends State<ChemisorbEditor> {
   void _commit({
     String? adsorbateTag,
     String? substrateTag,
+    double? anchorReach,
+    double? tolerance,
     double? reach,
+    bool? clashFilter,
     int? maxFormedBonds,
-    int? maxTransfers,
     Object? formedBonds = _keep,
     Object? bondInventory = _keep,
     int? topN,
@@ -99,9 +106,11 @@ class _ChemisorbEditorState extends State<ChemisorbEditor> {
       APIChemisorbData(
         adsorbateTag: adsorbateTag ?? data.adsorbateTag,
         substrateTag: substrateTag ?? data.substrateTag,
+        anchorReach: anchorReach ?? data.anchorReach,
+        tolerance: tolerance ?? data.tolerance,
         reach: reach ?? data.reach,
+        clashFilter: clashFilter ?? data.clashFilter,
         maxFormedBonds: maxFormedBonds ?? data.maxFormedBonds,
-        maxTransfers: maxTransfers ?? data.maxTransfers,
         formedBonds: identical(formedBonds, _keep)
             ? data.formedBonds
             : formedBonds as int?,
@@ -133,6 +142,8 @@ class _ChemisorbEditorState extends State<ChemisorbEditor> {
     if (data == null) {
       return const Center(child: CircularProgressIndicator());
     }
+    // Greyed only once a report says nothing reads it.
+    final reachUsed = _report?.reachUsed ?? true;
 
     return Padding(
       padding: const EdgeInsets.all(8.0),
@@ -184,34 +195,47 @@ class _ChemisorbEditorState extends State<ChemisorbEditor> {
           ),
           const SizedBox(height: 8),
           FloatInput(
-            label: 'Reach (Å)',
-            value: data.reach,
-            onChanged: (v) => _commit(reach: v),
+            label: 'Anchor reach, leg 1 (Å)',
+            value: data.anchorReach,
+            onChanged: (v) => _commit(anchorReach: v),
           ),
           const SizedBox(height: 8),
-          _CapField(
-            checkboxLabel: 'Limit formed bonds',
-            fieldLabel: 'Max formed bonds (0 = none)',
-            value: data.maxFormedBonds,
-            onChanged: (v) => _commit(maxFormedBonds: v),
+          FloatInput(
+            label: 'Tolerance, legs 2–3 (Å)',
+            value: data.tolerance,
+            onChanged: (v) => _commit(tolerance: v),
           ),
+          const SizedBox(height: 8),
           Opacity(
-            opacity: widget.transfersConnected ? 1.0 : 0.5,
+            opacity: reachUsed ? 1.0 : 0.5,
             child: IgnorePointer(
-              ignoring: !widget.transfersConnected,
-              child: _CapField(
-                checkboxLabel: 'Limit transfers',
-                fieldLabel: 'Max transfers (0 = none)',
-                value: data.maxTransfers,
-                onChanged: (v) => _commit(maxTransfers: v),
+              ignoring: !reachUsed,
+              child: FloatInput(
+                label: 'Reach, legs 4+ and H transfer (Å)',
+                value: data.reach,
+                onChanged: (v) => _commit(reach: v),
               ),
             ),
+          ),
+          CheckboxListTile(
+            title: const Text('Prune seatings that clash'),
+            value: data.clashFilter,
+            onChanged: (value) => _commit(clashFilter: value ?? true),
+            controlAffinity: ListTileControlAffinity.leading,
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+          ),
+          _CapField(
+            checkboxLabel: 'Limit legs',
+            fieldLabel: 'Max legs (bonds formed)',
+            value: data.maxFormedBonds,
+            onChanged: (v) => _commit(maxFormedBonds: v),
           ),
           if (!widget.transfersConnected)
             Padding(
               padding: const EdgeInsets.only(top: 4.0),
               child: Text(
-                'Wire `transfers` to enable H / halogen transfers.',
+                'Wire `transfers` to let an OH foot give its H to a site.',
                 style: Theme.of(context)
                     .textTheme
                     .bodySmall
@@ -222,7 +246,7 @@ class _ChemisorbEditorState extends State<ChemisorbEditor> {
 
           // ---- what to search for: pruned before anything is relaxed -----
           CheckboxListTile(
-            title: const Text('Only an exact number of formed bonds'),
+            title: const Text('Only an exact number of legs'),
             value: data.formedBonds != null,
             onChanged: (value) => _commit(
               formedBonds: (value ?? false) ? _DEFAULT_FORMED_BONDS : null,
@@ -235,9 +259,9 @@ class _ChemisorbEditorState extends State<ChemisorbEditor> {
             Padding(
               padding: const EdgeInsets.only(left: 16.0, bottom: 8.0),
               child: IntInput(
-                label: 'Formed bonds (exactly)',
+                label: 'Legs (exactly)',
                 value: data.formedBonds!,
-                minimumValue: 0,
+                minimumValue: 1,
                 onChanged: (v) => _commit(formedBonds: v),
               ),
             ),
@@ -337,7 +361,8 @@ class ChemisorbRunRow extends StatelessWidget {
       status = 'Searched: ${stats.relaxed} relaxed '
           'in ${formatNatural(stats.seconds, 3)} s.';
     } else {
-      status = '${stats.toRelax} hypotheses to relax'
+      status = '${stats.toRelax} relaxations'
+          '${stats.localPhase ? ' + local phase' : ''}'
           '${stats.truncated ? ' (budget hit)' : ''}.';
     }
     return Column(
@@ -367,8 +392,8 @@ class ChemisorbRunRow extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(top: 6.0),
             child: Text(
-              'Not run: the outputs show the unrelaxed pose. Results are not '
-              'saved with the file.',
+              'Not run: no candidates yet. Results are not saved with the '
+              'file.',
               style: theme.textTheme.bodySmall,
             ),
           ),
@@ -435,17 +460,31 @@ class _StatsCard extends StatelessWidget {
                     ),
                   ),
                 ),
-              _Row('Feet / sites in reach',
-                  '${stats.feet} / ${stats.sitesInReach}'),
-              if (stats.transferCandidates > BigInt.zero)
-                _Row('Transfer candidates', '${stats.transferCandidates}'),
-              _Row('Assignments considered', '${stats.considered}'),
-              _Row('Pruned: valence', '${stats.prunedValence}'),
-              if (stats.prunedFilter > BigInt.zero)
-                _Row('Pruned: formed bonds / inventory',
-                    '${stats.prunedFilter}'),
+              _Row('Feet / sites', '${stats.feet} / ${stats.sites}'),
+              _Row('Legs 1 / 2 / 3',
+                  '${stats.anchors} / ${stats.spherePairs} / ${stats.torusTriples}'),
+              _Row('Candidates (legs 1–3)', '${stats.candidates}'),
+              if (stats.parents > BigInt.zero)
+                _Row('Parents of the local phase', '${stats.parents}'),
               _Row('Duplicates', '${stats.duplicates}'),
-              _Row('To relax', '${stats.toRelax}'),
+              _Row('Pruned: valence', '${stats.prunedValence}'),
+              if (stats.prunedNoAcceptor > BigInt.zero)
+                _Row('Pruned: no H acceptor', '${stats.prunedNoAcceptor}'),
+              if (stats.prunedFilter > BigInt.zero)
+                _Row('Pruned: inventory', '${stats.prunedFilter}'),
+              _Row('Mirror: pruned / undecided',
+                  '${stats.prunedMirror} / ${stats.mirrorUndecided}'),
+              _Row('Seating clashes / pruned',
+                  '${stats.seatingClashes} / ${stats.prunedClash}'),
+              _Row(
+                  'To relax',
+                  '${stats.toRelax}'
+                      '${stats.localPhase ? ' + local phase' : ''}'),
+              for (final level in stats.local)
+                _Row(
+                    'Leg ${level.legs}: hypotheses / relaxed',
+                    '${level.hypotheses} / ${level.relaxed}'
+                        '${level.truncated ? ' (cut)' : ''}'),
               _Row('Relaxed', '${stats.relaxed}'),
               _Row('Unconverged', '${stats.unconverged}'),
               if (stats.searched)
@@ -461,7 +500,7 @@ class _StatsCard extends StatelessWidget {
 }
 
 /// The listed candidates in rank order, by strain (UFF energy against the
-/// same pose relaxed with no bonds formed). The bond inventory is shown under
+/// separated state: the adsorbate and the substrate each relaxed alone). The bond inventory is shown under
 /// every row because strains of different inventories do not compare cleanly.
 /// The line under the title says how many relaxed candidates top N and the
 /// window dropped.
@@ -524,7 +563,8 @@ class _CandidatesCard extends StatelessWidget {
                     children: [
                       Text(
                         '#${row.rank}  ${formatNatural(row.strain, 4)}'
-                        '${row.converged ? '' : '  unconv.'}',
+                        '${row.converged ? '' : '  unconv.'}'
+                        '${row.seatingClash ? '  clash' : ''}',
                         style: mono?.copyWith(
                           color: row.converged ? null : theme.colorScheme.error,
                         ),
@@ -542,9 +582,8 @@ class _CandidatesCard extends StatelessWidget {
 }
 
 /// A cap that can be switched off: a checkbox, and the value only while it
-/// is ticked. The node stores "no cap" as [_NO_CAP] (`-1`), so `0` can mean
-/// what it says; that encoding stays out of the panel. Ticking seeds
-/// [_DEFAULT_CAP].
+/// is ticked. The node stores "no cap" as [_NO_CAP] (`-1`); that encoding
+/// stays out of the panel. Ticking seeds [_DEFAULT_CAP].
 class _CapField extends StatelessWidget {
   final String checkboxLabel;
   final String fieldLabel;
@@ -579,7 +618,7 @@ class _CapField extends StatelessWidget {
             child: IntInput(
               label: fieldLabel,
               value: value,
-              minimumValue: 0,
+              minimumValue: 1,
               onChanged: onChanged,
             ),
           ),
@@ -588,14 +627,15 @@ class _CapField extends StatelessWidget {
   }
 }
 
-/// How the node stores "no cap" for `max_formed_bonds` and `max_transfers`.
+/// How the node stores "no cap" for `max_formed_bonds`.
 const int _NO_CAP = -1;
 
-/// The value a cap takes when its checkbox is first ticked.
-const int _DEFAULT_CAP = 1;
+/// The value a cap takes when its checkbox is first ticked: a binding of fewer
+/// than two legs is listed only for a one-foot adsorbate.
+const int _DEFAULT_CAP = 3;
 
 /// The `formed bonds` filter's value when it is first ticked.
-const int _DEFAULT_FORMED_BONDS = 1;
+const int _DEFAULT_FORMED_BONDS = 2;
 
 /// The "leave unchanged" default of [_ChemisorbEditorState._commit]'s two
 /// nullable filter arguments, where `null` already means "no filter".

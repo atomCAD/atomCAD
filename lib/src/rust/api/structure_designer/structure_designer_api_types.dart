@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'structure_designer_api_types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `hash`
 
 /// The outcome of a tab switch (activate, or close of the active tab).
 /// `library_report` is what the dependency check did on activation
@@ -841,7 +841,7 @@ class APICanvasViewport {
 }
 
 /// Dart-facing twin of the settings of
-/// `atomcad_structure_designer::nodes::chemisorb::ChemisorbData` — its ten
+/// `atomcad_structure_designer::nodes::chemisorb::ChemisorbData` — its
 /// persisted properties. The stored search is not here: it never crosses to
 /// Dart, and the setter keeps it.
 class APIChemisorbData {
@@ -851,20 +851,26 @@ class APIChemisorbData {
   /// Substrate reactive atoms: those carrying this tag. Empty = all atoms.
   final String substrateTag;
 
-  /// Maximum adsorbate atom to site distance for a bond (Å).
+  /// Leg 1: sites within this of a posed foot (Å).
+  final double anchorReach;
+
+  /// Legs 2 and 3: how far a site may lie outside the exact shell or ring (Å).
+  final double tolerance;
+
+  /// Legs 4 and later: sites within this of a relaxed foot; also the H
+  /// transfer reach, site to site (Å).
   final double reach;
 
-  /// At most this many bonds formed per hypothesis: -1 = no cap, 0 = none.
+  /// Prune seatings that clash instead of relaxing them.
+  final bool clashFilter;
+
+  /// At most this many legs per hypothesis: -1 = no cap.
   final int maxFormedBonds;
 
-  /// At most this many transfers per hypothesis: -1 = no cap, 0 = none.
-  /// Read only while the `transfers` pin carries a record.
-  final int maxTransfers;
-
-  /// Only patterns with exactly this many formed bonds; `None` = any.
+  /// Only bindings with exactly this many legs; `None` = any.
   final int? formedBonds;
 
-  /// Only patterns with exactly this bond inventory (a candidate's `bonds`
+  /// Only bindings with exactly this bond inventory (a candidate's `bonds`
   /// label); `None` = any.
   final String? bondInventory;
 
@@ -874,7 +880,7 @@ class APIChemisorbData {
   /// Only candidates within this many kcal/mol of the best are kept.
   final double energyWindow;
 
-  /// At most this many hypotheses relaxed.
+  /// At most this many relaxations.
   final int budget;
 
   /// UFF iteration limit per relaxation.
@@ -883,9 +889,11 @@ class APIChemisorbData {
   const APIChemisorbData({
     required this.adsorbateTag,
     required this.substrateTag,
+    required this.anchorReach,
+    required this.tolerance,
     required this.reach,
+    required this.clashFilter,
     required this.maxFormedBonds,
-    required this.maxTransfers,
     this.formedBonds,
     this.bondInventory,
     required this.topN,
@@ -898,9 +906,11 @@ class APIChemisorbData {
   int get hashCode =>
       adsorbateTag.hashCode ^
       substrateTag.hashCode ^
+      anchorReach.hashCode ^
+      tolerance.hashCode ^
       reach.hashCode ^
+      clashFilter.hashCode ^
       maxFormedBonds.hashCode ^
-      maxTransfers.hashCode ^
       formedBonds.hashCode ^
       bondInventory.hashCode ^
       topN.hashCode ^
@@ -915,9 +925,11 @@ class APIChemisorbData {
           runtimeType == other.runtimeType &&
           adsorbateTag == other.adsorbateTag &&
           substrateTag == other.substrateTag &&
+          anchorReach == other.anchorReach &&
+          tolerance == other.tolerance &&
           reach == other.reach &&
+          clashFilter == other.clashFilter &&
           maxFormedBonds == other.maxFormedBonds &&
-          maxTransfers == other.maxTransfers &&
           formedBonds == other.formedBonds &&
           bondInventory == other.bondInventory &&
           topN == other.topN &&
@@ -927,7 +939,7 @@ class APIChemisorbData {
 }
 
 /// One choice of the `bond_inventory` dropdown: a bond inventory and how many
-/// hypotheses (relaxations) it would take.
+/// relaxations it would take.
 class APIChemisorbInventoryOption {
   final String label;
   final BigInt count;
@@ -949,6 +961,78 @@ class APIChemisorbInventoryOption {
           count == other.count;
 }
 
+/// One local-phase level (twin of `ChemisorbLevelView`).
+class APIChemisorbLevel {
+  final BigInt legs;
+  final BigInt parents;
+  final BigInt paths;
+  final BigInt hypotheses;
+  final BigInt duplicates;
+  final BigInt prunedValence;
+  final BigInt prunedNoAcceptor;
+  final BigInt prunedFilter;
+  final BigInt candidates;
+  final BigInt toRelax;
+  final BigInt relaxed;
+  final BigInt unconverged;
+  final bool truncated;
+  final BigInt nearMisses;
+
+  const APIChemisorbLevel({
+    required this.legs,
+    required this.parents,
+    required this.paths,
+    required this.hypotheses,
+    required this.duplicates,
+    required this.prunedValence,
+    required this.prunedNoAcceptor,
+    required this.prunedFilter,
+    required this.candidates,
+    required this.toRelax,
+    required this.relaxed,
+    required this.unconverged,
+    required this.truncated,
+    required this.nearMisses,
+  });
+
+  @override
+  int get hashCode =>
+      legs.hashCode ^
+      parents.hashCode ^
+      paths.hashCode ^
+      hypotheses.hashCode ^
+      duplicates.hashCode ^
+      prunedValence.hashCode ^
+      prunedNoAcceptor.hashCode ^
+      prunedFilter.hashCode ^
+      candidates.hashCode ^
+      toRelax.hashCode ^
+      relaxed.hashCode ^
+      unconverged.hashCode ^
+      truncated.hashCode ^
+      nearMisses.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIChemisorbLevel &&
+          runtimeType == other.runtimeType &&
+          legs == other.legs &&
+          parents == other.parents &&
+          paths == other.paths &&
+          hypotheses == other.hypotheses &&
+          duplicates == other.duplicates &&
+          prunedValence == other.prunedValence &&
+          prunedNoAcceptor == other.prunedNoAcceptor &&
+          prunedFilter == other.prunedFilter &&
+          candidates == other.candidates &&
+          toRelax == other.toRelax &&
+          relaxed == other.relaxed &&
+          unconverged == other.unconverged &&
+          truncated == other.truncated &&
+          nearMisses == other.nearMisses;
+}
+
 /// What the `chemisorb` panel renders after a root evaluation of the selected
 /// node: the plan (no rows) or the stored result.
 class APIChemisorbReport {
@@ -958,15 +1042,23 @@ class APIChemisorbReport {
   /// The `bond_inventory` choices, narrowed by `formed_bonds`.
   final List<APIChemisorbInventoryOption> inventoryOptions;
 
+  /// `reach` is read (a local phase follows, or `transfers` carries a
+  /// record); the panel greys it out otherwise.
+  final bool reachUsed;
+
   const APIChemisorbReport({
     required this.stats,
     required this.rows,
     required this.inventoryOptions,
+    required this.reachUsed,
   });
 
   @override
   int get hashCode =>
-      stats.hashCode ^ rows.hashCode ^ inventoryOptions.hashCode;
+      stats.hashCode ^
+      rows.hashCode ^
+      inventoryOptions.hashCode ^
+      reachUsed.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -975,7 +1067,8 @@ class APIChemisorbReport {
           runtimeType == other.runtimeType &&
           stats == other.stats &&
           rows == other.rows &&
-          inventoryOptions == other.inventoryOptions;
+          inventoryOptions == other.inventoryOptions &&
+          reachUsed == other.reachUsed;
 }
 
 /// One listed candidate (twin of `ChemisorbRowView`), kcal/mol throughout.
@@ -987,6 +1080,7 @@ class APIChemisorbRow {
   final BigInt formedBonds;
   final BigInt transfers;
   final bool converged;
+  final bool seatingClash;
   final double worstBondRatio;
   final double stretch;
   final double bend;
@@ -1002,6 +1096,7 @@ class APIChemisorbRow {
     required this.formedBonds,
     required this.transfers,
     required this.converged,
+    required this.seatingClash,
     required this.worstBondRatio,
     required this.stretch,
     required this.bend,
@@ -1019,6 +1114,7 @@ class APIChemisorbRow {
       formedBonds.hashCode ^
       transfers.hashCode ^
       converged.hashCode ^
+      seatingClash.hashCode ^
       worstBondRatio.hashCode ^
       stretch.hashCode ^
       bend.hashCode ^
@@ -1038,6 +1134,7 @@ class APIChemisorbRow {
           formedBonds == other.formedBonds &&
           transfers == other.transfers &&
           converged == other.converged &&
+          seatingClash == other.seatingClash &&
           worstBondRatio == other.worstBondRatio &&
           stretch == other.stretch &&
           bend == other.bend &&
@@ -1047,19 +1144,30 @@ class APIChemisorbRow {
 }
 
 /// The whole search, as the `stats` pin carries it (twin of
-/// `ChemisorbStatsView`).
+/// `ChemisorbStatsView`). The counts up to `pruned_clash` are the plan's
+/// (legs 1–3); `local` is the local phase's, known only after Run.
 class APIChemisorbStats {
   final BigInt feet;
-  final BigInt sitesInReach;
-
-  /// Candidate transfers the `transfers` records allow; 0 without them.
-  final BigInt transferCandidates;
-  final BigInt considered;
-  final BigInt prunedValence;
-
-  /// Rejected by `formed_bonds` or `bond_inventory` while enumerating.
-  final BigInt prunedFilter;
+  final BigInt sites;
+  final BigInt paths;
+  final BigInt anchors;
+  final BigInt spherePairs;
+  final BigInt torusTriples;
   final BigInt duplicates;
+  final BigInt prunedValence;
+  final BigInt prunedNoAcceptor;
+
+  /// Rejected by `bond_inventory` while enumerating.
+  final BigInt prunedFilter;
+  final BigInt prunedMirror;
+  final BigInt mirrorUndecided;
+  final BigInt candidates;
+  final BigInt parents;
+  final BigInt seatingClashes;
+  final BigInt prunedClash;
+
+  /// A local phase (legs 4+) follows; its cost is known only after Run.
+  final bool localPhase;
 
   /// The node outputs a search result for its current inputs.
   final bool searched;
@@ -1067,6 +1175,7 @@ class APIChemisorbStats {
   /// A result exists but was computed from other inputs: Run again.
   final bool stale;
   final BigInt relaxed;
+  final BigInt localRelaxed;
   final BigInt toRelax;
   final BigInt unconverged;
   final BigInt listed;
@@ -1074,42 +1183,67 @@ class APIChemisorbStats {
   /// The budget was hit; the search is not exhaustive.
   final bool truncated;
   final double seconds;
+  final List<APIChemisorbLevel> local;
 
   const APIChemisorbStats({
     required this.feet,
-    required this.sitesInReach,
-    required this.transferCandidates,
-    required this.considered,
-    required this.prunedValence,
-    required this.prunedFilter,
+    required this.sites,
+    required this.paths,
+    required this.anchors,
+    required this.spherePairs,
+    required this.torusTriples,
     required this.duplicates,
+    required this.prunedValence,
+    required this.prunedNoAcceptor,
+    required this.prunedFilter,
+    required this.prunedMirror,
+    required this.mirrorUndecided,
+    required this.candidates,
+    required this.parents,
+    required this.seatingClashes,
+    required this.prunedClash,
+    required this.localPhase,
     required this.searched,
     required this.stale,
     required this.relaxed,
+    required this.localRelaxed,
     required this.toRelax,
     required this.unconverged,
     required this.listed,
     required this.truncated,
     required this.seconds,
+    required this.local,
   });
 
   @override
   int get hashCode =>
       feet.hashCode ^
-      sitesInReach.hashCode ^
-      transferCandidates.hashCode ^
-      considered.hashCode ^
-      prunedValence.hashCode ^
-      prunedFilter.hashCode ^
+      sites.hashCode ^
+      paths.hashCode ^
+      anchors.hashCode ^
+      spherePairs.hashCode ^
+      torusTriples.hashCode ^
       duplicates.hashCode ^
+      prunedValence.hashCode ^
+      prunedNoAcceptor.hashCode ^
+      prunedFilter.hashCode ^
+      prunedMirror.hashCode ^
+      mirrorUndecided.hashCode ^
+      candidates.hashCode ^
+      parents.hashCode ^
+      seatingClashes.hashCode ^
+      prunedClash.hashCode ^
+      localPhase.hashCode ^
       searched.hashCode ^
       stale.hashCode ^
       relaxed.hashCode ^
+      localRelaxed.hashCode ^
       toRelax.hashCode ^
       unconverged.hashCode ^
       listed.hashCode ^
       truncated.hashCode ^
-      seconds.hashCode;
+      seconds.hashCode ^
+      local.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -1117,20 +1251,32 @@ class APIChemisorbStats {
       other is APIChemisorbStats &&
           runtimeType == other.runtimeType &&
           feet == other.feet &&
-          sitesInReach == other.sitesInReach &&
-          transferCandidates == other.transferCandidates &&
-          considered == other.considered &&
-          prunedValence == other.prunedValence &&
-          prunedFilter == other.prunedFilter &&
+          sites == other.sites &&
+          paths == other.paths &&
+          anchors == other.anchors &&
+          spherePairs == other.spherePairs &&
+          torusTriples == other.torusTriples &&
           duplicates == other.duplicates &&
+          prunedValence == other.prunedValence &&
+          prunedNoAcceptor == other.prunedNoAcceptor &&
+          prunedFilter == other.prunedFilter &&
+          prunedMirror == other.prunedMirror &&
+          mirrorUndecided == other.mirrorUndecided &&
+          candidates == other.candidates &&
+          parents == other.parents &&
+          seatingClashes == other.seatingClashes &&
+          prunedClash == other.prunedClash &&
+          localPhase == other.localPhase &&
           searched == other.searched &&
           stale == other.stale &&
           relaxed == other.relaxed &&
+          localRelaxed == other.localRelaxed &&
           toRelax == other.toRelax &&
           unconverged == other.unconverged &&
           listed == other.listed &&
           truncated == other.truncated &&
-          seconds == other.seconds;
+          seconds == other.seconds &&
+          local == other.local;
 }
 
 class APICircleData {

@@ -1009,24 +1009,30 @@ This network is in the repository as
 
 ## chemisorb
 
-Finds **every way a posed molecule can bond to a surface**, relaxes each one
-with UFF and ranks them by UFF energy. Typical uses: mounting a tooltip molecule on a bare
-silicon apex (which feet bond to which surface atoms?), and checking how a
-small molecule lands. One search is one **pose**: the adsorbate exactly as it
-is wired, over the substrate exactly as it is wired. To compare poses, use one
-node per pose.
+Finds **the ways a posed molecule can bond to a surface**, relaxes each one
+with UFF and ranks them by UFF energy. Typical uses: mounting a tooltip molecule
+on a bare silicon apex (which feet bond to which surface atoms?), and checking
+how a small molecule lands.
+
+The search builds each binding **one bond (leg) at a time**. The pose fixes
+only where the first bond lands; the molecule's orientation is not taken from
+the pose but follows from which sites the later legs bond to. So one search
+covers every orientation the molecule's own shape allows, not only the
+orientations near its pose.
 
 **The search runs only when you press Run.** A search relaxes tens to
 thousands of structures and takes seconds to minutes, so the node never runs it
 while the network evaluates — not on an edit, not when you select it, not when
 a downstream node changes. Until you press **Run** in the properties panel (or
-run `atomcad-cli run <node>`), the node shows the **plan**: `best` is the
-combined pose, unrelaxed; `candidates` is empty; `stats` counts what a run
-would do, with `searched` false. After a run the node shows the result. If an
-input or a search setting changes afterwards, the node goes back to showing the
-plan with `stale` true, and the panel asks you to run again. Undo the change
-and the result comes back. Results are **not saved** with the file; after
-reopening a project, press Run again.
+run `atomcad-cli run <node>`), the node shows the **plan**: `candidates` is
+empty and `stats` counts what a run would do, with `searched` false. After a
+run the node shows the result. If an input or a search setting changes
+afterwards, the node goes back to showing the plan with `stale` true, and the
+panel asks you to run again. Undo the change and the result comes back. Results
+are **not saved** with the file; after reopening a project, press Run again.
+The node draws nothing in the viewport: display the `adsorbate` and
+`substrate` inputs to see the pose, and take a candidate's `structure` field
+downstream to see a result.
 
 **The search runs in the background.** While it runs, the application stays
 usable: you can orbit the view, select, edit and switch tabs. The panel shows a
@@ -1046,86 +1052,122 @@ arrives while you are typing in a field or dragging waits until you finish.
 One search per node at a time; several `chemisorb` nodes can search at once.
 `atomcad-cli run` is not affected: it runs the search and waits for it.
 
-**What counts as a site.** A *site* is a substrate atom that has a free
-valence (a dangling bond). There is no notion of a surface plane or a facet, so
-any geometry works: terraces, other facets, step edges, clusters.
+**Sites and feet.** A *site* is a substrate atom that has a free valence (a
+dangling bond). There is no notion of a surface plane or a facet in what the
+search accepts, so any geometry works: terraces, other facets, step edges,
+clusters. A hydrogen on a surface atom saturates it, so placing H by hand is
+how to block a spot. A *foot* is an adsorbate atom with a free valence (a
+radical O, a bare C), or — with a transfer record — an OH oxygen that bonds by
+giving away its H. Each foot forms at most one bond; a site with two free
+valences can take two feet. Frozen atoms are respected: no bond forms between
+two frozen atoms, and frozen atoms stay put during relaxation.
 
-**What the search enumerates.** Each adsorbate atom with a free valence (a
-*foot*) forms at most one new bond, to a site within `reach` of it. Every
-combination is tried, including partial ones: a tripod bound by one, two or
-three legs gives three kinds of result. Frozen atoms are
-respected: no bond forms between two frozen atoms, and frozen atoms stay put
-during relaxation.
+**How a binding is built.**
 
-**Transfers** (optional). Wire the `transfers` pin to also let a monovalent
-atom (hydrogen or a halogen) move across: from its only neighbour, the
-*donor*, to an atom with a free valence on the other side. Two directions:
+1. **Leg 1**: any site within `anchor_reach` of a foot, as posed.
+2. **Leg 2**: any site the molecule can reach with a second foot while the
+   first stays bonded. Two feet are a fixed distance apart, and each sits a bond
+   length from its site, so the two sites can be at most that distance plus the
+   two bond lengths apart, and at least that distance minus them. Every site in
+   that band (a spherical shell around the first site) is tried, whatever the
+   directions of the bonds; `tolerance` widens the band for a molecule that
+   flexes.
+3. **Leg 3**: the same test against both bonded sites at once, which leaves a
+   ring of sites around the line through them, again widened by `tolerance`.
+4. **Legs 4 and later** (a molecule with four or more feet): the three-leg
+   bindings are relaxed first, and each further leg is any site within `reach`
+   of a foot's **relaxed** position — the molecule has settled by then, so its
+   pose no longer says where the remaining feet are. This *local phase* runs one
+   leg at a time and its cost is known only after Run.
 
-- `to_substrate` — an adsorbate atom gives one away. This is how **OH legs**
-  mount: the H goes to a site, which frees the O to bond to another site. Without
-  this, an OH oxygen is saturated and never bonds.
-- `to_adsorbate` — a surface atom gives one away to a radical foot (H
-  abstraction).
+Before relaxing, each binding is **seated**: the molecule is placed rigidly so
+its bonded feet sit a bond length above their sites, on the open side of the
+surface. Two checks run on the seating, and both are reported:
 
-The donor must be a reactive atom of its side (the tags select donors, never
-the hydrogens, so you never tag H atoms); the moving atom must be within
-`reach` of where it goes; none of the three atoms may be frozen. Moving either
-of two equivalent atoms on one donor (the two H of water) counts once. The
-moved atom starts its relaxation on its new partner, on the side it came from.
-Moves within one side (H hopping along the surface) are not searched.
+- **Clashes.** A seating that puts the molecule through the substrate (two
+  heavy atoms closer than about 0.6 of their covalent radii) cannot be repaired
+  by relaxation. With `clash_filter` on (the default) such a binding is pruned
+  rather than relaxed; with it off, it is relaxed and listed with
+  `seating_clash` set.
+- **Mirror images.** A three-leg assignment whose feet would have to be
+  reflected to fit their sites is pruned always. When the check cannot tell
+  (nearly collinear feet, a flat molecule) the binding is kept.
+
+A binding reached in several orders of its legs is relaxed once. **One-leg
+bindings are listed only for a molecule with a single foot** (water, a single
+radical): a molecule with more feet is not "bound" by one of them.
+
+**Transfers** (optional). Wire the `transfers` pin with a `to_substrate` record
+for H to let an **OH leg** mount: when an OH oxygen bonds to a site, its H goes
+to the free site **nearest that site** (ties by atom id), never to that site
+itself, and only within `reach` of it. That is one fixed rule, not a search of
+every possible acceptor: on Si(100) it puts the H on the dimer partner, the
+known answer for water. A leg whose H finds no free site within `reach` is
+dropped. A site an earlier leg's H took is not available to later legs.
+`to_adsorbate` (a radical foot abstracting surface H) is not supported and is
+reported as an error.
+
+Tag the O feet (`adsorbate_tag`) when you enable a transfer: without a tag,
+every carbon carrying an H counts as a donor foot too.
 
 **Input pins**
 
-- `adsorbate` (`HasAtoms`) — the molecule, posed over the substrate. Its feet
-  are the atoms with a free valence (a radical O, a bare C).
+- `adsorbate` (`HasAtoms`) — the molecule, posed over the substrate.
 - `substrate` (`HasAtoms`) — the surface, typically the output of a
   [`proxy`](#proxy) node, frozen rim included.
 - `transfers` (array of `ChemisorbTransfer`, optional) — one record per
   allowed transfer kind: `element` (the atomic number, 1 for H) and `direction`
-  (`to_substrate` or `to_adsorbate`); two records to allow both directions.
-  Disconnected, or an empty array, means bond forming only. Build it with an
-  `array` node of element type `ChemisorbTransfer` (the panel offers an element
-  dropdown and the two directions) or a `record_construct` per record.
+  (`to_substrate`). Disconnected, or an empty array, means bond forming only.
+  Build it with an `array` node of element type `ChemisorbTransfer` (the panel
+  offers an element dropdown and the direction) or a `record_construct`.
 
 **Properties.** Every property is a search setting: changing one after a run
 makes the result stale, and you press Run again.
 
 - `adsorbate_tag`, `substrate_tag` (default empty = all atoms) — only atoms
   carrying this tag take part. Tag the feet to keep a reactive working end out
-  of the search. A tag no atom carries is an error, so a typo does not read as
-  "found nothing".
-- `reach` (default 3.5 Å) — the largest foot-to-site distance considered.
-- `max_formed_bonds` (default: no cap) — at most this many bonds per
-  pattern. Transfers are not counted; `0` leaves only the patterns that form
-  no bond (pure transfers). In the panel, tick *Limit formed bonds* to set it;
-  in the text format, `-1` means no cap.
-- `max_transfers` (default 1) — at most this many transfers per pattern,
-  summed over all `transfers` records. `0` bans transfers while keeping the
-  `transfers` wire. In the panel, untick *Limit transfers* for no cap; in the
-  text format that is `-1`. Read only while `transfers` carries a record (the
-  panel greys it out otherwise); a tripod with three OH legs needs 3, or no
-  cap, to mount on all three. Without a cap the number of
-  patterns grows quickly with the number of donors and acceptors, so watch the
-  hypothesis count beside **Run**.
-- `formed_bonds` (default unset = any) — only patterns with exactly this many
-  formed bonds (transfers not counted). Applied while the patterns are
-  enumerated, so a run relaxes only that group: run once per group to compare
-  like with like.
-- `bond_inventory` (default unset = any) — only patterns with exactly this bond
+  of the search, and **tag the facet** you mean on the substrate: the shells of
+  legs 2 and 3 are wide, and an untagged proxy offers its bare side and bottom
+  faces, and any unreconstructed rim atom, as sites too. A tag no atom carries
+  is an error, so a typo does not read as "found nothing".
+- `anchor_reach` (default 3.5 Å) — leg 1: sites within this of a posed foot.
+  On a periodic surface the variety comes from the later legs, so this can stay
+  small; raising it mostly adds the same patterns on neighbouring sites.
+- `tolerance` (default 0.5 Å) — legs 2 and 3: how far a site may lie outside
+  the band the molecule's shape and the bond lengths allow. The bond lengths
+  already cover every bond direction, so this is only for a molecule whose feet
+  move relative to each other (a flexible linker); raise it for a floppy
+  adsorbate.
+- `reach` (default 3.0 Å) — legs 4 and later: sites within this of a foot's
+  relaxed position; also how far a transferred H may go from its foot's site.
+  The panel greys it out when nothing reads it (three feet or fewer, and no
+  transfer record).
+- `clash_filter` (default on) — prune seatings that clash instead of relaxing
+  them. Clashes are counted either way.
+- `max_formed_bonds` (default: no cap) — at most this many legs per binding.
+  In the panel, tick *Limit legs* to set it; in the text format, `-1` means no
+  cap.
+- `formed_bonds` (default unset = any) — only bindings with exactly this many
+  legs (transfers not counted) are candidates, so a run relaxes only that
+  group: run once per group to compare like with like.
+- `bond_inventory` (default unset = any) — only bindings with exactly this bond
   inventory, written as in a candidate's `bonds` field, e.g. `formed 2× O–Si`.
-  Also applied while enumerating. The panel offers every inventory the search
-  can produce (narrowed by `formed_bonds`), each with how many relaxations it
-  would take.
+  The panel offers every inventory of up to three legs the search can produce
+  (narrowed by `formed_bonds`), each with how many relaxations it takes.
+  Inventories of four legs or more are known only after a run: run once with
+  `formed_bonds` set, and the dropdown then lists them.
 - `top_n` (default 10) — at most this many candidates are kept and listed. The
   rest are dropped as they are relaxed, so memory stays at `top_n` structures
-  however many patterns there are.
+  however many bindings there are.
 - `energy_window` (default 30 kcal/mol) — of those, only candidates within this
-  many kcal/mol of the best. Without a filter the best is usually a single
-  bond, so the default window often drops every full binding — set
+  many kcal/mol of the best. Without a filter the best is usually a two-leg
+  binding, so the default window often drops every full binding — set
   `formed_bonds` to see them.
-- `budget` (default 10 000) — at most this many relaxations, counting only the
-  patterns that pass the two filters. A search that hits it is **not
-  exhaustive**, and the panel says so.
+- `budget` (default 10 000) — at most this many relaxations, over both phases.
+  A search that hits it is **not exhaustive**, and the panel says so. A
+  six-footed tool over a whole Si(100) proxy with `formed_bonds: 6` takes close
+  to that many (most of them in the local phase) and about a quarter of an hour
+  in a release build; a facet tag cuts that several times.
 - `max_iterations` (default 2000) — the UFF iteration limit per relaxation.
 
 The relaxations also follow the van der Waals setting in Preferences (the same
@@ -1134,114 +1176,118 @@ one `relax` uses); changing it makes a result stale.
 In the text format `formed_bonds` and `bond_inventory` appear only when set:
 `formed_bonds: 3, bond_inventory: "formed 3× O–Si"`.
 
-**Output pins****Output pins**
+**Output pins**
 
-- `best` (`Molecule`) — the rank-1 candidate after a run (the relaxed pose with
-  no bonds formed if nothing was found); the unrelaxed pose before a run.
 - `candidates` (array of `ChemisorbCandidate`) — the kept candidates in rank
   order. Each record carries its `structure` (adsorbate + substrate, relaxed),
   `rank`, `strain`, `bonds` (the bond inventory, e.g. `formed 3× O–Si`, or
   `formed 1× H–Si, 1× O–Si; broken 1× H–O` with a transfer), `sites` (the
-  formed bonds by atom id, then the transfers, e.g. `O2–Si45; H3 O2→Si47`),
-  `formed_bonds` (transfers not counted), `transfers`, `converged`,
-  `worst_bond_ratio`, and `terms` (the
+  formed bonds by atom id in binding order, then the transfers, e.g.
+  `O2–Si45; H3 O2→Si47`), `formed_bonds` (the leg count; transfers not
+  counted), `transfers`, `converged`, `seating_clash` (its start clashed; only
+  possible with `clash_filter` off), `worst_bond_ratio`, and `terms` (the
   strain split into `stretch`, `bend`, `torsion`, `inversion`, `vdw`). A record
-  array draws nothing in the viewport; to look at another candidate, take its
+  array draws nothing in the viewport; to look at a candidate, take its
   `structure` field (`array_at` + `record_destructure`).
-- `stats` (`ChemisorbStats`) — the whole search: `feet`, `sites_in_reach`,
-  `transfer_candidates` (the donor–atom–acceptor moves the records allow),
-  `considered`, `pruned_valence`, `pruned_filter` (patterns the two filters cut
-  before relaxing), `duplicates`, `to_relax`, `relaxed`, `unconverged`,
-  `listed` (kept after top N and the window), `truncated`, `seconds`,
-  and the two run-state flags `searched` and
-  `stale`. Downstream nodes can tell a result from a plan by `searched`.
+- `stats` (`ChemisorbStats`) — the whole search. From the plan (legs 1–3):
+  `feet`, `sites` (substrate atoms with a free valence), `paths` (every foot–site
+  choice that passed its leg's test), `anchors` / `sphere_pairs` /
+  `torus_triples` (distinct one-, two- and three-leg bindings), `duplicates`,
+  `pruned_valence`, `pruned_no_acceptor` (an H with no free site within
+  `reach`), `pruned_filter` (cut by `bond_inventory`), `pruned_mirror`,
+  `mirror_undecided`, `candidates`, `parents` (three-leg bindings relaxed only
+  to grow legs 4+ from), `seating_clashes`, `pruned_clash`, `to_relax` and
+  `local_phase` (legs 4+ follow). From the run: `relaxed` (both phases),
+  `local_relaxed`, `unconverged`, `listed` (kept after top N and the window),
+  `truncated`, `seconds`, and `local`, one `ChemisorbLevel` record per local leg
+  (`legs`, `parents`, `paths`, `hypotheses`, `duplicates`, the pruned counts,
+  `candidates`, `to_relax`, `relaxed`, `unconverged`, `truncated`,
+  `near_misses`). The two run-state flags are `searched` and `stale`;
+  downstream nodes can tell a result from a plan by `searched`.
 
 In every output structure the atoms whose bonds changed carry the tag
 `cs_changed`, so an `apply_style` rule can highlight them.
 
 **How candidates are ranked.** By `strain`: the UFF energy of the relaxed
-candidate minus that of the same pose relaxed with no bonds formed, in
-kcal/mol. Lower ranks first. There is no bond-energy term. The node is meant
-for **kinetic control**, where what a reaction can reach matters more than the
-absolute energy of the product, and tabulated bond enthalpies are too crude to
-supply that energy anyway. Any element UFF knows can take part.
+candidate minus that of the **separated** state — the molecule relaxed on its
+own plus the substrate relaxed on its own — in kcal/mol. Lower ranks first. The
+reference is not the pose, because the candidates come from many orientations.
+There is no bond-energy term. The node is meant for **kinetic control**, where
+what a reaction can reach matters more than the absolute energy of the product,
+and tabulated bond enthalpies are too crude to supply that energy anyway. Any
+element UFF knows can take part.
 
 Two consequences:
 
 - **Fewer bonds usually rank first.** UFF treats a bond as a spring, so every
   bond a molecule has to stretch to form adds strain and nothing pays it back.
-  A single leg down typically beats all three legs down.
+  A tripod on two legs typically beats the same tripod on three.
 - **Strains compare cleanly only between candidates with the same bond
   inventory** — the same bonds formed and broken, by element pair (the `bonds`
   field). A different bond graph shifts the UFF energy for reasons that are
-  not strain, so "two O–Si bonds" against "one O–Si bond", or "one O–Si" against
-  "one O–Si plus an H moved", is not a like-for-like comparison.
+  not strain, so "two O–Si bonds" against "three O–Si bonds" is not a
+  like-for-like comparison.
 
-So read the ranking within one kind of binding: search with `formed_bonds` or
-`bond_inventory` set, then compare the candidates' strains, their
-`worst_bond_ratio` and their per-term breakdown (hover a row in the panel). The
-ranking is crude by nature: a surface dimer bond and a bulk bond are both just
-"Si–Si", and UFF knows nothing about Si(100) dimer pairing. Use the node to
-find the handful of plausible patterns, then take them to a finer method (UMA,
-DFT).
+So **set `formed_bonds` or `bond_inventory` before reading the ranking**, then
+compare the candidates' strains, their `worst_bond_ratio` and their per-term
+breakdown (hover a row in the panel). The ranking is crude by nature: a
+surface dimer bond and a bulk bond are both just "Si–Si", and UFF knows nothing
+about Si(100) dimer pairing. Use the node to find the handful of plausible
+patterns, then take them to a finer method (UMA, DFT).
 
-On bare Si(100)-2×1, a CH₂–CH₂ diradical posed over one dimer ranks the di-σ
-binding on that dimer first among its two-bond bindings, as experiment and DFT
-say, but only by about 4 kcal/mol over bridging two dimers of a row. On a
-smaller proxy (a frozen rim closer to the site) the order flips. Margins of a
-few kcal/mol are within UFF's error; check them against the proxy size.
+On bare Si(100)-2×1, a CH₂–CH₂ diradical posed over one dimer, with the dimer
+atoms tagged, ranks the di-σ binding on that dimer first among its two-leg
+bindings, as experiment and DFT say, but only by about 4 kcal/mol over bridging
+two dimers of a row. Margins of a few kcal/mol are within UFF's error; check
+them against the proxy size. For water, the transfer rule puts the H on the
+dimer partner of the O's site by construction — the known answer — rather than
+UFF choosing it: UFF cannot tell that pattern from H and OH on two
+neighbouring dimers (they differ by less than half a kcal/mol).
 
-**Water shows the limit plainly.** For H₂O on bare Si(100)-2×1 with an H
-transfer enabled, the known answer — H and OH on the two atoms of **one** dimer
-— is a tie against H and OH on two neighbouring dimers: the two form the same
-bonds, and UFF has nothing that prefers pairing the dangling bonds of one dimer.
-Over several proxies and poses they differ by less than half a kcal/mol and
-either can come first. Where two patterns form the same bonds on the same kind
-of atoms, treat their order as undecided.
-
-**What "exhaustive" means here.** For the given pose, every bonding pattern the
-settings allow is relaxed, unless `truncated` is set. The assumptions are
-exactly the settings: the pose, the tags, `reach`, the caps
-and the enabled transfers. Patterns that need the molecule to rotate far from
-its pose, to lose a group of atoms or to break one of its own bonds (other than
-by an enabled transfer) are not searched.
-
-Patterns are not filtered by geometry: any combination of sites within
-`reach` is tried, however well or badly its spacing matches the feet. A
-"crossed" pattern (foot 1 on site B, foot 2 on site A) is therefore searched
-too; UFF relaxes it into a tangled structure that ranks last, typically with a
-very large strain.
+**What "exhaustive" means here.** Unless `truncated` is set, every binding is
+relaxed that can be reached by: leg 1 within `anchor_reach` of the posed feet;
+legs 2 and 3 on any site the foot spacing and bond lengths allow, plus
+`tolerance`; further legs within `reach` of the relaxed geometry; each
+transferred H placed by the rule when its leg forms; minus the mirror-image
+three-leg assignments, and the clashing seatings when `clash_filter` is on. It
+depends on the order in which legs bond (an H that took a site a later leg
+could have used is not tried elsewhere), and it does not recognise the same
+pattern repeated on equivalent sites elsewhere on the proxy. Bindings that need
+the molecule to lose a group of atoms or to break one of its own bonds (other
+than by the transfer rule) are not searched.
 
 **Reading the panel.** The panel shows the **Run** button, with the number of
-hypotheses a run would relax (or what the last run did) beside it, and a red
-line when the result is stale. Below it are the search settings, with the
-filters (*Only an exact number of formed bonds*, *Bond inventory*) and then
-*Top N* and the energy window. Then the search statistics, with **not
-exhaustive** in red when the budget was hit, a *Transfer candidates* row when
-`transfers` is wired and a *Pruned: formed bonds / inventory* row when a
-filter cut anything; and the ranked candidates, one line each with the strain,
-the bond inventory underneath, and an `unconv.` mark on a relaxation that did
-not converge. A line over the list says how many relaxed candidates top N and
-the window dropped. Hover a row for its sites,
-worst bond ratio and strain terms. *Limit transfers* is greyed out while `transfers` is not
-wired, since nothing reads it then. The statistics appear once the node is displayed. A
-`chemisorb` inside a custom network shows its result only where that network is
-called with the inputs the run used; everywhere else it shows the plan.
+relaxations a run would do beside it ("+ local phase" when legs 4 and later
+follow, whose count is known only after Run), or what the last run did, and a
+red line when the result is stale. Below it are the search settings — the tags,
+the three distances (*Reach* greyed while nothing reads it), *Prune seatings
+that clash*, *Limit legs* — then the filters (*Only an exact number of legs*,
+*Bond inventory*), then *Top N* and the energy window. Then the search
+statistics, with **not exhaustive** in red when the budget was hit: the feet and
+sites, the one-, two- and three-leg counts, the candidates, the mirror and clash
+counts, and one line per local leg after a run; and the ranked candidates, one
+line each with the strain, the bond inventory underneath, an `unconv.` mark on a
+relaxation that did not converge and a `clash` mark on one whose seating
+clashed. A line over the list says how many relaxed candidates top N and the
+window dropped. Hover a row for its sites, worst bond ratio and strain terms.
+The statistics appear once the node is displayed. A `chemisorb` inside a custom
+network shows its result only where that network is called with the inputs the
+run used; everywhere else it shows the plan.
 
 **Example.**
 
 ```
-mount = chemisorb { adsorbate: tool, substrate: surface, adsorbate_tag: "feet", reach: 3.5 }
+mount = chemisorb { adsorbate: tool, substrate: surface, adsorbate_tag: "feet", substrate_tag: "facet", formed_bonds: 3 }
 ```
 
 Then press Run (or `atomcad-cli run mount`) and read `mount.stats` and
-`mount.candidates`. To review the three-leg bindings, set `formed_bonds: 3` and
-run again: only those are relaxed. The same tool with OH legs, each allowed to
-hand its H to the surface:
+`mount.candidates`: the three-leg bindings, ranked. Unset `formed_bonds` (or
+set it to 2) and run again to see where the tool sticks on two legs. The same
+tool with OH legs, each giving its H to the surface:
 
 ```
 h_off = array { element_type: Record(ChemisorbTransfer), elements: [{ element: 1, direction: "to_substrate" }] }
-mount = chemisorb { adsorbate: tool, substrate: surface, adsorbate_tag: "feet", transfers: h_off, max_transfers: 3 }
+mount = chemisorb { adsorbate: tool, substrate: surface, adsorbate_tag: "feet", substrate_tag: "facet", transfers: h_off, formed_bonds: 3 }
 ```
 
 ## mechanosynth

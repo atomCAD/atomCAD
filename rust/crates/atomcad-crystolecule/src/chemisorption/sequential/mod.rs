@@ -14,9 +14,10 @@
 //!
 //! Legs 4 and later are the **local phase** (`local`): `evaluate` relaxes
 //! the three-leg hypotheses as parents, then searches each unbonded foot's
-//! sites within `reach` of its relaxed position, level by level. This module
-//! sits beside the original all-at-once engine until the `chemisorb` node
-//! moves over (Phase 3 of the design).
+//! sites within `reach` of its relaxed position, level by level. It replaced
+//! an earlier all-at-once engine that took one pose and relaxed every
+//! combination of sites within reach of it, so it covered only the
+//! orientations near that pose.
 //!
 //! Rules that are easy to erode:
 //!

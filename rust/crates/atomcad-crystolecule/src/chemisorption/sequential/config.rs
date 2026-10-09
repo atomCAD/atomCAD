@@ -2,6 +2,7 @@
 
 use crate::chemisorption::config::ChemisorptionError;
 use crate::chemisorption::inventory::BondInventory;
+use crate::chemisorption::relax::RelaxSettings;
 use crate::chemisorption::transfer::{TransferDirection, TransferRule, is_transferable_element};
 use crate::simulation::uff::VdwMode;
 
@@ -116,12 +117,11 @@ impl SequentialSearch {
     }
 
     /// The relaxation settings, in the shape `relax` reads.
-    pub(crate) fn relax_settings(&self) -> crate::chemisorption::ChemisorptionSearch {
-        crate::chemisorption::ChemisorptionSearch {
+    pub fn relax_settings(&self) -> RelaxSettings {
+        RelaxSettings {
             max_iterations: self.max_iterations,
             gradient_rms_tolerance: self.gradient_rms_tolerance,
             vdw_mode: self.vdw_mode.clone(),
-            ..Default::default()
         }
     }
 }

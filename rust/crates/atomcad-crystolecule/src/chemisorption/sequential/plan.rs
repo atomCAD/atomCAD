@@ -10,8 +10,8 @@ use super::config::SequentialSearch;
 use super::setup::{Leg, Mirror, NEAR_MISS_BAND, Seating, Setup, Step};
 use super::tree::{NO_ROW, NearMiss, RowKind, SearchTree};
 use crate::atomic_structure::AtomicStructure;
+use crate::chemisorption::atoms::{HypothesisKey, change_key};
 use crate::chemisorption::config::ChemisorptionError;
-use crate::chemisorption::enumerate::{HypothesisKey, change_key};
 use crate::chemisorption::inventory::{BondInventory, BondKind};
 use crate::chemisorption::transfer::Transfer;
 use rustc_hash::FxHashMap;
@@ -62,7 +62,7 @@ impl Hypothesis {
 
     /// The atoms whose bonds it changes, sorted.
     pub fn changed_atoms(&self) -> Vec<u32> {
-        crate::chemisorption::enumerate::changed_atoms(&self.formed, &self.transfers)
+        crate::chemisorption::atoms::changed_atoms(&self.formed, &self.transfers)
     }
 }
 

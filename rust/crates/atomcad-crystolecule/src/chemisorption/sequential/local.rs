@@ -21,11 +21,10 @@ use super::plan::{
 use super::setup::{Leg, NEAR_MISS_BAND, Setup, Step};
 use super::tree::{NearMiss, RowKind, SearchTree};
 use crate::atomic_structure::AtomicStructure;
-use crate::chemisorption::ChemisorptionSearch;
+use crate::chemisorption::atoms::{HypothesisKey, change_key};
 use crate::chemisorption::config::{CHANGED_TAG, ChemisorptionError};
-use crate::chemisorption::enumerate::{HypothesisKey, change_key};
 use crate::chemisorption::inventory::BondInventory;
-use crate::chemisorption::relax::{Relaxed, StrainTerms, relax};
+use crate::chemisorption::relax::{RelaxSettings, Relaxed, StrainTerms, relax};
 use atomcad_util::job_control::JobControl;
 use glam::DVec3;
 use rayon::prelude::*;
@@ -146,7 +145,7 @@ pub(crate) fn hypothesis<'a>(
 pub(crate) struct Local<'a> {
     pub plan: &'a SequentialPlan,
     pub config: &'a SequentialSearch,
-    pub settings: &'a ChemisorptionSearch,
+    pub settings: &'a RelaxSettings,
     pub reference_energy: f64,
     pub reference_terms: &'a StrainTerms,
     pub control: Option<&'a JobControl>,

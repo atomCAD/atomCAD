@@ -166,6 +166,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       dynamic raw);
 
   @protected
+  APIChemisorbLevel dco_decode_api_chemisorb_level(dynamic raw);
+
+  @protected
   APIChemisorbReport dco_decode_api_chemisorb_report(dynamic raw);
 
   @protected
@@ -1308,6 +1311,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       dco_decode_list_api_chemisorb_inventory_option(dynamic raw);
 
   @protected
+  List<APIChemisorbLevel> dco_decode_list_api_chemisorb_level(dynamic raw);
+
+  @protected
   List<APIChemisorbRow> dco_decode_list_api_chemisorb_row(dynamic raw);
 
   @protected
@@ -2206,6 +2212,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIChemisorbInventoryOption sse_decode_api_chemisorb_inventory_option(
+      SseDeserializer deserializer);
+
+  @protected
+  APIChemisorbLevel sse_decode_api_chemisorb_level(
       SseDeserializer deserializer);
 
   @protected
@@ -3549,6 +3559,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
           SseDeserializer deserializer);
 
   @protected
+  List<APIChemisorbLevel> sse_decode_list_api_chemisorb_level(
+      SseDeserializer deserializer);
+
+  @protected
   List<APIChemisorbRow> sse_decode_list_api_chemisorb_row(
       SseDeserializer deserializer);
 
@@ -4596,6 +4610,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_chemisorb_inventory_option(
       APIChemisorbInventoryOption self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_chemisorb_level(
+      APIChemisorbLevel self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_chemisorb_report(
@@ -6005,6 +6023,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_api_chemisorb_inventory_option(
       List<APIChemisorbInventoryOption> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_api_chemisorb_level(
+      List<APIChemisorbLevel> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_api_chemisorb_row(

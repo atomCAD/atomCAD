@@ -12,13 +12,15 @@
 //! carries that side's reactive tag. What is **not** hashed: selection, the
 //! display-only flags, and tags other than the reactive one — none of them
 //! changes a search, and selecting an atom must not make a result stale. Of
-//! the settings, every field of [`ChemisorptionSearch`] (`max_transfers` only
-//! while a transfer rule is enabled, the one case it is read).
+//! the settings, every field of [`SequentialSearch`]. `reach` is hashed even
+//! when nothing reads it (three feet or fewer and no transfer rule): whether
+//! it is read depends on the inputs, and a property the panel greys out is
+//! not one a user edits.
 //!
 //! The value is compared within one process and never persisted, so the
 //! standard library's hasher is enough.
 
-use super::config::ChemisorptionSearch;
+use super::sequential::SequentialSearch;
 use crate::atomic_structure::AtomicStructure;
 use crate::simulation::uff::VdwMode;
 use std::collections::hash_map::DefaultHasher;
@@ -50,19 +52,23 @@ fn hash_structure(s: &AtomicStructure, tag: &Option<String>, h: &mut DefaultHash
 pub fn input_fingerprint(
     adsorbate: &AtomicStructure,
     substrate: &AtomicStructure,
-    config: &ChemisorptionSearch,
+    config: &SequentialSearch,
 ) -> u64 {
     let mut h = DefaultHasher::new();
     hash_structure(adsorbate, &config.adsorbate_tag, &mut h);
     hash_structure(substrate, &config.substrate_tag, &mut h);
 
-    let ChemisorptionSearch {
+    // Destructured, so a new setting is a compile error here until it is
+    // hashed.
+    let SequentialSearch {
         adsorbate_tag,
         substrate_tag,
+        anchor_reach,
+        tolerance,
         reach,
-        max_formed_bonds,
+        clash_filter,
         transfers,
-        max_transfers,
+        max_formed_bonds,
         formed_bonds,
         bond_inventory,
         budget,
@@ -74,14 +80,12 @@ pub fn input_fingerprint(
     } = config;
     adsorbate_tag.hash(&mut h);
     substrate_tag.hash(&mut h);
+    anchor_reach.to_bits().hash(&mut h);
+    tolerance.to_bits().hash(&mut h);
     reach.to_bits().hash(&mut h);
-    max_formed_bonds.hash(&mut h);
-    // `max_transfers` is read only when a transfer rule is enabled, so without
-    // one it must not make a result stale.
+    clash_filter.hash(&mut h);
     transfers.hash(&mut h);
-    if !transfers.is_empty() {
-        max_transfers.hash(&mut h);
-    }
+    max_formed_bonds.hash(&mut h);
     formed_bonds.hash(&mut h);
     bond_inventory.hash(&mut h);
     budget.hash(&mut h);

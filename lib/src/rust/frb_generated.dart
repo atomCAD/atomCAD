@@ -19245,20 +19245,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIChemisorbData dco_decode_api_chemisorb_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 11)
-      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
+    if (arr.length != 13)
+      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
     return APIChemisorbData(
       adsorbateTag: dco_decode_String(arr[0]),
       substrateTag: dco_decode_String(arr[1]),
-      reach: dco_decode_f_64(arr[2]),
-      maxFormedBonds: dco_decode_i_32(arr[3]),
-      maxTransfers: dco_decode_i_32(arr[4]),
-      formedBonds: dco_decode_opt_box_autoadd_i_32(arr[5]),
-      bondInventory: dco_decode_opt_String(arr[6]),
-      topN: dco_decode_i_32(arr[7]),
-      energyWindow: dco_decode_f_64(arr[8]),
-      budget: dco_decode_i_32(arr[9]),
-      maxIterations: dco_decode_i_32(arr[10]),
+      anchorReach: dco_decode_f_64(arr[2]),
+      tolerance: dco_decode_f_64(arr[3]),
+      reach: dco_decode_f_64(arr[4]),
+      clashFilter: dco_decode_bool(arr[5]),
+      maxFormedBonds: dco_decode_i_32(arr[6]),
+      formedBonds: dco_decode_opt_box_autoadd_i_32(arr[7]),
+      bondInventory: dco_decode_opt_String(arr[8]),
+      topN: dco_decode_i_32(arr[9]),
+      energyWindow: dco_decode_f_64(arr[10]),
+      budget: dco_decode_i_32(arr[11]),
+      maxIterations: dco_decode_i_32(arr[12]),
     );
   }
 
@@ -19276,15 +19278,40 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIChemisorbLevel dco_decode_api_chemisorb_level(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 14)
+      throw Exception('unexpected arr length: expect 14 but see ${arr.length}');
+    return APIChemisorbLevel(
+      legs: dco_decode_usize(arr[0]),
+      parents: dco_decode_usize(arr[1]),
+      paths: dco_decode_usize(arr[2]),
+      hypotheses: dco_decode_usize(arr[3]),
+      duplicates: dco_decode_usize(arr[4]),
+      prunedValence: dco_decode_usize(arr[5]),
+      prunedNoAcceptor: dco_decode_usize(arr[6]),
+      prunedFilter: dco_decode_usize(arr[7]),
+      candidates: dco_decode_usize(arr[8]),
+      toRelax: dco_decode_usize(arr[9]),
+      relaxed: dco_decode_usize(arr[10]),
+      unconverged: dco_decode_usize(arr[11]),
+      truncated: dco_decode_bool(arr[12]),
+      nearMisses: dco_decode_usize(arr[13]),
+    );
+  }
+
+  @protected
   APIChemisorbReport dco_decode_api_chemisorb_report(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
     return APIChemisorbReport(
       stats: dco_decode_api_chemisorb_stats(arr[0]),
       rows: dco_decode_list_api_chemisorb_row(arr[1]),
       inventoryOptions: dco_decode_list_api_chemisorb_inventory_option(arr[2]),
+      reachUsed: dco_decode_bool(arr[3]),
     );
   }
 
@@ -19292,8 +19319,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIChemisorbRow dco_decode_api_chemisorb_row(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 13)
-      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
+    if (arr.length != 14)
+      throw Exception('unexpected arr length: expect 14 but see ${arr.length}');
     return APIChemisorbRow(
       rank: dco_decode_usize(arr[0]),
       strain: dco_decode_f_64(arr[1]),
@@ -19302,12 +19329,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       formedBonds: dco_decode_usize(arr[4]),
       transfers: dco_decode_usize(arr[5]),
       converged: dco_decode_bool(arr[6]),
-      worstBondRatio: dco_decode_f_64(arr[7]),
-      stretch: dco_decode_f_64(arr[8]),
-      bend: dco_decode_f_64(arr[9]),
-      torsion: dco_decode_f_64(arr[10]),
-      inversion: dco_decode_f_64(arr[11]),
-      vdw: dco_decode_f_64(arr[12]),
+      seatingClash: dco_decode_bool(arr[7]),
+      worstBondRatio: dco_decode_f_64(arr[8]),
+      stretch: dco_decode_f_64(arr[9]),
+      bend: dco_decode_f_64(arr[10]),
+      torsion: dco_decode_f_64(arr[11]),
+      inversion: dco_decode_f_64(arr[12]),
+      vdw: dco_decode_f_64(arr[13]),
     );
   }
 
@@ -19315,24 +19343,36 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIChemisorbStats dco_decode_api_chemisorb_stats(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 15)
-      throw Exception('unexpected arr length: expect 15 but see ${arr.length}');
+    if (arr.length != 27)
+      throw Exception('unexpected arr length: expect 27 but see ${arr.length}');
     return APIChemisorbStats(
       feet: dco_decode_usize(arr[0]),
-      sitesInReach: dco_decode_usize(arr[1]),
-      transferCandidates: dco_decode_usize(arr[2]),
-      considered: dco_decode_usize(arr[3]),
-      prunedValence: dco_decode_usize(arr[4]),
-      prunedFilter: dco_decode_usize(arr[5]),
+      sites: dco_decode_usize(arr[1]),
+      paths: dco_decode_usize(arr[2]),
+      anchors: dco_decode_usize(arr[3]),
+      spherePairs: dco_decode_usize(arr[4]),
+      torusTriples: dco_decode_usize(arr[5]),
       duplicates: dco_decode_usize(arr[6]),
-      searched: dco_decode_bool(arr[7]),
-      stale: dco_decode_bool(arr[8]),
-      relaxed: dco_decode_usize(arr[9]),
-      toRelax: dco_decode_usize(arr[10]),
-      unconverged: dco_decode_usize(arr[11]),
-      listed: dco_decode_usize(arr[12]),
-      truncated: dco_decode_bool(arr[13]),
-      seconds: dco_decode_f_64(arr[14]),
+      prunedValence: dco_decode_usize(arr[7]),
+      prunedNoAcceptor: dco_decode_usize(arr[8]),
+      prunedFilter: dco_decode_usize(arr[9]),
+      prunedMirror: dco_decode_usize(arr[10]),
+      mirrorUndecided: dco_decode_usize(arr[11]),
+      candidates: dco_decode_usize(arr[12]),
+      parents: dco_decode_usize(arr[13]),
+      seatingClashes: dco_decode_usize(arr[14]),
+      prunedClash: dco_decode_usize(arr[15]),
+      localPhase: dco_decode_bool(arr[16]),
+      searched: dco_decode_bool(arr[17]),
+      stale: dco_decode_bool(arr[18]),
+      relaxed: dco_decode_usize(arr[19]),
+      localRelaxed: dco_decode_usize(arr[20]),
+      toRelax: dco_decode_usize(arr[21]),
+      unconverged: dco_decode_usize(arr[22]),
+      listed: dco_decode_usize(arr[23]),
+      truncated: dco_decode_bool(arr[24]),
+      seconds: dco_decode_f_64(arr[25]),
+      local: dco_decode_list_api_chemisorb_level(arr[26]),
     );
   }
 
@@ -23205,6 +23245,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<APIChemisorbLevel> dco_decode_list_api_chemisorb_level(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_api_chemisorb_level).toList();
+  }
+
+  @protected
   List<APIChemisorbRow> dco_decode_list_api_chemisorb_row(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_api_chemisorb_row).toList();
@@ -25550,9 +25596,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_adsorbateTag = sse_decode_String(deserializer);
     var var_substrateTag = sse_decode_String(deserializer);
+    var var_anchorReach = sse_decode_f_64(deserializer);
+    var var_tolerance = sse_decode_f_64(deserializer);
     var var_reach = sse_decode_f_64(deserializer);
+    var var_clashFilter = sse_decode_bool(deserializer);
     var var_maxFormedBonds = sse_decode_i_32(deserializer);
-    var var_maxTransfers = sse_decode_i_32(deserializer);
     var var_formedBonds = sse_decode_opt_box_autoadd_i_32(deserializer);
     var var_bondInventory = sse_decode_opt_String(deserializer);
     var var_topN = sse_decode_i_32(deserializer);
@@ -25562,9 +25610,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return APIChemisorbData(
         adsorbateTag: var_adsorbateTag,
         substrateTag: var_substrateTag,
+        anchorReach: var_anchorReach,
+        tolerance: var_tolerance,
         reach: var_reach,
+        clashFilter: var_clashFilter,
         maxFormedBonds: var_maxFormedBonds,
-        maxTransfers: var_maxTransfers,
         formedBonds: var_formedBonds,
         bondInventory: var_bondInventory,
         topN: var_topN,
@@ -25583,6 +25633,41 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIChemisorbLevel sse_decode_api_chemisorb_level(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_legs = sse_decode_usize(deserializer);
+    var var_parents = sse_decode_usize(deserializer);
+    var var_paths = sse_decode_usize(deserializer);
+    var var_hypotheses = sse_decode_usize(deserializer);
+    var var_duplicates = sse_decode_usize(deserializer);
+    var var_prunedValence = sse_decode_usize(deserializer);
+    var var_prunedNoAcceptor = sse_decode_usize(deserializer);
+    var var_prunedFilter = sse_decode_usize(deserializer);
+    var var_candidates = sse_decode_usize(deserializer);
+    var var_toRelax = sse_decode_usize(deserializer);
+    var var_relaxed = sse_decode_usize(deserializer);
+    var var_unconverged = sse_decode_usize(deserializer);
+    var var_truncated = sse_decode_bool(deserializer);
+    var var_nearMisses = sse_decode_usize(deserializer);
+    return APIChemisorbLevel(
+        legs: var_legs,
+        parents: var_parents,
+        paths: var_paths,
+        hypotheses: var_hypotheses,
+        duplicates: var_duplicates,
+        prunedValence: var_prunedValence,
+        prunedNoAcceptor: var_prunedNoAcceptor,
+        prunedFilter: var_prunedFilter,
+        candidates: var_candidates,
+        toRelax: var_toRelax,
+        relaxed: var_relaxed,
+        unconverged: var_unconverged,
+        truncated: var_truncated,
+        nearMisses: var_nearMisses);
+  }
+
+  @protected
   APIChemisorbReport sse_decode_api_chemisorb_report(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -25590,10 +25675,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_rows = sse_decode_list_api_chemisorb_row(deserializer);
     var var_inventoryOptions =
         sse_decode_list_api_chemisorb_inventory_option(deserializer);
+    var var_reachUsed = sse_decode_bool(deserializer);
     return APIChemisorbReport(
         stats: var_stats,
         rows: var_rows,
-        inventoryOptions: var_inventoryOptions);
+        inventoryOptions: var_inventoryOptions,
+        reachUsed: var_reachUsed);
   }
 
   @protected
@@ -25606,6 +25693,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_formedBonds = sse_decode_usize(deserializer);
     var var_transfers = sse_decode_usize(deserializer);
     var var_converged = sse_decode_bool(deserializer);
+    var var_seatingClash = sse_decode_bool(deserializer);
     var var_worstBondRatio = sse_decode_f_64(deserializer);
     var var_stretch = sse_decode_f_64(deserializer);
     var var_bend = sse_decode_f_64(deserializer);
@@ -25620,6 +25708,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         formedBonds: var_formedBonds,
         transfers: var_transfers,
         converged: var_converged,
+        seatingClash: var_seatingClash,
         worstBondRatio: var_worstBondRatio,
         stretch: var_stretch,
         bend: var_bend,
@@ -25633,36 +25722,60 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_feet = sse_decode_usize(deserializer);
-    var var_sitesInReach = sse_decode_usize(deserializer);
-    var var_transferCandidates = sse_decode_usize(deserializer);
-    var var_considered = sse_decode_usize(deserializer);
-    var var_prunedValence = sse_decode_usize(deserializer);
-    var var_prunedFilter = sse_decode_usize(deserializer);
+    var var_sites = sse_decode_usize(deserializer);
+    var var_paths = sse_decode_usize(deserializer);
+    var var_anchors = sse_decode_usize(deserializer);
+    var var_spherePairs = sse_decode_usize(deserializer);
+    var var_torusTriples = sse_decode_usize(deserializer);
     var var_duplicates = sse_decode_usize(deserializer);
+    var var_prunedValence = sse_decode_usize(deserializer);
+    var var_prunedNoAcceptor = sse_decode_usize(deserializer);
+    var var_prunedFilter = sse_decode_usize(deserializer);
+    var var_prunedMirror = sse_decode_usize(deserializer);
+    var var_mirrorUndecided = sse_decode_usize(deserializer);
+    var var_candidates = sse_decode_usize(deserializer);
+    var var_parents = sse_decode_usize(deserializer);
+    var var_seatingClashes = sse_decode_usize(deserializer);
+    var var_prunedClash = sse_decode_usize(deserializer);
+    var var_localPhase = sse_decode_bool(deserializer);
     var var_searched = sse_decode_bool(deserializer);
     var var_stale = sse_decode_bool(deserializer);
     var var_relaxed = sse_decode_usize(deserializer);
+    var var_localRelaxed = sse_decode_usize(deserializer);
     var var_toRelax = sse_decode_usize(deserializer);
     var var_unconverged = sse_decode_usize(deserializer);
     var var_listed = sse_decode_usize(deserializer);
     var var_truncated = sse_decode_bool(deserializer);
     var var_seconds = sse_decode_f_64(deserializer);
+    var var_local = sse_decode_list_api_chemisorb_level(deserializer);
     return APIChemisorbStats(
         feet: var_feet,
-        sitesInReach: var_sitesInReach,
-        transferCandidates: var_transferCandidates,
-        considered: var_considered,
-        prunedValence: var_prunedValence,
-        prunedFilter: var_prunedFilter,
+        sites: var_sites,
+        paths: var_paths,
+        anchors: var_anchors,
+        spherePairs: var_spherePairs,
+        torusTriples: var_torusTriples,
         duplicates: var_duplicates,
+        prunedValence: var_prunedValence,
+        prunedNoAcceptor: var_prunedNoAcceptor,
+        prunedFilter: var_prunedFilter,
+        prunedMirror: var_prunedMirror,
+        mirrorUndecided: var_mirrorUndecided,
+        candidates: var_candidates,
+        parents: var_parents,
+        seatingClashes: var_seatingClashes,
+        prunedClash: var_prunedClash,
+        localPhase: var_localPhase,
         searched: var_searched,
         stale: var_stale,
         relaxed: var_relaxed,
+        localRelaxed: var_localRelaxed,
         toRelax: var_toRelax,
         unconverged: var_unconverged,
         listed: var_listed,
         truncated: var_truncated,
-        seconds: var_seconds);
+        seconds: var_seconds,
+        local: var_local);
   }
 
   @protected
@@ -29818,6 +29931,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<APIChemisorbLevel> sse_decode_list_api_chemisorb_level(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <APIChemisorbLevel>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_api_chemisorb_level(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<APIChemisorbRow> sse_decode_list_api_chemisorb_row(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -33060,9 +33186,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.adsorbateTag, serializer);
     sse_encode_String(self.substrateTag, serializer);
+    sse_encode_f_64(self.anchorReach, serializer);
+    sse_encode_f_64(self.tolerance, serializer);
     sse_encode_f_64(self.reach, serializer);
+    sse_encode_bool(self.clashFilter, serializer);
     sse_encode_i_32(self.maxFormedBonds, serializer);
-    sse_encode_i_32(self.maxTransfers, serializer);
     sse_encode_opt_box_autoadd_i_32(self.formedBonds, serializer);
     sse_encode_opt_String(self.bondInventory, serializer);
     sse_encode_i_32(self.topN, serializer);
@@ -33080,6 +33208,26 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_api_chemisorb_level(
+      APIChemisorbLevel self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(self.legs, serializer);
+    sse_encode_usize(self.parents, serializer);
+    sse_encode_usize(self.paths, serializer);
+    sse_encode_usize(self.hypotheses, serializer);
+    sse_encode_usize(self.duplicates, serializer);
+    sse_encode_usize(self.prunedValence, serializer);
+    sse_encode_usize(self.prunedNoAcceptor, serializer);
+    sse_encode_usize(self.prunedFilter, serializer);
+    sse_encode_usize(self.candidates, serializer);
+    sse_encode_usize(self.toRelax, serializer);
+    sse_encode_usize(self.relaxed, serializer);
+    sse_encode_usize(self.unconverged, serializer);
+    sse_encode_bool(self.truncated, serializer);
+    sse_encode_usize(self.nearMisses, serializer);
+  }
+
+  @protected
   void sse_encode_api_chemisorb_report(
       APIChemisorbReport self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -33087,6 +33235,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_list_api_chemisorb_row(self.rows, serializer);
     sse_encode_list_api_chemisorb_inventory_option(
         self.inventoryOptions, serializer);
+    sse_encode_bool(self.reachUsed, serializer);
   }
 
   @protected
@@ -33100,6 +33249,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_usize(self.formedBonds, serializer);
     sse_encode_usize(self.transfers, serializer);
     sse_encode_bool(self.converged, serializer);
+    sse_encode_bool(self.seatingClash, serializer);
     sse_encode_f_64(self.worstBondRatio, serializer);
     sse_encode_f_64(self.stretch, serializer);
     sse_encode_f_64(self.bend, serializer);
@@ -33113,20 +33263,32 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       APIChemisorbStats self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_usize(self.feet, serializer);
-    sse_encode_usize(self.sitesInReach, serializer);
-    sse_encode_usize(self.transferCandidates, serializer);
-    sse_encode_usize(self.considered, serializer);
-    sse_encode_usize(self.prunedValence, serializer);
-    sse_encode_usize(self.prunedFilter, serializer);
+    sse_encode_usize(self.sites, serializer);
+    sse_encode_usize(self.paths, serializer);
+    sse_encode_usize(self.anchors, serializer);
+    sse_encode_usize(self.spherePairs, serializer);
+    sse_encode_usize(self.torusTriples, serializer);
     sse_encode_usize(self.duplicates, serializer);
+    sse_encode_usize(self.prunedValence, serializer);
+    sse_encode_usize(self.prunedNoAcceptor, serializer);
+    sse_encode_usize(self.prunedFilter, serializer);
+    sse_encode_usize(self.prunedMirror, serializer);
+    sse_encode_usize(self.mirrorUndecided, serializer);
+    sse_encode_usize(self.candidates, serializer);
+    sse_encode_usize(self.parents, serializer);
+    sse_encode_usize(self.seatingClashes, serializer);
+    sse_encode_usize(self.prunedClash, serializer);
+    sse_encode_bool(self.localPhase, serializer);
     sse_encode_bool(self.searched, serializer);
     sse_encode_bool(self.stale, serializer);
     sse_encode_usize(self.relaxed, serializer);
+    sse_encode_usize(self.localRelaxed, serializer);
     sse_encode_usize(self.toRelax, serializer);
     sse_encode_usize(self.unconverged, serializer);
     sse_encode_usize(self.listed, serializer);
     sse_encode_bool(self.truncated, serializer);
     sse_encode_f_64(self.seconds, serializer);
+    sse_encode_list_api_chemisorb_level(self.local, serializer);
   }
 
   @protected
@@ -36439,6 +36601,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_api_chemisorb_inventory_option(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_api_chemisorb_level(
+      List<APIChemisorbLevel> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_api_chemisorb_level(item, serializer);
     }
   }
 

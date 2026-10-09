@@ -146,7 +146,7 @@ fn strain_is_measured_from_the_separated_state() {
     let (ads, sub) = triangle();
     let config = triangle_config();
     let (_, r) = run(&ads, &sub, &config);
-    let settings = atomcad_crystolecule::chemisorption::ChemisorptionSearch::default();
+    let settings = atomcad_crystolecule::chemisorption::RelaxSettings::default();
     let (mut a, mut s) = (ads.clone(), sub.clone());
     let want = relax(&mut a, &settings).unwrap().energy + relax(&mut s, &settings).unwrap().energy;
     assert!((r.reference_energy - want).abs() < 1e-9);
