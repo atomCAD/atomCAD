@@ -11,6 +11,9 @@ use atomcad_structure_designer::node_network::FunctionPinDisposition;
 use atomcad_structure_designer::node_network::FunctionPinRole;
 // Path-qualified rather than imported bare: the api-side twin deliberately keeps
 // the same identifier (D9a).
+use atomcad_crystolecule::chemisorption::sequential::{
+    DebugForm as DomainDebugForm, Mirror as DomainMirror,
+};
 use atomcad_structure_designer::node_jobs::{JobOutcome, JobOutcomeKind, JobPoll, JobStatus};
 use atomcad_structure_designer::node_type::NodeTypeCategory as DomainNodeTypeCategory;
 use atomcad_structure_designer::nodes::atom_edit::atom_edit::{
@@ -20,7 +23,8 @@ use atomcad_structure_designer::nodes::atom_edit::atom_edit::{
     PointerMoveResultKind as DomainPointerMoveResultKind, PointerUpResult as DomainPointerUpResult,
 };
 use atomcad_structure_designer::nodes::chemisorb::{
-    ChemisorbData, ChemisorbEvalCache, ChemisorbLevelView,
+    ChemisorbData, ChemisorbDebugRowKind, ChemisorbDebugRowView, ChemisorbEvalCache,
+    ChemisorbLevelView,
 };
 use atomcad_structure_designer::nodes::comment::{
     CommentAnchor as DomainCommentAnchor, WireAnchor as DomainWireAnchor,
@@ -1092,6 +1096,142 @@ pub struct APIChemisorbReport {
     /// `reach` is read (a local phase follows, or `transfers` carries a
     /// record); the panel greys it out otherwise.
     pub reach_used: bool,
+    /// The row the debug pins show and its form; `None` = the root view.
+    pub debug_selected_row: Option<u32>,
+    pub debug_selected_form: Option<APIChemisorbDebugForm>,
+    /// Identifies the search tree; the panel drops the rows it fetched when it
+    /// changes.
+    pub debug_tree_key: u64,
+}
+
+/// How a debug row is shown (twin of `sequential::DebugForm`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum APIChemisorbDebugForm {
+    /// The inputs at the pose: the root and the foot rows.
+    Posed,
+    /// The start geometry the search relaxes from.
+    Seated,
+    /// The relaxation the search recorded.
+    Relaxed,
+}
+
+/// What a debug row stands for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum APIChemisorbDebugRowKind {
+    Root,
+    Foot,
+    Leg,
+}
+
+/// The mirror check's verdict on a three-leg row (twin of
+/// `sequential::Mirror`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum APIChemisorbMirror {
+    Proper,
+    Mirrored,
+    Undecided,
+}
+
+/// One row of the `chemisorb` debug tree (twin of `ChemisorbDebugRowView`).
+pub struct APIChemisorbDebugRow {
+    pub row: u32,
+    pub parent: Option<u32>,
+    pub kind: APIChemisorbDebugRowKind,
+    pub legs: u32,
+    /// `root`, `foot O12`, or the leg the row adds, `O12–Si45`.
+    pub label: String,
+    /// The CLI's path to the row.
+    pub path: String,
+    /// A duplicate path: the canonical row of its change set.
+    pub duplicate_of: Option<u32>,
+    /// Children listed with duplicates hidden, and the duplicates hidden.
+    pub children: u32,
+    pub hidden_duplicates: u32,
+    /// The children by verdict.
+    pub candidates: u32,
+    pub mirrored: u32,
+    pub undecided: u32,
+    pub clashes: u32,
+    pub rejected_valence: u32,
+    pub rejected_no_acceptor: u32,
+    pub rejected_filter: u32,
+    /// Near misses of the next leg's test, e.g. `Si52 +0.27`.
+    pub near_misses: Vec<String>,
+    pub candidate: bool,
+    pub local_parent: bool,
+    pub mirror: Option<APIChemisorbMirror>,
+    pub seating_clash: bool,
+    pub pruned_clash: bool,
+    /// kcal/mol, when this path was relaxed.
+    pub strain: Option<f64>,
+    pub converged: bool,
+    pub budget_cut: bool,
+    pub can_seat: bool,
+    pub can_relax: bool,
+    pub default_form: APIChemisorbDebugForm,
+}
+
+impl From<DomainDebugForm> for APIChemisorbDebugForm {
+    fn from(f: DomainDebugForm) -> Self {
+        match f {
+            DomainDebugForm::Posed => APIChemisorbDebugForm::Posed,
+            DomainDebugForm::Seated => APIChemisorbDebugForm::Seated,
+            DomainDebugForm::Relaxed => APIChemisorbDebugForm::Relaxed,
+        }
+    }
+}
+
+impl From<APIChemisorbDebugForm> for DomainDebugForm {
+    fn from(f: APIChemisorbDebugForm) -> Self {
+        match f {
+            APIChemisorbDebugForm::Posed => DomainDebugForm::Posed,
+            APIChemisorbDebugForm::Seated => DomainDebugForm::Seated,
+            APIChemisorbDebugForm::Relaxed => DomainDebugForm::Relaxed,
+        }
+    }
+}
+
+impl From<&ChemisorbDebugRowView> for APIChemisorbDebugRow {
+    fn from(v: &ChemisorbDebugRowView) -> Self {
+        APIChemisorbDebugRow {
+            row: v.row,
+            parent: v.parent,
+            kind: match v.kind {
+                ChemisorbDebugRowKind::Root => APIChemisorbDebugRowKind::Root,
+                ChemisorbDebugRowKind::Foot => APIChemisorbDebugRowKind::Foot,
+                ChemisorbDebugRowKind::Leg => APIChemisorbDebugRowKind::Leg,
+            },
+            legs: v.legs,
+            label: v.label.clone(),
+            path: v.path.clone(),
+            duplicate_of: v.duplicate_of,
+            children: v.children,
+            hidden_duplicates: v.hidden_duplicates,
+            candidates: v.candidates,
+            mirrored: v.mirrored,
+            undecided: v.undecided,
+            clashes: v.clashes,
+            rejected_valence: v.rejected_valence,
+            rejected_no_acceptor: v.rejected_no_acceptor,
+            rejected_filter: v.rejected_filter,
+            near_misses: v.near_misses.clone(),
+            candidate: v.candidate,
+            local_parent: v.local_parent,
+            mirror: v.mirror.map(|m| match m {
+                DomainMirror::Proper => APIChemisorbMirror::Proper,
+                DomainMirror::Mirrored => APIChemisorbMirror::Mirrored,
+                DomainMirror::Undecided => APIChemisorbMirror::Undecided,
+            }),
+            seating_clash: v.seating_clash,
+            pruned_clash: v.pruned_clash,
+            strain: v.strain,
+            converged: v.converged,
+            budget_cut: v.budget_cut,
+            can_seat: v.can_seat,
+            can_relax: v.can_relax,
+            default_form: v.default_form.into(),
+        }
+    }
 }
 
 impl From<&ChemisorbData> for APIChemisorbData {
@@ -1131,6 +1271,7 @@ impl From<&APIChemisorbData> for ChemisorbData {
             budget: d.budget,
             max_iterations: d.max_iterations,
             stored: None,
+            debug: None,
         }
     }
 }
@@ -1218,6 +1359,9 @@ impl From<&ChemisorbEvalCache> for APIChemisorbReport {
                 })
                 .collect(),
             reach_used: cache.reach_used,
+            debug_selected_row: cache.debug_selected.map(|(row, _)| row),
+            debug_selected_form: cache.debug_selected.map(|(_, form)| form.into()),
+            debug_tree_key: cache.tree_key,
         }
     }
 }

@@ -48,7 +48,8 @@ crates/atomcad-crystolecule/src/
 │       ├── plan.rs                 # plan(): depth-first legs 1–3, change-set dedupe, PlanStats, Hypothesis
 │       ├── tree.rs                 # SearchTree: one row per path, counts + near misses, no structures (the debug view's data)
 │       ├── evaluate.rs             # evaluate() / search(): relax candidates + parents against the separated reference, then the local phase
-│       └── local.rs                # The local phase (legs 4+): levels grown from relaxed parents' positions; LevelStats; replay()
+│       ├── local.rs                # The local phase (legs 4+): levels grown from relaxed parents' positions; LevelStats; replay() / replay_start()
+│       └── debug.rs                # The debug view's data: row forms, a row's marked structure, DebugShapes (analytic field), row paths for the CLI
 ├── crystolecule_constants.rs       # Diamond unit cell size, default motif text
 ├── drawing_plane.rs                # 2D drawing plane embedded in 3D crystal
 ├── motif.rs                        # Motif struct (sites, bonds, parameters)
@@ -350,6 +351,17 @@ Rules that are easy to erode:
   structure rebuilt from them (`Setup::state_structure`) must apply the bond
   changes step by step in the order the search did, or the audit's strain
   recomputation drifts.
+- **The debug view (`sequential/debug.rs`) stores nothing.** A row's view is
+  rebuilt from the tree on demand — posed and geometric seated rows by
+  geometry alone, a relaxed row from the kept candidate or by `replay` — and a
+  duplicate row is shown as its canonical row (only the path the search kept
+  produced its geometry). `needs_relaxation` is the line between "instant" and
+  "a job"; keep anything that relaxes behind it. `DebugShapes` is an analytic
+  field that *does* report a native grid (`SHAPE_GRID`), on purpose: the
+  shells are ~20 Å across and the analytic fallback spacing would sample
+  millions of points per redraw. Its shell is the shell test's envelope over
+  site elements, and a test pins that a site is inside a drawn shape iff the
+  search's own `need_against` accepts it — change one and the test fails.
 
 **Memory Layout**: `InlineBond` packs atom_id (29 bits) + bond_order (3 bits) into 4 bytes. `SmallVec<[InlineBond; 4]>` keeps up to 4 bonds inline per atom. Spatial grid (FxHashMap, cell size 4.0 Å) enables O(1) neighbor queries. `AtomicStructure` no longer carries a `frame_transform` — movement nodes bake transforms directly into atom positions (see `doc/design_lattice_space_refactoring.md` Appendix B).
 
@@ -773,6 +785,7 @@ tests/crystolecule/
 ├── chemisorption_sequential_relax_test.rs  # …relaxing: what is relaxed, filters commute, strain invariances, threads, budget, run control, known answers
 ├── chemisorption_sequential_local_test.rs  # …the local phase: planted 5-leg binding, the oracle per level (via replay), dedupe, transfers per leg (competing acceptors), budget, threads
 ├── chemisorption_sequential_golden_test.rs # …against the old engine's golden data (chemisorption_golden/), coverage of the 20-pose brute force, insta snapshots
+├── chemisorption_sequential_debug_test.rs  # …the debug view: which form a row opens on, seated / relaxed views (replay outside top N), markings, shapes = the shell/ring test, row paths
 ├── chemisorption_golden/old_engine.json  # The removed all-at-once engine's bond sets and strains (captured in Phase 0); the golden test compares against it
 ├── proxy_cut_test.rs              # Riders, bond distances, fill/rm_single keep set, severed-bond caps; the §4.3 bulk-silicon fill table
 ├── concave_rebond_test.rs         # Concave-corner rebonding; clash detector re-derived independently

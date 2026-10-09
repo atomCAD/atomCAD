@@ -7,6 +7,7 @@ import 'package:flutter_cad/inputs/string_input.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/chemisorb_api.dart'
     as chemisorb_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
+import 'package:flutter_cad/structure_designer/node_data/chemisorb_debug_tree.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 import 'package:flutter_cad/structure_designer/node_jobs.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
@@ -35,6 +36,11 @@ import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 /// many hypotheses a run would relax. The report (statistics,
 /// warnings and the ranked candidates) lives in the selected node's eval cache
 /// and is re-read on every model notification, as `proxy_editor.dart` does.
+///
+/// The **search tree** under the statistics ([ChemisorbDebugTree]) is the
+/// debug view (design §6.5): a click selects a row for the node's `debug` and
+/// `debug_shapes` pins, through `model.chemisorbDebugSelect`; the chips beside
+/// it show and hide those two pins.
 class ChemisorbEditor extends StatefulWidget {
   final BigInt nodeId;
   final APIChemisorbData? data;
@@ -44,12 +50,19 @@ class ChemisorbEditor extends StatefulWidget {
   /// reads it.
   final bool transfersConnected;
 
+  /// Whether the `debug` (pin 2) and `debug_shapes` (pin 3) outputs are
+  /// displayed.
+  final bool debugShown;
+  final bool shapesShown;
+
   const ChemisorbEditor({
     super.key,
     required this.nodeId,
     required this.data,
     required this.model,
     required this.transfersConnected,
+    this.debugShown = false,
+    this.shapesShown = false,
   });
 
   @override
@@ -134,6 +147,21 @@ class _ChemisorbEditorState extends State<ChemisorbEditor> {
     if (error != null && mounted) {
       showErrorSnackBar(context, 'Chemisorption search did not start: $error');
     }
+  }
+
+  /// Selects a search-tree row for the debug pins; a refusal (a job already
+  /// runs on the node, a row with no relaxation) is reported here.
+  void _select(int row, APIChemisorbDebugForm? form) {
+    final error =
+        widget.model.chemisorbDebugSelect(widget.nodeId, row, form: form);
+    if (error != null && mounted) {
+      showErrorSnackBar(context, 'Debug view: $error');
+    }
+  }
+
+  void _togglePin(int pin) {
+    widget.model.toggleOutputPinDisplay(widget.nodeId, pin,
+        scopeChain: widget.model.propertyEditorScopeChain);
   }
 
   @override
@@ -303,10 +331,26 @@ class _ChemisorbEditorState extends State<ChemisorbEditor> {
           ),
           const SizedBox(height: 16),
 
-          // ---- the report -------------------------------------------------          const SizedBox(height: 16),
-
           // ---- the report -------------------------------------------------
           _StatsCard(report: _report),
+          const SizedBox(height: 12),
+          ChemisorbDebugTree(
+            treeKey: _report?.debugTreeKey,
+            searched: _report?.stats.searched ?? false,
+            selectedRow: _report?.debugSelectedRow,
+            selectedForm: _report?.debugSelectedForm,
+            debugShown: widget.debugShown,
+            shapesShown: widget.shapesShown,
+            fetchRow: (row) => chemisorb_api.getChemisorbDebugRow(row: row),
+            fetchChildren: (row, showDuplicates) =>
+                chemisorb_api.getChemisorbDebugChildren(
+                    row: row, showDuplicates: showDuplicates),
+            fetchAncestors: (row) =>
+                chemisorb_api.getChemisorbDebugAncestors(row: row).toList(),
+            onSelect: _select,
+            onToggleDebug: () => _togglePin(_DEBUG_PIN),
+            onToggleShapes: () => _togglePin(_DEBUG_SHAPES_PIN),
+          ),
           const SizedBox(height: 12),
           if (_report != null && _report!.stats.searched)
             _CandidatesCard(report: _report!),
@@ -626,6 +670,10 @@ class _CapField extends StatelessWidget {
     );
   }
 }
+
+/// The `debug` and `debug_shapes` output pins.
+const int _DEBUG_PIN = 2;
+const int _DEBUG_SHAPES_PIN = 3;
 
 /// How the node stores "no cap" for `max_formed_bonds`.
 const int _NO_CAP = -1;

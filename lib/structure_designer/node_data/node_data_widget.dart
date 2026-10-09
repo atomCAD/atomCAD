@@ -721,6 +721,9 @@ class NodeDataWidget extends StatelessWidget {
           // Pin 2, appended after adsorbate and substrate.
           transfersConnected: selectedNode.inputPins.length > 2 &&
               selectedNode.inputPins[2].connected,
+          // Pins 2 and 3: the debug view.
+          debugShown: selectedNode.displayedPins.contains(2),
+          shapesShown: selectedNode.displayedPins.contains(3),
         );
       case 'proxy':
         // Scope-aware fetch of the eight stored properties + the input's

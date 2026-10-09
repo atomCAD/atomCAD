@@ -119,6 +119,14 @@ Future<void> main(List<String> args) async {
 
   final runParser = ArgParser();
 
+  final debugSelectParser = ArgParser()
+    ..addOption('form',
+        allowed: ['posed', 'seated', 'relaxed'],
+        help: 'How to show the row (default: the form it opens on)')
+    ..addFlag('show',
+        negatable: false,
+        help: "Also display the node's debug and debug_shapes pins");
+
   final cameraParser = ArgParser()
     ..addOption('eye', help: 'Camera position as x,y,z')
     ..addOption('target', help: 'Look-at point as x,y,z')
@@ -194,6 +202,7 @@ Future<void> main(List<String> args) async {
   parser.addCommand('describe', describeParser);
   parser.addCommand('evaluate', evaluateParser);
   parser.addCommand('run', runParser);
+  parser.addCommand('debug-select', debugSelectParser);
   parser.addCommand('camera', cameraParser);
   parser.addCommand('screenshot', screenshotParser);
   parser.addCommand('display', displayParser);
@@ -309,6 +318,21 @@ Future<void> main(List<String> args) async {
       }
       await _runRun(serverUrl, command.rest.first);
       break;
+    case 'debug-select':
+      if (command.rest.isEmpty) {
+        stderr.writeln('Error: Missing node identifier');
+        stderr.writeln('Usage: atomcad-cli debug-select <node> [<path>] '
+            '[--form posed|seated|relaxed] [--show]');
+        exit(1);
+      }
+      await _runDebugSelect(
+        serverUrl,
+        command.rest.first,
+        command.rest.length > 1 ? command.rest.sublist(1).join(' ') : '',
+        command['form'] as String?,
+        command['show'] as bool,
+      );
+      break;
     case 'camera':
       await _runCamera(serverUrl, command);
       break;
@@ -374,6 +398,10 @@ void _printUsage() {
       '  atomcad-cli evaluate <node_id> -v     Evaluate with detailed output');
   stdout.writeln(
       '  atomcad-cli run <node>                Run a chemisorb search (its Run button)');
+  stdout.writeln(
+      '  atomcad-cli debug-select <node> [<path>] [--form F] [--show]');
+  stdout.writeln(
+      '                                        Show a chemisorb search-tree row on its debug pins');
   stdout.writeln(
       '  atomcad-cli camera                    Get current camera state');
   stdout.writeln('  atomcad-cli camera --eye x,y,z --target x,y,z --up x,y,z');
@@ -475,6 +503,10 @@ void _printReplHelp() {
   stdout.writeln('  evaluate -v <node>  Evaluate with detailed output');
   stdout
       .writeln('  run <node>          Run a chemisorb search (its Run button)');
+  stdout
+      .writeln('  debug-select <node> [<path>] [posed|seated|relaxed] [show]');
+  stdout.writeln(
+      '                      Show a chemisorb search-tree row on its debug pins');
   stdout.writeln('  camera, c           Get current camera state');
   stdout.writeln('  camera --eye x,y,z --target x,y,z --up x,y,z');
   stdout.writeln('                      Set camera position');
@@ -733,6 +765,35 @@ Future<void> _runRun(String serverUrl, String nodeIdentifier) async {
     final uri = Uri.parse('$serverUrl/run')
         .replace(queryParameters: {'node': nodeIdentifier});
     final response = await _post(uri).timeout(const Duration(hours: 1));
+    if (response.statusCode == 200) {
+      stdout.write(response.body);
+      if (response.body.isNotEmpty && !response.body.endsWith('\n')) {
+        stdout.writeln();
+      }
+    } else {
+      stderr.writeln('Error: Server returned ${response.statusCode}');
+      stderr.writeln(response.body);
+    }
+  } catch (e) {
+    stderr.writeln('Error: Failed to connect to atomCAD: $e');
+  }
+}
+
+/// Selects a row of a `chemisorb` node's search tree for its `debug` and
+/// `debug_shapes` pins and prints what the row shows and its children. A path
+/// is the legs along the row as `foot-site` atom-id pairs (`12-45,13-61`), a
+/// foot's id alone for its foot row, `#N` for row N, or nothing for the root.
+/// A relaxed row the search did not keep is replayed first, hence the timeout.
+Future<void> _runDebugSelect(String serverUrl, String nodeIdentifier,
+    String path, String? form, bool show) async {
+  try {
+    final uri = Uri.parse('$serverUrl/debug-select').replace(queryParameters: {
+      'node': nodeIdentifier,
+      'path': path,
+      if (form != null && form.isNotEmpty) 'form': form,
+      if (show) 'show': 'true',
+    });
+    final response = await _post(uri).timeout(const Duration(minutes: 30));
     if (response.statusCode == 200) {
       stdout.write(response.body);
       if (response.body.isNotEmpty && !response.body.endsWith('\n')) {
@@ -1390,6 +1451,23 @@ Future<void> _runRepl(String serverUrl) async {
           stdout.writeln('Usage: run <node>');
         } else {
           await _runRun(serverUrl, parts[1]);
+        }
+        break;
+
+      case 'debug-select':
+        if (parts.length < 2) {
+          stdout.writeln(
+              'Usage: debug-select <node> [<path>] [posed|seated|relaxed] [show]');
+        } else {
+          const forms = ['posed', 'seated', 'relaxed'];
+          final rest = parts.sublist(2);
+          await _runDebugSelect(
+            serverUrl,
+            parts[1],
+            rest.where((p) => !forms.contains(p) && p != 'show').join(' '),
+            rest.firstWhere(forms.contains, orElse: () => ''),
+            rest.contains('show'),
+          );
         }
         break;
 

@@ -38,4 +38,8 @@ pub enum ChemisorptionError {
     /// The search's `JobControl` was cancelled; no partial report is kept.
     #[error("search cancelled")]
     Cancelled,
+    /// A debug view asked for a row the tree does not have, or a form the row
+    /// has no geometry in.
+    #[error("{0}")]
+    DebugRow(String),
 }

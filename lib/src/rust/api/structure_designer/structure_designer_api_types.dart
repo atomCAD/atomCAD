@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'structure_designer_api_types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `hash`
 
 /// The outcome of a tab switch (activate, or close of the active tab).
 /// `library_report` is what the dependency check did on activation
@@ -938,6 +938,169 @@ class APIChemisorbData {
           maxIterations == other.maxIterations;
 }
 
+/// How a debug row is shown (twin of `sequential::DebugForm`).
+enum APIChemisorbDebugForm {
+  /// The inputs at the pose: the root and the foot rows.
+  posed,
+
+  /// The start geometry the search relaxes from.
+  seated,
+
+  /// The relaxation the search recorded.
+  relaxed,
+  ;
+}
+
+/// One row of the `chemisorb` debug tree (twin of `ChemisorbDebugRowView`).
+class APIChemisorbDebugRow {
+  final int row;
+  final int? parent;
+  final APIChemisorbDebugRowKind kind;
+  final int legs;
+
+  /// `root`, `foot O12`, or the leg the row adds, `O12–Si45`.
+  final String label;
+
+  /// The CLI's path to the row.
+  final String path;
+
+  /// A duplicate path: the canonical row of its change set.
+  final int? duplicateOf;
+
+  /// Children listed with duplicates hidden, and the duplicates hidden.
+  final int children;
+  final int hiddenDuplicates;
+
+  /// The children by verdict.
+  final int candidates;
+  final int mirrored;
+  final int undecided;
+  final int clashes;
+  final int rejectedValence;
+  final int rejectedNoAcceptor;
+  final int rejectedFilter;
+
+  /// Near misses of the next leg's test, e.g. `Si52 +0.27`.
+  final List<String> nearMisses;
+  final bool candidate;
+  final bool localParent;
+  final APIChemisorbMirror? mirror;
+  final bool seatingClash;
+  final bool prunedClash;
+
+  /// kcal/mol, when this path was relaxed.
+  final double? strain;
+  final bool converged;
+  final bool budgetCut;
+  final bool canSeat;
+  final bool canRelax;
+  final APIChemisorbDebugForm defaultForm;
+
+  const APIChemisorbDebugRow({
+    required this.row,
+    this.parent,
+    required this.kind,
+    required this.legs,
+    required this.label,
+    required this.path,
+    this.duplicateOf,
+    required this.children,
+    required this.hiddenDuplicates,
+    required this.candidates,
+    required this.mirrored,
+    required this.undecided,
+    required this.clashes,
+    required this.rejectedValence,
+    required this.rejectedNoAcceptor,
+    required this.rejectedFilter,
+    required this.nearMisses,
+    required this.candidate,
+    required this.localParent,
+    this.mirror,
+    required this.seatingClash,
+    required this.prunedClash,
+    this.strain,
+    required this.converged,
+    required this.budgetCut,
+    required this.canSeat,
+    required this.canRelax,
+    required this.defaultForm,
+  });
+
+  @override
+  int get hashCode =>
+      row.hashCode ^
+      parent.hashCode ^
+      kind.hashCode ^
+      legs.hashCode ^
+      label.hashCode ^
+      path.hashCode ^
+      duplicateOf.hashCode ^
+      children.hashCode ^
+      hiddenDuplicates.hashCode ^
+      candidates.hashCode ^
+      mirrored.hashCode ^
+      undecided.hashCode ^
+      clashes.hashCode ^
+      rejectedValence.hashCode ^
+      rejectedNoAcceptor.hashCode ^
+      rejectedFilter.hashCode ^
+      nearMisses.hashCode ^
+      candidate.hashCode ^
+      localParent.hashCode ^
+      mirror.hashCode ^
+      seatingClash.hashCode ^
+      prunedClash.hashCode ^
+      strain.hashCode ^
+      converged.hashCode ^
+      budgetCut.hashCode ^
+      canSeat.hashCode ^
+      canRelax.hashCode ^
+      defaultForm.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIChemisorbDebugRow &&
+          runtimeType == other.runtimeType &&
+          row == other.row &&
+          parent == other.parent &&
+          kind == other.kind &&
+          legs == other.legs &&
+          label == other.label &&
+          path == other.path &&
+          duplicateOf == other.duplicateOf &&
+          children == other.children &&
+          hiddenDuplicates == other.hiddenDuplicates &&
+          candidates == other.candidates &&
+          mirrored == other.mirrored &&
+          undecided == other.undecided &&
+          clashes == other.clashes &&
+          rejectedValence == other.rejectedValence &&
+          rejectedNoAcceptor == other.rejectedNoAcceptor &&
+          rejectedFilter == other.rejectedFilter &&
+          nearMisses == other.nearMisses &&
+          candidate == other.candidate &&
+          localParent == other.localParent &&
+          mirror == other.mirror &&
+          seatingClash == other.seatingClash &&
+          prunedClash == other.prunedClash &&
+          strain == other.strain &&
+          converged == other.converged &&
+          budgetCut == other.budgetCut &&
+          canSeat == other.canSeat &&
+          canRelax == other.canRelax &&
+          defaultForm == other.defaultForm;
+}
+
+/// What a debug row stands for.
+enum APIChemisorbDebugRowKind {
+  root,
+  foot,
+  leg,
+  ;
+}
+
 /// One choice of the `bond_inventory` dropdown: a bond inventory and how many
 /// relaxations it would take.
 class APIChemisorbInventoryOption {
@@ -1033,6 +1196,15 @@ class APIChemisorbLevel {
           nearMisses == other.nearMisses;
 }
 
+/// The mirror check's verdict on a three-leg row (twin of
+/// `sequential::Mirror`).
+enum APIChemisorbMirror {
+  proper,
+  mirrored,
+  undecided,
+  ;
+}
+
 /// What the `chemisorb` panel renders after a root evaluation of the selected
 /// node: the plan (no rows) or the stored result.
 class APIChemisorbReport {
@@ -1046,11 +1218,22 @@ class APIChemisorbReport {
   /// record); the panel greys it out otherwise.
   final bool reachUsed;
 
+  /// The row the debug pins show and its form; `None` = the root view.
+  final int? debugSelectedRow;
+  final APIChemisorbDebugForm? debugSelectedForm;
+
+  /// Identifies the search tree; the panel drops the rows it fetched when it
+  /// changes.
+  final BigInt debugTreeKey;
+
   const APIChemisorbReport({
     required this.stats,
     required this.rows,
     required this.inventoryOptions,
     required this.reachUsed,
+    this.debugSelectedRow,
+    this.debugSelectedForm,
+    required this.debugTreeKey,
   });
 
   @override
@@ -1058,7 +1241,10 @@ class APIChemisorbReport {
       stats.hashCode ^
       rows.hashCode ^
       inventoryOptions.hashCode ^
-      reachUsed.hashCode;
+      reachUsed.hashCode ^
+      debugSelectedRow.hashCode ^
+      debugSelectedForm.hashCode ^
+      debugTreeKey.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -1068,7 +1254,10 @@ class APIChemisorbReport {
           stats == other.stats &&
           rows == other.rows &&
           inventoryOptions == other.inventoryOptions &&
-          reachUsed == other.reachUsed;
+          reachUsed == other.reachUsed &&
+          debugSelectedRow == other.debugSelectedRow &&
+          debugSelectedForm == other.debugSelectedForm &&
+          debugTreeKey == other.debugTreeKey;
 }
 
 /// One listed candidate (twin of `ChemisorbRowView`), kcal/mol throughout.

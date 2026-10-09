@@ -13,6 +13,8 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
     as sd_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/node_jobs_api.dart'
     as node_jobs_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/chemisorb_api.dart'
+    as chemisorb_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/library_links_api.dart'
     as library_links_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/documents_api.dart'
@@ -316,6 +318,9 @@ class AiAssistantServer {
             break;
           case '/run':
             _handleRun(request);
+            break;
+          case '/debug-select':
+            _handleDebugSelect(request);
             break;
           case '/camera':
             _handleCamera(request);
@@ -632,6 +637,46 @@ class AiAssistantServer {
       onNetworkEdited?.call();
       request.response.headers.contentType = ContentType.text;
       request.response.write(summary);
+    } catch (e) {
+      onNetworkEdited?.call();
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(jsonEncode({
+        'error': e.toString(),
+      }));
+    }
+  }
+
+  /// Selects a row of a `chemisorb` node's search tree for its debug pins
+  /// (`design_chemisorption_sequential.md` §6.5) — the panel's tree click, by
+  /// path. Blocking: a relaxed row the search did not keep is replayed before
+  /// this returns. Answers with the row's description and its children, the
+  /// paths an agent goes one level deeper with.
+  void _handleDebugSelect(HttpRequest request) {
+    if (request.method != 'POST') {
+      request.response.statusCode = HttpStatus.methodNotAllowed;
+      return;
+    }
+    final params = request.uri.queryParameters;
+    final nodeIdentifier = params['node'];
+    if (nodeIdentifier == null || nodeIdentifier.isEmpty) {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(jsonEncode({
+        'error': 'Missing required parameter: node',
+      }));
+      return;
+    }
+    try {
+      final text = chemisorb_api.chemisorbDebugSelectByName(
+        nodeIdentifier: nodeIdentifier,
+        path: params['path'] ?? '',
+        form: params['form'] ?? '',
+        showPins: params['show'] == 'true',
+      );
+      onNetworkEdited?.call();
+      request.response.headers.contentType = ContentType.text;
+      request.response.write(text);
     } catch (e) {
       onNetworkEdited?.call();
       request.response.statusCode = HttpStatus.badRequest;

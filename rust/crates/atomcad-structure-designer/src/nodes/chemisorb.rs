@@ -50,6 +50,18 @@
 //!
 //! The panel's data goes into `context.selected_node_eval_cache`
 //! ([`ChemisorbEvalCache`]) on root evaluations, as `proxy` and `relax` do.
+//!
+//! **The debug view** (pins 2 and 3, design §6.5) shows one row of the search
+//! tree: `debug` the row's structure with its markings, `debug_shapes` its
+//! search shapes. Selecting a row is an action (`chemisorb_ops.rs`), never
+//! evaluation: it builds the view — relaxing, as a node job, when the row is a
+//! relaxed one that is not a kept candidate — and stores it with the input
+//! fingerprint ([`ChemisorbData::debug`], like the search result: not saved,
+//! not undoable, and not fingerprinted itself). Evaluation outputs the stored
+//! view while the fingerprint matches, and otherwise the **root view** (the
+//! posed inputs, the feet, their anchor sites, the `anchor_reach` spheres),
+//! which it builds itself: geometry alone, as cheap as `plan`, so it follows
+//! `anchor_reach` live with no click and no Run.
 
 use crate::data_type::{DataType, RecordType};
 use crate::evaluator::network_evaluator::NetworkEvaluationContext;
@@ -69,12 +81,16 @@ use crate::text_format::TextValue;
 use atomcad_crystolecule::atomic_constants::element_symbol;
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::chemisorption::sequential::{
-    Candidate, LevelStats, PlanStats, SearchReport, SequentialPlan, SequentialSearch, plan,
+    Candidate, ChildVerdict, DebugForm, DebugShapes, DebugView, LevelStats, Mirror, NO_ROW,
+    PlanStats, RowKind, SHAPE_ALPHA, SHAPE_COLOR, SHAPE_LEVEL, SearchReport, SearchTree,
+    SequentialPlan, SequentialSearch, child_verdict, plan, relaxation, root_view, row_forms,
+    row_label, row_path, shown_row,
 };
 use atomcad_crystolecule::chemisorption::{
     BondInventory, TransferDirection, TransferRule, input_fingerprint, inventory_options,
     is_transferable_element,
 };
+use atomcad_crystolecule::field::isosurface::{IsosurfaceColoring, IsosurfaceData, LevelBasis};
 use atomcad_crystolecule::simulation::uff::VdwMode;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -94,6 +110,8 @@ pub const TRANSFERS_INPUT_PIN: usize = 2;
 /// Output pin indices.
 pub const CANDIDATES_OUTPUT_PIN: usize = 0;
 pub const STATS_OUTPUT_PIN: usize = 1;
+pub const DEBUG_OUTPUT_PIN: usize = 2;
+pub const DEBUG_SHAPES_OUTPUT_PIN: usize = 3;
 
 /// The van der Waals cutoff `relax` uses when the preference asks for one.
 const VDW_CUTOFF: f64 = 6.0;
@@ -137,8 +155,16 @@ pub struct StoredSearch {
     pub report: SearchReport,
 }
 
+/// The debug view of one tree row, built by the select action
+/// (`chemisorb_ops.rs`) for inputs with this fingerprint.
+#[derive(Debug)]
+pub struct StoredDebug {
+    pub fingerprint: u64,
+    pub view: DebugView,
+}
+
 /// Node data for `chemisorb`: the search settings (all persisted, all text
-/// properties) and the last search result (neither).
+/// properties), the last search result and the debug view (neither).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChemisorbData {
     /// Adsorbate reactive atoms: those carrying this tag. Empty = all atoms.
@@ -195,6 +221,12 @@ pub struct ChemisorbData {
     /// inputs, and the fingerprint keeps a copied or outdated one harmless.
     #[serde(skip)]
     pub stored: Option<Arc<StoredSearch>>,
+    /// The selected row's debug view, written only by the select action. Like
+    /// `stored`: never saved, never an undo step, output only while the
+    /// fingerprint matches. A selection is UI state, not a search setting, so
+    /// nothing fingerprints it.
+    #[serde(skip)]
+    pub debug: Option<Arc<StoredDebug>>,
 }
 
 impl Default for ChemisorbData {
@@ -214,6 +246,7 @@ impl Default for ChemisorbData {
             budget: default_budget(),
             max_iterations: default_max_iterations(),
             stored: None,
+            debug: None,
         }
     }
 }
@@ -381,6 +414,234 @@ pub struct ChemisorbEvalCache {
     /// `reach` is read: a local phase follows, or a transfer rule is wired.
     /// The panel greys it out otherwise.
     pub reach_used: bool,
+    /// What the debug tree is read from.
+    pub tree: ChemisorbTree,
+    /// The row the debug pins show and its form; `None` = the root view.
+    pub debug_selected: Option<(u32, DebugForm)>,
+    /// Identifies the tree: the input fingerprint. Row numbers stay valid while
+    /// it holds (a run only appends the local rows), so the panel drops what it
+    /// fetched of the tree when it, or `stats.searched`, changes.
+    pub tree_key: u64,
+}
+
+/// A search tree and what its rows refer to, shared with the node through an
+/// `Arc`, never copied: the plan of this evaluation, or the stored search
+/// matching the inputs (whose tree extends the plan's with the local phase).
+#[derive(Debug, Clone)]
+pub enum ChemisorbTree {
+    Plan {
+        plan: Arc<SequentialPlan>,
+        clash_filter: bool,
+    },
+    Search {
+        search: Arc<StoredSearch>,
+        clash_filter: bool,
+    },
+}
+
+impl ChemisorbTree {
+    pub fn plan(&self) -> &SequentialPlan {
+        match self {
+            ChemisorbTree::Plan { plan, .. } => plan,
+            ChemisorbTree::Search { search, .. } => &search.plan,
+        }
+    }
+
+    pub fn report(&self) -> Option<&SearchReport> {
+        match self {
+            ChemisorbTree::Plan { .. } => None,
+            ChemisorbTree::Search { search, .. } => Some(&search.report),
+        }
+    }
+
+    pub fn tree(&self) -> &SearchTree {
+        self.report().map_or(&self.plan().tree, |r| &r.tree)
+    }
+
+    fn clash_filter(&self) -> bool {
+        match self {
+            ChemisorbTree::Plan { clash_filter, .. }
+            | ChemisorbTree::Search { clash_filter, .. } => *clash_filter,
+        }
+    }
+}
+
+/// What a debug row stands for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChemisorbDebugRowKind {
+    Root,
+    Foot,
+    Leg,
+}
+
+/// One row of the debug tree, as the panel lists it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ChemisorbDebugRowView {
+    pub row: u32,
+    pub parent: Option<u32>,
+    pub kind: ChemisorbDebugRowKind,
+    pub legs: u32,
+    /// `root`, `foot O12`, or the leg the row adds, `O12–Si45`.
+    pub label: String,
+    /// The CLI's path to the row (`12-45,13-61`).
+    pub path: String,
+    /// A duplicate path: the canonical row of its change set.
+    pub duplicate_of: Option<u32>,
+    /// Children listed with duplicates hidden, and the duplicates hidden.
+    pub children: u32,
+    pub hidden_duplicates: u32,
+    /// The children by the verdict on what they reach (duplicates included).
+    pub candidates: u32,
+    pub mirrored: u32,
+    pub undecided: u32,
+    pub clashes: u32,
+    /// Children rejected for want of valence, of an H acceptor, by the
+    /// inventory filter.
+    pub rejected_valence: u32,
+    pub rejected_no_acceptor: u32,
+    pub rejected_filter: u32,
+    /// The sites just outside the next leg's test, e.g. `Si52 +0.27`.
+    pub near_misses: Vec<String>,
+    /// The row's own hypothesis: a candidate, a local-phase parent, its
+    /// mirror verdict (three legs), whether its seating clashes and whether
+    /// that pruned it.
+    pub candidate: bool,
+    pub local_parent: bool,
+    pub mirror: Option<Mirror>,
+    pub seating_clash: bool,
+    pub pruned_clash: bool,
+    /// The relaxation recorded for this path (a local duplicate has its own;
+    /// a geometric one shares its canonical row's), kcal/mol.
+    pub strain: Option<f64>,
+    pub converged: bool,
+    /// The row was to be relaxed and the budget ran out first.
+    pub budget_cut: bool,
+    /// The forms it can be shown in, and the one it opens on.
+    pub can_seat: bool,
+    pub can_relax: bool,
+    pub default_form: DebugForm,
+}
+
+impl ChemisorbEvalCache {
+    /// Row `row` of the debug tree, `None` past its end.
+    pub fn debug_row(&self, row: u32) -> Option<ChemisorbDebugRowView> {
+        ((row as usize) < self.tree.tree().len()).then(|| debug_row_view(&self.tree, row))
+    }
+
+    /// The children of `row` the panel lists: duplicates only when asked. A
+    /// display option, nothing more: the tree is the same either way.
+    pub fn debug_children(&self, row: u32, show_duplicates: bool) -> Vec<ChemisorbDebugRowView> {
+        let tree = self.tree.tree();
+        if row as usize >= tree.len() {
+            return Vec::new();
+        }
+        tree.visible_children(row, show_duplicates)
+            .into_iter()
+            .map(|c| debug_row_view(&self.tree, c))
+            .collect()
+    }
+
+    /// The rows from the root down to `row`, both included: what the panel
+    /// expands to reveal it.
+    pub fn debug_ancestors(&self, row: u32) -> Vec<u32> {
+        let tree = self.tree.tree();
+        if row as usize >= tree.len() {
+            return Vec::new();
+        }
+        let mut out = vec![row];
+        let mut r = row;
+        while tree.row(r).parent != NO_ROW {
+            r = tree.row(r).parent;
+            out.push(r);
+        }
+        out.reverse();
+        out
+    }
+}
+
+/// The panel's view of one row: the tree's counts, and what became of the
+/// row's own hypothesis.
+fn debug_row_view(source: &ChemisorbTree, row: u32) -> ChemisorbDebugRowView {
+    let plan = source.plan();
+    let report = source.report();
+    let tree = source.tree();
+    let r = tree.row(row);
+    let forms = row_forms(plan, report, row);
+    let mut v = ChemisorbDebugRowView {
+        row,
+        parent: (r.parent != NO_ROW).then_some(r.parent),
+        kind: match r.kind {
+            RowKind::Root => ChemisorbDebugRowKind::Root,
+            RowKind::Foot(_) => ChemisorbDebugRowKind::Foot,
+            RowKind::Leg { .. } => ChemisorbDebugRowKind::Leg,
+        },
+        legs: r.legs as u32,
+        label: row_label(&plan.setup, tree, row),
+        path: row_path(&plan.setup, tree, row),
+        duplicate_of: r.duplicate_of,
+        children: 0,
+        hidden_duplicates: r.duplicates,
+        candidates: 0,
+        mirrored: 0,
+        undecided: 0,
+        clashes: 0,
+        rejected_valence: r.rejected_valence,
+        rejected_no_acceptor: r.rejected_no_acceptor,
+        rejected_filter: r.rejected_filter,
+        near_misses: tree
+            .near_misses(row)
+            .iter()
+            .map(|n| {
+                let site = &plan.setup.sites[n.site as usize];
+                format!("{}{} +{:.2}", element_symbol(site.element), site.id, n.miss)
+            })
+            .collect(),
+        candidate: false,
+        local_parent: false,
+        mirror: None,
+        seating_clash: false,
+        pruned_clash: false,
+        strain: None,
+        converged: false,
+        budget_cut: false,
+        can_seat: forms.seated,
+        can_relax: forms.relaxed,
+        default_form: forms.default,
+    };
+    for &c in tree.children(row) {
+        if tree.row(c).duplicate_of.is_none() {
+            v.children += 1;
+        }
+        match child_verdict(plan, report, c) {
+            ChildVerdict::Candidate => v.candidates += 1,
+            ChildVerdict::Mirrored => v.mirrored += 1,
+            ChildVerdict::Undecided => v.undecided += 1,
+            ChildVerdict::Clash => v.clashes += 1,
+        }
+    }
+    let canonical = shown_row(tree, row);
+    if let Some(index) = tree.row(canonical).hypothesis {
+        let h = match report {
+            Some(rep) => rep.hypothesis(plan, index as usize),
+            None => &plan.hypotheses[index as usize],
+        };
+        v.candidate = h.candidate;
+        v.local_parent = h.parent;
+        v.mirror = h.mirror;
+        v.seating_clash = h.seating.as_ref().is_some_and(|s| s.clashes());
+        v.pruned_clash = v.seating_clash && source.clash_filter();
+    }
+    if let Some(rep) = report {
+        if let Some(x) = relaxation(rep, row).or_else(|| relaxation(rep, canonical)) {
+            v.strain = Some(x.strain);
+            v.converged = x.converged;
+        }
+        v.budget_cut = (v.candidate || v.local_parent)
+            && !v.pruned_clash
+            && v.mirror != Some(Mirror::Mirrored)
+            && relaxation(rep, canonical).is_none();
+    }
+    v
 }
 
 impl ChemisorbData {
@@ -703,7 +964,25 @@ fn plan_inventories(p: &SequentialPlan) -> impl Iterator<Item = (&BondInventory,
         .map(|h| (&h.inventory, h.legs()))
 }
 
-/// The two outputs and the panel's data for one evaluation, from the current
+/// The `debug_shapes` output: the shapes as a translucent isosurface, or
+/// nothing.
+pub fn shapes_result(shapes: &Option<DebugShapes>) -> NetworkResult {
+    match shapes {
+        Some(shapes) => NetworkResult::Isosurface(IsosurfaceData {
+            field: Arc::new(shapes.clone()),
+            level: SHAPE_LEVEL,
+            level_basis: LevelBasis::Absolute,
+            coloring: IsosurfaceColoring::Phase {
+                positive: SHAPE_COLOR,
+                negative: SHAPE_COLOR,
+            },
+            alpha: SHAPE_ALPHA,
+        }),
+        None => NetworkResult::None,
+    }
+}
+
+/// The four outputs and the panel's data for one evaluation, from the current
 /// inputs and whatever is stored. Relaxes nothing.
 pub fn chemisorb_outputs(
     data: &ChemisorbData,
@@ -712,19 +991,44 @@ pub fn chemisorb_outputs(
     config: &SequentialSearch,
 ) -> Result<(Vec<NetworkResult>, ChemisorbEvalCache), String> {
     let fingerprint = input_fingerprint(adsorbate, substrate, config);
-    let stored = data.matching_search(fingerprint);
+    let stored_arc = data
+        .stored
+        .as_ref()
+        .filter(|s| s.fingerprint == fingerprint);
+    let stored = stored_arc.map(|s| &**s);
 
     // The plan (the stored one when it matches: the same inputs make the same
     // plan), and the dropdown's choices from a plan without the inventory
     // filter. Cheap: nothing is relaxed.
-    let fresh;
-    let planned = match stored {
-        Some(s) => &s.plan,
+    let tree = match stored_arc {
+        Some(s) => ChemisorbTree::Search {
+            search: s.clone(),
+            clash_filter: config.clash_filter,
+        },
+        None => ChemisorbTree::Plan {
+            plan: Arc::new(
+                plan(adsorbate, substrate, config).map_err(|e| format!("chemisorb: {e}"))?,
+            ),
+            clash_filter: config.clash_filter,
+        },
+    };
+    let planned = tree.plan();
+
+    // The debug pins: the selected row while it matches, else the root view.
+    let selected = data.debug.as_ref().filter(|d| d.fingerprint == fingerprint);
+    let debug_selected = selected.map(|d| (d.view.row, d.view.form));
+    let root;
+    let view = match selected {
+        Some(d) => &d.view,
         None => {
-            fresh = plan(adsorbate, substrate, config).map_err(|e| format!("chemisorb: {e}"))?;
-            &fresh
+            root = root_view(planned, config);
+            &root
         }
     };
+    let debug_outputs = [
+        molecule(view.structure.clone()),
+        shapes_result(&view.shapes),
+    ];
     let inventory_options = if config.bond_inventory.is_some() {
         let unfiltered = SequentialSearch {
             bond_inventory: None,
@@ -772,7 +1076,13 @@ pub fn chemisorb_outputs(
             .zip(&report.candidates)
             .map(|(row, c)| candidate_record(row, &c.structure))
             .collect();
-        let outputs = vec![NetworkResult::Array(records), stats_record(&stats)];
+        let [debug, shapes] = debug_outputs;
+        let outputs = vec![
+            NetworkResult::Array(records),
+            stats_record(&stats),
+            debug,
+            shapes,
+        ];
         return Ok((
             outputs,
             ChemisorbEvalCache {
@@ -780,6 +1090,9 @@ pub fn chemisorb_outputs(
                 rows,
                 inventory_options,
                 reach_used,
+                tree,
+                debug_selected,
+                tree_key: fingerprint,
             },
         ));
     }
@@ -789,7 +1102,13 @@ pub fn chemisorb_outputs(
         stale: data.stored.is_some(),
         ..ChemisorbStatsView::of_plan(&planned.stats)
     };
-    let outputs = vec![NetworkResult::Array(Vec::new()), stats_record(&stats)];
+    let [debug, shapes] = debug_outputs;
+    let outputs = vec![
+        NetworkResult::Array(Vec::new()),
+        stats_record(&stats),
+        debug,
+        shapes,
+    ];
     Ok((
         outputs,
         ChemisorbEvalCache {
@@ -797,6 +1116,9 @@ pub fn chemisorb_outputs(
             rows: Vec::new(),
             inventory_options,
             reach_used,
+            tree,
+            debug_selected,
+            tree_key: fingerprint,
         },
     ))
 }
@@ -822,7 +1144,7 @@ impl NodeData for ChemisorbData {
         _decorate: bool,
         context: &mut NetworkEvaluationContext,
     ) -> EvalOutput {
-        let all_pins = |v: NetworkResult| EvalOutput::multi(vec![v.clone(), v]);
+        let all_pins = |v: NetworkResult| EvalOutput::multi(vec![v; 4]);
 
         let adsorbate = network_evaluator.evaluate_arg_required(
             network_stack,
@@ -880,6 +1202,11 @@ impl NodeData for ChemisorbData {
             && let Some(previous) = previous.as_any_ref().downcast_ref::<ChemisorbData>()
         {
             self.stored = previous.stored.clone();
+        }
+        if self.debug.is_none()
+            && let Some(previous) = previous.as_any_ref().downcast_ref::<ChemisorbData>()
+        {
+            self.debug = previous.debug.clone();
         }
     }
 
@@ -1077,7 +1404,9 @@ pub fn get_node_type() -> NodeType {
                       (exactly this inventory, as in a candidate's `bonds` field) before \
                       reading the ranking. **top_n** and **energy_window** (kcal/mol above \
                       the best) choose which relaxed candidates are kept. Every setting \
-                      needs a new Run. Changed atoms carry the `cs_changed` tag."
+                      needs a new Run. Changed atoms carry the `cs_changed` tag.
+                      
+                      **Debug view.** The panel's search tree lists every path the search                       took (root, the leg-1 foot, then one leg per level). Selecting a row                       shows it on `debug`: the structure posed, seated or relaxed, bonded                       pairs orange, unbonded feet violet, the sites the next leg's test                       accepts green, near misses yellow (labelled with how far they missed),                       mirror-pruned blue, undecided cyan, clashing red, the rest of the                       substrate dimmed. `debug_shapes` draws the row's search shapes: the                       `anchor_reach` spheres, the leg-2 shell, the leg-3 ring, the `reach`                       spheres of the local phase. With no row selected (or after the inputs                       change) both show the root: every foot and its anchor sites."
             .to_string(),
         summary: Some("Find and rank chemisorption bindings leg by leg".to_string()),
         category: NodeTypeCategory::AtomicStructure,
@@ -1108,6 +1437,10 @@ pub fn get_node_type() -> NodeType {
                 DataType::Array(Box::new(named(CHEMISORB_CANDIDATE_RECORD))),
             ),
             OutputPinDefinition::fixed("stats", named(CHEMISORB_STATS_RECORD)),
+            // The debug view (§6.5): the selected tree row, and its search
+            // shapes. Each pin can be shown on its own.
+            OutputPinDefinition::fixed("debug", DataType::Molecule),
+            OutputPinDefinition::fixed("debug_shapes", DataType::Isosurface),
         ],
         zone_input_pins: vec![],
         zone_output_pins: vec![],

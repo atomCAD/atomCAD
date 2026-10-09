@@ -66,7 +66,15 @@ Built-in node type implementations. Each file defines one node type's behavior v
   the report** (`StoredSearch`): the report numbers its hypotheses after the
   plan's and extends its tree, and `replay` (the debug view's re-relaxation)
   needs both. Its outputs were renumbered once, when the `best` pin was
-  removed (`candidates` 0, `stats` 1); append from here on.
+  removed (`candidates` 0, `stats` 1); append from here on. Pins 2 and 3
+  (`debug`, `debug_shapes`) are the **debug view**: selecting a search-tree
+  row is an action like Run (`prepare_chemisorb_debug` in `chemisorb_ops.rs` —
+  built at once when the view is geometry, a node job when it must replay a
+  relaxation), and its result is a second fingerprint-keyed runtime field,
+  `ChemisorbData::debug`, carried by `inherit_runtime_state` like `stored`.
+  The one debug structure `eval` builds itself is the **root view**, because
+  it is geometry alone and must follow `anchor_reach` live; never build any
+  other row's view in `eval`.
 - **Region-gated atom ops (`doc/design_blueprint_region_atom_edits.md` Part A):** `passivate`, `remove_hydrogen`, `infer_bonds`, `atom_replace`, and the metadata-edit pair `freeze`/`unfreeze` (`freeze.rs`) each carry an **optional `region: Blueprint` input pin as their last pin**, gating the op to atoms inside that volume. The shared seam and the rules for adding another such op are in **`evaluator/atom_op.rs`**'s module doc.
 - **Movement (polymorphic over abstract inputs):** `structure_move`, `structure_rot` on `HasStructure`; `free_move`, `free_rot` on `HasFreeLinOps`; `lattice_symop`. The four `structure_*`/`free_*` movement nodes keep a `same_as_input("result","input")` pin-0 (concrete type flows through) but are now **two-output** (`[result, diff]`, see the diff-output bullet below); `lattice_symop` is unchanged single-output.
 - **Diff output pins (issue #295, `doc/design_diff_outputs_for_atom_ops.md`):** `relax`, the four movement nodes (`free_move`/`free_rot`/`structure_move`/`structure_rot`), `atom_replace`, and `atom_cut` each carry a **second `diff` output pin** (pin 1) alongside `result` (pin 0) — the same two-pin shape as `atom_edit`. The snapshot→`extract_diff`→`multi` pattern, the shared helpers, and the traps (every error path must return **two**-pin errors; do not override `default_display_all_output_pins`) are in **`evaluator/atom_op.rs`**'s module doc.

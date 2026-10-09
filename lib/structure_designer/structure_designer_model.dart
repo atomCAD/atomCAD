@@ -3907,6 +3907,38 @@ class StructureDesignerModel extends ChangeNotifier {
     } catch (e) {
       return e.toString();
     }
+    _jobStarted(scopePath, nodeId, jobId);
+    return null;
+  }
+
+  /// Selects row [row] of `chemisorb` node [nodeId]'s search tree for its
+  /// `debug` and `debug_shapes` pins (`design_chemisorption_sequential.md`
+  /// §6.5), in [form] or, when `null`, the form the row opens on. A view that
+  /// is geometry alone shows at once; a relaxed row the search did not keep is
+  /// replayed as a node job, with the progress and the outcome of any job.
+  /// Not an undo step. Returns the kernel's message when it refuses, `null`
+  /// otherwise.
+  String? chemisorbDebugSelect(BigInt nodeId, int row,
+      {APIChemisorbDebugForm? form}) {
+    final scopePath = scopeChainToBytes(propertyEditorScopeChain);
+    final BigInt? jobId;
+    try {
+      jobId = chemisorb_api.chemisorbDebugSelect(
+          scopePath: scopePath, nodeId: nodeId, row: row, form: form);
+    } catch (e) {
+      return e.toString();
+    }
+    if (jobId == null) {
+      refreshFromKernel();
+    } else {
+      _jobStarted(scopePath, nodeId, jobId);
+    }
+    return null;
+  }
+
+  /// A job the kernel has just started: shown until the first poll replaces
+  /// it, and the poller woken.
+  void _jobStarted(Uint64List scopePath, BigInt nodeId, BigInt jobId) {
     // Shown until the first poll replaces it, so the panel turns Run into
     // Cancel on the next frame — a double click must not reach the kernel's
     // "already running" refusal. Not a poll: a poll can carry outcomes, and
@@ -3930,7 +3962,6 @@ class StructureDesignerModel extends ChangeNotifier {
       ];
     }
     onNodeJobStarted?.call();
-    return null;
   }
 
   /// Asks job [jobId] to stop; the poll reports it cancelled once its worker

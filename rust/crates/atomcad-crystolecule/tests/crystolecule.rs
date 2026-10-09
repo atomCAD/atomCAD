@@ -177,6 +177,8 @@ mod mechanosynth_place_test;
 mod bond_enthalpy_test;
 
 // The chemisorption search (design_chemisorption_sequential.md).
+#[path = "crystolecule/chemisorption_sequential_debug_test.rs"]
+mod chemisorption_sequential_debug_test;
 #[path = "crystolecule/chemisorption_sequential_golden_test.rs"]
 mod chemisorption_sequential_golden_test;
 #[path = "crystolecule/chemisorption_sequential_local_test.rs"]

@@ -19,6 +19,10 @@ it is an ordinary command-line tool and nothing about it is AI-specific.
 - `atomcad-cli run <node>` presses a [`chemisorb`](./nodes/atomic.md#chemisorb)
   node's **Run** button: evaluation never runs that search, so without `run` a
   script only ever sees the node's plan.
+- `atomcad-cli debug-select <node> [<path>] [--form seated|relaxed] [--show]`
+  clicks a row of a `chemisorb` node's search tree: the row shows on the node's
+  `debug` and `debug_shapes` pins (`--show` displays them), and the command
+  prints what it marks and its children's paths, to go one level deeper.
 
 Query output is valid input to `edit --replace`, so a whole network can be read,
 adjusted in a text editor, and applied back.

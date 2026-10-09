@@ -479,8 +479,28 @@ pub fn replay(
     config: &SequentialSearch,
     row: u32,
 ) -> Result<Replayed, ChemisorptionError> {
+    let (mut s, steps) = replay_start(plan, report, config, row)?;
+    let relaxed = relax(&mut s, &config.relax_settings())?;
+    Ok(Replayed {
+        strain: relaxed.energy - report.reference_energy,
+        structure: s,
+        relaxed,
+        steps,
+    })
+}
+
+/// The start geometry of tree row `row`, as the search relaxed it from, and
+/// the legs along its path: a geometric row's seating (a function of its
+/// change set, so a duplicate row seats as its canonical row), a local-phase
+/// row's relaxed parent (replayed) plus its own leg. Relaxes only the
+/// ancestors of a local-phase row.
+pub fn replay_start(
+    plan: &SequentialPlan,
+    report: &SearchReport,
+    config: &SequentialSearch,
+    row: u32,
+) -> Result<(AtomicStructure, Vec<Step>), ChemisorptionError> {
     let setup = &plan.setup;
-    let settings = config.relax_settings();
     let r = report.tree.row(row);
     let RowKind::Leg {
         foot,
@@ -489,10 +509,10 @@ pub fn replay(
     } = r.kind
     else {
         return Err(ChemisorptionError::InvalidConfig(
-            "only a row with a bonded leg has a relaxed state".into(),
+            "only a row with a bonded leg has a start geometry".into(),
         ));
     };
-    let (mut s, steps) = if r.legs as usize <= GEOMETRIC_LEGS {
+    if r.legs as usize <= GEOMETRIC_LEGS {
         let canonical = r.duplicate_of.unwrap_or(row);
         let index = report
             .tree
@@ -504,33 +524,25 @@ pub fn replay(
             Some(s) => s.clone(),
             None => setup.seat(&h.steps),
         };
-        (setup.start_structure(&h.steps, &seating), h.steps.clone())
-    } else {
-        let parent = replay(plan, report, config, r.parent)?;
-        let index = report
-            .tree
-            .row(r.parent)
-            .hypothesis
-            .expect("a parent row is canonical") as usize;
-        let h = report.hypothesis(plan, index);
-        let step = Step {
-            leg: Leg {
-                foot: foot as usize,
-                site: site as usize,
-            },
-            acceptor: acceptor.map(|a| a as usize),
-        };
-        let positions = setup.movable_positions(&parent.structure);
-        let (s, _) = setup.grown_structure(&h.steps, &moved_of(h), &positions, step);
-        let mut steps = parent.steps;
-        steps.push(step);
-        (s, steps)
+        return Ok((setup.start_structure(&h.steps, &seating), h.steps.clone()));
+    }
+    let parent = replay(plan, report, config, r.parent)?;
+    let index = report
+        .tree
+        .row(r.parent)
+        .hypothesis
+        .expect("a parent row is canonical") as usize;
+    let h = report.hypothesis(plan, index);
+    let step = Step {
+        leg: Leg {
+            foot: foot as usize,
+            site: site as usize,
+        },
+        acceptor: acceptor.map(|a| a as usize),
     };
-    let relaxed = relax(&mut s, &settings)?;
-    Ok(Replayed {
-        strain: relaxed.energy - report.reference_energy,
-        structure: s,
-        relaxed,
-        steps,
-    })
+    let positions = setup.movable_positions(&parent.structure);
+    let (s, _) = setup.grown_structure(&h.steps, &moved_of(h), &positions, step);
+    let mut steps = parent.steps;
+    steps.push(step);
+    Ok((s, steps))
 }

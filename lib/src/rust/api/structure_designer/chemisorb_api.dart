@@ -7,7 +7,8 @@ import '../../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'structure_designer_api_types.dart';
 
-// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `chemisorb_node_data`, `chemisorb_node_report`, `set_chemisorb_node_data`
+// These functions are ignored because they are not marked as `pub`: `selected_cache`
+// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `chemisorb_debug_children`, `chemisorb_debug_row`, `chemisorb_debug_select_named`, `chemisorb_node_data`, `chemisorb_node_report`, `set_chemisorb_node_data`
 
 APIChemisorbData? getChemisorbData(
         {required Uint64List scopePath, required BigInt nodeId}) =>
@@ -23,3 +24,51 @@ void setChemisorbData(
 
 APIChemisorbReport? getChemisorbReport() => RustLib.instance.api
     .crateApiStructureDesignerChemisorbApiGetChemisorbReport();
+
+/// Row `row` of the selected `chemisorb` node's search tree; `None` when no
+/// `chemisorb` is selected and evaluated, or past the tree's end.
+APIChemisorbDebugRow? getChemisorbDebugRow({required int row}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerChemisorbApiGetChemisorbDebugRow(row: row);
+
+/// The children of `row` in the selected `chemisorb` node's search tree,
+/// duplicates only when `show_duplicates`.
+List<APIChemisorbDebugRow> getChemisorbDebugChildren(
+        {required int row, required bool showDuplicates}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerChemisorbApiGetChemisorbDebugChildren(
+            row: row, showDuplicates: showDuplicates);
+
+/// The rows from the root down to `row`: what the panel expands to reveal it
+/// (a duplicate row's "jump to the canonical one").
+Uint32List getChemisorbDebugAncestors({required int row}) => RustLib
+    .instance.api
+    .crateApiStructureDesignerChemisorbApiGetChemisorbDebugAncestors(row: row);
+
+/// Selects tree row `row` of a `chemisorb` node for its debug pins, in
+/// `form` (`None` = the row's default). A view that is geometry alone is
+/// built and shown at once (`Ok(None)`); one that needs relaxing starts as a
+/// node job, whose id is returned, and shows when it is installed. Not an
+/// undo step.
+BigInt? chemisorbDebugSelect(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required int row,
+        APIChemisorbDebugForm? form}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerChemisorbApiChemisorbDebugSelect(
+            scopePath: scopePath, nodeId: nodeId, row: row, form: form);
+
+/// The CLI's `debug-select`, through the AI HTTP server: blocking; the row's
+/// description and its children as text.
+String chemisorbDebugSelectByName(
+        {required String nodeIdentifier,
+        required String path,
+        required String form,
+        required bool showPins}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerChemisorbApiChemisorbDebugSelectByName(
+            nodeIdentifier: nodeIdentifier,
+            path: path,
+            form: form,
+            showPins: showPins);

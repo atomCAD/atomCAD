@@ -384,7 +384,7 @@ fn the_outputs_are_candidates_then_stats() {
         .iter()
         .map(|p| p.name.as_str())
         .collect();
-    assert_eq!(pins, ["candidates", "stats"]);
+    assert_eq!(pins, ["candidates", "stats", "debug", "debug_shapes"]);
     let field_names = |record: &str| -> Vec<String> {
         registry
             .lookup_record_type_def(record)
@@ -1878,4 +1878,375 @@ fn a_search_landing_in_a_parked_document_shows_when_it_is_activated() {
         .expect("chemisorb eval cache");
     assert!(after.stats.searched);
     assert_eq!(after.rows.len(), 3);
+}
+
+// ============================================================================
+// The debug view (design §6.5, §11.8)
+// ============================================================================
+//
+// The cage over the three silyls: one-, two- and three-leg rows, small
+// enough to Run in well under a second. The views themselves are tested in
+// `atomcad-crystolecule`'s `chemisorption_sequential_debug_test.rs`; what is
+// exercised here is what the node adds: the two appended pins, the root view
+// evaluation builds, the select action (geometry at once, relaxation as a
+// job), the fingerprint, and that a selection is neither saved, undone nor a
+// search setting.
+
+use atomcad_crystolecule::chemisorption::sequential::{DebugForm, SHAPE_LEVEL};
+use atomcad_crystolecule::field::ScalarField;
+use atomcad_structure_designer::chemisorb_ops::{ChemisorbDebugStep, DebugRowRef};
+use atomcad_structure_designer::node_jobs::JobWork;
+use atomcad_structure_designer::nodes::chemisorb::ChemisorbDebugRowKind;
+
+/// All four outputs.
+fn all_outputs(designer: &mut StructureDesigner, network: &str, node: u64) -> Vec<NetworkResult> {
+    let network = network.to_string();
+    designer.with_eval_context(false, |evaluator, registry, _prefs, context| {
+        let net = registry.node_networks.get(&network).unwrap();
+        let stack = vec![NetworkStackElement::root(net)];
+        (0..4)
+            .map(|pin| evaluator.evaluate(&stack, node, pin, registry, false, context))
+            .collect()
+    })
+}
+
+fn shapes_field(v: &NetworkResult) -> Arc<dyn ScalarField> {
+    match v {
+        NetworkResult::Isosurface(iso) => {
+            assert_eq!(iso.level, SHAPE_LEVEL);
+            iso.field.clone()
+        }
+        other => panic!("expected an isosurface, got {:?}", other.infer_data_type()),
+    }
+}
+
+fn cage_network() -> Net {
+    network_with(cage())
+}
+
+/// Selects `row` and installs the view, which must need no relaxation.
+fn select_now(designer: &mut StructureDesigner, node: u64, row: u32, form: Option<DebugForm>) {
+    let prepared = designer
+        .prepare_chemisorb_debug(&[], node, DebugRowRef::Row(row), form)
+        .expect("prepare");
+    let ChemisorbDebugStep::Ready(outcome) = prepared.step else {
+        panic!("row {row} should be geometry alone");
+    };
+    designer
+        .install_job_result(&prepared.target, outcome)
+        .expect("install");
+}
+
+#[test]
+fn the_debug_pins_are_appended_and_show_the_root_view_with_no_selection() {
+    let registry = NodeTypeRegistry::new();
+    let node_type = registry.get_node_type("chemisorb").unwrap();
+    let pins: Vec<(&str, &DataType)> = node_type
+        .output_pins
+        .iter()
+        .map(|p| (p.name.as_str(), p.fixed_type().expect("fixed")))
+        .collect();
+    assert_eq!(pins[2], ("debug", &DataType::Molecule));
+    assert_eq!(pins[3], ("debug_shapes", &DataType::Isosurface));
+
+    let Net {
+        mut designer,
+        name,
+        adsorbate,
+        node,
+    } = cage_network();
+    let out = all_outputs(&mut designer, name, node);
+    let root = atoms(&out[2]);
+    // The posed inputs, every foot marked.
+    let cache = designer_eval_cache(&mut designer, name, node);
+    assert_eq!(cache.debug_selected, None);
+    let setup = &cache.tree.plan().setup;
+    assert_eq!(root.get_num_of_atoms(), setup.combined.get_num_of_atoms());
+    for f in &setup.feet {
+        assert!(
+            root.decorator().atom_color.contains_key(&f.id),
+            "foot {}",
+            f.id
+        );
+        assert_eq!(root.get_atom(f.id).unwrap().position, f.position);
+    }
+    // The anchor spheres, radius anchor_reach (3.5 Å).
+    let field = shapes_field(&out[3]);
+    let foot = setup.feet[0].position;
+    let centre = setup.feet.iter().map(|f| f.position).sum::<DVec3>() / 3.0;
+    let out_dir = (foot - centre).normalize();
+    assert!(field.sample(foot + out_dir * 3.4) > SHAPE_LEVEL);
+    assert!(field.sample(foot + out_dir * 3.6) < SHAPE_LEVEL);
+    // No UFF call: before Run, the node never searched.
+    assert!(!boolean(&fields(&out[1]), "searched"));
+
+    // anchor_reach is followed live, with no click and no Run.
+    set_props(
+        &mut designer,
+        name,
+        node,
+        &[("anchor_reach", TextValue::Float(5.0))],
+    );
+    let out = all_outputs(&mut designer, name, node);
+    let field = shapes_field(&out[3]);
+    assert!(field.sample(foot + out_dir * 4.9) > SHAPE_LEVEL);
+
+    // An upstream error reaches all four pins.
+    set_value(
+        &mut designer,
+        name,
+        adsorbate,
+        NetworkResult::Error("boom".into()),
+    );
+    for v in all_outputs(&mut designer, name, node) {
+        assert!(matches!(v, NetworkResult::Error(_)));
+    }
+}
+
+#[test]
+fn the_eval_cache_lists_the_tree_lazily_with_duplicates_hidden() {
+    let Net {
+        mut designer,
+        name,
+        node,
+        ..
+    } = cage_network();
+    let cache = designer_eval_cache(&mut designer, name, node);
+    let root = cache.debug_row(0).unwrap();
+    assert_eq!(root.kind, ChemisorbDebugRowKind::Root);
+    assert_eq!(root.label, "root");
+    let feet = cache.debug_children(0, false);
+    assert_eq!(feet.len(), 3);
+    assert!(feet.iter().all(|f| f.kind == ChemisorbDebugRowKind::Foot));
+    // Somewhere below, a duplicate is hidden and shown on request.
+    let tree = cache.tree.tree();
+    let parent = (0..tree.len() as u32)
+        .find(|&r| tree.row(r).duplicates > 0)
+        .expect("a row hiding duplicates");
+    let hidden = cache.debug_children(parent, false);
+    let all = cache.debug_children(parent, true);
+    let dups: Vec<_> = all.iter().filter(|r| r.duplicate_of.is_some()).collect();
+    assert_eq!(all.len() - hidden.len(), dups.len());
+    assert_eq!(
+        cache.debug_row(parent).unwrap().hidden_duplicates as usize,
+        dups.len()
+    );
+    // A duplicate jumps to its canonical row: the ancestors reveal it.
+    let canonical = dups[0].duplicate_of.unwrap();
+    let path = cache.debug_ancestors(canonical);
+    assert_eq!(path.first(), Some(&0));
+    assert_eq!(path.last(), Some(&canonical));
+    for w in path.windows(2) {
+        assert_eq!(cache.debug_row(w[1]).unwrap().parent, Some(w[0]));
+    }
+    // Toggling the duplicates changes nothing in the tree or its identity.
+    let again = designer_eval_cache(&mut designer, name, node);
+    assert_eq!(again.tree_key, cache.tree_key);
+    assert_eq!(again.tree.tree().len(), tree.len());
+}
+
+#[test]
+fn selecting_a_row_before_run_shows_it_seated_and_searches_nothing() {
+    let Net {
+        mut designer,
+        name,
+        node,
+        ..
+    } = cage_network();
+    let cache = designer_eval_cache(&mut designer, name, node);
+    let tree = cache.tree.tree();
+    let row = (0..tree.len() as u32)
+        .find(|&r| tree.row(r).legs == 2 && !tree.children(r).is_empty())
+        .unwrap();
+    let history = designer.undo_stack.history_len();
+    designer.is_dirty = false;
+    select_now(&mut designer, node, row, None);
+    assert_eq!(
+        designer.undo_stack.history_len(),
+        history,
+        "not an undo step"
+    );
+    assert!(!designer.is_dirty(), "not a dirtying edit");
+
+    let out = all_outputs(&mut designer, name, node);
+    assert!(!boolean(&fields(&out[1]), "searched"), "nothing searched");
+    let shown = atoms(&out[2]);
+    let p = cache.tree.plan();
+    let h = &p.hypotheses[tree.row(row).hypothesis.unwrap() as usize];
+    let seating = h.seating.clone().unwrap_or_else(|| p.setup.seat(&h.steps));
+    let expected = p.setup.start_structure(&h.steps, &seating);
+    assert_eq!(positions(shown), positions(&expected), "seated");
+    let cache = designer_eval_cache(&mut designer, name, node);
+    assert_eq!(cache.debug_selected, Some((row, DebugForm::Seated)));
+    // A relaxed form does not exist yet.
+    let err = designer
+        .prepare_chemisorb_debug(&[], node, DebugRowRef::Row(row), Some(DebugForm::Relaxed))
+        .err()
+        .unwrap();
+    assert!(err.contains("Run first"), "{err}");
+}
+
+#[test]
+fn a_fingerprint_change_shows_the_root_and_undoing_it_brings_the_selection_back() {
+    let Net {
+        mut designer,
+        name,
+        node,
+        ..
+    } = cage_network();
+    designer_eval_cache(&mut designer, name, node);
+    select_now(&mut designer, node, 4, None);
+    assert!(
+        designer_eval_cache(&mut designer, name, node)
+            .debug_selected
+            .is_some()
+    );
+
+    let edited = ChemisorbData {
+        tolerance: 0.7,
+        ..data(&designer, name, node)
+    };
+    designer.set_chemisorb_data(&[], node, edited);
+    let cache = designer_eval_cache(&mut designer, name, node);
+    assert_eq!(
+        cache.debug_selected, None,
+        "another fingerprint: the root view"
+    );
+    assert!(designer.undo());
+    let cache = designer_eval_cache(&mut designer, name, node);
+    assert_eq!(
+        cache.debug_selected.map(|s| s.0),
+        Some(4),
+        "inherited across the edit"
+    );
+}
+
+#[test]
+fn a_selection_is_not_a_search_setting_and_is_not_saved() {
+    use atomcad_structure_designer::serialization::node_networks_serialization::{
+        load_node_networks_from_file, save_node_networks_to_file,
+    };
+    let Net {
+        mut designer,
+        name,
+        node,
+        ..
+    } = cage_network();
+    designer.run_chemisorb(&[], node).unwrap();
+    assert_eq!(searched_and_stale(&mut designer, name, node), (true, false));
+    designer_eval_cache(&mut designer, name, node);
+    select_now(&mut designer, node, 4, Some(DebugForm::Seated));
+    assert_eq!(
+        searched_and_stale(&mut designer, name, node),
+        (true, false),
+        "selecting does not make the result stale"
+    );
+
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("debug.cnnd");
+    save_node_networks_to_file(
+        &mut designer.node_type_registry,
+        &path,
+        false,
+        &HashMap::new(),
+    )
+    .expect("save");
+    assert!(
+        !std::fs::read_to_string(&path)
+            .unwrap()
+            .contains("\"debug\"")
+    );
+    let mut reloaded = StructureDesigner::new();
+    load_node_networks_from_file(&mut reloaded.node_type_registry, path.to_str().unwrap())
+        .expect("load");
+    assert!(data(&reloaded, name, node).debug.is_none());
+}
+
+#[test]
+fn after_run_a_relaxed_row_outside_top_n_is_a_job_that_reproduces_its_strain() {
+    let Net {
+        mut designer,
+        name,
+        node,
+        ..
+    } = cage_network();
+    set_props(&mut designer, name, node, &[("top_n", TextValue::Int(1))]);
+    designer.run_chemisorb(&[], node).unwrap();
+    let search = stored(&designer, name, node).unwrap();
+    let report = &search.report;
+    let kept = report.candidates[0].row;
+    let other = report
+        .relaxed
+        .iter()
+        .find(|r| r.row != kept)
+        .expect("a relaxation outside top N");
+
+    // The kept candidate is shown at once, from its stored structure. (The
+    // best is a two-leg binding the ring is searched from, so it opens
+    // seated: relaxed is asked for.)
+    designer_eval_cache(&mut designer, name, node);
+    select_now(&mut designer, node, kept, Some(DebugForm::Relaxed));
+    let out = all_outputs(&mut designer, name, node);
+    assert_eq!(
+        positions(atoms(&out[2])),
+        positions(&report.candidates[0].structure)
+    );
+
+    // Another relaxed row is replayed, as a job.
+    let prepared = designer
+        .prepare_chemisorb_debug(
+            &[],
+            node,
+            DebugRowRef::Row(other.row),
+            Some(DebugForm::Relaxed),
+        )
+        .unwrap();
+    let ChemisorbDebugStep::Job(work) = prepared.step else {
+        panic!("a relaxed row outside top N needs relaxing");
+    };
+    let result: Box<dyn JobResult> = work.run(None).unwrap();
+    let summary = designer
+        .install_job_result(&prepared.target, result)
+        .unwrap();
+    assert!(summary.contains("shown relaxed"), "{summary}");
+    let view = data(&designer, name, node).debug.unwrap();
+    assert!((view.view.strain.unwrap() - other.strain).abs() < 1e-6);
+    let cache = designer_eval_cache(&mut designer, name, node);
+    assert_eq!(cache.debug_selected, Some((other.row, DebugForm::Relaxed)));
+    // The seated form of the same row is geometry again.
+    select_now(&mut designer, node, other.row, Some(DebugForm::Seated));
+}
+
+#[test]
+fn the_cli_select_reads_a_path_and_installs_what_the_panel_would() {
+    let Net {
+        mut designer,
+        name,
+        node,
+        ..
+    } = cage_network();
+    let cache = designer_eval_cache(&mut designer, name, node);
+    let row = 5;
+    let path = cache.debug_row(row).unwrap().path;
+    let text = designer
+        .chemisorb_debug_select_blocking(&[], node, DebugRowRef::Path(path.clone()), None)
+        .unwrap();
+    assert!(text.starts_with(&format!("row #{row}: ")), "{text}");
+    assert!(text.contains(&format!("path: {path}")), "{text}");
+    assert!(text.contains("children"), "{text}");
+    let by_path = data(&designer, name, node).debug.unwrap();
+    select_now(&mut designer, node, row, None);
+    let by_row = data(&designer, name, node).debug.unwrap();
+    assert_eq!(by_path.view.row, by_row.view.row);
+    assert_eq!(by_path.view.form, by_row.view.form);
+    assert_eq!(
+        positions(&by_path.view.structure),
+        positions(&by_row.view.structure)
+    );
+    assert!(
+        designer
+            .chemisorb_debug_select_blocking(&[], node, DebugRowRef::Path("999-1".into()), None)
+            .unwrap_err()
+            .contains("not a foot")
+    );
 }

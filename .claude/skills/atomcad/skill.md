@@ -600,14 +600,32 @@ inventory, a warning if the budget truncated the search). The result is stored o
 the node and output until an input or a setting changes; it is not saved with
 the file, so after `load` run again. Seconds to minutes.
 
-H transfers (OH legs handing their H to the surface, or feet abstracting
-surface H) are enabled through the optional `transfers` pin — note the
-`Record(Name)` spelling of the element type:
+H transfers (OH legs handing their H to the surface; `to_substrate` only) are
+enabled through the optional `transfers` pin — note the `Record(Name)` spelling
+of the element type:
 
 ```
 h_off = array { element_type: Record(ChemisorbTransfer), elements: [{ element: 1, direction: "to_substrate" }] }
-mount = chemisorb { adsorbate: tool, substrate: surface, transfers: h_off, max_transfers: 3 }
+mount = chemisorb { adsorbate: tool, substrate: surface, adsorbate_tag: "feet", transfers: h_off, formed_bonds: 3 }
 ```
+
+To see what the search did at one step, select a row of its search tree — the
+same as clicking it in the panel. The row shows on the node's `debug` (pin 2,
+the structure with its markings) and `debug_shapes` (pin 3, the search shapes);
+`--show` displays both, then take a `screenshot`:
+
+```bash
+atomcad-cli debug-select mount                  # the root: feet, anchor sites
+atomcad-cli debug-select mount 12 --show        # foot 12's anchors
+atomcad-cli debug-select mount 12-45,13-61      # two legs, seated: the leg-3 ring
+atomcad-cli debug-select mount 12-45,13-61 --form relaxed   # after run
+```
+
+A path is the legs as foot-site atom-id pairs (the ids of a candidate's `sites`
+field), or `#N` for row N. The command prints what the row marks (bonded,
+accepted, mirrored, clashing, near misses with how far they missed) and its
+children's paths. A relaxed row that is not a listed candidate is re-relaxed
+first, so it can take a few seconds.
 
 ### Node Discovery
 
@@ -794,6 +812,7 @@ Commands:
 - `replace`/`r` — Enter edit mode (replace entire network)
 - `evaluate`/`e <node>` — Evaluate a node
 - `run <node>` — Run a `chemisorb` node's search
+- `debug-select <node> [<path>] [posed|seated|relaxed] [show]` — Show a `chemisorb` search-tree row on its debug pins
 - `nodes` — List available node types
 - `describe`/`d <node>` — Describe a node type
 - `networks` — List all node networks

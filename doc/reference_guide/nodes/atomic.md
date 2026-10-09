@@ -1030,9 +1030,9 @@ run the node shows the result. If an input or a search setting changes
 afterwards, the node goes back to showing the plan with `stale` true, and the
 panel asks you to run again. Undo the change and the result comes back. Results
 are **not saved** with the file; after reopening a project, press Run again.
-The node draws nothing in the viewport: display the `adsorbate` and
-`substrate` inputs to see the pose, and take a candidate's `structure` field
-downstream to see a result.
+The node's results draw nothing in the viewport: take a candidate's
+`structure` field downstream to see one. What the search does at each step is
+drawn by the two debug pins (see **The debug view** below).
 
 **The search runs in the background.** While it runs, the application stays
 usable: you can orbit the view, select, edit and switch tabs. The panel shows a
@@ -1205,6 +1205,13 @@ In the text format `formed_bonds` and `bond_inventory` appear only when set:
   `near_misses`). The two run-state flags are `searched` and `stale`;
   downstream nodes can tell a result from a plan by `searched`.
 
+- `debug` (`Molecule`) — the search-tree row selected in the panel, as a
+  structure with its markings (see **The debug view**). With no row selected,
+  the root: the posed molecule with every foot and its anchor sites marked.
+- `debug_shapes` (`Isosurface`) — that row's search shapes, translucent: the
+  `anchor_reach` spheres, the leg-2 shell, the leg-3 ring, the `reach` spheres
+  of the local phase. Display it, or not, to show or hide the shapes.
+
 In every output structure the atoms whose bonds changed carry the tag
 `cs_changed`, so an `apply_style` rule can highlight them.
 
@@ -1273,6 +1280,60 @@ window dropped. Hover a row for its sites, worst bond ratio and strain terms.
 The statistics appear once the node is displayed. A `chemisorb` inside a custom
 network shows its result only where that network is called with the inputs the
 run used; everywhere else it shows the plan.
+
+**The debug view.** Under the statistics, the panel's **Search tree** lists
+every path the search took: the root (the posed molecule), each foot that can
+bond first, then one leg per level — `O12–Si45`, then `+ O13–Si61` under it,
+and so on. Each row says what the next level found: how many sites its test
+accepted (*anchor*, *sphere*, *ring* or *reach*), how many of those are mirror
+images (*mirr.*), undecided by the mirror check (*undec.*) or clash when seated
+(*clash*), and how many sites missed the test by less than 1 Å (*near*). A row
+that was relaxed shows its strain; a mirror-pruned or clash-pruned row is
+greyed; *budget cut* marks one the budget stopped. Hover a row for its path,
+the rejections and the near misses with how far each missed.
+
+Rows are loaded when you expand them, so a large tree opens at once. A binding
+reached in several orders of its legs is listed once, under the order the
+search kept; its other parents say *1 dup. hidden*. Tick **Show duplicates** to
+list those as *= duplicate of #N* rows — clicking one jumps to the row it
+duplicates. The checkbox changes only the list, never the search.
+
+**Click a row** to show it on the two debug pins (tick *debug pin* and *shapes
+pin* above the tree to display them). On `debug` the structure is drawn with
+markings: bonded feet and sites (and a transferred H and its acceptor) orange,
+unbonded feet violet, the sites the next leg's test accepts green, near misses
+yellow with a label giving the miss in ångström, mirror-pruned blue, undecided
+cyan, clashing red (for a seated row, also the atom pairs of its own clashes);
+the rest of the substrate is dimmed. A row opens in the form the search uses
+next:
+
+- the root and the foot rows: **posed**, as the inputs place the molecule;
+- a one- or two-leg row with children: **seated** — the rigid placement the
+  shell and the ring are searched from — even after a run;
+- any other row: **relaxed** when the search relaxed it, **seated** when it did
+  not (before a run, a row pruned for a clash, a row the budget cut).
+
+When a row has both forms, a *Seated / Relaxed* switch under the tree shows the
+other; the house button goes back to the root. Showing a seated row is
+immediate. Showing a relaxed one is immediate for a listed candidate; any other
+relaxed row is relaxed again from its start (and a legs-4+ row from its relaxed
+parents, along the path the search kept), as a short background job with the
+same progress and **Cancel** as Run — the result is exactly the one the search
+recorded. Nothing of the tree is saved, and selecting a row is not an undo step
+and is not a search setting: it never makes a result stale.
+
+With no row selected, or once an input or a setting changes, both pins show the
+root: the posed molecule, every foot, its anchor sites and the `anchor_reach`
+spheres. It follows `anchor_reach` as you type, with no Run, so it is the view
+to tune `anchor_reach` with. Use the near misses the same way for `tolerance`
+and `reach`: they show exactly which sites a larger value would add.
+
+From a script, `atomcad-cli debug-select <node> <path>` does the same as a
+click and prints what the row shows and its children with their paths. A path
+is the legs along the row as foot–site atom-id pairs (`12-45,13-61`; the ids
+are those of the candidates' `sites` field), a foot's id alone for its foot
+row, `#N` for row N, or nothing for the root; `--form seated|relaxed` picks the
+form and `--show` displays the two pins.
 
 **Example.**
 

@@ -543,7 +543,8 @@ five phases, none implemented. Do not attempt it piecemeal from a widget.
 
 ## Node jobs (background Run)
 
-An explicit, expensive action on one node — today `chemisorb`'s **Run** — runs
+An explicit, expensive action on one node — today `chemisorb`'s **Run**, and
+its debug view replaying a relaxed row (`model.chemisorbDebugSelect`) — runs
 on a Rust worker pool (`doc/design_background_node_jobs.md`); Rust owns every
 rule (routing, deferral, outcome kinds), Flutter starts, polls and shows.
 

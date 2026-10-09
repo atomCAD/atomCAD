@@ -20,17 +20,28 @@
 //! is never saved, and it is a pure function of the inputs. Installing marks
 //! the node's data changed so the refresh re-evaluates it and everything
 //! downstream.
+//!
+//! The **debug view**'s select action (design §6.5) is here too, in the same
+//! shape: [`StructureDesigner::prepare_chemisorb_debug`] evaluates the inputs
+//! and finds the row; a view that is geometry alone is built at once
+//! ([`ChemisorbDebugStep::Ready`], installed by the caller), one that must
+//! replay a relaxation is a second kind of node job
+//! ([`ChemisorbDebugWork`]). Both install through the same
+//! `install_job_result`, so a selection is no more an undo step than a Run.
 
 use crate::node_data::NodeData;
-use crate::node_jobs::{JobInputs, JobResult, JobWork};
+use crate::node_jobs::{JobInputs, JobResult, JobTarget, JobWork};
 use crate::nodes::chemisorb::{
-    ADSORBATE_INPUT_PIN, ChemisorbData, SUBSTRATE_INPUT_PIN, StoredSearch, TRANSFERS_INPUT_PIN,
-    atomic_inputs, transfer_rules,
+    ADSORBATE_INPUT_PIN, ChemisorbData, SUBSTRATE_INPUT_PIN, StoredDebug, StoredSearch,
+    TRANSFERS_INPUT_PIN, atomic_inputs, transfer_rules,
 };
 use crate::structure_designer::StructureDesigner;
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::chemisorption::input_fingerprint;
-use atomcad_crystolecule::chemisorption::sequential::{SequentialSearch, evaluate, plan};
+use atomcad_crystolecule::chemisorption::sequential::{
+    DebugForm, SearchReport, SequentialPlan, SequentialSearch, debug_view, evaluate, find_row,
+    needs_relaxation, plan, row_forms, row_label, row_path, shown_row, tree_of,
+};
 use atomcad_util::job_control::JobControl;
 use atomcad_util::number_format::format_natural;
 use std::sync::Arc;
@@ -220,5 +231,254 @@ impl StructureDesigner {
         let summary = outcome.summary.clone();
         self.install_job_result(&target, Box::new(outcome))?;
         Ok(summary)
+    }
+}
+
+// ============================================================================
+// The debug view (design §6.5)
+// ============================================================================
+
+/// What a `chemisorb` debug-view job is called in the UI.
+pub const CHEMISORB_DEBUG_JOB_LABEL: &str = "Chemisorption debug view";
+
+/// At most this many children are listed under a selected row's description
+/// (the CLI's `debug-select`).
+const LISTED_CHILDREN: usize = 40;
+
+/// Which tree row to show: by number (the panel), or by path (the CLI, as
+/// `sequential::find_row` reads it).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DebugRowRef {
+    Row(u32),
+    Path(String),
+}
+
+/// A row's view, built: what an install writes.
+pub struct ChemisorbDebugOutcome {
+    pub stored: StoredDebug,
+    /// One fact per line; the first names the row, its form and its strain.
+    pub description: String,
+}
+
+/// A row whose view needs relaxations (a relaxed row that is not a kept
+/// candidate, or a local-phase row's start geometry): the replay, owned, to
+/// run off the UI thread like Run.
+pub struct ChemisorbDebugWork {
+    pub fingerprint: u64,
+    pub search: Arc<StoredSearch>,
+    pub config: SequentialSearch,
+    pub row: u32,
+    pub form: DebugForm,
+}
+
+/// A prepared selection: built already, or a job to start.
+pub enum ChemisorbDebugStep {
+    Ready(Box<ChemisorbDebugOutcome>),
+    Job(Box<ChemisorbDebugWork>),
+}
+
+pub struct ChemisorbDebugPrepared {
+    pub target: JobTarget,
+    pub step: ChemisorbDebugStep,
+    /// The selected row's listed children, one per line with its path: what
+    /// the CLI prints so an agent can go one level deeper.
+    pub children: String,
+}
+
+fn build_debug(
+    plan: &SequentialPlan,
+    report: Option<&SearchReport>,
+    config: &SequentialSearch,
+    fingerprint: u64,
+    row: u32,
+    form: DebugForm,
+) -> Result<ChemisorbDebugOutcome, String> {
+    let view =
+        debug_view(plan, report, config, row, form).map_err(|e| format!("chemisorb: {e}"))?;
+    let description = view.describe(&plan.setup, tree_of(plan, report));
+    Ok(ChemisorbDebugOutcome {
+        stored: StoredDebug { fingerprint, view },
+        description,
+    })
+}
+
+/// The children of a row as `debug-select` lists them: path, label, and
+/// what became of the hypothesis each reaches.
+fn children_text(plan: &SequentialPlan, report: Option<&SearchReport>, row: u32) -> String {
+    let tree = tree_of(plan, report);
+    let row = shown_row(tree, row);
+    let children = tree.visible_children(row, false);
+    if children.is_empty() {
+        return "children: none".to_string();
+    }
+    let mut lines = vec![format!("children ({}):", children.len())];
+    for &c in children.iter().take(LISTED_CHILDREN) {
+        let h = tree.row(c).hypothesis.map(|i| match report {
+            Some(r) => r.hypothesis(plan, i as usize),
+            None => &plan.hypotheses[i as usize],
+        });
+        let mut notes = Vec::new();
+        if let Some(h) = h {
+            if let Some(m) = h.mirror {
+                notes.push(format!("{m:?}").to_lowercase());
+            }
+            if h.seating.as_ref().is_some_and(|s| s.clashes()) {
+                notes.push("clash".to_string());
+            }
+            if h.candidate {
+                notes.push("candidate".to_string());
+            }
+        }
+        if let Some(r) = report.and_then(|r| r.relaxed.iter().find(|x| x.row == c)) {
+            notes.push(format!("strain {:.2}", r.strain));
+        }
+        let notes = if notes.is_empty() {
+            String::new()
+        } else {
+            format!("  [{}]", notes.join(", "))
+        };
+        lines.push(format!(
+            "  {}  {}{notes}",
+            row_path(&plan.setup, tree, c),
+            row_label(&plan.setup, tree, c),
+        ));
+    }
+    if children.len() > LISTED_CHILDREN {
+        lines.push(format!(
+            "  ... and {} more",
+            children.len() - LISTED_CHILDREN
+        ));
+    }
+    lines.join("\n")
+}
+
+impl JobWork for ChemisorbDebugWork {
+    fn label(&self) -> String {
+        CHEMISORB_DEBUG_JOB_LABEL.to_string()
+    }
+
+    fn run(self: Box<Self>, control: Option<&JobControl>) -> Result<Box<dyn JobResult>, String> {
+        if let Some(c) = control {
+            c.set_phase("Relaxing the selected row");
+        }
+        let outcome = build_debug(
+            &self.search.plan,
+            Some(&self.search.report),
+            &self.config,
+            self.fingerprint,
+            self.row,
+            self.form,
+        )?;
+        Ok(Box::new(outcome))
+    }
+}
+
+impl JobResult for ChemisorbDebugOutcome {
+    fn install(self: Box<Self>, data: &mut dyn NodeData) -> Result<String, String> {
+        let data = data
+            .as_any_mut()
+            .downcast_mut::<ChemisorbData>()
+            .ok_or("the node is no longer a chemisorb node")?;
+        data.debug = Some(Arc::new(self.stored));
+        Ok(self.description)
+    }
+}
+
+impl StructureDesigner {
+    /// Selects a row of a `chemisorb` node's search tree for its debug pins
+    /// (design §6.5): evaluates the inputs, finds the tree (the stored search
+    /// when it matches them, else a fresh plan) and the row, and either builds
+    /// the view at once — posed and seated geometric rows are geometry alone —
+    /// or prepares a job for one that needs relaxing. `form` = `None` opens
+    /// the row on its default form. Errors are user-facing.
+    ///
+    /// Selecting is not an undo step and does not dirty the file: the view is
+    /// runtime state keyed by the input fingerprint, like the search result.
+    pub fn prepare_chemisorb_debug(
+        &mut self,
+        scope_path: &[u64],
+        node_id: u64,
+        row: DebugRowRef,
+        form: Option<DebugForm>,
+    ) -> Result<ChemisorbDebugPrepared, String> {
+        let (target, prepared) = self.with_job_inputs(scope_path, node_id, |data, inputs| {
+            let data = data
+                .as_any_ref()
+                .downcast_ref::<ChemisorbData>()
+                .ok_or_else(|| format!("Node {node_id} is not a chemisorb node"))?;
+            let work = data.prepare_work(inputs)?;
+            let stored = data
+                .stored
+                .clone()
+                .filter(|s| s.fingerprint == work.fingerprint);
+            Ok::<_, String>((work, stored))
+        })?;
+        let (work, stored) = prepared?;
+        let fresh;
+        let (plan, report) = match &stored {
+            Some(s) => (&s.plan, Some(&s.report)),
+            None => {
+                fresh = plan(&work.adsorbate, &work.substrate, &work.config)
+                    .map_err(|e| format!("chemisorb: {e}"))?;
+                (&fresh, None)
+            }
+        };
+        let tree = tree_of(plan, report);
+        let row = match row {
+            DebugRowRef::Row(r) if (r as usize) < tree.len() => r,
+            DebugRowRef::Row(r) => return Err(format!("The search tree has no row {r}")),
+            DebugRowRef::Path(path) => find_row(&plan.setup, tree, &path)?,
+        };
+        let forms = row_forms(plan, report, row);
+        let form = form.unwrap_or(forms.default);
+        if form == DebugForm::Relaxed && !forms.relaxed {
+            return Err(format!(
+                "{} has no relaxation{}",
+                row_label(&plan.setup, tree, row),
+                if report.is_none() { ": Run first" } else { "" }
+            ));
+        }
+        let children = children_text(plan, report, row);
+        let step = match (&stored, needs_relaxation(plan, report, row, form)) {
+            (Some(search), true) => ChemisorbDebugStep::Job(Box::new(ChemisorbDebugWork {
+                fingerprint: work.fingerprint,
+                search: search.clone(),
+                config: work.config,
+                row,
+                form,
+            })),
+            _ => ChemisorbDebugStep::Ready(Box::new(build_debug(
+                plan,
+                report,
+                &work.config,
+                work.fingerprint,
+                row,
+                form,
+            )?)),
+        };
+        Ok(ChemisorbDebugPrepared {
+            target,
+            step,
+            children,
+        })
+    }
+
+    /// The CLI's `debug-select`: prepare, run any relaxation on the calling
+    /// thread, install. Returns the row's description and its children. Does
+    /// not refresh.
+    pub fn chemisorb_debug_select_blocking(
+        &mut self,
+        scope_path: &[u64],
+        node_id: u64,
+        row: DebugRowRef,
+        form: Option<DebugForm>,
+    ) -> Result<String, String> {
+        let prepared = self.prepare_chemisorb_debug(scope_path, node_id, row, form)?;
+        let result: Box<dyn JobResult> = match prepared.step {
+            ChemisorbDebugStep::Ready(outcome) => outcome,
+            ChemisorbDebugStep::Job(work) => work.run(None)?,
+        };
+        let summary = self.install_job_result(&prepared.target, result)?;
+        Ok(format!("{summary}\n{}", prepared.children))
     }
 }

@@ -144,3 +144,69 @@ fn the_setter_is_undoable_and_keeps_the_stored_search() {
     set_chemisorb_node_data(&mut designer, &[], 1, &other);
     assert!(chemisorb_node_data(&designer, &[], 1).is_none());
 }
+
+/// The debug tree seam (design §6.5): rows and children read from the
+/// selected node's eval cache, the selection reported back, and the CLI's
+/// `debug-select` by node name and path.
+#[test]
+fn the_debug_tree_is_read_lazily_and_the_cli_selects_by_path() {
+    use rust_lib_flutter_cad::api::structure_designer::chemisorb_api::{
+        chemisorb_debug_children, chemisorb_debug_row, chemisorb_debug_select_named,
+    };
+    use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::{
+        APIChemisorbDebugForm, APIChemisorbDebugRowKind,
+    };
+
+    let (mut designer, node) = network();
+    refresh_selected(&mut designer, node);
+    let report = chemisorb_node_report(&designer).unwrap();
+    assert_eq!(report.debug_selected_row, None, "the root view");
+    let root = chemisorb_debug_row(&designer, 0).unwrap();
+    assert_eq!(root.kind, APIChemisorbDebugRowKind::Root);
+    assert_eq!(root.default_form, APIChemisorbDebugForm::Posed);
+    // One foot (the •OH oxygen), two anchors.
+    let feet = chemisorb_debug_children(&designer, 0, false);
+    assert_eq!(feet.len(), 1);
+    let legs = chemisorb_debug_children(&designer, feet[0].row, false);
+    assert_eq!(legs.len(), 2);
+    assert!(legs.iter().all(|l| l.kind == APIChemisorbDebugRowKind::Leg));
+    assert!(chemisorb_debug_row(&designer, 9_999).is_none());
+
+    // The CLI names the row by path; the report then names it as selected.
+    let text =
+        chemisorb_debug_select_named(&mut designer, &node.to_string(), &legs[1].path, "", false)
+            .unwrap();
+    assert!(text.contains("shown seated"), "{text}");
+    refresh_selected(&mut designer, node);
+    let report = chemisorb_node_report(&designer).unwrap();
+    assert_eq!(report.debug_selected_row, Some(legs[1].row));
+    assert_eq!(
+        report.debug_selected_form,
+        Some(APIChemisorbDebugForm::Seated)
+    );
+
+    // After Run, a one-foot leg row is a leaf and opens relaxed.
+    designer.run_node_job_blocking(&[], node).unwrap();
+    let text =
+        chemisorb_debug_select_named(&mut designer, &node.to_string(), &legs[0].path, "", true)
+            .unwrap();
+    assert!(text.contains("shown relaxed, strain"), "{text}");
+    let pins = designer
+        .get_scope_network(&[])
+        .and_then(|n| n.get_displayed_pins(node))
+        .cloned()
+        .unwrap();
+    assert!(
+        pins.contains(&2) && pins.contains(&3),
+        "--show displays both pins"
+    );
+    assert!(
+        chemisorb_debug_select_named(&mut designer, &node.to_string(), "root", "relaxed", false)
+            .is_err()
+    );
+    assert!(
+        chemisorb_debug_select_named(&mut designer, &node.to_string(), "root", "sideways", false)
+            .unwrap_err()
+            .contains("not a form")
+    );
+}

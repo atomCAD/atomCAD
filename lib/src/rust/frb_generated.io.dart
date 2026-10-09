@@ -162,11 +162,23 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIChemisorbData dco_decode_api_chemisorb_data(dynamic raw);
 
   @protected
+  APIChemisorbDebugForm dco_decode_api_chemisorb_debug_form(dynamic raw);
+
+  @protected
+  APIChemisorbDebugRow dco_decode_api_chemisorb_debug_row(dynamic raw);
+
+  @protected
+  APIChemisorbDebugRowKind dco_decode_api_chemisorb_debug_row_kind(dynamic raw);
+
+  @protected
   APIChemisorbInventoryOption dco_decode_api_chemisorb_inventory_option(
       dynamic raw);
 
   @protected
   APIChemisorbLevel dco_decode_api_chemisorb_level(dynamic raw);
+
+  @protected
+  APIChemisorbMirror dco_decode_api_chemisorb_mirror(dynamic raw);
 
   @protected
   APIChemisorbReport dco_decode_api_chemisorb_report(dynamic raw);
@@ -835,6 +847,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIChemisorbData dco_decode_box_autoadd_api_chemisorb_data(dynamic raw);
 
   @protected
+  APIChemisorbDebugForm dco_decode_box_autoadd_api_chemisorb_debug_form(
+      dynamic raw);
+
+  @protected
+  APIChemisorbDebugRow dco_decode_box_autoadd_api_chemisorb_debug_row(
+      dynamic raw);
+
+  @protected
+  APIChemisorbMirror dco_decode_box_autoadd_api_chemisorb_mirror(dynamic raw);
+
+  @protected
   APIChemisorbReport dco_decode_box_autoadd_api_chemisorb_report(dynamic raw);
 
   @protected
@@ -1307,6 +1330,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<APICandidateNode> dco_decode_list_api_candidate_node(dynamic raw);
 
   @protected
+  List<APIChemisorbDebugRow> dco_decode_list_api_chemisorb_debug_row(
+      dynamic raw);
+
+  @protected
   List<APIChemisorbInventoryOption>
       dco_decode_list_api_chemisorb_inventory_option(dynamic raw);
 
@@ -1482,6 +1509,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Int32List dco_decode_list_prim_i_32_strict(dynamic raw);
 
   @protected
+  Uint32List dco_decode_list_prim_u_32_strict(dynamic raw);
+
+  @protected
   Uint64List dco_decode_list_prim_u_64_strict(dynamic raw);
 
   @protected
@@ -1601,6 +1631,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIChemisorbData? dco_decode_opt_box_autoadd_api_chemisorb_data(dynamic raw);
+
+  @protected
+  APIChemisorbDebugForm? dco_decode_opt_box_autoadd_api_chemisorb_debug_form(
+      dynamic raw);
+
+  @protected
+  APIChemisorbDebugRow? dco_decode_opt_box_autoadd_api_chemisorb_debug_row(
+      dynamic raw);
+
+  @protected
+  APIChemisorbMirror? dco_decode_opt_box_autoadd_api_chemisorb_mirror(
+      dynamic raw);
 
   @protected
   APIChemisorbReport? dco_decode_opt_box_autoadd_api_chemisorb_report(
@@ -2211,11 +2253,27 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIChemisorbData sse_decode_api_chemisorb_data(SseDeserializer deserializer);
 
   @protected
+  APIChemisorbDebugForm sse_decode_api_chemisorb_debug_form(
+      SseDeserializer deserializer);
+
+  @protected
+  APIChemisorbDebugRow sse_decode_api_chemisorb_debug_row(
+      SseDeserializer deserializer);
+
+  @protected
+  APIChemisorbDebugRowKind sse_decode_api_chemisorb_debug_row_kind(
+      SseDeserializer deserializer);
+
+  @protected
   APIChemisorbInventoryOption sse_decode_api_chemisorb_inventory_option(
       SseDeserializer deserializer);
 
   @protected
   APIChemisorbLevel sse_decode_api_chemisorb_level(
+      SseDeserializer deserializer);
+
+  @protected
+  APIChemisorbMirror sse_decode_api_chemisorb_mirror(
       SseDeserializer deserializer);
 
   @protected
@@ -2981,6 +3039,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIChemisorbDebugForm sse_decode_box_autoadd_api_chemisorb_debug_form(
+      SseDeserializer deserializer);
+
+  @protected
+  APIChemisorbDebugRow sse_decode_box_autoadd_api_chemisorb_debug_row(
+      SseDeserializer deserializer);
+
+  @protected
+  APIChemisorbMirror sse_decode_box_autoadd_api_chemisorb_mirror(
+      SseDeserializer deserializer);
+
+  @protected
   APIChemisorbReport sse_decode_box_autoadd_api_chemisorb_report(
       SseDeserializer deserializer);
 
@@ -3554,6 +3624,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  List<APIChemisorbDebugRow> sse_decode_list_api_chemisorb_debug_row(
+      SseDeserializer deserializer);
+
+  @protected
   List<APIChemisorbInventoryOption>
       sse_decode_list_api_chemisorb_inventory_option(
           SseDeserializer deserializer);
@@ -3763,6 +3837,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Int32List sse_decode_list_prim_i_32_strict(SseDeserializer deserializer);
 
   @protected
+  Uint32List sse_decode_list_prim_u_32_strict(SseDeserializer deserializer);
+
+  @protected
   Uint64List sse_decode_list_prim_u_64_strict(SseDeserializer deserializer);
 
   @protected
@@ -3902,6 +3979,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIChemisorbData? sse_decode_opt_box_autoadd_api_chemisorb_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIChemisorbDebugForm? sse_decode_opt_box_autoadd_api_chemisorb_debug_form(
+      SseDeserializer deserializer);
+
+  @protected
+  APIChemisorbDebugRow? sse_decode_opt_box_autoadd_api_chemisorb_debug_row(
+      SseDeserializer deserializer);
+
+  @protected
+  APIChemisorbMirror? sse_decode_opt_box_autoadd_api_chemisorb_mirror(
       SseDeserializer deserializer);
 
   @protected
@@ -4608,12 +4697,28 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIChemisorbData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_chemisorb_debug_form(
+      APIChemisorbDebugForm self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_chemisorb_debug_row(
+      APIChemisorbDebugRow self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_chemisorb_debug_row_kind(
+      APIChemisorbDebugRowKind self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_chemisorb_inventory_option(
       APIChemisorbInventoryOption self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_chemisorb_level(
       APIChemisorbLevel self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_chemisorb_mirror(
+      APIChemisorbMirror self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_chemisorb_report(
@@ -5438,6 +5543,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIChemisorbData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_api_chemisorb_debug_form(
+      APIChemisorbDebugForm self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_chemisorb_debug_row(
+      APIChemisorbDebugRow self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_chemisorb_mirror(
+      APIChemisorbMirror self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_api_chemisorb_report(
       APIChemisorbReport self, SseSerializer serializer);
 
@@ -6021,6 +6138,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<APICandidateNode> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_api_chemisorb_debug_row(
+      List<APIChemisorbDebugRow> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_api_chemisorb_inventory_option(
       List<APIChemisorbInventoryOption> self, SseSerializer serializer);
 
@@ -6232,6 +6353,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       Int32List self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_prim_u_32_strict(
+      Uint32List self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_prim_u_64_strict(
       Uint64List self, SseSerializer serializer);
 
@@ -6377,6 +6502,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_chemisorb_data(
       APIChemisorbData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_chemisorb_debug_form(
+      APIChemisorbDebugForm? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_chemisorb_debug_row(
+      APIChemisorbDebugRow? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_chemisorb_mirror(
+      APIChemisorbMirror? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_chemisorb_report(

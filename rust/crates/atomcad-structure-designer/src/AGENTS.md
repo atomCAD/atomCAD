@@ -70,7 +70,7 @@ structure_designer/
 ├── thumbnail_ops.rs           # Thumbnails: which network a capture lands on, store, set/reset (D2/D6)
 ├── ai_text_edit.rs            # ai_text_edit: the AI edit choke point (edit → validate → layout → log → undo)
 ├── mechanosynth_edit_ops.rs   # mechanosynth_edit: block edits, cursor, and the click→place flow
-├── chemisorb_ops.rs           # chemisorb: Run as a node job (prepare / search / install) and the settings setter
+├── chemisorb_ops.rs           # chemisorb: Run as a node job (prepare / search / install), the debug view's select action, the settings setter
 ├── node_jobs/                 # Node jobs: explicit per-node work run off the UI thread (runner, DocumentSet side)
 ├── ai_edit_log.rs             # Session log of AI edits (runtime-only, never in .cnnd)
 ├── ai_edit_diff.rs            # Diffs two AI text-format snapshots (By node / Text)

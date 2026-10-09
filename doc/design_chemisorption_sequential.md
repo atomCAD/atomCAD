@@ -1,7 +1,8 @@
 # Design: sequential chemisorption search with orientation coverage
 
-Status: **Phases 0–3 done** (Phase 3, the node, on 2026-10-09, §16); next:
-Phase 4, the debug view. Outcome of a design discussion and review between
+Status: **Phases 0–4 done** (Phase 4, the debug view, on 2026-10-09, §17);
+next: the tolerance calibration on a real adsorbate and the Phase 5 manual
+walkthrough. Outcome of a design discussion and review between
 the maintainer and Claude on 2026-10-08.
 
 This document says what changed in the `chemisorb` node and the crystolecule
@@ -1773,3 +1774,176 @@ not change here beyond moving code.
 - Phase 4: the debug view, on `StoredSearch::{plan, report}` and `replay`.
 - Phase 5 / manual: a walkthrough of the panel and Run after
   `cargo build --release`, and the Flutter smoke test (maintainer only).
+
+---
+
+## 17. Phase 4 results (2026-10-09)
+
+On atomCAD branch `chemisorption-sequential`, not committed yet. The debug
+view of §6.5 is built: the tree in the panel, the select action with its
+background replay, the `debug` and `debug_shapes` pins, the CLI command and
+the reference-guide section.
+
+### 17.1 What is built
+
+**Engine** (`sequential/debug.rs`, new; `local.rs` gains `replay_start`,
+which `replay` now calls). Pure functions over a plan and an optional report,
+nothing stored:
+
+- `row_forms`: the forms a row has and the one it opens on, the §6.5 rule
+  verbatim (posed for the root and the foot rows; seated for a one- or
+  two-leg row with children; relaxed when relaxed; seated otherwise).
+- `needs_relaxation`: the line between "instant" and "a job" — a relaxed row
+  that is not a kept candidate (replay), and a local-phase row's seated form
+  (its relaxed parent replayed, plus the new bond).
+- `debug_view` / `root_view`: the row's structure with its markings in the
+  decorator (colour overrides, labels, the unmarked substrate ghosted), the
+  search shapes, the strain of a relaxed row, and `Marks` (bonded, feet,
+  accepted / mirrored / undecided / clashing children, near misses with the
+  smallest miss) for the tests and the CLI.
+- `DebugShapes`, an analytic `ScalarField`: per unbonded foot the leg-2 shell
+  or the leg-3 ring (the intersection of its shells), the `anchor_reach`
+  spheres, the local `reach` spheres; field `max(0, SHAPE_LEVEL − d)` with `d`
+  the signed distance to the union, so the isosurface at `SHAPE_LEVEL` is the
+  boundary and no negative lobe is extracted.
+- `row_label`, `row_path`, `find_row`: the names the panel and the CLI use.
+  A path is the legs as `foot-site` combined atom ids (`12-45,13-61`, the ids
+  of a candidate's `sites` field), a foot id alone for its foot row, `#N`, or
+  `root`.
+- `ChemisorptionError::DebugRow` for a row or form that does not exist.
+
+**Node** (`nodes/chemisorb.rs`, `chemisorb_ops.rs`):
+
+- Output pins 2 `debug` (`Molecule`) and 3 `debug_shapes` (`Isosurface`),
+  appended. Every error reaches all four pins.
+- `ChemisorbData::debug: Option<Arc<StoredDebug>>` (fingerprint + view),
+  `#[serde(skip)]`, carried by `inherit_runtime_state` like `stored`.
+  Evaluation outputs it while the fingerprint matches, otherwise the root view,
+  which it builds itself (geometry alone).
+- The eval cache carries the tree the panel reads (`ChemisorbTree`: the plan
+  of this evaluation in an `Arc`, or the matching `StoredSearch`), the current
+  selection and the tree key (the input fingerprint). Its `debug_row`,
+  `debug_children` (duplicates only on request) and `debug_ancestors` build
+  the panel's rows lazily.
+- `StructureDesigner::prepare_chemisorb_debug(scope, node, DebugRowRef,
+  form)`: the same guards as Run (top level, editable network), evaluates the
+  inputs, takes the stored search when it matches or plans afresh, finds the
+  row (by number or by path), and returns either a ready view or a
+  `ChemisorbDebugWork` — a second kind of node job, labelled "Chemisorption
+  debug view". Both install through `install_job_result`: no undo step, no
+  dirty flag. `chemisorb_debug_select_blocking` is the CLI's form.
+
+**API and CLI.** `get_chemisorb_debug_row` / `_children` / `_ancestors`,
+`chemisorb_debug_select(scope, node, row, form) → job id or none`, and
+`chemisorb_debug_select_by_name` for the HTTP server's `/debug-select`.
+`atomcad-cli debug-select <node> [<path>] [--form posed|seated|relaxed]
+[--show]` (and the REPL's `debug-select`) prints the row's description and its
+children with their paths; `--show` displays the node and its two debug pins.
+
+**Panel** (`chemisorb_debug_tree.dart`, under the statistics card): the lazy
+tree (fetched on expand, a `ListView` of 24-px rows in a 300-px box), each row
+with its label and counts (strain, the next level's accepted / mirrored /
+undecided / clash / near counts, "N dup. hidden"), a tooltip with the path,
+rejections and near misses; *Show duplicates*; *debug pin* / *shapes pin*
+chips that toggle pins 2 and 3; under the tree the selected row with a
+*Seated / Relaxed* switch when it has both, a button back to the root, and a
+colour legend. A replay shows in the Run row's progress like a Run, with
+Cancel; the host reports its outcome.
+
+### 17.2 Decisions taken while implementing
+
+1. **The panel selects by row number, the CLI by path.** §6.5 names a row by
+   its path; row numbers are equivalent and hold while the fingerprint does
+   (a run only appends the local rows), so the API takes the number and the
+   CLI the path, which `find_row` resolves.
+2. **A duplicate row shows its canonical row.** Only the path the search kept
+   produced the change set's geometry; the panel's duplicate rows jump to it
+   rather than showing a second view.
+3. **A local-phase row's seated form is its start geometry**: the relaxed
+   parent, replayed, plus the new bond and H. It needs relaxing, so it is a
+   job like a relaxed replay.
+4. **The shapes draw the test's envelope over site elements.** A new foot's
+   bond length depends on the site element; the drawn shell uses the longest,
+   so it contains the test's shell for every element (they coincide on a
+   one-element substrate, which a test pins). The `reach` spheres are drawn
+   only in the relaxed form, since the local phase searches from relaxed
+   positions; a seated three-leg parent draws nothing.
+5. **The shapes field reports a native grid** (`SHAPE_GRID` 0.3 Å) although
+   it is analytic, so the extraction does not fall back to the 0.15 Å default
+   spacing over shells 20 Å across. This half of §10 Q9 (how coarse before the
+   ring looks bad) is the walkthrough's to judge; the value is one constant.
+6. **§10 Q9's other half: atom labels carry arbitrary text**, so near misses
+   are labelled in the viewport with their miss (`Si52 +0.27`), not only in
+   the row tooltip. Feet and bonded atoms are labelled with their names.
+7. **A view built before a Run stays after it.** It is still correct for the
+   same fingerprint (the seated form); the switch offers the relaxed form. Not
+   re-selecting automatically avoids starting a replay job nobody asked for.
+8. **A selection survives a settings edit and its undo** (through
+   `inherit_runtime_state`), as the stored result does, and a selection never
+   makes a result stale (it is not fingerprinted).
+9. **One job per node** still holds: a replay and a Run refuse each other
+   ("A job is already running on this node"). Select is refused where Run is
+   (in a body, on a read-only network).
+10. **`--show` makes an ordinary display change** (undoable, saved like any
+    pin display), so an agent can render the view without the GUI.
+
+### 17.3 Findings
+
+1. After a run, the best kept candidate is usually a two-leg binding — and a
+   two-leg row with children opens **seated** by the rule, even though it is
+   a listed candidate. Correct per §6.5, but surprising at first sight: the
+   relaxed form is one click on the switch. Worth checking in the
+   walkthrough whether the rule should prefer relaxed for a listed candidate.
+2. The plan's tree already held everything the panel needs (no engine change
+   to the search itself beyond `replay_start`). Before Run the panel reads the
+   plan of the current evaluation, kept in an `Arc` in the eval cache.
+3. On the stand-in tripod over the Si(100) slab, every site lies inside a
+   drawn sphere or ring **iff** the search's own `need_against` accepts it, at
+   the defaults, for all one-leg rows and a fifth of the two-leg rows (sites
+   within 1e-6 Å of a bound skipped). The drawn shapes are therefore exactly
+   what the search tests, which is what makes them useful for tuning.
+
+### 17.4 Tests
+
+- `chemisorption_sequential_debug_test.rs` (crystolecule), 13 tests, ~10 s in
+  debug: each hypothesis listed once with duplicates hidden, the hidden counts
+  equal the duplicates shown; every row's path finds it, element prefixes and
+  errors; the forms before a run, after one (two-leg rows with children
+  seated, relaxed three-leg rows relaxed, two-leg leaves relaxed with
+  `formed_bonds = 2`), clash-pruned and budget-cut rows seated; a seated view
+  equals the seating and marks its bonds and clashes; the root view marks the
+  feet and exactly the anchor sites (from the definition, not the tree),
+  ghosts the rest, draws one `anchor_reach` sphere per foot and follows
+  `anchor_reach` (the near misses become anchors one ångström wider); a row
+  marks its children by verdict and labels its near misses; the shapes equal
+  the test (above); a tripod three-leg row draws nothing; a relaxed row
+  outside top N replays to its recorded strain (1e-6), three-leg parents and
+  four-leg candidates; a local row reached in two orders shows the kept one
+  with its strain; a local row's seated form is `replay_start`, and its relaxed
+  parent's `reach` spheres contain every child's site.
+- `chemisorb_node_test.rs`, 7 new tests (36 in the file): the appended pins
+  and the root view (feet, anchor spheres, `anchor_reach` live, errors on all
+  four pins); the eval cache's lazy rows, hidden duplicates and ancestors;
+  selecting before Run is seated, needs no job, is not an undo step and not a
+  dirtying edit, and refuses the relaxed form ("Run first"); a fingerprint
+  change shows the root and its undo brings the selection back; a selection
+  does not make a result stale and is not saved; after Run a relaxed row
+  outside top N is a job that reproduces its strain, the kept candidate shows
+  its stored structure; the CLI path selects what the panel would.
+- `chemisorb_api_test.rs`, 1 new test: the rows through the API seam, the
+  selection reported back, `debug-select` by path, forms, `--show`.
+- Flutter `test/chemisorb_debug_tree_test.dart`, 4 tests: children fetched only
+  on expand, a click selects, duplicates hidden then shown and jumping to the
+  canonical row, a new tree resets the expansion, the form switch and the way
+  back to the root.
+
+No mutation check: §11.9 asks for one per *engine* phase, and the search did
+not change.
+
+### 17.5 Left
+
+- Phase 4's last item: calibrate the default `tolerance` with the debug view
+  on a real adsorbate (outside this repository).
+- Phase 5: the manual walkthrough after `cargo build --release` — the panel,
+  Run, the tree, the shapes at `SHAPE_GRID` 0.3 Å and the colours on a real
+  proxy, and finding 1 above; the Flutter smoke test (maintainer only).
