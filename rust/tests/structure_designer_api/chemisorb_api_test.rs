@@ -132,7 +132,7 @@ fn the_setter_is_undoable_and_keeps_the_stored_search() {
     );
 
     assert!(designer.undo());
-    assert_eq!(chemisorb_node_data(&designer, &[], node).unwrap().top_n, 10);
+    assert_eq!(chemisorb_node_data(&designer, &[], node).unwrap().top_n, 50);
     assert!(stored(&designer));
     refresh_selected(&mut designer, node);
     let report = chemisorb_node_report(&designer).unwrap();

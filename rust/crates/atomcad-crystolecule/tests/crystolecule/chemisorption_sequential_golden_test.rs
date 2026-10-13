@@ -465,6 +465,8 @@ fn candidate_snapshots_ethylene_and_water() {
     let (w, sub) = water_setup();
     let config = SequentialSearch {
         transfers: vec![H_TO_SUBSTRATE],
+        // The default before design_structure_comparison.md D13 raised it.
+        top_n: 10,
         ..Default::default()
     };
     let p = plan(&w, &sub, &config).unwrap();
@@ -482,6 +484,7 @@ fn candidate_snapshots_stand_in() {
         let (ads, _) = posed_stand_in(legs, 0.0, DVec3::ZERO);
         let config = SequentialSearch {
             formed_bonds: Some(3),
+            top_n: 10,
             ..Default::default()
         };
         let p = plan(&ads, &slab, &config).unwrap();
@@ -506,6 +509,7 @@ fn local_phase_snapshot_hexapod() {
     let config = SequentialSearch {
         substrate_tag: Some("dimer".into()),
         formed_bonds: Some(6),
+        top_n: 10,
         ..Default::default()
     };
     let p = plan(&ads, &slab, &config).unwrap();

@@ -11,9 +11,11 @@ use atomcad_structure_designer::node_network::FunctionPinDisposition;
 use atomcad_structure_designer::node_network::FunctionPinRole;
 // Path-qualified rather than imported bare: the api-side twin deliberately keeps
 // the same identifier (D9a).
+use atomcad_crystolecule::chemisorption::DistinctSettings;
 use atomcad_crystolecule::chemisorption::sequential::{
     DebugForm as DomainDebugForm, DebugItem as DomainDebugItem, Mirror as DomainMirror,
 };
+use atomcad_crystolecule::structure_compare::Motion as DomainMotion;
 use atomcad_structure_designer::node_jobs::{JobOutcome, JobOutcomeKind, JobPoll, JobStatus};
 use atomcad_structure_designer::node_type::NodeTypeCategory as DomainNodeTypeCategory;
 use atomcad_structure_designer::nodes::atom_edit::atom_edit::{
@@ -995,7 +997,7 @@ pub struct APIChemisorbData {
     /// Only bindings with exactly this bond inventory (a candidate's `bonds`
     /// label); `None` = any.
     pub bond_inventory: Option<String>,
-    /// At most this many candidates kept and listed.
+    /// At most this many candidates kept, counted before `unique` merges.
     pub top_n: i32,
     /// Only candidates within this many kcal/mol of the best are kept.
     pub energy_window: f64,
@@ -1003,6 +1005,49 @@ pub struct APIChemisorbData {
     pub budget: i32,
     /// UFF iteration limit per relaxation.
     pub max_iterations: i32,
+    /// Listing, not searching (no new Run): merge kept candidates that are
+    /// one binding up to this motion.
+    pub unique: APIChemisorbUnique,
+    /// The comparison tolerance, Å, in (0, 0.3].
+    pub unique_tolerance: f64,
+    /// Bonds into the substrate the compared cluster reaches.
+    pub local_hops: i32,
+}
+
+/// The `chemisorb` node's `unique` choice: off, or the motion two equal
+/// bindings may differ by (twin of `Option<structure_compare::Motion>`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum APIChemisorbUnique {
+    Off,
+    /// No motion: compared where they stand.
+    Exact,
+    Translation,
+    Rigid,
+    RigidMirror,
+}
+
+impl From<Option<DomainMotion>> for APIChemisorbUnique {
+    fn from(m: Option<DomainMotion>) -> Self {
+        match m {
+            None => APIChemisorbUnique::Off,
+            Some(DomainMotion::None) => APIChemisorbUnique::Exact,
+            Some(DomainMotion::Translation) => APIChemisorbUnique::Translation,
+            Some(DomainMotion::Rigid) => APIChemisorbUnique::Rigid,
+            Some(DomainMotion::RigidMirror) => APIChemisorbUnique::RigidMirror,
+        }
+    }
+}
+
+impl From<APIChemisorbUnique> for Option<DomainMotion> {
+    fn from(u: APIChemisorbUnique) -> Self {
+        match u {
+            APIChemisorbUnique::Off => None,
+            APIChemisorbUnique::Exact => Some(DomainMotion::None),
+            APIChemisorbUnique::Translation => Some(DomainMotion::Translation),
+            APIChemisorbUnique::Rigid => Some(DomainMotion::Rigid),
+            APIChemisorbUnique::RigidMirror => Some(DomainMotion::RigidMirror),
+        }
+    }
 }
 
 /// One local-phase level (twin of `ChemisorbLevelView`).
@@ -1054,11 +1099,15 @@ pub struct APIChemisorbStats {
     pub local_relaxed: usize,
     pub to_relax: usize,
     pub unconverged: usize,
+    /// Listed after `unique` merged copies; `listed + merged` were kept.
     pub listed: usize,
     /// The budget was hit; the search is not exhaustive.
     pub truncated: bool,
     pub seconds: f64,
     pub local: Vec<APIChemisorbLevel>,
+    pub merged: usize,
+    /// Candidate pairs the comparison gave up on (not merged).
+    pub unique_undecided: usize,
 }
 
 /// One choice of the `bond_inventory` dropdown: a bond inventory and how many
@@ -1070,7 +1119,10 @@ pub struct APIChemisorbInventoryOption {
 
 /// One listed candidate (twin of `ChemisorbRowView`), kcal/mol throughout.
 pub struct APIChemisorbRow {
+    /// The search's rank; a gap shows where copies were merged.
     pub rank: usize,
+    /// Kept candidates merged into this one.
+    pub copies: usize,
     pub strain: f64,
     pub bonds: String,
     pub sites: String,
@@ -1197,6 +1249,9 @@ pub struct APIChemisorbDebugRow {
     pub mirror: Option<APIChemisorbMirror>,
     pub seating_clash: bool,
     pub pruned_clash: bool,
+    /// A kept candidate `unique` merged: the rank of the listed one it is a
+    /// copy of.
+    pub copy_of: Option<usize>,
     /// kcal/mol, when this path was relaxed.
     pub strain: Option<f64>,
     pub converged: bool,
@@ -1260,6 +1315,7 @@ impl From<&ChemisorbDebugRowView> for APIChemisorbDebugRow {
             }),
             seating_clash: v.seating_clash,
             pruned_clash: v.pruned_clash,
+            copy_of: v.copy_of,
             strain: v.strain,
             converged: v.converged,
             budget_cut: v.budget_cut,
@@ -1286,6 +1342,9 @@ impl From<&ChemisorbData> for APIChemisorbData {
             energy_window: d.energy_window,
             budget: d.budget,
             max_iterations: d.max_iterations,
+            unique: d.distinct.unique.into(),
+            unique_tolerance: d.distinct.tolerance,
+            local_hops: d.distinct.local_hops as i32,
         }
     }
 }
@@ -1306,6 +1365,11 @@ impl From<&APIChemisorbData> for ChemisorbData {
             energy_window: d.energy_window,
             budget: d.budget,
             max_iterations: d.max_iterations,
+            distinct: DistinctSettings {
+                unique: d.unique.into(),
+                tolerance: d.unique_tolerance,
+                local_hops: d.local_hops.max(0) as usize,
+            },
             stored: None,
             debug: None,
         }
@@ -1365,12 +1429,15 @@ impl From<&ChemisorbEvalCache> for APIChemisorbReport {
                 truncated: s.truncated,
                 seconds: s.seconds,
                 local: s.local.iter().map(APIChemisorbLevel::from).collect(),
+                merged: s.merged,
+                unique_undecided: s.unique_undecided,
             },
             rows: cache
                 .rows
                 .iter()
                 .map(|r| APIChemisorbRow {
                     rank: r.rank,
+                    copies: r.copies,
                     strain: r.strain,
                     bonds: r.bonds.clone(),
                     sites: r.sites.clone(),

@@ -349,6 +349,8 @@ String debugRowSummary(APIChemisorbDebugRow row,
         parts.add('clash');
       }
       if (row.budgetCut) parts.add('budget cut');
+      // A rank, not a row: `#n` in this tree always names a row.
+      if (row.copyOf != null) parts.add('copy of rank ${row.copyOf}');
   }
   return parts.join(' · ');
 }
@@ -360,6 +362,10 @@ String debugRowDetails(APIChemisorbDebugRow row) {
     'path: ${row.path}',
   ];
   if (row.candidate) lines.add('a candidate');
+  if (row.copyOf != null) {
+    lines.add('kept, then merged by `unique`: a copy of the candidate '
+        'ranked ${row.copyOf}');
+  }
   if (row.localParent) lines.add('a parent of the local phase');
   if (row.mirror != null) lines.add('mirror check: ${row.mirror!.name}');
   final rejected = [

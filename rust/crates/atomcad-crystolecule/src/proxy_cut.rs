@@ -246,6 +246,21 @@ pub fn bond_distances(
     sources: &[u32],
     riders: &FxHashMap<u32, u32>,
 ) -> FxHashMap<u32, u32> {
+    bond_distances_from(structure, sources, riders, false)
+}
+
+/// [`bond_distances`], with a choice for riders among the sources: skipped
+/// (`expand_rider_sources` false, what the proxy cut wants), or started at
+/// distance 0 and expanded from like any other source — so a hydrogen a
+/// reaction moved onto a heavy atom reaches that atom at distance 1
+/// (`chemisorption::distinct`'s local cluster). A rider is still never
+/// reached *through*: only a source rider is expanded.
+pub fn bond_distances_from(
+    structure: &AtomicStructure,
+    sources: &[u32],
+    riders: &FxHashMap<u32, u32>,
+    expand_rider_sources: bool,
+) -> FxHashMap<u32, u32> {
     let mut distance: FxHashMap<u32, u32> = FxHashMap::default();
     let mut queue: VecDeque<u32> = VecDeque::new();
 
@@ -253,7 +268,9 @@ pub fn bond_distances(
     seeds.sort_unstable();
     seeds.dedup();
     for seed in seeds {
-        if riders.contains_key(&seed) || structure.get_atom(seed).is_none() {
+        if (!expand_rider_sources && riders.contains_key(&seed))
+            || structure.get_atom(seed).is_none()
+        {
             continue;
         }
         if distance.insert(seed, 0).is_none() {

@@ -30,13 +30,21 @@
 //! to another call site, or to an older pose, can only fail to match — it is
 //! never output for inputs it was not computed from.
 //!
-//! **Every property is a search setting.** `formed_bonds` and
+//! **Every property but three is a search setting.** `formed_bonds` and
 //! `bond_inventory` restrict which hypotheses are candidates (so only that
 //! group is relaxed), and `top_n` / `energy_window` what is kept while relaxing
-//! (so only the listed structures are ever held); all are fingerprinted, and a
+//! (so only the kept structures are ever held); all are fingerprinted, and a
 //! change makes a stored result stale like any other. The filters exist because
 //! the ranking is UFF energy alone: fewer bonds rank first, and strains compare
 //! cleanly only within one bond inventory.
+//!
+//! The three exceptions are **output settings** (`unique`, `unique_tolerance`,
+//! `local_hops`; `ChemisorbData::distinct`, design
+//! `design_structure_comparison.md` §5): they decide how the kept candidates
+//! are *listed* — tagged `cs_adsorbate` / `cs_local`, and merged where two are
+//! the same binding up to a rigid motion of their local cluster — so they act
+//! on the stored result, are not fingerprinted, and a change re-lists it
+//! without a new Run. `top_n` counts candidates before merging.
 //!
 //! The `bond_inventory` dropdown's choices come from a second `plan` without
 //! the inventory filter — with it, the plan would only ever contain the
@@ -90,11 +98,12 @@ use atomcad_crystolecule::chemisorption::sequential::{
     step_near_misses,
 };
 use atomcad_crystolecule::chemisorption::{
-    BondInventory, TransferDirection, TransferRule, input_fingerprint, inventory_options,
-    is_transferable_element,
+    BondInventory, Distinct, DistinctSettings, TransferDirection, TransferRule, distinct,
+    input_fingerprint, inventory_options, is_transferable_element,
 };
 use atomcad_crystolecule::field::isosurface::{IsosurfaceColoring, IsosurfaceData, LevelBasis};
 use atomcad_crystolecule::simulation::uff::VdwMode;
+use atomcad_crystolecule::structure_compare::Motion;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -136,7 +145,7 @@ fn no_cap() -> i32 {
     -1
 }
 fn default_top_n() -> i32 {
-    10
+    SequentialSearch::default().top_n as i32
 }
 fn default_energy_window() -> f64 {
     30.0
@@ -205,7 +214,8 @@ pub struct ChemisorbData {
     /// any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bond_inventory: Option<String>,
-    /// At most this many candidates are kept and listed…
+    /// At most this many candidates are kept, counted before `unique` merges
+    /// copies of one binding…
     #[serde(default = "default_top_n")]
     pub top_n: i32,
     /// …and only those within this many kcal/mol of the best.
@@ -218,6 +228,11 @@ pub struct ChemisorbData {
     /// UFF iteration limit per relaxation.
     #[serde(default = "default_max_iterations")]
     pub max_iterations: i32,
+    /// How the kept candidates are listed: `unique` (merge copies of one
+    /// binding), its tolerance and the local cluster it compares. Output
+    /// settings, not search settings: never fingerprinted.
+    #[serde(default)]
+    pub distinct: DistinctSettings,
     /// The last search, written only by the node job's install
     /// (`ChemisorbOutcome`, `chemisorb_ops.rs`).
     /// Never saved and never an undo step: it is a pure function of the
@@ -248,6 +263,7 @@ impl Default for ChemisorbData {
             energy_window: default_energy_window(),
             budget: default_budget(),
             max_iterations: default_max_iterations(),
+            distinct: DistinctSettings::default(),
             stored: None,
             debug: None,
         }
@@ -338,8 +354,14 @@ pub struct ChemisorbStatsView {
     /// only after Run.
     pub to_relax: usize,
     pub unconverged: usize,
-    /// Candidates kept: the best `top_n` within the window.
+    /// Candidates listed: the best `top_n` within the window, after `unique`
+    /// merged copies of one binding.
     pub listed: usize,
+    /// Kept candidates `unique` merged into an earlier one (`listed + merged`
+    /// is the kept count).
+    pub merged: usize,
+    /// Candidate pairs the comparison gave up on (its work cap): not merged.
+    pub unique_undecided: usize,
     /// The budget was hit; the search is **not** exhaustive.
     pub truncated: bool,
     /// Wall time of the search, or of `plan` when `searched` is false (s).
@@ -379,7 +401,10 @@ impl ChemisorbStatsView {
 /// One listed candidate, as the `candidates` pin and the panel show it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ChemisorbRowView {
+    /// The search's rank: a gap shows where copies were merged.
     pub rank: usize,
+    /// Kept candidates merged into this one, itself excluded.
+    pub copies: usize,
     /// UFF energy against the separated state — the adsorbate and the
     /// substrate each relaxed alone (kcal/mol): the ranking key, lower is
     /// better.
@@ -425,6 +450,9 @@ pub struct ChemisorbEvalCache {
     /// holds (a run only appends the local rows), so the panel drops what it
     /// fetched of the tree when it, or `stats.searched`, changes.
     pub tree_key: u64,
+    /// The kept candidates `unique` merged, by tree row: the rank of the one
+    /// each was merged into (the debug tree's "copy of #rank").
+    pub copy_of_rank: HashMap<u32, usize>,
 }
 
 /// A search tree and what its rows refer to, shared with the node through an
@@ -524,6 +552,9 @@ pub struct ChemisorbDebugRowView {
     pub mirror: Option<Mirror>,
     pub seating_clash: bool,
     pub pruned_clash: bool,
+    /// A kept candidate `unique` merged: the rank of the listed one it is a
+    /// copy of.
+    pub copy_of: Option<usize>,
     /// The relaxation recorded for this path (a local duplicate has its own;
     /// a geometric one shares its canonical row's), kcal/mol.
     pub strain: Option<f64>,
@@ -550,7 +581,8 @@ impl ChemisorbEvalCache {
 
     /// The panel's view of `item`, `None` past the tree's end.
     pub fn debug_row(&self, item: DebugItem) -> Option<ChemisorbDebugRowView> {
-        self.has(item).then(|| debug_row_view(&self.tree, item))
+        self.has(item)
+            .then(|| debug_row_view(&self.tree, &self.copy_of_rank, item))
     }
 
     /// The children of `item` the panel lists: a state's next feet, a step's
@@ -573,7 +605,7 @@ impl ChemisorbEvalCache {
                     || c.is_step()
                     || child_verdict(plan, report, c.row) != ChildVerdict::Mirrored
             })
-            .map(|c| debug_row_view(&self.tree, c))
+            .map(|c| debug_row_view(&self.tree, &self.copy_of_rank, c))
             .collect()
     }
 
@@ -589,7 +621,11 @@ impl ChemisorbEvalCache {
 
 /// The panel's view of one item: the tree's counts, and what became of a
 /// leg's own hypothesis.
-fn debug_row_view(source: &ChemisorbTree, item: DebugItem) -> ChemisorbDebugRowView {
+fn debug_row_view(
+    source: &ChemisorbTree,
+    copy_of_rank: &HashMap<u32, usize>,
+    item: DebugItem,
+) -> ChemisorbDebugRowView {
     let plan = source.plan();
     let report = source.report();
     let tree = source.tree();
@@ -632,6 +668,7 @@ fn debug_row_view(source: &ChemisorbTree, item: DebugItem) -> ChemisorbDebugRowV
         mirror: None,
         seating_clash: false,
         pruned_clash: false,
+        copy_of: None,
         strain: None,
         converged: false,
         budget_cut: false,
@@ -675,6 +712,7 @@ fn debug_row_view(source: &ChemisorbTree, item: DebugItem) -> ChemisorbDebugRowV
     v.rejected_no_acceptor = r.rejected_no_acceptor;
     v.rejected_filter = r.rejected_filter;
     let canonical = shown_row(tree, item.row);
+    v.copy_of = copy_of_rank.get(&canonical).copied();
     if let Some(index) = tree.row(canonical).hypothesis {
         let h = match report {
             Some(rep) => rep.hypothesis(plan, index as usize),
@@ -767,6 +805,14 @@ impl ChemisorbData {
         Ok(config)
     }
 
+    /// The listing settings, validated in the node's own words.
+    pub fn distinct_config(&self) -> Result<DistinctSettings, String> {
+        self.distinct
+            .validate()
+            .map_err(|e| format!("chemisorb: {e}"))?;
+        Ok(self.distinct)
+    }
+
     /// The stored search, when it was computed from inputs with this
     /// fingerprint.
     pub fn matching_search(&self, fingerprint: u64) -> Option<&StoredSearch> {
@@ -774,6 +820,33 @@ impl ChemisorbData {
             .as_deref()
             .filter(|s| s.fingerprint == fingerprint)
     }
+}
+
+/// Every `unique` choice, in the panel's order: off, then from the strictest
+/// motion to the most permissive.
+pub const UNIQUE_CHOICES: [Option<Motion>; 5] = [
+    None,
+    Some(Motion::None),
+    Some(Motion::Translation),
+    Some(Motion::Rigid),
+    Some(Motion::RigidMirror),
+];
+
+/// The `unique` property's spelling: `off`, or the motion — `none` written
+/// `exact`, since "unique: none" would read as "off".
+pub fn unique_name(unique: Option<Motion>) -> &'static str {
+    match unique {
+        None => "off",
+        Some(Motion::None) => "exact",
+        Some(motion) => motion.name(),
+    }
+}
+
+/// The inverse of [`unique_name`]; `None` for an unknown spelling.
+pub fn parse_unique(text: &str) -> Option<Option<Motion>> {
+    UNIQUE_CHOICES
+        .into_iter()
+        .find(|&choice| unique_name(choice) == text.trim())
 }
 
 /// The `transfers` pin's records. `None` (disconnected) and an empty array
@@ -870,7 +943,7 @@ fn molecule(atoms: AtomicStructure) -> NetworkResult {
     })
 }
 
-fn row_view(rank: usize, c: &Candidate) -> ChemisorbRowView {
+fn row_view(rank: usize, copies: usize, c: &Candidate) -> ChemisorbRowView {
     let label = |id: u32| {
         let z = c.structure.get_atom(id).map_or(0, |a| a.atomic_number);
         format!("{}{id}", element_symbol(z))
@@ -901,6 +974,7 @@ fn row_view(rank: usize, c: &Candidate) -> ChemisorbRowView {
         .join("; ");
     ChemisorbRowView {
         rank,
+        copies,
         strain: c.strain,
         bonds: c.bond_inventory.to_string(),
         sites,
@@ -917,11 +991,11 @@ fn row_view(rank: usize, c: &Candidate) -> ChemisorbRowView {
     }
 }
 
-fn candidate_record(row: &ChemisorbRowView, structure: &AtomicStructure) -> NetworkResult {
+fn candidate_record(row: &ChemisorbRowView, structure: AtomicStructure) -> NetworkResult {
     let float = NetworkResult::Float;
     let int = |n: usize| NetworkResult::Int(n as i32);
     NetworkResult::record(vec![
-        ("structure".to_string(), molecule(structure.clone())),
+        ("structure".to_string(), molecule(structure)),
         ("rank".to_string(), int(row.rank)),
         ("strain".to_string(), float(row.strain)),
         (
@@ -950,6 +1024,7 @@ fn candidate_record(row: &ChemisorbRowView, structure: &AtomicStructure) -> Netw
                 ("vdw".to_string(), float(row.vdw)),
             ]),
         ),
+        ("copies".to_string(), int(row.copies)),
     ])
 }
 
@@ -1007,6 +1082,8 @@ fn stats_record(s: &ChemisorbStatsView) -> NetworkResult {
             "local".to_string(),
             NetworkResult::Array(s.local.iter().map(level_record).collect()),
         ),
+        ("merged".to_string(), int(s.merged)),
+        ("unique_undecided".to_string(), int(s.unique_undecided)),
     ])
 }
 
@@ -1067,6 +1144,55 @@ fn posed_step_again(
     .ok()
 }
 
+/// What a stored search lists: the rows, the tagged structures beside them,
+/// and which kept candidates were merged into which (by tree row, the
+/// representative's rank). Relaxes nothing; `unique` compares the kept
+/// candidates' local clusters.
+struct Listing {
+    rows: Vec<ChemisorbRowView>,
+    structures: Vec<AtomicStructure>,
+    copy_of_rank: HashMap<u32, usize>,
+    merged: usize,
+    undecided: usize,
+}
+
+fn listing(stored: &StoredSearch, settings: &DistinctSettings) -> Result<Listing, String> {
+    let report = &stored.report;
+    let Distinct {
+        candidates,
+        merged,
+        undecided,
+    } = distinct(&stored.plan.setup, report, settings).map_err(|e| format!("chemisorb: {e}"))?;
+    let mut listing = Listing {
+        rows: Vec::new(),
+        structures: Vec::new(),
+        copy_of_rank: HashMap::new(),
+        merged,
+        undecided,
+    };
+    for (i, (listed, c)) in candidates.into_iter().zip(&report.candidates).enumerate() {
+        match listed.copy_of {
+            Some(k) => {
+                listing.copy_of_rank.insert(c.row, k + 1);
+            }
+            None => {
+                listing.rows.push(row_view(i + 1, listed.copies, c));
+                listing.structures.push(listed.structure);
+            }
+        }
+    }
+    Ok(listing)
+}
+
+/// The `candidates` pin's readout when `unique` merged anything:
+/// "6 of 20 (14 copies merged)".
+fn merged_readout(listed: usize, merged: usize) -> Option<String> {
+    (merged > 0).then(|| {
+        let noun = if merged == 1 { "copy" } else { "copies" };
+        format!("{listed} of {} ({merged} {noun} merged)", listed + merged)
+    })
+}
+
 /// The four outputs and the panel's data for one evaluation, from the current
 /// inputs and whatever is stored. Relaxes nothing.
 pub fn chemisorb_outputs(
@@ -1074,7 +1200,8 @@ pub fn chemisorb_outputs(
     adsorbate: &AtomicStructure,
     substrate: &AtomicStructure,
     config: &SequentialSearch,
-) -> Result<(Vec<NetworkResult>, ChemisorbEvalCache), String> {
+    listing_settings: &DistinctSettings,
+) -> Result<(EvalOutput, ChemisorbEvalCache), String> {
     let fingerprint = input_fingerprint(adsorbate, substrate, config);
     let stored_arc = data
         .stored
@@ -1143,14 +1270,14 @@ pub fn chemisorb_outputs(
     let reach_used = planned.stats.local_phase || !config.transfers.is_empty();
 
     if let Some(stored) = stored {
-        let report = &stored.report;
-        let rows: Vec<ChemisorbRowView> = report
-            .candidates
-            .iter()
-            .enumerate()
-            .map(|(i, c)| row_view(i + 1, c))
-            .collect();
-        let s = &report.stats;
+        let Listing {
+            rows,
+            structures,
+            copy_of_rank,
+            merged,
+            undecided,
+        } = listing(stored, listing_settings)?;
+        let s = &stored.report.stats;
         let stats = ChemisorbStatsView {
             searched: true,
             stale: false,
@@ -1158,6 +1285,8 @@ pub fn chemisorb_outputs(
             local_relaxed: s.local_relaxed,
             unconverged: s.unconverged,
             listed: rows.len(),
+            merged,
+            unique_undecided: undecided,
             truncated: s.truncated,
             seconds: s.seconds,
             local: s.local.iter().map(ChemisorbLevelView::from).collect(),
@@ -1165,18 +1294,21 @@ pub fn chemisorb_outputs(
         };
         let records = rows
             .iter()
-            .zip(&report.candidates)
-            .map(|(row, c)| candidate_record(row, &c.structure))
+            .zip(structures)
+            .map(|(row, structure)| candidate_record(row, structure))
             .collect();
         let [debug, shapes] = debug_outputs;
-        let outputs = vec![
+        let mut output = EvalOutput::multi(vec![
             NetworkResult::Array(records),
             stats_record(&stats),
             debug,
             shapes,
-        ];
+        ]);
+        if let Some(readout) = merged_readout(stats.listed, merged) {
+            output.pin_subtitles.insert(CANDIDATES_OUTPUT_PIN, readout);
+        }
         return Ok((
-            outputs,
+            output,
             ChemisorbEvalCache {
                 stats,
                 rows,
@@ -1185,6 +1317,7 @@ pub fn chemisorb_outputs(
                 tree,
                 debug_selected,
                 tree_key: fingerprint,
+                copy_of_rank,
             },
         ));
     }
@@ -1202,7 +1335,7 @@ pub fn chemisorb_outputs(
         shapes,
     ];
     Ok((
-        outputs,
+        EvalOutput::multi(outputs),
         ChemisorbEvalCache {
             stats,
             rows: Vec::new(),
@@ -1211,6 +1344,7 @@ pub fn chemisorb_outputs(
             tree,
             debug_selected,
             tree_key: fingerprint,
+            copy_of_rank: HashMap::new(),
         },
     ))
 }
@@ -1271,12 +1405,16 @@ impl NodeData for ChemisorbData {
             Ok(config) => config,
             Err(message) => return all_pins(NetworkResult::Error(message)),
         };
-        match chemisorb_outputs(self, &adsorbate, &substrate, &config) {
-            Ok((outputs, cache)) => {
+        let listing_settings = match self.distinct_config() {
+            Ok(settings) => settings,
+            Err(message) => return all_pins(NetworkResult::Error(message)),
+        };
+        match chemisorb_outputs(self, &adsorbate, &substrate, &config, &listing_settings) {
+            Ok((output, cache)) => {
                 if network_stack.len() == 1 {
                     context.selected_node_eval_cache = Some(Box::new(cache));
                 }
-                EvalOutput::multi(outputs)
+                output
             }
             Err(message) => all_pins(NetworkResult::Error(message)),
         }
@@ -1361,6 +1499,20 @@ impl NodeData for ChemisorbData {
                 TextValue::Int(self.max_iterations),
             ),
         ];
+        props.extend([
+            (
+                "unique".to_string(),
+                TextValue::String(unique_name(self.distinct.unique).to_string()),
+            ),
+            (
+                "unique_tolerance".to_string(),
+                TextValue::Float(self.distinct.tolerance),
+            ),
+            (
+                "local_hops".to_string(),
+                TextValue::Int(self.distinct.local_hops as i32),
+            ),
+        ]);
         if let Some(n) = self.formed_bonds {
             props.push(("formed_bonds".to_string(), TextValue::Int(n)));
         }
@@ -1441,6 +1593,21 @@ impl NodeData for ChemisorbData {
         if let Some(v) = int("max_iterations")? {
             self.max_iterations = v;
         }
+        if let Some(v) = string("unique")? {
+            self.distinct.unique = parse_unique(&v).ok_or_else(|| {
+                format!(
+                    "unique must be one of {}, got '{v}'",
+                    UNIQUE_CHOICES.map(unique_name).join(", ")
+                )
+            })?;
+        }
+        if let Some(v) = float("unique_tolerance")? {
+            self.distinct.tolerance = v;
+        }
+        if let Some(v) = int("local_hops")? {
+            self.distinct.local_hops =
+                usize::try_from(v).map_err(|_| "local_hops must be 0 or more".to_string())?;
+        }
         if let Some(v) = int("formed_bonds")? {
             self.formed_bonds = Some(v);
         }
@@ -1496,7 +1663,21 @@ pub fn get_node_type() -> NodeType {
                       (exactly this inventory, as in a candidate's `bonds` field) before \
                       reading the ranking. **top_n** and **energy_window** (kcal/mol above \
                       the best) choose which relaxed candidates are kept. Every setting \
-                      needs a new Run. Changed atoms carry the `cs_changed` tag.\n\
+                      above needs a new Run. Changed atoms carry the `cs_changed` tag.\n\
+                      \n\
+                      **Listing** (no new Run needed). **unique** (default `rigid_mirror`) \
+                      lists one candidate per distinct binding: a kept candidate equal to a \
+                      better-ranked one up to the chosen motion (`exact`, `translation`, \
+                      `rigid`, `rigid_mirror`; `off` lists every kept candidate) is merged \
+                      into it, and the candidate's `copies` field counts what it stood for. \
+                      Two candidates are equal when their **local clusters** — the adsorbate \
+                      plus **local_hops** bonds into the substrate, hydrogens included but \
+                      never walked through — match atom for atom within \
+                      **unique_tolerance** (Å, at most 0.3) after the best fit, bonds \
+                      included. `top_n` counts candidates before merging, so raise it if \
+                      too few distinct bindings are listed; ranks keep their gaps. Every \
+                      candidate carries the tags `cs_adsorbate` (the adsorbate's atoms) and \
+                      `cs_local` (the cluster compared).\n\
                       \n\
                       **Debug view.** The panel's search tree alternates states and steps: \
                       the root, then under each state a **next foot** per foot the search \

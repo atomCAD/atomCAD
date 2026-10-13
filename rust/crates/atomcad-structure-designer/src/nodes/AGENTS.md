@@ -55,11 +55,17 @@ Built-in node type implementations. Each file defines one node type's behavior v
   shape — fingerprinted stored result plus a `prepare_job` — for the next
   expensive node rather than caching in `eval`; the fingerprint is what makes
   installing a job's result safe whatever was edited while it ran. **Every
-  property is a search setting** (fingerprinted; a change makes the result
-  stale), including the two filters and `top_n` / `energy_window`, because the
-  engine applies them before or while relaxing and keeps only what is listed.
-  A split into listing-only filters was tried and removed: it forced every
-  relaxed structure to be held. The `bond_inventory` dropdown is fed by a
+  property but three is a search setting** (fingerprinted; a change makes the
+  result stale), including the two filters and `top_n` / `energy_window`,
+  because the engine applies them before or while relaxing and holds only the
+  best `top_n`. The three exceptions are the **listing** settings
+  (`ChemisorbData::distinct`: `unique`, `unique_tolerance`, `local_hops`),
+  applied by `chemisorption::distinct` when `eval` builds its outputs from the
+  stored result — not fingerprinted, so a change re-lists without a Run. A new
+  setting is a search setting unless it can act on the stored report alone.
+  Applying the two *filters* after the search instead was tried and removed:
+  it forced every relaxed structure to be held (merging copies is different —
+  it only drops kept candidates). The `bond_inventory` dropdown is fed by a
   second `plan` without that filter (with it, the plan only contains the
   current choice); the plan covers legs 1–3 only, so deeper inventories come
   from a matching unfiltered result. The stored result keeps the **plan beside

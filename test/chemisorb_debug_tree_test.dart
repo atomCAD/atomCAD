@@ -28,6 +28,7 @@ APIChemisorbDebugRow item(
   APIChemisorbMirror? mirror,
   int? duplicateOf,
   double? strain,
+  int? copyOf,
 }) =>
     APIChemisorbDebugRow(
       item: id,
@@ -53,6 +54,7 @@ APIChemisorbDebugRow item(
       mirror: mirror,
       seatingClash: false,
       prunedClash: false,
+      copyOf: copyOf == null ? null : BigInt.from(copyOf),
       strain: strain,
       converged: true,
       budgetCut: false,
@@ -154,6 +156,13 @@ Future<void> expandFirst(WidgetTester tester) async {
 }
 
 void main() {
+  test('a kept candidate unique merged names the rank it is a copy of', () {
+    final copy = item(ref(9), strain: 1.5, copyOf: 2);
+    expect(debugRowSummary(copy), contains('copy of rank 2'));
+    expect(debugRowDetails(copy), contains('ranked 2'));
+    expect(debugRowSummary(item(ref(9), strain: 1.5)), isNot(contains('copy')));
+  });
+
   testWidgets('children are fetched only when an item is expanded',
       (tester) async {
     final h = Harness();

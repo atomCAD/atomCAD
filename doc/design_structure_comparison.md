@@ -1,8 +1,8 @@
 # Design: equivalent chemisorption results, and the `compare_atoms` node
 
 Status: **reviewed 2026-10-13 (correctness, architecture, tests, clarity);
-Phase 1 implemented 2026-10-13 (notes at the end of its section); Phases 2–4
-open.**
+Phases 1 and 2 implemented 2026-10-13 (notes at the end of each section);
+Phases 3–4 open.**
 
 Vocabulary used throughout: the search **keeps** up to `top_n` candidates
 (its stored result); `unique` **merges** a kept candidate into an earlier
@@ -803,6 +803,48 @@ adds):
 **Timing** (`#[ignore]`, release): `distinct()` on the hexapod fixture's
 stored result, printed beside the plan's time, so an output rebuild can be
 compared with an evaluation.
+
+**Implemented 2026-10-13.** Where the code differs from the text above:
+
+- **`ChemisorbData` holds `distinct: DistinctSettings`** (a nested JSON object,
+  `#[serde(default)]` on the field and the struct): the node data has flat
+  search fields, not a `SequentialSearch`, so "beside its `SequentialSearch`"
+  became a field beside them. The text format stays flat (`unique`,
+  `unique_tolerance`, `local_hops`; `unique` spelled `off` / `exact` /
+  `translation` / `rigid` / `rigid_mirror`). `DistinctSettings::validate`
+  checks the tolerance with `unique` off too, so a bad value is reported where
+  it was typed. The API twin of `Option<Motion>` is `APIChemisorbUnique`.
+- `bond_distances` keeps its signature (the proxy cut and its tests are
+  unchanged); the generalization is `bond_distances_from(…,
+  expand_rider_sources)`. `distinct` passes the H atoms as the riders.
+- **The Run summary lists after merging too** (`ChemisorbRunSummary::merged`,
+  "3 listed (2 copies merged)"): `ChemisorbWork` carries the listing settings
+  for that one count, so the CLI and the panel cannot disagree. They stay out
+  of the fingerprint.
+- The debug tree says **"copy of rank N"**, not "copy of #N": `#N` already
+  names a tree row everywhere in that tree.
+- The panel's Listing group is a second section after the search settings;
+  the tolerance greys out with `unique` off, `local_hops` does not (it still
+  decides `cs_local`).
+- **Tests.** "Merges are sound" and "merges happen" became one assertion:
+  under each motion, two kept candidates share a class **iff** a symmetry of
+  the unrelaxed slab of the allowed kind (the eight point operations of a
+  (100) cubic slab about the vertical, composed with the translation between
+  the sites) maps one site's 5 Å environment onto the slab at the other. On
+  the silyl fixture (12 dimer sites) `translation` gives 2 classes (the two
+  atoms of a dimer) and `rigid` / `rigid_mirror` give 1; a mirror pair is
+  asserted merged under `rigid_mirror`, but on Si(100) p2mm every mirror pair
+  is also related by a proper motion, so this fixture cannot tell
+  `rigid_mirror` from `rigid`. The node tests needed their own fixture: •OH or
+  a lone H over the three silyls 2.6 Å apart does **not** merge — each Si
+  relaxes towards its own neighbours, past 0.15 Å — so they use H over three
+  silyls 12 Å apart.
+- **Snapshots.** No node-type or candidate snapshot covers `chemisorb`, so
+  nothing changed under `cargo insta review`. The engine's three snapshot
+  tests that used the default `top_n` (water; the stand-in tripod and
+  hexapod, release-only) pin `top_n: 10`.
+- Measured (release): on the hexapod at three legs, `distinct` takes 0.011 s
+  over 40 kept candidates (35 merged), against 0.040 s for the plan.
 
 ### Phase 3 — The `compare_atoms` node
 

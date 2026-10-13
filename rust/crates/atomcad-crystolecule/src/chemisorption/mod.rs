@@ -29,10 +29,14 @@
 //! The modules beside `sequential` are what it is built from: the atoms a
 //! search reads and the change-set key ([`atoms`]), the bond inventory, one
 //! relaxation with its per-term energies ([`relax`]), transfers, and the
-//! input fingerprint a caller keys a stored result by.
+//! input fingerprint a caller keys a stored result by. [`distinct`] is what a
+//! caller lists from a finished search: the kept candidates tagged and, with
+//! `unique`, merged where they are one binding (output settings, never search
+//! settings).
 
 pub mod atoms;
 pub mod config;
+pub mod distinct;
 pub mod fingerprint;
 pub mod inventory;
 pub mod relax;
@@ -41,6 +45,10 @@ pub mod transfer;
 
 pub use atoms::{HypothesisKey, change_key, changed_atoms, free_valence};
 pub use config::{CHANGED_TAG, ChemisorptionError, Side};
+pub use distinct::{
+    ADSORBATE_TAG, Distinct, DistinctCandidate, DistinctSettings, LOCAL_TAG, distinct,
+    local_cluster,
+};
 pub use fingerprint::input_fingerprint;
 pub use inventory::{BondInventory, BondKind, InventoryParseError, inventory_options};
 pub use relax::{RelaxSettings, StrainTerms};

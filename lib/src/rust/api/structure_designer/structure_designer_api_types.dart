@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'structure_designer_api_types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `hash`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `hash`, `hash`
 
 /// The outcome of a tab switch (activate, or close of the active tab).
 /// `library_report` is what the dependency check did on activation
@@ -874,7 +874,7 @@ class APIChemisorbData {
   /// label); `None` = any.
   final String? bondInventory;
 
-  /// At most this many candidates kept and listed.
+  /// At most this many candidates kept, counted before `unique` merges.
   final int topN;
 
   /// Only candidates within this many kcal/mol of the best are kept.
@@ -885,6 +885,16 @@ class APIChemisorbData {
 
   /// UFF iteration limit per relaxation.
   final int maxIterations;
+
+  /// Listing, not searching (no new Run): merge kept candidates that are
+  /// one binding up to this motion.
+  final APIChemisorbUnique unique;
+
+  /// The comparison tolerance, Å, in (0, 0.3].
+  final double uniqueTolerance;
+
+  /// Bonds into the substrate the compared cluster reaches.
+  final int localHops;
 
   const APIChemisorbData({
     required this.adsorbateTag,
@@ -900,6 +910,9 @@ class APIChemisorbData {
     required this.energyWindow,
     required this.budget,
     required this.maxIterations,
+    required this.unique,
+    required this.uniqueTolerance,
+    required this.localHops,
   });
 
   @override
@@ -916,7 +929,10 @@ class APIChemisorbData {
       topN.hashCode ^
       energyWindow.hashCode ^
       budget.hashCode ^
-      maxIterations.hashCode;
+      maxIterations.hashCode ^
+      unique.hashCode ^
+      uniqueTolerance.hashCode ^
+      localHops.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -935,7 +951,10 @@ class APIChemisorbData {
           topN == other.topN &&
           energyWindow == other.energyWindow &&
           budget == other.budget &&
-          maxIterations == other.maxIterations;
+          maxIterations == other.maxIterations &&
+          unique == other.unique &&
+          uniqueTolerance == other.uniqueTolerance &&
+          localHops == other.localHops;
 }
 
 /// How a debug item is shown (twin of `sequential::DebugForm`).
@@ -1019,6 +1038,10 @@ class APIChemisorbDebugRow {
   final bool seatingClash;
   final bool prunedClash;
 
+  /// A kept candidate `unique` merged: the rank of the listed one it is a
+  /// copy of.
+  final BigInt? copyOf;
+
   /// kcal/mol, when this path was relaxed.
   final double? strain;
   final bool converged;
@@ -1051,6 +1074,7 @@ class APIChemisorbDebugRow {
     this.mirror,
     required this.seatingClash,
     required this.prunedClash,
+    this.copyOf,
     this.strain,
     required this.converged,
     required this.budgetCut,
@@ -1084,6 +1108,7 @@ class APIChemisorbDebugRow {
       mirror.hashCode ^
       seatingClash.hashCode ^
       prunedClash.hashCode ^
+      copyOf.hashCode ^
       strain.hashCode ^
       converged.hashCode ^
       budgetCut.hashCode ^
@@ -1119,6 +1144,7 @@ class APIChemisorbDebugRow {
           mirror == other.mirror &&
           seatingClash == other.seatingClash &&
           prunedClash == other.prunedClash &&
+          copyOf == other.copyOf &&
           strain == other.strain &&
           converged == other.converged &&
           budgetCut == other.budgetCut &&
@@ -1301,7 +1327,11 @@ class APIChemisorbReport {
 
 /// One listed candidate (twin of `ChemisorbRowView`), kcal/mol throughout.
 class APIChemisorbRow {
+  /// The search's rank; a gap shows where copies were merged.
   final BigInt rank;
+
+  /// Kept candidates merged into this one.
+  final BigInt copies;
   final double strain;
   final String bonds;
   final String sites;
@@ -1318,6 +1348,7 @@ class APIChemisorbRow {
 
   const APIChemisorbRow({
     required this.rank,
+    required this.copies,
     required this.strain,
     required this.bonds,
     required this.sites,
@@ -1336,6 +1367,7 @@ class APIChemisorbRow {
   @override
   int get hashCode =>
       rank.hashCode ^
+      copies.hashCode ^
       strain.hashCode ^
       bonds.hashCode ^
       sites.hashCode ^
@@ -1356,6 +1388,7 @@ class APIChemisorbRow {
       other is APIChemisorbRow &&
           runtimeType == other.runtimeType &&
           rank == other.rank &&
+          copies == other.copies &&
           strain == other.strain &&
           bonds == other.bonds &&
           sites == other.sites &&
@@ -1406,12 +1439,18 @@ class APIChemisorbStats {
   final BigInt localRelaxed;
   final BigInt toRelax;
   final BigInt unconverged;
+
+  /// Listed after `unique` merged copies; `listed + merged` were kept.
   final BigInt listed;
 
   /// The budget was hit; the search is not exhaustive.
   final bool truncated;
   final double seconds;
   final List<APIChemisorbLevel> local;
+  final BigInt merged;
+
+  /// Candidate pairs the comparison gave up on (not merged).
+  final BigInt uniqueUndecided;
 
   const APIChemisorbStats({
     required this.feet,
@@ -1441,6 +1480,8 @@ class APIChemisorbStats {
     required this.truncated,
     required this.seconds,
     required this.local,
+    required this.merged,
+    required this.uniqueUndecided,
   });
 
   @override
@@ -1471,7 +1512,9 @@ class APIChemisorbStats {
       listed.hashCode ^
       truncated.hashCode ^
       seconds.hashCode ^
-      local.hashCode;
+      local.hashCode ^
+      merged.hashCode ^
+      uniqueUndecided.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -1504,7 +1547,22 @@ class APIChemisorbStats {
           listed == other.listed &&
           truncated == other.truncated &&
           seconds == other.seconds &&
-          local == other.local;
+          local == other.local &&
+          merged == other.merged &&
+          uniqueUndecided == other.uniqueUndecided;
+}
+
+/// The `chemisorb` node's `unique` choice: off, or the motion two equal
+/// bindings may differ by (twin of `Option<structure_compare::Motion>`).
+enum APIChemisorbUnique {
+  off,
+
+  /// No motion: compared where they stand.
+  exact,
+  translation,
+  rigid,
+  rigidMirror,
+  ;
 }
 
 class APICircleData {

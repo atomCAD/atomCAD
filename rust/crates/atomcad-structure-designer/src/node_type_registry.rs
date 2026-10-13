@@ -1015,6 +1015,7 @@ impl NodeTypeRegistry {
                         "terms".to_string(),
                         DataType::Record(RecordType::Named("ChemisorbStrainTerms".to_string())),
                     ),
+                    ("copies".to_string(), DataType::Int),
                 ],
             ),
         );
@@ -1077,6 +1078,8 @@ impl NodeTypeRegistry {
                             "ChemisorbLevel".to_string(),
                         )))),
                     ),
+                    ("merged".to_string(), DataType::Int),
+                    ("unique_undecided".to_string(), DataType::Int),
                 ],
             ),
         );

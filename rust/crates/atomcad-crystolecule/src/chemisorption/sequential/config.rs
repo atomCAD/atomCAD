@@ -64,7 +64,10 @@ impl Default for SequentialSearch {
             formed_bonds: None,
             bond_inventory: None,
             budget: 10_000,
-            top_n: 10,
+            // Counts candidates before `unique` merges copies of one binding
+            // (design_structure_comparison.md D7, D13): copies have nearly the
+            // same strain and would crowd a small list.
+            top_n: 50,
             energy_window: 30.0,
             max_iterations: 2000,
             gradient_rms_tolerance: 1e-3,

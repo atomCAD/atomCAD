@@ -37,6 +37,7 @@ crates/atomcad-crystolecule/src/
 ├── bond_enthalpy.rs                # Mean single-bond enthalpies (12 elements) + Pauling estimate; currently unused
 ├── chemisorption/                  # Chemisorption search: building blocks here, the search itself in sequential/
 │   ├── config.rs                   # ChemisorptionError, Side, CHANGED_TAG
+│   ├── distinct.rs                 # What a finished search lists: cs_adsorbate / cs_local tags, local_cluster, unique (DistinctSettings → group_in_order)
 │   ├── atoms.rs                    # free_valence, reactive_atoms (by tag), change_key / HypothesisKey
 │   ├── fingerprint.rs              # input_fingerprint(): hash of both inputs + every SequentialSearch field (keys a stored result)
 │   ├── relax.rs                    # one UFF relaxation (RelaxSettings) with per-term energies (StrainTerms)
@@ -331,7 +332,17 @@ Rules that are easy to erode:
   (`bond_inventory`). **An inventory is a filter, never a sort key.** Do not reintroduce enthalpies here without that decision being
   revisited; the tables live on, unused, in `bond_enthalpy.rs` (copied
   verbatim from Appendix A of the design — never fill a gap from memory).
-- **Every setting is a search setting, applied as early as it can be.** The
+- **Listing is not searching** (`distinct.rs`,
+  `doc/design_structure_comparison.md` §5). `unique`, its tolerance and
+  `local_hops` are `DistinctSettings`, **not** `SequentialSearch` fields: they
+  run on a finished `SearchReport`, are never fingerprinted, and `top_n`
+  counts candidates *before* merging. The two tags (`cs_adsorbate`,
+  `cs_local`) are written there, on clones of the kept candidates — never in
+  `evaluate` beside `CHANGED_TAG`, which would change every stored candidate
+  and the engine's snapshots. The local cluster's hop walk is
+  `proxy_cut::bond_distances_from` with H as terminators and seed H expanded
+  (a transferred H reaches its acceptor at hop 1); do not write a second BFS.
+- **Every search setting is applied as early as it can be.** The
   two filters decide which hypotheses are candidates during enumeration (an
   inventory prunes a branch once a bond kind exceeds its count), so the plan
   is exactly what a run relaxes; `top_n` and the window are applied *while
@@ -803,7 +814,7 @@ motif_bond_inference → Motif, UnitCellStruct, atomic_constants
 miller        →  glam only (no crystolecule types at all)
 patch         →  AtomicStructure, UnitCellStruct, weld, hydrogen_passivation, guided_placement, GeoNode
 proxy_cut     →  AtomicStructure, atomic_constants, atomic_structure_utils, hydrogen_passivation
-chemisorption →  AtomicStructure, atomic_constants, guided_placement, hydrogen_passivation (terminator_bond_length, seating a transferred atom), simulation (rayon for the relaxations), rigid_fit (seating)
+chemisorption →  AtomicStructure, atomic_constants, guided_placement, hydrogen_passivation (terminator_bond_length, seating a transferred atom), simulation (rayon for the relaxations), rigid_fit (seating), structure_compare + proxy_cut (distinct.rs: unique, the hop walk)
 mechanosynth  →  AtomicStructure, atomic_constants, rigid_fit, structure_compare (re-exports compare_structures; serde_json for the two JSON files)
 structure_compare → AtomicStructure, atomic_constants, rigid_fit (rayon for grouping)
 guided_placement → AtomicStructure, simulation/uff (typer, params)
@@ -839,6 +850,7 @@ tests/crystolecule/
 ├── patch_test.rs                  # Cell selection, region depths, apply_patch pipeline
 ├── patch_build_test.rs            # Tiling-vector validation, tile extraction
 ├── bond_enthalpy_test.rs          # The (unused) enthalpy table: symmetry, conversion, Pauling estimates
+├── chemisorption_distinct_test.rs # distinct(): the tags, the local cluster's hop rule, merges = the slab's site orbits (checked from coordinates), thread counts, tag limit; timing (#[ignore])
 ├── chemisorption_sequential_support.rs  # Sequential search: fixtures, the independent oracle (§11.1) and audit (§11.5)
 ├── chemisorption_sequential_test.rs     # …plan only: predicates, hand-worked case, oracle (fixtures + 300 random), planted bindings, metamorphic, rules, tree
 ├── chemisorption_sequential_relax_test.rs  # …relaxing: what is relaxed, filters commute, strain invariances, threads, budget, run control, known answers

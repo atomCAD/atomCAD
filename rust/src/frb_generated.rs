@@ -16670,6 +16670,9 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_energyWindow = <f64>::sse_decode(deserializer);
         let mut var_budget = <i32>::sse_decode(deserializer);
         let mut var_maxIterations = <i32>::sse_decode(deserializer);
+        let mut var_unique = <crate::api::structure_designer::structure_designer_api_types::APIChemisorbUnique>::sse_decode(deserializer);
+        let mut var_uniqueTolerance = <f64>::sse_decode(deserializer);
+        let mut var_localHops = <i32>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIChemisorbData {
             adsorbate_tag: var_adsorbateTag,
             substrate_tag: var_substrateTag,
@@ -16684,6 +16687,9 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             energy_window: var_energyWindow,
             budget: var_budget,
             max_iterations: var_maxIterations,
+            unique: var_unique,
+            unique_tolerance: var_uniqueTolerance,
+            local_hops: var_localHops,
         };
     }
 }
@@ -16744,13 +16750,14 @@ impl SseDecode
         >>::sse_decode(deserializer);
         let mut var_seatingClash = <bool>::sse_decode(deserializer);
         let mut var_prunedClash = <bool>::sse_decode(deserializer);
+        let mut var_copyOf = <Option<usize>>::sse_decode(deserializer);
         let mut var_strain = <Option<f64>>::sse_decode(deserializer);
         let mut var_converged = <bool>::sse_decode(deserializer);
         let mut var_budgetCut = <bool>::sse_decode(deserializer);
         let mut var_canSeat = <bool>::sse_decode(deserializer);
         let mut var_canRelax = <bool>::sse_decode(deserializer);
         let mut var_defaultForm = <crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugForm>::sse_decode(deserializer);
-        return crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRow{item: var_item, kind: var_kind, legs: var_legs, label: var_label, path: var_path, duplicate_of: var_duplicateOf, children: var_children, hidden_duplicates: var_hiddenDuplicates, mirrored_children: var_mirroredChildren, mirrored_duplicates: var_mirroredDuplicates, candidates: var_candidates, mirrored: var_mirrored, undecided: var_undecided, clashes: var_clashes, rejected_valence: var_rejectedValence, rejected_no_acceptor: var_rejectedNoAcceptor, rejected_filter: var_rejectedFilter, near_misses: var_nearMisses, candidate: var_candidate, local_parent: var_localParent, mirror: var_mirror, seating_clash: var_seatingClash, pruned_clash: var_prunedClash, strain: var_strain, converged: var_converged, budget_cut: var_budgetCut, can_seat: var_canSeat, can_relax: var_canRelax, default_form: var_defaultForm};
+        return crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRow{item: var_item, kind: var_kind, legs: var_legs, label: var_label, path: var_path, duplicate_of: var_duplicateOf, children: var_children, hidden_duplicates: var_hiddenDuplicates, mirrored_children: var_mirroredChildren, mirrored_duplicates: var_mirroredDuplicates, candidates: var_candidates, mirrored: var_mirrored, undecided: var_undecided, clashes: var_clashes, rejected_valence: var_rejectedValence, rejected_no_acceptor: var_rejectedNoAcceptor, rejected_filter: var_rejectedFilter, near_misses: var_nearMisses, candidate: var_candidate, local_parent: var_localParent, mirror: var_mirror, seating_clash: var_seatingClash, pruned_clash: var_prunedClash, copy_of: var_copyOf, strain: var_strain, converged: var_converged, budget_cut: var_budgetCut, can_seat: var_canSeat, can_relax: var_canRelax, default_form: var_defaultForm};
     }
 }
 
@@ -16865,6 +16872,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_rank = <usize>::sse_decode(deserializer);
+        let mut var_copies = <usize>::sse_decode(deserializer);
         let mut var_strain = <f64>::sse_decode(deserializer);
         let mut var_bonds = <String>::sse_decode(deserializer);
         let mut var_sites = <String>::sse_decode(deserializer);
@@ -16880,6 +16888,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_vdw = <f64>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIChemisorbRow {
             rank: var_rank,
+            copies: var_copies,
             strain: var_strain,
             bonds: var_bonds,
             sites: var_sites,
@@ -16929,6 +16938,8 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_local = <Vec<
             crate::api::structure_designer::structure_designer_api_types::APIChemisorbLevel,
         >>::sse_decode(deserializer);
+        let mut var_merged = <usize>::sse_decode(deserializer);
+        let mut var_uniqueUndecided = <usize>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIChemisorbStats {
             feet: var_feet,
             sites: var_sites,
@@ -16957,6 +16968,25 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             truncated: var_truncated,
             seconds: var_seconds,
             local: var_local,
+            merged: var_merged,
+            unique_undecided: var_uniqueUndecided,
+        };
+    }
+}
+
+impl SseDecode
+    for crate::api::structure_designer::structure_designer_api_types::APIChemisorbUnique
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::structure_designer::structure_designer_api_types::APIChemisorbUnique::Off,
+1 => crate::api::structure_designer::structure_designer_api_types::APIChemisorbUnique::Exact,
+2 => crate::api::structure_designer::structure_designer_api_types::APIChemisorbUnique::Translation,
+3 => crate::api::structure_designer::structure_designer_api_types::APIChemisorbUnique::Rigid,
+4 => crate::api::structure_designer::structure_designer_api_types::APIChemisorbUnique::RigidMirror,
+            _ => unreachable!("Invalid variant for APIChemisorbUnique: {}", inner),
         };
     }
 }
@@ -25722,6 +25752,9 @@ impl flutter_rust_bridge::IntoDart
             self.energy_window.into_into_dart().into_dart(),
             self.budget.into_into_dart().into_dart(),
             self.max_iterations.into_into_dart().into_dart(),
+            self.unique.into_into_dart().into_dart(),
+            self.unique_tolerance.into_into_dart().into_dart(),
+            self.local_hops.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -25825,6 +25858,7 @@ impl flutter_rust_bridge::IntoDart
             self.mirror.into_into_dart().into_dart(),
             self.seating_clash.into_into_dart().into_dart(),
             self.pruned_clash.into_into_dart().into_dart(),
+            self.copy_of.into_into_dart().into_dart(),
             self.strain.into_into_dart().into_dart(),
             self.converged.into_into_dart().into_dart(),
             self.budget_cut.into_into_dart().into_dart(),
@@ -26014,6 +26048,7 @@ impl flutter_rust_bridge::IntoDart
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.rank.into_into_dart().into_dart(),
+            self.copies.into_into_dart().into_dart(),
             self.strain.into_into_dart().into_dart(),
             self.bonds.into_into_dart().into_dart(),
             self.sites.into_into_dart().into_dart(),
@@ -26079,6 +26114,8 @@ impl flutter_rust_bridge::IntoDart
             self.truncated.into_into_dart().into_dart(),
             self.seconds.into_into_dart().into_dart(),
             self.local.into_into_dart().into_dart(),
+            self.merged.into_into_dart().into_dart(),
+            self.unique_undecided.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -26095,6 +26132,36 @@ impl
     fn into_into_dart(
         self,
     ) -> crate::api::structure_designer::structure_designer_api_types::APIChemisorbStats {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
+    for crate::api::structure_designer::structure_designer_api_types::APIChemisorbUnique
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Off => 0.into_dart(),
+            Self::Exact => 1.into_dart(),
+            Self::Translation => 2.into_dart(),
+            Self::Rigid => 3.into_dart(),
+            Self::RigidMirror => 4.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::structure_designer::structure_designer_api_types::APIChemisorbUnique
+{
+}
+impl
+    flutter_rust_bridge::IntoIntoDart<
+        crate::api::structure_designer::structure_designer_api_types::APIChemisorbUnique,
+    > for crate::api::structure_designer::structure_designer_api_types::APIChemisorbUnique
+{
+    fn into_into_dart(
+        self,
+    ) -> crate::api::structure_designer::structure_designer_api_types::APIChemisorbUnique {
         self
     }
 }
@@ -33326,6 +33393,9 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <f64>::sse_encode(self.energy_window, serializer);
         <i32>::sse_encode(self.budget, serializer);
         <i32>::sse_encode(self.max_iterations, serializer);
+        <crate::api::structure_designer::structure_designer_api_types::APIChemisorbUnique>::sse_encode(self.unique, serializer);
+        <f64>::sse_encode(self.unique_tolerance, serializer);
+        <i32>::sse_encode(self.local_hops, serializer);
     }
 }
 
@@ -33379,6 +33449,7 @@ impl SseEncode
         <Option<crate::api::structure_designer::structure_designer_api_types::APIChemisorbMirror>>::sse_encode(self.mirror, serializer);
         <bool>::sse_encode(self.seating_clash, serializer);
         <bool>::sse_encode(self.pruned_clash, serializer);
+        <Option<usize>>::sse_encode(self.copy_of, serializer);
         <Option<f64>>::sse_encode(self.strain, serializer);
         <bool>::sse_encode(self.converged, serializer);
         <bool>::sse_encode(self.budget_cut, serializer);
@@ -33461,6 +33532,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <usize>::sse_encode(self.rank, serializer);
+        <usize>::sse_encode(self.copies, serializer);
         <f64>::sse_encode(self.strain, serializer);
         <String>::sse_encode(self.bonds, serializer);
         <String>::sse_encode(self.sites, serializer);
@@ -33507,6 +33579,22 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <bool>::sse_encode(self.truncated, serializer);
         <f64>::sse_encode(self.seconds, serializer);
         <Vec<crate::api::structure_designer::structure_designer_api_types::APIChemisorbLevel>>::sse_encode(self.local, serializer);
+        <usize>::sse_encode(self.merged, serializer);
+        <usize>::sse_encode(self.unique_undecided, serializer);
+    }
+}
+
+impl SseEncode
+    for crate::api::structure_designer::structure_designer_api_types::APIChemisorbUnique
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(match self {crate::api::structure_designer::structure_designer_api_types::APIChemisorbUnique::Off => { 0 }
+crate::api::structure_designer::structure_designer_api_types::APIChemisorbUnique::Exact => { 1 }
+crate::api::structure_designer::structure_designer_api_types::APIChemisorbUnique::Translation => { 2 }
+crate::api::structure_designer::structure_designer_api_types::APIChemisorbUnique::Rigid => { 3 }
+crate::api::structure_designer::structure_designer_api_types::APIChemisorbUnique::RigidMirror => { 4 }
+ _ => { unimplemented!(""); }}, serializer);
     }
 }
 

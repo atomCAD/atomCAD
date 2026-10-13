@@ -2,6 +2,7 @@
 //! carry. The settings are [`SequentialSearch`](super::sequential::SequentialSearch).
 
 use crate::atomic_structure::TagError;
+use crate::structure_compare::CompareError;
 
 /// The tag every output structure carries on the atoms whose bonds the
 /// candidate changed, so `apply_style` can highlight them.
@@ -39,6 +40,9 @@ pub enum ChemisorptionError {
     Relaxation(String),
     #[error("tagging the result failed: {0}")]
     Tag(#[from] TagError),
+    /// Comparing the kept candidates for `unique` failed (`distinct`).
+    #[error("comparing candidates: {0}")]
+    Compare(#[from] CompareError),
     /// The search's `JobControl` was cancelled; no partial report is kept.
     #[error("search cancelled")]
     Cancelled,

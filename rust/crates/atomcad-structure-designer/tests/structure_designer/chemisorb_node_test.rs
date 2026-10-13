@@ -6,8 +6,9 @@
 //! adds: the run model (evaluation shows the plan and never searches; Run
 //! stores a result keyed by an input fingerprint; a mismatch falls back to the
 //! plan and says `stale`), the two outputs and their records, the filters and
-//! `top_n` (search settings like any other), the eval cache the panel reads,
-//! the text format and the `.cnnd` round trip.
+//! `top_n` (search settings like any other), the listing settings (`unique`
+//! and its two companions, which are *not* search settings), the eval cache
+//! the panel reads, the text format and the `.cnnd` round trip.
 //!
 //! The main fixture is •OH over three silyl radicals: a one-foot adsorbate, so
 //! three one-leg hypotheses, small enough that a debug-build Run takes well
@@ -16,7 +17,10 @@
 
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
-use atomcad_crystolecule::chemisorption::CHANGED_TAG;
+use atomcad_crystolecule::chemisorption::{
+    ADSORBATE_TAG, CHANGED_TAG, DistinctSettings, LOCAL_TAG, distinct,
+};
+use atomcad_crystolecule::structure_compare::Motion;
 use atomcad_structure_designer::data_type::{DataType, RecordType};
 use atomcad_structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use atomcad_structure_designer::evaluator::network_result::{MoleculeData, NetworkResult};
@@ -169,12 +173,17 @@ fn network() -> Net {
 
 /// [`network`] with another adsorbate over the three silyls.
 fn network_with(adsorbate: AtomicStructure) -> Net {
+    network_of(adsorbate, three_silyls())
+}
+
+/// `value(adsorbate)` and `value(substrate)` wired into a `chemisorb`.
+fn network_of(adsorbate: AtomicStructure, substrate: AtomicStructure) -> Net {
     let name = "main";
     let mut designer = StructureDesigner::new();
     designer.add_node_network(name);
     designer.set_active_node_network_name(Some(name.to_string()));
     let adsorbate = add_value(&mut designer, name, molecule(adsorbate));
-    let substrate = add_value(&mut designer, name, molecule(three_silyls()));
+    let substrate = add_value(&mut designer, name, molecule(substrate));
     let node = designer.add_node("chemisorb", DVec2::new(200.0, 0.0));
     designer.connect_nodes(adsorbate, 0, node, 0);
     designer.connect_nodes(substrate, 0, node, 1);
@@ -935,7 +944,8 @@ fn every_property_round_trips_through_the_text_format() {
     const FULL: &str = "c = chemisorb { adsorbate_tag: \"feet\", substrate_tag: \"top\", \
                         anchor_reach: 4.5, tolerance: 0.25, reach: 2.5, clash_filter: false, \
                         max_formed_bonds: 3, top_n: 5, energy_window: 12.5, budget: 500, \
-                        max_iterations: 800 }";
+                        max_iterations: 800, unique: \"translation\", unique_tolerance: 0.25, \
+                        local_hops: 3 }";
     let serialized = author_and_serialize(&format!("{FULL}\n"));
     assert!(serialized.contains(FULL), "got:\n{serialized}");
     assert_eq!(serialized, author_and_serialize(&serialized));
@@ -944,22 +954,48 @@ fn every_property_round_trips_through_the_text_format() {
     const FILTERED: &str = "c = chemisorb { adsorbate_tag: \"\", substrate_tag: \"\", \
                             anchor_reach: 3.5, tolerance: 0.5, reach: 3.0, clash_filter: true, \
                             max_formed_bonds: -1, top_n: 10, energy_window: 30.0, \
-                            budget: 10000, max_iterations: 2000, formed_bonds: 2, \
+                            budget: 10000, max_iterations: 2000, unique: \"off\", \
+                            unique_tolerance: 0.15, local_hops: 2, formed_bonds: 2, \
                             bond_inventory: \"formed 2× O–Si\" }";
     let serialized = author_and_serialize(&format!("{FILTERED}\n"));
     assert!(serialized.contains(FILTERED), "got:\n{serialized}");
     assert_eq!(serialized, author_and_serialize(&serialized));
 
-    // The short form expands to the documented defaults (the Phase 0 spike's).
+    // The short form expands to the documented defaults (the Phase 0 spike's,
+    // `top_n` 50 and the listing defaults of design_structure_comparison.md).
     let short = author_and_serialize("c = chemisorb { }\n");
     assert!(
         short.contains(
             "c = chemisorb { adsorbate_tag: \"\", substrate_tag: \"\", anchor_reach: 3.5, \
-             tolerance: 0.5, reach: 3.0, clash_filter: true, max_formed_bonds: -1, top_n: 10, \
-             energy_window: 30.0, budget: 10000, max_iterations: 2000 }"
+             tolerance: 0.5, reach: 3.0, clash_filter: true, max_formed_bonds: -1, top_n: 50, \
+             energy_window: 30.0, budget: 10000, max_iterations: 2000, \
+             unique: \"rigid_mirror\", unique_tolerance: 0.15, local_hops: 2 }"
         ),
         "got:\n{short}"
     );
+
+    // Every `unique` spelling round-trips; an unknown one is refused.
+    for unique in ["off", "exact", "translation", "rigid", "rigid_mirror"] {
+        let serialized =
+            author_and_serialize(&format!("c = chemisorb {{ unique: \"{unique}\" }}\n"));
+        assert!(
+            serialized.contains(&format!("unique: \"{unique}\"")),
+            "got:\n{serialized}"
+        );
+    }
+    let mut data = ChemisorbData::default();
+    let props = |k: &str, v: TextValue| HashMap::from([(k.to_string(), v)]);
+    let err = data
+        .set_text_properties(&props("unique", TextValue::String("mirror".into())))
+        .unwrap_err();
+    assert!(
+        err.contains("off, exact, translation, rigid, rigid_mirror"),
+        "{err}"
+    );
+    let err = data
+        .set_text_properties(&props("local_hops", TextValue::Int(-1)))
+        .unwrap_err();
+    assert!(err.contains("local_hops"), "{err}");
 }
 
 #[test]
@@ -1082,6 +1118,16 @@ fn invalid_settings_are_reported_in_the_nodes_words() {
             "formed_bonds must be at least 1",
         ),
         ("budget", TextValue::Int(0), "budget must be at least 1"),
+        (
+            "unique_tolerance",
+            TextValue::Float(0.5),
+            "the unique tolerance must be in (0, 0.3]",
+        ),
+        (
+            "unique_tolerance",
+            TextValue::Float(0.0),
+            "the unique tolerance must be in (0, 0.3]",
+        ),
     ] {
         let restore = data(&designer, name, node);
         set_props(&mut designer, name, node, &[(key, value)]);
@@ -1102,6 +1148,252 @@ fn invalid_settings_are_reported_in_the_nodes_words() {
             .unwrap()
             .data = Box::new(restore);
     }
+}
+
+// ============================================================================
+// Listing: `unique` (design_structure_comparison.md §5)
+// ============================================================================
+
+/// A lone H radical over three silyl radicals 12 Å apart (everything but
+/// the Si frozen, all three alike), every one within `anchor_reach`: three
+/// one-leg candidates that relax to the same SiH4, so `unique` merges them
+/// into one. (Over [`three_silyls`] they do not: 2.6 Å apart, each Si relaxes
+/// towards its own neighbours.)
+fn h_over_isolated_silyls() -> Net {
+    let mut adsorbate = AtomicStructure::new();
+    adsorbate.add_atom(H, DVec3::new(0.3, 0.2, 2.2));
+    let mut substrate = AtomicStructure::new();
+    let sites: Vec<u32> = [
+        DVec3::ZERO,
+        DVec3::new(12.0, 0.0, 0.0),
+        DVec3::new(0.0, 12.0, 0.0),
+    ]
+    .into_iter()
+    .map(|p| add_silyl(&mut substrate, p))
+    .collect();
+    for id in substrate.atom_ids().copied().collect::<Vec<_>>() {
+        if !sites.contains(&id) {
+            substrate.set_atom_frozen(id, true);
+        }
+    }
+    let mut net = network_of(adsorbate, substrate);
+    set_props(
+        &mut net.designer,
+        net.name,
+        net.node,
+        &[("anchor_reach", TextValue::Float(13.0))],
+    );
+    net
+}
+
+/// The `candidates` pin's readout, evaluated as a refresh does.
+fn candidates_readout(designer: &mut StructureDesigner, network: &str, node: u64) -> String {
+    use atomcad_structure_designer::node_network::NodeRef;
+    let network = network.to_string();
+    designer.with_eval_context(false, |evaluator, registry, _prefs, context| {
+        let net = registry.node_networks.get(&network).unwrap();
+        let stack = vec![NetworkStackElement::root(net)];
+        let _ = evaluator.evaluate(&stack, node, 0, registry, false, context);
+        context.node_output_strings[&NodeRef::top(node)][0].clone()
+    })
+}
+
+fn refreshed_cache(designer: &mut StructureDesigner, node: u64) -> ChemisorbEvalCache {
+    designer.select_node(node);
+    designer.mark_node_data_changed(node);
+    designer.mark_full_refresh();
+    let changes = designer.get_pending_changes();
+    designer.refresh(&changes);
+    designer
+        .get_selected_node_eval_cache()
+        .and_then(|c| c.downcast_ref::<ChemisorbEvalCache>())
+        .cloned()
+        .expect("chemisorb eval cache")
+}
+
+fn with_listing(
+    designer: &StructureDesigner,
+    name: &str,
+    node: u64,
+    distinct: DistinctSettings,
+) -> ChemisorbData {
+    ChemisorbData {
+        distinct,
+        ..data(designer, name, node)
+    }
+}
+
+/// The outputs, the stats and the panel's rows all follow `distinct`.
+#[test]
+fn the_node_lists_what_distinct_answers() {
+    let Net {
+        mut designer,
+        name,
+        node,
+        ..
+    } = h_over_isolated_silyls();
+    let summary = designer.run_chemisorb(&[], node).unwrap();
+    assert_eq!((summary.relaxed, summary.listed, summary.merged), (3, 1, 2));
+    assert!(format_run_result(&summary).contains("1 listed (2 copies merged)"));
+
+    let stored = stored(&designer, name, node).unwrap();
+    let answer = distinct(
+        &stored.plan.setup,
+        &stored.report,
+        &DistinctSettings::default(),
+    )
+    .unwrap();
+    let listed: Vec<usize> = answer.listed().collect();
+    assert_eq!(listed, [0]);
+
+    let out = outputs(&mut designer, name, node);
+    let rows = array(&out[0]);
+    assert_eq!(rows.len(), listed.len());
+    for (row, &i) in rows.iter().zip(&listed) {
+        let f = fields(row);
+        assert_eq!(int(&f, "rank"), i as i32 + 1);
+        assert_eq!(int(&f, "copies"), answer.candidates[i].copies as i32);
+        let structure = atoms(&f["structure"]);
+        assert_eq!(
+            structure.atoms_with_tag(LOCAL_TAG),
+            answer.candidates[i].structure.atoms_with_tag(LOCAL_TAG)
+        );
+        assert_eq!(
+            structure.atoms_with_tag(ADSORBATE_TAG),
+            stored.plan.setup.adsorbate_atoms
+        );
+    }
+    let s = fields(&out[1]);
+    assert_eq!(int(&s, "listed"), 1);
+    assert_eq!(int(&s, "merged"), 2);
+    assert_eq!(int(&s, "unique_undecided"), 0);
+    assert_eq!(
+        (int(&s, "listed") + int(&s, "merged")) as usize,
+        stored.report.candidates.len()
+    );
+    assert_eq!(
+        candidates_readout(&mut designer, name, node),
+        "1 of 3 (2 copies merged)"
+    );
+
+    // The panel: listed rows only, each with its copies; a merged
+    // candidate's tree row knows the rank it is a copy of.
+    let cache = refreshed_cache(&mut designer, node);
+    assert_eq!((cache.stats.listed, cache.stats.merged), (1, 2));
+    assert_eq!(cache.rows.len(), 1);
+    assert_eq!((cache.rows[0].rank, cache.rows[0].copies), (1, 2));
+    for (i, c) in stored.report.candidates.iter().enumerate() {
+        let expected = answer.candidates[i].copy_of.map(|k| k + 1);
+        assert_eq!(cache.copy_of_rank.get(&c.row).copied(), expected);
+        let view = cache.debug_row(DebugItem::state(c.row)).unwrap();
+        assert_eq!(view.copy_of, expected, "row {}", c.row);
+    }
+}
+
+/// `unique`, `unique_tolerance` and `local_hops` act on the stored result:
+/// changing one after a Run keeps it current (no new Run, no stale flag) and
+/// changes what is listed.
+#[test]
+fn the_listing_settings_are_not_search_settings() {
+    let Net {
+        mut designer,
+        name,
+        node,
+        ..
+    } = h_over_isolated_silyls();
+    designer.run_chemisorb(&[], node).unwrap();
+    let first = stored(&designer, name, node).unwrap();
+    let listed = |designer: &mut StructureDesigner| {
+        let out = outputs(designer, name, node);
+        let s = fields(&out[1]);
+        assert!(boolean(&s, "searched") && !boolean(&s, "stale"));
+        let copies: Vec<i32> = array(&out[0])
+            .iter()
+            .map(|r| int(&fields(r), "copies"))
+            .collect();
+        (int(&s, "listed"), int(&s, "merged"), copies)
+    };
+    assert_eq!(listed(&mut designer), (1, 2, vec![2]));
+
+    let off = DistinctSettings {
+        unique: None,
+        ..DistinctSettings::default()
+    };
+    let edited = with_listing(&designer, name, node, off);
+    designer.set_chemisorb_data(&[], node, edited);
+    assert_eq!(listed(&mut designer), (3, 0, vec![0, 0, 0]));
+    assert!(
+        !candidates_readout(&mut designer, name, node).contains("merged"),
+        "no readout without merges"
+    );
+
+    // `exact`: the three sites are elsewhere, so nothing is equal in place.
+    let exact = DistinctSettings {
+        unique: Some(Motion::None),
+        ..DistinctSettings::default()
+    };
+    let edited = with_listing(&designer, name, node, exact);
+    designer.set_chemisorb_data(&[], node, edited);
+    assert_eq!(listed(&mut designer).0, 3);
+
+    for distinct in [
+        DistinctSettings {
+            tolerance: 0.3,
+            ..DistinctSettings::default()
+        },
+        DistinctSettings {
+            local_hops: 0,
+            ..DistinctSettings::default()
+        },
+    ] {
+        let edited = with_listing(&designer, name, node, distinct);
+        designer.set_chemisorb_data(&[], node, edited);
+        assert_eq!(listed(&mut designer), (1, 2, vec![2]), "{distinct:?}");
+    }
+    // `local_hops` 0 compares the H atoms alone: its cluster is the
+    // adsorbate.
+    let out = outputs(&mut designer, name, node);
+    let structure = atoms(&fields(&array(&out[0])[0])["structure"]).clone();
+    assert_eq!(
+        structure.atoms_with_tag(LOCAL_TAG),
+        structure.atoms_with_tag(ADSORBATE_TAG)
+    );
+
+    // Nothing was searched again: the one stored result served every listing.
+    assert!(Arc::ptr_eq(&first, &stored(&designer, name, node).unwrap()));
+}
+
+#[test]
+fn a_new_node_keeps_fifty_and_lists_distinct_bindings_by_default() {
+    let data = ChemisorbData::default();
+    assert_eq!(data.top_n, 50);
+    assert_eq!(data.distinct, DistinctSettings::default());
+    assert_eq!(data.distinct.unique, Some(Motion::RigidMirror));
+}
+
+/// A node saved before the listing settings existed loads with their
+/// defaults, and its saved `top_n` is kept.
+#[test]
+fn a_node_saved_before_the_listing_settings_loads_with_their_defaults() {
+    let old = r#"{"adsorbate_tag":"","substrate_tag":"","anchor_reach":3.5,
+        "tolerance":0.5,"reach":3.0,"clash_filter":true,"max_formed_bonds":-1,
+        "top_n":10,"energy_window":30.0,"budget":10000,"max_iterations":2000}"#;
+    let data: ChemisorbData = serde_json::from_str(old).expect("loads");
+    assert_eq!(data.top_n, 10);
+    assert_eq!(data.distinct, DistinctSettings::default());
+
+    // …and the settings round-trip through the saved JSON.
+    let edited = ChemisorbData {
+        distinct: DistinctSettings {
+            unique: None,
+            tolerance: 0.2,
+            local_hops: 1,
+        },
+        ..data
+    };
+    let json = serde_json::to_string(&edited).unwrap();
+    let back: ChemisorbData = serde_json::from_str(&json).unwrap();
+    assert_eq!(back.distinct, edited.distinct);
 }
 
 // ============================================================================

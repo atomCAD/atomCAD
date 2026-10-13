@@ -1028,7 +1028,9 @@ run `atomcad-cli run <node>`), the node shows the **plan**: `candidates` is
 empty and `stats` counts what a run would do, with `searched` false. After a
 run the node shows the result. If an input or a search setting changes
 afterwards, the node goes back to showing the plan with `stale` true, and the
-panel asks you to run again. Undo the change and the result comes back. Results
+panel asks you to run again. The three **listing** settings (`unique`,
+`unique_tolerance`, `local_hops`) are the exception: they re-list the result
+at once, without a new Run. Undo the change and the result comes back. Results
 are **not saved** with the file; after reopening a project, press Run again.
 The node's results draw nothing in the viewport: take a candidate's
 `structure` field downstream to see one. What the search does at each step is
@@ -1133,8 +1135,9 @@ every carbon carrying an H counts as a donor foot too.
   Build it with an `array` node of element type `ChemisorbTransfer` (the panel
   offers an element dropdown and the direction) or a `record_construct`.
 
-**Properties.** Every property is a search setting: changing one after a run
-makes the result stale, and you press Run again.
+**Properties.** Every property but the three listing ones (below the list) is
+a search setting: changing one after a run makes the result stale, and you
+press Run again.
 
 - `adsorbate_tag`, `substrate_tag` (default empty = all atoms) — only atoms
   carrying this tag take part. Tag the feet to keep a reactive working end out
@@ -1170,9 +1173,11 @@ makes the result stale, and you press Run again.
   (narrowed by `formed_bonds`), each with how many relaxations it takes.
   Inventories of four legs or more are known only after a run: run once with
   `formed_bonds` set, and the dropdown then lists them.
-- `top_n` (default 10) — at most this many candidates are kept and listed. The
-  rest are dropped as they are relaxed, so memory stays at `top_n` structures
-  however many bindings there are.
+- `top_n` (default 50) — at most this many candidates are kept. The rest are
+  dropped as they are relaxed, so memory stays at `top_n` structures however
+  many bindings there are. It counts candidates **before** `unique` merges
+  copies of one binding, so fewer are usually listed; if too few distinct
+  bindings are listed, raise it. A node saved with another value keeps it.
 - `energy_window` (default 30 kcal/mol) — of those, only candidates within this
   many kcal/mol of the best. Without a filter the best is usually a two-leg
   binding, so the default window often drops every full binding — set
@@ -1184,11 +1189,48 @@ makes the result stale, and you press Run again.
   in a release build; a facet tag cuts that several times.
 - `max_iterations` (default 2000) — the UFF iteration limit per relaxation.
 
+**Listing.** Three more properties decide how the kept candidates are listed.
+They act on the stored result, so changing one re-lists it at once — no new
+Run, and the result never goes stale for them.
+
+- `unique` (default `rigid_mirror`) — list each distinct binding once. Copies
+  of one binding are common: a symmetric molecule with its feet swapped over
+  the same sites, the same binding on an equivalent set of sites elsewhere on
+  the slab, or its mirror image. A kept candidate equal to a better-ranked one
+  is merged into it: it is dropped from `candidates`, and the one it was merged
+  into counts it in its `copies` field. Ranks keep their gaps, so a jump from
+  #1 to #4 means #2 and #3 were copies. The choices say which motion two equal
+  bindings may differ by: `exact` (none — compared where they stand),
+  `translation`, `rigid` (a rotation and a translation), `rigid_mirror` (also a
+  reflection); `off` lists every kept candidate. A candidate merges into the
+  **first** better-ranked one it equals, so the list does not depend on how the
+  search was scheduled.
+- `unique_tolerance` (default 0.15 Å, at most 0.3) — two bindings are equal
+  when their local clusters match atom for atom, same element and same bonds
+  (with the same orders), every atom within this distance of its partner after
+  the best fit of the allowed kind. The largest deviation decides, not the
+  average. Two relaxations that reach the same minimum agree only to the
+  minimizer's convergence, and a copy near the edge of the proxy sits in a
+  slightly different environment, so the tolerance cannot be tiny.
+- `local_hops` (default 2) — the **local cluster** compared: the molecule's
+  atoms plus everything within this many bonds of them in the substrate.
+  Hydrogens are included but never walked through, and every H on an included
+  atom is added, so the cluster says whether a neighbouring atom is a radical.
+  At 1 a dimer atom and a step-edge atom can look the same; 2 also takes in
+  each site's back-bond neighbours and dimer partner.
+
+Rarely, a pair of candidates is too symmetric for the comparison to decide
+within its work limit; such a pair is not merged and is counted in the stats
+(`unique_undecided`). "Equal" is always exact; at worst an undecided or missed
+pair leaves a copy in the list.
+
 The relaxations also follow the van der Waals setting in Preferences (the same
 one `relax` uses); changing it makes a result stale.
 
 In the text format `formed_bonds` and `bond_inventory` appear only when set:
-`formed_bonds: 3, bond_inventory: "formed 3× O–Si"`.
+`formed_bonds: 3, bond_inventory: "formed 3× O–Si"`. The listing properties are
+`unique: "rigid_mirror", unique_tolerance: 0.15, local_hops: 2`, `unique` one of
+`"off"`, `"exact"`, `"translation"`, `"rigid"`, `"rigid_mirror"`.
 
 **Output pins**
 
@@ -1199,8 +1241,10 @@ In the text format `formed_bonds` and `bond_inventory` appear only when set:
   formed bonds by atom id in binding order, then the transfers, e.g.
   `O2–Si45; H3 O2→Si47`), `formed_bonds` (the leg count; transfers not
   counted), `transfers`, `converged`, `seating_clash` (its start clashed; only
-  possible with `clash_filter` off), `worst_bond_ratio`, and `terms` (the
-  strain split into `stretch`, `bend`, `torsion`, `inversion`, `vdw`). A record
+  possible with `clash_filter` off), `worst_bond_ratio`, `terms` (the
+  strain split into `stretch`, `bend`, `torsion`, `inversion`, `vdw`), and
+  `copies` (how many kept candidates `unique` merged into this one, itself
+  excluded; copies the search did not keep are not counted). A record
   array draws nothing in the viewport; to look at a candidate, take its
   `structure` field (`array_at` + `record_destructure`).
 - `stats` (`ChemisorbStats`) — the whole search. From the plan (legs 1–3):
@@ -1212,7 +1256,10 @@ In the text format `formed_bonds` and `bond_inventory` appear only when set:
   `mirror_undecided`, `candidates`, `parents` (three-leg bindings relaxed only
   to grow legs 4+ from), `seating_clashes`, `pruned_clash`, `to_relax` and
   `local_phase` (legs 4+ follow). From the run: `relaxed` (both phases),
-  `local_relaxed`, `unconverged`, `listed` (kept after top N and the window),
+  `local_relaxed`, `unconverged`, `listed` (kept after top N and the window,
+  then after `unique` merged copies), `merged` (kept candidates `unique` merged
+  into an earlier one; `listed + merged` is the kept count),
+  `unique_undecided` (candidate pairs the comparison could not decide),
   `truncated`, `seconds`, and `local`, one `ChemisorbLevel` record per local leg
   (`legs`, `parents`, `paths`, `hypotheses`, `duplicates`, the pruned counts,
   `candidates`, `to_relax`, `relaxed`, `unconverged`, `truncated`,
@@ -1228,7 +1275,13 @@ In the text format `formed_bonds` and `bond_inventory` appear only when set:
   not, to show or hide the shape.
 
 In every output structure the atoms whose bonds changed carry the tag
-`cs_changed`, so an `apply_style` rule can highlight them.
+`cs_changed`, so an `apply_style` rule can highlight them. Every candidate's
+structure also carries `cs_adsorbate` (the atoms that came from the molecule,
+a transferred H included) and `cs_local` (the local cluster `unique`
+compares), whether `unique` is on or off. The pin readout of `candidates` says
+how many were merged, e.g. *6 of 20 (14 copies merged)*. The three tags need
+three of a structure's 32 tag names; inputs that already use more than 29
+between them are reported as an error.
 
 **How candidates are ranked.** By `strain`: the UFF energy of the relaxed
 candidate minus that of the **separated** state — the molecule relaxed on its
@@ -1273,8 +1326,10 @@ legs 2 and 3 on any site the foot spacing and bond lengths allow, plus
 transferred H placed by the rule when its leg forms; minus the mirror-image
 three-leg assignments, and the clashing seatings when `clash_filter` is on. It
 depends on the order in which legs bond (an H that took a site a later leg
-could have used is not tried elsewhere), and it does not recognise the same
-pattern repeated on equivalent sites elsewhere on the proxy. Bindings that need
+could have used is not tried elsewhere). The search itself does not recognise
+the same pattern repeated on equivalent sites elsewhere on the proxy — every
+copy is relaxed and counts towards `top_n` — but `unique` merges the copies it
+kept when they are listed. Bindings that need
 the molecule to lose a group of atoms or to break one of its own bonds (other
 than by the transfer rule) are not searched.
 
@@ -1284,14 +1339,18 @@ follow, whose count is known only after Run), or what the last run did, and a
 red line when the result is stale. Below it are the search settings — the tags,
 the three distances (*Reach* greyed while nothing reads it), *Prune seatings
 that clash*, *Limit legs* — then the filters (*Only an exact number of legs*,
-*Bond inventory*), then *Top N* and the energy window. Then the search
+*Bond inventory*), then *Top N* and the energy window; then, in a group of
+its own, the **Listing** settings (*Unique*, its tolerance — greyed while
+*Unique* is off — and *Local hops*), which need no new Run. Then the search
 statistics, with **not exhaustive** in red when the budget was hit: the feet and
 sites, the one-, two- and three-leg counts, the candidates, the mirror and clash
 counts, and one line per local leg after a run; and the ranked candidates, one
 line each with the strain, the bond inventory underneath, an `unconv.` mark on a
-relaxation that did not converge and a `clash` mark on one whose seating
-clashed. A line over the list says how many relaxed candidates top N and the
-window dropped. Hover a row for its sites, worst bond ratio and strain terms.
+relaxation that did not converge, a `clash` mark on one whose seating
+clashed, and *+N copies* on one `unique` merged copies into. Lines over the
+list say how many relaxed candidates top N and the window dropped, and how
+many kept ones were merged; the statistics give the kept and the listed
+counts. Hover a row for its sites, worst bond ratio and strain terms.
 The statistics appear once the node is displayed. A `chemisorb` inside a custom
 network shows its result only where that network is called with the inputs the
 run used; everywhere else it shows the plan.
@@ -1310,7 +1369,9 @@ O13* → `+ O13–Si61` → … A next foot says how many sites its test accepte
 (*anchor*, *shell*, *ring* or *reach*), and how many of those lead to a
 mirror image (*mirr.*), are undecided by the mirror check (*undec.*) or clash
 when seated (*clash*). A leg that was relaxed shows its strain; a clash-pruned
-leg is greyed; *budget cut* marks one the budget stopped. Hover an item for
+leg is greyed; *budget cut* marks one the budget stopped; *copy of rank N*
+marks a kept candidate `unique` merged into the candidate ranked N (it is
+still a relaxed binding of the search, just not listed). Hover an item for
 its path and the rejections.
 
 Items are loaded when you expand them, so a large tree opens at once. A binding

@@ -16,12 +16,19 @@ import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 /// substrate, found leg by leg, relaxed and ranked
 /// (`design_chemisorption_sequential.md`).
 ///
-/// Every setting is a search setting: changing any of them makes a stored
-/// result stale. The formed-bond and bond-inventory filters choose which
-/// hypotheses are candidates, so a run relaxes only that group; `top_n` and
-/// the energy window choose what is kept. (A split into "filters after
+/// Every setting but three is a search setting: changing any of them makes a
+/// stored result stale. The formed-bond and bond-inventory filters choose
+/// which hypotheses are candidates, so a run relaxes only that group; `top_n`
+/// and the energy window choose what is kept. (A split into "filters after
 /// search" existed and was removed — it was arbitrary and forced every
 /// relaxed structure to be kept.)
+///
+/// The three exceptions are the **Listing** group — `unique`, its tolerance
+/// and `local_hops` (`doc/design_structure_comparison.md` §5). They decide how
+/// the kept candidates are listed (copies of one binding merged into the best
+/// ranked), act on the stored result and never make it stale, so they sit in a
+/// group of their own after the search settings. `top_n` counts candidates
+/// before merging, which is why its label says "kept".
 ///
 /// The three distances are one per phase of the search: `anchor_reach` for
 /// leg 1, `tolerance` for legs 2 and 3, `reach` for legs 4 and later and for
@@ -111,6 +118,9 @@ class _ChemisorbEditorState extends State<ChemisorbEditor> {
     double? energyWindow,
     int? budget,
     int? maxIterations,
+    APIChemisorbUnique? unique,
+    double? uniqueTolerance,
+    int? localHops,
   }) {
     final data = widget.data;
     if (data == null) return;
@@ -134,6 +144,9 @@ class _ChemisorbEditorState extends State<ChemisorbEditor> {
         energyWindow: energyWindow ?? data.energyWindow,
         budget: budget ?? data.budget,
         maxIterations: maxIterations ?? data.maxIterations,
+        unique: unique ?? data.unique,
+        uniqueTolerance: uniqueTolerance ?? data.uniqueTolerance,
+        localHops: localHops ?? data.localHops,
       ),
     );
   }
@@ -302,7 +315,7 @@ class _ChemisorbEditorState extends State<ChemisorbEditor> {
 
           // ---- what to keep: applied while relaxing ----------------------
           IntInput(
-            label: 'Top N (candidates kept)',
+            label: 'Top N (kept, before merging copies)',
             value: data.topN,
             minimumValue: 1,
             onChanged: (v) => _commit(topN: v),
@@ -328,6 +341,38 @@ class _ChemisorbEditorState extends State<ChemisorbEditor> {
             value: data.maxIterations,
             minimumValue: 1,
             onChanged: (v) => _commit(maxIterations: v),
+          ),
+          const SizedBox(height: 16),
+
+          // ---- how the kept candidates are listed: no new Run -------------
+          const _SectionHeader(
+            title: 'Listing',
+            note: 'Applied to the last run at once — no new Run needed.',
+          ),
+          const SizedBox(height: 8),
+          _UniqueDropdown(
+            value: data.unique,
+            onChanged: (v) => _commit(unique: v),
+          ),
+          const SizedBox(height: 8),
+          Opacity(
+            opacity: data.unique == APIChemisorbUnique.off ? 0.5 : 1.0,
+            child: IgnorePointer(
+              ignoring: data.unique == APIChemisorbUnique.off,
+              child: FloatInput(
+                label: 'Unique tolerance (Å, at most 0.3)',
+                value: data.uniqueTolerance,
+                onChanged: (v) => _commit(uniqueTolerance: v),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          // Not greyed with `unique` off: it still decides the `cs_local` tag.
+          IntInput(
+            label: 'Local hops (cluster compared)',
+            value: data.localHops,
+            minimumValue: 0,
+            onChanged: (v) => _commit(localHops: v),
           ),
           const SizedBox(height: 16),
 
@@ -533,8 +578,12 @@ class _StatsCard extends StatelessWidget {
                         '${level.truncated ? ' (cut)' : ''}'),
               _Row('Relaxed', '${stats.relaxed}'),
               _Row('Unconverged', '${stats.unconverged}'),
-              if (stats.searched)
-                _Row('Kept (top N / window)', '${stats.listed}'),
+              if (stats.searched) ...[
+                _Row('Kept (top N / window)', '${stats.listed + stats.merged}'),
+                _Row('Listed (distinct)', '${stats.listed}'),
+                if (stats.uniqueUndecided > BigInt.zero)
+                  _Row('Unique: pairs undecided', '${stats.uniqueUndecided}'),
+              ],
               _Row(stats.searched ? 'Search time' : 'Plan time',
                   '${formatNatural(stats.seconds, 3)} s'),
             ],
@@ -555,12 +604,18 @@ class _CandidatesCard extends StatelessWidget {
 
   const _CandidatesCard({required this.report});
 
-  /// What top N and the window dropped, in one line.
-  static String _hiddenLine(APIChemisorbStats s) {
-    final dropped = s.relaxed - s.listed;
-    return dropped > BigInt.zero
-        ? 'Not kept: $dropped past top N / energy window.'
-        : '';
+  /// What top N and the window dropped, and what `unique` merged, one line
+  /// each.
+  static List<String> _hiddenLines(APIChemisorbStats s) {
+    final dropped = s.relaxed - s.listed - s.merged;
+    final copies = s.merged == BigInt.one ? 'copy' : 'copies';
+    return [
+      if (dropped > BigInt.zero)
+        'Not kept: $dropped past top N / energy window.',
+      if (s.merged > BigInt.zero)
+        'Merged: ${s.merged} kept $copies of the bindings below '
+            '(ranks keep their gaps).',
+    ];
   }
 
   @override
@@ -568,7 +623,7 @@ class _CandidatesCard extends StatelessWidget {
     final theme = Theme.of(context);
     final mono = theme.textTheme.bodySmall?.copyWith(fontFamily: 'monospace');
     final rows = report.rows;
-    final hidden = _hiddenLine(report.stats);
+    final hidden = _hiddenLines(report.stats);
     return Card(
       elevation: 1,
       child: Padding(
@@ -577,11 +632,11 @@ class _CandidatesCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Candidates (kcal/mol)', style: theme.textTheme.titleSmall),
-            if (hidden.isNotEmpty)
+            for (final line in hidden)
               Padding(
                 padding: const EdgeInsets.only(top: 2.0),
                 child: Text(
-                  hidden,
+                  line,
                   style: theme.textTheme.bodySmall
                       ?.copyWith(fontStyle: FontStyle.italic),
                 ),
@@ -609,6 +664,7 @@ class _CandidatesCard extends StatelessWidget {
                     children: [
                       Text(
                         '#${row.rank}  ${formatNatural(row.strain, 4)}'
+                        '${row.copies > BigInt.zero ? '  +${row.copies} copies' : ''}'
                         '${row.converged ? '' : '  unconv.'}'
                         '${row.seatingClash ? '  clash' : ''}',
                         style: mono?.copyWith(
@@ -669,6 +725,44 @@ class _CapField extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// The `unique` choice: off, or the motion two equal bindings may differ by.
+class _UniqueDropdown extends StatelessWidget {
+  final APIChemisorbUnique value;
+  final ValueChanged<APIChemisorbUnique> onChanged;
+
+  const _UniqueDropdown({required this.value, required this.onChanged});
+
+  static String _label(APIChemisorbUnique u) => switch (u) {
+        APIChemisorbUnique.off => 'Off — list every kept candidate',
+        APIChemisorbUnique.exact => 'Exact (in place)',
+        APIChemisorbUnique.translation => 'Up to a translation',
+        APIChemisorbUnique.rigid => 'Up to a rigid motion',
+        APIChemisorbUnique.rigidMirror => 'Up to a rigid motion or mirror',
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<APIChemisorbUnique>(
+      key: ValueKey('chemisorb_unique_$value'),
+      decoration: const InputDecoration(
+        labelText: 'Unique (merge copies of one binding)',
+        border: OutlineInputBorder(),
+        isDense: true,
+        contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      ),
+      isExpanded: true,
+      value: value,
+      items: [
+        for (final u in APIChemisorbUnique.values)
+          DropdownMenuItem(value: u, child: Text(_label(u))),
+      ],
+      onChanged: (v) {
+        if (v != null) onChanged(v);
+      },
     );
   }
 }

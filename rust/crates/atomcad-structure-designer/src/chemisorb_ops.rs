@@ -37,12 +37,12 @@ use crate::nodes::chemisorb::{
 };
 use crate::structure_designer::StructureDesigner;
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
-use atomcad_crystolecule::chemisorption::input_fingerprint;
 use atomcad_crystolecule::chemisorption::sequential::{
     DebugForm, DebugItem, RowKind, SearchReport, SequentialPlan, SequentialSearch, debug_view,
     evaluate, find_item, item_children, item_label, item_path, needs_relaxation, plan, row_forms,
     step_near_misses, tree_of,
 };
+use atomcad_crystolecule::chemisorption::{DistinctSettings, distinct, input_fingerprint};
 use atomcad_util::job_control::JobControl;
 use atomcad_util::number_format::format_natural;
 use std::sync::Arc;
@@ -55,8 +55,12 @@ pub const CHEMISORB_JOB_LABEL: &str = "Chemisorption search";
 pub struct ChemisorbRunSummary {
     /// Relaxations run, both phases.
     pub relaxed: usize,
-    /// Candidates kept and listed: the best `top_n` within the window.
+    /// Candidates listed: the best `top_n` within the window, after `unique`
+    /// merged copies of one binding (at the node's listing settings when Run
+    /// was pressed).
     pub listed: usize,
+    /// Kept candidates `unique` merged into an earlier one.
+    pub merged: usize,
     /// The strain of the best listed candidate (kcal/mol), `None` when
     /// nothing is listed.
     pub best_strain: Option<f64>,
@@ -72,8 +76,13 @@ pub struct ChemisorbRunSummary {
 /// One line per fact: what the CLI's `run` prints and the job's install
 /// summary.
 pub fn format_run_result(result: &ChemisorbRunSummary) -> String {
+    let merged = match result.merged {
+        0 => String::new(),
+        1 => " (1 copy merged)".to_string(),
+        n => format!(" ({n} copies merged)"),
+    };
     let mut lines = vec![format!(
-        "Relaxed {} hypotheses in {} s; {} listed.",
+        "Relaxed {} hypotheses in {} s; {} listed{merged}.",
         result.relaxed,
         format_natural(result.seconds, 3),
         result.listed
@@ -100,12 +109,15 @@ pub fn format_run_result(result: &ChemisorbRunSummary) -> String {
 
 /// A prepared search: the evaluated inputs, the config (every setting,
 /// filters and `top_n` included) and the fingerprint of all of it. Owns
-/// everything, so it can run on any thread.
+/// everything, so it can run on any thread. The listing settings ride along
+/// for the summary only: they are not fingerprinted, and the node re-lists the
+/// stored result at whatever they are when it is evaluated.
 pub struct ChemisorbWork {
     pub adsorbate: AtomicStructure,
     pub substrate: AtomicStructure,
     pub config: SequentialSearch,
     pub fingerprint: u64,
+    pub listing: DistinctSettings,
 }
 
 /// A finished search, ready to install. The summary is computed on the
@@ -126,12 +138,14 @@ impl ChemisorbData {
         let (adsorbate, substrate) = atomic_inputs(adsorbate, substrate)?;
         let config =
             self.search_config(inputs.context().use_vdw_cutoff, transfer_rules(transfers)?)?;
+        let listing = self.distinct_config()?;
         let fingerprint = input_fingerprint(&adsorbate, &substrate, &config);
         Ok(ChemisorbWork {
             adsorbate,
             substrate,
             config,
             fingerprint,
+            listing,
         })
     }
 }
@@ -151,10 +165,15 @@ impl ChemisorbWork {
             c.set_phase("Relaxing");
         }
         let report = evaluate(&planned, &self.config, control).map_err(fail)?;
+        let merged = distinct(&planned.setup, &report, &self.listing)
+            .map_err(fail)?
+            .merged;
+        // The best candidate is always listed: nothing ranks before it.
         let best = report.candidates.first();
         let summary = ChemisorbRunSummary {
             relaxed: report.stats.relaxed,
-            listed: report.candidates.len(),
+            listed: report.candidates.len() - merged,
+            merged,
             best_strain: best.map(|c| c.strain),
             best_bonds: best.map_or_else(String::new, |c| c.bond_inventory.to_string()),
             truncated: report.stats.truncated,
