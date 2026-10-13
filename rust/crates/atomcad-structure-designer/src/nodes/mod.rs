@@ -19,6 +19,7 @@ pub mod circle;
 pub mod closure;
 pub mod collect;
 pub mod comment;
+pub mod compare_atoms;
 pub mod cuboid;
 pub mod dematerialize;
 pub mod diff;

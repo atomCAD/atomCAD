@@ -4505,6 +4505,14 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  void setCompareAtomsData(BigInt nodeId, APICompareAtomsData data) {
+    structure_designer_api.setCompareAtomsData(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
+    refreshFromKernel();
+  }
+
   void setAtomComposeDiffData(BigInt nodeId, APIAtomComposeDiffData data) {
     structure_designer_api.setAtomComposediffData(
         scopePath: scopeChainToBytes(propertyEditorScopeChain),

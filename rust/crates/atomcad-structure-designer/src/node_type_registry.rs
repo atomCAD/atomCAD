@@ -20,6 +20,7 @@ use super::nodes::circle::get_node_type as circle_get_node_type;
 use super::nodes::closure::get_node_type as closure_get_node_type;
 use super::nodes::collect::get_node_type as collect_get_node_type;
 use super::nodes::comment::get_node_type as comment_get_node_type;
+use super::nodes::compare_atoms::get_node_type as compare_atoms_get_node_type;
 use super::nodes::cuboid::get_node_type as cuboid_get_node_type;
 use super::nodes::dematerialize::get_node_type as dematerialize_get_node_type;
 use super::nodes::diff::get_node_type as diff_get_node_type;
@@ -1084,6 +1085,29 @@ impl NodeTypeRegistry {
             ),
         );
 
+        // `CompareReport` — the `compare_atoms` node's `report` pin
+        // (`doc/design_structure_comparison.md` §4): the fit's largest and RMS
+        // deviation (NaN without a fit), whether the search hit its work cap,
+        // the pre-check that rejected the pair (empty if none), and each
+        // difference as a line of text. Plain fields, for the reasons
+        // `MechanosynthStep` gives. Append new fields last.
+        ret.built_in_record_type_defs.insert(
+            "CompareReport".to_string(),
+            RecordTypeDef::from_named_fields(
+                "CompareReport",
+                vec![
+                    ("max_deviation".to_string(), DataType::Float),
+                    ("rmsd".to_string(), DataType::Float),
+                    ("undecided".to_string(), DataType::Bool),
+                    ("rejected_by".to_string(), DataType::String),
+                    (
+                        "mismatches".to_string(),
+                        DataType::Array(Box::new(DataType::String)),
+                    ),
+                ],
+            ),
+        );
+
         // Annotation nodes
         ret.add_node_type(comment_get_node_type());
 
@@ -1198,6 +1222,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(relax_get_node_type());
         ret.add_node_type(proxy_get_node_type());
         ret.add_node_type(chemisorb_get_node_type());
+        ret.add_node_type(compare_atoms_get_node_type());
         ret.add_node_type(passivate_get_node_type());
         ret.add_node_type(remove_hydrogen_get_node_type());
         ret.add_node_type(infer_bonds_get_node_type());

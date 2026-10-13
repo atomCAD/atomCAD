@@ -31,6 +31,7 @@ use atomcad_structure_designer::nodes::chemisorb::{
 use atomcad_structure_designer::nodes::comment::{
     CommentAnchor as DomainCommentAnchor, WireAnchor as DomainWireAnchor,
 };
+use atomcad_structure_designer::nodes::compare_atoms::CompareAtomsData;
 use atomcad_structure_designer::nodes::proxy::{ProxyData, ProxyStats};
 use atomcad_structure_designer::structure_designer::{
     ExecuteResult as DomainExecuteResult, NodeEvaluationResult as DomainNodeEvaluationResult,
@@ -967,6 +968,84 @@ impl From<&APIProxyData> for ProxyData {
             passiv_elem: data.passiv_elem,
             core: data.core,
             fill: data.fill,
+            available_tags: std::cell::RefCell::new(Vec::new()),
+        }
+    }
+}
+
+/// Dart-facing twin of
+/// `atomcad_structure_designer::nodes::compare_atoms::CompareAtomsData` — the
+/// four persisted properties plus the write-only `available_tags` snapshot the
+/// editor's suggestion chips read (as `APIProxyData` carries it).
+pub struct APICompareAtomsData {
+    /// Compare only the atoms carrying this tag, on both sides. Empty = every
+    /// atom.
+    pub tag: String,
+    pub motion: APICompareMotion,
+    /// Max per-atom deviation after the fit, Å, in (0, 0.3].
+    pub tolerance: f64,
+    /// Bonds between compared atoms must agree in presence and order.
+    pub compare_bonds: bool,
+    /// Both inputs' tag names, captured at the last eval and offered as
+    /// suggestions. **Ignored by the setter** — it is a snapshot, not a
+    /// property.
+    pub available_tags: Vec<String>,
+}
+
+/// Which motions may relate the two structures `compare_atoms` compares (twin
+/// of `structure_compare::Motion`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum APICompareMotion {
+    /// Compared where they stand.
+    None,
+    Translation,
+    Rigid,
+    RigidMirror,
+}
+
+impl From<DomainMotion> for APICompareMotion {
+    fn from(m: DomainMotion) -> Self {
+        match m {
+            DomainMotion::None => APICompareMotion::None,
+            DomainMotion::Translation => APICompareMotion::Translation,
+            DomainMotion::Rigid => APICompareMotion::Rigid,
+            DomainMotion::RigidMirror => APICompareMotion::RigidMirror,
+        }
+    }
+}
+
+impl From<APICompareMotion> for DomainMotion {
+    fn from(m: APICompareMotion) -> Self {
+        match m {
+            APICompareMotion::None => DomainMotion::None,
+            APICompareMotion::Translation => DomainMotion::Translation,
+            APICompareMotion::Rigid => DomainMotion::Rigid,
+            APICompareMotion::RigidMirror => DomainMotion::RigidMirror,
+        }
+    }
+}
+
+impl From<&CompareAtomsData> for APICompareAtomsData {
+    fn from(data: &CompareAtomsData) -> Self {
+        APICompareAtomsData {
+            tag: data.tag.clone(),
+            motion: data.motion.into(),
+            tolerance: data.tolerance,
+            compare_bonds: data.compare_bonds,
+            available_tags: data.available_tags.borrow().clone(),
+        }
+    }
+}
+
+impl From<&APICompareAtomsData> for CompareAtomsData {
+    /// `available_tags` is deliberately dropped: it is an eval-time snapshot
+    /// the node rewrites on every evaluation, never something the panel owns.
+    fn from(data: &APICompareAtomsData) -> Self {
+        CompareAtomsData {
+            tag: data.tag.clone(),
+            motion: data.motion.into(),
+            tolerance: data.tolerance,
+            compare_bonds: data.compare_bonds,
             available_tags: std::cell::RefCell::new(Vec::new()),
         }
     }

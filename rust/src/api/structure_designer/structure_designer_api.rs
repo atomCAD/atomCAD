@@ -106,6 +106,7 @@ use crate::api::structure_designer::structure_designer_api_types::APIAtomCompose
 use crate::api::structure_designer::structure_designer_api_types::APIAtomCutData;
 use crate::api::structure_designer::structure_designer_api_types::APIBoolData;
 use crate::api::structure_designer::structure_designer_api_types::APIColormap;
+use crate::api::structure_designer::structure_designer_api_types::APICompareAtomsData;
 use crate::api::structure_designer::structure_designer_api_types::APICuboidData;
 use crate::api::structure_designer::structure_designer_api_types::APIDiffStats;
 use crate::api::structure_designer::structure_designer_api_types::APIDrawingPlaneData;
@@ -186,6 +187,7 @@ use atomcad_structure_designer::nodes::circle::CircleData;
 use atomcad_structure_designer::nodes::closure::{ClosureData, ClosureKind};
 use atomcad_structure_designer::nodes::collect::CollectData;
 use atomcad_structure_designer::nodes::comment::CommentData;
+use atomcad_structure_designer::nodes::compare_atoms::CompareAtomsData;
 use atomcad_structure_designer::nodes::cuboid::CuboidData;
 use atomcad_structure_designer::nodes::drawing_plane::DrawingPlaneData;
 use atomcad_structure_designer::nodes::drawing_plane::DrawingPlaneEvalCache;
@@ -3703,6 +3705,23 @@ pub fn get_apply_diff_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIAppl
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_compare_atoms_data(scope_path: Vec<u64>, node_id: u64) -> Option<APICompareAtomsData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let data = cad_instance
+                    .structure_designer
+                    .get_node_network_data_scoped(&scope_path, node_id)?
+                    .as_any_ref()
+                    .downcast_ref::<CompareAtomsData>()?;
+                Some(APICompareAtomsData::from(data))
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn get_atom_composediff_data(
     scope_path: Vec<u64>,
     node_id: u64,
@@ -6040,6 +6059,24 @@ pub fn set_apply_diff_data(scope_path: Vec<u64>, node_id: u64, data: APIApplyDif
             cad_instance
                 .structure_designer
                 .set_node_network_data_scoped(&scope_path, node_id, apply_diff_data);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+/// `available_tags` on the incoming twin is ignored: it is the node's
+/// eval-time snapshot, not a property the panel owns.
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_compare_atoms_data(scope_path: Vec<u64>, node_id: u64, data: APICompareAtomsData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            cad_instance
+                .structure_designer
+                .set_node_network_data_scoped(
+                    &scope_path,
+                    node_id,
+                    Box::new(CompareAtomsData::from(&data)),
+                );
             refresh_structure_designer_auto(cad_instance);
         });
     }

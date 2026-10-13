@@ -1,0 +1,17 @@
+---
+source: crates/atomcad-structure-designer/tests/structure_designer/compare_atoms_test.rs
+expression: s
+---
+inputs:
+  a: HasAtoms
+  b: HasAtoms
+outputs:
+  equal: Bool
+  aligned: Molecule
+  report: Record(CompareReport)
+CompareReport:
+  max_deviation: Float
+  rmsd: Float
+  undecided: Bool
+  rejected_by: String
+  mismatches: [String]

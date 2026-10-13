@@ -87,6 +87,7 @@ import 'package:flutter_cad/structure_designer/node_data/infer_bonds_editor.dart
 import 'package:flutter_cad/structure_designer/node_data/atom_replace_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/export_atoms_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/apply_diff_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/compare_atoms_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_composediff_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_cut_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/lattice_vecs_editor.dart';
@@ -1221,6 +1222,17 @@ class NodeDataWidget extends StatelessWidget {
         return ApplyDiffEditor(
           nodeId: selectedNode.id,
           data: applyDiffData,
+          model: model,
+        );
+      case 'compare_atoms':
+        final compareAtomsData = getCompareAtomsData(
+          scopePath: scopePath,
+          nodeId: selectedNode.id,
+        );
+
+        return CompareAtomsEditor(
+          nodeId: selectedNode.id,
+          data: compareAtomsData,
           model: model,
         );
       case 'atom_composediff':

@@ -1,8 +1,8 @@
 # Design: equivalent chemisorption results, and the `compare_atoms` node
 
 Status: **reviewed 2026-10-13 (correctness, architecture, tests, clarity);
-Phases 1 and 2 implemented 2026-10-13 (notes at the end of each section);
-Phases 3–4 open.**
+Phases 1–3 implemented 2026-10-13 (notes at the end of each section);
+Phase 4 (the manual walkthrough) open.**
 
 Vocabulary used throughout: the search **keeps** up to `top_n` candidates
 (its stored result); `unique` **merges** a kept candidate into an earlier
@@ -868,6 +868,31 @@ compared with an evaluation.
   from `b`.
 - Text-format round trip of the four properties; the node-type snapshot of
   the new node, reviewed with `cargo insta review`.
+
+**Implemented 2026-10-13.** Where the code differs from the text above:
+
+- **The text format quotes `motion`**: `motion: "rigid_mirror"`, not the bare
+  identifier §4 shows. The text format has no enum value; every enum-valued
+  property is a `TextValue::String`, `chemisorb`'s `unique` included.
+- **`aligned` is the pin displayed on creation**
+  (`default_displayed_output_pins` = `{1}`): `equal` is a `Bool` and draws
+  nothing, and the fit overlaid on `a` is what a user adds the node to see.
+- The node keeps a write-only `available_tags` snapshot (both inputs' tag
+  names) for the panel's suggestion chips, as `proxy` does; the panel is the
+  four properties only — the verdict and report are read from the pins.
+- Errors (bad tolerance, missing tag, empty input, non-atomic input) are output
+  on all three pins; an upstream error is forwarded verbatim on all three.
+- **Tests.** No node-type snapshot harness exists (as Phase 2 found), so the
+  "node-type snapshot" is an insta snapshot of the pin layout and the
+  `CompareReport` fields, in the style of `product_pin_layout_snapshot`. The
+  "agrees with `unique`" test runs Phase 2's node fixtures (H over three silyls
+  12 Å apart: one binding, three copies; •OH over three silyls 2.6 Å apart: no
+  merges) with `unique` off and checks every pair of kept candidates: the
+  node's `equal` is the core's verdict at `unique`'s settings on the `cs_local`
+  clusters, every copy equals its representative, and no two listed candidates
+  are equal — both verdicts occur. The near-miss test lifts one atom of a
+  planar cluster by 3·tolerance (Phase 1's construction), so it reports **two**
+  mismatches, as Phase 1 recorded.
 
 ### Phase 4 — Walkthrough (maintainer, by hand)
 

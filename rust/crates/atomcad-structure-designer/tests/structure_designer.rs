@@ -667,6 +667,8 @@ mod text_format_zone_body_path_test;
 
 #[path = "structure_designer/chemisorb_node_test.rs"]
 mod chemisorb_node_test;
+#[path = "structure_designer/compare_atoms_test.rs"]
+mod compare_atoms_test;
 
 #[path = "structure_designer/node_jobs_support.rs"]
 mod node_jobs_support;

@@ -1222,7 +1222,8 @@ Run, and the result never goes stale for them.
 Rarely, a pair of candidates is too symmetric for the comparison to decide
 within its work limit; such a pair is not merged and is counted in the stats
 (`unique_undecided`). "Equal" is always exact; at worst an undecided or missed
-pair leaves a copy in the list.
+pair leaves a copy in the list. To see why two candidates were merged or kept
+apart, compare them with [`compare_atoms`](#compare_atoms).
 
 The relaxations also follow the van der Waals setting in Preferences (the same
 one `relax` uses); changing it makes a result stale.
@@ -1448,6 +1449,77 @@ tool with OH legs, each giving its H to the surface:
 h_off = array { element_type: Record(ChemisorbTransfer), elements: [{ element: 1, direction: "to_substrate" }] }
 mount = chemisorb { adsorbate: tool, substrate: surface, adsorbate_tag: "feet", substrate_tag: "facet", transfers: h_off, formed_bonds: 3 }
 ```
+
+## compare_atoms
+
+Compares two atomic structures up to a tolerance and, optionally, a rigid
+motion: are `a` and `b` the same structure, moved? It is the comparison
+`chemisorb`'s `unique` uses, so it is also how you find out why two candidates
+were merged or kept apart.
+
+**Equal** means there is a motion of the allowed kind and a one-to-one matching
+of the atoms — same element — such that, after the best (least-squares) fit of
+that matching, every atom lies within `tolerance` of its partner. The largest
+deviation decides, not the average. With `compare_bonds` on, the matching must
+also agree on every bond and its order.
+
+**Input pins**
+
+- `a`, `b` (`HasAtoms`) — the two structures. A crystal is compared by its
+  atoms.
+
+**Properties**
+
+- `tag` (default empty) — compare only the atoms carrying this tag, on both
+  sides; empty compares every atom. Bonds from tagged to untagged atoms are
+  ignored: what they say about the surroundings is included by tagging more
+  atoms. The panel offers the tags found in either input.
+- `motion` (default `rigid_mirror`) — what may relate the two: `none`
+  (compared where they stand), `translation`, `rigid` (a rotation and a
+  translation) or `rigid_mirror` (also a reflection, so a molecule equals its
+  mirror image).
+- `tolerance` (default 0.15 Å, at most 0.3) — the largest distance a matched
+  atom may lie from its partner after the fit.
+- `compare_bonds` (default on) — bonds must agree too.
+
+The defaults are `unique`'s, so with only `tag` set the node compares exactly as
+`unique` does.
+
+**Output pins**
+
+- `equal` (`Bool`) — the verdict. True is exact: a matching was found. False is
+  very likely right but, for the rigid motions, not proven — a missed match only
+  ever says "not equal", never the reverse.
+- `aligned` (`Molecule`) — all of `b`, moved onto `a` by the best fit found
+  (unmoved when there is none, and always under `none`). This pin is displayed
+  when the node is added; display `a` too and the two overlay, so you see which
+  atoms agree and which do not.
+- `report` (`CompareReport` record) — `max_deviation` and `rmsd` (Å, of the fit
+  shown in `aligned`; NaN when there is none), `undecided` (the search hit its
+  work limit before deciding — rare, highly symmetric structures only),
+  `rejected_by` (when a quick check already ruled the pair out — different
+  element counts, bond counts, bonded neighbourhoods, overall shape or
+  interatomic distances — that check's reason, e.g. *element counts differ:
+  C 6/5*; empty otherwise), and `mismatches` (one line per atom or bond that
+  differs under the fit shown).
+
+A `tolerance` outside (0, 0.3], a `tag` that no atom of `a` (or of `b`)
+carries, and an input without atoms are errors.
+
+**Why were two `chemisorb` candidates merged?** Set the `chemisorb` node's
+`unique` to `off` — it re-lists at once, no new Run — so every kept candidate
+is listed; take two of them (`array_at` on `candidates`, then the record's
+`structure` field) into `a` and `b`; set `tag` to `cs_local`. Leave `motion`
+and `tolerance` at their defaults, or set them to the values `unique` had.
+`equal` is then `unique`'s verdict on that pair, `aligned` shows the fit, and
+`report` names what broke it.
+
+With `motion: "none"`, `compare_bonds` on and no tag, the node is plain
+structural equality up to the tolerance.
+
+Text format:
+`compare_atoms { tag: "cs_local", motion: "rigid_mirror", tolerance: 0.15, compare_bonds: true }`,
+`motion` one of `"none"`, `"translation"`, `"rigid"`, `"rigid_mirror"`.
 
 ## mechanosynth
 

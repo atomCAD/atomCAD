@@ -889,6 +889,12 @@ APIApplyDiffData? getApplyDiffData(
         .crateApiStructureDesignerStructureDesignerApiGetApplyDiffData(
             scopePath: scopePath, nodeId: nodeId);
 
+APICompareAtomsData? getCompareAtomsData(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetCompareAtomsData(
+            scopePath: scopePath, nodeId: nodeId);
+
 APIAtomComposeDiffData? getAtomComposediffData(
         {required Uint64List scopePath, required BigInt nodeId}) =>
     RustLib.instance.api
@@ -1504,6 +1510,16 @@ void setApplyDiffData(
         required APIApplyDiffData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetApplyDiffData(
+            scopePath: scopePath, nodeId: nodeId, data: data);
+
+/// `available_tags` on the incoming twin is ignored: it is the node's
+/// eval-time snapshot, not a property the panel owns.
+void setCompareAtomsData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APICompareAtomsData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetCompareAtomsData(
             scopePath: scopePath, nodeId: nodeId, data: data);
 
 void setAtomComposediffData(

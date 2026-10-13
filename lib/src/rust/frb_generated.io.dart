@@ -220,6 +220,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APICommentData dco_decode_api_comment_data(dynamic raw);
 
   @protected
+  APICompareAtomsData dco_decode_api_compare_atoms_data(dynamic raw);
+
+  @protected
+  APICompareMotion dco_decode_api_compare_motion(dynamic raw);
+
+  @protected
   APICompatibilityReport dco_decode_api_compatibility_report(dynamic raw);
 
   @protected
@@ -881,6 +887,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APICommentData dco_decode_box_autoadd_api_comment_data(dynamic raw);
+
+  @protected
+  APICompareAtomsData dco_decode_box_autoadd_api_compare_atoms_data(
+      dynamic raw);
 
   @protected
   APICompatibilityReport dco_decode_box_autoadd_api_compatibility_report(
@@ -1679,6 +1689,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APICommentData? dco_decode_opt_box_autoadd_api_comment_data(dynamic raw);
 
   @protected
+  APICompareAtomsData? dco_decode_opt_box_autoadd_api_compare_atoms_data(
+      dynamic raw);
+
+  @protected
   APICompatibilityReport? dco_decode_opt_box_autoadd_api_compatibility_report(
       dynamic raw);
 
@@ -2339,6 +2353,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APICommentData sse_decode_api_comment_data(SseDeserializer deserializer);
+
+  @protected
+  APICompareAtomsData sse_decode_api_compare_atoms_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APICompareMotion sse_decode_api_compare_motion(SseDeserializer deserializer);
 
   @protected
   APICompatibilityReport sse_decode_api_compatibility_report(
@@ -3101,6 +3122,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APICommentData sse_decode_box_autoadd_api_comment_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APICompareAtomsData sse_decode_box_autoadd_api_compare_atoms_data(
       SseDeserializer deserializer);
 
   @protected
@@ -4055,6 +4080,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APICompareAtomsData? sse_decode_opt_box_autoadd_api_compare_atoms_data(
+      SseDeserializer deserializer);
+
+  @protected
   APICompatibilityReport? sse_decode_opt_box_autoadd_api_compatibility_report(
       SseDeserializer deserializer);
 
@@ -4814,6 +4843,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_comment_data(
       APICommentData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_compare_atoms_data(
+      APICompareAtomsData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_compare_motion(
+      APICompareMotion self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_compatibility_report(
@@ -5630,6 +5667,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_comment_data(
       APICommentData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_compare_atoms_data(
+      APICompareAtomsData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_compatibility_report(
@@ -6599,6 +6640,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_comment_data(
       APICommentData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_compare_atoms_data(
+      APICompareAtomsData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_compatibility_report(
