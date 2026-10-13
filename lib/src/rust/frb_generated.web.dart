@@ -1522,6 +1522,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Int32List dco_decode_list_prim_i_32_strict(dynamic raw);
 
   @protected
+  Uint32List dco_decode_list_prim_u_32_strict(dynamic raw);
+
+  @protected
   Uint64List dco_decode_list_prim_u_64_strict(dynamic raw);
 
   @protected
@@ -2123,6 +2126,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt dco_decode_usize(dynamic raw);
+
+  @protected
+  ViewportImageSize dco_decode_viewport_image_size(dynamic raw);
 
   @protected
   WireIdentifier dco_decode_wire_identifier(dynamic raw);
@@ -3863,6 +3869,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Int32List sse_decode_list_prim_i_32_strict(SseDeserializer deserializer);
 
   @protected
+  Uint32List sse_decode_list_prim_u_32_strict(SseDeserializer deserializer);
+
+  @protected
   Uint64List sse_decode_list_prim_u_64_strict(SseDeserializer deserializer);
 
   @protected
@@ -4565,6 +4574,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt sse_decode_usize(SseDeserializer deserializer);
+
+  @protected
+  ViewportImageSize sse_decode_viewport_image_size(
+      SseDeserializer deserializer);
 
   @protected
   WireIdentifier sse_decode_wire_identifier(SseDeserializer deserializer);
@@ -6392,6 +6405,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       Int32List self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_prim_u_32_strict(
+      Uint32List self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_prim_u_64_strict(
       Uint64List self, SseSerializer serializer);
 
@@ -7100,6 +7117,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_usize(BigInt self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_viewport_image_size(
+      ViewportImageSize self, SseSerializer serializer);
 
   @protected
   void sse_encode_wire_identifier(

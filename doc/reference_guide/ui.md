@@ -1075,6 +1075,11 @@ Used for loading and saving a design, exporting a design to .xyz or .mol, undo/r
 - *File > Link library…*, *File > Refresh all dependencies*: Link another `.cnnd` file so its networks and record types can be used here without being copied, and re-read every linked library and data file. See [Linked libraries](library_linking.md).
 - *File > Export project bundle…*: Writes a `.zip` of the design and every library and data file it depends on, laid out so that it opens complete wherever it is unzipped. See [Moving a design](library_linking.md#moving-a-design-save-as-and-project-bundles).
 - *File > Export visible*: You can export visible atomic structures into `.xyz` or `.mol` format. `.mol` is a better choice because in this case bonds are saved too. `.xyz` do not support bond information so when saving into `.xyz` bond information is lost. In case of `.mol` the newer `V3000` flavor is used instead of the old `V2000` flavor because `V3000` supports more than 999 atoms. The format dialog also has a *Write frozen atoms* checkbox (on by default, remembered for the session): for `.xyz` it appends a [`FREEZEXYZ` line](./nodes/atomic.md#frozen-atoms-in-xyz-files) listing the frozen atoms; it has no effect on `.mol`.
+- *File > Export viewport image...*: Saves the 3D viewport as a `.png`, from the current camera. Available in both modes.
+  - **Size**: *Viewport size* (the default, shown with its pixel size) or *Custom*, with width and height fields. A custom size with a different aspect ratio keeps the vertical field of view, so a wider image shows more at the sides rather than cropping. The largest image is 2048 px on each side; a larger size, including a viewport bigger than that on a large monitor, is scaled down with its aspect ratio kept, and the dialog says so before you export.
+  - **Background**: *As on screen* (the background colour from *Edit → Preferences*) or *White*.
+  - The image is always anti-aliased: it is rendered at twice the size and scaled down, so atom outlines and mesh edges come out smooth. One side effect: grid lines and wireframe edges come out thinner and lighter than on screen.
+  - What the viewport shows is what lands in the image — the grid and axes as you have them set, labels, and selection highlights — **except the translate/rotate gizmo** (and the guide dots of guided atom placement), which are left out. Your camera is left exactly as it was.
 - *File > Export node network image...*: Saves the **whole** active node network as a `.png` — including the parts that do not fit on screen, which is what makes it usable for sharing a large network in a discussion or an issue. Available in Node Network Mode only.
   - The dialog offers a **zoom level** (the same three levels the canvas itself uses — *Normal*, *Zoomed out*, *Zoomed out far*), a **resolution** multiplier (1×, 2×, 3×) and a **margin**, the blank space around the content in pixels of the image at 1×. It shows the resulting pixel size as you change any of them, so you can see what you are about to get.
     - It always opens at *Normal* zoom and 1× — a faithful, full-detail image — however you happen to be zoomed on the canvas at the time. Zooming out is for fitting a very large network into the size limit below; the higher multipliers are for keeping small node labels legible when the picture will be scaled down again elsewhere.
@@ -1092,7 +1097,8 @@ Used for loading and saving a design, exporting a design to .xyz or .mol, undo/r
   - `.cnnd` libraries linked (*Link library…*, *Change file…*),
   - structure imports (`.xyz`, `.cif` — both the *Import XYZ* menu item and the Browse buttons on the `import_xyz` / `import_cif` nodes),
   - structure exports (`.xyz`, `.mol` — both *Export visible* and the `export_atoms` node's Browse button),
-  - node network images (*Export node network image...*).
+  - node network images (*Export node network image...*),
+  - viewport images (*Export viewport image...*).
 
   So exporting a structure to a renders folder does not move where *Load Design* opens next time. If a remembered folder has since been deleted or lives on a drive that is not mounted, the dialog falls back to the system default.
 - *Edit > Undo* (`Ctrl+Z`) / *Edit > Redo* (`Ctrl+Shift+Z` or `Ctrl+Y`): Undo and redo all operations, including node edits, wire connections, atom editing, and more.

@@ -2577,6 +2577,7 @@ enum APIFileDialogPurpose {
   structureImport,
   structureExport,
   networkImage,
+  viewportImage,
   aiHistory,
   libraryLink,
   ;

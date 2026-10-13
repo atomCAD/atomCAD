@@ -12,6 +12,7 @@ import '../common/file_dialog_directory.dart';
 import '../common/menu_widget.dart';
 import '../common/section.dart';
 import 'error_report.dart';
+import 'export_viewport_image.dart';
 import 'structure_designer_model.dart';
 import 'node_network/export_network_image.dart';
 import 'node_network/find_node_picker.dart';
@@ -296,6 +297,11 @@ class _StructureDesignerState extends State<StructureDesigner> {
                             key: const Key('export_visible_item'),
                             onPressed: _exportVisible,
                             child: const Text('Export visible'),
+                          ),
+                          MenuItemButton(
+                            key: const Key('export_viewport_image_item'),
+                            onPressed: _exportViewportImage,
+                            child: const Text('Export viewport image...'),
                           ),
                           if (!model.directEditingMode)
                             MenuItemButton(
@@ -1471,6 +1477,14 @@ class _StructureDesignerState extends State<StructureDesigner> {
     FocusManager.instance.primaryFocus?.unfocus();
     if (!mounted) return;
     await exportNetworkImage(context, graphModel);
+  }
+
+  /// Export the 3D viewport as an anti-aliased PNG
+  /// (`export_viewport_image.dart`).
+  Future<void> _exportViewportImage() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    if (!mounted) return;
+    await exportViewportImage(context, graphModel.nodeNetworkView?.name);
   }
 
   /// Export visible atomic structures as XYZ or MOL file

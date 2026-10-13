@@ -121,10 +121,13 @@ impl RenderTarget {
 /// Which parts of the scene a draw includes.
 #[derive(Clone, Copy)]
 struct PassFlags {
-    /// The editing aids: background grid lines, drawing-plane grids, atom
-    /// labels and the whole gadget pass (gadgets and the lightweight pivot
-    /// cube). Off for a thumbnail, which shows only the content (D5).
+    /// The editing aids: background grid lines, drawing-plane grids and atom
+    /// labels. Off for a thumbnail, which shows only the content (D5).
     editing_aids: bool,
+    /// The whole gadget pass: gadgets (the translate/rotate gizmo, guide dots)
+    /// and the lightweight pivot cube. On only for the live viewport — neither
+    /// a thumbnail nor an exported viewport image shows them.
+    gadgets: bool,
 }
 
 pub struct Renderer {
@@ -1262,7 +1265,10 @@ impl Renderer {
             &self.camera_bind_group,
             view,
             background_color_rgb,
-            PassFlags { editing_aids: true },
+            PassFlags {
+                editing_aids: true,
+                gadgets: true,
+            },
         )
     }
 
@@ -1314,6 +1320,7 @@ impl Renderer {
                 background.rgb(),
                 PassFlags {
                     editing_aids: false,
+                    gadgets: false,
                 },
             );
             crate::thumbnail::bgra_to_rgba_in_place(&mut pixels);
@@ -1330,6 +1337,77 @@ impl Renderer {
             self.thumbnail_target.size.width,
             self.thumbnail_target.size.height,
         )
+    }
+
+    /// Renders the viewport scene for *File > Export viewport image* at
+    /// `width × height` and returns it as tightly packed **RGBA**.
+    ///
+    /// The live camera's pose and vertical field of view are kept and only the
+    /// aspect follows the requested size, so a wider image shows more at the
+    /// sides rather than cropping. Everything the viewport shows is drawn —
+    /// grid, labels, selection rims — except the gadget pass (gizmo, guide
+    /// dots, pivot cube). The frame is drawn at
+    /// [`IMAGE_EXPORT_SUPERSAMPLING`](crate::image_export::IMAGE_EXPORT_SUPERSAMPLING)×
+    /// into a target created for this call and box-downsampled, which is
+    /// what anti-aliases it.
+    ///
+    /// The caller sizes the image with
+    /// [`fit_export_size`](crate::image_export::fit_export_size); a side over
+    /// the limit is clamped here as a last guard. The live viewport's target
+    /// and camera uniform are untouched. It borrows the thumbnail camera
+    /// buffer (written before every use, under the render lock) and, like a
+    /// thumbnail, re-sorts the transparent impostors for its camera — the
+    /// export camera has the live view matrix, so that sort is the live one.
+    pub fn render_image(
+        &mut self,
+        width: u32,
+        height: u32,
+        background_color_rgb: [u8; 3],
+    ) -> Vec<u8> {
+        use crate::image_export::{IMAGE_EXPORT_MAX_SIZE, IMAGE_EXPORT_SUPERSAMPLING};
+        let width = width.clamp(1, IMAGE_EXPORT_MAX_SIZE);
+        let height = height.clamp(1, IMAGE_EXPORT_MAX_SIZE);
+
+        let _lock = self.render_mutex.lock().unwrap();
+
+        let mut camera = self.camera.clone();
+        camera.aspect = width as f64 / height as f64;
+        let mut camera_uniform = CameraUniform::new();
+        camera_uniform.refresh(&camera);
+        self.queue.write_buffer(
+            &self.thumbnail_camera_buffer,
+            0,
+            bytemuck::cast_slice(&[camera_uniform]),
+        );
+
+        let view = camera.build_view_matrix().as_mat4();
+        Self::resort_transparent_impostors(
+            &self.queue,
+            &self.transparent_impostor_mesh,
+            &self.transparent_quad_centers,
+            self.transparent_mesh_generation,
+            &mut self.transparent_sorted_generation,
+            &mut self.transparent_sorted_view,
+            view,
+        );
+
+        let target = RenderTarget::new(
+            &self.device,
+            width * IMAGE_EXPORT_SUPERSAMPLING,
+            height * IMAGE_EXPORT_SUPERSAMPLING,
+        );
+        let mut pixels = self.draw_to_target(
+            &target,
+            &self.thumbnail_camera_bind_group,
+            view,
+            background_color_rgb,
+            PassFlags {
+                editing_aids: true,
+                gadgets: false,
+            },
+        );
+        crate::thumbnail::bgra_to_rgba_in_place(&mut pixels);
+        crate::thumbnail::downsample_2x2(&pixels, target.size.width, target.size.height)
     }
 
     /// Bounds of the content meshes on the GPU (D4); `None` when the content
@@ -1501,7 +1579,7 @@ impl Renderer {
         }
 
         // Second render pass for gadgets - clear depth buffer but preserve color
-        if flags.editing_aids {
+        if flags.gadgets {
             let mut gadget_render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
                 label: Some("Gadget Render Pass"),
                 color_attachments: &[Some(RenderPassColorAttachment {

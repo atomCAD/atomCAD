@@ -1,6 +1,8 @@
-//! Screenshot capture API for CLI/AI agent use.
+//! Viewport capture to PNG.
 //!
-//! Provides functionality to capture the current viewport to a PNG file.
+//! [`capture_screenshot`] is the CLI / AI agent path (`atomcad-cli screenshot`):
+//! the live frame, gadgets included, at the requested size. [`export_viewport_image`]
+//! is the user's *File > Export viewport image*: supersampled, without gadgets.
 
 use crate::api::api_common::{CADInstance, with_mut_cad_instance_or};
 use image::{ImageBuffer, Rgba};
@@ -151,5 +153,114 @@ fn capture_screenshot_impl(
         width: target_width,
         height: target_height,
         error_message: None,
+    }
+}
+
+/// Size an export of `width × height` will actually be written at
+/// (*File > Export viewport image*): unchanged when it fits in the
+/// 2048 px limit, otherwise scaled down with the aspect ratio kept. The
+/// dialog shows this before exporting; [`export_viewport_image`] applies it.
+#[flutter_rust_bridge::frb(sync)]
+pub fn fit_viewport_image_size(width: u32, height: u32) -> ViewportImageSize {
+    let (width, height, reduced) = atomcad_renderer::image_export::fit_export_size(width, height);
+    ViewportImageSize {
+        width,
+        height,
+        reduced,
+    }
+}
+
+/// See [`fit_viewport_image_size`].
+#[derive(Debug, Clone)]
+pub struct ViewportImageSize {
+    pub width: u32,
+    pub height: u32,
+    /// The requested size was over the limit and has been scaled down.
+    pub reduced: bool,
+}
+
+/// The current viewport size in pixels, as `[width, height]` — the default
+/// size of an exported viewport image.
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_viewport_image_size() -> Vec<u32> {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let (width, height) = cad_instance.renderer.get_viewport_size();
+                vec![width, height]
+            },
+            vec![0, 0],
+        )
+    }
+}
+
+/// *File > Export viewport image*: renders the scene from the live camera at
+/// `width × height` (fitted by [`fit_viewport_image_size`]), 2× supersampled,
+/// without the gadget pass, and writes it to `output_path` as PNG.
+///
+/// `background_rgb` (0-255) overrides the background; `None` uses the
+/// background colour from the preferences, i.e. the one on screen.
+#[flutter_rust_bridge::frb(sync)]
+pub fn export_viewport_image(
+    output_path: String,
+    width: u32,
+    height: u32,
+    background_rgb: Option<Vec<u8>>,
+) -> ScreenshotResult {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                export_viewport_image_impl(
+                    cad_instance,
+                    &output_path,
+                    width,
+                    height,
+                    background_rgb,
+                )
+            },
+            ScreenshotResult {
+                success: false,
+                output_path: output_path.clone(),
+                width: 0,
+                height: 0,
+                error_message: Some("CAD instance not initialized".to_string()),
+            },
+        )
+    }
+}
+
+fn export_viewport_image_impl(
+    cad_instance: &mut CADInstance,
+    output_path: &str,
+    width: u32,
+    height: u32,
+    background_rgb: Option<Vec<u8>>,
+) -> ScreenshotResult {
+    let (width, height, _) = atomcad_renderer::image_export::fit_export_size(width, height);
+    let bg_color = match background_rgb.as_ref().filter(|v| v.len() >= 3) {
+        Some(v) => [v[0], v[1], v[2]],
+        None => {
+            let c = &cad_instance
+                .structure_designer
+                .preferences
+                .background_preferences
+                .background_color;
+            [c.x as u8, c.y as u8, c.z as u8]
+        }
+    };
+    let rgba = cad_instance.renderer.render_image(width, height, bg_color);
+    let result = |error_message: Option<String>| ScreenshotResult {
+        success: error_message.is_none(),
+        output_path: output_path.to_string(),
+        width,
+        height,
+        error_message,
+    };
+    match atomcad_renderer::thumbnail::encode_png(&rgba, width, height) {
+        Ok(png) => match std::fs::write(output_path, png) {
+            Ok(()) => result(None),
+            Err(e) => result(Some(format!("Failed to write {}: {}", output_path, e))),
+        },
+        Err(e) => result(Some(format!("Failed to encode PNG: {}", e))),
     }
 }

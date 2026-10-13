@@ -6,8 +6,8 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `capture_screenshot_impl`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `capture_screenshot_impl`, `export_viewport_image_impl`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `fmt`
 
 /// Capture the current viewport to a PNG file.
 ///
@@ -25,6 +25,37 @@ ScreenshotResult captureScreenshot(
         int? height,
         Uint8List? backgroundRgb}) =>
     RustLib.instance.api.crateApiScreenshotApiCaptureScreenshot(
+        outputPath: outputPath,
+        width: width,
+        height: height,
+        backgroundRgb: backgroundRgb);
+
+/// Size an export of `width × height` will actually be written at
+/// (*File > Export viewport image*): unchanged when it fits in the
+/// 2048 px limit, otherwise scaled down with the aspect ratio kept. The
+/// dialog shows this before exporting; [`export_viewport_image`] applies it.
+ViewportImageSize fitViewportImageSize(
+        {required int width, required int height}) =>
+    RustLib.instance.api.crateApiScreenshotApiFitViewportImageSize(
+        width: width, height: height);
+
+/// The current viewport size in pixels, as `[width, height]` — the default
+/// size of an exported viewport image.
+Uint32List getViewportImageSize() =>
+    RustLib.instance.api.crateApiScreenshotApiGetViewportImageSize();
+
+/// *File > Export viewport image*: renders the scene from the live camera at
+/// `width × height` (fitted by [`fit_viewport_image_size`]), 2× supersampled,
+/// without the gadget pass, and writes it to `output_path` as PNG.
+///
+/// `background_rgb` (0-255) overrides the background; `None` uses the
+/// background colour from the preferences, i.e. the one on screen.
+ScreenshotResult exportViewportImage(
+        {required String outputPath,
+        required int width,
+        required int height,
+        Uint8List? backgroundRgb}) =>
+    RustLib.instance.api.crateApiScreenshotApiExportViewportImage(
         outputPath: outputPath,
         width: width,
         height: height,
@@ -64,4 +95,31 @@ class ScreenshotResult {
           width == other.width &&
           height == other.height &&
           errorMessage == other.errorMessage;
+}
+
+/// See [`fit_viewport_image_size`].
+class ViewportImageSize {
+  final int width;
+  final int height;
+
+  /// The requested size was over the limit and has been scaled down.
+  final bool reduced;
+
+  const ViewportImageSize({
+    required this.width,
+    required this.height,
+    required this.reduced,
+  });
+
+  @override
+  int get hashCode => width.hashCode ^ height.hashCode ^ reduced.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ViewportImageSize &&
+          runtimeType == other.runtimeType &&
+          width == other.width &&
+          height == other.height &&
+          reduced == other.reduced;
 }

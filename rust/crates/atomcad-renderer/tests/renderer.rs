@@ -25,3 +25,7 @@ mod surface_alpha_test;
 // comparison (doc/design_network_thumbnails.md, Phase 1).
 #[path = "renderer/thumbnail_test.rs"]
 mod thumbnail_test;
+
+// *File > Export viewport image*: the size rule.
+#[path = "renderer/image_export_test.rs"]
+mod image_export_test;

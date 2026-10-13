@@ -49,6 +49,8 @@ pub enum FileDialogPurpose {
     StructureExport,
     /// Node-network images: the `.png` written by *Export node network image*.
     NetworkImage,
+    /// Viewport images: the `.png` written by *Export viewport image*.
+    ViewportImage,
     /// AI edit-history exports: the `.json` / `.md` written by the AI History
     /// panel's *Export*.
     AiHistory,
@@ -67,6 +69,7 @@ impl FileDialogPurpose {
             Self::StructureImport => "import",
             Self::StructureExport => "export",
             Self::NetworkImage => "network_image",
+            Self::ViewportImage => "viewport_image",
             Self::AiHistory => "ai_history",
             Self::LibraryLink => "library_link",
         }
