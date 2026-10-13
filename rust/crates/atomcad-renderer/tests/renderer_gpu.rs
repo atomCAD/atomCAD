@@ -704,16 +704,17 @@ use atomcad_renderer::line_lod::LodSlot;
 
 /// A ground grid in `z = 0`, `±extent` units, lines 1 unit apart and every
 /// tenth a major line, with a minor and a major LOD slot as the display
-/// crate's grids register them. White on the default backgrounds.
+/// crate's grids register them (the major fading with the minor). White on the default backgrounds.
 fn slotted_ground_grid(extent: i32) -> LineMesh {
     let mut grid = LineMesh::new();
-    let slot = |spacing: f32| LodSlot {
+    let slot = |spacing: f32, fades_with: u32| LodSlot {
         plane_point: Vec3::ZERO,
         plane_normal: Vec3::Z,
         spacing,
+        fades_with,
     };
-    let minor = grid.add_lod_slot(slot(1.0));
-    let major = grid.add_lod_slot(slot(10.0));
+    let minor = grid.add_lod_slot(slot(1.0, 0));
+    let major = grid.add_lod_slot(slot(10.0, minor));
     let white = LineStyle::solid([1.0, 1.0, 1.0]);
     let e = extent as f32;
     for i in -extent..=extent {
@@ -848,5 +849,15 @@ fn a_low_perspective_grid_fades_towards_the_horizon() {
     assert!(
         near_horizon < 0.5 * bottom,
         "near the horizon {near_horizon}, near the bottom {bottom}"
+    );
+
+    // The grid ends as a whole: the major lines fade with the minor ones
+    // rather than running on alone towards the horizon. In this view, with
+    // their own fade distances, they would light the rows from about 10 to
+    // 28 below the horizon, where the minor lines are already gone.
+    let major_only = mean(horizon + 10..horizon + 28);
+    assert!(
+        major_only < 0.02 * bottom,
+        "lines left near the horizon: {major_only} (bottom {bottom})"
     );
 }

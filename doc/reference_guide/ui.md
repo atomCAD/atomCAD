@@ -1040,7 +1040,7 @@ Two toggles for the scene's background furniture, mirroring the checkboxes in **
 - **Show axes** (axis icon): shows or hides the Cartesian axes. Same setting as *Show Axes* in the preferences dialog; the subordinate *Show Lattice Axes* option remains there.
 - **Show grid** (grid icon): shows or hides the Cartesian grid. Note this is a *different* control from the **Wireframe** geometry rendering mode, whose icon is also a grid — wireframe changes how your geometry is drawn, this one only affects the background.
 
-The grid thins itself out so it never turns into a grey smear. When its lines would be drawn closer together than a few pixels, the minor lines disappear and only every tenth (major) line stays; zoom out further and the major lines go too. Seen from a low angle in perspective, the grid also fades out with distance, so it ends softly before the horizon instead of in a band of crawling lines. The drawing-plane grid behaves the same way. In orthographic projection there is no distance fade, and a grid seen exactly edge-on is hidden.
+The grid thins itself out so it never turns into a grey smear. When its lines would be drawn closer together than a few pixels, the minor lines disappear and only every tenth (major) line stays; zoom out further and the major lines go too. Seen from a low angle in perspective, the grid also fades out with distance — minor and major lines together — so it ends softly before the horizon instead of in a band of crawling lines. The drawing-plane grid behaves the same way. In orthographic projection there is no distance fade, and a grid seen exactly edge-on is hidden.
 
 ### Editing mode
 
@@ -1181,7 +1181,7 @@ The panel's **Isosurface extraction** group governs how an [`isosurface`](nodes/
 |---------|-------------|
 | Background Color | The scene background color. |
 | Show Axes | Toggles visibility of the Cartesian axes. Mirrors the toggle in the [Display Preferences panel](#background-axes-and-grid). |
-| Show Lattice Axes | Toggles dotted lines showing non-Cartesian lattice directions (nested under Show Axes). |
+| Show Lattice Axes | Toggles dashed lines showing non-Cartesian lattice directions (nested under Show Axes). The dashes keep the same length on screen at any zoom. |
 | Show Grid | Toggles visibility of the Cartesian grid. Mirrors the toggle in the [Display Preferences panel](#background-axes-and-grid). |
 | Grid Size | Spacing between grid lines. |
 | Grid Color / Grid Strong Color | Colors for regular and primary (axis-aligned) grid lines. |

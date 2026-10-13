@@ -7,6 +7,11 @@
 //! ([`lod_uniform_entries`]); the shader knows nothing about grids, only those
 //! two numbers per slot.
 //!
+//! A grid fades as a whole: its major slot names its minor slot in
+//! [`LodSlot::fades_with`] and, while the minor lines are shown, fades at
+//! their distances instead of its own, so the grid ends at one soft boundary
+//! rather than as a dense grid with a sparse one running on past it.
+//!
 //! Every function here is pure, so it can be tested with a real `Camera` and
 //! no device.
 
@@ -22,9 +27,10 @@ pub const LINE_LOD_SLOTS: usize = 32;
 pub const T_DROP_PX: f32 = 4.0;
 /// A visible slot starts fading where its lines across the view come this
 /// close on screen (logical pixels)…
-pub const T_FADE_START_PX: f32 = 4.0;
-/// …and is gone where they come this close.
-pub const T_FADE_END_PX: f32 = 1.5;
+pub const T_FADE_START_PX: f32 = 6.0;
+/// …and is gone where they come this close. The ratio of the two sets the
+/// length of the fade band: its eye distances differ by `√(6 / 1)` ≈ 2.4×.
+pub const T_FADE_END_PX: f32 = 1.0;
 /// A hidden slot comes back only at `HYSTERESIS × T_DROP_PX`, so an orbit
 /// hovering at the threshold doesn't flicker.
 pub const HYSTERESIS: f32 = 1.25;
@@ -42,6 +48,10 @@ pub struct LodSlot {
     /// World distance between neighbouring lines of this level. For a
     /// parallelogram grid, the smaller of its two line distances.
     pub spacing: f32,
+    /// The id of a finer slot of the same grid whose fade distances this one
+    /// takes while that slot is visible; 0 = always its own. A grid's major
+    /// slot names its minor slot here.
+    pub fades_with: u32,
 }
 
 /// What one slot does in one draw. "No fade" is `fade_end <= fade_start`.
@@ -142,7 +152,10 @@ pub fn slot_lod(
 }
 
 /// A mesh's whole `LineLodUniform`: entry 0 and every entry past `slots` are
-/// [`SlotLod::ALWAYS`], entry `i + 1` is `slots[i]`'s [`slot_lod`].
+/// [`SlotLod::ALWAYS`], entry `i + 1` is `slots[i]`'s [`slot_lod`] — except
+/// that a visible slot whose [`LodSlot::fades_with`] names a visible slot
+/// takes that slot's fade distances, so a grid fades at the distances of its
+/// finest visible level.
 ///
 /// With `hysteresis` (the live viewport only), each slot's previous
 /// visibility is read from it and its new one written back; it is resized to
@@ -154,15 +167,36 @@ pub fn lod_uniform_entries(
     pixel_scale: f32,
     mut hysteresis: Option<&mut Vec<Option<bool>>>,
 ) -> [[f32; 4]; LINE_LOD_SLOTS] {
-    let mut entries = [SlotLod::ALWAYS.to_gpu(); LINE_LOD_SLOTS];
+    let slots = &slots[..slots.len().min(LINE_LOD_SLOTS - 1)];
     if let Some(state) = hysteresis.as_deref_mut() {
         state.resize(slots.len(), None);
     }
-    for (i, slot) in slots.iter().take(LINE_LOD_SLOTS - 1).enumerate() {
-        let was_visible = hysteresis.as_deref().and_then(|state| state[i]);
-        let lod = slot_lod(slot, camera, target_size, pixel_scale, was_visible);
-        if let Some(state) = hysteresis.as_deref_mut() {
-            state[i] = Some(lod.visible);
+    let lods: Vec<SlotLod> = slots
+        .iter()
+        .enumerate()
+        .map(|(i, slot)| {
+            let was_visible = hysteresis.as_deref().and_then(|state| state[i]);
+            let lod = slot_lod(slot, camera, target_size, pixel_scale, was_visible);
+            if let Some(state) = hysteresis.as_deref_mut() {
+                state[i] = Some(lod.visible);
+            }
+            lod
+        })
+        .collect();
+
+    let mut entries = [SlotLod::ALWAYS.to_gpu(); LINE_LOD_SLOTS];
+    for (i, (slot, lod)) in slots.iter().zip(&lods).enumerate() {
+        let mut lod = *lod;
+        let finer = (slot.fades_with as usize)
+            .checked_sub(1)
+            .filter(|&j| j != i)
+            .and_then(|j| lods.get(j));
+        if let Some(finer) = finer
+            && lod.visible
+            && finer.visible
+        {
+            lod.fade_start = finer.fade_start;
+            lod.fade_end = finer.fade_end;
         }
         entries[i + 1] = lod.to_gpu();
     }

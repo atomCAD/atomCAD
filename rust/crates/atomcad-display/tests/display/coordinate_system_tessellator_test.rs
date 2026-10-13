@@ -304,3 +304,26 @@ fn each_drawing_plane_registers_its_own_slots() {
     second.dedup();
     assert_eq!(second, vec![0, 3, 4]);
 }
+
+#[test]
+fn each_major_slot_fades_with_its_own_grids_minor_slot() {
+    let fades_with = |mesh: &LineMesh| -> Vec<u32> {
+        mesh.lod_slots.iter().map(|slot| slot.fades_with).collect()
+    };
+    let ground = tessellate_background_coordinate_system(None, &preferences(true, true));
+    assert_eq!(fades_with(&ground), vec![0, 1]);
+
+    let dual =
+        tessellate_background_coordinate_system(Some(&skewed_cell()), &preferences(true, true));
+    assert_eq!(fades_with(&dual), vec![0, 1, 0, 3]);
+
+    let mut planes = LineMesh::new();
+    for _ in 0..2 {
+        tessellate_drawing_plane_grid_and_axes(
+            &mut planes,
+            &DrawingPlane::default(),
+            &preferences(true, true),
+        );
+    }
+    assert_eq!(fades_with(&planes), vec![0, 1, 0, 3]);
+}

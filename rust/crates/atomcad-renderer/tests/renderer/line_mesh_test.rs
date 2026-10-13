@@ -163,6 +163,7 @@ fn lod_slot(spacing: f32) -> LodSlot {
         plane_point: Vec3::ZERO,
         plane_normal: Vec3::Z,
         spacing,
+        fades_with: 0,
     }
 }
 

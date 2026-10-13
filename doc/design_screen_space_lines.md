@@ -501,6 +501,7 @@ pub struct LodSlot {
     pub plane_point: Vec3,
     pub plane_normal: Vec3,
     pub spacing: f32,   // world distance between neighbouring lines of this level
+    pub fades_with: u32, // a finer slot whose fade distances this one takes; 0 = own
 }
 ```
 
@@ -560,8 +561,27 @@ makes the same choices as the screen.
   passes `was_visible`, which the renderer keeps per mesh and slot. The
   thumbnail and the export pass `None` and take the plain threshold.
 
+- **A grid fades as a whole** (revised after the Phase 4 screenshots). A
+  grid's major slot names its minor slot in `fades_with`, and while the minor
+  slot is visible the major one fades at the **minor's** distances instead of
+  its own: the grid fades at the distances of its finest visible level. Fading
+  each level by its own distances made the minor lines stop along a fairly
+  sharp curve while the major lines ran on alone towards the horizon, which
+  read as a second, sparser grid rather than as the same grid receding. The
+  cost is less grid at low angles: the whole grid now ends where the minor
+  lines would, about √10 ≈ 3.2× nearer than the major lines used to. When the
+  minor level drops, the major lines take their own distances and the fade
+  boundary jumps out by that factor, in the same frame as the minor lines'
+  pop and under the same hysteresis.
+
 Starting values, tuned in the walkthrough: `T_drop = 4 px`,
-`T_fade_start = 4 px`, `T_fade_end = 1.5 px`.
+`T_fade_start = 6 px`, `T_fade_end = 1 px`. The eye distances of the fade
+band's ends differ by `√(T_fade_start / T_fade_end)`; the first values (4 and
+1.5 px, a ratio of 1.6) gave a band that perspective squeezed into a few
+dozen rows near the horizon, where it read as an edge. With `T_fade_start >
+T_drop`, a slot just above its drop threshold is already slightly faded
+straight below the eye (to about 0.94 at the threshold), which dims the grid
+a little just before its minor lines pop.
 
 **On the GPU.** Each line mesh gets a second uniform, `LineLodUniform`,
 holding one `vec4(visible, fade_start, fade_end, 0)` per slot id (32
@@ -598,7 +618,8 @@ choice at its own size for free.
 1. **Line-weight preference.** A single "line weight" multiplier in
    preferences would be one more factor into `pixel_scale` for the live
    viewport only (or for all targets). Left out until the walkthrough shows
-   whether the D8 defaults need it.
+   whether the D8 defaults need it. *Resolved (Phase 5): the walkthrough
+   found the D8 defaults right, so no preference was added.*
 2. **Gadget lines in the CLI screenshot.** Unchanged (the CLI screenshot
    still draws the gadget pass), but they will now be wider. Mentioned for
    anyone diffing old CLI screenshots.
@@ -844,6 +865,13 @@ The CLI-screenshot check was replaced by looking at the GPU harness's dumped
 renders (`ATOMCAD_GPU_DUMP_DIR`); the screenshots of the real app are left to
 the Phase 5 walkthrough.
 
+*Revised after the first screenshots:* the whole-grid fade (`fades_with`,
+D9) and the longer fade band (6 / 1 px). `lod_uniform_entries` computes every
+slot's own `SlotLod` first, then copies a visible finer slot's fade distances
+onto each visible slot linked to it. The low-angle GPU test also checks that
+no lines are left in the band where the major lines used to run on alone; it
+fails with the link removed.
+
 ### Phase 5 — Walkthrough and documentation
 
 - Manual GUI walkthrough (maintainer): grid near and far, orthographic and
@@ -856,6 +884,17 @@ the Phase 5 walkthrough.
 - Reference guide: `doc/reference_guide/ui.md` describes *Show Lattice
   Axes* as "dotted lines"; change it to dashed if the walkthrough keeps the
   6 / 4 px pattern. Nothing else there describes line appearance.
+
+*As implemented:* the maintainer's walkthrough covered every item above and
+found nothing to change, so the D8 widths and the D9 thresholds as revised in
+Phase 4 (`T_drop` 4 px, fade 6 / 1 px, the whole-grid fade) are the final
+values; no tuning commit was needed. The guide now calls the lattice axes
+dashed. (Phase 4 had already added the grid's level of detail to the guide
+and removed its stale note that exported lines come out thinner than on
+screen.) Two known limits remain, both recorded above and neither seen as a
+problem in the walkthrough: lines running towards the horizon still end with
+the rest of the grid while still readable (D9), and a dashed polyline would
+scramble its pattern on a tilted curve (D5), which nothing draws today.
 
 ## Future work
 

@@ -20,6 +20,7 @@ fn ground_slot(spacing: f32) -> LodSlot {
         plane_point: Vec3::ZERO,
         plane_normal: Vec3::Z,
         spacing,
+        fades_with: 0,
     }
 }
 
@@ -255,4 +256,71 @@ fn the_uniform_holds_no_slot_at_zero_and_past_the_table() {
     for entry in lod_uniform_entries(&slots, &ortho, TARGET, 1.0, None) {
         assert!(entry[2] <= entry[1]);
     }
+}
+
+// ---- A grid fades as a whole ------------------------------------------------
+
+/// `[minor, major]` of a ground grid with spacing 1 and 10, the major fading
+/// with the minor as the display crate registers them.
+fn linked_grid() -> [LodSlot; 2] {
+    [
+        ground_slot(1.0),
+        LodSlot {
+            fades_with: 1,
+            ..ground_slot(10.0)
+        },
+    ]
+}
+
+#[test]
+fn a_major_slot_fades_at_its_visible_minor_slots_distances() {
+    let slots = linked_grid();
+    let camera = looking(DVec3::new(0.0, 1.0, -0.2), 20.0, false);
+    let minor = slot_lod(&slots[0], &camera, TARGET, 1.0, None);
+    let own_major = slot_lod(&slots[1], &camera, TARGET, 1.0, None);
+    assert!(minor.visible && own_major.visible);
+    assert!(own_major.fade_start > minor.fade_start);
+
+    let entries = lod_uniform_entries(&slots, &camera, TARGET, 1.0, None);
+    assert_eq!(entries[1], minor.to_gpu());
+    assert_eq!(entries[2], minor.to_gpu(), "the major fades with the minor");
+}
+
+#[test]
+fn once_the_minor_slot_drops_the_major_slot_takes_its_own_distances() {
+    let slots = linked_grid();
+    let f = focal_px(&top_down(1.0), TARGET.1);
+    // Past the minor's drop, well short of the major's.
+    let camera = top_down(2.0 * f / T_DROP_PX as f64);
+    let minor = slot_lod(&slots[0], &camera, TARGET, 1.0, None);
+    let major = slot_lod(&slots[1], &camera, TARGET, 1.0, None);
+    assert!(!minor.visible && major.visible);
+
+    let entries = lod_uniform_entries(&slots, &camera, TARGET, 1.0, None);
+    assert_eq!(entries[1], minor.to_gpu());
+    assert_eq!(entries[2], major.to_gpu());
+}
+
+#[test]
+fn a_fades_with_link_to_itself_or_past_the_table_is_ignored() {
+    let camera = looking(DVec3::new(0.0, 1.0, -0.2), 20.0, false);
+    for fades_with in [1, 7] {
+        let slot = LodSlot {
+            fades_with,
+            ..ground_slot(10.0)
+        };
+        let entries = lod_uniform_entries(&[slot], &camera, TARGET, 1.0, None);
+        assert_eq!(
+            entries[1],
+            slot_lod(&slot, &camera, TARGET, 1.0, None).to_gpu()
+        );
+    }
+}
+
+#[test]
+fn the_fade_band_spans_more_than_twice_its_start_distance() {
+    // The eye distances of the band's ends differ by √(T_start / T_end);
+    // 4 and 1.5 px, the first values, gave a band too short to read as a fade.
+    let ratio = (T_FADE_START_PX / T_FADE_END_PX).sqrt();
+    assert!(ratio > 2.0, "fade band ratio {ratio}");
 }

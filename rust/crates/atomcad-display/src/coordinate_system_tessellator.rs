@@ -277,7 +277,9 @@ fn is_major_grid_line(i: i32) -> bool {
 }
 
 /// The two level-of-detail slots of one grid (D9): its minor lines, `s` apart,
-/// and its major lines, `10 s` apart, both in the grid's plane.
+/// and its major lines, `10 s` apart, both in the grid's plane. The major slot
+/// fades with the minor one, so while the minor lines are shown the whole grid
+/// fades out at one distance.
 struct GridLodSlots {
     minor: u32,
     major: u32,
@@ -295,15 +297,16 @@ impl GridLodSlots {
             return Self { minor: 0, major: 0 };
         }
         let spacing = normal.length() / longest;
-        let mut slot = |spacing: f64| {
+        let mut slot = |spacing: f64, fades_with: u32| {
             mesh.add_lod_slot(LodSlot {
                 plane_point: origin.as_vec3(),
                 plane_normal: normal.normalize().as_vec3(),
                 spacing: spacing as f32,
+                fades_with,
             })
         };
-        let minor = slot(spacing);
-        let major = slot(spacing * GRID_MAJOR_EVERY as f64);
+        let minor = slot(spacing, 0);
+        let major = slot(spacing * GRID_MAJOR_EVERY as f64, minor);
         Self { minor, major }
     }
 
