@@ -1,7 +1,8 @@
 # Design: equivalent chemisorption results, and the `compare_atoms` node
 
 Status: **reviewed 2026-10-13 (correctness, architecture, tests, clarity);
-ready for implementation.**
+Phase 1 implemented 2026-10-13 (notes at the end of its section); Phases 2–4
+open.**
 
 Vocabulary used throughout: the search **keeps** up to `top_n` candidates
 (its stored result); `unique` **merges** a kept candidate into an earlier
@@ -704,6 +705,30 @@ comes from the construction:
 - One pair driven to the work cap (a highly symmetric cluster against a near
   miss): under 20 ms; the measured per-proposal cost sets `max_proposals`
   (§3.4).
+
+**Implemented 2026-10-13.** Where the code differs from the text above:
+
+- **The eigenvalue bound under `none` uses `2·tolerance`.** §3.3's bound
+  assumes the fit put the centroids together; `none` has no fit, so a centred
+  position can move by twice the tolerance. With the bound as written the
+  pre-check was not exact for `none`.
+- `rejected_by` is `Option<Rejection { check: PreCheck, reason: String }>`: a
+  field-less `PreCheck` cannot carry the counts its message names.
+  `Comparison` also returns `matching` (when equal) and `proposals`.
+- Refinement refits on a partial pairing once half the atoms (at least 3) are
+  paired; the decision still needs every atom. Anchor triples whose own fit
+  leaves more than `√k·tolerance` are dropped without counting as proposals
+  (exact: the full fit leaves each anchor within the tolerance).
+- An unequal pair is reported against its best attempt refitted on the atoms
+  it paired, when that leaves fewer mismatches.
+- Measured (release): ~43 µs per proposal at 125 atoms, so the cap of 200 is
+  ~8.5 ms; grouping 200 clusters of 120 atoms in one bin, 0.10 s (0.22 s when
+  every base is a 0.3 Å near miss of the others). `max_proposals` stays 200.
+- Two test descriptions were not constructible as written: a rotation of a
+  few degrees cannot produce a complete, swapped pairing under the
+  precondition (the test turns 120° about an axis the carbons sit on), and a
+  displaced atom is reported from both sides (`UnmatchedInB` and
+  `UnmatchedInA`), so two mismatches, not one.
 
 ### Phase 2 — `chemisorb` lists distinct bindings
 

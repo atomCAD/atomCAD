@@ -59,7 +59,14 @@ crates/atomcad-crystolecule/src/
 ├── miller.rs                       # Miller-index arithmetic: reduction, enumeration, symmetry families {hkl}
 ├── patch.rs                        # Surface-patch domain model: tile extraction, cell selection, apply_patch
 ├── proxy_cut.rs                    # Bond-hop simulation-proxy cut: plan_proxy / apply_proxy (fill, rm_single, severed-bond caps)
-├── rigid_fit.rs                    # The rigid fit (Horn's quaternion Kabsch): mechanosynth place + tool pose, chemisorption seating
+├── rigid_fit.rs                    # The rigid fit (Horn's quaternion Kabsch): mechanosynth place + tool pose, chemisorption seating; symmetric_eigen_3 (same Jacobi solver)
+├── structure_compare/              # Two structures equal up to a tolerance and a motion (design_structure_comparison.md)
+│   ├── mod.rs                      # Motion, CompareSettings, Comparison, PreCheck; compare(): pre-checks → motion search → final check
+│   ├── exact.rs                    # compare_structures / compare_structures_matched (no motion), Mismatch — moved from mechanosynth
+│   ├── cluster.rs                  # Cluster: the compared atoms cut out, with their invariants computed once
+│   ├── invariants.rs               # The pre-checks, each an exact rejection
+│   ├── motion.rs                   # Proposals (principal axes, anchor triples), pairing, refinement, the decision
+│   └── group.rs                    # group_in_order: greedy classes in a fixed order, deterministic across thread counts
 ├── weld.rs                         # weld_coincident_atoms(): fuse atoms at the same position (surface patches)
 ├── structure.rs                    # `Structure` value type (lattice_vecs + motif + motif_offset)
 ├── unit_cell_struct.rs             # Unit cell geometry & coordinate conversion
@@ -96,7 +103,6 @@ crates/atomcad-crystolecule/src/
 │   ├── scene.rs                    # Scene, Participant, ToolBinding, replay_scene, event rules
 │   ├── pose.rs                     # tool_pose: a tool's transform from its four tagged atoms
 │   ├── place.rs                    # placement engine: click -> candidate steps + tool readiness
-│   ├── compare.rs                  # compare_structures: position-tolerant Vec<Mismatch>
 │   └── trajectory/                 # where a tool is at every point of a step
 │       ├── mod.rs                  # re-exports; the two-layer rule
 │       ├── envelope.rs             # Envelope + the approach sweep + its wireframe cage (pure geometry, no scene)
@@ -169,7 +175,8 @@ crates/atomcad-crystolecule/src/
 | `CubeFile` | `io/cube_loader.rs` | Parsed `.cube`: `atoms`, `fields`, and an advisory `units_warning` |
 | `OpLibrary` / `Operation` / `Pattern` | `mechanosynth/schema.rs` | A named before/after rewrite in a local frame; comparing the two patterns *by pattern id* is the rewrite, there is no diff syntax |
 | `BuildScript` / `Step` | `mechanosynth/schema.rs` | An ordered list of (operation name, translation, rotation); `p_workpiece = r · p_local + t` |
-| `Mismatch` | `mechanosynth/compare.rs` | One difference found by `compare_structures` — unmatched atom, element, bond presence or bond order |
+| `Mismatch` | `structure_compare/exact.rs` | One difference found by `compare_structures` — unmatched atom, element, bond presence or bond order. `mechanosynth` re-exports it |
+| `Cluster` / `CompareSettings` / `Comparison` | `structure_compare/` | The atoms a comparison looks at (with their invariants), how two are compared (`Motion`, tolerance, bonds, work cap), and the answer — exactly one of equal, rejected by a pre-check, or mismatches against the best fit |
 | `Candidate` | `mechanosynth/place.rs` | One way of placing an operation at a clicked atom: the `Step`, the pattern-id → atom-id assignment, the fit residual, and the `mirrored` / `approximate` flags |
 | `Method` | `mechanosynth/schema.rs` | `Tip` / `Bulk` / `Spontaneous` — a **closed, engine-defined** vocabulary on every operation. A library cannot add a kind; what it adds is the *instrument*, through the tool type (`tip`) or the `agent` (`bulk`) |
 | `ToolType` / `ToolSide` | `mechanosynth/schema.rs` | A tool type the library envisions (its `states`, whose **first entry is the initial state**, and its four-or-more non-coplanar tagged `frame` atoms), and what one `tip` operation does to it — the same before/after rewrite, in the tool's local frame |
@@ -208,7 +215,8 @@ The assumption behind the culling stops holding the moment a pass cuts the workp
 
 **Position matching** (`atomic_structure/matching.rs`): four subsystems ask
 "which atom is *here*" — `apply_diff`'s `match_diff_atoms`, mechanosynth's
-`apply_step` and `compare_structures`, and the placement engine — and each used
+`apply_step`, `compare_structures` (now in `structure_compare/exact.rs`,
+re-exported by `mechanosynth`), and the placement engine — and each used
 to carry its own copy of the grid walk. The loop lives in one place now:
 `AtomicStructure::nearest_unclaimed_atom(target, tolerance, element, is_claimed)`,
 with `nearest_atom` as the whole-structure companion scan every "not found within
@@ -218,6 +226,36 @@ lower atom id** (grid iteration order is an implementation detail, and a
 symmetric site would otherwise make "which one matched" move with an unrelated
 edit), and the claim set is a **predicate** rather than a set, so a caller
 holding a map, a set or nothing at all uses the same function.
+
+**Structure comparison** (`structure_compare/`, `doc/design_structure_comparison.md`):
+`compare` decides whether two clusters are equal up to a tolerance and a
+`Motion` (`none` / `translation` / `rigid` / `rigid_mirror`). Rules that are
+easy to erode:
+
+- **"Equal" is exact by construction; only "not equal" may be wrong.** Motions
+  are *proposed* (principal axes, then anchor triples) and refined, but the
+  verdict is the final check: a same-element `compare_structures_matched`
+  under the motion, then the least-squares fit **of the matching it returned**
+  must keep every pair within the tolerance. Never let a proposal, a
+  refinement round or a heuristic say "equal" on its own.
+- **Every pre-check must stay an exact rejection** (`invariants.rs`): a bound
+  that is merely "usually right" turns into silently missed merges. Under
+  `none` the eigenvalue bound is taken at twice the tolerance (no fit brings
+  the centroids together).
+- **Pairing never crosses elements** (labels with bonds), which is why the
+  tolerance is capped at `MAX_TOLERANCE`: the nearest-atom matching is
+  unambiguous only while `4·tolerance` is below the shortest same-element
+  distance.
+- **Determinism:** `group_in_order` runs every comparison of a cluster against
+  the listed ones and takes the lowest index, so neither the choice nor the
+  counts depend on scheduling; the eigensolver is the fixed-sweep Jacobi of
+  `rigid_fit.rs`.
+- The work cap (`max_proposals`) makes a pair **undecided** — not equal, and
+  counted — never a hang.
+
+The tests check the pipeline against a brute-force oracle that is D2 written
+out (every same-element bijection, its fit); keep that oracle independent of
+the pipeline's code.
 
 **Mechanosynthesis placement** (`mechanosynth/place.rs`): the inverse of
 `apply_step` — given a clicked workpiece atom it produces the steps that could
@@ -706,7 +744,7 @@ placement engine.
 
 Deliberately independent of `atomic_structure_diff` / `apply_diff`, which solve
 the more general problem of anchoring arbitrary diffs across bases; nothing is
-shared beyond `AtomicStructure`. `compare_structures` is the position-tolerant
+shared beyond `AtomicStructure`. `compare_structures` (in `structure_compare/`) is the position-tolerant
 comparison the generators verify with — it returns a *list* of differences rather
 than a bool, because a bare `false` leaves the caller nothing to print, and it is
 not `atomcad_test_support::assert_structures_equivalent` (test-only, panics,
@@ -766,7 +804,8 @@ miller        →  glam only (no crystolecule types at all)
 patch         →  AtomicStructure, UnitCellStruct, weld, hydrogen_passivation, guided_placement, GeoNode
 proxy_cut     →  AtomicStructure, atomic_constants, atomic_structure_utils, hydrogen_passivation
 chemisorption →  AtomicStructure, atomic_constants, guided_placement, hydrogen_passivation (terminator_bond_length, seating a transferred atom), simulation (rayon for the relaxations), rigid_fit (seating)
-mechanosynth  →  AtomicStructure, atomic_constants, rigid_fit (serde_json for the two JSON files)
+mechanosynth  →  AtomicStructure, atomic_constants, rigid_fit, structure_compare (re-exports compare_structures; serde_json for the two JSON files)
+structure_compare → AtomicStructure, atomic_constants, rigid_fit (rayon for grouping)
 guided_placement → AtomicStructure, simulation/uff (typer, params)
 hydrogen_passivation → AtomicStructure, atomic_constants, guided_placement
 ```
@@ -800,13 +839,16 @@ tests/crystolecule/
 ├── patch_test.rs                  # Cell selection, region depths, apply_patch pipeline
 ├── patch_build_test.rs            # Tiling-vector validation, tile extraction
 ├── bond_enthalpy_test.rs          # The (unused) enthalpy table: symmetry, conversion, Pauling estimates
-├── chemisorption_sequential_support.rs  # Sequential search: fixtures, SplitMix64, the independent oracle (§11.1) and audit (§11.5)
+├── chemisorption_sequential_support.rs  # Sequential search: fixtures, the independent oracle (§11.1) and audit (§11.5)
 ├── chemisorption_sequential_test.rs     # …plan only: predicates, hand-worked case, oracle (fixtures + 300 random), planted bindings, metamorphic, rules, tree
 ├── chemisorption_sequential_relax_test.rs  # …relaxing: what is relaxed, filters commute, strain invariances, threads, budget, run control, known answers
 ├── chemisorption_sequential_local_test.rs  # …the local phase: planted 5-leg binding, the oracle per level (via replay), dedupe, transfers per leg (competing acceptors), budget, threads
 ├── chemisorption_sequential_golden_test.rs # …against the old engine's golden data (chemisorption_golden/), coverage of the 20-pose brute force, insta snapshots
 ├── chemisorption_sequential_debug_test.rs  # …the debug view: which form a row opens on, seated / relaxed views (replay outside top N), markings, shapes = the shell/ring test, row paths
 ├── chemisorption_golden/old_engine.json  # The removed all-at-once engine's bond sets and strains (captured in Phase 0); the golden test compares against it
+├── rigid_fit_test.rs              # symmetric_eigen_3 (orthonormal, reconstructs, repeated eigenvalues, bit-identical) + the fit itself
+├── structure_compare_test.rs      # Against a brute-force D2 oracle, known answers on large clusters, the matched comparison, grouping; timing (#[ignore])
+├── test_rng.rs                    # Seeded SplitMix64 shared by the randomized tests
 ├── proxy_cut_test.rs              # Riders, bond distances, fill/rm_single keep set, severed-bond caps; the §4.3 bulk-silicon fill table
 ├── concave_rebond_test.rs         # Concave-corner rebonding; clash detector re-derived independently
 ├── io/

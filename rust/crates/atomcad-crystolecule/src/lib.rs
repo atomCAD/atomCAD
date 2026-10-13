@@ -22,6 +22,7 @@ pub mod proxy_cut;
 pub mod rigid_fit;
 pub mod simulation;
 pub mod structure;
+pub mod structure_compare;
 pub mod supercell;
 pub mod unit_cell_struct;
 pub mod unit_cell_symmetries;

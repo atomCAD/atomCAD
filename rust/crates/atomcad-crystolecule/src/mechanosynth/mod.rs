@@ -35,7 +35,6 @@
 //! [`AtomicStructure`]: crate::atomic_structure::AtomicStructure
 
 pub mod apply;
-pub mod compare;
 pub mod parse;
 pub mod place;
 pub mod pose;
@@ -47,7 +46,9 @@ pub use apply::{
     Contact, HighlightTags, StepEffect, apply_step, describe_nearest, replay, resolve_tolerance,
     step_contact, steps_applied,
 };
-pub use compare::{Mismatch, compare_structures, describe_mismatches};
+// The comparison moved to `structure_compare` (it is not mechanosynth-specific);
+// re-exported so the generators and their tests keep their paths.
+pub use crate::structure_compare::{Mismatch, compare_structures, describe_mismatches};
 pub use parse::{
     load_build_script, load_library, parse_build_script, parse_library, validate_script_ops,
 };

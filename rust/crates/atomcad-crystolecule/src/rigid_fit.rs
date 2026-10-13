@@ -19,6 +19,7 @@ use glam::{DMat3, DQuat, DVec3};
 pub const RANK_EPSILON: f64 = 1e-9;
 
 /// A rigid transform and how well it fits: `p_world = r · p_local + t`.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Fit {
     pub r: DMat3,
     pub t: DVec3,
@@ -162,25 +163,58 @@ fn kabsch(source: &[DVec3], target: &[DVec3]) -> DMat3 {
     DMat3::from_quat(quat.normalize())
 }
 
-/// The eigenvector of the largest eigenvalue of a symmetric 4×4, by cyclic
-/// Jacobi rotations. Deterministic: a fixed sweep order and a fixed number of
-/// sweeps, so the same input always gives the same answer bit for bit.
+/// The eigenvector of the largest eigenvalue of a symmetric 4×4.
 fn largest_eigenvector_4(matrix: [[f64; 4]; 4]) -> [f64; 4] {
+    let (values, v) = jacobi_eigen(matrix);
+    let best = (0..4)
+        .max_by(|&i, &j| values[i].total_cmp(&values[j]))
+        .expect("four diagonal entries");
+    [v[0][best], v[1][best], v[2][best], v[3][best]]
+}
+
+/// Every eigenpair of a symmetric 3×3: the eigenvalues in ascending order and
+/// the matching unit eigenvectors as the columns of the matrix, so
+/// `m = vectors · diag(values) · vectorsᵀ`.
+///
+/// The principal axes of a point set (`structure_compare`) are read off this.
+/// The eigenvectors are orthonormal also when eigenvalues repeat; which basis
+/// of a repeated eigenspace comes back, and each vector's sign, are whatever
+/// the sweeps produce — fixed for a given input, bit for bit, but not
+/// meaningful.
+pub fn symmetric_eigen_3(m: DMat3) -> ([f64; 3], DMat3) {
+    let matrix: [[f64; 3]; 3] = std::array::from_fn(|i| std::array::from_fn(|j| m.col(j)[i]));
+    let (values, v) = jacobi_eigen(matrix);
+    let mut order = [0usize, 1, 2];
+    // A stable sort on a total order: equal eigenvalues keep the solver's order.
+    order.sort_by(|&i, &j| values[i].total_cmp(&values[j]));
+    let sorted = order.map(|k| values[k]);
+    let column = |k: usize| DVec3::new(v[0][k], v[1][k], v[2][k]);
+    let vectors = DMat3::from_cols(column(order[0]), column(order[1]), column(order[2]));
+    (sorted, vectors)
+}
+
+/// All eigenpairs of a symmetric N×N by cyclic Jacobi rotations: the diagonal
+/// it ends with (unsorted) and the accumulated rotation, whose column `k` is
+/// the eigenvector of value `k`. Deterministic: a fixed sweep order and a fixed
+/// maximum number of sweeps, so the same input always gives the same answer
+/// bit for bit — the 4×4 of Horn's method and the 3×3 of the principal axes run
+/// the very same arithmetic.
+fn jacobi_eigen<const N: usize>(matrix: [[f64; N]; N]) -> ([f64; N], [[f64; N]; N]) {
     let mut a = matrix;
-    let mut v = [[0.0f64; 4]; 4];
+    let mut v = [[0.0f64; N]; N];
     for (i, row) in v.iter_mut().enumerate() {
         row[i] = 1.0;
     }
     for _ in 0..24 {
-        let off: f64 = (0..4)
-            .flat_map(|p| ((p + 1)..4).map(move |q| (p, q)))
+        let off: f64 = (0..N)
+            .flat_map(|p| ((p + 1)..N).map(move |q| (p, q)))
             .map(|(p, q)| a[p][q] * a[p][q])
             .sum();
         if off < 1e-30 {
             break;
         }
-        for p in 0..4 {
-            for q in (p + 1)..4 {
+        for p in 0..N {
+            for q in (p + 1)..N {
                 if a[p][q] == 0.0 {
                     continue;
                 }
@@ -190,7 +224,7 @@ fn largest_eigenvector_4(matrix: [[f64; 4]; 4]) -> [f64; 4] {
                 let s = t * c;
                 // A ← Jᵀ A J, in the two halves it factors into: the columns
                 // first, then the rows of the result.
-                let rotate_columns = |m: &mut [[f64; 4]; 4]| {
+                let rotate_columns = |m: &mut [[f64; N]; N]| {
                     for row in m.iter_mut() {
                         let (kp, kq) = (row[p], row[q]);
                         row[p] = c * kp - s * kq;
@@ -205,8 +239,5 @@ fn largest_eigenvector_4(matrix: [[f64; 4]; 4]) -> [f64; 4] {
             }
         }
     }
-    let best = (0..4)
-        .max_by(|&i, &j| a[i][i].total_cmp(&a[j][j]))
-        .expect("four diagonal entries");
-    [v[0][best], v[1][best], v[2][best], v[3][best]]
+    (std::array::from_fn(|i| a[i][i]), v)
 }

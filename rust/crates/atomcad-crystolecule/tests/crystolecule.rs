@@ -189,3 +189,14 @@ mod chemisorption_sequential_relax_test;
 mod chemisorption_sequential_support;
 #[path = "crystolecule/chemisorption_sequential_test.rs"]
 mod chemisorption_sequential_test;
+
+// The structure comparison (design_structure_comparison.md) and the rigid fit
+// it shares with mechanosynth and chemisorption.
+#[path = "crystolecule/rigid_fit_test.rs"]
+mod rigid_fit_test;
+#[path = "crystolecule/structure_compare_test.rs"]
+mod structure_compare_test;
+
+// The seeded generator the randomized tests share.
+#[path = "crystolecule/test_rng.rs"]
+mod test_rng;

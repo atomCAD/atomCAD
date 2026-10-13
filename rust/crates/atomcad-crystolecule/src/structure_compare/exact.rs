@@ -9,6 +9,12 @@
 //! Tags, per-atom flags and atom ids are ignored. Ids in particular are
 //! meaningless across a replay, since every added atom takes the next free
 //! slot.
+//!
+//! No motion is applied here: the two structures are compared where they
+//! stand. [`compare`](super::compare) finds the motion first and ends with
+//! [`compare_structures_matched`] as its final check. The functions moved here
+//! from `mechanosynth` (which re-exports them) because nothing in them is
+//! specific to mechanosynthesis.
 
 use crate::atomic_constants::element_symbol;
 use crate::atomic_structure::AtomicStructure;
@@ -119,20 +125,50 @@ pub fn compare_structures(
     b: &AtomicStructure,
     tolerance: f64,
 ) -> Vec<Mismatch> {
+    compare_structures_matched(a, b, tolerance, false).mismatches
+}
+
+/// What [`compare_structures_matched`] found: the differences, and the
+/// matching they were found under.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MatchedComparison {
+    pub mismatches: Vec<Mismatch>,
+    /// `(a atom id, b atom id)` for every matched pair, in `a`'s atom order.
+    /// One to one; an atom on neither list is reported as unmatched.
+    pub pairs: Vec<(u32, u32)>,
+}
+
+/// [`compare_structures`], also returning the matching.
+///
+/// `same_element` restricts every atom's partner to atoms of its own element.
+/// Off, a different element at the right place is a partner whose element
+/// differs (the mechanosynth generators' report); on, it is no partner at all
+/// and [`Mismatch::ElementDiffers`] cannot occur — the rule the structure
+/// comparison needs, where a C next to an H must never be taken for it.
+pub fn compare_structures_matched(
+    a: &AtomicStructure,
+    b: &AtomicStructure,
+    tolerance: f64,
+    same_element: bool,
+) -> MatchedComparison {
     let mut mismatches = Vec::new();
 
+    let mut pairs = Vec::new();
     let mut a_to_b: FxHashMap<u32, u32> = FxHashMap::default();
     let mut b_to_a: FxHashMap<u32, u32> = FxHashMap::default();
 
     for a_atom in a.atoms_values() {
-        // No element filter: an element difference on a matched pair is a
-        // *reported* mismatch here, not a reason to look further afield.
-        let best = b.nearest_unclaimed_atom(a_atom.position, tolerance, None, |id| {
+        // Without `same_element`, no element filter: an element difference on
+        // a matched pair is a *reported* mismatch, not a reason to look
+        // further afield.
+        let element = same_element.then_some(a_atom.atomic_number);
+        let best = b.nearest_unclaimed_atom(a_atom.position, tolerance, element, |id| {
             b_to_a.contains_key(&id)
         });
         match best {
             Some(found) => {
                 let b_id = found.atom_id;
+                pairs.push((a_atom.id, b_id));
                 a_to_b.insert(a_atom.id, b_id);
                 b_to_a.insert(b_id, a_atom.id);
                 let b_atom = b.get_atom(b_id).expect("just matched");
@@ -209,7 +245,7 @@ pub fn compare_structures(
         }
     }
 
-    mismatches
+    MatchedComparison { mismatches, pairs }
 }
 
 /// A one-line-per-mismatch rendering, for a failure message or a generator's
