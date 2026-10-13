@@ -8,7 +8,7 @@ use crate::label_atlas::decode_font_atlas;
 use crate::label_mesh::LabelMesh;
 use crate::label_mesh::LabelVertex;
 use crate::line_mesh::LineMesh;
-use crate::line_mesh::LineVertex;
+use crate::line_mesh::LineSegmentInstance;
 use crate::surface_sort::sorted_component_order;
 use crate::thumbnail::ThumbnailBackground;
 use crate::transparent_impostor_mesh::TransparentImpostorMesh;
@@ -109,6 +109,23 @@ impl CameraUniform {
 
 const DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32Float;
 
+/// Straight (not premultiplied) alpha blending, the blend state of every
+/// blended pipeline: lines, labels, transparent impostors and transparent
+/// surfaces (`doc/design_screen_space_lines.md` D6).
+///
+/// Colour is `SrcAlpha, OneMinusSrcAlpha`. Alpha is `One, OneMinusSrcAlpha`,
+/// so a translucent fragment over the opaque clear leaves the destination
+/// opaque: readback keeps alpha, and a `SrcAlpha` alpha factor would make
+/// every anti-aliased pixel of an exported PNG or a thumbnail translucent.
+/// wgpu's `BlendState::ALPHA_BLENDING` is exactly this (its alpha component
+/// is `BlendComponent::OVER`); `tests/renderer/line_mesh_test.rs` pins it, so
+/// a wgpu upgrade that changed it would fail there.
+pub const STRAIGHT_ALPHA_BLENDING: BlendState = BlendState::ALPHA_BLENDING;
+
+/// Number of entries in a `LineLodUniform`: slot ids 0..32, id 0 being "no
+/// slot" (D9).
+const LINE_LOD_SLOTS: usize = 32;
+
 /// What one draw renders into: colour and depth textures of one size and the
 /// buffer the colour is read back through. The live viewport owns one and the
 /// thumbnail owns another, so a thumbnail capture never resizes or
@@ -180,8 +197,10 @@ pub struct Renderer {
     device: Device,
     queue: Queue,
     triangle_pipeline: RenderPipeline,
+    /// Every line mesh: instanced screen-space segments, blended, depth
+    /// tested but not depth writing (`doc/design_screen_space_lines.md` D6).
+    /// Its own layout, `[camera, model, line LOD]`.
     line_pipeline: RenderPipeline,
-    background_line_pipeline: RenderPipeline,
     atom_impostor_pipeline: RenderPipeline,
     bond_impostor_pipeline: RenderPipeline,
     transparent_impostor_pipeline: RenderPipeline,
@@ -242,6 +261,10 @@ pub struct Renderer {
     /// resource, so it is bound once per pass before the label draw — the way
     /// `camera_bind_group` already is.
     label_atlas_bind_group: wgpu::BindGroup,
+    /// The line pipeline's group 2: a `LineLodUniform` holding "visible, no
+    /// fade" in every entry (D9). Every line mesh binds this one shared,
+    /// constant uniform until grid level of detail gives meshes their own.
+    line_lod_bind_group: wgpu::BindGroup,
     gadget_atom_impostor_mesh: GPUMesh,
     gadget_bond_impostor_mesh: GPUMesh,
     /// The live viewport's render target.
@@ -479,6 +502,19 @@ impl Renderer {
             push_constant_ranges: &[],
         });
 
+        // ===== Lines (doc/design_screen_space_lines.md D6, D9) =====
+        let (line_lod_bind_group_layout, line_lod_bind_group) =
+            Self::create_line_lod_binding(&device);
+        let line_pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: Some("Line Pipeline Layout"),
+            bind_group_layouts: &[
+                &camera_bind_group_layout,
+                &model_bind_group_layout,
+                &line_lod_bind_group_layout,
+            ],
+            push_constant_ranges: &[],
+        });
+
         // Triangle pipeline (normal depth testing)
         let triangle_pipeline = Self::create_triangle_pipeline(
             &device,
@@ -487,24 +523,7 @@ impl Renderer {
             false, // Normal depth testing
         );
 
-        let line_pipeline = Self::create_line_pipeline(
-            &device,
-            &pipeline_layout,
-            wgpu::DepthBiasState {
-                constant: 0,
-                slope_scale: 0.0,
-                clamp: 0.0,
-            },
-        );
-        let background_line_pipeline = Self::create_line_pipeline(
-            &device,
-            &pipeline_layout,
-            wgpu::DepthBiasState {
-                constant: 0,
-                slope_scale: 0.0,
-                clamp: 0.0,
-            },
-        );
+        let line_pipeline = Self::create_line_pipeline(&device, &line_pipeline_layout);
 
         // Impostor pipelines
         let atom_impostor_pipeline =
@@ -550,7 +569,6 @@ impl Renderer {
             queue,
             triangle_pipeline,
             line_pipeline,
-            background_line_pipeline,
             atom_impostor_pipeline,
             bond_impostor_pipeline,
             transparent_impostor_pipeline,
@@ -576,6 +594,7 @@ impl Renderer {
             transparent_sorted_view: None,
             label_mesh,
             label_atlas_bind_group,
+            line_lod_bind_group,
             gadget_atom_impostor_mesh,
             gadget_bond_impostor_mesh,
             target,
@@ -591,10 +610,15 @@ impl Renderer {
         }
     }
 
+    /// The line pipeline (`doc/design_screen_space_lines.md` D4, D6): six
+    /// vertices per instance, expanded by `line_mesh.wgsl`; straight-alpha
+    /// blending; depth test `Less` with **no depth write**, or the
+    /// anti-aliasing fringe of one grid line would reject the crossing line at
+    /// every intersection; no depth bias (the triangle pipeline's negative
+    /// bias already makes a face win a coplanar tie against an edge in it).
     fn create_line_pipeline(
         device: &Device,
-        pipeline_layout: &wgpu::PipelineLayout,
-        depth_bias_state: wgpu::DepthBiasState,
+        line_pipeline_layout: &wgpu::PipelineLayout,
     ) -> RenderPipeline {
         let line_shader = device.create_shader_module(ShaderModuleDescriptor {
             label: Some("Line Shader"),
@@ -603,11 +627,11 @@ impl Renderer {
 
         device.create_render_pipeline(&RenderPipelineDescriptor {
             label: Some("Line Render Pipeline"),
-            layout: Some(pipeline_layout),
+            layout: Some(line_pipeline_layout),
             vertex: VertexState {
                 module: &line_shader,
                 entry_point: Some("vs_main"),
-                buffers: &[LineVertex::desc()],
+                buffers: &[LineSegmentInstance::desc()],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(FragmentState {
@@ -615,26 +639,31 @@ impl Renderer {
                 entry_point: Some("fs_main"),
                 targets: &[Some(ColorTargetState {
                     format: TextureFormat::Bgra8Unorm,
-                    blend: Some(BlendState::REPLACE),
+                    blend: Some(STRAIGHT_ALPHA_BLENDING),
                     write_mask: ColorWrites::ALL,
                 })],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             }),
             primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::LineList,
+                topology: wgpu::PrimitiveTopology::TriangleList,
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw,
-                cull_mode: None, // Don't cull lines
+                // The corners' winding follows the screen direction.
+                cull_mode: None,
                 polygon_mode: wgpu::PolygonMode::Fill,
                 unclipped_depth: false,
                 conservative: false,
             },
             depth_stencil: Some(wgpu::DepthStencilState {
                 format: DEPTH_FORMAT,
-                depth_write_enabled: true,
+                depth_write_enabled: false,
                 depth_compare: wgpu::CompareFunction::Less,
                 stencil: wgpu::StencilState::default(),
-                bias: depth_bias_state,
+                bias: wgpu::DepthBiasState {
+                    constant: 0,
+                    slope_scale: 0.0,
+                    clamp: 0.0,
+                },
             }),
             multisample: wgpu::MultisampleState {
                 count: 1,
@@ -644,6 +673,39 @@ impl Renderer {
             multiview: None,
             cache: None,
         })
+    }
+
+    /// The line pipeline's group-2 layout and the one shared `LineLodUniform`
+    /// bound there: `(1, 0, 0, 0)` — visible, no fade — in every entry (D9).
+    fn create_line_lod_binding(device: &Device) -> (wgpu::BindGroupLayout, wgpu::BindGroup) {
+        let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("line_lod_bind_group_layout"),
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        });
+        let entries = [[1.0f32, 0.0, 0.0, 0.0]; LINE_LOD_SLOTS];
+        let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Default Line LOD Buffer"),
+            contents: bytemuck::cast_slice(&entries),
+            usage: wgpu::BufferUsages::UNIFORM,
+        });
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: buffer.as_entire_binding(),
+            }],
+            label: Some("default_line_lod_bind_group"),
+        });
+        (layout, bind_group)
     }
 
     fn create_triangle_pipeline(
@@ -727,8 +789,8 @@ impl Renderer {
     /// `triangle_pipeline` in exactly three ways: alpha blending on, depth
     /// writes off, and a caller-chosen `cull_mode`.
     ///
-    /// `ALPHA_BLENDING` is non-premultiplied source-over, the same blend both
-    /// existing transparent pipelines use. The depth **test** stays on so
+    /// [`STRAIGHT_ALPHA_BLENDING`] is non-premultiplied source-over, the blend
+    /// every blended pipeline uses. The depth **test** stays on so
     /// opaque geometry (drawn first, with depth writes) occludes correctly; the
     /// depth **write** must stay off or the first transparent fragment would
     /// kill the surface's own second layer, which is precisely the layer the
@@ -761,7 +823,7 @@ impl Renderer {
                 entry_point: Some("fs_main"),
                 targets: &[Some(ColorTargetState {
                     format: TextureFormat::Bgra8Unorm,
-                    blend: Some(BlendState::ALPHA_BLENDING),
+                    blend: Some(STRAIGHT_ALPHA_BLENDING),
                     write_mask: ColorWrites::ALL,
                 })],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
@@ -931,7 +993,7 @@ impl Renderer {
                 entry_point: Some("fs_main"),
                 targets: &[Some(ColorTargetState {
                     format: TextureFormat::Bgra8Unorm,
-                    blend: Some(BlendState::ALPHA_BLENDING),
+                    blend: Some(STRAIGHT_ALPHA_BLENDING),
                     write_mask: ColorWrites::ALL,
                 })],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
@@ -1094,7 +1156,7 @@ impl Renderer {
                 entry_point: Some("fs_main"),
                 targets: &[Some(ColorTargetState {
                     format: TextureFormat::Bgra8Unorm,
-                    blend: Some(BlendState::ALPHA_BLENDING),
+                    blend: Some(STRAIGHT_ALPHA_BLENDING),
                     write_mask: ColorWrites::ALL,
                 })],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
@@ -1548,12 +1610,7 @@ impl Renderer {
             // Set camera bind group (shared for both pipelines)
             render_pass.set_bind_group(0, camera_bind_group, &[]);
 
-            // Each mesh now has its own model bind group
-
-            // Set identity transform for wireframe mesh and render it
-            self.wireframe_mesh.set_identity_transform(&self.queue);
-            render_pass.set_pipeline(&self.line_pipeline);
-            self.render_mesh(&mut render_pass, &self.wireframe_mesh);
+            // Each mesh has its own model bind group (group 1).
 
             // Set identity transform for main mesh and render it
             self.main_mesh.set_identity_transform(&self.queue);
@@ -1571,16 +1628,6 @@ impl Renderer {
             self.render_mesh(&mut render_pass, &self.bond_impostor_mesh);
 
             if flags.editing_aids {
-                // Drawing-plane grids: content lines, but an editing aid.
-                self.reference_line_mesh.set_identity_transform(&self.queue);
-                render_pass.set_pipeline(&self.line_pipeline);
-                self.render_mesh(&mut render_pass, &self.reference_line_mesh);
-
-                // Set identity transform for background mesh and render it
-                self.background_mesh.set_identity_transform(&self.queue);
-                render_pass.set_pipeline(&self.background_line_pipeline);
-                self.render_mesh(&mut render_pass, &self.background_mesh);
-
                 // Atom labels: after everything opaque (they blend over it) and,
                 // critically, BEFORE the transparent pass. The order is forced by
                 // the depth-write asymmetry — labels write depth, ghosts do not.
@@ -1598,8 +1645,26 @@ impl Renderer {
                 self.render_mesh(&mut render_pass, &self.label_mesh);
             }
 
+            // All lines, after the opaque content and the labels and before the
+            // ghosts (`doc/design_screen_space_lines.md` D6). Lines blend and
+            // write no depth, so they must test against finished opaque depth:
+            // anything opaque drawn after a line would paint over it even where
+            // the line is in front. A label in front of a line hides it (labels
+            // write depth); a ghost composites over a line and tints it, the
+            // milder error of the two orders.
+            self.wireframe_mesh.set_identity_transform(&self.queue);
+            let mut lines = vec![&self.wireframe_mesh];
+            if flags.editing_aids {
+                // Drawing-plane grids: content lines, but an editing aid.
+                self.reference_line_mesh.set_identity_transform(&self.queue);
+                self.background_mesh.set_identity_transform(&self.queue);
+                lines.push(&self.reference_line_mesh);
+                lines.push(&self.background_mesh);
+            }
+            self.draw_lines(&mut render_pass, &lines);
+
             // Transparent impostors (x-ray) draw last in the main pass — after
-            // ALL opaque content, including the background lines — with alpha
+            // ALL opaque content and the lines — with alpha
             // blending and depth writes off. The index buffer is kept in
             // back-to-front order for this camera by
             // `resort_transparent_impostors` (called before this draw).
@@ -1649,11 +1714,6 @@ impl Renderer {
             // Set camera bind group for gadget render pass
             gadget_render_pass.set_bind_group(0, camera_bind_group, &[]);
 
-            // Render gadget lines first
-            self.gadget_line_mesh.set_identity_transform(&self.queue);
-            gadget_render_pass.set_pipeline(&self.line_pipeline);
-            self.render_mesh(&mut gadget_render_pass, &self.gadget_line_mesh);
-
             // Render gadget triangles
             self.lightweight_mesh.set_identity_transform(&self.queue);
             gadget_render_pass.set_pipeline(&self.triangle_pipeline);
@@ -1670,6 +1730,12 @@ impl Renderer {
                 .set_identity_transform(&self.queue);
             gadget_render_pass.set_pipeline(&self.bond_impostor_pipeline);
             self.render_mesh(&mut gadget_render_pass, &self.gadget_bond_impostor_mesh);
+
+            // Gadget lines last, for the same reason as in the main pass (D6):
+            // they write no depth, so a gadget triangle drawn after them would
+            // paint over them where they cross its arrow heads and rings.
+            self.gadget_line_mesh.set_identity_transform(&self.queue);
+            self.draw_lines(&mut gadget_render_pass, &[&self.gadget_line_mesh]);
         }
 
         // Calculate bytes per row with proper alignment (256-byte boundary for WebGPU)
@@ -1776,8 +1842,27 @@ impl Renderer {
         }
     }
 
+    /// Draws `meshes` with the line pipeline. Group 2 (the line LOD uniform)
+    /// is bound here, after the pipeline that declares it: `render_mesh` only
+    /// knows about group 1, and the label pipeline binds a different group 2.
+    fn draw_lines<'a>(&self, render_pass: &mut RenderPass<'a>, meshes: &[&GPUMesh]) {
+        if meshes.iter().all(|mesh| mesh.num_instances == 0) {
+            return;
+        }
+        render_pass.set_pipeline(&self.line_pipeline);
+        render_pass.set_bind_group(2, &self.line_lod_bind_group, &[]);
+        for mesh in meshes {
+            self.render_mesh(render_pass, mesh);
+        }
+    }
+
     fn render_mesh<'a>(&self, render_pass: &mut RenderPass<'a>, mesh: &GPUMesh) {
-        if mesh.num_indices > 0 {
+        if mesh.num_instances > 0 {
+            // A line mesh: one six-vertex quad per instance, no index buffer.
+            render_pass.set_bind_group(1, &mesh.model_bind_group, &[]);
+            render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+            render_pass.draw(0..6, 0..mesh.num_instances);
+        } else if mesh.num_indices > 0 {
             // Set the mesh's model bind group (index 1)
             render_pass.set_bind_group(1, &mesh.model_bind_group, &[]);
 

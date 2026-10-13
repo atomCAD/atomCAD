@@ -1,135 +1,153 @@
 use bytemuck;
 use glam::f32::Vec3;
 
+/// One line segment as the GPU draws it: one instance of a six-vertex quad
+/// that `line_mesh.wgsl` expands to a width in pixels
+/// (`doc/design_screen_space_lines.md` D1).
+///
+/// 60 bytes. Every screen-space length is in **logical pixels**; the shader
+/// multiplies by the render target's `pixel_scale` (D2).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct LineVertex {
-    pub position: [f32; 3],
-    pub color: [f32; 3], // RGB color
+#[derive(Copy, Clone, Debug, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct LineSegmentInstance {
+    /// Segment ends in world space (the mesh's model matrix still applies).
+    pub p0: [f32; 3],
+    pub p1: [f32; 3],
+    /// Linear RGBA, **not** premultiplied.
+    pub color: [f32; 4],
+    /// Width in logical pixels.
+    pub width_px: f32,
+    /// Dash pattern in logical pixels; `dash_off_px == 0` means solid (D5).
+    pub dash_on_px: f32,
+    pub dash_off_px: f32,
+    /// World-space arc length of `p0` along its polyline (D5); 0 for a lone
+    /// segment.
+    pub dash_phase: f32,
+    /// Grid level-of-detail slot (D9); 0 = never hidden or faded.
+    pub lod_slot: u32,
 }
 
-impl LineVertex {
-    pub fn new(position: &Vec3, color: &[f32; 3]) -> Self {
-        Self {
-            position: [position.x, position.y, position.z],
-            color: *color,
-        }
-    }
-
+impl LineSegmentInstance {
+    /// The instance-rate vertex buffer layout `line_mesh.wgsl` reads.
     pub fn desc() -> wgpu::VertexBufferLayout<'static> {
+        const ATTRIBUTES: [wgpu::VertexAttribute; 8] = wgpu::vertex_attr_array![
+            0 => Float32x3, // p0
+            1 => Float32x3, // p1
+            2 => Float32x4, // color
+            3 => Float32,   // width_px
+            4 => Float32,   // dash_on_px
+            5 => Float32,   // dash_off_px
+            6 => Float32,   // dash_phase
+            7 => Uint32,    // lod_slot
+        ];
         wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<LineVertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-                wgpu::VertexAttribute {
-                    offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
-                    shader_location: 1,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-            ],
+            array_stride: std::mem::size_of::<LineSegmentInstance>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Instance,
+            attributes: &ATTRIBUTES,
         }
     }
 }
 
-/*
- * A Line mesh in CPU memory.
- */
-pub struct LineMesh {
-    pub vertices: Vec<LineVertex>,
-    pub indices: Vec<u32>, // Each pair of indices represents a line segment
+/// How a segment is drawn (D7).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LineStyle {
+    /// Linear RGBA.
+    pub color: [f32; 4],
+    /// Width in logical pixels.
+    pub width_px: f32,
+    pub dash: Option<LineDash>,
 }
 
-impl Default for LineMesh {
-    fn default() -> Self {
-        Self::new()
+/// A dash pattern in logical pixels.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LineDash {
+    pub on_px: f32,
+    pub off_px: f32,
+}
+
+impl LineStyle {
+    /// 1 px, solid, opaque: what every line was before screen-space lines.
+    pub const fn solid(color: [f32; 3]) -> Self {
+        Self {
+            color: [color[0], color[1], color[2], 1.0],
+            width_px: 1.0,
+            dash: None,
+        }
     }
+
+    pub const fn with_width(self, width_px: f32) -> Self {
+        Self { width_px, ..self }
+    }
+
+    pub const fn with_alpha(self, alpha: f32) -> Self {
+        Self {
+            color: [self.color[0], self.color[1], self.color[2], alpha],
+            ..self
+        }
+    }
+
+    pub const fn dashed(self, on_px: f32, off_px: f32) -> Self {
+        Self {
+            dash: Some(LineDash { on_px, off_px }),
+            ..self
+        }
+    }
+}
+
+/// A line mesh in CPU memory: the list of segments every line producer fills
+/// and `GPUMesh::update_from_line_mesh` uploads as instances.
+#[derive(Clone, Debug, Default)]
+pub struct LineMesh {
+    pub instances: Vec<LineSegmentInstance>,
 }
 
 impl LineMesh {
     pub fn new() -> Self {
         Self {
-            vertices: Vec::new(),
-            indices: Vec::new(),
+            instances: Vec::new(),
         }
     }
 
-    // Returns the index of the added vertex
-    pub fn add_vertex(&mut self, vertex: LineVertex) -> u32 {
-        let length = self.vertices.len() as u32;
-        self.vertices.push(vertex);
-        length
+    pub fn add_segment(&mut self, p0: &Vec3, p1: &Vec3, style: &LineStyle) {
+        let (dash_on_px, dash_off_px) = match style.dash {
+            Some(dash) => (dash.on_px, dash.off_px),
+            None => (0.0, 0.0),
+        };
+        self.instances.push(LineSegmentInstance {
+            p0: p0.to_array(),
+            p1: p1.to_array(),
+            color: style.color,
+            width_px: style.width_px,
+            dash_on_px,
+            dash_off_px,
+            dash_phase: 0.0,
+            lod_slot: 0,
+        });
     }
 
-    // Add a line segment between two vertices
-    pub fn add_line(&mut self, index0: u32, index1: u32) {
-        self.indices.push(index0);
-        self.indices.push(index1);
-    }
-
-    // Add a line directly specifying two positions and colors
-    pub fn add_line_with_positions(
-        &mut self,
-        start_pos: &Vec3,
-        start_color: &[f32; 3],
-        end_pos: &Vec3,
-        end_color: &[f32; 3],
-    ) {
-        let start_index = self.add_vertex(LineVertex::new(start_pos, start_color));
-        let end_index = self.add_vertex(LineVertex::new(end_pos, end_color));
-        self.add_line(start_index, end_index);
-    }
-
-    // Convenience method to add a line with the same color for both vertices
+    /// `LineStyle::solid(color)`: the shortcut for producers not yet given a
+    /// style of their own.
     pub fn add_line_with_uniform_color(
         &mut self,
         start_pos: &Vec3,
         end_pos: &Vec3,
         color: &[f32; 3],
     ) {
-        self.add_line_with_positions(start_pos, color, end_pos, color);
+        self.add_segment(start_pos, end_pos, &LineStyle::solid(*color));
     }
 
-    /// Add a dotted line by creating multiple small line segments
-    pub fn add_dotted_line(
-        &mut self,
-        start_pos: &Vec3,
-        end_pos: &Vec3,
-        color: &[f32; 3],
-        dot_length: f32,
-        gap_length: f32,
-    ) {
-        let direction = *end_pos - *start_pos;
-        let total_length = direction.length();
-        let direction_normalized = direction.normalize();
+    /// The segments' ends, in emission order.
+    pub fn segments(&self) -> impl Iterator<Item = (Vec3, Vec3)> + '_ {
+        self.instances
+            .iter()
+            .map(|s| (Vec3::from_array(s.p0), Vec3::from_array(s.p1)))
+    }
 
-        let segment_length = dot_length + gap_length;
-        let num_segments = (total_length / segment_length).floor() as u32;
+    pub fn len(&self) -> usize {
+        self.instances.len()
+    }
 
-        for i in 0..num_segments {
-            let start_offset = i as f32 * segment_length;
-            let end_offset = start_offset + dot_length;
-
-            let dot_start = *start_pos + direction_normalized * start_offset;
-            let dot_end = *start_pos + direction_normalized * end_offset;
-
-            self.add_line_with_uniform_color(&dot_start, &dot_end, color);
-        }
-
-        // Add final partial dot if there's remaining length
-        let remaining = total_length - (num_segments as f32 * segment_length);
-        if remaining > 0.0 {
-            let start_offset = num_segments as f32 * segment_length;
-            let end_offset = (start_offset + dot_length.min(remaining)).min(total_length);
-
-            let dot_start = *start_pos + direction_normalized * start_offset;
-            let dot_end = *start_pos + direction_normalized * end_offset;
-
-            self.add_line_with_uniform_color(&dot_start, &dot_end, color);
-        }
+    pub fn is_empty(&self) -> bool {
+        self.instances.is_empty()
     }
 }

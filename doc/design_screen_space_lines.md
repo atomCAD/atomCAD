@@ -247,6 +247,14 @@ between files is a trap for the next person to add a field).
    the divide needs. Without this, a ground-grid line passing behind the
    camera projects through infinity and paints a wedge across the screen. It
    is the classic bug of screen-space lines and gets a test (Phase 2).
+
+   *Note (Phase 2):* the wedge is what you get when the corners are emitted
+   at `w = 1`. Because step 5 emits each corner at its own end's `w`, the
+   hardware clipper sees a quad straddling `w = 0` instead, and the symptom
+   of a missing clip here is different: every line running towards the
+   horizon **vanishes**. The GPU test therefore checks both: no pixel above
+   the horizon, and receding lines present below it. It was confirmed to
+   fail with the clip removed.
 3. Divide by `w`, convert to render pixels with `viewport_size_px`.
 4. Let `hw = 0.5 * max(width_px * pixel_scale, 1.0)` and `pad = hw + 1.0`
    (one render pixel of fringe). Offset the corner by `±pad` along the
@@ -327,17 +335,22 @@ that motivated this design.
 Lines use straight-alpha blending for colour (`SrcAlpha`,
 `OneMinusSrcAlpha`), depth test `Less`, **depth write off**, no depth bias.
 
-**The alpha component is `One`, `OneMinusSrcAlpha`, not
-`BlendState::ALPHA_BLENDING`.** The latter blends alpha with `SrcAlpha` as
-well, so a fringe fragment of alpha 0.5 over the opaque clear (a = 1) leaves
-a destination alpha of 0.5² + 0.5 = 0.75. Readback keeps alpha:
-`bgra_to_rgba_in_place` only swaps channels, and `downsample_2x2` and
-`encode_png` pass it through. Every anti-aliased line pixel would come out
-translucent in an exported PNG and in a thumbnail. With `One,
-OneMinusSrcAlpha` the destination stays at a = 1. The other alpha-blended
-pipelines (labels, transparent impostors, transparent surfaces) use
-`ALPHA_BLENDING` today and have the same latent defect. Phase 2 gives all of
-them the same blend state, defined once as a `const` in `renderer.rs`.
+**The alpha component must be `One`, `OneMinusSrcAlpha`.** Blending alpha
+with `SrcAlpha` as well would make a fringe fragment of alpha 0.5 over the
+opaque clear (a = 1) leave a destination alpha of 0.5² + 0.5 = 0.75.
+Readback keeps alpha: `bgra_to_rgba_in_place` only swaps channels, and
+`downsample_2x2` and `encode_png` pass it through. Every anti-aliased line
+pixel would come out translucent in an exported PNG and in a thumbnail. With
+`One, OneMinusSrcAlpha` the destination stays at a = 1.
+
+*Correction (Phase 2):* an earlier draft said wgpu's
+`BlendState::ALPHA_BLENDING` blends alpha with `SrcAlpha` and that the other
+blended pipelines therefore had a latent defect. They do not: in wgpu 23
+`ALPHA_BLENDING.alpha` is `BlendComponent::OVER`, i.e. `One,
+OneMinusSrcAlpha`, already. Phase 2 still defines the blend state once, as
+`STRAIGHT_ALPHA_BLENDING` in `renderer.rs` (equal to `ALPHA_BLENDING`), uses
+it in every blended pipeline, and pins its factors in a CPU test so a wgpu
+upgrade that changed them would fail.
 
 Why no depth write: the anti-aliasing fringe is a real fragment at line
 depth. If lines wrote depth, the fringe of one grid line would reject the
@@ -713,6 +726,15 @@ maintainer.
   - **gadget order:** a gadget line in front of a gadget triangle keeps its
     colour where they cross.
 - Check by CLI screenshot: the same scenes, by eye.
+
+*As implemented:* `LineSegmentInstance` already carries all of D1's fields,
+`lod_slot` included, so the instance layout does not change again in Phase 4;
+every producer writes slot 0, and the vertex shader already drops a segment
+whose slot is marked hidden in the bound `LineLodUniform`. `LineStyle` has
+D7's builders including `dashed`, which fills the dash fields, but the shader
+ignores them until Phase 3. `add_polyline` is Phase 3's. The twins live in
+`line_geometry.rs` with tests in `tests/renderer/line_geometry_test.rs` and
+`line_mesh_test.rs`.
 
 ### Phase 3 — Dashes, polylines and the producers' styles
 

@@ -39,3 +39,12 @@ mod camera_uniform_test;
 // Rust struct (naga, doc/design_screen_space_lines.md Testing layer 2).
 #[path = "renderer/shader_test.rs"]
 mod shader_test;
+
+// Screen-space lines, Phase 2: the instanced `LineMesh`, the line blend state
+// and the Rust twins of `line_mesh.wgsl` (doc/design_screen_space_lines.md
+// D1, D4, D6, D7).
+#[path = "renderer/line_mesh_test.rs"]
+mod line_mesh_test;
+
+#[path = "renderer/line_geometry_test.rs"]
+mod line_geometry_test;

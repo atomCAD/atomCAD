@@ -10,13 +10,9 @@ use std::collections::HashSet;
 
 /// Helper: collect all line segments as pairs of (start, end) positions from a LineMesh.
 fn collect_line_segments(mesh: &LineMesh) -> Vec<([f32; 3], [f32; 3])> {
-    let mut segments = Vec::new();
-    for chunk in mesh.indices.chunks(2) {
-        let start = mesh.vertices[chunk[0] as usize].position;
-        let end = mesh.vertices[chunk[1] as usize].position;
-        segments.push((start, end));
-    }
-    segments
+    mesh.segments()
+        .map(|(start, end)| (start.to_array(), end.to_array()))
+        .collect()
 }
 
 /// Helper: round an f32 position array to avoid floating point comparison issues.
@@ -28,11 +24,11 @@ fn round_pos(p: [f32; 3]) -> [i32; 3] {
     ]
 }
 
-/// Helper: collect all unique vertex positions (rounded) from a LineMesh.
+/// Helper: collect all unique segment end positions (rounded) from a LineMesh.
 fn collect_unique_vertices(mesh: &LineMesh) -> HashSet<[i32; 3]> {
-    mesh.vertices
-        .iter()
-        .map(|v| round_pos(v.position))
+    mesh.segments()
+        .flat_map(|(start, end)| [start, end])
+        .map(|p| round_pos(p.to_array()))
         .collect()
 }
 
@@ -51,11 +47,7 @@ fn test_wireframe_vertices_cubic() {
     tessellate_unit_cell_wireframe(&mut mesh, &uc);
 
     // Should have exactly 12 line segments
-    assert_eq!(
-        mesh.indices.len(),
-        24,
-        "Expected 12 line segments (24 indices)"
-    );
+    assert_eq!(mesh.len(), 12, "Expected 12 line segments");
 
     // Verify the 8 expected vertices exist
     let vertices = collect_unique_vertices(&mesh);
@@ -138,7 +130,7 @@ fn test_wireframe_non_orthogonal() {
     tessellate_unit_cell_wireframe(&mut mesh, &uc);
 
     // Should still have exactly 12 line segments
-    assert_eq!(mesh.indices.len(), 24, "Expected 12 line segments");
+    assert_eq!(mesh.len(), 12, "Expected 12 line segments");
 
     let vertices = collect_unique_vertices(&mesh);
 
@@ -170,8 +162,7 @@ fn test_wireframe_non_orthogonal() {
 fn test_wireframe_not_generated_without_unit_cell() {
     // No tessellation call → empty mesh (simulates no unit_cell connected)
     let mesh = LineMesh::new();
-    assert!(mesh.vertices.is_empty());
-    assert!(mesh.indices.is_empty());
+    assert!(mesh.is_empty());
 }
 
 // ===== Additional tests =====
@@ -188,9 +179,9 @@ fn test_wireframe_colors_are_uniform() {
     let mut mesh = LineMesh::new();
     tessellate_unit_cell_wireframe_with_color(&mut mesh, &uc, &color);
 
-    // All vertices should have the specified color
-    for vertex in &mesh.vertices {
-        assert_eq!(vertex.color, color);
+    // All segments should have the specified color, opaque
+    for segment in &mesh.instances {
+        assert_eq!(segment.color, [color[0], color[1], color[2], 1.0]);
     }
 }
 
@@ -210,20 +201,13 @@ fn test_wireframe_appends_to_existing_mesh() {
         &Vec3::new(20.0, 20.0, 20.0),
         &[1.0, 0.0, 0.0],
     );
-    let pre_existing_vertex_count = mesh.vertices.len();
-    let pre_existing_index_count = mesh.indices.len();
+    let pre_existing_segment_count = mesh.len();
 
     tessellate_unit_cell_wireframe(&mut mesh, &uc);
 
-    // Should have added 24 vertices (2 per line * 12 lines) and 24 indices
     assert_eq!(
-        mesh.vertices.len(),
-        pre_existing_vertex_count + 24,
-        "Should add 24 vertices for 12 line segments"
-    );
-    assert_eq!(
-        mesh.indices.len(),
-        pre_existing_index_count + 24,
-        "Should add 24 indices for 12 line segments"
+        mesh.len(),
+        pre_existing_segment_count + 12,
+        "Should add 12 line segments"
     );
 }

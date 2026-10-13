@@ -111,11 +111,9 @@ pub fn content_bounds(
             .iter()
             .for_each(|v| acc.add_point(v.position));
     }
-    if !wireframe_mesh.indices.is_empty() {
-        wireframe_mesh
-            .vertices
-            .iter()
-            .for_each(|v| acc.add_point(v.position));
+    for (p0, p1) in wireframe_mesh.segments() {
+        acc.add_point(p0.to_array());
+        acc.add_point(p1.to_array());
     }
     if !atom_impostor_mesh.indices.is_empty() {
         atom_impostor_mesh

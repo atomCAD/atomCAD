@@ -323,7 +323,11 @@ When adding new functionality to the Rust codebase:
      (camera math, label layout, impostor meshes, transparent sort), including
      `shader_test.rs`, which parses and validates every `.wgsl` file with
      `naga` and checks each shader's `CameraUniform` offsets against the Rust
-     struct — so a broken shader fails `cargo test`, not the app's start-up
+     struct — so a broken shader fails `cargo test`, not the app's start-up.
+     The line shader's arithmetic is tested through its Rust twins in
+     `src/line_geometry.rs` (`line_geometry_test.rs`): **a change to
+     `line_mesh.wgsl` must be mirrored there**, and the GPU harness is what
+     catches a twin that drifted
    - `rust/crates/atomcad-renderer/tests/renderer_gpu.rs` - the **opt-in GPU
      harness** (see below)
    - `rust/crates/atomcad-display/tests/display/` - tessellation tests. The two

@@ -963,11 +963,11 @@ fn the_cage_reaches_the_wireframe_pass_in_the_preference_colour() {
     let scene = scene_with_overlay();
     let mesh = wireframe_of(&scene, &cage_display_prefs(true, [255, 160, 0]));
 
-    assert_eq!(mesh.indices.len(), 4, "two segments, two endpoints each");
-    for vertex in &mesh.vertices {
-        assert!((vertex.color[0] - 1.0).abs() < 1e-6);
-        assert!((vertex.color[1] - 160.0 / 255.0).abs() < 1e-6);
-        assert_eq!(vertex.color[2], 0.0);
+    assert_eq!(mesh.len(), 2, "two segments");
+    for segment in &mesh.instances {
+        assert!((segment.color[0] - 1.0).abs() < 1e-6);
+        assert!((segment.color[1] - 160.0 / 255.0).abs() < 1e-6);
+        assert_eq!(segment.color[2], 0.0);
     }
 }
 
@@ -975,5 +975,5 @@ fn the_cage_reaches_the_wireframe_pass_in_the_preference_colour() {
 fn the_cage_contributes_nothing_with_the_preference_off() {
     let scene = scene_with_overlay();
     let mesh = wireframe_of(&scene, &cage_display_prefs(false, [255, 160, 0]));
-    assert!(mesh.vertices.is_empty() && mesh.indices.is_empty());
+    assert!(mesh.is_empty());
 }

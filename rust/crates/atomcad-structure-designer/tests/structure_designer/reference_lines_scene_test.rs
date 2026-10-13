@@ -84,11 +84,11 @@ fn drawing_plane_grid_goes_to_reference_lines_not_wireframe() {
         tessellate_scene_content(&scene, &test_camera(), false, &display_prefs());
 
     assert!(
-        wireframe.indices.is_empty(),
+        wireframe.is_empty(),
         "the drawing-plane grid must not be content"
     );
     assert!(
-        !reference_lines.indices.is_empty(),
+        !reference_lines.is_empty(),
         "the drawing-plane grid is still drawn live"
     );
 }

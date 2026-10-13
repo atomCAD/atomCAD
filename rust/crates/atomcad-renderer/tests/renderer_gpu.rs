@@ -19,7 +19,7 @@ use atomcad_renderer::atom_impostor_mesh::AtomImpostorMesh;
 use atomcad_renderer::bond_impostor_mesh::BondImpostorMesh;
 use atomcad_renderer::image_export::IMAGE_EXPORT_SUPERSAMPLING;
 use atomcad_renderer::label_mesh::LabelMesh;
-use atomcad_renderer::line_mesh::LineMesh;
+use atomcad_renderer::line_mesh::{LineMesh, LineStyle};
 use atomcad_renderer::mesh::{Material, Mesh, Vertex};
 use atomcad_renderer::renderer::Renderer;
 use atomcad_renderer::thumbnail::{THUMBNAIL_SIZE, fit_camera_to_bounds};
@@ -223,4 +223,361 @@ fn resized_viewport_renders_at_the_new_size() {
         lit > 1000,
         "resized render is (almost) all background: {lit}"
     );
+}
+
+// ---- Screen-space lines, Phase 2 (doc/design_screen_space_lines.md) --------
+
+use glam::f64::DVec3;
+
+const BLACK: [u8; 3] = [0, 0, 0];
+
+/// Uploads `main` and `wireframe` as the content, `lightweight` and
+/// `gadget_lines` as the gadgets, and nothing else.
+fn upload(
+    renderer: &mut Renderer,
+    main: &Mesh,
+    wireframe: &LineMesh,
+    lightweight: &Mesh,
+    gadget_lines: &LineMesh,
+) {
+    renderer.update_all_gpu_meshes(
+        lightweight,
+        gadget_lines,
+        main,
+        wireframe,
+        &LineMesh::new(),
+        &AtomImpostorMesh::new(),
+        &BondImpostorMesh::new(),
+        &TransparentImpostorMesh::new(),
+        &TransparentSurfaceMesh::new(),
+        &LabelMesh::new(),
+        &AtomImpostorMesh::new(),
+        &BondImpostorMesh::new(),
+        true,
+        Some((1, "Main".to_string())),
+    );
+}
+
+/// An opaque square of half-size `half` in the plane `z`, facing +Z.
+fn square(half: f32, z: f32, albedo: Vec3) -> Mesh {
+    let mut mesh = Mesh::new();
+    let material = Material::new(&albedo, 0.5, 0.0);
+    let corners = [
+        Vec3::new(-half, -half, z),
+        Vec3::new(half, -half, z),
+        Vec3::new(half, half, z),
+        Vec3::new(-half, half, z),
+    ];
+    for corner in &corners {
+        mesh.add_vertex(Vertex::new(corner, &Vec3::Z, &material));
+    }
+    mesh.add_quad(0, 1, 2, 3);
+    mesh
+}
+
+/// Orthographic, looking straight down the -Z axis at the origin, +Y up, at
+/// 10 render pixels per world unit in the default viewport.
+fn top_down_orthographic(renderer: &mut Renderer) {
+    renderer.set_orthographic_mode(true);
+    renderer.set_ortho_half_height(VIEWPORT_HEIGHT as f64 / 20.0);
+    renderer.move_camera(
+        &DVec3::new(0.0, 0.0, 50.0),
+        &DVec3::ZERO,
+        &DVec3::new(0.0, 1.0, 0.0),
+    );
+}
+
+/// The BGRA pixel at `(column, row)` of a live render, as RGBA.
+fn rgba_at(pixels: &[u8], width: u32, column: u32, row: u32) -> [u8; 4] {
+    let i = ((row * width + column) * 4) as usize;
+    [pixels[i + 2], pixels[i + 1], pixels[i], pixels[i + 3]]
+}
+
+/// The pixel of a top-down orthographic live render where world `(x, y)` is.
+fn pixel_of(x: f32, y: f32) -> (u32, u32) {
+    (
+        (VIEWPORT_WIDTH as f32 / 2.0 + x * 10.0) as u32,
+        (VIEWPORT_HEIGHT as f32 / 2.0 - y * 10.0) as u32,
+    )
+}
+
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn anti_aliased_lines_leave_every_exported_and_thumbnail_pixel_opaque() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    upload_fixed_scene(&mut renderer);
+    // Diagonal wireframe lines, so plenty of fringe pixels are partial.
+    let mut wireframe = LineMesh::new();
+    for i in 0..8 {
+        let t = i as f32;
+        wireframe.add_line_with_uniform_color(
+            &Vec3::new(-6.0 + t, -6.0, 2.0),
+            &Vec3::new(6.0 + t * 0.3, 6.0, 2.0),
+            &[1.0, 1.0, 0.0],
+        );
+    }
+    upload(
+        &mut renderer,
+        &square(4.0, 0.0, Vec3::new(0.8, 0.3, 0.2)),
+        &wireframe,
+        &Mesh::new(),
+        &LineMesh::new(),
+    );
+
+    let export = renderer.render_image(300, 200, BACKGROUND_RGB);
+    dump("alpha_export", &export);
+    let translucent = export.chunks_exact(4).filter(|p| p[3] != 255).count();
+    assert_eq!(translucent, 0, "translucent pixels in the export");
+
+    let bounds = renderer.content_bounds().expect("content has bounds");
+    let thumbnail = renderer.render_thumbnail(&fit_camera_to_bounds(&renderer.camera, bounds));
+    dump("alpha_thumbnail", &thumbnail);
+    let translucent = thumbnail.chunks_exact(4).filter(|p| p[3] != 255).count();
+    assert_eq!(translucent, 0, "translucent pixels in the thumbnail");
+}
+
+/// A ground grid seen from just above it, looking at the horizon, with the
+/// camera inside the grid: half of every line running away from the camera
+/// lies behind it, and only the near-plane clip keeps the half in front.
+///
+/// What goes wrong without the clip depends on how the corners are emitted.
+/// Dividing by `w` and emitting `w = 1` paints a wedge across the sky; this
+/// shader emits each corner at its own end's `w`, and then the receding lines
+/// vanish instead (their quads straddle `w = 0`). The test checks for both.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn a_grid_at_a_grazing_angle_lights_nothing_above_the_horizon() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    let mut grid = LineMesh::new();
+    let white = [1.0, 1.0, 1.0];
+    for i in -100..=100 {
+        let t = i as f32 * 2.0;
+        grid.add_line_with_uniform_color(
+            &Vec3::new(t, -200.0, 0.0),
+            &Vec3::new(t, 200.0, 0.0),
+            &white,
+        );
+        grid.add_line_with_uniform_color(
+            &Vec3::new(-200.0, t, 0.0),
+            &Vec3::new(200.0, t, 0.0),
+            &white,
+        );
+    }
+    renderer.update_background_mesh(&grid);
+    // Eye 1 unit above the plane, looking horizontally along +Y: the
+    // horizon is the middle row of the image.
+    renderer.move_camera(
+        &DVec3::new(3.0, 0.0, 1.0),
+        &DVec3::new(3.0, 100.0, 1.0),
+        &DVec3::Z,
+    );
+
+    let live = renderer.render(BLACK);
+    dump("grazing_grid", &live);
+    let row_bytes = VIEWPORT_WIDTH as usize * 4;
+    let horizon = VIEWPORT_HEIGHT as usize / 2;
+    let lit_below = count_non_background(&live[(horizon + 2) * row_bytes..], BLACK, true);
+    assert!(lit_below > 1000, "the grid is not drawn: {lit_below}");
+    // A couple of rows of margin for the fringe of the lines at the horizon.
+    let lit_above = count_non_background(&live[..(horizon - 2) * row_bytes], BLACK, true);
+    assert_eq!(lit_above, 0, "pixels lit above the horizon (a wedge)");
+
+    // The lines running towards the horizon cross the rows below it as
+    // separate short runs; the lines across the view light whole rows.
+    let most_runs = (horizon + 10..VIEWPORT_HEIGHT as usize)
+        .map(|row| {
+            let lit: Vec<bool> = (0..VIEWPORT_WIDTH)
+                .map(|column| rgba_at(&live, VIEWPORT_WIDTH, column, row as u32)[0] > 4)
+                .collect();
+            lit.windows(2).filter(|w| w[1] && !w[0]).count() + lit[0] as usize
+        })
+        .max()
+        .unwrap();
+    assert!(
+        most_runs >= 3,
+        "the lines running towards the horizon are missing: at most {most_runs} runs per row"
+    );
+}
+
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn an_axis_seen_end_on_is_a_small_dot() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    let mut axis = LineMesh::new();
+    axis.add_line_with_uniform_color(
+        &Vec3::new(0.0, 0.0, -5.0),
+        &Vec3::new(0.0, 0.0, 5.0),
+        &[1.0, 1.0, 1.0],
+    );
+    upload(
+        &mut renderer,
+        &Mesh::new(),
+        &axis,
+        &Mesh::new(),
+        &LineMesh::new(),
+    );
+    for orthographic in [false, true] {
+        renderer.set_orthographic_mode(orthographic);
+        renderer.move_camera(
+            &DVec3::new(0.0, 0.0, 30.0),
+            &DVec3::ZERO,
+            &DVec3::new(0.0, 1.0, 0.0),
+        );
+        let live = renderer.render(BLACK);
+        dump(&format!("end_on_{orthographic}"), &live);
+        let (cx, cy) = (VIEWPORT_WIDTH as i32 / 2, VIEWPORT_HEIGHT as i32 / 2);
+        let mut lit = 0;
+        for (index, p) in live.chunks_exact(4).enumerate() {
+            if p[0] > 4 || p[1] > 4 || p[2] > 4 {
+                lit += 1;
+                let (x, y) = (
+                    (index as u32 % VIEWPORT_WIDTH) as i32,
+                    (index as u32 / VIEWPORT_WIDTH) as i32,
+                );
+                assert!(
+                    (x - cx).abs() <= 3 && (y - cy).abs() <= 3,
+                    "lit pixel ({x}, {y}) far from the centre (orthographic: {orthographic})"
+                );
+            }
+        }
+        assert!(
+            (1..=25).contains(&lit),
+            "expected a small dot, got {lit} lit pixels (orthographic: {orthographic})"
+        );
+    }
+}
+
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn a_one_pixel_line_sums_to_one_pixel_of_coverage_per_column() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    let mut line = LineMesh::new();
+    // A third of a pixel off a pixel centre, so the coverage is split over
+    // two rows.
+    line.add_line_with_uniform_color(
+        &Vec3::new(-12.0, 0.083, 0.0),
+        &Vec3::new(12.0, 0.083, 0.0),
+        &[1.0, 1.0, 1.0],
+    );
+    upload(
+        &mut renderer,
+        &Mesh::new(),
+        &line,
+        &Mesh::new(),
+        &LineMesh::new(),
+    );
+    top_down_orthographic(&mut renderer);
+    let live = renderer.render(BLACK);
+    dump("one_pixel_line", &live);
+
+    let mut split_columns = 0;
+    for column in 60..260 {
+        let coverages: Vec<f32> = (0..VIEWPORT_HEIGHT)
+            .map(|row| rgba_at(&live, VIEWPORT_WIDTH, column, row)[0] as f32 / 255.0)
+            .collect();
+        let sum: f32 = coverages.iter().sum();
+        assert!(
+            (sum - 1.0).abs() < 0.03,
+            "column {column}: coverage sums to {sum}"
+        );
+        if coverages.iter().filter(|c| **c > 0.05).count() >= 2 {
+            split_columns += 1;
+        }
+    }
+    assert!(split_columns > 150, "the line is not anti-aliased");
+}
+
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn a_line_behind_an_opaque_face_is_hidden_and_one_in_front_is_not() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    let mut lines = LineMesh::new();
+    let red = LineStyle::solid([1.0, 0.0, 0.0]).with_width(3.0);
+    let green = LineStyle::solid([0.0, 1.0, 0.0]).with_width(3.0);
+    lines.add_segment(
+        &Vec3::new(-12.0, 2.0, -1.0),
+        &Vec3::new(12.0, 2.0, -1.0),
+        &red,
+    );
+    lines.add_segment(
+        &Vec3::new(-12.0, -2.0, 1.0),
+        &Vec3::new(12.0, -2.0, 1.0),
+        &green,
+    );
+    upload(
+        &mut renderer,
+        &square(4.0, 0.0, Vec3::new(0.1, 0.1, 0.9)),
+        &lines,
+        &Mesh::new(),
+        &LineMesh::new(),
+    );
+    top_down_orthographic(&mut renderer);
+    let live = renderer.render(BLACK);
+    dump("main_pass_order", &live);
+
+    // Outside the square both lines show.
+    let (x, y) = pixel_of(-8.0, 2.0);
+    let outside_red = rgba_at(&live, VIEWPORT_WIDTH, x, y);
+    assert!(
+        outside_red[0] > 200,
+        "red line outside the face: {outside_red:?}"
+    );
+    // Over the square: the red line behind is hidden, the green in front shows.
+    let (x, y) = pixel_of(0.0, 2.0);
+    let behind = rgba_at(&live, VIEWPORT_WIDTH, x, y);
+    assert!(
+        behind[0] < behind[2],
+        "the line behind the face shows through: {behind:?}"
+    );
+    let (x, y) = pixel_of(0.0, -2.0);
+    let in_front = rgba_at(&live, VIEWPORT_WIDTH, x, y);
+    assert!(
+        in_front[1] > 200 && in_front[0] < 50 && in_front[2] < 50,
+        "the line in front of the face is not drawn over it: {in_front:?}"
+    );
+}
+
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn a_gadget_line_in_front_of_a_gadget_triangle_keeps_its_colour() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    let mut gadget_lines = LineMesh::new();
+    gadget_lines.add_segment(
+        &Vec3::new(-12.0, 0.0, 1.0),
+        &Vec3::new(12.0, 0.0, 1.0),
+        &LineStyle::solid([0.0, 1.0, 0.0]).with_width(3.0),
+    );
+    upload(
+        &mut renderer,
+        &Mesh::new(),
+        &LineMesh::new(),
+        &square(4.0, 0.0, Vec3::new(0.1, 0.1, 0.9)),
+        &gadget_lines,
+    );
+    top_down_orthographic(&mut renderer);
+    let live = renderer.render(BLACK);
+    dump("gadget_order", &live);
+
+    let (x, y) = pixel_of(0.0, 0.0);
+    let crossing = rgba_at(&live, VIEWPORT_WIDTH, x, y);
+    assert!(
+        crossing[1] > 200 && crossing[0] < 50 && crossing[2] < 50,
+        "the gadget triangle painted over the gadget line: {crossing:?}"
+    );
+    // And the triangle is there around it.
+    let (x, y) = pixel_of(0.0, 2.0);
+    let face = rgba_at(&live, VIEWPORT_WIDTH, x, y);
+    assert!(face[2] > face[1], "no gadget triangle: {face:?}");
 }

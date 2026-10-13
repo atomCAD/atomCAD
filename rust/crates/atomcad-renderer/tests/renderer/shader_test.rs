@@ -141,3 +141,55 @@ fn only_the_listed_shaders_declare_a_camera_uniform() {
         );
     }
 }
+
+/// `(member name, interpolation)` of the struct `entry_point` returns.
+fn vertex_output_interpolation(
+    path: &std::path::Path,
+    entry_point: &str,
+) -> Vec<(String, Option<naga::Interpolation>)> {
+    let module = parse(path);
+    let entry = module
+        .entry_points
+        .iter()
+        .find(|e| e.name == entry_point)
+        .unwrap_or_else(|| panic!("{} has no {entry_point}", path.display()));
+    let result = entry.function.result.as_ref().expect("returns a value");
+    match &module.types[result.ty].inner {
+        naga::TypeInner::Struct { members, .. } => members
+            .iter()
+            .filter_map(|m| match &m.binding {
+                Some(naga::Binding::Location { interpolation, .. }) => {
+                    Some((m.name.clone().unwrap_or_default(), *interpolation))
+                }
+                _ => None,
+            })
+            .collect(),
+        other => panic!("{entry_point} does not return a struct: {other:?}"),
+    }
+}
+
+/// The line shader's screen-space outputs must interpolate `linear`: each
+/// corner carries its own `w`, so the default perspective-correct
+/// interpolation would bend them on any line whose ends sit at different
+/// depths. Per-instance values are `flat`
+/// (doc/design_screen_space_lines.md D4).
+#[test]
+fn line_shader_outputs_carry_the_d4_interpolation() {
+    use naga::Interpolation::{Flat, Linear};
+    let outputs = vertex_output_interpolation(&shader_dir().join("line_mesh.wgsl"), "vs_main");
+    let expected = [
+        ("color", Flat),
+        ("across", Linear),
+        ("along", Linear),
+        ("length_px", Flat),
+        ("half_width", Flat),
+        ("scaled_width", Flat),
+    ];
+    assert_eq!(
+        outputs,
+        expected
+            .iter()
+            .map(|(name, interpolation)| (name.to_string(), Some(*interpolation)))
+            .collect::<Vec<_>>()
+    );
+}

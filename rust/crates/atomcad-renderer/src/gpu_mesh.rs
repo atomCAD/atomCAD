@@ -49,7 +49,8 @@ impl ModelUniform {
 pub enum MeshType {
     /// Triangle mesh rendered with triangles primitive topology
     Triangles,
-    /// Line mesh rendered with lines primitive topology
+    /// Screen-space line segments: one instance per segment, a six-vertex
+    /// quad each, no index buffer (`doc/design_screen_space_lines.md` D1).
     Lines,
     /// Atom impostor mesh rendered as quads with sphere ray-casting
     AtomImpostors,
@@ -63,11 +64,18 @@ pub enum MeshType {
     Labels,
 }
 
-/// Represents a mesh on the GPU with vertex and index buffers and its own transform
+/// Represents a mesh on the GPU with vertex and index buffers and its own transform.
+///
+/// A line mesh is drawn by instance instead: its `vertex_buffer` holds one
+/// `LineSegmentInstance` per segment, `num_instances` counts them, and its
+/// index buffer stays empty (`num_indices == 0`).
 pub struct GPUMesh {
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
     pub num_indices: u32,
+    /// Instances to draw with `draw(0..6, 0..num_instances)`; non-zero only
+    /// for a line mesh.
+    pub num_instances: u32,
     pub mesh_type: MeshType,
     pub model_buffer: wgpu::Buffer,
     pub model_bind_group: wgpu::BindGroup,
@@ -92,11 +100,11 @@ impl GPUMesh {
             }
             MeshType::Lines => {
                 let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("Empty Line Vertex Buffer"),
-                    contents: bytemuck::cast_slice(&[] as &[crate::line_mesh::LineVertex]),
+                    label: Some("Empty Line Instance Buffer"),
+                    contents: bytemuck::cast_slice(&[] as &[crate::line_mesh::LineSegmentInstance]),
                     usage: BufferUsages::VERTEX,
                 });
-                (vertex_buffer, "Empty Line Vertex Buffer")
+                (vertex_buffer, "Empty Line Instance Buffer")
             }
             MeshType::AtomImpostors => {
                 let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -166,6 +174,7 @@ impl GPUMesh {
             vertex_buffer,
             index_buffer,
             num_indices: 0,
+            num_instances: 0,
             mesh_type,
             model_buffer,
             model_bind_group,
@@ -266,25 +275,15 @@ impl GPUMesh {
             "Cannot update a non-line GPUMesh with a LineMesh"
         );
 
-        let vertex_label = format!("{} Line Vertex Buffer", label_prefix);
-        let index_label = format!("{} Line Index Buffer", label_prefix);
-
-        // TODO: In the future, consider updating buffer data in-place if size permits
-        // instead of recreating buffers
+        let instance_label = format!("{} Line Instance Buffer", label_prefix);
 
         self.vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some(&vertex_label),
-            contents: bytemuck::cast_slice(line_mesh.vertices.as_slice()),
+            label: Some(&instance_label),
+            contents: bytemuck::cast_slice(line_mesh.instances.as_slice()),
             usage: BufferUsages::VERTEX,
         });
 
-        self.index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some(&index_label),
-            contents: bytemuck::cast_slice(line_mesh.indices.as_slice()),
-            usage: BufferUsages::INDEX,
-        });
-
-        self.num_indices = line_mesh.indices.len() as u32;
+        self.num_instances = line_mesh.instances.len() as u32;
 
         // Note: The model buffer and bind group remain unchanged
     }

@@ -9,9 +9,9 @@ use glam::f64::DVec3;
 
 const WHITE: [f32; 3] = [1.0, 1.0, 1.0];
 
-/// Number of line segments emitted into a LineMesh (two indices per segment).
+/// Number of line segments emitted into a LineMesh.
 fn segment_count(mesh: &LineMesh) -> usize {
-    mesh.indices.len() / 2
+    mesh.segments().count()
 }
 
 /// A unit square in the z=0 plane split into two coplanar triangles that share

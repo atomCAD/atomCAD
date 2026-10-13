@@ -20,10 +20,6 @@ pub const LATTICE_A_COLOR: [f32; 3] = [0.0, 1.0, 1.0]; // Cyan for a-vector
 pub const LATTICE_B_COLOR: [f32; 3] = [1.0, 0.0, 1.0]; // Magenta for b-vector
 pub const LATTICE_C_COLOR: [f32; 3] = [1.0, 1.0, 0.0]; // Yellow for c-vector
 
-// Dotted line parameters for lattice axes
-const DOT_LENGTH: f32 = 0.5; // Length of each dot in Angstroms
-const GAP_LENGTH: f32 = 0.5; // Gap between dots in Angstroms
-
 // Threshold for considering a vector aligned with a Cartesian axis
 const ALIGNMENT_THRESHOLD: f64 = 0.99;
 
@@ -249,12 +245,12 @@ pub fn add_axis_line(output_mesh: &mut LineMesh, start: &DVec3, end: &DVec3, col
     output_mesh.add_line_with_uniform_color(&start_vec3, &end_vec3, color);
 }
 
-/// Adds a dotted axis line from start to end with the specified color
+/// Adds a lattice-axis line from start to end with the specified color.
+///
+/// Drawn solid for now: the world-space dash splitter is gone, and the axis
+/// becomes dashed in pixels with `doc/design_screen_space_lines.md` Phase 3.
 fn add_dotted_axis_line(output_mesh: &mut LineMesh, start: &DVec3, end: &DVec3, color: &[f32; 3]) {
-    let start_vec3 = Vec3::new(start.x as f32, start.y as f32, start.z as f32);
-    let end_vec3 = Vec3::new(end.x as f32, end.y as f32, end.z as f32);
-
-    output_mesh.add_dotted_line(&start_vec3, &end_vec3, color, DOT_LENGTH, GAP_LENGTH);
+    add_axis_line(output_mesh, start, end, color);
 }
 
 /// Checks if a vector is aligned with a Cartesian axis (X, Y, or Z)

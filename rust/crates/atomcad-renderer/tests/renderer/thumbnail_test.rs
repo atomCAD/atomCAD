@@ -13,6 +13,7 @@ use atomcad_renderer::thumbnail::{
     thumbnail_changed,
 };
 use atomcad_renderer::transparent_impostor_mesh::TransparentImpostorMesh;
+use glam::f32::Vec3;
 use glam::f64::{DVec3, DVec4};
 
 fn vec_approx_eq(a: DVec3, b: DVec3) -> bool {
@@ -92,6 +93,19 @@ fn bonds_triangles_and_vertices_without_indices() {
     let (min, max) = content_bounds(&main, &wire, &atoms, &bonds, &transparent, &iso).unwrap();
     assert!(vec_approx_eq(min, DVec3::new(-0.25, -0.25, -0.25)));
     assert!(vec_approx_eq(max, DVec3::new(0.25, 0.25, 10.25)));
+}
+
+#[test]
+fn wireframe_segments_count_by_both_ends() {
+    let (main, mut wire, atoms, bonds, transparent, iso) = empty_meshes();
+    wire.add_line_with_uniform_color(
+        &Vec3::new(-2.0, 0.0, 1.0),
+        &Vec3::new(3.0, 5.0, -1.0),
+        &[1.0, 1.0, 1.0],
+    );
+    let (min, max) = content_bounds(&main, &wire, &atoms, &bonds, &transparent, &iso).unwrap();
+    assert!(vec_approx_eq(min, DVec3::new(-2.0, 0.0, -1.0)));
+    assert!(vec_approx_eq(max, DVec3::new(3.0, 5.0, 1.0)));
 }
 
 /// The fitted camera keeps the view direction, looks at the box centre and
