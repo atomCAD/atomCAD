@@ -110,6 +110,117 @@ fn segments_yields_the_ends_in_emission_order() {
     assert_eq!(segments, vec![(Vec3::ZERO, Vec3::X), (Vec3::Y, Vec3::Z)]);
 }
 
+#[test]
+fn style_builders_change_only_their_own_field() {
+    let solid = LineStyle::solid([0.1, 0.2, 0.3]);
+    assert_eq!(
+        solid,
+        LineStyle {
+            color: [0.1, 0.2, 0.3, 1.0],
+            width_px: 1.0,
+            dash: None,
+        }
+    );
+    assert_eq!(
+        solid.with_width(2.0),
+        LineStyle {
+            width_px: 2.0,
+            ..solid
+        }
+    );
+    assert_eq!(
+        solid.with_alpha(0.25),
+        LineStyle {
+            color: [0.1, 0.2, 0.3, 0.25],
+            ..solid
+        }
+    );
+    assert_eq!(
+        solid.dashed(6.0, 4.0),
+        LineStyle {
+            dash: Some(LineDash {
+                on_px: 6.0,
+                off_px: 4.0
+            }),
+            ..solid
+        }
+    );
+}
+
+// ---- Polylines (D5, Phase 3) ---------------------------------------------------
+
+fn phases(mesh: &LineMesh) -> Vec<f32> {
+    mesh.instances.iter().map(|s| s.dash_phase).collect()
+}
+
+#[test]
+fn an_open_polyline_carries_the_cumulative_arc_length_as_its_phase() {
+    let points = [
+        Vec3::ZERO,
+        Vec3::new(3.0, 0.0, 0.0),
+        Vec3::new(3.0, 4.0, 0.0),
+        Vec3::new(3.0, 4.0, 2.0),
+    ];
+    let style = LineStyle::solid([1.0, 1.0, 1.0])
+        .with_width(1.5)
+        .dashed(6.0, 4.0);
+    let mut mesh = LineMesh::new();
+    mesh.add_polyline(&points, false, &style);
+
+    let segments: Vec<(Vec3, Vec3)> = mesh.segments().collect();
+    assert_eq!(
+        segments,
+        vec![
+            (points[0], points[1]),
+            (points[1], points[2]),
+            (points[2], points[3]),
+        ]
+    );
+    assert_eq!(phases(&mesh), vec![0.0, 3.0, 7.0]);
+    for segment in &mesh.instances {
+        assert_eq!(segment.width_px, 1.5);
+        assert_eq!((segment.dash_on_px, segment.dash_off_px), (6.0, 4.0));
+        assert_eq!(segment.lod_slot, 0);
+    }
+}
+
+#[test]
+fn a_closed_polyline_adds_the_segment_back_to_the_first_point() {
+    let points = [
+        Vec3::ZERO,
+        Vec3::new(2.0, 0.0, 0.0),
+        Vec3::new(2.0, 2.0, 0.0),
+        Vec3::new(0.0, 2.0, 0.0),
+    ];
+    let mut mesh = LineMesh::new();
+    mesh.add_polyline(&points, true, &LineStyle::solid([1.0, 1.0, 1.0]));
+
+    assert_eq!(mesh.len(), 4);
+    assert_eq!(mesh.segments().last(), Some((points[3], points[0])));
+    assert_eq!(phases(&mesh), vec![0.0, 2.0, 4.0, 6.0]);
+}
+
+#[test]
+fn a_polyline_of_fewer_than_two_points_draws_nothing() {
+    let style = LineStyle::solid([1.0, 1.0, 1.0]);
+    let mut mesh = LineMesh::new();
+    mesh.add_polyline(&[], true, &style);
+    mesh.add_polyline(&[Vec3::X], true, &style);
+    assert!(mesh.is_empty());
+}
+
+#[test]
+fn a_lone_segment_starts_its_pattern_at_zero() {
+    let mut mesh = LineMesh::new();
+    mesh.add_polyline(
+        &[Vec3::ZERO, Vec3::X],
+        false,
+        &LineStyle::solid([1.0, 1.0, 1.0]),
+    );
+    mesh.add_segment(&Vec3::X, &Vec3::Y, &LineStyle::solid([1.0, 1.0, 1.0]));
+    assert_eq!(phases(&mesh), vec![0.0, 0.0]);
+}
+
 /// The alpha component must be `One, OneMinusSrcAlpha`: with `SrcAlpha` a
 /// fringe fragment of alpha 0.5 over the opaque clear would leave a
 /// destination alpha of 0.75, and every anti-aliased pixel of an exported PNG

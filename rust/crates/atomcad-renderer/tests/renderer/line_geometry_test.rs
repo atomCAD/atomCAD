@@ -1,6 +1,7 @@
 // The Rust twins of `line_mesh.wgsl`'s arithmetic
-// (doc/design_screen_space_lines.md D4, Phase 2): the near-plane clip, the
-// zero-length fallback, the corner expansion and the edge coverage.
+// (doc/design_screen_space_lines.md D4, D5; Phases 2 and 3): the near-plane
+// clip, the zero-length fallback, the corner expansion, the edge coverage and
+// the dash pattern.
 //
 // The clip tests build their matrices with the real `Camera` in both
 // projections: perspective is `perspective_rh_gl`, whose `z = 0` lies at about
@@ -9,7 +10,8 @@
 
 use atomcad_renderer::camera::Camera;
 use atomcad_renderer::line_geometry::{
-    CORNERS, MIN_SCREEN_LENGTH_PX, clip_to_near_plane, edge_coverage, expand_corner, half_width_px,
+    CORNERS, MIN_DASH_ORIGIN_W, MIN_SCREEN_LENGTH_PX, clip_to_near_plane, dash_coverage,
+    dash_offset_px, edge_coverage, expand_corner, half_width_px, pixels_per_world_unit,
     screen_direction, segment_distance, to_screen_px,
 };
 use glam::{Mat4, Vec2, Vec3, Vec4, Vec4Swizzles};
@@ -277,4 +279,167 @@ fn a_sub_pixel_line_fades_instead_of_thinning() {
     // A sub-pixel logical width that the scale lifts to a full pixel is not
     // faded.
     assert_eq!(edge_coverage(0.0, 0.5, 2.0), 1.0);
+}
+
+// ---- Dashes (D5) -----------------------------------------------------------------
+
+#[test]
+fn a_solid_line_has_full_dash_coverage_and_no_offset() {
+    for t in [-3.0, 0.0, 2.5, 1000.0] {
+        assert_eq!(dash_coverage(t, 6.0, 0.0), 1.0);
+    }
+    let c = Vec4::new(0.1, 0.2, 0.5, 1.0);
+    assert_eq!(
+        dash_offset_px((c, c * 2.0), c, 1.0, 3.0, 0.0, VIEWPORT),
+        0.0
+    );
+}
+
+#[test]
+fn dash_coverage_is_on_in_the_dash_and_off_in_the_gap() {
+    let (on, period) = (6.0, 10.0);
+    // Well inside the dash, in every period, negative ones included.
+    for start in [-20.0, 0.0, 10.0, 990.0] {
+        assert_eq!(dash_coverage(start + 3.0, on, period), 1.0);
+        assert_eq!(dash_coverage(start + 1.0, on, period), 1.0);
+        // Well inside the gap.
+        assert_eq!(dash_coverage(start + 8.0, on, period), 0.0);
+    }
+}
+
+#[test]
+fn a_dash_end_is_soft_over_one_pixel() {
+    let (on, period) = (6.0, 10.0);
+    // Half covered exactly at either end of the dash…
+    assert!((dash_coverage(0.0, on, period) - 0.5).abs() < 1e-6);
+    assert!((dash_coverage(on, on, period) - 0.5).abs() < 1e-6);
+    // …and linear across the one-pixel edge.
+    assert!((dash_coverage(-0.25, on, period) - 0.25).abs() < 1e-6);
+    assert!((dash_coverage(on + 0.25, on, period) - 0.25).abs() < 1e-6);
+    assert_eq!(dash_coverage(-0.5, on, period), 0.0);
+    assert_eq!(dash_coverage(0.5, on, period), 1.0);
+    // Sampled at pixel centres, any phase of the pattern sums to `on` per
+    // period: the soft edge moves coverage, it does not add any.
+    for shift in [0.0, 0.3, 0.5, 0.77] {
+        let sum: f32 = (0..10)
+            .map(|k| dash_coverage(k as f32 + 0.5 + shift, on, period))
+            .sum();
+        assert!((sum - on).abs() < 1e-5, "shift {shift}: {sum}");
+    }
+}
+
+#[test]
+fn pixels_per_world_unit_in_orthographic_is_the_zoom() {
+    let mut camera = camera(true);
+    camera.ortho_half_height = 15.0;
+    // A segment across the view: 600 px / 30 world units = 20 px per unit.
+    let p0 = ahead_offset(&camera, 20.0, -1.0);
+    let p1 = ahead_offset(&camera, 20.0, 4.0);
+    let (c0, c1) = (to_clip(&camera, p0), to_clip(&camera, p1));
+    let delta = (c1 - c0) / p0.distance(p1);
+    for origin in [c0, c1, c0.lerp(c1, 0.3)] {
+        let ppw = pixels_per_world_unit(origin, delta, VIEWPORT);
+        assert!((ppw - 20.0).abs() < 1e-3, "{ppw}");
+    }
+    let length_px = to_screen_px(c0, VIEWPORT).distance(to_screen_px(c1, VIEWPORT));
+    assert!((length_px - 5.0 * 20.0).abs() < 1e-2);
+}
+
+#[test]
+fn pixels_per_world_unit_in_perspective_is_the_derivative_of_the_projection() {
+    let camera = camera(false);
+    let p0 = ahead_offset(&camera, 10.0, -1.0);
+    let p1 = ahead(&camera, 40.0);
+    let (c0, c1) = (to_clip(&camera, p0), to_clip(&camera, p1));
+    let length = p0.distance(p1);
+    let ppw = pixels_per_world_unit(c0, (c1 - c0) / length, VIEWPORT);
+    // A finite difference from p0 towards p1.
+    let h = 1e-3;
+    let near = to_clip(&camera, p0 + (p1 - p0) / length * h);
+    let numeric = to_screen_px(near, VIEWPORT).distance(to_screen_px(c0, VIEWPORT)) / h;
+    assert!((ppw - numeric).abs() / numeric < 1e-2, "{ppw} vs {numeric}");
+}
+
+#[test]
+fn a_polyline_dash_pattern_continues_across_a_joint_in_orthographic() {
+    let camera = camera(true);
+    let (on, period) = (6.0, 10.0);
+    // Two collinear segments of one polyline: the second starts at arc
+    // length 3.7.
+    let a = ahead_offset(&camera, 20.0, -3.0);
+    let b = ahead_offset(&camera, 20.0, 0.7);
+    let c = ahead_offset(&camera, 20.0, 2.0);
+    let (ca, cb, cc) = (
+        to_clip(&camera, a),
+        to_clip(&camera, b),
+        to_clip(&camera, c),
+    );
+    let first_offset = dash_offset_px((ca, cb), ca, a.distance(b), 0.0, period, VIEWPORT);
+    assert_eq!(first_offset, 0.0);
+    let first_length = to_screen_px(ca, VIEWPORT).distance(to_screen_px(cb, VIEWPORT));
+    let second_offset =
+        dash_offset_px((cb, cc), cb, b.distance(c), a.distance(b), period, VIEWPORT);
+    // The first segment's end and the second's start are at the same place
+    // in the pattern.
+    let reduce = |t: f32| t - period * (t / period).floor();
+    assert!(
+        (reduce(first_length + first_offset) - second_offset).abs() < 1e-2,
+        "{} vs {second_offset}",
+        reduce(first_length)
+    );
+    for t in [0.0, 0.4, 1.0] {
+        assert!(
+            (dash_coverage(first_length + first_offset - t, on, period)
+                - dash_coverage(second_offset - t, on, period))
+            .abs()
+                < 1e-2
+        );
+    }
+}
+
+#[test]
+fn a_clipped_start_in_front_of_the_eye_keeps_the_unclipped_pattern() {
+    let camera = camera(false);
+    let period = 10.0;
+    // p0 between the eye and the clip plane (about 2 × znear): clipped, but
+    // still in front, so it still projects.
+    let znear = camera.znear as f32;
+    let p0 = ahead_offset(&camera, znear * 1.2, 0.01);
+    let p1 = ahead_offset(&camera, 30.0, 2.0);
+    let (u0, u1) = (to_clip(&camera, p0), to_clip(&camera, p1));
+    assert!(u0.z < 0.0 && u0.w > MIN_DASH_ORIGIN_W);
+    let (c0, _) = clip_to_near_plane(u0, u1).unwrap();
+    let offset = dash_offset_px((u0, u1), c0, p0.distance(p1), 0.0, period, VIEWPORT);
+    let shift = to_screen_px(c0, VIEWPORT).distance(to_screen_px(u0, VIEWPORT));
+    assert!(shift > period, "the test wants a shift of several periods");
+    let expected = shift - period * (shift / period).floor();
+    assert!((offset - expected).abs() < 1e-2, "{offset} vs {expected}");
+}
+
+#[test]
+fn a_start_behind_the_eye_measures_from_the_clipped_point() {
+    let camera = camera(false);
+    let eye = camera.eye.as_vec3();
+    let forward = (camera.target.as_vec3() - eye).normalize();
+    let p0 = eye - forward * 5.0 + Vec3::new(0.0, 0.0, 0.3);
+    let p1 = ahead_offset(&camera, 30.0, 2.0);
+    let (u0, u1) = (to_clip(&camera, p0), to_clip(&camera, p1));
+    assert!(u0.w < 0.0);
+    let (c0, _) = clip_to_near_plane(u0, u1).unwrap();
+    assert_eq!(
+        dash_offset_px((u0, u1), c0, p0.distance(p1), 0.0, 10.0, VIEWPORT),
+        0.0
+    );
+}
+
+#[test]
+fn the_dash_offset_is_reduced_into_one_period() {
+    let camera = camera(true);
+    let p0 = ahead_offset(&camera, 20.0, 0.0);
+    let p1 = ahead_offset(&camera, 20.0, 1.0);
+    let (c0, c1) = (to_clip(&camera, p0), to_clip(&camera, p1));
+    for phase in [0.0, 0.01, 3.3, 1234.5] {
+        let offset = dash_offset_px((c0, c1), c0, 1.0, phase, 7.0, VIEWPORT);
+        assert!((0.0..7.0).contains(&offset), "phase {phase}: {offset}");
+    }
 }

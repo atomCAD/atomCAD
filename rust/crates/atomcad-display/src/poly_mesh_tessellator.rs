@@ -1,7 +1,7 @@
 use crate::poly_mesh::PolyMesh;
 use crate::preferences::MeshSmoothing;
 use atomcad_crystolecule::crystolecule_constants;
-use atomcad_renderer::line_mesh::LineMesh;
+use atomcad_renderer::line_mesh::{LineMesh, LineStyle};
 use atomcad_renderer::mesh::{Material, Mesh, Vertex};
 use glam::DVec3;
 use glam::Vec3;
@@ -551,6 +551,11 @@ pub fn tessellate_quad_mesh(
 /// far apart) still show their wireframe.
 const COPLANAR_ANGLE_THRESHOLD_DEGREES: f64 = 1.0;
 
+/// Line weight of a CSG wireframe edge, logical pixels
+/// (doc/design_screen_space_lines.md D8). A dense wireframe is a tangle at
+/// anything heavier.
+pub const CSG_WIREFRAME_WIDTH_PX: f32 = 1.0;
+
 /// Returns true when this edge sits between exactly two near-coplanar faces and
 /// so represents an interior line on a flat region rather than a real feature
 /// edge. Boundary edges (1 face) and non-manifold edges (>2 faces) are never
@@ -630,8 +635,11 @@ pub fn tessellate_poly_mesh_to_line_mesh(
             normal_edge_color
         };
 
-        // Add the line with the appropriate color
-        line_mesh.add_line_with_uniform_color(&v1_pos, &v2_pos, &color);
+        line_mesh.add_segment(
+            &v1_pos,
+            &v2_pos,
+            &LineStyle::solid(color).with_width(CSG_WIREFRAME_WIDTH_PX),
+        );
     }
 }
 

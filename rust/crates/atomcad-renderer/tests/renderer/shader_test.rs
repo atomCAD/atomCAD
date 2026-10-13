@@ -184,6 +184,9 @@ fn line_shader_outputs_carry_the_d4_interpolation() {
         ("length_px", Flat),
         ("half_width", Flat),
         ("scaled_width", Flat),
+        ("dash_offset", Flat),
+        ("dash_on", Flat),
+        ("dash_period", Flat),
     ];
     assert_eq!(
         outputs,

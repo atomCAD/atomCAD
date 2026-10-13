@@ -318,6 +318,19 @@ the sides, so dash ends are anti-aliased too.
   is exact in orthographic projection and visually continuous on finely
   tessellated curves in perspective (the scale differs negligibly between
   neighbouring segments).
+
+  *Correction (Phase 3): this holds only while the pixels per world unit are
+  the same all along the polyline* — a straight polyline, or a curve in a
+  plane facing the camera in orthographic. The jump at a joint is not the
+  scale difference between neighbours times a segment length but times the
+  **whole arc length so far**, which grows around the curve. A 48-segment
+  ring tilted 60° from the view in orthographic jumps by up to half a period
+  at a joint (5 px of a 10 px pattern), so a dashed tilted circle comes out
+  scrambled. Nothing draws a dashed polyline yet (the guided-placement
+  circles are solid), so this has no visible effect today. Options when one
+  is needed: convert the phase with one scale per polyline (continuous, but
+  dashes stretch with foreshortening), or measure the pattern in world units
+  for such curves.
 - **`along` is measured from the unclipped `p0`.** When `p0` is clipped by
   the near plane, the shader still measures from where `p0` would project.
   When `p0` is behind the camera that is undefined, and the measurement
@@ -753,6 +766,23 @@ ignores them until Phase 3. `add_polyline` is Phase 3's. The twins live in
   - **dashes:** the dash period measured along a dashed line matches
     `on + off` in both images.
 - Check by CLI screenshot and a 2× export, by eye.
+
+*As implemented:* the pixels per world unit that convert `dash_phase` are the
+length of the projection's derivative at the point the pattern is measured
+from (`pixels_per_world_unit`), computed from the segment's clip-space change
+per unit of its own (pre-model) length, so a model matrix that scales does
+not stretch the phase. The vertex shader reduces the resulting offset into
+one period before handing it to the fragment shader as a `flat` value: when
+the unclipped `p0` is just in front of the eye it projects far off screen,
+and an unreduced offset would cost the fragment's `mod` its precision. An
+unclipped `p0` counts as "behind the camera" below `w = 1e-4`
+(`MIN_DASH_ORIGIN_W`). Each producer's weight is a `*_WIDTH_PX` constant next
+to it (`coordinate_system_tessellator`, `unit_cell_wireframe_tessellator`,
+`poly_mesh_tessellator`, `guided_placement_tessellator`, and
+`TOOL_ENVELOPE_WIDTH_PX` in `scene_tessellator`). **D8's gadget row has no
+producer:** no gadget writes `TessellationOutput::line_mesh` today, so
+`gadget_line_mesh` is always empty and there was nothing to convert; a
+gadget that adds lines should give them 2 px.
 
 ### Phase 4 — Grid level of detail and distance fade
 

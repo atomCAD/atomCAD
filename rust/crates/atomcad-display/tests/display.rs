@@ -8,6 +8,13 @@
 #[path = "display/poly_mesh_tessellator_test.rs"]
 mod poly_mesh_tessellator_test;
 
+// Line styles of the line producers (doc/design_screen_space_lines.md D8).
+#[path = "display/coordinate_system_tessellator_test.rs"]
+mod coordinate_system_tessellator_test;
+
+#[path = "display/guided_placement_tessellator_test.rs"]
+mod guided_placement_tessellator_test;
+
 #[path = "display/csg_to_poly_mesh_test.rs"]
 mod csg_to_poly_mesh_test;
 

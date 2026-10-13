@@ -46,7 +46,9 @@ use atomcad_structure_designer::nodes::mechanosynth::{
 };
 use atomcad_structure_designer::nodes::ops_library::OpsLibraryData;
 use atomcad_structure_designer::overlay::{Overlay, OverlayKind};
-use atomcad_structure_designer::scene_tessellator::tessellate_scene_content;
+use atomcad_structure_designer::scene_tessellator::{
+    TOOL_ENVELOPE_WIDTH_PX, tessellate_scene_content,
+};
 use atomcad_structure_designer::serialization::node_networks_serialization::{
     load_node_networks_from_file, save_node_networks_to_file,
 };
@@ -968,7 +970,11 @@ fn the_cage_reaches_the_wireframe_pass_in_the_preference_colour() {
         assert!((segment.color[0] - 1.0).abs() < 1e-6);
         assert!((segment.color[1] - 160.0 / 255.0).abs() < 1e-6);
         assert_eq!(segment.color[2], 0.0);
+        // doc/design_screen_space_lines.md D8: 1.5 px, solid.
+        assert_eq!(segment.width_px, TOOL_ENVELOPE_WIDTH_PX);
+        assert_eq!(segment.dash_off_px, 0.0);
     }
+    assert_eq!(TOOL_ENVELOPE_WIDTH_PX, 1.5);
 }
 
 #[test]

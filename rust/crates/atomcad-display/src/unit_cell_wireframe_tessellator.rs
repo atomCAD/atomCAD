@@ -1,9 +1,13 @@
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
-use atomcad_renderer::line_mesh::LineMesh;
+use atomcad_renderer::line_mesh::{LineMesh, LineStyle};
 use glam::f32::Vec3;
 
 /// Color for unit cell wireframe edges.
 const UNIT_CELL_WIREFRAME_COLOR: [f32; 3] = [0.75, 0.75, 0.75]; // light gray
+
+/// Line weight of the unit cell edges, logical pixels
+/// (doc/design_screen_space_lines.md D8).
+pub const UNIT_CELL_WIREFRAME_WIDTH_PX: f32 = 1.5;
 
 /// Tessellates a unit cell as 12 wireframe edges (parallelepiped) into a LineMesh.
 ///
@@ -35,23 +39,24 @@ pub fn tessellate_unit_cell_wireframe_with_color(
     let vac = va + vc;
     let vbc = vb + vc;
     let vabc = va + vb + vc;
+    let style = LineStyle::solid(*color).with_width(UNIT_CELL_WIREFRAME_WIDTH_PX);
 
     // 12 edges: 4 along each basis direction
     // Edges along a-direction
-    line_mesh.add_line_with_uniform_color(&o, &va, color);
-    line_mesh.add_line_with_uniform_color(&vb, &vab, color);
-    line_mesh.add_line_with_uniform_color(&vc, &vac, color);
-    line_mesh.add_line_with_uniform_color(&vbc, &vabc, color);
+    line_mesh.add_segment(&o, &va, &style);
+    line_mesh.add_segment(&vb, &vab, &style);
+    line_mesh.add_segment(&vc, &vac, &style);
+    line_mesh.add_segment(&vbc, &vabc, &style);
 
     // Edges along b-direction
-    line_mesh.add_line_with_uniform_color(&o, &vb, color);
-    line_mesh.add_line_with_uniform_color(&va, &vab, color);
-    line_mesh.add_line_with_uniform_color(&vc, &vbc, color);
-    line_mesh.add_line_with_uniform_color(&vac, &vabc, color);
+    line_mesh.add_segment(&o, &vb, &style);
+    line_mesh.add_segment(&va, &vab, &style);
+    line_mesh.add_segment(&vc, &vbc, &style);
+    line_mesh.add_segment(&vac, &vabc, &style);
 
     // Edges along c-direction
-    line_mesh.add_line_with_uniform_color(&o, &vc, color);
-    line_mesh.add_line_with_uniform_color(&va, &vac, color);
-    line_mesh.add_line_with_uniform_color(&vb, &vbc, color);
-    line_mesh.add_line_with_uniform_color(&vab, &vabc, color);
+    line_mesh.add_segment(&o, &vc, &style);
+    line_mesh.add_segment(&va, &vac, &style);
+    line_mesh.add_segment(&vb, &vbc, &style);
+    line_mesh.add_segment(&vab, &vabc, &style);
 }

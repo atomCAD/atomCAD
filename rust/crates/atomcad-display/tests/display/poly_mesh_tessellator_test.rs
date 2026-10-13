@@ -2,7 +2,9 @@
 // suppression added for issue #366 (improve visibility of wireframe mode).
 
 use atomcad_display::poly_mesh::PolyMesh;
-use atomcad_display::poly_mesh_tessellator::tessellate_poly_mesh_to_line_mesh;
+use atomcad_display::poly_mesh_tessellator::{
+    CSG_WIREFRAME_WIDTH_PX, tessellate_poly_mesh_to_line_mesh,
+};
 use atomcad_display::preferences::MeshSmoothing;
 use atomcad_renderer::line_mesh::LineMesh;
 use glam::f64::DVec3;
@@ -82,4 +84,17 @@ fn non_coplanar_shared_edge_is_kept_even_with_suppression() {
     // real feature edge and must survive suppression.
     assert_eq!(segment_count(&line_mesh_for(&mesh, true)), 7);
     assert_eq!(segment_count(&line_mesh_for(&mesh, false)), 7);
+}
+
+/// doc/design_screen_space_lines.md D8: a CSG wireframe edge is 1 px, solid.
+#[test]
+fn wireframe_edges_are_one_pixel_solid() {
+    assert_eq!(CSG_WIREFRAME_WIDTH_PX, 1.0);
+    let line_mesh = line_mesh_for(&folded_quads(), false);
+    assert!(!line_mesh.is_empty());
+    for segment in &line_mesh.instances {
+        assert_eq!(segment.width_px, CSG_WIREFRAME_WIDTH_PX);
+        assert_eq!(segment.dash_off_px, 0.0);
+        assert_eq!(segment.color, [1.0, 1.0, 1.0, 1.0]);
+    }
 }

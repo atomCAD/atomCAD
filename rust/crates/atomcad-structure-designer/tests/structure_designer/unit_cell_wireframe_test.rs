@@ -2,7 +2,8 @@
 
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
 use atomcad_display::unit_cell_wireframe_tessellator::{
-    tessellate_unit_cell_wireframe, tessellate_unit_cell_wireframe_with_color,
+    UNIT_CELL_WIREFRAME_WIDTH_PX, tessellate_unit_cell_wireframe,
+    tessellate_unit_cell_wireframe_with_color,
 };
 use atomcad_renderer::line_mesh::LineMesh;
 use glam::f64::DVec3;
@@ -182,6 +183,25 @@ fn test_wireframe_colors_are_uniform() {
     // All segments should have the specified color, opaque
     for segment in &mesh.instances {
         assert_eq!(segment.color, [color[0], color[1], color[2], 1.0]);
+    }
+}
+
+/// doc/design_screen_space_lines.md D8: the unit cell is 1.5 px and solid.
+#[test]
+fn test_wireframe_is_one_and_a_half_pixels_solid() {
+    assert_eq!(UNIT_CELL_WIREFRAME_WIDTH_PX, 1.5);
+    let uc = UnitCellStruct::new(
+        DVec3::new(3.0, 0.0, 0.0),
+        DVec3::new(0.0, 3.0, 0.0),
+        DVec3::new(0.0, 0.0, 3.0),
+    );
+    let mut mesh = LineMesh::new();
+    tessellate_unit_cell_wireframe(&mut mesh, &uc);
+    assert_eq!(mesh.len(), 12);
+    for segment in &mesh.instances {
+        assert_eq!(segment.width_px, UNIT_CELL_WIREFRAME_WIDTH_PX);
+        assert_eq!(segment.dash_off_px, 0.0);
+        assert_eq!(segment.lod_slot, 0);
     }
 }
 

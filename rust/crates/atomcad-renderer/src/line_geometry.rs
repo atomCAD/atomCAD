@@ -124,6 +124,69 @@ pub fn segment_distance(along: f32, across: f32, length: f32) -> f32 {
     }
 }
 
+/// Below this `w` an unclipped `p0` counts as behind the eye, and the dash
+/// pattern is measured from the clipped end instead (D5).
+pub const MIN_DASH_ORIGIN_W: f32 = 1e-4;
+
+/// Render pixels per world unit at the clip-space point `origin`, moving
+/// along a segment whose clip-space change per world unit is `delta`: the
+/// length of the derivative of the projection there. Constant along a
+/// segment in orthographic projection, where `w` does not change.
+pub fn pixels_per_world_unit(origin: Vec4, delta: Vec4, viewport_size_px: Vec2) -> f32 {
+    let derivative = (delta.xy() * origin.w - origin.xy() * delta.w) / (origin.w * origin.w);
+    (derivative * viewport_size_px * 0.5).length()
+}
+
+/// Where in its dash pattern a segment's clipped `p0` lies, in render pixels
+/// from the start of a period: `along + dash_offset_px(..)` is the fragment's
+/// position in the pattern (D5).
+///
+/// `unclipped` is the segment's clip-space ends before the near-plane clip,
+/// `c0` the start after it, `world_length` the segment's length in the mesh's
+/// coordinates (the unit of `dash_phase`) and `period_px` the scaled
+/// `on + off`. The pattern is measured from the unclipped `p0` while that is
+/// in front of the eye, and from the clipped one otherwise; the polyline's
+/// `dash_phase` is converted with the pixels per world unit there. The result
+/// is reduced into `[0, period_px)`, so the fragment's arithmetic stays exact
+/// however far off screen `p0` projects. `0` when the line is solid
+/// (`period_px <= 0`).
+pub fn dash_offset_px(
+    unclipped: (Vec4, Vec4),
+    c0: Vec4,
+    world_length: f32,
+    dash_phase: f32,
+    period_px: f32,
+    viewport_size_px: Vec2,
+) -> f32 {
+    if period_px <= 0.0 {
+        return 0.0;
+    }
+    let (u0, u1) = unclipped;
+    let origin = if u0.w > MIN_DASH_ORIGIN_W { u0 } else { c0 };
+    let shift = to_screen_px(c0, viewport_size_px).distance(to_screen_px(origin, viewport_size_px));
+    let phase_px = if world_length > 0.0 {
+        dash_phase * pixels_per_world_unit(origin, (u1 - u0) / world_length, viewport_size_px)
+    } else {
+        0.0
+    };
+    let offset = shift + phase_px;
+    offset - period_px * (offset / period_px).floor()
+}
+
+/// Coverage of the dash pattern at `t` render pixels into it: the "on"
+/// interval `[0, on_px)` of every `period_px`, with the same one-pixel soft
+/// edge as the sides of the line, so dash ends are anti-aliased too. `1` when
+/// the line is solid (`period_px <= 0`).
+pub fn dash_coverage(t: f32, on_px: f32, period_px: f32) -> f32 {
+    if period_px <= 0.0 {
+        return 1.0;
+    }
+    // Distance from the middle of the nearest dash.
+    let u = t - 0.5 * on_px;
+    let u = u - period_px * (u / period_px + 0.5).floor();
+    (0.5 * on_px + 0.5 - u.abs()).clamp(0.0, 1.0)
+}
+
 /// Coverage of a fragment `distance` render pixels from the segment: a
 /// one-render-pixel soft edge (not scaled by `pixel_scale`, D2), and a
 /// sub-pixel line drawn one pixel wide at proportionally less coverage, so it

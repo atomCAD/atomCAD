@@ -1,20 +1,25 @@
 use atomcad_crystolecule::atomic_structure::atomic_structure_decorator::{
     WireframeRingVisuals, WireframeSphereVisuals,
 };
-use atomcad_renderer::line_mesh::LineMesh;
+use atomcad_renderer::line_mesh::{LineMesh, LineStyle};
 use glam::f32::Vec3;
 use glam::f64::DVec3;
 
 /// Gray color for wireframe sphere/ring.
 const WIREFRAME_COLOR: [f32; 3] = [0.376, 0.376, 0.376]; // #606060
 
+/// Line weight of the sphere and ring, logical pixels
+/// (doc/design_screen_space_lines.md D8).
+pub const WIREFRAME_WIDTH_PX: f32 = 1.5;
+
 /// Number of segments per great circle.
 const SPHERE_SEGMENTS: u32 = 48;
 
 /// Tessellate a wireframe circle into a LineMesh.
 ///
-/// Generates `segments` line segments forming a circle at `center` with given `radius`
-/// in the plane defined by `normal`.
+/// Generates a closed polyline of `segments` line segments forming a circle at
+/// `center` with given `radius` in the plane defined by `normal`, so a dash
+/// pattern would run continuously around it.
 pub fn tessellate_wireframe_circle(
     line_mesh: &mut LineMesh,
     center: &DVec3,
@@ -30,21 +35,18 @@ pub fn tessellate_wireframe_circle(
     let v = n.cross(u);
 
     let step = std::f64::consts::TAU / segments as f64;
-    let mut prev = *center + u * radius;
+    let points: Vec<Vec3> = (0..segments)
+        .map(|i| {
+            let (sin_a, cos_a) = (step * i as f64).sin_cos();
+            (*center + (u * cos_a + v * sin_a) * radius).as_vec3()
+        })
+        .collect();
 
-    for i in 1..=segments {
-        let angle = step * i as f64;
-        let (sin_a, cos_a) = angle.sin_cos();
-        let curr = *center + (u * cos_a + v * sin_a) * radius;
-
-        line_mesh.add_line_with_uniform_color(
-            &Vec3::new(prev.x as f32, prev.y as f32, prev.z as f32),
-            &Vec3::new(curr.x as f32, curr.y as f32, curr.z as f32),
-            color,
-        );
-
-        prev = curr;
-    }
+    line_mesh.add_polyline(
+        &points,
+        true,
+        &LineStyle::solid(*color).with_width(WIREFRAME_WIDTH_PX),
+    );
 }
 
 /// Tessellate a wireframe sphere (3 great circles: XY, XZ, YZ planes).

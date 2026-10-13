@@ -581,3 +581,119 @@ fn a_gadget_line_in_front_of_a_gadget_triangle_keeps_its_colour() {
     let face = rgba_at(&live, VIEWPORT_WIDTH, x, y);
     assert!(face[2] > face[1], "no gadget triangle: {face:?}");
 }
+
+// ---- Screen-space lines, Phase 3 (doc/design_screen_space_lines.md) --------
+
+/// The red channel of every column summed down the image, in units of full
+/// coverage: for a white line on black, the line's coverage per column.
+/// `bgra` = a live render; otherwise an RGBA export.
+fn column_coverage(pixels: &[u8], width: u32, height: u32, bgra: bool) -> Vec<f32> {
+    let red = if bgra { 2 } else { 0 };
+    (0..width)
+        .map(|column| {
+            (0..height)
+                .map(|row| pixels[((row * width + column) * 4) as usize + red] as f32 / 255.0)
+                .sum()
+        })
+        .collect()
+}
+
+/// A white horizontal line across the middle of a top-down orthographic view
+/// from x = −12 to 12 (columns 40 to 280), in the content's wireframe.
+fn render_horizontal_line(style: LineStyle) -> Option<(Vec<f32>, Vec<f32>)> {
+    let mut renderer = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT)?;
+    let mut line = LineMesh::new();
+    line.add_segment(
+        &Vec3::new(-12.0, 0.03, 0.0),
+        &Vec3::new(12.0, 0.03, 0.0),
+        &style,
+    );
+    upload(
+        &mut renderer,
+        &Mesh::new(),
+        &line,
+        &Mesh::new(),
+        &LineMesh::new(),
+    );
+    top_down_orthographic(&mut renderer);
+
+    let live = renderer.render(BLACK);
+    // At the viewport's size, the export frames the same view at 2×.
+    let export = renderer.render_image(VIEWPORT_WIDTH, VIEWPORT_HEIGHT, BLACK);
+    let dashed = style.dash.is_some();
+    dump(&format!("line_live_dashed_{dashed}"), &live);
+    dump(&format!("line_export_dashed_{dashed}"), &export);
+    Some((
+        column_coverage(&live, VIEWPORT_WIDTH, VIEWPORT_HEIGHT, true),
+        column_coverage(&export, VIEWPORT_WIDTH, VIEWPORT_HEIGHT, false),
+    ))
+}
+
+/// D2 end to end: a line authored as 2 px is 2 px in the live view and 2 px
+/// in a 2× export after the downsample. Without the target's pixel scale the
+/// export would show a 1 px line.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn a_two_pixel_line_is_two_pixels_wide_live_and_exported() {
+    let Some((live, export)) =
+        render_horizontal_line(LineStyle::solid([1.0, 1.0, 1.0]).with_width(2.0))
+    else {
+        return;
+    };
+    for (name, coverage) in [("live", &live), ("export", &export)] {
+        for (column, sum) in coverage.iter().enumerate().take(260).skip(60) {
+            assert!(
+                (sum - 2.0).abs() < 0.06,
+                "{name}, column {column}: coverage sums to {sum}"
+            );
+        }
+    }
+}
+
+/// The columns, from `range`, at which `coverage / width` rises through 0.5:
+/// where each dash starts.
+fn dash_starts(coverage: &[f32], width: f32, range: std::ops::Range<usize>) -> Vec<usize> {
+    range
+        .filter(|&c| coverage[c - 1] / width < 0.5 && coverage[c] / width >= 0.5)
+        .collect()
+}
+
+/// D5: a 6 / 4 px dash pattern repeats every 10 px, in the live view and in
+/// a 2× export alike, and is on for 60 % of its length.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn the_dash_period_is_on_plus_off_pixels_live_and_exported() {
+    let width = 2.0;
+    let Some((live, export)) = render_horizontal_line(
+        LineStyle::solid([1.0, 1.0, 1.0])
+            .with_width(width)
+            .dashed(6.0, 4.0),
+    ) else {
+        return;
+    };
+    for (name, coverage) in [("live", &live), ("export", &export)] {
+        let starts = dash_starts(coverage, width, 60..260);
+        assert!(
+            starts.len() >= 18,
+            "{name}: only {} dashes in 200 px",
+            starts.len()
+        );
+        for pair in starts.windows(2) {
+            let gap = pair[1] - pair[0];
+            assert!(
+                (9..=11).contains(&gap),
+                "{name}: dashes {gap} px apart at column {}",
+                pair[0]
+            );
+        }
+        let mean_period = (starts[starts.len() - 1] - starts[0]) as f32 / (starts.len() - 1) as f32;
+        assert!(
+            (mean_period - 10.0).abs() < 0.1,
+            "{name}: mean period {mean_period}"
+        );
+        // Over whole periods the pattern is on for 6 px in 10.
+        let span = starts[0]..starts[starts.len() - 1];
+        let on = span.clone().map(|c| coverage[c] / width).sum::<f32>() / span.len() as f32;
+        assert!((on - 0.6).abs() < 0.03, "{name}: on for {on} of the period");
+    }
+}

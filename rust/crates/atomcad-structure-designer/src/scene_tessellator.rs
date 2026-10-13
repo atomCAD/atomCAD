@@ -16,13 +16,17 @@ use atomcad_renderer::atom_impostor_mesh::AtomImpostorMesh;
 use atomcad_renderer::bond_impostor_mesh::BondImpostorMesh;
 use atomcad_renderer::camera::Camera;
 use atomcad_renderer::label_mesh::LabelMesh;
-use atomcad_renderer::line_mesh::LineMesh;
+use atomcad_renderer::line_mesh::{LineMesh, LineStyle};
 use atomcad_renderer::mesh::{Material, Mesh};
 use atomcad_renderer::tessellator::tessellator::{TessellationOutput, tessellate_cuboid};
 use atomcad_renderer::transparent_impostor_mesh::TransparentImpostorMesh;
 use atomcad_renderer::transparent_surface_mesh::TransparentSurfaceMesh;
 use glam::f32::Vec3;
 use glam::f64::{DQuat, DVec3};
+
+/// Line weight of a tool-envelope overlay, logical pixels
+/// (doc/design_screen_space_lines.md D8).
+pub const TOOL_ENVELOPE_WIDTH_PX: f32 = 1.5;
 
 /// Tessellates all scene content using the new node_data HashMap structure
 /// This is the main entry point for scene tessellation
@@ -470,17 +474,14 @@ fn tessellate_non_lightweight_content(
                         .tool_envelope_color
                 }
             };
-            let color_f32 = [
+            let style = LineStyle::solid([
                 color[0] as f32 / 255.0,
                 color[1] as f32 / 255.0,
                 color[2] as f32 / 255.0,
-            ];
+            ])
+            .with_width(TOOL_ENVELOPE_WIDTH_PX);
             for (from, to) in &overlay.segments {
-                wireframe_mesh.add_line_with_uniform_color(
-                    &Vec3::new(from.x as f32, from.y as f32, from.z as f32),
-                    &Vec3::new(to.x as f32, to.y as f32, to.z as f32),
-                    &color_f32,
-                );
+                wireframe_mesh.add_segment(&from.as_vec3(), &to.as_vec3(), &style);
             }
         }
     }

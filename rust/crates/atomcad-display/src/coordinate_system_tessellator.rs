@@ -1,11 +1,10 @@
-use glam::f32::Vec3;
 use glam::f64::DVec3;
 
 use crate::preferences::BackgroundPreferences;
 use atomcad_crystolecule::crystolecule_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
 use atomcad_crystolecule::drawing_plane::DrawingPlane;
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
-use atomcad_renderer::line_mesh::LineMesh;
+use atomcad_renderer::line_mesh::{LineMesh, LineStyle};
 
 // Constants for coordinate system visualization
 pub const X_AXIS_COLOR: [f32; 3] = [1.0, 0.0, 0.0]; // Red for X-axis
@@ -20,12 +19,20 @@ pub const LATTICE_A_COLOR: [f32; 3] = [0.0, 1.0, 1.0]; // Cyan for a-vector
 pub const LATTICE_B_COLOR: [f32; 3] = [1.0, 0.0, 1.0]; // Magenta for b-vector
 pub const LATTICE_C_COLOR: [f32; 3] = [1.0, 1.0, 0.0]; // Yellow for c-vector
 
+// Line weights in logical pixels (doc/design_screen_space_lines.md D8). The
+// drawing-plane grid and axes use the same ones as the ground grid and axes.
+pub const GRID_MINOR_WIDTH_PX: f32 = 1.0;
+pub const GRID_MAJOR_WIDTH_PX: f32 = 1.5;
+pub const AXIS_WIDTH_PX: f32 = 2.0;
+/// Non-Cartesian lattice axes are dashed: `(on, off)` in logical pixels.
+pub const LATTICE_AXIS_DASH_PX: (f32, f32) = (6.0, 4.0);
+
 // Threshold for considering a vector aligned with a Cartesian axis
 const ALIGNMENT_THRESHOLD: f64 = 0.99;
 
 /// Tessellates a coordinate system visualization with:
 /// - RGB colored coordinate axes (X=red, Y=green, Z=blue) aligned with Cartesian coordinates
-/// - Dotted lattice axes for unit cell basis vectors that are not aligned with Cartesian axes
+/// - Dashed lattice axes for unit cell basis vectors that are not aligned with Cartesian axes
 /// - A lattice grid following the unit cell's a and b basis vectors
 /// - Enhanced grid lines every 10 units
 pub fn tessellate_coordinate_system(
@@ -153,12 +160,7 @@ pub fn tessellate_drawing_plane_grid_and_axes(
 
     // Lines parallel to the u direction (vary along v)
     for i in -grid_range..=grid_range {
-        let is_emphasized = i % 10 == 0;
-        let color = if is_emphasized {
-            &grid_secondary_color
-        } else {
-            &grid_primary_color
-        };
+        let style = grid_line_style(i, &grid_primary_color, &grid_secondary_color);
 
         let offset_2d = v_step_2d * (i as f64);
         let start_2d = origin_2d + offset_2d - u_step_2d * (grid_range as f64);
@@ -172,27 +174,22 @@ pub fn tessellate_drawing_plane_grid_and_axes(
         if i == 0 {
             let mid_2d = origin_2d;
             let mid = drawing_plane.real_2d_to_world_3d(&mid_2d);
-            output_mesh.add_line_with_uniform_color(&start.as_vec3(), &mid.as_vec3(), color);
+            output_mesh.add_segment(&start.as_vec3(), &mid.as_vec3(), &style);
 
             let axis_end = drawing_plane.real_2d_to_world_3d(&u_axis_end_2d);
             let t_axis_end = axis_length_steps;
             let t_line_end = grid_range as f64;
             if t_axis_end < t_line_end {
-                output_mesh.add_line_with_uniform_color(&axis_end.as_vec3(), &end.as_vec3(), color);
+                output_mesh.add_segment(&axis_end.as_vec3(), &end.as_vec3(), &style);
             }
         } else {
-            output_mesh.add_line_with_uniform_color(&start.as_vec3(), &end.as_vec3(), color);
+            output_mesh.add_segment(&start.as_vec3(), &end.as_vec3(), &style);
         }
     }
 
     // Lines parallel to the v direction (vary along u)
     for i in -grid_range..=grid_range {
-        let is_emphasized = i % 10 == 0;
-        let color = if is_emphasized {
-            &grid_secondary_color
-        } else {
-            &grid_primary_color
-        };
+        let style = grid_line_style(i, &grid_primary_color, &grid_secondary_color);
 
         let offset_2d = u_step_2d * (i as f64);
         let start_2d = origin_2d + offset_2d - v_step_2d * (grid_range as f64);
@@ -206,16 +203,16 @@ pub fn tessellate_drawing_plane_grid_and_axes(
         if i == 0 {
             let mid_2d = origin_2d;
             let mid = drawing_plane.real_2d_to_world_3d(&mid_2d);
-            output_mesh.add_line_with_uniform_color(&start.as_vec3(), &mid.as_vec3(), color);
+            output_mesh.add_segment(&start.as_vec3(), &mid.as_vec3(), &style);
 
             let axis_end = drawing_plane.real_2d_to_world_3d(&v_axis_end_2d);
             let t_axis_end = axis_length_steps;
             let t_line_end = grid_range as f64;
             if t_axis_end < t_line_end {
-                output_mesh.add_line_with_uniform_color(&axis_end.as_vec3(), &end.as_vec3(), color);
+                output_mesh.add_segment(&axis_end.as_vec3(), &end.as_vec3(), &style);
             }
         } else {
-            output_mesh.add_line_with_uniform_color(&start.as_vec3(), &end.as_vec3(), color);
+            output_mesh.add_segment(&start.as_vec3(), &end.as_vec3(), &style);
         }
     }
 
@@ -239,18 +236,34 @@ pub fn tessellate_drawing_plane_grid_and_axes(
 
 /// Adds a single solid axis line from start to end with the specified color
 pub fn add_axis_line(output_mesh: &mut LineMesh, start: &DVec3, end: &DVec3, color: &[f32; 3]) {
-    let start_vec3 = Vec3::new(start.x as f32, start.y as f32, start.z as f32);
-    let end_vec3 = Vec3::new(end.x as f32, end.y as f32, end.z as f32);
-
-    output_mesh.add_line_with_uniform_color(&start_vec3, &end_vec3, color);
+    output_mesh.add_segment(
+        &start.as_vec3(),
+        &end.as_vec3(),
+        &LineStyle::solid(*color).with_width(AXIS_WIDTH_PX),
+    );
 }
 
-/// Adds a lattice-axis line from start to end with the specified color.
-///
-/// Drawn solid for now: the world-space dash splitter is gone, and the axis
-/// becomes dashed in pixels with `doc/design_screen_space_lines.md` Phase 3.
-fn add_dotted_axis_line(output_mesh: &mut LineMesh, start: &DVec3, end: &DVec3, color: &[f32; 3]) {
-    add_axis_line(output_mesh, start, end, color);
+/// Adds a lattice-axis line from start to end with the specified color,
+/// dashed in screen pixels so the pattern reads the same at every zoom.
+fn add_dashed_axis_line(output_mesh: &mut LineMesh, start: &DVec3, end: &DVec3, color: &[f32; 3]) {
+    let (on_px, off_px) = LATTICE_AXIS_DASH_PX;
+    output_mesh.add_segment(
+        &start.as_vec3(),
+        &end.as_vec3(),
+        &LineStyle::solid(*color)
+            .with_width(AXIS_WIDTH_PX)
+            .dashed(on_px, off_px),
+    );
+}
+
+/// Grid line `i` (counted from the origin): every tenth is a major line,
+/// heavier and in the strong colour.
+fn grid_line_style(i: i32, minor_color: &[f32; 3], major_color: &[f32; 3]) -> LineStyle {
+    if i % 10 == 0 {
+        LineStyle::solid(*major_color).with_width(GRID_MAJOR_WIDTH_PX)
+    } else {
+        LineStyle::solid(*minor_color).with_width(GRID_MINOR_WIDTH_PX)
+    }
 }
 
 /// Checks if a vector is aligned with a Cartesian axis (X, Y, or Z)
@@ -293,7 +306,7 @@ fn is_lattice_xy_aligned(unit_cell: &UnitCellStruct) -> bool {
     a_aligned_with_x && b_aligned_with_y
 }
 
-/// Adds lattice axes as dotted lines, but only for vectors not aligned with Cartesian axes
+/// Adds lattice axes as dashed lines, but only for vectors not aligned with Cartesian axes
 fn add_lattice_axes_if_non_cartesian(
     output_mesh: &mut LineMesh,
     unit_cell: &UnitCellStruct,
@@ -304,19 +317,19 @@ fn add_lattice_axes_if_non_cartesian(
     // Add a-vector if not aligned with Cartesian axes
     if !is_aligned_with_cartesian_axis(&unit_cell.a) {
         let a_end = origin + unit_cell.a * cs_size;
-        add_dotted_axis_line(output_mesh, &origin, &a_end, &LATTICE_A_COLOR);
+        add_dashed_axis_line(output_mesh, &origin, &a_end, &LATTICE_A_COLOR);
     }
 
     // Add b-vector if not aligned with Cartesian axes
     if !is_aligned_with_cartesian_axis(&unit_cell.b) {
         let b_end = origin + unit_cell.b * cs_size;
-        add_dotted_axis_line(output_mesh, &origin, &b_end, &LATTICE_B_COLOR);
+        add_dashed_axis_line(output_mesh, &origin, &b_end, &LATTICE_B_COLOR);
     }
 
     // Add c-vector if not aligned with Cartesian axes
     if !is_aligned_with_cartesian_axis(&unit_cell.c) {
         let c_end = origin + unit_cell.c * cs_size;
-        add_dotted_axis_line(output_mesh, &origin, &c_end, &LATTICE_C_COLOR);
+        add_dashed_axis_line(output_mesh, &origin, &c_end, &LATTICE_C_COLOR);
     }
 }
 
@@ -372,12 +385,7 @@ pub fn tessellate_grid_with_origin(
 
     // Create grid lines parallel to the u vector (varying along v direction)
     for i in -grid_range..=grid_range {
-        let is_emphasized = i % 10 == 0;
-        let color = if is_emphasized {
-            secondary_color
-        } else {
-            primary_color
-        };
+        let style = grid_line_style(i, primary_color, secondary_color);
 
         // Line runs from -grid_size*u to +grid_size*u, offset by i*v
         let offset = v_vector * (i as f64);
@@ -388,20 +396,15 @@ pub fn tessellate_grid_with_origin(
         if i == 0 {
             // Only draw the negative part
             let mid = *origin + offset;
-            output_mesh.add_line_with_uniform_color(&start.as_vec3(), &mid.as_vec3(), color);
+            output_mesh.add_segment(&start.as_vec3(), &mid.as_vec3(), &style);
         } else {
-            output_mesh.add_line_with_uniform_color(&start.as_vec3(), &end.as_vec3(), color);
+            output_mesh.add_segment(&start.as_vec3(), &end.as_vec3(), &style);
         }
     }
 
     // Create grid lines parallel to the v vector (varying along u direction)
     for i in -grid_range..=grid_range {
-        let is_emphasized = i % 10 == 0;
-        let color = if is_emphasized {
-            secondary_color
-        } else {
-            primary_color
-        };
+        let style = grid_line_style(i, primary_color, secondary_color);
 
         // Line runs from -grid_size*v to +grid_size*v, offset by i*u
         let offset = u_vector * (i as f64);
@@ -412,9 +415,9 @@ pub fn tessellate_grid_with_origin(
         if i == 0 {
             // Only draw the negative part
             let mid = *origin + offset;
-            output_mesh.add_line_with_uniform_color(&start.as_vec3(), &mid.as_vec3(), color);
+            output_mesh.add_segment(&start.as_vec3(), &mid.as_vec3(), &style);
         } else {
-            output_mesh.add_line_with_uniform_color(&start.as_vec3(), &end.as_vec3(), color);
+            output_mesh.add_segment(&start.as_vec3(), &end.as_vec3(), &style);
         }
     }
 }

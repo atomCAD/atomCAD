@@ -109,6 +109,35 @@ impl LineMesh {
     }
 
     pub fn add_segment(&mut self, p0: &Vec3, p1: &Vec3, style: &LineStyle) {
+        self.push_segment(p0, p1, style, 0.0);
+    }
+
+    /// Consecutive segments through `points`, each carrying the world arc
+    /// length of its start along the polyline as its dash phase, so a dash
+    /// pattern continues across the joints instead of restarting at each one
+    /// (D5). `closed` adds the segment from the last point back to the first.
+    /// Fewer than two points draw nothing.
+    pub fn add_polyline(&mut self, points: &[Vec3], closed: bool, style: &LineStyle) {
+        if points.len() < 2 {
+            return;
+        }
+        let closing = if closed {
+            Some((points[points.len() - 1], points[0]))
+        } else {
+            None
+        };
+        let mut arc_length = 0.0;
+        for (p0, p1) in points
+            .windows(2)
+            .map(|pair| (pair[0], pair[1]))
+            .chain(closing)
+        {
+            self.push_segment(&p0, &p1, style, arc_length);
+            arc_length += p0.distance(p1);
+        }
+    }
+
+    fn push_segment(&mut self, p0: &Vec3, p1: &Vec3, style: &LineStyle, dash_phase: f32) {
         let (dash_on_px, dash_off_px) = match style.dash {
             Some(dash) => (dash.on_px, dash.off_px),
             None => (0.0, 0.0),
@@ -120,7 +149,7 @@ impl LineMesh {
             width_px: style.width_px,
             dash_on_px,
             dash_off_px,
-            dash_phase: 0.0,
+            dash_phase,
             lod_slot: 0,
         });
     }
