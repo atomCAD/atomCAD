@@ -9,6 +9,8 @@ struct CameraUniform {
   head_light_dir: vec3<f32>,
   is_orthographic: f32,      // 1.0 = orthographic, 0.0 = perspective
   ortho_half_height: f32,    // Half height for orthographic projection (for zoom level)
+  viewport_size_px: vec2<f32>, // Render-target size in render pixels
+  pixel_scale: f32,          // Render-target pixels per output pixel
 };
 @group(0) @binding(0)
 var<uniform> camera: CameraUniform;

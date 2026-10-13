@@ -25,3 +25,10 @@ wgpu = { workspace = true }
 # `assets/` and `src/font_metrics.rs`, the two artifacts it writes.
 [dev-dependencies]
 ab_glyph = "0.2.32"
+# `naga` validates every `.wgsl` file and reads the `CameraUniform` layout each
+# one declares (`tests/renderer/shader_test.rs`); `tokio` blocks on
+# `Renderer::new` in the opt-in GPU harness (`tests/renderer_gpu.rs`). Both are
+# already in the tree through `wgpu` and the root crate
+# (doc/design_screen_space_lines.md, Testing).
+naga = { workspace = true }
+tokio = { workspace = true }

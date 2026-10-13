@@ -28,57 +28,82 @@ use std::sync::Mutex;
 use wgpu::util::DeviceExt;
 use wgpu::*;
 
+/// The per-view uniform every shader binds at group 0.
+///
+/// Six `.wgsl` files declare the same struct and must agree with this one
+/// byte for byte: issue #269 was a mismatch of exactly this kind. The padding
+/// is therefore explicit, `tests/renderer/shader_test.rs` checks the offsets
+/// naga computes for each shader against `offset_of!` here, and
+/// `tests/renderer/camera_uniform_test.rs` pins the size and the new fields.
+///
+/// | Field | Offset |
+/// |---|---|
+/// | `view_proj`, `view_matrix`, `proj_matrix` | 0, 64, 128 |
+/// | `camera_position` | 192 |
+/// | `head_light_dir`, `is_orthographic` | 208, 220 |
+/// | `ortho_half_height` | 224 |
+/// | `viewport_size_px` | 232 |
+/// | `pixel_scale` | 240 |
+/// | *size* | 256 |
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-struct CameraUniform {
-    view_proj: [[f32; 4]; 4],
-    view_matrix: [[f32; 4]; 4], // Separate view matrix
-    proj_matrix: [[f32; 4]; 4], // Separate projection matrix
+pub struct CameraUniform {
+    pub view_proj: [[f32; 4]; 4],
+    pub view_matrix: [[f32; 4]; 4], // Separate view matrix
+    pub proj_matrix: [[f32; 4]; 4], // Separate projection matrix
 
-    camera_position: [f32; 3],
-    _padding0: u32,
+    pub camera_position: [f32; 3],
+    pub _padding0: u32,
 
-    head_light_dir: [f32; 3],
+    pub head_light_dir: [f32; 3],
 
     // Orthographic rendering flag (1.0 = orthographic, 0.0 = perspective).
     // No padding before this field: in WGSL the f32 following a vec3<f32>
     // packs into the vec3's 4-byte tail slot, so it must do the same here.
-    is_orthographic: f32,
+    pub is_orthographic: f32,
 
     // Half height for orthographic projection (used for zoom level)
-    ortho_half_height: f32,
+    pub ortho_half_height: f32,
 
-    // Additional padding to maintain 16-byte struct alignment
-    _padding1: [u32; 3],
+    // WGSL aligns a vec2<f32> to 8 bytes, so it starts at 232, not 228.
+    pub _padding1: u32,
+
+    /// Size of the render target being drawn into, in render pixels
+    /// (`doc/design_screen_space_lines.md` D3).
+    pub viewport_size_px: [f32; 2],
+
+    /// Render-target pixels per output pixel: the pixel scale of the
+    /// [`RenderTarget`] drawn into (D2).
+    pub pixel_scale: f32,
+
+    // The struct's size rounds up to its 16-byte alignment (the matrices').
+    pub _padding2: [u32; 3],
 }
 
 impl CameraUniform {
-    fn new() -> Self {
-        Self {
-            view_proj: Mat4::IDENTITY.to_cols_array_2d(),
-            view_matrix: Mat4::IDENTITY.to_cols_array_2d(),
-            proj_matrix: Mat4::IDENTITY.to_cols_array_2d(),
-            camera_position: Vec3::new(0.0, 0.0, 0.0).to_array(),
-            _padding0: 0,
-            head_light_dir: Vec3::new(0.0, -1.0, 0.0).to_array(),
-            is_orthographic: 0.0,    // Default to perspective mode
-            ortho_half_height: 10.0, // Default orthographic half height
-            _padding1: [0, 0, 0],
-        }
-    }
-
-    fn refresh(&mut self, camera: &Camera) {
+    /// The uniform for drawing `camera` into a target of `target_size`
+    /// render pixels at `pixel_scale` (D3). Pure, so it can be tested without
+    /// a device; `Renderer::write_view_uniforms` is the only place that
+    /// writes one to the GPU.
+    pub fn new(camera: &Camera, target_size: (u32, u32), pixel_scale: f32) -> Self {
         let view_matrix = camera.build_view_matrix().as_mat4();
         let proj_matrix = camera.build_projection_matrix().as_mat4();
         let view_proj_matrix = proj_matrix * view_matrix;
 
-        self.view_proj = view_proj_matrix.to_cols_array_2d();
-        self.view_matrix = view_matrix.to_cols_array_2d();
-        self.proj_matrix = proj_matrix.to_cols_array_2d();
-        self.camera_position = camera.eye.as_vec3().to_array();
-        self.head_light_dir = camera.calc_headlight_direction().as_vec3().to_array();
-        self.is_orthographic = if camera.orthographic { 1.0 } else { 0.0 };
-        self.ortho_half_height = camera.ortho_half_height as f32;
+        Self {
+            view_proj: view_proj_matrix.to_cols_array_2d(),
+            view_matrix: view_matrix.to_cols_array_2d(),
+            proj_matrix: proj_matrix.to_cols_array_2d(),
+            camera_position: camera.eye.as_vec3().to_array(),
+            _padding0: 0,
+            head_light_dir: camera.calc_headlight_direction().as_vec3().to_array(),
+            is_orthographic: if camera.orthographic { 1.0 } else { 0.0 },
+            ortho_half_height: camera.ortho_half_height as f32,
+            _padding1: 0,
+            viewport_size_px: [target_size.0 as f32, target_size.1 as f32],
+            pixel_scale,
+            _padding2: [0, 0, 0],
+        }
     }
 }
 
@@ -88,21 +113,29 @@ const DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32Float;
 /// buffer the colour is read back through. The live viewport owns one and the
 /// thumbnail owns another, so a thumbnail capture never resizes or
 /// reallocates the viewport's (`doc/design_network_thumbnails.md` D5).
-struct RenderTarget {
+///
+/// A target also owns its **pixel scale** (`doc/design_screen_space_lines.md`
+/// D2): how many of its pixels make one pixel of the image finally shown or
+/// saved. Only a supersampled target has a scale other than 1, and the scale
+/// is fixed where the target is created, so nothing drawn into it, and no
+/// export code, has to know about supersampling.
+pub struct RenderTarget {
     texture: Texture,
     texture_view: TextureView,
     depth_texture_view: TextureView,
     output_buffer: Buffer,
+    /// In render pixels: the output size × the supersampling factor.
     size: Extent3d,
+    /// Render-target pixels per output pixel.
+    pixel_scale: f32,
 }
 
 impl RenderTarget {
-    fn new(device: &Device, width: u32, height: u32) -> Self {
-        let size = Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        };
+    /// A target that renders an `out_width × out_height` image at
+    /// `supersampling`×: `size = out × supersampling`,
+    /// `pixel_scale = supersampling`.
+    pub fn new(device: &Device, out_width: u32, out_height: u32, supersampling: u32) -> Self {
+        let (size, pixel_scale) = Self::dims(out_width, out_height, supersampling);
         let texture = Renderer::create_texture(device, &size);
         let texture_view = texture.create_view(&TextureViewDescriptor::default());
         let depth_texture = Renderer::create_depth_texture(device, &size);
@@ -114,7 +147,20 @@ impl RenderTarget {
             depth_texture_view,
             output_buffer,
             size,
+            pixel_scale,
         }
+    }
+
+    /// The size and pixel scale of a target for an `out_width × out_height`
+    /// image at `supersampling`×: the rule [`RenderTarget::new`] applies,
+    /// split out so it can be tested without a device.
+    pub fn dims(out_width: u32, out_height: u32, supersampling: u32) -> (Extent3d, f32) {
+        let size = Extent3d {
+            width: out_width * supersampling,
+            height: out_height * supersampling,
+            depth_or_array_layers: 1,
+        };
+        (size, supersampling as f32)
     }
 }
 
@@ -304,15 +350,21 @@ impl Renderer {
         let gadget_bond_impostor_mesh =
             GPUMesh::new_empty_bond_impostor_mesh(&device, &model_bind_group_layout);
 
-        let target = RenderTarget::new(&device, width, height);
+        let target = RenderTarget::new(&device, width, height, 1);
         let thumbnail_target = RenderTarget::new(
             &device,
-            crate::thumbnail::THUMBNAIL_RENDER_SIZE,
-            crate::thumbnail::THUMBNAIL_RENDER_SIZE,
+            crate::thumbnail::THUMBNAIL_SIZE,
+            crate::thumbnail::THUMBNAIL_SIZE,
+            crate::thumbnail::THUMBNAIL_SUPERSAMPLING,
         );
 
-        let mut camera_uniform = CameraUniform::new();
-        camera_uniform.refresh(&camera);
+        // The initial contents of both camera buffers. The thumbnail one is
+        // rewritten for its own target before every use.
+        let camera_uniform = CameraUniform::new(
+            &camera,
+            (target.size.width, target.size.height),
+            target.pixel_scale,
+        );
         let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Camera Buffer"),
             contents: bytemuck::cast_slice(&[camera_uniform]),
@@ -1105,15 +1157,17 @@ impl Renderer {
         }
 
         self.camera.aspect = width as f64 / height as f64;
-        self.update_camera_buffer();
 
         let _lock = self.render_mutex.lock().unwrap();
 
         self.device.poll(Maintain::Wait);
 
-        self.target = RenderTarget::new(&self.device, width, height);
+        self.target = RenderTarget::new(&self.device, width, height, 1);
 
         self.device.poll(Maintain::Wait);
+
+        // After the target, not before: the uniform carries its size (D3).
+        self.write_view_uniforms(&self.camera_buffer, &self.camera, &self.target);
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1276,7 +1330,7 @@ impl Renderer {
     /// (`doc/design_network_thumbnails.md` D5): content only, no gadgets,
     /// pivot cube, grid or labels, on a light or a dark background chosen
     /// for contrast with the content, at
-    /// `THUMBNAIL_RENDER_SIZE` and box-downsampled to `THUMBNAIL_SIZE`.
+    /// `THUMBNAIL_SUPERSAMPLING`× and box-downsampled to `THUMBNAIL_SIZE`.
     /// Returns tightly packed **RGBA**. `camera.aspect` is ignored: the
     /// thumbnail is square.
     ///
@@ -1290,12 +1344,10 @@ impl Renderer {
 
         let mut camera = camera.clone();
         camera.aspect = 1.0;
-        let mut camera_uniform = CameraUniform::new();
-        camera_uniform.refresh(&camera);
-        self.queue.write_buffer(
+        self.write_view_uniforms(
             &self.thumbnail_camera_buffer,
-            0,
-            bytemuck::cast_slice(&[camera_uniform]),
+            &camera,
+            &self.thumbnail_target,
         );
 
         let view = camera.build_view_matrix().as_mat4();
@@ -1372,13 +1424,10 @@ impl Renderer {
 
         let mut camera = self.camera.clone();
         camera.aspect = width as f64 / height as f64;
-        let mut camera_uniform = CameraUniform::new();
-        camera_uniform.refresh(&camera);
-        self.queue.write_buffer(
-            &self.thumbnail_camera_buffer,
-            0,
-            bytemuck::cast_slice(&[camera_uniform]),
-        );
+
+        // The target first: the uniform's size and pixel scale come from it.
+        let target = RenderTarget::new(&self.device, width, height, IMAGE_EXPORT_SUPERSAMPLING);
+        self.write_view_uniforms(&self.thumbnail_camera_buffer, &camera, &target);
 
         let view = camera.build_view_matrix().as_mat4();
         Self::resort_transparent_impostors(
@@ -1391,11 +1440,6 @@ impl Renderer {
             view,
         );
 
-        let target = RenderTarget::new(
-            &self.device,
-            width * IMAGE_EXPORT_SUPERSAMPLING,
-            height * IMAGE_EXPORT_SUPERSAMPLING,
-        );
         let mut pixels = self.draw_to_target(
             &target,
             &self.thumbnail_camera_bind_group,
@@ -1743,15 +1787,24 @@ impl Renderer {
         }
     }
 
-    // Helper method to update camera buffer
-    pub fn update_camera_buffer(&mut self) {
-        let mut camera_uniform = CameraUniform::new();
-        camera_uniform.refresh(&self.camera);
-        self.queue.write_buffer(
-            &self.camera_buffer,
-            0,
-            bytemuck::cast_slice(&[camera_uniform]),
+    /// Rewrites the live camera uniform from `self.camera` and the live
+    /// target.
+    pub fn update_camera_buffer(&self) {
+        self.write_view_uniforms(&self.camera_buffer, &self.camera, &self.target);
+    }
+
+    /// Writes `camera_buffer` for drawing `camera` into `target`
+    /// (`doc/design_screen_space_lines.md` D3). The only writer of a camera
+    /// uniform, so the viewport size and pixel scale a shader sees can only
+    /// come from the target it is drawn into.
+    fn write_view_uniforms(&self, camera_buffer: &Buffer, camera: &Camera, target: &RenderTarget) {
+        let camera_uniform = CameraUniform::new(
+            camera,
+            (target.size.width, target.size.height),
+            target.pixel_scale,
         );
+        self.queue
+            .write_buffer(camera_buffer, 0, bytemuck::cast_slice(&[camera_uniform]));
     }
 
     /// Sets how the merged transparent surface mesh is drawn.

@@ -272,6 +272,8 @@ dependencies = [
  "bytemuck",
  "glam",
  "image",
+ "naga",
+ "tokio",
  "wgpu",
 ]
 

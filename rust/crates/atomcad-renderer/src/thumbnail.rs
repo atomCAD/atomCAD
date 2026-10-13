@@ -17,9 +17,14 @@ use glam::f64::DVec3;
 /// Side of the stored thumbnail, in pixels (D5, D7).
 pub const THUMBNAIL_SIZE: u32 = 128;
 
-/// Side of the render the thumbnail is downsampled from (D5): impostors are
-/// not antialiased, so the 2×2 box filter is what smooths their edges.
-pub const THUMBNAIL_RENDER_SIZE: u32 = THUMBNAIL_SIZE * 2;
+/// Factor the thumbnail is rendered at before being downsampled (D5):
+/// impostors are not antialiased, so the 2×2 box filter is what smooths their
+/// edges. Fixed: the filter is [`downsample_2x2`]. It is also the thumbnail
+/// target's pixel scale (`doc/design_screen_space_lines.md` D2).
+pub const THUMBNAIL_SUPERSAMPLING: u32 = 2;
+
+/// Side of the render the thumbnail is downsampled from.
+pub const THUMBNAIL_RENDER_SIZE: u32 = THUMBNAIL_SIZE * THUMBNAIL_SUPERSAMPLING;
 
 /// The light thumbnail background (D5), for dark content (carbon, geometry).
 pub const THUMBNAIL_LIGHT_BACKGROUND_RGB: [u8; 3] = [216, 220, 226];

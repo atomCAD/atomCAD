@@ -320,7 +320,12 @@ When adding new functionality to the Rust codebase:
    - `rust/crates/atomcad-crystolecule/tests/crystolecule/` - Atomic structure tests
    - `rust/crates/atomcad-geo-tree/tests/geo_tree/` - Geometry tests
    - `rust/crates/atomcad-renderer/tests/renderer/` - GPU-free renderer tests
-     (camera math, label layout, impostor meshes, transparent sort)
+     (camera math, label layout, impostor meshes, transparent sort), including
+     `shader_test.rs`, which parses and validates every `.wgsl` file with
+     `naga` and checks each shader's `CameraUniform` offsets against the Rust
+     struct — so a broken shader fails `cargo test`, not the app's start-up
+   - `rust/crates/atomcad-renderer/tests/renderer_gpu.rs` - the **opt-in GPU
+     harness** (see below)
    - `rust/crates/atomcad-display/tests/display/` - tessellation tests. The two
      that drive `tessellate_scene_content` are **not** here: that function is a
      `structure_designer` module now, so they sit in
@@ -367,6 +372,23 @@ cd rust && cargo test --workspace                # Belt and braces; `default-mem
 ```
 
 Never `cargo test` with full parallelism on the Windows dev box — use `-j 4`.
+
+**The GPU harness** (`crates/atomcad-renderer/tests/renderer_gpu.rs`,
+`doc/design_screen_space_lines.md` Testing layer 4) builds a real `Renderer`
+offscreen, uploads small hand-made meshes, renders through the live,
+thumbnail and export paths and asserts on the read-back pixels. Every test is
+`#[ignore]`, so plain `cargo test` stays GPU-free; run it after any change to
+the renderer's draw path:
+
+```bash
+cd rust && cargo test -p atomcad-renderer --test renderer_gpu -- --ignored
+```
+
+A test that finds no wgpu adapter prints that and passes. Assert with
+tolerances and pixel counts, never committed golden images (they differ across
+drivers). To prove a refactor pixel-identical, set `ATOMCAD_GPU_DUMP_DIR` to a
+directory outside the repo: each test writes its images there as raw bytes, so
+a run before and a run after the change can be compared with `cmp`.
 
 ## Debugging
 

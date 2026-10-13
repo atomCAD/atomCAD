@@ -72,6 +72,10 @@ indexmap = "2.0"
 lazy_static = "1.4.0"
 lru = "0.12.1"
 nalgebra = "^0.33"
+# `naga`: a dev-dependency of the renderer's shader tests. Pinned to the
+# version `wgpu` 23 already pulls in, so it adds no code to the tree; it must
+# move with `wgpu`.
+naga = { version = "23.1.0", features = ["wgsl-in"] }
 rayon = "1.7"
 regex = "1.5.4"
 rustc-hash = "2.1"

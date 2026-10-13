@@ -29,3 +29,13 @@ mod thumbnail_test;
 // *File > Export viewport image*: the size rule.
 #[path = "renderer/image_export_test.rs"]
 mod image_export_test;
+
+// Screen-space lines, Phase 1: the extended camera uniform and the render
+// target's pixel scale (doc/design_screen_space_lines.md D2, D3).
+#[path = "renderer/camera_uniform_test.rs"]
+mod camera_uniform_test;
+
+// Every shader parses and validates; every `CameraUniform` in WGSL matches the
+// Rust struct (naga, doc/design_screen_space_lines.md Testing layer 2).
+#[path = "renderer/shader_test.rs"]
+mod shader_test;
