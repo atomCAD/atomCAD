@@ -1,6 +1,7 @@
 # Design: equivalent chemisorption results, and the `compare_atoms` node
 
-Status: **proposed, 2026-10-13, unreviewed.**
+Status: **proposed, 2026-10-13; first review folded in (D2 refit, D4
+symmetric sites, D5 cap, D13 `top_n`, `compare_atoms` defaults).**
 
 Two pieces on one shared core:
 
@@ -68,8 +69,9 @@ Making `top_n` count *distinct* bindings — merging during the search — was
 considered and rejected (D7): it needs either an arbitrary oversized pool or
 a store of every candidate's cluster plus replays, and it turns the
 comparison settings into search settings, so every tolerance change costs a
-Run. Instead `top_n` counts candidates before merging, and a user who gets
-too few distinct bindings raises it.
+Run. Instead `top_n` counts candidates before merging, its default rises to
+50 so copies do not crowd out the distinct bindings (D13), and a user who
+still gets too few raises it.
 
 What is given up: deduplicating arrays from other producers. The core lives
 in `atomcad-crystolecule` (§3), so a `unique_atoms` node can be added on it
@@ -84,15 +86,16 @@ if someone asks; `compare_atoms` already covers pairwise checks.
 | D1 | One shared core in `atomcad-crystolecule` (§3) serves `chemisorb`'s `unique` and the `compare_atoms` node, so the two cannot disagree. |
 | D2 | Equal means: **a motion of the allowed kind and a one-to-one matching of atoms, same element, every matched pair within `tolerance` (Å) after the least-squares fit of that matching** (Kabsch; for `translation`, the centroid difference). The max deviation, never the RMS, decides — as in mechanosynth placement. Optionally bonds too (presence and order). |
 | D3 | The motion is one choice: `none` / `translation` / `rigid` / `rigid_mirror`. Not two checkboxes: rotation without translation has no meaning without a fixed origin. |
-| D4 | The motion is **proposed, then verified**: the centroids and principal axes propose it first, anchor triples whenever those fail (§3.4); a refined fit follows; the final check decides. A proposal can only cause a missed merge, never a wrong one: **"equal" is exact by construction, "not equal" is very likely but not proven** (§3.5). An asymmetric adsorbate with swapped feet, or the mirror image of a chiral one, fails the check without a rule of its own. |
-| D5 | Each comparison has a **work cap**. Exceeding it makes the pair *not equal* and counts it **undecided**, reported. It may leave two copies apart; it never merges two different bindings and never hangs. |
+| D4 | The motion is **proposed, then verified**: the centroids and principal axes propose it first, anchor triples whenever those fail (§3.4); a refined fit follows; the final check decides, on the least-squares fit of the matching it found. A proposal can only cause a missed merge, never a wrong one: **"equal" is exact by construction, "not equal" is very likely but not proven** (§3.5). Handedness and foot assignment need no rule of their own: the mirror image of a chiral adsorbate fails under `rigid` (and is merged under `rigid_mirror`, as intended); an asymmetric adsorbate with its feet swapped fails under every motion over two *inequivalent* sites, and is merged when a symmetry of the cluster swaps the two sites — then it is the same binding. |
+| D5 | Each comparison has a **work cap**, sized to the cost budget (§3.7), not to a round number. Exceeding it makes the pair *not equal* and counts it **undecided**, reported. It may leave two copies apart; it never merges two different bindings, never hangs, and bounds the cost of one pair to milliseconds. |
 | D6 | `chemisorb` compares candidates on their **local cluster**: the adsorbate plus `local_hops` bonds into the substrate, H not counting as a hop (§5.2). The cluster is also written as tags (`cs_adsorbate`, `cs_local`), so `compare_atoms` can be pointed at exactly what `unique` compared. |
-| D7 | **`top_n` counts candidates before merging.** The search is unchanged: `keep_best` keeps the best `top_n` by (strain, change set), the energy window cuts them, and merging runs on that list. The listed result is therefore at most `top_n` long and often shorter; a user who wants more distinct bindings raises `top_n`. |
+| D7 | **`top_n` counts candidates before merging.** The search is unchanged: `keep_best` keeps the best `top_n` by (strain, change set), the energy window cuts them, and merging runs on that list. The listed result is therefore at most `top_n` long and often shorter; a user who wants more distinct bindings raises `top_n`. Copies of one binding have nearly the same strain, so they sit next to each other in the ranking and can fill most of a small `top_n` on their own; hence D13. |
 | D8 | `unique`, `unique_tolerance` and `local_hops` are **output settings**: they act on the stored result, never on what the search keeps, so they are not `SequentialSearch` fields, are not fingerprinted, and changing one re-evaluates the node in milliseconds without making a stored result stale. |
 | D9 | **Grouping is greedy in rank order**: each candidate joins the first listed candidate it equals, else it is listed. The kept list does not depend on the order relaxations finished in (D7), so neither does the grouping — tolerance equality is not transitive, and this fixed order is what makes the answer deterministic. |
 | D10 | **`unique` is on by default** (`rigid_mirror`). A ranked list of copies is never what a search is run for. Existing `chemisorb` nodes list fewer candidates after their next Run (stored results are not saved, so nothing on disk goes stale). |
 | D11 | Both run at evaluation time: `compare_atoms` as any node, `unique` when `chemisorb` builds its outputs from the stored result. Eval memoization reruns them only when an input or setting changes. |
-| D12 | `compare_structures` moves out of `mechanosynth/` into `atomic_structure/compare.rs`, beside `matching.rs`; `mechanosynth` re-exports it. Nothing in it is mechanosynth-specific. |
+| D12 | `compare_structures` moves out of `mechanosynth/` into `atomic_structure/compare.rs`, beside `matching.rs`; `mechanosynth` re-exports it. Nothing in it is mechanosynth-specific. A companion `compare_structures_matched` also returns the matching it found, which the final check refits on (§3.4). |
+| D13 | **`top_n`'s default rises from 10 to 50** for new `chemisorb` nodes; saved nodes keep their value. `top_n` bounds only what `keep_best` holds — every candidate is relaxed whatever it is — so the cost is memory for 40 more kept candidates, not search time. With 10, the best motif repeated over the proxy's equivalent sites could leave one or two distinct bindings listed, which is the requester's complaint in another form. The walkthrough (§6) checks the number on a realistic proxy. |
 
 ---
 
@@ -230,18 +233,36 @@ search is for the rest, and for every unequal pair that reaches it.
    changing, at most 3 rounds. A few wrong pairs among many right ones skew
    a fit only slightly, so the next round's pairing corrects them — the
    iterative-closest-point refinement.
-3. **Decide** with `compare_structures(a, b_moved, tolerance)`, its matching
-   restricted to same-element partners (a flag; the mechanosynth callers
-   keep today's unrestricted matching), bonds included when asked. Stop at
-   the first motion that passes.
+3. **Decide** in two parts. First `compare_structures_matched(a, b_moved,
+   tolerance)` (D12), its matching restricted to same-element partners (a
+   flag; the mechanosynth callers keep today's unrestricted matching), bonds
+   included when asked. If that passes, **refit on the matching it returned**
+   — the least-squares motion of the allowed kind (`rigid_fit`, same
+   handedness; the centroid translation for `translation`; nothing for
+   `none`) — and require every pair of that matching within `tolerance`
+   under the refit. Stop at the first motion that passes both.
+
+   The refit is what makes the verdict D2 rather than "within tolerance under
+   some motion": refinement stops after 3 rounds whether or not the pairing
+   has settled, and its pairing (by label) need not be the matching the
+   check finds (by element), so the motion it ends on need not be the
+   least-squares fit of that matching. The bond check needs no repeat: it
+   reads only the matching. The refit is also what the eigenvalue pre-check's
+   bound (§3.3) assumes — centroids together.
 
 A cluster whose atoms are all collinear leaves the turn about their line
 undetermined and irrelevant; two anchors suffice. A planar cluster needs no
 special case: its mirror image is reachable by a proper motion, which `rigid`
 already finds.
 
-After `max_candidates` (default 10,000) proposed motions the pair is
-**undecided** (D5).
+After `max_candidates` (default **200**) proposed motions the pair is
+**undecided** (D5). The default is sized to time, not to a count that feels
+safe: a proposal that pairs most atoms before failing costs up to 3
+refinement rounds of ~150 nearest-atom queries, ~50–100 µs, so 200 bound a
+pair at ~10–20 ms. The §7 timing test measures the per-proposal cost and
+sets the final number; a typical pair needs the 4–8 principal-axes proposals
+and a few anchor triples, so the cap is reached only by highly symmetric
+clusters.
 
 ```rust
 pub struct Comparison {
@@ -261,8 +282,9 @@ alignment a user would pick by eye.
 ### 3.5 What is guaranteed
 
 - **"Equal" is exact.** It is only ever reported when the final check found
-  a same-element matching with every pair within `tolerance` (and the bonds
-  agreeing, when compared) — which is D2 itself. However the motion was
+  a same-element matching with every pair within `tolerance` under the
+  least-squares fit of that very matching (and the bonds agreeing, when
+  compared) — which is D2 itself. However the motion was
   proposed, and whatever the pairing went through on the way, a wrong merge
   is impossible.
 - **"Not equal" is very likely, not proven.** It means no proposal led the
@@ -294,8 +316,9 @@ Estimated, not measured (§7 adds the measurement):
 | | |
 |---|---|
 | cluster size N (`local_hops` 2, H included) | 30–150 atoms |
-| a rejected proposed motion | ~1 µs |
-| a pair, typical / symmetric worst | 10–100 µs / ~1 ms |
+| a rejected proposed motion | ~1 µs (first atom unpaired) to ~100 µs (fails after refinement) |
+| a pair, typical / symmetric | 10–100 µs / ~1 ms |
+| a pair at the work cap (D5) | ~10–20 ms, then *undecided* |
 | grouping 200 kept candidates | well under 50 ms typical |
 
 Fast enough to rerun on every change of an output setting (D11).
@@ -314,14 +337,16 @@ Category: atomic structure. A pure function of its inputs.
 | out `aligned` | `Molecule` | all of `b`, moved onto `a` by the best fit: overlay it on `a` to see the comparison |
 | out `report` | record `CompareReport` | `max_deviation`, `rmsd`, `undecided`, `mismatches: Array[String]` (each `Mismatch`'s `Display`) |
 
-Properties: `tag` (empty = all atoms; the same tag on both sides), `motion`,
-`tolerance`, `compare_bonds`.
+Properties: `tag` (empty = all atoms; the same tag on both sides), `motion`
+(default `rigid_mirror`), `tolerance` (default 0.15 Å), `compare_bonds`
+(default **on**, as `unique` always compares bonds). The defaults are
+`unique`'s, so a node with only `tag` set compares as `unique` does.
 
 To find out why two candidates were or were not merged: switch `unique` off
 on the `chemisorb` node (instant, D8) so every kept candidate is listed, take
 two of them (`array_at` on `candidates`, then their `structure`), and set
-`tag` to `cs_local`, `motion` and `tolerance` as `unique` had them. `equal`
-then agrees with `unique`'s verdict, `aligned` shows the fit, and `report`
+`tag` to `cs_local`, `motion` and `tolerance` as `unique` had them, with
+`compare_bonds` on. `equal` then agrees with `unique`'s verdict, `aligned` shows the fit, and `report`
 names the atoms that broke it. With `motion = none`, `compare_bonds` on and
 an empty tag it is the structural equality the mechanosynth generators verify
 with.
@@ -417,7 +442,8 @@ shows "6 of 20 (14 copies merged)" when `unique` merged anything.
    three searches, verification, grouping. Tests (§7). No UI.
 2. **`chemisorb`.** `cs_adsorbate` in `evaluate`; the three output settings
    (node data, panel), `cs_local` and grouping in the output building, the
-   record and stats fields, the readout, the debug-view tooltip, the
+   record and stats fields, the readout, the debug-view tooltip, the `top_n`
+   default (D13; tests that relied on the old default pin 10 explicitly), the
    reference-guide section. The engine's search is not touched, so its
    tests (oracle, brute force, golden data) are unaffected; node-level tests
    and snapshots of the `candidates` output under the default settings are
@@ -426,7 +452,10 @@ shows "6 of 20 (14 copies merged)" when `unique` merged anything.
    reference guide.
 4. **Walkthrough** (maintainer, with mechadense's results): `local_hops` 1 vs
    2, tolerance 0.1 / 0.15 / 0.25, `rigid` vs `rigid_mirror`; look at every
-   pair hop 1 merges and hop 2 keeps apart, using `compare_atoms`.
+   pair hop 1 merges and hop 2 keeps apart, using `compare_atoms`. Count the
+   distinct bindings listed at `top_n` 10 and 50 on a realistic proxy: if 50
+   still lists only a handful, D13's default is too low (or D7 needs
+   revisiting).
 
 ---
 
@@ -434,17 +463,28 @@ shows "6 of 20 (14 copies merged)" when `unique` merged anything.
 
 In `atomcad-crystolecule/tests/crystolecule/structure_compare_test.rs`:
 
-- **Invariance.** A random cluster equals itself under a random translation,
+- **Invariance.** B is a random cluster A under a random translation,
   rotation, and (for `rigid_mirror` only) reflection, atoms shuffled, every
-  position jittered by up to `0.9·tolerance`. Each motion kind rejects the
-  motions it does not allow (`translation` a rotated copy, `rigid` the mirror
-  image of a chiral cluster).
+  position jittered by up to `tolerance`. The expected verdict is **computed,
+  not assumed**: the least-squares fit of the known matching, and its max
+  deviation against `tolerance` (D2). A jitter bound alone does not decide
+  it — the fit spreads the jitter, so one atom can end up farther off than
+  its own jitter (translation, three atoms jittered `+0.9t`, `−0.9t`,
+  `−0.9t` along x: the fit shifts by `−0.3t` and leaves the first `1.2t`
+  off). With jitter up to `tolerance`, both verdicts occur. Each motion kind
+  rejects the motions it does not allow (`translation` a rotated copy,
+  `rigid` the mirror image of a chiral cluster).
+- **The verdict is D2.** For every pair any test reports equal, the
+  least-squares fit of the reported matching has every pair within
+  `tolerance`.
 - **The invariant filters are exact.** On small random clusters, no pair the
   distance-list test or the bond-count test rejects is equal by brute force
   over all motions. Without bonds compared, the bond counts reject nothing.
 - **Chirality and asymmetry.** A chiral cluster vs its mirror image: equal
   under `rigid_mirror`, not under `rigid`. An asymmetric molecule with two
-  feet swapped over the same two sites: not equal under any motion.
+  feet swapped over two *inequivalent* sites: not equal under any motion.
+  The same swap over the two atoms of a symmetric dimer (related by the
+  dimer's twofold axis): equal under `rigid` — it is the same binding.
 - **Bonds.** Same positions, one bond order different: equal without bonds,
   not with them — rejected by the bond counts, before any motion is tried.
   Same bond counts, bonds on different atoms: rejected by the final check.
@@ -470,7 +510,9 @@ In `atomcad-crystolecule/tests/crystolecule/structure_compare_test.rs`:
 - **Grouping** is deterministic under varied thread counts; each class keeps
   its first member; `class_of` and `copies` agree.
 - **Timing.** Grouping 200 hexapod-sized clusters at hop 2, `rigid_mirror`:
-  under 0.25 s in release.
+  under 0.25 s in release. One pair driven to the work cap (a highly
+  symmetric cluster against a near miss): under 20 ms in release; the
+  measured per-proposal cost sets `max_candidates` (§3.4).
 
 In the sequential-search tests (`chemisorption_sequential_*`):
 
@@ -496,8 +538,11 @@ ones):
   `local_hops` after a Run does **not** make the stored result stale, and
   the output changes accordingly.
 - **Determinism.** Same output from results searched at 1, 2 and 8 threads.
-- `compare_atoms`' pins and report; text-format round trips of both nodes'
-  new properties; `chemisorb`'s new record and stats fields.
+- `compare_atoms`' pins and report; with only `tag` set to `cs_local`, its
+  `equal` agrees with `unique` on every pair of kept candidates;
+  text-format round trips of both nodes' new properties; `chemisorb`'s new
+  record and stats fields; a new node's `top_n` is 50 and a loaded node's
+  is unchanged.
 
 ---
 
