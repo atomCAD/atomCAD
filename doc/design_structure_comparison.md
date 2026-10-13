@@ -1,7 +1,12 @@
 # Design: equivalent chemisorption results, and the `compare_atoms` node
 
-Status: **proposed, 2026-10-13; first review folded in (D2 refit, D4
-symmetric sites, D5 cap, D13 `top_n`, `compare_atoms` defaults).**
+Status: **reviewed 2026-10-13 (correctness, architecture, tests, clarity);
+ready for implementation.**
+
+Vocabulary used throughout: the search **keeps** up to `top_n` candidates
+(its stored result); `unique` **merges** a kept candidate into an earlier
+equal one; what remains is **listed**. A kept candidate that was merged is a
+**copy**; the one it was merged into is its **representative**.
 
 Two pieces on one shared core:
 
@@ -55,13 +60,13 @@ they show tree rows the search already keeps out of the results.
 A separate node reducing an array of structures was designed first and
 dropped:
 
-- **No typing problem.** A downstream node needs `items` to accept both
+- **It would have a typing problem.** Such a node needs `items` to accept both
   structures and records carrying one, and the type system has no unions;
   each workaround (`filter`-style per-instance element type, record width
   subtyping) has a cost.
 - **One checkbox, not a node and its wiring** — the verbosity of
   `array_at` / `sequence` wiring is what mechadense asked to get away from.
-- **The node knows its own clusters.** It writes the `cs_local` tag it
+- **`chemisorb` knows its own clusters.** It writes the `cs_local` tag it
   compares on (§5.2) and reports `copies` on the candidate record, which keeps
   `rank`, `strain` and `bonds` beside each listed binding.
 
@@ -84,38 +89,71 @@ if someone asks; `compare_atoms` already covers pairwise checks.
 | # | Decision |
 |---|---|
 | D1 | One shared core in `atomcad-crystolecule` (§3) serves `chemisorb`'s `unique` and the `compare_atoms` node, so the two cannot disagree. |
-| D2 | Equal means: **a motion of the allowed kind and a one-to-one matching of atoms, same element, every matched pair within `tolerance` (Å) after the least-squares fit of that matching** (Kabsch; for `translation`, the centroid difference). The max deviation, never the RMS, decides — as in mechanosynth placement. Optionally bonds too (presence and order). |
+| D2 | Equal means: **a motion of the allowed kind and a one-to-one matching of atoms, same element, every matched pair within `tolerance` (Å) after the least-squares fit of that matching** (Kabsch; for `translation`, the centroid difference; for `none`, the identity). The max deviation, never the RMS, decides — as in mechanosynth placement. Optionally bonds too (presence and order). |
 | D3 | The motion is one choice: `none` / `translation` / `rigid` / `rigid_mirror`. Not two checkboxes: rotation without translation has no meaning without a fixed origin. |
 | D4 | The motion is **proposed, then verified**: the centroids and principal axes propose it first, anchor triples whenever those fail (§3.4); a refined fit follows; the final check decides, on the least-squares fit of the matching it found. A proposal can only cause a missed merge, never a wrong one: **"equal" is exact by construction, "not equal" is very likely but not proven** (§3.5). Handedness and foot assignment need no rule of their own: the mirror image of a chiral adsorbate fails under `rigid` (and is merged under `rigid_mirror`, as intended); an asymmetric adsorbate with its feet swapped fails under every motion over two *inequivalent* sites, and is merged when a symmetry of the cluster swaps the two sites — then it is the same binding. |
-| D5 | Each comparison has a **work cap**, sized to the cost budget (§3.7), not to a round number. Exceeding it makes the pair *not equal* and counts it **undecided**, reported. It may leave two copies apart; it never merges two different bindings, never hangs, and bounds the cost of one pair to milliseconds. |
-| D6 | `chemisorb` compares candidates on their **local cluster**: the adsorbate plus `local_hops` bonds into the substrate, H not counting as a hop (§5.2). The cluster is also written as tags (`cs_adsorbate`, `cs_local`), so `compare_atoms` can be pointed at exactly what `unique` compared. |
+| D5 | Each comparison has a **work cap**, sized to the cost budget (§3.7), not to a round number. Exceeding it makes the pair *not equal* and counts it **undecided**, reported. It may leave two copies apart; it never merges two different bindings, never hangs, and bounds the cost of one pair to tens of milliseconds. |
+| D6 | `chemisorb` compares candidates on their **local cluster**: the adsorbate plus `local_hops` bonds into the substrate, with H atoms as terminators — included, never walked through (§5.2). The cluster is also written as tags (`cs_adsorbate`, `cs_local`), so `compare_atoms` can be pointed at exactly what `unique` compared. |
 | D7 | **`top_n` counts candidates before merging.** The search is unchanged: `keep_best` keeps the best `top_n` by (strain, change set), the energy window cuts them, and merging runs on that list. The listed result is therefore at most `top_n` long and often shorter; a user who wants more distinct bindings raises `top_n`. Copies of one binding have nearly the same strain, so they sit next to each other in the ranking and can fill most of a small `top_n` on their own; hence D13. |
 | D8 | `unique`, `unique_tolerance` and `local_hops` are **output settings**: they act on the stored result, never on what the search keeps, so they are not `SequentialSearch` fields, are not fingerprinted, and changing one re-evaluates the node in milliseconds without making a stored result stale. |
-| D9 | **Grouping is greedy in rank order**: each candidate joins the first listed candidate it equals, else it is listed. The kept list does not depend on the order relaxations finished in (D7), so neither does the grouping — tolerance equality is not transitive, and this fixed order is what makes the answer deterministic. |
-| D10 | **`unique` is on by default** (`rigid_mirror`). A ranked list of copies is never what a search is run for. Existing `chemisorb` nodes list fewer candidates after their next Run (stored results are not saved, so nothing on disk goes stale). |
+| D9 | **Grouping is greedy in rank order**: each kept candidate is merged into the first listed candidate it equals, else it is listed. The kept list does not depend on the order relaxations finished in (D7), so neither does the grouping — tolerance equality is not transitive, and this fixed order is what makes the answer deterministic. |
+| D10 | **`unique` is on by default** (`rigid_mirror`). A ranked list of copies is never what a search is run for. A saved node without the new fields loads with the defaults (`#[serde(default)]`), so existing `chemisorb` nodes list fewer candidates after their next Run (stored results are not saved, so nothing on disk goes stale). |
 | D11 | Both run at evaluation time: `compare_atoms` as any node, `unique` when `chemisorb` builds its outputs from the stored result. Eval memoization reruns them only when an input or setting changes. |
-| D12 | `compare_structures` moves out of `mechanosynth/` into `atomic_structure/compare.rs`, beside `matching.rs`; `mechanosynth` re-exports it. Nothing in it is mechanosynth-specific. A companion `compare_structures_matched` also returns the matching it found, which the final check refits on (§3.4). |
-| D13 | **`top_n`'s default rises from 10 to 50** for new `chemisorb` nodes; saved nodes keep their value. `top_n` bounds only what `keep_best` holds — every candidate is relaxed whatever it is — so the cost is memory for 40 more kept candidates, not search time. With 10, the best motif repeated over the proxy's equivalent sites could leave one or two distinct bindings listed, which is the requester's complaint in another form. The walkthrough (§6) checks the number on a realistic proxy. |
+| D12 | **One module, `structure_compare/`, at the crate's top level** (beside `rigid_fit.rs`), holds all of the comparison: `compare_structures` and `Mismatch` move into it from `mechanosynth/compare.rs` (`mechanosynth` re-exports them; nothing in them is mechanosynth-specific), with a companion `compare_structures_matched` that also returns the matching (§3.4). Not `atomic_structure/`: that directory is the container and its primitive queries (`matching.rs` stays there), and a comparison is an algorithm over two structures, like the rigid fit. |
+| D13 | **`top_n`'s default rises from 10 to 50** for new `chemisorb` nodes; saved nodes keep their value. `top_n` bounds only what `keep_best` holds — every candidate is relaxed whatever it is — so the cost is memory for 40 more kept candidates, not search time. With 10, the best motif repeated over the proxy's equivalent sites could leave one or two distinct bindings listed, which is the requester's complaint in another form. The walkthrough (§6, Phase 4) checks the number on a realistic proxy. |
+| D14 | **What is chemisorption-specific lives in `chemisorption/distinct.rs`**, not in the node: the two tags, the hop rule, and "group a `SearchReport`'s candidates". The `chemisorb` node converts its settings, calls one function and builds records from the answer, as it already does for the search. The engine's search (`sequential/`) is not touched. |
 
 ---
 
 ## 3. The core (`atomcad-crystolecule`)
 
-`atomic_structure/compare.rs` (the moved `compare_structures` and `Mismatch`)
-plus `structure_compare.rs` (cluster, invariants, motion search, grouping).
-Pure functions over `AtomicStructure`, no node types.
+Pure functions over `AtomicStructure`, no node types, in one module (D12):
+
+```
+crates/atomcad-crystolecule/src/
+├── structure_compare/
+│   ├── mod.rs        # CompareSettings, Motion, Comparison; compare(); re-exports
+│   ├── exact.rs      # compare_structures / compare_structures_matched, Mismatch (moved)
+│   ├── cluster.rs    # Cluster (§3.2)
+│   ├── invariants.rs # the pre-checks (§3.3)
+│   ├── motion.rs     # proposals, verification (§3.4)
+│   └── group.rs      # group_in_order (§3.6)
+├── rigid_fit.rs      # + symmetric_eigen_3 (below)
+└── chemisorption/
+    └── distinct.rs   # the chemisorb side (§5, D14)
+```
+
+Two things it reuses rather than duplicates:
+
+- **The fit** is `rigid_fit::rigid_fit`, and a found motion is reported as
+  its `Fit` (`r` may be improper under `rigid_mirror`); no new transform type.
+- **The principal axes** need a symmetric 3×3 eigendecomposition, which the
+  crate does not have: `rigid_fit` has a private cyclic-Jacobi solver for the
+  4×4 of Horn's method, and `atomcad-geo-tree`'s 3×3 helper is private and
+  returns the smallest eigenvalue only. Generalize the Jacobi solver in
+  `rigid_fit.rs` to return all eigenpairs (`symmetric_eigen_3`, and the 4×4
+  path on the same code), keeping its fixed sweep order and count — the
+  determinism the grouping (§3.6) relies on comes from there.
+
+`AGENTS.md` for the crate gets the new module in its map, and its "Position
+matching" paragraph the new home of `compare_structures`.
 
 ### 3.1 Settings
 
 ```rust
 pub enum Motion { None, Translation, Rigid, RigidMirror }
 
-pub struct CompareSettings {
-    pub motion: Motion,
-    pub tolerance: f64,       // Å, max per-atom deviation after the fit
-    pub compare_bonds: bool,
-    pub max_candidates: usize // per pair, D5
+pub struct CompareSettings {     // Default:
+    pub motion: Motion,           // RigidMirror
+    pub tolerance: f64,           // 0.15 Å, max per-atom deviation after the fit
+    pub compare_bonds: bool,      // true
+    pub max_proposals: usize,     // 200, per pair (D5, §3.4)
+    pub proposals: Proposals,     // both paths (§3.4)
 }
+
+/// Both on by default and in every caller; turning one off exists for the
+/// tests that check the two paths against each other (Phase 1 tests, §6).
+pub struct Proposals { pub principal_axes: bool, pub anchors: bool }
 ```
 
 `tolerance` must be in `(0, MAX_TOLERANCE]`, `MAX_TOLERANCE = 0.3 Å`, a
@@ -132,7 +170,8 @@ a pairing — a missed merge, never a wrong one (§3.5).
 Default tolerance: **0.15 Å**. Two relaxations that reach the same minimum
 from different start geometries agree only to the minimizer's convergence,
 and at the edge of a local cluster a shifted copy sits in a slightly
-different finite-slab environment. To be confirmed in the walkthrough (§8).
+different finite-slab environment. To be confirmed in the walkthrough (§6,
+Phase 4; open question in §7).
 
 ### 3.2 The cluster
 
@@ -187,15 +226,17 @@ any motion is tried, instead of at the final `compare_structures`.
 Instead of trying positions and orientations blindly, the motion is first
 read off the clusters themselves; the search is the fallback.
 
-- **`none`**: no search. `compare_structures(a, b, tolerance)`.
-- **`translation`**: **one candidate**, `t = c_A − c_B`, the difference of
+- **`none`**: no search. The identity is the one proposal; it goes straight
+  to step 3 of the verification below (no pairing, no refinement, no refit).
+- **`translation`**: **one proposal**, `t = c_A − c_B`, the difference of
   the centroids. It is the least-squares translation of every matching
   (D2), so if any matching is within tolerance under it, this is the motion
-  that shows it. No search and no fallback.
+  that shows it. It goes through the verification below; no other proposal
+  and no fallback.
 - **`rigid` / `rigid_mirror`, the principal-axes path.** The eigenvectors of
   each cluster's second-moment tensor (§3.3) are axes fixed to the cluster.
   Rotating B's axes onto A's (about the centroids) aligns the two, up to the
-  sign of each axis: **4 proper candidates**, plus 4 improper ones with
+  sign of each axis: **4 proper proposals**, plus 4 improper ones with
   `rigid_mirror`. Each goes through the verification below. If one passes,
   the pair is equal.
 - **If none passes, the anchor search always runs.** The axes can be off:
@@ -255,11 +296,11 @@ undetermined and irrelevant; two anchors suffice. A planar cluster needs no
 special case: its mirror image is reachable by a proper motion, which `rigid`
 already finds.
 
-After `max_candidates` (default **200**) proposed motions the pair is
+After `max_proposals` (default **200**) proposed motions the pair is
 **undecided** (D5). The default is sized to time, not to a count that feels
 safe: a proposal that pairs most atoms before failing costs up to 3
 refinement rounds of ~150 nearest-atom queries, ~50–100 µs, so 200 bound a
-pair at ~10–20 ms. The §7 timing test measures the per-proposal cost and
+pair at ~10–20 ms. The Phase 1 timing test (§6) measures the per-proposal cost and
 sets the final number; a typical pair needs the 4–8 principal-axes proposals
 and a few anchor triples, so the cap is reached only by highly symmetric
 clusters.
@@ -268,16 +309,25 @@ clusters.
 pub struct Comparison {
     pub equal: bool,
     pub undecided: bool,
-    pub max_deviation: f64,          // of the best fit found
-    pub rmsd: f64,
-    pub transform: Option<Isometry>, // B onto A; None for `none`
-    pub mismatches: Vec<Mismatch>,   // against the best fit; empty iff equal
+    pub rejected_by: Option<PreCheck>, // a pre-check (§3.3) decided; no motion was tried
+    pub max_deviation: f64,            // of the best fit found; NaN when none was
+    pub rmsd: f64,                     // likewise
+    pub transform: Option<Fit>,        // rigid_fit::Fit, B onto A; None for `none`
+                                       // and when no fit was found
+    pub mismatches: Vec<Mismatch>,     // against the best fit
 }
+
+/// Which pre-check rejected a pair; `Display` gives a one-line reason
+/// ("element counts differ: C 6/5", "bond counts differ: C–Si single 3/2", …).
+pub enum PreCheck { ElementCounts, BondCounts, Labels, Eigenvalues, Distances }
 ```
 
 The "best fit" of an unequal pair is the motion that matched the most atoms,
 ties by smaller max deviation, so a near miss is reported against the
-alignment a user would pick by eye.
+alignment a user would pick by eye. Exactly one of these holds: `equal`
+(mismatches empty); `rejected_by` is set (mismatches empty — the reason is
+the pre-check's); or neither, and `mismatches` is non-empty against the best
+fit (with `undecided` set if the cap was reached).
 
 ### 3.5 What is guaranteed
 
@@ -289,29 +339,31 @@ alignment a user would pick by eye.
   is impossible.
 - **"Not equal" is very likely, not proven.** It means no proposal led the
   refinement to a passing pairing. The pre-checks are exact (§3.3), and
-  `translation` is exact (its one candidate is the least-squares
+  `translation` is exact (its one proposal is the least-squares
   translation). For rigid motions, a missed equal pair would need every
   label-consistent anchor triple, and the principal axes, to start the
   refinement too far off to recover; well-conditioned triangles and the
   refinement make that rare, but nothing here proves it impossible.
   Exceeding the work cap is reported as *undecided* rather than hidden.
-- The guards on the second point are the tests: brute force over all
-  motions on small clusters, and the principal-axes verdict against the
-  anchor search on larger ones (§7). A missed merge costs a duplicate in the
+- The guards on the second point are the tests: a brute-force oracle over
+  every matching on small clusters, and known answers on larger ones
+  (Phase 1 tests, §6). A missed merge costs a duplicate in the
   list, which `compare_atoms` can then explain.
 
 ### 3.6 Grouping
 
-`group_in_order(clusters, settings) -> Grouping { kept, class_of, copies,
+`group_in_order(clusters, settings) -> Grouping { listed, class_of, copies,
 compared, undecided }`: for each cluster in the given order, compare it with
-the kept ones in its element-count bin, in order; the first equal one is its
-class; else it is kept. The comparisons of one cluster against the kept ones
-run in parallel and the **lowest-index** equal one is chosen, so scheduling
-cannot change the answer.
+the clusters listed so far in its element-count bin; the first equal one (by
+index) is its representative; else it is listed itself. `class_of[i]` is the
+index of `i`'s representative (itself if listed), `copies[i]` the number of
+clusters merged into `i`, `compared` / `undecided` the pair counts. The
+comparisons of one cluster against the listed ones run in parallel and the
+**lowest-index** equal one is chosen, so scheduling cannot change the answer.
 
 ### 3.7 Cost
 
-Estimated, not measured (§7 adds the measurement):
+Estimated, not measured (Phase 1 and 2 timing tests, §6, measure them):
 
 | | |
 |---|---|
@@ -327,15 +379,22 @@ Fast enough to rerun on every change of an output setting (D11).
 
 ## 4. The `compare_atoms` node
 
-Category: atomic structure. A pure function of its inputs.
+Category: atomic structure. A pure function of its inputs:
+`atomcad-structure-designer/src/nodes/compare_atoms.rs`, a thin wrapper over
+`structure_compare::compare` — cutting the tagged clusters, calling, and
+turning the `Comparison` into pins. `CompareReport` is a built-in record type
+registered in `node_type_registry.rs`, as the `Chemisorb*` records are.
+`Motion` is node data here and in `chemisorb`, so it derives `serde` in
+`structure_compare` (the precedent is `field::Colormap`); the node adds no
+twin.
 
 | Pin | Type | |
 |---|---|---|
 | in `a` | `HasAtoms` | |
 | in `b` | `HasAtoms` | |
 | out `equal` | `Bool` | |
-| out `aligned` | `Molecule` | all of `b`, moved onto `a` by the best fit: overlay it on `a` to see the comparison |
-| out `report` | record `CompareReport` | `max_deviation`, `rmsd`, `undecided`, `mismatches: Array[String]` (each `Mismatch`'s `Display`) |
+| out `aligned` | `Molecule` | all of `b`, moved onto `a` by the best fit (`b` unmoved when there is none): overlay it on `a` to see the comparison |
+| out `report` | record `CompareReport` | `max_deviation`, `rmsd` (Float, NaN without a fit), `undecided` (Bool), `rejected_by` (String, the pre-check's reason, empty if none), `mismatches: Array[String]` (each `Mismatch`'s `Display`) |
 
 Properties: `tag` (empty = all atoms; the same tag on both sides), `motion`
 (default `rigid_mirror`), `tolerance` (default 0.15 Å), `compare_bonds`
@@ -344,14 +403,20 @@ Properties: `tag` (empty = all atoms; the same tag on both sides), `motion`
 
 To find out why two candidates were or were not merged: switch `unique` off
 on the `chemisorb` node (instant, D8) so every kept candidate is listed, take
-two of them (`array_at` on `candidates`, then their `structure`), and set
-`tag` to `cs_local`, `motion` and `tolerance` as `unique` had them, with
-`compare_bonds` on. `equal` then agrees with `unique`'s verdict, `aligned` shows the fit, and `report`
-names the atoms that broke it. With `motion = none`, `compare_bonds` on and
-an empty tag it is the structural equality the mechanosynth generators verify
-with.
+two of them (`array_at` on `candidates`, then the record's `structure`
+field) into `a` and `b`, set `tag` to `cs_local`, and set `motion` and
+`tolerance` to `unique`'s values (the defaults already match `unique`'s
+defaults); keep `compare_bonds` on. `equal` then agrees with `unique`'s
+verdict, `aligned` shows the fit, and `report` names the pre-check or the
+atoms that broke it. With `motion = none`, `compare_bonds` on and an empty
+tag it is the structural equality the mechanosynth generators verify with.
 
-Errors: tolerance out of range, a tag no atom carries on either side.
+Errors (node errors, not a `false`): `tolerance` outside `(0, 0.3]`; a
+non-empty `tag` that no atom of `a`, or no atom of `b`, carries.
+
+Text format: `compare_atoms { tag: "cs_local", motion: rigid_mirror,
+tolerance: 0.15, compare_bonds: true }`, the `motion` values spelled as in
+D3.
 
 ---
 
@@ -359,9 +424,24 @@ Errors: tolerance out of range, a tag no atom carries on either side.
 
 ### 5.1 Settings
 
-Three new `ChemisorbData` fields and panel controls, **not**
-`SequentialSearch` fields (D8): `input_fingerprint` never sees them, and the
-engine's search knows nothing of them.
+Three new settings and panel controls, **not** `SequentialSearch` fields
+(D8): `input_fingerprint` never sees them, and the engine's search knows
+nothing of them. They are one domain struct, `DistinctSettings` in
+`chemisorption/distinct.rs` (serde, validated there like
+`SequentialSearch::validate`), held by `ChemisorbData` beside its
+`SequentialSearch` — so the node data mirrors the split between what is
+searched and what is listed:
+
+```rust
+pub struct DistinctSettings {
+    pub unique: Option<Motion>, // None = off; Some(Motion::None) is shown as "exact"
+    pub tolerance: f64,         // `unique_tolerance`, validated as in §3.1
+    pub local_hops: usize,
+}
+```
+
+Every field `#[serde(default)]` (D10). The comparison it runs is
+`CompareSettings { motion, tolerance, compare_bonds: true, ..default }`.
 
 | Setting | Default | |
 |---|---|---|
@@ -376,15 +456,29 @@ different bonds are different bindings.
 
 - **`cs_adsorbate`**: every atom that came from the `adsorbate` input. A
   transferred H came from the adsorbate, so it keeps the tag on the
-  substrate. Added in `evaluate`, beside `CHANGED_TAG` (`cs_changed`): it
-  depends on no setting.
-- **`cs_local`**: added when the node builds a candidate's output record
-  (the structure is cloned there already), since it depends on `local_hops`.
-  It is written whether `unique` is on or off, so `compare_atoms` can use it
-  either way. Seeds are the `cs_adsorbate` atoms. Expand `local_hops`
-  times along bonds; an H reached is included but not expanded from (a
-  terminator); seed H atoms *are* expanded from, so a transferred H reaches
-  its acceptor at hop 1. Finally add every H bonded to an included atom.
+  substrate. The atoms are `Setup::adsorbate_atoms` — ids in the plan's
+  combined structure, which are every candidate's ids too.
+- **`cs_local`**: depends on `local_hops`. Seeds are the `cs_adsorbate`
+  atoms. Expand `local_hops` times along bonds; an H reached is included but
+  not expanded from (a terminator); seed H atoms *are* expanded from, so a
+  transferred H reaches its acceptor at hop 1. Finally add every H bonded to
+  an included atom.
+
+Both are written **at output**, by `distinct.rs`, on a clone of each kept
+candidate's structure — the clone `candidate_record` makes today moves into
+`distinct()`, so there is still one clone per candidate — whether `unique`
+is on or off, so `compare_atoms` can use them
+either way. Not in `evaluate` beside `CHANGED_TAG`: that tag is written in two
+places (the geometric phase in `evaluate.rs` and the local phase in
+`local.rs`), a third tag there would change every stored candidate and the
+engine's snapshot tests, and D14 keeps the engine untouched. The plan is
+stored with the result (`StoredSearch::plan`), so the setup is at hand. The
+debug view's rebuilt structures carry neither tag; they show tree rows, not
+listed candidates.
+
+The hop walk is the multi-source BFS `proxy_cut::bond_distances` already does
+with H as riders; generalize it there (a seed may start expanded, for the
+transferred H) rather than writing a second one in `distinct.rs`.
 
 The `cs_local` atoms are the cluster `unique` compares (D6). Hop 1 is the
 adsorbate plus every substrate atom the binding touched. Hop 2 adds each
@@ -402,151 +496,325 @@ existing tag error.
 The search and its stored result are untouched (D7). When the node builds
 its outputs from a stored result:
 
-1. Take the stored candidates — the best `top_n` by (strain, change set),
+1. Take the kept candidates — the best `top_n` by (strain, change set),
    already cut to the energy window, in rank order.
-2. Tag each with `cs_local` (§5.2) and cut its cluster.
-3. With `unique` on, group them in rank order (§3.6; the setting's motion
-   and tolerance, bonds on). Each candidate that equals an earlier one is
-   dropped from `candidates` and counted on it.
+2. Clone each, write both tags (§5.2), and cut its `cs_local` cluster.
+3. With `unique` on, group the clusters in rank order (§3.6, with the
+   comparison of §5.1). A copy is dropped from `candidates` and counted on
+   its representative.
 4. List the rest, keeping their search `rank`, so a gap in the ranks shows
    where copies were merged.
 
-So the window is applied before grouping: a distinct binding outside it is
-gone even if a copy of it would have been inside. `top_n` and the window
-are the search's; `unique` only reduces what they kept. `off` lists exactly
-what is listed today, plus the `cs_local` tag.
+Steps 1–3 are one call in `chemisorption/distinct.rs`:
+
+```rust
+pub fn distinct(setup: &Setup, report: &SearchReport, settings: &DistinctSettings)
+    -> Result<Distinct, ChemisorptionError>; // Err: the tag limit (§5.2)
+
+pub struct Distinct {
+    pub candidates: Vec<DistinctCandidate>, // one per kept candidate, rank order
+    pub merged: usize,
+    pub undecided: usize,                   // pairs that hit the work cap
+}
+pub struct DistinctCandidate {
+    pub structure: AtomicStructure,  // tagged clone
+    pub copy_of: Option<usize>,      // representative's index; None if listed
+    pub copies: usize,               // merged into this one; 0 for a copy
+}
+```
+
+The node calls it with `&stored.plan.setup` and `&stored.report`, and builds
+records, stats and its eval cache from the answer (D14).
+
+`top_n` and the energy window are the search's and are applied before
+grouping; `unique` only reduces what they kept. `off` lists exactly what is
+listed today, plus the two tags.
 
 A merged candidate is still a relaxed candidate in the search tree; with
-`unique` on, the debug view's tooltip on its row says "copy of #rank", so it
-is not mistaken for one that fell outside `top_n`.
+`unique` on, the debug view's tooltip on its row (`Candidate::row`) says
+"copy of #rank" with the representative's rank, so it is not mistaken for
+one that fell outside `top_n`.
+
+What the panel shows follows the same answer, through the existing path:
+`ChemisorbEvalCache.rows` (the panel's candidate list) holds the listed rows
+only, each with its `copies`, and the "copy of" rank rides on
+`ChemisorbDebugRowView`, which `chemisorb_api.rs` already serves the debug
+view. Their API twins in `structure_designer_api_types.rs` grow to match —
+`APIChemisorbRow` (`copies`), `APIChemisorbDebugRow` (copy of),
+`APIChemisorbStats` (`merged`, `unique_undecided`) and `APIChemisorbData`
+(the three settings) — so Phase 2 includes a
+`flutter_rust_bridge_codegen generate`.
 
 ### 5.4 Outputs
 
 - Candidate record: new field `copies: Int` — how many kept candidates this
   one stood for, itself excluded (0 with `unique` off or no copy found).
   Copies the search did not keep are not counted.
-- Stats record: `listed` (candidates after merging), `merged` (candidates
-  merged into an earlier one), `unique_undecided` (pairs that hit the work
-  cap). With `unique` off, `listed` equals the kept count and the other two
-  are 0.
+- Stats record: the existing `listed` now counts candidates *after*
+  merging (today it is the kept count, `rows.len()`); new `merged`
+  (candidates merged into an earlier one) and `unique_undecided` (pairs that
+  hit the work cap). `listed + merged` is the kept count. With `unique` off,
+  `listed` is the kept count, as today, and the other two are 0.
 
-Both are appended fields; no pin changes. The pin readout of `candidates`
+The new fields are appended; no pin changes. The pin readout of `candidates`
 shows "6 of 20 (14 copies merged)" when `unique` merged anything.
 
 ---
 
 ## 6. Phases
 
-1. **Core.** Move `compare_structures` (D12, re-exported from
-   `mechanosynth`); `structure_compare.rs` with the cluster, invariants, the
-   three searches, verification, grouping. Tests (§7). No UI.
-2. **`chemisorb`.** `cs_adsorbate` in `evaluate`; the three output settings
-   (node data, panel), `cs_local` and grouping in the output building, the
-   record and stats fields, the readout, the debug-view tooltip, the `top_n`
-   default (D13; tests that relied on the old default pin 10 explicitly), the
-   reference-guide section. The engine's search is not touched, so its
-   tests (oracle, brute force, golden data) are unaffected; node-level tests
-   and snapshots of the `candidates` output under the default settings are
-   reviewed and accepted.
-3. **`compare_atoms`.** Node, panel, `CompareReport` record, text format,
-   reference guide.
-4. **Walkthrough** (maintainer, with mechadense's results): `local_hops` 1 vs
-   2, tolerance 0.1 / 0.15 / 0.25, `rigid` vs `rigid_mirror`; look at every
-   pair hop 1 merges and hop 2 keeps apart, using `compare_atoms`. Count the
-   distinct bindings listed at `top_n` 10 and 50 on a realistic proxy: if 50
-   still lists only a handful, D13's default is too low (or D7 needs
-   revisiting).
+Rules for every phase:
 
----
+- Run the suite as `cargo test -j 4` from `rust/` (or `-p <crate>` while
+  iterating), then `cargo fmt` (never `--all`) and `cargo clippy`; from
+  Phase 2 on also `flutter analyze` from the repository root.
+- Tests go in the owning crate's `tests/` directory, declared in its
+  `tests/<crate>.rs` beside their siblings. No `#[cfg(test)]` modules.
+- **Randomized tests** use a seeded `SplitMix64` (moved in Phase 1 out of
+  `chemisorption_sequential_support.rs` into a shared `test_rng.rs` of the
+  same test crate) and a fixed case count, and **assert their own
+  coverage**: a property test over random pairs that are almost never equal
+  would pass with every check deleted, so each one asserts that both
+  verdicts (and, for a pre-check, both outcomes) occurred at least a stated
+  number of times.
+- **Timing tests** are `#[ignore = "timing; run in release"]` and print their
+  numbers, as `plan_is_fast_enough_for_every_evaluation` does.
+- The Dart layer gets no automated tests; it gets `flutter analyze` and the
+  manual walkthrough. The Flutter smoke test is the maintainer's to run: an
+  implementing agent lists it as pending and does not run it.
+- After any text-format change, the round-trip corpus test must still show
+  `query → --replace` as a no-op.
 
-## 7. Tests
+### Phase 1 — Core: `structure_compare`
 
-In `atomcad-crystolecule/tests/crystolecule/structure_compare_test.rs`:
+**Files.** `crates/atomcad-crystolecule/src/structure_compare/` (new; `pub
+mod` in `lib.rs`; layout in §3), `mechanosynth/compare.rs` (removed;
+`mechanosynth/mod.rs` re-exports from the new home), `rigid_fit.rs`
+(`symmetric_eigen_3`), `tests/crystolecule/structure_compare_test.rs` and
+`rigid_fit_test.rs` (new), `test_rng.rs` (new, `SplitMix64` moved), the
+crate's `AGENTS.md` (module map; the "Position matching" paragraph names the
+new home of `compare_structures`). No UI.
 
-- **Invariance.** B is a random cluster A under a random translation,
-  rotation, and (for `rigid_mirror` only) reflection, atoms shuffled, every
-  position jittered by up to `tolerance`. The expected verdict is **computed,
-  not assumed**: the least-squares fit of the known matching, and its max
-  deviation against `tolerance` (D2). A jitter bound alone does not decide
-  it — the fit spreads the jitter, so one atom can end up farther off than
-  its own jitter (translation, three atoms jittered `+0.9t`, `−0.9t`,
+**Deliverables.** Everything in §3: `Motion`, `CompareSettings`,
+`Proposals`, `Comparison`, `PreCheck`, `Cluster`, the pre-checks as `pub`
+functions of `invariants.rs`, the proposals and verification,
+`compare_structures_matched` and the same-element flag, `group_in_order`.
+
+**Automated tests — against a brute-force oracle**
+(`structure_compare_test.rs`).
+
+**The oracle is D2, literally.** `brute_force_equal(a, b, settings)`: every
+same-element bijection (with bonds compared, also agreeing on every bond);
+for each, the least-squares fit of the allowed kind — `rigid_fit` proper,
+and improper too under `rigid_mirror`; the centroid difference for
+`translation`; identity for `none` — and its max deviation against
+`tolerance`. Equal iff some bijection passes. Clusters of at most 8 atoms
+(≤ 8! bijections, far fewer per element).
+
+**The pair generator** draws clusters of 2–3 elements, optionally bonded,
+that satisfy §3.1's precondition (every same-element distance above
+`4·tolerance`), and pairs them so that both verdicts are common: B = A under
+a random motion of each kind, shuffled, jittered by up to `1.5·tolerance`;
+A's mirror image; A with one atom moved by about `tolerance`; one bond
+changed; an unrelated cluster with the same element counts.
+
+On every generated pair, for every motion kind:
+
+- **The pipeline agrees with the oracle.** "Equal" with the oracle false
+  would be a wrong merge; "not equal" with the oracle true is a missed merge
+  on a small cluster. Both fail the test.
+- **The verdict is D2.** For every "equal", the least-squares fit of the
+  returned matching has every pair within `tolerance`.
+- **Every pre-check is exact.** Each one (element counts, distance list, bond
+  counts, labels, eigenvalues), called directly: none rejects an
+  oracle-equal pair, and each rejects some pairs (not vacuous).
+- **Principal axes and anchors agree.** `CompareSettings::proposals` runs
+  each path alone: the anchor path alone agrees with the oracle, and the
+  principal-axes path alone never says equal where the oracle does not.
+
+**Outside the precondition** (same-element pairs closer than
+`4·tolerance`), the generator runs again: "equal" still implies the oracle —
+the guarantee that does not depend on it — while missed merges are allowed
+and counted, not failed.
+
+**Automated tests — known answers on larger clusters**
+(`structure_compare_test.rs`). Beyond brute-force size, the expected verdict
+comes from the construction:
+
+- **Invariance.** B is a random 30–150-atom cluster A under a random motion,
+  shuffled, jittered by up to `tolerance`. The expected verdict is
+  **computed, not assumed**: the least-squares fit of the known matching, and
+  its max deviation against `tolerance` (D2). A jitter bound alone does not
+  decide it — the fit spreads the jitter, so one atom can end up farther off
+  than its own jitter (translation, three atoms jittered `+0.9t`, `−0.9t`,
   `−0.9t` along x: the fit shifts by `−0.3t` and leaves the first `1.2t`
-  off). With jitter up to `tolerance`, both verdicts occur. Each motion kind
-  rejects the motions it does not allow (`translation` a rotated copy,
-  `rigid` the mirror image of a chiral cluster).
-- **The verdict is D2.** For every pair any test reports equal, the
-  least-squares fit of the reported matching has every pair within
-  `tolerance`.
-- **The invariant filters are exact.** On small random clusters, no pair the
-  distance-list test or the bond-count test rejects is equal by brute force
-  over all motions. Without bonds compared, the bond counts reject nothing.
+  off). Both verdicts occur. Each motion kind rejects the motions it does not
+  allow (`translation` a rotated copy, `rigid` the mirror image of a chiral
+  cluster).
 - **Chirality and asymmetry.** A chiral cluster vs its mirror image: equal
   under `rigid_mirror`, not under `rigid`. An asymmetric molecule with two
   feet swapped over two *inequivalent* sites: not equal under any motion.
   The same swap over the two atoms of a symmetric dimer (related by the
   dimer's twofold axis): equal under `rigid` — it is the same binding.
 - **Bonds.** Same positions, one bond order different: equal without bonds,
-  not with them — rejected by the bond counts, before any motion is tried.
-  Same bond counts, bonds on different atoms: rejected by the final check.
-- **Collinear and planar clusters** compare correctly.
-- **Principal axes agree with the search.** Over random clusters and pairs
-  (including near-degenerate ones: threefold and ring-like clusters, slightly
-  jittered), the verdict with the principal-axes path enabled equals the
-  verdict of the anchor search alone.
-- **No missed merges on small clusters.** For clusters small enough to
-  enumerate every matching (≤ 8 atoms), "not equal" from the full pipeline
-  agrees with brute force over all matchings and their least-squares fits.
+  not with them — rejected by the bond counts (`rejected_by =
+  BondCounts`), before any motion is tried. Same bond counts, bonds on
+  different atoms: rejected by the final check.
+- **Degenerate shapes.** Collinear and planar clusters; a ring and a
+  threefold cluster, slightly jittered (equal or near-equal eigenvalues):
+  each equal to a moved copy of itself, found by the anchor fallback when
+  the axes fail.
 - **Refinement recovers swaps.** A proposal deliberately rotated by a few
   degrees, so that the first pairing swaps two H atoms, still verifies after
   refinement.
 - **Same-element pairing.** A C–H pair closer than `3·tolerance` after a
   rough proposal is never paired across elements.
-- **The eigenvalue and label pre-checks are exact** (in the same brute-force
-  test as the other pre-checks).
 - **`translation`** finds a shifted, jittered copy with its single
-  candidate, and rejects a rotated one.
-- **Undecided.** With `max_candidates = 1` a symmetric pair comes back
-  undecided, never equal.
-- **Grouping** is deterministic under varied thread counts; each class keeps
-  its first member; `class_of` and `copies` agree.
-- **Timing.** Grouping 200 hexapod-sized clusters at hop 2, `rigid_mirror`:
-  under 0.25 s in release. One pair driven to the work cap (a highly
-  symmetric cluster against a near miss): under 20 ms in release; the
-  measured per-proposal cost sets `max_candidates` (§3.4).
+  proposal, and rejects a rotated one.
+- **Undecided.** An equal pair with degenerate principal axes (the ring
+  above), so the first proposal fails, with `max_proposals = 1`: comes back
+  undecided and not equal. (A generic symmetric pair would not do: its first
+  principal-axes proposal can pass, and the test would see "equal".) Across
+  all tests, `undecided` never comes with `equal`.
+- **The three outcomes** (§3.4): every `Comparison` is exactly one of equal,
+  rejected by a pre-check, or unequal with mismatches. A copy with one atom
+  displaced by `3·tolerance` reports the copy's motion as `transform` and
+  one mismatch naming that atom.
 
-In the sequential-search tests (`chemisorption_sequential_*`):
+**Automated tests — the pieces underneath.**
+
+- **`rigid_fit_test.rs`** (new; the fit has been tested only through its
+  callers): `symmetric_eigen_3` returns orthonormal eigenvectors that
+  reconstruct the matrix, sorted eigenvalues, repeated eigenvalues handled,
+  and bit-identical output on repeated calls. The existing mechanosynth and
+  chemisorption tests stay green on the generalized solver.
+- **`compare_structures`** after the move: the existing mechanosynth tests
+  pass unchanged through the re-export; `compare_structures_matched`
+  returns a matching consistent with its mismatch list; the same-element
+  flag off reproduces today's behaviour.
+- **Grouping** (`group_in_order`): the same answer in rayon pools of 1, 2
+  and 8 threads; each class keeps its first member; a non-transitive chain
+  (A equals B, B equals C, A not C) groups as {A, B}, {C}; `class_of` and
+  `copies` agree; undecided pairs are counted.
+
+**Timing** (`#[ignore]`, release):
+
+- Grouping 200 hexapod-sized clusters at hop 2, `rigid_mirror`: under
+  0.25 s.
+- One pair driven to the work cap (a highly symmetric cluster against a near
+  miss): under 20 ms; the measured per-proposal cost sets `max_proposals`
+  (§3.4).
+
+### Phase 2 — `chemisorb` lists distinct bindings
+
+**Files.** `crates/atomcad-crystolecule/src/chemisorption/distinct.rs`
+(new; `pub mod` and re-exports in `chemisorption/mod.rs`), `proxy_cut.rs`
+(`bond_distances` generalized, §5.2), `chemisorption/sequential/config.rs`
+(the `top_n` default, D13), `tests/crystolecule/chemisorption_distinct_test.rs`
+(new); `crates/atomcad-structure-designer/src/nodes/chemisorb.rs` (settings
+in `ChemisorbData`, output building from `Distinct`, record and stats
+fields, eval cache, readout), `chemisorb_node_test.rs`;
+`rust/src/api/structure_designer/structure_designer_api_types.rs` and
+`chemisorb_api.rs` (the twins of §5.3), FRB regeneration; the Flutter
+`chemisorb` panel (three controls, the `copies` column, the debug-view
+tooltip). Docs: the `chemisorb` entry in
+`doc/reference_guide/nodes/atomic.md`, and the crate `AGENTS.md`'s
+chemisorption section (output settings are not search settings; tags are
+written at output).
+
+**Deliverables.** §5 in full. The engine's search (`sequential/`) is not
+touched apart from the `top_n` constant, so its tests (oracle, brute force,
+golden data) are unaffected; tests that relied on the old default pin 10
+explicitly.
+
+**Fixtures.** A real search: a one-foot adsorbate (silyl, from the support
+file) on `si100_slab`, so every interior dimer atom is a site and
+translational and mirror copies are among the kept candidates (`top_n`
+large enough to keep them all). The transferred-H cases use a second search
+with an H transfer rule (`transfers: [H → substrate]`), as the existing
+transfer tests set one up.
+
+**Automated tests — the crate side** (`chemisorption_distinct_test.rs`; D14
+makes this testable without a node):
 
 - **`cs_adsorbate`** is on exactly the adsorbate's atoms, including a
   transferred H on the substrate.
-- **The local cluster** (the hop rule, exposed by the core or the engine for
-  the node to call): seeds, the H rule, a transferred H reaching its acceptor
-  at hop 1, `local_hops = 0` equal to the adsorbate.
+- **The local cluster:** seeds, the H rule, a transferred H reaching its
+  acceptor at hop 1, `local_hops = 0` equal to the adsorbate. The existing
+  `proxy_cut_test.rs` stays green on the generalized `bond_distances`.
+- **Merges are sound.** Every merged pair's sites are related by a surface
+  lattice translation or (under `rigid_mirror`) a mirror of the slab —
+  checked independently, from the site coordinates and the slab's cell.
+- **Merges happen.** Two interior sites related by a lattice translation,
+  both with their hop-2 clusters clear of the slab edge, are one listed
+  candidate; under `rigid_mirror` also a mirror pair.
+- **Listed candidates are distinct.** No two listed candidates are equal by
+  the core at the same settings, and `listed + merged` equals the kept count.
+- **`off` is today.** With `unique: off` every kept candidate is listed, in
+  order, with the two tags added and `copies` 0.
+- **Determinism.** The same answer from results searched at 1, 2 and 8
+  threads.
+- **Tag limit.** A substrate already carrying 31 tags gives the tag error,
+  not a panic.
+- **Settings validation:** `unique_tolerance` outside `(0, 0.3]` is a
+  config error.
 
-In `atomcad-structure-designer` tests (`chemisorb_node_test.rs` and new
-ones):
+**Automated tests — the node** (`chemisorb_node_test.rs`, only what the node
+adds):
 
-- **Shifted copies merge.** On a slab fixture, a binding and its copy under
-  a lattice translation of the slab that keeps both clusters inside it are
-  one listed candidate with `copies ≥ 1`; under `rigid_mirror`, also its
-  mirror copy across a mirror plane of the surface.
-- **Listed candidates are distinct.** With `unique` on, no two listed
-  candidates are equal by the core at the node's settings, and `listed +
-  merged` equals the kept count.
-- **`off` is today.** With `unique: off` the listed candidates are the
-  stored ones, in order, with the `cs_local` tag added and `copies` 0.
 - **Not fingerprinted.** Changing `unique`, `unique_tolerance` or
   `local_hops` after a Run does **not** make the stored result stale, and
   the output changes accordingly.
-- **Determinism.** Same output from results searched at 1, 2 and 8 threads.
-- `compare_atoms`' pins and report; with only `tag` set to `cs_local`, its
-  `equal` agrees with `unique` on every pair of kept candidates;
-  text-format round trips of both nodes' new properties; `chemisorb`'s new
-  record and stats fields; a new node's `top_n` is 50 and a loaded node's
-  is unchanged.
+- **The node reflects `Distinct`:** the `candidates` pin, `stats` (`listed +
+  merged` is the kept count) and the eval cache's rows agree with it.
+- **Defaults and persistence:** a new node's `top_n` is 50 and a loaded
+  node's is unchanged; a node saved before this change loads with the
+  `DistinctSettings` defaults; text-format round trip of the three new
+  properties.
+- **Snapshots:** the node-type snapshots (`node_snapshots`, the new record
+  fields) and the `candidates` snapshots under the default settings change;
+  review them with `cargo insta review`.
+
+**Timing** (`#[ignore]`, release): `distinct()` on the hexapod fixture's
+stored result, printed beside the plan's time, so an output rebuild can be
+compared with an evaluation.
+
+### Phase 3 — The `compare_atoms` node
+
+**Files.** `crates/atomcad-structure-designer/src/nodes/compare_atoms.rs`
+(new; registered in `nodes/mod.rs` and `node_type_registry.rs`, with the
+`CompareReport` record type), `tests/structure_designer/compare_atoms_test.rs`
+(new); its property panel; a new entry in
+`doc/reference_guide/nodes/atomic.md`.
+
+**Deliverables.** §4 in full, including the text format.
+
+**Automated tests** (`compare_atoms_test.rs`):
+
+- Pins and report on a known equal pair, a known unequal pair (one
+  mismatch, `aligned` moved by the best fit) and a pre-check rejection
+  (`rejected_by` set, `aligned` = `b` unmoved).
+- **Agrees with `unique`:** on Phase 2's fixture with `unique` off, with only
+  `tag` set to `cs_local`, `equal` agrees with `unique`'s verdict on every
+  pair of kept candidates.
+- Errors: a tolerance out of range; a non-empty tag missing from `a`, and
+  from `b`.
+- Text-format round trip of the four properties; the node-type snapshot of
+  the new node, reviewed with `cargo insta review`.
+
+### Phase 4 — Walkthrough (maintainer, by hand)
+
+An implementing agent lists this as pending, together with the Flutter smoke
+test, and runs neither. With mechadense's results: `local_hops` 1 vs 2,
+tolerance 0.1 / 0.15 / 0.25, `rigid` vs `rigid_mirror`; look at every pair
+hop 1 merges and hop 2 keeps apart, using `compare_atoms`. Count the
+distinct bindings listed at `top_n` 10 and 50 on a realistic proxy: if 50
+still lists only a handful, D13's default is too low (or D7 needs
+revisiting).
 
 ---
 
-## 8. Open questions
+## 7. Open questions
 
 - **Default tolerance** (0.15 Å) — to be set from the walkthrough.
 - **Show the merged copies?** A user may want to see where the copies sat
