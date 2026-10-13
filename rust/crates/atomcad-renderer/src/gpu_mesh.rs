@@ -79,6 +79,10 @@ pub struct GPUMesh {
     pub mesh_type: MeshType,
     pub model_buffer: wgpu::Buffer,
     pub model_bind_group: wgpu::BindGroup,
+    /// A line mesh's grid level-of-detail uniforms (D9 of
+    /// `doc/design_screen_space_lines.md`); `None` for a mesh without LOD
+    /// slots, which binds the renderer's shared "visible, no fade" uniform.
+    pub(crate) line_lod: Option<crate::renderer::LineLodBinding>,
 }
 
 impl GPUMesh {
@@ -178,6 +182,7 @@ impl GPUMesh {
             mesh_type,
             model_buffer,
             model_bind_group,
+            line_lod: None,
         }
     }
 

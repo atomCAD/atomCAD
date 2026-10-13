@@ -1,7 +1,7 @@
 // The Rust twins of `line_mesh.wgsl`'s arithmetic
 // (doc/design_screen_space_lines.md D4, D5; Phases 2 and 3): the near-plane
-// clip, the zero-length fallback, the corner expansion, the edge coverage and
-// the dash pattern.
+// clip, the zero-length fallback, the corner expansion, the edge coverage,
+// the dash pattern and (Phase 4) the grid distance fade.
 //
 // The clip tests build their matrices with the real `Camera` in both
 // projections: perspective is `perspective_rh_gl`, whose `z = 0` lies at about
@@ -11,8 +11,8 @@
 use atomcad_renderer::camera::Camera;
 use atomcad_renderer::line_geometry::{
     CORNERS, MIN_DASH_ORIGIN_W, MIN_SCREEN_LENGTH_PX, clip_to_near_plane, dash_coverage,
-    dash_offset_px, edge_coverage, expand_corner, half_width_px, pixels_per_world_unit,
-    screen_direction, segment_distance, to_screen_px,
+    dash_offset_px, distance_fade, edge_coverage, expand_corner, half_width_px,
+    pixels_per_world_unit, screen_direction, segment_distance, to_screen_px,
 };
 use glam::{Mat4, Vec2, Vec3, Vec4, Vec4Swizzles};
 
@@ -441,5 +441,33 @@ fn the_dash_offset_is_reduced_into_one_period() {
     for phase in [0.0, 0.01, 3.3, 1234.5] {
         let offset = dash_offset_px((c0, c1), c0, 1.0, phase, 7.0, VIEWPORT);
         assert!((0.0..7.0).contains(&offset), "phase {phase}: {offset}");
+    }
+}
+
+// ---- Distance fade (D9, Phase 4) -------------------------------------------
+
+#[test]
+fn the_distance_fade_is_one_before_its_start_and_zero_after_its_end() {
+    assert_eq!(distance_fade(0.0, 10.0, 20.0), 1.0);
+    assert_eq!(distance_fade(10.0, 10.0, 20.0), 1.0);
+    assert_eq!(distance_fade(20.0, 10.0, 20.0), 0.0);
+    assert_eq!(distance_fade(1000.0, 10.0, 20.0), 0.0);
+    assert!((distance_fade(15.0, 10.0, 20.0) - 0.5).abs() < 1e-6);
+}
+
+#[test]
+fn the_distance_fade_falls_monotonically_between_its_distances() {
+    let samples: Vec<f32> = (0..=100)
+        .map(|i| distance_fade(10.0 + i as f32 * 0.1, 10.0, 20.0))
+        .collect();
+    assert!(samples.windows(2).all(|w| w[1] <= w[0]));
+    assert!(samples[1] < 1.0 && samples[99] > 0.0);
+}
+
+#[test]
+fn equal_or_reversed_fade_distances_mean_no_fade() {
+    for distance in [0.0, 5.0, 50.0, 1e6] {
+        assert_eq!(distance_fade(distance, 0.0, 0.0), 1.0);
+        assert_eq!(distance_fade(distance, 20.0, 10.0), 1.0);
     }
 }

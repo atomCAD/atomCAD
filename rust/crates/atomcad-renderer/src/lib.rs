@@ -10,6 +10,7 @@ pub mod image_export;
 pub mod label_atlas;
 pub mod label_mesh;
 pub mod line_geometry;
+pub mod line_lod;
 pub mod line_mesh;
 pub mod mesh;
 pub mod renderer;

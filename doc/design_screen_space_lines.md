@@ -819,6 +819,31 @@ gadget that adds lines should give them 2 px.
 - Check by CLI screenshot: perspective at high, middle and grazing
   elevation, zoomed in and out; orthographic top and tilted.
 
+*As implemented:* **every `LineLodUniform` exists twice, once per view.**
+The thumbnail and the export borrow one camera buffer of their own, and the
+live camera uniform is rewritten only when the camera moves; a single LOD
+uniform per mesh, rewritten for an export, would have left the export's
+choices in place for every live frame until the next camera move. So a mesh
+with slots holds a live and an offscreen uniform (`LineLodBinding` in
+`renderer.rs`), `write_view_uniforms` takes a `View` (`Live` / `Offscreen`)
+that selects the camera buffer and the LOD uniforms together instead of a
+buffer and a `live` flag, and `draw_to_target` takes the same `View` instead
+of a camera bind group. The hysteresis state sits in a `Mutex` on the binding,
+because uniforms are written under `&self` while the render lock is held; it
+survives a re-upload of identical slots (the grids are re-tessellated on every
+refresh) and is reset when they change. The live LOD is also written right
+after a line mesh is uploaded, not only on camera moves, so new slots never
+draw with stale entries. Further details: a full slot table reports through
+`eprintln!` rather than `log::warn!` (the workspace has no `log` crate); the
+shader treats a slot id past the table as slot 0; the world position is
+clipped with the same parameter as the clip-space end; a degenerate grid
+(`u ∥ v`) registers no slots; the major-line period is
+`GRID_MAJOR_EVERY` in `coordinate_system_tessellator.rs`. The GPU tests were
+confirmed to fail with the slot test and the fade removed from the shader.
+The CLI-screenshot check was replaced by looking at the GPU harness's dumped
+renders (`ATOMCAD_GPU_DUMP_DIR`); the screenshots of the real app are left to
+the Phase 5 walkthrough.
+
 ### Phase 5 — Walkthrough and documentation
 
 - Manual GUI walkthrough (maintainer): grid near and far, orthographic and

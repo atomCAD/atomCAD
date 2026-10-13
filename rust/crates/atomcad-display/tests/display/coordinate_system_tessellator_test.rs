@@ -1,6 +1,8 @@
 // Line styles of the ground grid, the axes and the drawing-plane grid
-// (doc/design_screen_space_lines.md D8, Phase 3).
+// (doc/design_screen_space_lines.md D8, Phase 3), and the grids'
+// level-of-detail slots (D9, Phase 4).
 
+use atomcad_crystolecule::crystolecule_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
 use atomcad_crystolecule::drawing_plane::DrawingPlane;
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
 use atomcad_display::coordinate_system_tessellator::{
@@ -10,8 +12,10 @@ use atomcad_display::coordinate_system_tessellator::{
     tessellate_drawing_plane_grid_and_axes,
 };
 use atomcad_display::preferences::BackgroundPreferences;
+use atomcad_renderer::line_lod::LodSlot;
 use atomcad_renderer::line_mesh::{LineMesh, LineSegmentInstance};
-use glam::f64::DVec3;
+use glam::f32::Vec3;
+use glam::f64::{DVec2, DVec3};
 
 const GRID_SIZE: i32 = 12;
 const GRID: [u8; 3] = [10, 20, 30];
@@ -177,9 +181,126 @@ fn drawing_plane_grid_and_axes_match_the_ground_grid() {
     }
 }
 
+// ---- Level-of-detail slots (D9, Phase 4) -------------------------------------
+
+/// The slot ids of the segments of `color`, deduplicated.
+fn slot_ids(mesh: &LineMesh, color: [f32; 4]) -> Vec<u32> {
+    let mut ids: Vec<u32> = with_color(mesh, color).iter().map(|s| s.lod_slot).collect();
+    ids.sort();
+    ids.dedup();
+    ids
+}
+
+fn assert_slot(slot: &LodSlot, normal: DVec3, spacing: f64) {
+    assert_eq!(slot.plane_point, Vec3::ZERO);
+    let n = slot.plane_normal.as_dvec3();
+    assert!((n.length() - 1.0).abs() < 1e-6);
+    assert!(
+        n.cross(normal.normalize()).length() < 1e-6,
+        "normal {n:?}, expected ±{normal:?}"
+    );
+    assert!(
+        (slot.spacing as f64 - spacing).abs() < 1e-5 * spacing,
+        "spacing {}, expected {spacing}",
+        slot.spacing
+    );
+}
+
 #[test]
-fn no_line_is_tagged_with_a_lod_slot_yet() {
+fn the_ground_grid_registers_a_minor_and_a_major_slot() {
+    let mesh = tessellate_background_coordinate_system(None, &preferences(true, true));
+    let cell = UnitCellStruct::cubic_diamond();
+    assert_eq!(mesh.lod_slots.len(), 2);
+    assert_slot(&mesh.lod_slots[0], DVec3::Z, cell.a.length());
+    assert_slot(&mesh.lod_slots[1], DVec3::Z, 10.0 * cell.a.length());
+
+    assert_eq!(slot_ids(&mesh, rgba(GRID)), vec![1]);
+    assert_eq!(slot_ids(&mesh, rgba(GRID_STRONG)), vec![2]);
+    for color in [X_AXIS_COLOR, Y_AXIS_COLOR, Z_AXIS_COLOR] {
+        assert_eq!(slot_ids(&mesh, opaque(color)), vec![0]);
+    }
+}
+
+#[test]
+fn dual_grid_mode_registers_slots_for_both_grids() {
+    let cell = skewed_cell();
+    let mesh = tessellate_background_coordinate_system(Some(&cell), &preferences(true, true));
+    assert_eq!(mesh.lod_slots.len(), 4);
+    // The Cartesian grid at the diamond spacing…
+    assert_slot(
+        &mesh.lod_slots[0],
+        DVec3::Z,
+        DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
+    );
+    assert_slot(
+        &mesh.lod_slots[1],
+        DVec3::Z,
+        10.0 * DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
+    );
+    // …and the lattice grid in the a-b plane, at the smaller line distance
+    // of its parallelogram.
+    let normal = cell.a.cross(cell.b);
+    let spacing = normal.length() / cell.a.length().max(cell.b.length());
+    assert_slot(&mesh.lod_slots[2], normal, spacing);
+    assert_slot(&mesh.lod_slots[3], normal, 10.0 * spacing);
+
+    assert_eq!(slot_ids(&mesh, rgba(GRID)), vec![1]);
+    assert_eq!(slot_ids(&mesh, rgba(GRID_STRONG)), vec![2]);
+    assert_eq!(slot_ids(&mesh, rgba(LATTICE_GRID)), vec![3]);
+    assert_eq!(slot_ids(&mesh, rgba(LATTICE_GRID_STRONG)), vec![4]);
+    for color in [
+        X_AXIS_COLOR,
+        Y_AXIS_COLOR,
+        Z_AXIS_COLOR,
+        LATTICE_A_COLOR,
+        LATTICE_B_COLOR,
+        LATTICE_C_COLOR,
+    ] {
+        assert_eq!(slot_ids(&mesh, opaque(color)), vec![0]);
+    }
+}
+
+#[test]
+fn axes_alone_register_no_slot() {
     let mesh =
-        tessellate_background_coordinate_system(Some(&skewed_cell()), &preferences(true, true));
+        tessellate_background_coordinate_system(Some(&skewed_cell()), &preferences(true, false));
+    assert!(mesh.lod_slots.is_empty());
     assert!(mesh.instances.iter().all(|s| s.lod_slot == 0));
+}
+
+#[test]
+fn each_drawing_plane_registers_its_own_slots() {
+    let plane = DrawingPlane::default();
+    let mut mesh = LineMesh::new();
+    tessellate_drawing_plane_grid_and_axes(&mut mesh, &plane, &preferences(true, true));
+    assert_eq!(mesh.lod_slots.len(), 2);
+    let u = plane.real_2d_to_world_3d(&DVec2::new(
+        plane.effective_unit_cell.a.x,
+        plane.effective_unit_cell.a.y,
+    )) - plane.real_2d_to_world_3d(&DVec2::ZERO);
+    let v = plane.real_2d_to_world_3d(&DVec2::new(
+        plane.effective_unit_cell.b.x,
+        plane.effective_unit_cell.b.y,
+    )) - plane.real_2d_to_world_3d(&DVec2::ZERO);
+    let normal = u.cross(v);
+    let spacing = normal.length() / u.length().max(v.length());
+    assert_slot(&mesh.lod_slots[0], normal, spacing);
+    assert_slot(&mesh.lod_slots[1], normal, 10.0 * spacing);
+    assert_eq!(slot_ids(&mesh, rgba(PLANE_GRID)), vec![1]);
+    assert_eq!(slot_ids(&mesh, rgba(PLANE_GRID_STRONG)), vec![2]);
+    for color in [DRAWING_PLANE_X_AXIS_COLOR, DRAWING_PLANE_Y_AXIS_COLOR] {
+        assert_eq!(slot_ids(&mesh, opaque(color)), vec![0]);
+    }
+
+    // A second plane in the same mesh gets slots of its own.
+    let first_len = mesh.len();
+    tessellate_drawing_plane_grid_and_axes(&mut mesh, &plane, &preferences(true, true));
+    assert_eq!(mesh.lod_slots.len(), 4);
+    let mut second: Vec<u32> = mesh.instances[first_len..]
+        .iter()
+        .map(|s| s.lod_slot)
+        .collect();
+    second.sort();
+    second.dedup();
+    assert_eq!(second, vec![0, 3, 4]);
 }

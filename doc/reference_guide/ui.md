@@ -1040,6 +1040,8 @@ Two toggles for the scene's background furniture, mirroring the checkboxes in **
 - **Show axes** (axis icon): shows or hides the Cartesian axes. Same setting as *Show Axes* in the preferences dialog; the subordinate *Show Lattice Axes* option remains there.
 - **Show grid** (grid icon): shows or hides the Cartesian grid. Note this is a *different* control from the **Wireframe** geometry rendering mode, whose icon is also a grid — wireframe changes how your geometry is drawn, this one only affects the background.
 
+The grid thins itself out so it never turns into a grey smear. When its lines would be drawn closer together than a few pixels, the minor lines disappear and only every tenth (major) line stays; zoom out further and the major lines go too. Seen from a low angle in perspective, the grid also fades out with distance, so it ends softly before the horizon instead of in a band of crawling lines. The drawing-plane grid behaves the same way. In orthographic projection there is no distance fade, and a grid seen exactly edge-on is hidden.
+
 ### Editing mode
 
 The last group switches between [Direct Editing Mode](./direct_editing.md) (pencil icon) and Node Network Mode (tree icon), the same as *View → Switch to …*. The pencil is greyed out when there is no displayed `atom_edit` node selected to edit; its tooltip says so.
@@ -1078,7 +1080,7 @@ Used for loading and saving a design, exporting a design to .xyz or .mol, undo/r
 - *File > Export viewport image...*: Saves the 3D viewport as a `.png`, from the current camera. Available in both modes.
   - **Size**: *Viewport size* (the default, shown with its pixel size) or *Custom*, with width and height fields. A custom size with a different aspect ratio keeps the vertical field of view, so a wider image shows more at the sides rather than cropping. The largest image is 2048 px on each side; a larger size, including a viewport bigger than that on a large monitor, is scaled down with its aspect ratio kept, and the dialog says so before you export.
   - **Background**: *As on screen* (the background colour from *Edit → Preferences*) or *White*.
-  - The image is always anti-aliased: it is rendered at twice the size and scaled down, so atom outlines and mesh edges come out smooth. One side effect: grid lines and wireframe edges come out thinner and lighter than on screen.
+  - The image is always anti-aliased: it is rendered at twice the size and scaled down, so atom outlines and mesh edges come out smooth. Lines (grid, axes, wireframe edges) keep the same width in pixels as on screen.
   - What the viewport shows is what lands in the image — the grid and axes as you have them set, labels, and selection highlights — **except the translate/rotate gizmo** (and the guide dots of guided atom placement), which are left out. Your camera is left exactly as it was.
 - *File > Export node network image...*: Saves the **whole** active node network as a `.png` — including the parts that do not fit on screen, which is what makes it usable for sharing a large network in a discussion or an issue. Available in Node Network Mode only.
   - The dialog offers a **zoom level** (the same three levels the canvas itself uses — *Normal*, *Zoomed out*, *Zoomed out far*), a **resolution** multiplier (1×, 2×, 3×) and a **margin**, the blank space around the content in pixels of the image at 1×. It shows the resulting pixel size as you change any of them, so you can see what you are about to get.

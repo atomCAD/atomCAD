@@ -196,3 +196,14 @@ pub fn edge_coverage(distance: f32, width_px: f32, pixel_scale: f32) -> f32 {
     let coverage = (half_width_px(width_px, pixel_scale) + 0.5 - distance).clamp(0.0, 1.0);
     coverage * width.min(1.0)
 }
+
+/// The grid distance fade (D9): 1 up to `fade_start` eye distance, 0 from
+/// `fade_end` on, a smoothstep between. `fade_end <= fade_start` means no
+/// fade (WGSL's `smoothstep` is undefined for equal or reversed edges).
+pub fn distance_fade(eye_distance: f32, fade_start: f32, fade_end: f32) -> f32 {
+    if fade_end <= fade_start {
+        return 1.0;
+    }
+    let t = ((eye_distance - fade_start) / (fade_end - fade_start)).clamp(0.0, 1.0);
+    1.0 - t * t * (3.0 - 2.0 * t)
+}

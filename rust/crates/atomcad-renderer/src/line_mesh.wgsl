@@ -1,10 +1,11 @@
-// Screen-space lines (doc/design_screen_space_lines.md D1, D4, D5).
+// Screen-space lines (doc/design_screen_space_lines.md D1, D4, D5, D9).
 //
 // One instance per segment, six vertices per instance: the vertex shader
 // places each corner of a quad around the segment's screen projection, at a
 // width in pixels, and the fragment shader computes an anti-aliased coverage
 // from the distance to the segment, times a dash term measured in pixels. No
-// index buffer.
+// index buffer. A grid line's level-of-detail slot can hide it or fade it out
+// with eye distance (D9).
 //
 // Every function's arithmetic has a Rust twin in `line_geometry.rs`, named in
 // its comment, which the CPU tests exercise. Change both together.
@@ -32,8 +33,9 @@ struct ModelUniform {
 var<uniform> model: ModelUniform;
 
 // Grid level of detail (D9): one `vec4(visible, fade_start, fade_end, 0)` per
-// slot id. Until Phase 4 every mesh binds a uniform holding "visible, no
-// fade" in every entry.
+// slot id, written per draw by the renderer (`line_lod.rs`). Entry 0 is
+// always "visible, no fade", and a mesh without slots binds a uniform holding
+// that in every entry. "No fade" is `fade_end <= fade_start`.
 struct LineLodUniform {
   slots: array<vec4<f32>, 32>,
 };
@@ -75,6 +77,12 @@ struct VertexOutput {
     // The dash pattern × pixel scale; a period of 0 means solid.
     @location(7) @interpolate(flat) dash_on: f32,
     @location(8) @interpolate(flat) dash_period: f32,
+    // The world position of the line's centre (D9): emitted at each end's
+    // clipped point, not the expanded corner, and interpolated
+    // perspective-correctly, unlike the screen-space values above.
+    @location(9) @interpolate(perspective) world_pos: vec3<f32>,
+    // The slot's (fade_start, fade_end) eye distances.
+    @location(10) @interpolate(flat) fade: vec2<f32>,
 };
 
 // Below this screen length a segment has no direction.
@@ -98,6 +106,8 @@ fn degenerate() -> VertexOutput {
     output.dash_offset = 0.0;
     output.dash_on = 0.0;
     output.dash_period = 0.0;
+    output.world_pos = vec3<f32>(0.0);
+    output.fade = vec2<f32>(0.0);
     return output;
 }
 
@@ -136,12 +146,20 @@ fn dash_offset_px(u0: vec4<f32>, u1: vec4<f32>, c0: vec4<f32>, world_length: f32
 // `screen_direction` and `half_width_px`) and `dash_offset_px`.
 @vertex
 fn vs_main(@builtin(vertex_index) vertex_index: u32, segment: SegmentInput) -> VertexOutput {
-    if (lod.slots[segment.lod_slot].x < 0.5) {
+    // A slot the renderer hid this draw (D9). An id past the table is
+    // treated as "no slot".
+    var slot = lod.slots[0];
+    if (segment.lod_slot < 32u) {
+        slot = lod.slots[segment.lod_slot];
+    }
+    if (slot.x < 0.5) {
         return degenerate();
     }
 
-    var c0 = camera.view_proj * model.model_matrix * vec4<f32>(segment.p0, 1.0);
-    var c1 = camera.view_proj * model.model_matrix * vec4<f32>(segment.p1, 1.0);
+    var w0 = model.model_matrix * vec4<f32>(segment.p0, 1.0);
+    var w1 = model.model_matrix * vec4<f32>(segment.p1, 1.0);
+    var c0 = camera.view_proj * w0;
+    var c1 = camera.view_proj * w1;
     let u0 = c0;
     let u1 = c1;
 
@@ -150,10 +168,16 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32, segment: SegmentInput) -> V
     if (c0.z < 0.0 && c1.z < 0.0) {
         return degenerate();
     }
+    // The world ends move with the clip-space ones: the projection is linear
+    // in homogeneous coordinates, so one parameter serves both.
     if (c0.z < 0.0) {
-        c0 = mix(c0, c1, c0.z / (c0.z - c1.z));
+        let t = c0.z / (c0.z - c1.z);
+        c0 = mix(c0, c1, t);
+        w0 = mix(w0, w1, t);
     } else if (c1.z < 0.0) {
-        c1 = mix(c1, c0, c1.z / (c1.z - c0.z));
+        let t = c1.z / (c1.z - c0.z);
+        c1 = mix(c1, c0, t);
+        w1 = mix(w1, w0, t);
     }
 
     let s0 = to_screen_px(c0);
@@ -176,11 +200,13 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32, segment: SegmentInput) -> V
     let side = select(-1.0, 1.0, vertex_index == 2u || vertex_index == 4u || vertex_index == 5u);
     var base = s0;
     var clip = c0;
+    var world = w0;
     var along = -pad;
     var along_offset = -pad;
     if (end == 1u) {
         base = s1;
         clip = c1;
+        world = w1;
         along = length_px + pad;
         along_offset = pad;
     }
@@ -205,6 +231,8 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32, segment: SegmentInput) -> V
     output.dash_period = dash_period;
     output.dash_offset = dash_offset_px(u0, u1, c0, distance(segment.p0, segment.p1),
                                         segment.dash_phase, dash_period);
+    output.world_pos = world.xyz / world.w;
+    output.fade = slot.yz;
     return output;
 }
 
@@ -219,7 +247,17 @@ fn dash_coverage(t: f32, on_px: f32, period_px: f32) -> f32 {
     return clamp(0.5 * on_px + 0.5 - abs(u), 0.0, 1.0);
 }
 
-// Twin: `segment_distance`, `edge_coverage` and `dash_coverage`.
+// Twin: `distance_fade`.
+fn distance_fade(eye_distance: f32, fade_start: f32, fade_end: f32) -> f32 {
+    // `smoothstep` is undefined for equal or reversed edges: that is "no fade".
+    if (fade_end <= fade_start) {
+        return 1.0;
+    }
+    return 1.0 - smoothstep(fade_start, fade_end, eye_distance);
+}
+
+// Twin: `segment_distance`, `edge_coverage`, `dash_coverage` and
+// `distance_fade`.
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     var distance = abs(input.across);
@@ -231,7 +269,10 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
 
     let coverage = clamp(input.half_width + 0.5 - distance, 0.0, 1.0)
         * min(input.scaled_width, 1.0)
-        * dash_coverage(input.along + input.dash_offset, input.dash_on, input.dash_period);
+        * dash_coverage(input.along + input.dash_offset, input.dash_on, input.dash_period)
+        // `length`, not `distance`: the local `distance` above shadows it.
+        * distance_fade(length(input.world_pos - camera.camera_position),
+                        input.fade.x, input.fade.y);
     let alpha = input.color.a * coverage;
     if (alpha < 1.0 / 255.0) {
         discard;

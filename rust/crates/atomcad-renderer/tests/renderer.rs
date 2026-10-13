@@ -48,3 +48,8 @@ mod line_mesh_test;
 
 #[path = "renderer/line_geometry_test.rs"]
 mod line_geometry_test;
+
+// Screen-space lines, Phase 4: grid level of detail and the distance fade
+// (doc/design_screen_space_lines.md D9).
+#[path = "renderer/line_lod_test.rs"]
+mod line_lod_test;

@@ -1,6 +1,7 @@
 // The instanced `LineMesh` and the blend state of the line pipeline
 // (doc/design_screen_space_lines.md D1, D6, D7; Phase 2).
 
+use atomcad_renderer::line_lod::{LINE_LOD_SLOTS, LodSlot};
 use atomcad_renderer::line_mesh::{LineDash, LineMesh, LineSegmentInstance, LineStyle};
 use atomcad_renderer::renderer::STRAIGHT_ALPHA_BLENDING;
 use glam::f32::Vec3;
@@ -119,6 +120,7 @@ fn style_builders_change_only_their_own_field() {
             color: [0.1, 0.2, 0.3, 1.0],
             width_px: 1.0,
             dash: None,
+            lod_slot: 0,
         }
     );
     assert_eq!(
@@ -145,6 +147,53 @@ fn style_builders_change_only_their_own_field() {
             ..solid
         }
     );
+    assert_eq!(
+        solid.with_lod_slot(3),
+        LineStyle {
+            lod_slot: 3,
+            ..solid
+        }
+    );
+}
+
+// ---- LOD slots (D9, Phase 4) -------------------------------------------------
+
+fn lod_slot(spacing: f32) -> LodSlot {
+    LodSlot {
+        plane_point: Vec3::ZERO,
+        plane_normal: Vec3::Z,
+        spacing,
+    }
+}
+
+#[test]
+fn lod_slot_ids_start_at_one_and_tag_segments() {
+    let mut mesh = LineMesh::new();
+    let minor = mesh.add_lod_slot(lod_slot(1.0));
+    let major = mesh.add_lod_slot(lod_slot(10.0));
+    assert_eq!((minor, major), (1, 2));
+    assert_eq!(mesh.lod_slots, vec![lod_slot(1.0), lod_slot(10.0)]);
+
+    let style = LineStyle::solid([1.0, 1.0, 1.0]);
+    mesh.add_segment(&Vec3::ZERO, &Vec3::X, &style.with_lod_slot(major));
+    mesh.add_polyline(
+        &[Vec3::ZERO, Vec3::Y, Vec3::Z],
+        false,
+        &style.with_lod_slot(minor),
+    );
+    mesh.add_line_with_uniform_color(&Vec3::ZERO, &Vec3::Z, &[1.0, 0.0, 0.0]);
+    let slots: Vec<u32> = mesh.instances.iter().map(|s| s.lod_slot).collect();
+    assert_eq!(slots, vec![2, 1, 1, 0]);
+}
+
+#[test]
+fn a_full_lod_slot_table_hands_out_slot_zero() {
+    let mut mesh = LineMesh::new();
+    for i in 1..LINE_LOD_SLOTS as u32 {
+        assert_eq!(mesh.add_lod_slot(lod_slot(i as f32)), i);
+    }
+    assert_eq!(mesh.add_lod_slot(lod_slot(100.0)), 0);
+    assert_eq!(mesh.lod_slots.len(), LINE_LOD_SLOTS - 1);
 }
 
 // ---- Polylines (D5, Phase 3) ---------------------------------------------------

@@ -7,6 +7,7 @@ use crate::bond_impostor_mesh::BondImpostorMesh;
 use crate::label_atlas::decode_font_atlas;
 use crate::label_mesh::LabelMesh;
 use crate::label_mesh::LabelVertex;
+use crate::line_lod::{LINE_LOD_SLOTS, LodSlot, SlotLod, lod_uniform_entries};
 use crate::line_mesh::LineMesh;
 use crate::line_mesh::LineSegmentInstance;
 use crate::surface_sort::sorted_component_order;
@@ -122,9 +123,47 @@ const DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32Float;
 /// a wgpu upgrade that changed it would fail there.
 pub const STRAIGHT_ALPHA_BLENDING: BlendState = BlendState::ALPHA_BLENDING;
 
-/// Number of entries in a `LineLodUniform`: slot ids 0..32, id 0 being "no
-/// slot" (D9).
-const LINE_LOD_SLOTS: usize = 32;
+/// Which set of per-view uniforms a draw reads: the live viewport's, or the
+/// one set shared by the thumbnail and the image export, which is rewritten
+/// before every use. Each camera uniform and each line mesh's
+/// `LineLodUniform` exists once per view, so an offscreen render never leaves
+/// its values behind for the next live frame.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum View {
+    Live,
+    Offscreen,
+}
+
+/// The `LineLodUniform`s of one line mesh that has grid level-of-detail slots
+/// (`doc/design_screen_space_lines.md` D9): one per [`View`], filled by
+/// `Renderer::write_view_uniforms`.
+pub(crate) struct LineLodBinding {
+    slots: Vec<LodSlot>,
+    /// Each slot's visibility in the last live frame, for the hysteresis of
+    /// `slot_lod`. Only the live view reads or writes it. A mutex because it
+    /// changes under `&self`, while the render lock is held.
+    was_visible: Mutex<Vec<Option<bool>>>,
+    live: (Buffer, wgpu::BindGroup),
+    offscreen: (Buffer, wgpu::BindGroup),
+}
+
+impl LineLodBinding {
+    fn new(device: &Device, layout: &wgpu::BindGroupLayout, slots: Vec<LodSlot>) -> Self {
+        Self {
+            slots,
+            was_visible: Mutex::new(Vec::new()),
+            live: Renderer::create_line_lod_uniform(device, layout, "Live Line LOD"),
+            offscreen: Renderer::create_line_lod_uniform(device, layout, "Offscreen Line LOD"),
+        }
+    }
+
+    fn uniform(&self, view: View) -> &(Buffer, wgpu::BindGroup) {
+        match view {
+            View::Live => &self.live,
+            View::Offscreen => &self.offscreen,
+        }
+    }
+}
 
 /// What one draw renders into: colour and depth textures of one size and the
 /// buffer the colour is read back through. The live viewport owns one and the
@@ -261,10 +300,12 @@ pub struct Renderer {
     /// resource, so it is bound once per pass before the label draw — the way
     /// `camera_bind_group` already is.
     label_atlas_bind_group: wgpu::BindGroup,
-    /// The line pipeline's group 2: a `LineLodUniform` holding "visible, no
-    /// fade" in every entry (D9). Every line mesh binds this one shared,
-    /// constant uniform until grid level of detail gives meshes their own.
-    line_lod_bind_group: wgpu::BindGroup,
+    /// The line pipeline's group-2 layout, kept for the `LineLodUniform`s of
+    /// meshes that have LOD slots (D9).
+    line_lod_bind_group_layout: wgpu::BindGroupLayout,
+    /// The line pipeline's group 2 for a mesh without LOD slots: a
+    /// `LineLodUniform` holding "visible, no fade" in every entry (D9).
+    default_line_lod_bind_group: wgpu::BindGroup,
     gadget_atom_impostor_mesh: GPUMesh,
     gadget_bond_impostor_mesh: GPUMesh,
     /// The live viewport's render target.
@@ -503,7 +544,7 @@ impl Renderer {
         });
 
         // ===== Lines (doc/design_screen_space_lines.md D6, D9) =====
-        let (line_lod_bind_group_layout, line_lod_bind_group) =
+        let (line_lod_bind_group_layout, default_line_lod_bind_group) =
             Self::create_line_lod_binding(&device);
         let line_pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("Line Pipeline Layout"),
@@ -594,7 +635,8 @@ impl Renderer {
             transparent_sorted_view: None,
             label_mesh,
             label_atlas_bind_group,
-            line_lod_bind_group,
+            line_lod_bind_group_layout,
+            default_line_lod_bind_group,
             gadget_atom_impostor_mesh,
             gadget_bond_impostor_mesh,
             target,
@@ -691,7 +733,7 @@ impl Renderer {
                 count: None,
             }],
         });
-        let entries = [[1.0f32, 0.0, 0.0, 0.0]; LINE_LOD_SLOTS];
+        let entries = [SlotLod::ALWAYS.to_gpu(); LINE_LOD_SLOTS];
         let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Default Line LOD Buffer"),
             contents: bytemuck::cast_slice(&entries),
@@ -706,6 +748,61 @@ impl Renderer {
             label: Some("default_line_lod_bind_group"),
         });
         (layout, bind_group)
+    }
+
+    /// One writable `LineLodUniform` and its group-2 bind group (D9).
+    fn create_line_lod_uniform(
+        device: &Device,
+        layout: &wgpu::BindGroupLayout,
+        label: &str,
+    ) -> (Buffer, wgpu::BindGroup) {
+        let entries = [SlotLod::ALWAYS.to_gpu(); LINE_LOD_SLOTS];
+        let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some(label),
+            contents: bytemuck::cast_slice(&entries),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: buffer.as_entire_binding(),
+            }],
+            label: Some(label),
+        });
+        (buffer, bind_group)
+    }
+
+    /// Gives `mesh` the `LineLodUniform`s its freshly uploaded `line_mesh`
+    /// needs (D9): none without LOD slots; otherwise the existing ones are
+    /// kept and only the slot table is replaced. The hysteresis state
+    /// survives a re-upload of the same slots (the grids are re-tessellated
+    /// on every refresh) and is reset when they change.
+    fn attach_line_lod(
+        device: &Device,
+        layout: &wgpu::BindGroupLayout,
+        mesh: &mut GPUMesh,
+        line_mesh: &LineMesh,
+    ) {
+        if line_mesh.lod_slots.is_empty() {
+            mesh.line_lod = None;
+            return;
+        }
+        match &mut mesh.line_lod {
+            Some(binding) => {
+                if binding.slots != line_mesh.lod_slots {
+                    binding.slots.clone_from(&line_mesh.lod_slots);
+                    binding.was_visible.lock().unwrap().clear();
+                }
+            }
+            None => {
+                mesh.line_lod = Some(LineLodBinding::new(
+                    device,
+                    layout,
+                    line_mesh.lod_slots.clone(),
+                ));
+            }
+        }
     }
 
     fn create_triangle_pipeline(
@@ -1229,7 +1326,7 @@ impl Renderer {
         self.device.poll(Maintain::Wait);
 
         // After the target, not before: the uniform carries its size (D3).
-        self.write_view_uniforms(&self.camera_buffer, &self.camera, &self.target);
+        self.write_view_uniforms(View::Live, &self.camera, &self.target);
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1256,6 +1353,12 @@ impl Renderer {
 
         self.gadget_line_mesh
             .update_from_line_mesh(&self.device, gadget_line_mesh, "Gadget Lines");
+        Self::attach_line_lod(
+            &self.device,
+            &self.line_lod_bind_group_layout,
+            &mut self.gadget_line_mesh,
+            gadget_line_mesh,
+        );
         self.gadget_line_mesh.set_identity_transform(&self.queue);
 
         if update_non_lightweight {
@@ -1278,6 +1381,18 @@ impl Renderer {
                 &self.device,
                 reference_line_mesh,
                 "Reference Lines",
+            );
+            Self::attach_line_lod(
+                &self.device,
+                &self.line_lod_bind_group_layout,
+                &mut self.wireframe_mesh,
+                wireframe_mesh,
+            );
+            Self::attach_line_lod(
+                &self.device,
+                &self.line_lod_bind_group_layout,
+                &mut self.reference_line_mesh,
+                reference_line_mesh,
             );
 
             self.atom_impostor_mesh.update_from_atom_impostor_mesh(
@@ -1349,6 +1464,9 @@ impl Renderer {
             self.gadget_bond_impostor_mesh
                 .set_identity_transform(&self.queue);
         }
+
+        // New slots need their live LOD now, not at the next camera move.
+        self.write_line_lods(View::Live, &self.camera, &self.target);
     }
 
     pub fn update_background_mesh(&mut self, background_line_mesh: &LineMesh) {
@@ -1359,7 +1477,14 @@ impl Renderer {
             background_line_mesh,
             "Background",
         );
+        Self::attach_line_lod(
+            &self.device,
+            &self.line_lod_bind_group_layout,
+            &mut self.background_mesh,
+            background_line_mesh,
+        );
         self.background_mesh.set_identity_transform(&self.queue);
+        self.write_line_lods(View::Live, &self.camera, &self.target);
     }
 
     pub fn render(&mut self, background_color_rgb: [u8; 3]) -> Vec<u8> {
@@ -1378,7 +1503,7 @@ impl Renderer {
 
         self.draw_to_target(
             &self.target,
-            &self.camera_bind_group,
+            View::Live,
             view,
             background_color_rgb,
             PassFlags {
@@ -1406,11 +1531,7 @@ impl Renderer {
 
         let mut camera = camera.clone();
         camera.aspect = 1.0;
-        self.write_view_uniforms(
-            &self.thumbnail_camera_buffer,
-            &camera,
-            &self.thumbnail_target,
-        );
+        self.write_view_uniforms(View::Offscreen, &camera, &self.thumbnail_target);
 
         let view = camera.build_view_matrix().as_mat4();
         Self::resort_transparent_impostors(
@@ -1429,7 +1550,7 @@ impl Renderer {
         let draw_on = |background: ThumbnailBackground| {
             let mut pixels = self.draw_to_target(
                 &self.thumbnail_target,
-                &self.thumbnail_camera_bind_group,
+                View::Offscreen,
                 view,
                 background.rgb(),
                 PassFlags {
@@ -1489,7 +1610,7 @@ impl Renderer {
 
         // The target first: the uniform's size and pixel scale come from it.
         let target = RenderTarget::new(&self.device, width, height, IMAGE_EXPORT_SUPERSAMPLING);
-        self.write_view_uniforms(&self.thumbnail_camera_buffer, &camera, &target);
+        self.write_view_uniforms(View::Offscreen, &camera, &target);
 
         let view = camera.build_view_matrix().as_mat4();
         Self::resort_transparent_impostors(
@@ -1504,7 +1625,7 @@ impl Renderer {
 
         let mut pixels = self.draw_to_target(
             &target,
-            &self.thumbnail_camera_bind_group,
+            View::Offscreen,
             view,
             background_color_rgb,
             PassFlags {
@@ -1559,16 +1680,20 @@ impl Renderer {
         }
     }
 
-    /// One frame into `target`, drawn with the camera bound in
-    /// `camera_bind_group` (whose view matrix is `view`), read back as BGRA.
+    /// One frame into `target`, drawn with the per-view uniforms of
+    /// `uniforms` (whose view matrix is `view`), read back as BGRA.
     fn draw_to_target(
         &self,
         target: &RenderTarget,
-        camera_bind_group: &wgpu::BindGroup,
+        uniforms: View,
         view: Mat4,
         background_color_rgb: [u8; 3],
         flags: PassFlags,
     ) -> Vec<u8> {
+        let camera_bind_group = match uniforms {
+            View::Live => &self.camera_bind_group,
+            View::Offscreen => &self.thumbnail_camera_bind_group,
+        };
         let mut encoder = self
             .device
             .create_command_encoder(&CommandEncoderDescriptor {
@@ -1661,7 +1786,7 @@ impl Renderer {
                 lines.push(&self.reference_line_mesh);
                 lines.push(&self.background_mesh);
             }
-            self.draw_lines(&mut render_pass, &lines);
+            self.draw_lines(&mut render_pass, &lines, uniforms);
 
             // Transparent impostors (x-ray) draw last in the main pass — after
             // ALL opaque content and the lines — with alpha
@@ -1735,7 +1860,7 @@ impl Renderer {
             // they write no depth, so a gadget triangle drawn after them would
             // paint over them where they cross its arrow heads and rings.
             self.gadget_line_mesh.set_identity_transform(&self.queue);
-            self.draw_lines(&mut gadget_render_pass, &[&self.gadget_line_mesh]);
+            self.draw_lines(&mut gadget_render_pass, &[&self.gadget_line_mesh], uniforms);
         }
 
         // Calculate bytes per row with proper alignment (256-byte boundary for WebGPU)
@@ -1842,16 +1967,29 @@ impl Renderer {
         }
     }
 
-    /// Draws `meshes` with the line pipeline. Group 2 (the line LOD uniform)
-    /// is bound here, after the pipeline that declares it: `render_mesh` only
-    /// knows about group 1, and the label pipeline binds a different group 2.
-    fn draw_lines<'a>(&self, render_pass: &mut RenderPass<'a>, meshes: &[&GPUMesh]) {
+    /// Draws `meshes` with the line pipeline. Group 2 (the mesh's line LOD
+    /// uniform for `uniforms`, or the shared "visible, no fade" one) is bound
+    /// here, after the pipeline that declares it: `render_mesh` only knows
+    /// about group 1, and the label pipeline binds a different group 2.
+    fn draw_lines<'a>(
+        &self,
+        render_pass: &mut RenderPass<'a>,
+        meshes: &[&GPUMesh],
+        uniforms: View,
+    ) {
         if meshes.iter().all(|mesh| mesh.num_instances == 0) {
             return;
         }
         render_pass.set_pipeline(&self.line_pipeline);
-        render_pass.set_bind_group(2, &self.line_lod_bind_group, &[]);
         for mesh in meshes {
+            if mesh.num_instances == 0 {
+                continue;
+            }
+            let lod_bind_group = match &mesh.line_lod {
+                Some(binding) => &binding.uniform(uniforms).1,
+                None => &self.default_line_lod_bind_group,
+            };
+            render_pass.set_bind_group(2, lod_bind_group, &[]);
             self.render_mesh(render_pass, mesh);
         }
     }
@@ -1875,14 +2013,19 @@ impl Renderer {
     /// Rewrites the live camera uniform from `self.camera` and the live
     /// target.
     pub fn update_camera_buffer(&self) {
-        self.write_view_uniforms(&self.camera_buffer, &self.camera, &self.target);
+        self.write_view_uniforms(View::Live, &self.camera, &self.target);
     }
 
-    /// Writes `camera_buffer` for drawing `camera` into `target`
-    /// (`doc/design_screen_space_lines.md` D3). The only writer of a camera
-    /// uniform, so the viewport size and pixel scale a shader sees can only
-    /// come from the target it is drawn into.
-    fn write_view_uniforms(&self, camera_buffer: &Buffer, camera: &Camera, target: &RenderTarget) {
+    /// Writes the per-view uniforms of `uniforms` for drawing `camera` into
+    /// `target` (`doc/design_screen_space_lines.md` D3, D9): the camera
+    /// uniform and every line mesh's `LineLodUniform`. The only writer of a
+    /// camera uniform, so the viewport size and pixel scale a shader sees can
+    /// only come from the target it is drawn into.
+    fn write_view_uniforms(&self, uniforms: View, camera: &Camera, target: &RenderTarget) {
+        let camera_buffer = match uniforms {
+            View::Live => &self.camera_buffer,
+            View::Offscreen => &self.thumbnail_camera_buffer,
+        };
         let camera_uniform = CameraUniform::new(
             camera,
             (target.size.width, target.size.height),
@@ -1890,6 +2033,34 @@ impl Renderer {
         );
         self.queue
             .write_buffer(camera_buffer, 0, bytemuck::cast_slice(&[camera_uniform]));
+        self.write_line_lods(uniforms, camera, target);
+    }
+
+    /// Writes the `LineLodUniform` of `uniforms` for every line mesh with LOD
+    /// slots (D9). Only the live view uses and updates the hysteresis state;
+    /// a thumbnail or an export takes the plain thresholds.
+    fn write_line_lods(&self, uniforms: View, camera: &Camera, target: &RenderTarget) {
+        let meshes = [
+            &self.wireframe_mesh,
+            &self.reference_line_mesh,
+            &self.background_mesh,
+            &self.gadget_line_mesh,
+        ];
+        for binding in meshes.iter().filter_map(|mesh| mesh.line_lod.as_ref()) {
+            let mut was_visible = binding.was_visible.lock().unwrap();
+            let entries = lod_uniform_entries(
+                &binding.slots,
+                camera,
+                (target.size.width, target.size.height),
+                target.pixel_scale,
+                (uniforms == View::Live).then_some(&mut *was_visible),
+            );
+            self.queue.write_buffer(
+                &binding.uniform(uniforms).0,
+                0,
+                bytemuck::cast_slice(&entries),
+            );
+        }
     }
 
     /// Sets how the merged transparent surface mesh is drawn.

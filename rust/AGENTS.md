@@ -394,6 +394,14 @@ drivers). To prove a refactor pixel-identical, set `ATOMCAD_GPU_DUMP_DIR` to a
 directory outside the repo: each test writes its images there as raw bytes, so
 a run before and a run after the change can be compared with `cmp`.
 
+**Per-view uniforms come in pairs.** The renderer draws into the live
+viewport and offscreen (thumbnail, image export), and each has its own camera
+uniform and its own `LineLodUniform` per line mesh, selected together by
+`View` in `renderer.rs`. The live ones are rewritten only when the camera
+moves or a mesh is uploaded, so a new per-view uniform must also exist once
+per `View`: a single shared one would leave an export's values in every live
+frame until the next camera move.
+
 ## Debugging
 
 - `println!()` output appears in Flutter console

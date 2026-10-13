@@ -1,3 +1,4 @@
+use crate::line_lod::{LINE_LOD_SLOTS, LodSlot};
 use bytemuck;
 use glam::f32::Vec3;
 
@@ -56,6 +57,9 @@ pub struct LineStyle {
     /// Width in logical pixels.
     pub width_px: f32,
     pub dash: Option<LineDash>,
+    /// Grid level-of-detail slot, an id returned by [`LineMesh::add_lod_slot`]
+    /// (D9); 0 = never hidden or faded.
+    pub lod_slot: u32,
 }
 
 /// A dash pattern in logical pixels.
@@ -72,6 +76,7 @@ impl LineStyle {
             color: [color[0], color[1], color[2], 1.0],
             width_px: 1.0,
             dash: None,
+            lod_slot: 0,
         }
     }
 
@@ -92,6 +97,10 @@ impl LineStyle {
             ..self
         }
     }
+
+    pub const fn with_lod_slot(self, lod_slot: u32) -> Self {
+        Self { lod_slot, ..self }
+    }
 }
 
 /// A line mesh in CPU memory: the list of segments every line producer fills
@@ -99,13 +108,32 @@ impl LineStyle {
 #[derive(Clone, Debug, Default)]
 pub struct LineMesh {
     pub instances: Vec<LineSegmentInstance>,
+    /// The grid level-of-detail slots its segments refer to (D9): slot id
+    /// `i + 1` is `lod_slots[i]`.
+    pub lod_slots: Vec<LodSlot>,
 }
 
 impl LineMesh {
     pub fn new() -> Self {
         Self {
             instances: Vec::new(),
+            lod_slots: Vec::new(),
         }
+    }
+
+    /// Registers a grid level-of-detail slot and returns the id to put in
+    /// [`LineStyle::lod_slot`] (D9). Ids run from 1; when the table is full
+    /// this warns and returns 0, and those lines never fade.
+    pub fn add_lod_slot(&mut self, slot: LodSlot) -> u32 {
+        if self.lod_slots.len() >= LINE_LOD_SLOTS - 1 {
+            eprintln!(
+                "LineMesh: more than {} LOD slots, the extra lines will not fade",
+                LINE_LOD_SLOTS - 1
+            );
+            return 0;
+        }
+        self.lod_slots.push(slot);
+        self.lod_slots.len() as u32
     }
 
     pub fn add_segment(&mut self, p0: &Vec3, p1: &Vec3, style: &LineStyle) {
@@ -150,7 +178,7 @@ impl LineMesh {
             dash_on_px,
             dash_off_px,
             dash_phase,
-            lod_slot: 0,
+            lod_slot: style.lod_slot,
         });
     }
 

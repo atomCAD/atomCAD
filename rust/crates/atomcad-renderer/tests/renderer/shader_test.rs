@@ -171,11 +171,12 @@ fn vertex_output_interpolation(
 /// The line shader's screen-space outputs must interpolate `linear`: each
 /// corner carries its own `w`, so the default perspective-correct
 /// interpolation would bend them on any line whose ends sit at different
-/// depths. Per-instance values are `flat`
-/// (doc/design_screen_space_lines.md D4).
+/// depths. Per-instance values are `flat`, and the world position the grid
+/// fade measures from is `perspective` (doc/design_screen_space_lines.md D4,
+/// D9).
 #[test]
 fn line_shader_outputs_carry_the_d4_interpolation() {
-    use naga::Interpolation::{Flat, Linear};
+    use naga::Interpolation::{Flat, Linear, Perspective};
     let outputs = vertex_output_interpolation(&shader_dir().join("line_mesh.wgsl"), "vs_main");
     let expected = [
         ("color", Flat),
@@ -187,6 +188,10 @@ fn line_shader_outputs_carry_the_d4_interpolation() {
         ("dash_offset", Flat),
         ("dash_on", Flat),
         ("dash_period", Flat),
+        // D9: the world position interpolates perspective-correctly, the
+        // slot's fade distances are per instance.
+        ("world_pos", Perspective),
+        ("fade", Flat),
     ];
     assert_eq!(
         outputs,

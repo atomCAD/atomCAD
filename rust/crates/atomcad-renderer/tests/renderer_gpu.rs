@@ -697,3 +697,156 @@ fn the_dash_period_is_on_plus_off_pixels_live_and_exported() {
         assert!((on - 0.6).abs() < 0.03, "{name}: on for {on} of the period");
     }
 }
+
+// ---- Screen-space lines, Phase 4 (doc/design_screen_space_lines.md D9) -----
+
+use atomcad_renderer::line_lod::LodSlot;
+
+/// A ground grid in `z = 0`, `±extent` units, lines 1 unit apart and every
+/// tenth a major line, with a minor and a major LOD slot as the display
+/// crate's grids register them. White on the default backgrounds.
+fn slotted_ground_grid(extent: i32) -> LineMesh {
+    let mut grid = LineMesh::new();
+    let slot = |spacing: f32| LodSlot {
+        plane_point: Vec3::ZERO,
+        plane_normal: Vec3::Z,
+        spacing,
+    };
+    let minor = grid.add_lod_slot(slot(1.0));
+    let major = grid.add_lod_slot(slot(10.0));
+    let white = LineStyle::solid([1.0, 1.0, 1.0]);
+    let e = extent as f32;
+    for i in -extent..=extent {
+        let style = white.with_lod_slot(if i % 10 == 0 { major } else { minor });
+        let t = i as f32;
+        grid.add_segment(&Vec3::new(t, -e, 0.0), &Vec3::new(t, e, 0.0), &style);
+        grid.add_segment(&Vec3::new(-e, t, 0.0), &Vec3::new(e, t, 0.0), &style);
+    }
+    grid
+}
+
+/// Lit pixels (any channel above a few levels) in the rectangle `columns ×
+/// rows` of a `width`-wide image.
+fn lit_in(
+    pixels: &[u8],
+    width: u32,
+    columns: std::ops::Range<u32>,
+    rows: std::ops::Range<u32>,
+) -> usize {
+    rows.flat_map(|row| columns.clone().map(move |column| (column, row)))
+        .filter(|&(column, row)| {
+            let i = ((row * width + column) * 4) as usize;
+            pixels[i..i + 3].iter().any(|&c| c > 4)
+        })
+        .count()
+}
+
+/// Perspective, looking straight down at the origin from height `h`, +Y up.
+fn top_down_perspective(renderer: &mut Renderer, h: f64) {
+    renderer.set_orthographic_mode(false);
+    renderer.move_camera(
+        &DVec3::new(0.0, 0.0, h),
+        &DVec3::ZERO,
+        &DVec3::new(0.0, 1.0, 0.0),
+    );
+}
+
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn a_grid_zoomed_out_past_the_minor_threshold_lights_only_major_lines() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    renderer.update_background_mesh(&slotted_ground_grid(60));
+    // Focal length in pixels: the minor slot drops above h = f / T_drop.
+    let f = VIEWPORT_HEIGHT as f64 / 2.0 / (renderer.camera.fovy / 2.0).tan();
+    let drop_h = f / atomcad_renderer::line_lod::T_DROP_PX as f64;
+
+    // The open cell between the major lines x, y = 0 and x, y = 10, with a
+    // margin for the major lines' width and fringe.
+    let cell = |h: f64| {
+        let px_per_unit = f / h;
+        let column = |x: f64| (VIEWPORT_WIDTH as f64 / 2.0 + x * px_per_unit) as u32;
+        let row = |y: f64| (VIEWPORT_HEIGHT as f64 / 2.0 - y * px_per_unit) as u32;
+        (
+            column(0.0) + 4..column(10.0) - 3,
+            row(10.0) + 4..row(0.0) - 3,
+        )
+    };
+
+    // Zoomed in, the minor lines light the cell: the check below can fail.
+    let near = drop_h * 0.5;
+    top_down_perspective(&mut renderer, near);
+    let live = renderer.render(BLACK);
+    dump("lod_near", &live);
+    let (columns, rows) = cell(near);
+    assert!(lit_in(&live, VIEWPORT_WIDTH, columns, rows) > 20);
+
+    // Zoomed out past the threshold, the cell is empty but the major lines
+    // around it are still drawn.
+    let far = drop_h * 1.5;
+    top_down_perspective(&mut renderer, far);
+    let live = renderer.render(BLACK);
+    dump("lod_far", &live);
+    let (columns, rows) = cell(far);
+    assert!(columns.len() > 5 && rows.len() > 5, "the cell is too small");
+    assert_eq!(
+        lit_in(&live, VIEWPORT_WIDTH, columns.clone(), rows.clone()),
+        0,
+        "minor lines drawn past the threshold"
+    );
+    let major_x0 = (VIEWPORT_WIDTH / 2 - 1)..(VIEWPORT_WIDTH / 2 + 2);
+    assert!(lit_in(&live, VIEWPORT_WIDTH, major_x0, rows.clone()) > 0);
+
+    // A 2× export makes the same choice (its own uniforms, plain threshold).
+    let export = renderer.render_image(VIEWPORT_WIDTH, VIEWPORT_HEIGHT, BLACK);
+    dump("lod_far_export", &export);
+    assert_eq!(
+        lit_in(&export, VIEWPORT_WIDTH, columns.clone(), rows.clone()),
+        0,
+        "minor lines drawn in the export"
+    );
+    // …and leaves the live view's LOD alone.
+    assert_eq!(renderer.render(BLACK), live);
+}
+
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn a_low_perspective_grid_fades_towards_the_horizon() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    renderer.update_background_mesh(&slotted_ground_grid(200));
+    renderer.set_orthographic_mode(false);
+    // Eye 2 units up, looking almost level along +Y.
+    renderer.move_camera(
+        &DVec3::new(0.3, 0.0, 2.0),
+        &DVec3::new(0.3, 100.0, 0.0),
+        &DVec3::Z,
+    );
+    let live = renderer.render(BLACK);
+    dump("lod_horizon", &live);
+
+    // The mean brightness of a band of rows.
+    let mean = |rows: std::ops::Range<u32>| {
+        let count = rows.len() as f64 * VIEWPORT_WIDTH as f64;
+        let sum: f64 = rows
+            .flat_map(|row| (0..VIEWPORT_WIDTH).map(move |column| (column, row)))
+            .map(|(column, row)| rgba_at(&live, VIEWPORT_WIDTH, column, row)[0] as f64)
+            .sum();
+        sum / count
+    };
+    // The horizon is a few rows above the middle; the band just below it is
+    // tens of units away, the bottom rows only a few.
+    let horizon = VIEWPORT_HEIGHT / 2 - 8;
+    let near_horizon = mean(horizon + 2..horizon + 12);
+    let bottom = mean(VIEWPORT_HEIGHT - 20..VIEWPORT_HEIGHT);
+    assert!(
+        bottom > 10.0,
+        "the grid near the eye is not drawn: {bottom}"
+    );
+    assert!(
+        near_horizon < 0.5 * bottom,
+        "near the horizon {near_horizon}, near the bottom {bottom}"
+    );
+}

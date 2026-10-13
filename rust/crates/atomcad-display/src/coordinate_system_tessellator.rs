@@ -4,6 +4,7 @@ use crate::preferences::BackgroundPreferences;
 use atomcad_crystolecule::crystolecule_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
 use atomcad_crystolecule::drawing_plane::DrawingPlane;
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
+use atomcad_renderer::line_lod::LodSlot;
 use atomcad_renderer::line_mesh::{LineMesh, LineStyle};
 
 // Constants for coordinate system visualization
@@ -158,9 +159,18 @@ pub fn tessellate_drawing_plane_grid_and_axes(
     let u_axis_end_2d = u_step_2d * axis_length_steps;
     let v_axis_end_2d = v_step_2d * axis_length_steps;
 
+    // Each drawing plane registers its own minor and major LOD slots, so
+    // several planes in one mesh each keep their own plane (D9).
+    let u_world = drawing_plane.real_2d_to_world_3d(&u_step_2d) - origin;
+    let v_world = drawing_plane.real_2d_to_world_3d(&v_step_2d) - origin;
+    let slots = GridLodSlots::register(output_mesh, &origin, &u_world, &v_world);
+
     // Lines parallel to the u direction (vary along v)
     for i in -grid_range..=grid_range {
-        let style = grid_line_style(i, &grid_primary_color, &grid_secondary_color);
+        let style = slots.tag(
+            i,
+            grid_line_style(i, &grid_primary_color, &grid_secondary_color),
+        );
 
         let offset_2d = v_step_2d * (i as f64);
         let start_2d = origin_2d + offset_2d - u_step_2d * (grid_range as f64);
@@ -189,7 +199,10 @@ pub fn tessellate_drawing_plane_grid_and_axes(
 
     // Lines parallel to the v direction (vary along u)
     for i in -grid_range..=grid_range {
-        let style = grid_line_style(i, &grid_primary_color, &grid_secondary_color);
+        let style = slots.tag(
+            i,
+            grid_line_style(i, &grid_primary_color, &grid_secondary_color),
+        );
 
         let offset_2d = u_step_2d * (i as f64);
         let start_2d = origin_2d + offset_2d - v_step_2d * (grid_range as f64);
@@ -256,10 +269,58 @@ fn add_dashed_axis_line(output_mesh: &mut LineMesh, start: &DVec3, end: &DVec3, 
     );
 }
 
+/// Every tenth grid line, counted from the origin, is a major line.
+pub const GRID_MAJOR_EVERY: i32 = 10;
+
+fn is_major_grid_line(i: i32) -> bool {
+    i % GRID_MAJOR_EVERY == 0
+}
+
+/// The two level-of-detail slots of one grid (D9): its minor lines, `s` apart,
+/// and its major lines, `10 s` apart, both in the grid's plane.
+struct GridLodSlots {
+    minor: u32,
+    major: u32,
+}
+
+impl GridLodSlots {
+    /// Registers the slots of the grid through `origin` spanned by `u` and
+    /// `v` in `mesh`. For a parallelogram grid the spacing is the smaller of
+    /// the two line distances, `|u × v| / max(|u|, |v|)`. A degenerate grid
+    /// (`u ∥ v`) gets no slots and never fades.
+    fn register(mesh: &mut LineMesh, origin: &DVec3, u: &DVec3, v: &DVec3) -> Self {
+        let normal = u.cross(*v);
+        let longest = u.length().max(v.length());
+        if normal.length() < 1e-12 || longest < 1e-12 {
+            return Self { minor: 0, major: 0 };
+        }
+        let spacing = normal.length() / longest;
+        let mut slot = |spacing: f64| {
+            mesh.add_lod_slot(LodSlot {
+                plane_point: origin.as_vec3(),
+                plane_normal: normal.normalize().as_vec3(),
+                spacing: spacing as f32,
+            })
+        };
+        let minor = slot(spacing);
+        let major = slot(spacing * GRID_MAJOR_EVERY as f64);
+        Self { minor, major }
+    }
+
+    /// `style` tagged with the slot of grid line `i`.
+    fn tag(&self, i: i32, style: LineStyle) -> LineStyle {
+        style.with_lod_slot(if is_major_grid_line(i) {
+            self.major
+        } else {
+            self.minor
+        })
+    }
+}
+
 /// Grid line `i` (counted from the origin): every tenth is a major line,
 /// heavier and in the strong colour.
 fn grid_line_style(i: i32, minor_color: &[f32; 3], major_color: &[f32; 3]) -> LineStyle {
-    if i % 10 == 0 {
+    if is_major_grid_line(i) {
         LineStyle::solid(*major_color).with_width(GRID_MAJOR_WIDTH_PX)
     } else {
         LineStyle::solid(*minor_color).with_width(GRID_MINOR_WIDTH_PX)
@@ -371,7 +432,9 @@ fn get_lattice_grid_secondary_color(background_preferences: &BackgroundPreferenc
 
 /// Generic grid tessellation function
 /// Creates a grid based on two basis vectors (u and v)
-/// The grid follows these vectors to create a parallelogram grid pattern
+/// The grid follows these vectors to create a parallelogram grid pattern.
+/// Registers the grid's minor and major level-of-detail slots in
+/// `output_mesh` and tags its lines with them.
 pub fn tessellate_grid_with_origin(
     output_mesh: &mut LineMesh,
     origin: &DVec3,
@@ -382,10 +445,11 @@ pub fn tessellate_grid_with_origin(
     secondary_color: &[f32; 3],
 ) {
     let grid_range = grid_size;
+    let slots = GridLodSlots::register(output_mesh, origin, u_vector, v_vector);
 
     // Create grid lines parallel to the u vector (varying along v direction)
     for i in -grid_range..=grid_range {
-        let style = grid_line_style(i, primary_color, secondary_color);
+        let style = slots.tag(i, grid_line_style(i, primary_color, secondary_color));
 
         // Line runs from -grid_size*u to +grid_size*u, offset by i*v
         let offset = v_vector * (i as f64);
@@ -404,7 +468,7 @@ pub fn tessellate_grid_with_origin(
 
     // Create grid lines parallel to the v vector (varying along u direction)
     for i in -grid_range..=grid_range {
-        let style = grid_line_style(i, primary_color, secondary_color);
+        let style = slots.tag(i, grid_line_style(i, primary_color, secondary_color));
 
         // Line runs from -grid_size*v to +grid_size*v, offset by i*u
         let offset = u_vector * (i as f64);
