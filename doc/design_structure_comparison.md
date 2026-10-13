@@ -82,9 +82,9 @@ if someone asks; `compare_atoms` already covers pairwise checks.
 | # | Decision |
 |---|---|
 | D1 | One shared core in `atomcad-crystolecule` (§3) serves `chemisorb`'s `unique` and the `compare_atoms` node, so the two cannot disagree. |
-| D2 | Equal means: **a motion of the allowed kind and a one-to-one matching of atoms, same element, every matched pair within `tolerance` (Å) after the best fit**. The max deviation, never the RMS, decides — as in mechanosynth placement. Optionally bonds too (presence and order). |
+| D2 | Equal means: **a motion of the allowed kind and a one-to-one matching of atoms, same element, every matched pair within `tolerance` (Å) after the least-squares fit of that matching** (Kabsch; for `translation`, the centroid difference). The max deviation, never the RMS, decides — as in mechanosynth placement. Optionally bonds too (presence and order). |
 | D3 | The motion is one choice: `none` / `translation` / `rigid` / `rigid_mirror`. Not two checkboxes: rotation without translation has no meaning without a fixed origin. |
-| D4 | The motion is **searched, then verified**: anchors propose motions, a full fit refines one, `compare_structures` decides. The verification makes the answer exact up to the tolerance, so an asymmetric adsorbate with swapped feet, or the mirror image of a chiral one, fails without a rule of its own. |
+| D4 | The motion is **proposed, then verified**: the centroids and principal axes propose it directly where they are well defined, anchor triples where they are not (§3.4); a full fit refines it; `compare_structures` decides. The verification makes the answer exact up to the tolerance, so an asymmetric adsorbate with swapped feet, or the mirror image of a chiral one, fails without a rule of its own. |
 | D5 | Each comparison has a **work cap**. Exceeding it makes the pair *not equal* and counts it **undecided**, reported. It may leave two copies apart; it never merges two different bindings and never hangs. |
 | D6 | `chemisorb` compares candidates on their **local cluster**: the adsorbate plus `local_hops` bonds into the substrate, H not counting as a hop (§5.2). The cluster is also written as tags (`cs_adsorbate`, `cs_local`), so `compare_atoms` can be pointed at exactly what `unique` compared. |
 | D7 | **`top_n` counts candidates before merging.** The search is unchanged: `keep_best` keeps the best `top_n` by (strain, change set), the energy window cuts them, and merging runs on that list. The listed result is therefore at most `top_n` long and often shorter; a user who wants more distinct bindings raises `top_n`. |
@@ -151,32 +151,76 @@ Per cluster, computed once:
   matching that agrees on every bond maps them one to one, kind for kind, so
   equal counts are necessary. Exact as a rejection, like the other two, and
   O(bonds) to compute.
+- **Atom labels** (only when bonds are compared): each atom's element, its
+  bond count within the cluster, and the sorted elements of its bonded
+  neighbours. A matching that agrees on every bond maps each atom to one
+  with the same label, so the multisets of labels must be equal. The labels
+  are reused by the anchor search (§3.4). Without bonds compared they are
+  not used at all: bonds may then differ, and so may labels.
+- **The sorted eigenvalues of the second-moment tensor.** With `c` the
+  centroid and `aᵢ = xᵢ − c`, the tensor is `M = Σ aᵢ aᵢᵀ` (unweighted). A
+  rigid motion, mirror included, leaves its eigenvalues unchanged. A matching
+  within `tolerance` moves each centred position by `|dᵢ| ≤ 2·tolerance`
+  (its own deviation plus the centroid's), so `‖M_A − M_B‖ ≤ E =
+  Σ (2|aᵢ||dᵢ| + |dᵢ|²) ≤ Σ (4·tolerance·|aᵢ| + 4·tolerance²)`, taking `aᵢ`
+  from A; by Weyl's inequality no eigenvalue moves by more than `E`. So
+  eigenvalues differing by more than `E` reject the pair — exact, and the
+  same tensor serves the principal-axes path (§3.4).
 
 Pairs are binned by element counts and, with bonds, bond counts first (one
-hash of both), then the distance lists are compared (O(N²), ~10 µs at
-N = 150). Only pairs that pass reach the motion search. The bond counts
-reject differently bonded pairs before any motion is tried, instead of at
-the final `compare_structures`.
+hash of both), then the label multisets and eigenvalues are compared, then
+the distance lists (O(N²), ~10 µs at N = 150). Only pairs that pass reach
+the motion search. The bond counts reject differently bonded pairs before
+any motion is tried, instead of at the final `compare_structures`.
 
 ### 3.4 The motion search
 
+Instead of trying positions and orientations blindly, the motion is first
+read off the clusters themselves; the search is the fallback.
+
 - **`none`**: no search. `compare_structures(a, b, tolerance)`.
-- **`translation`**: take an atom of A's rarest element; each atom of B with
-  that element proposes `t = b − a`. O(m·N).
-- **`rigid` / `rigid_mirror`**: three anchors in A — the first from the
-  rarest element, the other two chosen to make a well-conditioned triangle
-  (far apart, far from collinear). In B, candidate triples are built element
-  by element, keeping only atoms whose distances to the already-chosen
-  anchors agree within `2·tolerance`. Each triple gives a proper fit with
+- **`translation`**: **one candidate**, `t = c_A − c_B`, the difference of
+  the centroids. It is the least-squares translation of every matching
+  (D2), so if any matching is within tolerance under it, this is the motion
+  that shows it. No search and no fallback.
+- **`rigid` / `rigid_mirror`, the principal-axes path.** The eigenvectors of
+  each cluster's second-moment tensor (§3.3) are axes fixed to the cluster.
+  Rotating B's axes onto A's (about the centroids) aligns the two, up to the
+  sign of each axis: **4 proper candidates**, plus 4 improper ones with
+  `rigid_mirror`. Each goes through the verification below.
+- **When the axes are not well defined.** Two equal or nearly equal
+  eigenvalues leave the axes in their plane undetermined — a cluster with a
+  threefold axis, a ring, a near-spherical cage. Under the matching's
+  perturbation an eigenvector turns by at most `sin θ ≤ E / gap` (Davis–Kahan,
+  `gap` the distance to the nearest other eigenvalue, `E` from §3.3). The
+  path is **reliable** when `2·r_max·E / gap ≤ tolerance` for every axis
+  (`r_max` the farthest atom from the centroid): the two frames then differ
+  by less than the loose matching tolerance of step 1 below can absorb.
+  - Reliable, and a candidate verifies: equal.
+  - Reliable, and none verifies: **not equal**, without a fallback — an
+    equal pair would have been found.
+  - Not reliable: try the candidates anyway (cheap), and if none verifies,
+    fall back to the anchor search.
+- **The anchor search (fallback).** Three anchors in A — the first from the
+  rarest label (the rarest element without bonds), the other two chosen to
+  make a well-conditioned triangle (far apart, far from collinear). In B,
+  candidate triples are built atom by atom from atoms with the **same
+  label**, keeping only those whose distances to the already-chosen anchors
+  agree within `2·tolerance`. Each triple gives a proper fit with
   `rigid_fit`; with `rigid_mirror`, also the improper one (A onto B reflected
-  through its centroid). The distance filter keeps this far from O(N³) even
-  for symmetric clusters.
+  through its centroid). Labels and the distance filter keep this far from
+  O(N³) even for symmetric clusters; in a molecule most labels are unique.
+
+The local clusters `chemisorb` compares usually take the fast path: the
+hop-2 substrate atoms break the adsorbate's own symmetry, and a site on
+Si(100) 2×1 has at most a mirror plane. The fallback is for the rest, and it
+is what keeps the answer exact (D4) whatever the cluster.
 
 **Verification, for every proposed motion:**
 
 1. Apply it to B and match to A with nearest-unclaimed matching at a loose
    tolerance (`3·tolerance`): a fit on three anchors is only as good as three
-   atoms.
+   atoms, and a frame from principal axes only as good as the eigenvectors.
 2. If every atom is matched, **refit on all matched pairs** (`rigid_fit`, same
    handedness) and re-apply.
 3. Decide with `compare_structures(a, b_moved, tolerance)` (bonds included
@@ -376,6 +420,15 @@ In `atomcad-crystolecule/tests/crystolecule/structure_compare_test.rs`:
   not with them — rejected by the bond counts, before any motion is tried.
   Same bond counts, bonds on different atoms: rejected by the final check.
 - **Collinear and planar clusters** compare correctly.
+- **Principal axes agree with the search.** Over random clusters and pairs
+  (including near-degenerate ones: threefold and ring-like clusters, slightly
+  jittered), the verdict with the principal-axes path enabled equals the
+  verdict of the anchor search alone. In particular, no pair the path calls
+  "reliable, not equal" is equal by the anchor search.
+- **The eigenvalue and label pre-checks are exact** (in the same brute-force
+  test as the other pre-checks).
+- **`translation`** finds a shifted, jittered copy with its single
+  candidate, and rejects a rotated one.
 - **Undecided.** With `max_candidates = 1` a symmetric pair comes back
   undecided, never equal.
 - **Grouping** is deterministic under varied thread counts; each class keeps
