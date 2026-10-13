@@ -115,10 +115,12 @@ pub struct CompareSettings {
 }
 ```
 
-`tolerance` must be in `(0, MAX_TOLERANCE]`, `MAX_TOLERANCE = 0.5 Å`, a
-config error otherwise. Above about half the shortest interatomic distance
-(~1.0 Å for X–H) nearest-atom matching is no longer unambiguous and the
-greedy matcher in `compare_structures` could pair the wrong atoms.
+`tolerance` must be in `(0, MAX_TOLERANCE]`, `MAX_TOLERANCE = 0.3 Å`, a
+config error otherwise. The binding constraint is the loose matching of the
+verification (§3.4, step 1), which works at `3·tolerance`: at 0.3 Å that is
+0.9 Å, still below the shortest interatomic distances (~1.0–1.1 Å for X–H),
+so nearest-atom matching stays unambiguous. At 0.5 Å it would be 1.5 Å, and
+the greedy matcher could pair the wrong atoms.
 
 Default tolerance: **0.15 Å**. Two relaxations that reach the same minimum
 from different start geometries agree only to the minimizer's convergence,
