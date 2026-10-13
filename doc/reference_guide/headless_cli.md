@@ -18,7 +18,11 @@ it is an ordinary command-line tool and nothing about it is AI-specific.
   network (the default) or replacing it (`--replace`).
 - `atomcad-cli run <node>` presses a [`chemisorb`](./nodes/atomic.md#chemisorb)
   node's **Run** button: evaluation never runs that search, so without `run` a
-  script only ever sees the node's plan.
+  script only ever sees the node's plan. It waits for the search and prints a
+  summary: how many hypotheses were relaxed, how many candidates are listed
+  (with, in parentheses, how many copies the node's `unique` setting merged —
+  `6 listed (14 copies merged)`), the best listed strain, and warnings for
+  unconverged relaxations or an exhausted budget.
 - `atomcad-cli debug-select <node> [<path>] [--form seated|relaxed] [--show]`
   clicks an item of a `chemisorb` node's search tree (a leg `12-45,13-61`, or
   the next foot after it, `12-45,13-61,14`): the item shows on the node's

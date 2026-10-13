@@ -1043,7 +1043,10 @@ progress bar — moving without a number while the search plans, then "Relaxing
 small spinner in its title bar (hover it for the percentage), and the document's
 tab shows one too, so a search running in another tab stays visible. When the
 search ends, a message at the bottom of the window reports it: the result
-(relaxed, listed, best strain), that it was cancelled, that it failed and why,
+(relaxed, listed, best strain — e.g. *Relaxed 121 hypotheses in 4.2 s; 6 listed
+(14 copies merged).*, where the count in parentheses is how many kept
+candidates `unique` merged into better-ranked ones, and is left out when it
+merged none), that it was cancelled, that it failed and why,
 or that its result was discarded because the node was deleted, the document
 closed or the network became read-only. **Cancel** stops the search after the
 relaxations already under way; the panel says "Cancelling…" until then, and
@@ -1052,7 +1055,8 @@ the inputs, or any setting: the result still lands, and if what you changed
 affects it, it lands *stale* and the panel asks for a new Run. A result that
 arrives while you are typing in a field or dragging waits until you finish.
 One search per node at a time; several `chemisorb` nodes can search at once.
-`atomcad-cli run` is not affected: it runs the search and waits for it.
+`atomcad-cli run` is not affected: it runs the search and waits for it, then
+prints the same summary.
 
 **Sites and feet.** A *site* is a substrate atom that has a free valence (a
 dangling bond). There is no notion of a surface plane or a facet in what the
