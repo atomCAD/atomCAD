@@ -205,64 +205,179 @@ fn vs_main(input: AtomImpostorVertexInput) -> AtomImpostorVertexOutput {
     return output;
 }
 
+// ============================================================================
+// Per-sample coverage (doc/design_viewport_antialiasing.md D4)
+//
+// Shading runs once per pixel, coverage is decided per sample: one hit-only
+// ray per sample position, written as `@builtin(sample_mask)`. Rust twins in
+// `impostor_coverage.rs`; this block is repeated in `bond_impostor.wgsl` and
+// `transparent_impostor.wgsl`, and a change to one is made to all four.
+// ============================================================================
+
+// The render target's sample count (1 or 4), set per pipeline by
+// `PipelineSet::new`.
+override SAMPLE_COUNT: u32 = 1u;
+
+// Largest distance of a 4x sample from the pixel centre, in pixels.
+// Twin: `SAMPLE_FOOTPRINT_PX`.
+const SAMPLE_FOOTPRINT_PX: f32 = 0.4;
+
+// WebGPU's standard 4x sample positions relative to the pixel centre, in
+// pixels, y down; sample i is bit i of the sample mask.
+// Twin: `sample_offsets(4)`.
+fn sample_offset_4x(i: u32) -> vec2<f32> {
+    var offsets = array<vec2<f32>, 4>(
+        vec2<f32>(-0.125, -0.375),
+        vec2<f32>(0.375, -0.125),
+        vec2<f32>(-0.375, 0.125),
+        vec2<f32>(0.125, 0.375),
+    );
+    return offsets[i];
+}
+
+// The point on the billboard quad under a sample. Twin: `sample_point`.
+fn sample_point(world_position: vec3<f32>, dwx: vec3<f32>, dwy: vec3<f32>, offset: vec2<f32>) -> vec3<f32> {
+    return world_position + dwx * offset.x + dwy * offset.y;
+}
+
+// The early-out limit on |quad_uv|, widened by the sample footprint so no
+// covered sample is lost; exactly 1 for one sample. Twin: `quad_uv_limit`.
+fn quad_uv_limit(duv_dx: vec2<f32>, duv_dy: vec2<f32>) -> f32 {
+    if SAMPLE_COUNT > 1u {
+        return 1.0 + SAMPLE_FOOTPRINT_PX * sqrt(dot(duv_dx, duv_dx) + dot(duv_dy, duv_dy));
+    }
+    return 1.0;
+}
+
+// How far, in world units, a sample ray can pass from the pixel-centre ray.
+// Every 4x offset has |x| + |y| = 0.5, so a sample's quad point is at most
+// half the larger pixel step from the centre's, and the ray moves by at most
+// that where it passes the impostor; 1.25 to spare. Twin: `sample_reach`.
+fn sample_reach(dwx: vec3<f32>, dwy: vec3<f32>) -> f32 {
+    return 1.25 * 0.5 * sqrt(max(dot(dwx, dwx), dot(dwy, dwy)));
+}
+
+struct Ray {
+    origin: vec3<f32>,
+    dir: vec3<f32>,
+}
+
+// The view ray through the quad point `p`.
+fn view_ray(p: vec3<f32>, radius: f32) -> Ray {
+    var ray: Ray;
+    if camera.is_orthographic > 0.5 {
+        // Parallel rays. The quad plane passes through the sphere center, so
+        // start the ray one diameter behind the fragment to keep both
+        // intersections at positive t for the selection logic below.
+        ray.dir = -camera_backward();
+        ray.origin = p - ray.dir * (radius * 2.0);
+    } else {
+        ray.origin = camera.camera_position;
+        ray.dir = normalize(p - ray.origin);
+    }
+    return ray;
+}
+
+// The nearest non-negative t at which the ray meets the sphere, negative on a
+// miss. Twin: `sphere_hit`.
+fn sphere_hit(origin: vec3<f32>, dir: vec3<f32>, center: vec3<f32>, radius: f32) -> f32 {
+    let oc = center - origin;
+    let tca = dot(oc, dir);
+    // Sphere behind the ray origin.
+    if tca < 0.0 {
+        return -1.0;
+    }
+    let d2 = dot(oc, oc) - tca * tca;
+    let radius2 = radius * radius;
+    if d2 > radius2 {
+        return -1.0;
+    }
+    let thc = sqrt(radius2 - d2);
+    let t0 = tca - thc;
+    let t1 = tca + thc;
+    // Use the nearest positive intersection.
+    let t = select(t1, t0, t0 > 0.0);
+    if t < 0.0 {
+        return -1.0;
+    }
+    return t;
+}
+
+// How far the ray, as a line, passes outside the sphere's silhouette:
+// negative inside it. Huge for a sphere behind the ray's origin. Lets a
+// fragment far from the silhouette skip the per-sample tests.
+// Twin: `sphere_ray_distance`.
+fn sphere_ray_distance(origin: vec3<f32>, dir: vec3<f32>, center: vec3<f32>, radius: f32) -> f32 {
+    let oc = center - origin;
+    let tca = dot(oc, dir);
+    if tca < 0.0 {
+        return 3.0e38;
+    }
+    return sqrt(max(dot(oc, oc) - tca * tca, 0.0)) - radius;
+}
+
 struct AtomFragmentOutput {
     @builtin(frag_depth) depth: f32,
+    @builtin(sample_mask) sample_mask: u32,
     @location(0) color: vec4<f32>,
 }
 
 @fragment
 fn fs_main(input: AtomImpostorVertexOutput) -> AtomFragmentOutput {
+    // Derivatives first: they must be taken in uniform control flow, before
+    // anything can discard.
+    let dwx = dpdxFine(input.world_position);
+    let dwy = dpdyFine(input.world_position);
+    let duv_dx = dpdxFine(input.quad_uv);
+    let duv_dy = dpdyFine(input.quad_uv);
+
     // Early discard for fragments outside the padded quad circle.
     // quad_uv ranges from -1..1 across the padded quad, so the sphere edge
     // is at dist_sq = 1/quad_padding^2. Discard beyond the quad circle.
+    let uv_limit = quad_uv_limit(duv_dx, duv_dy);
     let dist_sq = dot(input.quad_uv, input.quad_uv);
-    if dist_sq > 1.0 {
+    if dist_sq > uv_limit * uv_limit {
         discard;
     }
 
-    // Ray-sphere intersection using view space for better precision (following reference)
-    var ray_origin: vec3<f32>;
-    var ray_dir: vec3<f32>;
-    if camera.is_orthographic > 0.5 {
-        // Parallel rays. The quad plane passes through the sphere center, so
-        // start the ray one diameter behind the fragment to keep both
-        // intersections at positive t for the selection logic below.
-        ray_dir = -camera_backward();
-        ray_origin = input.world_position - ray_dir * (input.radius * 2.0);
+    // Coverage: one hit test per sample. The shading ray is the pixel
+    // centre's if it hits, otherwise the first sample's that does.
+    var ray = view_ray(input.world_position, input.radius);
+    var t = sphere_hit(ray.origin, ray.dir, input.world_center, input.radius);
+    var mask = 0u;
+    if SAMPLE_COUNT == 1u {
+        mask = select(0u, 1u, t >= 0.0);
     } else {
-        ray_origin = camera.camera_position;
-        ray_dir = normalize(input.world_position - ray_origin);
+        // Far outside the silhouette every sample misses; far inside it every
+        // sample hits. Only fragments near it test each sample.
+        let reach = sample_reach(dwx, dwy);
+        let distance = sphere_ray_distance(ray.origin, ray.dir, input.world_center, input.radius);
+        if distance > reach {
+            discard;
+        }
+        if distance < -reach && t >= 0.0 {
+            mask = 0xFu;
+        }
+        let all_hit = mask != 0u;
+        for (var i = 0u; i < 4u && !all_hit; i++) {
+            let p = sample_point(input.world_position, dwx, dwy, sample_offset_4x(i));
+            let sample_ray = view_ray(p, input.radius);
+            let sample_t = sphere_hit(sample_ray.origin, sample_ray.dir, input.world_center, input.radius);
+            if sample_t >= 0.0 {
+                mask |= 1u << i;
+                if t < 0.0 {
+                    ray = sample_ray;
+                    t = sample_t;
+                }
+            }
+        }
     }
-
-    // Optimized ray-sphere intersection (following reference)
-    let oc = input.world_center - ray_origin;
-    let tca = dot(oc, ray_dir);
-
-    // Early out if sphere is behind camera (following reference)
-    if tca < 0.0 {
-        discard;
-    }
-
-    let d2 = dot(oc, oc) - tca * tca;
-    let radius2 = input.radius * input.radius;
-
-    if d2 > radius2 {
-        discard;
-    }
-
-    // Calculate intersection (following reference)
-    let thc = sqrt(radius2 - d2);
-    let t0 = tca - thc;
-    let t1 = tca + thc;
-
-    // Use the nearest positive intersection (following reference)
-    let t = select(t1, t0, t0 > 0.0);
-    if t < 0.0 {
+    if mask == 0u {
         discard;
     }
 
     // Calculate hit point and normal (following reference)
-    let hit_point = ray_origin + t * ray_dir;
+    let hit_point = ray.origin + t * ray.dir;
     let world_normal = normalize(hit_point - input.world_center);
 
     // Compute depth from the actual hit point
@@ -293,6 +408,7 @@ fn fs_main(input: AtomImpostorVertexOutput) -> AtomFragmentOutput {
 
     var output: AtomFragmentOutput;
     output.depth = depth;
+    output.sample_mask = mask;
     output.color = vec4<f32>(color, 1.0);
     return output;
 }

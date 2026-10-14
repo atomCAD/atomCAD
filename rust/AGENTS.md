@@ -411,6 +411,16 @@ new pipeline goes into `PipelineSet`**, never onto `Renderer`, or it exists
 at one count and panics (or silently misdraws) at the other. Targets are
 sized by the pure `TargetSpec` / `live_target_spec` in `render_target.rs`.
 
+**The impostor shaders decide coverage per sample** (D4): the three
+`*_impostor.wgsl` files each carry a copy of the same coverage block (sample
+offsets, sample rays, hit tests, the early-outs) and read the target's
+sample count from `override SAMPLE_COUNT`, which `PipelineSet::new` sets. A
+change to one copy is made to all of them **and** to the Rust twins in
+`impostor_coverage.rs`. Take screen-space derivatives (`dpdx*`) at the top of
+the fragment entry point, before anything can `discard`: naga accepts a
+derivative after a `discard`, so only `shader_test.rs`'s source check
+catches that mistake.
+
 ## Debugging
 
 - `println!()` output appears in Flutter console

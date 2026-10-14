@@ -7,6 +7,7 @@ pub mod dummy_renderer;
 pub mod font_metrics;
 pub mod gpu_mesh;
 pub mod image_export;
+pub mod impostor_coverage;
 pub mod label_atlas;
 pub mod label_mesh;
 pub mod line_geometry;

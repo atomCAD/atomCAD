@@ -7,6 +7,7 @@ use crate::mesh::Vertex;
 use crate::render_target::{COLOR_FORMAT, DEPTH_FORMAT};
 use crate::renderer::STRAIGHT_ALPHA_BLENDING;
 use crate::transparent_impostor_mesh::TransparentImpostorVertex;
+use std::collections::HashMap;
 use wgpu::*;
 
 /// The bind group layouts every pipeline is built on, by shape: the shared
@@ -135,6 +136,13 @@ impl PipelineSet {
             label: create_label_pipeline(device, &layouts.label, &shaders.label, sample_count),
         }
     }
+}
+
+/// The impostor shaders' `override SAMPLE_COUNT`
+/// (`doc/design_viewport_antialiasing.md` D4): they decide coverage per
+/// sample at the target's sample positions, so they must know the count.
+fn sample_count_constants(sample_count: u32) -> HashMap<String, f64> {
+    HashMap::from([("SAMPLE_COUNT".to_string(), f64::from(sample_count))])
 }
 
 /// The line pipeline (`doc/design_screen_space_lines.md` D4, D6): six
@@ -357,6 +365,7 @@ fn create_atom_impostor_pipeline(
     atom_impostor_shader: &wgpu::ShaderModule,
     sample_count: u32,
 ) -> RenderPipeline {
+    let constants = sample_count_constants(sample_count);
     device.create_render_pipeline(&RenderPipelineDescriptor {
         label: Some("Atom Impostor Render Pipeline"),
         layout: Some(pipeline_layout),
@@ -374,7 +383,10 @@ fn create_atom_impostor_pipeline(
                 blend: Some(BlendState::REPLACE),
                 write_mask: ColorWrites::ALL,
             })],
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            compilation_options: wgpu::PipelineCompilationOptions {
+                constants: &constants,
+                ..Default::default()
+            },
         }),
         primitive: wgpu::PrimitiveState {
             topology: wgpu::PrimitiveTopology::TriangleList,
@@ -412,6 +424,7 @@ fn create_bond_impostor_pipeline(
     bond_impostor_shader: &wgpu::ShaderModule,
     sample_count: u32,
 ) -> RenderPipeline {
+    let constants = sample_count_constants(sample_count);
     device.create_render_pipeline(&RenderPipelineDescriptor {
         label: Some("Bond Impostor Render Pipeline"),
         layout: Some(pipeline_layout),
@@ -429,7 +442,10 @@ fn create_bond_impostor_pipeline(
                 blend: Some(BlendState::REPLACE),
                 write_mask: ColorWrites::ALL,
             })],
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            compilation_options: wgpu::PipelineCompilationOptions {
+                constants: &constants,
+                ..Default::default()
+            },
         }),
         primitive: wgpu::PrimitiveState {
             topology: wgpu::PrimitiveTopology::TriangleList,
@@ -475,6 +491,7 @@ fn create_transparent_impostor_pipeline(
     transparent_impostor_shader: &wgpu::ShaderModule,
     sample_count: u32,
 ) -> RenderPipeline {
+    let constants = sample_count_constants(sample_count);
     device.create_render_pipeline(&RenderPipelineDescriptor {
         label: Some("Transparent Impostor Render Pipeline"),
         layout: Some(pipeline_layout),
@@ -492,7 +509,10 @@ fn create_transparent_impostor_pipeline(
                 blend: Some(STRAIGHT_ALPHA_BLENDING),
                 write_mask: ColorWrites::ALL,
             })],
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            compilation_options: wgpu::PipelineCompilationOptions {
+                constants: &constants,
+                ..Default::default()
+            },
         }),
         primitive: wgpu::PrimitiveState {
             topology: wgpu::PrimitiveTopology::TriangleList,

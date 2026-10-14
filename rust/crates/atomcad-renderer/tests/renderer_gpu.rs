@@ -970,3 +970,333 @@ fn turning_anti_aliasing_off_and_on_restores_the_anti_aliased_image() {
         println!("renderer_gpu: no 4x MSAA on this adapter, both images are 1-sample");
     }
 }
+
+// ---- Viewport anti-aliasing, Phase 2 (doc/design_viewport_antialiasing.md) --
+//
+// Per-sample impostor coverage (D4). Mutation: with the shaders' mask forced
+// to 0b1111, the silhouette, no-seam, bond, ghost and gadget tests fail.
+
+/// Uploads impostors only: `atoms`, `bonds` and `ghosts` as content,
+/// `gadget_atoms` as the gadget pass's guide dots.
+fn upload_impostors(
+    renderer: &mut Renderer,
+    atoms: &AtomImpostorMesh,
+    bonds: &BondImpostorMesh,
+    ghosts: &TransparentImpostorMesh,
+    gadget_atoms: &AtomImpostorMesh,
+) {
+    renderer.update_all_gpu_meshes(
+        &Mesh::new(),
+        &LineMesh::new(),
+        &Mesh::new(),
+        &LineMesh::new(),
+        &LineMesh::new(),
+        atoms,
+        bonds,
+        ghosts,
+        &TransparentSurfaceMesh::new(),
+        &LabelMesh::new(),
+        gadget_atoms,
+        &BondImpostorMesh::new(),
+        true,
+        Some((1, "Main".to_string())),
+    );
+}
+
+fn atom(centre: Vec3, radius: f32, albedo: [f32; 3]) -> AtomImpostorMesh {
+    let mut atoms = AtomImpostorMesh::new();
+    atoms.add_atom_quad(&centre, radius, &albedo, 0.5, 0.0, &[0.0; 4]);
+    atoms
+}
+
+/// A renderer at the default size with a multisampled live target, or
+/// `None` (with a note) when there is no adapter or no 4× MSAA on it. The
+/// skip asks the adapter, not the live target, so a live target that lost
+/// its samples fails instead of skipping.
+fn try_msaa_renderer() -> Option<Renderer> {
+    let renderer = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT)?;
+    if !renderer.msaa_supported() {
+        println!("renderer_gpu: no 4x MSAA on this adapter, skipping");
+        return None;
+    }
+    assert_eq!(renderer.live_sample_count(), LIVE_SAMPLE_COUNT);
+    Some(renderer)
+}
+
+/// Per-pixel coverage of the live view, from one render on black and one on
+/// white. A pixel resolved from opaque content covering a fraction `c` of
+/// its samples is `c·colour + (1 − c)·background`, so the two renders differ
+/// by `(1 − c)·255`. For blended content `c` is coverage times alpha.
+fn live_coverage(renderer: &mut Renderer, name: &str) -> Vec<f32> {
+    let on_black = renderer.render(BLACK);
+    let on_white = renderer.render([255, 255, 255]);
+    dump(&format!("{name}_on_black"), &on_black);
+    dump(&format!("{name}_on_white"), &on_white);
+    on_black
+        .chunks_exact(4)
+        .zip(on_white.chunks_exact(4))
+        .map(|(b, w)| {
+            let diff: f32 = (0..3).map(|c| w[c] as f32 - b[c] as f32).sum::<f32>() / 3.0;
+            1.0 - diff / 255.0
+        })
+        .collect()
+}
+
+/// The world position of the centre of pixel `index` in the top-down
+/// orthographic view (`top_down_orthographic`).
+fn world_of_pixel(index: usize) -> (f32, f32) {
+    let column = (index as u32 % VIEWPORT_WIDTH) as f32;
+    let row = (index as u32 / VIEWPORT_WIDTH) as f32;
+    (
+        (column + 0.5 - VIEWPORT_WIDTH as f32 / 2.0) / 10.0,
+        (VIEWPORT_HEIGHT as f32 / 2.0 - row - 0.5) / 10.0,
+    )
+}
+
+fn intermediate(coverage: &[f32], low: f32, high: f32) -> usize {
+    coverage.iter().filter(|&&c| c > low && c < high).count()
+}
+
+/// D4: the summed coverage of a sphere of radius 20 px is its area, and its
+/// outline has partly covered pixels.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn a_spheres_summed_coverage_is_its_area() {
+    let Some(mut renderer) = try_msaa_renderer() else {
+        return;
+    };
+    top_down_orthographic(&mut renderer);
+    upload_impostors(
+        &mut renderer,
+        &atom(Vec3::ZERO, 2.0, [0.9, 0.9, 0.9]),
+        &BondImpostorMesh::new(),
+        &TransparentImpostorMesh::new(),
+        &AtomImpostorMesh::new(),
+    );
+    let coverage = live_coverage(&mut renderer, "aa_sphere_20px");
+    let area: f32 = coverage.iter().sum();
+    let expected = std::f32::consts::PI * 20.0 * 20.0;
+    assert!(
+        (area / expected - 1.0).abs() < 0.02,
+        "coverage {area} px² vs π r² = {expected}"
+    );
+    let edge = intermediate(&coverage, 0.1, 0.9);
+    assert!(edge > 60, "the outline is not anti-aliased: {edge} pixels");
+}
+
+/// D4: a sub-pixel sphere (r = 0.7 px) rendered at 16 sub-pixel offsets
+/// covers π r² on average, and its coverage changes with the offset (a
+/// single sample would make each render all-or-nothing).
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn a_sub_pixel_spheres_mean_coverage_is_its_area() {
+    let Some(mut renderer) = try_msaa_renderer() else {
+        return;
+    };
+    top_down_orthographic(&mut renderer);
+    let mut areas = Vec::new();
+    for i in 0..4 {
+        for j in 0..4 {
+            // Quarter-pixel steps, in world units (10 px per unit).
+            let centre = Vec3::new((i as f32 + 0.125) * 0.025, (j as f32 + 0.125) * 0.025, 0.0);
+            upload_impostors(
+                &mut renderer,
+                &atom(centre, 0.07, [0.9, 0.9, 0.9]),
+                &BondImpostorMesh::new(),
+                &TransparentImpostorMesh::new(),
+                &AtomImpostorMesh::new(),
+            );
+            let coverage = live_coverage(&mut renderer, &format!("aa_sphere_subpx_{i}_{j}"));
+            areas.push(coverage.iter().sum::<f32>());
+        }
+    }
+    let mean = areas.iter().sum::<f32>() / areas.len() as f32;
+    let expected = std::f32::consts::PI * 0.7 * 0.7;
+    assert!(
+        (mean / expected - 1.0).abs() < 0.1,
+        "mean coverage {mean} px² vs π r² = {expected} ({areas:?})"
+    );
+    let first = areas[0];
+    assert!(
+        areas.iter().any(|a| (a - first).abs() > 0.1),
+        "every offset gives the same coverage: {areas:?}"
+    );
+}
+
+/// D4: one opaque sphere in front of another with a depth gap. Along the
+/// front sphere's silhouette over the back one the two colours mix, and the
+/// background never shows through, whichever is drawn first.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn a_sphere_in_front_of_another_leaves_no_seam() {
+    let Some(mut renderer) = try_msaa_renderer() else {
+        return;
+    };
+    top_down_orthographic(&mut renderer);
+    const BLUE: [u8; 3] = [0, 0, 255];
+    // Red, 20 px, high above a green one of 25 px whose centre is 25 px to
+    // the right: the front silhouette crosses the back disc.
+    let front = (Vec3::new(0.0, 0.0, 10.0), 2.0, [1.0, 0.0, 0.0]);
+    let back = (Vec3::new(2.5, 0.0, 0.0), 2.5, [0.0, 1.0, 0.0]);
+    for (order, first, second) in [("front_first", front, back), ("back_first", back, front)] {
+        let mut atoms = AtomImpostorMesh::new();
+        for (centre, radius, albedo) in [first, second] {
+            atoms.add_atom_quad(&centre, radius, &albedo, 0.5, 0.0, &[0.0; 4]);
+        }
+        upload_impostors(
+            &mut renderer,
+            &atoms,
+            &BondImpostorMesh::new(),
+            &TransparentImpostorMesh::new(),
+            &AtomImpostorMesh::new(),
+        );
+        let live = renderer.render(BLUE);
+        dump(&format!("aa_no_seam_{order}"), &live);
+
+        let mut arc = 0;
+        let mut mixed = 0;
+        for (index, pixel) in live.chunks_exact(4).enumerate() {
+            let (x, y) = world_of_pixel(index);
+            let to_front = (x * x + y * y).sqrt();
+            let to_back = ((x - 2.5).powi(2) + y * y).sqrt();
+            // Within 1.5 px of the front silhouette, well inside the back disc.
+            if (to_front - 2.0).abs() > 0.15 || to_back > 2.1 {
+                continue;
+            }
+            arc += 1;
+            let [b, g, r] = [pixel[0] as f32, pixel[1] as f32, pixel[2] as f32];
+            // One background sample of four would be 64 levels of blue on
+            // top of the white specular both spheres add to every channel.
+            assert!(
+                b - r.min(g) < 40.0,
+                "{order}: background shows through at {x:.2},{y:.2}: rgb {r} {g} {b}"
+            );
+            let redness = r / (r + g).max(1.0);
+            if r + g > 30.0 && redness > 0.2 && redness < 0.8 {
+                mixed += 1;
+            }
+        }
+        assert!(arc > 60, "{order}: arc too short to judge: {arc}");
+        assert!(
+            mixed > 15,
+            "{order}: the silhouette over the back sphere is not anti-aliased: {mixed} of {arc}"
+        );
+    }
+}
+
+/// D4: a bond's long edges are anti-aliased, and its flat ends do not paint
+/// past the clip planes.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn a_bonds_long_edges_are_anti_aliased_and_its_ends_stay_clipped() {
+    let Some(mut renderer) = try_msaa_renderer() else {
+        return;
+    };
+    top_down_orthographic(&mut renderer);
+    let angle: f32 = 0.3;
+    let axis = Vec3::new(angle.cos(), angle.sin(), 0.0);
+    let mut bonds = BondImpostorMesh::new();
+    bonds.add_bond_with_positions(&(axis * -6.0), &(axis * 6.0), 1.0, &[0.9, 0.9, 0.9]);
+    upload_impostors(
+        &mut renderer,
+        &AtomImpostorMesh::new(),
+        &bonds,
+        &TransparentImpostorMesh::new(),
+        &AtomImpostorMesh::new(),
+    );
+    let coverage = live_coverage(&mut renderer, "aa_bond");
+
+    let mut edge = 0;
+    for (index, &c) in coverage.iter().enumerate() {
+        let (x, y) = world_of_pixel(index);
+        let along = x * axis.x + y * axis.y;
+        let across = (-x * axis.y + y * axis.x).abs();
+        if along.abs() > 6.15 {
+            assert!(c < 0.02, "paints past the end at {x:.2},{y:.2}: {c}");
+        } else if along.abs() < 5.85 && across < 0.85 {
+            assert!(c > 0.98, "a hole inside the bond at {x:.2},{y:.2}: {c}");
+        } else if along.abs() < 5.0 && c > 0.1 && c < 0.9 {
+            edge += 1;
+        }
+    }
+    // Two long edges of 100 px each.
+    assert!(
+        edge > 100,
+        "the long edges are not anti-aliased: {edge} pixels"
+    );
+}
+
+/// D4: a ghost (x-ray) atom's silhouette composites partly covered pixels,
+/// and every pixel of the read-back image stays opaque.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn a_ghosts_silhouette_is_anti_aliased_and_the_image_stays_opaque() {
+    let Some(mut renderer) = try_msaa_renderer() else {
+        return;
+    };
+    top_down_orthographic(&mut renderer);
+    let alpha = 0.5;
+    let mut ghosts = TransparentImpostorMesh::new();
+    ghosts.add_atom_quad(
+        &Vec3::ZERO,
+        2.0,
+        &[0.9, 0.9, 0.9],
+        0.5,
+        0.0,
+        &[0.0; 4],
+        alpha,
+    );
+    upload_impostors(
+        &mut renderer,
+        &AtomImpostorMesh::new(),
+        &BondImpostorMesh::new(),
+        &ghosts,
+        &AtomImpostorMesh::new(),
+    );
+    for background in [BLACK, [255, 255, 255]] {
+        let live = renderer.render(background);
+        assert!(
+            live.chunks_exact(4).all(|p| p[3] == 255),
+            "a pixel is not opaque on {background:?}"
+        );
+    }
+    // Coverage times alpha: `alpha` inside, 0 outside, in between on the edge.
+    let coverage = live_coverage(&mut renderer, "aa_ghost");
+    let inside = coverage[(VIEWPORT_HEIGHT / 2 * VIEWPORT_WIDTH + VIEWPORT_WIDTH / 2) as usize];
+    assert!((inside - alpha).abs() < 0.02, "interior {inside}");
+    let edge = intermediate(&coverage, 0.1 * alpha, 0.9 * alpha);
+    assert!(
+        edge > 60,
+        "the ghost's outline is not anti-aliased: {edge} pixels"
+    );
+    let area: f32 = coverage.iter().sum::<f32>() / alpha;
+    let expected = std::f32::consts::PI * 20.0 * 20.0;
+    assert!((area / expected - 1.0).abs() < 0.03, "{area} vs {expected}");
+}
+
+/// D4: a guide dot drawn in the gadget pass, with the content atom pipeline,
+/// is anti-aliased too.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn a_gadget_guide_dot_is_anti_aliased() {
+    let Some(mut renderer) = try_msaa_renderer() else {
+        return;
+    };
+    top_down_orthographic(&mut renderer);
+    upload_impostors(
+        &mut renderer,
+        &AtomImpostorMesh::new(),
+        &BondImpostorMesh::new(),
+        &TransparentImpostorMesh::new(),
+        &atom(Vec3::ZERO, 1.0, [0.9, 0.9, 0.9]),
+    );
+    let coverage = live_coverage(&mut renderer, "aa_gadget_dot");
+    let area: f32 = coverage.iter().sum();
+    let expected = std::f32::consts::PI * 10.0 * 10.0;
+    assert!((area / expected - 1.0).abs() < 0.03, "{area} vs {expected}");
+    let edge = intermediate(&coverage, 0.1, 0.9);
+    assert!(
+        edge > 30,
+        "the guide dot is not anti-aliased: {edge} pixels"
+    );
+}

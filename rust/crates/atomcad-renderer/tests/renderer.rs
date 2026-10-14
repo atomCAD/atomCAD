@@ -59,3 +59,8 @@ mod line_geometry_test;
 // (doc/design_screen_space_lines.md D9).
 #[path = "renderer/line_lod_test.rs"]
 mod line_lod_test;
+
+// Viewport anti-aliasing, Phase 2: the Rust twins of the impostor shaders'
+// per-sample coverage (doc/design_viewport_antialiasing.md D4, D6).
+#[path = "renderer/impostor_coverage_test.rs"]
+mod impostor_coverage_test;

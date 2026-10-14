@@ -893,6 +893,49 @@ release library, a GUI check needs `cargo build --release` first.
   any covered sample, so the number of shaded impostor fragments grows most
   in exactly this view. Record the numbers in this document; report back
   before Phase 3 if the regression is large.
+
+  **Measured (2026-10-14): the regression is large.** Not on the nanobeam
+  itself (it needs the whole app; the GUI was not driven) but on a stand-in
+  with its atom count, rendered through `Renderer::render` in a temporary
+  release-mode harness: a diamond slab of 60 × 60 × 37 cells, 1.07 M atom
+  impostors (r = 0.45 Å) and 2.1 M bond impostors (r = 0.12 Å), a
+  1600 × 1000 live target, mean of 20 frames after 3 warm-up frames,
+  readback included, viewed obliquely from three distances:
+
+  | Frame time (ms) | far, ~3 px/atom | mid, ~10 px/atom | near, ~30 px/atom |
+  |---|---|---|---|
+  | *iGPU (AMD Radeon, Vulkan; the app's default adapter)* | | | |
+  | Anti-aliasing off (the pre-design path) | 29 | 67 | 63 |
+  | Phase 1 (4× MSAA, impostors per pixel) | 45 | 95 | 85 |
+  | Phase 2 | 78 | 160 | 124 |
+  | *dGPU (RTX 3060 Laptop, Vulkan)* | | | |
+  | Phase 1 | 8.7 | 14.1 | 10.9 |
+  | Phase 2 | 15.9 | 26.7 | 18.0 |
+
+  So Phase 2 costs +45–90 % over Phase 1 on both GPUs, at every zoom, not
+  only far out. D4's cost argument ("four hit tests … next to a PBR
+  evaluation that costs several times all four") does not hold. The impostor
+  shaders write `frag_depth`, so there is no early depth test, and on a deep
+  crystal every fragment of every quad, occluded or not, runs the coverage
+  code. Diagnostic variants on the iGPU (far / mid):
+
+  | Variant | far | mid |
+  |---|---|---|
+  | Phase 2 shaders on the 1-sample path, mask `0xF` (cost of writing `sample_mask`) | 47 | 98 |
+  | Phase 2 arithmetic, mask widened to `0xF` on output (cost of partial masks) | 80 | 158 |
+  | Phase 2 without the per-sample loop | 50 | 105 |
+  | Per-sample tests replaced by a linearised distance (`d + ∂d/∂x·o.x + ∂d/∂y·o.y`, prototype) | 67 | 144 |
+
+  Writing a sample mask and partial coverage cost next to nothing; the
+  per-sample loop is the cost, and it is paid even where the shipped
+  early-outs (below) let a fragment skip it, presumably because a wave runs
+  the loop if any of its fragments needs it, and small impostors put an edge
+  in almost every wave. Swapping the loop for the linearised test recovers
+  only about a third. Two early-outs were added to step 3 of D4 and kept
+  (sound, unit-tested against perspective billboards, a few percent at mid
+  range): a pixel-centre ray further than `sample_reach` outside the
+  silhouette discards without per-sample tests, and for spheres one further
+  inside takes all four samples.
 - Tests (CPU):
   - `impostor_coverage`: the 4× offsets are WebGPU's and are centred (sum
     zero); the single-sample offset is the centre; a sphere hit by every

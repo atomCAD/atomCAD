@@ -201,3 +201,141 @@ fn line_shader_outputs_carry_the_d4_interpolation() {
             .collect::<Vec<_>>()
     );
 }
+
+// ---- Viewport anti-aliasing, Phase 2 (doc/design_viewport_antialiasing.md) --
+
+/// The shaders that decide impostor coverage per sample (D4).
+const IMPOSTOR_SHADERS: [&str; 3] = [
+    "atom_impostor.wgsl",
+    "bond_impostor.wgsl",
+    "transparent_impostor.wgsl",
+];
+
+/// D4: each impostor shader takes the target's sample count as the
+/// pipeline-overridable constant `SAMPLE_COUNT` (set by `PipelineSet::new`)
+/// and writes `@builtin(sample_mask)` from `fs_main`.
+#[test]
+fn impostor_shaders_declare_sample_count_and_write_a_sample_mask() {
+    for name in IMPOSTOR_SHADERS {
+        let module = parse(&shader_dir().join(name));
+        let sample_count = module
+            .overrides
+            .iter()
+            .find(|(_, o)| o.name.as_deref() == Some("SAMPLE_COUNT"))
+            .unwrap_or_else(|| panic!("{name} has no `override SAMPLE_COUNT`"))
+            .1;
+        assert_eq!(
+            module.types[sample_count.ty].inner,
+            naga::TypeInner::Scalar(naga::Scalar::U32),
+            "{name}: SAMPLE_COUNT is not a u32"
+        );
+
+        let entry = module
+            .entry_points
+            .iter()
+            .find(|e| e.name == "fs_main")
+            .unwrap_or_else(|| panic!("{name} has no fs_main"));
+        let result = entry.function.result.as_ref().expect("fs_main returns");
+        let writes_mask = match &module.types[result.ty].inner {
+            naga::TypeInner::Struct { members, .. } => members
+                .iter()
+                .any(|m| m.binding == Some(naga::Binding::BuiltIn(naga::BuiltIn::SampleMask))),
+            other => panic!("{name}: fs_main does not return a struct: {other:?}"),
+        };
+        assert!(writes_mask, "{name}: fs_main writes no sample_mask");
+    }
+}
+
+/// The body of every `fn` in a WGSL source, by name (brace matching; the
+/// shaders have no braces in comments or strings).
+fn function_bodies(source: &str) -> Vec<(String, String)> {
+    let mut bodies = Vec::new();
+    let mut rest = source;
+    while let Some(at) = rest.find("fn ") {
+        let after = &rest[at + 3..];
+        let name: String = after
+            .chars()
+            .take_while(|c| c.is_alphanumeric() || *c == '_')
+            .collect();
+        let open = after.find('{').expect("fn has a body");
+        let mut depth = 0;
+        let mut close = open;
+        for (i, c) in after[open..].char_indices() {
+            match c {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        close = open + i;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        bodies.push((name, after[open + 1..close].to_string()));
+        rest = &after[close..];
+    }
+    bodies
+}
+
+/// Removes `// …` comments, so the check below reads code only.
+fn strip_line_comments(source: &str) -> String {
+    source
+        .lines()
+        .map(|line| line.split("//").next().unwrap_or(""))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// D4: the derivatives the per-sample rays are built from must be taken
+/// before anything can discard (a derivative after a `discard` reads helper
+/// lanes' garbage, or is rejected outright by stricter compilers). Checked on
+/// the source: in no function may a `dpdx`/`dpdy`/`fwidth` follow a
+/// `discard`, or a call to a function that can discard.
+#[test]
+fn impostor_shaders_take_derivatives_before_any_discard() {
+    const DERIVATIVES: [&str; 3] = ["dpdx", "dpdy", "fwidth"];
+    for name in IMPOSTOR_SHADERS {
+        let source =
+            strip_line_comments(&std::fs::read_to_string(shader_dir().join(name)).unwrap());
+        let bodies = function_bodies(&source);
+
+        // The functions that can discard, transitively.
+        let mut discarding: Vec<&str> = bodies
+            .iter()
+            .filter(|(_, body)| body.contains("discard"))
+            .map(|(name, _)| name.as_str())
+            .collect();
+        loop {
+            let more: Vec<&str> = bodies
+                .iter()
+                .filter(|(f, _)| !discarding.contains(&f.as_str()))
+                .filter(|(_, body)| discarding.iter().any(|d| body.contains(&format!("{d}("))))
+                .map(|(f, _)| f.as_str())
+                .collect();
+            if more.is_empty() {
+                break;
+            }
+            discarding.extend(more);
+        }
+
+        let mut checked_a_derivative = false;
+        for (function, body) in &bodies {
+            let first_discard = std::iter::once("discard".to_string())
+                .chain(discarding.iter().map(|d| format!("{d}(")))
+                .filter_map(|needle| body.find(&needle))
+                .min();
+            for derivative in DERIVATIVES {
+                for (at, _) in body.match_indices(derivative) {
+                    checked_a_derivative = true;
+                    assert!(
+                        first_discard.is_none_or(|d| at < d),
+                        "{name}: `{derivative}` in `{function}` after something that can discard"
+                    );
+                }
+            }
+        }
+        assert!(checked_a_derivative, "{name} takes no derivatives");
+    }
+}
