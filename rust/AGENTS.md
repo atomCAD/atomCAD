@@ -402,6 +402,15 @@ moves or a mesh is uploaded, so a new per-view uniform must also exist once
 per `View`: a single shared one would leave an export's values in every live
 frame until the next camera move.
 
+**Pipelines exist once per sample count, in `PipelineSet`**
+(`pipelines.rs`, `doc/design_viewport_antialiasing.md` D2). The live target
+is 4× multisampled and the offscreen ones are not, and a wgpu pipeline only
+draws into attachments of the count it was compiled for, so the renderer
+holds a set per count and `draw_to_target` picks by the target's count. **A
+new pipeline goes into `PipelineSet`**, never onto `Renderer`, or it exists
+at one count and panics (or silently misdraws) at the other. Targets are
+sized by the pure `TargetSpec` / `live_target_spec` in `render_target.rs`.
+
 ## Debugging
 
 - `println!()` output appears in Flutter console

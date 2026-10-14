@@ -2112,6 +2112,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   (BigInt, NodeView) dco_decode_record_u_64_node_view(dynamic raw);
 
   @protected
+  RenderingPreferences dco_decode_rendering_preferences(dynamic raw);
+
+  @protected
   ScreenshotResult dco_decode_screenshot_result(dynamic raw);
 
   @protected
@@ -4574,6 +4577,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (BigInt, NodeView) sse_decode_record_u_64_node_view(
+      SseDeserializer deserializer);
+
+  @protected
+  RenderingPreferences sse_decode_rendering_preferences(
       SseDeserializer deserializer);
 
   @protected
@@ -7136,6 +7143,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_record_u_64_node_view(
       (BigInt, NodeView) self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_rendering_preferences(
+      RenderingPreferences self, SseSerializer serializer);
 
   @protected
   void sse_encode_screenshot_result(

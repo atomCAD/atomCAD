@@ -95,6 +95,9 @@ class PreferencesKeys {
   static const Key documentTabPlacementDropdown =
       Key('pref_document_tab_placement_dropdown');
 
+  // Rendering
+  static const Key antiAliasingCheckbox = Key('pref_anti_aliasing_checkbox');
+
   static const Key layoutAlgorithmDropdown =
       Key('pref_layout_algorithm_dropdown');
   static const Key respectHandMovedInReflowCheckbox =
@@ -1171,6 +1174,60 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                                 _applyPreferences();
                               }
                             },
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.medium),
+
+                    // Rendering Section — how the live viewport is drawn
+                    // (`doc/design_viewport_antialiasing.md` D8). Exports and
+                    // thumbnails are always anti-aliased and ignore it.
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(AppSpacing.medium),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[200],
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Rendering',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.medium),
+                          Row(
+                            children: [
+                              Checkbox(
+                                key: PreferencesKeys.antiAliasingCheckbox,
+                                value: _preferences
+                                    .renderingPreferences.antiAliasing,
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    setState(() {
+                                      _preferences.renderingPreferences
+                                          .antiAliasing = value;
+                                    });
+                                    _applyPreferences();
+                                  }
+                                },
+                              ),
+                              const SizedBox(width: 8),
+                              const Expanded(
+                                child: Tooltip(
+                                  message:
+                                      'Smooths the edges of solids in the viewport '
+                                      '(4x multisampling). Turn off to save GPU '
+                                      'memory and time on a slow machine.',
+                                  child: Text('Anti-aliasing'),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),

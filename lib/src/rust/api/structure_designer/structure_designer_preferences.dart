@@ -8,7 +8,7 @@ import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `default_background_color`, `default_ball_and_stick_cull_depth`, `default_csg_mesh_cache_mb`, `default_csg_sketch_cache_mb`, `default_drawing_plane_grid_color`, `default_drawing_plane_grid_strong_color`, `default_eval_memo_cache_mb`, `default_grid_color`, `default_grid_size`, `default_grid_strong_color`, `default_hide_coplanar_wireframe_edges`, `default_invisible_node_cache_mb`, `default_isosurface_cell_budget`, `default_isosurface_fallback_spacing`, `default_isosurface_quality_multiplier`, `default_label_scale`, `default_lattice_grid_color`, `default_lattice_grid_strong_color`, `default_max_displacement`, `default_samples_per_unit_cell`, `default_scene_alpha`, `default_settle_steps`, `default_sharpness_angle_threshold`, `default_show_axes`, `default_show_geometry_shell_for_atomic`, `default_show_grid`, `default_show_lattice_axes`, `default_space_filling_cull_depth`, `default_steps_per_frame`, `default_tool_envelope_color`, `default_true`, `default_unit_cell_wireframe_color`, `default_wireframe_active_color`, `default_wireframe_inactive_color`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 enum AtomicRenderingMethod {
   triangleMesh,
@@ -507,6 +507,30 @@ enum NodeTitleMode {
       .crateApiStructureDesignerStructureDesignerPreferencesNodeTitleModeDefault();
 }
 
+/// How the live viewport is rendered (`doc/design_viewport_antialiasing.md`
+/// D8). Twin of the domain struct.
+class RenderingPreferences {
+  /// 4× MSAA for the live viewport. Default on.
+  bool antiAliasing;
+
+  RenderingPreferences({
+    required this.antiAliasing,
+  });
+
+  static Future<RenderingPreferences> default_() => RustLib.instance.api
+      .crateApiStructureDesignerStructureDesignerPreferencesRenderingPreferencesDefault();
+
+  @override
+  int get hashCode => antiAliasing.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RenderingPreferences &&
+          runtimeType == other.runtimeType &&
+          antiAliasing == other.antiAliasing;
+}
+
 /// Preferences for energy minimization simulation.
 class SimulationPreferences {
   /// Use spatial grid with distance cutoff for van der Waals interactions.
@@ -573,6 +597,7 @@ class StructureDesignerPreferences {
   final SimulationPreferences simulationPreferences;
   final MemoryPreferences memoryPreferences;
   final InterfacePreferences interfacePreferences;
+  final RenderingPreferences renderingPreferences;
 
   const StructureDesignerPreferences.raw({
     required this.geometryVisualizationPreferences,
@@ -583,6 +608,7 @@ class StructureDesignerPreferences {
     required this.simulationPreferences,
     required this.memoryPreferences,
     required this.interfacePreferences,
+    required this.renderingPreferences,
   });
 
   StructureDesignerPreferences cloneSelf() => RustLib.instance.api
@@ -605,7 +631,8 @@ class StructureDesignerPreferences {
       layoutPreferences.hashCode ^
       simulationPreferences.hashCode ^
       memoryPreferences.hashCode ^
-      interfacePreferences.hashCode;
+      interfacePreferences.hashCode ^
+      renderingPreferences.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -621,7 +648,8 @@ class StructureDesignerPreferences {
           layoutPreferences == other.layoutPreferences &&
           simulationPreferences == other.simulationPreferences &&
           memoryPreferences == other.memoryPreferences &&
-          interfacePreferences == other.interfacePreferences;
+          interfacePreferences == other.interfacePreferences &&
+          renderingPreferences == other.renderingPreferences;
 }
 
 /// Dart-facing twin of [`domain::SurfaceTransparencyMode`].

@@ -1,12 +1,8 @@
-// The camera uniform and the render target's size and pixel scale
-// (doc/design_screen_space_lines.md D2, D3, Phase 1).
+// The camera uniform (doc/design_screen_space_lines.md D3, Phase 1). The
+// render target's size and pixel scale are in `render_target_test.rs`.
 
 use atomcad_renderer::camera::Camera;
-use atomcad_renderer::image_export::{
-    IMAGE_EXPORT_MAX_SIZE, IMAGE_EXPORT_SUPERSAMPLING, fit_export_size,
-};
-use atomcad_renderer::renderer::{CameraUniform, RenderTarget};
-use atomcad_renderer::thumbnail::{THUMBNAIL_RENDER_SIZE, THUMBNAIL_SIZE, THUMBNAIL_SUPERSAMPLING};
+use atomcad_renderer::renderer::CameraUniform;
 use std::mem::offset_of;
 
 // ---- CameraUniform ----------------------------------------------------------
@@ -69,48 +65,4 @@ fn camera_uniform_padding_is_zero() {
     assert_eq!(uniform._padding0, 0);
     assert_eq!(uniform._padding1, 0);
     assert_eq!(uniform._padding2, [0, 0, 0]);
-}
-
-// ---- RenderTarget::dims -----------------------------------------------------
-
-#[test]
-fn live_viewport_target_is_its_own_size_at_scale_1() {
-    let (size, scale) = RenderTarget::dims(1024, 768, 1);
-    assert_eq!(
-        (size.width, size.height, size.depth_or_array_layers),
-        (1024, 768, 1)
-    );
-    assert_eq!(scale, 1.0);
-}
-
-#[test]
-fn thumbnail_target_is_supersampled_at_its_pixel_scale() {
-    let (size, scale) = RenderTarget::dims(THUMBNAIL_SIZE, THUMBNAIL_SIZE, THUMBNAIL_SUPERSAMPLING);
-    assert_eq!(
-        (size.width, size.height),
-        (THUMBNAIL_RENDER_SIZE, THUMBNAIL_RENDER_SIZE)
-    );
-    assert_eq!(scale, 2.0);
-}
-
-#[test]
-fn export_target_is_supersampled_at_its_pixel_scale() {
-    let (size, scale) = RenderTarget::dims(800, 600, IMAGE_EXPORT_SUPERSAMPLING);
-    assert_eq!((size.width, size.height), (1600, 1200));
-    assert_eq!(scale, IMAGE_EXPORT_SUPERSAMPLING as f32);
-}
-
-#[test]
-fn clamped_export_target_keeps_the_scale_and_fits_the_texture_limit() {
-    // An oversized request is fitted first (as the api does), then the
-    // target is the fitted size × the supersampling, at the same scale.
-    let (width, height, reduced) = fit_export_size(6000, 3000);
-    assert!(reduced);
-    assert_eq!((width, height), (IMAGE_EXPORT_MAX_SIZE, 1024));
-
-    let (size, scale) = RenderTarget::dims(width, height, IMAGE_EXPORT_SUPERSAMPLING);
-    assert_eq!((size.width, size.height), (4096, 2048));
-    assert_eq!(scale, 2.0);
-    // wgpu's default max_texture_dimension_2d.
-    assert!(size.width <= 8192 && size.height <= 8192);
 }

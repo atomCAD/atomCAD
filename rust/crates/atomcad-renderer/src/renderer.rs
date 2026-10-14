@@ -1,19 +1,19 @@
 use super::camera::Camera;
 use super::gpu_mesh::GPUMesh;
 use super::mesh::Mesh;
-use super::mesh::Vertex;
 use crate::atom_impostor_mesh::AtomImpostorMesh;
 use crate::bond_impostor_mesh::BondImpostorMesh;
 use crate::label_atlas::decode_font_atlas;
 use crate::label_mesh::LabelMesh;
-use crate::label_mesh::LabelVertex;
 use crate::line_lod::{LINE_LOD_SLOTS, LodSlot, SlotLod, lod_uniform_entries};
 use crate::line_mesh::LineMesh;
-use crate::line_mesh::LineSegmentInstance;
+use crate::pipelines::{PipelineLayouts, PipelineSet, Shaders};
+use crate::render_target::{
+    COLOR_FORMAT, DEPTH_FORMAT, RenderQuality, RenderTarget, TargetSpec, live_target_spec,
+};
 use crate::surface_sort::sorted_component_order;
 use crate::thumbnail::ThumbnailBackground;
 use crate::transparent_impostor_mesh::TransparentImpostorMesh;
-use crate::transparent_impostor_mesh::TransparentImpostorVertex;
 use crate::transparent_sort::sorted_transparent_indices;
 use crate::transparent_surface_mesh::{
     SurfaceComponentRange, SurfaceTransparencyMode, TransparentSurfaceMesh,
@@ -108,8 +108,6 @@ impl CameraUniform {
     }
 }
 
-const DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32Float;
-
 /// Straight (not premultiplied) alpha blending, the blend state of every
 /// blended pipeline: lines, labels, transparent impostors and transparent
 /// surfaces (`doc/design_screen_space_lines.md` D6).
@@ -165,61 +163,6 @@ impl LineLodBinding {
     }
 }
 
-/// What one draw renders into: colour and depth textures of one size and the
-/// buffer the colour is read back through. The live viewport owns one and the
-/// thumbnail owns another, so a thumbnail capture never resizes or
-/// reallocates the viewport's (`doc/design_network_thumbnails.md` D5).
-///
-/// A target also owns its **pixel scale** (`doc/design_screen_space_lines.md`
-/// D2): how many of its pixels make one pixel of the image finally shown or
-/// saved. Only a supersampled target has a scale other than 1, and the scale
-/// is fixed where the target is created, so nothing drawn into it, and no
-/// export code, has to know about supersampling.
-pub struct RenderTarget {
-    texture: Texture,
-    texture_view: TextureView,
-    depth_texture_view: TextureView,
-    output_buffer: Buffer,
-    /// In render pixels: the output size × the supersampling factor.
-    size: Extent3d,
-    /// Render-target pixels per output pixel.
-    pixel_scale: f32,
-}
-
-impl RenderTarget {
-    /// A target that renders an `out_width × out_height` image at
-    /// `supersampling`×: `size = out × supersampling`,
-    /// `pixel_scale = supersampling`.
-    pub fn new(device: &Device, out_width: u32, out_height: u32, supersampling: u32) -> Self {
-        let (size, pixel_scale) = Self::dims(out_width, out_height, supersampling);
-        let texture = Renderer::create_texture(device, &size);
-        let texture_view = texture.create_view(&TextureViewDescriptor::default());
-        let depth_texture = Renderer::create_depth_texture(device, &size);
-        let depth_texture_view = depth_texture.create_view(&TextureViewDescriptor::default());
-        let output_buffer = Renderer::create_output_buffer(device, &size);
-        Self {
-            texture,
-            texture_view,
-            depth_texture_view,
-            output_buffer,
-            size,
-            pixel_scale,
-        }
-    }
-
-    /// The size and pixel scale of a target for an `out_width × out_height`
-    /// image at `supersampling`×: the rule [`RenderTarget::new`] applies,
-    /// split out so it can be tested without a device.
-    pub fn dims(out_width: u32, out_height: u32, supersampling: u32) -> (Extent3d, f32) {
-        let size = Extent3d {
-            width: out_width * supersampling,
-            height: out_height * supersampling,
-            depth_or_array_layers: 1,
-        };
-        (size, supersampling as f32)
-    }
-}
-
 /// Which parts of the scene a draw includes.
 #[derive(Clone, Copy)]
 struct PassFlags {
@@ -235,26 +178,20 @@ struct PassFlags {
 pub struct Renderer {
     device: Device,
     queue: Queue,
-    triangle_pipeline: RenderPipeline,
-    /// Every line mesh: instanced screen-space segments, blended, depth
-    /// tested but not depth writing (`doc/design_screen_space_lines.md` D6).
-    /// Its own layout, `[camera, model, line LOD]`.
-    line_pipeline: RenderPipeline,
-    atom_impostor_pipeline: RenderPipeline,
-    bond_impostor_pipeline: RenderPipeline,
-    transparent_impostor_pipeline: RenderPipeline,
-    /// The three transparent-surface pipelines, all reading `mesh.wgsl` with
-    /// `Vertex::desc()` and differing only in `cull_mode`. Alpha blending on,
-    /// depth test on, depth **write off** — or the first transparent fragment
-    /// kills the surface's own second layer. See
-    /// `doc/design_isosurface_node.md` §Pipelines and blend mode.
-    surface_no_cull_pipeline: RenderPipeline,
-    surface_front_cull_pipeline: RenderPipeline,
-    surface_back_cull_pipeline: RenderPipeline,
-    /// Atom labels. The only pipeline with a texture, so the only one built on
-    /// its own three-group layout (camera, model, atlas) — see
-    /// `doc/design_atom_labels.md` §Pipeline changes.
-    label_pipeline: RenderPipeline,
+    /// The pipelines at [`LIVE_SAMPLE_COUNT`](crate::render_target::LIVE_SAMPLE_COUNT)
+    /// samples, for the multisampled live target
+    /// (`doc/design_viewport_antialiasing.md` D2). `None` when the adapter
+    /// cannot multisample the colour or depth format; the live target then
+    /// always has one sample.
+    live_pipelines: Option<PipelineSet>,
+    /// The single-sample pipelines: the thumbnail, the export, and the live
+    /// target with anti-aliasing off.
+    offscreen_pipelines: PipelineSet,
+    /// The live viewport's size as last requested by `set_viewport_size`, in
+    /// logical pixels, and the quality settings pushed in from the
+    /// preferences (D8). The live target is derived from both.
+    viewport_request: (f64, f64),
+    quality: RenderQuality,
     main_mesh: GPUMesh,
     wireframe_mesh: GPUMesh,
     /// Drawing-plane grids and axes: drawn with the content in the live view,
@@ -414,12 +351,38 @@ impl Renderer {
         let gadget_bond_impostor_mesh =
             GPUMesh::new_empty_bond_impostor_mesh(&device, &model_bind_group_layout);
 
-        let target = RenderTarget::new(&device, width, height, 1);
+        // D2: both attachment formats must support 4 samples, or there is no
+        // multisampled live target at all.
+        let msaa_supported = [COLOR_FORMAT, DEPTH_FORMAT].iter().all(|&format| {
+            adapter
+                .get_texture_format_features(format)
+                .flags
+                .sample_count_supported(crate::render_target::LIVE_SAMPLE_COUNT)
+        });
+        if !msaa_supported {
+            println!(
+                "[renderer] 4x MSAA is not supported by this adapter; anti-aliasing is unavailable"
+            );
+        }
+
+        let viewport_request = (width as f64, height as f64);
+        let quality = RenderQuality::default();
+        let target = RenderTarget::new(
+            &device,
+            live_target_spec(
+                viewport_request.0,
+                viewport_request.1,
+                quality,
+                msaa_supported,
+            ),
+        );
         let thumbnail_target = RenderTarget::new(
             &device,
-            crate::thumbnail::THUMBNAIL_SIZE,
-            crate::thumbnail::THUMBNAIL_SIZE,
-            crate::thumbnail::THUMBNAIL_SUPERSAMPLING,
+            TargetSpec::image(
+                crate::thumbnail::THUMBNAIL_SIZE,
+                crate::thumbnail::THUMBNAIL_SIZE,
+                crate::thumbnail::THUMBNAIL_SUPERSAMPLING,
+            ),
         );
 
         // The initial contents of both camera buffers. The thumbnail one is
@@ -433,33 +396,6 @@ impl Renderer {
             label: Some("Camera Buffer"),
             contents: bytemuck::cast_slice(&[camera_uniform]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-
-        // Triangle shader module
-        let triangle_shader = device.create_shader_module(ShaderModuleDescriptor {
-            label: Some("Triangle Shader"),
-            source: ShaderSource::Wgsl(include_str!("mesh.wgsl").into()),
-        });
-
-        // Impostor shader modules
-        let atom_impostor_shader = device.create_shader_module(ShaderModuleDescriptor {
-            label: Some("Atom Impostor Shader"),
-            source: ShaderSource::Wgsl(include_str!("atom_impostor.wgsl").into()),
-        });
-
-        let bond_impostor_shader = device.create_shader_module(ShaderModuleDescriptor {
-            label: Some("Bond Impostor Shader"),
-            source: ShaderSource::Wgsl(include_str!("bond_impostor.wgsl").into()),
-        });
-
-        let transparent_impostor_shader = device.create_shader_module(ShaderModuleDescriptor {
-            label: Some("Transparent Impostor Shader"),
-            source: ShaderSource::Wgsl(include_str!("transparent_impostor.wgsl").into()),
-        });
-
-        let label_shader = device.create_shader_module(ShaderModuleDescriptor {
-            label: Some("Label Shader"),
-            source: ShaderSource::Wgsl(include_str!("label.wgsl").into()),
         });
 
         let camera_bind_group_layout =
@@ -556,67 +492,29 @@ impl Renderer {
             push_constant_ranges: &[],
         });
 
-        // Triangle pipeline (normal depth testing)
-        let triangle_pipeline = Self::create_triangle_pipeline(
-            &device,
-            &pipeline_layout,
-            &triangle_shader,
-            false, // Normal depth testing
-        );
-
-        let line_pipeline = Self::create_line_pipeline(&device, &line_pipeline_layout);
-
-        // Impostor pipelines
-        let atom_impostor_pipeline =
-            Self::create_atom_impostor_pipeline(&device, &pipeline_layout, &atom_impostor_shader);
-
-        let bond_impostor_pipeline =
-            Self::create_bond_impostor_pipeline(&device, &pipeline_layout, &bond_impostor_shader);
-
-        let transparent_impostor_pipeline = Self::create_transparent_impostor_pipeline(
-            &device,
-            &pipeline_layout,
-            &transparent_impostor_shader,
-        );
-
-        // One transparent-surface pipeline per cull mode. Three, where the
-        // design names two: it counts the two-pass pair, and the `SinglePass`
-        // control mode it describes separately needs a `cull_mode: None`
-        // pipeline of its own.
-        let surface_no_cull_pipeline = Self::create_surface_transparent_pipeline(
-            &device,
-            &pipeline_layout,
-            &triangle_shader,
-            None,
-        );
-        let surface_front_cull_pipeline = Self::create_surface_transparent_pipeline(
-            &device,
-            &pipeline_layout,
-            &triangle_shader,
-            Some(wgpu::Face::Front),
-        );
-        let surface_back_cull_pipeline = Self::create_surface_transparent_pipeline(
-            &device,
-            &pipeline_layout,
-            &triangle_shader,
-            Some(wgpu::Face::Back),
-        );
-
-        let label_pipeline =
-            Self::create_label_pipeline(&device, &label_pipeline_layout, &label_shader);
+        let shaders = Shaders::new(&device);
+        let layouts = PipelineLayouts {
+            main: pipeline_layout,
+            line: line_pipeline_layout,
+            label: label_pipeline_layout,
+        };
+        let live_pipelines = msaa_supported.then(|| {
+            PipelineSet::new(
+                &device,
+                &layouts,
+                &shaders,
+                crate::render_target::LIVE_SAMPLE_COUNT,
+            )
+        });
+        let offscreen_pipelines = PipelineSet::new(&device, &layouts, &shaders, 1);
 
         Self {
             device,
             queue,
-            triangle_pipeline,
-            line_pipeline,
-            atom_impostor_pipeline,
-            bond_impostor_pipeline,
-            transparent_impostor_pipeline,
-            surface_no_cull_pipeline,
-            surface_front_cull_pipeline,
-            surface_back_cull_pipeline,
-            label_pipeline,
+            live_pipelines,
+            offscreen_pipelines,
+            viewport_request,
+            quality,
             main_mesh,
             wireframe_mesh,
             reference_line_mesh,
@@ -650,71 +548,6 @@ impl Renderer {
             content_owner: None,
             render_mutex: Mutex::new(()),
         }
-    }
-
-    /// The line pipeline (`doc/design_screen_space_lines.md` D4, D6): six
-    /// vertices per instance, expanded by `line_mesh.wgsl`; straight-alpha
-    /// blending; depth test `Less` with **no depth write**, or the
-    /// anti-aliasing fringe of one grid line would reject the crossing line at
-    /// every intersection; no depth bias (the triangle pipeline's negative
-    /// bias already makes a face win a coplanar tie against an edge in it).
-    fn create_line_pipeline(
-        device: &Device,
-        line_pipeline_layout: &wgpu::PipelineLayout,
-    ) -> RenderPipeline {
-        let line_shader = device.create_shader_module(ShaderModuleDescriptor {
-            label: Some("Line Shader"),
-            source: ShaderSource::Wgsl(include_str!("line_mesh.wgsl").into()),
-        });
-
-        device.create_render_pipeline(&RenderPipelineDescriptor {
-            label: Some("Line Render Pipeline"),
-            layout: Some(line_pipeline_layout),
-            vertex: VertexState {
-                module: &line_shader,
-                entry_point: Some("vs_main"),
-                buffers: &[LineSegmentInstance::desc()],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            },
-            fragment: Some(FragmentState {
-                module: &line_shader,
-                entry_point: Some("fs_main"),
-                targets: &[Some(ColorTargetState {
-                    format: TextureFormat::Bgra8Unorm,
-                    blend: Some(STRAIGHT_ALPHA_BLENDING),
-                    write_mask: ColorWrites::ALL,
-                })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
-                // The corners' winding follows the screen direction.
-                cull_mode: None,
-                polygon_mode: wgpu::PolygonMode::Fill,
-                unclipped_depth: false,
-                conservative: false,
-            },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: DEPTH_FORMAT,
-                depth_write_enabled: false,
-                depth_compare: wgpu::CompareFunction::Less,
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState {
-                    constant: 0,
-                    slope_scale: 0.0,
-                    clamp: 0.0,
-                },
-            }),
-            multisample: wgpu::MultisampleState {
-                count: 1,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
-            multiview: None,
-            cache: None,
-        })
     }
 
     /// The line pipeline's group-2 layout and the one shared `LineLodUniform`
@@ -803,326 +636,6 @@ impl Renderer {
                 ));
             }
         }
-    }
-
-    fn create_triangle_pipeline(
-        device: &Device,
-        pipeline_layout: &wgpu::PipelineLayout,
-        triangle_shader: &wgpu::ShaderModule,
-        always_on_top: bool,
-    ) -> RenderPipeline {
-        let depth_stencil = if always_on_top {
-            Some(wgpu::DepthStencilState {
-                format: DEPTH_FORMAT,
-                depth_write_enabled: false, // Don't write to depth buffer
-                depth_compare: wgpu::CompareFunction::Always, // Always pass depth test
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState {
-                    constant: 0,
-                    slope_scale: 0.0,
-                    clamp: 0.0,
-                },
-            })
-        } else {
-            Some(wgpu::DepthStencilState {
-                format: DEPTH_FORMAT,
-                depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::Less,
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState {
-                    constant: -8,
-                    slope_scale: -1.0,
-                    clamp: 8.0,
-                },
-            })
-        };
-
-        let label = if always_on_top {
-            "Gadget Triangle Render Pipeline"
-        } else {
-            "Triangle Render Pipeline"
-        };
-
-        device.create_render_pipeline(&RenderPipelineDescriptor {
-            label: Some(label),
-            layout: Some(pipeline_layout),
-            vertex: VertexState {
-                module: triangle_shader,
-                entry_point: Some("vs_main"),
-                buffers: &[Vertex::desc()],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            },
-            fragment: Some(FragmentState {
-                module: triangle_shader,
-                entry_point: Some("fs_main"),
-                targets: &[Some(ColorTargetState {
-                    format: TextureFormat::Bgra8Unorm,
-                    blend: Some(BlendState::REPLACE),
-                    write_mask: ColorWrites::ALL,
-                })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
-                polygon_mode: wgpu::PolygonMode::Fill,
-                unclipped_depth: false,
-                conservative: false,
-            },
-            depth_stencil,
-            multisample: wgpu::MultisampleState {
-                count: 1,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
-            multiview: None,
-            cache: None,
-        })
-    }
-
-    /// A transparent-surface pipeline, differing from the opaque
-    /// `triangle_pipeline` in exactly three ways: alpha blending on, depth
-    /// writes off, and a caller-chosen `cull_mode`.
-    ///
-    /// [`STRAIGHT_ALPHA_BLENDING`] is non-premultiplied source-over, the blend
-    /// every blended pipeline uses. The depth **test** stays on so
-    /// opaque geometry (drawn first, with depth writes) occludes correctly; the
-    /// depth **write** must stay off or the first transparent fragment would
-    /// kill the surface's own second layer, which is precisely the layer the
-    /// two-pass draw exists to show. No depth bias either: the opaque pipeline
-    /// biases to win coplanar ties against wireframes, and a surface that does
-    /// not write depth has no tie to win.
-    fn create_surface_transparent_pipeline(
-        device: &Device,
-        pipeline_layout: &wgpu::PipelineLayout,
-        triangle_shader: &wgpu::ShaderModule,
-        cull_mode: Option<wgpu::Face>,
-    ) -> RenderPipeline {
-        let label = match cull_mode {
-            None => "Transparent Surface Pipeline (no cull)",
-            Some(wgpu::Face::Front) => "Transparent Surface Pipeline (back faces)",
-            Some(wgpu::Face::Back) => "Transparent Surface Pipeline (front faces)",
-        };
-
-        device.create_render_pipeline(&RenderPipelineDescriptor {
-            label: Some(label),
-            layout: Some(pipeline_layout),
-            vertex: VertexState {
-                module: triangle_shader,
-                entry_point: Some("vs_main"),
-                buffers: &[Vertex::desc()],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            },
-            fragment: Some(FragmentState {
-                module: triangle_shader,
-                entry_point: Some("fs_main"),
-                targets: &[Some(ColorTargetState {
-                    format: TextureFormat::Bgra8Unorm,
-                    blend: Some(STRAIGHT_ALPHA_BLENDING),
-                    write_mask: ColorWrites::ALL,
-                })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode,
-                polygon_mode: wgpu::PolygonMode::Fill,
-                unclipped_depth: false,
-                conservative: false,
-            },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: DEPTH_FORMAT,
-                depth_write_enabled: false,
-                depth_compare: wgpu::CompareFunction::Less,
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState {
-                    constant: 0,
-                    slope_scale: 0.0,
-                    clamp: 0.0,
-                },
-            }),
-            multisample: wgpu::MultisampleState {
-                count: 1,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
-            multiview: None,
-            cache: None,
-        })
-    }
-
-    fn create_atom_impostor_pipeline(
-        device: &Device,
-        pipeline_layout: &wgpu::PipelineLayout,
-        atom_impostor_shader: &wgpu::ShaderModule,
-    ) -> RenderPipeline {
-        device.create_render_pipeline(&RenderPipelineDescriptor {
-            label: Some("Atom Impostor Render Pipeline"),
-            layout: Some(pipeline_layout),
-            vertex: VertexState {
-                module: atom_impostor_shader,
-                entry_point: Some("vs_main"),
-                buffers: &[crate::atom_impostor_mesh::AtomImpostorVertex::desc()],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            },
-            fragment: Some(FragmentState {
-                module: atom_impostor_shader,
-                entry_point: Some("fs_main"),
-                targets: &[Some(ColorTargetState {
-                    format: TextureFormat::Bgra8Unorm,
-                    blend: Some(BlendState::REPLACE),
-                    write_mask: ColorWrites::ALL,
-                })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
-                polygon_mode: wgpu::PolygonMode::Fill,
-                unclipped_depth: false,
-                conservative: false,
-            },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: DEPTH_FORMAT,
-                depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::Less,
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState {
-                    constant: 0,
-                    slope_scale: 0.0,
-                    clamp: 0.0,
-                },
-            }),
-            multisample: wgpu::MultisampleState {
-                count: 1,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
-            multiview: None,
-            cache: None,
-        })
-    }
-
-    fn create_bond_impostor_pipeline(
-        device: &Device,
-        pipeline_layout: &wgpu::PipelineLayout,
-        bond_impostor_shader: &wgpu::ShaderModule,
-    ) -> RenderPipeline {
-        device.create_render_pipeline(&RenderPipelineDescriptor {
-            label: Some("Bond Impostor Render Pipeline"),
-            layout: Some(pipeline_layout),
-            vertex: VertexState {
-                module: bond_impostor_shader,
-                entry_point: Some("vs_main"),
-                buffers: &[crate::bond_impostor_mesh::BondImpostorVertex::desc()],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            },
-            fragment: Some(FragmentState {
-                module: bond_impostor_shader,
-                entry_point: Some("fs_main"),
-                targets: &[Some(ColorTargetState {
-                    format: TextureFormat::Bgra8Unorm,
-                    blend: Some(BlendState::REPLACE),
-                    write_mask: ColorWrites::ALL,
-                })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
-                polygon_mode: wgpu::PolygonMode::Fill,
-                unclipped_depth: false,
-                conservative: false,
-            },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: DEPTH_FORMAT,
-                depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::Less,
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState {
-                    constant: 0,
-                    slope_scale: 0.0,
-                    clamp: 0.0,
-                },
-            }),
-            multisample: wgpu::MultisampleState {
-                count: 1,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
-            multiview: None,
-            cache: None,
-        })
-    }
-
-    /// Pipeline for the merged transparent impostor mesh (x-ray ghost atoms +
-    /// bonds). Standard alpha blending, depth *test* on but depth *write* off,
-    /// so ghosts test against opaque geometry (drawn first with depth writes on)
-    /// yet do not occlude one another in the buffer. Culling is disabled: each
-    /// quad is a camera-facing billboard whose real shape comes from the
-    /// per-fragment ray-cast, so back-face culling could only wrongly drop a
-    /// quad. Draw order back-to-front is handled by the index buffer (emission
-    /// order for now; Phase 5 adds the depth sort).
-    fn create_transparent_impostor_pipeline(
-        device: &Device,
-        pipeline_layout: &wgpu::PipelineLayout,
-        transparent_impostor_shader: &wgpu::ShaderModule,
-    ) -> RenderPipeline {
-        device.create_render_pipeline(&RenderPipelineDescriptor {
-            label: Some("Transparent Impostor Render Pipeline"),
-            layout: Some(pipeline_layout),
-            vertex: VertexState {
-                module: transparent_impostor_shader,
-                entry_point: Some("vs_main"),
-                buffers: &[TransparentImpostorVertex::desc()],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            },
-            fragment: Some(FragmentState {
-                module: transparent_impostor_shader,
-                entry_point: Some("fs_main"),
-                targets: &[Some(ColorTargetState {
-                    format: TextureFormat::Bgra8Unorm,
-                    blend: Some(STRAIGHT_ALPHA_BLENDING),
-                    write_mask: ColorWrites::ALL,
-                })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: None,
-                polygon_mode: wgpu::PolygonMode::Fill,
-                unclipped_depth: false,
-                conservative: false,
-            },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: DEPTH_FORMAT,
-                depth_write_enabled: false,
-                depth_compare: wgpu::CompareFunction::Less,
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState {
-                    constant: 0,
-                    slope_scale: 0.0,
-                    clamp: 0.0,
-                },
-            }),
-            multisample: wgpu::MultisampleState {
-                count: 1,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
-            multiview: None,
-            cache: None,
-        })
     }
 
     /// Decode the committed SDF font atlas, upload it as an R8 texture, and
@@ -1225,71 +738,6 @@ impl Renderer {
         (layout, bind_group)
     }
 
-    /// Blended, depth-**writing** label pipeline.
-    ///
-    /// The renderer has no MSAA, so an alpha-tested label would throw away the
-    /// antialiasing that is the main reason to use an SDF at all. Blending gives
-    /// smooth edges; keeping depth writes on preserves correct occlusion of and
-    /// by other scene content, and the shader's `discard` on near-zero coverage
-    /// stops empty texels from polluting the depth buffer. Two labels
-    /// overlapping each other therefore blend in draw order rather than depth
-    /// order — an accepted artifact, and no sort is needed.
-    fn create_label_pipeline(
-        device: &Device,
-        label_pipeline_layout: &wgpu::PipelineLayout,
-        label_shader: &wgpu::ShaderModule,
-    ) -> RenderPipeline {
-        device.create_render_pipeline(&RenderPipelineDescriptor {
-            label: Some("Label Render Pipeline"),
-            layout: Some(label_pipeline_layout),
-            vertex: VertexState {
-                module: label_shader,
-                entry_point: Some("vs_main"),
-                buffers: &[LabelVertex::desc()],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            },
-            fragment: Some(FragmentState {
-                module: label_shader,
-                entry_point: Some("fs_main"),
-                targets: &[Some(ColorTargetState {
-                    format: TextureFormat::Bgra8Unorm,
-                    blend: Some(STRAIGHT_ALPHA_BLENDING),
-                    write_mask: ColorWrites::ALL,
-                })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
-                // A billboard's facing is meaningless, so culling could only
-                // wrongly drop a quad.
-                cull_mode: None,
-                polygon_mode: wgpu::PolygonMode::Fill,
-                unclipped_depth: false,
-                conservative: false,
-            },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: DEPTH_FORMAT,
-                depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::Less,
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState {
-                    constant: 0,
-                    slope_scale: 0.0,
-                    clamp: 0.0,
-                },
-            }),
-            multisample: wgpu::MultisampleState {
-                count: 1,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
-            multiview: None,
-            cache: None,
-        })
-    }
-
     /// Writes a camera pose. `up` is taken as the caller's *intent* for the
     /// roll and is orthonormalized against the new view direction, so callers
     /// that pass a world axis (the CLI's `camera --up`, a loaded project) leave
@@ -1311,17 +759,56 @@ impl Renderer {
     }
 
     pub fn set_viewport_size(&mut self, width: u32, height: u32) {
-        if self.target.size.width == width && self.target.size.height == height {
+        self.viewport_request = (width as f64, height as f64);
+        self.update_live_target();
+    }
+
+    /// Sets the live viewport's quality settings, the *Rendering* preferences
+    /// (`doc/design_viewport_antialiasing.md` D8). Pushed in from the api on
+    /// every refresh; recreates the live target only when it changes.
+    pub fn set_render_quality(&mut self, quality: RenderQuality) {
+        self.quality = quality;
+        self.update_live_target();
+    }
+
+    /// The live viewport's quality settings.
+    pub fn render_quality(&self) -> RenderQuality {
+        self.quality
+    }
+
+    /// Whether the adapter can multisample the live target (D2). Without it
+    /// the live target has one sample whatever the quality settings say.
+    pub fn msaa_supported(&self) -> bool {
+        self.live_pipelines.is_some()
+    }
+
+    /// Samples per pixel of the live target: 4 with anti-aliasing on (and
+    /// supported), otherwise 1.
+    pub fn live_sample_count(&self) -> u32 {
+        self.target.sample_count
+    }
+
+    /// Recreates the live target when the spec derived from the viewport
+    /// request and the quality settings differs from the current one, so the
+    /// push on every refresh costs one comparison.
+    fn update_live_target(&mut self) {
+        let spec = live_target_spec(
+            self.viewport_request.0,
+            self.viewport_request.1,
+            self.quality,
+            self.live_pipelines.is_some(),
+        );
+        if spec == self.target.spec() {
             return;
         }
 
-        self.camera.aspect = width as f64 / height as f64;
+        self.camera.aspect = spec.size.width as f64 / spec.size.height as f64;
 
         let _lock = self.render_mutex.lock().unwrap();
 
         self.device.poll(Maintain::Wait);
 
-        self.target = RenderTarget::new(&self.device, width, height, 1);
+        self.target = RenderTarget::new(&self.device, spec);
 
         self.device.poll(Maintain::Wait);
 
@@ -1609,7 +1096,10 @@ impl Renderer {
         camera.aspect = width as f64 / height as f64;
 
         // The target first: the uniform's size and pixel scale come from it.
-        let target = RenderTarget::new(&self.device, width, height, IMAGE_EXPORT_SUPERSAMPLING);
+        let target = RenderTarget::new(
+            &self.device,
+            TargetSpec::image(width, height, IMAGE_EXPORT_SUPERSAMPLING),
+        );
         self.write_view_uniforms(View::Offscreen, &camera, &target);
 
         let view = camera.build_view_matrix().as_mat4();
@@ -1680,6 +1170,24 @@ impl Renderer {
         }
     }
 
+    /// The pipeline set whose sample count is `target`'s (D2). A target is
+    /// only ever created at a count that has a set, so a miss is a bug.
+    fn pipelines_for(&self, target: &RenderTarget) -> &PipelineSet {
+        [
+            Some(&self.offscreen_pipelines),
+            self.live_pipelines.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        .find(|set| set.sample_count == target.sample_count)
+        .unwrap_or_else(|| {
+            panic!(
+                "no pipelines for a {}-sample render target",
+                target.sample_count
+            )
+        })
+    }
+
     /// One frame into `target`, drawn with the per-view uniforms of
     /// `uniforms` (whose view matrix is `view`), read back as BGRA.
     fn draw_to_target(
@@ -1694,6 +1202,7 @@ impl Renderer {
             View::Live => &self.camera_bind_group,
             View::Offscreen => &self.thumbnail_camera_bind_group,
         };
+        let pipelines = self.pipelines_for(target);
         let mut encoder = self
             .device
             .create_command_encoder(&CommandEncoderDescriptor {
@@ -1712,22 +1221,12 @@ impl Renderer {
         {
             let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
                 label: Some("Render Pass"),
-                color_attachments: &[Some(RenderPassColorAttachment {
-                    view: &target.texture_view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(bg_color),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &target.depth_texture_view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0), // Clear depth to the farthest value
-                        store: wgpu::StoreOp::Store,
-                    }),
-                    stencil_ops: None,
-                }),
+                // The last pass resolves the multisampled colour (D3); with
+                // the gadget pass to follow, that is not this one.
+                color_attachments: &[Some(
+                    target.color_attachment(wgpu::LoadOp::Clear(bg_color), !flags.gadgets),
+                )],
+                depth_stencil_attachment: Some(target.depth_attachment()),
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
@@ -1739,17 +1238,17 @@ impl Renderer {
 
             // Set identity transform for main mesh and render it
             self.main_mesh.set_identity_transform(&self.queue);
-            render_pass.set_pipeline(&self.triangle_pipeline);
+            render_pass.set_pipeline(&pipelines.triangle);
             self.render_mesh(&mut render_pass, &self.main_mesh);
 
             // Render impostor meshes (if they have data)
             // Note: Impostor meshes are only populated when AtomicRenderingMethod::Impostors is selected
             self.atom_impostor_mesh.set_identity_transform(&self.queue);
-            render_pass.set_pipeline(&self.atom_impostor_pipeline);
+            render_pass.set_pipeline(&pipelines.atom_impostor);
             self.render_mesh(&mut render_pass, &self.atom_impostor_mesh);
 
             self.bond_impostor_mesh.set_identity_transform(&self.queue);
-            render_pass.set_pipeline(&self.bond_impostor_pipeline);
+            render_pass.set_pipeline(&pipelines.bond_impostor);
             self.render_mesh(&mut render_pass, &self.bond_impostor_mesh);
 
             if flags.editing_aids {
@@ -1765,7 +1264,7 @@ impl Renderer {
                 // Group 2 (the font atlas) is bound once here, after the pipeline
                 // that declares it — `render_mesh` only knows about group 1.
                 self.label_mesh.set_identity_transform(&self.queue);
-                render_pass.set_pipeline(&self.label_pipeline);
+                render_pass.set_pipeline(&pipelines.label);
                 render_pass.set_bind_group(2, &self.label_atlas_bind_group, &[]);
                 self.render_mesh(&mut render_pass, &self.label_mesh);
             }
@@ -1786,7 +1285,7 @@ impl Renderer {
                 lines.push(&self.reference_line_mesh);
                 lines.push(&self.background_mesh);
             }
-            self.draw_lines(&mut render_pass, &lines, uniforms);
+            self.draw_lines(&mut render_pass, pipelines, &lines, uniforms);
 
             // Transparent impostors (x-ray) draw last in the main pass — after
             // ALL opaque content and the lines — with alpha
@@ -1795,7 +1294,7 @@ impl Renderer {
             // `resort_transparent_impostors` (called before this draw).
             self.transparent_impostor_mesh
                 .set_identity_transform(&self.queue);
-            render_pass.set_pipeline(&self.transparent_impostor_pipeline);
+            render_pass.set_pipeline(&pipelines.transparent_impostor);
             self.render_mesh(&mut render_pass, &self.transparent_impostor_mesh);
 
             // Transparent isosurfaces last of all. Nothing orders fragments
@@ -1809,29 +1308,17 @@ impl Renderer {
             // enough, and the input to any future OIT decision.
             self.isosurface_transparent_mesh
                 .set_identity_transform(&self.queue);
-            self.draw_transparent_surfaces(&mut render_pass, &view);
+            self.draw_transparent_surfaces(&mut render_pass, pipelines, &view);
         }
 
         // Second render pass for gadgets - clear depth buffer but preserve color
         if flags.gadgets {
             let mut gadget_render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
                 label: Some("Gadget Render Pass"),
-                color_attachments: &[Some(RenderPassColorAttachment {
-                    view: &target.texture_view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load, // Preserve existing color buffer
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &target.depth_texture_view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0), // Clear depth buffer for gadgets
-                        store: wgpu::StoreOp::Store,
-                    }),
-                    stencil_ops: None,
-                }),
+                // Preserve the main pass's colour, clear depth for the gadgets,
+                // and resolve: this is the last pass (D3).
+                color_attachments: &[Some(target.color_attachment(wgpu::LoadOp::Load, true))],
+                depth_stencil_attachment: Some(target.depth_attachment()),
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
@@ -1841,26 +1328,31 @@ impl Renderer {
 
             // Render gadget triangles
             self.lightweight_mesh.set_identity_transform(&self.queue);
-            gadget_render_pass.set_pipeline(&self.triangle_pipeline);
+            gadget_render_pass.set_pipeline(&pipelines.triangle);
             self.render_mesh(&mut gadget_render_pass, &self.lightweight_mesh);
 
             // Render gadget atom impostors (guide dots, always on top)
             self.gadget_atom_impostor_mesh
                 .set_identity_transform(&self.queue);
-            gadget_render_pass.set_pipeline(&self.atom_impostor_pipeline);
+            gadget_render_pass.set_pipeline(&pipelines.atom_impostor);
             self.render_mesh(&mut gadget_render_pass, &self.gadget_atom_impostor_mesh);
 
             // Render gadget bond impostors (guide dot connectors, always on top)
             self.gadget_bond_impostor_mesh
                 .set_identity_transform(&self.queue);
-            gadget_render_pass.set_pipeline(&self.bond_impostor_pipeline);
+            gadget_render_pass.set_pipeline(&pipelines.bond_impostor);
             self.render_mesh(&mut gadget_render_pass, &self.gadget_bond_impostor_mesh);
 
             // Gadget lines last, for the same reason as in the main pass (D6):
             // they write no depth, so a gadget triangle drawn after them would
             // paint over them where they cross its arrow heads and rings.
             self.gadget_line_mesh.set_identity_transform(&self.queue);
-            self.draw_lines(&mut gadget_render_pass, &[&self.gadget_line_mesh], uniforms);
+            self.draw_lines(
+                &mut gadget_render_pass,
+                pipelines,
+                &[&self.gadget_line_mesh],
+                uniforms,
+            );
         }
 
         // Calculate bytes per row with proper alignment (256-byte boundary for WebGPU)
@@ -1929,7 +1421,12 @@ impl Renderer {
     /// permutation of a single-digit-length list, so recomputing it per frame
     /// is free and needs no laziness (contrast the impostor sort, which
     /// rewrites and re-uploads an index buffer).
-    fn draw_transparent_surfaces<'a>(&'a self, render_pass: &mut RenderPass<'a>, view: &Mat4) {
+    fn draw_transparent_surfaces<'a>(
+        &'a self,
+        render_pass: &mut RenderPass<'a>,
+        pipelines: &'a PipelineSet,
+        view: &Mat4,
+    ) {
         let mesh = &self.isosurface_transparent_mesh;
         if mesh.num_indices == 0 {
             return;
@@ -1947,22 +1444,22 @@ impl Renderer {
             && !self.isosurface_components.is_empty();
 
         if self.surface_transparency_mode == SurfaceTransparencyMode::SinglePass {
-            render_pass.set_pipeline(&self.surface_no_cull_pipeline);
+            render_pass.set_pipeline(&pipelines.surface_no_cull);
             render_pass.draw_indexed(0..mesh.num_indices, 0, 0..1);
         } else if sorted {
             for index in sorted_component_order(&self.isosurface_components, view) {
                 let component = self.isosurface_components[index];
                 let range = component.first_index..component.first_index + component.index_count;
                 // Back faces, then front faces, within this component.
-                render_pass.set_pipeline(&self.surface_front_cull_pipeline);
+                render_pass.set_pipeline(&pipelines.surface_front_cull);
                 render_pass.draw_indexed(range.clone(), 0, 0..1);
-                render_pass.set_pipeline(&self.surface_back_cull_pipeline);
+                render_pass.set_pipeline(&pipelines.surface_back_cull);
                 render_pass.draw_indexed(range, 0, 0..1);
             }
         } else {
-            render_pass.set_pipeline(&self.surface_front_cull_pipeline);
+            render_pass.set_pipeline(&pipelines.surface_front_cull);
             render_pass.draw_indexed(0..mesh.num_indices, 0, 0..1);
-            render_pass.set_pipeline(&self.surface_back_cull_pipeline);
+            render_pass.set_pipeline(&pipelines.surface_back_cull);
             render_pass.draw_indexed(0..mesh.num_indices, 0, 0..1);
         }
     }
@@ -1974,13 +1471,14 @@ impl Renderer {
     fn draw_lines<'a>(
         &self,
         render_pass: &mut RenderPass<'a>,
+        pipelines: &PipelineSet,
         meshes: &[&GPUMesh],
         uniforms: View,
     ) {
         if meshes.iter().all(|mesh| mesh.num_instances == 0) {
             return;
         }
-        render_pass.set_pipeline(&self.line_pipeline);
+        render_pass.set_pipeline(&pipelines.line);
         for mesh in meshes {
             if mesh.num_instances == 0 {
                 continue;
@@ -2169,48 +1667,5 @@ impl Renderer {
 
         // Update the GPU buffers
         self.update_camera_buffer();
-    }
-
-    // Helper method to create texture
-    fn create_texture(device: &Device, texture_size: &Extent3d) -> Texture {
-        device.create_texture(&TextureDescriptor {
-            label: Some("Render Target Texture"),
-            size: *texture_size,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: TextureDimension::D2,
-            format: TextureFormat::Bgra8Unorm,
-            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
-            view_formats: &[],
-        })
-    }
-
-    // Helper method to create depth texture
-    fn create_depth_texture(device: &Device, texture_size: &Extent3d) -> Texture {
-        device.create_texture(&TextureDescriptor {
-            label: Some("Depth Buffer"),
-            size: *texture_size,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: TextureDimension::D2,
-            format: DEPTH_FORMAT,
-            usage: TextureUsages::RENDER_ATTACHMENT,
-            view_formats: &[],
-        })
-    }
-
-    // Helper method to create output buffer
-    fn create_output_buffer(device: &Device, texture_size: &Extent3d) -> Buffer {
-        // Calculate aligned bytes per row (must be a multiple of 256 in WebGPU)
-        let bytes_per_row = 4 * texture_size.width; // 4 bytes per pixel (RGBA8)
-        let aligned_bytes_per_row = (bytes_per_row + 255) & !255;
-        let buffer_size = aligned_bytes_per_row * texture_size.height;
-
-        device.create_buffer(&BufferDescriptor {
-            label: Some("Output Buffer"),
-            size: buffer_size as BufferAddress,
-            usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
-            mapped_at_creation: false,
-        })
     }
 }

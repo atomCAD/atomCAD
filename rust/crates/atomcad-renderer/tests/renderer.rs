@@ -30,10 +30,16 @@ mod thumbnail_test;
 #[path = "renderer/image_export_test.rs"]
 mod image_export_test;
 
-// Screen-space lines, Phase 1: the extended camera uniform and the render
-// target's pixel scale (doc/design_screen_space_lines.md D2, D3).
+// Screen-space lines, Phase 1: the extended camera uniform
+// (doc/design_screen_space_lines.md D3).
 #[path = "renderer/camera_uniform_test.rs"]
 mod camera_uniform_test;
+
+// The render target's size, pixel scale and sample count, and the live
+// target's quality settings (doc/design_viewport_antialiasing.md D1, D8;
+// doc/design_screen_space_lines.md D2).
+#[path = "renderer/render_target_test.rs"]
+mod render_target_test;
 
 // Every shader parses and validates; every `CameraUniform` in WGSL matches the
 // Rust struct (naga, doc/design_screen_space_lines.md Testing layer 2).

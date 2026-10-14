@@ -6,7 +6,8 @@ use atomcad_structure_designer::preferences::{
     DocumentTabPlacement, GeometryVisualization, GeometryVisualizationPreferences,
     InterfacePreferences, LayoutAlgorithmPreference, LayoutPreferences, MemoryPreferences,
     MeshSmoothing, NodeDisplayPolicy, NodeDisplayPreferences, NodeTitleMode, PrefColor,
-    SimulationPreferences, StructureDesignerPreferences, SurfaceTransparencyMode,
+    RenderingPreferences, SimulationPreferences, StructureDesignerPreferences,
+    SurfaceTransparencyMode,
 };
 
 /// Test round-trip serialization: serialize preferences to JSON and deserialize back.
@@ -485,6 +486,9 @@ fn test_non_default_values_roundtrip() {
         },
         interface_preferences: InterfacePreferences {
             document_tab_placement: DocumentTabPlacement::AboveViewport,
+        },
+        rendering_preferences: RenderingPreferences {
+            anti_aliasing: false,
         },
     };
 
@@ -991,4 +995,37 @@ fn document_tab_placement_reads_the_old_horizontal_name() {
         old.interface_preferences.document_tab_placement,
         DocumentTabPlacement::AboveViewport
     );
+}
+
+// ---- Rendering (doc/design_viewport_antialiasing.md D8) --------------------
+
+#[test]
+fn rendering_anti_aliasing_defaults_to_on() {
+    assert!(RenderingPreferences::default().anti_aliasing);
+    assert!(
+        StructureDesignerPreferences::default()
+            .rendering_preferences
+            .anti_aliasing
+    );
+}
+
+#[test]
+fn preferences_without_the_rendering_section_load_with_anti_aliasing_on() {
+    // An older file: no `rendering_preferences` key at all.
+    let old: StructureDesignerPreferences =
+        serde_json::from_str(r#"{"layout_preferences": {}}"#).unwrap();
+    assert!(old.rendering_preferences.anti_aliasing);
+    // And an empty section.
+    let empty: StructureDesignerPreferences =
+        serde_json::from_str(r#"{"rendering_preferences": {}}"#).unwrap();
+    assert!(empty.rendering_preferences.anti_aliasing);
+}
+
+#[test]
+fn rendering_anti_aliasing_off_roundtrips() {
+    let mut prefs = StructureDesignerPreferences::default();
+    prefs.rendering_preferences.anti_aliasing = false;
+    let json = serde_json::to_string(&prefs).unwrap();
+    let loaded: StructureDesignerPreferences = serde_json::from_str(&json).unwrap();
+    assert!(!loaded.rendering_preferences.anti_aliasing);
 }

@@ -702,6 +702,25 @@ pub struct InterfacePreferences {
     pub document_tab_placement: DocumentTabPlacement,
 }
 
+/// How the live viewport is rendered (`doc/design_viewport_antialiasing.md`
+/// D8). Twin of the domain struct.
+#[frb]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RenderingPreferences {
+    /// 4× MSAA for the live viewport. Default on.
+    #[frb(non_final)]
+    #[serde(default = "default_true")]
+    pub anti_aliasing: bool,
+}
+
+impl Default for RenderingPreferences {
+    fn default() -> Self {
+        Self {
+            anti_aliasing: true,
+        }
+    }
+}
+
 #[frb]
 #[derive(Clone, Serialize, Deserialize, Default)]
 pub struct StructureDesignerPreferences {
@@ -721,6 +740,8 @@ pub struct StructureDesignerPreferences {
     pub memory_preferences: MemoryPreferences,
     #[serde(default)]
     pub interface_preferences: InterfacePreferences,
+    #[serde(default)]
+    pub rendering_preferences: RenderingPreferences,
 }
 
 impl StructureDesignerPreferences {
@@ -1141,6 +1162,22 @@ impl From<&domain::InterfacePreferences> for InterfacePreferences {
     }
 }
 
+impl From<&RenderingPreferences> for domain::RenderingPreferences {
+    fn from(p: &RenderingPreferences) -> Self {
+        domain::RenderingPreferences {
+            anti_aliasing: p.anti_aliasing,
+        }
+    }
+}
+
+impl From<&domain::RenderingPreferences> for RenderingPreferences {
+    fn from(p: &domain::RenderingPreferences) -> Self {
+        RenderingPreferences {
+            anti_aliasing: p.anti_aliasing,
+        }
+    }
+}
+
 impl From<&StructureDesignerPreferences> for domain::StructureDesignerPreferences {
     fn from(p: &StructureDesignerPreferences) -> Self {
         domain::StructureDesignerPreferences {
@@ -1154,6 +1191,7 @@ impl From<&StructureDesignerPreferences> for domain::StructureDesignerPreference
             simulation_preferences: (&p.simulation_preferences).into(),
             memory_preferences: (&p.memory_preferences).into(),
             interface_preferences: (&p.interface_preferences).into(),
+            rendering_preferences: (&p.rendering_preferences).into(),
         }
     }
 }
@@ -1177,6 +1215,7 @@ impl From<&domain::StructureDesignerPreferences> for StructureDesignerPreference
             simulation_preferences: (&p.simulation_preferences).into(),
             memory_preferences: (&p.memory_preferences).into(),
             interface_preferences: (&p.interface_preferences).into(),
+            rendering_preferences: (&p.rendering_preferences).into(),
         }
     }
 }

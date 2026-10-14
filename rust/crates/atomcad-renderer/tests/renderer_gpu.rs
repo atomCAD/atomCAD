@@ -861,3 +861,112 @@ fn a_low_perspective_grid_fades_towards_the_horizon() {
         "lines left near the horizon: {major_only} (bottom {bottom})"
     );
 }
+
+// ---- Viewport anti-aliasing, Phase 1 (doc/design_viewport_antialiasing.md) --
+
+use atomcad_renderer::render_target::{LIVE_SAMPLE_COUNT, RenderQuality};
+
+/// An opaque square of half-size `half` in `z = 0`, rotated by `angle`
+/// radians about +Z, so none of its edges runs along a pixel row or column.
+fn tilted_square(half: f32, angle: f32, albedo: Vec3) -> Mesh {
+    let mut mesh = Mesh::new();
+    let material = Material::new(&albedo, 0.5, 0.0);
+    let (sin, cos) = angle.sin_cos();
+    for (x, y) in [(-half, -half), (half, -half), (half, half), (-half, half)] {
+        let corner = Vec3::new(x * cos - y * sin, x * sin + y * cos, 0.0);
+        mesh.add_vertex(Vertex::new(&corner, &Vec3::Z, &material));
+    }
+    mesh.add_quad(0, 1, 2, 3);
+    mesh
+}
+
+/// How many pixels of a live render of a uniformly coloured face on black are
+/// strictly between the face's colour and the background: summed channels
+/// between 15 % and 85 % of the face's, which is `interior`.
+fn count_intermediate(pixels: &[u8], interior: [u8; 4]) -> usize {
+    let full: u32 = interior[..3].iter().map(|&c| c as u32).sum();
+    pixels
+        .chunks_exact(4)
+        .filter(|p| {
+            let sum: u32 = p[..3].iter().map(|&c| c as u32).sum();
+            sum * 100 > full * 15 && sum * 100 < full * 85
+        })
+        .count()
+}
+
+/// D1, D3: the edges of an opaque mesh in the live view are anti-aliased.
+/// Mutation: with the live sample count forced to 1, no pixel is
+/// intermediate and this fails.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn a_tilted_square_has_anti_aliased_edges_in_the_live_view() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    // The skip asks the adapter, not the live target, so a live target that
+    // lost its samples fails here instead of skipping.
+    if !renderer.msaa_supported() {
+        println!("renderer_gpu: no 4x MSAA on this adapter, skipping");
+        return;
+    }
+    upload(
+        &mut renderer,
+        &tilted_square(6.0, 0.4, Vec3::new(0.9, 0.9, 0.9)),
+        &LineMesh::new(),
+        &Mesh::new(),
+        &LineMesh::new(),
+    );
+    top_down_orthographic(&mut renderer);
+    let live = renderer.render(BLACK);
+    dump("aa_mesh_edge", &live);
+
+    let interior = rgba_at(
+        &live,
+        VIEWPORT_WIDTH,
+        VIEWPORT_WIDTH / 2,
+        VIEWPORT_HEIGHT / 2,
+    );
+    assert!(interior[0] > 50, "the square is not drawn: {interior:?}");
+    // The perimeter is 4 × 120 px; most edge pixels are partly covered.
+    let intermediate = count_intermediate(&live, interior);
+    assert!(
+        intermediate > 200,
+        "the square's edges are not anti-aliased: {intermediate} intermediate pixels"
+    );
+}
+
+/// D2, D8: anti-aliasing off renders the live view with one sample (the
+/// pre-design image: compare the `live_aa_off` dump with a pre-phase `live`
+/// dump), and turning it on again restores the anti-aliased image exactly.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn turning_anti_aliasing_off_and_on_restores_the_anti_aliased_image() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    upload_fixed_scene(&mut renderer);
+    let on = renderer.render(BACKGROUND_RGB);
+
+    renderer.set_render_quality(RenderQuality {
+        anti_aliasing: false,
+    });
+    assert_eq!(renderer.live_sample_count(), 1);
+    assert_eq!(
+        renderer.get_viewport_size(),
+        (VIEWPORT_WIDTH, VIEWPORT_HEIGHT)
+    );
+    let off = renderer.render(BACKGROUND_RGB);
+    dump("live_aa_off", &off);
+    assert_eq!(off.len(), on.len());
+
+    renderer.set_render_quality(RenderQuality::default());
+    let on_again = renderer.render(BACKGROUND_RGB);
+    assert_eq!(on, on_again, "anti-aliasing off and on changed the image");
+
+    if renderer.msaa_supported() {
+        assert_eq!(renderer.live_sample_count(), LIVE_SAMPLE_COUNT);
+        assert_ne!(on, off, "anti-aliasing changed nothing");
+    } else {
+        println!("renderer_gpu: no 4x MSAA on this adapter, both images are 1-sample");
+    }
+}

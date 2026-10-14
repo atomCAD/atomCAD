@@ -42,6 +42,16 @@ fn to_renderer_surface_transparency_mode(
     }
 }
 
+/// Domain *Rendering* preferences → the renderer's quality settings
+/// (`doc/design_viewport_antialiasing.md` D8), for the same reason as above.
+fn to_render_quality(
+    prefs: &domain_prefs::RenderingPreferences,
+) -> atomcad_renderer::render_target::RenderQuality {
+    atomcad_renderer::render_target::RenderQuality {
+        anti_aliasing: prefs.anti_aliasing,
+    }
+}
+
 fn to_display_mesh_smoothing(
     smoothing: &domain_prefs::MeshSmoothing,
 ) -> display_prefs::MeshSmoothing {
@@ -575,6 +585,15 @@ pub fn refresh_structure_designer(
                 .geometry_visualization_preferences
                 .surface_transparency_mode,
         ));
+    // The *Rendering* preferences, pushed the same way
+    // (`doc/design_viewport_antialiasing.md` D8). The renderer recreates the
+    // live target only when they change it.
+    cad_instance.renderer.set_render_quality(to_render_quality(
+        &cad_instance
+            .structure_designer
+            .preferences
+            .rendering_preferences,
+    ));
     cad_instance.renderer.update_all_gpu_meshes(
         &lightweight_mesh,
         &gadget_line_mesh,

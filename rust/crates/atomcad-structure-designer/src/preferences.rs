@@ -629,6 +629,29 @@ pub struct InterfacePreferences {
     pub document_tab_placement: DocumentTabPlacement,
 }
 
+/// How the live viewport is rendered (`doc/design_viewport_antialiasing.md`
+/// D8). Both settings trade speed for quality; neither touches the thumbnail
+/// or the exported image, which are always supersampled.
+///
+/// Pushed to the renderer on every refresh, like
+/// [`GeometryVisualizationPreferences::surface_transparency_mode`]: the
+/// renderer crate cannot see this type.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RenderingPreferences {
+    /// 4× MSAA for the live viewport (D1). Off: the viewport renders with one
+    /// sample per pixel, as before the design.
+    #[serde(default = "default_true")]
+    pub anti_aliasing: bool,
+}
+
+impl Default for RenderingPreferences {
+    fn default() -> Self {
+        Self {
+            anti_aliasing: true,
+        }
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize, Default)]
 pub struct StructureDesignerPreferences {
     #[serde(default)]
@@ -647,6 +670,8 @@ pub struct StructureDesignerPreferences {
     pub memory_preferences: MemoryPreferences,
     #[serde(default)]
     pub interface_preferences: InterfacePreferences,
+    #[serde(default)]
+    pub rendering_preferences: RenderingPreferences,
 }
 
 const CONFIG_DIR_NAME: &str = "atomCAD";
