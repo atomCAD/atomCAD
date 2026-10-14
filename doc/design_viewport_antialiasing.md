@@ -672,6 +672,15 @@ when the rounded size and the rectangle differ by one. Which one looks right
 is checked on a real display in the walkthrough (Phase 5); the code change
 is one argument.
 
+**Decided (2026-10-14): `FilterQuality.none`.** On the maintainer's 125 %
+display, `low` visibly blurred the live view: with *Anti-aliasing* off, a
+hard cube edge (93 → 255) came out 93 → 174 → 255 row after row, the exact
+50 % mix of a half-pixel bilinear shift, which made the off and on images
+look alike. The `Texture` in `cad_viewport.dart` now uses `none`. The walkthrough
+(Phase 5) still watches for the dropped or repeated column at the viewport's
+edge; if it shows, the remedy is snapping the viewport's rectangle to device
+pixels.
+
 **Cost.** The live frame's CPU-side cost scales with the device pixel count,
 because every frame is read back and copied through the plugin (Current
 state). A 1600 × 1000 logical viewport is 6.4 MB per frame at 100 %, 14.4 MB

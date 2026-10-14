@@ -804,8 +804,15 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
                   onPointerCancel: (PointerCancelEvent event) {
                     onPointerCancel(event);
                   },
+                  // `none`, not the default `low`: the texture is the
+                  // viewport's device-pixel size, and at a fractional
+                  // display scale the viewport can start between device
+                  // pixels, where bilinear sampling blends every pixel with
+                  // its neighbour and blurs the whole image
+                  // (`doc/design_viewport_antialiasing.md` D7).
                   child: Texture(
                     textureId: textureId!,
+                    filterQuality: FilterQuality.none,
                   ),
                 );
               })
