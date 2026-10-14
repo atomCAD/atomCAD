@@ -471,7 +471,6 @@ fn fs_main(input: BondImpostorVertexOutput) -> BondFragmentOutput {
 
     let cylinder_start = input.world_start;
     let cylinder_end = input.world_end;
-    let cylinder_axis = normalize(cylinder_end - cylinder_start);
 
     // Coverage: one hit test per sample. The shading ray is the pixel
     // centre's if it hits, otherwise the first sample's that does.
@@ -504,6 +503,26 @@ fn fs_main(input: BondImpostorVertexOutput) -> BondFragmentOutput {
         discard;
     }
 
+    let shaded = shade_bond_hit(input, ray, t);
+    var output: BondFragmentOutput;
+    output.depth = shaded.depth;
+    output.sample_mask = mask;
+    output.color = shaded.color;
+    return output;
+}
+
+// The colour and depth of a surface hit. Shared by `fs_main` and
+// `fs_main_per_sample` (D5), so the two cannot disagree about the surface.
+struct Shaded {
+    color: vec4<f32>,
+    depth: f32,
+}
+
+// Shading of the cylinder where `ray` meets it at `t`.
+fn shade_bond_hit(input: BondImpostorVertexOutput, ray: Ray, t: f32) -> Shaded {
+    let cylinder_start = input.world_start;
+    let cylinder_axis = normalize(input.world_end - cylinder_start);
+
     // Hit point and surface normal
     let hit_point = ray.origin + t * ray.dir;
     let projection_length = dot(hit_point - cylinder_start, cylinder_axis);
@@ -524,9 +543,67 @@ fn fs_main(input: BondImpostorVertexOutput) -> BondFragmentOutput {
         0.0   // metallic - bonds are non-metallic
     );
 
-    var output: BondFragmentOutput;
-    output.depth = depth;
-    output.sample_mask = mask;
-    output.color = vec4<f32>(color, 1.0);
+    var shaded: Shaded;
+    shaded.depth = depth;
+    shaded.color = vec4<f32>(color, 1.0);
+    return shaded;
+}
+
+// ---- Per-sample shading (D5) ----
+// Everything from this marker to the end of the file is the refined frame's
+// entry point and is cut off (`pipelines::without_per_sample_shading`) on an
+// adapter without `MULTISAMPLED_SHADING`, where a module using
+// `@builtin(sample_index)` would not even compile. The block is repeated in
+// `atom_impostor.wgsl` and `transparent_impostor.wgsl`.
+
+// Where `world_position` lies on the render target, in pixels, y down.
+fn target_pixel_of(world_position: vec3<f32>) -> vec2<f32> {
+    let clip = camera.view_proj * vec4<f32>(world_position, 1.0);
+    let ndc = clip.xy / clip.w;
+    return vec2<f32>(
+        (ndc.x * 0.5 + 0.5) * camera.viewport_size_px.x,
+        (0.5 - ndc.y * 0.5) * camera.viewport_size_px.y,
+    );
+}
+
+// The offset, in pixels, from where `world_position` was interpolated to
+// sample `index` of the pixel at `frag_xy`. WGSL interpolates at the pixel
+// centre, which makes this the sample's standard offset; a backend running
+// the shader per sample may interpolate at the sample instead, which makes it
+// about zero. Measured rather than assumed, the sample ray is right either
+// way. Twin: `per_sample_offset`.
+fn per_sample_offset(frag_xy: vec2<f32>, world_position: vec3<f32>, index: u32) -> vec2<f32> {
+    let sample_px = floor(frag_xy) + vec2<f32>(0.5) + sample_offset_4x(index);
+    return sample_px - target_pixel_of(world_position);
+}
+
+struct PerSampleFragmentOutput {
+    @builtin(frag_depth) depth: f32,
+    @location(0) color: vec4<f32>,
+}
+
+// The refined frame (D5): taking `sample_index` runs this once per sample,
+// each with its own ray, hit, colour and depth, so where two impostors meet
+// is resolved per sample. No sample mask: an invocation covers its sample.
+@fragment
+fn fs_main_per_sample(
+    input: BondImpostorVertexOutput,
+    @builtin(sample_index) sample_index: u32,
+) -> PerSampleFragmentOutput {
+    // Derivatives first, before anything can discard.
+    let dwx = dpdxFine(input.world_position);
+    let dwy = dpdyFine(input.world_position);
+
+    let offset = per_sample_offset(input.clip_position.xy, input.world_position, sample_index);
+    let ray = view_ray(sample_point(input.world_position, dwx, dwy, offset), input.radius);
+    let t = cylinder_hit(ray.origin, ray.dir, input.world_start, input.world_end, input.radius);
+    if t < 0.0 {
+        discard;
+    }
+
+    let shaded = shade_bond_hit(input, ray, t);
+    var output: PerSampleFragmentOutput;
+    output.depth = shaded.depth;
+    output.color = shaded.color;
     return output;
 }

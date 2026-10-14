@@ -64,3 +64,9 @@ mod line_lod_test;
 // per-sample coverage (doc/design_viewport_antialiasing.md D4, D6).
 #[path = "renderer/impostor_coverage_test.rs"]
 mod impostor_coverage_test;
+
+// Viewport anti-aliasing, Phase 3: when the still-camera refined frame is
+// drawn, and that every mutating `Renderer` method invalidates it
+// (doc/design_viewport_antialiasing.md D5).
+#[path = "renderer/live_refinement_test.rs"]
+mod live_refinement_test;

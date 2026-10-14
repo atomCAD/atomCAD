@@ -339,3 +339,98 @@ fn impostor_shaders_take_derivatives_before_any_discard() {
         assert!(checked_a_derivative, "{name} takes no derivatives");
     }
 }
+
+// ---- Viewport anti-aliasing, Phase 3 (doc/design_viewport_antialiasing.md) --
+
+use atomcad_renderer::pipelines::{PER_SAMPLE_SHADING_MARKER, without_per_sample_shading};
+
+/// D5: each impostor shader has the refined frame's entry point,
+/// `fs_main_per_sample`, which takes `@builtin(sample_index)` (that is what
+/// runs it once per sample) and writes no sample mask.
+#[test]
+fn impostor_shaders_have_a_per_sample_entry_point() {
+    for name in IMPOSTOR_SHADERS {
+        let module = parse(&shader_dir().join(name));
+        let entry = module
+            .entry_points
+            .iter()
+            .find(|e| e.name == "fs_main_per_sample")
+            .unwrap_or_else(|| panic!("{name} has no fs_main_per_sample"));
+        assert_eq!(entry.stage, naga::ShaderStage::Fragment, "{name}");
+        let takes_sample_index = entry
+            .function
+            .arguments
+            .iter()
+            .any(|a| a.binding == Some(naga::Binding::BuiltIn(naga::BuiltIn::SampleIndex)));
+        assert!(
+            takes_sample_index,
+            "{name}: fs_main_per_sample takes no sample_index"
+        );
+
+        let result = entry.function.result.as_ref().expect("returns");
+        let naga::TypeInner::Struct { members, .. } = &module.types[result.ty].inner else {
+            panic!("{name}: fs_main_per_sample does not return a struct");
+        };
+        assert!(
+            !members
+                .iter()
+                .any(|m| m.binding == Some(naga::Binding::BuiltIn(naga::BuiltIn::SampleMask))),
+            "{name}: fs_main_per_sample writes a sample mask"
+        );
+
+        // Phase 2's derivatives-before-discard check reads every function,
+        // this one included; make sure it has derivatives to check.
+        let source = std::fs::read_to_string(shader_dir().join(name)).unwrap();
+        let (_, body) = function_bodies(&strip_line_comments(&source))
+            .into_iter()
+            .find(|(f, _)| f == "fs_main_per_sample")
+            .unwrap();
+        assert!(
+            body.contains("dpdx"),
+            "{name}: fs_main_per_sample takes no derivatives"
+        );
+    }
+}
+
+/// D5: without `MULTISAMPLED_SHADING` a module that uses `sample_index` does
+/// not validate at all, so the renderer cuts the per-sample block off
+/// (`without_per_sample_shading`). What is left must validate without the
+/// capability and keep `fs_main`.
+#[test]
+fn impostor_shaders_without_the_per_sample_block_validate_without_per_sample_shading() {
+    let caps =
+        naga::valid::Capabilities::default() - naga::valid::Capabilities::MULTISAMPLED_SHADING;
+    let validate = |source: &str| {
+        let module = naga::front::wgsl::parse_str(source).expect("parses");
+        naga::valid::Validator::new(naga::valid::ValidationFlags::all(), caps)
+            .validate(&module)
+            .map(|_| module)
+    };
+    for name in IMPOSTOR_SHADERS {
+        let source = std::fs::read_to_string(shader_dir().join(name)).unwrap();
+        assert_eq!(
+            source.matches(PER_SAMPLE_SHADING_MARKER).count(),
+            1,
+            "{name}: the marker must appear exactly once"
+        );
+        assert!(
+            validate(&source).is_err(),
+            "{name}: the whole shader validates without per-sample shading"
+        );
+
+        let stripped = without_per_sample_shading(&source);
+        let module = validate(stripped)
+            .unwrap_or_else(|e| panic!("{name} without the per-sample block: {e:?}"));
+        let entries: Vec<&str> = module
+            .entry_points
+            .iter()
+            .map(|e| e.name.as_str())
+            .collect();
+        assert!(entries.contains(&"fs_main"), "{name}: {entries:?}");
+        assert!(
+            !entries.contains(&"fs_main_per_sample"),
+            "{name}: {entries:?}"
+        );
+    }
+    assert_eq!(without_per_sample_shading("no marker"), "no marker");
+}

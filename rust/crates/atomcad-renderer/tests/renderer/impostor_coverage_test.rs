@@ -3,10 +3,10 @@
 
 use atomcad_renderer::impostor_coverage::{
     SAMPLE_FOOTPRINT_PX, SAMPLE_OFFSET_L1, SAMPLE_POSITIONS_4X, coverage_mask, cylinder_hit,
-    cylinder_ray_distance, quad_uv_limit, sample_offsets, sample_point, sample_reach, sphere_hit,
-    sphere_ray_distance,
+    cylinder_ray_distance, per_sample_offset, quad_uv_limit, sample_offsets, sample_point,
+    sample_reach, sphere_hit, sphere_ray_distance, target_pixel_of,
 };
-use glam::{Vec2, Vec3};
+use glam::{Mat4, Vec2, Vec3};
 
 /// Orthographic, looking down -Z, one world unit per pixel: a sample's ray
 /// starts above its quad point and points down. `dwy` is -Y because pixel
@@ -480,4 +480,78 @@ fn the_ray_distances_are_signed_distances_to_the_silhouette() {
     // The reach is 1.25 × half the larger pixel step.
     let reach = sample_reach(Vec3::new(0.3, 0.0, 0.0), Vec3::new(0.0, 0.4, 0.0));
     assert!((reach - 1.25 * 0.5 * 0.4).abs() < 1e-6);
+}
+
+// ---- The refined frame's sample rays (D5, Phase 3) --------------------------
+
+/// The point of the plane z = 0 under render pixel position `px` (y down)
+/// of a `size` target seen through `view_proj`.
+fn plane_point_under(view_proj: Mat4, size: Vec2, px: Vec2) -> Vec3 {
+    let ndc = Vec2::new(px.x / size.x * 2.0 - 1.0, 1.0 - px.y / size.y * 2.0);
+    let inverse = view_proj.inverse();
+    let near = inverse.project_point3(ndc.extend(0.0));
+    let far = inverse.project_point3(ndc.extend(1.0));
+    near + (far - near) * (-near.z / (far.z - near.z))
+}
+
+#[test]
+fn target_pixel_of_maps_world_to_pixels_with_y_down() {
+    // One world unit per pixel, origin at the centre of a 100 x 50 target.
+    let view_proj = Mat4::orthographic_rh(-50.0, 50.0, -25.0, 25.0, -10.0, 10.0);
+    let size = Vec2::new(100.0, 50.0);
+    assert_eq!(
+        target_pixel_of(view_proj, size, Vec3::ZERO),
+        Vec2::new(50.0, 25.0)
+    );
+    let px = target_pixel_of(view_proj, size, Vec3::new(10.0, 5.0, 3.0));
+    assert!((px - Vec2::new(60.0, 20.0)).length() < 1e-4, "{px}");
+}
+
+/// The offset is the standard one when the input was interpolated at the
+/// pixel centre, and zero when it was interpolated at the sample itself, so
+/// the sample ray is right under either interpolation rule.
+#[test]
+fn the_per_sample_offset_is_measured_from_where_the_input_was_interpolated() {
+    let pixel = Vec2::new(10.0, 20.0);
+    for (i, &[x, y]) in sample_offsets(4).iter().enumerate() {
+        let centre = pixel + Vec2::splat(0.5);
+        assert_eq!(per_sample_offset(centre, centre, i), [x, y], "sample {i}");
+
+        let at_sample = pixel + Vec2::from(SAMPLE_POSITIONS_4X[i]);
+        assert_eq!(
+            per_sample_offset(at_sample, at_sample, i),
+            [0.0, 0.0],
+            "sample {i}"
+        );
+    }
+}
+
+/// End to end in perspective: from a point interpolated at the pixel centre
+/// or at the sample, `sample_point` with the measured offset lands on the
+/// plane point under the sample (to first order, within a hundredth of a
+/// pixel).
+#[test]
+fn a_sample_point_lands_under_its_sample_in_perspective() {
+    let size = Vec2::new(320.0, 200.0);
+    let view = Mat4::look_at_rh(Vec3::new(3.0, -4.0, 20.0), Vec3::ZERO, Vec3::Y);
+    let proj = Mat4::perspective_rh(0.8, size.x / size.y, 0.1, 100.0);
+    let view_proj = proj * view;
+
+    let pixel = Vec2::new(201.0, 77.0);
+    for (i, position) in SAMPLE_POSITIONS_4X.iter().enumerate() {
+        let sample_px = pixel + Vec2::from(*position);
+        for interpolated_px in [pixel + Vec2::splat(0.5), sample_px] {
+            let world = plane_point_under(view_proj, size, interpolated_px);
+            let dwx = plane_point_under(view_proj, size, interpolated_px + Vec2::X) - world;
+            let dwy = plane_point_under(view_proj, size, interpolated_px + Vec2::Y) - world;
+            let measured = target_pixel_of(view_proj, size, world);
+            let offset = per_sample_offset(interpolated_px, measured, i);
+            let p = sample_point(world, dwx, dwy, offset);
+            let landed = target_pixel_of(view_proj, size, p);
+            assert!(
+                (landed - sample_px).length() < 0.01,
+                "sample {i} from {interpolated_px}: landed at {landed}, want {sample_px}"
+            );
+        }
+    }
 }

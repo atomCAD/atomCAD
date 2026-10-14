@@ -1457,7 +1457,7 @@ abstract class RustLibApi extends BaseApi {
       crateApiStructureDesignerStructureDesignerApiPromoteNodeToParameter(
           {required BigInt nodeId});
 
-  double crateApiCommonApiProvideTexture({required int texturePtr});
+  APIFrameInfo crateApiCommonApiProvideTexture({required int texturePtr});
 
   APIHoveredAtomInfo?
       crateApiStructureDesignerStructureDesignerApiQueryHoveredAtomInfo(
@@ -13487,7 +13487,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
 
   @override
-  double crateApiCommonApiProvideTexture({required int texturePtr}) {
+  APIFrameInfo crateApiCommonApiProvideTexture({required int texturePtr}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
@@ -13495,7 +13495,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 400)!;
       },
       codec: SseCodec(
-        decodeSuccessData: sse_decode_f_64,
+        decodeSuccessData: sse_decode_api_frame_info,
         decodeErrorData: null,
       ),
       constMeta: kCrateApiCommonApiProvideTextureConstMeta,
@@ -20433,6 +20433,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIFrameInfo dco_decode_api_frame_info(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return APIFrameInfo(
+      frameTime: dco_decode_f_64(arr[0]),
+      refineIn: dco_decode_opt_box_autoadd_f_64(arr[1]),
+    );
+  }
+
+  @protected
   APIFreeCircleData dco_decode_api_free_circle_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -27123,6 +27135,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_inputType = sse_decode_api_data_type(deserializer);
     return APIForeachData(inputType: var_inputType);
+  }
+
+  @protected
+  APIFrameInfo sse_decode_api_frame_info(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_frameTime = sse_decode_f_64(deserializer);
+    var var_refineIn = sse_decode_opt_box_autoadd_f_64(deserializer);
+    return APIFrameInfo(frameTime: var_frameTime, refineIn: var_refineIn);
   }
 
   @protected
@@ -34746,6 +34766,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       APIForeachData self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_api_data_type(self.inputType, serializer);
+  }
+
+  @protected
+  void sse_encode_api_frame_info(APIFrameInfo self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_f_64(self.frameTime, serializer);
+    sse_encode_opt_box_autoadd_f_64(self.refineIn, serializer);
   }
 
   @protected

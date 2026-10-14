@@ -13,6 +13,7 @@ use crate::api::api_common::with_mut_cad_instance;
 use crate::api::api_common::with_mut_cad_instance_or;
 use crate::api::common_api_types::APICamera;
 use crate::api::common_api_types::APICameraCanonicalView;
+use crate::api::common_api_types::APIFrameInfo;
 use crate::api::common_api_types::APIIVec3;
 use crate::api::common_api_types::APITransform;
 use crate::api::common_api_types::APIVec3;
@@ -176,8 +177,9 @@ fn send_texture(texture_ptr: u64, width: u32, height: u32, v: Vec<u8>) {
 }
 
 #[flutter_rust_bridge::frb(sync, type_64bit_int)]
-pub fn provide_texture(texture_ptr: u64) -> f64 {
+pub fn provide_texture(texture_ptr: u64) -> APIFrameInfo {
     let start = Instant::now(); // Record the start time
+    let mut refine_in = None;
 
     unsafe {
         // Use regular with_mut_cad_instance which returns Option<()>
@@ -194,6 +196,10 @@ pub fn provide_texture(texture_ptr: u64) -> f64 {
             ]);
             let (width, height) = cad_instance.renderer.get_viewport_size();
             send_texture(texture_ptr, width, height, v);
+            refine_in = cad_instance
+                .renderer
+                .refine_in()
+                .map(|due| due.as_secs_f64());
         })
         .is_none()
         {
@@ -211,7 +217,10 @@ pub fn provide_texture(texture_ptr: u64) -> f64 {
     let duration = start.elapsed(); // Calculate elapsed time
     //println!("Provide texture time: {:?}", duration);
 
-    return duration.as_secs_f64();
+    APIFrameInfo {
+        frame_time: duration.as_secs_f64(),
+        refine_in,
+    }
 }
 
 #[flutter_rust_bridge::frb(sync)]

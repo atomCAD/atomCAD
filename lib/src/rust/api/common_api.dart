@@ -17,7 +17,7 @@ void setViewportSize({required int width, required int height}) =>
     RustLib.instance.api
         .crateApiCommonApiSetViewportSize(width: width, height: height);
 
-double provideTexture({required int texturePtr}) => RustLib.instance.api
+APIFrameInfo provideTexture({required int texturePtr}) => RustLib.instance.api
     .crateApiCommonApiProvideTexture(texturePtr: texturePtr);
 
 APICamera? getCamera() => RustLib.instance.api.crateApiCommonApiGetCamera();

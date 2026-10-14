@@ -411,6 +411,15 @@ new pipeline goes into `PipelineSet`**, never onto `Renderer`, or it exists
 at one count and panics (or silently misdraws) at the other. Targets are
 sized by the pure `TargetSpec` / `live_target_spec` in `render_target.rs`.
 
+**A new `pub fn(&mut self)` on `Renderer` bumps the live generation**
+(`bump_live_generation()`, or through `update_camera_buffer` /
+`update_live_target`; D5). Once the view rests, `render` keeps the refined
+frame's bytes and hands them out until the generation changes, so a setter
+that forgets the bump leaves a stale picture on screen.
+`live_refinement_test.rs` reads `renderer.rs` and fails on such a setter. A
+setting pushed on every refresh bumps only when its value changes, or every
+refresh throws the refined image away.
+
 **The impostor shaders decide coverage per sample** (D4): the three
 `*_impostor.wgsl` files each carry a copy of the same coverage block (sample
 offsets, sample rays, hit tests, the early-outs) and read the target's
@@ -419,7 +428,11 @@ change to one copy is made to all of them **and** to the Rust twins in
 `impostor_coverage.rs`. Take screen-space derivatives (`dpdx*`) at the top of
 the fragment entry point, before anything can `discard`: naga accepts a
 derivative after a `discard`, so only `shader_test.rs`'s source check
-catches that mistake.
+catches that mistake. Each file ends with the refined frame's
+`fs_main_per_sample` (D5), after the `// ---- Per-sample shading (D5) ----`
+marker: on an adapter without `MULTISAMPLED_SHADING` a module using
+`sample_index` does not compile at all, so `Shaders::new` cuts the file at
+the marker. Anything `fs_main` uses must stay above it.
 
 ## Debugging
 

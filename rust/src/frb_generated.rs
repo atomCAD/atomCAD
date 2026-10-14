@@ -17933,6 +17933,18 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
     }
 }
 
+impl SseDecode for crate::api::common_api_types::APIFrameInfo {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_frameTime = <f64>::sse_decode(deserializer);
+        let mut var_refineIn = <Option<f64>>::sse_decode(deserializer);
+        return crate::api::common_api_types::APIFrameInfo {
+            frame_time: var_frameTime,
+            refine_in: var_refineIn,
+        };
+    }
+}
+
 impl SseDecode for crate::api::structure_designer::structure_designer_api_types::APIFreeCircleData {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -27726,6 +27738,27 @@ impl
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::common_api_types::APIFrameInfo {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.frame_time.into_into_dart().into_dart(),
+            self.refine_in.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::common_api_types::APIFrameInfo
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::common_api_types::APIFrameInfo>
+    for crate::api::common_api_types::APIFrameInfo
+{
+    fn into_into_dart(self) -> crate::api::common_api_types::APIFrameInfo {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart
     for crate::api::structure_designer::structure_designer_api_types::APIFreeCircleData
 {
@@ -34429,6 +34462,14 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
             self.input_type,
             serializer,
         );
+    }
+}
+
+impl SseEncode for crate::api::common_api_types::APIFrameInfo {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <f64>::sse_encode(self.frame_time, serializer);
+        <Option<f64>>::sse_encode(self.refine_in, serializer);
     }
 }
 

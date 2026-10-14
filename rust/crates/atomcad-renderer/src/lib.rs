@@ -13,6 +13,7 @@ pub mod label_mesh;
 pub mod line_geometry;
 pub mod line_lod;
 pub mod line_mesh;
+pub mod live_refinement;
 pub mod mesh;
 pub mod pipelines;
 pub mod render_target;

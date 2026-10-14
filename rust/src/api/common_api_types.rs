@@ -149,3 +149,14 @@ pub struct APIResult {
     pub success: bool,
     pub error_message: String,
 }
+
+/// What `provide_texture` reports about the frame it rendered
+/// (`doc/design_viewport_antialiasing.md` D5).
+pub struct APIFrameInfo {
+    /// Wall time of the frame, in seconds.
+    pub frame_time: f64,
+    /// Seconds until a refined frame is due; `None` when none is owed
+    /// (already refined, anti-aliasing off, or unsupported). Flutter renders
+    /// on demand, so it must ask for that frame itself.
+    pub refine_in: Option<f64>,
+}

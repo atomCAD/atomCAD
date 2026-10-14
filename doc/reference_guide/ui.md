@@ -1174,7 +1174,7 @@ How the [3D viewport](#3d-viewport) is drawn. These settings trade speed for qua
 
 | Setting | Description |
 |---------|-------------|
-| Anti-aliasing | Smooths edges in the viewport by rendering four samples per pixel (4× multisampling): the outlines of atoms, bonds and x-ray ghosts, and the edges of solids — CSG shapes, isosurfaces, the gizmo. Where two atoms touch, or a bond enters its atom, the boundary between them is not smoothed. On by default. Turn it off on a slow machine, a very large viewport or a very large structure: it uses about four times the GPU memory for the viewport, and on a structure of a million atoms it can make each frame take about twice as long. Takes effect immediately. If the graphics adapter cannot multisample, the setting has no effect. |
+| Anti-aliasing | Smooths edges in the viewport by rendering four samples per pixel (4× multisampling): the outlines of atoms, bonds and x-ray ghosts, and the edges of solids — CSG shapes, isosurfaces, the gizmo. While the view moves, the boundary where two atoms touch, or where a bond enters its atom, is not smoothed; once the view comes to rest (about a sixth of a second after the last change) the viewport sharpens once more and smooths those boundaries too. On by default. Turn it off on a slow machine, a very large viewport or a very large structure: it uses about four times the GPU memory for the viewport, and on a structure of a million atoms it can make each frame take about twice as long. Takes effect immediately. If the graphics adapter cannot multisample, the setting has no effect. |
 
 ### Layout
 

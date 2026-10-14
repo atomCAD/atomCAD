@@ -1001,6 +1001,50 @@ release library, a GUI check needs `cargo build --release` first.
   image goes stale.
 - Measure the refined frame's `provide_texture` time on a small scene and on
   the nanobeam; record it here.
+
+  **Measured (2026-10-14).** As in Phase 2, on a stand-in rather than the
+  nanobeam itself: the same 1.07 M-atom / 2.1 M-bond diamond slab, a
+  1600 × 1000 live target, viewed obliquely, through `Renderer::render`
+  (normal, mean of 20 after 3 warm-ups) and `render_still` (refined, mean
+  of 10), readback included, in a temporary release-mode harness; the
+  high-performance adapter `Renderer::new` now picks (RTX 3060 Laptop,
+  Vulkan). The small scene is the same slab at 2 × 2 × 2 cells (64 atoms).
+
+  | Frame time (ms) | far, ~3 px/atom | mid, ~10 px/atom | near, ~30 px/atom |
+  |---|---|---|---|
+  | Slab, normal frame (D4) | 15.2 | 22.0 | 21.0 |
+  | Slab, refined frame (D5) | 19.1 | 33.4 | 33.7 |
+  | Small scene, normal | 2.4 | 2.5 | 2.4 |
+  | Small scene, refined | 2.4 | 2.3 | 2.5 |
+
+  The refined frame costs 1.3–1.6× a normal one, not the 4× of the impostor
+  shading alone: it skips D4's per-sample hit loop, and the rest of the frame
+  (vertex work, meshes, readback) is unchanged. At ~34 ms, paid once per
+  rest, it is not worth a longer `REFINE_DELAY` (150 ms for now; Phase 5
+  tunes it on screen). A small scene is all readback.
+
+  **Two deviations from D5 found during implementation:**
+
+  - *The per-sample block is cut off without `MULTISAMPLED_SHADING`.* D5
+    gated only the refined *pipelines* on the downlevel flag, but wgpu
+    validates the whole shader module against the device's capabilities, so
+    a module that contains an entry point using `sample_index` fails to
+    compile on such an adapter even if no pipeline uses it, which would take
+    the ordinary impostor pipelines down with it. Each impostor shader
+    therefore ends with its per-sample block after a marker line, and
+    `Shaders::new` builds the modules from the source cut at the marker when
+    the flag is missing (`pipelines::without_per_sample_shading`, tested with
+    naga against capabilities lacking the flag).
+  - *The sample offset is measured, not assumed.* D5 builds a sample's ray
+    as `sample_point(world_position, dwx, dwy, offset[sample_index])`, which
+    is right only if `world_position` is interpolated at the pixel centre.
+    WGSL says it is, but whether a backend running the shader per sample
+    keeps centre interpolation is not something to bet the picture on (if
+    it interpolated at the sample, the offset would be applied twice). The
+    shaders instead project `world_position` back to the target
+    (`target_pixel_of`) and offset from wherever it actually was
+    (`per_sample_offset`), which is right under either rule; the Rust twins
+    are tested for both.
 - Reference guide: the *Anti-aliasing* entry in `ui.md` says that a still
   view sharpens once more after it comes to rest.
 - Tests (CPU):

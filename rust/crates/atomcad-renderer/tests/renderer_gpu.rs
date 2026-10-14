@@ -40,6 +40,11 @@ fn block_on<F: std::future::Future>(future: F) -> F::Output {
 
 /// A renderer at `width × height`, or `None` (with a note on stdout) when the
 /// machine has no adapter. `Renderer::new` itself panics without one.
+///
+/// Automatic refinement is off (`doc/design_viewport_antialiasing.md` D5,
+/// Testing layer 4), so a test that renders twice gets the same kind of
+/// frame both times however slow the machine is. Refined frames come from
+/// `render_still`, or from a test that sets a zero delay.
 fn try_renderer(width: u32, height: u32) -> Option<Renderer> {
     let adapter = block_on(
         wgpu::Instance::default().request_adapter(&wgpu::RequestAdapterOptions::default()),
@@ -48,7 +53,9 @@ fn try_renderer(width: u32, height: u32) -> Option<Renderer> {
         println!("renderer_gpu: no wgpu adapter found, skipping");
         return None;
     }
-    Some(block_on(Renderer::new(width, height)))
+    let mut renderer = block_on(Renderer::new(width, height));
+    renderer.set_refine_delay(None);
+    Some(renderer)
 }
 
 /// Writes `pixels` to `$ATOMCAD_GPU_DUMP_DIR/<name>.raw` when the variable is
@@ -1299,4 +1306,417 @@ fn a_gadget_guide_dot_is_anti_aliased() {
         edge > 30,
         "the guide dot is not anti-aliased: {edge} pixels"
     );
+}
+
+// ---- Viewport anti-aliasing, Phase 3 (doc/design_viewport_antialiasing.md) --
+//
+// The still-camera refined frame (D5). Refined frames for pixel tests come
+// from `render_still`; the tests of the decision set a zero delay and read
+// `last_frame_kind`. Mutations: draw the refined frame with the normal
+// pipelines (the junction and contact tests fail); in the transparent
+// shader's per-sample entry point multiply the ghost's alpha by 4 (the
+// refined-matches-normal test fails).
+
+use atomcad_renderer::live_refinement::LiveFrameKind;
+use std::time::Duration;
+
+/// A multisampled renderer whose adapter can also shade per sample, or
+/// `None` (with a note). Like `try_msaa_renderer`, the skip asks the
+/// adapter, so a renderer that lost its refined pipelines fails instead.
+fn try_refining_renderer() -> Option<Renderer> {
+    let renderer = try_msaa_renderer()?;
+    if !renderer.refinement_supported() {
+        println!("renderer_gpu: no per-sample shading on this adapter, skipping");
+        return None;
+    }
+    Some(renderer)
+}
+
+/// The indices of the pixels of a top-down orthographic live render within
+/// `half_width` world units of the line through `point` along the unit
+/// vector `direction`, and within `half_length` of `point` along it.
+fn pixels_along(
+    point: (f32, f32),
+    direction: (f32, f32),
+    half_length: f32,
+    half_width: f32,
+) -> Vec<usize> {
+    (0..(VIEWPORT_WIDTH * VIEWPORT_HEIGHT) as usize)
+        .filter(|&index| {
+            let (x, y) = world_of_pixel(index);
+            let (dx, dy) = (x - point.0, y - point.1);
+            let along = dx * direction.0 + dy * direction.1;
+            let across = -dx * direction.1 + dy * direction.0;
+            along.abs() <= half_length && across.abs() <= half_width
+        })
+        .collect()
+}
+
+/// Checks a red-against-green boundary along `band` (pixel indices of a
+/// live render): in the normal frame every pixel is one colour or the other
+/// (the D4 staircase: green channel at most 40 on the red side, at least 110
+/// on the green one, in these scenes), and the refined frame differs from
+/// it by more than 24 levels on more than `min_changed` of them, its partly
+/// covered pixels.
+fn assert_refined_boundary(
+    normal: &[u8],
+    refined: &[u8],
+    band: &[usize],
+    min_changed: usize,
+    what: &str,
+) {
+    let green = |pixels: &[u8], index: usize| pixels[index * 4 + 1];
+    let between: Vec<u8> = band
+        .iter()
+        .map(|&index| green(normal, index))
+        .filter(|&g| g > 40 && g < 110)
+        .collect();
+    assert!(
+        between.is_empty(),
+        "{what}: a normal frame already mixes the colours ({between:?}), so the test proves nothing"
+    );
+    let changed = band
+        .iter()
+        .filter(|&&index| {
+            (0..3)
+                .any(|c| (normal[index * 4 + c] as i32 - refined[index * 4 + c] as i32).abs() > 24)
+        })
+        .count();
+    assert!(
+        changed > min_changed,
+        "{what}: the refined frame is not anti-aliased: {changed} of {} pixels changed",
+        band.len()
+    );
+}
+
+/// D5: a bond entering a differently coloured atom. Seen from above with the
+/// bond's axis through the atom's centre, the two surfaces meet along a
+/// straight segment, an intersection with no depth gap. The refined frame
+/// mixes the colours along it; a normal frame (D4) decides each pixel
+/// whole, which pins down that the refined frame is what fixes it.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn a_bond_atom_junction_is_anti_aliased_in_the_refined_frame() {
+    let Some(mut renderer) = try_refining_renderer() else {
+        return;
+    };
+    top_down_orthographic(&mut renderer);
+    // A red atom of radius 4 and a green bond of radius 2 along `axis`: the
+    // junction is the segment at distance sqrt(4^2 - 2^2) along the axis, 4
+    // long, tilted so it crosses the pixel grid.
+    let angle: f32 = 0.3;
+    let axis = (angle.cos(), angle.sin());
+    let mut bonds = BondImpostorMesh::new();
+    bonds.add_bond_with_positions(
+        &Vec3::ZERO,
+        &Vec3::new(axis.0 * 9.0, axis.1 * 9.0, 0.0),
+        2.0,
+        &[0.0, 1.0, 0.0],
+    );
+    upload_impostors(
+        &mut renderer,
+        &atom(Vec3::ZERO, 4.0, [1.0, 0.0, 0.0]),
+        &bonds,
+        &TransparentImpostorMesh::new(),
+        &AtomImpostorMesh::new(),
+    );
+    let normal = renderer.render(BLACK);
+    let refined = renderer.render_still(BLACK);
+    dump("refined_junction_normal", &normal);
+    dump("refined_junction", &refined);
+
+    // Clear of the segment's ends, where it meets the silhouettes.
+    let distance = (4.0f32 * 4.0 - 2.0 * 2.0).sqrt();
+    let band = pixels_along(
+        (axis.0 * distance, axis.1 * distance),
+        (-axis.1, axis.0),
+        1.7,
+        0.15,
+    );
+    assert!(
+        band.len() > 60,
+        "junction too short to judge: {}",
+        band.len()
+    );
+    assert_refined_boundary(&normal, &refined, &band, 15, "junction");
+}
+
+/// D5: two overlapping spheres of different colour, centres at the same
+/// height: the contact is a straight segment, tilted across the pixel grid.
+/// Mixed along it in the refined frame, not in a normal one.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn a_sphere_contact_is_anti_aliased_in_the_refined_frame() {
+    let Some(mut renderer) = try_refining_renderer() else {
+        return;
+    };
+    top_down_orthographic(&mut renderer);
+    let angle: f32 = 0.3;
+    let axis = (angle.cos(), angle.sin());
+    let d = 1.5;
+    let mut atoms = AtomImpostorMesh::new();
+    for (sign, albedo) in [(-1.0, [1.0, 0.0, 0.0]), (1.0, [0.0, 1.0, 0.0])] {
+        atoms.add_atom_quad(
+            &Vec3::new(sign * axis.0 * d, sign * axis.1 * d, 0.0),
+            3.0,
+            &albedo,
+            0.5,
+            0.0,
+            &[0.0; 4],
+        );
+    }
+    upload_impostors(
+        &mut renderer,
+        &atoms,
+        &BondImpostorMesh::new(),
+        &TransparentImpostorMesh::new(),
+        &AtomImpostorMesh::new(),
+    );
+    let normal = renderer.render(BLACK);
+    let refined = renderer.render_still(BLACK);
+    dump("refined_contact_normal", &normal);
+    dump("refined_contact", &refined);
+
+    // The contact segment is 2 sqrt(3^2 - 1.5^2) = 5.2 long; stay clear of
+    // its ends, where it meets the silhouettes.
+    let band = pixels_along((0.0, 0.0), (-axis.1, axis.0), 2.2, 0.15);
+    assert!(
+        band.len() > 80,
+        "contact too short to judge: {}",
+        band.len()
+    );
+    assert_refined_boundary(&normal, &refined, &band, 20, "contact");
+}
+
+/// Whether the live pixel `index` is on an edge of the image: some
+/// neighbour differs from it by more than 24 levels in a channel.
+fn on_an_edge(pixels: &[u8], index: usize) -> bool {
+    let (w, h) = (VIEWPORT_WIDTH as i64, VIEWPORT_HEIGHT as i64);
+    let (x, y) = (index as i64 % w, index as i64 / w);
+    let at = |x: i64, y: i64| &pixels[((y * w + x) * 4) as usize..][..3];
+    let here = at(x, y);
+    (-1..=1).any(|dy| {
+        (-1..=1).any(|dx| {
+            let (nx, ny) = (x + dx, y + dy);
+            nx >= 0
+                && ny >= 0
+                && nx < w
+                && ny < h
+                && (0..3).any(|c| (at(nx, ny)[c] as i32 - here[c] as i32).abs() > 24)
+        })
+    })
+}
+
+/// Asserts that `refined` and `normal` agree within a few levels wherever
+/// `normal` has no edge, and that `refined` is opaque.
+fn assert_refined_matches_normal_away_from_edges(normal: &[u8], refined: &[u8], what: &str) {
+    assert_eq!(normal.len(), refined.len());
+    assert!(
+        refined.chunks_exact(4).all(|p| p[3] == 255),
+        "{what}: a refined pixel is not opaque"
+    );
+    let mut compared = 0;
+    for (index, (n, r)) in normal
+        .chunks_exact(4)
+        .zip(refined.chunks_exact(4))
+        .enumerate()
+    {
+        if on_an_edge(normal, index) {
+            continue;
+        }
+        compared += 1;
+        let worst = (0..3)
+            .map(|c| (n[c] as i32 - r[c] as i32).abs())
+            .max()
+            .unwrap();
+        assert!(
+            worst <= 3,
+            "{what}: pixel {index} differs by {worst} away from any edge: normal {n:?}, refined {r:?}"
+        );
+    }
+    assert!(compared > 1000, "{what}: only {compared} pixels compared");
+}
+
+/// D5: away from impostor edges the refined frame is the normal one, for
+/// the fixed scene and for a ghost over an opaque atom, and it stays
+/// opaque. Catches a per-sample entry point that shades or blends
+/// differently from `fs_main` (a wrong sample offset, a ghost weighted as
+/// if it were the whole pixel), which the edge tests would not.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn the_refined_frame_matches_the_normal_one_away_from_edges() {
+    let Some(mut renderer) = try_refining_renderer() else {
+        return;
+    };
+    upload_fixed_scene(&mut renderer);
+    let normal = renderer.render(BACKGROUND_RGB);
+    let refined = renderer.render_still(BACKGROUND_RGB);
+    dump("refined_fixed_scene", &refined);
+    assert_refined_matches_normal_away_from_edges(&normal, &refined, "fixed scene");
+
+    top_down_orthographic(&mut renderer);
+    let mut ghosts = TransparentImpostorMesh::new();
+    ghosts.add_atom_quad(
+        &Vec3::new(1.0, 0.0, 5.0),
+        3.0,
+        &[0.2, 0.9, 0.3],
+        0.5,
+        0.0,
+        &[0.0; 4],
+        0.4,
+    );
+    upload_impostors(
+        &mut renderer,
+        &atom(Vec3::new(-1.0, 0.0, 0.0), 3.0, [0.9, 0.2, 0.2]),
+        &BondImpostorMesh::new(),
+        &ghosts,
+        &AtomImpostorMesh::new(),
+    );
+    let normal = renderer.render(BACKGROUND_RGB);
+    let refined = renderer.render_still(BACKGROUND_RGB);
+    dump("refined_ghost_over_atom", &refined);
+    assert_refined_matches_normal_away_from_edges(&normal, &refined, "ghost over atom");
+}
+
+/// D5's decision with a zero delay: after an upload the first frame is
+/// normal and owes a refined one at once, the next is refined, the one after
+/// that hands back the kept bytes, and a camera move starts over.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn a_resting_view_is_refined_once_and_then_kept() {
+    let Some(mut renderer) = try_refining_renderer() else {
+        return;
+    };
+    renderer.set_refine_delay(Some(Duration::ZERO));
+    upload_fixed_scene(&mut renderer);
+
+    let normal = renderer.render(BACKGROUND_RGB);
+    assert_eq!(renderer.last_frame_kind(), Some(LiveFrameKind::Normal));
+    assert_eq!(renderer.refine_in(), Some(Duration::ZERO));
+
+    let refined = renderer.render(BACKGROUND_RGB);
+    assert_eq!(renderer.last_frame_kind(), Some(LiveFrameKind::Refined));
+    assert_eq!(renderer.refine_in(), None);
+    assert!(normal != refined, "the refined frame changed nothing");
+
+    let kept = renderer.render(BACKGROUND_RGB);
+    assert_eq!(renderer.last_frame_kind(), Some(LiveFrameKind::Kept));
+    assert!(kept == refined, "the kept frame is not the refined one");
+    assert_eq!(renderer.refine_in(), None);
+
+    // A different background is a change too.
+    renderer.render(BLACK);
+    assert_eq!(renderer.last_frame_kind(), Some(LiveFrameKind::Normal));
+    renderer.render(BLACK);
+    assert_eq!(renderer.last_frame_kind(), Some(LiveFrameKind::Refined));
+
+    renderer.move_camera(
+        &DVec3::new(10.0, -20.0, 30.0),
+        &DVec3::ZERO,
+        &DVec3::new(0.0, 0.0, 1.0),
+    );
+    renderer.render(BLACK);
+    assert_eq!(renderer.last_frame_kind(), Some(LiveFrameKind::Normal));
+}
+
+/// D5: every mutating method of `Renderer` strictly increases the live
+/// generation when it changes something, and the settings pushed on every
+/// refresh do not when they are unchanged. The source-text check in
+/// `live_refinement_test.rs` catches a setter missing from this list.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn every_setter_invalidates_the_refined_frame() {
+    use atomcad_renderer::camera::CameraCanonicalView;
+    use atomcad_renderer::transparent_surface_mesh::SurfaceTransparencyMode;
+    use atomcad_util::transform::Transform;
+
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    let check = |what: &str, renderer: &mut Renderer, change: &dyn Fn(&mut Renderer)| {
+        let before = renderer.live_generation();
+        change(renderer);
+        assert!(
+            renderer.live_generation() > before,
+            "{what} did not bump the live generation"
+        );
+    };
+    check("update_all_gpu_meshes", &mut renderer, &upload_fixed_scene);
+    check("update_background_mesh", &mut renderer, &|r| {
+        r.update_background_mesh(&LineMesh::new())
+    });
+    check("move_camera", &mut renderer, &|r| {
+        r.move_camera(
+            &DVec3::new(1.0, 2.0, 30.0),
+            &DVec3::ZERO,
+            &DVec3::new(0.0, 1.0, 0.0),
+        )
+    });
+    check("set_orthographic_mode", &mut renderer, &|r| {
+        r.set_orthographic_mode(true)
+    });
+    check("set_ortho_half_height", &mut renderer, &|r| {
+        r.set_ortho_half_height(7.0)
+    });
+    check("set_camera_canonical_view", &mut renderer, &|r| {
+        r.set_camera_canonical_view(CameraCanonicalView::Front)
+    });
+    check("set_camera_transform", &mut renderer, &|r| {
+        r.set_camera_transform(&Transform::new(
+            DVec3::new(0.0, -30.0, 0.0),
+            glam::f64::DQuat::IDENTITY,
+        ))
+    });
+    check("a direct camera edit", &mut renderer, &|r| {
+        r.camera.fovy *= 0.5;
+        r.update_camera_buffer();
+    });
+    check("set_surface_transparency_mode", &mut renderer, &|r| {
+        r.set_surface_transparency_mode(SurfaceTransparencyMode::SinglePass)
+    });
+    check("set_viewport_size", &mut renderer, &|r| {
+        r.set_viewport_size(VIEWPORT_WIDTH + 10, VIEWPORT_HEIGHT)
+    });
+    if renderer.msaa_supported() {
+        check("set_render_quality", &mut renderer, &|r| {
+            r.set_render_quality(RenderQuality {
+                anti_aliasing: false,
+            })
+        });
+    }
+    check("set_refine_delay", &mut renderer, &|r| {
+        r.set_refine_delay(Some(Duration::ZERO))
+    });
+
+    // Pushed on every refresh: unchanged values must not bump, or every
+    // refresh would throw the refined image away.
+    let before = renderer.live_generation();
+    renderer.set_surface_transparency_mode(SurfaceTransparencyMode::SinglePass);
+    renderer.set_render_quality(renderer.render_quality());
+    renderer.set_viewport_size(VIEWPORT_WIDTH + 10, VIEWPORT_HEIGHT);
+    assert_eq!(
+        renderer.live_generation(),
+        before,
+        "an unchanged setting bumped"
+    );
+}
+
+/// D5, D8: with anti-aliasing off there is no refined frame, however long
+/// the view rests, and none is owed.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn with_anti_aliasing_off_no_frame_is_refined() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    renderer.set_refine_delay(Some(Duration::ZERO));
+    renderer.set_render_quality(RenderQuality {
+        anti_aliasing: false,
+    });
+    upload_fixed_scene(&mut renderer);
+    for _ in 0..4 {
+        renderer.render(BACKGROUND_RGB);
+        assert_eq!(renderer.last_frame_kind(), Some(LiveFrameKind::Normal));
+        assert_eq!(renderer.refine_in(), None);
+    }
 }

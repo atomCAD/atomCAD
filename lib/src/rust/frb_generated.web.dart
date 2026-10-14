@@ -348,6 +348,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIForeachData dco_decode_api_foreach_data(dynamic raw);
 
   @protected
+  APIFrameInfo dco_decode_api_frame_info(dynamic raw);
+
+  @protected
   APIFreeCircleData dco_decode_api_free_circle_data(dynamic raw);
 
   @protected
@@ -2500,6 +2503,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIForeachData sse_decode_api_foreach_data(SseDeserializer deserializer);
+
+  @protected
+  APIFrameInfo sse_decode_api_frame_info(SseDeserializer deserializer);
 
   @protected
   APIFreeCircleData sse_decode_api_free_circle_data(
@@ -5008,6 +5014,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_foreach_data(
       APIForeachData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_frame_info(APIFrameInfo self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_free_circle_data(

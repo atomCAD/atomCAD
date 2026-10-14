@@ -108,7 +108,9 @@ fn capture_screenshot_impl(
         .filter(|v| v.len() >= 3)
         .map(|v| [v[0], v[1], v[2]])
         .unwrap_or([30, 30, 30]); // Default dark gray
-    let mut pixels = renderer.render(bg_color);
+    // A screenshot is a still: the refined frame, without waiting for the
+    // view to rest (`doc/design_viewport_antialiasing.md` D5).
+    let mut pixels = renderer.render_still(bg_color);
 
     // Restore viewport if changed
     if size_changed {

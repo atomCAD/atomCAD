@@ -9,8 +9,11 @@
 //! CPU. Each WGSL copy names its twin here, and a change to one must be made
 //! to the others. A twin can drift from the WGSL silently, so the GPU harness
 //! (`tests/renderer_gpu.rs`) is the cross-check.
+//!
+//! The refined frame (D5) builds one ray per sample from the same pieces,
+//! plus [`target_pixel_of`] and [`per_sample_offset`].
 
-use glam::{Vec2, Vec3};
+use glam::{Mat4, Vec2, Vec3};
 
 /// WebGPU's standard 4-sample pattern, in pixels from the pixel's top-left
 /// corner (y down). Sample `i` is bit `i` of the sample mask.
@@ -172,4 +175,28 @@ pub fn coverage_mask(hits: impl Iterator<Item = bool>) -> u32 {
     hits.enumerate()
         .filter(|(_, hit)| *hit)
         .fold(0, |mask, (i, _)| mask | (1 << i))
+}
+
+/// Where `world_position` lies on a render target of `viewport_size_px`
+/// pixels, in pixels from the top-left corner, y down. Twin of
+/// `target_pixel_of` in the impostor shaders' per-sample block (D5).
+pub fn target_pixel_of(view_proj: Mat4, viewport_size_px: Vec2, world_position: Vec3) -> Vec2 {
+    let clip = view_proj * world_position.extend(1.0);
+    let ndc = clip.truncate().truncate() / clip.w;
+    Vec2::new(
+        (ndc.x * 0.5 + 0.5) * viewport_size_px.x,
+        (0.5 - ndc.y * 0.5) * viewport_size_px.y,
+    )
+}
+
+/// The refined frame's sample offset (D5): from `interpolated_px`, where the
+/// fragment's `world_position` was interpolated (measured with
+/// [`target_pixel_of`]), to 4× sample `index` of the pixel at `frag_xy`. With
+/// interpolation at the pixel centre it is the sample's standard offset;
+/// with interpolation at the sample itself it is zero. Twin of
+/// `per_sample_offset` in the impostor shaders.
+pub fn per_sample_offset(frag_xy: Vec2, interpolated_px: Vec2, index: usize) -> [f32; 2] {
+    let [x, y] = SAMPLE_OFFSETS_4X[index];
+    let sample = frag_xy.floor() + Vec2::splat(0.5) + Vec2::new(x, y);
+    (sample - interpolated_px).to_array()
 }

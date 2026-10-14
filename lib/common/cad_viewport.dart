@@ -5,6 +5,7 @@ import 'package:texture_rgba_renderer/texture_rgba_renderer.dart';
 import 'package:flutter_cad/src/rust/api/common_api.dart';
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_cad/common/api_utils.dart';
+import 'package:flutter_cad/common/refinement_timer.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:vector_math/vector_math.dart' as vector_math;
 import 'dart:math';
@@ -141,6 +142,11 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
   static const double _zoomPerZoomDelta = 0.002;
 
   TextureRgbaRenderer? _textureRenderer;
+
+  /// Asks for the refined frame once the view has rested
+  /// (`doc/design_viewport_antialiasing.md` D5).
+  late final RefinementTimer _refinementTimer =
+      RefinementTimer(renderingNeeded);
 
   int? textureId;
   int? _texturePtr;
@@ -426,7 +432,8 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
       // may have queued up while the previous render was blocking; only the
       // last position matters.
       _flushPendingCameraDrag();
-      provideTexture(texturePtr: _texturePtr!);
+      final frame = provideTexture(texturePtr: _texturePtr!);
+      _refinementTimer.onFrame(frame.refineIn);
     }
   }
 
@@ -814,6 +821,7 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     // and release texture resources to prevent memory leaks
     const int textureKey = 0;
     _textureRenderer?.closeTexture(textureKey);
+    _refinementTimer.dispose();
     _textureRenderer = null;
     _texturePtr = null;
 

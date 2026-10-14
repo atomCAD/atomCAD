@@ -29,20 +29,49 @@ pub(crate) struct Shaders {
     pub label: ShaderModule,
 }
 
+/// The marker before the refined frame's entry point at the end of each
+/// impostor shader (`doc/design_viewport_antialiasing.md` D5).
+pub const PER_SAMPLE_SHADING_MARKER: &str = "// ---- Per-sample shading (D5) ----";
+
+/// `source` without its per-sample entry point: everything from
+/// [`PER_SAMPLE_SHADING_MARKER`] on. A module that uses
+/// `@builtin(sample_index)` fails to compile on an adapter without
+/// `DownlevelFlags::MULTISAMPLED_SHADING`, even when no pipeline uses that
+/// entry point, so on such an adapter the impostor shaders are built without
+/// it. A source without the marker is returned whole.
+pub fn without_per_sample_shading(source: &str) -> &str {
+    source
+        .find(PER_SAMPLE_SHADING_MARKER)
+        .map_or(source, |at| &source[..at])
+}
+
 impl Shaders {
-    pub fn new(device: &Device) -> Self {
-        let module = |label: &str, source: &'static str| {
+    /// `per_sample_shading`: whether the adapter has
+    /// `DownlevelFlags::MULTISAMPLED_SHADING`. Without it the impostor shaders
+    /// lose their `fs_main_per_sample` entry point (D5).
+    pub fn new(device: &Device, per_sample_shading: bool) -> Self {
+        let module = |label: &str, source: &str| {
             device.create_shader_module(ShaderModuleDescriptor {
                 label: Some(label),
                 source: ShaderSource::Wgsl(source.into()),
             })
         };
+        let impostor = |label: &str, source: &'static str| {
+            module(
+                label,
+                if per_sample_shading {
+                    source
+                } else {
+                    without_per_sample_shading(source)
+                },
+            )
+        };
         Self {
             triangle: module("Triangle Shader", include_str!("mesh.wgsl")),
             line: module("Line Shader", include_str!("line_mesh.wgsl")),
-            atom_impostor: module("Atom Impostor Shader", include_str!("atom_impostor.wgsl")),
-            bond_impostor: module("Bond Impostor Shader", include_str!("bond_impostor.wgsl")),
-            transparent_impostor: module(
+            atom_impostor: impostor("Atom Impostor Shader", include_str!("atom_impostor.wgsl")),
+            bond_impostor: impostor("Bond Impostor Shader", include_str!("bond_impostor.wgsl")),
+            transparent_impostor: impostor(
                 "Transparent Impostor Shader",
                 include_str!("transparent_impostor.wgsl"),
             ),
@@ -80,15 +109,67 @@ pub(crate) struct PipelineSet {
     /// its own three-group layout (camera, model, atlas) — see
     /// `doc/design_atom_labels.md` §Pipeline changes.
     pub label: RenderPipeline,
+    /// D5: per-sample-shading variants of the impostor pipelines, for the
+    /// refined frame. `Some` only in a multisampled set, and only on an
+    /// adapter with `DownlevelFlags::MULTISAMPLED_SHADING`.
+    pub refined: Option<RefinedImpostorPipelines>,
+}
+
+/// The impostor pipelines with the shaders' `fs_main_per_sample` entry point
+/// (`doc/design_viewport_antialiasing.md` D5): everything else as in the
+/// set's own impostor pipelines.
+pub(crate) struct RefinedImpostorPipelines {
+    pub atom_impostor: RenderPipeline,
+    pub bond_impostor: RenderPipeline,
+    pub transparent_impostor: RenderPipeline,
 }
 
 impl PipelineSet {
+    /// `per_sample_shading`: whether `shaders` carry the per-sample entry
+    /// points (D5); the refined pipelines are built only then, and only for a
+    /// multisampled set.
     pub fn new(
         device: &Device,
         layouts: &PipelineLayouts,
         shaders: &Shaders,
         sample_count: u32,
+        per_sample_shading: bool,
     ) -> Self {
+        let impostors = |fragment_entry: &str| {
+            (
+                create_atom_impostor_pipeline(
+                    device,
+                    &layouts.main,
+                    &shaders.atom_impostor,
+                    sample_count,
+                    fragment_entry,
+                ),
+                create_bond_impostor_pipeline(
+                    device,
+                    &layouts.main,
+                    &shaders.bond_impostor,
+                    sample_count,
+                    fragment_entry,
+                ),
+                create_transparent_impostor_pipeline(
+                    device,
+                    &layouts.main,
+                    &shaders.transparent_impostor,
+                    sample_count,
+                    fragment_entry,
+                ),
+            )
+        };
+        let (atom_impostor, bond_impostor, transparent_impostor) = impostors("fs_main");
+        let refined = (sample_count > 1 && per_sample_shading).then(|| {
+            let (atom_impostor, bond_impostor, transparent_impostor) =
+                impostors("fs_main_per_sample");
+            RefinedImpostorPipelines {
+                atom_impostor,
+                bond_impostor,
+                transparent_impostor,
+            }
+        });
         // One transparent-surface pipeline per cull mode. Three, where the
         // isosurface design names two: it counts the two-pass pair, and the
         // `SinglePass` control mode it describes separately needs a
@@ -112,28 +193,14 @@ impl PipelineSet {
                 sample_count,
             ),
             line: create_line_pipeline(device, &layouts.line, &shaders.line, sample_count),
-            atom_impostor: create_atom_impostor_pipeline(
-                device,
-                &layouts.main,
-                &shaders.atom_impostor,
-                sample_count,
-            ),
-            bond_impostor: create_bond_impostor_pipeline(
-                device,
-                &layouts.main,
-                &shaders.bond_impostor,
-                sample_count,
-            ),
-            transparent_impostor: create_transparent_impostor_pipeline(
-                device,
-                &layouts.main,
-                &shaders.transparent_impostor,
-                sample_count,
-            ),
+            atom_impostor,
+            bond_impostor,
+            transparent_impostor,
             surface_no_cull: surface(None),
             surface_front_cull: surface(Some(wgpu::Face::Front)),
             surface_back_cull: surface(Some(wgpu::Face::Back)),
             label: create_label_pipeline(device, &layouts.label, &shaders.label, sample_count),
+            refined,
         }
     }
 }
@@ -364,6 +431,7 @@ fn create_atom_impostor_pipeline(
     pipeline_layout: &wgpu::PipelineLayout,
     atom_impostor_shader: &wgpu::ShaderModule,
     sample_count: u32,
+    fragment_entry: &str,
 ) -> RenderPipeline {
     let constants = sample_count_constants(sample_count);
     device.create_render_pipeline(&RenderPipelineDescriptor {
@@ -377,7 +445,7 @@ fn create_atom_impostor_pipeline(
         },
         fragment: Some(FragmentState {
             module: atom_impostor_shader,
-            entry_point: Some("fs_main"),
+            entry_point: Some(fragment_entry),
             targets: &[Some(ColorTargetState {
                 format: COLOR_FORMAT,
                 blend: Some(BlendState::REPLACE),
@@ -423,6 +491,7 @@ fn create_bond_impostor_pipeline(
     pipeline_layout: &wgpu::PipelineLayout,
     bond_impostor_shader: &wgpu::ShaderModule,
     sample_count: u32,
+    fragment_entry: &str,
 ) -> RenderPipeline {
     let constants = sample_count_constants(sample_count);
     device.create_render_pipeline(&RenderPipelineDescriptor {
@@ -436,7 +505,7 @@ fn create_bond_impostor_pipeline(
         },
         fragment: Some(FragmentState {
             module: bond_impostor_shader,
-            entry_point: Some("fs_main"),
+            entry_point: Some(fragment_entry),
             targets: &[Some(ColorTargetState {
                 format: COLOR_FORMAT,
                 blend: Some(BlendState::REPLACE),
@@ -490,6 +559,7 @@ fn create_transparent_impostor_pipeline(
     pipeline_layout: &wgpu::PipelineLayout,
     transparent_impostor_shader: &wgpu::ShaderModule,
     sample_count: u32,
+    fragment_entry: &str,
 ) -> RenderPipeline {
     let constants = sample_count_constants(sample_count);
     device.create_render_pipeline(&RenderPipelineDescriptor {
@@ -503,7 +573,7 @@ fn create_transparent_impostor_pipeline(
         },
         fragment: Some(FragmentState {
             module: transparent_impostor_shader,
-            entry_point: Some("fs_main"),
+            entry_point: Some(fragment_entry),
             targets: &[Some(ColorTargetState {
                 format: COLOR_FORMAT,
                 blend: Some(STRAIGHT_ALPHA_BLENDING),

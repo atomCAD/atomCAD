@@ -487,6 +487,23 @@ fn shade_atom(input: TransparentImpostorVertexOutput, d: Derivatives) -> Transpa
         discard;
     }
 
+    let shaded = shade_atom_hit(input, ray, t);
+    var output: TransparentFragmentOutput;
+    output.depth = shaded.depth;
+    output.sample_mask = mask;
+    output.color = shaded.color;
+    return output;
+}
+
+// The colour and depth of a surface hit. Shared by `fs_main` and
+// `fs_main_per_sample` (D5), so the two cannot disagree about the surface.
+struct Shaded {
+    color: vec4<f32>,
+    depth: f32,
+}
+
+// Shading of the ghost sphere where `ray` meets it at `t`.
+fn shade_atom_hit(input: TransparentImpostorVertexOutput, ray: Ray, t: f32) -> Shaded {
     let hit_point = ray.origin + t * ray.dir;
     let world_normal = normalize(hit_point - input.world_a);
 
@@ -510,18 +527,16 @@ fn shade_atom(input: TransparentImpostorVertexOutput, d: Derivatives) -> Transpa
         input.metallic
     );
 
-    var output: TransparentFragmentOutput;
-    output.depth = depth;
-    output.sample_mask = mask;
-    output.color = vec4<f32>(color, input.alpha);
-    return output;
+    var shaded: Shaded;
+    shaded.depth = depth;
+    shaded.color = vec4<f32>(color, input.alpha);
+    return shaded;
 }
 
 // Cylinder ray-cast + shading (bond branch).
 fn shade_bond(input: TransparentImpostorVertexOutput, d: Derivatives) -> TransparentFragmentOutput {
     let cylinder_start = input.world_a;
     let cylinder_end = input.world_b;
-    let cylinder_axis = normalize(cylinder_end - cylinder_start);
 
     // Coverage: one hit test per sample, as in the atom branch.
     var ray = view_ray(input.world_position, input.radius);
@@ -553,6 +568,19 @@ fn shade_bond(input: TransparentImpostorVertexOutput, d: Derivatives) -> Transpa
         discard;
     }
 
+    let shaded = shade_bond_hit(input, ray, t);
+    var output: TransparentFragmentOutput;
+    output.depth = shaded.depth;
+    output.sample_mask = mask;
+    output.color = shaded.color;
+    return output;
+}
+
+// Shading of the ghost cylinder where `ray` meets it at `t`.
+fn shade_bond_hit(input: TransparentImpostorVertexOutput, ray: Ray, t: f32) -> Shaded {
+    let cylinder_start = input.world_a;
+    let cylinder_axis = normalize(input.world_b - cylinder_start);
+
     let hit_point = ray.origin + t * ray.dir;
     let projection_length = dot(hit_point - cylinder_start, cylinder_axis);
     let axis_point = cylinder_start + projection_length * cylinder_axis;
@@ -570,11 +598,10 @@ fn shade_bond(input: TransparentImpostorVertexOutput, d: Derivatives) -> Transpa
         0.0  // metallic - bonds are non-metallic
     );
 
-    var output: TransparentFragmentOutput;
-    output.depth = depth;
-    output.sample_mask = mask;
-    output.color = vec4<f32>(color, input.alpha);
-    return output;
+    var shaded: Shaded;
+    shaded.depth = depth;
+    shaded.color = vec4<f32>(color, input.alpha);
+    return shaded;
 }
 
 @fragment
@@ -590,4 +617,75 @@ fn fs_main(input: TransparentImpostorVertexOutput) -> TransparentFragmentOutput 
         return shade_atom(input, d);
     }
     return shade_bond(input, d);
+}
+
+// ---- Per-sample shading (D5) ----
+// Everything from this marker to the end of the file is the refined frame's
+// entry point and is cut off (`pipelines::without_per_sample_shading`) on an
+// adapter without `MULTISAMPLED_SHADING`, where a module using
+// `@builtin(sample_index)` would not even compile. The block is repeated in
+// `atom_impostor.wgsl` and `bond_impostor.wgsl`.
+
+// Where `world_position` lies on the render target, in pixels, y down.
+fn target_pixel_of(world_position: vec3<f32>) -> vec2<f32> {
+    let clip = camera.view_proj * vec4<f32>(world_position, 1.0);
+    let ndc = clip.xy / clip.w;
+    return vec2<f32>(
+        (ndc.x * 0.5 + 0.5) * camera.viewport_size_px.x,
+        (0.5 - ndc.y * 0.5) * camera.viewport_size_px.y,
+    );
+}
+
+// The offset, in pixels, from where `world_position` was interpolated to
+// sample `index` of the pixel at `frag_xy`. WGSL interpolates at the pixel
+// centre, which makes this the sample's standard offset; a backend running
+// the shader per sample may interpolate at the sample instead, which makes it
+// about zero. Measured rather than assumed, the sample ray is right either
+// way. Twin: `per_sample_offset`.
+fn per_sample_offset(frag_xy: vec2<f32>, world_position: vec3<f32>, index: u32) -> vec2<f32> {
+    let sample_px = floor(frag_xy) + vec2<f32>(0.5) + sample_offset_4x(index);
+    return sample_px - target_pixel_of(world_position);
+}
+
+struct PerSampleFragmentOutput {
+    @builtin(frag_depth) depth: f32,
+    @location(0) color: vec4<f32>,
+}
+
+// The refined frame (D5): taking `sample_index` runs this once per sample,
+// each with its own ray, hit, colour and depth, so where two ghosts meet is
+// resolved per sample. Each sample blends the ghost at its own alpha and the
+// resolve averages them. No sample mask: an invocation covers its sample.
+@fragment
+fn fs_main_per_sample(
+    input: TransparentImpostorVertexOutput,
+    @builtin(sample_index) sample_index: u32,
+) -> PerSampleFragmentOutput {
+    // Derivatives first, before the branch on `kind` and anything that can
+    // discard.
+    let dwx = dpdxFine(input.world_position);
+    let dwy = dpdyFine(input.world_position);
+
+    let offset = per_sample_offset(input.clip_position.xy, input.world_position, sample_index);
+    let ray = view_ray(sample_point(input.world_position, dwx, dwy, offset), input.radius);
+    var t: f32;
+    if input.kind == 0u {
+        t = sphere_hit(ray.origin, ray.dir, input.world_a, input.radius);
+    } else {
+        t = cylinder_hit(ray.origin, ray.dir, input.world_a, input.world_b, input.radius);
+    }
+    if t < 0.0 {
+        discard;
+    }
+
+    var shaded: Shaded;
+    if input.kind == 0u {
+        shaded = shade_atom_hit(input, ray, t);
+    } else {
+        shaded = shade_bond_hit(input, ray, t);
+    }
+    var output: PerSampleFragmentOutput;
+    output.depth = shaded.depth;
+    output.color = shaded.color;
+    return output;
 }

@@ -7,6 +7,7 @@ use crate::label_atlas::decode_font_atlas;
 use crate::label_mesh::LabelMesh;
 use crate::line_lod::{LINE_LOD_SLOTS, LodSlot, SlotLod, lod_uniform_entries};
 use crate::line_mesh::LineMesh;
+use crate::live_refinement::{LiveFrameKind, LiveRefinement};
 use crate::pipelines::{PipelineLayouts, PipelineSet, Shaders};
 use crate::render_target::{
     COLOR_FORMAT, DEPTH_FORMAT, RenderQuality, RenderTarget, TargetSpec, live_target_spec,
@@ -26,6 +27,7 @@ use glam::f64::DQuat;
 use glam::f64::DVec3;
 use glam::f64::DVec4;
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 use wgpu::util::DeviceExt;
 use wgpu::*;
 
@@ -173,6 +175,10 @@ struct PassFlags {
     /// and the lightweight pivot cube. On only for the live viewport — neither
     /// a thumbnail nor an exported viewport image shows them.
     gadgets: bool,
+    /// The refined frame (`doc/design_viewport_antialiasing.md` D5): the
+    /// impostors of both passes are drawn with the per-sample-shading
+    /// pipelines. Only for a target whose set has them.
+    refined: bool,
 }
 
 pub struct Renderer {
@@ -192,6 +198,10 @@ pub struct Renderer {
     /// preferences (D8). The live target is derived from both.
     viewport_request: (f64, f64),
     quality: RenderQuality,
+    /// When to draw the refined live frame, and its kept bytes (D5). Every
+    /// mutating `pub fn` bumps its generation, and so does every write of
+    /// the live uniforms (`write_view_uniforms`).
+    refinement: LiveRefinement,
     main_mesh: GPUMesh,
     wireframe_mesh: GPUMesh,
     /// Drawing-plane grids and axes: drawn with the content in the live view,
@@ -370,6 +380,18 @@ impl Renderer {
                 "[renderer] 4x MSAA is not supported by this adapter; anti-aliasing is unavailable"
             );
         }
+        // D5: the refined frame shades per sample. Every DX12, Vulkan and
+        // Metal adapter can; some GL ones cannot, and on those the impostor
+        // shaders are built without their per-sample entry point.
+        let per_sample_shading = adapter
+            .get_downlevel_capabilities()
+            .flags
+            .contains(DownlevelFlags::MULTISAMPLED_SHADING);
+        if msaa_supported && !per_sample_shading {
+            println!(
+                "[renderer] per-sample shading is not supported by this adapter; the still-camera refinement is unavailable"
+            );
+        }
 
         let viewport_request = (width as f64, height as f64);
         let quality = RenderQuality::default();
@@ -498,7 +520,7 @@ impl Renderer {
             push_constant_ranges: &[],
         });
 
-        let shaders = Shaders::new(&device);
+        let shaders = Shaders::new(&device, per_sample_shading);
         let layouts = PipelineLayouts {
             main: pipeline_layout,
             line: line_pipeline_layout,
@@ -510,9 +532,11 @@ impl Renderer {
                 &layouts,
                 &shaders,
                 crate::render_target::LIVE_SAMPLE_COUNT,
+                per_sample_shading,
             )
         });
-        let offscreen_pipelines = PipelineSet::new(&device, &layouts, &shaders, 1);
+        let offscreen_pipelines =
+            PipelineSet::new(&device, &layouts, &shaders, 1, per_sample_shading);
 
         Self {
             device,
@@ -521,6 +545,7 @@ impl Renderer {
             offscreen_pipelines,
             viewport_request,
             quality,
+            refinement: LiveRefinement::new(),
             main_mesh,
             wireframe_mesh,
             reference_line_mesh,
@@ -788,6 +813,15 @@ impl Renderer {
         self.live_pipelines.is_some()
     }
 
+    /// Whether the adapter can draw the refined frame (D5): 4× MSAA and
+    /// per-sample shading. Without it the live view is never refined,
+    /// whatever the quality settings say.
+    pub fn refinement_supported(&self) -> bool {
+        self.live_pipelines
+            .as_ref()
+            .is_some_and(|set| set.refined.is_some())
+    }
+
     /// Samples per pixel of the live target: 4 with anti-aliasing on (and
     /// supported), otherwise 1.
     pub fn live_sample_count(&self) -> u32 {
@@ -840,6 +874,7 @@ impl Renderer {
         update_non_lightweight: bool,
         content_owner: Option<(u64, String)>,
     ) {
+        self.bump_live_generation();
         self.lightweight_mesh
             .update_from_mesh(&self.device, lightweight_mesh, "Lightweight");
         self.lightweight_mesh.set_identity_transform(&self.queue);
@@ -965,6 +1000,7 @@ impl Renderer {
     pub fn update_background_mesh(&mut self, background_line_mesh: &LineMesh) {
         let _lock = self.render_mutex.lock().unwrap();
 
+        self.bump_live_generation();
         self.background_mesh.update_from_line_mesh(
             &self.device,
             background_line_mesh,
@@ -980,7 +1016,74 @@ impl Renderer {
         self.write_line_lods(View::Live, &self.camera, &self.target);
     }
 
+    /// The live frame, read back as BGRA: a normal one, the refined one once
+    /// the view has rested for the refine delay, or the kept refined bytes
+    /// after that (`doc/design_viewport_antialiasing.md` D5).
     pub fn render(&mut self, background_color_rgb: [u8; 3]) -> Vec<u8> {
+        let available = self.refinement_available();
+        match self
+            .refinement
+            .decide(background_color_rgb, Instant::now(), available)
+        {
+            LiveFrameKind::Normal => self.render_live(background_color_rgb, false),
+            LiveFrameKind::Refined => {
+                let pixels = self.render_live(background_color_rgb, true);
+                self.refinement.keep(pixels.clone());
+                pixels
+            }
+            LiveFrameKind::Kept => self
+                .refinement
+                .kept()
+                .expect("a kept frame has bytes")
+                .to_vec(),
+        }
+    }
+
+    /// The refined live frame now, whatever the refine delay (D5): for a
+    /// still such as the CLI screenshot. A normal frame when the live target
+    /// cannot be refined. Leaves the refinement state alone.
+    pub fn render_still(&mut self, background_color_rgb: [u8; 3]) -> Vec<u8> {
+        let refined = self.refinement_available();
+        self.render_live(background_color_rgb, refined)
+    }
+
+    /// Whether the live target can be refined: it is multisampled and its
+    /// pipeline set has the per-sample-shading impostor pipelines (D5).
+    fn refinement_available(&self) -> bool {
+        self.pipelines_for(&self.target).refined.is_some()
+    }
+
+    /// Sets how long the live view must rest before the refined frame (D5);
+    /// `None` never refines on its own (`render_still` still does). For tests.
+    pub fn set_refine_delay(&mut self, delay: Option<Duration>) {
+        self.refinement.set_delay(delay);
+        self.bump_live_generation();
+    }
+
+    /// Changes whenever what the live frame shows may have changed (D5).
+    pub fn live_generation(&self) -> u64 {
+        self.refinement.generation()
+    }
+
+    /// What the last `render` drew (D5).
+    pub fn last_frame_kind(&self) -> Option<LiveFrameKind> {
+        self.refinement.last_kind()
+    }
+
+    /// From the last `render`: how long until the refined frame is due,
+    /// `None` when none is owed (D5). The caller asks for a frame then.
+    pub fn refine_in(&self) -> Option<Duration> {
+        self.refinement.refine_in()
+    }
+
+    /// Records that the live frame may have changed (D5). A missed bump
+    /// leaves a stale refined image on screen; a spurious one only
+    /// postpones the refinement.
+    fn bump_live_generation(&self) {
+        self.refinement.bump();
+    }
+
+    fn render_live(&mut self, background_color_rgb: [u8; 3], refined: bool) -> Vec<u8> {
         let _lock = self.render_mutex.lock().unwrap();
 
         let view = self.camera.build_view_matrix().as_mat4();
@@ -1002,6 +1105,7 @@ impl Renderer {
             PassFlags {
                 editing_aids: true,
                 gadgets: true,
+                refined,
             },
         )
     }
@@ -1049,6 +1153,7 @@ impl Renderer {
                 PassFlags {
                     editing_aids: false,
                     gadgets: false,
+                    refined: false,
                 },
             );
             crate::thumbnail::bgra_to_rgba_in_place(&mut pixels);
@@ -1127,6 +1232,7 @@ impl Renderer {
             PassFlags {
                 editing_aids: true,
                 gadgets: false,
+                refined: false,
             },
         );
         crate::thumbnail::bgra_to_rgba_in_place(&mut pixels);
@@ -1209,6 +1315,25 @@ impl Renderer {
             View::Offscreen => &self.thumbnail_camera_bind_group,
         };
         let pipelines = self.pipelines_for(target);
+        // The impostor pipelines: per-pixel shading, or per-sample shading
+        // for the refined frame (D5), in both passes.
+        let (atom_impostor, bond_impostor, transparent_impostor) = if flags.refined {
+            let refined = pipelines
+                .refined
+                .as_ref()
+                .expect("a refined frame is drawn only into a target with refined pipelines");
+            (
+                &refined.atom_impostor,
+                &refined.bond_impostor,
+                &refined.transparent_impostor,
+            )
+        } else {
+            (
+                &pipelines.atom_impostor,
+                &pipelines.bond_impostor,
+                &pipelines.transparent_impostor,
+            )
+        };
         let mut encoder = self
             .device
             .create_command_encoder(&CommandEncoderDescriptor {
@@ -1250,11 +1375,11 @@ impl Renderer {
             // Render impostor meshes (if they have data)
             // Note: Impostor meshes are only populated when AtomicRenderingMethod::Impostors is selected
             self.atom_impostor_mesh.set_identity_transform(&self.queue);
-            render_pass.set_pipeline(&pipelines.atom_impostor);
+            render_pass.set_pipeline(atom_impostor);
             self.render_mesh(&mut render_pass, &self.atom_impostor_mesh);
 
             self.bond_impostor_mesh.set_identity_transform(&self.queue);
-            render_pass.set_pipeline(&pipelines.bond_impostor);
+            render_pass.set_pipeline(bond_impostor);
             self.render_mesh(&mut render_pass, &self.bond_impostor_mesh);
 
             if flags.editing_aids {
@@ -1300,7 +1425,7 @@ impl Renderer {
             // `resort_transparent_impostors` (called before this draw).
             self.transparent_impostor_mesh
                 .set_identity_transform(&self.queue);
-            render_pass.set_pipeline(&pipelines.transparent_impostor);
+            render_pass.set_pipeline(transparent_impostor);
             self.render_mesh(&mut render_pass, &self.transparent_impostor_mesh);
 
             // Transparent isosurfaces last of all. Nothing orders fragments
@@ -1340,13 +1465,13 @@ impl Renderer {
             // Render gadget atom impostors (guide dots, always on top)
             self.gadget_atom_impostor_mesh
                 .set_identity_transform(&self.queue);
-            gadget_render_pass.set_pipeline(&pipelines.atom_impostor);
+            gadget_render_pass.set_pipeline(atom_impostor);
             self.render_mesh(&mut gadget_render_pass, &self.gadget_atom_impostor_mesh);
 
             // Render gadget bond impostors (guide dot connectors, always on top)
             self.gadget_bond_impostor_mesh
                 .set_identity_transform(&self.queue);
-            gadget_render_pass.set_pipeline(&pipelines.bond_impostor);
+            gadget_render_pass.set_pipeline(bond_impostor);
             self.render_mesh(&mut gadget_render_pass, &self.gadget_bond_impostor_mesh);
 
             // Gadget lines last, for the same reason as in the main pass (D6):
@@ -1525,7 +1650,14 @@ impl Renderer {
     /// uniform and every line mesh's `LineLodUniform`. The only writer of a
     /// camera uniform, so the viewport size and pixel scale a shader sees can
     /// only come from the target it is drawn into.
+    ///
+    /// Writing the live uniforms bumps the live generation (D5): every edit
+    /// of the `pub camera` field reaches the GPU through here
+    /// (`update_camera_buffer`), so this catches the edits made by callers.
     fn write_view_uniforms(&self, uniforms: View, camera: &Camera, target: &RenderTarget) {
+        if uniforms == View::Live {
+            self.bump_live_generation();
+        }
         let camera_buffer = match uniforms {
             View::Live => &self.camera_buffer,
             View::Offscreen => &self.thumbnail_camera_buffer,
@@ -1573,7 +1705,11 @@ impl Renderer {
     /// the preferences types and cannot read them, and a preference change
     /// triggers a refresh anyway.
     pub fn set_surface_transparency_mode(&mut self, mode: SurfaceTransparencyMode) {
-        self.surface_transparency_mode = mode;
+        // Only a change bumps: this is pushed on every refresh.
+        if mode != self.surface_transparency_mode {
+            self.surface_transparency_mode = mode;
+            self.bump_live_generation();
+        }
     }
 
     /// Sets the camera to orthographic or perspective mode

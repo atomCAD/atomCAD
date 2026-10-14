@@ -376,6 +376,23 @@ fn fs_main(input: AtomImpostorVertexOutput) -> AtomFragmentOutput {
         discard;
     }
 
+    let shaded = shade_atom_hit(input, ray, t);
+    var output: AtomFragmentOutput;
+    output.depth = shaded.depth;
+    output.sample_mask = mask;
+    output.color = shaded.color;
+    return output;
+}
+
+// The colour and depth of a surface hit. Shared by `fs_main` and
+// `fs_main_per_sample` (D5), so the two cannot disagree about the surface.
+struct Shaded {
+    color: vec4<f32>,
+    depth: f32,
+}
+
+// Shading of the sphere where `ray` meets it at `t`.
+fn shade_atom_hit(input: AtomImpostorVertexOutput, ray: Ray, t: f32) -> Shaded {
     // Calculate hit point and normal (following reference)
     let hit_point = ray.origin + t * ray.dir;
     let world_normal = normalize(hit_point - input.world_center);
@@ -406,9 +423,67 @@ fn fs_main(input: AtomImpostorVertexOutput) -> AtomFragmentOutput {
     color = color / (color + vec3(1.0));
     color = pow(color, vec3(1.0 / 2.2));
 
-    var output: AtomFragmentOutput;
-    output.depth = depth;
-    output.sample_mask = mask;
-    output.color = vec4<f32>(color, 1.0);
+    var shaded: Shaded;
+    shaded.depth = depth;
+    shaded.color = vec4<f32>(color, 1.0);
+    return shaded;
+}
+
+// ---- Per-sample shading (D5) ----
+// Everything from this marker to the end of the file is the refined frame's
+// entry point and is cut off (`pipelines::without_per_sample_shading`) on an
+// adapter without `MULTISAMPLED_SHADING`, where a module using
+// `@builtin(sample_index)` would not even compile. The block is repeated in
+// `bond_impostor.wgsl` and `transparent_impostor.wgsl`.
+
+// Where `world_position` lies on the render target, in pixels, y down.
+fn target_pixel_of(world_position: vec3<f32>) -> vec2<f32> {
+    let clip = camera.view_proj * vec4<f32>(world_position, 1.0);
+    let ndc = clip.xy / clip.w;
+    return vec2<f32>(
+        (ndc.x * 0.5 + 0.5) * camera.viewport_size_px.x,
+        (0.5 - ndc.y * 0.5) * camera.viewport_size_px.y,
+    );
+}
+
+// The offset, in pixels, from where `world_position` was interpolated to
+// sample `index` of the pixel at `frag_xy`. WGSL interpolates at the pixel
+// centre, which makes this the sample's standard offset; a backend running
+// the shader per sample may interpolate at the sample instead, which makes it
+// about zero. Measured rather than assumed, the sample ray is right either
+// way. Twin: `per_sample_offset`.
+fn per_sample_offset(frag_xy: vec2<f32>, world_position: vec3<f32>, index: u32) -> vec2<f32> {
+    let sample_px = floor(frag_xy) + vec2<f32>(0.5) + sample_offset_4x(index);
+    return sample_px - target_pixel_of(world_position);
+}
+
+struct PerSampleFragmentOutput {
+    @builtin(frag_depth) depth: f32,
+    @location(0) color: vec4<f32>,
+}
+
+// The refined frame (D5): taking `sample_index` runs this once per sample,
+// each with its own ray, hit, colour and depth, so where two impostors meet
+// is resolved per sample. No sample mask: an invocation covers its sample.
+@fragment
+fn fs_main_per_sample(
+    input: AtomImpostorVertexOutput,
+    @builtin(sample_index) sample_index: u32,
+) -> PerSampleFragmentOutput {
+    // Derivatives first, before anything can discard.
+    let dwx = dpdxFine(input.world_position);
+    let dwy = dpdyFine(input.world_position);
+
+    let offset = per_sample_offset(input.clip_position.xy, input.world_position, sample_index);
+    let ray = view_ray(sample_point(input.world_position, dwx, dwy, offset), input.radius);
+    let t = sphere_hit(ray.origin, ray.dir, input.world_center, input.radius);
+    if t < 0.0 {
+        discard;
+    }
+
+    let shaded = shade_atom_hit(input, ray, t);
+    var output: PerSampleFragmentOutput;
+    output.depth = shaded.depth;
+    output.color = shaded.color;
     return output;
 }

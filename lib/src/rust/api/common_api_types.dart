@@ -82,6 +82,34 @@ enum APICameraCanonicalView {
   ;
 }
 
+/// What `provide_texture` reports about the frame it rendered
+/// (`doc/design_viewport_antialiasing.md` D5).
+class APIFrameInfo {
+  /// Wall time of the frame, in seconds.
+  final double frameTime;
+
+  /// Seconds until a refined frame is due; `None` when none is owed
+  /// (already refined, anti-aliasing off, or unsupported). Flutter renders
+  /// on demand, so it must ask for that frame itself.
+  final double? refineIn;
+
+  const APIFrameInfo({
+    required this.frameTime,
+    this.refineIn,
+  });
+
+  @override
+  int get hashCode => frameTime.hashCode ^ refineIn.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIFrameInfo &&
+          runtimeType == other.runtimeType &&
+          frameTime == other.frameTime &&
+          refineIn == other.refineIn;
+}
+
 class APIResult {
   final bool success;
   final String errorMessage;
