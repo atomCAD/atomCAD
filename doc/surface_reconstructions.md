@@ -46,7 +46,7 @@ The category indicates the surface normal direction. Fortunately, classification
 **Classification heuristics:**
 
 
-1. **SDF depth value**: The signed distance field (SDF) depth is already computed during structure generation. Atoms with depth > 0.5 Å can be immediately classified as bulk for performance, as they are too far from any surface.
+1. **SDF depth value — deliberately not used.** An earlier version classified atoms deeper than 0.5 Å below the cutter surface as bulk, as a speed-up. That is wrong: a cut can lie anywhere in the gap between the top atomic layer and the next one up (a/4 — 0.89 Å for diamond, 1.36 Å for silicon) without changing which atoms are kept, so a cut in the upper part of the gap left a whole terrace unreconstructed (dihydride). Which atoms reconstruct must depend only on which atoms were kept. Fully coordinated atoms (4 bonds) are rejected by their bond count instead, which costs the same.
 2. **Bond coordination analysis**: Examining the directions of existing C-C bonds provides strong classification signals. Surface atoms on {100} facets have exactly 2 bulk neighbors (with 2 dangling bonds), and the missing bond directions indicate the surface normal. This information is readily available at low computational cost.
 3. **SDF gradient** (optional): For ambiguous cases, we can compute the local surface normal via the SDF gradient. This requires 4 additional SDF evaluations per atom and is only needed for atoms near the surface. While computationally expensive, it would only impact shallow atoms and cause approximately 1.5× slowdown depending on crystal depth distribution.when doing 
 

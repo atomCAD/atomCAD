@@ -816,3 +816,134 @@ fn reconstructed_dimer_has_bulk_length_back_bonds() {
         assert!(dimers > 0, "Z={elem}: no dimer of {dimer_len} Å found");
     }
 }
+
+// =============================================================================
+// Reconstruction depends on the atoms kept, not on where the cut lies
+//
+// A cutter surface can sit anywhere in the gap between the top atomic layer
+// and the next one up (a/4: 0.89 Å for diamond, 1.36 Å for silicon) without
+// changing which atoms are kept, so it must not change the result either. The
+// reconstruction used to skip every atom more than 0.5 Å below the cutter
+// surface as "bulk", which left a whole terrace unreconstructed (dihydride)
+// whenever the cut fell in the upper part of that gap — reported on a silicon
+// step edge whose plateau was raised by 2/5 of a cell.
+// =============================================================================
+
+/// Fills `geometry` with reconstruction and H passivation on.
+fn fill_recon(
+    motif: &Motif,
+    cell: &UnitCellStruct,
+    geometry: GeoNode,
+    extent: f64,
+) -> AtomicStructure {
+    let config = LatticeFillConfig {
+        unit_cell: cell.clone(),
+        motif: motif.clone(),
+        parameter_element_values: HashMap::new(),
+        geometry,
+        motif_offset: DVec3::ZERO,
+        regions: Vec::new(),
+    };
+    let options = LatticeFillOptions {
+        hydrogen_passivation: true,
+        remove_unbonded_atoms: true,
+        remove_single_bond_atoms: false,
+        reconstruct_surface: true,
+        invert_phase: false,
+        rebond_concave_clashes: true,
+        passivation_element: 1,
+    };
+    let fill_region = DAABox::new(DVec3::splat(-extent), DVec3::splat(extent));
+    fill_lattice(&config, &options, &fill_region).atomic_structure
+}
+
+/// Asserts two structures hold the same atoms (per element, by position).
+fn assert_same_atoms(a: &AtomicStructure, b: &AtomicStructure, what: &str) {
+    for elem in [1, 6, 14] {
+        let pa = host_positions(a, elem);
+        let pb = host_positions(b, elem);
+        assert_eq!(
+            pa.len(),
+            pb.len(),
+            "{what}: Z={elem} count differs ({} vs {})",
+            pa.len(),
+            pb.len()
+        );
+        let dev = max_nearest_deviation(&pa, &pb).max(max_nearest_deviation(&pb, &pa));
+        assert!(dev < 1e-9, "{what}: Z={elem} atoms differ by up to {dev} Å");
+    }
+}
+
+/// A flat (001) top face reconstructs identically wherever the cut lies above
+/// the top layer, as long as it stays below the next layer up.
+#[test]
+fn reconstruction_does_not_depend_on_cut_height_within_layer_gap() {
+    for (motif, a) in [
+        (silicon_motif(), 5.431),
+        (DEFAULT_ZINCBLENDE_MOTIF.clone(), 3.567),
+    ] {
+        let cell = cubic_cell(a);
+        let cells = 4.0;
+        let box_with_top = |top_offset: f64| {
+            axis_aligned_box(
+                DVec3::ZERO,
+                DVec3::new(cells * a, cells * a, cells * a + top_offset),
+            )
+        };
+        let reference = fill_recon(&motif, &cell, box_with_top(0.0), cells * a + 5.0);
+        for frac in [0.1, 0.15, 0.2, 0.24] {
+            let s = fill_recon(&motif, &cell, box_with_top(frac * a), cells * a + 5.0);
+            assert_same_atoms(
+                &s,
+                &reference,
+                &format!("a={a}, cut {frac}·a above the top layer"),
+            );
+        }
+    }
+}
+
+/// The reported case: a silicon (001) terrace with a plateau raised by 2/5 of
+/// a cell behind a 45° step edge. Its top layer is the a/4 one, so the result
+/// must equal the plateau raised by exactly a/4 — and the upper terrace must be
+/// reconstructed (no dihydride away from its edges).
+#[test]
+fn silicon_step_edge_plateau_off_layer_reconstructs() {
+    let a = 5.431;
+    let cell = cubic_cell(a);
+    let radius = 4.0 * a;
+    let step_edge = |height: f64| {
+        let plateau = GeoNode::intersection_3d(vec![
+            GeoNode::half_space(DVec3::Z, DVec3::new(0.0, 0.0, height)),
+            GeoNode::half_space(DVec3::new(1.0, 1.0, 0.0).normalize(), DVec3::ZERO),
+        ]);
+        let terraces = GeoNode::union_3d(vec![GeoNode::half_space(DVec3::Z, DVec3::ZERO), plateau]);
+        GeoNode::intersection_3d(vec![GeoNode::sphere(DVec3::ZERO, radius), terraces])
+    };
+    let on_layer = fill_recon(&silicon_motif(), &cell, step_edge(0.25 * a), radius + 5.0);
+    let off_layer = fill_recon(&silicon_motif(), &cell, step_edge(0.4 * a), radius + 5.0);
+
+    // Upper-terrace top-layer Si well away from the step and the sphere rim:
+    // each must be a monohydride dimer atom, never a dihydride.
+    let top = 0.25 * a;
+    let mut checked = 0;
+    for at in off_layer.atoms_values() {
+        let p = at.position;
+        let interior = (p.x + p.y) / 2f64.sqrt() < -a && p.length() < radius - 1.5 * a;
+        if at.atomic_number != 14 || !interior || p.z < top - 0.6 || p.z > top + 0.1 {
+            continue;
+        }
+        let hydrogens = at
+            .bonds
+            .iter()
+            .filter(|b| off_layer.get_atom(b.other_atom_id()).unwrap().atomic_number == 1)
+            .count();
+        assert_eq!(
+            hydrogens, 1,
+            "upper-terrace Si at {p:?} carries {hydrogens} H"
+        );
+        checked += 1;
+    }
+    assert!(checked > 10, "only {checked} upper-terrace atoms checked");
+
+    assert_same_atoms(&off_layer, &on_layer, "plateau at 2/5 vs 1/4 of a cell");
+}

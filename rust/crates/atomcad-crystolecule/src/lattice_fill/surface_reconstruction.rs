@@ -21,9 +21,9 @@ use std::collections::HashMap;
 
 /// Surface orientation classification for atoms.
 ///
-/// This enum categorizes atoms based on their position and bonding:
-/// - Bulk: Deep interior atoms (depth > threshold)
-/// - Unknown: Surface atoms that don't fit standard (100) reconstruction pattern
+/// This enum categorizes atoms by their bonding alone:
+/// - Bulk: Fully coordinated atoms (4 bonds)
+/// - Unknown: Under-coordinated atoms that don't fit the (100) reconstruction pattern
 /// - Surface variants: Atoms on {100} facets with specific surface normals
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum SurfaceOrientation {
@@ -36,10 +36,6 @@ enum SurfaceOrientation {
     Surface001,    // (001)
     SurfaceNeg001, // (00-1)
 }
-
-/// Depth threshold in Ångströms for classifying atoms as bulk.
-/// Atoms deeper than this are not near any surface.
-const BULK_DEPTH_THRESHOLD: f32 = 0.5;
 
 /// Minimum magnitude for a bond component on an axis to be considered aligned.
 /// Components below this threshold are considered insignificant.
@@ -268,7 +264,13 @@ fn get_debug_atomic_number(orientation: SurfaceOrientation) -> i16 {
 /// Classifies the surface orientation of a single atom.
 ///
 /// This function determines whether an atom is bulk, on a surface, or has
-/// an unknown/ambiguous orientation based on its depth and bonding pattern.
+/// an unknown/ambiguous orientation based on its bonding pattern alone.
+///
+/// The distance to the cutter surface (`in_crystal_depth`) is deliberately not
+/// consulted. A cut can lie anywhere in the gap between the top atomic layer
+/// and the next one up (a/4: 0.89 Å for diamond, 1.36 Å for silicon) without
+/// changing which atoms are kept, so it must not change which of them
+/// reconstruct. A depth cut-off once did, and left whole terraces dihydride.
 ///
 /// # Arguments
 /// * `atom` - The atom to classify
@@ -280,8 +282,7 @@ fn classify_atom_surface_orientation(
     atom: &Atom,
     structure: &AtomicStructure,
 ) -> SurfaceOrientation {
-    // Check if atom is deep in the bulk (> 0.5 Å from surface)
-    if atom.in_crystal_depth > BULK_DEPTH_THRESHOLD {
+    if atom.bonds.len() == 4 {
         return SurfaceOrientation::Bulk;
     }
 
