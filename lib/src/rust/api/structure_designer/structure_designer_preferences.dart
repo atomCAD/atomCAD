@@ -513,22 +513,28 @@ class RenderingPreferences {
   /// 4× MSAA for the live viewport. Default on.
   bool antiAliasing;
 
+  /// Render the live viewport at the display's device pixel ratio. Default
+  /// on.
+  bool fullDisplayResolution;
+
   RenderingPreferences({
     required this.antiAliasing,
+    required this.fullDisplayResolution,
   });
 
   static Future<RenderingPreferences> default_() => RustLib.instance.api
       .crateApiStructureDesignerStructureDesignerPreferencesRenderingPreferencesDefault();
 
   @override
-  int get hashCode => antiAliasing.hashCode;
+  int get hashCode => antiAliasing.hashCode ^ fullDisplayResolution.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is RenderingPreferences &&
           runtimeType == other.runtimeType &&
-          antiAliasing == other.antiAliasing;
+          antiAliasing == other.antiAliasing &&
+          fullDisplayResolution == other.fullDisplayResolution;
 }
 
 /// Preferences for energy minimization simulation.

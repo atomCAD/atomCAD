@@ -411,6 +411,12 @@ new pipeline goes into `PipelineSet`**, never onto `Renderer`, or it exists
 at one count and panics (or silently misdraws) at the other. Targets are
 sized by the pure `TargetSpec` / `live_target_spec` in `render_target.rs`.
 
+**The live target is in device pixels** (D7): `Renderer::get_viewport_size`
+is what the texture handed to Flutter measures, twice the logical size on a
+200 % display. Anything authored in logical pixels (a minimum grab radius,
+a default image size) reads `get_viewport_logical_size` instead, and
+anything drawn reads the target's `pixel_scale`, never a hard-coded 1.
+
 **A new `pub fn(&mut self)` on `Renderer` bumps the live generation**
 (`bump_live_generation()`, or through `update_camera_buffer` /
 `update_live_target`; D5). Once the view rests, `render` keeps the refined

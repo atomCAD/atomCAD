@@ -10,7 +10,7 @@ use crate::line_mesh::LineMesh;
 use crate::live_refinement::{LiveFrameKind, LiveRefinement};
 use crate::pipelines::{PipelineLayouts, PipelineSet, Shaders};
 use crate::render_target::{
-    COLOR_FORMAT, DEPTH_FORMAT, RenderQuality, RenderTarget, TargetSpec, live_target_spec,
+    COLOR_FORMAT, DEPTH_FORMAT, RenderQuality, RenderTarget, TargetSpec, ViewportRequest,
 };
 use crate::surface_sort::sorted_component_order;
 use crate::thumbnail::ThumbnailBackground;
@@ -193,10 +193,11 @@ pub struct Renderer {
     /// The single-sample pipelines: the thumbnail, the export, and the live
     /// target with anti-aliasing off.
     offscreen_pipelines: PipelineSet,
-    /// The live viewport's size as last requested by `set_viewport_size`, in
-    /// logical pixels, and the quality settings pushed in from the
-    /// preferences (D8). The live target is derived from both.
-    viewport_request: (f64, f64),
+    /// The live viewport as last requested by `set_viewport_request`: its
+    /// size in logical pixels and the display's device pixel ratio (D7), and
+    /// the quality settings pushed in from the preferences (D8). The live
+    /// target is derived from both.
+    viewport_request: ViewportRequest,
     quality: RenderQuality,
     /// When to draw the refined live frame, and its kept bytes (D5). Every
     /// mutating `pub fn` bumps its generation, and so does every write of
@@ -393,16 +394,16 @@ impl Renderer {
             );
         }
 
-        let viewport_request = (width as f64, height as f64);
+        // Ratio 1 until the first `set_viewport_request` (D7).
+        let viewport_request = ViewportRequest {
+            logical_width: width as f64,
+            logical_height: height as f64,
+            device_pixel_ratio: 1.0,
+        };
         let quality = RenderQuality::default();
         let target = RenderTarget::new(
             &device,
-            live_target_spec(
-                viewport_request.0,
-                viewport_request.1,
-                quality,
-                msaa_supported,
-            ),
+            viewport_request.target_spec(quality, msaa_supported),
         );
         let thumbnail_target = RenderTarget::new(
             &device,
@@ -784,14 +785,40 @@ impl Renderer {
         self.update_camera_buffer();
     }
 
-    /// Gets the current viewport size as (width, height)
+    /// The live target's size as (width, height) in render pixels: device
+    /// pixels with *Full display resolution* on (D7). What the texture handed
+    /// to Flutter measures.
     pub fn get_viewport_size(&self) -> (u32, u32) {
         (self.target.size.width, self.target.size.height)
     }
 
-    pub fn set_viewport_size(&mut self, width: u32, height: u32) {
-        self.viewport_request = (width as f64, height as f64);
+    /// The live target's size in logical pixels: its size divided by its
+    /// pixel scale (D7). What anything authored in logical pixels (the
+    /// gizmo's minimum grab radius, the export dialog's default size) needs.
+    pub fn get_viewport_logical_size(&self) -> (f64, f64) {
+        let scale = self.target.pixel_scale as f64;
+        (
+            self.target.size.width as f64 / scale,
+            self.target.size.height as f64 / scale,
+        )
+    }
+
+    /// Sets what Flutter laid out: the viewport's size in logical pixels and
+    /// the display's device pixel ratio (D7). Recreates the live target only
+    /// when the target derived from it changes.
+    pub fn set_viewport_request(&mut self, logical_w: f64, logical_h: f64, dpr: f64) {
+        self.viewport_request = ViewportRequest {
+            logical_width: logical_w,
+            logical_height: logical_h,
+            device_pixel_ratio: dpr,
+        };
         self.update_live_target();
+    }
+
+    /// The last viewport request, so a caller that renders the live target at
+    /// another size (the CLI screenshot) can put it back.
+    pub fn viewport_request(&self) -> ViewportRequest {
+        self.viewport_request
     }
 
     /// Sets the live viewport's quality settings, the *Rendering* preferences
@@ -832,12 +859,9 @@ impl Renderer {
     /// request and the quality settings differs from the current one, so the
     /// push on every refresh costs one comparison.
     fn update_live_target(&mut self) {
-        let spec = live_target_spec(
-            self.viewport_request.0,
-            self.viewport_request.1,
-            self.quality,
-            self.live_pipelines.is_some(),
-        );
+        let spec = self
+            .viewport_request
+            .target_spec(self.quality, self.live_pipelines.is_some());
         if spec == self.target.spec() {
             return;
         }

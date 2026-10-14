@@ -6,3 +6,6 @@
 
 #[path = "renderer_api/camera_axis_resolution_test.rs"]
 mod camera_axis_resolution_test;
+
+#[path = "renderer_api/gadget_pick_context_test.rs"]
+mod gadget_pick_context_test;

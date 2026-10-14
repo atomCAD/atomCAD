@@ -642,12 +642,17 @@ pub struct RenderingPreferences {
     /// sample per pixel, as before the design.
     #[serde(default = "default_true")]
     pub anti_aliasing: bool,
+    /// Render the live viewport at the display's device pixel ratio (D7).
+    /// Off: at its logical size, which Flutter scales up on a HiDPI display.
+    #[serde(default = "default_true")]
+    pub full_display_resolution: bool,
 }
 
 impl Default for RenderingPreferences {
     fn default() -> Self {
         Self {
             anti_aliasing: true,
+            full_display_resolution: true,
         }
     }
 }

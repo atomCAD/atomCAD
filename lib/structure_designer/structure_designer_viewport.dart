@@ -605,7 +605,8 @@ class _StructureDesignerViewportState
     if (camera.orthographic) {
       // `camera.aspect`, not `viewportWidth / viewportHeight`: the renderer
       // builds its orthographic projection from the former, and the two differ
-      // by the integer truncation in `setViewportSize`. `getRayFromPointerPos`
+      // by the rounding of the render target's size in device pixels.
+      // `getRayFromPointerPos`
       // already uses `camera.aspect`, and this is its inverse.
       final orthoHalfWidth = camera.orthoHalfHeight * camera.aspect;
       final sx = (xView / orthoHalfWidth) * (viewportWidth * 0.5) +

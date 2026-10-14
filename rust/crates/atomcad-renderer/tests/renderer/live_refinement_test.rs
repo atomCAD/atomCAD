@@ -235,7 +235,7 @@ fn every_mutating_pub_fn_on_renderer_bumps_the_live_generation() {
     // them fails.
     for expected in [
         "move_camera",
-        "set_viewport_size",
+        "set_viewport_request",
         "set_render_quality",
         "update_all_gpu_meshes",
         "update_background_mesh",

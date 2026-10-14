@@ -489,6 +489,7 @@ fn test_non_default_values_roundtrip() {
         },
         rendering_preferences: RenderingPreferences {
             anti_aliasing: false,
+            full_display_resolution: false,
         },
     };
 
@@ -1028,4 +1029,34 @@ fn rendering_anti_aliasing_off_roundtrips() {
     let json = serde_json::to_string(&prefs).unwrap();
     let loaded: StructureDesignerPreferences = serde_json::from_str(&json).unwrap();
     assert!(!loaded.rendering_preferences.anti_aliasing);
+}
+
+#[test]
+fn rendering_full_display_resolution_defaults_to_on() {
+    assert!(RenderingPreferences::default().full_display_resolution);
+    assert!(
+        StructureDesignerPreferences::default()
+            .rendering_preferences
+            .full_display_resolution
+    );
+}
+
+#[test]
+fn a_rendering_section_with_only_anti_aliasing_loads_with_full_display_resolution_on() {
+    // A file written before Phase 4 of the design: the section has only the
+    // Phase 1 field.
+    let phase1: StructureDesignerPreferences =
+        serde_json::from_str(r#"{"rendering_preferences": {"anti_aliasing": false}}"#).unwrap();
+    assert!(!phase1.rendering_preferences.anti_aliasing);
+    assert!(phase1.rendering_preferences.full_display_resolution);
+}
+
+#[test]
+fn rendering_full_display_resolution_off_roundtrips() {
+    let mut prefs = StructureDesignerPreferences::default();
+    prefs.rendering_preferences.full_display_resolution = false;
+    let json = serde_json::to_string(&prefs).unwrap();
+    let loaded: StructureDesignerPreferences = serde_json::from_str(&json).unwrap();
+    assert!(!loaded.rendering_preferences.full_display_resolution);
+    assert!(loaded.rendering_preferences.anti_aliasing);
 }

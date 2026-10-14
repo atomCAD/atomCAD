@@ -49,6 +49,7 @@ fn to_render_quality(
 ) -> atomcad_renderer::render_target::RenderQuality {
     atomcad_renderer::render_target::RenderQuality {
         anti_aliasing: prefs.anti_aliasing,
+        full_display_resolution: prefs.full_display_resolution,
     }
 }
 
@@ -362,7 +363,7 @@ pub static mut CAD_INSTANCE: Option<CADInstance> = None;
 ///
 /// unsafe {
 ///     with_mut_cad_instance(|instance| {
-///         instance.renderer.set_viewport_size(800, 600);
+///         instance.renderer.set_viewport_request(800.0, 600.0, 1.0);
 ///     });
 /// }
 /// ```
@@ -487,16 +488,28 @@ where
 /// the camera paths (every camera mutation triggers a refresh) and
 /// `set_viewport_size` covers resizes.
 pub fn update_gadget_pick_context(cad_instance: &mut CADInstance) {
-    let camera = &cad_instance.renderer.camera;
-    let (_, viewport_height) = cad_instance.renderer.get_viewport_size();
-    let viewport_height = viewport_height.max(1) as f64;
+    // Logical, not device, pixels: the minimum grab radius is authored in
+    // logical pixels (`doc/design_viewport_antialiasing.md` D7).
+    let (_, logical_height) = cad_instance.renderer.get_viewport_logical_size();
     cad_instance.structure_designer.gadget_pick_context =
-        atomcad_display::gadget::GadgetPickContext {
-            eye: camera.eye,
-            perspective_world_per_pixel: 2.0 * (camera.fovy * 0.5).tan() / viewport_height,
-            ortho_world_per_pixel: 2.0 * camera.ortho_half_height / viewport_height,
-            orthographic: camera.orthographic,
-        };
+        gadget_pick_context(&cad_instance.renderer.camera, logical_height);
+}
+
+/// The gadget pick context for `camera` in a viewport `logical_viewport_height`
+/// logical pixels tall: world units per logical pixel at unit distance
+/// (perspective) or everywhere (orthographic). Pure, so it is tested without a
+/// `CADInstance`.
+pub fn gadget_pick_context(
+    camera: &atomcad_renderer::camera::Camera,
+    logical_viewport_height: f64,
+) -> atomcad_display::gadget::GadgetPickContext {
+    let viewport_height = logical_viewport_height.max(1.0);
+    atomcad_display::gadget::GadgetPickContext {
+        eye: camera.eye,
+        perspective_world_per_pixel: 2.0 * (camera.fovy * 0.5).tan() / viewport_height,
+        ortho_world_per_pixel: 2.0 * camera.ortho_half_height / viewport_height,
+        orthographic: camera.orthographic,
+    }
 }
 
 /// Runs a refresh and records its always-on phase breakdown (Phase 1 of

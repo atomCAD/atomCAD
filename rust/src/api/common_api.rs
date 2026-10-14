@@ -66,12 +66,19 @@ fn to_api_camera_canonical_view(
 const INITIAL_VIEWPORT_WIDTH: u32 = 1280;
 const INITIAL_VIEWPORT_HEIGHT: u32 = 544;
 
-/// Set the viewport size for rendering
+/// Sets the live viewport's size as Flutter laid it out: logical pixels and
+/// the display's device pixel ratio (`doc/design_viewport_antialiasing.md`
+/// D7). The renderer allocates the target in device pixels unless *Full
+/// display resolution* is off.
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_viewport_size(width: u32, height: u32) {
+pub fn set_viewport_size(logical_width: f64, logical_height: f64, device_pixel_ratio: f64) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            cad_instance.renderer.set_viewport_size(width, height);
+            cad_instance.renderer.set_viewport_request(
+                logical_width,
+                logical_height,
+                device_pixel_ratio,
+            );
             crate::api::api_common::update_gadget_pick_context(cad_instance);
         });
     }

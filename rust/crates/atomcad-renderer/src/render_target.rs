@@ -70,22 +70,28 @@ impl TargetSpec {
 pub struct RenderQuality {
     /// 4× MSAA for the live viewport (D1).
     pub anti_aliasing: bool,
+    /// Render the live viewport at the device pixel ratio (D7). Off: at the
+    /// logical size, which Flutter scales up.
+    pub full_display_resolution: bool,
 }
 
 impl Default for RenderQuality {
     fn default() -> Self {
         Self {
             anti_aliasing: true,
+            full_display_resolution: true,
         }
     }
 }
 
-/// The live target for a `logical_w × logical_h` viewport under `quality`
-/// (D8). `msaa_supported` is the adapter check of D2: without it the target
-/// has one sample whatever the preference says.
+/// The live target for a `logical_w × logical_h` viewport on a display of
+/// `device_pixel_ratio` under `quality` (D7, D8). `msaa_supported` is the
+/// adapter check of D2: without it the target has one sample whatever the
+/// preference says.
 pub fn live_target_spec(
     logical_w: f64,
     logical_h: f64,
+    device_pixel_ratio: f64,
     quality: RenderQuality,
     msaa_supported: bool,
 ) -> TargetSpec {
@@ -94,7 +100,46 @@ pub fn live_target_spec(
     } else {
         1
     };
-    TargetSpec::viewport(logical_w, logical_h, 1.0, sample_count)
+    let ratio = if quality.full_display_resolution {
+        sanitized_ratio(device_pixel_ratio)
+    } else {
+        1.0
+    };
+    TargetSpec::viewport(logical_w, logical_h, ratio, sample_count)
+}
+
+/// What Flutter laid out for the live viewport (D7): its size in logical
+/// pixels and the display's device pixel ratio. The renderer keeps the last
+/// one and derives the live target from it and the [`RenderQuality`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ViewportRequest {
+    pub logical_width: f64,
+    pub logical_height: f64,
+    pub device_pixel_ratio: f64,
+}
+
+impl ViewportRequest {
+    /// The live target for this request: [`live_target_spec`].
+    pub fn target_spec(&self, quality: RenderQuality, msaa_supported: bool) -> TargetSpec {
+        live_target_spec(
+            self.logical_width,
+            self.logical_height,
+            self.device_pixel_ratio,
+            quality,
+            msaa_supported,
+        )
+    }
+}
+
+/// A device pixel ratio a target can be built from: Flutter never reports a
+/// non-positive or non-finite one, but a bad value from a caller must not
+/// become a zero pixel scale (every screen-space length would collapse).
+fn sanitized_ratio(device_pixel_ratio: f64) -> f64 {
+    if device_pixel_ratio.is_finite() && device_pixel_ratio > 0.0 {
+        device_pixel_ratio
+    } else {
+        1.0
+    }
 }
 
 /// What one draw renders into: colour and depth textures of one size and the

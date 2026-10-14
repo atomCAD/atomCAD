@@ -63,7 +63,7 @@ fn capture_screenshot_impl(
 ) -> ScreenshotResult {
     let renderer = &mut cad_instance.renderer;
 
-    // Save original viewport size
+    // What is on screen, in device pixels: the size of an unsized capture.
     let (orig_width, orig_height) = renderer.get_viewport_size();
 
     // Determine target size
@@ -96,10 +96,14 @@ fn capture_screenshot_impl(
         };
     }
 
-    // Set viewport size if different
-    let size_changed = target_width != orig_width || target_height != orig_height;
-    if size_changed {
-        renderer.set_viewport_size(target_width, target_height);
+    // A sized capture renders the live target at exactly the requested pixels,
+    // at ratio 1, and puts the request back afterwards
+    // (`doc/design_viewport_antialiasing.md` D7). An unsized one renders the
+    // target as it is.
+    let sized = width.is_some() || height.is_some();
+    let saved_request = renderer.viewport_request();
+    if sized {
+        renderer.set_viewport_request(target_width as f64, target_height as f64, 1.0);
     }
 
     // Render
@@ -112,9 +116,12 @@ fn capture_screenshot_impl(
     // view to rest (`doc/design_viewport_antialiasing.md` D5).
     let mut pixels = renderer.render_still(bg_color);
 
-    // Restore viewport if changed
-    if size_changed {
-        renderer.set_viewport_size(orig_width, orig_height);
+    if sized {
+        renderer.set_viewport_request(
+            saved_request.logical_width,
+            saved_request.logical_height,
+            saved_request.device_pixel_ratio,
+        );
     }
 
     // Convert BGRA -> RGBA (wgpu uses BGRA8Unorm)
@@ -181,15 +188,20 @@ pub struct ViewportImageSize {
     pub reduced: bool,
 }
 
-/// The current viewport size in pixels, as `[width, height]` — the default
-/// size of an exported viewport image.
+/// The current viewport size in logical pixels, as `[width, height]` — the
+/// default size of an exported viewport image. Logical, so the image shows
+/// lines at their authored width (`doc/design_viewport_antialiasing.md` D7,
+/// open question 1).
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_viewport_image_size() -> Vec<u32> {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
-                let (width, height) = cad_instance.renderer.get_viewport_size();
-                vec![width, height]
+                let (width, height) = cad_instance.renderer.get_viewport_logical_size();
+                vec![
+                    (width.round() as u32).max(1),
+                    (height.round() as u32).max(1),
+                ]
             },
             vec![0, 0],
         )

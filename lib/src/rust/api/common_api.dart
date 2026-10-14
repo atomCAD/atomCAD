@@ -12,10 +12,18 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `deref`, `deref`, `initialize`, `initialize`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `drawing_plane_up`, `resolve_lattice_direction_up`, `resolve_miller_plane_up`
 
-/// Set the viewport size for rendering
-void setViewportSize({required int width, required int height}) =>
-    RustLib.instance.api
-        .crateApiCommonApiSetViewportSize(width: width, height: height);
+/// Sets the live viewport's size as Flutter laid it out: logical pixels and
+/// the display's device pixel ratio (`doc/design_viewport_antialiasing.md`
+/// D7). The renderer allocates the target in device pixels unless *Full
+/// display resolution* is off.
+void setViewportSize(
+        {required double logicalWidth,
+        required double logicalHeight,
+        required double devicePixelRatio}) =>
+    RustLib.instance.api.crateApiCommonApiSetViewportSize(
+        logicalWidth: logicalWidth,
+        logicalHeight: logicalHeight,
+        devicePixelRatio: devicePixelRatio);
 
 APIFrameInfo provideTexture({required int texturePtr}) => RustLib.instance.api
     .crateApiCommonApiProvideTexture(texturePtr: texturePtr);

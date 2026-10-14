@@ -711,12 +711,18 @@ pub struct RenderingPreferences {
     #[frb(non_final)]
     #[serde(default = "default_true")]
     pub anti_aliasing: bool,
+    /// Render the live viewport at the display's device pixel ratio. Default
+    /// on.
+    #[frb(non_final)]
+    #[serde(default = "default_true")]
+    pub full_display_resolution: bool,
 }
 
 impl Default for RenderingPreferences {
     fn default() -> Self {
         Self {
             anti_aliasing: true,
+            full_display_resolution: true,
         }
     }
 }
@@ -1166,6 +1172,7 @@ impl From<&RenderingPreferences> for domain::RenderingPreferences {
     fn from(p: &RenderingPreferences) -> Self {
         domain::RenderingPreferences {
             anti_aliasing: p.anti_aliasing,
+            full_display_resolution: p.full_display_resolution,
         }
     }
 }
@@ -1174,6 +1181,7 @@ impl From<&domain::RenderingPreferences> for RenderingPreferences {
     fn from(p: &domain::RenderingPreferences) -> Self {
         RenderingPreferences {
             anti_aliasing: p.anti_aliasing,
+            full_display_resolution: p.full_display_resolution,
         }
     }
 }

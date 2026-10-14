@@ -2161,7 +2161,9 @@ abstract class RustLibApi extends BaseApi {
   String? crateApiCommonApiSetViewUpFromMillerPlane({required APIIVec3 hkl});
 
   void crateApiCommonApiSetViewportSize(
-      {required int width, required int height});
+      {required double logicalWidth,
+      required double logicalHeight,
+      required double devicePixelRatio});
 
   void crateApiStructureDesignerXrayApiSetXrayData(
       {required Uint64List scopePath,
@@ -18238,12 +18240,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   void crateApiCommonApiSetViewportSize(
-      {required int width, required int height}) {
+      {required double logicalWidth,
+      required double logicalHeight,
+      required double devicePixelRatio}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_u_32(width, serializer);
-        sse_encode_u_32(height, serializer);
+        sse_encode_f_64(logicalWidth, serializer);
+        sse_encode_f_64(logicalHeight, serializer);
+        sse_encode_f_64(devicePixelRatio, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 559)!;
       },
       codec: SseCodec(
@@ -18251,7 +18256,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeErrorData: null,
       ),
       constMeta: kCrateApiCommonApiSetViewportSizeConstMeta,
-      argValues: [width, height],
+      argValues: [logicalWidth, logicalHeight, devicePixelRatio],
       apiImpl: this,
     ));
   }
@@ -18259,7 +18264,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiCommonApiSetViewportSizeConstMeta =>
       const TaskConstMeta(
         debugName: "set_viewport_size",
-        argNames: ["width", "height"],
+        argNames: ["logicalWidth", "logicalHeight", "devicePixelRatio"],
       );
 
   @override
@@ -25499,10 +25504,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   RenderingPreferences dco_decode_rendering_preferences(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 1)
-      throw Exception('unexpected arr length: expect 1 but see ${arr.length}');
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
     return RenderingPreferences(
       antiAliasing: dco_decode_bool(arr[0]),
+      fullDisplayResolution: dco_decode_bool(arr[1]),
     );
   }
 
@@ -33535,7 +33541,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_antiAliasing = sse_decode_bool(deserializer);
-    return RenderingPreferences(antiAliasing: var_antiAliasing);
+    var var_fullDisplayResolution = sse_decode_bool(deserializer);
+    return RenderingPreferences(
+        antiAliasing: var_antiAliasing,
+        fullDisplayResolution: var_fullDisplayResolution);
   }
 
   @protected
@@ -40083,6 +40092,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       RenderingPreferences self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_bool(self.antiAliasing, serializer);
+    sse_encode_bool(self.fullDisplayResolution, serializer);
   }
 
   @protected

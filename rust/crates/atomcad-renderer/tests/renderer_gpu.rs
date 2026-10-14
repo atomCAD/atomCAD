@@ -221,7 +221,7 @@ fn resized_viewport_renders_at_the_new_size() {
     upload_fixed_scene(&mut renderer);
 
     let (width, height) = (256, 256);
-    renderer.set_viewport_size(width, height);
+    renderer.set_viewport_request(width as f64, height as f64, 1.0);
     let live = renderer.render(BACKGROUND_RGB);
     dump("resized", &live);
     assert_eq!(live.len(), (width * height * 4) as usize);
@@ -956,6 +956,7 @@ fn turning_anti_aliasing_off_and_on_restores_the_anti_aliased_image() {
 
     renderer.set_render_quality(RenderQuality {
         anti_aliasing: false,
+        ..RenderQuality::default()
     });
     assert_eq!(renderer.live_sample_count(), 1);
     assert_eq!(
@@ -1674,16 +1675,26 @@ fn every_setter_invalidates_the_refined_frame() {
     check("set_surface_transparency_mode", &mut renderer, &|r| {
         r.set_surface_transparency_mode(SurfaceTransparencyMode::SinglePass)
     });
-    check("set_viewport_size", &mut renderer, &|r| {
-        r.set_viewport_size(VIEWPORT_WIDTH + 10, VIEWPORT_HEIGHT)
+    check("set_viewport_request", &mut renderer, &|r| {
+        r.set_viewport_request((VIEWPORT_WIDTH + 10) as f64, VIEWPORT_HEIGHT as f64, 1.0)
+    });
+    check("set_viewport_request (ratio)", &mut renderer, &|r| {
+        r.set_viewport_request((VIEWPORT_WIDTH + 10) as f64, VIEWPORT_HEIGHT as f64, 2.0)
     });
     if renderer.msaa_supported() {
         check("set_render_quality", &mut renderer, &|r| {
             r.set_render_quality(RenderQuality {
                 anti_aliasing: false,
+                ..RenderQuality::default()
             })
         });
     }
+    check("set_render_quality (resolution)", &mut renderer, &|r| {
+        r.set_render_quality(RenderQuality {
+            full_display_resolution: false,
+            ..r.render_quality()
+        })
+    });
     check("set_refine_delay", &mut renderer, &|r| {
         r.set_refine_delay(Some(Duration::ZERO))
     });
@@ -1693,7 +1704,7 @@ fn every_setter_invalidates_the_refined_frame() {
     let before = renderer.live_generation();
     renderer.set_surface_transparency_mode(SurfaceTransparencyMode::SinglePass);
     renderer.set_render_quality(renderer.render_quality());
-    renderer.set_viewport_size(VIEWPORT_WIDTH + 10, VIEWPORT_HEIGHT);
+    renderer.set_viewport_request((VIEWPORT_WIDTH + 10) as f64, VIEWPORT_HEIGHT as f64, 2.0);
     assert_eq!(
         renderer.live_generation(),
         before,
@@ -1712,6 +1723,7 @@ fn with_anti_aliasing_off_no_frame_is_refined() {
     renderer.set_refine_delay(Some(Duration::ZERO));
     renderer.set_render_quality(RenderQuality {
         anti_aliasing: false,
+        ..RenderQuality::default()
     });
     upload_fixed_scene(&mut renderer);
     for _ in 0..4 {
@@ -1719,4 +1731,185 @@ fn with_anti_aliasing_off_no_frame_is_refined() {
         assert_eq!(renderer.last_frame_kind(), Some(LiveFrameKind::Normal));
         assert_eq!(renderer.refine_in(), None);
     }
+}
+
+// ---- Viewport anti-aliasing, Phase 4 (doc/design_viewport_antialiasing.md) --
+//
+// HiDPI (D7): the live target in device pixels, its pixel scale the device
+// pixel ratio. Mutation: build the live target at the logical size (the
+// device pixel ratio ignored in `TargetSpec::viewport`) and the HiDPI test
+// fails.
+
+/// The fixed test viewport's logical size, as a request.
+const LOGICAL_W: f64 = VIEWPORT_WIDTH as f64;
+const LOGICAL_H: f64 = VIEWPORT_HEIGHT as f64;
+
+/// D7: at ratio 2 the live target is twice the logical size, and a line
+/// authored as 2 (logical) px covers 4 render pixels per column, because the
+/// target's pixel scale is the ratio.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn at_ratio_2_the_live_target_is_twice_the_logical_size_and_lines_scale() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    renderer.set_viewport_request(LOGICAL_W, LOGICAL_H, 2.0);
+    let (width, height) = (VIEWPORT_WIDTH * 2, VIEWPORT_HEIGHT * 2);
+    assert_eq!(renderer.get_viewport_size(), (width, height));
+
+    let mut line = LineMesh::new();
+    line.add_segment(
+        &Vec3::new(-12.0, 0.03, 0.0),
+        &Vec3::new(12.0, 0.03, 0.0),
+        &LineStyle::solid([1.0, 1.0, 1.0]).with_width(2.0),
+    );
+    upload(
+        &mut renderer,
+        &Mesh::new(),
+        &line,
+        &Mesh::new(),
+        &LineMesh::new(),
+    );
+    // 10 logical px per world unit, so 20 render px: the line spans render
+    // columns 80 to 560.
+    top_down_orthographic(&mut renderer);
+
+    let live = renderer.render(BLACK);
+    dump("hidpi_line_live", &live);
+    assert_eq!(live.len(), (width * height * 4) as usize);
+    let coverage = column_coverage(&live, width, height, true);
+    for (column, sum) in coverage.iter().enumerate().take(520).skip(120) {
+        assert!(
+            (sum - 4.0).abs() < 0.12,
+            "column {column}: coverage sums to {sum}, expected 4 render px"
+        );
+    }
+    // Nothing outside the segment's ends.
+    for (column, sum) in coverage.iter().enumerate().take(60) {
+        assert!(*sum < 0.01, "column {column} lit beyond the line: {sum}");
+    }
+}
+
+/// D8: with *Full display resolution* off the live target is the logical
+/// size whatever the ratio, and turning it on again restores the full-size
+/// image exactly.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn turning_full_display_resolution_off_and_on_restores_the_full_size_image() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    renderer.set_viewport_request(LOGICAL_W, LOGICAL_H, 2.0);
+    upload_fixed_scene(&mut renderer);
+    let full = renderer.render(BACKGROUND_RGB);
+    dump("hidpi_fixed_scene", &full);
+    assert_eq!(full.len(), (VIEWPORT_WIDTH * VIEWPORT_HEIGHT * 16) as usize);
+    assert!(count_non_background(&full, BACKGROUND_RGB, true) > 4000);
+
+    renderer.set_render_quality(RenderQuality {
+        full_display_resolution: false,
+        ..RenderQuality::default()
+    });
+    assert_eq!(
+        renderer.get_viewport_size(),
+        (VIEWPORT_WIDTH, VIEWPORT_HEIGHT)
+    );
+    let logical = renderer.render(BACKGROUND_RGB);
+    dump("hidpi_off_fixed_scene", &logical);
+    assert_eq!(
+        logical.len(),
+        (VIEWPORT_WIDTH * VIEWPORT_HEIGHT * 4) as usize
+    );
+    assert!(count_non_background(&logical, BACKGROUND_RGB, true) > 1000);
+    // Anti-aliasing is independent of the resolution.
+    if renderer.msaa_supported() {
+        assert_eq!(renderer.live_sample_count(), LIVE_SAMPLE_COUNT);
+    }
+
+    renderer.set_render_quality(RenderQuality::default());
+    assert_eq!(
+        renderer.get_viewport_size(),
+        (VIEWPORT_WIDTH * 2, VIEWPORT_HEIGHT * 2)
+    );
+    let full_again = renderer.render(BACKGROUND_RGB);
+    assert_eq!(
+        full, full_again,
+        "full display resolution off and on changed the image"
+    );
+}
+
+/// D7: the logical size is what the export dialog's default and the gadget
+/// pick context read; the device size is what is handed to Flutter.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn the_logical_viewport_size_is_the_requested_one_at_any_ratio() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    renderer.set_viewport_request(LOGICAL_W, LOGICAL_H, 2.0);
+    assert_eq!(renderer.get_viewport_logical_size(), (LOGICAL_W, LOGICAL_H));
+    assert_eq!(
+        renderer.get_viewport_size(),
+        (VIEWPORT_WIDTH * 2, VIEWPORT_HEIGHT * 2)
+    );
+
+    // At a fractional ratio the device size is rounded, so the logical size
+    // read back is within one device pixel of the request.
+    renderer.set_viewport_request(LOGICAL_W + 0.3, LOGICAL_H, 1.25);
+    let (w, h) = renderer.get_viewport_logical_size();
+    assert!((w - (LOGICAL_W + 0.3)).abs() <= 1.0 / 1.25, "{w}");
+    assert!((h - LOGICAL_H).abs() <= 1.0 / 1.25, "{h}");
+    assert_eq!(renderer.get_viewport_size(), (400, 250));
+
+    // Resolution off: the logical size is the target's size.
+    renderer.set_render_quality(RenderQuality {
+        full_display_resolution: false,
+        ..RenderQuality::default()
+    });
+    renderer.set_viewport_request(LOGICAL_W, LOGICAL_H, 2.0);
+    assert_eq!(renderer.get_viewport_logical_size(), (LOGICAL_W, LOGICAL_H));
+    assert_eq!(
+        renderer.get_viewport_size(),
+        (VIEWPORT_WIDTH, VIEWPORT_HEIGHT)
+    );
+}
+
+/// D7: the CLI's sized capture (save the request, render at the requested
+/// pixels at ratio 1, put the request back) renders exactly `w × h` and
+/// leaves the live target at the device size, still multisampled.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn a_sized_capture_at_ratio_2_renders_its_size_and_restores_the_live_target() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    renderer.set_viewport_request(LOGICAL_W, LOGICAL_H, 2.0);
+    upload_fixed_scene(&mut renderer);
+    let before = renderer.render(BACKGROUND_RGB);
+    let samples = renderer.live_sample_count();
+
+    let (w, h) = (256u32, 192u32);
+    let saved = renderer.viewport_request();
+    renderer.set_viewport_request(w as f64, h as f64, 1.0);
+    let capture = renderer.render_still(BACKGROUND_RGB);
+    dump("hidpi_sized_capture", &capture);
+    assert_eq!(capture.len(), (w * h * 4) as usize);
+    assert!(count_non_background(&capture, BACKGROUND_RGB, true) > 1000);
+    renderer.set_viewport_request(
+        saved.logical_width,
+        saved.logical_height,
+        saved.device_pixel_ratio,
+    );
+
+    assert_eq!(renderer.viewport_request(), saved);
+    assert_eq!(
+        renderer.get_viewport_size(),
+        (VIEWPORT_WIDTH * 2, VIEWPORT_HEIGHT * 2)
+    );
+    assert_eq!(renderer.live_sample_count(), samples);
+    if renderer.msaa_supported() {
+        assert_eq!(samples, LIVE_SAMPLE_COUNT);
+    }
+    let after = renderer.render(BACKGROUND_RGB);
+    assert_eq!(before, after, "the sized capture disturbed the live view");
 }

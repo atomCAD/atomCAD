@@ -15203,12 +15203,17 @@ fn wire__crate__api__common_api__set_viewport_size_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_width = <u32>::sse_decode(&mut deserializer);
-            let api_height = <u32>::sse_decode(&mut deserializer);
+            let api_logical_width = <f64>::sse_decode(&mut deserializer);
+            let api_logical_height = <f64>::sse_decode(&mut deserializer);
+            let api_device_pixel_ratio = <f64>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok({
-                    crate::api::common_api::set_viewport_size(api_width, api_height);
+                    crate::api::common_api::set_viewport_size(
+                        api_logical_width,
+                        api_logical_height,
+                        api_device_pixel_ratio,
+                    );
                 })?;
                 Ok(output_ok)
             })())
@@ -24089,7 +24094,8 @@ impl SseDecode
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_antiAliasing = <bool>::sse_decode(deserializer);
-        return crate::api::structure_designer::structure_designer_preferences::RenderingPreferences{anti_aliasing: var_antiAliasing};
+        let mut var_fullDisplayResolution = <bool>::sse_decode(deserializer);
+        return crate::api::structure_designer::structure_designer_preferences::RenderingPreferences{anti_aliasing: var_antiAliasing, full_display_resolution: var_fullDisplayResolution};
     }
 }
 
@@ -32874,7 +32880,11 @@ impl flutter_rust_bridge::IntoDart
     for crate::api::structure_designer::structure_designer_preferences::RenderingPreferences
 {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [self.anti_aliasing.into_into_dart().into_dart()].into_dart()
+        [
+            self.anti_aliasing.into_into_dart().into_dart(),
+            self.full_display_resolution.into_into_dart().into_dart(),
+        ]
+        .into_dart()
     }
 }
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
@@ -39316,6 +39326,7 @@ impl SseEncode
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <bool>::sse_encode(self.anti_aliasing, serializer);
+        <bool>::sse_encode(self.full_display_resolution, serializer);
     }
 }
 

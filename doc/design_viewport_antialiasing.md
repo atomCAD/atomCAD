@@ -1143,6 +1143,36 @@ release library, a GUI check needs `cargo build --release` first.
 - Effort: 1–1.5 d, plus 0.5 d if reduction 1 is needed (it touches the
   plugin on three platforms).
 
+**Measured (2026-10-14).** As in Phases 2 and 3, on a stand-in rather than
+the nanobeam itself (the GUI was not driven): the same 1.07 M-atom / 2.1
+M-bond diamond slab and a 64-atom small scene, viewed obliquely at mid range
+(~10 px per atom at ratio 1), through `Renderer::render` (normal, mean of 15
+after 3 warm-ups) and `render_still` (refined, mean of 6), readback
+included, in a temporary release-mode harness, on the high-performance
+adapter (RTX 3060 Laptop, Vulkan), MSAA on. The viewport is 1200 × 700
+logical pixels, about what a maximised window leaves on the maintainer's
+display, which is 1920 × 1080 at **125 %**. The last column emulates the
+plugin's per-frame CPU work on Windows (a copy into a fresh buffer plus the
+per-pixel R/B swap, i.e. reductions 2 and 1 together), timed in Rust on the
+read-back bytes; Flutter's own upload of the pixel buffer is not included.
+
+| Ratio | Target | Small, normal | Small, refined | Slab, normal | Slab, refined | Copy + swap |
+|---|---|---|---|---|---|---|
+| 1 | 1200 × 700 | 1.5 | 1.6 | 17.6 | 26.7 | 0.8–0.9 |
+| 1.25 (this display) | 1500 × 875 | 2.4 | 2.4 | 23.7 | 37.9 | 1.2–1.5 |
+| 1.5 | 1800 × 1050 | 3.3 | 3.4 | 31.3 | 49.6 | 1.7–1.8 |
+| 2 | 2400 × 1400 | 5.5 | 5.3 | 47.8 | 79.2 | 3.2–4.4 |
+
+(Frame times in ms.) At the display's own scale *Full display resolution*
+costs +35 % on the slab (17.6 → 23.7 ms) and +60 % on the small scene,
+where the frame is all readback (1.5 → 2.4 ms, still far under a frame). At
+2 the slab frame is 2.7× the ratio-1 frame for 4× the pixels. **Reduction 1
+was not done:** the regression is GPU-side, not in the plugin. The swap and
+the copy together are at most 4.4 ms even at ratio 2, under a tenth of the
+slab's frame, so removing the swap (reduction 1) would save a millisecond or
+two where the frame grew by 30. The remedy for a large structure on a
+high-DPI display is the preference itself, which restores the ratio-1 row.
+
 ### Phase 5 — Walkthrough and documentation
 
 - Manual GUI walkthrough (maintainer), on the 100 % display and, if

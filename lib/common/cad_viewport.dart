@@ -768,9 +768,16 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
             ? LayoutBuilder(builder: (context, constraints) {
                 viewportWidth = constraints.maxWidth;
                 viewportHeight = constraints.maxHeight;
+                // Logical size, untruncated, and the device pixel ratio: the
+                // renderer allocates the texture in device pixels
+                // (`doc/design_viewport_antialiasing.md` D7). Reading the
+                // ratio through `MediaQuery` rebuilds, and so re-sizes, the
+                // viewport when the window moves to a display of another
+                // scale.
                 setViewportSize(
-                    width: viewportWidth.toInt(),
-                    height: viewportHeight.toInt());
+                    logicalWidth: viewportWidth,
+                    logicalHeight: viewportHeight,
+                    devicePixelRatio: MediaQuery.devicePixelRatioOf(context));
 
                 return Listener(
                   onPointerSignal: (pointerSignal) {

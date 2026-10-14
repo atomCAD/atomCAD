@@ -39,8 +39,10 @@ ViewportImageSize fitViewportImageSize(
     RustLib.instance.api.crateApiScreenshotApiFitViewportImageSize(
         width: width, height: height);
 
-/// The current viewport size in pixels, as `[width, height]` — the default
-/// size of an exported viewport image.
+/// The current viewport size in logical pixels, as `[width, height]` — the
+/// default size of an exported viewport image. Logical, so the image shows
+/// lines at their authored width (`doc/design_viewport_antialiasing.md` D7,
+/// open question 1).
 Uint32List getViewportImageSize() =>
     RustLib.instance.api.crateApiScreenshotApiGetViewportImageSize();
 

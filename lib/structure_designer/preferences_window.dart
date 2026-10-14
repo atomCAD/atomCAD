@@ -97,6 +97,8 @@ class PreferencesKeys {
 
   // Rendering
   static const Key antiAliasingCheckbox = Key('pref_anti_aliasing_checkbox');
+  static const Key fullDisplayResolutionCheckbox =
+      Key('pref_full_display_resolution_checkbox');
 
   static const Key layoutAlgorithmDropdown =
       Key('pref_layout_algorithm_dropdown');
@@ -1225,6 +1227,36 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                                       '(4x multisampling). Turn off to save GPU '
                                       'memory and time on a slow machine.',
                                   child: Text('Anti-aliasing'),
+                                ),
+                              ),
+                            ],
+                          ),
+                          Row(
+                            children: [
+                              Checkbox(
+                                key: PreferencesKeys
+                                    .fullDisplayResolutionCheckbox,
+                                value: _preferences
+                                    .renderingPreferences.fullDisplayResolution,
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    setState(() {
+                                      _preferences.renderingPreferences
+                                          .fullDisplayResolution = value;
+                                    });
+                                    _applyPreferences();
+                                  }
+                                },
+                              ),
+                              const SizedBox(width: 8),
+                              const Expanded(
+                                child: Tooltip(
+                                  message:
+                                      "Renders the viewport at your display's "
+                                      'full pixel density, so it stays sharp at '
+                                      'a display scale above 100%. Turn off to '
+                                      'render faster on a large high-DPI display.',
+                                  child: Text('Full display resolution'),
                                 ),
                               ),
                             ],
