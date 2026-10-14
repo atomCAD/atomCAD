@@ -27,24 +27,27 @@ one-pixel staircase:
 
 This document makes the live viewport anti-aliased with **4× MSAA**, gives the
 impostors **exact per-sample silhouette coverage** inside that MSAA (one
-mechanism for meshes and impostors), extends it to the circle where a bond
-enters its atom, and renders the live viewport at the **device pixel ratio**.
-Two preferences can turn MSAA and the device-pixel rendering off.
+mechanism for meshes and impostors), renders one **refined frame with
+per-sample impostor shading** once the view comes to rest, so that where
+impostors meet (bond–atom junctions, sphere–sphere contacts) is exact too,
+and renders the live viewport at the **device pixel ratio**. Two preferences
+can turn MSAA (and with it the refinement) and the device-pixel rendering
+off.
 
 ### Scope
 
 - **In:** multisampled colour and depth for the live viewport, pipelines per
   sample count, the resolve (D1–D3); per-sample silhouette coverage in the
   three impostor shaders: opaque atoms, opaque bonds, x-ray ghosts, and
-  through them the gadget guide dots (D4); per-sample bond–atom junctions
+  through them the gadget guide dots (D4); the still-camera refined frame
   (D5); device-pixel allocation of the live target and every consumer of the
   viewport's size in pixels (D7); two preferences, *Anti-aliasing* and *Full
   display resolution*, both on by default (D8).
-- **Out (see Future work):** anti-aliasing of sphere–sphere contacts in the
-  live view (still-camera refinement is the recorded fallback), post-process
-  AA (FXAA/SMAA, needs the post-process chain of report §2.6), a GPU path
-  from the renderer to Flutter that skips the CPU readback, MSAA for the
-  thumbnail and the export.
+- **Out (see Future work):** exact impostor–impostor intersections *while the
+  view moves* (they are exact only in the refined frame), post-process AA
+  (FXAA/SMAA, needs the post-process chain of report §2.6), a GPU path from
+  the renderer to Flutter that skips the CPU readback, MSAA for the thumbnail
+  and the export.
 
 ## Current state (facts, with references)
 
@@ -80,6 +83,10 @@ All in `rust/crates/atomcad-renderer/src/` unless noted.
   (`texture_rgba_renderer_plugin.cc`) are also CPU pixel-buffer textures.
   **The per-frame cost of the live view is proportional to its pixel count,
   outside the GPU.**
+- **Frames are on demand.** The frame callback is persistent, but Flutter
+  only runs it when a frame is scheduled: `CadViewport.renderingNeeded`
+  (`scheduleFrame`) after a camera move, a refresh, a resize, or any other UI
+  repaint. A viewport at rest renders nothing.
 - **Viewport size.** `CadViewport.build` (`lib/common/cad_viewport.dart`)
   calls `setViewportSize(width: viewportWidth.toInt(), height:
   viewportHeight.toInt())` from a `LayoutBuilder`: logical pixels, truncated.
@@ -103,13 +110,31 @@ All in `rust/crates/atomcad-renderer/src/` unless noted.
   a ray–cylinder test clipped flat at both ends. `transparent_impostor.wgsl`
   contains copies of both branches, selected per quad by `kind`, and blends.
   The three files share no code.
-- **Tests.** `tests/renderer/shader_test.rs` validates every `.wgsl` with naga
-  and checks the six `CameraUniform` layouts; `line_geometry.rs` holds Rust
-  twins of the line shader's arithmetic; the opt-in GPU harness
-  `tests/renderer_gpu.rs` renders through the live, thumbnail and export paths
+- **Tests** (in `rust/crates/atomcad-renderer/tests/`).
+  `renderer/shader_test.rs` validates every `.wgsl` with naga and checks the
+  six `CameraUniform` layouts; `src/line_geometry.rs` holds Rust twins of
+  the line shader's arithmetic; the opt-in GPU harness `renderer_gpu.rs`
+  renders through the live, thumbnail and export paths
   and can dump raw images (`ATOMCAD_GPU_DUMP_DIR`) for before/after `cmp`.
 
 ## Decisions
+
+**Where the code goes.** Everything below except the preferences and the api
+is in the renderer crate, and none of it goes into `renderer.rs` (already
+over 2000 lines) beyond the calls. Three new modules; the pure functions
+in them get test files under `tests/renderer/`:
+
+| Module | Holds |
+|---|---|
+| `render_target.rs` | `RenderTarget` (moved out of `renderer.rs`), `TargetSpec`, `RenderQuality`, `live_target_spec` (D1, D7, D8) |
+| `pipelines.rs` | `PipelineSet`, `RefinedImpostorPipelines`, the `create_*_pipeline` functions moved out of `renderer.rs`, the `PipelineLayouts`/`Shaders` they are built from (D2, D5) |
+| `live_refinement.rs` | `LiveRefinement` (generation, change time, kept image), `live_frame_kind`, `REFINE_DELAY` (D5) |
+
+`impostor_coverage.rs` (D6) is a fourth new module. `renderer.rs` keeps
+`Renderer`, `draw_to_target` and the passes (D3). `RenderingPreferences` is
+in `atomcad-structure-designer/src/preferences.rs` beside the other
+preference sections, and reaches the renderer as a `RenderQuality` through
+the api, like `surface_transparency_mode` (D8).
 
 ### D1 — MSAA 4× for the live viewport; the offscreen targets stay supersampled
 
@@ -136,9 +161,10 @@ Why not MSAA for the offscreen targets too: memory. The export renders up to
 would be 4096² × 4 × (4 + 4) bytes = 512 MiB, allocated for one image. The
 supersampled image already has four samples per pixel and, unlike MSAA, also
 smooths every impostor intersection (D4, *What is anti-aliased and what is
-not*), so it is the better image anyway. The thumbnail is small enough for MSAA, but one rule
-("live is multisampled, offscreen is supersampled") is easier to keep than a
-per-target exception, and the thumbnail gains nothing visible.
+not*), so it is the better image anyway. The thumbnail is small enough for
+MSAA, but one rule ("live is multisampled, offscreen is supersampled") is
+easier to keep than a per-target exception, and the thumbnail gains nothing
+visible.
 
 Why 4: WebGPU guarantees sample counts 1 and 4 for both `Bgra8Unorm` and
 `Depth32Float`, so 4 is portable without probing. 8 is not guaranteed and the
@@ -193,7 +219,7 @@ be turned off (D8).
 A wgpu pipeline is compiled for one sample count and can only draw into
 attachments of that count. Since the live target is multisampled and the
 offscreen ones are not, every pipeline exists twice. The nine pipelines move
-out of `Renderer` into one struct, built by one function:
+out of `Renderer` into one struct in `pipelines.rs`, built by one function:
 
 ```rust
 struct PipelineSet {
@@ -354,11 +380,10 @@ work, no sort.
   both pick the *same* two samples, and the background shows through as a
   seam. The positional mask above picks complementary samples for
   complementary edges, which is what makes neighbouring atoms seamless.
-- **Per-sample shading** (`@interpolate(perspective, sample)`). Exact, and
-  it would also fix the intersections below, but it runs the whole shader
-  four times on every impostor pixel, interior included. (Still-camera
-  refinement in Future work uses it only on frames where the camera is at
-  rest.)
+- **Per-sample shading** (the whole fragment shader run once per sample).
+  Exact, and it would also fix the intersections below, but it costs four
+  times the impostor shading on every pixel, interior included. (D5 uses
+  it, but only for the one frame rendered once the view is at rest.)
 - **Post-process AA (FXAA/SMAA).** Needs the post-process chain that does
   not exist yet, softens the already-anti-aliased lines and labels, and
   guesses edges from colour rather than knowing them.
@@ -380,18 +405,23 @@ its mask.
   the boundary is decided per pixel and stays a staircase. That happens
   wherever the two surfaces are within about one pixel's depth range of each
   other:
-  - **in ball-and-stick, the circle where every bond enters its atom.** This
-    is on every atom, not a rare case. **D5 fixes it** for opaque bonds;
+  - in ball-and-stick, the circle where every bond enters its atom (on every
+    atom, not a rare case);
   - in space-filling, the contact curves between overlapping spheres,
     clearest between elements of very different colour (C against H, report
-    shot `c11`). A sphere does not know its neighbours, so D5's approach does
-    not carry over; this one stays, see below;
-  - the junctions of x-ray ghost bonds (D5 leaves them as they are).
+    shot `c11`);
+  - the same junctions and contacts between x-ray ghosts.
+
+  All of these are one problem: two impostors meeting, each knowing only
+  itself. D4 deliberately does not special-case any of them (a bond shader
+  that knows about its end atoms would fix the junction and leave the
+  contacts, at the price of coupling the shaders and growing the bond
+  vertex). Instead they are exact in the **refined frame** (D5), which is
+  what the user sees whenever the view is at rest, and per-pixel only while
+  it moves.
 
 Exports and thumbnails have none of these limits, since supersampling shades
-every sample. For the space-filling contacts in the live view, the fallback
-is **still-camera refinement** (Future work): the walkthrough (Phase 4)
-decides whether they matter enough to build it.
+every sample.
 
 **The rim highlight** depends on `NdotV` at the shading point and is
 unchanged.
@@ -404,75 +434,165 @@ surface as well.
 **Gadget impostors** (the guide dots and their connectors) are drawn with the
 same atom and bond pipelines and are anti-aliased with no further work.
 
-### D5 — A bond gives way to its end atoms per sample
+### D5 — At rest, one refined frame with per-sample impostor shading
 
-The junction between a bond and its atom is jagged because two separate
-draws settle it by depth, one value per pixel each. The bond shader can
-settle it itself instead: it knows which two spheres it runs into, so on each
-sample ray it can tell whether one of them is in front.
+Once the view stops changing, the renderer draws one more frame in which the
+impostor shaders run **once per sample** instead of once per pixel. Each
+sample then has its own ray, its own hit, its own colour and its own depth, so
+every impostor–impostor boundary (bond–atom junctions, sphere–sphere
+contacts, ghost junctions) is resolved exactly as a mesh intersection is, at
+4× the impostor shading cost of a normal frame, paid once. While the view
+moves, frames are D4's; when it stops, the jaggies D4 leaves disappear. The
+refinement exists only with *Anti-aliasing* on (D8): it needs the
+multisampled target.
 
-**The claim rule.** In step 3 of D4, the bond sets bit *i* only if its sample
-ray hits the cylinder at `t_bond` **and** neither end sphere is hit by the
-same ray at `t_sphere < t_bond`. That one test covers both sides of the atom:
-on the near side, the part of the cylinder inside the sphere is behind the
-sphere's surface; on the far side, the sphere is hit on the way to the bond.
-The junction circle becomes an edge of the bond's sample mask, so it resolves
-like an outline.
+**Why per-sample shading on the live target, not a supersampled frame.**
+Both give four shaded samples per pixel. A separate 2× target would cost its
+own memory (about 200 MB at a device pixel ratio of 2, D7, on top of the MSAA
+target of D1) and a downsample, which on the GPU is the missing post-process
+chain and on the CPU is the export's box filter at 4× the live pixel count.
+Per-sample shading reuses the MSAA target and its resolve: nothing is
+allocated, and the readback is unchanged.
 
-**The depth must agree with the mask.** The atom still covers the samples the
-bond claims, and the atom's single depth at a junction pixel can be nearer
-than the bond's single depth, in which case it would win the bond's samples
-back in the depth test and the staircase would return from the other side.
-So when the bond claims any sample on a pixel that one of its end spheres
-also covers, its `frag_depth` is lowered to just in front of **the depth that
-sphere writes on that pixel**:
+**The shaders.** Each impostor shader (atom, bond, and both branches of the
+transparent one) gets a second fragment entry point, `fs_main_per_sample`,
+that takes `@builtin(sample_index)`. Taking that builtin is what makes the
+GPU run the entry point per sample. The inputs keep their default
+(pixel-centre) interpolation, so the vertex stage and its output struct are
+unchanged: the entry point takes the derivatives first (as in D4, before
+anything can discard), builds its sample's ray with D4's machinery,
+`sample_point(world_position, dwx, dwy, offset[sample_index])`, then runs the
+full intersection, shading and `frag_depth` of today's code on that ray, and
+discards on a miss. It writes no `sample_mask`: a per-sample invocation only
+ever covers its own sample. Everything below the ray construction is shared
+with `fs_main`, so the two entry points cannot disagree about the surface.
 
+Meshes, lines and labels need no refined variant: their depth is already per
+sample under MSAA (D3), and their colour does not change across a pixel in
+any way that matters.
+
+**The pipelines.** `PipelineSet` gains
+
+```rust
+/// D5: per-sample-shading variants of the impostor pipelines. `Some` only
+/// in a multisampled set, and only on an adapter with
+/// `DownlevelFlags::MULTISAMPLED_SHADING`.
+refined: Option<RefinedImpostorPipelines>,  // atom, bond, transparent
 ```
-frag_depth = min(own_depth, end_atom_depth(pixel) − ε)
+
+and `PassFlags` gains `refined: bool`. With it set, `draw_to_target` draws
+the impostor meshes of **both** passes (so also the guide dots) with the
+refined pipelines and everything else as usual. `Renderer::new` reads
+`MULTISAMPLED_SHADING` from the adapter's downlevel capabilities; every
+DX12, Vulkan and Metal adapter has it, only GL adapters can lack it. Without
+it there is no refinement and the renderer says so once, like the MSAA
+fallback of D2.
+
+**When to refine.** The renderer keeps a **live generation** counter that
+changes whenever what the live frame shows may have changed. Because D5 keeps
+and reuses the refined image, a *missed* bump is a bug the user sees: the
+viewport keeps showing an old picture until something else changes. A
+*spurious* bump only postpones the refined frame. So the rule is written to
+over-bump, and it is placed where every change already passes, not at the
+callers:
+
+- **every `pub fn(&mut self)` on `Renderer` except `render*` and getters**
+  bumps: mesh uploads (`update_all_gpu_meshes`, `update_background_mesh`),
+  camera setters, `set_surface_transparency_mode`, `set_viewport_request`,
+  `set_render_quality`, and whatever is added later;
+- **`write_view_uniforms(View::Live, ..)`** bumps too. That covers the api
+  code that edits the `pub camera` field directly, because every such edit
+  is followed by `update_camera_buffer()`, which writes through it. That
+  method takes `&self`, so the counter is a `Cell<u64>`.
+
+The background colour is passed into every render rather than set, so
+`render` compares it with the previous one and treats a difference like a
+bump. `Renderer::render` then decides:
+
+| State | What it renders |
+|---|---|
+| Refinement unavailable (1-sample live target, no refined pipelines, or delay `None`) | a normal frame, always |
+| Generation or background changed since the last render | a normal frame (D4), and remembers the time of the change |
+| Unchanged, but less than `REFINE_DELAY` since the change | a normal frame |
+| Unchanged, `REFINE_DELAY` elapsed, not refined yet | **the refined frame**, and keeps its read-back bytes |
+| Unchanged, already refined | the kept bytes, with no GPU work |
+
+The table is a pure function, `live_frame_kind(generation_changed,
+since_change, already_refined, refinement_available) -> LiveFrameKind`,
+tested without a device (its first row is `refinement_available = false`).
+It lives in a new module `live_refinement.rs` of the renderer crate,
+together with the state it reads, which `Renderer` owns and `render`
+consults; `renderer.rs` keeps only the call:
+
+```rust
+pub struct LiveRefinement {
+    generation: Cell<u64>,         // bumped through `&self` (above)
+    seen_generation: u64,          // the generation of the last render
+    background: Option<[u8; 3]>,   // the background of the last render
+    changed_at: Instant,           // when either last changed
+    delay: Option<Duration>,       // `set_refine_delay`; default `Some(REFINE_DELAY)`
+    last_kind: Option<LiveFrameKind>,
+    kept: Option<Vec<u8>>,         // the refined frame's bytes, until the next change
+}
+pub enum LiveFrameKind { Normal, Refined, Kept }
 ```
 
-The bond can compute `end_atom_depth(pixel)` exactly, because the atom
-shader's choice of shading ray is deterministic (D4 step 5: the centre ray if
-it hits, else the first sample ray that hits) and the bond shader runs the
-same test with a copy of the same sphere code (D6). ε is a few units in the last place of
-the depth value, enough to absorb a difference in floating-point contraction
-between the two shaders. The bond now wins exactly the samples it claims
-against its own atom, in either draw order. Against any third object the
-lowered depth is off by at most the depth range of one pixel at the
-junction, which is the same tolerance every impostor already has.
+The delay is a field, not only a constant: `set_refine_delay(Option<Duration>)`
+sets it (`None` means `render` never refines on its own, and `refine_in`
+below is then always `None`), so tests can make the decision deterministic (Testing, layer
+4). Two read-only accessors, `live_generation() -> u64` and
+`last_frame_kind() -> Option<LiveFrameKind>`, expose the decision to tests
+and to debugging.
 
-**What the bond needs to know.** Each end atom's centre and displayed radius.
-The centres are not the cylinder's end points for the side cylinders of a
-double or triple bond, which are offset sideways (`compute_bond_perpendicular`
-in `atomcad-display/src/atomic_tessellator.rs`). `BondImpostorVertex` gains
-the offset (`[f32; 3]`, centres = end points − offset) and the two radii
-(`[f32; 2]`): 20 bytes, so 48 → 68 bytes per vertex. That is about 40 % more
-bond vertex memory, which on the million-atom nanobeam is in the low hundreds
-of MB; instancing the bond quads (Future work) would more than pay it back.
+The delay matters because a frame with an unchanged generation does not mean
+the user has stopped: any unrelated Flutter repaint (a hover in the node
+network, a panel animation) runs the frame callback too, and a refined frame
+in the middle of a drag would stall the next mouse move. `REFINE_DELAY` is
+about 150 ms (tuned in the walkthrough, Phase 5).
 
-**Where the radii come from.** `tessellate_bond_impostor_inline` writes each
-end atom's **effective** displayed radius, the same one that atom's own
-impostor gets (per-atom style rules included), and **0** when the end atom is
-not drawn as an opaque impostor: a ghost, a hidden atom, or no atom at all.
-Radius 0 means "no sphere", and the shader skips that test. Every other
-`add_bond_quad` caller (guidelines, anchor arrows, delete markers, guide-dot
-connectors) passes 0 and is unchanged.
+**The deferred frame.** Frames are on demand (Current state), so after the
+last frame of a camera drag nothing would ever ask for the refined one. The
+Rust side says when one is owed, in the return value of the frame itself.
+`provide_texture` returns an `f64` frame time today, which Dart ignores
+(`cad_viewport.dart`); it becomes
 
-**Ghost bonds are left alone.** A translucent atom shows the bond running
-into it; clipping the bond there would change what x-ray shows, not just its
-edges. The transparent shader's bond branch therefore does not apply the
-claim rule, and ghost junctions keep a per-pixel boundary. They are blended
-and low in contrast, so this is the cheap end of the trade.
+```rust
+// rust/src/api/common_api.rs
+pub struct APIFrameInfo {
+    pub frame_time: f64,
+    /// Seconds until a refined frame is due; `None` when none is owed
+    /// (already refined, anti-aliasing off, or unsupported).
+    pub refine_in: Option<f64>,
+}
+```
 
-**Orthographic.** Today's orthographic ray starts two *bond* radii behind the
-fragment, which can be inside an end sphere. The bond's sample rays start far
-enough back to be behind both end spheres as well (the largest end radius
-plus the side-cylinder offset is enough), so `t_sphere` and `t_bond` are
-measured from one origin outside everything.
+so the answer comes from the same render and costs no second FFI call per
+frame. After each `provideTexture`, `CadViewport` hands `refine_in` to a
+small `RefinementTimer` (`lib/common/refinement_timer.dart`, a plain class
+so it can be unit-tested without the viewport): it (re)arms a single `Timer`
+for that long whose callback is `renderingNeeded()`, cancels it when
+`refine_in` is `None`, and cancels it on dispose. A new frame cancels and
+re-arms it, so it only fires once the view has been still for
+`REFINE_DELAY`.
 
-**Cost.** Per bond sample, two ray–sphere tests on top of the cylinder test,
-and on junction pixels one replay of the atom's shading-ray choice (up to
-five sphere tests). No extra pass, no change to the atom shader.
+**Stills elsewhere.** `Renderer::render_still(background)` renders the
+refined frame unconditionally (a normal frame when refinement is not
+available), bypassing `live_frame_kind` and leaving the kept image alone.
+The CLI `capture_screenshot_impl` calls it, since a screenshot is a still by
+definition, and the Phase 3 GPU tests use it to get a refined frame without
+waiting out `REFINE_DELAY`. The export and the thumbnail are untouched
+(always supersampled, D1).
+
+**Cost and risk.** The refined frame shades every impostor sample: about four
+times the impostor cost of a normal frame. `provide_texture` blocks the UI
+thread, so on a large scene the refined frame delays whatever input arrives
+during it, at most once per rest. Camera drags are coalesced
+(`_flushPendingCameraDrag`), so the delay is one late frame, not a backlog.
+Phase 3 measures it on the nanobeam. If the refined frame takes too long to
+be acceptable there, the remedy is a longer `REFINE_DELAY`, not a different
+mechanism. The switch from the D4 frame to the refined one is a visible
+change only at impostor–impostor boundaries; whether that reads as a pop is
+judged on screen (Phase 5).
 
 ### D6 — One Rust twin for the coverage arithmetic
 
@@ -489,14 +609,10 @@ pub fn sample_point(world_position: Vec3, dwx: Vec3, dwy: Vec3, offset: [f32; 2]
 pub fn sphere_hit(origin: Vec3, dir: Vec3, centre: Vec3, radius: f32) -> Option<f32>;
 pub fn cylinder_hit(origin: Vec3, dir: Vec3, start: Vec3, end: Vec3, radius: f32) -> Option<f32>;
 pub fn coverage_mask(hits: impl Iterator<Item = bool>) -> u32;
-/// D5: the bond claims a sample iff it hits and neither end sphere
-/// (radius 0 = none) is hit nearer along the same ray.
-pub fn bond_claims_sample(t_bond: Option<f32>, end_sphere_t: [Option<f32>; 2]) -> bool;
-/// D5: the depth the bond writes on a pixel one of its end atoms also covers.
-pub fn bond_junction_depth(own_depth: f32, end_atom_depth: Option<f32>) -> f32;
 ```
 
-Each WGSL copy carries a comment naming its twin. The GPU harness is the
+`sample_point` serves both D4's coverage rays and D5's per-sample shading
+ray. Each WGSL copy carries a comment naming its twin. The GPU harness is the
 cross-check that a twin has not drifted, as for the lines.
 
 ### D7 — HiDPI: the live target is allocated in device pixels, and its pixel scale is the device pixel ratio
@@ -538,13 +654,13 @@ logical aspect by under a pixel of rounding).
 | Consumer | Needs | Change |
 |---|---|---|
 | `provide_texture` → `send_texture` | device px | none; `get_viewport_size` keeps returning the target's size |
-| `update_gadget_pick_context` (`MIN_HIT_RADIUS_PX`, logical) | logical px | use a new `Renderer::get_viewport_logical_size()` (size ÷ `pixel_scale`) |
+| `update_gadget_pick_context` (`MIN_HIT_RADIUS_PX`, logical) | logical px | use a new `Renderer::get_viewport_logical_size()` (size ÷ `pixel_scale`); the arithmetic moves into a pure `gadget_pick_context(camera, logical_viewport_height)` beside it, for testing |
 | `get_viewport_image_size` (export dialog default) | logical px | logical size; see open question 1 |
-| CLI `capture_screenshot_impl`, no size given | what is on screen | render the live target as it is, no resize |
-| CLI `capture_screenshot_impl`, size given | the requested px | a live target of exactly `w × h` at ratio 1.0 (sample count per the preference), then restore it from the saved request |
+| CLI `capture_screenshot_impl`, no size given | what is on screen | `render_still` on the live target as it is (D5), no resize |
+| CLI `capture_screenshot_impl`, size given | the requested px | save `Renderer::viewport_request()` (new getter: the last `(logical_w, logical_h, dpr)`), `set_viewport_request(w, h, 1.0)`, `render_still`, then `set_viewport_request` with the saved values |
 | Line widths, dashes, grid LOD | render px via `pixel_scale` | none |
 | Flutter picking, projection, marquee selection | logical px | none (they never read the renderer's size) |
-| `Renderer::new` | — | unchanged, ratio 1 until the first `set_viewport_request` |
+| `Renderer::new` | — | ratio 1 until the first `set_viewport_request`; `RenderQuality::default()` has both fields `true`, matching the preference defaults |
 
 **Displaying it.** Flutter's `Texture` widget maps the texture onto the
 widget's logical rectangle, so a texture of exactly the device-pixel size is
@@ -553,15 +669,15 @@ ratio (125 %, 150 %) a panel edge can fall between device pixels, and the
 default `FilterQuality.low` then resamples by a fraction of a pixel, a slight
 softening; `FilterQuality.none` avoids that but can drop or repeat a column
 when the rounded size and the rectangle differ by one. Which one looks right
-is checked on a real display in the walkthrough (Phase 4); the code change
+is checked on a real display in the walkthrough (Phase 5); the code change
 is one argument.
 
 **Cost.** The live frame's CPU-side cost scales with the device pixel count,
 because every frame is read back and copied through the plugin (Current
 state). A 1600 × 1000 logical viewport is 6.4 MB per frame at 100 %, 14.4 MB
 at 150 % and 25.6 MB at 200 %. GPU cost scales the same way, and the MSAA
-memory of D1 by the same factor. Phase 3 measures `provide_texture` before
-and after on the maintainer's display and on the million-atom nanobeam; the
+memory of D1 and the refined frame of D5 by the same factor. Phase 4
+measures `provide_texture` before and after on the maintainer's display and on the million-atom nanobeam; the
 design does not assume the result. A user can always turn *Full display
 resolution* off (D8); if the frame time is a problem with it on, the cheap
 reductions, in order, are:
@@ -579,7 +695,7 @@ code path the design does not already have:
 
 | Preference | Default | Off means | What a change does |
 |---|---|---|---|
-| *Anti-aliasing* | on | the live target has 1 sample | recreates the live target (D2: the 1-sample pipelines exist anyway) |
+| *Anti-aliasing* | on | the live target has 1 sample, and there is no refined frame (D5) | recreates the live target (D2: the 1-sample pipelines exist anyway) |
 | *Full display resolution* | on | the live target's ratio is 1.0 | recreates the live target (D7) |
 
 Neither touches the thumbnail or the export: those are always supersampled,
@@ -592,10 +708,10 @@ at their own size.
   multisampled while impostors are not. "Impostor AA off" could only mean the
   impostor shaders claiming all four samples, which saves four hit tests per
   pixel, nothing measurable next to the shading.
-- **The bond–atom junction (D5).** It costs two sphere tests per sample and
-  does nothing with anti-aliasing off. It needs no second vertex layout
-  either way (end radii of 0 already mean "no sphere"), but a switch that
-  trades nothing is not worth a line in the dialog.
+- **The refined frame (D5) on its own.** It is part of *Anti-aliasing*: it
+  needs the multisampled target, and with the target it costs nothing until
+  the view is at rest. If it proves too slow on a large scene, the remedy is
+  a longer `REFINE_DELAY`, not a switch.
 
 **Where they live.** A new `RenderingPreferences { anti_aliasing: bool,
 full_display_resolution: bool }` in
@@ -607,12 +723,15 @@ impls) to a new **Rendering** section in the Preferences dialog
 (`lib/structure_designer/preferences_window.dart`).
 
 **How they reach the renderer.** Like `surface_transparency_mode`: pushed on
-every refresh (`set_structure_designer_preferences` refreshes), because the
+every refresh, in `refresh_structure_designer` (`api_common.rs`) next to
+`set_surface_transparency_mode` (and `set_structure_designer_preferences`
+refreshes), because the
 renderer crate cannot see the preferences types. The renderer keeps the last
 viewport request and the quality settings, and derives the live target from
 both:
 
 ```rust
+/// `Default`: both `true`, like the preferences.
 pub struct RenderQuality { pub anti_aliasing: bool, pub full_display_resolution: bool }
 
 impl Renderer {
@@ -622,7 +741,7 @@ impl Renderer {
     pub fn set_render_quality(&mut self, quality: RenderQuality);
 }
 
-/// Pure, so it is tested without a device.
+/// Pure, so it is tested without a device. In `render_target.rs`.
 pub fn live_target_spec(logical_w: f64, logical_h: f64, dpr: f64,
                         quality: RenderQuality, msaa_supported: bool) -> TargetSpec;
 ```
@@ -642,48 +761,92 @@ every refresh costs one comparison.
 
 ## Testing
 
-Same four layers as `design_screen_space_lines.md`, cheapest first. The
-concrete tests are listed in the phase that builds what they test.
+Five layers, cheapest first: the four of `design_screen_space_lines.md`
+plus Dart unit tests for the one piece of Flutter logic. The concrete tests
+are listed in the phase that builds what they test.
 
-1. **Pure functions, CPU** (`tests/renderer/`, and the owning crate's tests
-   for preferences and tessellation). Everything with arithmetic is a pure
-   function: the target specs, the coverage twin (D6), and the bond claim and
-   junction-depth rules (D5).
+1. **Pure functions, CPU** (`crates/atomcad-renderer/tests/renderer/`, and
+   the owning crate's tests for preferences). Everything with arithmetic or
+   a decision is a pure function: the target specs, the coverage twin (D6),
+   when to refine (`live_frame_kind`, D5). One source-text check also lives
+   here: **every mutating `pub fn` on `Renderer` bumps the live generation**
+   (D5). It reads `renderer.rs` the way `shader_test.rs` reads the `.wgsl`
+   files, finds each `pub fn …(&mut self` in `impl Renderer`, and requires
+   its body to call the bump unless it is on a short allowlist (`render`,
+   `render_still`, `render_thumbnail`, `render_image`). A behavioural test
+   can only cover the setters that exist when it is written; this one also
+   catches the next one.
 2. **Shader structure, naga** (`shader_test.rs`): the shaders validate and
-   carry the builtins and constants the design relies on.
-3. **API tests** (`rust/tests/renderer_api/`): the consumers of the viewport
-   size that live in `api`.
-4. **GPU harness** (`renderer_gpu.rs`, `--ignored`): pixel assertions with
-   tolerances and counts, never golden images; byte-identity checks via
-   `ATOMCAD_GPU_DUMP_DIR` dumps taken **before** a change and compared with
-   `cmp` after it. Every existing GPU test must keep passing in every phase,
-   notably the line coverage sums once the live target is multisampled.
+   carry the entry points, builtins and constants the design relies on.
+3. **API tests** (`rust/tests/renderer_api/`). This harness has **no GPU and
+   no `CADInstance`**, so it tests pure api helpers only. Anything that needs
+   a `Renderer` is layer 4, and api logic that should be tested is first
+   split into a pure function (Phase 4 does this for the gadget pick
+   context).
+4. **GPU harness** (`crates/atomcad-renderer/tests/renderer_gpu.rs`,
+   `--ignored`): pixel assertions with tolerances and counts, never golden
+   images; byte-identity checks via `ATOMCAD_GPU_DUMP_DIR` dumps. Every
+   existing GPU test must keep passing in every phase, notably the line
+   coverage sums once the live target is multisampled. Four rules for this
+   design:
+   - **Dumps first.** Each phase starts by dumping the harness from the
+     previous commit; its "byte-identical" checks compare against that.
+   - **Capability skips.** A test that needs 4× MSAA or
+     `MULTISAMPLED_SHADING` and runs on an adapter without it prints so and
+     returns, like the existing no-adapter skip. The fallbacks themselves are
+     covered on the CPU (`live_target_spec`, `live_frame_kind`).
+   - **No timing.** The harness's `try_renderer` switches automatic
+     refinement off (`set_refine_delay(None)`, D5), so the existing tests
+     that call `render` twice and compare stay deterministic however slow
+     the machine is. Refinement tests switch it on with a zero delay; no
+     test sleeps.
+   - **Assert decisions, not only pixels.** `Renderer::live_generation()`
+     and `Renderer::last_frame_kind()` (D5) let a test check *why* a frame
+     looks the way it does (normal, refined or kept image), which pixels
+     alone cannot distinguish when nothing on screen changes.
+5. **Dart unit tests** (`flutter test`, `test/`, no Rust library; not the
+   human-only `integration_test/`). The refinement timer is the only Flutter
+   logic in this design, and if it breaks, every Rust test still passes and
+   the refined frame simply never comes. It is a small class,
+   `RefinementTimer` in `lib/common/`, that `CadViewport` owns; its tests
+   drive it with `testWidgets` and `tester.pump(duration)`.
 
 As in the lines work, each new GPU test is confirmed to **fail with its fix
 removed** before it is trusted; each phase names the mutation to try.
+
+**Not automated, on purpose** (Phase 5's walkthrough): how the texture looks
+in Flutter at a fractional scale (`FilterQuality`), whether the switch to
+the refined frame reads as a pop, whether `REFINE_DELAY` feels right, moving
+the window between monitors, and the `MediaQuery` read that feeds the
+device pixel ratio (one line, only observable on a real display).
 
 ## Phases
 
 Each phase leaves the build green and the app usable. Checks per phase:
 `cargo fmt`, `cargo clippy`, `cargo test -j 4` (the renderer harness and the
 api harnesses explicitly), the GPU harness (`cargo test -p atomcad-renderer
---test renderer_gpu -- --ignored`), and `flutter analyze`. The Flutter smoke
+--test renderer_gpu -- --ignored`), `flutter analyze`, and `flutter test`
+(the Dart unit tests in `test/`; from Phase 3 on). The Flutter smoke
 test is a manual step for the maintainer. Because `flutter run` loads the
 release library, a GUI check needs `cargo build --release` first.
 
 ### Phase 1 — MSAA for the live viewport (meshes anti-aliased; impostors not yet)
 
+- First, as a pure move with no behaviour change: `RenderTarget` into
+  `render_target.rs`, the pipeline constructors into `pipelines.rs` (Where
+  the code goes). The GPU harness dumps before and after the move must be
+  byte-identical.
 - `TargetSpec` and the new `RenderTarget::new`; `sample_count` and
   `msaa_view` on the target (D1). Thumbnail and export targets via
   `TargetSpec::image`; the live one via `TargetSpec::viewport(w, h, 1.0,
-  LIVE_SAMPLE_COUNT)` (the ratio arrives in Phase 3).
+  LIVE_SAMPLE_COUNT)` (the ratio arrives in Phase 4).
 - `PipelineSet`, built twice; `draw_to_target` picks by sample count; the
   adapter check and fallback (D2).
 - The pass and resolve changes (D3).
 - The *Anti-aliasing* preference end to end (D8): `RenderingPreferences`,
   the api twin, the dialog's **Rendering** section, `RenderQuality`,
   `live_target_spec`, `set_render_quality`, and the push on refresh, all
-  with `anti_aliasing` only and no device pixel ratio; Phase 3 adds both.
+  with `anti_aliasing` only and no device pixel ratio; Phase 4 adds both.
   The live viewport request is still today's `set_viewport_size(w, h)`.
   Reference guide: the new section in `doc/reference_guide/ui.md`'s
   Preferences Dialog.
@@ -724,12 +887,12 @@ release library, a GUI check needs `cargo build --release` first.
   `transparent_impostor.wgsl`: derivatives first, widened early-out, sample
   hit tests, shading ray, `sample_mask` output (D4); `SAMPLE_COUNT` set by
   `PipelineSet::new`.
-- The bond–atom junction (D5): the offset and end radii on
-  `BondImpostorVertex` and in `tessellate_bond_impostor_inline`; the claim
-  rule and the junction depth in `bond_impostor.wgsl` only. Both apply only
-  when `SAMPLE_COUNT > 1`: with one sample the claim rule decides exactly
-  what the depth test already decides, so the offscreen path keeps today's
-  code and stays byte-identical.
+- Measure `provide_texture` on the nanobeam, far enough out that atoms are a
+  few pixels across, before and after the phase. D4 shades fragments whose
+  centre misses but a sample hits, and the rasteriser now emits fragments for
+  any covered sample, so the number of shaded impostor fragments grows most
+  in exactly this view. Record the numbers in this document; report back
+  before Phase 3 if the regression is large.
 - Tests (CPU):
   - `impostor_coverage`: the 4× offsets are WebGPU's and are centred (sum
     zero); the single-sample offset is the centre; a sphere hit by every
@@ -738,60 +901,134 @@ release library, a GUI check needs `cargo build --release` first.
     AND = 0), the property D4 rests on; `sample_point` with orthogonal
     derivatives lands on the expected points; the hit tests agree with the
     shading code's intersection on hits, including the cylinder's length
-    clip;
-  - D5: `bond_claims_sample` on rays that hit the cylinder in front of,
-    inside, and behind an end sphere (claimed, not, not); radius 0 never
-    blocks; `bond_junction_depth` is below the atom's depth when the atom is
-    nearer and unchanged otherwise;
-  - bond tessellation (`atomcad-display` tests): the end atoms' effective
-    radii and a double bond's side-cylinder offset are written, and 0 for a
-    ghost or missing end atom.
+    clip.
 - Tests (naga):
   - the three impostor shaders validate, declare `override SAMPLE_COUNT`,
     and have a `sample_mask` builtin in their fragment output;
   - the derivatives are taken before the first `discard` (checked on the
     WGSL source: a `dpdx` after a `discard` is the regression to catch).
 - Tests (GPU):
-  - **sphere silhouette:** the summed coverage of a sphere of radius *r* px
-    is ≈ π r² (within a few percent), for r = 20 and for r = 0.7, where the
-    single-sample render is all-or-nothing;
+  - **sphere silhouette:** the summed coverage of a sphere of radius 20 px is
+    ≈ π r² (within a few percent). For r = 0.7 px a single position is too
+    coarse to compare with π r² (4 samples quantise to 0.25 px² against an
+    area of 1.54 px²): render it at 16 sub-pixel offsets and require the
+    mean to be ≈ π r² within 10 %, and that the offsets do not all give the
+    same coverage (the single-sample render is all-or-nothing);
   - **no seam:** two opaque spheres overlapping in screen space, one in
     front, drawn in both orders: along the front sphere's silhouette over the
     back one, no pixel is closer to the background colour than to either
     sphere's;
   - **bond:** a cylinder's long edges have intermediate pixels; its flat
     ends do not paint outside the clip;
-  - **bond–atom junction:** a bond entering a differently coloured atom,
-    seen obliquely, in both draw orders: along the junction circle there are
-    pixels strictly between the bond's and the atom's colours, and none
-    outside the range between them; also for a double bond's side cylinder;
   - **ghost:** a transparent atom's silhouette has intermediate alpha
     composites, and every pixel of the read-back image is opaque;
   - **gadget impostor:** a guide dot in the gadget pass is anti-aliased;
   - **offscreen unchanged:** the export and thumbnail renders of the fixed
     scene are byte-identical to before the phase.
 
-  Mutations: force the mask to `0b1111` (silhouette, no-seam and ghost tests
-  fail); force the end radii to 0 (junction test fails).
-- Expected: atom and bond silhouettes and the bond–atom junctions smooth in
-  the live view, including at a distance and in orthographic; exports
-  byte-identical.
-- Effort: 3–4 d (the junction is about 1 d of it).
+  Mutation: force the mask to `0b1111` (silhouette, no-seam and ghost tests
+  fail).
+- Expected: atom and bond silhouettes smooth in the live view, including at
+  a distance and in orthographic; bond–atom junctions and sphere contacts
+  still per pixel (Phase 3); exports byte-identical.
+- Effort: 2–3 d.
 
-### Phase 3 — HiDPI
+### Phase 3 — Still-camera refinement
+
+- First, before any other change of the phase: `set_refine_delay`,
+  `live_generation` and `last_frame_kind` (D5), and the GPU harness's
+  `try_renderer` switching automatic refinement off (Testing, layer 4), so
+  the existing GPU tests never see a refined frame.
+- `fs_main_per_sample` in the three impostor shaders (both branches of the
+  transparent one), sharing everything below the ray construction with
+  `fs_main` (D5).
+- `RefinedImpostorPipelines` in the multisampled `PipelineSet`, gated on
+  `DownlevelFlags::MULTISAMPLED_SHADING`; `PassFlags::refined`, which
+  switches the impostor draws of both passes.
+- `live_refinement.rs`: `LiveRefinement`, `LiveFrameKind`,
+  `live_frame_kind`, `REFINE_DELAY`. The generation bumps of D5 (every
+  mutating `pub fn` on `Renderer`, plus `write_view_uniforms(View::Live,
+  ..)`); the background comparison; the call from `Renderer::render`;
+  `render_still`.
+- `provide_texture` returns `APIFrameInfo`; regenerate the bindings;
+  `lib/common/refinement_timer.dart` and its use in `CadViewport` (D5).
+- CLI `capture_screenshot_impl` calls `render_still`.
+- `rust/AGENTS.md`, beside the `PipelineSet` line of Phase 1: a new `pub
+  fn(&mut self)` on `Renderer` bumps the live generation, or the refined
+  image goes stale.
+- Measure the refined frame's `provide_texture` time on a small scene and on
+  the nanobeam; record it here.
+- Reference guide: the *Anti-aliasing* entry in `ui.md` says that a still
+  view sharpens once more after it comes to rest.
+- Tests (CPU):
+  - `live_frame_kind`: every row of D5's table; `refinement_available =
+    false` never gives a refined frame; a generation change after a refined
+    frame gives a normal frame again; a delay of `None` never refines;
+  - **every mutating `pub fn` bumps** (source-text check, Testing layer 1).
+    Mutation: remove the bump from `set_surface_transparency_mode`.
+- Tests (naga):
+  - the three impostor shaders have an `fs_main_per_sample` entry point
+    taking `sample_index`;
+  - Phase 2's derivatives-before-`discard` check covers the new entry point
+    too.
+- Tests (GPU). Refined frames for pixel tests come from `render_still`;
+  tests of the decision set the delay to zero and check `last_frame_kind`.
+  - **bond–atom junction:** a bond entering a differently coloured atom,
+    seen obliquely, refined: along the junction circle there are pixels
+    strictly between the bond's and the atom's colours; the same scene in a
+    normal frame has none (the D4 staircase), which pins down that the
+    refined frame is what fixes it;
+  - **sphere contact:** two overlapping spheres of different colour in
+    space-filling, refined: intermediate pixels along the contact curve;
+  - **refined matches normal away from edges:** for the fixed scene and for
+    a ghost over an opaque atom, pixels not on an impostor edge differ
+    between the refined and the normal frame by at most a couple of levels
+    per channel, and every pixel of the refined frame is opaque. This
+    catches a per-sample entry point that shades or blends differently from
+    `fs_main` (a ghost blended once per sample *and* weighted as if it were
+    the whole pixel, a wrong sample offset), which the edge tests above
+    would not;
+  - **the decision:** with a zero delay, `render` after an upload is
+    `Normal`, the next one `Refined`, the one after that `Kept` with bytes
+    equal to the refined ones; a camera move makes the next one `Normal`;
+  - **every setter invalidates:** each mutating `pub fn` of `Renderer`
+    (mesh upload, camera, ortho mode, surface transparency mode, viewport
+    request, render quality) strictly increases `live_generation()`. The
+    source-text check catches a setter that is missing from this list;
+  - **anti-aliasing off:** with a zero delay, no `render` is ever `Refined`;
+  - **offscreen unchanged:** export and thumbnail byte-identical.
+
+  Mutations: draw the refined frame with the normal pipelines (junction and
+  contact tests fail); in the transparent per-sample entry point, multiply
+  the ghost's alpha by 4 (refined-matches-normal fails).
+- Tests (Dart, `test/refinement_timer_test.dart`): a frame with `refine_in`
+  = 0.15 s fires the callback once after 0.15 s; a second frame at 0.1 s
+  re-arms it so it fires at 0.25 s, not 0.15 s; `None` cancels a pending
+  timer; dispose cancels it. Mutation: arm without cancelling the previous
+  timer (the re-arm test sees two callbacks).
+- Expected: when the view comes to rest, junctions, contacts and ghost
+  junctions turn smooth after `REFINE_DELAY`; moving the camera again shows
+  the D4 frame at once.
+- Effort: 2–2.5 d.
+
+### Phase 4 — HiDPI
 
 - `set_viewport_size(logical_w, logical_h, dpr)` in the api, regenerate the
   bindings, and the Flutter call with `MediaQuery.devicePixelRatioOf`.
-- `set_viewport_request`, `get_viewport_logical_size`, and the consumers in
-  D7's table (gadget pick context, export default size, CLI screenshot).
+- `set_viewport_request`, `viewport_request`, `get_viewport_logical_size`,
+  and the consumers in D7's table (gadget pick context, export default size,
+  CLI screenshot). For the gadget pick context, first split its arithmetic
+  out of `update_gadget_pick_context` into a pure
+  `gadget_pick_context(camera, logical_viewport_height)` in `api_common.rs`,
+  so it can be tested without a `CADInstance` (Testing, layer 3).
 - The *Full display resolution* preference (D8): the second field of
   `RenderingPreferences` and of `RenderQuality`, the ratio in
   `live_target_spec`, the dialog checkbox and its guide entry.
-- Measure `provide_texture` (its return value is already the frame time) at
+- Measure `provide_texture` (`APIFrameInfo::frame_time`) at
   100 % and at the display's own scale, on a small scene and on the
-  nanobeam, with MSAA on. Record the numbers in this document. If the frame
-  time regresses noticeably, do reduction 1 of D7 in this phase and report
-  back before going further.
+  nanobeam, with MSAA on, for a normal and for a refined frame. Record the
+  numbers in this document. If the frame time regresses noticeably, do
+  reduction 1 of D7 in this phase and report back before going further.
 - Tests (CPU):
   - `TargetSpec::viewport`: rounding at 1.25, 1.5 and 2; never below 1×1;
     `pixel_scale` equals the ratio;
@@ -799,34 +1036,42 @@ release library, a GUI check needs `cargo build --release` first.
     preferences;
   - `RenderingPreferences`: `full_display_resolution` defaults to `true`,
     and a preferences JSON with only the Phase 1 field loads with it `true`.
-- Tests (API, `rust/tests/renderer_api/`): `update_gadget_pick_context` uses
-  the logical height at a ratio of 2; `get_viewport_image_size` returns the
-  logical size.
+- Tests (API, `rust/tests/renderer_api/`): `gadget_pick_context` at a
+  logical height of 500 gives the world-per-pixel of a 500 px viewport,
+  whatever the device height.
 - Tests (GPU):
   - **HiDPI:** a live target at ratio 2 has twice the logical size, and a
     2 px line sums to ≈ 4 render pixels of coverage per column;
   - **resolution off:** at ratio 2 the image has the logical size, and
-    toggling the setting off and on again restores the full-size image.
+    toggling the setting off and on again restores the full-size image;
+  - **logical size:** at ratio 2, `get_viewport_logical_size` is the
+    requested logical size and `get_viewport_size` twice it (the export
+    dialog default and the pick context read the first);
+  - **sized capture restores:** at ratio 2, the CLI's sequence (save
+    `viewport_request()`, `set_viewport_request(w, h, 1.0)`, `render_still`,
+    restore) renders `w × h` and leaves the live target at the device size
+    again, still multisampled.
 
   Mutation: pass the logical size as the device size (HiDPI test fails).
 - Effort: 1–1.5 d, plus 0.5 d if reduction 1 is needed (it touches the
   plugin on three platforms).
 
-### Phase 4 — Walkthrough and documentation
+### Phase 5 — Walkthrough and documentation
 
 - Manual GUI walkthrough (maintainer), on the 100 % display and, if
   available, a 150 % or 200 % one: a dense crystal near and far in both
   projections (silhouettes, far-field shimmer while orbiting), a CSG solid's
   edges, an isosurface, ghosts from `xray`, the gizmo and the guide dots,
-  bond–atom junctions close up (single and double bonds), moving the window
-  between monitors of different scale, the `FilterQuality` choice of D7,
-  both preferences toggled on and off while a scene is shown, a thumbnail,
-  and an export compared with the screen.
-- **Decide on still-camera refinement:** look at space-filling contacts
-  between C and H at rest and while orbiting, and record in this document
-  whether the refinement in Future work is worth building.
-- Reference guide: the **Rendering** preferences were documented in Phases 1
-  and 3; check them against the final behaviour. `ui.md` says the exported
+  moving the window between monitors of different scale, the
+  `FilterQuality` choice of D7, both preferences toggled on and off while a
+  scene is shown, a thumbnail, and an export compared with the screen.
+- **The refined frame:** bond–atom junctions close up (single and double
+  bonds) and space-filling C–H contacts, while orbiting and at rest; whether
+  the switch reads as a pop; whether `REFINE_DELAY` feels right (neither
+  refining mid-gesture nor noticeably late); a click right after the camera
+  stops on the nanobeam. Record the chosen delay in this document.
+- Reference guide: the **Rendering** preferences were documented in Phases 1,
+  3 and 4; check them against the final behaviour. `ui.md` says the exported
   image is "always anti-aliased"; that stays true, and it should add that
   the export does not depend on the two preferences.
 - Effort: 0.5 d.
@@ -835,22 +1080,14 @@ release library, a GUI check needs `cargo build --release` first.
 
 All of these build on this design without changing it:
 
-- **Still-camera refinement**, the fallback for the space-filling contacts
-  (D4, *What is anti-aliased and what is not*), built only if the
-  walkthrough asks for it. A third variant of the atom pipelines (and of the
-  transparent one) with its sample-ray inputs declared
-  `@interpolate(perspective, sample)`, so the shader runs once per sample
-  and writes a depth per sample: exact intersections, at 4× the impostor
-  shading cost. The viewport already re-renders on every Flutter frame
-  (`provide_texture` from a persistent frame callback), so the renderer can
-  switch to that variant once the camera and the meshes have been unchanged
-  for a few frames, and back on the next change. Jaggies then exist only
-  while orbiting, where they are hardest to see, and the 4× cost is paid
-  only on frames nobody is waiting for. Risks to judge on screen: a visible
-  pop at the switch, and the cost on the nanobeam if one refined frame is
-  slower than a user's next click.
+- **Exact impostor intersections while moving.** D5 makes them exact only at
+  rest. If the walkthrough finds the moving junctions distracting, the
+  options are a bond shader that knows its end atoms (rejected in D4 for
+  coupling the shaders and covering only one of the cases) or post-process
+  AA (below).
 - **Instanced bond quads.** One instance per bond instead of four vertices
-  would cut bond vertex memory about 4× and more than repay D5's 20 bytes.
+  would cut bond vertex memory about 4×; independent of anti-aliasing, but
+  the obvious next memory saving on the nanobeam.
 - **A GPU path to Flutter.** The CPU readback is what makes device-pixel
   rendering expensive (D7). Sharing a GPU texture with Flutter (a D3D11
   shared handle on Windows, an `IOSurface` on macOS) removes it, but is
@@ -861,4 +1098,4 @@ All of these build on this design without changing it:
   once memory allows, e.g. 4 samples with 1× supersampling for small
   exports.
 - **Post-process AA** (FXAA/SMAA): orthogonal, and only worth it if the
-  space-filling contacts matter and still-camera refinement does not suit.
+  intersections while moving turn out to matter.
