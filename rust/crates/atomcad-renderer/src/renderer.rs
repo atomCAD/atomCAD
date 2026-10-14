@@ -273,10 +273,16 @@ impl Renderer {
 
         let camera = Camera::default_pose(width as f64 / height as f64);
 
-        // Initialize GPU
+        // Initialize GPU. Ask for the high-performance adapter: on a laptop
+        // with both, the default is the integrated GPU, which renders a large
+        // crystal about 5x slower than the discrete one. A machine with only
+        // one adapter gets that one either way.
         let instance = Instance::default();
         let adapter = instance
-            .request_adapter(&RequestAdapterOptions::default())
+            .request_adapter(&RequestAdapterOptions {
+                power_preference: PowerPreference::HighPerformance,
+                ..Default::default()
+            })
             .await
             .expect("Failed to find a suitable adapter");
         // Configure custom limits to support larger vertex buffers for complex atomic models
