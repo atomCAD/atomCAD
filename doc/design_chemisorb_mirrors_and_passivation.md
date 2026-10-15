@@ -1,7 +1,7 @@
 # Design: mirrored bindings and passivated sites in `chemisorb`, clash-aware `passivate`
 
-Status: **draft 2026-10-15; open questions settled by the maintainer the same
-day; not yet reviewed.**
+Status: **reviewed 2026-10-15; ready for implementation.** Phases 1–3 are
+agent work; Phase 4 is the maintainer's.
 
 Three additions, requested by mechadense for a chemist who runs `chemisorb`
 as a brute-force search and wants to be shown, not told, what the pruning
@@ -132,15 +132,19 @@ the right result for a host whose open bond points into something.
   caps on the start structure, and in most seatings the molecule there is
   several Å from where it relaxes to (§8.0), so a skip decided there removes
   H where the molecule *was*, not where it ends up. Every open valence is
-  capped. An H that starts inside the molecule is pushed out by the
-  relaxation. The relaxation can bury an H under the molecule; the walkthrough
-  checks for that (§8.0). Without skips, the H a candidate gets depends only on
+  capped. An H that starts inside the molecule is expected to be pushed out
+  by the relaxation; whether it is sometimes trapped under the molecule
+  instead is what the walkthrough checks (Phase 4). Without skips, the H a candidate gets depends only on
   which sites it uses, which also keeps `unique` and the reference keys
   (§4.4) stable.
 - **D9. The passivating H atoms are tagged `cs_passivant`** in every
-  candidate structure, so an `apply_style` rule can show or hide them. That
-  makes four of the 32 tag names chemisorb reserves; the "inputs that already
-  use more than 29" error becomes "more than 28".
+  candidate structure of a search with the setting on, so an `apply_style`
+  rule can show or hide them. A structure holds at most 32 tag names
+  (`MAX_TAGS`), and chemisorb already writes three (`cs_changed`,
+  `cs_adsorbate`, `cs_local`). With the setting on it writes four, so the
+  inputs may carry at most 28 instead of 29. Inputs over the limit fail the
+  way they do today: `TagError::LimitReached`, reported as an error, never a
+  panic.
 
 ---
 
@@ -158,9 +162,9 @@ let candidate = !pruned && admits(…);
 let parent = !pruned && self.local_phase && depth == GEOMETRIC_LEGS;
 ```
 
-The caller's `extend` gate reads the same `pruned`. The geometric depth cap is
-three legs, so this matters only for consistency, but the two must not
-diverge. `Hypothesis::mirror` keeps the verdict either way, so a candidate
+`found` returns `pruned` where it returns the verdict today, so the caller's
+`extend` gate reads the same value. The geometric depth cap is three legs, so
+this matters only for consistency, but the two must not diverge. `Hypothesis::mirror` keeps the verdict either way, so a candidate
 knows it was mirrored.
 
 Statistics: `pruned_mirror` keeps meaning *pruned* and is 0 with the setting
@@ -170,9 +174,13 @@ whatever the setting.
 
 ### 3.2 Seating a mirrored hypothesis
 
-`Setup::seat` takes the three-leg branch it has today, unless the legs are
-Mirrored; the verdict is a pure function of the legs and the local up, so
-`seat` can recompute it itself. For a Mirrored set of legs:
+A new `Setup::seat_mirrored(steps)` seats a Mirrored set of legs, and `plan`
+calls it instead of `seat` for a Mirrored hypothesis it keeps. `seat` itself
+does not change. Everything downstream (`evaluate`, `replay_start`, the debug
+view) reads the seating stored on the hypothesis and calls `seat` only when
+none is stored. With the setting off, a pruned mirrored row therefore still
+shows the proper Kabsch seating in the debug view, with the body in the
+substrate, which is the picture of why it was pruned. `seat_mirrored`:
 
 1. For each of the three pairs of legs, in sorted leg order, compute the
    two-leg seating that `seat` already does for two legs: align the foot axis
@@ -192,7 +200,7 @@ sorted legs, so "the start geometry is a function of the change set", and
 with it the change-set dedupe, still holds.
 
 `seat` should be split into a placement half (rotation, translation) and a
-finishing half (residual, clashes, moved) so that the mirrored branch reuses
+finishing half (residual, clashes, moved) so that `seat_mirrored` reuses
 both without copying.
 
 **Plan time.** Today a mirrored hypothesis is never seated. With the setting
@@ -216,9 +224,12 @@ guard, follow the sequential design's §4.9 remedy: move per-row seating out of
   saying why. A mirrored row's seated form is the two-leg seating above; its
   relaxed form behaves like any other row's.
 - `unique` needs no change. A mirrored start that relaxes into a proper
-  binding merges into it, and the representative's `copies` counts it. That
-  is the answer to "did the mirrored case find anything new?" The debug tree
-  already marks such a row "copy of rank N".
+  binding merges into it, and the representative's `copies` counts it; the
+  debug tree already marks such a row "copy of rank N". Expect few merges for
+  a rigid adsorbate. Seated on two legs, it usually cannot swing its third
+  foot across, and it ends strained instead. A mirrored candidate that stays
+  unmerged *and* ranks well is the interesting case the option exists to
+  show.
 
 ---
 
@@ -247,8 +258,8 @@ is needed.
 - **`skip_already_passivated` must be `false` here.** A site made by
   deleting a surface H keeps the hydrogen-passivation flag. On mechadense's
   network all 18 sites carry it, so the default options place **no H at
-  all** (measured 2026-10-15, §8). The same goes for the reference's
-  `add_terminators_counted`.
+  all** (measured 2026-10-15). `add_terminators_counted` (§4.4) must not
+  skip flagged hosts either.
 
 ### 4.2 Where it happens
 
@@ -266,7 +277,10 @@ is needed.
 
   At the deepest level, step 1 has no paths that need a state. The candidates
   are relaxed passivated directly, and the dedupe uses the passivated strain.
-  With the setting off, a level is unchanged: one batch.
+  This asymmetry is deliberate: above the deepest level the winning path
+  must be the one whose bare state the next level grows from, while at the
+  deepest level nothing grows further. With the setting off, a level is
+  unchanged: one batch.
 - **Replay** (`replay`, `replay_start`). The relaxed form of a candidate's row
   is the passivated relaxation; a parent-only row's is the bare one. A row
   that is both shows the passivated relaxation, and its hover says the deeper
@@ -278,14 +292,22 @@ is needed.
 ### 4.3 Counting and budget
 
 A hypothesis that is a candidate *and* a parent costs two relaxations when
-`passivate_sites` is on. `PlanStats` gains `twice`, the number of such
-hypotheses in the geometric phase, and the invariant becomes
+`passivate_sites` is on. Today `PlanStats` counts such a hypothesis once, in
+`candidates` (`parents` counts parent-only hypotheses), and `to_relax` is a
+list of hypotheses. With the setting on:
 
-`candidates + parents + twice == to_relax + pruned_clash` (untruncated).
+- `PlanStats` gains `twice`: the queued (not clash-pruned) hypotheses that
+  are both candidate and parent.
+- `PlanStats::to_relax` counts **relaxations**: the queued hypotheses plus
+  `twice`. The plan's list of queued hypotheses stays a list of hypotheses.
+- The invariant becomes
+  `candidates + parents + twice == to_relax + pruned_clash` (untruncated).
+- `budget` counts relaxations. A hypothesis is queued only if all of its
+  relaxations fit in what is left; otherwise the plan is truncated there.
+  A hypothesis is never half relaxed.
 
 The count next to Run already shows `to_relax`, so it is correct by
-construction. `budget` counts relaxations, so both of a hypothesis's
-relaxations spend it. In the local phase, `LevelStats::to_relax` counts both
+construction. In the local phase, `LevelStats::to_relax` counts both
 batches. The panel's "+ local phase" note is unchanged. Reference relaxations
 (§4.4) are not counted against the budget, as the separated reference's two
 relaxations are not counted today, but the progress total includes them.
@@ -320,13 +342,28 @@ candidate reached a key first, and that order varies with the thread count.
 With no clash rule (D8), the key depends only on which sites the candidate
 uses and what valence each has left, so it varies between candidates only
 because they use different sites. `evaluate` therefore keeps the reference
-relaxations of one search in a map from key to `(energy, StrainTerms)`,
-filled the first time a key is needed. This is not a speculative cache.
-Without it, one search runs one reference relaxation per candidate instead of
-one per key: for mechadense's run, 2,658 instead of at most 816 (one per
-unordered site triple). The map lives on
+relaxations of one search in a map from key to `(energy, StrainTerms)`.
+This is not a speculative cache. Without it, one search runs one reference
+relaxation per candidate instead of one per key: for mechadense's run, 2,658
+instead of at most 816 (one per unordered site triple). The map lives on
 `SearchReport`, because `replay` needs the same references. It is small: two
 numbers and a short list per entry.
+
+**The references are relaxed before the candidates that need them.** A
+candidate's strain is needed the moment its relaxation finishes (`keep_best`
+applies `top_n` and the window while relaxing), so the map must already hold
+its key. The key is cheap to compute: passivate the start structure, read
+`(host, count)`, and drop the structure. So:
+
+1. Before the geometric phase's batch, compute the key of every queued
+   candidate. Collect the distinct keys, sorted.
+2. Relax those references in parallel and fill the map.
+3. Relax the candidates.
+
+Each local level does the same for its kept candidates before its
+passivated batch, relaxing only keys not already in the map. No thread waits
+on another for a reference, nothing is relaxed twice, and the progress total
+is known before each batch starts.
 
 `SearchReport::reference_energy` and `reference_terms` stay as the bare
 reference and are used by every bare relaxation. A passivated candidate's
@@ -413,17 +450,19 @@ Build §5: the `clash` option and `skipped` count in
 twin, the panel, the text format, and the `passivate` section of
 `doc/reference_guide/nodes/atomic.md`.
 
-Tests (`hydrogen_passivation_test.rs`, the node's test file in
-`structure_designer`):
+Tests (`hydrogen_passivation_test.rs`, `passivate_node_test.rs`):
 
 - `clash: None` is bit-identical to today on every existing passivation
   fixture: same atoms, positions and ids.
 - Si(100) 2×1 monohydride and Si(111) 1×1: **zero skipped** at the default
   factor.
 - Unreconstructed Si(100) 1×1 dihydride and C(100) 1×1 dihydride: skipped
-  > 0, and after the pass no two non-excluded atoms are inside the rule. Run
-  this check independently of the implementation: a brute-force O(n²) scan
-  over the output.
+  > 0, and the output is checked by a brute-force O(n²) oracle written
+  independently of the implementation, in both directions:
+  - *Sound:* no two non-excluded atoms are inside the rule.
+  - *Not over-eager:* every skipped slot, added alone to the output, would
+    clash with something in it. Without this half, a pass that skips every
+    terminator would pass the test.
 - Greedy order: of a clashing pair, the terminator on the lower-id host is
   kept; renumbering the hosts swaps which one survives.
 - The 1–3 exclusion: a methyl-terminated carbon chain passivates fully at the
@@ -431,28 +470,32 @@ Tests (`hydrogen_passivation_test.rs`, the node's test file in
 - A terminator that would sit inside an unrelated molecule placed above the
   surface is skipped; moving the molecule away restores it.
 - Node: serde-default loading of an old `{}` / `{"element":1}` payload; a
-  non-positive factor is an error; the round-trip corpus stays a no-op.
+  non-positive factor is an error; both properties round-trip through the
+  text format and `.cnnd` when `skip_clashes` is on, and nothing is written
+  when it is off; the round-trip corpus stays a no-op.
 
 Record the measured nearest-pair distances of the four surface fixtures in
-this document (§8), and adjust the default factor if 0.7 does not separate
-them.
+this document (a new §8.1), and adjust the default factor if 0.7 does not
+separate them.
 
 ### Phase 2 — `include_mirrored`
 
-Build §3: the setting, the `pruned` gate, `mirrored_kept`, the mirrored
-seating, the candidate field, the panel and debug-view changes, the
+Build §3: the setting, the `pruned` gate, `mirrored_kept`, `seat_mirrored`, the candidate field, the panel and debug-view changes, the
 fingerprint, the text format, the reference guide (*How a binding is built*,
 *Properties*, the statistics list) and the crystolecule `AGENTS.md` rule
 "Mirror check vs clash filter" ("pruned always" becomes "pruned unless
 `include_mirrored`").
 
 Tests (`chemisorption_sequential_test.rs`, `…_relax_test.rs`,
-`…_debug_test.rs`):
+`…_debug_test.rs`, `chemisorb_node_test.rs`):
 
 - Off: plan, stats and snapshots unchanged (the existing golden and insta
   tests are the check).
-- On: `to_relax(on) == to_relax(off) + mirrored_kept` (clash filter off);
-  `pruned_mirror == 0`; `pruned_mirror(off) == mirrored_kept(on)`.
+- On: `pruned_mirror == 0` and `pruned_mirror(off) == mirrored_kept(on)`.
+  `to_relax(on) == to_relax(off) + mirrored_kept` holds only when every
+  three-leg hypothesis is relaxed, so the fixture sets that up: clash filter
+  off, no `formed_bonds` / `bond_inventory` filter that rejects three legs,
+  and not truncated.
 - The oracle (§11.1 of the sequential design) gains the setting: with it on,
   every three-leg assignment within the shells is a hypothesis, and the
   count equals the naive enumeration's.
@@ -463,25 +506,44 @@ Tests (`chemisorption_sequential_test.rs`, `…_relax_test.rs`,
 - A tripod relaxation from a mirrored start converges or is marked
   unconverged, never errors. Its `mirrored` flag is set.
 - An achiral tripod with three equivalent feet: every mirrored candidate is
-  merged by `unique` (`rigid_mirror`) into a proper one. This is the
-  "relabelled proper binding" case of D2, checked end to end.
+  either merged by `unique` into a proper one, or its strain is above the
+  best proper candidate's in the same inventory. For an achiral molecule a
+  mirrored start cannot reach a binding the proper search lacks, so a
+  mirrored candidate that ranks first and stays unmerged means a bug. The
+  test does **not** require every one to merge: a rigid tripod seated on two
+  legs usually cannot swing its third foot across, and it ends strained
+  instead.
+- Replay and debug view: with the setting on, a mirrored relaxed row's
+  `replay` reproduces its recorded strain, and its seated form is the
+  `seat_mirrored` seating. With it off, a pruned mirrored row's seated form
+  is unchanged (the proper Kabsch seating).
 - Plan time with the setting on, under the existing timing guard.
+- Node: the property round-trips through the text format and `.cnnd` and is
+  written only when true; a node saved without it loads with it off; toggling
+  it makes a stored result stale and undo restores it; `mirrored` is the
+  record's last field so far (appended).
 
 ### Phase 3 — `passivate_sites`
 
 Build §4: the setting; the capped-host rule; passivated candidate
-relaxations in both phases; the two-batch local level; the per-host-set
-reference map; replay; `twice`; the candidate fields and `cs_passivant`; the
+relaxations in both phases; the two-batch local level; the per-key
+reference map, relaxed before each batch; replay; `twice`; the candidate fields and `cs_passivant`; the
 panel; the fingerprint; the text format; the reference guide (*Properties*,
 *How candidates are ranked*, the output-record list, the tag paragraph);
 `AGENTS.md` (*What is relaxed* gains D5; the tag count).
 
 Tests (`chemisorption_sequential_relax_test.rs`, `…_local_test.rs`,
-`…_debug_test.rs`, `chemisorption_distinct_test.rs`):
+`…_debug_test.rs`, `chemisorption_distinct_test.rs`,
+`chemisorb_node_test.rs`):
 
 - Off: unchanged (golden + snapshots).
 - On, geometric phase: after the pass, every site's open valences are
   capped, with no H beyond them; atom count = combined + `passivants`.
+- Nothing to cap: on a fixture where every candidate uses all of its sites'
+  valence (e.g. two sites, a two-legged adsorbate, `formed_bonds = 2`), the
+  setting changes nothing. The same candidates, structures and strains come
+  out with it on and off, and `passivants == 0`. This metamorphic check pins
+  that the passivated path and its reference reduce to the bare ones.
 - Sites made by deleting H keep the hydrogen-passivation flag and are still
   capped (§4.1). Build the fixture with `atom_edit` H deletions, as
   mechadense's network does.
@@ -501,21 +563,40 @@ Tests (`chemisorption_sequential_relax_test.rs`, `…_local_test.rs`,
 - `twice`: a four-footed fixture with `formed_bonds` unset has `twice > 0`
   and runs exactly `to_relax` relaxations; with `formed_bonds = 4`, `twice
   == 0`.
+- Budget counts relaxations: for every budget from 0 to the untruncated
+  relaxation count, the relaxations run never exceed the budget, no
+  hypothesis is relaxed only once when it needs two, and the plan is marked
+  truncated exactly when the budget is below the untruncated count.
+- References are relaxed up front: the reference map holds exactly one entry
+  per distinct key among the relaxed candidates, and the progress total
+  announced before a batch equals the relaxations that batch runs,
+  references included.
 - Local phase: the frontier positions with the setting on equal those with
   it off (states are bare); the deepest-level dedupe uses passivated strain.
 - Replay: every relaxed row's `replay` reproduces the recorded strain with
   the setting on (the existing replay-equals-search test, run in both
   settings).
-- Tags: `cs_passivant` is on exactly the placed H; inputs with 29 tag names
-  are now an error.
+- Tags: `cs_passivant` is on exactly the placed H. With the setting on,
+  inputs carrying 29 tag names give the tag-limit error, not a panic (the
+  existing `the_tag_limit_is_an_error_not_a_panic`, adjusted by one). With
+  the setting off, 29 still works.
 - Determinism across thread counts with the setting on (the existing thread
   test, run in both settings).
+- `unique` still merges: the existing "merges = the slab's site orbits" test
+  in `chemisorption_distinct_test.rs`, run with the setting on. The passivant
+  H are part of the compared cluster, so this pins that symmetric bindings
+  receive symmetric H.
+- Node: the property round-trips through the text format and `.cnnd` and is
+  written only when true; a node saved without it loads with it off; toggling
+  it makes a stored result stale; `passivants` is appended after `mirrored`.
 
 ### Phase 4 — Walkthrough (maintainer, by hand)
 
 On mechadense's network: run with `include_mirrored` on and read the
 `mirr.` rows and their merges. Run with `passivate_sites` on and look at the
-`cs_passivant` H around a few bindings. On a dihydride surface, compare
+`cs_passivant` H around a few bindings, in particular the best-fitting ones
+that start with an H inside the tool (§8.0): it should be pushed out, not
+trapped under the molecule. On a dihydride surface, compare
 `passivate` with and without `skip_clashes`. Not an agent task; the Flutter
 smoke test stays a manual step.
 
@@ -567,17 +648,16 @@ candidate, 39,870 in all), and for each H recorded the smallest
   them naturally, because the start geometry is far from where these
   candidates end up.
 
-**Verdict: 0.7 is a sound default for this use case.** Over 98 % of capping H
-are never near the cut. The one natural gap in the data (0.4–0.9, among the
-seatings that resemble a binding) contains 0.7. In UFF terms, a contact at
-0.7 of the van der Waals sum costs roughly 15–30 kcal/mol before relaxing
-(H–C, H–O, H–H), large but repairable; contacts below about 0.5 are
-overlaps that relaxation cannot repair sensibly.
+**What this means for the factor.** The one natural gap in the data
+(0.4–0.9, among the seatings that resemble a binding) contains 0.7, so 0.7
+stays the proposed default for `passivate`. In UFF terms, a contact at 0.7 of
+the van der Waals sum costs roughly 15–30 kcal/mol before relaxing (H–C,
+H–O, H–H), large but repairable. Contacts below about 0.5 are overlaps that
+relaxation cannot repair sensibly.
 
-What the factor cannot fix is the poorly fitting majority. There the skip is
-decided on a rigid start that is several Å away from where the relaxation
-goes, so an H may be skipped at a spot the relaxed molecule no longer
-covers, or kept where it later ends up crowded. If the walkthrough shows
-this matters, the remedy is a different design, not a different factor:
-relax bare, cap on the relaxed geometry, and relax again, at twice the cost.
-Not part of this design; recorded so the walkthrough looks for it.
+**What this means for `chemisorb`** (D8). For the poorly fitting majority,
+no factor helps. A skip there is decided on a rigid start several Å from
+where the relaxation goes, so it removes H where the molecule *was*. That is
+why `passivate_sites` caps everything. If the walkthrough shows trapped H
+matter, the remedy is a different design, not a factor: relax bare, cap on
+the relaxed geometry, and relax again, at twice the cost.
