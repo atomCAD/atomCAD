@@ -46,6 +46,11 @@ mod render_target_test;
 #[path = "renderer/shader_test.rs"]
 mod shader_test;
 
+// Depth perception, Phase 1: the per-pass shading uniform
+// (doc/design_depth_perception.md D2, D3).
+#[path = "renderer/shading_uniform_test.rs"]
+mod shading_uniform_test;
+
 // Screen-space lines, Phase 2: the instanced `LineMesh`, the line blend state
 // and the Rust twins of `line_mesh.wgsl` (doc/design_screen_space_lines.md
 // D1, D4, D6, D7).

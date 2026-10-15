@@ -45,6 +45,52 @@ pub fn without_per_sample_shading(source: &str) -> &str {
         .map_or(source, |at| &source[..at])
 }
 
+/// The marker in each lit shader where [`LIGHTING_MODULE`] is inserted
+/// (`doc/design_depth_perception.md` D1).
+pub const LIGHTING_MARKER: &str = "// ---- lighting ----";
+
+/// The lighting shared by the lit shaders (`lighting.wgsl`): the
+/// `ShadingUniform`, the PBR helpers, `light_surface` and `to_display`. It
+/// reads the host's `camera` without declaring it, so it compiles only as
+/// part of a host ([`compose_lit_shader`]).
+pub const LIGHTING_MODULE: &str = include_str!("lighting.wgsl");
+
+/// The lit shaders, by file name: the ones composed with
+/// [`LIGHTING_MODULE`].
+pub const LIT_SHADERS: [&str; 4] = [
+    "atom_impostor.wgsl",
+    "bond_impostor.wgsl",
+    "mesh.wgsl",
+    "transparent_impostor.wgsl",
+];
+
+/// `host` with [`LIGHTING_MODULE`] inserted at its [`LIGHTING_MARKER`]
+/// (`doc/design_depth_perception.md` D1): the host's header (its uniform
+/// declarations, which the module reads), then the module, then the rest of
+/// the host, marker included. WGSL has no `#include`; this is the one
+/// composition step, and what `Shaders::new` compiles. Run it before
+/// [`without_per_sample_shading`], whose marker is in the host's tail.
+///
+/// # Panics
+///
+/// When `host` does not contain the marker exactly once: a lit shader that
+/// lost it would otherwise fail to compile only on the GPU.
+pub fn compose_lit_shader(host: &str) -> String {
+    let markers = host.matches(LIGHTING_MARKER).count();
+    assert_eq!(
+        markers, 1,
+        "a lit shader must contain `{LIGHTING_MARKER}` exactly once, found {markers}"
+    );
+    let at = host.find(LIGHTING_MARKER).expect("counted above");
+    let (header, rest) = host.split_at(at);
+    let mut composed = String::with_capacity(host.len() + LIGHTING_MODULE.len() + 1);
+    composed.push_str(header);
+    composed.push_str(LIGHTING_MODULE);
+    composed.push('\n');
+    composed.push_str(rest);
+    composed
+}
+
 impl Shaders {
     /// `per_sample_shading`: whether the adapter has
     /// `DownlevelFlags::MULTISAMPLED_SHADING`. Without it the impostor shaders
@@ -56,18 +102,22 @@ impl Shaders {
                 source: ShaderSource::Wgsl(source.into()),
             })
         };
-        let impostor = |label: &str, source: &'static str| {
+        let impostor = |label: &str, host: &str| {
+            let source = compose_lit_shader(host);
             module(
                 label,
                 if per_sample_shading {
-                    source
+                    &source
                 } else {
-                    without_per_sample_shading(source)
+                    without_per_sample_shading(&source)
                 },
             )
         };
         Self {
-            triangle: module("Triangle Shader", include_str!("mesh.wgsl")),
+            triangle: module(
+                "Triangle Shader",
+                &compose_lit_shader(include_str!("mesh.wgsl")),
+            ),
             line: module("Line Shader", include_str!("line_mesh.wgsl")),
             atom_impostor: impostor("Atom Impostor Shader", include_str!("atom_impostor.wgsl")),
             bond_impostor: impostor("Bond Impostor Shader", include_str!("bond_impostor.wgsl")),

@@ -1,5 +1,3 @@
-const PI: f32 = 3.14159265359;
-
 struct CameraUniform {
   view_proj: mat4x4<f32>,
   view_matrix: mat4x4<f32>,
@@ -21,6 +19,10 @@ struct ModelUniform {
 @group(1) @binding(0)
 var<uniform> model: ModelUniform;
 
+// ---- lighting ----
+// `lighting.wgsl` is inserted here (`pipelines::compose_lit_shader`):
+// `camera_backward`, `camera_view_vector`, `light_surface`, `to_display`.
+
 struct VertexInput {
     @location(0) position: vec3<f32>,
     @location(1) normal: vec3<f32>,
@@ -41,35 +43,6 @@ struct VertexOutput {
     @location(4) metallic: f32,
     @location(5) alpha: f32,
 };
-
-// Helper functions for PBR
-fn fresnel_schlick(cos_theta: f32, f0: vec3<f32>) -> vec3<f32> {
-    return f0 + (1.0 - f0) * pow(1.0 - cos_theta, 5.0);
-}
-
-fn distribution_ggx(N: vec3<f32>, H: vec3<f32>, roughness: f32) -> f32 {
-    let a = roughness * roughness;
-    let a2 = a * a;
-    let NdotH = max(dot(N, H), 0.0);
-    let NdotH2 = NdotH * NdotH;
-
-    let num = a2;
-    let denom = (NdotH2 * (a2 - 1.0) + 1.0);
-    return num / (PI * denom * denom);
-}
-
-fn geometry_schlick_ggx(NdotV: f32, roughness: f32) -> f32 {
-    let k = (roughness + 1.0) * (roughness + 1.0) / 8.0;
-    return NdotV / (NdotV * (1.0 - k) + k);
-}
-
-fn geometry_smith(N: vec3<f32>, V: vec3<f32>, L: vec3<f32>, roughness: f32) -> f32 {
-    let NdotV = max(dot(N, V), 0.0);
-    let NdotL = max(dot(N, L), 0.0);
-    let ggx2 = geometry_schlick_ggx(NdotV, roughness);
-    let ggx1 = geometry_schlick_ggx(NdotL, roughness);
-    return ggx1 * ggx2;
-}
 
 // Vertex shader
 
@@ -95,51 +68,20 @@ fn vs_main(input: VertexInput) -> VertexOutput {
 
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
-    let N = normalize(input.normal);
+    // A local `V`, for Phase 1 of `doc/design_depth_perception.md` only: the
+    // eye direction in both projections, which is wrong in orthographic but
+    // is what this shader has always used, so the shared lighting changes no
+    // pixel. Phase 2 calls `light_surface`, whose `V` is `camera_view_vector`
+    // (D1).
     let V = normalize(camera.camera_position - input.world_position);
-    let L = normalize(-camera.head_light_dir);
-    let H = normalize(V + L);
-
-    // Base reflectivity for metallic/non-metallic materials
-    let f0 = mix(vec3<f32>(0.04), input.albedo, input.metallic);
-
-    // Fresnel term
-    let F = fresnel_schlick(max(dot(H, V), 0.0), f0);
-
-    // Normal Distribution Function (NDF)
-    let D = distribution_ggx(N, H, input.roughness);
-
-    // Geometry term
-    let G = geometry_smith(N, V, L, input.roughness);
-
-    // BRDF
-    let numerator = D * G * F;
-    let denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.001;
-    let specular = numerator / denominator;
-
-    // Diffuse term (Lambertian reflection)
-    let k_d = (vec3<f32>(1.0) - F) * (1.0 - input.metallic);
-    let diffuse = k_d * input.albedo / PI;
-
-    let NdotL = max(dot(N, L), 0.0);
-    let light_color = vec3<f32>(2.0);
-    let light_contribution = light_color * NdotL;
-
-    // Diffuse ambient term (non-metallic contribution)
-    let ambient_light_color: vec3<f32> = vec3<f32>(0.2); // Ambient light color
-    let ambient_diffuse = ambient_light_color * input.albedo;
-
-    // Specular ambient term (reflective contribution)
-    let ambient_specular = ambient_light_color * fresnel_schlick(max(dot(V, N), 0.0), f0);
-
-    // Blend ambient terms based on the material's metallic property
-    let ambient = mix(ambient_diffuse, ambient_specular, input.metallic);
-
-    var color = light_contribution * (diffuse + specular) + ambient;
-
-    // Tone mapping and gamma correction
-    color = color / (color + vec3(1.0));
-    color = pow(color, vec3(1.0 / 2.2));
+    let color = to_display(light_surface_from(
+        V,
+        input.normal,
+        input.albedo,
+        input.roughness,
+        input.metallic,
+        FULLY_EXPOSED,
+    ));
 
     // Non-premultiplied source-over, matching both existing transparent
     // pipelines. Opaque meshes carry `alpha == 1.0` and are unchanged.

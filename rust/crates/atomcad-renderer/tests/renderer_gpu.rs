@@ -14,6 +14,12 @@
 // Setting `ATOMCAD_GPU_DUMP_DIR` writes every image a test renders into that
 // directory as raw bytes, so two builds can be compared byte for byte (the
 // "pixel-identical" check of a phase that must not change the output).
+//
+// Setting `ATOMCAD_GPU_COMPARE_DIR` makes that comparison automatic
+// (`doc/design_depth_perception.md`, Testing layer 4): every image is also
+// read back from `<dir>/<name>.raw`, a dump of an earlier build on the same
+// machine, and must match it within `GPU_COMPARE_TOLERANCE` per channel. The
+// reference is a local dump, never a committed golden image.
 
 use atomcad_renderer::atom_impostor_mesh::AtomImpostorMesh;
 use atomcad_renderer::bond_impostor_mesh::BondImpostorMesh;
@@ -58,12 +64,55 @@ fn try_renderer(width: u32, height: u32) -> Option<Renderer> {
     Some(renderer)
 }
 
-/// Writes `pixels` to `$ATOMCAD_GPU_DUMP_DIR/<name>.raw` when the variable is
-/// set; does nothing otherwise.
+/// The largest per-channel difference `ATOMCAD_GPU_COMPARE_DIR` accepts
+/// against the reference dump.
+const GPU_COMPARE_TOLERANCE: u8 = 0;
+
+/// Writes `pixels` to `$ATOMCAD_GPU_DUMP_DIR/<name>.raw` when that variable is
+/// set, and compares them with `$ATOMCAD_GPU_COMPARE_DIR/<name>.raw` when that
+/// one is: same length, and no channel more than [`GPU_COMPARE_TOLERANCE`]
+/// apart. An image the reference directory lacks (a test newer than the
+/// dump) is reported and skipped. Does nothing when neither is set.
 fn dump(name: &str, pixels: &[u8]) {
     if let Ok(dir) = std::env::var("ATOMCAD_GPU_DUMP_DIR") {
         let path = std::path::Path::new(&dir).join(format!("{name}.raw"));
         std::fs::write(&path, pixels).expect("write GPU dump");
+    }
+    if let Ok(dir) = std::env::var("ATOMCAD_GPU_COMPARE_DIR") {
+        let path = std::path::Path::new(&dir).join(format!("{name}.raw"));
+        let Ok(reference) = std::fs::read(&path) else {
+            println!(
+                "renderer_gpu: no reference {}, not compared",
+                path.display()
+            );
+            return;
+        };
+        assert_eq!(
+            pixels.len(),
+            reference.len(),
+            "{name}: size differs from the reference"
+        );
+        let (worst, at) = pixels
+            .iter()
+            .zip(&reference)
+            .enumerate()
+            .map(|(i, (a, b))| (a.abs_diff(*b), i))
+            .max()
+            .unwrap_or((0, 0));
+        let differing = pixels
+            .chunks_exact(4)
+            .zip(reference.chunks_exact(4))
+            .filter(|(a, b)| a != b)
+            .count();
+        // Written as an excess, not `worst <= tolerance`: with a tolerance
+        // of 0 clippy rejects that comparison as always true or false.
+        assert_eq!(
+            worst.saturating_sub(GPU_COMPARE_TOLERANCE),
+            0,
+            "{name}: differs from the reference by {worst} at byte {at} \
+             (pixel {}), {differing} pixels differ",
+            at / 4
+        );
     }
 }
 
@@ -1912,4 +1961,244 @@ fn a_sized_capture_at_ratio_2_renders_its_size_and_restores_the_live_target() {
     }
     let after = renderer.render(BACKGROUND_RGB);
     assert_eq!(before, after, "the sized capture disturbed the live view");
+}
+
+// ---- Depth perception, Phase 1 (doc/design_depth_perception.md) -----------
+//
+// The lit-pipelines scene (Testing layer 4): every lit pipeline, one image
+// per pipeline and variant, so a later phase that changes one of them on
+// purpose can exempt that image without losing the comparison on the rest.
+// It exists for `ATOMCAD_GPU_COMPARE_DIR`: the shading refactor of Phase 1
+// must leave every one of these images unchanged.
+
+use atomcad_renderer::transparent_surface_mesh::SurfaceComponentRange;
+
+const LIGHT_BACKGROUND: [u8; 3] = [235, 235, 235];
+const DARK_BACKGROUND: [u8; 3] = [30, 30, 30];
+
+/// The content of one lit-pipelines image.
+struct LitScene {
+    main: Mesh,
+    atoms: AtomImpostorMesh,
+    bonds: BondImpostorMesh,
+    ghosts: TransparentImpostorMesh,
+    surfaces: TransparentSurfaceMesh,
+    gadget_atoms: AtomImpostorMesh,
+}
+
+impl LitScene {
+    fn empty() -> Self {
+        Self {
+            main: Mesh::new(),
+            atoms: AtomImpostorMesh::new(),
+            bonds: BondImpostorMesh::new(),
+            ghosts: TransparentImpostorMesh::new(),
+            surfaces: TransparentSurfaceMesh::new(),
+            gadget_atoms: AtomImpostorMesh::new(),
+        }
+    }
+
+    fn upload(&self, renderer: &mut Renderer) {
+        renderer.update_all_gpu_meshes(
+            &Mesh::new(),
+            &LineMesh::new(),
+            &self.main,
+            &LineMesh::new(),
+            &LineMesh::new(),
+            &self.atoms,
+            &self.bonds,
+            &self.ghosts,
+            &self.surfaces,
+            &LabelMesh::new(),
+            &self.gadget_atoms,
+            &BondImpostorMesh::new(),
+            true,
+            Some((1, "Main".to_string())),
+        );
+    }
+}
+
+/// An axis-aligned cube of half-size `half` around the origin, one flat
+/// normal per face, every vertex at opacity `alpha`.
+fn cube(half: f32, albedo: Vec3, alpha: f32) -> Mesh {
+    let mut mesh = Mesh::new();
+    let material = Material::new(&albedo, 0.5, 0.0);
+    for normal in [
+        Vec3::X,
+        Vec3::NEG_X,
+        Vec3::Y,
+        Vec3::NEG_Y,
+        Vec3::Z,
+        Vec3::NEG_Z,
+    ] {
+        // `u × v = normal`, so the corners run counter-clockwise seen from
+        // outside, the front face the triangle pipeline keeps.
+        let u = normal.any_orthonormal_vector();
+        let v = normal.cross(u);
+        let centre = normal * half;
+        let corners = [
+            centre + (-u - v) * half,
+            centre + (u - v) * half,
+            centre + (u + v) * half,
+            centre + (-u + v) * half,
+        ];
+        let first = mesh.vertices.len() as u32;
+        for corner in &corners {
+            mesh.add_vertex(Vertex::new_translucent(corner, &normal, &material, alpha));
+        }
+        mesh.add_quad(first, first + 1, first + 2, first + 3);
+    }
+    mesh
+}
+
+/// Every lit pipeline, by name, each alone in its scene: the opaque
+/// triangle mesh, the atom impostor (plain, metallic, selected and frozen,
+/// the last two with their rims), the bond impostor, the transparent atom
+/// and bond impostors, the transparent isosurface and a gadget-pass atom.
+fn lit_pipeline_scenes() -> Vec<(&'static str, LitScene)> {
+    let atom = |roughness: f32, metallic: f32, rim: [f32; 4]| {
+        let mut atoms = AtomImpostorMesh::new();
+        atoms.add_atom_quad(
+            &Vec3::ZERO,
+            1.5,
+            &[0.2, 0.5, 0.9],
+            roughness,
+            metallic,
+            &rim,
+        );
+        LitScene {
+            atoms,
+            ..LitScene::empty()
+        }
+    };
+    let mut scenes = vec![
+        (
+            "mesh",
+            LitScene {
+                main: cube(1.2, Vec3::new(0.8, 0.3, 0.2), 1.0),
+                ..LitScene::empty()
+            },
+        ),
+        ("atom", atom(0.5, 0.0, [0.0; 4])),
+        ("atom_metallic", atom(0.3, 1.0, [0.0; 4])),
+        ("atom_selected", atom(0.5, 0.0, [1.0, 0.5, 0.0, 1.0])),
+        ("atom_frozen", atom(0.5, 0.0, [0.0, 0.8, 1.0, 1.0])),
+    ];
+
+    let bond_start = Vec3::new(-2.0, -0.5, 0.0);
+    let bond_end = Vec3::new(2.0, 0.5, 0.0);
+    let mut bonds = BondImpostorMesh::new();
+    bonds.add_bond_with_positions(&bond_start, &bond_end, 0.5, &[0.7, 0.7, 0.7]);
+    scenes.push((
+        "bond",
+        LitScene {
+            bonds,
+            ..LitScene::empty()
+        },
+    ));
+
+    let ghost_colour = [0.9, 0.6, 0.2];
+    let mut ghost_atom = TransparentImpostorMesh::new();
+    ghost_atom.add_atom_quad(&Vec3::ZERO, 1.5, &ghost_colour, 0.5, 0.0, &[0.0; 4], 0.5);
+    scenes.push((
+        "ghost_atom",
+        LitScene {
+            ghosts: ghost_atom,
+            ..LitScene::empty()
+        },
+    ));
+
+    let mut ghost_bond = TransparentImpostorMesh::new();
+    ghost_bond.add_bond_quad(&bond_start, &bond_end, 0.5, &ghost_colour, 0.5);
+    scenes.push((
+        "ghost_bond",
+        LitScene {
+            ghosts: ghost_bond,
+            ..LitScene::empty()
+        },
+    ));
+
+    let surface = cube(1.2, Vec3::new(0.3, 0.8, 0.4), 0.5);
+    let index_count = surface.indices.len() as u32;
+    scenes.push((
+        "surface",
+        LitScene {
+            surfaces: TransparentSurfaceMesh {
+                mesh: surface,
+                components: vec![SurfaceComponentRange {
+                    first_index: 0,
+                    index_count,
+                    centroid: Vec3::ZERO,
+                }],
+            },
+            ..LitScene::empty()
+        },
+    ));
+
+    let mut gadget_atoms = AtomImpostorMesh::new();
+    gadget_atoms.add_atom_quad(&Vec3::ZERO, 1.0, &[0.9, 0.9, 0.2], 0.5, 0.0, &[0.0; 4]);
+    scenes.push((
+        "gadget_atom",
+        LitScene {
+            gadget_atoms,
+            ..LitScene::empty()
+        },
+    ));
+    scenes
+}
+
+/// Every lit pipeline, in perspective and orthographic, with MSAA off, on,
+/// and on with the refined frame's per-sample entry points, on a light and a
+/// dark background: one dumped image each, named
+/// `lit_<pipeline>_<projection>_<sampling>_<background>`. Variants the
+/// adapter cannot draw are skipped. Each image must show its content.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn lit_pipelines_scene() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    let mut images = 0;
+    for (pipeline, scene) in lit_pipeline_scenes() {
+        scene.upload(&mut renderer);
+        for orthographic in [false, true] {
+            renderer.set_orthographic_mode(orthographic);
+            renderer.set_ortho_half_height(3.5);
+            // Oblique, so the cube shows three faces and every sphere a range
+            // of normals.
+            renderer.move_camera(
+                &DVec3::new(5.0, -10.0, 8.0),
+                &DVec3::ZERO,
+                &DVec3::new(0.0, 0.0, 1.0),
+            );
+            let projection = if orthographic { "ortho" } else { "persp" };
+            for sampling in ["msaa_off", "msaa_on", "refined"] {
+                let anti_aliasing = sampling != "msaa_off";
+                if anti_aliasing && !renderer.msaa_supported()
+                    || sampling == "refined" && !renderer.refinement_supported()
+                {
+                    continue;
+                }
+                renderer.set_render_quality(RenderQuality {
+                    anti_aliasing,
+                    full_display_resolution: true,
+                });
+                for (background_name, background) in
+                    [("light", LIGHT_BACKGROUND), ("dark", DARK_BACKGROUND)]
+                {
+                    let pixels = if sampling == "refined" {
+                        renderer.render_still(background)
+                    } else {
+                        renderer.render(background)
+                    };
+                    let name = format!("lit_{pipeline}_{projection}_{sampling}_{background_name}");
+                    dump(&name, &pixels);
+                    let lit = count_non_background(&pixels, background, true);
+                    assert!(lit > 500, "{name}: (almost) all background: {lit}");
+                    images += 1;
+                }
+            }
+        }
+    }
+    println!("renderer_gpu: lit-pipelines scene rendered {images} images");
 }

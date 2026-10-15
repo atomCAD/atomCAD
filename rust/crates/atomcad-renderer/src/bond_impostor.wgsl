@@ -1,5 +1,3 @@
-const PI: f32 = 3.14159265359;
-
 struct CameraUniform {
   view_proj: mat4x4<f32>,
   view_matrix: mat4x4<f32>,
@@ -21,6 +19,10 @@ struct ModelUniform {
 @group(1) @binding(0)
 var<uniform> model: ModelUniform;
 
+// ---- lighting ----
+// `lighting.wgsl` is inserted here (`pipelines::compose_lit_shader`):
+// `camera_backward`, `camera_view_vector`, `light_surface`, `to_display`.
+
 struct BondImpostorVertexInput {
     @location(0) start_position: vec3<f32>,
     @location(1) end_position: vec3<f32>,
@@ -37,25 +39,6 @@ struct BondImpostorVertexOutput {
     @location(3) color: vec3<f32>,
     @location(4) quad_uv: vec2<f32>, // For ray-casting
     @location(5) world_position: vec3<f32>, // World position of this fragment
-}
-
-// ============================================================================
-// Camera Helper Functions
-// ============================================================================
-
-// Points from the scene toward the eye (right-handed view space +Z),
-// extracted from the view matrix rows.
-fn camera_backward() -> vec3<f32> {
-    return vec3<f32>(camera.view_matrix[0][2], camera.view_matrix[1][2], camera.view_matrix[2][2]);
-}
-
-// Direction from a surface point toward the viewer. In orthographic mode all
-// view rays are parallel, so the eye position must not be used per-point.
-fn camera_view_vector(world_position: vec3<f32>) -> vec3<f32> {
-    if camera.is_orthographic > 0.5 {
-        return camera_backward();
-    }
-    return normalize(camera.camera_position - world_position);
 }
 
 // ============================================================================
@@ -147,127 +130,6 @@ fn ray_cylinder_intersect(
     result.normal = surface_normal;
     
     return result;
-}
-
-// ============================================================================
-// Simple Lighting (since bonds typically use simpler shading)
-// ============================================================================
-
-fn calculate_bond_lighting(
-    world_position: vec3<f32>,
-    normal: vec3<f32>, 
-    color: vec3<f32>
-) -> vec3<f32> {
-    let N = normalize(normal);
-    let V = camera_view_vector(world_position);
-    let L = normalize(-camera.head_light_dir);
-
-    // Simple Lambertian diffuse + ambient
-    let NdotL = max(dot(N, L), 0.0);
-    let diffuse = color * NdotL;
-    
-    // Simple specular highlight
-    let R = reflect(-L, N);
-    let VdotR = max(dot(V, R), 0.0);
-    let specular = vec3<f32>(0.3) * pow(VdotR, 32.0);
-    
-    // Ambient lighting
-    let ambient = color * 0.2;
-    
-    var final_color = ambient + diffuse * 0.8 + specular;
-    
-    // Simple tone mapping and gamma correction
-    final_color = final_color / (final_color + vec3(1.0));
-    final_color = pow(final_color, vec3(1.0/2.2));
-    
-    return final_color;
-}
-
-// ============================================================================
-// PBR Helper Functions (copied from atom_impostor.wgsl)
-// ============================================================================
-
-fn fresnel_schlick(cos_theta: f32, f0: vec3<f32>) -> vec3<f32> {
-    return f0 + (1.0 - f0) * pow(1.0 - cos_theta, 5.0);
-}
-
-fn distribution_ggx(N: vec3<f32>, H: vec3<f32>, roughness: f32) -> f32 {
-    let a = roughness * roughness;
-    let a2 = a * a;
-    let NdotH = max(dot(N, H), 0.0);
-    let NdotH2 = NdotH * NdotH;
-
-    let num = a2;
-    let denom = (NdotH2 * (a2 - 1.0) + 1.0);
-    return num / (PI * denom * denom);
-}
-
-fn geometry_schlick_ggx(NdotV: f32, roughness: f32) -> f32 {
-    let k = (roughness + 1.0) * (roughness + 1.0) / 8.0;
-    return NdotV / (NdotV * (1.0 - k) + k);
-}
-
-fn geometry_smith(N: vec3<f32>, V: vec3<f32>, L: vec3<f32>, roughness: f32) -> f32 {
-    let NdotV = max(dot(N, V), 0.0);
-    let NdotL = max(dot(N, L), 0.0);
-    let ggx2 = geometry_schlick_ggx(NdotV, roughness);
-    let ggx1 = geometry_schlick_ggx(NdotL, roughness);
-    return ggx1 * ggx2;
-}
-
-fn calculate_pbr_lighting(
-    world_position: vec3<f32>,
-    normal: vec3<f32>, 
-    albedo: vec3<f32>,
-    roughness: f32,
-    metallic: f32
-) -> vec3<f32> {
-    let N = normalize(normal);
-    let V = camera_view_vector(world_position);
-    let L = normalize(-camera.head_light_dir);
-    let H = normalize(V + L);
-
-    // Base reflectivity for metallic/non-metallic materials
-    let f0 = mix(vec3<f32>(0.04), albedo, metallic);
-
-    // Fresnel term
-    let F = fresnel_schlick(max(dot(H, V), 0.0), f0);
-
-    // Normal Distribution Function (NDF)
-    let D = distribution_ggx(N, H, roughness);
-
-    // Geometry term
-    let G = geometry_smith(N, V, L, roughness);
-
-    // BRDF
-    let numerator = D * G * F;
-    let denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.001;
-    let specular = numerator / denominator;
-
-    // Diffuse term (Lambertian reflection)
-    let k_d = (vec3<f32>(1.0) - F) * (1.0 - metallic);
-    let diffuse = k_d * albedo / PI;
-
-    let NdotL = max(dot(N, L), 0.0);
-    let light_color = vec3<f32>(2.0);
-    let light_contribution = light_color * NdotL;
-
-    // Diffuse ambient term (non-metallic contribution)
-    let ambient_light_color: vec3<f32> = vec3<f32>(0.2); // Ambient light color
-    let ambient_diffuse = ambient_light_color * albedo;
-
-    // Specular ambient term (reflective contribution)
-    let ambient_specular = ambient_light_color * fresnel_schlick(max(dot(V, N), 0.0), f0);
-
-    // Blend ambient terms based on the material's metallic property
-    let ambient = mix(ambient_diffuse, ambient_specular, metallic);
-
-    var color = light_contribution * (diffuse + specular) + ambient;
-	
-    color = color / (color + vec3(1.0)); // Tone mapping
-    color = pow(color, vec3(1.0/2.2)); // Gamma correction
-
-    return color;
 }
 
 // ============================================================================
@@ -534,14 +396,14 @@ fn shade_bond_hit(input: BondImpostorVertexOutput, ray: Ray, t: f32) -> Shaded {
     let clip_pos = camera.proj_matrix * view_pos;
     let depth = clip_pos.z / clip_pos.w;
 
-    // PBR lighting using the correct surface normal
-    let color = calculate_pbr_lighting(
+    let color = to_display(light_surface(
         hit_point,
         surface_normal,
         input.color,
         0.5,  // roughness - moderate for bonds
-        0.0   // metallic - bonds are non-metallic
-    );
+        0.0,  // metallic - bonds are non-metallic
+        FULLY_EXPOSED,
+    ));
 
     var shaded: Shaded;
     shaded.depth = depth;

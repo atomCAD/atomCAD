@@ -6,6 +6,7 @@
 // #269) fails only as a wrong picture. Both are caught here, in plain
 // `cargo test`, without a GPU.
 
+use atomcad_renderer::pipelines::{LIT_SHADERS, compose_lit_shader};
 use atomcad_renderer::renderer::CameraUniform;
 use std::mem::offset_of;
 use std::path::PathBuf;
@@ -25,18 +26,34 @@ fn shader_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src")
 }
 
+/// Every shader in `src/`. `lighting.wgsl` is not one: it is a module the lit
+/// shaders are composed with, and is checked as part of them.
 fn all_shader_files() -> Vec<PathBuf> {
     let mut files: Vec<PathBuf> = std::fs::read_dir(shader_dir())
         .expect("read src/")
         .map(|entry| entry.expect("dir entry").path())
         .filter(|path| path.extension().is_some_and(|ext| ext == "wgsl"))
+        .filter(|path| !path.ends_with("lighting.wgsl"))
         .collect();
     files.sort();
     files
 }
 
-fn parse(path: &std::path::Path) -> naga::Module {
+/// The source of the shader at `path` as the renderer compiles it: a lit
+/// shader composed with `lighting.wgsl` (`doc/design_depth_perception.md`
+/// D1), any other as written.
+fn source(path: &std::path::Path) -> String {
     let source = std::fs::read_to_string(path).expect("read shader");
+    let file = path.file_name().unwrap().to_str().unwrap();
+    if LIT_SHADERS.contains(&file) {
+        compose_lit_shader(&source)
+    } else {
+        source
+    }
+}
+
+fn parse(path: &std::path::Path) -> naga::Module {
+    let source = source(path);
     naga::front::wgsl::parse_str(&source).unwrap_or_else(|e| {
         panic!(
             "{} does not parse:\n{}",
@@ -61,15 +78,15 @@ fn every_shader_parses_and_validates() {
     }
 }
 
-/// `(member name, offset)` of the `CameraUniform` struct `path` declares,
-/// and the struct's size.
-fn wgsl_camera_uniform_layout(path: &std::path::Path) -> (Vec<(String, u32)>, u32) {
+/// `(member name, offset)` of the struct `name` the shader at `path`
+/// declares, and the struct's size.
+fn wgsl_struct_layout(path: &std::path::Path, name: &str) -> (Vec<(String, u32)>, u32) {
     let module = parse(path);
     let (_, ty) = module
         .types
         .iter()
-        .find(|(_, ty)| ty.name.as_deref() == Some("CameraUniform"))
-        .unwrap_or_else(|| panic!("{} declares no CameraUniform", path.display()));
+        .find(|(_, ty)| ty.name.as_deref() == Some(name))
+        .unwrap_or_else(|| panic!("{} declares no {name}", path.display()));
     match &ty.inner {
         naga::TypeInner::Struct { members, span } => (
             members
@@ -78,7 +95,7 @@ fn wgsl_camera_uniform_layout(path: &std::path::Path) -> (Vec<(String, u32)>, u3
                 .collect(),
             *span,
         ),
-        other => panic!("CameraUniform is not a struct: {other:?}"),
+        other => panic!("{name} is not a struct: {other:?}"),
     }
 }
 
@@ -121,7 +138,7 @@ fn rust_camera_uniform_layout() -> (Vec<(String, u32)>, u32) {
 fn every_camera_uniform_in_wgsl_matches_the_rust_struct() {
     let expected = rust_camera_uniform_layout();
     for name in CAMERA_SHADERS {
-        let layout = wgsl_camera_uniform_layout(&shader_dir().join(name));
+        let layout = wgsl_struct_layout(&shader_dir().join(name), "CameraUniform");
         assert_eq!(layout, expected, "CameraUniform layout of {name}");
     }
 }
@@ -297,8 +314,7 @@ fn strip_line_comments(source: &str) -> String {
 fn impostor_shaders_take_derivatives_before_any_discard() {
     const DERIVATIVES: [&str; 3] = ["dpdx", "dpdy", "fwidth"];
     for name in IMPOSTOR_SHADERS {
-        let source =
-            strip_line_comments(&std::fs::read_to_string(shader_dir().join(name)).unwrap());
+        let source = strip_line_comments(&source(&shader_dir().join(name)));
         let bodies = function_bodies(&source);
 
         // The functions that can discard, transitively.
@@ -380,7 +396,7 @@ fn impostor_shaders_have_a_per_sample_entry_point() {
 
         // Phase 2's derivatives-before-discard check reads every function,
         // this one included; make sure it has derivatives to check.
-        let source = std::fs::read_to_string(shader_dir().join(name)).unwrap();
+        let source = source(&shader_dir().join(name));
         let (_, body) = function_bodies(&strip_line_comments(&source))
             .into_iter()
             .find(|(f, _)| f == "fs_main_per_sample")
@@ -407,7 +423,10 @@ fn impostor_shaders_without_the_per_sample_block_validate_without_per_sample_sha
             .map(|_| module)
     };
     for name in IMPOSTOR_SHADERS {
-        let source = std::fs::read_to_string(shader_dir().join(name)).unwrap();
+        // As composed (`doc/design_depth_perception.md` D1): the cut runs
+        // after the composition, so it is the composed source that must
+        // survive it.
+        let source = source(&shader_dir().join(name));
         assert_eq!(
             source.matches(PER_SAMPLE_SHADING_MARKER).count(),
             1,
@@ -433,4 +452,192 @@ fn impostor_shaders_without_the_per_sample_block_validate_without_per_sample_sha
         );
     }
     assert_eq!(without_per_sample_shading("no marker"), "no marker");
+}
+
+// ---- Depth perception, Phase 1 (doc/design_depth_perception.md) -----------
+
+use atomcad_renderer::pipelines::{LIGHTING_MARKER, LIGHTING_MODULE};
+use atomcad_renderer::shading_uniform::ShadingUniform;
+
+/// The Rust `ShadingUniform`'s layout, by the WGSL member names.
+fn rust_shading_uniform_layout() -> (Vec<(String, u32)>, u32) {
+    let members = [
+        ("key_light_dir", offset_of!(ShadingUniform, key_light_dir)),
+        ("key_intensity", offset_of!(ShadingUniform, key_intensity)),
+        ("fill_light_dir", offset_of!(ShadingUniform, fill_light_dir)),
+        ("fill_intensity", offset_of!(ShadingUniform, fill_intensity)),
+        ("hemisphere_up", offset_of!(ShadingUniform, hemisphere_up)),
+        ("sky", offset_of!(ShadingUniform, sky)),
+        ("background", offset_of!(ShadingUniform, background)),
+        ("ground", offset_of!(ShadingUniform, ground)),
+        (
+            "depth_cue_front",
+            offset_of!(ShadingUniform, depth_cue_front),
+        ),
+        ("depth_cue_span", offset_of!(ShadingUniform, depth_cue_span)),
+        (
+            "depth_cue_strength",
+            offset_of!(ShadingUniform, depth_cue_strength),
+        ),
+        ("ao_strength", offset_of!(ShadingUniform, ao_strength)),
+    ];
+    (
+        members
+            .iter()
+            .map(|(name, offset)| (name.to_string(), *offset as u32))
+            .collect(),
+        std::mem::size_of::<ShadingUniform>() as u32,
+    )
+}
+
+/// D2: every lit shader, as composed, declares the `ShadingUniform` of the
+/// Rust struct, byte for byte, and binds it at group 0, binding 1.
+#[test]
+fn every_shading_uniform_in_wgsl_matches_the_rust_struct() {
+    let expected = rust_shading_uniform_layout();
+    for name in LIT_SHADERS {
+        let path = shader_dir().join(name);
+        assert_eq!(
+            wgsl_struct_layout(&path, "ShadingUniform"),
+            expected,
+            "ShadingUniform layout of {name}"
+        );
+        let module = parse(&path);
+        let (_, shading) = module
+            .global_variables
+            .iter()
+            .find(|(_, var)| var.name.as_deref() == Some("shading"))
+            .unwrap_or_else(|| panic!("{name} has no `shading`"));
+        assert_eq!(
+            shading.binding,
+            Some(naga::ResourceBinding {
+                group: 0,
+                binding: 1
+            }),
+            "{name}"
+        );
+        assert_eq!(shading.space, naga::AddressSpace::Uniform, "{name}");
+    }
+}
+
+/// D1: a shader is composed with `lighting.wgsl` exactly when it has the
+/// lighting marker, and the lit shaders are the four the design names. A
+/// shader that is not lit does not see the `ShadingUniform`.
+#[test]
+fn the_lighting_marker_is_in_exactly_the_lit_shaders() {
+    assert_eq!(
+        LIT_SHADERS,
+        [
+            "atom_impostor.wgsl",
+            "bond_impostor.wgsl",
+            "mesh.wgsl",
+            "transparent_impostor.wgsl"
+        ]
+    );
+    for path in all_shader_files() {
+        let raw = std::fs::read_to_string(&path).unwrap();
+        let file = path.file_name().unwrap().to_str().unwrap();
+        assert_eq!(
+            raw.contains(LIGHTING_MARKER),
+            LIT_SHADERS.contains(&file),
+            "{file}"
+        );
+        let declares = parse(&path)
+            .types
+            .iter()
+            .any(|(_, ty)| ty.name.as_deref() == Some("ShadingUniform"));
+        assert_eq!(declares, LIT_SHADERS.contains(&file), "{file}");
+    }
+}
+
+/// D1: the lighting is in `lighting.wgsl` only. No lit shader keeps its own
+/// copy of a function the module provides, and the unused
+/// `calculate_bond_lighting` is gone.
+#[test]
+fn no_lit_shader_keeps_a_copy_of_the_lighting() {
+    let module_functions: Vec<String> = function_bodies(&strip_line_comments(LIGHTING_MODULE))
+        .into_iter()
+        .map(|(name, _)| name)
+        .collect();
+    for required in [
+        "light_surface",
+        "to_display",
+        "camera_backward",
+        "camera_view_vector",
+        "fresnel_schlick",
+    ] {
+        assert!(
+            module_functions.iter().any(|f| f == required),
+            "lighting.wgsl has no {required}"
+        );
+    }
+    for name in LIT_SHADERS {
+        let raw = std::fs::read_to_string(shader_dir().join(name)).unwrap();
+        for (function, _) in function_bodies(&strip_line_comments(&raw)) {
+            assert!(
+                !module_functions.contains(&function),
+                "{name} declares its own `{function}`"
+            );
+            assert!(
+                !function.starts_with("calculate_"),
+                "{name} still has `{function}`"
+            );
+        }
+    }
+}
+
+/// D1: the composed shader is the host's header (up to the lighting
+/// marker), then the module, then the rest of the host. The module comes
+/// after the uniforms it reads, and the AA D5 marker stays after the module,
+/// so the per-sample cut still removes only the per-sample block.
+#[test]
+fn compose_lit_shader_puts_the_host_header_before_the_module() {
+    for name in LIT_SHADERS {
+        let host = std::fs::read_to_string(shader_dir().join(name)).unwrap();
+        let composed = compose_lit_shader(&host);
+        let split = host.find(LIGHTING_MARKER).unwrap();
+        let (header, rest) = host.split_at(split);
+
+        assert!(composed.starts_with(header), "{name}");
+        assert!(composed.ends_with(rest), "{name}");
+        assert_eq!(
+            &composed[header.len()..header.len() + LIGHTING_MODULE.len()],
+            LIGHTING_MODULE,
+            "{name}"
+        );
+        assert_eq!(composed.len(), host.len() + LIGHTING_MODULE.len() + 1);
+
+        let at = |needle: &str| {
+            composed
+                .find(needle)
+                .unwrap_or_else(|| panic!("{name}: no `{needle}`"))
+        };
+        assert!(at("var<uniform> camera") < at("struct ShadingUniform"));
+        assert!(at("var<uniform> model") < at("struct ShadingUniform"));
+        if IMPOSTOR_SHADERS.contains(&name) {
+            assert!(at("fn light_surface(") < at(PER_SAMPLE_SHADING_MARKER));
+            assert!(without_per_sample_shading(&composed).contains("fn light_surface("));
+        }
+    }
+}
+
+#[test]
+#[should_panic(expected = "exactly once, found 0")]
+fn compose_lit_shader_panics_on_a_host_without_the_marker() {
+    compose_lit_shader("struct CameraUniform { x: f32 };");
+}
+
+#[test]
+#[should_panic(expected = "exactly once, found 2")]
+fn compose_lit_shader_panics_on_a_host_with_two_markers() {
+    compose_lit_shader(&format!("{LIGHTING_MARKER}\n{LIGHTING_MARKER}\n"));
+}
+
+/// D1: `lighting.wgsl` reads the host's `camera` without declaring it, so on
+/// its own it is not a shader. (If it ever compiles alone, it has grown its
+/// own `CameraUniform`, a seventh copy for `shader_test.rs` to miss.)
+#[test]
+fn the_lighting_module_does_not_compile_on_its_own() {
+    assert!(naga::front::wgsl::parse_str(LIGHTING_MODULE).is_err());
+    assert!(!LIGHTING_MODULE.contains("struct CameraUniform"));
 }

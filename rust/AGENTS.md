@@ -322,8 +322,9 @@ When adding new functionality to the Rust codebase:
    - `rust/crates/atomcad-renderer/tests/renderer/` - GPU-free renderer tests
      (camera math, label layout, impostor meshes, transparent sort), including
      `shader_test.rs`, which parses and validates every `.wgsl` file with
-     `naga` and checks each shader's `CameraUniform` offsets against the Rust
-     struct — so a broken shader fails `cargo test`, not the app's start-up.
+     `naga` (the lit ones as composed, see below) and checks each shader's
+     `CameraUniform` and `ShadingUniform` offsets against the Rust structs —
+     so a broken shader fails `cargo test`, not the app's start-up.
      The line shader's arithmetic is tested through its Rust twins in
      `src/line_geometry.rs` (`line_geometry_test.rs`): **a change to
      `line_mesh.wgsl` must be mirrored there**, and the GPU harness is what
@@ -391,8 +392,12 @@ cd rust && cargo test -p atomcad-renderer --test renderer_gpu -- --ignored
 A test that finds no wgpu adapter prints that and passes. Assert with
 tolerances and pixel counts, never committed golden images (they differ across
 drivers). To prove a refactor pixel-identical, set `ATOMCAD_GPU_DUMP_DIR` to a
-directory outside the repo: each test writes its images there as raw bytes, so
-a run before and a run after the change can be compared with `cmp`.
+directory outside the repo and run the harness *before* the change: each test
+writes its images there as raw bytes. Then run it *after* the change with
+`ATOMCAD_GPU_COMPARE_DIR` pointing at that directory, and every image is
+compared with its dump automatically (`GPU_COMPARE_TOLERANCE` per channel).
+`lit_pipelines_scene` dumps one image per lit pipeline and variant, so a
+change to the shading is caught pipeline by pipeline.
 
 **Per-view uniforms come in pairs.** The renderer draws into the live
 viewport and offscreen (thumbnail, image export), and each has its own camera
@@ -400,7 +405,20 @@ uniform and its own `LineLodUniform` per line mesh, selected together by
 `View` in `renderer.rs`. The live ones are rewritten only when the camera
 moves or a mesh is uploaded, so a new per-view uniform must also exist once
 per `View`: a single shared one would leave an export's values in every live
-frame until the next camera move.
+frame until the next camera move. The `ShadingUniform`
+(`doc/design_depth_perception.md` D2) is the exception, by construction: it
+is per *pass* (content, gadget), and `draw_to_target` rewrites it before
+every draw, so nothing it holds survives into another draw.
+
+**The lit shaders share one lighting module**
+(`doc/design_depth_perception.md` D1). `atom_impostor.wgsl`,
+`bond_impostor.wgsl`, `transparent_impostor.wgsl` and `mesh.wgsl` do not
+compile on their own: `pipelines::compose_lit_shader` inserts `lighting.wgsl`
+(the `ShadingUniform`, the PBR helpers, `camera_view_vector`,
+`light_surface`, `to_display`) at each host's `// ---- lighting ----` marker,
+after the host's uniform declarations. Change the lighting there, never in a
+host; a host that declares its own copy of a module function fails
+`shader_test.rs`. Composition runs before the per-sample cut below.
 
 **Pipelines exist once per sample count, in `PipelineSet`**
 (`pipelines.rs`, `doc/design_viewport_antialiasing.md` D2). The live target

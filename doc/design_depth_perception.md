@@ -1176,6 +1176,16 @@ library.
     *Headlight* preset; the comparison must fail.
 - Effort: 1.5 d (half a day of it for the lit-pipelines scene and the
   compare switch).
+- **Phase notes (2026-10-15).** Implemented as above. Against a dump of the
+  pre-refactor build (all 31 harness tests, 194 images, 120 of them the
+  lit-pipelines scene, on a DX12 discrete adapter) every image is
+  byte-identical: the measured maximum difference is 0, so
+  `GPU_COMPARE_TOLERANCE` stays 0. The key/fill swap mutation fails the
+  comparison (up to 86 levels). Two details the text above leaves open:
+  `mesh.wgsl` keeps its old `V` by calling `light_surface_from(V, …)`, the
+  inner half of `light_surface`; and the hemisphere is computed as
+  `ground + (sky − ground)·t` rather than `mix`, which is what keeps
+  sky = ground exactly constant.
 
 ### Phase 2 — The studio rig and the rim after lighting
 

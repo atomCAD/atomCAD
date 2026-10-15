@@ -12,6 +12,7 @@ use crate::pipelines::{PipelineLayouts, PipelineSet, Shaders};
 use crate::render_target::{
     COLOR_FORMAT, DEPTH_FORMAT, RenderQuality, RenderTarget, TargetSpec, ViewportRequest,
 };
+use crate::shading_uniform::{ShadingPass, ShadingSettings, ShadingUniform};
 use crate::surface_sort::sorted_component_order;
 use crate::thumbnail::ThumbnailBackground;
 use crate::transparent_impostor_mesh::TransparentImpostorMesh;
@@ -165,6 +166,27 @@ impl LineLodBinding {
     }
 }
 
+/// Group 0 of every pipeline, once per [`View`] and [`ShadingPass`]
+/// (`doc/design_depth_perception.md` D2): the view's camera uniform paired
+/// with the pass's shading uniform.
+struct ViewBindGroups {
+    live_content: wgpu::BindGroup,
+    live_gadget: wgpu::BindGroup,
+    offscreen_content: wgpu::BindGroup,
+    offscreen_gadget: wgpu::BindGroup,
+}
+
+impl ViewBindGroups {
+    fn get(&self, view: View, pass: ShadingPass) -> &wgpu::BindGroup {
+        match (view, pass) {
+            (View::Live, ShadingPass::Content) => &self.live_content,
+            (View::Live, ShadingPass::Gadget) => &self.live_gadget,
+            (View::Offscreen, ShadingPass::Content) => &self.offscreen_content,
+            (View::Offscreen, ShadingPass::Gadget) => &self.offscreen_gadget,
+        }
+    }
+}
+
 /// Which parts of the scene a draw includes.
 #[derive(Clone, Copy)]
 struct PassFlags {
@@ -246,7 +268,7 @@ pub struct Renderer {
     /// rather than on the `GPUMesh`: `GPUMesh` knows only its model bind group
     /// (group 1) and has no notion of a texture, and the atlas is one shared
     /// resource, so it is bound once per pass before the label draw — the way
-    /// `camera_bind_group` already is.
+    /// group 0 (`view_bind_groups`) already is.
     label_atlas_bind_group: wgpu::BindGroup,
     /// The line pipeline's group-2 layout, kept for the `LineLodUniform`s of
     /// meshes that have LOD slots (D9).
@@ -260,13 +282,23 @@ pub struct Renderer {
     target: RenderTarget,
     pub camera: Camera,
     camera_buffer: wgpu::Buffer,
-    camera_bind_group: wgpu::BindGroup,
     /// The thumbnail's own render target and camera uniform, created once and
     /// reused, so a capture never touches the live target or the live camera
     /// buffer (`doc/design_network_thumbnails.md` D5).
     thumbnail_target: RenderTarget,
     thumbnail_camera_buffer: wgpu::Buffer,
-    thumbnail_camera_bind_group: wgpu::BindGroup,
+    /// The `ShadingUniform` of each pass (`doc/design_depth_perception.md`
+    /// D2): per pass, not per view, because `draw_to_target` rewrites both
+    /// before every draw, so no value can outlive the draw it was written
+    /// for.
+    content_shading_buffer: wgpu::Buffer,
+    gadget_shading_buffer: wgpu::Buffer,
+    /// Group 0 of every pipeline: a view's camera uniform with a pass's
+    /// shading uniform.
+    view_bind_groups: ViewBindGroups,
+    /// How the content is shaded (D2). The renderer's neutral default until
+    /// the preferences push theirs.
+    shading: ShadingSettings,
     /// Axis-aligned bounds of the content meshes on the GPU, recorded at
     /// upload (D4). `None` when the content is empty.
     content_bounds: Option<(DVec3, DVec3)>,
@@ -427,18 +459,33 @@ impl Renderer {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
+        // Group 0, shared by every pipeline layout: the camera uniform and
+        // the shading uniform (`doc/design_depth_perception.md` D2). The
+        // shaders that are not lit (lines, labels) do not declare binding 1.
         let camera_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX | ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::VERTEX | ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
                     },
-                    count: None,
-                }],
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                ],
                 label: Some("camera_bind_group_layout"),
             });
 
@@ -457,29 +504,63 @@ impl Renderer {
                 label: Some("model_bind_group_layout"),
             });
 
-        let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &camera_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: camera_buffer.as_entire_binding(),
-            }],
-            label: Some("camera_bind_group"),
-        });
-
         let thumbnail_camera_buffer =
             device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Thumbnail Camera Buffer"),
                 contents: bytemuck::cast_slice(&[camera_uniform]),
                 usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             });
-        let thumbnail_camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &camera_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: thumbnail_camera_buffer.as_entire_binding(),
-            }],
-            label: Some("thumbnail_camera_bind_group"),
-        });
+
+        // Written before every draw, so their initial contents never reach a
+        // frame.
+        let shading_buffer = |label| {
+            device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some(label),
+                size: std::mem::size_of::<ShadingUniform>() as wgpu::BufferAddress,
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            })
+        };
+        let content_shading_buffer = shading_buffer("Content Shading Buffer");
+        let gadget_shading_buffer = shading_buffer("Gadget Shading Buffer");
+        let view_bind_group = |label, camera: &wgpu::Buffer, shading: &wgpu::Buffer| {
+            device.create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: &camera_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: camera.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: shading.as_entire_binding(),
+                    },
+                ],
+                label: Some(label),
+            })
+        };
+        let view_bind_groups = ViewBindGroups {
+            live_content: view_bind_group(
+                "live_content_bind_group",
+                &camera_buffer,
+                &content_shading_buffer,
+            ),
+            live_gadget: view_bind_group(
+                "live_gadget_bind_group",
+                &camera_buffer,
+                &gadget_shading_buffer,
+            ),
+            offscreen_content: view_bind_group(
+                "offscreen_content_bind_group",
+                &thumbnail_camera_buffer,
+                &content_shading_buffer,
+            ),
+            offscreen_gadget: view_bind_group(
+                "offscreen_gadget_bind_group",
+                &thumbnail_camera_buffer,
+                &gadget_shading_buffer,
+            ),
+        };
 
         // Model bind group layout is already created above
         // Each mesh now has its own model buffer and bind group
@@ -572,10 +653,12 @@ impl Renderer {
             target,
             camera,
             camera_buffer,
-            camera_bind_group,
             thumbnail_target,
             thumbnail_camera_buffer,
-            thumbnail_camera_bind_group,
+            content_shading_buffer,
+            gadget_shading_buffer,
+            view_bind_groups,
+            shading: ShadingSettings::default(),
             content_bounds: None,
             content_owner: None,
             render_mutex: Mutex::new(()),
@@ -1124,6 +1207,7 @@ impl Renderer {
         self.draw_to_target(
             &self.target,
             View::Live,
+            &self.camera,
             view,
             background_color_rgb,
             PassFlags {
@@ -1172,6 +1256,7 @@ impl Renderer {
             let mut pixels = self.draw_to_target(
                 &self.thumbnail_target,
                 View::Offscreen,
+                &camera,
                 view,
                 background.rgb(),
                 PassFlags {
@@ -1251,6 +1336,7 @@ impl Renderer {
         let mut pixels = self.draw_to_target(
             &target,
             View::Offscreen,
+            &camera,
             view,
             background_color_rgb,
             PassFlags {
@@ -1324,20 +1410,37 @@ impl Renderer {
         })
     }
 
-    /// One frame into `target`, drawn with the per-view uniforms of
-    /// `uniforms` (whose view matrix is `view`), read back as BGRA.
+    /// One frame of `camera` into `target`, drawn with the per-view uniforms
+    /// of `uniforms` (whose view matrix is `view`), read back as BGRA.
+    ///
+    /// Writes both passes' `ShadingUniform` first
+    /// (`doc/design_depth_perception.md` D2): it depends on the background,
+    /// which two draws of one view may not share (the thumbnail), so it is
+    /// written for every draw rather than kept per view.
+    #[allow(clippy::too_many_arguments)]
     fn draw_to_target(
         &self,
         target: &RenderTarget,
         uniforms: View,
+        camera: &Camera,
         view: Mat4,
         background_color_rgb: [u8; 3],
         flags: PassFlags,
     ) -> Vec<u8> {
-        let camera_bind_group = match uniforms {
-            View::Live => &self.camera_bind_group,
-            View::Offscreen => &self.thumbnail_camera_bind_group,
-        };
+        for (pass, buffer) in [
+            (ShadingPass::Content, &self.content_shading_buffer),
+            (ShadingPass::Gadget, &self.gadget_shading_buffer),
+        ] {
+            let shading = ShadingUniform::new(
+                camera,
+                self.content_bounds,
+                background_color_rgb,
+                &self.shading,
+                pass,
+            );
+            self.queue
+                .write_buffer(buffer, 0, bytemuck::cast_slice(&[shading]));
+        }
         let pipelines = self.pipelines_for(target);
         // The impostor pipelines: per-pixel shading, or per-sample shading
         // for the refined frame (D5), in both passes.
@@ -1386,8 +1489,12 @@ impl Renderer {
                 occlusion_query_set: None,
             });
 
-            // Set camera bind group (shared for both pipelines)
-            render_pass.set_bind_group(0, camera_bind_group, &[]);
+            // Group 0: the view's camera, the content pass's shading.
+            render_pass.set_bind_group(
+                0,
+                self.view_bind_groups.get(uniforms, ShadingPass::Content),
+                &[],
+            );
 
             // Each mesh has its own model bind group (group 1).
 
@@ -1478,8 +1585,12 @@ impl Renderer {
                 occlusion_query_set: None,
             });
 
-            // Set camera bind group for gadget render pass
-            gadget_render_pass.set_bind_group(0, camera_bind_group, &[]);
+            // Group 0: the view's camera, the gadget pass's shading.
+            gadget_render_pass.set_bind_group(
+                0,
+                self.view_bind_groups.get(uniforms, ShadingPass::Gadget),
+                &[],
+            );
 
             // Render gadget triangles
             self.lightweight_mesh.set_identity_transform(&self.queue);
