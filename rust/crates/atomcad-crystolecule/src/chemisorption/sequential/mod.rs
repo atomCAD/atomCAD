@@ -71,7 +71,8 @@ pub use evaluate::{Candidate, RelaxedRow, SearchReport, SearchStats, evaluate, s
 pub use local::{LevelStats, Replayed, replay, replay_start};
 pub use plan::{GEOMETRIC_LEGS, Hypothesis, PlanStats, SequentialPlan, plan};
 pub use setup::{
-    CLASH_FRACTION, Foot, LOCAL_UP_RADIUS, Leg, MIRROR_MARGIN, Mirror, NEAR_MISS_BAND, ROUNDING,
-    Seating, Setup, Site, Step, THETA_STEP_DEG, collinear_axis, rest_length, triangle_quality,
+    CLASH_FRACTION, Foot, LOCAL_UP_RADIUS, Leg, MIRROR_MARGIN, MIRRORED_PAIRS, Mirror,
+    NEAR_MISS_BAND, ROUNDING, Seating, Setup, Site, Step, THETA_STEP_DEG, collinear_axis,
+    rest_length, triangle_quality,
 };
 pub use tree::{NO_ROW, NearMiss, Row, RowKind, SearchTree};

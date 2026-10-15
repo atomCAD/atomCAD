@@ -14,6 +14,7 @@ PlanStats {
     pruned_no_acceptor: 0,
     pruned_filter: 0,
     pruned_mirror: 1683,
+    mirrored_kept: 0,
     mirror_undecided: 1219,
     candidates: 3563,
     parents: 0,

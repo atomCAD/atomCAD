@@ -6,6 +6,7 @@
 use super::config::SequentialSearch;
 use super::local::{LevelStats, Local, State, hypothesis};
 use super::plan::{Hypothesis, PlanStats, SequentialPlan, plan};
+use super::setup::Mirror;
 use super::tree::SearchTree;
 use crate::atomic_structure::AtomicStructure;
 use crate::chemisorption::atoms::{HypothesisKey, change_key};
@@ -48,6 +49,10 @@ pub struct Candidate {
     /// Its start geometry clashed (§4.5). Only possible with the clash filter
     /// off.
     pub seating_clash: bool,
+    /// It grew from a three-leg assignment the mirror check found mirrored,
+    /// kept by `include_mirrored`: its own (three legs), or its local-phase
+    /// ancestor's.
+    pub mirrored: bool,
 }
 
 impl Candidate {
@@ -222,6 +227,7 @@ pub fn evaluate(
                 worst_bond_ratio: r.worst_bond_ratio,
                 energy: r.energy,
                 seating_clash: seating.clashes(),
+                mirrored: h.mirror == Some(Mirror::Mirrored),
             };
             keep_best(
                 &mut kept.lock().expect("no panics under the lock"),
@@ -246,6 +252,7 @@ pub fn evaluate(
                 row: row.row,
                 strain: row.strain,
                 positions,
+                mirrored: plan.hypotheses[row.hypothesis].mirror == Some(Mirror::Mirrored),
             });
         }
         relaxed.push(row);

@@ -491,10 +491,7 @@ pub fn debug_view(
             if tree.row(target).legs as usize <= GEOMETRIC_LEGS {
                 let index = tree.row(target).hypothesis.expect("a canonical row");
                 let h = hypothesis(plan, report, index);
-                let seating = match &h.seating {
-                    Some(s) => s.clone(),
-                    None => setup.seat(&h.steps),
-                };
+                let seating = plan.start_seating(h);
                 own_clashes = seating.clashes.clone();
                 (setup.start_structure(&h.steps, &seating), None)
             } else {
@@ -539,6 +536,9 @@ pub enum ChildVerdict {
     Candidate,
     /// Pruned by the mirror check.
     Mirrored,
+    /// Found mirrored by the mirror check, kept by `include_mirrored`, and
+    /// seated cleanly (upright on two legs).
+    MirroredKept,
     /// Left undecided by the mirror check, and seated cleanly.
     Undecided,
     /// Its seating clashes (pruned only with `clash_filter`).
@@ -557,10 +557,12 @@ pub fn child_verdict(
         return ChildVerdict::Candidate;
     };
     let h = hypothesis(plan, report, index);
-    if h.mirror == Some(Mirror::Mirrored) {
+    if plan.mirror_pruned(h) {
         ChildVerdict::Mirrored
     } else if h.seating.as_ref().is_some_and(|s| s.clashes()) {
         ChildVerdict::Clash
+    } else if h.mirror == Some(Mirror::Mirrored) {
+        ChildVerdict::MirroredKept
     } else if h.mirror == Some(Mirror::Undecided) {
         ChildVerdict::Undecided
     } else {

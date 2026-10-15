@@ -42,10 +42,11 @@ pub struct Hypothesis {
     /// budget stops it) and may be listed.
     pub candidate: bool,
     /// A three-leg hypothesis a local phase grows from (§4.6): relaxed even
-    /// when it is not a candidate. Mirrored ones never are.
+    /// when it is not a candidate. Mirror-pruned ones never are.
     pub parent: bool,
     /// Its start placement, for the hypotheses the geometric phase relaxes
-    /// (candidates and parents) only. Always `None` for a local-phase
+    /// (candidates and parents) only: `Setup::seat_mirrored` for a kept
+    /// mirrored one, else `Setup::seat`. Always `None` for a local-phase
     /// hypothesis: it starts from its relaxed parent instead.
     pub seating: Option<Seating>,
 }
@@ -93,8 +94,12 @@ pub struct PlanStats {
     pub pruned_no_acceptor: usize,
     /// The leg's bond kinds exceed the `bond_inventory` filter.
     pub pruned_filter: usize,
-    /// Three-leg hypotheses the mirror check rejected, and left undecided.
+    /// Three-leg hypotheses the mirror check rejected and that were pruned
+    /// for it (0 with `include_mirrored`), those it rejected and that were
+    /// kept (0 without), and those it left undecided. `pruned_mirror +
+    /// mirrored_kept` is the number of mirrored verdicts either way.
     pub pruned_mirror: usize,
+    pub mirrored_kept: usize,
     pub mirror_undecided: usize,
     /// Hypotheses the filters admit (mirror-pruned ones are not).
     pub candidates: usize,
@@ -135,6 +140,29 @@ pub struct SequentialPlan {
     pub stats: PlanStats,
     /// The most legs the settings allow a hypothesis, local phase included.
     pub max_legs: usize,
+    /// The search's `include_mirrored`: mirrored hypotheses were kept.
+    pub include_mirrored: bool,
+}
+
+impl SequentialPlan {
+    /// Whether the mirror check pruned `h`: mirrored, and the setting off.
+    pub fn mirror_pruned(&self, h: &Hypothesis) -> bool {
+        h.mirror == Some(Mirror::Mirrored) && !self.include_mirrored
+    }
+
+    /// The seating geometric hypothesis `h` starts from: the stored one, or
+    /// for a hypothesis the search did not seat, the one it would have used.
+    /// A mirror-pruned hypothesis gets the proper fit (`Setup::seat`), which
+    /// shows the body in the substrate: why it was pruned.
+    pub fn start_seating(&self, h: &Hypothesis) -> Seating {
+        match &h.seating {
+            Some(s) => s.clone(),
+            None if h.mirror == Some(Mirror::Mirrored) && self.include_mirrored => {
+                self.setup.seat_mirrored(&h.steps)
+            }
+            None => self.setup.seat(&h.steps),
+        }
+    }
 }
 
 struct Planner<'a> {
@@ -293,8 +321,8 @@ impl Planner<'_> {
             self.stats.duplicates += 1;
         } else {
             self.seen.insert(key, row);
-            let mirrored = self.found(row, formed_ids, transfers);
-            if !mirrored && !self.stopped() && depth < self.depth_cap {
+            let pruned = self.found(row, formed_ids, transfers);
+            if !pruned && !self.stopped() && depth < self.depth_cap {
                 self.extend(row);
             }
         }
@@ -315,7 +343,7 @@ impl Planner<'_> {
     }
 
     /// Records a new distinct hypothesis on `row`. Returns whether the mirror
-    /// check rejected it.
+    /// check pruned it: mirrored, with `include_mirrored` off.
     fn found(&mut self, row: u32, formed: Vec<(u32, u32)>, transfers: Vec<Transfer>) -> bool {
         let depth = self.steps.len();
         match depth {
@@ -343,6 +371,7 @@ impl Planner<'_> {
             let up = self.setup.local_up(&legs.map(|l| l.site));
             let verdict = self.setup.mirror(legs, up);
             match verdict {
+                Mirror::Mirrored if self.config.include_mirrored => self.stats.mirrored_kept += 1,
                 Mirror::Mirrored => self.stats.pruned_mirror += 1,
                 Mirror::Undecided => self.stats.mirror_undecided += 1,
                 Mirror::Proper => {}
@@ -350,8 +379,9 @@ impl Planner<'_> {
             mirror = Some(verdict);
         }
         let mirrored = mirror == Some(Mirror::Mirrored);
-        let candidate = !mirrored && admits(self.config, self.single_foot, depth, &inventory);
-        let parent = !mirrored && self.local_phase && depth == GEOMETRIC_LEGS;
+        let pruned = mirrored && !self.config.include_mirrored;
+        let candidate = !pruned && admits(self.config, self.single_foot, depth, &inventory);
+        let parent = !pruned && self.local_phase && depth == GEOMETRIC_LEGS;
         let index = self.hypotheses.len();
         let mut hypothesis = Hypothesis {
             steps: self.steps.clone(),
@@ -370,7 +400,11 @@ impl Planner<'_> {
             self.stats.parents += 1;
         }
         if candidate || parent {
-            let seating = self.setup.seat(&self.steps);
+            let seating = if mirrored {
+                self.setup.seat_mirrored(&self.steps)
+            } else {
+                self.setup.seat(&self.steps)
+            };
             for (t, &moved) in hypothesis.transfers.iter_mut().zip(&seating.moved) {
                 t.moved = moved;
             }
@@ -388,7 +422,7 @@ impl Planner<'_> {
         }
         self.tree.row_mut(row).hypothesis = Some(index as u32);
         self.hypotheses.push(hypothesis);
-        mirrored
+        pruned
     }
 }
 
@@ -528,5 +562,6 @@ pub fn plan(
         tree,
         stats,
         max_legs,
+        include_mirrored: config.include_mirrored,
     })
 }

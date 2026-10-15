@@ -2689,3 +2689,188 @@ fn the_cli_select_reads_a_path_and_installs_what_the_panel_would() {
             .contains("not a foot")
     );
 }
+
+// ============================================================================
+// include_mirrored (design_chemisorb_mirrors_and_passivation.md §3)
+// ============================================================================
+
+/// `include_mirrored` round-trips through the text format and `.cnnd`, and is
+/// written only when on, so a node that never used it saves as before; a
+/// node saved without it loads with it off.
+#[test]
+fn include_mirrored_round_trips_and_is_written_only_when_on() {
+    use atomcad_structure_designer::serialization::node_networks_serialization::{
+        load_node_networks_from_file, save_node_networks_to_file,
+    };
+    use tempfile::tempdir;
+
+    let on = author_and_serialize("c = chemisorb { include_mirrored: true }\n");
+    assert!(on.contains("include_mirrored: true"), "got:\n{on}");
+    assert_eq!(on, author_and_serialize(&on));
+    let off = author_and_serialize("c = chemisorb { include_mirrored: false }\n");
+    assert!(!off.contains("include_mirrored"), "got:\n{off}");
+
+    let old: ChemisorbData = serde_json::from_str("{}").expect("loads");
+    assert!(!old.include_mirrored);
+
+    for include_mirrored in [false, true] {
+        let Net {
+            mut designer,
+            name,
+            node,
+            ..
+        } = network();
+        set_props(
+            &mut designer,
+            name,
+            node,
+            &[("include_mirrored", TextValue::Bool(include_mirrored))],
+        );
+        let tmp = tempdir().unwrap();
+        let path = tmp.path().join("chemisorb.cnnd");
+        save_node_networks_to_file(
+            &mut designer.node_type_registry,
+            &path,
+            false,
+            &HashMap::new(),
+        )
+        .expect("save");
+        let json = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(json.contains("include_mirrored"), include_mirrored);
+
+        let mut registry = NodeTypeRegistry::new();
+        load_node_networks_from_file(&mut registry, path.to_str().unwrap()).expect("load");
+        let (_, loaded) = registry.node_networks[name]
+            .nodes
+            .iter()
+            .find(|(_, n)| n.node_type_name == "chemisorb")
+            .unwrap();
+        let loaded = loaded
+            .data
+            .as_any_ref()
+            .downcast_ref::<ChemisorbData>()
+            .unwrap();
+        assert_eq!(loaded.include_mirrored, include_mirrored);
+    }
+}
+
+/// `mirrored` is appended to the candidate record (its last field so far),
+/// `mirrored_kept` to the stats.
+#[test]
+fn the_mirrored_fields_are_appended() {
+    let registry = NodeTypeRegistry::new();
+    let field_names = |record: &str| -> Vec<String> {
+        registry
+            .lookup_record_type_def(record)
+            .unwrap()
+            .fields
+            .iter()
+            .map(|f| f.name.clone())
+            .collect()
+    };
+    assert_eq!(
+        field_names("ChemisorbCandidate").last().map(String::as_str),
+        Some("mirrored")
+    );
+    assert_eq!(
+        field_names("ChemisorbStats").last().map(String::as_str),
+        Some("mirrored_kept")
+    );
+}
+
+/// Toggling `include_mirrored` makes a stored result stale and its undo
+/// restores it; a run with it on relaxes the mirrored assignments, lists them
+/// flagged, and counts them as kept, in the stats and in the debug tree.
+#[test]
+fn include_mirrored_is_a_search_setting_and_its_candidates_are_flagged() {
+    let Net {
+        mut designer,
+        name,
+        node,
+        ..
+    } = cage_network();
+    set_props(
+        &mut designer,
+        name,
+        node,
+        &[
+            ("energy_window", TextValue::Float(1.0e6)),
+            ("clash_filter", TextValue::Bool(false)),
+        ],
+    );
+    designer.run_chemisorb(&[], node).unwrap();
+    let s = fields_of_stats(&mut designer, name, node);
+    let pruned = int(&s, "pruned_mirror");
+    assert!(pruned > 0, "the cage has mirrored assignments");
+    assert_eq!(int(&s, "mirrored_kept"), 0);
+    // Kept, before `unique` merges: a mirrored start may relax into the
+    // mirror image of a proper binding, which `rigid_mirror` merges.
+    let off_kept = int(&s, "listed") + int(&s, "merged");
+    let candidates = outputs(&mut designer, name, node)[0].clone();
+    assert!(
+        array(&candidates)
+            .iter()
+            .all(|c| !boolean(&fields(c), "mirrored"))
+    );
+
+    let edited = ChemisorbData {
+        include_mirrored: true,
+        ..data(&designer, name, node)
+    };
+    designer.set_chemisorb_data(&[], node, edited);
+    let s = fields_of_stats(&mut designer, name, node);
+    assert!(boolean(&s, "stale"), "include_mirrored is fingerprinted");
+    assert!(designer.undo());
+    assert!(!data(&designer, name, node).include_mirrored);
+    let s = fields_of_stats(&mut designer, name, node);
+    assert!(boolean(&s, "searched") && !boolean(&s, "stale"));
+    assert!(designer.redo());
+    assert!(data(&designer, name, node).include_mirrored);
+
+    designer.run_chemisorb(&[], node).unwrap();
+    let s = fields_of_stats(&mut designer, name, node);
+    assert!(boolean(&s, "searched"));
+    assert_eq!(int(&s, "pruned_mirror"), 0);
+    assert_eq!(int(&s, "mirrored_kept"), pruned);
+    assert!(int(&s, "listed") + int(&s, "merged") > off_kept);
+    let candidates = outputs(&mut designer, name, node)[0].clone();
+    assert!(
+        array(&candidates)
+            .iter()
+            .any(|c| boolean(&fields(c), "mirrored"))
+    );
+
+    let cache = designer_eval_cache(&mut designer, name, node);
+    let mirrored_rows: Vec<_> = cache.rows.iter().filter(|r| r.mirrored).collect();
+    assert!(!mirrored_rows.is_empty());
+    for r in &mirrored_rows {
+        let start = r.mirrored_start.expect("a three-leg mirrored start");
+        assert!(start > 0.0);
+    }
+    assert!(
+        cache
+            .rows
+            .iter()
+            .filter(|r| !r.mirrored)
+            .all(|r| r.mirrored_start.is_none())
+    );
+    // The debug tree: mirrored legs are kept, so none is hidden or counted
+    // as pruned.
+    let mut stack = vec![DebugItem::ROOT];
+    let mut kept = 0;
+    while let Some(item) = stack.pop() {
+        let row = cache.debug_row(item).unwrap();
+        assert_eq!(row.mirrored, 0, "{item:?}");
+        assert_eq!(row.mirrored_children, 0);
+        assert!(!row.mirror_pruned);
+        kept += row.mirrored_kept;
+        assert_eq!(
+            cache.debug_children(item, false, false).len(),
+            cache.debug_children(item, false, true).len()
+        );
+        for c in cache.debug_children(item, false, true) {
+            stack.push(c.item);
+        }
+    }
+    assert!(kept > 0, "steps count the kept mirrored legs");
+}

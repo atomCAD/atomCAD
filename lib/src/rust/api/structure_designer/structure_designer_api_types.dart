@@ -864,6 +864,9 @@ class APIChemisorbData {
   /// Prune seatings that clash instead of relaxing them.
   final bool clashFilter;
 
+  /// Relax mirror-image three-leg assignments instead of pruning them.
+  final bool includeMirrored;
+
   /// At most this many legs per hypothesis: -1 = no cap.
   final int maxFormedBonds;
 
@@ -903,6 +906,7 @@ class APIChemisorbData {
     required this.tolerance,
     required this.reach,
     required this.clashFilter,
+    required this.includeMirrored,
     required this.maxFormedBonds,
     this.formedBonds,
     this.bondInventory,
@@ -923,6 +927,7 @@ class APIChemisorbData {
       tolerance.hashCode ^
       reach.hashCode ^
       clashFilter.hashCode ^
+      includeMirrored.hashCode ^
       maxFormedBonds.hashCode ^
       formedBonds.hashCode ^
       bondInventory.hashCode ^
@@ -945,6 +950,7 @@ class APIChemisorbData {
           tolerance == other.tolerance &&
           reach == other.reach &&
           clashFilter == other.clashFilter &&
+          includeMirrored == other.includeMirrored &&
           maxFormedBonds == other.maxFormedBonds &&
           formedBonds == other.formedBonds &&
           bondInventory == other.bondInventory &&
@@ -1024,6 +1030,10 @@ class APIChemisorbDebugRow {
   /// A step's legs by verdict; together, the sites its test accepted.
   final int candidates;
   final int mirrored;
+
+  /// Mirrored legs kept by `include_mirrored` (`mirrored` counts pruned
+  /// ones).
+  final int mirroredKept;
   final int undecided;
   final int clashes;
   final int rejectedValence;
@@ -1035,6 +1045,9 @@ class APIChemisorbDebugRow {
   final bool candidate;
   final bool localParent;
   final APIChemisorbMirror? mirror;
+
+  /// Mirrored, and pruned for it (`include_mirrored` off).
+  final bool mirrorPruned;
   final bool seatingClash;
   final bool prunedClash;
 
@@ -1063,6 +1076,7 @@ class APIChemisorbDebugRow {
     required this.mirroredDuplicates,
     required this.candidates,
     required this.mirrored,
+    required this.mirroredKept,
     required this.undecided,
     required this.clashes,
     required this.rejectedValence,
@@ -1072,6 +1086,7 @@ class APIChemisorbDebugRow {
     required this.candidate,
     required this.localParent,
     this.mirror,
+    required this.mirrorPruned,
     required this.seatingClash,
     required this.prunedClash,
     this.copyOf,
@@ -1097,6 +1112,7 @@ class APIChemisorbDebugRow {
       mirroredDuplicates.hashCode ^
       candidates.hashCode ^
       mirrored.hashCode ^
+      mirroredKept.hashCode ^
       undecided.hashCode ^
       clashes.hashCode ^
       rejectedValence.hashCode ^
@@ -1106,6 +1122,7 @@ class APIChemisorbDebugRow {
       candidate.hashCode ^
       localParent.hashCode ^
       mirror.hashCode ^
+      mirrorPruned.hashCode ^
       seatingClash.hashCode ^
       prunedClash.hashCode ^
       copyOf.hashCode ^
@@ -1133,6 +1150,7 @@ class APIChemisorbDebugRow {
           mirroredDuplicates == other.mirroredDuplicates &&
           candidates == other.candidates &&
           mirrored == other.mirrored &&
+          mirroredKept == other.mirroredKept &&
           undecided == other.undecided &&
           clashes == other.clashes &&
           rejectedValence == other.rejectedValence &&
@@ -1142,6 +1160,7 @@ class APIChemisorbDebugRow {
           candidate == other.candidate &&
           localParent == other.localParent &&
           mirror == other.mirror &&
+          mirrorPruned == other.mirrorPruned &&
           seatingClash == other.seatingClash &&
           prunedClash == other.prunedClash &&
           copyOf == other.copyOf &&
@@ -1339,6 +1358,13 @@ class APIChemisorbRow {
   final BigInt transfers;
   final bool converged;
   final bool seatingClash;
+
+  /// It grew from a mirror-image three-leg assignment (`include_mirrored`).
+  final bool mirrored;
+
+  /// A mirrored three-leg candidate's start: its third foot's distance from
+  /// its seating point (Å).
+  final double? mirroredStart;
   final double worstBondRatio;
   final double stretch;
   final double bend;
@@ -1356,6 +1382,8 @@ class APIChemisorbRow {
     required this.transfers,
     required this.converged,
     required this.seatingClash,
+    required this.mirrored,
+    this.mirroredStart,
     required this.worstBondRatio,
     required this.stretch,
     required this.bend,
@@ -1375,6 +1403,8 @@ class APIChemisorbRow {
       transfers.hashCode ^
       converged.hashCode ^
       seatingClash.hashCode ^
+      mirrored.hashCode ^
+      mirroredStart.hashCode ^
       worstBondRatio.hashCode ^
       stretch.hashCode ^
       bend.hashCode ^
@@ -1396,6 +1426,8 @@ class APIChemisorbRow {
           transfers == other.transfers &&
           converged == other.converged &&
           seatingClash == other.seatingClash &&
+          mirrored == other.mirrored &&
+          mirroredStart == other.mirroredStart &&
           worstBondRatio == other.worstBondRatio &&
           stretch == other.stretch &&
           bend == other.bend &&
@@ -1420,7 +1452,10 @@ class APIChemisorbStats {
 
   /// Rejected by `bond_inventory` while enumerating.
   final BigInt prunedFilter;
+
+  /// Mirrored three-leg assignments pruned, and kept (`include_mirrored`).
   final BigInt prunedMirror;
+  final BigInt mirroredKept;
   final BigInt mirrorUndecided;
   final BigInt candidates;
   final BigInt parents;
@@ -1464,6 +1499,7 @@ class APIChemisorbStats {
     required this.prunedNoAcceptor,
     required this.prunedFilter,
     required this.prunedMirror,
+    required this.mirroredKept,
     required this.mirrorUndecided,
     required this.candidates,
     required this.parents,
@@ -1497,6 +1533,7 @@ class APIChemisorbStats {
       prunedNoAcceptor.hashCode ^
       prunedFilter.hashCode ^
       prunedMirror.hashCode ^
+      mirroredKept.hashCode ^
       mirrorUndecided.hashCode ^
       candidates.hashCode ^
       parents.hashCode ^
@@ -1532,6 +1569,7 @@ class APIChemisorbStats {
           prunedNoAcceptor == other.prunedNoAcceptor &&
           prunedFilter == other.prunedFilter &&
           prunedMirror == other.prunedMirror &&
+          mirroredKept == other.mirroredKept &&
           mirrorUndecided == other.mirrorUndecided &&
           candidates == other.candidates &&
           parents == other.parents &&

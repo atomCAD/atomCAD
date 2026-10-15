@@ -1,7 +1,7 @@
 # Design: mirrored bindings and passivated sites in `chemisorb`, clash-aware `passivate`
 
-Status: **reviewed 2026-10-15; Phase 1 done 2026-10-15 (§8.1).** Phases 1–3
-are agent work; Phase 4 is the maintainer's.
+Status: **reviewed 2026-10-15; Phases 1 and 2 done 2026-10-15 (§8.1,
+§8.2).** Phases 1–3 are agent work; Phase 4 is the maintainer's.
 
 Three additions, requested by mechadense for a chemist who runs `chemisorb`
 as a brute-force search and wants to be shown, not told, what the pruning
@@ -701,3 +701,54 @@ two. `geminal_terminators_do_not_clash_with_each_other` pins it.
 **`.cnnd`:** `skip_clashes` is not written while false and `clash_factor` not
 at its default, so a node that never used the option saves byte-identically
 to before (the text format follows §5.2: both only when `skip_clashes` is on).
+
+### 8.2 Phase 2: `include_mirrored` (2026-10-15)
+
+Built as §3 describes. Where the implementation had to choose:
+
+- **`seat_on_pair` uses the triple's local up and seating points, and its θ
+  rule excludes all three legs.** §3.2 says "the two-leg seating `seat`
+  already does", but `seat` on a pair would take the local up of two sites
+  and count the third foot's own atoms as clashing with its own site, turning
+  the body away from where the third bond should form. The residual is then
+  measured against the same seating point the mirror check used.
+- **Body up holds for clean seatings only.** When every θ angle clashes the
+  rule keeps the fewest-clash angle wherever the body ends. On the slab
+  tripod this happens for 21 of 459 mirrored assignments, all of them triples
+  spanning the slab's top and its bare bottom face (all clashing).
+- **"Pruned" is a plan property.** `SequentialPlan` records the setting
+  (`include_mirrored`, `mirror_pruned(h)`), so the debug view tells a pruned
+  mirrored row from a kept one. `SequentialPlan::start_seating` is the one
+  place a row without a stored seating gets one: the proper fit for a pruned
+  row (the body-in-the-substrate picture of §3.2), `seat_mirrored` for a kept
+  one that was neither candidate nor parent.
+- **A local-phase candidate inherits `mirrored`** from its three-leg
+  ancestor; its row has no `mirrored_start` (the panel's "third bond started
+  at N Å" exists only for three-leg candidates).
+- **`ChildVerdict::MirroredKept`** is the debug tree's count for *mirr.
+  (kept)*; `mirrored` keeps counting pruned legs only, so the panel's hiding
+  arithmetic is unchanged.
+- **Snapshots.** The four plan snapshots print `PlanStats` with `{:#?}`, so
+  they gained the line `mirrored_kept: 0`; every value is unchanged.
+- **The audit's bond-ratio check skips mirrored candidates.** A rigid
+  adsorbate seated on two legs often ends with its third bond far from rest
+  (below), which `audit` would otherwise report as a broken binding.
+
+**Plan time** (release, `plan_is_fast_enough_for_every_evaluation`): tripod
+0.014 s → 0.027 s (459 mirrored kept), hexapod 0.051 s → 0.095 s (1,683),
+against the 0.25 s guard. No change to the plan's structure was needed.
+
+**The achiral-tripod test needs a rigid substrate.** Over three *free* silyls
+(the relax tests' `planted_tripod`), every assignment of feet to silyls is the
+same molecule, and a mirrored start settled in another conformer of it, 0.035
+kcal/mol below the proper relaxation and 0.7 Å apart in foot height, so
+`unique` kept them apart. That is not a new binding, but it does break "a
+mirrored candidate never ranks first" on a substrate whose sites can move as
+freely as the adsorbate. With the site Si frozen the expectation holds by a
+wide margin: the three mirrored starts end at 1,611 kcal/mol (O–Si stretched
+to 2.1–2.4 Å) against 70 for the planted binding, none merged — the "ends
+strained" outcome of §3.3. On a real slab the sites are bonded into the
+surface, so the walkthrough (Phase 4) is where a mirrored candidate ranking
+near the top should be looked at: it is either the crossed-arm conformer the
+option exists to find, or a conformer of a proper binding that `unique`'s
+tolerance does not merge.

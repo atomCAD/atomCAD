@@ -19620,8 +19620,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIChemisorbData dco_decode_api_chemisorb_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 16)
-      throw Exception('unexpected arr length: expect 16 but see ${arr.length}');
+    if (arr.length != 17)
+      throw Exception('unexpected arr length: expect 17 but see ${arr.length}');
     return APIChemisorbData(
       adsorbateTag: dco_decode_String(arr[0]),
       substrateTag: dco_decode_String(arr[1]),
@@ -19629,16 +19629,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       tolerance: dco_decode_f_64(arr[3]),
       reach: dco_decode_f_64(arr[4]),
       clashFilter: dco_decode_bool(arr[5]),
-      maxFormedBonds: dco_decode_i_32(arr[6]),
-      formedBonds: dco_decode_opt_box_autoadd_i_32(arr[7]),
-      bondInventory: dco_decode_opt_String(arr[8]),
-      topN: dco_decode_i_32(arr[9]),
-      energyWindow: dco_decode_f_64(arr[10]),
-      budget: dco_decode_i_32(arr[11]),
-      maxIterations: dco_decode_i_32(arr[12]),
-      unique: dco_decode_api_chemisorb_unique(arr[13]),
-      uniqueTolerance: dco_decode_f_64(arr[14]),
-      localHops: dco_decode_i_32(arr[15]),
+      includeMirrored: dco_decode_bool(arr[6]),
+      maxFormedBonds: dco_decode_i_32(arr[7]),
+      formedBonds: dco_decode_opt_box_autoadd_i_32(arr[8]),
+      bondInventory: dco_decode_opt_String(arr[9]),
+      topN: dco_decode_i_32(arr[10]),
+      energyWindow: dco_decode_f_64(arr[11]),
+      budget: dco_decode_i_32(arr[12]),
+      maxIterations: dco_decode_i_32(arr[13]),
+      unique: dco_decode_api_chemisorb_unique(arr[14]),
+      uniqueTolerance: dco_decode_f_64(arr[15]),
+      localHops: dco_decode_i_32(arr[16]),
     );
   }
 
@@ -19664,8 +19665,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIChemisorbDebugRow dco_decode_api_chemisorb_debug_row(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 30)
-      throw Exception('unexpected arr length: expect 30 but see ${arr.length}');
+    if (arr.length != 32)
+      throw Exception('unexpected arr length: expect 32 but see ${arr.length}');
     return APIChemisorbDebugRow(
       item: dco_decode_api_chemisorb_debug_ref(arr[0]),
       kind: dco_decode_api_chemisorb_debug_row_kind(arr[1]),
@@ -19679,24 +19680,26 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       mirroredDuplicates: dco_decode_u_32(arr[9]),
       candidates: dco_decode_u_32(arr[10]),
       mirrored: dco_decode_u_32(arr[11]),
-      undecided: dco_decode_u_32(arr[12]),
-      clashes: dco_decode_u_32(arr[13]),
-      rejectedValence: dco_decode_u_32(arr[14]),
-      rejectedNoAcceptor: dco_decode_u_32(arr[15]),
-      rejectedFilter: dco_decode_u_32(arr[16]),
-      nearMisses: dco_decode_list_String(arr[17]),
-      candidate: dco_decode_bool(arr[18]),
-      localParent: dco_decode_bool(arr[19]),
-      mirror: dco_decode_opt_box_autoadd_api_chemisorb_mirror(arr[20]),
-      seatingClash: dco_decode_bool(arr[21]),
-      prunedClash: dco_decode_bool(arr[22]),
-      copyOf: dco_decode_opt_box_autoadd_usize(arr[23]),
-      strain: dco_decode_opt_box_autoadd_f_64(arr[24]),
-      converged: dco_decode_bool(arr[25]),
-      budgetCut: dco_decode_bool(arr[26]),
-      canSeat: dco_decode_bool(arr[27]),
-      canRelax: dco_decode_bool(arr[28]),
-      defaultForm: dco_decode_api_chemisorb_debug_form(arr[29]),
+      mirroredKept: dco_decode_u_32(arr[12]),
+      undecided: dco_decode_u_32(arr[13]),
+      clashes: dco_decode_u_32(arr[14]),
+      rejectedValence: dco_decode_u_32(arr[15]),
+      rejectedNoAcceptor: dco_decode_u_32(arr[16]),
+      rejectedFilter: dco_decode_u_32(arr[17]),
+      nearMisses: dco_decode_list_String(arr[18]),
+      candidate: dco_decode_bool(arr[19]),
+      localParent: dco_decode_bool(arr[20]),
+      mirror: dco_decode_opt_box_autoadd_api_chemisorb_mirror(arr[21]),
+      mirrorPruned: dco_decode_bool(arr[22]),
+      seatingClash: dco_decode_bool(arr[23]),
+      prunedClash: dco_decode_bool(arr[24]),
+      copyOf: dco_decode_opt_box_autoadd_usize(arr[25]),
+      strain: dco_decode_opt_box_autoadd_f_64(arr[26]),
+      converged: dco_decode_bool(arr[27]),
+      budgetCut: dco_decode_bool(arr[28]),
+      canSeat: dco_decode_bool(arr[29]),
+      canRelax: dco_decode_bool(arr[30]),
+      defaultForm: dco_decode_api_chemisorb_debug_form(arr[31]),
     );
   }
 
@@ -19772,8 +19775,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIChemisorbRow dco_decode_api_chemisorb_row(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 15)
-      throw Exception('unexpected arr length: expect 15 but see ${arr.length}');
+    if (arr.length != 17)
+      throw Exception('unexpected arr length: expect 17 but see ${arr.length}');
     return APIChemisorbRow(
       rank: dco_decode_usize(arr[0]),
       copies: dco_decode_usize(arr[1]),
@@ -19784,12 +19787,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       transfers: dco_decode_usize(arr[6]),
       converged: dco_decode_bool(arr[7]),
       seatingClash: dco_decode_bool(arr[8]),
-      worstBondRatio: dco_decode_f_64(arr[9]),
-      stretch: dco_decode_f_64(arr[10]),
-      bend: dco_decode_f_64(arr[11]),
-      torsion: dco_decode_f_64(arr[12]),
-      inversion: dco_decode_f_64(arr[13]),
-      vdw: dco_decode_f_64(arr[14]),
+      mirrored: dco_decode_bool(arr[9]),
+      mirroredStart: dco_decode_opt_box_autoadd_f_64(arr[10]),
+      worstBondRatio: dco_decode_f_64(arr[11]),
+      stretch: dco_decode_f_64(arr[12]),
+      bend: dco_decode_f_64(arr[13]),
+      torsion: dco_decode_f_64(arr[14]),
+      inversion: dco_decode_f_64(arr[15]),
+      vdw: dco_decode_f_64(arr[16]),
     );
   }
 
@@ -19797,8 +19802,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIChemisorbStats dco_decode_api_chemisorb_stats(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 29)
-      throw Exception('unexpected arr length: expect 29 but see ${arr.length}');
+    if (arr.length != 30)
+      throw Exception('unexpected arr length: expect 30 but see ${arr.length}');
     return APIChemisorbStats(
       feet: dco_decode_usize(arr[0]),
       sites: dco_decode_usize(arr[1]),
@@ -19811,24 +19816,25 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       prunedNoAcceptor: dco_decode_usize(arr[8]),
       prunedFilter: dco_decode_usize(arr[9]),
       prunedMirror: dco_decode_usize(arr[10]),
-      mirrorUndecided: dco_decode_usize(arr[11]),
-      candidates: dco_decode_usize(arr[12]),
-      parents: dco_decode_usize(arr[13]),
-      seatingClashes: dco_decode_usize(arr[14]),
-      prunedClash: dco_decode_usize(arr[15]),
-      localPhase: dco_decode_bool(arr[16]),
-      searched: dco_decode_bool(arr[17]),
-      stale: dco_decode_bool(arr[18]),
-      relaxed: dco_decode_usize(arr[19]),
-      localRelaxed: dco_decode_usize(arr[20]),
-      toRelax: dco_decode_usize(arr[21]),
-      unconverged: dco_decode_usize(arr[22]),
-      listed: dco_decode_usize(arr[23]),
-      truncated: dco_decode_bool(arr[24]),
-      seconds: dco_decode_f_64(arr[25]),
-      local: dco_decode_list_api_chemisorb_level(arr[26]),
-      merged: dco_decode_usize(arr[27]),
-      uniqueUndecided: dco_decode_usize(arr[28]),
+      mirroredKept: dco_decode_usize(arr[11]),
+      mirrorUndecided: dco_decode_usize(arr[12]),
+      candidates: dco_decode_usize(arr[13]),
+      parents: dco_decode_usize(arr[14]),
+      seatingClashes: dco_decode_usize(arr[15]),
+      prunedClash: dco_decode_usize(arr[16]),
+      localPhase: dco_decode_bool(arr[17]),
+      searched: dco_decode_bool(arr[18]),
+      stale: dco_decode_bool(arr[19]),
+      relaxed: dco_decode_usize(arr[20]),
+      localRelaxed: dco_decode_usize(arr[21]),
+      toRelax: dco_decode_usize(arr[22]),
+      unconverged: dco_decode_usize(arr[23]),
+      listed: dco_decode_usize(arr[24]),
+      truncated: dco_decode_bool(arr[25]),
+      seconds: dco_decode_f_64(arr[26]),
+      local: dco_decode_list_api_chemisorb_level(arr[27]),
+      merged: dco_decode_usize(arr[28]),
+      uniqueUndecided: dco_decode_usize(arr[29]),
     );
   }
 
@@ -26227,6 +26233,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_tolerance = sse_decode_f_64(deserializer);
     var var_reach = sse_decode_f_64(deserializer);
     var var_clashFilter = sse_decode_bool(deserializer);
+    var var_includeMirrored = sse_decode_bool(deserializer);
     var var_maxFormedBonds = sse_decode_i_32(deserializer);
     var var_formedBonds = sse_decode_opt_box_autoadd_i_32(deserializer);
     var var_bondInventory = sse_decode_opt_String(deserializer);
@@ -26244,6 +26251,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         tolerance: var_tolerance,
         reach: var_reach,
         clashFilter: var_clashFilter,
+        includeMirrored: var_includeMirrored,
         maxFormedBonds: var_maxFormedBonds,
         formedBonds: var_formedBonds,
         bondInventory: var_bondInventory,
@@ -26289,6 +26297,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_mirroredDuplicates = sse_decode_u_32(deserializer);
     var var_candidates = sse_decode_u_32(deserializer);
     var var_mirrored = sse_decode_u_32(deserializer);
+    var var_mirroredKept = sse_decode_u_32(deserializer);
     var var_undecided = sse_decode_u_32(deserializer);
     var var_clashes = sse_decode_u_32(deserializer);
     var var_rejectedValence = sse_decode_u_32(deserializer);
@@ -26299,6 +26308,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_localParent = sse_decode_bool(deserializer);
     var var_mirror =
         sse_decode_opt_box_autoadd_api_chemisorb_mirror(deserializer);
+    var var_mirrorPruned = sse_decode_bool(deserializer);
     var var_seatingClash = sse_decode_bool(deserializer);
     var var_prunedClash = sse_decode_bool(deserializer);
     var var_copyOf = sse_decode_opt_box_autoadd_usize(deserializer);
@@ -26321,6 +26331,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         mirroredDuplicates: var_mirroredDuplicates,
         candidates: var_candidates,
         mirrored: var_mirrored,
+        mirroredKept: var_mirroredKept,
         undecided: var_undecided,
         clashes: var_clashes,
         rejectedValence: var_rejectedValence,
@@ -26330,6 +26341,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         candidate: var_candidate,
         localParent: var_localParent,
         mirror: var_mirror,
+        mirrorPruned: var_mirrorPruned,
         seatingClash: var_seatingClash,
         prunedClash: var_prunedClash,
         copyOf: var_copyOf,
@@ -26437,6 +26449,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_transfers = sse_decode_usize(deserializer);
     var var_converged = sse_decode_bool(deserializer);
     var var_seatingClash = sse_decode_bool(deserializer);
+    var var_mirrored = sse_decode_bool(deserializer);
+    var var_mirroredStart = sse_decode_opt_box_autoadd_f_64(deserializer);
     var var_worstBondRatio = sse_decode_f_64(deserializer);
     var var_stretch = sse_decode_f_64(deserializer);
     var var_bend = sse_decode_f_64(deserializer);
@@ -26453,6 +26467,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         transfers: var_transfers,
         converged: var_converged,
         seatingClash: var_seatingClash,
+        mirrored: var_mirrored,
+        mirroredStart: var_mirroredStart,
         worstBondRatio: var_worstBondRatio,
         stretch: var_stretch,
         bend: var_bend,
@@ -26476,6 +26492,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_prunedNoAcceptor = sse_decode_usize(deserializer);
     var var_prunedFilter = sse_decode_usize(deserializer);
     var var_prunedMirror = sse_decode_usize(deserializer);
+    var var_mirroredKept = sse_decode_usize(deserializer);
     var var_mirrorUndecided = sse_decode_usize(deserializer);
     var var_candidates = sse_decode_usize(deserializer);
     var var_parents = sse_decode_usize(deserializer);
@@ -26506,6 +26523,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         prunedNoAcceptor: var_prunedNoAcceptor,
         prunedFilter: var_prunedFilter,
         prunedMirror: var_prunedMirror,
+        mirroredKept: var_mirroredKept,
         mirrorUndecided: var_mirrorUndecided,
         candidates: var_candidates,
         parents: var_parents,
@@ -34138,6 +34156,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_f_64(self.tolerance, serializer);
     sse_encode_f_64(self.reach, serializer);
     sse_encode_bool(self.clashFilter, serializer);
+    sse_encode_bool(self.includeMirrored, serializer);
     sse_encode_i_32(self.maxFormedBonds, serializer);
     sse_encode_opt_box_autoadd_i_32(self.formedBonds, serializer);
     sse_encode_opt_String(self.bondInventory, serializer);
@@ -34181,6 +34200,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_32(self.mirroredDuplicates, serializer);
     sse_encode_u_32(self.candidates, serializer);
     sse_encode_u_32(self.mirrored, serializer);
+    sse_encode_u_32(self.mirroredKept, serializer);
     sse_encode_u_32(self.undecided, serializer);
     sse_encode_u_32(self.clashes, serializer);
     sse_encode_u_32(self.rejectedValence, serializer);
@@ -34190,6 +34210,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.candidate, serializer);
     sse_encode_bool(self.localParent, serializer);
     sse_encode_opt_box_autoadd_api_chemisorb_mirror(self.mirror, serializer);
+    sse_encode_bool(self.mirrorPruned, serializer);
     sse_encode_bool(self.seatingClash, serializer);
     sse_encode_bool(self.prunedClash, serializer);
     sse_encode_opt_box_autoadd_usize(self.copyOf, serializer);
@@ -34272,6 +34293,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_usize(self.transfers, serializer);
     sse_encode_bool(self.converged, serializer);
     sse_encode_bool(self.seatingClash, serializer);
+    sse_encode_bool(self.mirrored, serializer);
+    sse_encode_opt_box_autoadd_f_64(self.mirroredStart, serializer);
     sse_encode_f_64(self.worstBondRatio, serializer);
     sse_encode_f_64(self.stretch, serializer);
     sse_encode_f_64(self.bend, serializer);
@@ -34295,6 +34318,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_usize(self.prunedNoAcceptor, serializer);
     sse_encode_usize(self.prunedFilter, serializer);
     sse_encode_usize(self.prunedMirror, serializer);
+    sse_encode_usize(self.mirroredKept, serializer);
     sse_encode_usize(self.mirrorUndecided, serializer);
     sse_encode_usize(self.candidates, serializer);
     sse_encode_usize(self.parents, serializer);

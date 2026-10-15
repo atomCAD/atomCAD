@@ -2160,19 +2160,253 @@ fn plan_is_fast_enough_for_every_evaluation() {
     let slab = si100_slab(5.0, 11.0);
     for legs in [3, 6] {
         let (ads, _) = posed_stand_in(legs, 0.0, DVec3::ZERO);
-        let config = SequentialSearch::default();
-        let _ = plan(&ads, &slab, &config).unwrap();
-        let p = plan(&ads, &slab, &config).unwrap();
-        println!(
-            "{legs} feet: plan {:.3} s, {} hypotheses, {} seated",
-            p.stats.seconds,
-            p.hypotheses.len(),
-            p.stats.candidates
-        );
-        assert!(
-            p.stats.seconds < 0.25,
-            "{legs} feet: {:.3} s",
-            p.stats.seconds
-        );
+        // With `include_mirrored` every mirrored assignment is seated too:
+        // three two-leg θ searches each.
+        for include_mirrored in [false, true] {
+            let config = SequentialSearch {
+                include_mirrored,
+                ..Default::default()
+            };
+            let _ = plan(&ads, &slab, &config).unwrap();
+            let p = plan(&ads, &slab, &config).unwrap();
+            println!(
+                "{legs} feet, include_mirrored {include_mirrored}: plan {:.3} s, \
+                 {} hypotheses, {} seated, {} mirrored kept",
+                p.stats.seconds,
+                p.hypotheses.len(),
+                p.stats.candidates,
+                p.stats.mirrored_kept
+            );
+            assert!(
+                p.stats.seconds < 0.25,
+                "{legs} feet, include_mirrored {include_mirrored}: {:.3} s",
+                p.stats.seconds
+            );
+        }
     }
+}
+
+// ============================================================================
+// include_mirrored (design_chemisorb_mirrors_and_passivation.md §3)
+// ============================================================================
+
+fn with_mirrored(config: &SequentialSearch) -> SequentialSearch {
+    SequentialSearch {
+        include_mirrored: true,
+        ..config.clone()
+    }
+}
+
+fn mirror_verdicts(p: &SequentialPlan) -> BTreeMap<InputChange, Option<Mirror>> {
+    p.hypotheses
+        .iter()
+        .map(|h| (input_change(&p.setup, &h.key()), h.mirror))
+        .collect()
+}
+
+/// With the setting on, the mirror check still judges every three-leg
+/// assignment but prunes none: what it pruned is kept, counted in
+/// `mirrored_kept`, and relaxed as a candidate. The fixtures relax every
+/// three-leg hypothesis (clash filter off, no leg-count or inventory filter,
+/// not truncated), so `to_relax` grows by exactly the kept ones.
+#[test]
+fn include_mirrored_keeps_what_the_mirror_check_prunes() {
+    let (tri_ads, tri_sub) = hand_worked();
+    let (slab_ads, slab) = tripod_over_slab();
+    for (what, ads, sub, config) in [
+        ("hand-worked", &tri_ads, &tri_sub, cfg(2.0, 0.0)),
+        ("slab tripod", &slab_ads, &slab, cfg(3.5, 0.5)),
+    ] {
+        let off = plan(ads, sub, &config).unwrap();
+        let on = plan(ads, sub, &with_mirrored(&config)).unwrap();
+        assert!(!off.stats.truncated && !on.stats.truncated);
+        assert!(off.stats.pruned_mirror > 0, "{what}");
+        assert_eq!(on.stats.pruned_mirror, 0, "{what}");
+        assert_eq!(off.stats.mirrored_kept, 0, "{what}");
+        assert_eq!(on.stats.mirrored_kept, off.stats.pruned_mirror, "{what}");
+        assert_eq!(
+            on.stats.to_relax,
+            off.stats.to_relax + on.stats.mirrored_kept,
+            "{what}"
+        );
+        // The same hypotheses with the same verdicts; only what is relaxed
+        // changes.
+        assert_eq!(plan_changes(&on), plan_changes(&off), "{what}");
+        assert_eq!(mirror_verdicts(&on), mirror_verdicts(&off), "{what}");
+        for h in &on.hypotheses {
+            if h.mirror == Some(Mirror::Mirrored) {
+                assert!(h.candidate && h.seating.is_some(), "{what}");
+                assert!(!on.mirror_pruned(h));
+            }
+        }
+        for p in [&off, &on] {
+            assert_stats_add_up(p);
+        }
+        assert_matches_oracle(&on, &with_mirrored(&config), what);
+    }
+    // The hand-worked case by name: its five mirrored triples are candidates.
+    let p = plan(&tri_ads, &tri_sub, &with_mirrored(&cfg(2.0, 0.0))).unwrap();
+    assert_eq!((p.stats.mirrored_kept, p.stats.pruned_mirror), (5, 0));
+    assert_eq!(
+        p.hypotheses
+            .iter()
+            .filter(|h| h.legs() == 3 && h.candidate)
+            .count(),
+        7
+    );
+}
+
+/// The oracle with the setting on: every three-leg assignment within the
+/// shells is a hypothesis, and a candidate when the filters admit it,
+/// mirrored or not — on the random cases of the oracle test.
+#[test]
+fn plan_equals_the_oracle_with_mirrored_kept() {
+    let mut kept = 0;
+    for seed in 0..300 {
+        let mut rng = Rng::new(seed);
+        let (ads, sub, config) = random_case(&mut rng);
+        let config = with_mirrored(&config);
+        let p = plan(&ads, &sub, &config).unwrap();
+        assert_stats_add_up(&p);
+        assert_matches_oracle(&p, &config, &format!("seed {seed}, mirrored kept"));
+        kept += p.stats.mirrored_kept;
+    }
+    assert!(kept > 0, "the random cases include mirrored assignments");
+}
+
+/// Where `seat_mirrored` puts a mirrored three-leg assignment: upright (the
+/// body's centroid above the seating points along the local up, where the
+/// proper fit puts it below), on the pair whose third foot lands nearest its
+/// seating point, the same whatever the binding order. "Upright" holds for a
+/// clean seating only: when every turn of the θ rule clashes it keeps the one
+/// with the fewest clashing pairs, wherever the body ends (on the slab, triples
+/// that span its top and its bare bottom face).
+
+fn assert_mirrored_seating(p: &SequentialPlan, h: &Hypothesis) {
+    let setup = &p.setup;
+    let seating = h
+        .seating
+        .as_ref()
+        .expect("a kept mirrored hypothesis is seated");
+    assert_eq!(seating, &setup.seat_mirrored(&h.steps));
+    let mut legs: Vec<Leg> = h.steps.iter().map(|s| s.leg).collect();
+    legs.sort_unstable();
+    let up = setup.local_up(&legs.iter().map(|l| l.site).collect::<Vec<_>>());
+    assert_eq!(seating.up, up);
+    let points = setup.seating_points(&legs, up);
+    let plane = points.iter().copied().sum::<DVec3>() / 3.0;
+    let centroid = |s: &Seating| {
+        setup.posed().iter().map(|&q| s.apply(q)).sum::<DVec3>() / setup.posed().len() as f64
+    };
+    if !seating.clashes() {
+        assert!(
+            (centroid(seating) - plane).dot(up) > 0.0,
+            "body up: {:?}",
+            h.steps
+        );
+        // The proper fit of the same legs seats the body in the substrate:
+        // the reason the mirror check exists.
+        assert!((centroid(&setup.seat(&h.steps)) - plane).dot(up) < 0.0);
+    }
+    // The pair: the least third-foot distance of the three, ties to the
+    // earlier pair.
+    let thirds: Vec<f64> = MIRRORED_PAIRS
+        .iter()
+        .map(|&pair| setup.third_foot_distance(&h.steps, pair, &setup.seat_on_pair(&h.steps, pair)))
+        .collect();
+    let best = thirds.iter().copied().fold(f64::INFINITY, f64::min);
+    let chosen = thirds.iter().position(|&d| d == best).unwrap();
+    assert_eq!(
+        seating,
+        &setup.seat_on_pair(&h.steps, MIRRORED_PAIRS[chosen])
+    );
+    assert!(seating.residual >= best - 1e-9);
+    // Bit for bit the same for every binding order.
+    let mut steps = h.steps.clone();
+    for _ in 0..3 {
+        steps.rotate_left(1);
+        assert_eq!(&setup.seat_mirrored(&steps), seating);
+        steps.swap(0, 1);
+        assert_eq!(&setup.seat_mirrored(&steps), seating);
+    }
+}
+
+#[test]
+fn a_mirrored_assignment_is_seated_upright_on_two_legs() {
+    // The hand-worked triangle. On sites A, B, C the feet and the sites are
+    // equilateral with the same side, so any pair seats both its feet
+    // exactly and the third foot is left a stretched bond away (the two
+    // mirrored triples on D, B, C have mismatched spacings).
+    let (ads, sub) = hand_worked();
+    let p = plan(&ads, &sub, &with_mirrored(&cfg(2.0, 0.0))).unwrap();
+    let mut checked = 0;
+    for h in p
+        .hypotheses
+        .iter()
+        .filter(|h| h.mirror == Some(Mirror::Mirrored))
+    {
+        assert_mirrored_seating(&p, h);
+        let seating = h.seating.as_ref().unwrap();
+        let mut legs: Vec<Leg> = h.steps.iter().map(|s| s.leg).collect();
+        legs.sort_unstable();
+        if legs.iter().any(|l| l.site > 2) {
+            continue;
+        }
+        let points = p.setup.seating_points(&legs, seating.up);
+        let off: Vec<f64> = legs
+            .iter()
+            .zip(&points)
+            .map(|(l, &q)| seating.apply(p.setup.feet[l.foot].position).distance(q))
+            .collect();
+        assert_eq!(off.iter().filter(|&&d| d < 1e-6).count(), 2, "{off:?}");
+        let third = off.iter().copied().fold(0.0, f64::max);
+        assert!(third > 1.0, "the third bond starts stretched: {third}");
+        assert!((seating.residual - third).abs() < 1e-9);
+        checked += 1;
+    }
+    assert_eq!(checked, 3);
+
+    // The slab tripod: real sites, mismatched spacings.
+    let (ads, slab) = tripod_over_slab();
+    let p = plan(&ads, &slab, &with_mirrored(&cfg(3.5, 0.5))).unwrap();
+    let (mut checked, mut clean) = (0, 0);
+    for h in p
+        .hypotheses
+        .iter()
+        .filter(|h| h.mirror == Some(Mirror::Mirrored))
+        .step_by(7)
+    {
+        assert_mirrored_seating(&p, h);
+        checked += 1;
+        clean += usize::from(!h.seating.as_ref().unwrap().clashes());
+    }
+    assert!(
+        checked > 20 && clean > 20,
+        "{checked} checked, {clean} clean"
+    );
+}
+
+/// With the setting off a mirrored hypothesis is never seated, as before,
+/// and the seating shown for it is the proper fit.
+#[test]
+fn without_the_setting_a_mirrored_hypothesis_is_not_seated() {
+    let (ads, sub) = hand_worked();
+    let p = plan(&ads, &sub, &cfg(2.0, 0.0)).unwrap();
+    assert!(!p.include_mirrored);
+    for h in &p.hypotheses {
+        if h.mirror == Some(Mirror::Mirrored) {
+            assert!(p.mirror_pruned(h) && !h.candidate && h.seating.is_none());
+            assert_eq!(p.start_seating(h), p.setup.seat(&h.steps));
+        }
+    }
+}
+
+#[test]
+fn include_mirrored_changes_the_fingerprint() {
+    let (ads, sub) = hand_worked();
+    let config = cfg(2.0, 0.0);
+    assert_ne!(
+        input_fingerprint(&ads, &sub, &config),
+        input_fingerprint(&ads, &sub, &with_mirrored(&config))
+    );
 }

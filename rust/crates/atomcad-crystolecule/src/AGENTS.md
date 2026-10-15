@@ -372,10 +372,14 @@ Rules that are easy to erode:
   slot nearest the side it came from, after the leg bonds are made — never on
   the line from its old position, which ignores the acceptor's bonds.
 - **Mirror check vs clash filter.** Mirror-image three-leg assignments are
-  pruned always by an exact handedness test that abstains near zero (nearly
-  collinear feet, a flat body); clashing seatings are pruned only with
-  `clash_filter` (on by default) and are always counted. They are separate
-  on purpose: one is geometry, the other a threshold.
+  pruned unless `include_mirrored`, by an exact handedness test that abstains
+  near zero (nearly collinear feet, a flat body); clashing seatings are pruned
+  only with `clash_filter` (on by default) and are always counted. They are
+  separate on purpose: one is geometry, the other a threshold. A kept mirrored
+  assignment is seated by `Setup::seat_mirrored` (upright on two legs, third
+  bond stretched), never by a reflection or the proper fit; "pruned" is
+  `SequentialPlan::mirror_pruned`, not `mirror == Mirrored`, and a seating
+  shown for an unseated row comes from `SequentialPlan::start_seating`.
 - The ranking is deterministic: relaxations run in parallel (rayon) and finish
   in any order, but "the best `top_n` by strain, ties by the change set" is
   one answer whatever the order, and a local level sorts before truncating.

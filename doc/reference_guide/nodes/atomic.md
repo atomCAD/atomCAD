@@ -1101,8 +1101,15 @@ surface. Two checks run on the seating, and both are reported:
   rather than relaxed; with it off, it is relaxed and listed with
   `seating_clash` set.
 - **Mirror images.** A three-leg assignment whose feet would have to be
-  reflected to fit their sites is pruned always. When the check cannot tell
-  (nearly collinear feet, a flat molecule) the binding is kept.
+  reflected to fit their sites is pruned, unless `include_mirrored` is on.
+  When the check cannot tell (nearly collinear feet, a flat molecule) the
+  binding is kept. With `include_mirrored` on, a mirrored assignment is
+  relaxed instead: the molecule is never reflected (that would be its mirror
+  image, a different molecule if it is chiral). It is seated upright on two of
+  its three legs — of the three pairs, the one that leaves the third foot
+  nearest its site — and the third bond starts stretched, for the relaxation
+  to pull in. A molecule whose feet can cross on flexible linkers may find a
+  binding this way; a rigid one usually ends strained.
 
 **Foot order** (optional). By default every order of the legs is tried —
 any foot as leg 1, any remaining foot as leg 2, and so on — and a binding
@@ -1170,6 +1177,11 @@ press Run again.
   transfer record).
 - `clash_filter` (default on) — prune seatings that clash instead of relaxing
   them. Clashes are counted either way.
+- `include_mirrored` (default off) — relax the mirror-image three-leg
+  assignments instead of pruning them (see **Mirror images** above). Their
+  candidates are marked `mirrored`; with `unique` on, one that relaxes into a
+  proper binding is merged into it. Each costs a relaxation: on a three-footed
+  tool about as many again as the proper three-leg bindings.
 - `max_formed_bonds` (default: no cap) — at most this many legs per binding.
   In the panel, tick *Limit legs* to set it; in the text format, `-1` means no
   cap.
@@ -1238,7 +1250,8 @@ The relaxations also follow the van der Waals setting in Preferences (the same
 one `relax` uses); changing it makes a result stale.
 
 In the text format `formed_bonds` and `bond_inventory` appear only when set:
-`formed_bonds: 3, bond_inventory: "formed 3× O–Si"`. The listing properties are
+`formed_bonds: 3, bond_inventory: "formed 3× O–Si"`; `include_mirrored: true`
+only when on. The listing properties are
 `unique: "rigid_mirror", unique_tolerance: 0.15, local_hops: 2`, `unique` one of
 `"off"`, `"exact"`, `"translation"`, `"rigid"`, `"rigid_mirror"`.
 
@@ -1252,9 +1265,10 @@ In the text format `formed_bonds` and `bond_inventory` appear only when set:
   `O2–Si45; H3 O2→Si47`), `formed_bonds` (the leg count; transfers not
   counted), `transfers`, `converged`, `seating_clash` (its start clashed; only
   possible with `clash_filter` off), `worst_bond_ratio`, `terms` (the
-  strain split into `stretch`, `bend`, `torsion`, `inversion`, `vdw`), and
+  strain split into `stretch`, `bend`, `torsion`, `inversion`, `vdw`),
   `copies` (how many kept candidates `unique` merged into this one, itself
-  excluded; copies the search did not keep are not counted). A record
+  excluded; copies the search did not keep are not counted), and `mirrored`
+  (it grew from a mirror-image assignment kept by `include_mirrored`). A record
   array draws nothing in the viewport; to look at a candidate, take its
   `structure` field (`array_at` + `record_destructure`).
 - `stats` (`ChemisorbStats`) — the whole search. From the plan (legs 1–3):
@@ -1263,10 +1277,12 @@ In the text format `formed_bonds` and `bond_inventory` appear only when set:
   `torus_triples` (distinct one-, two- and three-leg bindings), `duplicates`,
   `pruned_valence`, `pruned_no_acceptor` (an H with no free site within
   `reach`), `pruned_filter` (cut by `bond_inventory`), `pruned_mirror`,
-  `mirror_undecided`, `candidates`, `parents` (three-leg bindings relaxed only
-  to grow legs 4+ from), `seating_clashes`, `pruned_clash`, `to_relax` and
-  `local_phase` (legs 4+ follow). From the run: `relaxed` (both phases),
-  `local_relaxed`, `unconverged`, `listed` (kept after top N and the window,
+  `mirror_undecided`, `mirrored_kept` (mirror images relaxed because of
+  `include_mirrored`; with it on `pruned_mirror` is 0, and `pruned_mirror +
+  mirrored_kept` is always the number the check found), `candidates`,
+  `parents` (three-leg bindings relaxed only to grow legs 4+ from),
+  `seating_clashes`, `pruned_clash`, `to_relax` and `local_phase` (legs 4+
+  follow). From the run: `relaxed` (both phases), `local_relaxed`, `unconverged`, `listed` (kept after top N and the window,
   then after `unique` merged copies), `merged` (kept candidates `unique` merged
   into an earlier one; `listed + merged` is the kept count),
   `unique_undecided` (candidate pairs the comparison could not decide),
@@ -1334,7 +1350,8 @@ relaxed that can be reached by: leg 1 within `anchor_reach` of the posed feet;
 legs 2 and 3 on any site the foot spacing and bond lengths allow, plus
 `tolerance`; further legs within `reach` of the relaxed geometry; each
 transferred H placed by the rule when its leg forms; minus the mirror-image
-three-leg assignments, and the clashing seatings when `clash_filter` is on. It
+three-leg assignments (unless `include_mirrored` is on), and the clashing
+seatings when `clash_filter` is on. It
 depends on the order in which legs bond (an H that took a site a later leg
 could have used is not tried elsewhere). The search itself does not recognise
 the same pattern repeated on equivalent sites elsewhere on the proxy — every
@@ -1348,7 +1365,7 @@ relaxations a run would do beside it ("+ local phase" when legs 4 and later
 follow, whose count is known only after Run), or what the last run did, and a
 red line when the result is stale. Below it are the search settings — the tags,
 the three distances (*Reach* greyed while nothing reads it), *Prune seatings
-that clash*, *Limit legs* — then the filters (*Only an exact number of legs*,
+that clash*, *Include mirrored assignments*, *Limit legs* — then the filters (*Only an exact number of legs*,
 *Bond inventory*), then *Top N* and the energy window; then, in a group of
 its own, the **Listing** settings (*Unique*, its tolerance — greyed while
 *Unique* is off — and *Local hops*), which need no new Run. Then the search
@@ -1357,7 +1374,9 @@ sites, the one-, two- and three-leg counts, the candidates, the mirror and clash
 counts, and one line per local leg after a run; and the ranked candidates, one
 line each with the strain, the bond inventory underneath, an `unconv.` mark on a
 relaxation that did not converge, a `clash` mark on one whose seating
-clashed, and *+N copies* on one `unique` merged copies into. Lines over the
+clashed, a `mirr.` mark on a mirrored one (its hover says how far its third
+bond started from its site), and *+N copies* on one `unique` merged copies
+into. The mirror line of the statistics reads *pruned / kept / undecided*. Lines over the
 list say how many relaxed candidates top N and the window dropped, and how
 many kept ones were merged; the statistics give the kept and the listed
 counts. Hover a row for its sites, worst bond ratio and strain terms.
@@ -1377,8 +1396,8 @@ the search one decision at a time. It alternates two kinds of item:
 So going down the tree reads: root → *next foot O12* → `O12–Si45` → *next foot
 O13* → `+ O13–Si61` → … A next foot says how many sites its test accepted
 (*anchor*, *shell*, *ring* or *reach*), and how many of those lead to a
-mirror image (*mirr.*), are undecided by the mirror check (*undec.*) or clash
-when seated (*clash*). A leg that was relaxed shows its strain; a clash-pruned
+mirror image (*mirr.*, or *mirr. (kept)* with `include_mirrored`), are
+undecided by the mirror check (*undec.*) or clash when seated (*clash*). A leg that was relaxed shows its strain; a clash-pruned
 leg is greyed; *budget cut* marks one the budget stopped; *copy of rank N*
 marks a kept candidate `unique` merged into the candidate ranked N (it is
 still a relaxed binding of the search, just not listed). Hover an item for
@@ -1390,7 +1409,11 @@ search kept; the next foot it was also reached from says *1 dup. hidden*. Tick
 **Show duplicates** to list those as *= duplicate of #N* rows — clicking one
 jumps to the row it duplicates. Legs the mirror check pruned are hidden too
 (the *mirr.* count still says how many); tick **Show mirrored** to list them,
-greyed. Both toggles change only the list, never the search.
+greyed. Seated, a pruned one shows the proper fit with the body in the
+substrate — the reason it was pruned. With `include_mirrored` on nothing is
+pruned: mirrored legs are ordinary rows marked *mirr. (kept)*, seated upright
+on two legs, and **Show mirrored** is disabled. Both toggles change only the
+list, never the search.
 
 **Click an item** to show it on the two debug pins (tick *debug pin* and
 *shapes pin* above the tree to display them). Atoms keep their element colours

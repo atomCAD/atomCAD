@@ -10,7 +10,8 @@ use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::chemisorption::relax::relax;
 use atomcad_crystolecule::chemisorption::sequential::*;
 use atomcad_crystolecule::chemisorption::{
-    BondInventory, CHANGED_TAG, ChemisorptionError, TransferDirection, TransferRule,
+    BondInventory, CHANGED_TAG, ChemisorptionError, DistinctSettings, TransferDirection,
+    TransferRule, distinct,
 };
 use atomcad_crystolecule::simulation::uff::VdwMode;
 use atomcad_util::job_control::JobControl;
@@ -493,4 +494,102 @@ fn water_relaxes_with_its_hydrogen_on_the_dimer_partner() {
         "formed 1× H–Si, 1× O–Si; broken 1× H–O"
     );
     assert!(c.converged);
+}
+
+// ============================================================================
+// include_mirrored (design_chemisorb_mirrors_and_passivation.md §3)
+// ============================================================================
+
+/// A mirrored start relaxes like any other (converged or marked unconverged,
+/// never an error), and its candidate says it was mirrored. Off, none does.
+#[test]
+fn a_mirrored_start_relaxes_and_is_flagged() {
+    let (ads, sub) = triangle();
+    let config = SequentialSearch {
+        include_mirrored: true,
+        ..triangle_config()
+    };
+    let (p, r) = run(&ads, &sub, &config);
+    assert!(p.stats.mirrored_kept > 0);
+    assert_eq!(
+        r.candidates.iter().filter(|c| c.mirrored).count(),
+        p.stats.mirrored_kept,
+        "everything relaxed and kept"
+    );
+    for c in &r.candidates {
+        let h = r.hypothesis(&p, c.hypothesis);
+        assert_eq!(c.mirrored, h.mirror == Some(Mirror::Mirrored));
+        assert!(c.strain.is_finite());
+    }
+
+    let (_, off) = run(&ads, &sub, &triangle_config());
+    assert!(off.candidates.iter().all(|c| !c.mirrored));
+    assert_eq!(
+        off.candidates.len() + p.stats.mirrored_kept,
+        r.candidates.len()
+    );
+}
+
+/// The stand-in tripod is achiral and its three feet are equivalent, so a
+/// mirrored start cannot reach a binding the proper search lacks: each
+/// mirrored candidate is either `unique`-merged with a proper one, or more
+/// strained than the best proper candidate of its inventory. A mirrored
+/// candidate that ranks first and stays apart would be a bug. Not every one
+/// has to merge: seated on two legs, a rigid tripod usually cannot swing its
+/// third foot across and ends strained instead.
+///
+/// The site Si are frozen, so the sites form a rigid surface. Over three free
+/// silyls every assignment is the same molecule, and a mirrored start can
+/// settle in another conformer of it, 0.03 kcal/mol below the proper one
+/// (measured): not a different binding, but not one `unique` merges either.
+#[test]
+fn a_mirrored_start_of_an_achiral_tripod_finds_nothing_new() {
+    let (ads, mut sub, _) = planted_tripod();
+    let si: Vec<u32> = sub
+        .atoms_values()
+        .filter(|a| a.atomic_number == SI)
+        .map(|a| a.id)
+        .collect();
+    for id in si {
+        sub.set_atom_frozen(id, true);
+    }
+    let config = keep_all(SequentialSearch {
+        anchor_reach: 1.8,
+        tolerance: 0.0,
+        clash_filter: false,
+        include_mirrored: true,
+        ..Default::default()
+    });
+    let (p, r) = run(&ads, &sub, &config);
+    assert!(p.stats.mirrored_kept > 0);
+    let d = distinct(&p.setup, &r, &DistinctSettings::default()).unwrap();
+    let group = |i: usize| d.candidates[i].copy_of.unwrap_or(i);
+    let (mut merged, mut strained, mut checked) = (0, 0, 0);
+    for (i, c) in r.candidates.iter().enumerate().filter(|(_, c)| c.mirrored) {
+        let best_proper = r
+            .candidates
+            .iter()
+            .filter(|o| !o.mirrored && o.bond_inventory == c.bond_inventory)
+            .map(|o| o.strain)
+            .fold(f64::INFINITY, f64::min);
+        assert!(best_proper.is_finite(), "a proper binding of {c:?}");
+        let with_proper = r
+            .candidates
+            .iter()
+            .enumerate()
+            .any(|(j, o)| !o.mirrored && group(j) == group(i));
+        if with_proper {
+            merged += 1;
+        } else {
+            assert!(
+                c.strain > best_proper,
+                "a mirrored candidate stays apart and ranks first: {} vs {best_proper}",
+                c.strain
+            );
+            strained += 1;
+        }
+        checked += 1;
+    }
+    assert_eq!(checked, p.stats.mirrored_kept);
+    println!("mirrored candidates: {merged} merged with a proper one, {strained} more strained");
 }

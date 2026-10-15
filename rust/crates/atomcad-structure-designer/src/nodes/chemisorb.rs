@@ -91,8 +91,8 @@ use crate::text_format::TextValue;
 use atomcad_crystolecule::atomic_constants::element_symbol;
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::chemisorption::sequential::{
-    Candidate, ChildVerdict, DebugForm, DebugItem, DebugShapes, DebugView, LevelStats, Mirror,
-    PlanStats, RowKind, SHAPE_ALPHA, SHAPE_COLOR, SHAPE_LEVEL, SearchReport, SearchTree,
+    Candidate, ChildVerdict, DebugForm, DebugItem, DebugShapes, DebugView, Hypothesis, LevelStats,
+    Mirror, PlanStats, RowKind, SHAPE_ALPHA, SHAPE_COLOR, SHAPE_LEVEL, SearchReport, SearchTree,
     SequentialPlan, SequentialSearch, child_verdict, debug_view, item_ancestors, item_children,
     item_label, item_path, next_feet, plan, relaxation, root_view, row_forms, shown_row, step_legs,
     step_near_misses,
@@ -200,6 +200,11 @@ pub struct ChemisorbData {
     /// reported either way.
     #[serde(default = "default_clash_filter")]
     pub clash_filter: bool,
+    /// Relax the mirror-image three-leg assignments the mirror check would
+    /// prune, each seated upright on two legs with the third bond stretched.
+    /// Written only when on, so files that never used it are unchanged.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub include_mirrored: bool,
     /// At most this many legs (bonds formed) per hypothesis: `-1` = no cap.
     /// The panel shows it as a checkbox plus a value; `-1` is the unticked
     /// state.
@@ -256,6 +261,7 @@ impl Default for ChemisorbData {
             tolerance: default_tolerance(),
             reach: default_reach(),
             clash_filter: default_clash_filter(),
+            include_mirrored: false,
             max_formed_bonds: no_cap(),
             formed_bonds: None,
             bond_inventory: None,
@@ -331,7 +337,9 @@ pub struct ChemisorbStatsView {
     pub pruned_no_acceptor: usize,
     /// Rejected by `bond_inventory` while enumerating.
     pub pruned_filter: usize,
+    /// Mirrored three-leg assignments pruned, and kept (`include_mirrored`).
     pub pruned_mirror: usize,
+    pub mirrored_kept: usize,
     pub mirror_undecided: usize,
     /// Hypotheses the filters admit (legs 1–3).
     pub candidates: usize,
@@ -384,6 +392,7 @@ impl ChemisorbStatsView {
             pruned_no_acceptor: p.pruned_no_acceptor,
             pruned_filter: p.pruned_filter,
             pruned_mirror: p.pruned_mirror,
+            mirrored_kept: p.mirrored_kept,
             mirror_undecided: p.mirror_undecided,
             candidates: p.candidates,
             parents: p.parents,
@@ -420,6 +429,12 @@ pub struct ChemisorbRowView {
     pub converged: bool,
     /// Its start geometry clashed (only possible with `clash_filter` off).
     pub seating_clash: bool,
+    /// It grew from a mirror-image three-leg assignment (`include_mirrored`).
+    pub mirrored: bool,
+    /// A mirrored three-leg candidate's start: how far its third foot was
+    /// from its seating point (Å). `None` otherwise, a local-phase candidate
+    /// included.
+    pub mirrored_start: Option<f64>,
     pub worst_bond_ratio: f64,
     pub stretch: f64,
     pub bend: f64,
@@ -535,6 +550,9 @@ pub struct ChemisorbDebugRowView {
     /// included); all of them are sites its test accepted.
     pub candidates: u32,
     pub mirrored: u32,
+    /// Mirrored legs kept by `include_mirrored` (not among `mirrored`, which
+    /// counts pruned ones).
+    pub mirrored_kept: u32,
     pub undecided: u32,
     pub clashes: u32,
     /// A state's children rejected for want of valence, of an H acceptor,
@@ -550,6 +568,8 @@ pub struct ChemisorbDebugRowView {
     pub candidate: bool,
     pub local_parent: bool,
     pub mirror: Option<Mirror>,
+    /// Mirrored, and pruned for it (`include_mirrored` off).
+    pub mirror_pruned: bool,
     pub seating_clash: bool,
     pub pruned_clash: bool,
     /// A kept candidate `unique` merged: the rank of the listed one it is a
@@ -657,6 +677,7 @@ fn debug_row_view(
         mirrored_duplicates: 0,
         candidates: 0,
         mirrored: 0,
+        mirrored_kept: 0,
         undecided: 0,
         clashes: 0,
         rejected_valence: 0,
@@ -666,6 +687,7 @@ fn debug_row_view(
         candidate: false,
         local_parent: false,
         mirror: None,
+        mirror_pruned: false,
         seating_clash: false,
         pruned_clash: false,
         copy_of: None,
@@ -694,6 +716,7 @@ fn debug_row_view(
                         v.mirrored_children += 1;
                     }
                 }
+                ChildVerdict::MirroredKept => v.mirrored_kept += 1,
                 ChildVerdict::Undecided => v.undecided += 1,
                 ChildVerdict::Clash => v.clashes += 1,
             }
@@ -713,6 +736,7 @@ fn debug_row_view(
     v.rejected_filter = r.rejected_filter;
     let canonical = shown_row(tree, item.row);
     v.copy_of = copy_of_rank.get(&canonical).copied();
+    let mut mirror_pruned = false;
     if let Some(index) = tree.row(canonical).hypothesis {
         let h = match report {
             Some(rep) => rep.hypothesis(plan, index as usize),
@@ -721,6 +745,8 @@ fn debug_row_view(
         v.candidate = h.candidate;
         v.local_parent = h.parent;
         v.mirror = h.mirror;
+        v.mirror_pruned = plan.mirror_pruned(h);
+        mirror_pruned = v.mirror_pruned;
         v.seating_clash = h.seating.as_ref().is_some_and(|s| s.clashes());
         v.pruned_clash = v.seating_clash && source.clash_filter();
     }
@@ -731,7 +757,7 @@ fn debug_row_view(
         }
         v.budget_cut = (v.candidate || v.local_parent)
             && !v.pruned_clash
-            && v.mirror != Some(Mirror::Mirrored)
+            && !mirror_pruned
             && relaxation(rep, canonical).is_none();
     }
     v
@@ -785,6 +811,7 @@ impl ChemisorbData {
             tolerance: self.tolerance,
             reach: self.reach,
             clash_filter: self.clash_filter,
+            include_mirrored: self.include_mirrored,
             transfers,
             max_formed_bonds: (self.max_formed_bonds >= 1)
                 .then_some(self.max_formed_bonds as usize),
@@ -943,7 +970,7 @@ fn molecule(atoms: AtomicStructure) -> NetworkResult {
     })
 }
 
-fn row_view(rank: usize, copies: usize, c: &Candidate) -> ChemisorbRowView {
+fn row_view(rank: usize, copies: usize, c: &Candidate, h: &Hypothesis) -> ChemisorbRowView {
     let label = |id: u32| {
         let z = c.structure.get_atom(id).map_or(0, |a| a.atomic_number);
         format!("{}{id}", element_symbol(z))
@@ -982,6 +1009,12 @@ fn row_view(rank: usize, copies: usize, c: &Candidate) -> ChemisorbRowView {
         transfers: c.transfers.len(),
         converged: c.converged,
         seating_clash: c.seating_clash,
+        mirrored: c.mirrored,
+        mirrored_start: h
+            .seating
+            .as_ref()
+            .filter(|_| h.mirror == Some(Mirror::Mirrored))
+            .map(|s| s.residual),
         worst_bond_ratio: c.worst_bond_ratio,
         stretch: c.terms.stretch,
         bend: c.terms.bend,
@@ -1025,6 +1058,7 @@ fn candidate_record(row: &ChemisorbRowView, structure: AtomicStructure) -> Netwo
             ]),
         ),
         ("copies".to_string(), int(row.copies)),
+        ("mirrored".to_string(), NetworkResult::Bool(row.mirrored)),
     ])
 }
 
@@ -1084,6 +1118,7 @@ fn stats_record(s: &ChemisorbStatsView) -> NetworkResult {
         ),
         ("merged".to_string(), int(s.merged)),
         ("unique_undecided".to_string(), int(s.unique_undecided)),
+        ("mirrored_kept".to_string(), int(s.mirrored_kept)),
     ])
 }
 
@@ -1176,7 +1211,8 @@ fn listing(stored: &StoredSearch, settings: &DistinctSettings) -> Result<Listing
                 listing.copy_of_rank.insert(c.row, k + 1);
             }
             None => {
-                listing.rows.push(row_view(i + 1, listed.copies, c));
+                let h = report.hypothesis(&stored.plan, c.hypothesis);
+                listing.rows.push(row_view(i + 1, listed.copies, c, h));
                 listing.structures.push(listed.structure);
             }
         }
@@ -1522,6 +1558,9 @@ impl NodeData for ChemisorbData {
                 TextValue::String(bonds.clone()),
             ));
         }
+        if self.include_mirrored {
+            props.push(("include_mirrored".to_string(), TextValue::Bool(true)));
+        }
         props
     }
 
@@ -1577,6 +1616,9 @@ impl NodeData for ChemisorbData {
         }
         if let Some(v) = boolean("clash_filter")? {
             self.clash_filter = v;
+        }
+        if let Some(v) = boolean("include_mirrored")? {
+            self.include_mirrored = v;
         }
         if let Some(v) = int("max_formed_bonds")? {
             self.max_formed_bonds = v;
@@ -1642,8 +1684,10 @@ pub fn get_node_type() -> NodeType {
                       flex. **Legs 4 and later**: a site within **reach** (Å) of a foot's \
                       relaxed position. The adsorbate is seated rigidly on its bonded sites \
                       before relaxing; seatings that put it through the substrate are \
-                      pruned (**clash_filter**, on by default) and mirror-image three-leg \
-                      assignments always are. One-leg bindings are listed only for a \
+                      pruned (**clash_filter**, on by default) and so are mirror-image \
+                      three-leg assignments, unless **include_mirrored** is on: then each is \
+                      seated upright on two of its legs and the third bond starts stretched \
+                      (`mirrored` on the candidate). One-leg bindings are listed only for a \
                       one-foot adsorbate. **adsorbate_tag** / **substrate_tag** restrict the \
                       reactive atoms (empty = all; tag the facet to keep the search small).                       **Foot order**: tag the feet `foot1`, `foot2`, … instead of `foot` (with                       adsorbate_tag `foot`) and leg k is only ever foot k, so the search                       follows that one order; the plain tag tries every order. \
                       **max_formed_bonds** caps the legs (-1 = no cap). **budget** caps the \

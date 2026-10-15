@@ -111,6 +111,7 @@ class _ChemisorbEditorState extends State<ChemisorbEditor> {
     double? tolerance,
     double? reach,
     bool? clashFilter,
+    bool? includeMirrored,
     int? maxFormedBonds,
     Object? formedBonds = _keep,
     Object? bondInventory = _keep,
@@ -133,6 +134,7 @@ class _ChemisorbEditorState extends State<ChemisorbEditor> {
         tolerance: tolerance ?? data.tolerance,
         reach: reach ?? data.reach,
         clashFilter: clashFilter ?? data.clashFilter,
+        includeMirrored: includeMirrored ?? data.includeMirrored,
         maxFormedBonds: maxFormedBonds ?? data.maxFormedBonds,
         formedBonds: identical(formedBonds, _keep)
             ? data.formedBonds
@@ -266,6 +268,20 @@ class _ChemisorbEditorState extends State<ChemisorbEditor> {
             contentPadding: EdgeInsets.zero,
             dense: true,
           ),
+          Tooltip(
+            message: 'Relax the three-leg assignments the mirror check would '
+                'prune: each is seated upright on two of its legs, and the '
+                'third bond starts stretched.',
+            waitDuration: const Duration(milliseconds: 600),
+            child: CheckboxListTile(
+              title: const Text('Include mirrored assignments'),
+              value: data.includeMirrored,
+              onChanged: (value) => _commit(includeMirrored: value ?? false),
+              controlAffinity: ListTileControlAffinity.leading,
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+            ),
+          ),
           _CapField(
             checkboxLabel: 'Limit legs',
             fieldLabel: 'Max legs (bonds formed)',
@@ -386,6 +402,7 @@ class _ChemisorbEditorState extends State<ChemisorbEditor> {
             selectedForm: _report?.debugSelectedForm,
             debugShown: widget.debugShown,
             shapesShown: widget.shapesShown,
+            includeMirrored: widget.data?.includeMirrored ?? false,
             fetchRow: (item) => chemisorb_api.getChemisorbDebugRow(item: item),
             fetchChildren: (item, showDuplicates, showMirrored) =>
                 chemisorb_api.getChemisorbDebugChildren(
@@ -563,8 +580,10 @@ class _StatsCard extends StatelessWidget {
                 _Row('Pruned: no H acceptor', '${stats.prunedNoAcceptor}'),
               if (stats.prunedFilter > BigInt.zero)
                 _Row('Pruned: inventory', '${stats.prunedFilter}'),
-              _Row('Mirror: pruned / undecided',
-                  '${stats.prunedMirror} / ${stats.mirrorUndecided}'),
+              _Row(
+                  'Mirror: pruned / kept / undecided',
+                  '${stats.prunedMirror} / ${stats.mirroredKept} / '
+                      '${stats.mirrorUndecided}'),
               _Row('Seating clashes / pruned',
                   '${stats.seatingClashes} / ${stats.prunedClash}'),
               _Row(
@@ -656,7 +675,8 @@ class _CandidatesCard extends StatelessWidget {
                     'bend ${formatNatural(row.bend, 3)}, '
                     'torsion ${formatNatural(row.torsion, 3)}, '
                     'inversion ${formatNatural(row.inversion, 3)}, '
-                    'vdW ${formatNatural(row.vdw, 3)}',
+                    'vdW ${formatNatural(row.vdw, 3)}'
+                    '${_mirroredNote(row)}',
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 3.0),
                   child: Column(
@@ -666,7 +686,8 @@ class _CandidatesCard extends StatelessWidget {
                         '#${row.rank}  ${formatNatural(row.strain, 4)}'
                         '${row.copies > BigInt.zero ? '  +${row.copies} copies' : ''}'
                         '${row.converged ? '' : '  unconv.'}'
-                        '${row.seatingClash ? '  clash' : ''}',
+                        '${row.seatingClash ? '  clash' : ''}'
+                        '${row.mirrored ? '  mirr.' : ''}',
                         style: mono?.copyWith(
                           color: row.converged ? null : theme.colorScheme.error,
                         ),
@@ -681,6 +702,16 @@ class _CandidatesCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The candidate list's hover line for a mirrored candidate, empty otherwise.
+String _mirroredNote(APIChemisorbRow row) {
+  if (!row.mirrored) return '';
+  final start = row.mirroredStart;
+  return start == null
+      ? '\ngrew from a mirrored assignment, seated on two legs'
+      : '\nmirrored: seated on two legs; third bond started at '
+          '${formatNatural(start, 3)} Å';
 }
 
 /// A cap that can be switched off: a checkbox, and the value only while it

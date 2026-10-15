@@ -655,8 +655,7 @@ impl Setup {
     pub fn seat(&self, steps: &[Step]) -> Seating {
         // In leg order, not binding order, so the seating is the same bit for
         // bit whatever order the legs were bound in.
-        let mut legs: Vec<Leg> = steps.iter().map(|s| s.leg).collect();
-        legs.sort_unstable();
+        let legs = sorted_legs(steps);
         let sites: Vec<usize> = legs.iter().map(|l| l.site).collect();
         let up = self.local_up(&sites);
         let points = self.seating_points(&legs, up);
@@ -664,27 +663,7 @@ impl Setup {
         let (rotation, translation) = match legs.len() {
             0 => (DMat3::IDENTITY, DVec3::ZERO),
             1 => (DMat3::IDENTITY, points[0] - feet[0]),
-            2 => {
-                let (mid_f, mid_p) = ((feet[0] + feet[1]) / 2.0, (points[0] + points[1]) / 2.0);
-                let foot_axis = feet[1] - feet[0];
-                let point_axis = points[1] - points[0];
-                let align = if foot_axis.length() < 1e-9 || point_axis.length() < 1e-9 {
-                    DMat3::IDENTITY
-                } else {
-                    DMat3::from_quat(DQuat::from_rotation_arc(
-                        foot_axis.normalize(),
-                        point_axis.normalize(),
-                    ))
-                };
-                // About the seating axis; with coincident seating points (two
-                // feet on one site) about the local up instead.
-                let axis = if point_axis.length() < 1e-9 {
-                    up
-                } else {
-                    point_axis.normalize()
-                };
-                self.turn_body_up(&legs, align, mid_p - align * mid_f, axis, mid_p, up)
-            }
+            2 => self.place_pair(&legs, [feet[0], feet[1]], [points[0], points[1]], up),
             _ => {
                 let fit = rigid_fit(&feet, &points, false).expect("three or more points");
                 match collinear_axis(&points) {
@@ -696,12 +675,112 @@ impl Setup {
                 }
             }
         };
-        let residual = feet
+        self.finish_seating(steps, &legs, &points, rotation, translation, up)
+    }
+
+    /// Seats a three-leg assignment the mirror check found mirrored, upright
+    /// instead of by the proper fit, which would put the body in the
+    /// substrate (`design_chemisorb_mirrors_and_passivation.md` §3.2): for
+    /// each of the three pairs of legs, in sorted leg order
+    /// ([`MIRRORED_PAIRS`]), the two-leg seating
+    /// ([`seat_on_pair`](Self::seat_on_pair)); keep the pair whose third foot
+    /// lands nearest its seating point, ties to the earlier pair. The third
+    /// bond then starts stretched and the relaxation pulls it in. Never a
+    /// reflection: that would relax the mirror-image molecule.
+    pub fn seat_mirrored(&self, steps: &[Step]) -> Seating {
+        assert_eq!(steps.len(), 3, "a mirrored hypothesis has three legs");
+        let mut best: Option<(f64, Seating)> = None;
+        for pair in MIRRORED_PAIRS {
+            let seating = self.seat_on_pair(steps, pair);
+            let third = self.third_foot_distance(steps, pair, &seating);
+            if best.as_ref().is_none_or(|(d, _)| third < *d) {
+                best = Some((third, seating));
+            }
+        }
+        best.expect("three pairs").1
+    }
+
+    /// The two-leg seating of three legs on one pair of them (`pair`: two
+    /// indices into the legs **sorted**, ascending): the pair's foot axis
+    /// aligned with its seating axis, then the θ rule. Unlike a two-leg
+    /// hypothesis's [`seat`](Self::seat), the local up and the seating points
+    /// are those of all three sites, and the θ rule and the clashes exclude
+    /// all three legs, so the third foot may come near its own site.
+    pub fn seat_on_pair(&self, steps: &[Step], pair: [usize; 2]) -> Seating {
+        let legs = sorted_legs(steps);
+        let sites: Vec<usize> = legs.iter().map(|l| l.site).collect();
+        let up = self.local_up(&sites);
+        let points = self.seating_points(&legs, up);
+        let [a, b] = pair;
+        let feet = [a, b].map(|i| self.feet[legs[i].foot].position);
+        let (rotation, translation) = self.place_pair(&legs, feet, [points[a], points[b]], up);
+        self.finish_seating(steps, &legs, &points, rotation, translation, up)
+    }
+
+    /// How far the leg outside `pair` (indices into the sorted legs) sits
+    /// from its seating point under `seating` (Å).
+    pub fn third_foot_distance(&self, steps: &[Step], pair: [usize; 2], seating: &Seating) -> f64 {
+        let legs = sorted_legs(steps);
+        let third = (0..legs.len())
+            .find(|i| !pair.contains(i))
+            .expect("three legs");
+        let point = self.seating_points(&legs[third..=third], seating.up)[0];
+        seating
+            .apply(self.feet[legs[third].foot].position)
+            .distance(point)
+    }
+
+    /// Two feet onto two seating points: the foot axis aligned with the
+    /// seating axis about their midpoints, then the θ rule about that axis
+    /// (about `up` when the two points coincide). The θ rule's clash count
+    /// excludes `clash_legs`.
+    fn place_pair(
+        &self,
+        clash_legs: &[Leg],
+        feet: [DVec3; 2],
+        points: [DVec3; 2],
+        up: DVec3,
+    ) -> (DMat3, DVec3) {
+        let (mid_f, mid_p) = ((feet[0] + feet[1]) / 2.0, (points[0] + points[1]) / 2.0);
+        let foot_axis = feet[1] - feet[0];
+        let point_axis = points[1] - points[0];
+        let align = if foot_axis.length() < 1e-9 || point_axis.length() < 1e-9 {
+            DMat3::IDENTITY
+        } else {
+            DMat3::from_quat(DQuat::from_rotation_arc(
+                foot_axis.normalize(),
+                point_axis.normalize(),
+            ))
+        };
+        // About the seating axis; with coincident seating points (two feet on
+        // one site) about the local up instead.
+        let axis = if point_axis.length() < 1e-9 {
+            up
+        } else {
+            point_axis.normalize()
+        };
+        self.turn_body_up(clash_legs, align, mid_p - align * mid_f, axis, mid_p, up)
+    }
+
+    /// The finishing half of a seating, whatever placed it: the residual over
+    /// every leg, the clashes with every leg excluded, and each donating
+    /// step's moving atom. `legs` and `points` are sorted, `steps` in binding
+    /// order.
+    fn finish_seating(
+        &self,
+        steps: &[Step],
+        legs: &[Leg],
+        points: &[DVec3],
+        rotation: DMat3,
+        translation: DVec3,
+        up: DVec3,
+    ) -> Seating {
+        let residual = legs
             .iter()
-            .zip(&points)
-            .map(|(&f, &p)| (rotation * f + translation).distance(p))
+            .zip(points)
+            .map(|(l, &p)| (rotation * self.feet[l.foot].position + translation).distance(p))
             .fold(0.0, f64::max);
-        let clashes = self.clashes(&legs, rotation, translation);
+        let clashes = self.clashes(legs, rotation, translation);
         let moved = steps
             .iter()
             .filter_map(|s| s.acceptor.map(|a| (s.leg.foot, a)))
@@ -932,6 +1011,18 @@ impl Setup {
         apply_transfers(&mut s, &transfers);
         s
     }
+}
+
+/// The pairs [`Setup::seat_mirrored`] tries, as indices into the sorted
+/// legs, in the order that breaks its ties.
+pub const MIRRORED_PAIRS: [[usize; 2]; 3] = [[0, 1], [0, 2], [1, 2]];
+
+/// The legs of `steps`, sorted: what seating reads, so the binding order
+/// cannot leak into the start geometry.
+fn sorted_legs(steps: &[Step]) -> Vec<Leg> {
+    let mut legs: Vec<Leg> = steps.iter().map(|s| s.leg).collect();
+    legs.sort_unstable();
+    legs
 }
 
 /// How far a triangle is from collinear, independent of its size and of the

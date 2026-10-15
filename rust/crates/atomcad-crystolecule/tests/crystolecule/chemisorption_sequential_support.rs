@@ -443,22 +443,29 @@ pub fn assert_stats_add_up(p: &SequentialPlan) {
             .filter(|h| h.parent && !h.candidate)
             .count()
     );
-    // Parents are the unmirrored three-leg hypotheses, and only with a local
-    // phase to follow.
+    // Parents are the three-leg hypotheses the mirror check did not prune,
+    // and only with a local phase to follow.
     for h in &p.hypotheses {
         assert_eq!(
             h.parent,
-            s.local_phase && h.legs() == GEOMETRIC_LEGS && h.mirror != Some(Mirror::Mirrored)
+            s.local_phase && h.legs() == GEOMETRIC_LEGS && !p.mirror_pruned(h)
         );
         assert_eq!(h.seating.is_some(), h.candidate || h.parent);
+        if p.mirror_pruned(h) {
+            assert!(!h.candidate);
+        }
     }
-    assert_eq!(
-        s.pruned_mirror,
-        p.hypotheses
-            .iter()
-            .filter(|h| h.mirror == Some(Mirror::Mirrored))
-            .count()
-    );
+    let mirrored = p
+        .hypotheses
+        .iter()
+        .filter(|h| h.mirror == Some(Mirror::Mirrored))
+        .count();
+    assert_eq!(s.pruned_mirror + s.mirrored_kept, mirrored);
+    if p.include_mirrored {
+        assert_eq!(s.pruned_mirror, 0);
+    } else {
+        assert_eq!(s.mirrored_kept, 0);
+    }
 }
 
 // ============================================================================
@@ -622,7 +629,7 @@ fn judge(
         setup.mirror(l, setup.local_up(&l.map(|l| l.site)))
     });
     let one_foot = setup.feet.len() == 1;
-    let candidate = mirror != Some(Mirror::Mirrored)
+    let candidate = (mirror != Some(Mirror::Mirrored) || config.include_mirrored)
         && (legs >= 2 || one_foot)
         && config.max_formed_bonds.is_none_or(|m| legs <= m)
         && config.formed_bonds.is_none_or(|n| legs == n)
@@ -801,8 +808,10 @@ pub fn audit(p: &SequentialPlan, report: &SearchReport, config: &SequentialSearc
         assert_eq!(inventory, c.bond_inventory, "audit: inventory");
         assert_eq!(c.formed.len(), added.len() - c.transfers.len());
 
-        // Formed bonds near their rest lengths.
-        for &(a, b) in &want_added {
+        // Formed bonds near their rest lengths. Not for a mirrored start: a
+        // rigid adsorbate seated on two legs often cannot bring its third
+        // foot in, and ends strained (include_mirrored, §3.3).
+        for &(a, b) in want_added.iter().filter(|_| !c.mirrored) {
             let pa = c.structure.get_atom(a).unwrap().position;
             let pb = c.structure.get_atom(b).unwrap().position;
             let rest = atomcad_crystolecule::chemisorption::sequential::rest_length(

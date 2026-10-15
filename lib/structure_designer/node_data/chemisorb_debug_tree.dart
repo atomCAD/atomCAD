@@ -33,7 +33,9 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
 ///   says how many it hides, and **Show duplicates** lists them as
 ///   "= duplicate of #N" rows that jump to the canonical one. Legs the mirror
 ///   check pruned are hidden the same way until **Show mirrored** is on (the
-///   step's *mirr.* count still says how many). Display options only: not
+///   step's *mirr.* count still says how many). With `include_mirrored` none
+///   is pruned: mirrored legs are ordinary rows (*mirr. (kept)*) and the chip
+///   is disabled. Display options only: not
 ///   saved, not undo steps, and the tree is the same either way.
 /// - **The selection is the kernel's** ([selected] / [selectedForm], read
 ///   back from the report), so it survives this widget being rebuilt or
@@ -56,6 +58,10 @@ class ChemisorbDebugTree extends StatefulWidget {
   final bool debugShown;
   final bool shapesShown;
 
+  /// The node's `include_mirrored`: nothing is mirror-pruned, so **Show
+  /// mirrored** has nothing to show.
+  final bool includeMirrored;
+
   final APIChemisorbDebugRow? Function(APIChemisorbDebugRef item) fetchRow;
   final List<APIChemisorbDebugRow> Function(
           APIChemisorbDebugRef item, bool showDuplicates, bool showMirrored)
@@ -77,6 +83,7 @@ class ChemisorbDebugTree extends StatefulWidget {
     required this.selectedForm,
     required this.debugShown,
     required this.shapesShown,
+    this.includeMirrored = false,
     required this.fetchRow,
     required this.fetchChildren,
     required this.fetchAncestors,
@@ -226,14 +233,23 @@ class _ChemisorbDebugTreeState extends State<ChemisorbDebugTree> {
                   }),
                   visualDensity: VisualDensity.compact,
                 ),
-                FilterChip(
-                  label: const Text('Show mirrored'),
-                  selected: _showMirrored,
-                  onSelected: (value) => setState(() {
-                    _showMirrored = value;
-                    _children.clear();
-                  }),
-                  visualDensity: VisualDensity.compact,
+                Tooltip(
+                  message: widget.includeMirrored
+                      ? 'Include mirrored assignments is on: no leg is '
+                          'mirror-pruned, so there is nothing to show.'
+                      : 'List the legs the mirror check pruned.',
+                  waitDuration: const Duration(milliseconds: 600),
+                  child: FilterChip(
+                    label: const Text('Show mirrored'),
+                    selected: _showMirrored && !widget.includeMirrored,
+                    onSelected: widget.includeMirrored
+                        ? null
+                        : (value) => setState(() {
+                              _showMirrored = value;
+                              _children.clear();
+                            }),
+                    visualDensity: VisualDensity.compact,
+                  ),
                 ),
               ],
             ),
@@ -327,10 +343,16 @@ String debugRowSummary(APIChemisorbDebugRow row,
     case APIChemisorbDebugRowKind.root:
       parts.add('${row.children} feet');
     case APIChemisorbDebugRowKind.nextFoot:
-      final accepted =
-          row.candidates + row.mirrored + row.undecided + row.clashes;
+      final accepted = row.candidates +
+          row.mirrored +
+          row.mirroredKept +
+          row.undecided +
+          row.clashes;
       final test = StringBuffer('${_testName(row)}: $accepted');
       if (row.mirrored > 0) test.write(', ${row.mirrored} mirr.');
+      if (row.mirroredKept > 0) {
+        test.write(', ${row.mirroredKept} mirr. (kept)');
+      }
       if (row.undecided > 0) test.write(', ${row.undecided} undec.');
       if (row.clashes > 0) test.write(', ${row.clashes} clash');
       parts.add(test.toString());
@@ -342,7 +364,11 @@ String debugRowSummary(APIChemisorbDebugRow row,
         parts.add('strain ${formatNatural(row.strain!, 4)}'
             '${row.converged ? '' : ' unconv.'}');
       }
-      if (row.mirror == APIChemisorbMirror.mirrored) parts.add('mirrored');
+      if (row.mirrorPruned) {
+        parts.add('mirrored');
+      } else if (row.mirror == APIChemisorbMirror.mirrored) {
+        parts.add('mirr. (kept)');
+      }
       if (row.prunedClash) {
         parts.add('clash, pruned');
       } else if (row.seatingClash) {
@@ -367,7 +393,10 @@ String debugRowDetails(APIChemisorbDebugRow row) {
         'ranked ${row.copyOf}');
   }
   if (row.localParent) lines.add('a parent of the local phase');
-  if (row.mirror != null) lines.add('mirror check: ${row.mirror!.name}');
+  if (row.mirror != null) {
+    lines.add('mirror check: ${row.mirror!.name}'
+        '${row.mirror == APIChemisorbMirror.mirrored ? (row.mirrorPruned ? ', pruned' : ', kept: seated upright on two legs') : ''}');
+  }
   final rejected = [
     if (row.rejectedValence > 0) '${row.rejectedValence} valence',
     if (row.rejectedNoAcceptor > 0) '${row.rejectedNoAcceptor} no H acceptor',
@@ -404,9 +433,7 @@ class _RowTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final small = theme.textTheme.bodySmall;
-    final dim = row.duplicateOf != null ||
-        row.mirror == APIChemisorbMirror.mirrored ||
-        row.prunedClash;
+    final dim = row.duplicateOf != null || row.mirrorPruned || row.prunedClash;
     final step = row.kind == APIChemisorbDebugRowKind.nextFoot;
     return Tooltip(
       message: debugRowDetails(row),

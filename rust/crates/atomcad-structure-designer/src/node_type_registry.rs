@@ -1017,6 +1017,7 @@ impl NodeTypeRegistry {
                         DataType::Record(RecordType::Named("ChemisorbStrainTerms".to_string())),
                     ),
                     ("copies".to_string(), DataType::Int),
+                    ("mirrored".to_string(), DataType::Bool),
                 ],
             ),
         );
@@ -1081,6 +1082,7 @@ impl NodeTypeRegistry {
                     ),
                     ("merged".to_string(), DataType::Int),
                     ("unique_undecided".to_string(), DataType::Int),
+                    ("mirrored_kept".to_string(), DataType::Int),
                 ],
             ),
         );

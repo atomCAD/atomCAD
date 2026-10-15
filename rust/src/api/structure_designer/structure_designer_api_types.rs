@@ -1069,6 +1069,8 @@ pub struct APIChemisorbData {
     pub reach: f64,
     /// Prune seatings that clash instead of relaxing them.
     pub clash_filter: bool,
+    /// Relax mirror-image three-leg assignments instead of pruning them.
+    pub include_mirrored: bool,
     /// At most this many legs per hypothesis: -1 = no cap.
     pub max_formed_bonds: i32,
     /// Only bindings with exactly this many legs; `None` = any.
@@ -1162,7 +1164,9 @@ pub struct APIChemisorbStats {
     pub pruned_no_acceptor: usize,
     /// Rejected by `bond_inventory` while enumerating.
     pub pruned_filter: usize,
+    /// Mirrored three-leg assignments pruned, and kept (`include_mirrored`).
     pub pruned_mirror: usize,
+    pub mirrored_kept: usize,
     pub mirror_undecided: usize,
     pub candidates: usize,
     pub parents: usize,
@@ -1209,6 +1213,11 @@ pub struct APIChemisorbRow {
     pub transfers: usize,
     pub converged: bool,
     pub seating_clash: bool,
+    /// It grew from a mirror-image three-leg assignment (`include_mirrored`).
+    pub mirrored: bool,
+    /// A mirrored three-leg candidate's start: its third foot's distance from
+    /// its seating point (Å).
+    pub mirrored_start: Option<f64>,
     pub worst_bond_ratio: f64,
     pub stretch: f64,
     pub bend: f64,
@@ -1316,6 +1325,9 @@ pub struct APIChemisorbDebugRow {
     /// A step's legs by verdict; together, the sites its test accepted.
     pub candidates: u32,
     pub mirrored: u32,
+    /// Mirrored legs kept by `include_mirrored` (`mirrored` counts pruned
+    /// ones).
+    pub mirrored_kept: u32,
     pub undecided: u32,
     pub clashes: u32,
     pub rejected_valence: u32,
@@ -1326,6 +1338,8 @@ pub struct APIChemisorbDebugRow {
     pub candidate: bool,
     pub local_parent: bool,
     pub mirror: Option<APIChemisorbMirror>,
+    /// Mirrored, and pruned for it (`include_mirrored` off).
+    pub mirror_pruned: bool,
     pub seating_clash: bool,
     pub pruned_clash: bool,
     /// A kept candidate `unique` merged: the rank of the listed one it is a
@@ -1379,6 +1393,7 @@ impl From<&ChemisorbDebugRowView> for APIChemisorbDebugRow {
             mirrored_duplicates: v.mirrored_duplicates,
             candidates: v.candidates,
             mirrored: v.mirrored,
+            mirrored_kept: v.mirrored_kept,
             undecided: v.undecided,
             clashes: v.clashes,
             rejected_valence: v.rejected_valence,
@@ -1392,6 +1407,7 @@ impl From<&ChemisorbDebugRowView> for APIChemisorbDebugRow {
                 DomainMirror::Mirrored => APIChemisorbMirror::Mirrored,
                 DomainMirror::Undecided => APIChemisorbMirror::Undecided,
             }),
+            mirror_pruned: v.mirror_pruned,
             seating_clash: v.seating_clash,
             pruned_clash: v.pruned_clash,
             copy_of: v.copy_of,
@@ -1414,6 +1430,7 @@ impl From<&ChemisorbData> for APIChemisorbData {
             tolerance: d.tolerance,
             reach: d.reach,
             clash_filter: d.clash_filter,
+            include_mirrored: d.include_mirrored,
             max_formed_bonds: d.max_formed_bonds,
             formed_bonds: d.formed_bonds,
             bond_inventory: d.bond_inventory.clone(),
@@ -1437,6 +1454,7 @@ impl From<&APIChemisorbData> for ChemisorbData {
             tolerance: d.tolerance,
             reach: d.reach,
             clash_filter: d.clash_filter,
+            include_mirrored: d.include_mirrored,
             max_formed_bonds: d.max_formed_bonds,
             formed_bonds: d.formed_bonds,
             bond_inventory: d.bond_inventory.clone(),
@@ -1492,6 +1510,7 @@ impl From<&ChemisorbEvalCache> for APIChemisorbReport {
                 pruned_no_acceptor: s.pruned_no_acceptor,
                 pruned_filter: s.pruned_filter,
                 pruned_mirror: s.pruned_mirror,
+                mirrored_kept: s.mirrored_kept,
                 mirror_undecided: s.mirror_undecided,
                 candidates: s.candidates,
                 parents: s.parents,
@@ -1524,6 +1543,8 @@ impl From<&ChemisorbEvalCache> for APIChemisorbReport {
                     transfers: r.transfers,
                     converged: r.converged,
                     seating_clash: r.seating_clash,
+                    mirrored: r.mirrored,
+                    mirrored_start: r.mirrored_start,
                     worst_bond_ratio: r.worst_bond_ratio,
                     stretch: r.stretch,
                     bend: r.bend,

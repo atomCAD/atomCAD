@@ -38,9 +38,9 @@ use crate::nodes::chemisorb::{
 use crate::structure_designer::StructureDesigner;
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::chemisorption::sequential::{
-    DebugForm, DebugItem, RowKind, SearchReport, SequentialPlan, SequentialSearch, debug_view,
-    evaluate, find_item, item_children, item_label, item_path, needs_relaxation, plan, row_forms,
-    step_near_misses, tree_of,
+    DebugForm, DebugItem, Mirror, RowKind, SearchReport, SequentialPlan, SequentialSearch,
+    debug_view, evaluate, find_item, item_children, item_label, item_path, needs_relaxation, plan,
+    row_forms, step_near_misses, tree_of,
 };
 use atomcad_crystolecule::chemisorption::{DistinctSettings, distinct, input_fingerprint};
 use atomcad_util::job_control::JobControl;
@@ -348,7 +348,12 @@ fn children_text(plan: &SequentialPlan, report: Option<&SearchReport>, item: Deb
                     None => &plan.hypotheses[i as usize],
                 };
                 if let Some(m) = h.mirror {
-                    notes.push(format!("{m:?}").to_lowercase());
+                    let kept = m == Mirror::Mirrored && !plan.mirror_pruned(h);
+                    notes.push(format!(
+                        "{}{}",
+                        format!("{m:?}").to_lowercase(),
+                        if kept { " (kept)" } else { "" }
+                    ));
                 }
                 if h.seating.as_ref().is_some_and(|s| s.clashes()) {
                     notes.push("clash".to_string());

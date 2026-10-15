@@ -77,6 +77,8 @@ pub(crate) struct State {
     pub strain: f64,
     /// The movable atoms' relaxed positions ([`Setup::movable_positions`]).
     pub positions: Vec<DVec3>,
+    /// Its three-leg ancestor (or itself) was a kept mirrored assignment.
+    pub mirrored: bool,
 }
 
 /// One path of a level, before it is relaxed.
@@ -324,6 +326,7 @@ impl Local<'_> {
                         worst_bond_ratio: d.relaxed.worst_bond_ratio,
                         energy: d.relaxed.energy,
                         seating_clash: false,
+                        mirrored: frontier[path.parent].mirrored,
                     });
                 }
                 if deeper {
@@ -332,6 +335,7 @@ impl Local<'_> {
                         row: path.row,
                         strain,
                         positions: d.positions,
+                        mirrored: frontier[path.parent].mirrored,
                     });
                 }
             }
@@ -520,10 +524,7 @@ pub fn replay_start(
             .hypothesis
             .expect("a canonical row has a hypothesis") as usize;
         let h = report.hypothesis(plan, index);
-        let seating = match &h.seating {
-            Some(s) => s.clone(),
-            None => setup.seat(&h.steps),
-        };
+        let seating = plan.start_seating(h);
         return Ok((setup.start_structure(&h.steps, &seating), h.steps.clone()));
     }
     let parent = replay(plan, report, config, r.parent)?;

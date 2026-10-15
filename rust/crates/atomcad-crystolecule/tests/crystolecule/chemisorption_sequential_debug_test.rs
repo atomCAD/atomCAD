@@ -757,3 +757,81 @@ fn a_local_row_seats_on_its_replayed_parent_and_the_parents_step_draws_its_reach
     // A step has its one form: seated, it is refused.
     assert!(debug_view(p, rep, &r.config, step, DebugForm::Seated).is_err());
 }
+
+// ============================================================================
+// include_mirrored (design_chemisorb_mirrors_and_passivation.md §3.3)
+// ============================================================================
+
+/// With the setting on, a mirrored row is an ordinary row: seated by
+/// `seat_mirrored`, relaxed, replayed to its recorded strain, counted as
+/// kept. With it off, the same rows are pruned and their seated form is the
+/// proper fit, body in the substrate.
+#[test]
+fn a_kept_mirrored_row_is_seated_on_two_legs_and_replays_to_its_strain() {
+    let (ads, sub) = planted(3, &[]);
+    let config = SequentialSearch {
+        anchor_reach: 1.8,
+        tolerance: 0.0,
+        clash_filter: false,
+        include_mirrored: true,
+        top_n: 1,
+        energy_window: f64::INFINITY,
+        ..Default::default()
+    };
+    let r = run(&ads, &sub, config.clone());
+    let (p, rep) = (&r.plan, Some(&r.report));
+    let mut replayed = 0;
+    for h in p
+        .hypotheses
+        .iter()
+        .filter(|h| h.mirror == Some(Mirror::Mirrored))
+    {
+        let item = DebugItem::state(h.row);
+        assert!(matches!(
+            child_verdict(p, rep, h.row),
+            ChildVerdict::MirroredKept | ChildVerdict::Clash
+        ));
+        let seated = debug_view(p, rep, &r.config, item, DebugForm::Seated).unwrap();
+        let want = p
+            .setup
+            .start_structure(&h.steps, &p.setup.seat_mirrored(&h.steps));
+        assert_eq!(positions(&seated.structure), positions(&want));
+        let recorded = relaxation(&r.report, h.row).expect("relaxed");
+        let forms = row_forms(p, rep, item);
+        assert!(forms.relaxed && forms.default == DebugForm::Relaxed);
+        let view = debug_view(p, rep, &r.config, item, DebugForm::Relaxed).unwrap();
+        assert!((view.strain.unwrap() - recorded.strain).abs() < 1e-6);
+        if needs_relaxation(p, rep, item, DebugForm::Relaxed) {
+            replayed += 1;
+        }
+    }
+    assert!(replayed > 0, "a mirrored row outside top N was replayed");
+
+    let off_config = SequentialSearch {
+        include_mirrored: false,
+        ..config
+    };
+    let off = plan(&ads, &sub, &off_config).unwrap();
+    let mut pruned = 0;
+    for h in off
+        .hypotheses
+        .iter()
+        .filter(|h| h.mirror == Some(Mirror::Mirrored))
+    {
+        assert_eq!(child_verdict(&off, None, h.row), ChildVerdict::Mirrored);
+        let view = debug_view(
+            &off,
+            None,
+            &off_config,
+            DebugItem::state(h.row),
+            DebugForm::Seated,
+        )
+        .unwrap();
+        let want = off
+            .setup
+            .start_structure(&h.steps, &off.setup.seat(&h.steps));
+        assert_eq!(positions(&view.structure), positions(&want));
+        pruned += 1;
+    }
+    assert_eq!(pruned, r.plan.stats.mirrored_kept);
+}

@@ -16734,6 +16734,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_tolerance = <f64>::sse_decode(deserializer);
         let mut var_reach = <f64>::sse_decode(deserializer);
         let mut var_clashFilter = <bool>::sse_decode(deserializer);
+        let mut var_includeMirrored = <bool>::sse_decode(deserializer);
         let mut var_maxFormedBonds = <i32>::sse_decode(deserializer);
         let mut var_formedBonds = <Option<i32>>::sse_decode(deserializer);
         let mut var_bondInventory = <Option<String>>::sse_decode(deserializer);
@@ -16751,6 +16752,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             tolerance: var_tolerance,
             reach: var_reach,
             clash_filter: var_clashFilter,
+            include_mirrored: var_includeMirrored,
             max_formed_bonds: var_maxFormedBonds,
             formed_bonds: var_formedBonds,
             bond_inventory: var_bondInventory,
@@ -16808,6 +16810,7 @@ impl SseDecode
         let mut var_mirroredDuplicates = <u32>::sse_decode(deserializer);
         let mut var_candidates = <u32>::sse_decode(deserializer);
         let mut var_mirrored = <u32>::sse_decode(deserializer);
+        let mut var_mirroredKept = <u32>::sse_decode(deserializer);
         let mut var_undecided = <u32>::sse_decode(deserializer);
         let mut var_clashes = <u32>::sse_decode(deserializer);
         let mut var_rejectedValence = <u32>::sse_decode(deserializer);
@@ -16819,6 +16822,7 @@ impl SseDecode
         let mut var_mirror = <Option<
             crate::api::structure_designer::structure_designer_api_types::APIChemisorbMirror,
         >>::sse_decode(deserializer);
+        let mut var_mirrorPruned = <bool>::sse_decode(deserializer);
         let mut var_seatingClash = <bool>::sse_decode(deserializer);
         let mut var_prunedClash = <bool>::sse_decode(deserializer);
         let mut var_copyOf = <Option<usize>>::sse_decode(deserializer);
@@ -16828,7 +16832,7 @@ impl SseDecode
         let mut var_canSeat = <bool>::sse_decode(deserializer);
         let mut var_canRelax = <bool>::sse_decode(deserializer);
         let mut var_defaultForm = <crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugForm>::sse_decode(deserializer);
-        return crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRow{item: var_item, kind: var_kind, legs: var_legs, label: var_label, path: var_path, duplicate_of: var_duplicateOf, children: var_children, hidden_duplicates: var_hiddenDuplicates, mirrored_children: var_mirroredChildren, mirrored_duplicates: var_mirroredDuplicates, candidates: var_candidates, mirrored: var_mirrored, undecided: var_undecided, clashes: var_clashes, rejected_valence: var_rejectedValence, rejected_no_acceptor: var_rejectedNoAcceptor, rejected_filter: var_rejectedFilter, near_misses: var_nearMisses, candidate: var_candidate, local_parent: var_localParent, mirror: var_mirror, seating_clash: var_seatingClash, pruned_clash: var_prunedClash, copy_of: var_copyOf, strain: var_strain, converged: var_converged, budget_cut: var_budgetCut, can_seat: var_canSeat, can_relax: var_canRelax, default_form: var_defaultForm};
+        return crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRow{item: var_item, kind: var_kind, legs: var_legs, label: var_label, path: var_path, duplicate_of: var_duplicateOf, children: var_children, hidden_duplicates: var_hiddenDuplicates, mirrored_children: var_mirroredChildren, mirrored_duplicates: var_mirroredDuplicates, candidates: var_candidates, mirrored: var_mirrored, mirrored_kept: var_mirroredKept, undecided: var_undecided, clashes: var_clashes, rejected_valence: var_rejectedValence, rejected_no_acceptor: var_rejectedNoAcceptor, rejected_filter: var_rejectedFilter, near_misses: var_nearMisses, candidate: var_candidate, local_parent: var_localParent, mirror: var_mirror, mirror_pruned: var_mirrorPruned, seating_clash: var_seatingClash, pruned_clash: var_prunedClash, copy_of: var_copyOf, strain: var_strain, converged: var_converged, budget_cut: var_budgetCut, can_seat: var_canSeat, can_relax: var_canRelax, default_form: var_defaultForm};
     }
 }
 
@@ -16951,6 +16955,8 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_transfers = <usize>::sse_decode(deserializer);
         let mut var_converged = <bool>::sse_decode(deserializer);
         let mut var_seatingClash = <bool>::sse_decode(deserializer);
+        let mut var_mirrored = <bool>::sse_decode(deserializer);
+        let mut var_mirroredStart = <Option<f64>>::sse_decode(deserializer);
         let mut var_worstBondRatio = <f64>::sse_decode(deserializer);
         let mut var_stretch = <f64>::sse_decode(deserializer);
         let mut var_bend = <f64>::sse_decode(deserializer);
@@ -16967,6 +16973,8 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             transfers: var_transfers,
             converged: var_converged,
             seating_clash: var_seatingClash,
+            mirrored: var_mirrored,
+            mirrored_start: var_mirroredStart,
             worst_bond_ratio: var_worstBondRatio,
             stretch: var_stretch,
             bend: var_bend,
@@ -16991,6 +16999,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_prunedNoAcceptor = <usize>::sse_decode(deserializer);
         let mut var_prunedFilter = <usize>::sse_decode(deserializer);
         let mut var_prunedMirror = <usize>::sse_decode(deserializer);
+        let mut var_mirroredKept = <usize>::sse_decode(deserializer);
         let mut var_mirrorUndecided = <usize>::sse_decode(deserializer);
         let mut var_candidates = <usize>::sse_decode(deserializer);
         let mut var_parents = <usize>::sse_decode(deserializer);
@@ -17023,6 +17032,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             pruned_no_acceptor: var_prunedNoAcceptor,
             pruned_filter: var_prunedFilter,
             pruned_mirror: var_prunedMirror,
+            mirrored_kept: var_mirroredKept,
             mirror_undecided: var_mirrorUndecided,
             candidates: var_candidates,
             parents: var_parents,
@@ -25894,6 +25904,7 @@ impl flutter_rust_bridge::IntoDart
             self.tolerance.into_into_dart().into_dart(),
             self.reach.into_into_dart().into_dart(),
             self.clash_filter.into_into_dart().into_dart(),
+            self.include_mirrored.into_into_dart().into_dart(),
             self.max_formed_bonds.into_into_dart().into_dart(),
             self.formed_bonds.into_into_dart().into_dart(),
             self.bond_inventory.into_into_dart().into_dart(),
@@ -25996,6 +26007,7 @@ impl flutter_rust_bridge::IntoDart
             self.mirrored_duplicates.into_into_dart().into_dart(),
             self.candidates.into_into_dart().into_dart(),
             self.mirrored.into_into_dart().into_dart(),
+            self.mirrored_kept.into_into_dart().into_dart(),
             self.undecided.into_into_dart().into_dart(),
             self.clashes.into_into_dart().into_dart(),
             self.rejected_valence.into_into_dart().into_dart(),
@@ -26005,6 +26017,7 @@ impl flutter_rust_bridge::IntoDart
             self.candidate.into_into_dart().into_dart(),
             self.local_parent.into_into_dart().into_dart(),
             self.mirror.into_into_dart().into_dart(),
+            self.mirror_pruned.into_into_dart().into_dart(),
             self.seating_clash.into_into_dart().into_dart(),
             self.pruned_clash.into_into_dart().into_dart(),
             self.copy_of.into_into_dart().into_dart(),
@@ -26205,6 +26218,8 @@ impl flutter_rust_bridge::IntoDart
             self.transfers.into_into_dart().into_dart(),
             self.converged.into_into_dart().into_dart(),
             self.seating_clash.into_into_dart().into_dart(),
+            self.mirrored.into_into_dart().into_dart(),
+            self.mirrored_start.into_into_dart().into_dart(),
             self.worst_bond_ratio.into_into_dart().into_dart(),
             self.stretch.into_into_dart().into_dart(),
             self.bend.into_into_dart().into_dart(),
@@ -26247,6 +26262,7 @@ impl flutter_rust_bridge::IntoDart
             self.pruned_no_acceptor.into_into_dart().into_dart(),
             self.pruned_filter.into_into_dart().into_dart(),
             self.pruned_mirror.into_into_dart().into_dart(),
+            self.mirrored_kept.into_into_dart().into_dart(),
             self.mirror_undecided.into_into_dart().into_dart(),
             self.candidates.into_into_dart().into_dart(),
             self.parents.into_into_dart().into_dart(),
@@ -33648,6 +33664,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <f64>::sse_encode(self.tolerance, serializer);
         <f64>::sse_encode(self.reach, serializer);
         <bool>::sse_encode(self.clash_filter, serializer);
+        <bool>::sse_encode(self.include_mirrored, serializer);
         <i32>::sse_encode(self.max_formed_bonds, serializer);
         <Option<i32>>::sse_encode(self.formed_bonds, serializer);
         <Option<String>>::sse_encode(self.bond_inventory, serializer);
@@ -33700,6 +33717,7 @@ impl SseEncode
         <u32>::sse_encode(self.mirrored_duplicates, serializer);
         <u32>::sse_encode(self.candidates, serializer);
         <u32>::sse_encode(self.mirrored, serializer);
+        <u32>::sse_encode(self.mirrored_kept, serializer);
         <u32>::sse_encode(self.undecided, serializer);
         <u32>::sse_encode(self.clashes, serializer);
         <u32>::sse_encode(self.rejected_valence, serializer);
@@ -33709,6 +33727,7 @@ impl SseEncode
         <bool>::sse_encode(self.candidate, serializer);
         <bool>::sse_encode(self.local_parent, serializer);
         <Option<crate::api::structure_designer::structure_designer_api_types::APIChemisorbMirror>>::sse_encode(self.mirror, serializer);
+        <bool>::sse_encode(self.mirror_pruned, serializer);
         <bool>::sse_encode(self.seating_clash, serializer);
         <bool>::sse_encode(self.pruned_clash, serializer);
         <Option<usize>>::sse_encode(self.copy_of, serializer);
@@ -33802,6 +33821,8 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <usize>::sse_encode(self.transfers, serializer);
         <bool>::sse_encode(self.converged, serializer);
         <bool>::sse_encode(self.seating_clash, serializer);
+        <bool>::sse_encode(self.mirrored, serializer);
+        <Option<f64>>::sse_encode(self.mirrored_start, serializer);
         <f64>::sse_encode(self.worst_bond_ratio, serializer);
         <f64>::sse_encode(self.stretch, serializer);
         <f64>::sse_encode(self.bend, serializer);
@@ -33825,6 +33846,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <usize>::sse_encode(self.pruned_no_acceptor, serializer);
         <usize>::sse_encode(self.pruned_filter, serializer);
         <usize>::sse_encode(self.pruned_mirror, serializer);
+        <usize>::sse_encode(self.mirrored_kept, serializer);
         <usize>::sse_encode(self.mirror_undecided, serializer);
         <usize>::sse_encode(self.candidates, serializer);
         <usize>::sse_encode(self.parents, serializer);
