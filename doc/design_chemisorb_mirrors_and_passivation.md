@@ -17,11 +17,12 @@ rules drop:
    `clash_factor`). Leave an open valence uncapped when its terminator would
    sit in a bad steric clash.
 
-Feature 3 is not separate from feature 2. Capping the free sites around a
-bound molecule puts H atoms next to the molecule, and some of them land inside
-it. `passivate_sites` therefore places its H with feature 3's clash rule
-always on. There is one implementation of the rule, in
-`hydrogen_passivation.rs`, and both nodes call it.
+Features 2 and 3 are independent. `passivate_sites` places its H **without**
+the clash rule (D8): it caps the start structure, where the molecule is
+usually still far from where the relaxation takes it, so a clash measured
+there says little about the relaxed binding. The rule lives in
+`hydrogen_passivation.rs` as a general-purpose option, and today the
+`passivate` node is its only caller.
 
 Background: `doc/design_chemisorption_sequential.md` (the search; §4.5
 seating and the mirror check, §4.6 the local phase, §4.8 the reference
@@ -126,9 +127,16 @@ the right result for a host whose open bond points into something.
   this pass already placed. Hosts are visited in atom-id order. Covalent radii
   are the wrong scale here: they put an H–H clash below 0.6 Å, which would
   let through every dihydride clash this option exists to catch.
-- **D8. `chemisorb` uses the rule at its default factor and does not expose
-  the factor** (maintainer decision 2026-10-15). The node already has many
-  properties. If someone needs another value it can be added later.
+- **D8. `chemisorb` does not use the clash rule** (maintainer decision
+  2026-10-15, superseding the first draft's "always on"). `passivate_sites`
+  caps on the start structure, and in most seatings the molecule there is
+  several Å from where it relaxes to (§8.0), so a skip decided there removes
+  H where the molecule *was*, not where it ends up. Every open valence is
+  capped. An H that starts inside the molecule is pushed out by the
+  relaxation. The relaxation can bury an H under the molecule; the walkthrough
+  checks for that (§8.0). Without skips, the H a candidate gets depends only on
+  which sites it uses, which also keeps `unique` and the reference keys
+  (§4.4) stable.
 - **D9. The passivating H atoms are tagged `cs_passivant`** in every
   candidate structure, so an `apply_style` rule can show or hide them. That
   makes four of the 32 tag names chemisorb reserves; the "inputs that already
@@ -220,8 +228,8 @@ guard, follow the sequential design's §4.9 remedy: move per-row seating out of
 
 For a candidate, passivation runs on its **start structure**, where the legs
 and transfers are already bonded. It calls `add_hydrogens_filtered` with
-`eligible = |id| site_ids.contains(&id)` (every `Setup::sites` id) and the
-clash rule of §5 on. Because the bonds are already there, the open slots it
+`eligible = |id| site_ids.contains(&id)` (every `Setup::sites` id) and
+`clash: None` (D8). Because the bonds are already there, the open slots it
 finds on a site are exactly what the binding left. An unused site gets all of
 its slots, a used site its leftover slots (none in the common case), and an
 acceptor whatever the transferred atom did not take. No list of used sites
@@ -232,9 +240,8 @@ is needed.
   Si/C/Ge hosts, the case this is for. Where they differ (a radical carbon
   typed sp²), the placement code is the one that knows the directions, so it
   decides. The reference guide says so.
-- The clash rule sees the **start structure**, adsorbate included, so an H
-  that would land in the molecule is skipped. The candidate records how many
-  H were placed and how many were skipped.
+- No H is skipped, even one that starts inside the molecule (D8). The
+  candidate records how many H were placed.
 - `bond_inventory` and the `bonds` field do not change. The passivating
   Si–H bonds are not bonds the binding forms.
 - **`skip_already_passivated` must be `false` here.** A site made by
@@ -308,16 +315,16 @@ start structure did, which is why the count is part of the key. Copying the
 candidate's H positions instead would make the reference depend on which
 candidate reached a key first, and that order varies with the thread count.
 `hydrogen_passivation.rs` gains a small `add_terminators_counted(structure,
-&[(host, count)], element)` for this, built on the same direction code; no
-clash rule applies, since the key already records the outcome.
+&[(host, count)], element)` for this, built on the same direction code.
 
-The key varies between candidates: different sites are used, and the clash
-rule skips different slots. `evaluate` therefore keeps the reference
+With no clash rule (D8), the key depends only on which sites the candidate
+uses and what valence each has left, so it varies between candidates only
+because they use different sites. `evaluate` therefore keeps the reference
 relaxations of one search in a map from key to `(energy, StrainTerms)`,
 filled the first time a key is needed. This is not a speculative cache.
 Without it, one search runs one reference relaxation per candidate instead of
 one per key: for mechadense's run, 2,658 instead of at most 816 (one per
-unordered site triple, more if the clash rule splits them). The map lives on
+unordered site triple). The map lives on
 `SearchReport`, because `replay` needs the same references. It is small: two
 numbers and a short list per entry.
 
@@ -326,23 +333,19 @@ reference and are used by every bare relaxation. A passivated candidate's
 `terms` are taken against its own reference.
 
 **Comparability.** As today, strains compare cleanly within one bond
-inventory. Within an inventory, candidates can differ in how many H the clash
-rule skipped. Their references differ to match, so each strain is still the
-cost of forming that candidate's bonds. The panel's hover shows the skipped
-count, so a candidate whose environment had to be thinned is visible.
+inventory. Each candidate's reference carries exactly its H, so each strain
+is still the cost of forming that candidate's bonds.
 
 ### 4.5 Fingerprint, outputs, panel
 
 - `input_fingerprint` hashes both new `SequentialSearch` fields; its
   destructuring makes a forgotten field a compile error.
-- `ChemisorbCandidate` gains, appended: `passivants: Int` (H placed) and
-  `passivants_skipped: Int` (H the clash rule skipped). Both are 0 with the
-  setting off.
+- `ChemisorbCandidate` gains, appended: `passivants: Int` (H placed), 0 with
+  the setting off.
 - The candidate structures carry `cs_passivant` on the placed H (D9).
 - The panel gets two checkboxes in the search settings: *Include mirrored
   assignments* and *Passivate unused sites before relaxing*. They sit under
-  *Prune seatings that clash*. A hover on a row adds "N H placed, M skipped
-  (clash)".
+  *Prune seatings that clash*. A hover on a row adds "N H placed".
 - Text format: `include_mirrored: true`, `passivate_sites: true`. Both are
   written only when true, like the existing optional settings, so saved
   networks and the round-trip corpus are unchanged.
@@ -396,8 +399,8 @@ Text format: `skip_clashes: true, clash_factor: 0.7`, written only when
 `skip_clashes` is true.
 
 The other callers of `add_hydrogens` (`atom_edit`'s one-click passivation,
-`materialize`, `lattice_fill`, `proxy_cut`) pass `clash: None` and are
-unchanged.
+`materialize`, `lattice_fill`, `proxy_cut`, and `chemisorb`'s
+`passivate_sites`, D8) pass `clash: None`.
 
 ---
 
@@ -478,8 +481,7 @@ Tests (`chemisorption_sequential_relax_test.rs`, `…_local_test.rs`,
 
 - Off: unchanged (golden + snapshots).
 - On, geometric phase: after the pass, every site's open valences are
-  either capped or counted as skipped, with no H beyond them; atom count =
-  combined + `passivants`.
+  capped, with no H beyond them; atom count = combined + `passivants`.
 - Sites made by deleting H keep the hydrogen-passivation flag and are still
   capped (§4.1). Build the fixture with `atom_edit` H deletions, as
   mechadense's network does.
@@ -493,8 +495,9 @@ Tests (`chemisorption_sequential_relax_test.rs`, `…_local_test.rs`,
 - The reference is a function of its key: two candidates with the same key
   (including a used site with leftover valence) share one reference
   relaxation, and the energy does not change with the thread count.
-- A hand-built case where a site next to the bound molecule's body would get
-  an H inside the molecule: that H is skipped and counted.
+- A hand-built case where a site next to the bound molecule's body gets an H
+  inside the molecule: the H is placed, and the relaxation converges or is
+  marked unconverged, never errors.
 - `twice`: a four-footed fixture with `formed_bonds` unset has `twice > 0`
   and runs exactly `to_relax` relaxations; with `formed_bonds = 4`, `twice
   == 0`.
@@ -523,7 +526,8 @@ smoke test stays a manual step.
 None. The four questions of the first draft were settled by the maintainer
 on 2026-10-15:
 
-- The clash factor is not exposed in `chemisorb` (D8).
+- `chemisorb` does not use the clash rule at all (D8; revised the same day
+  from "used, factor not exposed").
 - A used site's leftover valence is capped (D4).
 - H is the only passivant (D4a).
 - The adsorbate's unbonded feet stay radicals (D4).
@@ -531,6 +535,11 @@ on 2026-10-15:
 ## 8. Phase results
 
 ### 8.0 Pre-implementation check of the clash factor (2026-10-15)
+
+*Superseded for `chemisorb` by D8: the probe below is why `passivate_sites`
+does not use the rule. Its numbers still inform the `passivate` default.
+Without the rule, 30 of the 78 best-fitting seatings start with an H about
+0.8 Å from a tool H. The walkthrough checks that those relax sensibly.*
 
 Run on mechadense's network (`CHEMISORB-on-gemcut`: a 216-atom gemcut
 Si(100) proxy with 18 bare sites, and a 28-atom tool with 3 O feet). A
