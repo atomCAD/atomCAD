@@ -3,8 +3,14 @@
 Source: `reports/rendering_capabilities/rendering_capabilities_report_2026-09-21.md`
 §2.3 (depth perception) and the rim-band item of §2.4. Builds on
 `doc/design_screen_space_lines.md` and `doc/design_viewport_antialiasing.md`.
-It relies on the per-sample impostor shading (D4/D5) and the per-view uniform
-rule of the anti-aliasing design, and it changes neither.
+It relies on the per-sample impostor shading (AA D4/D5) and the per-view
+uniform rule of the anti-aliasing design, and it changes neither; the new
+`ShadingUniform` is outside that rule by construction (D2).
+
+**Naming.** "D1"–"D10" always mean this document's decisions. Decisions of
+the anti-aliasing design are written "AA D4", "AA D5": the *AA D5 marker*
+is the source marker `without_per_sample_shading` cuts at, and the *AA D4
+coverage block* is the impostor coverage code at the top of `fs_main`.
 
 ## Motivation
 
@@ -182,8 +188,8 @@ All in `rust/crates/atomcad-renderer/src/` unless noted.
 ### D1 — One lighting module, composed into the four lit shaders
 
 WGSL has no `#include`. The renderer already edits shader source before
-compiling it: `without_per_sample_shading` cuts the impostor files at the D5
-marker. So this design adds one source composition step: a new file,
+compiling it: `without_per_sample_shading` cuts the impostor files at the
+AA D5 marker. So this design adds one source composition step: a new file,
 `lighting.wgsl`, is **prepended** to `atom_impostor.wgsl`,
 `bond_impostor.wgsl`, `transparent_impostor.wgsl` and `mesh.wgsl` before
 the module is created.
@@ -193,10 +199,16 @@ the module is created.
 - the `ShadingUniform` struct and its binding (D2)
 - the four PBR helpers
 - `light_surface(world_position, N, albedo, roughness, metallic, exposure) -> vec3`,
-  which returns linear colour
+  which returns linear colour. `exposure: vec4<f32>` is the packed
+  `(4b, E)` exactly as the vertex delivers it (D10); it is unpacked inside.
+  Callers without per-atom exposure (`mesh.wgsl`, `transparent_impostor.wgsl`)
+  pass `vec4(0.0, 0.0, 0.0, 1.0)`, the fully exposed value.
 - `to_display(linear) -> vec3`, which applies Reinhard and gamma, unchanged
-- `apply_rim(color, rim_color, rim_weight) -> vec3` (D4)
 - `apply_depth_cue(color, world_position) -> vec3` (D5)
+- `apply_rim(color, rim_color, rim_weight) -> vec3` (D4), applied last
+
+The display-space order is fixed: `to_display` → `apply_depth_cue` →
+`apply_rim`. The rim is a UI signal and is neither lit nor fogged.
 
 `camera_backward` and `camera_view_vector` move into `lighting.wgsl` as
 well, so every lit shader builds `V` the same way. This fixes the
@@ -212,8 +224,8 @@ host file's declarations. To make that work, the composition puts the
 **host's header** first (everything up to and including the group-1
 `ModelUniform` binding), then `lighting.wgsl`, then the rest of the host
 file. The split point is a marker comment, `// ---- lighting ----`, placed
-in each host file. This is the same mechanism as the D5 marker, applied in
-the other direction.
+in each host file. This is the same mechanism as the AA D5 marker, applied
+in the other direction.
 
 Composition is a pure function, `pipelines::compose_lit_shader(host: &str) -> String`.
 `Shaders::new` calls it, and so does `shader_test.rs`. The naga validation
@@ -232,8 +244,10 @@ the content bounds and the background colour, and the background colour can
 differ between two draws of the same view (the thumbnail). So:
 
 - **A new uniform, `ShadingUniform`, at `@group(0) @binding(1)`**, visible
-  to the fragment stage. Every pipeline's group-0 layout gains the entry.
-  `line_mesh.wgsl` and `label.wgsl` do not declare it, which wgpu allows.
+  to the fragment stage. It is added to the one shared group-0 bind group
+  layout (`camera_bind_group_layout`), so every pipeline layout sees it,
+  the line and label layouts included. `line_mesh.wgsl` and `label.wgsl`
+  do not declare it, which wgpu allows.
 - **Written by `draw_to_target` on every call**, from the pure
   `ShadingUniform::new(camera, content_bounds, background, settings, pass)`.
   It is a few dozen bytes and the write is queued before the draw's submit.
@@ -254,6 +268,13 @@ differ between two draws of the same view (the thumbnail). So:
   the camera moves, and it must match byte for byte across six files. The
   background colour does not belong to the camera.
 
+**The renderer's default `ShadingSettings` is today's look:** *Headlight*,
+depth-cue strength 0, AO strength 0. The user's defaults (*Studio*, cue
+and AO on, D8) live in the preferences and reach the renderer through
+`set_shading` on every refresh. Keeping the renderer default neutral is
+what lets every existing GPU test, and the "byte-identical" checks of
+the phases, run unchanged without setting anything.
+
 `head_light_dir` stays in `CameraUniform`. It is the *Headlight* preset's
 key direction (D3), and `ShadingUniform::new` copies it from there, so
 the `CameraUniform` layout does not change.
@@ -264,10 +285,14 @@ the `CameraUniform` layout does not change.
 ### D3 — A camera-relative studio rig, with the old headlight as a preset
 
 ```text
-radiance = key  · (diffuse + specular) · (N·L_key)⁺
-         + fill · diffuse · (N·L_fill)⁺           · exposure
-         + mix(ground, sky, ½ + ½ N·up_cam) · albedo · exposure
+radiance = key  · (diffuse + specular) · (N·L_key)⁺       · key_factor
+         + fill · diffuse · (N·L_fill)⁺                   · ambient_factor
+         + mix(ground, sky, ½ + ½ N·up_cam) · albedo      · ambient_factor
 ```
+
+`ambient_factor` and `key_factor` come from the exposure (D7, "From
+exposure to light"). Both are 1 for a fully exposed surface and whenever
+AO is off.
 
 Specular ambient and metallic blending stay as they are. Only the ambient's
 magnitude changes, from 0.2 to the hemisphere value.
@@ -288,10 +313,12 @@ magnitude changes, from 0.2 to the hemisphere value.
 - **No rim light.** A bright outline on every atom would compete with the
   rim band, the one channel reserved for selection, frozen and marked state
   (D4).
-- **Exposure** (D6) multiplies the fill and the ambient but **not** the key.
-  Ambient occlusion stands in for missing indirect light, and the fill is a
-  stand-in for indirect light too. The key is direct light: darkening it by
-  burial would look like a shadow without a shadow's direction.
+- **Exposure** (D6) acts on the fill and the ambient in full, and on the key
+  only weakly (`AO_KEY`, D7). Ambient occlusion stands in for missing
+  indirect light, and the fill is a stand-in for indirect light too. The key
+  is direct light: darkening it fully by burial would look like a shadow
+  without a shadow's direction. A small share is still applied so that the
+  key does not wash out the creases (D7).
 
 **Calibration constraint.** The new look must not shift the colour palette.
 A surface facing the viewer (`N = V`) with white albedo, roughness 0.5 and
@@ -319,12 +346,15 @@ light would be a trap. The preference is the preset (D8).
 
 ### D4 — The rim band is applied after lighting, at a screen-space width
 
-- **After lighting.** The rim colour is mixed into the display-space output
-  (`apply_rim`, after `to_display`), not into the albedo. Selection orange,
-  frozen cyan and marked magenta then read the same all around the outline
-  and under either preset. They are UI signals, and a UI signal should not
-  be lit. Delete markers keep working: their red signal now comes from an
-  unlit ring around a dark sphere, which is if anything clearer.
+- **After lighting and after the depth cue.** The rim colour is mixed into
+  the display-space output (`apply_rim`, after `to_display` and after
+  `apply_depth_cue`), not into the albedo. Selection orange, frozen cyan and
+  marked magenta then read the same all around the outline, under either
+  preset and at any depth. They are UI signals, and a UI signal should be
+  neither lit nor fogged: a selected atom at the back of the scene must stay
+  as clearly selected as one at the front. Delete markers keep working:
+  their red signal now comes from an unlit ring around a dark sphere,
+  which is if anything clearer.
 - **Screen-space width.** The band is where the view ray passes within
   `w` render pixels of the silhouette. Here
   `w = min(RIM_WIDTH_PX × pixel_scale, 0.35 × r_px)`, with
@@ -338,8 +368,8 @@ light would be a trap. The preference is the preset (D8).
     `fs_main_per_sample`) give the world size of a pixel.
   - The pixel distance is `−distance / pixel_world`.
 
-  The early-out structure of the D4 coverage block is unchanged, because the
-  computation runs only on fragments that are already shaded.
+  The early-out structure of the AA D4 coverage block is unchanged, because
+  the computation runs only on fragments that are already shaded.
 - Both `shade_atom_hit` copies change, the opaque one and the transparent
   one. Bonds have no rim.
 
@@ -348,23 +378,40 @@ asked only for the width. Applying the rim after lighting is new, and the
 rig change makes it necessary: under a side key light, the far side of a
 lit rim would fall into shade.
 
-### D5 — Depth cue: fog to the background colour across the scene's bounding sphere
+### D5 — Depth cue: fog to the background colour, from the nearest content over a fixed span
 
 ```text
 depth   = view-space distance along the view axis (both projections)
-front   = max(c − R, near)      c = view depth of the bounding sphere's centre
-back    = c + R                 R = its radius (half the content AABB's diagonal)
-f       = strength · clamp((depth − front) / (back − front), 0, 1)
-out.rgb = mix(out.rgb, background, f)   (after to_display and apply_rim)
+c       = view depth of the content AABB's centre
+h       = the AABB's half extents;  a = the view axis in world space
+front   = max(c − (h.x·|a.x| + h.y·|a.y| + h.z·|a.z|), near)
+span    = 2R                    R = |h|, half the AABB's diagonal (the radius
+                                of its circumscribed "bounding sphere")
+f       = strength · clamp((depth − front) / span, 0, 1)
+out.rgb = mix(out.rgb, background, f)   (after to_display, before apply_rim)
 ```
 
-- **The range is the content's bounding sphere, not the near and far
-  planes.** The far plane is 2400 Å, and a cue spread over that range would
-  be invisible on any real structure. The sphere is used rather than the
-  AABB's projected depth range because the sphere's range does not change
-  as the camera orbits the content's centre. With the AABB range, an atom's
-  fog would "breathe" during a rotation. This is the same reason the report
-  fits the shadow map to a sphere.
+- **The fog starts at the nearest content.** `front` is the depth of the
+  AABB's nearest corner (its support point along the view axis), so the
+  front of the content is never fogged, whatever its shape. Anchoring at the
+  bounding sphere's front instead would fog all content that sits inside
+  the sphere: a 100 × 100 × 10 Å slab seen from above (R ≈ 71 Å) would get
+  f ≈ 0.23–0.27 on every atom, a uniform 25 % wash towards the background
+  with no depth information in it, and even a cube's front face would get
+  f ≈ 0.1. That would also defeat the D3 calibration constraint on exactly
+  the views the application is used for.
+- **The span is fixed at the bounding sphere's diameter**, not the AABB's
+  projected depth range, and not the near and far planes. The far plane is
+  2400 Å, and a cue spread over that range would be invisible on any real
+  structure. A fixed span keeps the cue's gradient (fog per Å) constant
+  while the camera orbits: thin content seen face-on gets almost no cue
+  (it has almost no depth), and the same content seen edge-on gets the
+  full gradient across its depth.
+- **Rotation behaviour.** `front` is a support function, so it moves
+  continuously as the camera orbits, by at most `R − min(h)`. An atom's fog
+  therefore changes smoothly and slowly during a rotation; nothing jumps.
+  The nearest content stays at f = 0 at every orientation, which matters
+  more than a perfectly constant per-atom value.
 - **Mixed in display space, towards the actual background.** The fully
   fogged colour must equal the background pixel exactly, on the light and on
   the dark background. Mixing after tone mapping and gamma, towards the same
@@ -391,9 +438,8 @@ out.rgb = mix(out.rgb, background, f)   (after to_display and apply_rim)
   depth *from the viewer*. The two compose without interacting.
 
 **Known limitation**, also Open question 2: in a close-up on a very large
-structure, such as the million-atom nanobeam, the bounding sphere is
-hundreds of Å deep and the visible part spans a small slice of it, so the
-cue is weak there.
+structure, such as the million-atom nanobeam, the span is hundreds of Å
+and the visible part covers a small slice of it, so the cue is weak there.
 
 ### D6 — Per-atom exposure: a solid-angle visibility from the atom's centre, baked on the CPU
 
@@ -439,36 +485,46 @@ single line.
 
 **Who occludes, who receives.**
 
-- **Occluders:** every atom of the structure with display alpha 1, **culled
-  atoms included**. Culling hides interior atoms only to save rendering
-  time. Those atoms still exist, and leaving them out would make the
-  surface atoms above them look open from below. Ghosts (alpha < 1) do not
-  occlude: a ghosted lattice around a highlighted dopant should leave the
-  dopant looking lit, and here it does.
-- **Receivers:** opaque, unculled atoms. These are the only ones whose value
+- **Occluders:** every atom of the structure whose **structure alpha**
+  `get_atom_alpha(id)` is 1, **culled atoms included**. Culling hides
+  interior atoms only to save rendering time. Those atoms still exist, and
+  leaving them out would make the surface atoms above them look open from
+  below. Ghosts (alpha < 1, set by `xray`) do not occlude: a ghosted lattice
+  around a highlighted dopant should leave the dopant looking lit, and here
+  it does.
+  - The test is on the structure's own alpha, **not** the display alpha the
+    tessellator draws with (`global_alpha × get_atom_alpha`,
+    `atomic_tessellator.rs`), because `global_alpha` comes from the
+    *Scene transparency* preference. Using it would make exposure depend on
+    a preference, which "depends on the structure alone" below rules out
+    and D9 relies on.
+- **Receivers:** atoms drawn opaque and unculled, i.e. by the tessellator's
+  effective alpha, preference included. These are the only ones whose value
   is used, so the computation iterates over them alone. Culled interior
   atoms, typically most of a lattice-filled crystal, cost nothing as
-  receivers.
-- **An atom's exposure depends on the geometry alone**: the positions,
-  occluder radii and alphas of the atoms within `R_MAX`. It does not depend
+  receivers. With *Scene transparency* on, every atom is a ghost and there
+  are no receivers; the cached values stay valid for when it is turned off.
+- **An atom's exposure depends on the structure alone**: the positions,
+  occluder radii and structure alphas of the atoms within `R_MAX`. It does
+  not depend
   on which other atoms are receivers, on the display style or on any
   preference. D9 relies on this. A value computed once stays valid while
   nothing within `R_MAX` of the atom changes, even if the cull depths change
   the set of receivers.
-- **Exposure 1:**
+- **Exposure 1** (written as the packed `(0, 0, 0, 1)`):
   - ghosts (the transparent mesh, whose vertex keeps its layout)
   - delete and unchanged markers
   - anchor spheres
   - every atom of a diff structure (`is_diff()`; these are edit overlays,
-    not matter)
+    not matter): `ao_receivers` returns no receivers for one
   - gadget impostors
+  - any receiver that has no value yet (absent from `AtomExposure`)
 
-**Scope of the neighbourhood: one `AtomicStructure`.** The tessellator is
-called once per displayed structure (`scene_tessellator.rs:279`), so a tool
-does not darken the surface beneath it when the two are separate displayed
-outputs. Occlusion across structures needs the scene tessellator to gather
-every displayed structure first. That is Future work, and it is the natural
-companion of shadows.
+**Scope of the neighbourhood: one `AtomicStructure`.** Exposure is computed
+per displayed atomic output, so a tool does not darken the surface beneath
+it when the two are separate displayed outputs. Occlusion across structures
+needs `update_exposure` (D9) to gather every displayed structure first.
+That is Future work, and it is the natural companion of shadows.
 
 **Rejected:**
 
@@ -544,62 +600,106 @@ seconds on every content refresh. So:
 Every function in it is pure, and none reads a preference:
 
 ```rust
-/// Exposure in [0, 1] of each atom in `receivers`, keyed by atom id;
-/// absent ids are fully exposed. Builds one `SpatialGrid` over the
+/// The packed `(4b, E)` (D10) of each atom in `receivers`, keyed by atom
+/// id; absent ids are fully exposed. Builds one `SpatialGrid` over the
 /// occluders; runs the receivers under `rayon`.
-pub fn atom_exposure(structure: &AtomicStructure, receivers: &[u32]) -> AtomExposure;
+pub fn atom_exposure(
+    structure: &AtomicStructure,
+    receivers: &[u32],
+) -> (AtomExposure, ExposureStats);
+
+/// The occluder state of every atom: id → (position, occluder radius,
+/// occluder or not). About 24 bytes per atom. O(atoms).
+pub fn occluder_snapshot(structure: &AtomicStructure) -> OccluderSnapshot;
 
 /// The atoms whose occluder state differs between `old` and `new`
 /// (position, occluder radius, occluder or not, added, removed), with
 /// their old and new positions. O(atoms).
-pub fn occlusion_changes(old: &AtomicStructure, new: &AtomicStructure) -> OcclusionChanges;
+pub fn occlusion_changes(old: &OccluderSnapshot, new: &AtomicStructure) -> OcclusionChanges;
 
-/// `previous` brought up to date for `structure`. Drops the values within
-/// `R_MAX + max occluder radius` of a changed position, old or new, then
-/// computes every receiver that has no value. Few missing receivers are
-/// computed through `AtomicStructure`'s own grid, many through
-/// `atom_exposure`'s path.
+/// The union of two change sets, keeping every old and new position of
+/// either. Used to fold a new diff into changes still pending.
+pub fn merge_changes(pending: OcclusionChanges, new: OcclusionChanges) -> OcclusionChanges;
+
+/// `previous` brought up to date for `structure`, holding values for
+/// `receivers` only. Drops the values within `R_MAX + max occluder radius`
+/// of a changed position, old or new, and the values of atoms that are no
+/// longer receivers, then computes every receiver that has no value. When
+/// at most `FULL_PATH_FRACTION` (¼) of the receivers need computing, they go
+/// through `AtomicStructure`'s own grid; above it, through
+/// `atom_exposure`'s path (the "full path").
 pub fn update_atom_exposure(
     previous: &AtomExposure,
     changes: &OcclusionChanges,
     structure: &AtomicStructure,
     receivers: &[u32],
-) -> AtomExposure;
+) -> (AtomExposure, ExposureStats);
+
+/// What one call did: receivers computed, and whether it took the full
+/// path. Returned per call, never kept in a global (Testing layer 1).
+pub struct ExposureStats { pub receivers_computed: usize, pub full_path: bool }
 ```
 
 `AtomExposure` is an `FxHashMap<u32, [i8; 4]>` wrapped in a newtype: the
-packed `(b, E)` of D10, in the vertex format they are uploaded in. Both
+packed `(4b, E)` of D10, in the vertex format it is uploaded in. Both
 paths compute each receiver with the same kernel over the same neighbour
-set. Since the mask is an OR, neighbour order does not matter. **So an
-incremental update is bit-identical to a full computation**, and Phase 4
-tests exactly that.
+set, and both use one shared `within_r_max(d²)` predicate, so the two grids
+cannot disagree on a neighbour at the boundary. Since the mask is an OR,
+neighbour order does not matter. **So an incremental update is
+bit-identical to a full computation**, and Phase 4 tests exactly that.
 
-The tessellator does not call these functions directly: it takes the
-exposure from the scene's cache (D9). `tessellate_atomic_structure_impostors`
-gains an `exposure: Option<&AtomExposure>` parameter, where `None` means AO
-is off and every vertex is fully exposed (`b = 0`, `E = 1`). It also exposes the receiver selection it
-already does (`should_cull_atom`, alpha) as `ao_receivers(structure,
-viz_prefs) -> Vec<u32>`. The cache uses that function, so the two can never
-disagree.
+The diff runs against an `OccluderSnapshot`, not the previous
+`AtomicStructure`. That way the cache never needs the old structure to be
+alive (D9, "Carried across a re-evaluation"), at a cost of about 24 MB per
+million atoms while AO is on.
+
+The tessellator does not call these functions: it reads the exposure from
+the scene's cache, which a separate pass fills (D9).
+`tessellate_atomic_structure_impostors` gains an
+`exposure: Option<&AtomExposure>` parameter, where `None` means AO is off
+and every vertex is fully exposed (`b = 0`, `E = 1`). `atomic_tessellator`
+also exposes the receiver selection it already does (`should_cull_atom`,
+alpha) as `ao_receivers(structure, viz_prefs) -> Vec<u32>`. The cache pass
+uses that function, so the two can never disagree.
+
+**Why `atomcad-display` and not `atomcad-crystolecule`.** The kernel reads
+nothing but an `AtomicStructure`, so it could live in the domain crate. It
+does not belong there, because every rule in it is a rendering policy:
+- covalent radius as a stand-in for an occluder (D6);
+- the ghost rule, which follows the `xray` alpha;
+- exposure 1 for diff structures (edit overlays);
+- the receiver set, which follows the cull depths;
+- the packed `Snorm8x4` value, which is a vertex format.
+
+Placing it in crystolecule would make the domain crate carry rendering
+rules. Placing it in the display crate matches its role as the domain →
+renderer adapter, and the crate already depends on crystolecule for
+`SpatialGrid` and the covalent radii. `atomcad-structure-designer` owns
+only the cache and the policy of *when* to update it (D9). It already
+depends on the display crate through `scene_tessellator`, so the DAG does
+not change.
 
 **Into the vertices.**
 
-- `AtomImpostorVertex` gains `exposure: vec4<f32>` in vertex format
-  `Snorm8x4`: `(b.x, b.y, b.z, E)` in 4 bytes (D10). The vertex grows
-  from 60 to 64 bytes.
+- `AtomImpostorVertex` gains `exposure: [i8; 4]`, uploaded as vertex
+  format `Snorm8x4` and read in WGSL as `vec4<f32>`: the packed
+  `(4b.x, 4b.y, 4b.z, E)` (D10) in 4 bytes. The vertex grows from 60 to
+  64 bytes.
 - `BondImpostorVertex` gains `exposure_start, exposure_end`, two more
-  `Snorm8x4`. The bond shader mixes the two by the hit point's axial
-  parameter, which `shade_bond_hit` already computes as
-  `projection_length`, so a bond darkens towards its buried end and on the
-  side facing its neighbours.
+  `[i8; 4]` / `Snorm8x4`. The bond shader mixes the two by the hit point's
+  axial parameter `t = projection_length / cylinder_length` (both already
+  computed in `shade_bond_hit`), so a bond darkens towards its buried end
+  and on the side facing its neighbours.
+- `TransparentImpostorVertex` is unchanged (ghosts are fully exposed).
 - `add_atom_quad` and `add_bond_quad` keep their signatures and write the
   fully exposed value `(0, 0, 0, 1)`. New `…_with_exposure` variants serve
   the tessellator. Every other producer, including gadgets, anchors and
   markers, is unchanged and comes out fully exposed.
-- The memory cost on the nanobeam is 16 MB more vertex data, the same as a
-  plain `f32` would cost, because the bent vector rides in the same 4 bytes.
-  Instanced bond and atom quads (AA design, Future work) would recover it
-  several times over.
+- The memory cost on the nanobeam in ball-and-stick, at 4 vertices per
+  quad and about 2 bonds per atom: about 16 MB for atoms and 64 MB for
+  bonds. That is the same as plain `f32` exposures would cost, because the
+  bent vector rides in the same 4 bytes. Instanced bond and atom quads (AA
+  design, Future work) would recover it several times over.
 
 **From exposure to light**, in `light_surface`, with `V(N)` the per-pixel
 visibility of D10:
@@ -638,26 +738,37 @@ Starting values: `AO_FLOOR = 0.25`, `AO_OPEN = 0.6`, `AO_KEY = 0.35`.
   next to the anti-aliasing pair, and they follow its path to the
   **Rendering** section of the Preferences dialog under a *Lighting*
   sub-heading. The checkbox-plus-slider pairs work like *Scene transparency*.
-- The renderer receives them as
-  `ShadingSettings { preset, depth_cue_strength, ao_strength }`, through a
-  new `Renderer::set_shading`. That setter is pushed on every refresh next
-  to `set_render_quality`, bumps the live generation only when the value
-  changed, and treats an "off" checkbox as strength 0.
+- They travel along two paths, both converted in the root crate's
+  `api_common.rs`. That is where the domain preferences already become
+  `RenderQuality` and `DisplayPreferences`, so neither the renderer nor the
+  display crate learns about `RenderingPreferences`:
+  - **To the renderer**, as
+    `ShadingSettings { preset, depth_cue_strength, ao_strength }`, built
+    by a new `to_shading_settings` next to `to_render_quality` and passed
+    to a new `Renderer::set_shading`. That setter is pushed on every
+    refresh next to `set_render_quality`, bumps the live generation only
+    when the value changed, and treats an "off" checkbox as strength 0.
+  - **To the display layer**, only the *Ambient occlusion* checkbox, as
+    `ambient_occlusion: bool` on the display crate's
+    `AtomicStructureVisualizationPreferences`, set by
+    `to_display_preferences`. `update_exposure` and `scene_tessellator`
+    both read it from the `DisplayPreferences` they already receive.
 - **The *Ambient occlusion* checkbox is the off switch for huge
   structures, and off means zero cost**, not strength 0. With it off:
   - `scene_tessellator` passes `exposure: None`, and every vertex gets
     1.0;
-  - no exposure is computed;
-  - no cache is filled or carried over (D9), so the `occlusion_changes`
-    diff is skipped as well.
+  - `update_exposure` returns at once, so no exposure is computed;
+  - no cache is carried over (D9), so the `occlusion_changes` diff is
+    skipped as well. The refresh code reads the checkbox from
+    `StructureDesigner`'s own preferences.
 
   The strength slider, by contrast, is renderer-only and changes no
   geometry.
-- **Toggling it re-evaluates nothing.** The preference is read at
-  tessellation time, never during evaluation, which is the display crate's
-  invariant. Saving the preferences already ends in
-  `refresh_structure_designer_auto`, which re-tessellates. Switching AO on
-  fills the caches of the displayed nodes on that tessellation. Switching it
+- **Toggling it re-evaluates nothing.** The preference is read after
+  evaluation (by `update_exposure` and the tessellator), never during it,
+  which is the display crate's invariant. Saving the preferences already
+  ends in `refresh_structure_designer_auto`, which re-tessellates. Switching
+  AO on fills the caches of the displayed nodes on that refresh. Switching it
   off leaves filled caches unused; they are dropped with their scene entries
   as usual.
 - The reference guide row says this outright: on a structure of several
@@ -682,40 +793,78 @@ refresh that is not lightweight: an edit to an unrelated node, a node
 selection, a property change. Evaluation already avoids repeating work, and
 exposure should be paid on the same terms.
 
-**1. Cached with the evaluated output.**
-- `NodeSceneData` gains `exposure: ExposureCache`. It holds one entry per
-  atomic output pin, behind a `Mutex`, so the tessellator can fill it
-  through the `&StructureDesignerScene` it already receives.
-- This follows the existing pattern, "derive at `generate_scene` time and
-  park on `NodeSceneData`" (`surface_color_distribution`,
-  `atomcad-structure-designer/src/AGENTS.md`), with one difference: it is
-  filled **lazily**, on the first tessellation that wants it. Evaluation
-  stays independent of the AO preference, and AO off computes nothing.
-- On a tessellation with AO on, for each atomic structure:
+**1. Cached with the evaluated output, filled by its own pass.**
+- `NodeSceneData` gains `exposure: ExposureCache`, a plain field (no
+  interior mutability). It holds one entry per atomic output pin.
+- An entry holds three things: the exposure values, the
+  `OccluderSnapshot` of the structure they were computed for, and the
+  **pending changes** not yet applied to the values.
+- The cache is filled by a separate pass, **between evaluation and
+  tessellation**: `StructureDesigner::update_exposure(&mut self, prefs:
+  &DisplayPreferences, lightweight: bool)`, in a new module
+  `atomcad-structure-designer/src/scene_exposure.rs`.
+  `refresh_structure_designer` (`api_common.rs`) calls it
+  **unconditionally**, right after `structure_designer.refresh(changes)` and
+  before `tessellate_scene_content`. The function returns at once on a
+  lightweight refresh or with AO off. The gating lives inside it so that
+  the structure-designer tests exercise it: the root-crate call site needs
+  a GPU-backed `CADInstance`, which no automated harness builds. For each
+  atomic output of each displayed node:
   1. `receivers = ao_receivers(structure, viz_prefs)`.
   2. If the entry has a value for every receiver and no pending changes,
-     use it.
-  3. Otherwise run `update_atom_exposure` (or `atom_exposure` on an empty
-     entry) and store the result.
+     keep it.
+  3. Otherwise run `update_atom_exposure` with the pending changes (or
+     `atom_exposure` on an empty entry), store the result, clear the
+     pending changes and take a fresh snapshot — subject to the drag rule
+     (point 3).
+- `tessellate_scene_content` stays a **pure function** of the scene, the
+  camera and the display preferences. It only reads the entries, and
+  passes `Some(&values)` to `tessellate_atomic_structure_impostors` when AO
+  is on, `None` when it is off.
+- This is the existing pattern, "derive and park on `NodeSceneData`"
+  (`surface_color_distribution`, `atomcad-structure-designer/src/AGENTS.md`),
+  moved one step later: after evaluation instead of during it. Evaluation
+  stays independent of the AO preference, and AO off computes nothing.
+- The pass is timed on its own, as `exposure_ms` in the refresh profile
+  (`refresh_profile.rs`, next to `tessellate_ms`), so its cost is neither
+  hidden in tessellation nor inferred from it.
 - So a partial refresh that does not re-evaluate a node reuses its
   exposure. So does a node restored from the invisible-node cache, whose
   `NodeSceneData` keeps its entry.
 - A cull-depth change needs no special case. Receivers that gain
-  visibility have no value and are computed; values for atoms that are no
-  longer receivers are pruned (D6: a value does not depend on the receiver
-  set).
-- The entry counts in `NodeSceneData`'s `MemorySizeEstimator`, about 8 bytes
-  per receiver.
+  visibility have no value and are computed. Values for atoms that are no
+  longer receivers stay correct (D6: a value does not depend on the
+  receiver set); they are simply unused until `update_atom_exposure` next
+  runs and drops them.
+- The entry counts in `NodeSceneData`'s `MemorySizeEstimator`: about 8 bytes
+  per receiver for the values and about 24 bytes per atom for the snapshot.
 
 **2. Carried across a re-evaluation.**
 - A re-evaluated node gets a fresh `NodeSceneData`. When it replaces an
-  older entry under the same `NodeRef`, the old exposure entry moves into
-  the new one, together with `occlusion_changes(old, new)`.
+  older entry under the same `NodeRef`, the old exposure entry (values,
+  snapshot, pending changes) moves into the new one, and its pending
+  changes become `merge_changes(pending, occlusion_changes(snapshot, new))`.
+  The snapshot is **not** replaced here: the values still correspond to it
+  plus the pending changes, and only an update (step 3 above) advances it.
+- **Pending changes are merged, never replaced.** A drag (point 3)
+  re-evaluates on every tick and may skip the update on each one. If a
+  tick's carry-over replaced the pending set, the motion of the earlier
+  ticks would be forgotten, the closing update would see only the last
+  tick, and the values near the earlier positions would stay stale for
+  good, with nothing to report it.
+- The diff runs against the entry's snapshot, so the outgoing structure is
+  not needed. The carry-over is a move of the entry: no structure is kept
+  alive for it.
 - This happens at the two insertion sites: the end of `refresh_partial`'s
-  Step 5, and in `refresh_full`, which keeps the outgoing scene until its
-  inserts are done instead of dropping it at `fresh_scene()`. Both go
-  through one helper, `carry_over_exposure(old, &mut new)`, so neither site
-  can forget it.
+  Step 5, and in `refresh_full`. `refresh_full` **takes the exposure
+  entries out of the outgoing scene** (a move per entry, keyed by
+  `NodeRef`) before it drops that scene at `fresh_scene()`, then attaches
+  them as the new entries are inserted. Keeping the whole outgoing scene
+  alive until the inserts are done instead would hold two copies of every
+  displayed structure through evaluation — `NodeOutput` owns its
+  `AtomicStructure` — which on the nanobeam is hundreds of MB.
+  Both sites go through one helper, `carry_over_exposure(old_entry,
+  &mut new)`, so neither can forget it.
 - It runs only when AO is on and the old entry has values.
 - Its cost is the O(atoms) diff: about 20–30 ms per million atoms against a
   full recomputation of 150–400 ms.
@@ -733,22 +882,33 @@ exposure should be paid on the same terms.
     once, beside the re-evaluation that caused it.
 
 **3. Drags.**
-- While `StructureDesigner::open_interaction()` reports a drag, the
-  tessellator gets `interaction_open = true`, passed from
-  `refresh_structure_designer` the way `lightweight` is.
-- Under it, an update that would take the full path (more than a quarter of
-  the receivers to compute) is **not** run. The previous values are used for
-  every atom that has one, new receivers get 1.0, and the entry keeps its
-  pending changes.
-- The first tessellation after the drag ends completes the update.
+- `update_exposure` is a `StructureDesigner` method, so it reads
+  `self.open_interaction()` directly. Nothing about drags is threaded into
+  the tessellator.
+- While an interaction is open, an update that would take the full path
+  (more than `FULL_PATH_FRACTION` of the receivers to compute, counted
+  over the accumulated pending changes, D7) is **not** run. The previous values are used for every atom that has one,
+  new receivers get 1.0, and the entry keeps its pending changes, which
+  the next tick's carry-over extends (point 2).
+- The first `update_exposure` after the drag ends completes the update over
+  the whole accumulated set, so its result equals a full computation on the
+  final structure.
 - So dragging a large selection costs one full update when the drag ends,
   not one per tick. A small drag (a few atoms, the usual atom_edit case)
   stays exact on every tick through the incremental path.
-- The refresh that closes a drag must reach the tessellator with
-  `interaction_open = false`. Phase 4b checks that it does, for the atom_edit
-  drag and the gadget drag.
+- The refresh that closes a drag must run `update_exposure` after the
+  interaction is closed, i.e. with `open_interaction()` already `None`.
+  Phase 4b checks that it does, for the atom_edit drag and the gadget drag.
 
 **Rejected:**
+- **Filling the cache lazily inside the tessellator**, behind a `Mutex` on
+  `NodeSceneData`, through the `&StructureDesignerScene` it receives. It
+  would make `tessellate_scene_content` a hidden writer: the half-dozen
+  tests that call it directly would start paying for and mutating exposure,
+  its time would land in `tessellate_ms`, and the drag state would have to
+  be threaded into a function that has no `StructureDesigner` to ask. An
+  explicit `&mut` pass at the one production call site has none of these
+  problems.
 - **Computing in `generate_scene`, eagerly.** That would make evaluation
   read the AO preference, which turns a checkbox toggle into a
   re-evaluation. It would also compute exposure for outputs that are never
@@ -834,6 +994,7 @@ V(N) = clamp(E + 2 · dot(b, N), 0, 1)
   calibration then fails. `b` is used for visibility only.
 - **Per-texel visibility maps** (QuteMol). This is the GPU path D6
   rejects.
+
 ## Open questions
 
 1. **Occluder radius: covalent or displayed?** D6 chooses covalent, so that
@@ -843,10 +1004,9 @@ V(N) = clamp(E + 2 · dot(b, N), 0, 1)
    at both styles in the walkthrough, and switch `occluder_radius` if the
    ball-and-stick picture reads wrong.
 2. **Depth-cue range on close-ups of huge structures** (D5). One option, if
-   the walkthrough on the nanobeam finds the cue too weak: clamp the range
-   to the part of the bounding sphere inside the view frustum. That is
-   still rotation-stable around the target, but it changes with zoom.
-   Recommendation: ship the sphere and decide on evidence.
+   the walkthrough on the nanobeam finds the cue too weak: clamp the span
+   to the part of the content inside the view frustum. That changes with
+   zoom. Recommendation: ship the fixed span and decide on evidence.
 3. **Does a style rule need "no AO"?** An atom highlighted with
    `apply_style` that sits in a groove will be darkened like its neighbours.
    An `emissive` style field (report §2.4) is the real answer, and it is out
@@ -859,38 +1019,95 @@ the phase that builds what they test.
 
 1. **Pure functions, CPU.**
    - `ShadingUniform::new` covers the rig's directions from a camera, the
-     presets, the depth range from bounds and the gadget variant.
+     presets, the depth cue's `front` and span from bounds and the gadget
+     variant.
    - `compose_lit_shader`.
    - `atom_exposure` and the cap-mask table, against the exact cone test as
      oracle.
    - `update_atom_exposure`, against `atom_exposure` as oracle:
      bit-identical by construction (D7), so asserted with `==`.
-   - The D9 cache through refreshes, driven by a `StructureDesigner` with a
-     counter of exposure computations, so that a reuse is observed rather
-     than inferred from timing.
+   - The D9 cache through refreshes, driven by a `StructureDesigner`. Reuse
+     is observed, not inferred from timing. The display functions return
+     an `ExposureStats` per call (D7), and `StructureDesigner` sums them
+     into `last_exposure_stats` (receivers computed, full-path updates,
+     plus diffs run by the carry-over), reset at the start of each refresh.
+     These are **per-instance**
+     statistics, never a process-global counter, because `cargo test` runs
+     the tests of one harness in parallel threads, and a static counter
+     would count the neighbouring tests' work. "Re-evaluated nothing" is
+     asserted the same way, through the refresh's own
+     `RefreshSubPhases::eval_ms == None`.
+   - The vertex layouts: each `desc()` attribute offset equals the
+     `offset_of!` of its field, and the stride equals `size_of` (64 bytes
+     for `AtomImpostorVertex`). Without this, a wrong offset for the new
+     `Snorm8x4` attribute shows up only as a pipeline-creation panic in
+     the GPU harness, which CI does not run.
    - The preferences' serde defaults.
    - The live-generation source check of `live_refinement_test.rs` covers
      `set_shading` automatically.
+
+   **Fixtures.** The display crate cannot build a node network, so its
+   tests build lattices with a small helper that writes diamond positions
+   straight into an `AtomicStructure` (no bonds needed: exposure reads
+   positions and radii only), and pass receiver lists explicitly instead of
+   relying on `in_crystal_depth`. Random neighbourhoods use a fixed seed.
+   Structure-designer tests set every new preference explicitly, never
+   relying on its default: the designer reads the user's
+   `preferences.json`, so a default-dependent test passes or fails
+   depending on the machine.
 2. **Shader structure, naga** (`shader_test.rs`). Each lit shader is
    validated **as composed**. `ShadingUniform`'s offsets are checked as
    `CameraUniform`'s are, and the per-sample entry points still compile
-   after composition and the D5 cut.
-3. **A Rust twin of `light_surface`** (`shading.rs`), used to tune the
-   constants against the D3 calibration constraint and to compute expected
-   pixel values for the GPU tests. A change to `lighting.wgsl` is mirrored
-   there, as with `line_geometry.rs` and `impostor_coverage.rs`. The GPU
-   harness is what catches a twin that has drifted.
+   after composition and the AA D5 cut.
+3. **A Rust twin of the shading** (`shading.rs`): `light_surface`, the AO
+   mapping (`ao(N)`, `V(N)`), `to_display` and `apply_depth_cue`. It is
+   used to tune the constants against the D3 calibration constraint and to
+   compute expected pixel values for the GPU tests. A change to
+   `lighting.wgsl` is mirrored there, as with `line_geometry.rs` and
+   `impostor_coverage.rs`. What catches a twin that has drifted is one
+   explicit GPU test, **twin agreement** (Phase 2, extended in Phases 3
+   and 4): sampled pixels of a lit sphere match the twin within 2/255.
+   Without that test, "measured against the twin" in the other GPU tests
+   would compare two things that may have drifted together.
 4. **GPU harness** (`renderer_gpu.rs`, `--ignored`), with the AA design's
    rules: dumps first, capability skips, no timing, pixel tolerances and
-   counts, never golden images.
+   counts, never committed golden images.
    - The anchor test of the whole design is that **the *Headlight* preset
-     with depth cue and AO off reproduces the pre-design image**, compared
-     against the dump taken before Phase 1.
+     with depth cue and AO off reproduces the pre-design image**.
+   - Today `ATOMCAD_GPU_DUMP_DIR` only *writes* images, and the comparison
+     between two dump directories is done by hand. Phase 1 adds
+     `ATOMCAD_GPU_COMPARE_DIR`: when it is set, `dump()` also reads
+     `<name>.raw` from that directory and asserts the largest per-channel
+     difference is within a tolerance. The reference stays a local,
+     uncommitted dump of the previous commit on the same machine, so the
+     "never golden images" rule (drivers differ) still holds. The
+     pixel-neutral claims of later phases ("byte-identical to Phase N")
+     use the same switch.
+   - The existing harness draws too little lit content for that anchor to
+     mean much: one opaque quad, one atom and one bond. Phase 1 therefore
+     first adds a **lit-pipelines scene**: every lit pipeline (opaque mesh,
+     atom and bond impostors, a selected and a frozen atom with rims,
+     transparent atom and bond impostors, a transparent isosurface, a
+     gadget-pass atom), in perspective and orthographic, with MSAA off and
+     on (the per-sample entry points), on a light and a dark background.
+     It dumps **one image per pipeline and variant** under its own name, so
+     a later phase can exempt one image (an orthographic mesh, a rimmed
+     atom) without losing the comparison on the rest. It is committed and
+     dumped **before** the refactor.
+   - GPU tests that need a particular shading set it with
+     `set_shading`; all others run on the renderer's neutral default (D2).
 5. **No new Dart logic.** The dialog rows are thin editor UI and are
    checked in the walkthrough.
 
 Each new GPU test is confirmed to **fail with its fix removed** before it is
 trusted; each phase names the mutation to try.
+
+**Left to the walkthrough because no harness reaches it:** the one call to
+`update_exposure` in `refresh_structure_designer` (`api_common.rs`).
+Driving that function needs a `CADInstance` with a live renderer, which
+only the Flutter smoke test has. The gating (lightweight, AO off) lives
+inside `update_exposure`, so it is covered by the structure-designer
+tests; what is left unverified is a single unconditional call.
 
 **Not automated, on purpose** (Phase 5's walkthrough):
 
@@ -904,9 +1121,16 @@ trusted; each phase names the mutation to try.
 
 Each phase leaves the build green and the app usable. Checks per phase:
 
-- `cargo fmt`, `cargo clippy`, `cargo test -j 4` (the renderer and display
-  harnesses and the api harnesses explicitly)
-- the GPU harness
+- `cargo fmt`, `cargo clippy`
+- `cargo test -j 4`, naming each harness this design touches, because
+  `cargo test --workspace` stops at the first failing harness:
+  - `-p atomcad-renderer --test renderer`
+  - `-p atomcad-display --test display`
+  - `-p atomcad-structure-designer --test structure_designer`
+  - root crate: `--test structure_designer_api`, `--test integration`,
+    `--test renderer_api`
+- the GPU harness:
+  `cargo test -p atomcad-renderer --test renderer_gpu -- --ignored`
 - `flutter analyze`
 
 The Flutter smoke test is a manual step for the maintainer. A GUI check
@@ -915,42 +1139,55 @@ library.
 
 ### Phase 1 — Shared lighting module and `ShadingUniform` (no visible change)
 
-- **Before any code:** dump the GPU harness (`ATOMCAD_GPU_DUMP_DIR`) from
-  the current commit.
+- **Before any code:**
+  - Add the lit-pipelines GPU scene (Testing layer 4) and the
+    `ATOMCAD_GPU_COMPARE_DIR` switch in `dump()`, and commit both on their
+    own. This commit changes no shader.
+  - Then dump the whole GPU harness from that commit
+    (`ATOMCAD_GPU_DUMP_DIR`).
 - Add `lighting.wgsl`, the `// ---- lighting ----` markers and
   `compose_lit_shader` (D1). Remove the four copies and
   `calculate_bond_lighting`.
 - Add `ShadingUniform` at group 0, binding 1, with the two per-pass buffers
-  and the four bind groups (D2). It is written in `draw_to_target`. In this
-  phase it carries only the *Headlight* preset: depth cue 0, exposure
-  unused, and the fill and hemisphere terms present in the formula but with
-  the preset's values.
+  and the four bind groups (D2). It is written in `draw_to_target` from the
+  renderer's neutral default `ShadingSettings` (D2); `set_shading` and the
+  preferences come in Phase 2. So in this phase it carries only the
+  *Headlight* preset: depth cue 0, exposure unused, and the fill and
+  hemisphere terms present in the formula but with the preset's values.
 - `mesh.wgsl` keeps its old `V` in this phase (a local override marked for
   Phase 2), so the phase is pixel-neutral.
 - **Tests:**
   - `shader_test.rs`: every lit shader validates as composed; the
     `ShadingUniform` offsets; per-sample entry points survive composition
-    plus the D5 cut.
-  - `shading_uniform_test.rs`: the *Headlight* preset copies
-    `head_light_dir` and has fill 0, sky = ground = 0.2; the gadget variant
-    has depth-cue strength 0; size and offsets.
-  - `pipelines_test.rs` (or the existing shader test file):
-    `compose_lit_shader` puts the host header before the module and fails
-    loudly on a host without the marker.
-  - GPU: **every existing harness image is byte-identical to the dump.**
-    Float reordering may make this ≤ 1/255 per channel instead; if so,
-    record the measured maximum in the phase notes and assert it.
-  - Mutation: swap fill and key in the preset; the comparison must fail.
-- Effort: 1 d.
+    plus the AA D5 cut.
+  - `shading_uniform_test.rs` (new, in `tests/renderer/`, registered in
+    `tests/renderer.rs`): the *Headlight* preset copies `head_light_dir`
+    and has fill 0, sky = ground = 0.2; the gadget variant has depth-cue
+    strength 0; size and offsets.
+  - `shader_test.rs`: `compose_lit_shader` puts the host header before the
+    module, keeps the AA D5 marker after it, and fails loudly on a host
+    without the lighting marker.
+  - GPU, run with `ATOMCAD_GPU_COMPARE_DIR` pointing at the dump:
+    **every harness image, the lit-pipelines scene included, is
+    byte-identical.** Float reordering may make this ≤ 1/255 per channel
+    instead; if so, record the measured maximum in the phase notes and
+    make it the switch's tolerance.
+  - Mutation: temporarily swap the key and fill intensities of the
+    *Headlight* preset; the comparison must fail.
+- Effort: 1.5 d (half a day of it for the lit-pipelines scene and the
+  compare switch).
 
 ### Phase 2 — The studio rig and the rim after lighting
 
 - Add the `Studio` preset (D3), the shared `camera_view_vector` in
   `mesh.wgsl`, `apply_rim` and the screen-space rim width (D4) in both
-  `shade_atom_hit` copies. Add the Rust twin `shading.rs`.
+  `shade_atom_hit` copies. Add the Rust twin `shading.rs` with
+  `light_surface` and `to_display`; Phase 3 adds `apply_depth_cue` to it
+  and Phase 4 the AO mapping.
 - Add the preferences: `lighting` in `RenderingPreferences`, the API twin,
   and the *Lighting* dropdown in the dialog's Rendering section.
-  `Renderer::set_shading` with `ShadingSettings`, pushed on every refresh.
+  `Renderer::set_shading` with `ShadingSettings`, built by
+  `to_shading_settings` in `api_common.rs` and pushed on every refresh.
 - **Tests:**
   - `shading_test.rs` (twin): the D3 calibration constraint for `Studio`
     against `Headlight` (front-facing white within ±5 %); the hemisphere is
@@ -962,15 +1199,28 @@ library.
   - Preferences: a `preferences.json` without the new field loads as
     `Studio`; the api twin round-trips.
   - GPU:
+    - **Twin agreement**: under each preset, pixels sampled at known
+      normals of a lit sphere (centre, and four points at 60° from the
+      view axis) match `shading.rs` within 2/255, in perspective and
+      orthographic. Mutation: change one rig constant in the twin only.
     - A lit sphere under Studio is brighter in its upper-left quadrant than
-      in its lower-right, measured against the twin.
+      in its lower-right.
     - A selected sphere's rim pixels: their count on a 200-px sphere and on
       a 40-px sphere stays within the `RIM_WIDTH_PX` ring area ± tolerance
       (the old NdotV band fails this on the large sphere: mutation).
     - The rim colour is the same on the key side and the fill side within
       2/255 (lighting the rim fails it: mutation).
-    - Under *Headlight*, unselected content is still byte-identical to the
-      Phase 1 dump.
+    - The rim is as wide in output pixels in the exported image (2×
+      supersampled) as in the live view, within one pixel, the way the
+      line tests check line widths. Dropping `pixel_scale` from `w` fails
+      it (mutation).
+    - On the renderer's default (*Headlight*), against the Phase 1 dump:
+      every image is byte-identical **except** the rimmed-atom images
+      (the rim changed, tested above) and the orthographic triangle-mesh
+      images. Those change on purpose, because `mesh.wgsl` now builds `V`
+      with the shared `camera_view_vector` (D1). For them, a separate
+      assertion: an orthographic flat quad is evenly lit across its width
+      (the old per-pixel `V` was not).
 - Effort: 1–1.5 d.
 
 ### Phase 3 — Depth cue
@@ -980,26 +1230,43 @@ library.
   strength 0, and the *Depth cue* checkbox and strength in preferences.
 - **Tests:**
   - `shading_uniform_test.rs`:
-    - `front`/`back` from a known sphere and camera, in both projections
+    - `front` and `span` from a known AABB and camera, in both projections
     - `front` clamped at the near plane when the camera is inside the
-      sphere
+      content
     - strength 0 when there is no content
-    - the range does not change when the camera orbits the sphere's centre
+    - the span does not change when the camera orbits the AABB's centre,
+      and `front` changes continuously (small orbit steps, bounded change)
+    - a 100 × 100 × 10 Å slab seen face-on: its top face is at f = 0 and its
+      bottom face below 0.05 (anchoring at the bounding sphere's front fails
+      this: mutation)
+    - a cube at several orientations: its nearest corner is at f = 0
+  - Preferences: a `preferences.json` without the new fields loads with
+    the cue on at strength 0.5; the api twin round-trips.
   - GPU:
     - Two identical spheres at the front and the back of the content: the
       back one is measurably closer to the background colour, on a light
-      and on a dark background.
+      and on a dark background; the front one equals the cue-off image.
+      The same scene goes once through `render_thumbnail`, which draws the
+      view twice in a row on the two backgrounds. The kept image must be
+      fogged towards *its own* background, which is what writing the
+      `ShadingUniform` on every draw (D2) guarantees.
+    - Twin agreement, extended: the back sphere's centre pixel matches the
+      twin's `apply_depth_cue` within 2/255.
     - A sphere at the far end with strength 1 equals the background within
       2/255 (display-space mixing: a linear-space mix fails, as a mutation).
+    - A selected sphere at the far end keeps its rim colour within 2/255 of
+      the same sphere at the front (fogging after `apply_rim` fails it:
+      mutation).
     - A gadget-pass sphere at the same depth is unfogged (writing the
       content variant for the gadget pass fails it).
-    - Depth cue off: byte-identical to Phase 2.
+    - Depth cue off: byte-identical to Phase 2 (`ATOMCAD_GPU_COMPARE_DIR`).
 - Effort: 0.5–1 d.
 
 ### Phase 4 — Baked ambient occlusion, the computation
 
-- Add `ambient_occlusion.rs` with `atom_exposure`, `occlusion_changes`,
-  `update_atom_exposure` and the cap-mask table (D6, D7). Add the `exposure`
+- Add `ambient_occlusion.rs` with `atom_exposure`, `occluder_snapshot`,
+  `occlusion_changes`, `merge_changes`, `update_atom_exposure` and the
+  cap-mask table (D6, D7). Add the `exposure`
   vertex fields and `…_with_exposure` producers, `ao_receivers`, the
   `exposure: Option<&AtomExposure>` parameter of
   `tessellate_atomic_structure_impostors`, and the shader mapping.
@@ -1014,12 +1281,18 @@ library.
   - A lattice-filled diamond block: an interior atom (unculled for the
     test) is below 0.1; a (100) terrace atom lies between an adatom placed
     on it and an atom in a trench cut into it.
-  - Culled atoms occlude; ghosts (alpha < 1) do not; atoms of a diff
-    structure are 1.
+  - Atoms left out of `receivers` (culled) still occlude; ghosts (structure
+    alpha < 1) do not; `ao_receivers` returns nothing for a diff
+    structure. (`atom_exposure` and `occluder_snapshot` take no
+    preferences, so *Scene transparency* cannot reach them by
+    construction; no test is needed for it.)
   - The table against the exact cone test on 1 000 random neighbourhoods:
     mean absolute error < 0.03, maximum < 0.08.
   - Determinism: the same structure gives bit-identical values across runs
-    and thread counts (the `rayon` order must not leak into results).
+    and thread counts. The test runs `atom_exposure` inside local
+    `rayon::ThreadPool`s of 1 and 4 threads (`install`), so the result
+    does not depend on the machine's core count, and the `rayon` order
+    must not leak into results.
   - Two symmetry-equivalent atoms of a lattice fill get equal values.
   - Bent vector (D10):
     - isolated and fully buried atoms have `b = 0`
@@ -1032,28 +1305,52 @@ library.
   - Display-side tessellation tests: vertices of opaque atoms carry the
     packed value; gadget, anchor and marker vertices carry `(0, 0, 0, 1)`;
     `exposure: None` leaves every vertex at `(0, 0, 0, 1)`.
+  - Renderer CPU tests: the `AtomImpostorVertex` and `BondImpostorVertex`
+    `desc()` offsets and strides against `offset_of!`/`size_of`
+    (Testing layer 1). The hand-built vertex literal in
+    `thumbnail_test.rs` gains the new field.
   - Incremental updates (`ambient_occlusion_test.rs`), each compared with
-    `==` against `atom_exposure` on the new structure:
+    `==` against `atom_exposure` on the new structure, with the changes
+    taken from `occlusion_changes(occluder_snapshot(old), new)`:
     - one atom moved by 0.5 Å in a lattice-filled block; also one added and
       one deleted
     - an atom's alpha set below 1 (it stops occluding)
     - a changed receiver set (a different cull depth) with no geometry
       change
     - an empty diff, which returns the previous values without computing any
-      receiver
+      receiver (`ExposureStats::receivers_computed == 0`)
     - a diff over most atoms, which takes the full path
-  - GPU:
+      (`ExposureStats::full_path`), and one just under `FULL_PATH_FRACTION`,
+      which does not
+    - three successive moves of the same atoms, with the diffs folded by
+      `merge_changes` and a single update at the end (replacing instead of
+      merging fails it: mutation)
+    - an occluder placed at exactly `R_MAX` from a receiver, and one ulp
+      inside and outside it, updated through the structure-grid path: equal
+      to the full path in all three cases (the shared `within_r_max`
+      predicate, D7)
+  - GPU (these set `ao_strength` 1 with `set_shading`, since the renderer
+    default is 0):
     - Two spheres with exposure 0 and 1: the occluded one's shaded-side
-      pixels are darker by the mapping's factor, measured against the twin.
+      pixels are darker by the mapping's factor (twin agreement, extended
+      to the AO mapping).
     - `ao_strength` 0 makes them identical.
     - A bond with exposure 0 → 1 brightens monotonically from start to end.
     - A sphere with `E = ½` and `b` pointing to screen-right: its right
       half is brighter than its left, matching the twin. With `b = 0` the
       two halves are symmetric, which is the mutation: drop the `dot(b, N)`
       term and the first assertion must fail.
+    - On the renderer's default (`ao_strength` 0) and with every vertex
+      fully exposed, all images are byte-identical to Phase 3
+      (`ATOMCAD_GPU_COMPARE_DIR`): the new vertex field and the mapping
+      change nothing while exposure is 1.
   - **Measure and record** one full `atom_exposure` and the evaluate time
     on a lattice-filled 1 M-atom cuboid and on the 80-cell rod, in a release
-    build (D7's absolute budget: at most 15 % of evaluate).
+    build (D7's absolute budget: at most 15 % of evaluate). The measurement
+    is an `#[ignore]`d test in the structure-designer harness, which can
+    lattice-fill. It prints both times and asserts nothing: timing is never
+    asserted, and the budget is checked by hand and recorded in the phase
+    notes.
 - Effort: 2.5 d.
 
 ### Phase 4b — Exposure cache on the scene (D9)
@@ -1061,33 +1358,60 @@ library.
 - Add `ExposureCache` to `NodeSceneData` (`new()`, the `generate_scene`
   literal, `MemorySizeEstimator`, and the direct-construction sites in
   `multi_output_unit_test.rs`). Add `carry_over_exposure` at the
-  insertion sites of `refresh_partial` and `refresh_full`. Thread the AO
-  flag and `interaction_open` through `tessellate_scene_content`.
-- Add the two AO preferences (D8): the domain fields, the API twin and the
-  dialog rows.
+  insertion sites of `refresh_partial` and `refresh_full`; in
+  `refresh_full`, take the exposure entries out of the outgoing scene
+  before `fresh_scene()` (D9). Add `scene_exposure.rs` with
+  `StructureDesigner::update_exposure` and `last_exposure_stats`, call it
+  unconditionally from `refresh_structure_designer` between `refresh` and
+  `tessellate_scene_content`, and have `scene_tessellator` read the
+  entries. Add `exposure_ms` to the refresh profile (the domain struct, its
+  API twin and the profiling panel row).
+- Add the two AO preferences (D8): the domain fields, the API twin, the
+  dialog rows and `ambient_occlusion` on the display crate's
+  `AtomicStructureVisualizationPreferences`, set in
+  `to_display_preferences`.
 - **Tests** (`atomcad-structure-designer/tests/structure_designer/ambient_occlusion_cache_test.rs`),
-  on a small lattice-filled network with a test-only counter of receivers
-  computed:
+  on a small lattice-filled network. Each test sets the AO preference
+  explicitly and drives `refresh` followed by `update_exposure`, the
+  sequence `refresh_structure_designer` runs. "Computes nothing" and
+  "computes only…" are read from `last_exposure_stats`; "without
+  re-evaluating" is `RefreshSubPhases::eval_ms == None` (Testing layer 1).
+  - A lightweight refresh (`update_exposure(…, lightweight: true)`)
+    computes nothing: the gating inside `update_exposure`.
   - A second refresh after editing an unrelated node computes nothing.
   - Selecting another node (both re-evaluated) computes nothing.
   - An atom_edit selection change computes nothing; moving one atom
     computes only receivers within `R_MAX + max r` of it.
   - A changed cull depth computes only the newly unculled receivers.
   - AO off: nothing computed, nothing carried over, and the
-    `occlusion_changes` diff is never run; switching it back on computes
-    without re-evaluating the network (the evaluation counter is
-    unchanged).
+    `occlusion_changes` diff is never run. Switching it back on through
+    `set_preferences` computes, and the refresh that follows re-evaluates
+    nothing (`eval_ms == None`): changing `RenderingPreferences` must not
+    mark a full refresh.
   - Hide → show restores the node from the invisible cache with its
     exposure: nothing computed.
-  - A large drag with `interaction_open = true` computes nothing and
-    leaves pending changes; the drag-end refresh completes them. This is
-    checked for an atom_edit drag and a gadget drag, through the real
-    drag-end entry points, which is what proves the closing refresh reaches
-    the tessellator.
-  - Mutation: drop `carry_over_exposure` from `refresh_partial`; the
-    node-selection test must fail.
+  - A large drag (moving more than `FULL_PATH_FRACTION` of the atoms) of
+    several ticks with an interaction open computes nothing and
+    accumulates pending changes; the drag-end refresh
+    completes them, and the cache then equals `atom_exposure` on the final
+    structure (`==`). This is checked for an atom_edit drag and a gadget
+    drag, through the real drag-end entry points, which is what proves the
+    closing refresh runs `update_exposure` with the interaction closed.
+  - `tessellate_scene_content` with AO on, on a scene whose entries are
+    empty (no `update_exposure` run), writes `(0, 0, 0, 1)` on every
+    vertex: the tessellator only reads the cache and treats an absent
+    value as fully exposed.
+  - Preferences: a `preferences.json` without the AO fields loads with AO
+    on at strength 1.0; the api twin round-trips.
+  - A full refresh (e.g. an undo that triggers `RefreshMode::Full`) with an
+    empty diff computes nothing: the entries were carried out of the
+    outgoing scene.
+  - Mutations: drop `carry_over_exposure` from `refresh_partial` (the
+    node-selection test must fail); replace the pending set instead of
+    merging it (the multi-tick drag test must fail).
 - **Measure and record** the refresh time of an unrelated-node edit on the
-  1 M-atom cuboid with AO on and off. The two should agree within noise.
+  1 M-atom cuboid with AO on and off. The two should agree within noise,
+  and `exposure_ms` should be the cost of the O(atoms) diff alone.
 - Effort: 1 d.
 
 ### Phase 5 — Walkthrough and documentation
@@ -1097,7 +1421,11 @@ library.
     T-centre scene, the 80-cell rod (perspective and orthographic) and a
     mechanosynthesis step.
   - The depth cue on the rod and the nanobeam.
-  - AO in both display styles.
+  - AO in both display styles. Toggling *Ambient occlusion* in the
+    Preferences dialog changes the picture at once, and the profiling
+    panel shows `exposure` time only when the structure changed. This is
+    the check on the `update_exposure` call in `api_common.rs`, which no
+    automated test reaches.
   - The rim of selected, frozen and marked atoms at 100 % and 200 %.
   - An exported image and a thumbnail on a light background.
   - The crease between touching atoms on a (100) 2×1 reconstruction and
@@ -1109,11 +1437,14 @@ library.
     (what each does, the default, and that exports follow them). The
     *Ambient occlusion* row says what it costs on a large structure, when
     that cost is paid (when the structure changes, not on every edit), and
-    that unticking it removes the cost entirely (D8).
+    that unticking it removes the cost entirely (D8). The profiling panel's
+    description gains the new *exposure* column (D9).
   - `atomcad-structure-designer/src/AGENTS.md`, beside the
     `NodeSceneData` derived-fields paragraph: the exposure cache is filled
-    lazily by the tessellator, and a new place that inserts a
-    `NodeSceneData` over an older one goes through `carry_over_exposure`.
+    by `update_exposure` between refresh and tessellation, never by the
+    tessellator, which only reads it; and a new place that inserts a
+    `NodeSceneData` over an older one goes through `carry_over_exposure`
+    (pending changes are merged, never replaced).
   - `rust/AGENTS.md`, renderer bullets:
     - lit shaders are composed with `lighting.wgsl` at the
       `// ---- lighting ----` marker, and a change there is mirrored in
@@ -1121,12 +1452,13 @@ library.
     - `ShadingUniform` is per pass and written on every draw, so it is
       exempt from the per-view pairs rule
   - `atomcad-display/src/AGENTS.md`: the `ambient_occlusion` module, and
-    the rule that occluders include culled atoms but not ghosts.
+    the rule that occluders include culled atoms but not ghosts, judged by
+    the structure's own alpha, never the preference-scaled display alpha.
 - Effort: 0.5 d.
 
-**Total: about 6.5–7.5 d.** That is the report's 3–5 d "Depth" bundle, plus the
-shader unification, the rim fix and the exposure cache, none of which the
-report costed.
+**Total: about 7–8 d.** That is the report's 3–5 d "Depth" bundle, plus the
+shader unification, the rim fix, the exposure cache and the GPU comparison
+scaffolding, none of which the report costed.
 
 ## Future work
 
@@ -1137,8 +1469,10 @@ All of these build on this design without changing it:
   separate. A shadow factor multiplies the key term in `light_surface`. The
   casters and the fit are as the report describes.
 - **Cross-structure exposure.** Gather all displayed structures in
-  `scene_tessellator` and run `atom_exposure` over their union, so a tool
-  tip darkens the surface it approaches.
+  `update_exposure` and run `atom_exposure` over their union, so a tool
+  tip darkens the surface it approaches. The pass already sees the whole
+  scene, which is one more reason it is not part of the per-structure
+  tessellator.
 - **SSAO** for isosurfaces and arbitrary molecules, on top of the
   post-process chain. Per-atom exposure stays as the cheap default.
 - **Emissive style field** (report §2.4). An emissive term added after the
