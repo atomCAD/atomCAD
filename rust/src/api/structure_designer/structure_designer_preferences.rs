@@ -733,6 +733,19 @@ pub struct RenderingPreferences {
     #[frb(non_final)]
     #[serde(default)]
     pub lighting: LightingPreset,
+    /// Fog the content towards the background with depth. Default on.
+    #[frb(non_final)]
+    #[serde(default = "default_true")]
+    pub depth_cue: bool,
+    /// The depth cue's strength at the back of the content, `[0, 1]`.
+    /// Default 0.5.
+    #[frb(non_final)]
+    #[serde(default = "default_depth_cue_strength")]
+    pub depth_cue_strength: f64,
+}
+
+fn default_depth_cue_strength() -> f64 {
+    0.5
 }
 
 impl Default for RenderingPreferences {
@@ -741,6 +754,8 @@ impl Default for RenderingPreferences {
             anti_aliasing: true,
             full_display_resolution: true,
             lighting: LightingPreset::Studio,
+            depth_cue: true,
+            depth_cue_strength: default_depth_cue_strength(),
         }
     }
 }
@@ -1210,6 +1225,8 @@ impl From<&RenderingPreferences> for domain::RenderingPreferences {
             anti_aliasing: p.anti_aliasing,
             full_display_resolution: p.full_display_resolution,
             lighting: (&p.lighting).into(),
+            depth_cue: p.depth_cue,
+            depth_cue_strength: p.depth_cue_strength,
         }
     }
 }
@@ -1220,6 +1237,8 @@ impl From<&domain::RenderingPreferences> for RenderingPreferences {
             anti_aliasing: p.anti_aliasing,
             full_display_resolution: p.full_display_resolution,
             lighting: (&p.lighting).into(),
+            depth_cue: p.depth_cue,
+            depth_cue_strength: p.depth_cue_strength,
         }
     }
 }

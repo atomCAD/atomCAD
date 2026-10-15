@@ -73,20 +73,12 @@ const GPU_COMPARE_TOLERANCE: u8 = 0;
 /// reference is a dump of the *previous* phase. Each phase that changes
 /// pixels lists them here and tests the change by its own assertions.
 ///
-/// Depth perception Phase 2 (`doc/design_depth_perception.md`): the rim is
-/// drawn after lighting at a screen-space width (the rimmed atoms), and
-/// `mesh.wgsl` builds `V` with the shared `camera_view_vector`, which changes
-/// orthographic triangle meshes. Measured, the change shows only on the
-/// top-down flat squares (up to 4 levels, from the specular term); the
-/// oblique `lit_mesh_ortho_*` and `lit_surface_ortho_*` images stay
-/// identical, so they are still asserted.
-const GPU_COMPARE_EXEMPT: &[&str] = &[
-    "lit_atom_selected_",
-    "lit_atom_frozen_",
-    "main_pass_order",
-    "gadget_order",
-    "aa_mesh_edge",
-];
+/// Depth perception Phase 3 (`doc/design_depth_perception.md`) changes no
+/// image the renderer's neutral default draws: the depth cue is off unless a
+/// test sets it, so every image is asserted against a Phase 2 dump.
+/// (Phase 2 listed the rimmed atoms and the top-down orthographic flat
+/// squares here.)
+const GPU_COMPARE_EXEMPT: &[&str] = &[];
 
 /// Writes `pixels` to `$ATOMCAD_GPU_DUMP_DIR/<name>.raw` when that variable is
 /// set, and compares them with `$ATOMCAD_GPU_COMPARE_DIR/<name>.raw` when that
@@ -2650,4 +2642,352 @@ fn an_orthographic_flat_quad_is_evenly_lit() {
             .fold((255u8, 0u8), |(lo, hi), p| (lo.min(p[c]), hi.max(p[c])));
         assert!(hi - lo <= 1, "channel {c}: {lo}..{hi} across the quad");
     }
+}
+
+// ---- Depth cue (doc/design_depth_perception.md D5, Phase 3) ----------------
+
+use atomcad_renderer::camera::Camera;
+use atomcad_renderer::shading::apply_depth_cue;
+use atomcad_renderer::thumbnail::ThumbnailBackground;
+
+const FOG_ALBEDO: [f32; 3] = [0.2, 0.5, 0.9];
+const FOG_RADIUS: f32 = 3.0;
+/// Two identical spheres, one at the front of the content and one 30 Å
+/// behind it, side by side as seen from above.
+const FOG_FRONT: Vec3 = Vec3::new(-7.0, 0.0, 0.0);
+const FOG_BACK: Vec3 = Vec3::new(7.0, 0.0, -30.0);
+
+fn depth_cue_of(strength: f32) -> ShadingSettings {
+    ShadingSettings {
+        depth_cue_strength: strength,
+        ..ShadingSettings::default()
+    }
+}
+
+/// The two spheres of the fog scene, each with the rim colour `rim`.
+fn fog_pair(albedo: [f32; 3], rim: [f32; 4]) -> AtomImpostorMesh {
+    let mut atoms = AtomImpostorMesh::new();
+    for centre in [FOG_FRONT, FOG_BACK] {
+        atoms.add_atom_quad(&centre, FOG_RADIUS, &albedo, 0.5, 0.0, &rim);
+    }
+    atoms
+}
+
+fn upload_fog_pair(renderer: &mut Renderer, albedo: [f32; 3], rim: [f32; 4]) {
+    upload_impostors(
+        renderer,
+        &fog_pair(albedo, rim),
+        &BondImpostorMesh::new(),
+        &TransparentImpostorMesh::new(),
+        &AtomImpostorMesh::new(),
+    );
+}
+
+/// The pixel of a `width × height` render of `camera` over the world point
+/// `point`.
+fn pixel_over(camera: &Camera, width: u32, height: u32, point: DVec3) -> (u32, u32) {
+    let ndc = camera.build_view_projection_matrix().project_point3(point);
+    (
+        ((ndc.x * 0.5 + 0.5) * width as f64) as u32,
+        ((0.5 - ndc.y * 0.5) * height as f64) as u32,
+    )
+}
+
+/// What the Rust twin says the pixel `(column, row)` over a fog-scene sphere
+/// at `centre` is, 0–255, under `uniform`: lit, mapped to the display, then
+/// fogged at the point the pixel's ray meets the sphere.
+fn twin_pixel(
+    camera: &Camera,
+    uniform: &ShadingUniform,
+    (width, height): (u32, u32),
+    (column, row): (u32, u32),
+    centre: Vec3,
+    albedo: [f32; 3],
+) -> Vec3 {
+    let (origin, dir) = ray_through_pixel(camera, width, height, column, row);
+    let hit = ray_sphere(origin, dir, centre.as_dvec3(), FOG_RADIUS as f64)
+        .expect("the sample pixel is on the sphere");
+    let normal = (hit - centre.as_dvec3()).normalize().as_vec3();
+    let lit = to_display(light_surface(
+        uniform,
+        view_vector(camera, hit),
+        normal,
+        Vec3::from(albedo),
+        0.5,
+        0.0,
+    ));
+    apply_depth_cue(uniform, camera, lit, hit) * 255.0
+}
+
+fn assert_near(got: [u8; 4], expected: Vec3, tolerance: f32, what: &str) {
+    for c in 0..3 {
+        assert!(
+            (got[c] as f32 - expected[c]).abs() <= tolerance,
+            "{what}: GPU {got:?}, expected {expected}"
+        );
+    }
+}
+
+fn rgb_of(pixel: [u8; 3]) -> Vec3 {
+    Vec3::new(pixel[0] as f32, pixel[1] as f32, pixel[2] as f32)
+}
+
+/// How far a pixel is from a background colour: the sum over the channels.
+fn distance_to(pixel: [u8; 4], background: [u8; 3]) -> i32 {
+    (0..3)
+        .map(|c| (pixel[c] as i32 - background[c] as i32).abs())
+        .sum()
+}
+
+/// D5, and the twin agreement of Testing layer 3 extended to the cue: of two
+/// identical spheres, the one at the back is measurably closer to the
+/// background, on a light and on a dark background, in both projections;
+/// the one at the front is the cue-off pixel. Both centre pixels are what
+/// the twin's `apply_depth_cue` computes, within 2/255.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn the_back_sphere_is_fogged_towards_the_background_and_the_front_one_is_not() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    renderer.set_render_quality(RenderQuality {
+        anti_aliasing: false,
+        full_display_resolution: true,
+    });
+    upload_fog_pair(&mut renderer, FOG_ALBEDO, [0.0; 4]);
+    let cue = depth_cue_of(0.5);
+    let mut worst = 0.0f32;
+    for orthographic in [false, true] {
+        look_down(&mut renderer, orthographic, 60.0, VIEWPORT_HEIGHT);
+        let camera = renderer.camera.clone();
+        for background in [LIGHT_BACKGROUND, DARK_BACKGROUND] {
+            renderer.set_shading(ShadingSettings::default());
+            let off = renderer.render(background);
+            renderer.set_shading(cue);
+            let on = renderer.render(background);
+            let name = format!("fog_pair_{orthographic}_{}", background[0]);
+            dump(&format!("{name}_off"), &off);
+            dump(&name, &on);
+            let uniform = ShadingUniform::new(
+                &camera,
+                renderer.content_bounds(),
+                background,
+                &cue,
+                ShadingPass::Content,
+            );
+            for centre in [FOG_FRONT, FOG_BACK] {
+                let pixel = pixel_over(&camera, VIEWPORT_WIDTH, VIEWPORT_HEIGHT, centre.as_dvec3());
+                let expected = twin_pixel(
+                    &camera,
+                    &uniform,
+                    (VIEWPORT_WIDTH, VIEWPORT_HEIGHT),
+                    pixel,
+                    centre,
+                    FOG_ALBEDO,
+                );
+                let got = rgba_at(&on, VIEWPORT_WIDTH, pixel.0, pixel.1);
+                let without = rgba_at(&off, VIEWPORT_WIDTH, pixel.0, pixel.1);
+                let what = format!("{name}, sphere at {centre}");
+                assert_near(got, expected, 2.0, &what);
+                for c in 0..3 {
+                    worst = worst.max((got[c] as f32 - expected[c]).abs());
+                }
+                if centre == FOG_FRONT {
+                    let plain = rgb_of([without[0], without[1], without[2]]);
+                    assert_near(got, plain, 1.0, &what);
+                } else {
+                    let (fogged, plain) = (
+                        distance_to(got, background),
+                        distance_to(without, background),
+                    );
+                    assert!(
+                        fogged + 30 < plain,
+                        "{what}: {fogged} from the background, {plain} without the cue"
+                    );
+                }
+            }
+        }
+    }
+    println!("renderer_gpu: depth-cue twin agreement, largest difference {worst}/255");
+}
+
+/// D2, D5: a thumbnail draws the view twice in a row, on a light and on a
+/// dark background, and keeps one. The kept image is fogged towards its own
+/// background, which is what writing the `ShadingUniform` before every draw
+/// guarantees. A bright and a dark scene make the thumbnail keep each
+/// background once. Mutation: building the uniform with a fixed background.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn a_thumbnail_is_fogged_towards_its_own_background() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    let cue = depth_cue_of(1.0);
+    renderer.set_shading(cue);
+    look_down(&mut renderer, false, 60.0, VIEWPORT_HEIGHT);
+    let mut kept = Vec::new();
+    for (scene, albedo) in [("bright", [0.95, 0.95, 0.95]), ("dark", [0.05, 0.05, 0.08])] {
+        upload_fog_pair(&mut renderer, albedo, [0.0; 4]);
+        let bounds = renderer.content_bounds().expect("content has bounds");
+        let mut camera = fit_camera_to_bounds(&renderer.camera, bounds);
+        camera.aspect = 1.0;
+        let thumbnail = renderer.render_thumbnail(&camera);
+        dump(&format!("fog_thumbnail_{scene}"), &thumbnail);
+        let corner = [thumbnail[0], thumbnail[1], thumbnail[2]];
+        let background = [ThumbnailBackground::Light, ThumbnailBackground::Dark]
+            .into_iter()
+            .find(|b| b.rgb() == corner)
+            .expect("the corner is one of the two backgrounds");
+        kept.push(background);
+        let uniform = ShadingUniform::new(
+            &camera,
+            Some(bounds),
+            background.rgb(),
+            &cue,
+            ShadingPass::Content,
+        );
+        let size = (THUMBNAIL_SIZE, THUMBNAIL_SIZE);
+        let pixel = pixel_over(&camera, size.0, size.1, FOG_BACK.as_dvec3());
+        let expected = twin_pixel(&camera, &uniform, size, pixel, FOG_BACK, albedo);
+        let i = ((pixel.1 * THUMBNAIL_SIZE + pixel.0) * 4) as usize;
+        let got = [thumbnail[i], thumbnail[i + 1], thumbnail[i + 2], 255];
+        assert_near(
+            got,
+            expected,
+            3.0,
+            &format!("{scene} scene on the {background:?} background"),
+        );
+    }
+    assert_ne!(kept[0], kept[1], "both scenes kept the same background");
+}
+
+/// D5: the cue mixes in display space towards the pass's clear colour, so at
+/// strength 1 a sphere a span behind the front of the content is the
+/// background pixel, within 2/255, on a light and on a dark background. A
+/// linear-space mix converges on `to_display(background)` instead: mutation.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn at_full_strength_the_far_end_is_the_background() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    renderer.set_render_quality(RenderQuality {
+        anti_aliasing: false,
+        full_display_resolution: true,
+    });
+    // Small spheres 200 Å apart along the view axis, so the span (the
+    // bounding sphere's diameter) is barely more than their distance: the
+    // back one's nearest point is 99.5 % of the way into it.
+    let (front, back) = (Vec3::ZERO, Vec3::new(0.0, 2.0, -200.0));
+    let mut atoms = AtomImpostorMesh::new();
+    for centre in [front, back] {
+        atoms.add_atom_quad(&centre, 0.5, &FOG_ALBEDO, 0.5, 0.0, &[0.0; 4]);
+    }
+    upload_impostors(
+        &mut renderer,
+        &atoms,
+        &BondImpostorMesh::new(),
+        &TransparentImpostorMesh::new(),
+        &AtomImpostorMesh::new(),
+    );
+    renderer.set_shading(depth_cue_of(1.0));
+    look_down(&mut renderer, true, 60.0, VIEWPORT_HEIGHT);
+    for background in [LIGHT_BACKGROUND, DARK_BACKGROUND] {
+        let pixels = renderer.render(background);
+        dump(&format!("fog_far_end_{}", background[0]), &pixels);
+        let (column, row) = pixel_of(back.x, back.y);
+        let got = rgba_at(&pixels, VIEWPORT_WIDTH, column, row);
+        assert_near(got, rgb_of(background), 2.0, "the far sphere");
+        let (column, row) = pixel_of(front.x, front.y);
+        let near = rgba_at(&pixels, VIEWPORT_WIDTH, column, row);
+        assert!(
+            distance_to(near, background) > 60,
+            "the near sphere {near:?} is lost in the background {background:?}"
+        );
+    }
+}
+
+/// D4, D5: the rim is mixed in after the cue, so a selected sphere at the
+/// back of the content keeps its rim colour: within 2/255 of the same sphere
+/// at the front, on the light background where fog would show most.
+/// Fogging after `apply_rim` fails this: mutation.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn a_selected_sphere_at_the_back_keeps_its_rim_colour() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    renderer.set_render_quality(RenderQuality {
+        anti_aliasing: false,
+        full_display_resolution: true,
+    });
+    upload_fog_pair(&mut renderer, FOG_ALBEDO, RIM_COLOUR);
+    renderer.set_shading(depth_cue_of(1.0));
+    look_down(&mut renderer, true, 60.0, VIEWPORT_HEIGHT);
+    let pixels = renderer.render(LIGHT_BACKGROUND);
+    dump("fog_rim", &pixels);
+    let radius_px = FOG_RADIUS * 10.0;
+    let rim = Vec3::new(RIM_COLOUR[0], RIM_COLOUR[1], RIM_COLOUR[2]) * 255.0;
+    for angle in [90.0f32, 200.0, 315.0] {
+        // 1.5 px inside the silhouette, at the same angle on both spheres.
+        let at = |centre: Vec3| {
+            let (column, row) = pixel_of(centre.x, centre.y);
+            let (s, c) = angle.to_radians().sin_cos();
+            let r = radius_px - 1.5;
+            let column = (column as f32 + c * r) as u32;
+            let row = (row as f32 - s * r) as u32;
+            rgba_at(&pixels, VIEWPORT_WIDTH, column, row)
+        };
+        let (front, back) = (at(FOG_FRONT), at(FOG_BACK));
+        assert_near(front, rim, 2.0, &format!("front rim at {angle}°"));
+        for c in 0..3 {
+            assert!(
+                front[c].abs_diff(back[c]) <= 2,
+                "rim at {angle}°: front {front:?}, back {back:?}"
+            );
+        }
+    }
+}
+
+/// D2, D5: the gadget pass has no depth cue. A guide dot as deep as the back
+/// sphere is drawn exactly as with the cue off, while the back sphere is
+/// fogged. Writing the content variant for the gadget pass fails this:
+/// mutation.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn a_gadget_sphere_is_not_fogged() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    renderer.set_render_quality(RenderQuality {
+        anti_aliasing: false,
+        full_display_resolution: true,
+    });
+    let gadget_centre = Vec3::new(0.0, 6.0, -30.0);
+    upload_impostors(
+        &mut renderer,
+        &fog_pair(FOG_ALBEDO, [0.0; 4]),
+        &BondImpostorMesh::new(),
+        &TransparentImpostorMesh::new(),
+        &atom(gadget_centre, 2.0, [0.9, 0.6, 0.1]),
+    );
+    look_down(&mut renderer, true, 60.0, VIEWPORT_HEIGHT);
+    renderer.set_shading(ShadingSettings::default());
+    let off = renderer.render(LIGHT_BACKGROUND);
+    renderer.set_shading(depth_cue_of(1.0));
+    let on = renderer.render(LIGHT_BACKGROUND);
+    dump("fog_gadget_off", &off);
+    dump("fog_gadget", &on);
+    let (column, row) = pixel_of(gadget_centre.x, gadget_centre.y);
+    assert_eq!(
+        rgba_at(&on, VIEWPORT_WIDTH, column, row),
+        rgba_at(&off, VIEWPORT_WIDTH, column, row),
+        "the guide dot is fogged"
+    );
+    let (column, row) = pixel_of(FOG_BACK.x, FOG_BACK.y);
+    assert_ne!(
+        rgba_at(&on, VIEWPORT_WIDTH, column, row),
+        rgba_at(&off, VIEWPORT_WIDTH, column, row),
+        "the back sphere is not fogged"
+    );
 }

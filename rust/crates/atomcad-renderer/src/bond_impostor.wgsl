@@ -21,7 +21,8 @@ var<uniform> model: ModelUniform;
 
 // ---- lighting ----
 // `lighting.wgsl` is inserted here (`pipelines::compose_lit_shader`):
-// `camera_backward`, `camera_view_vector`, `light_surface`, `to_display`.
+// `camera_backward`, `camera_view_vector`, `light_surface`, `to_display`,
+// `apply_depth_cue`.
 
 struct BondImpostorVertexInput {
     @location(0) start_position: vec3<f32>,
@@ -396,14 +397,14 @@ fn shade_bond_hit(input: BondImpostorVertexOutput, ray: Ray, t: f32) -> Shaded {
     let clip_pos = camera.proj_matrix * view_pos;
     let depth = clip_pos.z / clip_pos.w;
 
-    let color = to_display(light_surface(
+    let color = apply_depth_cue(to_display(light_surface(
         hit_point,
         surface_normal,
         input.color,
         0.5,  // roughness - moderate for bonds
         0.0,  // metallic - bonds are non-metallic
         FULLY_EXPOSED,
-    ));
+    )), hit_point);
 
     var shaded: Shaded;
     shaded.depth = depth;

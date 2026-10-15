@@ -424,10 +424,13 @@ every draw, so nothing it holds survives into another draw.
 `bond_impostor.wgsl`, `transparent_impostor.wgsl` and `mesh.wgsl` do not
 compile on their own: `pipelines::compose_lit_shader` inserts `lighting.wgsl`
 (the `ShadingUniform`, the PBR helpers, `camera_view_vector`,
-`light_surface`, `to_display`, the rim band's `rim_weight` / `apply_rim`) at
-each host's `// ---- lighting ----` marker, after the host's uniform
-declarations. Change the lighting there, never in a host; a host that declares
-its own copy of a module function fails `shader_test.rs`. Composition runs
+`light_surface`, `to_display`, `apply_depth_cue`, the rim band's
+`rim_weight` / `apply_rim`) at each host's `// ---- lighting ----` marker,
+after the host's uniform declarations. A lit colour is always
+`apply_depth_cue(to_display(light_surface(…)), p)`, with the rim mixed in
+last (`shader_test.rs` checks the order). Change the lighting there, never
+in a host; a host that declares its own copy of a module function fails
+`shader_test.rs`. Composition runs
 before the per-sample cut below. **A change to `lighting.wgsl` is mirrored in
 its Rust twin, `src/shading.rs`**, which the CPU tests tune the rig against
 and the GPU tests take expected colours from; the GPU harness's

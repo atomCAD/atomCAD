@@ -1297,6 +1297,42 @@ library.
       content variant for the gadget pass fails it).
     - Depth cue off: byte-identical to Phase 2 (`ATOMCAD_GPU_COMPARE_DIR`).
 - Effort: 0.5–1 d.
+- **Phase notes (2026-10-15).** Implemented as above. Against a dump of the
+  Phase 2 build every one of the 209 harness images is byte-identical, with
+  `GPU_COMPARE_EXEMPT` empty; the twin agrees with the GPU on the fogged
+  spheres within 0.53/255. Details the text above leaves open:
+  - `front` and `span` come from a pure `depth_cue_range(camera, bounds)`
+    in `shading_uniform.rs`; the twin's `depth_cue_fraction` /
+    `apply_depth_cue` are in `shading.rs`. Both passes carry the same range;
+    only the strength tells the gadget pass apart. Without content, or with
+    an AABB of no extent, the strength is 0 and the span 1, so the shader's
+    division is always defined.
+  - `apply_depth_cue` returns the colour untouched when the strength is 0,
+    rather than mixing by 0. That is what keeps the cue-off images
+    byte-identical whatever the compiler does with `mix`.
+  - The preferences are `depth_cue: bool` and `depth_cue_strength: f64`;
+    `to_shading_settings` turns an unticked box into strength 0 and clamps
+    the strength to [0, 1].
+  - "A sphere at the far end with strength 1": since the span is the
+    bounding sphere's diameter, content reaches f = 1 only where its depth
+    is nearly all of that diameter. The test uses two 0.5 Å spheres 200 Å
+    apart along the view axis, whose back sphere is 99.5 % of the way in.
+  - The thumbnail test renders a bright and a dark scene, so the thumbnail
+    keeps each background once, and compares the back sphere with the twin
+    within 3/255 (the thumbnail is box-downsampled).
+  - A structural `shader_test.rs` check asserts that every `to_display`
+    result in a lit shader goes straight into `apply_depth_cue`, and that
+    the rim is mixed into that fogged colour.
+  - Each GPU test's mutation fails it: the linear-space mix (converging on
+    `to_display(background)`) fails the far-end test, fogging after
+    `apply_rim` the rim test, the content variant in the gadget pass the
+    gadget test, a fixed background the thumbnail test, and a constant
+    changed in the twin alone the twin agreement. On the CPU side, anchoring
+    `front` at the bounding sphere's front fails the slab, cube and `front`
+    tests.
+  - The strength slider applies on every tick, as *Scene transparency*'s
+    does: each tick is a full refresh and a preferences write. That is
+    cheap on ordinary structures; on a huge one the slider is sluggish.
 
 ### Phase 4 — Baked ambient occlusion, the computation
 

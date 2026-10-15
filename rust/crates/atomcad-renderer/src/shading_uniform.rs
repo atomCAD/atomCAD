@@ -107,9 +107,12 @@ pub struct ShadingUniform {
     pub background: [f32; 3],
     pub ground: f32,
     /// The view depth where the depth cue starts, and the depth over which it
-    /// reaches full strength (D5). Filled in by Phase 3; 0 until then.
+    /// reaches full strength (D5): see [`depth_cue_range`]. The span is
+    /// always positive, so the shader can divide by it.
     pub depth_cue_front: f32,
     pub depth_cue_span: f32,
+    /// 0 is no cue: the gadget pass, a scene without content, or the cue
+    /// turned off.
     pub depth_cue_strength: f32,
     pub ao_strength: f32,
 }
@@ -159,7 +162,12 @@ impl ShadingUniform {
                     STUDIO_GROUND,
                 ),
             };
-        let depth_cue_strength = match (pass, content_bounds) {
+        // The range is the same in both passes; only the strength tells the
+        // gadget pass apart.
+        let range = content_bounds.and_then(|bounds| depth_cue_range(camera, bounds));
+        let (depth_cue_front, depth_cue_span) =
+            range.map_or((0.0, 1.0), |(front, span)| (front as f32, span as f32));
+        let depth_cue_strength = match (pass, range) {
             (ShadingPass::Content, Some(_)) => settings.depth_cue_strength,
             _ => 0.0,
         };
@@ -172,12 +180,37 @@ impl ShadingUniform {
             sky,
             background: background_rgb.map(|c| c as f32 / 255.0),
             ground,
-            depth_cue_front: 0.0,
-            depth_cue_span: 0.0,
+            depth_cue_front,
+            depth_cue_span,
             depth_cue_strength,
             ao_strength: settings.ao_strength,
         }
     }
+}
+
+/// Where the depth cue starts and the depth over which it reaches full
+/// strength, `(front, span)`, for content with the AABB `bounds` seen by
+/// `camera` (D5). Depths are view-space distances along the view axis, in
+/// both projections.
+///
+/// `front` is the depth of the AABB's nearest point along the view axis (its
+/// support point), clamped to the near plane, so the nearest content is never
+/// fogged whatever its shape. `span` is the diameter of the AABB's bounding
+/// sphere, fixed while the camera orbits, so the cue's gradient (fog per Å)
+/// does not change with the orientation. `None` for an AABB without extent:
+/// a cue over a span of 0 would be undefined.
+pub fn depth_cue_range(camera: &Camera, bounds: (DVec3, DVec3)) -> Option<(f64, f64)> {
+    let (min, max) = bounds;
+    let centre = 0.5 * (min + max);
+    let half = 0.5 * (max - min);
+    let span = 2.0 * half.length();
+    if !span.is_finite() || span <= 0.0 {
+        return None;
+    }
+    let axis = (camera.target - camera.eye).normalize();
+    let centre_depth = (centre - camera.eye).dot(axis);
+    let support = half.dot(axis.abs());
+    Some(((centre_depth - support).max(camera.znear), span))
 }
 
 /// The direction a light travels when it sits `elevation_deg` above the view

@@ -1,11 +1,12 @@
 // The Rust twin of the shared lighting module (doc/design_depth_perception.md
 // Testing layer 3, Phase 2): the D3 calibration constraint, the hemisphere
-// ambient and the rim's screen-space width. The GPU harness's twin-agreement
+// ambient, the rim's screen-space width and (Phase 3) the depth cue. The GPU harness's twin-agreement
 // test is what ties the twin to `lighting.wgsl`.
 
 use atomcad_renderer::camera::Camera;
 use atomcad_renderer::shading::{
-    RIM_WIDTH_PX, light_surface, luminance, rim_weight, to_display, view_vector,
+    RIM_WIDTH_PX, apply_depth_cue, depth_cue_fraction, light_surface, luminance, rim_weight,
+    to_display, view_vector,
 };
 use atomcad_renderer::shading_uniform::{
     LightingPreset, ShadingPass, ShadingSettings, ShadingUniform,
@@ -137,4 +138,58 @@ fn a_small_spheres_rim_is_at_most_a_third_of_its_radius() {
     assert_eq!(at(0.5), 1.0);
     assert!((at(1.4) - 0.5).abs() < 1e-6);
     assert_eq!(at(2.5), 0.0);
+}
+
+// ---- The depth cue (D5, Phase 3) -------------------------------------------
+
+fn cued(camera: &Camera, strength: f32, background: [u8; 3]) -> ShadingUniform {
+    let settings = ShadingSettings {
+        depth_cue_strength: strength,
+        ..ShadingSettings::default()
+    };
+    let bounds = (DVec3::splat(-5.0), DVec3::splat(5.0));
+    ShadingUniform::new(
+        camera,
+        Some(bounds),
+        background,
+        &settings,
+        ShadingPass::Content,
+    )
+}
+
+/// The point of the content farthest from the eye: the corner of the cube
+/// opposite the nearest one, which lies less than a span behind it.
+fn deepest_point(camera: &Camera) -> DVec3 {
+    let back = (camera.target - camera.eye).normalize();
+    DVec3::new(5.0, 5.0, 5.0) * back.signum()
+}
+
+/// D5: at strength 1 the far end of the span is exactly the background, so
+/// fogged content converges on the pixel the pass clears to; the nearest
+/// content keeps its colour; and strength 0 changes nothing.
+#[test]
+fn the_depth_cue_mixes_towards_the_background_in_display_space() {
+    let camera = camera();
+    let colour = Vec3::new(0.8, 0.3, 0.1);
+    let full = cued(&camera, 1.0, [240, 240, 240]);
+    // A span behind the front: past the content, full strength.
+    let forward = (camera.target - camera.eye).normalize();
+    let beyond = camera.eye + forward * (full.depth_cue_front + full.depth_cue_span) as f64 * 1.01;
+    let fogged = apply_depth_cue(&full, &camera, colour, beyond);
+    assert!((fogged - Vec3::splat(240.0 / 255.0)).abs().max_element() < 1e-6);
+
+    let nearest = -deepest_point(&camera);
+    assert_eq!(apply_depth_cue(&full, &camera, colour, nearest), colour);
+
+    let off = cued(&camera, 0.0, [240, 240, 240]);
+    assert_eq!(apply_depth_cue(&off, &camera, colour, beyond), colour);
+
+    // In between, on a dark background: part of the way, towards it.
+    let half = cued(&camera, 0.5, [20, 20, 20]);
+    let back = apply_depth_cue(&half, &camera, colour, deepest_point(&camera));
+    let f = 0.5 * depth_cue_fraction(&half, &camera, deepest_point(&camera));
+    assert!(f > 0.2 && f <= 0.5, "f {f}");
+    let background = Vec3::splat(20.0 / 255.0);
+    assert!((back - colour.lerp(background, f)).abs().max_element() < 1e-6);
+    assert!((back - background).length() < (colour - background).length());
 }

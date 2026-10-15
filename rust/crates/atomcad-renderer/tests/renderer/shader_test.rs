@@ -562,6 +562,7 @@ fn no_lit_shader_keeps_a_copy_of_the_lighting() {
     for required in [
         "light_surface",
         "to_display",
+        "apply_depth_cue",
         "camera_backward",
         "camera_view_vector",
         "fresnel_schlick",
@@ -581,6 +582,37 @@ fn no_lit_shader_keeps_a_copy_of_the_lighting() {
             assert!(
                 !function.starts_with("calculate_"),
                 "{name} still has `{function}`"
+            );
+        }
+    }
+}
+
+/// D5: every lit colour is fogged, and fogged in display space: each lit
+/// shader passes every `to_display` result straight to `apply_depth_cue`.
+/// Where the rim is mixed in, it is mixed into the fogged colour (D4), so a
+/// selected atom at the back keeps its rim.
+#[test]
+fn every_lit_colour_goes_through_the_depth_cue_before_the_rim() {
+    for name in LIT_SHADERS {
+        let raw = strip_line_comments(&std::fs::read_to_string(shader_dir().join(name)).unwrap());
+        let lit = raw.matches("to_display(").count();
+        assert!(lit > 0, "{name} lights nothing");
+        assert_eq!(
+            raw.matches("apply_depth_cue(to_display(").count(),
+            lit,
+            "{name}: a `to_display` result skips the depth cue"
+        );
+        for (index, _) in raw.match_indices("apply_rim(") {
+            assert!(
+                raw[index..].starts_with("apply_rim(lit,"),
+                "{name}: the rim is not mixed into `lit`"
+            );
+            let lit = raw[..index]
+                .rfind("let lit = ")
+                .expect("`lit` before the rim");
+            assert!(
+                raw[lit..].starts_with("let lit = apply_depth_cue("),
+                "{name}: the rim is not mixed into the fogged colour"
             );
         }
     }

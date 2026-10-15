@@ -1,11 +1,13 @@
 // The per-pass shading uniform (doc/design_depth_perception.md D2, D3,
-// Phases 1 and 2). Its WGSL twin is checked in `shader_test.rs`.
+// Phases 1-3). Its WGSL twin is checked in `shader_test.rs`.
 
 use atomcad_renderer::camera::Camera;
 use atomcad_renderer::renderer::CameraUniform;
+use atomcad_renderer::shading::depth_cue_fraction;
 use atomcad_renderer::shading_uniform::{
     HEADLIGHT_AMBIENT, HEADLIGHT_KEY_INTENSITY, LightingPreset, STUDIO_FILL_INTENSITY,
     STUDIO_GROUND, STUDIO_KEY_INTENSITY, STUDIO_SKY, ShadingPass, ShadingSettings, ShadingUniform,
+    depth_cue_range,
 };
 use glam::f32::Vec3;
 use glam::f64::{DQuat, DVec3};
@@ -214,5 +216,182 @@ fn the_studio_lights_turn_with_the_camera() {
             !Vec3::from(a).abs_diff_eq(Vec3::from(b), 0.1),
             "{name} did not move"
         );
+    }
+}
+
+// ---- The depth cue (D5, Phase 3) -------------------------------------------
+
+const CUE: ShadingSettings = ShadingSettings {
+    preset: LightingPreset::Headlight,
+    depth_cue_strength: 0.5,
+    ao_strength: 0.0,
+};
+
+fn looking_at(eye: DVec3, target: DVec3, orthographic: bool) -> Camera {
+    let mut camera = Camera::default_pose(1.5);
+    camera.eye = eye;
+    camera.target = target;
+    camera.up = if (eye - target).normalize().dot(DVec3::Z).abs() > 0.99 {
+        DVec3::Y
+    } else {
+        DVec3::Z
+    };
+    camera.orthographic = orthographic;
+    camera.orthonormalize_up();
+    camera
+}
+
+fn cue(camera: &Camera, bounds: (DVec3, DVec3)) -> ShadingUniform {
+    ShadingUniform::new(camera, Some(bounds), [0, 0, 0], &CUE, ShadingPass::Content)
+}
+
+/// The cue's `f` at a point: strength times the fraction of the span.
+fn fog_at(camera: &Camera, uniform: &ShadingUniform, point: DVec3) -> f32 {
+    uniform.depth_cue_strength * depth_cue_fraction(uniform, camera, point)
+}
+
+const CUBE: (DVec3, DVec3) = (DVec3::new(-5.0, -5.0, -5.0), DVec3::new(5.0, 5.0, 5.0));
+
+fn corners(bounds: (DVec3, DVec3)) -> Vec<DVec3> {
+    let (min, max) = bounds;
+    (0..8)
+        .map(|i| {
+            DVec3::new(
+                if i & 1 == 0 { min.x } else { max.x },
+                if i & 2 == 0 { min.y } else { max.y },
+                if i & 4 == 0 { min.z } else { max.z },
+            )
+        })
+        .collect()
+}
+
+/// D5: `front` is the depth of the AABB's support point along the view
+/// axis and `span` the bounding sphere's diameter, the same in both
+/// projections.
+#[test]
+fn the_cue_starts_at_the_nearest_point_and_spans_the_bounding_sphere() {
+    let diameter = 2.0 * 75f64.sqrt();
+    for orthographic in [false, true] {
+        // Straight down the z axis: the top face is 45 Å away.
+        let camera = looking_at(DVec3::new(0.0, 0.0, 50.0), DVec3::ZERO, orthographic);
+        let (front, span) = depth_cue_range(&camera, CUBE).unwrap();
+        assert!((front - 45.0).abs() < 1e-9, "front {front}");
+        assert!((span - diameter).abs() < 1e-9, "span {span}");
+        let uniform = cue(&camera, CUBE);
+        assert!((uniform.depth_cue_front - 45.0).abs() < 1e-5);
+        assert!((uniform.depth_cue_span as f64 - diameter).abs() < 1e-5);
+
+        // Along the body diagonal the nearest point is a corner, 5√3 in
+        // front of the centre.
+        let eye = DVec3::splat(30.0);
+        let camera = looking_at(eye, DVec3::ZERO, orthographic);
+        let (front, span) = depth_cue_range(&camera, CUBE).unwrap();
+        assert!(
+            (front - (eye.length() - 75f64.sqrt())).abs() < 1e-9,
+            "front {front}"
+        );
+        assert!((span - diameter).abs() < 1e-9);
+    }
+}
+
+/// D5: a camera inside the content starts the cue at the near plane, not
+/// behind the eye.
+#[test]
+fn the_front_is_clamped_at_the_near_plane() {
+    let camera = looking_at(
+        DVec3::new(0.0, 0.0, 2.0),
+        DVec3::new(0.0, 0.0, -10.0),
+        false,
+    );
+    let (front, _) = depth_cue_range(&camera, CUBE).unwrap();
+    assert_eq!(front, camera.znear);
+}
+
+/// D5: no content, or content without extent, has no cue, and its span stays
+/// positive so the shader's division is defined.
+#[test]
+fn without_content_there_is_no_cue() {
+    let camera = looking_at(DVec3::new(0.0, 0.0, 50.0), DVec3::ZERO, false);
+    let none = ShadingUniform::new(&camera, None, [0, 0, 0], &CUE, ShadingPass::Content);
+    assert_eq!(none.depth_cue_strength, 0.0);
+    assert!(none.depth_cue_span > 0.0);
+    let point = (DVec3::ONE, DVec3::ONE);
+    assert_eq!(depth_cue_range(&camera, point), None);
+    assert_eq!(cue(&camera, point).depth_cue_strength, 0.0);
+    assert!(cue(&camera, point).depth_cue_span > 0.0);
+}
+
+/// D5: orbiting the AABB's centre leaves the span alone and moves `front`
+/// continuously: by at most R·Δθ per step, since the centre's depth stays
+/// put and the support function is R-Lipschitz in the view axis.
+#[test]
+fn orbiting_keeps_the_span_and_moves_the_front_continuously() {
+    let bounds = (DVec3::new(-20.0, -8.0, -3.0), DVec3::new(30.0, 12.0, 5.0));
+    let centre = 0.5 * (bounds.0 + bounds.1);
+    let r = 0.5 * (bounds.1 - bounds.0).length();
+    let step = 1f64.to_radians();
+    let start = DVec3::new(70.0, -40.0, 35.0);
+    let mut previous: Option<(f64, f64)> = None;
+    for i in 0..=360 {
+        let rotation =
+            DQuat::from_axis_angle(DVec3::new(0.3, 0.2, 1.0).normalize(), i as f64 * step);
+        let camera = looking_at(centre + rotation * start, centre, false);
+        let (front, span) = depth_cue_range(&camera, bounds).unwrap();
+        assert!((span - 2.0 * r).abs() < 1e-9, "span {span} at {i}°");
+        if let Some((previous_front, _)) = previous {
+            assert!(
+                (front - previous_front).abs() <= r * step + 1e-9,
+                "front jumps from {previous_front} to {front} at {i}°"
+            );
+        }
+        previous = Some((front, span));
+    }
+}
+
+/// D5: a 100 × 100 × 10 Å slab seen face-on. Its top face is not fogged at
+/// all and its bottom face barely, because the cue starts at the nearest
+/// content. Anchored at the bounding sphere's front, every atom would carry a
+/// uniform 25 % wash.
+#[test]
+fn a_slab_seen_face_on_is_fogged_by_its_thickness_only() {
+    let slab = (DVec3::new(-50.0, -50.0, -5.0), DVec3::new(50.0, 50.0, 5.0));
+    for orthographic in [false, true] {
+        let camera = looking_at(DVec3::new(0.0, 0.0, 120.0), DVec3::ZERO, orthographic);
+        let uniform = cue(&camera, slab);
+        for x in [-50.0, 0.0, 50.0] {
+            let top = fog_at(&camera, &uniform, DVec3::new(x, x, 5.0));
+            let bottom = fog_at(&camera, &uniform, DVec3::new(x, -x, -5.0));
+            assert_eq!(top, 0.0, "top at {x}");
+            assert!(bottom > 0.0 && bottom < 0.05, "bottom {bottom} at {x}");
+        }
+    }
+}
+
+/// D5: whichever way a cube is seen, its nearest corner is unfogged and its
+/// farthest is fogged.
+#[test]
+fn a_cubes_nearest_corner_is_unfogged_at_every_orientation() {
+    for eye in [
+        DVec3::new(0.0, 0.0, 40.0),
+        DVec3::new(30.0, 0.0, 10.0),
+        DVec3::new(-20.0, 25.0, 15.0),
+        DVec3::new(17.0, -23.0, -31.0),
+        DVec3::splat(-25.0),
+    ] {
+        let camera = looking_at(eye, DVec3::new(1.0, -2.0, 0.5), false);
+        let uniform = cue(&camera, CUBE);
+        let forward = (camera.target - camera.eye).normalize();
+        let depth = |p: &DVec3| (*p - camera.eye).dot(forward);
+        let all = corners(CUBE);
+        let nearest = all
+            .iter()
+            .min_by(|a, b| depth(a).total_cmp(&depth(b)))
+            .unwrap();
+        let farthest = all
+            .iter()
+            .max_by(|a, b| depth(a).total_cmp(&depth(b)))
+            .unwrap();
+        assert!(fog_at(&camera, &uniform, *nearest) < 1e-5, "eye {eye}");
+        assert!(fog_at(&camera, &uniform, *farthest) > 0.1, "eye {eye}");
     }
 }

@@ -491,6 +491,8 @@ fn test_non_default_values_roundtrip() {
             anti_aliasing: false,
             full_display_resolution: false,
             lighting: LightingPreset::Headlight,
+            depth_cue: false,
+            depth_cue_strength: 0.8,
         },
     };
 
@@ -1098,4 +1100,39 @@ fn rendering_lighting_headlight_roundtrips() {
         LightingPreset::Headlight
     );
     assert!(loaded.rendering_preferences.anti_aliasing);
+}
+
+// ---- Depth cue (doc/design_depth_perception.md D8, Phase 3) ---------------
+
+#[test]
+fn the_depth_cue_defaults_to_on_at_half_strength() {
+    let prefs = RenderingPreferences::default();
+    assert!(prefs.depth_cue);
+    assert_eq!(prefs.depth_cue_strength, 0.5);
+}
+
+#[test]
+fn a_rendering_section_without_the_depth_cue_loads_it_on_at_half_strength() {
+    // A file written before Phase 3, with the Phase 2 preset in it.
+    let before: StructureDesignerPreferences = serde_json::from_str(
+        r#"{"rendering_preferences": {"anti_aliasing": true, "full_display_resolution": true, "lighting": "Headlight"}}"#,
+    )
+    .unwrap();
+    assert!(before.rendering_preferences.depth_cue);
+    assert_eq!(before.rendering_preferences.depth_cue_strength, 0.5);
+    assert_eq!(
+        before.rendering_preferences.lighting,
+        LightingPreset::Headlight
+    );
+}
+
+#[test]
+fn the_depth_cue_roundtrips_off_with_its_strength_kept() {
+    let mut prefs = StructureDesignerPreferences::default();
+    prefs.rendering_preferences.depth_cue = false;
+    prefs.rendering_preferences.depth_cue_strength = 0.8;
+    let json = serde_json::to_string(&prefs).unwrap();
+    let loaded: StructureDesignerPreferences = serde_json::from_str(&json).unwrap();
+    assert!(!loaded.rendering_preferences.depth_cue);
+    assert_eq!(loaded.rendering_preferences.depth_cue_strength, 0.8);
 }

@@ -55,9 +55,9 @@ fn to_render_quality(
 
 /// Domain *Lighting* preferences → the renderer's shading settings
 /// (`doc/design_depth_perception.md` D8), for the same reason as above.
-/// Only the preset so far: the depth cue and ambient occlusion stay off
-/// until their phases add their preferences.
-fn to_shading_settings(
+/// An unticked *Depth cue* is strength 0. Ambient occlusion stays off until
+/// its phase adds its preferences.
+pub fn to_shading_settings(
     prefs: &domain_prefs::RenderingPreferences,
 ) -> atomcad_renderer::shading_uniform::ShadingSettings {
     use atomcad_renderer::shading_uniform::{LightingPreset, ShadingSettings};
@@ -65,6 +65,11 @@ fn to_shading_settings(
         preset: match prefs.lighting {
             domain_prefs::LightingPreset::Studio => LightingPreset::Studio,
             domain_prefs::LightingPreset::Headlight => LightingPreset::Headlight,
+        },
+        depth_cue_strength: if prefs.depth_cue {
+            prefs.depth_cue_strength.clamp(0.0, 1.0) as f32
+        } else {
+            0.0
         },
         ..ShadingSettings::default()
     }

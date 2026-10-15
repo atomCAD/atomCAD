@@ -97,6 +97,31 @@ pub fn to_display(linear: Vec3) -> Vec3 {
     mapped.powf(1.0 / 2.2)
 }
 
+/// A display colour fogged towards the pass's background by its view depth
+/// (D5): untouched at `depth_cue_front`, mixed by `depth_cue_strength` a
+/// span's depth behind it. `color` and the result are display colours, 0–1.
+/// Twin of `apply_depth_cue`.
+pub fn apply_depth_cue(
+    shading: &ShadingUniform,
+    camera: &Camera,
+    color: Vec3,
+    world_position: DVec3,
+) -> Vec3 {
+    if shading.depth_cue_strength <= 0.0 {
+        return color;
+    }
+    let f = shading.depth_cue_strength * depth_cue_fraction(shading, camera, world_position);
+    color.lerp(Vec3::from_array(shading.background), f)
+}
+
+/// How far into the depth cue's span `world_position` lies, 0–1, before the
+/// strength is applied: 0 at the nearest content, 1 a span behind it.
+pub fn depth_cue_fraction(shading: &ShadingUniform, camera: &Camera, world_position: DVec3) -> f32 {
+    let forward = (camera.target - camera.eye).normalize();
+    let depth = (world_position - camera.eye).dot(forward) as f32;
+    ((depth - shading.depth_cue_front) / shading.depth_cue_span).clamp(0.0, 1.0)
+}
+
 /// How much of the rim colour a sphere's pixel takes (D4): `distance` is how
 /// far the view ray passes outside the silhouette in world units (negative
 /// inside), `pixel_world` the world size of a render pixel, `pixel_scale`

@@ -39,7 +39,7 @@ var<uniform> model: ModelUniform;
 // ---- lighting ----
 // `lighting.wgsl` is inserted here (`pipelines::compose_lit_shader`):
 // `camera_backward`, `camera_view_vector`, `light_surface`, `to_display`,
-// `rim_weight`, `apply_rim`.
+// `apply_depth_cue`, `rim_weight`, `apply_rim`.
 
 struct TransparentImpostorVertexInput {
     @location(0) kind: u32,             // 0 = atom (sphere), 1 = bond (cylinder)
@@ -414,17 +414,18 @@ fn shade_atom_hit(input: TransparentImpostorVertexOutput, ray: Ray, t: f32, pixe
     let hit_clip = camera.view_proj * vec4<f32>(hit_point, 1.0);
     let depth = hit_clip.z / hit_clip.w;
 
-    let lit = to_display(light_surface(
+    let lit = apply_depth_cue(to_display(light_surface(
         hit_point,
         world_normal,
         input.color,
         input.roughness,
         input.metallic,
         FULLY_EXPOSED,
-    ));
+    )), hit_point);
 
     // The rim band (D4): a screen-space ring along the silhouette, mixed in
-    // after lighting so it reads the same all around the outline.
+    // after lighting and after the depth cue, so it reads the same all
+    // around the outline and at any depth.
     let distance = sphere_ray_distance(ray.origin, ray.dir, input.world_a, input.radius);
     let rim = rim_weight(distance, pixel_world, input.radius) * input.rim_color.a;
     let color = apply_rim(lit, input.rim_color.rgb, rim);
@@ -492,14 +493,14 @@ fn shade_bond_hit(input: TransparentImpostorVertexOutput, ray: Ray, t: f32) -> S
     let clip_pos = camera.proj_matrix * view_pos;
     let depth = clip_pos.z / clip_pos.w;
 
-    let color = to_display(light_surface(
+    let color = apply_depth_cue(to_display(light_surface(
         hit_point,
         surface_normal,
         input.color,
         0.5, // roughness - moderate for bonds
         0.0, // metallic - bonds are non-metallic
         FULLY_EXPOSED,
-    ));
+    )), hit_point);
 
     var shaded: Shaded;
     shaded.depth = depth;

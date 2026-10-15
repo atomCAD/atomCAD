@@ -664,6 +664,18 @@ pub struct RenderingPreferences {
     /// The light rig (D3). A file from before the setting loads as *Studio*.
     #[serde(default)]
     pub lighting: LightingPreset,
+    /// Fog the content towards the background with its distance from the
+    /// nearest content (D5). Off is the same as strength 0.
+    #[serde(default = "default_true")]
+    pub depth_cue: bool,
+    /// How far the depth cue goes at the back of the content, in `[0, 1]`:
+    /// 1 reaches the background colour. Kept while `depth_cue` is off.
+    #[serde(default = "default_depth_cue_strength")]
+    pub depth_cue_strength: f64,
+}
+
+fn default_depth_cue_strength() -> f64 {
+    0.5
 }
 
 impl Default for RenderingPreferences {
@@ -672,6 +684,8 @@ impl Default for RenderingPreferences {
             anti_aliasing: true,
             full_display_resolution: true,
             lighting: LightingPreset::Studio,
+            depth_cue: true,
+            depth_cue_strength: default_depth_cue_strength(),
         }
     }
 }

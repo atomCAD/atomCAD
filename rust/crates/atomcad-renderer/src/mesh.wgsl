@@ -21,7 +21,8 @@ var<uniform> model: ModelUniform;
 
 // ---- lighting ----
 // `lighting.wgsl` is inserted here (`pipelines::compose_lit_shader`):
-// `camera_backward`, `camera_view_vector`, `light_surface`, `to_display`.
+// `camera_backward`, `camera_view_vector`, `light_surface`, `to_display`,
+// `apply_depth_cue`.
 
 struct VertexInput {
     @location(0) position: vec3<f32>,
@@ -68,14 +69,14 @@ fn vs_main(input: VertexInput) -> VertexOutput {
 
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
-    let color = to_display(light_surface(
+    let color = apply_depth_cue(to_display(light_surface(
         input.world_position,
         input.normal,
         input.albedo,
         input.roughness,
         input.metallic,
         FULLY_EXPOSED,
-    ));
+    )), input.world_position);
 
     // Non-premultiplied source-over, matching both existing transparent
     // pipelines. Opaque meshes carry `alpha == 1.0` and are unchanged.

@@ -24142,7 +24142,9 @@ impl SseDecode
         let mut var_antiAliasing = <bool>::sse_decode(deserializer);
         let mut var_fullDisplayResolution = <bool>::sse_decode(deserializer);
         let mut var_lighting = <crate::api::structure_designer::structure_designer_preferences::LightingPreset>::sse_decode(deserializer);
-        return crate::api::structure_designer::structure_designer_preferences::RenderingPreferences{anti_aliasing: var_antiAliasing, full_display_resolution: var_fullDisplayResolution, lighting: var_lighting};
+        let mut var_depthCue = <bool>::sse_decode(deserializer);
+        let mut var_depthCueStrength = <f64>::sse_decode(deserializer);
+        return crate::api::structure_designer::structure_designer_preferences::RenderingPreferences{anti_aliasing: var_antiAliasing, full_display_resolution: var_fullDisplayResolution, lighting: var_lighting, depth_cue: var_depthCue, depth_cue_strength: var_depthCueStrength};
     }
 }
 
@@ -32973,6 +32975,8 @@ impl flutter_rust_bridge::IntoDart
             self.anti_aliasing.into_into_dart().into_dart(),
             self.full_display_resolution.into_into_dart().into_dart(),
             self.lighting.into_into_dart().into_dart(),
+            self.depth_cue.into_into_dart().into_dart(),
+            self.depth_cue_strength.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -39438,6 +39442,8 @@ impl SseEncode
         <bool>::sse_encode(self.anti_aliasing, serializer);
         <bool>::sse_encode(self.full_display_resolution, serializer);
         <crate::api::structure_designer::structure_designer_preferences::LightingPreset>::sse_encode(self.lighting, serializer);
+        <bool>::sse_encode(self.depth_cue, serializer);
+        <f64>::sse_encode(self.depth_cue_strength, serializer);
     }
 }
 

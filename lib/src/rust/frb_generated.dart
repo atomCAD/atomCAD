@@ -25551,12 +25551,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   RenderingPreferences dco_decode_rendering_preferences(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
     return RenderingPreferences(
       antiAliasing: dco_decode_bool(arr[0]),
       fullDisplayResolution: dco_decode_bool(arr[1]),
       lighting: dco_decode_lighting_preset(arr[2]),
+      depthCue: dco_decode_bool(arr[3]),
+      depthCueStrength: dco_decode_f_64(arr[4]),
     );
   }
 
@@ -33621,10 +33623,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_antiAliasing = sse_decode_bool(deserializer);
     var var_fullDisplayResolution = sse_decode_bool(deserializer);
     var var_lighting = sse_decode_lighting_preset(deserializer);
+    var var_depthCue = sse_decode_bool(deserializer);
+    var var_depthCueStrength = sse_decode_f_64(deserializer);
     return RenderingPreferences(
         antiAliasing: var_antiAliasing,
         fullDisplayResolution: var_fullDisplayResolution,
-        lighting: var_lighting);
+        lighting: var_lighting,
+        depthCue: var_depthCue,
+        depthCueStrength: var_depthCueStrength);
   }
 
   @protected
@@ -40192,6 +40198,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.antiAliasing, serializer);
     sse_encode_bool(self.fullDisplayResolution, serializer);
     sse_encode_lighting_preset(self.lighting, serializer);
+    sse_encode_bool(self.depthCue, serializer);
+    sse_encode_f_64(self.depthCueStrength, serializer);
   }
 
   @protected

@@ -23,8 +23,8 @@ struct ShadingUniform {
   sky: f32,
   background: vec3<f32>,     // The pass's clear colour, display space (D5).
   ground: f32,
-  depth_cue_front: f32,      // D5, Phase 3.
-  depth_cue_span: f32,
+  depth_cue_front: f32,      // View depth where the depth cue starts (D5).
+  depth_cue_span: f32,       // Depth over which it reaches full strength; > 0.
   depth_cue_strength: f32,
   ao_strength: f32,          // D7, Phase 4.
 };
@@ -164,6 +164,27 @@ fn light_surface(
 fn to_display(linear: vec3<f32>) -> vec3<f32> {
     let mapped = linear / (linear + vec3<f32>(1.0));
     return pow(mapped, vec3<f32>(1.0 / 2.2));
+}
+
+// ============================================================================
+// The depth cue (D5)
+// ============================================================================
+
+// A display colour fogged towards the pass's background with its view depth:
+// not at all at `depth_cue_front` (the nearest content), by
+// `depth_cue_strength` at a span's depth behind it. Mixed in display space, so
+// at full strength the result is exactly the background pixel. Applied after
+// `to_display` and before `apply_rim`. Twin: `shading::apply_depth_cue`.
+fn apply_depth_cue(color: vec3<f32>, world_position: vec3<f32>) -> vec3<f32> {
+    // The gadget pass, no content, the cue off: leave the colour untouched,
+    // not merely mixed by 0.
+    if shading.depth_cue_strength <= 0.0 {
+        return color;
+    }
+    let depth = -(camera.view_matrix * vec4<f32>(world_position, 1.0)).z;
+    let f = shading.depth_cue_strength
+        * clamp((depth - shading.depth_cue_front) / shading.depth_cue_span, 0.0, 1.0);
+    return mix(color, shading.background, f);
 }
 
 // ============================================================================

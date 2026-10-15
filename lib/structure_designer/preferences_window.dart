@@ -100,6 +100,8 @@ class PreferencesKeys {
   static const Key fullDisplayResolutionCheckbox =
       Key('pref_full_display_resolution_checkbox');
   static const Key lightingDropdown = Key('pref_lighting_dropdown');
+  static const Key depthCueCheckbox = Key('pref_depth_cue_checkbox');
+  static const Key depthCueStrengthInput = Key('pref_depth_cue_strength_input');
 
   static const Key layoutAlgorithmDropdown =
       Key('pref_layout_algorithm_dropdown');
@@ -1301,6 +1303,97 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                                 _applyPreferences();
                               }
                             },
+                          ),
+                          const SizedBox(height: AppSpacing.medium),
+
+                          // Depth cue: fog towards the background with depth
+                          // (doc/design_depth_perception.md D5). The strength
+                          // is kept while the checkbox is off, as for scene
+                          // transparency.
+                          Row(
+                            children: [
+                              Checkbox(
+                                key: PreferencesKeys.depthCueCheckbox,
+                                value:
+                                    _preferences.renderingPreferences.depthCue,
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    setState(() {
+                                      _preferences.renderingPreferences
+                                          .depthCue = value;
+                                    });
+                                    _applyPreferences();
+                                  }
+                                },
+                              ),
+                              const SizedBox(width: 8),
+                              const Expanded(
+                                child: Tooltip(
+                                  message: 'Fades the structure towards the '
+                                      'background with its distance from you, '
+                                      'so its far side reads as further away. '
+                                      'The nearest part is never faded; the '
+                                      'strength is how far the far side goes.\n'
+                                      'Thumbnails and exported images use it too.',
+                                  child: Text('Depth cue'),
+                                ),
+                              ),
+                            ],
+                          ),
+                          IgnorePointer(
+                            ignoring:
+                                !_preferences.renderingPreferences.depthCue,
+                            child: Opacity(
+                              opacity:
+                                  _preferences.renderingPreferences.depthCue
+                                      ? 1.0
+                                      : 0.4,
+                              child: Padding(
+                                padding: const EdgeInsets.only(left: 24),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Slider(
+                                        value: _preferences.renderingPreferences
+                                            .depthCueStrength
+                                            .clamp(0.0, 1.0),
+                                        min: 0.0,
+                                        max: 1.0,
+                                        divisions: 100,
+                                        label: _preferences.renderingPreferences
+                                            .depthCueStrength
+                                            .toStringAsFixed(2),
+                                        onChanged: (value) {
+                                          setState(() {
+                                            _preferences.renderingPreferences
+                                                .depthCueStrength = value;
+                                          });
+                                          _applyPreferences();
+                                        },
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: 90,
+                                      child: FloatInput(
+                                        key: PreferencesKeys
+                                            .depthCueStrengthInput,
+                                        label: '',
+                                        value: _preferences.renderingPreferences
+                                            .depthCueStrength,
+                                        onChanged: (value) {
+                                          setState(() {
+                                            _preferences.renderingPreferences
+                                                    .depthCueStrength =
+                                                value.clamp(0.0, 1.0);
+                                          });
+                                          _applyPreferences();
+                                        },
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
                           ),
                         ],
                       ),

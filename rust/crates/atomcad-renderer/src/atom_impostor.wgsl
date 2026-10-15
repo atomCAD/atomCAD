@@ -22,7 +22,7 @@ var<uniform> model: ModelUniform;
 // ---- lighting ----
 // `lighting.wgsl` is inserted here (`pipelines::compose_lit_shader`):
 // `camera_backward`, `camera_view_vector`, `light_surface`, `to_display`,
-// `rim_weight`, `apply_rim`.
+// `apply_depth_cue`, `rim_weight`, `apply_rim`.
 
 struct AtomImpostorVertexInput {
     @location(0) center_position: vec3<f32>,
@@ -307,17 +307,18 @@ fn shade_atom_hit(input: AtomImpostorVertexOutput, ray: Ray, t: f32, pixel_world
     let hit_clip = camera.view_proj * vec4<f32>(hit_point, 1.0);
     let depth = hit_clip.z / hit_clip.w;
 
-    let lit = to_display(light_surface(
+    let lit = apply_depth_cue(to_display(light_surface(
         hit_point,
         world_normal,
         input.albedo,
         input.roughness,
         input.metallic,
         FULLY_EXPOSED,
-    ));
+    )), hit_point);
 
     // The rim band (D4): a screen-space ring along the silhouette, mixed in
-    // after lighting so it reads the same all around the outline.
+    // after lighting and after the depth cue, so it reads the same all
+    // around the outline and at any depth.
     let distance = sphere_ray_distance(ray.origin, ray.dir, input.world_center, input.radius);
     let rim = rim_weight(distance, pixel_world, input.radius) * input.rim_color.a;
     let color = apply_rim(lit, input.rim_color.rgb, rim);

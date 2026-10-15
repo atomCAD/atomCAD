@@ -157,6 +157,8 @@ fn the_lighting_preset_converts_both_ways() {
             anti_aliasing: false,
             full_display_resolution: true,
             lighting: api,
+            depth_cue: true,
+            depth_cue_strength: 0.5,
         };
         let down: domain::RenderingPreferences = (&prefs).into();
         assert_eq!(down.lighting, dom);
@@ -165,4 +167,44 @@ fn the_lighting_preset_converts_both_ways() {
         let up: RenderingPreferences = (&down).into();
         assert_eq!(up, prefs);
     }
+}
+
+/// The depth cue (`doc/design_depth_perception.md` D8, Phase 3) converts both
+/// ways, its two fields not swapped with a neighbour.
+#[test]
+fn the_depth_cue_converts_both_ways() {
+    let prefs = RenderingPreferences {
+        anti_aliasing: true,
+        full_display_resolution: true,
+        lighting: LightingPreset::Studio,
+        depth_cue: false,
+        depth_cue_strength: 0.75,
+    };
+    let down: domain::RenderingPreferences = (&prefs).into();
+    assert!(!down.depth_cue);
+    assert_eq!(down.depth_cue_strength, 0.75);
+    let up: RenderingPreferences = (&down).into();
+    assert_eq!(up, prefs);
+
+    // A file from before Phase 3 loads with the cue on at half strength.
+    let old: RenderingPreferences = serde_json::from_str(r#"{"anti_aliasing": true}"#).unwrap();
+    assert!(old.depth_cue);
+    assert_eq!(old.depth_cue_strength, 0.5);
+}
+
+/// The renderer sees an unticked *Depth cue* as strength 0, a ticked one as
+/// its strength clamped to `[0, 1]`, and never the AO it has no preference
+/// for yet.
+#[test]
+fn the_depth_cue_reaches_the_renderer_as_a_strength() {
+    use rust_lib_flutter_cad::api::api_common::to_shading_settings;
+    let mut prefs = domain::RenderingPreferences::default();
+    assert_eq!(to_shading_settings(&prefs).depth_cue_strength, 0.5);
+    prefs.depth_cue_strength = 1.7;
+    assert_eq!(to_shading_settings(&prefs).depth_cue_strength, 1.0);
+    prefs.depth_cue_strength = 0.3;
+    prefs.depth_cue = false;
+    let settings = to_shading_settings(&prefs);
+    assert_eq!(settings.depth_cue_strength, 0.0);
+    assert_eq!(settings.ao_strength, 0.0);
 }
