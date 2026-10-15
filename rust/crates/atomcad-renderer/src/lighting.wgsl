@@ -94,7 +94,7 @@ fn geometry_smith(N: vec3<f32>, V: vec3<f32>, L: vec3<f32>, roughness: f32) -> f
 // The linear (HDR) colour of a surface point under the pass's rig: the key
 // light (diffuse + specular), the diffuse-only fill light and the hemisphere
 // ambient. `exposure` is the packed `(4b, E)` of D10, `FULLY_EXPOSED` for a
-// surface without per-atom exposure.
+// surface without per-atom exposure. Twin: `shading::light_surface`.
 fn light_surface(
     world_position: vec3<f32>,
     normal: vec3<f32>,
@@ -103,27 +103,7 @@ fn light_surface(
     metallic: f32,
     exposure: vec4<f32>,
 ) -> vec3<f32> {
-    return light_surface_from(
-        camera_view_vector(world_position),
-        normal,
-        albedo,
-        roughness,
-        metallic,
-        exposure,
-    );
-}
-
-// `light_surface` with the view vector `V` given. Only `mesh.wgsl` calls it
-// directly, with its own perspective-only `V`, until Phase 2 moves it onto
-// `camera_view_vector` as well.
-fn light_surface_from(
-    V: vec3<f32>,
-    normal: vec3<f32>,
-    albedo: vec3<f32>,
-    roughness: f32,
-    metallic: f32,
-    exposure: vec4<f32>,
-) -> vec3<f32> {
+    let V = camera_view_vector(world_position);
     let N = normalize(normal);
     let L = normalize(-shading.key_light_dir);
     let H = normalize(V + L);
@@ -180,7 +160,40 @@ fn light_surface_from(
 }
 
 // Linear HDR colour to display colour: Reinhard tone mapping, then gamma.
+// Twin: `shading::to_display`.
 fn to_display(linear: vec3<f32>) -> vec3<f32> {
     let mapped = linear / (linear + vec3<f32>(1.0));
     return pow(mapped, vec3<f32>(1.0 / 2.2));
+}
+
+// ============================================================================
+// The rim band (D4)
+// ============================================================================
+
+// The rim band's width in output pixels. Twin: `shading::RIM_WIDTH_PX`.
+const RIM_WIDTH_PX: f32 = 3.0;
+
+// How much of the rim colour a sphere's pixel takes: 1 within the band along
+// the silhouette, 0 inside it, with a one-render-pixel soft inner edge.
+// `distance` is how far the view ray passes outside the silhouette in world
+// units (`sphere_ray_distance`, negative inside), `pixel_world` the world
+// size of a render pixel at the sphere. The band is `RIM_WIDTH_PX` output
+// pixels wide, but at most 0.35 of the sphere's radius on screen, so a
+// sphere a few pixels across is not all rim. Twin: `shading::rim_weight`.
+fn rim_weight(distance: f32, pixel_world: f32, radius: f32) -> f32 {
+    let inside_px = -distance / pixel_world;
+    let width_px = min(RIM_WIDTH_PX * camera.pixel_scale, 0.35 * radius / pixel_world);
+    return 1.0 - smoothstep(width_px - 0.5, width_px + 0.5, inside_px);
+}
+
+// The world size of a render pixel where the derivatives were taken: the
+// mean of the two screen axes' steps.
+fn pixel_world_size(dwx: vec3<f32>, dwy: vec3<f32>) -> f32 {
+    return 0.5 * (length(dwx) + length(dwy));
+}
+
+// The rim colour over a display colour, applied last: after `to_display` and
+// after the depth cue, so the rim is neither lit nor fogged (D4).
+fn apply_rim(color: vec3<f32>, rim_color: vec3<f32>, weight: f32) -> vec3<f32> {
+    return mix(color, rim_color, weight);
 }

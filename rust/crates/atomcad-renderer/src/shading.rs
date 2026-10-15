@@ -1,0 +1,119 @@
+//! Rust twins of the shared lighting module, `lighting.wgsl`
+//! (`doc/design_depth_perception.md` Testing layer 3).
+//!
+//! They tune the rig's constants against the D3 calibration constraint and
+//! give the GPU tests their expected pixel values. **A change to
+//! `lighting.wgsl` is mirrored here**; the GPU harness's twin-agreement test
+//! is what catches a twin that drifted.
+
+use crate::camera::Camera;
+use crate::shading_uniform::ShadingUniform;
+use glam::f32::Vec3;
+use glam::f64::DVec3;
+
+const PI: f32 = std::f32::consts::PI;
+
+/// The rim band's width in output pixels (D4). Twin of `RIM_WIDTH_PX`.
+pub const RIM_WIDTH_PX: f32 = 3.0;
+
+/// The direction from a surface point towards the viewer: the camera's
+/// backward axis in orthographic mode, towards the eye in perspective.
+/// Twin of `camera_view_vector`.
+pub fn view_vector(camera: &Camera, world_position: DVec3) -> Vec3 {
+    if camera.orthographic {
+        (camera.eye - camera.target).normalize().as_vec3()
+    } else {
+        (camera.eye - world_position).normalize().as_vec3()
+    }
+}
+
+fn fresnel_schlick(cos_theta: f32, f0: Vec3) -> Vec3 {
+    f0 + (Vec3::ONE - f0) * (1.0 - cos_theta).powf(5.0)
+}
+
+fn distribution_ggx(n: Vec3, h: Vec3, roughness: f32) -> f32 {
+    let a = roughness * roughness;
+    let a2 = a * a;
+    let n_dot_h = n.dot(h).max(0.0);
+    let denom = n_dot_h * n_dot_h * (a2 - 1.0) + 1.0;
+    a2 / (PI * denom * denom)
+}
+
+fn geometry_schlick_ggx(n_dot_v: f32, roughness: f32) -> f32 {
+    let k = (roughness + 1.0) * (roughness + 1.0) / 8.0;
+    n_dot_v / (n_dot_v * (1.0 - k) + k)
+}
+
+fn geometry_smith(n: Vec3, v: Vec3, l: Vec3, roughness: f32) -> f32 {
+    geometry_schlick_ggx(n.dot(v).max(0.0), roughness)
+        * geometry_schlick_ggx(n.dot(l).max(0.0), roughness)
+}
+
+/// The linear (HDR) colour of a surface point with normal `normal`, seen
+/// from direction `view` (towards the eye, see [`view_vector`]), under the
+/// rig in `shading` (D3). Fully exposed: the exposure mapping comes with
+/// Phase 4. Twin of `light_surface`.
+pub fn light_surface(
+    shading: &ShadingUniform,
+    view: Vec3,
+    normal: Vec3,
+    albedo: Vec3,
+    roughness: f32,
+    metallic: f32,
+) -> Vec3 {
+    let v = view;
+    let n = normal.normalize();
+    let l = -Vec3::from_array(shading.key_light_dir).normalize();
+    let h = (v + l).normalize();
+
+    let f0 = Vec3::splat(0.04).lerp(albedo, metallic);
+    let f = fresnel_schlick(h.dot(v).max(0.0), f0);
+    let d = distribution_ggx(n, h, roughness);
+    let g = geometry_smith(n, v, l, roughness);
+    let denominator = 4.0 * n.dot(v).max(0.0) * n.dot(l).max(0.0) + 0.001;
+    let specular = d * g * f / denominator;
+    let k_d = (Vec3::ONE - f) * (1.0 - metallic);
+    let diffuse = k_d * albedo / PI;
+
+    let n_dot_l = n.dot(l).max(0.0);
+    let key = shading.key_intensity * n_dot_l;
+
+    let t = 0.5 + 0.5 * n.dot(Vec3::from_array(shading.hemisphere_up));
+    let ambient_light = shading.ground + (shading.sky - shading.ground) * t;
+    let ambient_diffuse = ambient_light * albedo;
+    let ambient_specular = ambient_light * fresnel_schlick(v.dot(n).max(0.0), f0);
+    let ambient = ambient_diffuse.lerp(ambient_specular, metallic);
+
+    let l_fill = -Vec3::from_array(shading.fill_light_dir).normalize();
+    let fill = shading.fill_intensity * n.dot(l_fill).max(0.0) * diffuse;
+
+    key * (diffuse + specular) + ambient + fill
+}
+
+/// Linear HDR colour to display colour, 0–1: Reinhard, then gamma 2.2.
+/// Twin of `to_display`.
+pub fn to_display(linear: Vec3) -> Vec3 {
+    let mapped = linear / (linear + Vec3::ONE);
+    mapped.powf(1.0 / 2.2)
+}
+
+/// How much of the rim colour a sphere's pixel takes (D4): `distance` is how
+/// far the view ray passes outside the silhouette in world units (negative
+/// inside), `pixel_world` the world size of a render pixel, `pixel_scale`
+/// the target's render pixels per output pixel. Twin of `rim_weight`.
+pub fn rim_weight(distance: f32, pixel_world: f32, radius: f32, pixel_scale: f32) -> f32 {
+    let inside_px = -distance / pixel_world;
+    let width_px = (RIM_WIDTH_PX * pixel_scale).min(0.35 * radius / pixel_world);
+    1.0 - smoothstep(width_px - 0.5, width_px + 0.5, inside_px)
+}
+
+fn smoothstep(edge0: f32, edge1: f32, x: f32) -> f32 {
+    let t = ((x - edge0) / (edge1 - edge0)).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+/// The luminance of a linear colour (Rec. 709 weights), for the D3
+/// calibration constraint.
+pub fn luminance(linear: Vec3) -> f32 {
+    linear.dot(Vec3::new(0.2126, 0.7152, 0.0722))
+}

@@ -38,7 +38,8 @@ var<uniform> model: ModelUniform;
 
 // ---- lighting ----
 // `lighting.wgsl` is inserted here (`pipelines::compose_lit_shader`):
-// `camera_backward`, `camera_view_vector`, `light_surface`, `to_display`.
+// `camera_backward`, `camera_view_vector`, `light_surface`, `to_display`,
+// `rim_weight`, `apply_rim`.
 
 struct TransparentImpostorVertexInput {
     @location(0) kind: u32,             // 0 = atom (sphere), 1 = bond (cylinder)
@@ -388,7 +389,7 @@ fn shade_atom(input: TransparentImpostorVertexOutput, d: Derivatives) -> Transpa
         discard;
     }
 
-    let shaded = shade_atom_hit(input, ray, t);
+    let shaded = shade_atom_hit(input, ray, t, pixel_world_size(d.dwx, d.dwy));
     var output: TransparentFragmentOutput;
     output.depth = shaded.depth;
     output.sample_mask = mask;
@@ -404,30 +405,29 @@ struct Shaded {
 }
 
 // Shading of the ghost sphere where `ray` meets it at `t`.
-fn shade_atom_hit(input: TransparentImpostorVertexOutput, ray: Ray, t: f32) -> Shaded {
+// `pixel_world` is the world size of a render pixel there (`pixel_world_size`),
+// for the rim's screen-space width.
+fn shade_atom_hit(input: TransparentImpostorVertexOutput, ray: Ray, t: f32, pixel_world: f32) -> Shaded {
     let hit_point = ray.origin + t * ray.dir;
     let world_normal = normalize(hit_point - input.world_a);
 
     let hit_clip = camera.view_proj * vec4<f32>(hit_point, 1.0);
     let depth = hit_clip.z / hit_clip.w;
 
-    // Rim highlight: blend rim color into albedo before PBR so the rim is lit.
-    let V = camera_view_vector(hit_point);
-    let NdotV = max(dot(world_normal, V), 0.0);
-    let rim_start = 0.18;
-    let rim_full = 0.22;
-    let rim_factor = smoothstep(rim_start, rim_full, 1.0 - NdotV);
-    let rim_blend = rim_factor * input.rim_color.a;
-    let rim_albedo = mix(input.color, input.rim_color.rgb, rim_blend);
-
-    let color = to_display(light_surface(
+    let lit = to_display(light_surface(
         hit_point,
         world_normal,
-        rim_albedo,
+        input.color,
         input.roughness,
         input.metallic,
         FULLY_EXPOSED,
     ));
+
+    // The rim band (D4): a screen-space ring along the silhouette, mixed in
+    // after lighting so it reads the same all around the outline.
+    let distance = sphere_ray_distance(ray.origin, ray.dir, input.world_a, input.radius);
+    let rim = rim_weight(distance, pixel_world, input.radius) * input.rim_color.a;
+    let color = apply_rim(lit, input.rim_color.rgb, rim);
 
     var shaded: Shaded;
     shaded.depth = depth;
@@ -583,7 +583,7 @@ fn fs_main_per_sample(
 
     var shaded: Shaded;
     if input.kind == 0u {
-        shaded = shade_atom_hit(input, ray, t);
+        shaded = shade_atom_hit(input, ray, t, pixel_world_size(dwx, dwy));
     } else {
         shaded = shade_bond_hit(input, ray, t);
     }

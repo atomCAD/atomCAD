@@ -68,11 +68,32 @@ fn try_renderer(width: u32, height: u32) -> Option<Renderer> {
 /// against the reference dump.
 const GPU_COMPARE_TOLERANCE: u8 = 0;
 
+/// Images the current phase changes on purpose, by name prefix: compared with
+/// `ATOMCAD_GPU_COMPARE_DIR` and reported, but not asserted, because the
+/// reference is a dump of the *previous* phase. Each phase that changes
+/// pixels lists them here and tests the change by its own assertions.
+///
+/// Depth perception Phase 2 (`doc/design_depth_perception.md`): the rim is
+/// drawn after lighting at a screen-space width (the rimmed atoms), and
+/// `mesh.wgsl` builds `V` with the shared `camera_view_vector`, which changes
+/// orthographic triangle meshes. Measured, the change shows only on the
+/// top-down flat squares (up to 4 levels, from the specular term); the
+/// oblique `lit_mesh_ortho_*` and `lit_surface_ortho_*` images stay
+/// identical, so they are still asserted.
+const GPU_COMPARE_EXEMPT: &[&str] = &[
+    "lit_atom_selected_",
+    "lit_atom_frozen_",
+    "main_pass_order",
+    "gadget_order",
+    "aa_mesh_edge",
+];
+
 /// Writes `pixels` to `$ATOMCAD_GPU_DUMP_DIR/<name>.raw` when that variable is
 /// set, and compares them with `$ATOMCAD_GPU_COMPARE_DIR/<name>.raw` when that
 /// one is: same length, and no channel more than [`GPU_COMPARE_TOLERANCE`]
-/// apart. An image the reference directory lacks (a test newer than the
-/// dump) is reported and skipped. Does nothing when neither is set.
+/// apart, unless the name is in [`GPU_COMPARE_EXEMPT`]. An image the
+/// reference directory lacks (a test newer than the dump) is reported and
+/// skipped. Does nothing when neither is set.
 fn dump(name: &str, pixels: &[u8]) {
     if let Ok(dir) = std::env::var("ATOMCAD_GPU_DUMP_DIR") {
         let path = std::path::Path::new(&dir).join(format!("{name}.raw"));
@@ -104,6 +125,15 @@ fn dump(name: &str, pixels: &[u8]) {
             .zip(reference.chunks_exact(4))
             .filter(|(a, b)| a != b)
             .count();
+        if GPU_COMPARE_EXEMPT
+            .iter()
+            .any(|prefix| name.starts_with(prefix))
+        {
+            println!(
+                "renderer_gpu: {name} exempt from the comparison: differs by up to {worst}, {differing} pixels differ"
+            );
+            return;
+        }
         // Written as an excess, not `worst <= tolerance`: with a tolerance
         // of 0 clippy rejects that comparison as always true or false.
         assert_eq!(
@@ -2201,4 +2231,423 @@ fn lit_pipelines_scene() {
         }
     }
     println!("renderer_gpu: lit-pipelines scene rendered {images} images");
+}
+
+// ---- Depth perception, Phase 2: the studio rig and the rim ----------------
+//
+// `doc/design_depth_perception.md` D3, D4. Expected colours come from the
+// Rust twin (`shading.rs`); the twin-agreement test is what ties it to
+// `lighting.wgsl`.
+
+use atomcad_renderer::shading::{RIM_WIDTH_PX, light_surface, to_display, view_vector};
+use atomcad_renderer::shading_uniform::{
+    LightingPreset, ShadingPass, ShadingSettings, ShadingUniform,
+};
+
+fn shading_of(preset: LightingPreset) -> ShadingSettings {
+    ShadingSettings {
+        preset,
+        ..ShadingSettings::default()
+    }
+}
+
+/// Looking straight down -Z at the origin, +Y up, at 10 render pixels per
+/// world unit in a viewport `height` pixels high; perspective from
+/// `distance` away, or orthographic.
+fn look_down(renderer: &mut Renderer, orthographic: bool, distance: f64, height: u32) {
+    renderer.set_orthographic_mode(orthographic);
+    renderer.set_ortho_half_height(height as f64 / 20.0);
+    renderer.move_camera(
+        &DVec3::new(0.0, 0.0, distance),
+        &DVec3::ZERO,
+        &DVec3::new(0.0, 1.0, 0.0),
+    );
+}
+
+/// The view ray through the centre of pixel `(column, row)` of a
+/// `width × height` target: origin and unit direction, world space.
+fn ray_through_pixel(
+    camera: &atomcad_renderer::camera::Camera,
+    width: u32,
+    height: u32,
+    column: u32,
+    row: u32,
+) -> (DVec3, DVec3) {
+    let x = (column as f64 + 0.5) / width as f64 * 2.0 - 1.0;
+    let y = 1.0 - (row as f64 + 0.5) / height as f64 * 2.0;
+    let inverse = camera.build_view_projection_matrix().inverse();
+    let near = inverse.project_point3(DVec3::new(x, y, 0.1));
+    let far = inverse.project_point3(DVec3::new(x, y, 0.9));
+    (near, (far - near).normalize())
+}
+
+/// Where a ray meets the sphere `(centre, radius)` first, if it does.
+fn ray_sphere(origin: DVec3, dir: DVec3, centre: DVec3, radius: f64) -> Option<DVec3> {
+    let oc = centre - origin;
+    let tca = oc.dot(dir);
+    let d2 = oc.length_squared() - tca * tca;
+    let r2 = radius * radius;
+    (d2 <= r2).then(|| origin + dir * (tca - (r2 - d2).sqrt()))
+}
+
+/// D1, Testing layer 3: under each preset, in both projections, pixels at
+/// known normals of a lit sphere (its centre, and four points about 60° from
+/// the view axis) are what the Rust twin computes, within 2/255. Mutation:
+/// change one constant in `shading.rs` only (the hemisphere's `0.5 + 0.5·`
+/// to `0.5 + 0.4·` was tried); this test fails.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn the_twin_agrees_with_the_gpu_on_a_lit_sphere() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    renderer.set_render_quality(RenderQuality {
+        anti_aliasing: false,
+        full_display_resolution: true,
+    });
+    let (radius, albedo) = (8.0f32, [0.2f32, 0.5, 0.9]);
+    upload_impostors(
+        &mut renderer,
+        &atom(Vec3::ZERO, radius, albedo),
+        &BondImpostorMesh::new(),
+        &TransparentImpostorMesh::new(),
+        &AtomImpostorMesh::new(),
+    );
+    let mut worst = 0u8;
+    for preset in [LightingPreset::Headlight, LightingPreset::Studio] {
+        renderer.set_shading(shading_of(preset));
+        for orthographic in [false, true] {
+            look_down(&mut renderer, orthographic, 60.0, VIEWPORT_HEIGHT);
+            let pixels = renderer.render(DARK_BACKGROUND);
+            dump(
+                &format!("twin_{preset:?}_{orthographic}").to_lowercase(),
+                &pixels,
+            );
+            let camera = renderer.camera.clone();
+            let uniform = ShadingUniform::new(
+                &camera,
+                renderer.content_bounds(),
+                DARK_BACKGROUND,
+                &shading_of(preset),
+                ShadingPass::Content,
+            );
+            // The pixels over the sphere's centre and over four points 60°
+            // from the view axis: up, down, left and right. The expectation
+            // is computed for the pixel's own centre, so landing a little off
+            // those points does not matter.
+            let view_proj = camera.build_view_projection_matrix();
+            let pixel_over = |normal: DVec3| {
+                let ndc = view_proj.project_point3(normal * radius as f64);
+                (
+                    ((ndc.x * 0.5 + 0.5) * VIEWPORT_WIDTH as f64) as u32,
+                    ((0.5 - ndc.y * 0.5) * VIEWPORT_HEIGHT as f64) as u32,
+                )
+            };
+            let (s, c) = 60f64.to_radians().sin_cos();
+            for (column, row) in [
+                DVec3::Z,
+                DVec3::new(0.0, s, c),
+                DVec3::new(0.0, -s, c),
+                DVec3::new(-s, 0.0, c),
+                DVec3::new(s, 0.0, c),
+            ]
+            .map(pixel_over)
+            {
+                let (origin, dir) =
+                    ray_through_pixel(&camera, VIEWPORT_WIDTH, VIEWPORT_HEIGHT, column, row);
+                let hit = ray_sphere(origin, dir, DVec3::ZERO, radius as f64)
+                    .expect("the sample pixel is on the sphere");
+                let normal = hit.normalize().as_vec3();
+                let expected = to_display(light_surface(
+                    &uniform,
+                    view_vector(&camera, hit),
+                    normal,
+                    Vec3::from(albedo),
+                    0.5,
+                    0.0,
+                )) * 255.0;
+                let got = rgba_at(&pixels, VIEWPORT_WIDTH, column, row);
+                for c in 0..3 {
+                    let diff = (got[c] as f32 - expected[c]).abs();
+                    worst = worst.max(diff.round() as u8);
+                    assert!(
+                        diff <= 2.0,
+                        "{preset:?}, orthographic {orthographic}, pixel ({column}, {row}), \
+                         normal {normal}: GPU {got:?}, twin {expected}"
+                    );
+                }
+            }
+        }
+    }
+    println!("renderer_gpu: twin agreement, largest difference {worst}/255");
+}
+
+/// The mean luminance (0–255) of the pixels of a live (BGRA) render inside
+/// the disc `(cx, cy, r)` (pixels) that `keep(dx, dy)` selects.
+fn mean_in_disc(
+    pixels: &[u8],
+    width: u32,
+    (cx, cy, r): (f32, f32, f32),
+    keep: impl Fn(f32, f32) -> bool,
+) -> f32 {
+    let (mut sum, mut n) = (0.0, 0);
+    for (i, p) in pixels.chunks_exact(4).enumerate() {
+        let dx = (i as u32 % width) as f32 + 0.5 - cx;
+        let dy = (i as u32 / width) as f32 + 0.5 - cy;
+        if dx * dx + dy * dy < r * r && keep(dx, dy) {
+            sum += 0.0722 * p[0] as f32 + 0.7152 * p[1] as f32 + 0.2126 * p[2] as f32;
+            n += 1;
+        }
+    }
+    sum / n as f32
+}
+
+/// D3: the *Studio* key comes from the upper left, so a lit sphere is
+/// brighter in its upper-left quadrant than in its lower-right one. Under
+/// *Headlight* the two halves left and right of the centre are lit alike.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn a_sphere_under_studio_is_brighter_upper_left_than_lower_right() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    upload_impostors(
+        &mut renderer,
+        &atom(Vec3::ZERO, 8.0, [0.7, 0.7, 0.7]),
+        &BondImpostorMesh::new(),
+        &TransparentImpostorMesh::new(),
+        &AtomImpostorMesh::new(),
+    );
+    look_down(&mut renderer, true, 60.0, VIEWPORT_HEIGHT);
+    let disc = (
+        VIEWPORT_WIDTH as f32 / 2.0,
+        VIEWPORT_HEIGHT as f32 / 2.0,
+        78.0,
+    );
+    // Screen y grows downwards.
+    let upper_left = |dx: f32, dy: f32| dx < 0.0 && dy < 0.0;
+    let lower_right = |dx: f32, dy: f32| dx > 0.0 && dy > 0.0;
+
+    renderer.set_shading(shading_of(LightingPreset::Studio));
+    let studio = renderer.render(DARK_BACKGROUND);
+    dump("studio_quadrants", &studio);
+    let (ul, lr) = (
+        mean_in_disc(&studio, VIEWPORT_WIDTH, disc, upper_left),
+        mean_in_disc(&studio, VIEWPORT_WIDTH, disc, lower_right),
+    );
+    println!("renderer_gpu: Studio upper left {ul}, lower right {lr}");
+    assert!(ul > lr + 20.0, "upper left {ul}, lower right {lr}");
+
+    // The headlight is straight above the view axis: left and right alike.
+    renderer.set_shading(shading_of(LightingPreset::Headlight));
+    let headlight = renderer.render(DARK_BACKGROUND);
+    let left = mean_in_disc(&headlight, VIEWPORT_WIDTH, disc, |dx, _| dx < 0.0);
+    let right = mean_in_disc(&headlight, VIEWPORT_WIDTH, disc, |dx, _| dx > 0.0);
+    assert!((left - right).abs() < 1.0, "left {left}, right {right}");
+}
+
+/// The rim test sphere's colours: a green albedo and a magenta rim, far apart
+/// in every channel the weight is read from.
+const RIM_ALBEDO: [f32; 3] = [0.2, 0.8, 0.2];
+const RIM_COLOUR: [f32; 4] = [1.0, 0.0, 1.0, 1.0];
+
+fn rim_atom(radius: f32, rim: [f32; 4]) -> AtomImpostorMesh {
+    let mut atoms = AtomImpostorMesh::new();
+    atoms.add_atom_quad(&Vec3::ZERO, radius, &RIM_ALBEDO, 0.5, 0.0, &rim);
+    atoms
+}
+
+/// Renders a sphere of `radius` with and without the rim, live or exported
+/// (`export`, through `render_image` at the viewport's size), and returns
+/// each output pixel's rim weight: how far it moved from the plain colour
+/// towards the rim colour, in the channel where those two are furthest
+/// apart. 0 off the sphere.
+fn rim_weights(renderer: &mut Renderer, radius: f32, export: bool, name: &str) -> Vec<f32> {
+    let mut render = |rim: [f32; 4]| {
+        upload_impostors(
+            renderer,
+            &rim_atom(radius, rim),
+            &BondImpostorMesh::new(),
+            &TransparentImpostorMesh::new(),
+            &AtomImpostorMesh::new(),
+        );
+        if export {
+            let (width, height) = renderer.get_viewport_size();
+            renderer.render_image(width, height, BLACK)
+        } else {
+            // BGRA to RGBA, as the export is.
+            let mut pixels = renderer.render(BLACK);
+            for p in pixels.chunks_exact_mut(4) {
+                p.swap(0, 2);
+            }
+            pixels
+        }
+    };
+    let plain = render([0.0; 4]);
+    let rimmed = render(RIM_COLOUR);
+    dump(&format!("rim_{name}_plain"), &plain);
+    dump(&format!("rim_{name}"), &rimmed);
+    plain
+        .chunks_exact(4)
+        .zip(rimmed.chunks_exact(4))
+        .map(|(p, r)| {
+            (0..3)
+                .map(|c| {
+                    let span = RIM_COLOUR[c] * 255.0 - p[c] as f32;
+                    (span.abs(), (r[c] as f32 - p[c] as f32) / span)
+                })
+                .max_by(|a, b| a.0.total_cmp(&b.0))
+                .filter(|(span, _)| *span > 40.0)
+                .map_or(0.0, |(_, weight)| weight.clamp(0.0, 1.0))
+        })
+        .collect()
+}
+
+/// D4: the rim is a ring `RIM_WIDTH_PX` pixels wide along the silhouette,
+/// whatever the sphere's size: its summed weight on a 200-px and on a 40-px
+/// sphere (diameters) is the ring's area within 15 %. The old band
+/// (everything beyond ~35° from the view axis) covers about 11× that on the
+/// large sphere and 2.4× on the small one: mutation.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn the_rim_is_a_ring_of_fixed_pixel_width_on_any_sphere() {
+    let (width, height) = (320, 240);
+    let Some(mut renderer) = try_renderer(width, height) else {
+        return;
+    };
+    renderer.set_render_quality(RenderQuality {
+        anti_aliasing: false,
+        full_display_resolution: true,
+    });
+    look_down(&mut renderer, true, 60.0, height);
+    for radius_px in [100.0f32, 20.0] {
+        // 10 render pixels per world unit.
+        let name = format!("ring_{radius_px}");
+        let weights = rim_weights(&mut renderer, radius_px / 10.0, false, &name);
+        let area: f32 = weights.iter().sum();
+        let w = RIM_WIDTH_PX.min(0.35 * radius_px);
+        let ring = std::f32::consts::PI * (radius_px.powi(2) - (radius_px - w).powi(2));
+        println!(
+            "renderer_gpu: rim on a {radius_px}-px-radius sphere: {area} px², ring {ring} px²"
+        );
+        assert!(
+            (area / ring - 1.0).abs() < 0.15,
+            "{radius_px}-px-radius sphere: rim area {area}, ring {ring}"
+        );
+    }
+}
+
+/// D4: the rim is mixed in after lighting, so it is the rim colour all
+/// around the outline: on the key side and the fill side of a sphere under
+/// *Studio* alike, within 2/255. Lighting the rim (mixing it into the albedo,
+/// as before) fails this: mutation.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn the_rim_is_the_same_colour_on_the_key_and_the_fill_side() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    renderer.set_render_quality(RenderQuality {
+        anti_aliasing: false,
+        full_display_resolution: true,
+    });
+    renderer.set_shading(shading_of(LightingPreset::Studio));
+    look_down(&mut renderer, true, 60.0, VIEWPORT_HEIGHT);
+    let radius_px = 80.0f32;
+    upload_impostors(
+        &mut renderer,
+        &rim_atom(radius_px / 10.0, RIM_COLOUR),
+        &BondImpostorMesh::new(),
+        &TransparentImpostorMesh::new(),
+        &AtomImpostorMesh::new(),
+    );
+    let pixels = renderer.render(BLACK);
+    dump("rim_key_fill", &pixels);
+    // 1.5 px inside the silhouette, upper left (key) and lower right (fill).
+    let at = |angle_deg: f32| {
+        let (s, c) = angle_deg.to_radians().sin_cos();
+        let r = radius_px - 1.5;
+        let column = (VIEWPORT_WIDTH as f32 / 2.0 + c * r) as u32;
+        let row = (VIEWPORT_HEIGHT as f32 / 2.0 - s * r) as u32;
+        rgba_at(&pixels, VIEWPORT_WIDTH, column, row)
+    };
+    let (key_side, fill_side) = (at(135.0), at(-45.0));
+    for c in 0..3 {
+        assert!(
+            key_side[c].abs_diff(fill_side[c]) <= 2,
+            "key side {key_side:?}, fill side {fill_side:?}"
+        );
+        let rim = (RIM_COLOUR[c] * 255.0) as u8;
+        assert!(key_side[c].abs_diff(rim) <= 2, "key side {key_side:?}");
+    }
+}
+
+/// D4: the rim is as wide in output pixels in a 2× supersampled export as in
+/// the live view, within one pixel, measured as the summed rim weight along
+/// the row through the sphere's centre (both sides, halved). Without the
+/// target's `pixel_scale` in the width the export's rim would be half as
+/// wide: mutation.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn the_rim_is_as_wide_exported_as_live() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    assert_eq!(IMAGE_EXPORT_SUPERSAMPLING, 2);
+    renderer.set_render_quality(RenderQuality {
+        anti_aliasing: false,
+        full_display_resolution: true,
+    });
+    look_down(&mut renderer, true, 60.0, VIEWPORT_HEIGHT);
+    let row = (VIEWPORT_HEIGHT / 2) as usize;
+    let row_width = |weights: &[f32]| {
+        let start = row * VIEWPORT_WIDTH as usize;
+        weights[start..start + VIEWPORT_WIDTH as usize]
+            .iter()
+            .sum::<f32>()
+            / 2.0
+    };
+    let live = row_width(&rim_weights(&mut renderer, 6.0, false, "width_live"));
+    let export = row_width(&rim_weights(&mut renderer, 6.0, true, "width_export"));
+    println!("renderer_gpu: rim width live {live} px, exported {export} px");
+    assert!((live - RIM_WIDTH_PX).abs() <= 1.0, "live rim {live} px");
+    assert!(
+        (live - export).abs() <= 1.0,
+        "live rim {live} px, exported {export} px"
+    );
+}
+
+/// D1: `mesh.wgsl` builds `V` with the shared `camera_view_vector`, so in
+/// orthographic a flat quad facing the viewer is lit the same across its
+/// width. The old per-pixel `V` (towards the eye position) shaded it
+/// unevenly, the more so the closer the eye: mutation.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn an_orthographic_flat_quad_is_evenly_lit() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    upload(
+        &mut renderer,
+        &square(8.0, 0.0, Vec3::new(0.8, 0.3, 0.2)),
+        &LineMesh::new(),
+        &Mesh::new(),
+        &LineMesh::new(),
+    );
+    // The eye close to the quad: that changes nothing in orthographic, but
+    // would swing an eye-position `V` by ~40° across it.
+    look_down(&mut renderer, true, 10.0, VIEWPORT_HEIGHT);
+    let pixels = renderer.render(BLACK);
+    dump("ortho_flat_quad", &pixels);
+    let row = VIEWPORT_HEIGHT / 2;
+    let samples: Vec<[u8; 4]> = (VIEWPORT_WIDTH / 2 - 75..VIEWPORT_WIDTH / 2 + 75)
+        .step_by(5)
+        .map(|column| rgba_at(&pixels, VIEWPORT_WIDTH, column, row))
+        .collect();
+    for c in 0..3 {
+        let (lo, hi) = samples
+            .iter()
+            .fold((255u8, 0u8), |(lo, hi), p| (lo.min(p[c]), hi.max(p[c])));
+        assert!(hi - lo <= 1, "channel {c}: {lo}..{hi} across the quad");
+    }
 }

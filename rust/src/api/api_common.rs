@@ -53,6 +53,23 @@ fn to_render_quality(
     }
 }
 
+/// Domain *Lighting* preferences → the renderer's shading settings
+/// (`doc/design_depth_perception.md` D8), for the same reason as above.
+/// Only the preset so far: the depth cue and ambient occlusion stay off
+/// until their phases add their preferences.
+fn to_shading_settings(
+    prefs: &domain_prefs::RenderingPreferences,
+) -> atomcad_renderer::shading_uniform::ShadingSettings {
+    use atomcad_renderer::shading_uniform::{LightingPreset, ShadingSettings};
+    ShadingSettings {
+        preset: match prefs.lighting {
+            domain_prefs::LightingPreset::Studio => LightingPreset::Studio,
+            domain_prefs::LightingPreset::Headlight => LightingPreset::Headlight,
+        },
+        ..ShadingSettings::default()
+    }
+}
+
 fn to_display_mesh_smoothing(
     smoothing: &domain_prefs::MeshSmoothing,
 ) -> display_prefs::MeshSmoothing {
@@ -602,6 +619,15 @@ pub fn refresh_structure_designer(
     // (`doc/design_viewport_antialiasing.md` D8). The renderer recreates the
     // live target only when they change it.
     cad_instance.renderer.set_render_quality(to_render_quality(
+        &cad_instance
+            .structure_designer
+            .preferences
+            .rendering_preferences,
+    ));
+    // The *Lighting* preferences (`doc/design_depth_perception.md` D8),
+    // pushed the same way. The renderer drops its refined frame only when
+    // they change.
+    cad_instance.renderer.set_shading(to_shading_settings(
         &cad_instance
             .structure_designer
             .preferences

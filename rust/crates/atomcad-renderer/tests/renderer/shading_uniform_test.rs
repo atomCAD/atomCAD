@@ -1,13 +1,14 @@
 // The per-pass shading uniform (doc/design_depth_perception.md D2, D3,
-// Phase 1). Its WGSL twin is checked in `shader_test.rs`.
+// Phases 1 and 2). Its WGSL twin is checked in `shader_test.rs`.
 
 use atomcad_renderer::camera::Camera;
 use atomcad_renderer::renderer::CameraUniform;
 use atomcad_renderer::shading_uniform::{
-    HEADLIGHT_AMBIENT, HEADLIGHT_KEY_INTENSITY, LightingPreset, ShadingPass, ShadingSettings,
-    ShadingUniform,
+    HEADLIGHT_AMBIENT, HEADLIGHT_KEY_INTENSITY, LightingPreset, STUDIO_FILL_INTENSITY,
+    STUDIO_GROUND, STUDIO_KEY_INTENSITY, STUDIO_SKY, ShadingPass, ShadingSettings, ShadingUniform,
 };
-use glam::f64::DVec3;
+use glam::f32::Vec3;
+use glam::f64::{DQuat, DVec3};
 use std::mem::offset_of;
 
 const BOUNDS: Option<(DVec3, DVec3)> =
@@ -131,4 +132,87 @@ fn the_background_is_the_clear_colour() {
         ShadingPass::Content,
     );
     assert_eq!(uniform.background, [0.0, 128.0 / 255.0, 1.0]);
+}
+
+// ---- The *Studio* rig (D3, Phase 2) ----------------------------------------
+
+const STUDIO: ShadingSettings = ShadingSettings {
+    preset: LightingPreset::Studio,
+    depth_cue_strength: 0.0,
+    ao_strength: 0.0,
+};
+
+/// `direction` in the camera's frame: (right, up, forward).
+fn in_camera_space(camera: &Camera, direction: [f32; 3]) -> Vec3 {
+    let forward = (camera.target - camera.eye).normalize();
+    let right = forward.cross(camera.up).normalize();
+    let up = right.cross(forward);
+    let d = Vec3::from(direction).as_dvec3();
+    DVec3::new(d.dot(right), d.dot(up), d.dot(forward)).as_vec3()
+}
+
+fn oblique_camera() -> Camera {
+    let mut camera = Camera::default_pose(1.5);
+    camera.eye = DVec3::new(8.0, -12.0, 6.0);
+    camera.target = DVec3::new(1.0, 2.0, -1.0);
+    camera.up = DVec3::Z;
+    camera.orthonormalize_up();
+    camera
+}
+
+/// D3: the *Studio* key comes from the upper left of the view direction and
+/// the fill from the lower right. A light's travel direction is the reverse:
+/// the key travels down and to the right, the fill up and to the left, and
+/// both travel away from the eye. Both are unit vectors.
+#[test]
+fn the_studio_key_is_upper_left_and_the_fill_lower_right() {
+    let camera = oblique_camera();
+    let uniform = content(&camera, &STUDIO);
+    let key = in_camera_space(&camera, uniform.key_light_dir);
+    let fill = in_camera_space(&camera, uniform.fill_light_dir);
+    assert!((key.length() - 1.0).abs() < 1e-5, "key {key}");
+    assert!((fill.length() - 1.0).abs() < 1e-5, "fill {fill}");
+    // Travelling right (from the left), down (from above), away from the eye.
+    assert!(key.x > 0.2 && key.y < -0.4 && key.z > 0.5, "key {key}");
+    // Travelling left (from the right), up (from below), away from the eye.
+    assert!(fill.x < -0.4 && fill.y > 0.2 && fill.z > 0.5, "fill {fill}");
+    // 35° above the view axis, 30° to its side: sin 35° of it is vertical.
+    assert!((key.y + 35f32.to_radians().sin()).abs() < 1e-5, "key {key}");
+    assert!(
+        (fill.y - 20f32.to_radians().sin()).abs() < 1e-5,
+        "fill {fill}"
+    );
+
+    assert_eq!(uniform.key_intensity, STUDIO_KEY_INTENSITY);
+    assert_eq!(uniform.fill_intensity, STUDIO_FILL_INTENSITY);
+    assert_eq!(uniform.sky, STUDIO_SKY);
+    assert_eq!(uniform.ground, STUDIO_GROUND);
+    assert!(uniform.sky > uniform.ground);
+}
+
+/// D3: the rig is camera-relative. Orbiting the camera 90° about its up
+/// axis turns both lights in world space and leaves them unchanged in camera
+/// space, so the shading stays put while the user orbits.
+#[test]
+fn the_studio_lights_turn_with_the_camera() {
+    let camera = oblique_camera();
+    let mut orbited = camera.clone();
+    let rotation = DQuat::from_axis_angle(camera.up, 90f64.to_radians());
+    orbited.eye = camera.target + rotation * (camera.eye - camera.target);
+    orbited.up = rotation * camera.up;
+
+    let before = content(&camera, &STUDIO);
+    let after = content(&orbited, &STUDIO);
+    for (name, a, b) in [
+        ("key", before.key_light_dir, after.key_light_dir),
+        ("fill", before.fill_light_dir, after.fill_light_dir),
+    ] {
+        let (a_cam, b_cam) = (in_camera_space(&camera, a), in_camera_space(&orbited, b));
+        assert!(a_cam.abs_diff_eq(b_cam, 1e-5), "{name}: {a_cam} vs {b_cam}");
+        // It did turn in world space.
+        assert!(
+            !Vec3::from(a).abs_diff_eq(Vec3::from(b), 0.1),
+            "{name} did not move"
+        );
+    }
 }

@@ -18,6 +18,7 @@ pub mod mesh;
 pub mod pipelines;
 pub mod render_target;
 pub mod renderer;
+pub mod shading;
 pub mod shading_uniform;
 pub mod surface_sort;
 pub mod tessellator;

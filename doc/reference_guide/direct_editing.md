@@ -126,7 +126,7 @@ A **Modify** button on the measurement card opens a dialog where you can enter a
 
 ### Rim highlights
 
-The atom editor uses colored rim highlights to convey atom state while preserving element colors:
+The atom editor uses colored rim highlights to convey atom state while preserving element colors. A rim is a thin ring, about three pixels wide, along the atom's outline on screen; it is drawn in its colour unshaded, so it reads the same all around the atom, whatever the lighting, and is as wide on a large atom as on a small one (on an atom only a few pixels across it is narrower, so the atom keeps its own colour in the middle).
 
 - **Selected atoms** — magenta rim
 - **Frozen atoms** — ice-blue rim

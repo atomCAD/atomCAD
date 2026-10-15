@@ -629,9 +629,24 @@ pub struct InterfacePreferences {
     pub document_tab_placement: DocumentTabPlacement,
 }
 
-/// How the live viewport is rendered (`doc/design_viewport_antialiasing.md`
-/// D8). Both settings trade speed for quality; neither touches the thumbnail
-/// or the exported image, which are always supersampled.
+/// The light rig the viewport is shaded with
+/// (`doc/design_depth_perception.md` D3, D8).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LightingPreset {
+    /// A key light from the upper left, a fill from the lower right and an
+    /// ambient brighter from above. The default.
+    #[default]
+    Studio,
+    /// One light from just above the eye and a flat ambient: the look before
+    /// the studio rig.
+    Headlight,
+}
+
+/// How the viewport is rendered. The quality pair
+/// (`doc/design_viewport_antialiasing.md` D8) trades speed for quality and
+/// touches neither the thumbnail nor the exported image, which are always
+/// supersampled; the lighting (`doc/design_depth_perception.md` D8) is an
+/// appearance choice and applies to all three alike.
 ///
 /// Pushed to the renderer on every refresh, like
 /// [`GeometryVisualizationPreferences::surface_transparency_mode`]: the
@@ -646,6 +661,9 @@ pub struct RenderingPreferences {
     /// Off: at its logical size, which Flutter scales up on a HiDPI display.
     #[serde(default = "default_true")]
     pub full_display_resolution: bool,
+    /// The light rig (D3). A file from before the setting loads as *Studio*.
+    #[serde(default)]
+    pub lighting: LightingPreset,
 }
 
 impl Default for RenderingPreferences {
@@ -653,6 +671,7 @@ impl Default for RenderingPreferences {
         Self {
             anti_aliasing: true,
             full_display_resolution: true,
+            lighting: LightingPreset::Studio,
         }
     }
 }

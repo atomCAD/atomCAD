@@ -1232,6 +1232,32 @@ library.
       assertion: an orthographic flat quad is evenly lit across its width
       (the old per-pixel `V` was not).
 - Effort: 1–1.5 d.
+- **Phase notes (2026-10-15).** Implemented as above; the starting constants
+  (key 2.2, fill 0.6, sky 0.26, ground 0.12) meet the calibration constraint
+  as they are: a front-facing white surface under *Studio* is 0.984 × its
+  *Headlight* luminance, so nothing was tuned. The twin agrees with the GPU
+  within 1/255. Details the text above leaves open:
+  - The light directions are built by `light_travel_direction(camera,
+    elevation, azimuth)` in `shading_uniform.rs`: elevation 35° and azimuth
+    30° (left) for the key, −20° and −40° for the fill.
+  - The world size of a render pixel for the rim is the mean length of the
+    two world-position derivatives (`pixel_world_size`); the band's soft
+    inner edge is centred on `w`, so the ring's area is that of a ring `w`
+    wide. Measured: 1866 px² against 1857 for a 100-px radius, 355 against
+    349 for 20 px.
+  - `light_surface_from` is gone: with `mesh.wgsl` on the shared `V` it had
+    no caller left.
+  - Against the Phase 1 dump the changed images are the rimmed atoms (up to
+    152 levels) and three top-down orthographic flat squares
+    (`main_pass_order`, `gadget_order`, `aa_mesh_edge`, up to 4 levels). The
+    oblique `lit_mesh_ortho_*` and `lit_surface_ortho_*` images did **not**
+    change measurably, so they stay asserted; `GPU_COMPARE_EXEMPT` in
+    `renderer_gpu.rs` lists exactly the measured set. Every other image is
+    byte-identical.
+  - Each GPU test's mutation fails it: a twin constant changed alone (twin
+    agreement), the old `N·V` band (ring area 20 121 px² against 1857),
+    lighting the rim (key/fill colour), dropping `pixel_scale` (exported
+    rim 1.5 px against 3), the old eye-position `V` (flat quad).
 
 ### Phase 3 — Depth cue
 

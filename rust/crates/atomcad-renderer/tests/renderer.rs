@@ -51,6 +51,10 @@ mod shader_test;
 #[path = "renderer/shading_uniform_test.rs"]
 mod shading_uniform_test;
 
+// Depth perception, Phase 2: the Rust twin of the shared lighting module
+#[path = "renderer/shading_test.rs"]
+mod shading_test;
+
 // Screen-space lines, Phase 2: the instanced `LineMesh`, the line blend state
 // and the Rust twins of `line_mesh.wgsl` (doc/design_screen_space_lines.md
 // D1, D4, D6, D7).

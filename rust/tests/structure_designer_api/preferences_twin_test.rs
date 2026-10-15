@@ -15,7 +15,8 @@ use atomcad_structure_designer::preferences as domain;
 use rust_lib_flutter_cad::api::common_api_types::APIIVec3;
 use rust_lib_flutter_cad::api::structure_designer::structure_designer_preferences::{
     AtomicStructureVisualizationPreferences, DocumentTabPlacement, InterfacePreferences,
-    NodeDisplayPolicy, NodeDisplayPreferences, NodeTitleMode, StructureDesignerPreferences,
+    LightingPreset, NodeDisplayPolicy, NodeDisplayPreferences, NodeTitleMode, RenderingPreferences,
+    StructureDesignerPreferences,
 };
 
 #[test]
@@ -142,4 +143,26 @@ fn document_tab_placement_converts_both_ways() {
         old.interface_preferences.document_tab_placement,
         DocumentTabPlacement::LeftOfViewport
     );
+}
+
+/// The lighting preset (`doc/design_depth_perception.md` D8) converts both ways
+/// and travels beside the two rendering-quality switches, not in place of one.
+#[test]
+fn the_lighting_preset_converts_both_ways() {
+    for (api, dom) in [
+        (LightingPreset::Studio, domain::LightingPreset::Studio),
+        (LightingPreset::Headlight, domain::LightingPreset::Headlight),
+    ] {
+        let prefs = RenderingPreferences {
+            anti_aliasing: false,
+            full_display_resolution: true,
+            lighting: api,
+        };
+        let down: domain::RenderingPreferences = (&prefs).into();
+        assert_eq!(down.lighting, dom);
+        assert!(!down.anti_aliasing);
+        assert!(down.full_display_resolution);
+        let up: RenderingPreferences = (&down).into();
+        assert_eq!(up, prefs);
+    }
 }

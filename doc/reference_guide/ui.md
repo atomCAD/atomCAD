@@ -1170,12 +1170,13 @@ The panel's **Isosurface extraction** group governs how an [`isosurface`](nodes/
 
 ### Rendering
 
-How the [3D viewport](#3d-viewport) is drawn. These settings trade speed for quality; they do not affect an exported image or a network thumbnail, which are always anti-aliased.
+How the [3D viewport](#3d-viewport) is drawn. *Anti-aliasing* and *Full display resolution* trade speed for quality; they do not affect an exported image or a network thumbnail, which are always anti-aliased. The *Lighting* setting is a matter of appearance, so exported images and thumbnails use it too and look like the viewport.
 
 | Setting | Description |
 |---------|-------------|
 | Anti-aliasing | Smooths edges in the viewport by rendering four samples per pixel (4× multisampling): the outlines of atoms, bonds and x-ray ghosts, and the edges of solids — CSG shapes, isosurfaces, the gizmo. While the view moves, the boundary where two atoms touch, or where a bond enters its atom, is not smoothed; once the view comes to rest (about a sixth of a second after the last change) the viewport sharpens once more and smooths those boundaries too. On by default. Turn it off on a slow machine, a very large viewport or a very large structure: it uses about four times the GPU memory for the viewport, and on a structure of a million atoms it can make each frame take about twice as long. Takes effect immediately. If the graphics adapter cannot multisample, the setting has no effect. |
 | Full display resolution | Renders the viewport at your display's full pixel density. On a display scaled above 100 % (for example 150 % or 200 % in the Windows display settings) the viewport then has one rendered pixel per screen pixel, so atoms, edges and lines are sharp instead of slightly blurred; lines keep their width. On by default. At 100 % it changes nothing. Turn it off to render faster on a large high-DPI display: at 200 % the viewport has four times the pixels to render and copy to the screen each frame. Takes effect immediately, and follows the window when it moves to a display with a different scale. |
+| Lighting | How surfaces in the viewport are lit. *Studio* (the default) uses a key light from the upper left, a weaker fill light from the lower right and an ambient that is brighter from above than from below, so every atom and every face of a solid shows which way it faces, also on its shadowed side. *Headlight* is the look of earlier versions: one light from just above your eye and the same ambient from every side. The lights move with the camera, so the shading stays put while you orbit. Both keep element colours at about the same brightness. Takes effect immediately. |
 
 ### Layout
 

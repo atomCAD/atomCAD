@@ -68,14 +68,8 @@ fn vs_main(input: VertexInput) -> VertexOutput {
 
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
-    // A local `V`, for Phase 1 of `doc/design_depth_perception.md` only: the
-    // eye direction in both projections, which is wrong in orthographic but
-    // is what this shader has always used, so the shared lighting changes no
-    // pixel. Phase 2 calls `light_surface`, whose `V` is `camera_view_vector`
-    // (D1).
-    let V = normalize(camera.camera_position - input.world_position);
-    let color = to_display(light_surface_from(
-        V,
+    let color = to_display(light_surface(
+        input.world_position,
         input.normal,
         input.albedo,
         input.roughness,

@@ -397,7 +397,16 @@ writes its images there as raw bytes. Then run it *after* the change with
 `ATOMCAD_GPU_COMPARE_DIR` pointing at that directory, and every image is
 compared with its dump automatically (`GPU_COMPARE_TOLERANCE` per channel).
 `lit_pipelines_scene` dumps one image per lit pipeline and variant, so a
-change to the shading is caught pipeline by pipeline.
+change to the shading is caught pipeline by pipeline. A change that alters
+some images on purpose lists them in `GPU_COMPARE_EXEMPT` (reported, not
+asserted) and tests them with assertions of its own; list what the
+comparison *measured* as changed, not what you expected to change.
+
+When you check that a test fails with its fix removed (a mutation), do not
+restore the file from a copy: the copy's older modification time makes cargo
+think the restored shader is already built (`include_str!` is tracked by
+mtime), and the next run silently tests the mutated build. Restore with an
+edit, or `touch` the file afterwards.
 
 **Per-view uniforms come in pairs.** The renderer draws into the live
 viewport and offscreen (thumbnail, image export), and each has its own camera
@@ -415,10 +424,14 @@ every draw, so nothing it holds survives into another draw.
 `bond_impostor.wgsl`, `transparent_impostor.wgsl` and `mesh.wgsl` do not
 compile on their own: `pipelines::compose_lit_shader` inserts `lighting.wgsl`
 (the `ShadingUniform`, the PBR helpers, `camera_view_vector`,
-`light_surface`, `to_display`) at each host's `// ---- lighting ----` marker,
-after the host's uniform declarations. Change the lighting there, never in a
-host; a host that declares its own copy of a module function fails
-`shader_test.rs`. Composition runs before the per-sample cut below.
+`light_surface`, `to_display`, the rim band's `rim_weight` / `apply_rim`) at
+each host's `// ---- lighting ----` marker, after the host's uniform
+declarations. Change the lighting there, never in a host; a host that declares
+its own copy of a module function fails `shader_test.rs`. Composition runs
+before the per-sample cut below. **A change to `lighting.wgsl` is mirrored in
+its Rust twin, `src/shading.rs`**, which the CPU tests tune the rig against
+and the GPU tests take expected colours from; the GPU harness's
+twin-agreement test is what catches the two drifting apart.
 
 **Pipelines exist once per sample count, in `PipelineSet`**
 (`pipelines.rs`, `doc/design_viewport_antialiasing.md` D2). The live target

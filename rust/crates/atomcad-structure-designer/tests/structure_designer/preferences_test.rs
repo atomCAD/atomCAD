@@ -4,9 +4,9 @@ use atomcad_crystolecule::visualization::AtomicStructureVisualization;
 use atomcad_structure_designer::preferences::{
     AtomicRenderingMethod, AtomicStructureVisualizationPreferences, BackgroundPreferences,
     DocumentTabPlacement, GeometryVisualization, GeometryVisualizationPreferences,
-    InterfacePreferences, LayoutAlgorithmPreference, LayoutPreferences, MemoryPreferences,
-    MeshSmoothing, NodeDisplayPolicy, NodeDisplayPreferences, NodeTitleMode, PrefColor,
-    RenderingPreferences, SimulationPreferences, StructureDesignerPreferences,
+    InterfacePreferences, LayoutAlgorithmPreference, LayoutPreferences, LightingPreset,
+    MemoryPreferences, MeshSmoothing, NodeDisplayPolicy, NodeDisplayPreferences, NodeTitleMode,
+    PrefColor, RenderingPreferences, SimulationPreferences, StructureDesignerPreferences,
     SurfaceTransparencyMode,
 };
 
@@ -490,6 +490,7 @@ fn test_non_default_values_roundtrip() {
         rendering_preferences: RenderingPreferences {
             anti_aliasing: false,
             full_display_resolution: false,
+            lighting: LightingPreset::Headlight,
         },
     };
 
@@ -1058,5 +1059,43 @@ fn rendering_full_display_resolution_off_roundtrips() {
     let json = serde_json::to_string(&prefs).unwrap();
     let loaded: StructureDesignerPreferences = serde_json::from_str(&json).unwrap();
     assert!(!loaded.rendering_preferences.full_display_resolution);
+    assert!(loaded.rendering_preferences.anti_aliasing);
+}
+
+// ---- Lighting (doc/design_depth_perception.md D8, Phase 2) ----------------
+
+#[test]
+fn rendering_lighting_defaults_to_studio() {
+    assert_eq!(
+        RenderingPreferences::default().lighting,
+        LightingPreset::Studio
+    );
+}
+
+#[test]
+fn a_rendering_section_without_lighting_loads_as_studio() {
+    // A file written before the depth-perception design.
+    let before: StructureDesignerPreferences = serde_json::from_str(
+        r#"{"rendering_preferences": {"anti_aliasing": false, "full_display_resolution": false}}"#,
+    )
+    .unwrap();
+    assert_eq!(
+        before.rendering_preferences.lighting,
+        LightingPreset::Studio
+    );
+    assert!(!before.rendering_preferences.anti_aliasing);
+    assert!(!before.rendering_preferences.full_display_resolution);
+}
+
+#[test]
+fn rendering_lighting_headlight_roundtrips() {
+    let mut prefs = StructureDesignerPreferences::default();
+    prefs.rendering_preferences.lighting = LightingPreset::Headlight;
+    let json = serde_json::to_string(&prefs).unwrap();
+    let loaded: StructureDesignerPreferences = serde_json::from_str(&json).unwrap();
+    assert_eq!(
+        loaded.rendering_preferences.lighting,
+        LightingPreset::Headlight
+    );
     assert!(loaded.rendering_preferences.anti_aliasing);
 }

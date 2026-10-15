@@ -702,8 +702,21 @@ pub struct InterfacePreferences {
     pub document_tab_placement: DocumentTabPlacement,
 }
 
-/// How the live viewport is rendered (`doc/design_viewport_antialiasing.md`
-/// D8). Twin of the domain struct.
+/// The light rig the viewport is shaded with
+/// (`doc/design_depth_perception.md` D3, D8). Twin of the domain enum.
+#[frb]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LightingPreset {
+    /// Key light upper left, fill lower right, ambient brighter from above.
+    /// The default.
+    #[default]
+    Studio,
+    /// One light from just above the eye and a flat ambient.
+    Headlight,
+}
+
+/// How the viewport is rendered (`doc/design_viewport_antialiasing.md` D8,
+/// `doc/design_depth_perception.md` D8). Twin of the domain struct.
 #[frb]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RenderingPreferences {
@@ -716,6 +729,10 @@ pub struct RenderingPreferences {
     #[frb(non_final)]
     #[serde(default = "default_true")]
     pub full_display_resolution: bool,
+    /// The light rig. Default *Studio*.
+    #[frb(non_final)]
+    #[serde(default)]
+    pub lighting: LightingPreset,
 }
 
 impl Default for RenderingPreferences {
@@ -723,6 +740,7 @@ impl Default for RenderingPreferences {
         Self {
             anti_aliasing: true,
             full_display_resolution: true,
+            lighting: LightingPreset::Studio,
         }
     }
 }
@@ -1168,11 +1186,30 @@ impl From<&domain::InterfacePreferences> for InterfacePreferences {
     }
 }
 
+impl From<&LightingPreset> for domain::LightingPreset {
+    fn from(v: &LightingPreset) -> Self {
+        match v {
+            LightingPreset::Studio => domain::LightingPreset::Studio,
+            LightingPreset::Headlight => domain::LightingPreset::Headlight,
+        }
+    }
+}
+
+impl From<&domain::LightingPreset> for LightingPreset {
+    fn from(v: &domain::LightingPreset) -> Self {
+        match v {
+            domain::LightingPreset::Studio => LightingPreset::Studio,
+            domain::LightingPreset::Headlight => LightingPreset::Headlight,
+        }
+    }
+}
+
 impl From<&RenderingPreferences> for domain::RenderingPreferences {
     fn from(p: &RenderingPreferences) -> Self {
         domain::RenderingPreferences {
             anti_aliasing: p.anti_aliasing,
             full_display_resolution: p.full_display_resolution,
+            lighting: (&p.lighting).into(),
         }
     }
 }
@@ -1182,6 +1219,7 @@ impl From<&domain::RenderingPreferences> for RenderingPreferences {
         RenderingPreferences {
             anti_aliasing: p.anti_aliasing,
             full_display_resolution: p.full_display_resolution,
+            lighting: (&p.lighting).into(),
         }
     }
 }

@@ -99,6 +99,7 @@ class PreferencesKeys {
   static const Key antiAliasingCheckbox = Key('pref_anti_aliasing_checkbox');
   static const Key fullDisplayResolutionCheckbox =
       Key('pref_full_display_resolution_checkbox');
+  static const Key lightingDropdown = Key('pref_lighting_dropdown');
 
   static const Key layoutAlgorithmDropdown =
       Key('pref_layout_algorithm_dropdown');
@@ -1260,6 +1261,46 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                                 ),
                               ),
                             ],
+                          ),
+                          const SizedBox(height: AppSpacing.medium),
+                          const Tooltip(
+                            message: 'Studio: a key light from the upper left, '
+                                'a fill light from the lower right and an '
+                                'ambient brighter from above, so every surface '
+                                'shows which way it faces.\n'
+                                'Headlight: one light from just above your eye '
+                                'and a flat ambient, the look of earlier '
+                                'versions.\n'
+                                'Thumbnails and exported images use it too.',
+                            child: Text('Lighting'),
+                          ),
+                          const SizedBox(height: 4),
+                          DropdownButtonFormField<LightingPreset>(
+                            key: PreferencesKeys.lightingDropdown,
+                            decoration: const InputDecoration(
+                              border: OutlineInputBorder(),
+                              contentPadding: AppSpacing.fieldContentPadding,
+                            ),
+                            value: _preferences.renderingPreferences.lighting,
+                            items: const [
+                              DropdownMenuItem(
+                                value: LightingPreset.studio,
+                                child: Text('Studio'),
+                              ),
+                              DropdownMenuItem(
+                                value: LightingPreset.headlight,
+                                child: Text('Headlight'),
+                              ),
+                            ],
+                            onChanged: (value) {
+                              if (value != null) {
+                                setState(() {
+                                  _preferences.renderingPreferences.lighting =
+                                      value;
+                                });
+                                _applyPreferences();
+                              }
+                            },
                           ),
                         ],
                       ),

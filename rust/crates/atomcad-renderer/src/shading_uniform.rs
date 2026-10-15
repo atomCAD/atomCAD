@@ -6,6 +6,9 @@ use glam::f64::DVec3;
 
 /// The light rig (D3). The preference is the preset, not the lights: the
 /// rig's constants are named constants here.
+///
+/// The `Default` is the renderer's neutral *Headlight* (D2); the user's
+/// default, *Studio*, lives in the preferences.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum LightingPreset {
     /// The look before the studio rig: one key light 20° above the view
@@ -13,6 +16,10 @@ pub enum LightingPreset {
     /// ambient.
     #[default]
     Headlight,
+    /// A camera-relative studio rig: a key light from the upper left, a
+    /// diffuse-only fill from the lower right and a hemisphere ambient,
+    /// brighter from above.
+    Studio,
 }
 
 /// The *Headlight* preset's key intensity.
@@ -21,6 +28,25 @@ pub const HEADLIGHT_KEY_INTENSITY: f32 = 2.0;
 /// The *Headlight* preset's ambient, the same from every side
 /// (sky = ground).
 pub const HEADLIGHT_AMBIENT: f32 = 0.2;
+
+/// Where the *Studio* key light sits relative to the view direction, in
+/// degrees: above it, and to its left (D3).
+pub const STUDIO_KEY_ELEVATION_DEG: f64 = 35.0;
+pub const STUDIO_KEY_AZIMUTH_DEG: f64 = 30.0;
+/// The *Studio* key light's intensity.
+pub const STUDIO_KEY_INTENSITY: f32 = 2.2;
+
+/// Where the *Studio* fill light sits, in the same convention as the key:
+/// below the view direction and to its right, so both angles are negative.
+pub const STUDIO_FILL_ELEVATION_DEG: f64 = -20.0;
+pub const STUDIO_FILL_AZIMUTH_DEG: f64 = -40.0;
+/// The *Studio* fill light's intensity. It is diffuse only.
+pub const STUDIO_FILL_INTENSITY: f32 = 0.6;
+
+/// The *Studio* hemisphere ambient: from straight above the view (the sky)
+/// and from straight below it (the ground).
+pub const STUDIO_SKY: f32 = 0.26;
+pub const STUDIO_GROUND: f32 = 0.12;
 
 /// How the content is shaded: the renderer-side image of the *Lighting*
 /// preferences (D8).
@@ -103,6 +129,7 @@ impl ShadingUniform {
         pass: ShadingPass,
     ) -> Self {
         let head_light_dir = camera.calc_headlight_direction().as_vec3().to_array();
+        let up = camera_up(camera);
         let (key_light_dir, key_intensity, fill_light_dir, fill_intensity, sky, ground) =
             match settings.preset {
                 // The fill is off; its direction only has to be a unit
@@ -115,6 +142,22 @@ impl ShadingUniform {
                     HEADLIGHT_AMBIENT,
                     HEADLIGHT_AMBIENT,
                 ),
+                LightingPreset::Studio => (
+                    light_travel_direction(
+                        camera,
+                        STUDIO_KEY_ELEVATION_DEG,
+                        STUDIO_KEY_AZIMUTH_DEG,
+                    ),
+                    STUDIO_KEY_INTENSITY,
+                    light_travel_direction(
+                        camera,
+                        STUDIO_FILL_ELEVATION_DEG,
+                        STUDIO_FILL_AZIMUTH_DEG,
+                    ),
+                    STUDIO_FILL_INTENSITY,
+                    STUDIO_SKY,
+                    STUDIO_GROUND,
+                ),
             };
         let depth_cue_strength = match (pass, content_bounds) {
             (ShadingPass::Content, Some(_)) => settings.depth_cue_strength,
@@ -125,7 +168,7 @@ impl ShadingUniform {
             key_intensity,
             fill_light_dir,
             fill_intensity,
-            hemisphere_up: camera_up(camera).as_vec3().to_array(),
+            hemisphere_up: up.as_vec3().to_array(),
             sky,
             background: background_rgb.map(|c| c as f32 / 255.0),
             ground,
@@ -135,6 +178,23 @@ impl ShadingUniform {
             ao_strength: settings.ao_strength,
         }
     }
+}
+
+/// The direction a light travels when it sits `elevation_deg` above the view
+/// direction and `azimuth_deg` to its left (negative: below, to the right),
+/// as seen from the eye. Built from the camera basis, so the light turns
+/// with the camera (D3). The travel direction is what
+/// `CameraUniform::head_light_dir` holds too.
+pub fn light_travel_direction(camera: &Camera, elevation_deg: f64, azimuth_deg: f64) -> [f32; 3] {
+    let forward = (camera.target - camera.eye).normalize();
+    let right = forward.cross(camera.up).normalize();
+    let up = right.cross(forward);
+    let (elevation, azimuth) = (elevation_deg.to_radians(), azimuth_deg.to_radians());
+    // Towards the light: back along the view, up by the elevation, left by
+    // the azimuth. The light travels the other way.
+    let towards_light =
+        elevation.cos() * (-azimuth.cos() * forward - azimuth.sin() * right) + elevation.sin() * up;
+    (-towards_light).normalize().as_vec3().to_array()
 }
 
 /// The camera's up axis as the view matrix has it: the look-at basis's

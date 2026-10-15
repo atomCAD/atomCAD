@@ -917,6 +917,22 @@ impl Renderer {
         self.quality
     }
 
+    /// Sets how the content is shaded, the *Lighting* preferences
+    /// (`doc/design_depth_perception.md` D8). Pushed in from the api on every
+    /// refresh, so it bumps the live generation only when the value changes.
+    /// Applies to every view: thumbnails and exports look like the screen.
+    pub fn set_shading(&mut self, settings: ShadingSettings) {
+        if settings != self.shading {
+            self.shading = settings;
+            self.bump_live_generation();
+        }
+    }
+
+    /// How the content is shaded.
+    pub fn shading(&self) -> ShadingSettings {
+        self.shading
+    }
+
     /// Whether the adapter can multisample the live target (D2). Without it
     /// the live target has one sample whatever the quality settings say.
     pub fn msaa_supported(&self) -> bool {

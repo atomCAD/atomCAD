@@ -1328,6 +1328,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   LayoutPreferences dco_decode_layout_preferences(dynamic raw);
 
   @protected
+  LightingPreset dco_decode_lighting_preset(dynamic raw);
+
+  @protected
   List<String> dco_decode_list_String(dynamic raw);
 
   @protected
@@ -3658,6 +3661,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   LayoutPreferences sse_decode_layout_preferences(SseDeserializer deserializer);
+
+  @protected
+  LightingPreset sse_decode_lighting_preset(SseDeserializer deserializer);
 
   @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
@@ -6219,6 +6225,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_layout_preferences(
       LayoutPreferences self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_lighting_preset(
+      LightingPreset self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
