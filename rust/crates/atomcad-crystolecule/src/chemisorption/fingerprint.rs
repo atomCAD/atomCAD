@@ -77,6 +77,7 @@ pub fn input_fingerprint(
         reach,
         clash_filter,
         include_mirrored,
+        passivate_sites,
         transfers,
         max_formed_bonds,
         formed_bonds,
@@ -95,6 +96,7 @@ pub fn input_fingerprint(
     reach.to_bits().hash(&mut h);
     clash_filter.hash(&mut h);
     include_mirrored.hash(&mut h);
+    passivate_sites.hash(&mut h);
     transfers.hash(&mut h);
     max_formed_bonds.hash(&mut h);
     formed_bonds.hash(&mut h);

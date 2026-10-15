@@ -161,7 +161,7 @@ impl ChemisorbWork {
         }
         let planned = plan(&self.adsorbate, &self.substrate, &self.config).map_err(fail)?;
         if let Some(c) = control {
-            c.set_total(planned.to_relax.len() as u64 + 1);
+            c.set_total(planned.stats.to_relax as u64 + 1);
             c.set_phase("Relaxing");
         }
         let report = evaluate(&planned, &self.config, control).map_err(fail)?;

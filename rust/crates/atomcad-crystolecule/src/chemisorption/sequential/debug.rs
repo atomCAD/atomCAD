@@ -31,7 +31,9 @@
 
 use super::config::SequentialSearch;
 use super::evaluate::{Candidate, RelaxedRow, SearchReport};
-use super::local::{hypothesis as hypothesis_at, replay, replay_start};
+use super::local::{
+    hypothesis as hypothesis_at, recorded_passivated, replay, replay_start, replay_state,
+};
 use super::plan::{GEOMETRIC_LEGS, Hypothesis, SequentialPlan};
 use super::setup::{Leg, Mirror, Setup};
 use super::tree::{NearMiss, RowKind, SearchTree};
@@ -385,8 +387,17 @@ pub fn needs_relaxation(
     match form {
         DebugForm::Posed => false,
         DebugForm::Seated => tree.row(target).legs as usize > GEOMETRIC_LEGS,
-        DebugForm::Relaxed => report.is_none_or(|r| kept_candidate(r, target).is_none()),
+        DebugForm::Relaxed => {
+            report.is_none_or(|r| kept_candidate(r, target).is_none() || bare_step(r, item, target))
+        }
     }
+}
+
+/// Whether `item` is a step from a row whose recorded relaxation is
+/// passivated (`passivate_sites`): the step reads the bare state the next
+/// level grew from, which only a replay rebuilds.
+fn bare_step(report: &SearchReport, item: DebugItem, target: u32) -> bool {
+    item.is_step() && recorded_passivated(report, target)
 }
 
 /// What a view marks, combined atom ids, each list sorted. Colours go from
@@ -501,11 +512,16 @@ pub fn debug_view(
         }
         DebugForm::Relaxed => {
             let report = report.expect("a relaxed form exists only after a run");
-            match kept_candidate(report, target) {
-                Some(c) => (c.structure.clone(), Some(c.strain)),
-                None => {
-                    let r = replay(plan, report, config, target)?;
-                    (r.structure, Some(r.strain))
+            if bare_step(report, item, target) {
+                let r = replay_state(plan, report, config, target)?;
+                (r.structure, Some(r.strain))
+            } else {
+                match kept_candidate(report, target) {
+                    Some(c) => (c.structure.clone(), Some(c.strain)),
+                    None => {
+                        let r = replay(plan, report, config, target)?;
+                        (r.structure, Some(r.strain))
+                    }
                 }
             }
         }

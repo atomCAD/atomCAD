@@ -867,6 +867,9 @@ class APIChemisorbData {
   /// Relax mirror-image three-leg assignments instead of pruning them.
   final bool includeMirrored;
 
+  /// Cap the sites' open valences with H before relaxing a candidate.
+  final bool passivateSites;
+
   /// At most this many legs per hypothesis: -1 = no cap.
   final int maxFormedBonds;
 
@@ -907,6 +910,7 @@ class APIChemisorbData {
     required this.reach,
     required this.clashFilter,
     required this.includeMirrored,
+    required this.passivateSites,
     required this.maxFormedBonds,
     this.formedBonds,
     this.bondInventory,
@@ -928,6 +932,7 @@ class APIChemisorbData {
       reach.hashCode ^
       clashFilter.hashCode ^
       includeMirrored.hashCode ^
+      passivateSites.hashCode ^
       maxFormedBonds.hashCode ^
       formedBonds.hashCode ^
       bondInventory.hashCode ^
@@ -951,6 +956,7 @@ class APIChemisorbData {
           reach == other.reach &&
           clashFilter == other.clashFilter &&
           includeMirrored == other.includeMirrored &&
+          passivateSites == other.passivateSites &&
           maxFormedBonds == other.maxFormedBonds &&
           formedBonds == other.formedBonds &&
           bondInventory == other.bondInventory &&
@@ -1059,6 +1065,9 @@ class APIChemisorbDebugRow {
   final double? strain;
   final bool converged;
   final bool budgetCut;
+
+  /// The recorded relaxation was passivated (`passivate_sites`).
+  final bool passivated;
   final bool canSeat;
   final bool canRelax;
   final APIChemisorbDebugForm defaultForm;
@@ -1093,6 +1102,7 @@ class APIChemisorbDebugRow {
     this.strain,
     required this.converged,
     required this.budgetCut,
+    required this.passivated,
     required this.canSeat,
     required this.canRelax,
     required this.defaultForm,
@@ -1129,6 +1139,7 @@ class APIChemisorbDebugRow {
       strain.hashCode ^
       converged.hashCode ^
       budgetCut.hashCode ^
+      passivated.hashCode ^
       canSeat.hashCode ^
       canRelax.hashCode ^
       defaultForm.hashCode;
@@ -1167,6 +1178,7 @@ class APIChemisorbDebugRow {
           strain == other.strain &&
           converged == other.converged &&
           budgetCut == other.budgetCut &&
+          passivated == other.passivated &&
           canSeat == other.canSeat &&
           canRelax == other.canRelax &&
           defaultForm == other.defaultForm;
@@ -1365,6 +1377,9 @@ class APIChemisorbRow {
   /// A mirrored three-leg candidate's start: its third foot's distance from
   /// its seating point (Å).
   final double? mirroredStart;
+
+  /// The H `passivate_sites` placed before relaxing.
+  final BigInt passivants;
   final double worstBondRatio;
   final double stretch;
   final double bend;
@@ -1384,6 +1399,7 @@ class APIChemisorbRow {
     required this.seatingClash,
     required this.mirrored,
     this.mirroredStart,
+    required this.passivants,
     required this.worstBondRatio,
     required this.stretch,
     required this.bend,
@@ -1405,6 +1421,7 @@ class APIChemisorbRow {
       seatingClash.hashCode ^
       mirrored.hashCode ^
       mirroredStart.hashCode ^
+      passivants.hashCode ^
       worstBondRatio.hashCode ^
       stretch.hashCode ^
       bend.hashCode ^
@@ -1428,6 +1445,7 @@ class APIChemisorbRow {
           seatingClash == other.seatingClash &&
           mirrored == other.mirrored &&
           mirroredStart == other.mirroredStart &&
+          passivants == other.passivants &&
           worstBondRatio == other.worstBondRatio &&
           stretch == other.stretch &&
           bend == other.bend &&

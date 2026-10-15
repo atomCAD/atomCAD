@@ -1071,6 +1071,8 @@ pub struct APIChemisorbData {
     pub clash_filter: bool,
     /// Relax mirror-image three-leg assignments instead of pruning them.
     pub include_mirrored: bool,
+    /// Cap the sites' open valences with H before relaxing a candidate.
+    pub passivate_sites: bool,
     /// At most this many legs per hypothesis: -1 = no cap.
     pub max_formed_bonds: i32,
     /// Only bindings with exactly this many legs; `None` = any.
@@ -1218,6 +1220,8 @@ pub struct APIChemisorbRow {
     /// A mirrored three-leg candidate's start: its third foot's distance from
     /// its seating point (Å).
     pub mirrored_start: Option<f64>,
+    /// The H `passivate_sites` placed before relaxing.
+    pub passivants: usize,
     pub worst_bond_ratio: f64,
     pub stretch: f64,
     pub bend: f64,
@@ -1349,6 +1353,8 @@ pub struct APIChemisorbDebugRow {
     pub strain: Option<f64>,
     pub converged: bool,
     pub budget_cut: bool,
+    /// The recorded relaxation was passivated (`passivate_sites`).
+    pub passivated: bool,
     pub can_seat: bool,
     pub can_relax: bool,
     pub default_form: APIChemisorbDebugForm,
@@ -1414,6 +1420,7 @@ impl From<&ChemisorbDebugRowView> for APIChemisorbDebugRow {
             strain: v.strain,
             converged: v.converged,
             budget_cut: v.budget_cut,
+            passivated: v.passivated,
             can_seat: v.can_seat,
             can_relax: v.can_relax,
             default_form: v.default_form.into(),
@@ -1431,6 +1438,7 @@ impl From<&ChemisorbData> for APIChemisorbData {
             reach: d.reach,
             clash_filter: d.clash_filter,
             include_mirrored: d.include_mirrored,
+            passivate_sites: d.passivate_sites,
             max_formed_bonds: d.max_formed_bonds,
             formed_bonds: d.formed_bonds,
             bond_inventory: d.bond_inventory.clone(),
@@ -1455,6 +1463,7 @@ impl From<&APIChemisorbData> for ChemisorbData {
             reach: d.reach,
             clash_filter: d.clash_filter,
             include_mirrored: d.include_mirrored,
+            passivate_sites: d.passivate_sites,
             max_formed_bonds: d.max_formed_bonds,
             formed_bonds: d.formed_bonds,
             bond_inventory: d.bond_inventory.clone(),
@@ -1545,6 +1554,7 @@ impl From<&ChemisorbEvalCache> for APIChemisorbReport {
                     seating_clash: r.seating_clash,
                     mirrored: r.mirrored,
                     mirrored_start: r.mirrored_start,
+                    passivants: r.passivants,
                     worst_bond_ratio: r.worst_bond_ratio,
                     stretch: r.stretch,
                     bend: r.bend,

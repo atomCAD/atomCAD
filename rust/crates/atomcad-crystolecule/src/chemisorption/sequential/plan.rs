@@ -74,7 +74,7 @@ impl Hypothesis {
 /// `paths == pruned_valence + pruned_no_acceptor + pruned_filter + duplicates
 ///  + anchors + sphere_pairs + torus_triples`
 ///
-/// and `candidates + parents == to_relax + pruned_clash`.
+/// and `candidates + parents + twice == to_relax + pruned_clash`.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct PlanStats {
     /// Adsorbate atoms that can bond: a free valence, or an atom to donate.
@@ -110,8 +110,13 @@ pub struct PlanStats {
     /// those pruned for it (only with `clash_filter` on).
     pub seating_clashes: usize,
     pub pruned_clash: usize,
-    /// The relaxations `evaluate` runs in the geometric phase. The local
-    /// phase's are known only after relaxing.
+    /// With `passivate_sites`: the queued (not clash-pruned) hypotheses that
+    /// are both a candidate and a parent, each relaxed twice (passivated as a
+    /// candidate, bare as a parent). 0 without the setting.
+    pub twice: usize,
+    /// The relaxations `evaluate` runs in the geometric phase: one per queued
+    /// hypothesis, plus `twice`. The reference relaxations are not counted,
+    /// nor the local phase's, which are known only after relaxing.
     pub to_relax: usize,
     /// Near misses recorded over all rows.
     pub near_misses: usize,
@@ -140,6 +145,8 @@ pub struct SequentialPlan {
     pub stats: PlanStats,
     /// The most legs the settings allow a hypothesis, local phase included.
     pub max_legs: usize,
+    /// The search's `passivate_sites`: candidates are relaxed passivated.
+    pub passivate_sites: bool,
     /// The search's `include_mirrored`: mirrored hypotheses were kept.
     pub include_mirrored: bool,
 }
@@ -183,6 +190,8 @@ struct Planner<'a> {
     tree: SearchTree,
     hypotheses: Vec<Hypothesis>,
     to_relax: Vec<usize>,
+    /// Relaxations queued so far: `to_relax` plus the twice-relaxed.
+    relaxations: usize,
     stats: PlanStats,
 }
 
@@ -411,12 +420,19 @@ impl Planner<'_> {
             if seating.clashes() {
                 self.stats.seating_clashes += 1;
             }
+            // A hypothesis is queued only if all of its relaxations fit.
+            let twice = self.config.passivate_sites && candidate && parent;
+            let cost = if twice { 2 } else { 1 };
             if seating.clashes() && self.config.clash_filter {
                 self.stats.pruned_clash += 1;
-            } else if self.to_relax.len() >= self.config.budget {
+            } else if self.relaxations + cost > self.config.budget {
                 self.stats.truncated = true;
             } else {
                 self.to_relax.push(index);
+                self.relaxations += cost;
+                if twice {
+                    self.stats.twice += 1;
+                }
             }
             hypothesis.seating = Some(seating);
         }
@@ -537,6 +553,7 @@ pub fn plan(
         tree: SearchTree::default(),
         hypotheses: Vec::new(),
         to_relax: Vec::new(),
+        relaxations: 0,
         stats: PlanStats::default(),
     };
     planner.run();
@@ -544,13 +561,14 @@ pub fn plan(
         mut tree,
         hypotheses,
         to_relax,
+        relaxations,
         mut stats,
         ..
     } = planner;
     tree.finish();
     stats.feet = feet;
     stats.sites = setup.sites.len();
-    stats.to_relax = to_relax.len();
+    stats.to_relax = relaxations;
     stats.local_phase = local_phase;
     stats.seconds = start.elapsed().as_secs_f64();
     Ok(SequentialPlan {
@@ -563,5 +581,6 @@ pub fn plan(
         stats,
         max_legs,
         include_mirrored: config.include_mirrored,
+        passivate_sites: config.passivate_sites,
     })
 }

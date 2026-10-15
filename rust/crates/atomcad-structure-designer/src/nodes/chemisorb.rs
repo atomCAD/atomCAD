@@ -205,6 +205,11 @@ pub struct ChemisorbData {
     /// Written only when on, so files that never used it are unchanged.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub include_mirrored: bool,
+    /// Before a candidate is relaxed, cap every open valence its sites have
+    /// left with H (`cs_passivant`); its strain is taken against a substrate
+    /// carrying the same H. Written only when on.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub passivate_sites: bool,
     /// At most this many legs (bonds formed) per hypothesis: `-1` = no cap.
     /// The panel shows it as a checkbox plus a value; `-1` is the unticked
     /// state.
@@ -262,6 +267,7 @@ impl Default for ChemisorbData {
             reach: default_reach(),
             clash_filter: default_clash_filter(),
             include_mirrored: false,
+            passivate_sites: false,
             max_formed_bonds: no_cap(),
             formed_bonds: None,
             bond_inventory: None,
@@ -435,6 +441,9 @@ pub struct ChemisorbRowView {
     /// from its seating point (Å). `None` otherwise, a local-phase candidate
     /// included.
     pub mirrored_start: Option<f64>,
+    /// The H `passivate_sites` placed on its sites before relaxing; 0
+    /// without the setting.
+    pub passivants: usize,
     pub worst_bond_ratio: f64,
     pub stretch: f64,
     pub bend: f64,
@@ -581,6 +590,10 @@ pub struct ChemisorbDebugRowView {
     pub converged: bool,
     /// The row was to be relaxed and the budget ran out first.
     pub budget_cut: bool,
+    /// The recorded relaxation was passivated (`passivate_sites`): a
+    /// candidate's. A local-phase parent's next level grew from its bare
+    /// relaxation.
+    pub passivated: bool,
     /// The forms it can be shown in, and the one it opens on.
     pub can_seat: bool,
     pub can_relax: bool,
@@ -694,6 +707,7 @@ fn debug_row_view(
         strain: None,
         converged: false,
         budget_cut: false,
+        passivated: false,
         can_seat: forms.seated,
         can_relax: forms.relaxed,
         default_form: forms.default,
@@ -754,6 +768,7 @@ fn debug_row_view(
         if let Some(x) = relaxation(rep, item.row).or_else(|| relaxation(rep, canonical)) {
             v.strain = Some(x.strain);
             v.converged = x.converged;
+            v.passivated = x.passivated;
         }
         v.budget_cut = (v.candidate || v.local_parent)
             && !v.pruned_clash
@@ -812,6 +827,7 @@ impl ChemisorbData {
             reach: self.reach,
             clash_filter: self.clash_filter,
             include_mirrored: self.include_mirrored,
+            passivate_sites: self.passivate_sites,
             transfers,
             max_formed_bonds: (self.max_formed_bonds >= 1)
                 .then_some(self.max_formed_bonds as usize),
@@ -1015,6 +1031,7 @@ fn row_view(rank: usize, copies: usize, c: &Candidate, h: &Hypothesis) -> Chemis
             .as_ref()
             .filter(|_| h.mirror == Some(Mirror::Mirrored))
             .map(|s| s.residual),
+        passivants: c.passivants,
         worst_bond_ratio: c.worst_bond_ratio,
         stretch: c.terms.stretch,
         bend: c.terms.bend,
@@ -1059,6 +1076,7 @@ fn candidate_record(row: &ChemisorbRowView, structure: AtomicStructure) -> Netwo
         ),
         ("copies".to_string(), int(row.copies)),
         ("mirrored".to_string(), NetworkResult::Bool(row.mirrored)),
+        ("passivants".to_string(), int(row.passivants)),
     ])
 }
 
@@ -1561,6 +1579,9 @@ impl NodeData for ChemisorbData {
         if self.include_mirrored {
             props.push(("include_mirrored".to_string(), TextValue::Bool(true)));
         }
+        if self.passivate_sites {
+            props.push(("passivate_sites".to_string(), TextValue::Bool(true)));
+        }
         props
     }
 
@@ -1619,6 +1640,9 @@ impl NodeData for ChemisorbData {
         }
         if let Some(v) = boolean("include_mirrored")? {
             self.include_mirrored = v;
+        }
+        if let Some(v) = boolean("passivate_sites")? {
+            self.passivate_sites = v;
         }
         if let Some(v) = int("max_formed_bonds")? {
             self.max_formed_bonds = v;
@@ -1708,6 +1732,15 @@ pub fn get_node_type() -> NodeType {
                       reading the ranking. **top_n** and **energy_window** (kcal/mol above \
                       the best) choose which relaxed candidates are kept. Every setting \
                       above needs a new Run. Changed atoms carry the `cs_changed` tag.\n\
+                      \n\
+                      **passivate_sites** (off by default) relaxes each candidate on a \
+                      passivated surface: before relaxing, every open valence its sites have \
+                      left is capped with H (an unused site in full, a used site or an H \
+                      acceptor what remains), tagged `cs_passivant`, and its strain is taken \
+                      against a substrate carrying the same H, so it is still the cost of \
+                      forming its bonds (`passivants` on the candidate counts them). \
+                      Local-phase states stay bare, so a candidate that is also a parent is \
+                      relaxed twice.\n\
                       \n\
                       **Listing** (no new Run needed). **unique** (default `rigid_mirror`) \
                       lists one candidate per distinct binding: a kept candidate equal to a \

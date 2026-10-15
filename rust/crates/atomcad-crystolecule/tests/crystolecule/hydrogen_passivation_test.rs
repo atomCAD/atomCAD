@@ -1,7 +1,7 @@
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::hydrogen_passivation::{
-    AddHydrogensOptions, RemoveHydrogensOptions, add_hydrogens, open_valence_slots,
-    remove_hydrogens,
+    AddHydrogensOptions, RemoveHydrogensOptions, add_hydrogens, add_terminators_counted,
+    open_valence_slots, remove_hydrogens,
 };
 use glam::f64::DVec3;
 
@@ -1775,4 +1775,71 @@ fn a_terminator_inside_an_unrelated_molecule_is_skipped() {
     let (out, result) = passivate_hosts(&s, &hosts, factor);
     assert_eq!((result.atoms_added, result.skipped), (1, 0));
     assert_eq!(count_h_bonded_to(&out, host), 1);
+}
+
+// ============================================================================
+// add_terminators_counted (design_chemisorb_mirrors_and_passivation.md §4.4)
+// ============================================================================
+
+/// A Si with one bond and a C with two (and a third atom, not a host):
+/// three and two open slots.
+fn two_hosts() -> (AtomicStructure, u32, u32) {
+    let (mut s, si) = make_structure(14, &[(6, DVec3::new(0.0, 0.0, -1.9))]);
+    let c = 2;
+    let other = s.add_atom(6, DVec3::new(1.5, 0.0, -2.5));
+    s.add_bond(c, other, 1);
+    (s, si, c)
+}
+
+fn h_positions(s: &AtomicStructure, from: usize) -> Vec<DVec3> {
+    s.atoms_values()
+        .filter(|a| a.id as usize > from)
+        .map(|a| a.position)
+        .collect()
+}
+
+/// With each host's full slot count it places exactly what the general path
+/// places, at the same positions, flagged and bonded; and it ignores the
+/// host's own passivation flag, which the general path's default honours.
+#[test]
+fn counted_terminators_with_every_slot_match_the_general_path() {
+    let (mut general, si, c) = two_hosts();
+    let n = general.get_num_of_atoms();
+    let slots = [
+        (si, open_valence_slots(&general, si, 1)),
+        (c, open_valence_slots(&general, c, 1)),
+    ];
+    assert_eq!(slots, [(si, 3), (c, 2)]);
+    let mut counted = general.clone();
+    add_hydrogens_filtered(&mut general, &default_options(), &|id| id == si || id == c);
+    let added = add_terminators_counted(&mut counted, &slots, 1);
+    assert_eq!(added.len(), 5);
+    assert_eq!(h_positions(&general, n), h_positions(&counted, n));
+    for &id in &added {
+        assert!(counted.get_atom(id).unwrap().is_hydrogen_passivation());
+    }
+    assert_eq!(count_h_bonded_to(&counted, si), 3);
+
+    let (mut flagged, si, _) = two_hosts();
+    flagged.set_atom_hydrogen_passivation(si, true);
+    let mut general = flagged.clone();
+    add_hydrogens(&mut general, &default_options());
+    assert_eq!(count_h_bonded_to(&general, si), 0, "the default skips it");
+    add_terminators_counted(&mut flagged, &[(si, 3)], 1);
+    assert_eq!(count_h_bonded_to(&flagged, si), 3, "counted does not");
+}
+
+/// A count below the slots takes the first slots, in the general path's
+/// order; a count above them is capped; zero places nothing.
+#[test]
+fn counted_terminators_take_the_first_slots() {
+    let (mut all, si, c) = two_hosts();
+    let n = all.get_num_of_atoms();
+    add_terminators_counted(&mut all, &[(si, 3)], 1);
+    let (mut two, _, _) = two_hosts();
+    let added = add_terminators_counted(&mut two, &[(si, 2), (c, 0)], 1);
+    assert_eq!(added.len(), 2);
+    assert_eq!(h_positions(&two, n), h_positions(&all, n)[..2]);
+    let (mut over, _, _) = two_hosts();
+    assert_eq!(add_terminators_counted(&mut over, &[(si, 9)], 1).len(), 3);
 }

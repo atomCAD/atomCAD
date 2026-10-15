@@ -827,3 +827,260 @@ fn the_planted_hexapod_binding_is_found_three_levels_deep() {
     let x = replay(p, r, &run.config, c.row).unwrap();
     assert!((x.strain - c.strain).abs() < 1e-9);
 }
+
+// ============================================================================
+// passivate_sites (design_chemisorb_mirrors_and_passivation.md §4.2–4.3)
+// ============================================================================
+
+/// Five feet, every leg count a candidate, the setting off and on: the three-
+/// and four-leg candidates are parents too, so the geometric phase and level
+/// 4 relax them twice with the setting on; level 5 is the deepest. The
+/// iterations are capped as in `numbered_five`: the tests compare runs.
+fn five_any(passivate_sites: bool) -> &'static Run {
+    static OFF: OnceLock<Run> = OnceLock::new();
+    static ON: OnceLock<Run> = OnceLock::new();
+    let cell = if passivate_sites { &ON } else { &OFF };
+    cell.get_or_init(|| {
+        let (ads, sub, planted) = planted(5, &[]);
+        Run {
+            planted,
+            ..run(
+                &ads,
+                &sub,
+                SequentialSearch {
+                    passivate_sites,
+                    max_iterations: 200,
+                    ..config(None)
+                },
+            )
+        }
+    })
+}
+
+/// A candidate that is also a parent is relaxed twice, passivated and bare,
+/// and the plan and each level count both; with every candidate at the
+/// deepest level nothing is relaxed twice.
+#[test]
+fn a_candidate_that_is_a_parent_is_relaxed_twice() {
+    let on = five_any(true);
+    let (p, r) = (&on.plan, &on.report);
+    assert!(p.stats.twice > 0);
+    assert_eq!(p.stats.to_relax, p.to_relax.len() + p.stats.twice);
+    assert_eq!(
+        r.stats.local.iter().map(|l| l.legs).collect::<Vec<_>>(),
+        [4, 5]
+    );
+    assert!(r.stats.local[0].twice > 0, "level 4 has a second batch");
+    assert_eq!(r.stats.local[1].twice, 0, "level 5 is the deepest");
+    // Candidates relax passivated, parent-only rows bare.
+    for x in &r.relaxed {
+        let h = r.hypothesis(p, x.hypothesis);
+        let canonical = r.tree.row(x.row).duplicate_of.is_none();
+        if x.row as usize >= p.tree.len() && r.tree.row(x.row).legs == 5 {
+            assert!(x.passivated, "the deepest level relaxes passivated");
+        } else if canonical {
+            assert_eq!(x.passivated, h.candidate, "row {}", x.row);
+        } else {
+            assert!(!x.passivated, "a duplicate above the deepest is bare");
+        }
+    }
+
+    // `formed_bonds` at the deepest leg count: no candidate is a parent.
+    let (ads, sub, _) = planted(4, &[]);
+    let deepest = run(
+        &ads,
+        &sub,
+        SequentialSearch {
+            passivate_sites: true,
+            ..config(Some(4))
+        },
+    );
+    assert_eq!(deepest.plan.stats.twice, 0);
+    assert!(deepest.report.stats.local.iter().all(|l| l.twice == 0));
+    assert!(!deepest.report.candidates.is_empty());
+    assert!(deepest.report.candidates.iter().all(|c| c.passivants == 0));
+}
+
+/// States are bare: the setting changes no row of the tree the next level
+/// grows from positions, and a passivated row's bare state replays to the
+/// strain the run without the setting recorded for it.
+#[test]
+fn states_stay_bare_with_the_setting_on() {
+    let (off, on) = (five_any(false), five_any(true));
+    let shape = |r: &SearchReport| -> Vec<_> {
+        r.tree
+            .rows()
+            .iter()
+            .map(|x| (x.kind, x.parent, x.legs))
+            .collect()
+    };
+    assert_eq!(shape(&off.report), shape(&on.report));
+    let recorded = |r: &SearchReport| -> BTreeMap<u32, (f64, bool)> {
+        r.relaxed
+            .iter()
+            .map(|x| (x.row, (x.strain, x.passivated)))
+            .collect()
+    };
+    let (bare, passivated) = (recorded(&off.report), recorded(&on.report));
+    let mut replayed = [0; 2];
+    for (&row, &(strain, p)) in &passivated {
+        let legs = on.report.tree.row(row).legs as usize;
+        if !(3..5).contains(&legs) {
+            continue;
+        }
+        let want = bare[&row].0;
+        if !p {
+            assert_eq!(strain.to_bits(), want.to_bits(), "row {row}");
+        } else if replayed[legs - 3] < 2 {
+            replayed[legs - 3] += 1;
+            let x = replay_state(&on.plan, &on.report, &on.config, row).unwrap();
+            assert!((x.strain - want).abs() < 1e-9, "row {row}");
+            assert_eq!(x.passivants, 0);
+        }
+    }
+    assert_eq!(replayed, [2, 2], "passivated rows at levels 3 and 4");
+}
+
+/// Above the deepest level the dedupe reads the bare strain, at the deepest
+/// the passivated one; replaying either kind of row reproduces its strain.
+#[test]
+fn the_deepest_level_dedupes_on_the_passivated_strain() {
+    let on = five_any(true);
+    let (p, r, config) = (&on.plan, &on.report, &on.config);
+    let tree = &r.tree;
+    let strain: BTreeMap<u32, f64> = r.relaxed.iter().map(|x| (x.row, x.strain)).collect();
+    let mut checked = [0; 2];
+    for (i, row) in tree.rows().iter().enumerate() {
+        let Some(c) = row.duplicate_of else { continue };
+        let legs = row.legs as usize;
+        if legs <= GEOMETRIC_LEGS {
+            continue;
+        }
+        let mine = strain[&(i as u32)];
+        let kept = if legs == 5 {
+            strain[&c]
+        } else {
+            if checked[0] >= 2 {
+                continue;
+            }
+            // The canonical row records its passivated relaxation; the dedupe
+            // compared its bare one.
+            replay_state(p, r, config, c).unwrap().strain
+        };
+        assert!(
+            kept < mine || (kept == mine && c < i as u32),
+            "row {i}: kept {kept} over {mine}"
+        );
+        checked[legs - 4] += 1;
+    }
+    assert!(checked[0] > 0 && checked[1] > 0, "{checked:?}");
+
+    // Replay reproduces the recorded strain, passivated or not.
+    let mut seen = BTreeSet::new();
+    for x in &r.relaxed {
+        let key = (tree.row(x.row).legs, x.passivated);
+        if !seen.insert(key) {
+            continue;
+        }
+        let y = replay(p, r, config, x.row).unwrap();
+        assert!((y.strain - x.strain).abs() < 1e-9, "row {}", x.row);
+        if !x.passivated {
+            assert_eq!(y.passivants, 0);
+        }
+    }
+    assert!(seen.len() >= 4, "{seen:?}");
+    // The planted binding is found with the setting on too.
+    assert!(
+        r.candidates
+            .iter()
+            .any(|c| input_change(&p.setup, &c.key()).0 == on.planted)
+    );
+}
+
+/// Five numbered feet over their planted sites, every leg count a candidate,
+/// the setting on: one binding order, so few relaxations, but a candidate
+/// parent at three legs and at four. An unused site lies under its foot, so
+/// its H starts inside the foot and the relaxation is slow; the iterations
+/// are capped, since these tests count relaxations and compare runs.
+fn numbered_five() -> (AtomicStructure, AtomicStructure, SequentialSearch) {
+    let (mut ads, sub, _) = planted(5, &[]);
+    let (_, feet) = stand_in(5);
+    for (n, &f) in feet.iter().enumerate() {
+        ads.add_atom_tag(f, &format!("foot{}", n + 1)).unwrap();
+    }
+    let config = SequentialSearch {
+        adsorbate_tag: Some("foot".into()),
+        passivate_sites: true,
+        max_iterations: 200,
+        ..config(None)
+    };
+    (ads, sub, config)
+}
+
+/// The budget counts relaxations, a hypothesis that needs two gets both or
+/// none, and the search is truncated exactly when the budget is below what
+/// it needs: every budget from 1 to the untruncated count.
+#[test]
+fn the_budget_counts_relaxations_and_never_half_relaxes() {
+    let (ads, sub, base) = numbered_five();
+    let full = run(&ads, &sub, base.clone());
+    let total = full.report.stats.relaxed;
+    assert!(!full.report.stats.truncated);
+    assert!(full.plan.stats.twice > 0 && full.report.stats.local[0].twice > 0);
+    let need = full.plan.stats.to_relax;
+    for budget in 1..=total {
+        let config = SequentialSearch {
+            budget,
+            ..base.clone()
+        };
+        let p = plan(&ads, &sub, &config).unwrap();
+        assert_eq!(p.stats.truncated, budget < need, "budget {budget}");
+        assert!(p.stats.to_relax <= budget);
+        // A prefix, whole hypotheses only.
+        assert_eq!(p.to_relax[..], full.plan.to_relax[..p.to_relax.len()]);
+        let r = evaluate(&p, &config, None).unwrap();
+        audit(&p, &r, &config);
+        let s = &r.stats;
+        assert!(s.relaxed <= budget, "budget {budget}: {}", s.relaxed);
+        assert_eq!(s.truncated, budget < total, "budget {budget}");
+        // Never half relaxed: every relaxed candidate row records its
+        // passivated relaxation, every relaxed parent grew its level.
+        for c in &r.candidates {
+            let x = r.relaxed.iter().find(|x| x.row == c.row).unwrap();
+            assert!(x.passivated, "budget {budget}: row {} half relaxed", c.row);
+        }
+    }
+}
+
+#[test]
+fn one_thread_and_many_give_the_same_passivated_local_phase() {
+    let (ads, sub, config) = numbered_five();
+    let on = |threads: usize| {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .build()
+            .unwrap()
+            .install(|| run(&ads, &sub, config.clone()))
+    };
+    let (a, b) = (on(1), on(4));
+    let (ra, rb) = (&a.report, &b.report);
+    assert!(a.plan.stats.twice > 0 && ra.stats.local[0].twice > 0);
+    assert_eq!(ra.tree, rb.tree);
+    assert_eq!(ra.relaxed, rb.relaxed);
+    assert_eq!(ra.local, rb.local);
+    assert_eq!(ra.stats.local, rb.stats.local);
+    let refs = |r: &SearchReport| -> Vec<_> {
+        r.references
+            .iter()
+            .map(|(k, v)| (k.clone(), v.energy.to_bits()))
+            .collect()
+    };
+    assert_eq!(refs(ra), refs(rb));
+    let view = |r: &SearchReport| -> Vec<_> {
+        r.candidates
+            .iter()
+            .map(|c| (c.key(), c.strain.to_bits(), c.passivants))
+            .collect()
+    };
+    assert_eq!(view(ra), view(rb));
+}

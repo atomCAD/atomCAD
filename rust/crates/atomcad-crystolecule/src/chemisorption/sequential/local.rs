@@ -12,9 +12,17 @@
 //! states ([`Setup::movable`]), and only while the next level is being built:
 //! nothing of it outlives `evaluate`. The debug view rebuilds a state by
 //! [`replay`] instead.
+//!
+//! With `passivate_sites` (`passivate`) a state is always bare, and a
+//! candidate is relaxed passivated. Above the deepest level a level runs in
+//! two batches: every path bare (deduplicated on the bare strain, which picks
+//! the winners and the next frontier), then each kept candidate passivated
+//! from its winning path's start. At the deepest level nothing grows further,
+//! so its paths are relaxed passivated directly and deduplicated on that.
 
 use super::config::SequentialSearch;
 use super::evaluate::{Candidate, RelaxedRow, SearchReport, check_cancelled};
+use super::passivate::{PassivationKey, References};
 use super::plan::{
     GEOMETRIC_LEGS, Hypothesis, SequentialPlan, admits, inventory_allows, step_kinds,
 };
@@ -22,13 +30,13 @@ use super::setup::{Leg, NEAR_MISS_BAND, Setup, Step};
 use super::tree::{NearMiss, RowKind, SearchTree};
 use crate::atomic_structure::AtomicStructure;
 use crate::chemisorption::atoms::{HypothesisKey, change_key};
-use crate::chemisorption::config::{CHANGED_TAG, ChemisorptionError};
+use crate::chemisorption::config::{CHANGED_TAG, ChemisorptionError, PASSIVANT_TAG};
 use crate::chemisorption::inventory::BondInventory;
 use crate::chemisorption::relax::{RelaxSettings, Relaxed, StrainTerms, relax};
 use atomcad_util::job_control::JobControl;
 use glam::DVec3;
 use rayon::prelude::*;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// What one local level did. Every (foot, site) choice within `reach` is one
 /// **path** and ends exactly once, so
@@ -56,11 +64,19 @@ pub struct LevelStats {
     pub pruned_filter: usize,
     /// Hypotheses the filters admit.
     pub candidates: usize,
-    /// Paths that need a relaxation: a candidate's, or a parent's of the next
-    /// level. Duplicate paths included: their strains decide which is kept.
+    /// Relaxations the level needs: one per path that needs one (a
+    /// candidate's, or a parent's of the next level; duplicate paths included,
+    /// their strains decide which is kept), plus, with `passivate_sites`
+    /// above the deepest level, one per candidate change set for its
+    /// passivated relaxation.
     pub to_relax: usize,
-    /// Paths relaxed; fewer than `to_relax` when the budget ran out.
+    /// Relaxations run, both batches; fewer than `to_relax` when the budget
+    /// ran out.
     pub relaxed: usize,
+    /// Of `relaxed`, the second batch's: kept candidates relaxed again,
+    /// passivated (`passivate_sites`, above the deepest level). Their rows
+    /// were relaxed bare first, so they add no row of their own.
+    pub twice: usize,
     pub unconverged: usize,
     /// The budget cut this level short: the search is not exhaustive.
     pub truncated: bool,
@@ -96,7 +112,13 @@ struct Path {
 struct Done {
     moved: Option<u32>,
     relaxed: Relaxed,
+    /// Against the bare reference, or a passivated relaxation's own.
+    strain: f64,
+    terms: StrainTerms,
     positions: Vec<DVec3>,
+    /// A passivated relaxation: its key and its H's positions, in placement
+    /// order (all the candidate's structure needs beyond `positions`).
+    passivants: Option<(PassivationKey, Vec<DVec3>)>,
 }
 
 /// What a level hands back to `evaluate`.
@@ -156,7 +178,8 @@ pub(crate) struct Local<'a> {
 impl Local<'_> {
     /// Grows level `legs` from `frontier` (the relaxed states of the level
     /// above, in row order), spending at most `budget` relaxations. Appends
-    /// its rows to `tree` and its hypotheses to `local`.
+    /// its rows to `tree` and its hypotheses to `local`, and relaxes the
+    /// passivated references its candidates need into `references`.
     pub fn level(
         &self,
         legs: usize,
@@ -164,18 +187,32 @@ impl Local<'_> {
         budget: usize,
         tree: &mut SearchTree,
         local: &mut Vec<Hypothesis>,
+        references: &mut References,
     ) -> Result<Level, ChemisorptionError> {
         let setup = &self.plan.setup;
         let deeper = legs < self.plan.max_legs;
+        let passivate = self.config.passivate_sites;
+        // Above the deepest level a passivated candidate costs a second
+        // relaxation; at the deepest, its one relaxation is passivated.
+        let twice = passivate && deeper;
+        let first_passivated = passivate && !deeper;
         let mut stats = LevelStats {
             legs,
             parents: frontier.len(),
             ..Default::default()
         };
         let paths = self.enumerate(legs, frontier, tree, local, &mut stats);
+        let start = |i: usize| {
+            let path = &paths[i];
+            let state = &frontier[path.parent];
+            let h = hypothesis(self.plan, local, state.hypothesis);
+            setup.grown_structure(&h.steps, &moved_of(h), &state.positions, path.step)
+        };
 
         // Relax what is needed, the children of the best parents first, as
-        // far as the budget goes (the order is fixed before truncating).
+        // far as the budget goes (the order is fixed before truncating). With
+        // `twice`, the first path of a candidate change set also pays for
+        // that set's passivated relaxation, so no set is half relaxed.
         let mut order: Vec<usize> = (0..paths.len())
             .filter(|&i| paths[i].candidate || deeper)
             .collect();
@@ -187,39 +224,78 @@ impl Local<'_> {
                 .then_with(|| pa.key.cmp(&pb.key))
                 .then(pa.row.cmp(&pb.row))
         });
-        stats.to_relax = order.len();
-        if order.len() > budget {
-            order.truncate(budget);
+        let mut charged: BTreeSet<&HypothesisKey> = BTreeSet::new();
+        let cost: Vec<usize> = order
+            .iter()
+            .map(|&i| 1 + usize::from(twice && paths[i].candidate && charged.insert(&paths[i].key)))
+            .collect();
+        stats.to_relax = cost.iter().sum();
+        let mut spent = 0;
+        let mut taken = 0;
+        while taken < order.len() && spent + cost[taken] <= budget {
+            spent += cost[taken];
+            taken += 1;
+        }
+        if taken < order.len() {
+            order.truncate(taken);
             stats.truncated = true;
         }
         if let Some(c) = self.control {
             c.set_phase(&format!("Local phase: leg {legs}"));
+        }
+        if first_passivated {
+            let keys = order
+                .iter()
+                .map(|&i| setup.passivation_key(&start(i).0))
+                .collect();
+            references.ensure(self.plan, self.settings, keys, self.control)?;
+        }
+        let refs = &*references;
+        let relax_path = |i: usize, passivated: bool| -> Result<Done, ChemisorptionError> {
+            check_cancelled(self.control)?;
+            let (mut s, moved) = start(i);
+            let (reference, added) = if passivated {
+                let (key, added) = setup.passivate(&mut s);
+                (refs.get(&key), Some((key, added)))
+            } else {
+                (
+                    super::passivate::Reference {
+                        energy: self.reference_energy,
+                        terms: *self.reference_terms,
+                    },
+                    None,
+                )
+            };
+            let relaxed = relax(&mut s, self.settings)?;
+            if let Some(c) = self.control {
+                c.advance(1);
+            }
+            let passivants = added.map(|(key, ids)| {
+                let at = ids
+                    .iter()
+                    .map(|&id| s.get_atom(id).expect("a placed H").position)
+                    .collect();
+                (key, at)
+            });
+            Ok(Done {
+                moved,
+                strain: relaxed.energy - reference.energy,
+                terms: relaxed.terms.minus(&reference.terms),
+                relaxed,
+                positions: setup.movable_positions(&s),
+                passivants,
+            })
+        };
+        if let Some(c) = self.control {
             let total = c.snapshot().total.unwrap_or(0);
             c.set_total(total + order.len() as u64);
         }
         let relaxed: Vec<Done> = order
             .par_iter()
-            .map(|&i| -> Result<Done, ChemisorptionError> {
-                check_cancelled(self.control)?;
-                let path = &paths[i];
-                let state = &frontier[path.parent];
-                let h = hypothesis(self.plan, local, state.hypothesis);
-                let (mut s, moved) =
-                    setup.grown_structure(&h.steps, &moved_of(h), &state.positions, path.step);
-                let relaxed = relax(&mut s, self.settings)?;
-                if let Some(c) = self.control {
-                    c.advance(1);
-                }
-                Ok(Done {
-                    moved,
-                    relaxed,
-                    positions: setup.movable_positions(&s),
-                })
-            })
+            .map(|&i| relax_path(i, first_passivated))
             .collect::<Result<_, _>>()?;
         stats.relaxed = relaxed.len();
         stats.unconverged = relaxed.iter().filter(|d| !d.relaxed.converged).count();
-        let strain = |d: &Done| d.relaxed.energy - self.reference_energy;
 
         // Deduplicate by change set: the lowest strain wins, ties to the
         // earlier row; when none of a set's paths was relaxed, its first path.
@@ -235,13 +311,65 @@ impl Local<'_> {
         for members in groups.values() {
             let best = members
                 .iter()
-                .filter_map(|&i| done[i].as_ref().map(|d| (i, strain(d))))
+                .filter_map(|&i| done[i].as_ref().map(|d| (i, d.strain)))
                 .min_by(|a, b| a.1.total_cmp(&b.1).then(a.0.cmp(&b.0)))
                 .map_or(members[0], |(i, _)| i);
             for &i in members {
                 winner[i] = best;
             }
         }
+
+        // The second batch: each kept candidate, passivated, from its winning
+        // path's start.
+        let mut second: Vec<Option<Done>> = (0..paths.len()).map(|_| None).collect();
+        if twice {
+            let kept: Vec<usize> = (0..paths.len())
+                .filter(|&i| winner[i] == i && paths[i].candidate && done[i].is_some())
+                .collect();
+            let keys = kept
+                .iter()
+                .map(|&i| setup.passivation_key(&start(i).0))
+                .collect();
+            references.ensure(self.plan, self.settings, keys, self.control)?;
+            let refs = &*references;
+            if let Some(c) = self.control {
+                let total = c.snapshot().total.unwrap_or(0);
+                c.set_total(total + kept.len() as u64);
+            }
+            let relax_path = |i: usize| -> Result<Done, ChemisorptionError> {
+                check_cancelled(self.control)?;
+                let (mut s, moved) = start(i);
+                let (key, ids) = setup.passivate(&mut s);
+                let reference = refs.get(&key);
+                let relaxed = relax(&mut s, self.settings)?;
+                if let Some(c) = self.control {
+                    c.advance(1);
+                }
+                let at = ids
+                    .iter()
+                    .map(|&id| s.get_atom(id).expect("a placed H").position)
+                    .collect();
+                Ok(Done {
+                    moved,
+                    strain: relaxed.energy - reference.energy,
+                    terms: relaxed.terms.minus(&reference.terms),
+                    relaxed,
+                    positions: setup.movable_positions(&s),
+                    passivants: Some((key, at)),
+                })
+            };
+            let relaxed: Vec<Done> = kept
+                .par_iter()
+                .map(|&i| relax_path(i))
+                .collect::<Result<_, _>>()?;
+            stats.relaxed += relaxed.len();
+            stats.twice = relaxed.len();
+            stats.unconverged += relaxed.iter().filter(|d| !d.relaxed.converged).count();
+            for (&i, d) in kept.iter().zip(relaxed) {
+                second[i] = Some(d);
+            }
+        }
+
         // Each kept path's hypothesis index, in row order.
         let first = self.plan.hypotheses.len() + local.len();
         let mut index = vec![usize::MAX; paths.len()];
@@ -252,15 +380,17 @@ impl Local<'_> {
                 n += 1;
             }
         }
+        // A row relaxed twice records its passivated relaxation.
         let relaxed_rows: Vec<RelaxedRow> = order
             .iter()
             .map(|&i| {
-                let d = done[i].as_ref().expect("relaxed");
+                let d = second[i].as_ref().or(done[i].as_ref()).expect("relaxed");
                 RelaxedRow {
                     hypothesis: index[winner[i]],
                     row: paths[i].row,
-                    strain: strain(d),
+                    strain: d.strain,
                     converged: d.relaxed.converged,
+                    passivated: d.passivants.is_some(),
                 }
             })
             .collect();
@@ -307,11 +437,35 @@ impl Local<'_> {
                 seating: None,
             };
             if let Some(d) = d {
-                let strain = strain(&d);
                 if path.candidate {
-                    let mut s = setup.state_structure(&h.steps, &moved, &d.positions);
+                    // The candidate's relaxation: the second batch's when
+                    // there was one.
+                    let c = second[i].take().unwrap_or_else(|| Done {
+                        moved: d.moved,
+                        relaxed: d.relaxed.clone(),
+                        strain: d.strain,
+                        terms: d.terms,
+                        positions: d.positions.clone(),
+                        passivants: d.passivants.clone(),
+                    });
+                    let (mut s, passivants) = match &c.passivants {
+                        Some((key, at)) => setup.passivated_state_structure(
+                            &h.steps,
+                            &moved,
+                            &c.positions,
+                            key,
+                            at,
+                        ),
+                        None => (
+                            setup.state_structure(&h.steps, &moved, &c.positions),
+                            Vec::new(),
+                        ),
+                    };
                     for id in h.changed_atoms() {
                         s.add_atom_tag(id, CHANGED_TAG)?;
+                    }
+                    for &id in &passivants {
+                        s.add_atom_tag(id, PASSIVANT_TAG)?;
                     }
                     candidates.push(Candidate {
                         structure: s,
@@ -320,20 +474,22 @@ impl Local<'_> {
                         formed: h.formed.clone(),
                         transfers: h.transfers.clone(),
                         bond_inventory: h.inventory.clone(),
-                        strain,
-                        terms: d.relaxed.terms.minus(self.reference_terms),
-                        converged: d.relaxed.converged,
-                        worst_bond_ratio: d.relaxed.worst_bond_ratio,
-                        energy: d.relaxed.energy,
+                        strain: c.strain,
+                        terms: c.terms,
+                        converged: c.relaxed.converged,
+                        worst_bond_ratio: c.relaxed.worst_bond_ratio,
+                        energy: c.relaxed.energy,
                         seating_clash: false,
                         mirrored: frontier[path.parent].mirrored,
+                        passivants: passivants.len(),
                     });
                 }
                 if deeper {
+                    // States are bare: the first batch's.
                     next.push(State {
                         hypothesis: index[i],
                         row: path.row,
-                        strain,
+                        strain: d.strain,
                         positions: d.positions,
                         mirrored: frontier[path.parent].mirrored,
                     });
@@ -468,28 +624,80 @@ pub struct Replayed {
     pub strain: f64,
     /// The legs along the row's path, in binding order.
     pub steps: Vec<Step>,
+    /// The H placed before relaxing (tagged `cs_passivant`): 0 unless the
+    /// row's recorded relaxation was passivated.
+    pub passivants: usize,
 }
 
-/// Rebuilds the relaxed state of tree row `row`: a geometric row by seating
-/// its change set and relaxing it, a local-phase row by replaying its
-/// ancestors first — its own path's parent, which is always a kept
-/// (canonical) state, since only those grow children. Relaxation is
+/// Rebuilds the relaxed state of tree row `row` as the search recorded it: a
+/// geometric row by seating its change set and relaxing it, a local-phase row
+/// by replaying its ancestors first — its own path's parent, which is always
+/// a kept (canonical) state, since only those grow children. Relaxation is
 /// deterministic, so this is the state the search produced, and its strain
 /// is the one recorded for the row. A geometric duplicate row replays its
-/// canonical row (the same change set seats the same).
+/// canonical row (the same change set seats the same). A row whose recorded
+/// relaxation was passivated (`RelaxedRow::passivated`) is passivated as the
+/// search did, its strain taken against its key's reference.
 pub fn replay(
     plan: &SequentialPlan,
     report: &SearchReport,
     config: &SequentialSearch,
     row: u32,
 ) -> Result<Replayed, ChemisorptionError> {
+    replay_as(plan, report, config, row, recorded_passivated(report, row))
+}
+
+/// The bare relaxed state of tree row `row`: what the next level grew from.
+/// The same as [`replay`] unless the row's recorded relaxation is a
+/// passivated one (a candidate that is also a parent).
+pub fn replay_state(
+    plan: &SequentialPlan,
+    report: &SearchReport,
+    config: &SequentialSearch,
+    row: u32,
+) -> Result<Replayed, ChemisorptionError> {
+    replay_as(plan, report, config, row, false)
+}
+
+/// Whether the relaxation recorded for `row` (a geometric duplicate's: its
+/// canonical row's) was passivated.
+pub fn recorded_passivated(report: &SearchReport, row: u32) -> bool {
+    let r = report.tree.row(row);
+    let row = if r.legs as usize <= GEOMETRIC_LEGS {
+        r.duplicate_of.unwrap_or(row)
+    } else {
+        row
+    };
+    report.relaxed.iter().any(|x| x.row == row && x.passivated)
+}
+
+fn replay_as(
+    plan: &SequentialPlan,
+    report: &SearchReport,
+    config: &SequentialSearch,
+    row: u32,
+    passivated: bool,
+) -> Result<Replayed, ChemisorptionError> {
     let (mut s, steps) = replay_start(plan, report, config, row)?;
+    let (reference, passivants) = if passivated {
+        let (key, added) = plan.setup.passivate(&mut s);
+        let reference = report.references.get(&key).ok_or_else(|| {
+            ChemisorptionError::DebugRow("the search relaxed no reference for this row".into())
+        })?;
+        (reference.energy, added)
+    } else {
+        (report.reference_energy, Vec::new())
+    };
     let relaxed = relax(&mut s, &config.relax_settings())?;
+    for &id in &passivants {
+        s.add_atom_tag(id, PASSIVANT_TAG)?;
+    }
     Ok(Replayed {
-        strain: relaxed.energy - report.reference_energy,
+        strain: relaxed.energy - reference,
         structure: s,
         relaxed,
         steps,
+        passivants: passivants.len(),
     })
 }
 
@@ -527,7 +735,8 @@ pub fn replay_start(
         let seating = plan.start_seating(h);
         return Ok((setup.start_structure(&h.steps, &seating), h.steps.clone()));
     }
-    let parent = replay(plan, report, config, r.parent)?;
+    // A state is bare: the parent the search grew this row from.
+    let parent = replay_state(plan, report, config, r.parent)?;
     let index = report
         .tree
         .row(r.parent)

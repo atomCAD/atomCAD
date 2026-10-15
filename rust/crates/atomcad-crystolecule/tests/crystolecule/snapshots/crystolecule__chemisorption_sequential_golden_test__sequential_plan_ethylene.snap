@@ -20,6 +20,7 @@ PlanStats {
     parents: 0,
     seating_clashes: 0,
     pruned_clash: 0,
+    twice: 0,
     to_relax: 37,
     near_misses: 21,
     truncated: false,

@@ -351,7 +351,21 @@ Rules that are easy to erode:
   afterwards — a hexapod at the budget would hold ~1 GB.
 - **What is relaxed: a candidate, or a local-phase parent.** A two-leg
   hypothesis that is only a step on the way to three legs is never relaxed;
-  three-leg hypotheses are Kabsch-seated from their own bonds.
+  three-leg hypotheses are Kabsch-seated from their own bonds. With
+  `passivate_sites` (`sequential/passivate.rs`) **a candidate is relaxed
+  passivated and a parent bare**: a state the next leg grows from is never
+  passivated, so a hypothesis that is both is relaxed twice (`PlanStats::twice`,
+  `LevelStats::twice`), and the budget counts relaxations, never queuing half
+  of a pair. A passivated strain is taken against its own reference, keyed by
+  the `(host, count)` list it placed and built from that key alone
+  (`add_terminators_counted`), all relaxed **before** the candidates that need
+  them (`keep_best` ranks while relaxing). `RelaxedRow::passivated` says which
+  relaxation a row recorded; `replay` honours it, `replay_state` is the bare
+  one, and a debug step under such a row shows the bare state.
+  `cs_passivant` is written in `evaluate`, beside `CHANGED_TAG`, unlike the
+  listing tags: it marks what was relaxed, and exists only with the setting
+  on, so the snapshots do not change. With it a search writes four of the 32
+  tag names, which leaves the inputs 28.
 - **Geometric pruning is deliberate here, and only because it is exact.** An
   older all-at-once engine had a site-spacing filter (pair tolerance) that was
   removed: UFF lets feet flex by >2.5 Å of site mismatch, so any useful

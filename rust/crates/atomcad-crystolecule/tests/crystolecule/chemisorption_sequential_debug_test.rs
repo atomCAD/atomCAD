@@ -11,6 +11,7 @@
 
 use crate::chemisorption_sequential_support::*;
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
+use atomcad_crystolecule::chemisorption::PASSIVANT_TAG;
 use atomcad_crystolecule::chemisorption::sequential::debug::{
     ACCEPTED_COLOR, BONDED_COLOR, FADED_ALPHA, FOOT_COLOR,
 };
@@ -92,6 +93,30 @@ fn four() -> &'static Run {
                 tolerance: 0.0,
                 reach: 3.5,
                 formed_bonds: Some(4),
+                top_n: 1,
+                energy_window: f64::INFINITY,
+                ..Default::default()
+            },
+        )
+    })
+}
+
+/// The four-foot fixture with `passivate_sites` and every leg count a
+/// candidate: the three-leg candidates are parents too, relaxed twice, and
+/// level 4 (the deepest) is relaxed passivated.
+fn four_passivated() -> &'static Run {
+    static RUN: OnceLock<Run> = OnceLock::new();
+    RUN.get_or_init(|| {
+        let (ads, sub) = planted(4, &[0, 1]);
+        run(
+            &ads,
+            &sub,
+            SequentialSearch {
+                anchor_reach: 1.8,
+                tolerance: 0.0,
+                reach: 3.5,
+                passivate_sites: true,
+                max_iterations: 200,
                 top_n: 1,
                 energy_window: f64::INFINITY,
                 ..Default::default()
@@ -654,7 +679,24 @@ fn a_tripod_three_leg_row_has_no_steps() {
 
 #[test]
 fn a_relaxed_row_outside_top_n_is_replayed_to_its_recorded_strain() {
-    let r = four();
+    replayed_to_recorded_strain(four());
+}
+
+/// …with `passivate_sites` too: a passivated row replays passivated, against
+/// its key's reference.
+#[test]
+fn a_passivated_row_is_replayed_to_its_recorded_strain() {
+    replayed_to_recorded_strain(four_passivated());
+    assert!(
+        four_passivated()
+            .report
+            .relaxed
+            .iter()
+            .any(|x| x.passivated)
+    );
+}
+
+fn replayed_to_recorded_strain(r: &Run) {
     let (p, rep) = (&r.plan, Some(&r.report));
     let tree = &r.report.tree;
     assert_eq!(r.report.candidates.len(), 1, "top N 1");
@@ -665,13 +707,13 @@ fn a_relaxed_row_outside_top_n_is_replayed_to_its_recorded_strain() {
     assert_eq!(positions(&view.structure), positions(&kept.structure));
     assert_eq!(view.strain, Some(kept.strain));
 
-    let mut replayed = [0, 0];
+    let mut replayed = [0, 0, 0];
     for x in r.report.relaxed.iter().filter(|x| x.row != kept.row) {
         if tree.row(x.row).duplicate_of.is_some() {
             continue;
         }
         let legs = tree.row(x.row).legs as usize;
-        if replayed[legs - 3] >= 2 {
+        if replayed[legs - 2] >= 2 {
             continue;
         }
         let item = DebugItem::state(x.row);
@@ -684,10 +726,10 @@ fn a_relaxed_row_outside_top_n_is_replayed_to_its_recorded_strain() {
             view.strain.unwrap(),
             x.strain
         );
-        replayed[legs - 3] += 1;
+        replayed[legs - 2] += 1;
     }
     assert!(
-        replayed[0] > 0 && replayed[1] > 0,
+        replayed[1] > 0 && replayed[2] > 0,
         "three-leg parents and four-leg candidates: {replayed:?}"
     );
 }
@@ -834,4 +876,36 @@ fn a_kept_mirrored_row_is_seated_on_two_legs_and_replays_to_its_strain() {
         pruned += 1;
     }
     assert_eq!(pruned, r.plan.stats.mirrored_kept);
+}
+
+/// A row relaxed twice opens on its passivated relaxation (the candidate's),
+/// and its steps on the bare one the next level grew from.
+#[test]
+fn a_twice_relaxed_rows_steps_show_the_bare_state() {
+    let r = four_passivated();
+    let (p, rep) = (&r.plan, Some(&r.report));
+    assert!(p.stats.twice > 0);
+    let tree = &r.report.tree;
+    let row = canonical_leg_rows(tree)
+        .find(|&x| {
+            tree.row(x).legs == 3
+                && relaxation(&r.report, x).is_some_and(|x| x.passivated)
+                && !next_feet(p, rep, x).is_empty()
+        })
+        .expect("a candidate parent with steps");
+    let state = debug_view(p, rep, &r.config, DebugItem::state(row), DebugForm::Relaxed).unwrap();
+    assert!(!state.structure.atoms_with_tag(PASSIVANT_TAG).is_empty());
+    assert!((state.strain.unwrap() - relaxation(&r.report, row).unwrap().strain).abs() < 1e-6);
+
+    let f = next_feet(p, rep, row)[0];
+    let item = DebugItem::step(row, f);
+    assert!(needs_relaxation(p, rep, item, DebugForm::Relaxed));
+    let step = debug_view(p, rep, &r.config, item, DebugForm::Relaxed).unwrap();
+    assert!(step.structure.atoms_with_tag(PASSIVANT_TAG).is_empty());
+    assert_eq!(
+        step.structure.get_num_of_atoms(),
+        p.setup.combined.get_num_of_atoms()
+    );
+    let bare = replay_state(p, &r.report, &r.config, row).unwrap();
+    assert_eq!(positions(&step.structure), positions(&bare.structure));
 }

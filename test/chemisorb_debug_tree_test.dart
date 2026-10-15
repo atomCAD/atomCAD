@@ -60,6 +60,7 @@ APIChemisorbDebugRow item(
       strain: strain,
       converged: true,
       budgetCut: false,
+      passivated: false,
       canSeat: kind == APIChemisorbDebugRowKind.leg,
       canRelax: strain != null,
       defaultForm: kind == APIChemisorbDebugRowKind.leg

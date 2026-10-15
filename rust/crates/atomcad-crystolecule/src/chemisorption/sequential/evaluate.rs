@@ -5,12 +5,13 @@
 
 use super::config::SequentialSearch;
 use super::local::{LevelStats, Local, State, hypothesis};
+use super::passivate::{PassivationKey, Reference, References};
 use super::plan::{Hypothesis, PlanStats, SequentialPlan, plan};
 use super::setup::Mirror;
 use super::tree::SearchTree;
 use crate::atomic_structure::AtomicStructure;
 use crate::chemisorption::atoms::{HypothesisKey, change_key};
-use crate::chemisorption::config::{CHANGED_TAG, ChemisorptionError};
+use crate::chemisorption::config::{CHANGED_TAG, ChemisorptionError, PASSIVANT_TAG};
 use crate::chemisorption::inventory::BondInventory;
 use crate::chemisorption::relax::{StrainTerms, relax};
 use crate::chemisorption::transfer::Transfer;
@@ -19,6 +20,7 @@ use glam::DVec3;
 use rayon::prelude::*;
 
 use std::cmp::Ordering;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
 use std::time::Instant;
@@ -53,6 +55,9 @@ pub struct Candidate {
     /// kept by `include_mirrored`: its own (three legs), or its local-phase
     /// ancestor's.
     pub mirrored: bool,
+    /// The H atoms `passivate_sites` placed on its sites before relaxing
+    /// (tagged [`PASSIVANT_TAG`]); 0 without the setting.
+    pub passivants: usize,
 }
 
 impl Candidate {
@@ -73,12 +78,17 @@ pub struct RelaxedRow {
     pub row: u32,
     pub strain: f64,
     pub converged: bool,
+    /// The relaxation recorded for the row was passivated
+    /// (`passivate_sites`): a candidate's. A row relaxed both ways (a
+    /// candidate that is also a parent) records this one; the next level grew
+    /// from the bare one.
+    pub passivated: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct SearchStats {
     pub plan: PlanStats,
-    /// UFF relaxations of hypotheses (the reference's two not counted), both
+    /// UFF relaxations of hypotheses (the references' not counted), both
     /// phases.
     pub relaxed: usize,
     pub unconverged: usize,
@@ -96,13 +106,20 @@ pub struct SearchStats {
 #[derive(Debug, Clone)]
 pub struct SearchReport {
     /// `E(adsorbate relaxed alone) + E(substrate relaxed alone)`.
+    /// Every bare relaxation's strain is taken against it.
     pub reference_energy: f64,
     pub reference_terms: StrainTerms,
+    /// With `passivate_sites`: the reference of each passivation key a
+    /// relaxed candidate had (§4.4), the adsorbate alone plus the substrate
+    /// carrying the same H. A passivated relaxation's strain is taken
+    /// against its own key's.
+    pub references: BTreeMap<PassivationKey, Reference>,
     /// The best `top_n` by strain (ties by the change set), cut to the energy
     /// window above the first.
     pub candidates: Vec<Candidate>,
-    /// Every relaxation: the geometric phase's in plan order, then each local
-    /// level's in the order its budget took them.
+    /// One per relaxed row: the geometric phase's in plan order, then each
+    /// local level's in the order its budget took them. A row relaxed twice
+    /// (`passivate_sites`) has one, for its passivated relaxation.
     pub relaxed: Vec<RelaxedRow>,
     /// The local phase's hypotheses, numbered after the plan's
     /// ([`hypothesis`](Self::hypothesis)).
@@ -141,6 +158,9 @@ fn keep_best(kept: &mut Vec<Candidate>, c: Candidate, top_n: usize) {
     kept.truncate(top_n);
 }
 
+/// A parent's bare relaxation: its movable positions and its strain.
+type BareState = (Vec<DVec3>, f64);
+
 pub(crate) fn check_cancelled(control: Option<&JobControl>) -> Result<(), ChemisorptionError> {
     match control {
         Some(c) if c.is_cancelled() => Err(ChemisorptionError::Cancelled),
@@ -173,46 +193,88 @@ pub fn evaluate(
     let mut alone = plan.substrate.clone();
     let substrate = relax(&mut alone, &settings)?;
     advance();
-    let reference_energy = adsorbate.energy + substrate.energy;
-    let t = (adsorbate.terms, substrate.terms);
-    let reference_terms = StrainTerms {
-        stretch: t.0.stretch + t.1.stretch,
-        bend: t.0.bend + t.1.bend,
-        torsion: t.0.torsion + t.1.torsion,
-        inversion: t.0.inversion + t.1.inversion,
-        vdw: t.0.vdw + t.1.vdw,
+    let bare = Reference::of(&adsorbate, &substrate);
+    let (reference_energy, reference_terms) = (bare.energy, bare.terms);
+    let mut references = References {
+        adsorbate,
+        map: BTreeMap::new(),
     };
+    if config.passivate_sites {
+        // Every key the geometric candidates need, before any of them relaxes.
+        let keys: BTreeSet<PassivationKey> = plan
+            .to_relax
+            .iter()
+            .map(|&i| &plan.hypotheses[i])
+            .filter(|h| h.candidate)
+            .map(|h| {
+                let seating = h.seating.as_ref().expect("a relaxed hypothesis is seated");
+                plan.setup
+                    .passivation_key(&plan.setup.start_structure(&h.steps, seating))
+            })
+            .collect();
+        references.ensure(plan, &settings, keys, control)?;
+    }
 
     let kept: Mutex<Vec<Candidate>> = Mutex::new(Vec::with_capacity(config.top_n + 1));
     let unconverged = AtomicUsize::new(0);
     let calls = AtomicUsize::new(0);
-    let geometric: Vec<(RelaxedRow, Option<Vec<DVec3>>)> = plan
+    let relax_counted = |s: &mut AtomicStructure| -> Result<_, ChemisorptionError> {
+        check_cancelled(control)?;
+        let r = relax(s, &settings)?;
+        calls.fetch_add(1, AtomicOrdering::Relaxed);
+        advance();
+        if !r.converged {
+            unconverged.fetch_add(1, AtomicOrdering::Relaxed);
+        }
+        Ok(r)
+    };
+    // Per relaxed hypothesis: its row, and for a parent its bare state (the
+    // movable positions and the bare strain).
+    let geometric: Vec<(RelaxedRow, Option<BareState>)> = plan
         .to_relax
         .par_iter()
         .map(|&index| -> Result<_, ChemisorptionError> {
-            check_cancelled(control)?;
             let h = &plan.hypotheses[index];
             let seating = h.seating.as_ref().expect("a relaxed hypothesis is seated");
             let mut s = plan.setup.start_structure(&h.steps, seating);
-            let r = relax(&mut s, &settings)?;
-            calls.fetch_add(1, AtomicOrdering::Relaxed);
-            advance();
-            if !r.converged {
-                unconverged.fetch_add(1, AtomicOrdering::Relaxed);
+            let passivated = config.passivate_sites && h.candidate;
+            // A parent's state is always bare (D5): relaxed on its own when
+            // the candidate relaxation is passivated.
+            let mut state = None;
+            if passivated && h.parent {
+                let mut bare = s.clone();
+                let r = relax_counted(&mut bare)?;
+                state = Some((
+                    plan.setup.movable_positions(&bare),
+                    r.energy - reference_energy,
+                ));
             }
-            let strain = r.energy - reference_energy;
+            let (reference, passivants) = if passivated {
+                let (key, added) = plan.setup.passivate(&mut s);
+                (references.get(&key), added)
+            } else {
+                (bare, Vec::new())
+            };
+            let r = relax_counted(&mut s)?;
+            let strain = r.energy - reference.energy;
             let row = RelaxedRow {
                 hypothesis: index,
                 row: h.row,
                 strain,
                 converged: r.converged,
+                passivated,
             };
-            let positions = h.parent.then(|| plan.setup.movable_positions(&s));
+            if h.parent && state.is_none() {
+                state = Some((plan.setup.movable_positions(&s), strain));
+            }
             if !h.candidate {
-                return Ok((row, positions));
+                return Ok((row, state));
             }
             for id in h.changed_atoms() {
                 s.add_atom_tag(id, CHANGED_TAG)?;
+            }
+            for &id in &passivants {
+                s.add_atom_tag(id, PASSIVANT_TAG)?;
             }
             let c = Candidate {
                 structure: s,
@@ -222,19 +284,20 @@ pub fn evaluate(
                 transfers: h.transfers.clone(),
                 bond_inventory: h.inventory.clone(),
                 strain,
-                terms: r.terms.minus(&reference_terms),
+                terms: r.terms.minus(&reference.terms),
                 converged: r.converged,
                 worst_bond_ratio: r.worst_bond_ratio,
                 energy: r.energy,
                 seating_clash: seating.clashes(),
                 mirrored: h.mirror == Some(Mirror::Mirrored),
+                passivants: passivants.len(),
             };
             keep_best(
                 &mut kept.lock().expect("no panics under the lock"),
                 c,
                 config.top_n,
             );
-            Ok((row, positions))
+            Ok((row, state))
         })
         .collect::<Result<_, _>>()?;
     let mut kept = kept.into_inner().expect("no panics under the lock");
@@ -245,12 +308,12 @@ pub fn evaluate(
     // frontier.
     let mut relaxed = Vec::with_capacity(geometric.len());
     let mut frontier = Vec::new();
-    for (row, positions) in geometric {
-        if let Some(positions) = positions {
+    for (row, state) in geometric {
+        if let Some((positions, strain)) = state {
             frontier.push(State {
                 hypothesis: row.hypothesis,
                 row: row.row,
-                strain: row.strain,
+                strain,
                 positions,
                 mirrored: plan.hypotheses[row.hypothesis].mirror == Some(Mirror::Mirrored),
             });
@@ -271,7 +334,14 @@ pub fn evaluate(
     let mut legs = super::plan::GEOMETRIC_LEGS + 1;
     while !frontier.is_empty() && legs <= plan.max_legs {
         let budget = config.budget.saturating_sub(calls);
-        let level = grow.level(legs, &frontier, budget, &mut tree, &mut local)?;
+        let level = grow.level(
+            legs,
+            &frontier,
+            budget,
+            &mut tree,
+            &mut local,
+            &mut references,
+        )?;
         calls += level.stats.relaxed;
         unconverged += level.stats.unconverged;
         for c in level.candidates {
@@ -293,6 +363,7 @@ pub fn evaluate(
     Ok(SearchReport {
         reference_energy,
         reference_terms,
+        references: references.map,
         candidates: kept,
         relaxed,
         local,
@@ -311,7 +382,8 @@ pub fn evaluate(
 
 /// `plan` then `evaluate`. With a `control`: phase "Planning", then the total
 /// (one per geometric relaxation plus one for the reference) and phase
-/// "Relaxing"; each local level then adds its relaxations to the total.
+/// "Relaxing"; the passivated references (`passivate_sites`) and each local
+/// level then add theirs to the total before relaxing them.
 pub fn search(
     adsorbate: &AtomicStructure,
     substrate: &AtomicStructure,
@@ -323,7 +395,7 @@ pub fn search(
     }
     let planned = plan(adsorbate, substrate, config)?;
     if let Some(c) = control {
-        c.set_total(planned.to_relax.len() as u64 + 1);
+        c.set_total(planned.stats.to_relax as u64 + 1);
         c.set_phase("Relaxing");
     }
     evaluate(&planned, config, control)

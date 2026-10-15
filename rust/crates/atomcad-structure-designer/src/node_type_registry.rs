@@ -1018,6 +1018,7 @@ impl NodeTypeRegistry {
                     ),
                     ("copies".to_string(), DataType::Int),
                     ("mirrored".to_string(), DataType::Bool),
+                    ("passivants".to_string(), DataType::Int),
                 ],
             ),
         );

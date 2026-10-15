@@ -8,6 +8,10 @@ use crate::structure_compare::CompareError;
 /// candidate changed, so `apply_style` can highlight them.
 pub const CHANGED_TAG: &str = "cs_changed";
 
+/// The tag the H atoms `passivate_sites` places carry, in every candidate of a
+/// search with the setting on, so `apply_style` can show or hide them.
+pub const PASSIVANT_TAG: &str = "cs_passivant";
+
 /// Which input a message is about.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Side {

@@ -59,7 +59,16 @@ fn search(
 
 /// The silyl search: twelve dimer atoms, each one candidate.
 fn silyl_search() -> (SequentialPlan, SearchReport) {
+    silyl_search_with(false)
+}
+
+/// …with `passivate_sites`: every other dimer atom capped by an H.
+fn silyl_search_with(passivate_sites: bool) -> (SequentialPlan, SearchReport) {
     let (ads, sub, config) = silyl_on_si100(8.0);
+    let config = SequentialSearch {
+        passivate_sites,
+        ..config
+    };
     let (p, r) = search(&ads, &sub, &config);
     assert!(r.candidates.len() >= 8, "{} kept", r.candidates.len());
     assert!(r.candidates.iter().all(|c| c.formed.len() == 1));
@@ -269,7 +278,21 @@ fn the_local_cluster_stops_at_hydrogens_and_adds_their_caps() {
 /// `rigid_mirror` — both checked from the site coordinates alone.
 #[test]
 fn merges_are_exactly_the_slabs_equivalent_sites() {
-    let (p, r) = silyl_search();
+    merges_are_the_site_orbits(false);
+}
+
+/// The passivant H are part of the compared cluster, so this pins that
+/// symmetric bindings receive symmetric H (§4).
+#[test]
+fn merges_are_the_site_orbits_with_passivated_sites() {
+    merges_are_the_site_orbits(true);
+}
+
+fn merges_are_the_site_orbits(passivate_sites: bool) {
+    let (p, r) = silyl_search_with(passivate_sites);
+    if passivate_sites {
+        assert!(r.candidates.iter().all(|c| c.passivants > 0));
+    }
     let sites: Vec<DVec3> = r.candidates.iter().map(|c| site_position(&p, c)).collect();
     for motion in [
         Motion::None,

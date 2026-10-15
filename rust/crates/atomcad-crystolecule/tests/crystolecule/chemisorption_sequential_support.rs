@@ -15,11 +15,16 @@ use atomcad_crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
 use atomcad_crystolecule::atomic_structure_utils::{auto_create_bonds, remove_single_bond_atoms};
 use atomcad_crystolecule::chemisorption::relax::relax;
 use atomcad_crystolecule::chemisorption::sequential::{
-    GEOMETRIC_LEGS, Leg, Mirror, SearchReport, SequentialPlan, SequentialSearch, Setup, Step,
+    GEOMETRIC_LEGS, Leg, Mirror, PassivationKey, SearchReport, SequentialPlan, SequentialSearch,
+    Setup, Step,
 };
-use atomcad_crystolecule::chemisorption::{BondInventory, BondKind, HypothesisKey, change_key};
+use atomcad_crystolecule::chemisorption::{
+    BondInventory, BondKind, HypothesisKey, PASSIVANT_TAG, change_key,
+};
 use atomcad_crystolecule::crystolecule_constants::DEFAULT_ZINCBLENDE_MOTIF;
-use atomcad_crystolecule::hydrogen_passivation::{AddHydrogensOptions, add_hydrogens};
+use atomcad_crystolecule::hydrogen_passivation::{
+    AddHydrogensOptions, add_hydrogens, open_valence_slots,
+};
 use atomcad_crystolecule::lattice_fill::{LatticeFillConfig, LatticeFillOptions, fill_lattice};
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
 use atomcad_geo_tree::GeoNode;
@@ -426,11 +431,19 @@ pub fn assert_stats_add_up(p: &SequentialPlan) {
         p.hypotheses.len()
     );
     assert_eq!(
-        s.candidates + s.parents,
+        s.candidates + s.parents + s.twice,
         s.to_relax + s.pruned_clash,
         "{s:?}"
     );
-    assert_eq!(s.to_relax, p.to_relax.len());
+    assert_eq!(s.to_relax, p.to_relax.len() + s.twice);
+    // Relaxed twice: a queued candidate that is also a parent, and only with
+    // passivate_sites (§4.3).
+    let twice = p
+        .to_relax
+        .iter()
+        .filter(|&&i| p.hypotheses[i].candidate && p.hypotheses[i].parent)
+        .count();
+    assert_eq!(s.twice, if p.passivate_sites { twice } else { 0 });
     assert!(s.seating_clashes >= s.pruned_clash);
     assert_eq!(
         s.candidates,
@@ -775,8 +788,50 @@ pub fn audit(p: &SequentialPlan, report: &SearchReport, config: &SequentialSearc
         vdw_mode: config.vdw_mode.clone(),
         ..Default::default()
     };
+    let sites: BTreeSet<u32> = p.setup.sites.iter().map(|s| s.id).collect();
     for c in &report.candidates {
-        let after = bonds_of(&c.structure);
+        // The passivating H (§4.1): tagged, one per open slot its sites had
+        // left, each on a site, and nothing left open on any site.
+        let passivants: BTreeSet<u32> = c
+            .structure
+            .atoms_with_tag(PASSIVANT_TAG)
+            .into_iter()
+            .collect();
+        assert_eq!(passivants.len(), c.passivants, "audit: passivants tagged");
+        if !config.passivate_sites {
+            assert_eq!(c.passivants, 0, "audit: passivated without the setting");
+        }
+        let mut hosts: BTreeMap<u32, usize> = BTreeMap::new();
+        for &h in &passivants {
+            let atom = c.structure.get_atom(h).unwrap();
+            assert_eq!(atom.atomic_number, 1);
+            assert!(
+                base.get_atom(h).is_none(),
+                "audit: a passivant is a new atom"
+            );
+            let bonded: Vec<u32> = atom
+                .bonds
+                .iter()
+                .filter(|b| !b.is_delete_marker())
+                .map(|b| b.other_atom_id())
+                .collect();
+            assert_eq!(bonded.len(), 1, "audit: a passivant has one bond");
+            assert!(sites.contains(&bonded[0]), "audit: a passivant caps a site");
+            *hosts.entry(bonded[0]).or_insert(0) += 1;
+        }
+        if config.passivate_sites {
+            for &site in &sites {
+                assert_eq!(
+                    open_valence_slots(&c.structure, site, 1),
+                    0,
+                    "audit: site {site} left open"
+                );
+            }
+        }
+        let after: BTreeSet<(u32, u32)> = bonds_of(&c.structure)
+            .into_iter()
+            .filter(|(a, b)| !passivants.contains(a) && !passivants.contains(b))
+            .collect();
         let added: BTreeSet<_> = after.difference(&before).copied().collect();
         let removed: BTreeSet<_> = before.difference(&after).copied().collect();
         let norm = |a: u32, b: u32| (a.min(b), a.max(b));
@@ -827,8 +882,14 @@ pub fn audit(p: &SequentialPlan, report: &SearchReport, config: &SequentialSearc
         }
 
         // Valence, frozen atoms, conservation.
-        assert_eq!(c.structure.get_num_of_atoms(), base.get_num_of_atoms());
+        assert_eq!(
+            c.structure.get_num_of_atoms(),
+            base.get_num_of_atoms() + c.passivants
+        );
         for a in c.structure.atoms_values() {
+            if passivants.contains(&a.id) {
+                continue;
+            }
             let orig = base.get_atom(a.id).expect("conserved atoms");
             assert_eq!(a.atomic_number, orig.atomic_number);
             if let Some(v) = valence_of(a.atomic_number) {
@@ -849,23 +910,42 @@ pub fn audit(p: &SequentialPlan, report: &SearchReport, config: &SequentialSearc
             );
         }
 
-        // The strain, recomputed.
+        // The strain, recomputed: against the reference carrying the same
+        // H on the same hosts when passivated (§4.4).
+        let reference = if config.passivate_sites {
+            let key: PassivationKey = hosts.into_iter().collect();
+            report
+                .references
+                .get(&key)
+                .expect("audit: the candidate's reference was relaxed")
+                .energy
+        } else {
+            report.reference_energy
+        };
         let mut s = c.structure.clone();
         let energy = relax(&mut s, &settings).unwrap().energy;
         assert!(
-            (energy - report.reference_energy - c.strain).abs() < 1e-6,
+            (energy - reference - c.strain).abs() < 1e-6,
             "audit: strain {} recomputes as {}",
             c.strain,
-            energy - report.reference_energy
+            energy - reference
         );
     }
     // The statistics: the relaxations the plan predicted are the ones made,
     // each local level's add up, and every relaxation is listed once.
     let stats = &report.stats;
     if !p.stats.truncated {
-        assert_eq!(stats.relaxed, p.to_relax.len() + stats.local_relaxed);
+        assert_eq!(stats.relaxed, p.stats.to_relax + stats.local_relaxed);
     }
-    assert_eq!(report.relaxed.len(), stats.relaxed);
+    // A row relaxed twice (passivate_sites) is listed once.
+    let twice = p.stats.twice + stats.local.iter().map(|l| l.twice).sum::<usize>();
+    assert_eq!(report.relaxed.len(), stats.relaxed - twice);
+    assert!(
+        report
+            .relaxed
+            .iter()
+            .all(|r| config.passivate_sites || !r.passivated)
+    );
     assert!(stats.relaxed <= config.budget);
     assert_eq!(
         stats.local_relaxed,

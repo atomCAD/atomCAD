@@ -56,6 +56,7 @@ pub mod config;
 pub mod debug;
 pub mod evaluate;
 pub mod local;
+pub mod passivate;
 pub mod plan;
 pub mod setup;
 pub mod tree;
@@ -68,7 +69,8 @@ pub use debug::{
     relaxation, root_view, row_forms, shown_row, step_legs, step_near_misses, tree_of,
 };
 pub use evaluate::{Candidate, RelaxedRow, SearchReport, SearchStats, evaluate, search};
-pub use local::{LevelStats, Replayed, replay, replay_start};
+pub use local::{LevelStats, Replayed, recorded_passivated, replay, replay_start, replay_state};
+pub use passivate::{PASSIVANT, PassivationKey, Reference, passivated_reference};
 pub use plan::{GEOMETRIC_LEGS, Hypothesis, PlanStats, SequentialPlan, plan};
 pub use setup::{
     CLASH_FRACTION, Foot, LOCAL_UP_RADIUS, Leg, MIRROR_MARGIN, MIRRORED_PAIRS, Mirror,

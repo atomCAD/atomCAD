@@ -393,6 +393,12 @@ String debugRowDetails(APIChemisorbDebugRow row) {
         'ranked ${row.copyOf}');
   }
   if (row.localParent) lines.add('a parent of the local phase');
+  if (row.passivated) {
+    lines.add(row.localParent
+        ? 'relaxed passivated, as a candidate; the deeper rows grew from '
+            'its bare relaxation'
+        : 'relaxed passivated');
+  }
   if (row.mirror != null) {
     lines.add('mirror check: ${row.mirror!.name}'
         '${row.mirror == APIChemisorbMirror.mirrored ? (row.mirrorPruned ? ', pruned' : ', kept: seated upright on two legs') : ''}');

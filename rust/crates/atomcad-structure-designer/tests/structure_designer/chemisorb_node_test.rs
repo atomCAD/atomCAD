@@ -2754,7 +2754,7 @@ fn include_mirrored_round_trips_and_is_written_only_when_on() {
     }
 }
 
-/// `mirrored` is appended to the candidate record (its last field so far),
+/// `mirrored` and then `passivants` are appended to the candidate record,
 /// `mirrored_kept` to the stats.
 #[test]
 fn the_mirrored_fields_are_appended() {
@@ -2769,8 +2769,8 @@ fn the_mirrored_fields_are_appended() {
             .collect()
     };
     assert_eq!(
-        field_names("ChemisorbCandidate").last().map(String::as_str),
-        Some("mirrored")
+        field_names("ChemisorbCandidate")[field_names("ChemisorbCandidate").len() - 2..],
+        ["mirrored", "passivants"]
     );
     assert_eq!(
         field_names("ChemisorbStats").last().map(String::as_str),
@@ -2873,4 +2873,119 @@ fn include_mirrored_is_a_search_setting_and_its_candidates_are_flagged() {
         }
     }
     assert!(kept > 0, "steps count the kept mirrored legs");
+}
+
+// ============================================================================
+// passivate_sites (design_chemisorb_mirrors_and_passivation.md §4)
+// ============================================================================
+
+/// `passivate_sites` round-trips through the text format and `.cnnd`, and is
+/// written only when on; a node saved without it loads with it off.
+#[test]
+fn passivate_sites_round_trips_and_is_written_only_when_on() {
+    use atomcad_structure_designer::serialization::node_networks_serialization::{
+        load_node_networks_from_file, save_node_networks_to_file,
+    };
+    use tempfile::tempdir;
+
+    let on = author_and_serialize("c = chemisorb { passivate_sites: true }\n");
+    assert!(on.contains("passivate_sites: true"), "got:\n{on}");
+    assert_eq!(on, author_and_serialize(&on));
+    let off = author_and_serialize("c = chemisorb { passivate_sites: false }\n");
+    assert!(!off.contains("passivate_sites"), "got:\n{off}");
+
+    let old: ChemisorbData = serde_json::from_str("{}").expect("loads");
+    assert!(!old.passivate_sites);
+
+    for passivate_sites in [false, true] {
+        let Net {
+            mut designer,
+            name,
+            node,
+            ..
+        } = network();
+        set_props(
+            &mut designer,
+            name,
+            node,
+            &[("passivate_sites", TextValue::Bool(passivate_sites))],
+        );
+        let tmp = tempdir().unwrap();
+        let path = tmp.path().join("chemisorb.cnnd");
+        save_node_networks_to_file(
+            &mut designer.node_type_registry,
+            &path,
+            false,
+            &HashMap::new(),
+        )
+        .expect("save");
+        let json = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(json.contains("passivate_sites"), passivate_sites);
+
+        let mut registry = NodeTypeRegistry::new();
+        load_node_networks_from_file(&mut registry, path.to_str().unwrap()).expect("load");
+        let (_, loaded) = registry.node_networks[name]
+            .nodes
+            .iter()
+            .find(|(_, n)| n.node_type_name == "chemisorb")
+            .unwrap();
+        let loaded = loaded
+            .data
+            .as_any_ref()
+            .downcast_ref::<ChemisorbData>()
+            .unwrap();
+        assert_eq!(loaded.passivate_sites, passivate_sites);
+    }
+}
+
+/// Toggling `passivate_sites` makes a stored result stale and its undo
+/// restores it; a run with it on lists candidates carrying their H, tagged
+/// `cs_passivant` and counted by `passivants`.
+#[test]
+fn passivate_sites_is_a_search_setting_and_its_h_are_counted() {
+    let Net {
+        mut designer,
+        name,
+        node,
+        ..
+    } = network();
+    designer.run_chemisorb(&[], node).unwrap();
+    let candidates = outputs(&mut designer, name, node)[0].clone();
+    assert!(!array(&candidates).is_empty());
+    assert!(
+        array(&candidates)
+            .iter()
+            .all(|c| int(&fields(c), "passivants") == 0)
+    );
+
+    let edited = ChemisorbData {
+        passivate_sites: true,
+        ..data(&designer, name, node)
+    };
+    designer.set_chemisorb_data(&[], node, edited);
+    let s = fields_of_stats(&mut designer, name, node);
+    assert!(boolean(&s, "stale"), "passivate_sites is fingerprinted");
+    assert!(designer.undo());
+    assert!(!data(&designer, name, node).passivate_sites);
+    let s = fields_of_stats(&mut designer, name, node);
+    assert!(boolean(&s, "searched") && !boolean(&s, "stale"));
+    assert!(designer.redo());
+    assert!(data(&designer, name, node).passivate_sites);
+
+    designer.run_chemisorb(&[], node).unwrap();
+    let s = fields_of_stats(&mut designer, name, node);
+    assert!(boolean(&s, "searched"));
+    let candidates = outputs(&mut designer, name, node)[0].clone();
+    assert!(!array(&candidates).is_empty());
+    for c in array(&candidates) {
+        let f = fields(c);
+        // One OH leg on one of three silyls: the other two get one H each.
+        assert_eq!(int(&f, "passivants"), 2);
+        assert_eq!(
+            atoms(&f["structure"]).atoms_with_tag("cs_passivant").len(),
+            2
+        );
+    }
+    let cache = designer_eval_cache(&mut designer, name, node);
+    assert!(cache.rows.iter().all(|r| r.passivants == 2));
 }

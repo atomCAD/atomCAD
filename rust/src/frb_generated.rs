@@ -16735,6 +16735,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_reach = <f64>::sse_decode(deserializer);
         let mut var_clashFilter = <bool>::sse_decode(deserializer);
         let mut var_includeMirrored = <bool>::sse_decode(deserializer);
+        let mut var_passivateSites = <bool>::sse_decode(deserializer);
         let mut var_maxFormedBonds = <i32>::sse_decode(deserializer);
         let mut var_formedBonds = <Option<i32>>::sse_decode(deserializer);
         let mut var_bondInventory = <Option<String>>::sse_decode(deserializer);
@@ -16753,6 +16754,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             reach: var_reach,
             clash_filter: var_clashFilter,
             include_mirrored: var_includeMirrored,
+            passivate_sites: var_passivateSites,
             max_formed_bonds: var_maxFormedBonds,
             formed_bonds: var_formedBonds,
             bond_inventory: var_bondInventory,
@@ -16829,10 +16831,11 @@ impl SseDecode
         let mut var_strain = <Option<f64>>::sse_decode(deserializer);
         let mut var_converged = <bool>::sse_decode(deserializer);
         let mut var_budgetCut = <bool>::sse_decode(deserializer);
+        let mut var_passivated = <bool>::sse_decode(deserializer);
         let mut var_canSeat = <bool>::sse_decode(deserializer);
         let mut var_canRelax = <bool>::sse_decode(deserializer);
         let mut var_defaultForm = <crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugForm>::sse_decode(deserializer);
-        return crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRow{item: var_item, kind: var_kind, legs: var_legs, label: var_label, path: var_path, duplicate_of: var_duplicateOf, children: var_children, hidden_duplicates: var_hiddenDuplicates, mirrored_children: var_mirroredChildren, mirrored_duplicates: var_mirroredDuplicates, candidates: var_candidates, mirrored: var_mirrored, mirrored_kept: var_mirroredKept, undecided: var_undecided, clashes: var_clashes, rejected_valence: var_rejectedValence, rejected_no_acceptor: var_rejectedNoAcceptor, rejected_filter: var_rejectedFilter, near_misses: var_nearMisses, candidate: var_candidate, local_parent: var_localParent, mirror: var_mirror, mirror_pruned: var_mirrorPruned, seating_clash: var_seatingClash, pruned_clash: var_prunedClash, copy_of: var_copyOf, strain: var_strain, converged: var_converged, budget_cut: var_budgetCut, can_seat: var_canSeat, can_relax: var_canRelax, default_form: var_defaultForm};
+        return crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugRow{item: var_item, kind: var_kind, legs: var_legs, label: var_label, path: var_path, duplicate_of: var_duplicateOf, children: var_children, hidden_duplicates: var_hiddenDuplicates, mirrored_children: var_mirroredChildren, mirrored_duplicates: var_mirroredDuplicates, candidates: var_candidates, mirrored: var_mirrored, mirrored_kept: var_mirroredKept, undecided: var_undecided, clashes: var_clashes, rejected_valence: var_rejectedValence, rejected_no_acceptor: var_rejectedNoAcceptor, rejected_filter: var_rejectedFilter, near_misses: var_nearMisses, candidate: var_candidate, local_parent: var_localParent, mirror: var_mirror, mirror_pruned: var_mirrorPruned, seating_clash: var_seatingClash, pruned_clash: var_prunedClash, copy_of: var_copyOf, strain: var_strain, converged: var_converged, budget_cut: var_budgetCut, passivated: var_passivated, can_seat: var_canSeat, can_relax: var_canRelax, default_form: var_defaultForm};
     }
 }
 
@@ -16957,6 +16960,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_seatingClash = <bool>::sse_decode(deserializer);
         let mut var_mirrored = <bool>::sse_decode(deserializer);
         let mut var_mirroredStart = <Option<f64>>::sse_decode(deserializer);
+        let mut var_passivants = <usize>::sse_decode(deserializer);
         let mut var_worstBondRatio = <f64>::sse_decode(deserializer);
         let mut var_stretch = <f64>::sse_decode(deserializer);
         let mut var_bend = <f64>::sse_decode(deserializer);
@@ -16975,6 +16979,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             seating_clash: var_seatingClash,
             mirrored: var_mirrored,
             mirrored_start: var_mirroredStart,
+            passivants: var_passivants,
             worst_bond_ratio: var_worstBondRatio,
             stretch: var_stretch,
             bend: var_bend,
@@ -25905,6 +25910,7 @@ impl flutter_rust_bridge::IntoDart
             self.reach.into_into_dart().into_dart(),
             self.clash_filter.into_into_dart().into_dart(),
             self.include_mirrored.into_into_dart().into_dart(),
+            self.passivate_sites.into_into_dart().into_dart(),
             self.max_formed_bonds.into_into_dart().into_dart(),
             self.formed_bonds.into_into_dart().into_dart(),
             self.bond_inventory.into_into_dart().into_dart(),
@@ -26024,6 +26030,7 @@ impl flutter_rust_bridge::IntoDart
             self.strain.into_into_dart().into_dart(),
             self.converged.into_into_dart().into_dart(),
             self.budget_cut.into_into_dart().into_dart(),
+            self.passivated.into_into_dart().into_dart(),
             self.can_seat.into_into_dart().into_dart(),
             self.can_relax.into_into_dart().into_dart(),
             self.default_form.into_into_dart().into_dart(),
@@ -26220,6 +26227,7 @@ impl flutter_rust_bridge::IntoDart
             self.seating_clash.into_into_dart().into_dart(),
             self.mirrored.into_into_dart().into_dart(),
             self.mirrored_start.into_into_dart().into_dart(),
+            self.passivants.into_into_dart().into_dart(),
             self.worst_bond_ratio.into_into_dart().into_dart(),
             self.stretch.into_into_dart().into_dart(),
             self.bend.into_into_dart().into_dart(),
@@ -33665,6 +33673,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <f64>::sse_encode(self.reach, serializer);
         <bool>::sse_encode(self.clash_filter, serializer);
         <bool>::sse_encode(self.include_mirrored, serializer);
+        <bool>::sse_encode(self.passivate_sites, serializer);
         <i32>::sse_encode(self.max_formed_bonds, serializer);
         <Option<i32>>::sse_encode(self.formed_bonds, serializer);
         <Option<String>>::sse_encode(self.bond_inventory, serializer);
@@ -33734,6 +33743,7 @@ impl SseEncode
         <Option<f64>>::sse_encode(self.strain, serializer);
         <bool>::sse_encode(self.converged, serializer);
         <bool>::sse_encode(self.budget_cut, serializer);
+        <bool>::sse_encode(self.passivated, serializer);
         <bool>::sse_encode(self.can_seat, serializer);
         <bool>::sse_encode(self.can_relax, serializer);
         <crate::api::structure_designer::structure_designer_api_types::APIChemisorbDebugForm>::sse_encode(self.default_form, serializer);
@@ -33823,6 +33833,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <bool>::sse_encode(self.seating_clash, serializer);
         <bool>::sse_encode(self.mirrored, serializer);
         <Option<f64>>::sse_encode(self.mirrored_start, serializer);
+        <usize>::sse_encode(self.passivants, serializer);
         <f64>::sse_encode(self.worst_bond_ratio, serializer);
         <f64>::sse_encode(self.stretch, serializer);
         <f64>::sse_encode(self.bend, serializer);

@@ -553,6 +553,53 @@ pub fn add_hydrogens_filtered(
     }
 }
 
+/// Places exactly `count` terminators of `element` on each listed host: the
+/// **first** `count` of the slots [`add_hydrogens_filtered`] would fill there,
+/// in the order its direction code returns them (fewer if the host has fewer
+/// open slots). No option of the general path applies: no clash rule, no
+/// selection, and a host's hydrogen-passivation flag is ignored. Returns the
+/// added atoms' ids, host by host.
+///
+/// `chemisorb`'s `passivate_sites` builds its reference state with it
+/// (`doc/design_chemisorb_mirrors_and_passivation.md` §4.4): the substrate
+/// alone carrying as many H on each host as a candidate got, where a used site
+/// has more open slots than it had in the candidate.
+pub fn add_terminators_counted(
+    structure: &mut AtomicStructure,
+    hosts: &[(u32, usize)],
+    element: i16,
+) -> Vec<u32> {
+    let mut placements: Vec<(u32, Vec<DVec3>)> = Vec::new();
+    for &(host, count) in hosts {
+        if count == 0 {
+            continue;
+        }
+        let Some((hybridization, needed)) = open_valence_analysis(structure, host, element) else {
+            continue;
+        };
+        let atom = structure.get_atom(host).expect("analysed above");
+        let bond_len = terminator_bond_length(structure.effective_atomic_number(atom), element);
+        let existing_dirs = gather_bond_directions(structure, atom);
+        let dirs = compute_open_directions(structure, host, hybridization, &existing_dirs, needed);
+        let positions = dirs
+            .iter()
+            .take(count)
+            .map(|d| atom.position + *d * bond_len)
+            .collect();
+        placements.push((host, positions));
+    }
+    let mut added = Vec::new();
+    for (host, positions) in placements {
+        for pos in positions {
+            let id = structure.add_atom(element, pos);
+            structure.set_atom_hydrogen_passivation(id, true);
+            structure.add_bond(host, id, BOND_SINGLE);
+            added.push(id);
+        }
+    }
+    added
+}
+
 // ============================================================================
 // The clash rule
 // ============================================================================

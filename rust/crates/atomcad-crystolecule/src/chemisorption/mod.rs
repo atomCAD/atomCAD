@@ -44,7 +44,7 @@ pub mod sequential;
 pub mod transfer;
 
 pub use atoms::{HypothesisKey, change_key, changed_atoms, free_valence};
-pub use config::{CHANGED_TAG, ChemisorptionError, Side};
+pub use config::{CHANGED_TAG, ChemisorptionError, PASSIVANT_TAG, Side};
 pub use distinct::{
     ADSORBATE_TAG, Distinct, DistinctCandidate, DistinctSettings, LOCAL_TAG, distinct,
     local_cluster,

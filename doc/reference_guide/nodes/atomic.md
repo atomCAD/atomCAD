@@ -1182,6 +1182,21 @@ press Run again.
   candidates are marked `mirrored`; with `unique` on, one that relaxes into a
   proper binding is merged into it. Each costs a relaxation: on a three-footed
   tool about as many again as the proper three-leg bindings.
+- `passivate_sites` (default off) — relax each candidate on a passivated
+  surface. Before it is relaxed, every open valence its sites have left is
+  capped with H: an unused site in full, a site the candidate uses (or an H
+  acceptor) whatever its bonds leave. The binding is then relaxed with only
+  its own sites bare, crowded by the H the rest of the surface would really
+  carry. Only sites are capped (atoms with a free valence that pass
+  `substrate_tag`); the molecule's unbonded feet stay radicals. The number of
+  H per site is what `passivate` would place there (its open slots), and a
+  site's passivated flag is ignored, so a site made by deleting a surface H is
+  capped too. No H is skipped for a clash: one that starts inside the molecule
+  is left for the relaxation to push out (see **How candidates are ranked**
+  for its reference). Legs 4 and later always grow from the **bare**
+  relaxations, so a binding that is both a candidate and a step towards more
+  legs is relaxed twice, and the count next to Run includes both; the
+  reference relaxations come on top of that count.
 - `max_formed_bonds` (default: no cap) — at most this many legs per binding.
   In the panel, tick *Limit legs* to set it; in the text format, `-1` means no
   cap.
@@ -1251,7 +1266,7 @@ one `relax` uses); changing it makes a result stale.
 
 In the text format `formed_bonds` and `bond_inventory` appear only when set:
 `formed_bonds: 3, bond_inventory: "formed 3× O–Si"`; `include_mirrored: true`
-only when on. The listing properties are
+and `passivate_sites: true` only when on. The listing properties are
 `unique: "rigid_mirror", unique_tolerance: 0.15, local_hops: 2`, `unique` one of
 `"off"`, `"exact"`, `"translation"`, `"rigid"`, `"rigid_mirror"`.
 
@@ -1267,8 +1282,9 @@ only when on. The listing properties are
   possible with `clash_filter` off), `worst_bond_ratio`, `terms` (the
   strain split into `stretch`, `bend`, `torsion`, `inversion`, `vdw`),
   `copies` (how many kept candidates `unique` merged into this one, itself
-  excluded; copies the search did not keep are not counted), and `mirrored`
-  (it grew from a mirror-image assignment kept by `include_mirrored`). A record
+  excluded; copies the search did not keep are not counted), `mirrored`
+  (it grew from a mirror-image assignment kept by `include_mirrored`), and
+  `passivants` (the H `passivate_sites` placed on its sites; 0 without it). A record
   array draws nothing in the viewport; to look at a candidate, take its
   `structure` field (`array_at` + `record_destructure`).
 - `stats` (`ChemisorbStats`) — the whole search. From the plan (legs 1–3):
@@ -1304,15 +1320,23 @@ In every output structure the atoms whose bonds changed carry the tag
 `cs_changed`, so an `apply_style` rule can highlight them. Every candidate's
 structure also carries `cs_adsorbate` (the atoms that came from the molecule,
 a transferred H included) and `cs_local` (the local cluster `unique`
-compares), whether `unique` is on or off. The pin readout of `candidates` says
-how many were merged, e.g. *6 of 20 (14 copies merged)*. The three tags need
-three of a structure's 32 tag names; inputs that already use more than 29
-between them are reported as an error.
+compares), whether `unique` is on or off. With `passivate_sites` on, the H it
+placed carry `cs_passivant`, so a style rule can show or hide them. The pin
+readout of `candidates` says how many were merged, e.g. *6 of 20 (14 copies
+merged)*. The three tags need three of a structure's 32 tag names (four with
+`passivate_sites`); inputs that already use more than 29 (28) between them
+are reported as an error.
 
 **How candidates are ranked.** By `strain`: the UFF energy of the relaxed
 candidate minus that of the **separated** state — the molecule relaxed on its
 own plus the substrate relaxed on its own — in kcal/mol. Lower ranks first. The
 reference is not the pose, because the candidates come from many orientations.
+With `passivate_sites` on, the separated substrate carries **the same H** as
+the candidate: as many on each site as the candidate got, placed the way
+`passivate` would on the bare substrate, and relaxed on its own. The atoms on
+both sides then match, so the strain is still the cost of forming the
+candidate's bonds; candidates whose bonds use the same sites share one
+reference.
 There is no bond-energy term. The node is meant for **kinetic control**, where
 what a reaction can reach matters more than the absolute energy of the product,
 and tabulated bond enthalpies are too crude to supply that energy anyway. Any
@@ -1365,7 +1389,8 @@ relaxations a run would do beside it ("+ local phase" when legs 4 and later
 follow, whose count is known only after Run), or what the last run did, and a
 red line when the result is stale. Below it are the search settings — the tags,
 the three distances (*Reach* greyed while nothing reads it), *Prune seatings
-that clash*, *Include mirrored assignments*, *Limit legs* — then the filters (*Only an exact number of legs*,
+that clash*, *Include mirrored assignments*, *Passivate unused sites before
+relaxing*, *Limit legs* — then the filters (*Only an exact number of legs*,
 *Bond inventory*), then *Top N* and the energy window; then, in a group of
 its own, the **Listing** settings (*Unique*, its tolerance — greyed while
 *Unique* is off — and *Local hops*), which need no new Run. Then the search
@@ -1376,7 +1401,7 @@ line each with the strain, the bond inventory underneath, an `unconv.` mark on a
 relaxation that did not converge, a `clash` mark on one whose seating
 clashed, a `mirr.` mark on a mirrored one (its hover says how far its third
 bond started from its site), and *+N copies* on one `unique` merged copies
-into. The mirror line of the statistics reads *pruned / kept / undecided*. Lines over the
+into; with `passivate_sites`, a row's hover says how many H were placed. The mirror line of the statistics reads *pruned / kept / undecided*. Lines over the
 list say how many relaxed candidates top N and the window dropped, and how
 many kept ones were merged; the statistics give the kept and the listed
 counts. Hover a row for its sites, worst bond ratio and strain terms.

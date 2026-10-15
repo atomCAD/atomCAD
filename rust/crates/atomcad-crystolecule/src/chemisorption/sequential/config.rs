@@ -30,6 +30,11 @@ pub struct SequentialSearch {
     /// pruning them, each seated upright on two of its legs with the third
     /// bond started stretched (`Setup::seat_mirrored`).
     pub include_mirrored: bool,
+    /// Before a candidate is relaxed, cap every open valence its sites have
+    /// left with H (`cs_passivant`), so it relaxes on a passivated surface
+    /// with only its own bonds made. Its strain is taken against a reference
+    /// substrate carrying the same H (`passivate`).
+    pub passivate_sites: bool,
     /// The enabled transfer kinds; only `to_substrate` (a leg donating its
     /// atom to a site). Empty = bond forming only.
     pub transfers: Vec<TransferRule>,
@@ -64,6 +69,7 @@ impl Default for SequentialSearch {
             reach: 3.0,
             clash_filter: true,
             include_mirrored: false,
+            passivate_sites: false,
             transfers: Vec::new(),
             max_formed_bonds: None,
             formed_bonds: None,

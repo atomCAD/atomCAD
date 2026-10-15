@@ -112,6 +112,7 @@ class _ChemisorbEditorState extends State<ChemisorbEditor> {
     double? reach,
     bool? clashFilter,
     bool? includeMirrored,
+    bool? passivateSites,
     int? maxFormedBonds,
     Object? formedBonds = _keep,
     Object? bondInventory = _keep,
@@ -135,6 +136,7 @@ class _ChemisorbEditorState extends State<ChemisorbEditor> {
         reach: reach ?? data.reach,
         clashFilter: clashFilter ?? data.clashFilter,
         includeMirrored: includeMirrored ?? data.includeMirrored,
+        passivateSites: passivateSites ?? data.passivateSites,
         maxFormedBonds: maxFormedBonds ?? data.maxFormedBonds,
         formedBonds: identical(formedBonds, _keep)
             ? data.formedBonds
@@ -277,6 +279,22 @@ class _ChemisorbEditorState extends State<ChemisorbEditor> {
               title: const Text('Include mirrored assignments'),
               value: data.includeMirrored,
               onChanged: (value) => _commit(includeMirrored: value ?? false),
+              controlAffinity: ListTileControlAffinity.leading,
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+            ),
+          ),
+          Tooltip(
+            message: 'Before relaxing a candidate, cap every open valence '
+                'its sites have left with H (tagged cs_passivant), so it '
+                'relaxes on a passivated surface with only its own bonds '
+                'made. Its strain is taken against a substrate carrying the '
+                'same H.',
+            waitDuration: const Duration(milliseconds: 600),
+            child: CheckboxListTile(
+              title: const Text('Passivate unused sites before relaxing'),
+              value: data.passivateSites,
+              onChanged: (value) => _commit(passivateSites: value ?? false),
               controlAffinity: ListTileControlAffinity.leading,
               contentPadding: EdgeInsets.zero,
               dense: true,
@@ -676,7 +694,8 @@ class _CandidatesCard extends StatelessWidget {
                     'torsion ${formatNatural(row.torsion, 3)}, '
                     'inversion ${formatNatural(row.inversion, 3)}, '
                     'vdW ${formatNatural(row.vdw, 3)}'
-                    '${_mirroredNote(row)}',
+                    '${_mirroredNote(row)}'
+                    '${row.passivants > BigInt.zero ? '\n${row.passivants} H placed' : ''}',
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 3.0),
                   child: Column(

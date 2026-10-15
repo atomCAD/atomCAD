@@ -1,7 +1,7 @@
 # Design: mirrored bindings and passivated sites in `chemisorb`, clash-aware `passivate`
 
-Status: **reviewed 2026-10-15; Phases 1 and 2 done 2026-10-15 (§8.1,
-§8.2).** Phases 1–3 are agent work; Phase 4 is the maintainer's.
+Status: **reviewed 2026-10-15; Phases 1–3 done 2026-10-15 (§8.1–§8.3).**
+Phase 4, the walkthrough, is the maintainer's.
 
 Three additions, requested by mechadense for a chemist who runs `chemisorb`
 as a brute-force search and wants to be shown, not told, what the pruning
@@ -752,3 +752,65 @@ surface, so the walkthrough (Phase 4) is where a mirrored candidate ranking
 near the top should be looked at: it is either the crossed-arm conformer the
 option exists to find, or a conformer of a proper binding that `unique`'s
 tolerance does not merge.
+
+### 8.3 Phase 3: `passivate_sites` (2026-10-15)
+
+Built as §4 describes, in a new `sequential/passivate.rs`. Where the
+implementation had to choose:
+
+- **One placement routine for both sides.** A candidate is capped with
+  `add_terminators_counted` at each site's full `open_valence_slots` count,
+  not with `add_hydrogens_filtered`; the two place the same H at the same
+  positions (`counted_terminators_with_every_slot_match_the_general_path`),
+  and the reference then uses the same routine with the key's counts. The
+  key is read from the start structure's bonds alone (`Setup::passivation_key`),
+  so computing every key up front needs no H placement.
+- **One `RelaxedRow` per row, with a `passivated` flag.** A row relaxed twice
+  records its passivated relaxation, the one it shows; `SearchReport::relaxed`
+  is therefore one per relaxed row rather than one per relaxation, and the
+  second relaxations are counted by `PlanStats::twice` and a new
+  `LevelStats::twice` (`relaxed − twice` rows). `replay` passivates exactly
+  when the row's flag says so; `replay_state` is the bare relaxation, used for
+  a local row's parent and for a debug *step* under a twice-relaxed row, which
+  must show the state the next level grew from.
+- **The local budget charges the second batch up front.** In the level's
+  sorted order, the first path of each candidate change set costs two, every
+  other path one, and the level stops at the first path that does not fit.
+  The winner of a set is always among its relaxed paths, so a set with any
+  relaxed path gets exactly its one passivated relaxation and none is half
+  relaxed.
+- **Local candidates store H positions, not structures.** A passivated local
+  relaxation keeps its key and its H positions beside the movable positions;
+  the candidate structure is rebuilt by `passivated_state_structure`, so a
+  level still holds positions only (§4.6 of the sequential design).
+- **No `twice` field on the node's `stats` record or the panel.** The count
+  next to Run is `to_relax`, which includes it (§4.3); the debug tree's hover
+  says when a row's deeper rows grew from its bare relaxation.
+
+**Testing.** The audit (`chemisorption_sequential_support.rs`) now checks every
+passivated candidate: its `cs_passivant` H, one per open slot, each on a site,
+no site left open, the atom count, and the strain against its key's
+reference. Two deviations from §6's list:
+
+- *Sites made by deleting H* sets the hydrogen-passivation flag on the sites
+  directly (`a_site_flagged_as_passivated_is_still_capped`) instead of
+  building them with `atom_edit` deletions, which the crystolecule tests
+  cannot reach. The flag is what the deletion leaves behind, and the only
+  thing the passivation reads.
+- *The budget sweep* runs every budget from 1 to the untruncated count on a
+  five-foot fixture with numbered feet (one binding order: 31 relaxations,
+  two levels, a second batch at level 4), not on the shared five-foot run
+  (518 relaxations), which would take hours in debug.
+
+**Finding: an unbonded foot over its own site gets an H under it.** The
+planted fixtures put a site under every foot, so a candidate that leaves one
+foot unbonded caps the site right beneath it: the H starts about 0.15 Å from
+the foot. These relaxations ran to the 2,000-iteration limit, which made the
+five-foot tests about four times slower with the setting on; they now cap
+iterations at 200, since they compare runs and count relaxations. This is
+D4 working as decided (the foot stays a radical, the site is capped), but it
+means `passivate_sites` relaxes such a candidate with the H squeezed between
+the free foot and the site it would bond. The walkthrough should look at one
+on a four-footed tool: whether the H is pushed aside or the foot is pushed
+away. On mechadense's three-footed tool every candidate uses its three
+feet, so it does not arise there.

@@ -10,8 +10,8 @@ use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::chemisorption::relax::relax;
 use atomcad_crystolecule::chemisorption::sequential::*;
 use atomcad_crystolecule::chemisorption::{
-    BondInventory, CHANGED_TAG, ChemisorptionError, DistinctSettings, TransferDirection,
-    TransferRule, distinct,
+    BondInventory, CHANGED_TAG, ChemisorptionError, DistinctSettings, PASSIVANT_TAG,
+    TransferDirection, TransferRule, distinct,
 };
 use atomcad_crystolecule::simulation::uff::VdwMode;
 use atomcad_util::job_control::JobControl;
@@ -592,4 +592,343 @@ fn a_mirrored_start_of_an_achiral_tripod_finds_nothing_new() {
     }
     assert_eq!(checked, p.stats.mirrored_kept);
     println!("mirrored candidates: {merged} merged with a proper one, {strained} more strained");
+}
+
+// ============================================================================
+// passivate_sites (design_chemisorb_mirrors_and_passivation.md §4)
+// ============================================================================
+
+fn passivated(config: SequentialSearch) -> SequentialSearch {
+    SequentialSearch {
+        passivate_sites: true,
+        ..config
+    }
+}
+
+/// The passivation key a candidate's structure carries: its `cs_passivant`
+/// H by host.
+fn key_of(c: &Candidate) -> PassivationKey {
+    let mut hosts: BTreeMap<u32, usize> = BTreeMap::new();
+    for h in c.structure.atoms_with_tag(PASSIVANT_TAG) {
+        let atom = c.structure.get_atom(h).unwrap();
+        let host = atom.bonds.iter().find(|b| !b.is_delete_marker()).unwrap();
+        *hosts.entry(host.other_atom_id()).or_insert(0) += 1;
+    }
+    hosts.into_iter().collect()
+}
+
+/// Every site's open valence is capped and nothing else (the audit checks
+/// the hosts, the atom count and the strain against the key's reference);
+/// the relaxed rows say which relaxations were passivated.
+#[test]
+fn a_passivated_candidate_caps_every_open_site_valence() {
+    let (ads, sub) = triangle();
+    let config = passivated(triangle_config());
+    let (p, r) = run(&ads, &sub, &config);
+    assert!(!r.candidates.is_empty());
+    for c in &r.candidates {
+        // Five silyls, one valence each: the candidate's legs use some, the
+        // rest get one H.
+        assert_eq!(c.passivants, 5 - c.formed.len(), "{:?}", c.formed);
+        assert_eq!(
+            c.structure.get_num_of_atoms(),
+            p.setup.combined.get_num_of_atoms() + c.passivants
+        );
+    }
+    for x in &r.relaxed {
+        assert_eq!(x.passivated, p.hypotheses[x.hypothesis].candidate);
+    }
+}
+
+/// The references are relaxed up front, one per distinct key among the
+/// relaxed candidates, and the progress total announced covers them.
+#[test]
+fn one_reference_is_relaxed_per_key_before_the_candidates() {
+    let (ads, sub) = triangle();
+    let config = passivated(triangle_config());
+    let control = Arc::new(JobControl::new());
+    let r = search(&ads, &sub, &config, Some(&control)).unwrap();
+    let p = plan(&ads, &sub, &config).unwrap();
+    let keys: BTreeSet<PassivationKey> = p
+        .to_relax
+        .iter()
+        .map(|&i| &p.hypotheses[i])
+        .filter(|h| h.candidate)
+        .map(|h| {
+            p.setup.passivation_key(
+                &p.setup
+                    .start_structure(&h.steps, h.seating.as_ref().unwrap()),
+            )
+        })
+        .collect();
+    let have: BTreeSet<PassivationKey> = r.references.keys().cloned().collect();
+    assert_eq!(have, keys);
+    assert!(keys.len() < r.candidates.len(), "candidates share keys");
+    let progress = control.snapshot();
+    assert_eq!(
+        progress.total,
+        Some((r.stats.relaxed + 1 + r.references.len()) as u64)
+    );
+    assert_eq!(Some(progress.done), progress.total);
+}
+
+/// Two feet over two sites that both use: nothing is left to cap, and the
+/// setting changes nothing (§4: the passivated path and its reference reduce
+/// to the bare ones).
+#[test]
+fn with_nothing_to_cap_the_setting_changes_nothing() {
+    let (ads, _) = methoxy_feet(&[DVec3::ZERO, DVec3::new(3.0, 0.0, 0.0)]);
+    let (sub, _) = silyl_sites(&[DVec3::new(0.0, 0.0, -1.7), DVec3::new(3.0, 0.0, -1.7)], 3);
+    let config = keep_all(SequentialSearch {
+        anchor_reach: 4.0,
+        tolerance: 0.0,
+        formed_bonds: Some(2),
+        clash_filter: false,
+        ..Default::default()
+    });
+    let (p0, off) = run(&ads, &sub, &config);
+    let (_, on) = run(&ads, &sub, &passivated(config.clone()));
+    assert!(!off.candidates.is_empty());
+    assert_eq!(off.candidates.len(), on.candidates.len());
+    for (a, b) in off.candidates.iter().zip(&on.candidates) {
+        assert_eq!(a.key(), b.key());
+        assert_eq!(b.passivants, 0);
+        assert_eq!(a.strain.to_bits(), b.strain.to_bits());
+        assert_eq!(a.terms, b.terms);
+        for id in p0.setup.combined.atom_ids() {
+            assert_eq!(
+                a.structure.get_atom(*id).unwrap().position,
+                b.structure.get_atom(*id).unwrap().position
+            );
+        }
+    }
+}
+
+/// A site made by deleting a surface H keeps the hydrogen-passivation flag;
+/// it is a site all the same, and it is capped.
+#[test]
+fn a_site_flagged_as_passivated_is_still_capped() {
+    let (ads, mut sub) = triangle();
+    let sites: Vec<u32> = sub
+        .atoms_values()
+        .filter(|a| a.atomic_number == SI)
+        .map(|a| a.id)
+        .collect();
+    for &id in &sites {
+        sub.set_atom_hydrogen_passivation(id, true);
+    }
+    let config = passivated(SequentialSearch {
+        formed_bonds: Some(3),
+        ..triangle_config()
+    });
+    let (_, r) = run(&ads, &sub, &config);
+    assert!(!r.candidates.is_empty());
+    assert!(r.candidates.iter().all(|c| c.passivants == 2));
+}
+
+/// A used site with a valence left and an acceptor with one left after its
+/// transferred H each get one H: water over two SiH2.
+#[test]
+fn leftover_valence_on_a_used_site_and_an_acceptor_is_capped() {
+    let (sub, ids) = silyl_sites(&[DVec3::new(0.0, 0.0, -1.7), DVec3::new(2.4, 0.0, -1.7)], 2);
+    let w = water(DVec3::new(0.0, 0.0, 0.3), DVec3::X);
+    let config = passivated(keep_all(SequentialSearch {
+        transfers: vec![H_TO_SUBSTRATE],
+        anchor_reach: 2.5,
+        ..Default::default()
+    }));
+    let (p, r) = run(&w, &sub, &config);
+    let (_, back) = back_maps(&p.setup);
+    let c = r
+        .candidates
+        .iter()
+        .find(|c| back[&c.formed[0].1] == ids[0])
+        .expect("O on the first SiH2, H on the second");
+    assert_eq!(back[&c.transfers[0].acceptor], ids[1]);
+    assert_eq!(c.passivants, 2);
+    let key: Vec<(u32, usize)> = key_of(c).into_iter().map(|(h, n)| (back[&h], n)).collect();
+    assert_eq!(key, vec![(ids[0], 1), (ids[1], 1)]);
+}
+
+/// The reference carries the candidate's atoms: the adsorbate, the substrate
+/// and the same H on the same hosts; and relaxed from scratch, outside the
+/// search's map, it has the same energy.
+#[test]
+fn the_reference_conserves_atoms_and_is_a_function_of_its_key() {
+    let (ads, sub) = triangle();
+    let config = passivated(triangle_config());
+    let (p, r) = run(&ads, &sub, &config);
+    let elements = |s: &AtomicStructure| {
+        let mut count: BTreeMap<i16, usize> = BTreeMap::new();
+        for a in s.atoms_values() {
+            *count.entry(a.atomic_number).or_insert(0) += 1;
+        }
+        count
+    };
+    let (_, back) = back_maps(&p.setup);
+    let mut checked = BTreeSet::new();
+    for c in &r.candidates {
+        let key = key_of(c);
+        let reference = p.setup.passivated_substrate(&p.substrate, &key);
+        let mut both = elements(&reference);
+        for (z, n) in elements(&ads) {
+            *both.entry(z).or_insert(0) += n;
+        }
+        assert_eq!(both, elements(&c.structure));
+        // The same H on the same hosts.
+        let mut hosts: BTreeMap<u32, usize> = BTreeMap::new();
+        for a in reference.atoms_values() {
+            if p.substrate.get_atom(a.id).is_none() {
+                *hosts.entry(a.bonds[0].other_atom_id()).or_insert(0) += 1;
+            }
+        }
+        let want: BTreeMap<u32, usize> = key.iter().map(|&(h, n)| (back[&h], n)).collect();
+        assert_eq!(hosts, want);
+        if checked.insert(key.clone()) && checked.len() <= 3 {
+            let fresh = passivated_reference(&p, &config, &key).unwrap();
+            assert!((fresh.energy - r.references[&key].energy).abs() < 1e-9);
+        }
+    }
+}
+
+/// Two binding orders onto a site with a valence left share one key and so
+/// one reference; and the references do not change with the thread count.
+#[test]
+fn candidates_with_one_key_share_one_reference_whatever_the_threads() {
+    let (ads, _) = methoxy_feet(&[DVec3::ZERO, DVec3::new(3.0, 0.0, 0.0)]);
+    let mut sub = AtomicStructure::new();
+    let s0 = add_silyl(&mut sub, DVec3::new(0.0, 0.0, -1.7), 2);
+    add_silyl(&mut sub, DVec3::new(3.0, 0.0, -1.7), 3);
+    add_silyl(&mut sub, DVec3::new(9.0, 0.0, -1.7), 3);
+    let config = passivated(keep_all(SequentialSearch {
+        anchor_reach: 4.0,
+        tolerance: 0.0,
+        formed_bonds: Some(2),
+        clash_filter: false,
+        ..Default::default()
+    }));
+    let on = |threads: usize| {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .build()
+            .unwrap()
+            .install(|| run(&ads, &sub, &config))
+    };
+    let ((p, r1), (_, r4)) = (on(1), on(4));
+    let (_, back) = back_maps(&p.setup);
+    // Both feet on s0 and its neighbour, in either order: s0 keeps one
+    // valence either way, and the far silyl is capped in full.
+    let shared: Vec<&Candidate> = r1
+        .candidates
+        .iter()
+        .filter(|c| key_of(c).iter().any(|&(h, n)| back[&h] == s0 && n == 1))
+        .collect();
+    assert!(shared.len() >= 2, "two candidates leave s0 one valence");
+    let keys: BTreeSet<PassivationKey> = shared.iter().map(|c| key_of(c)).collect();
+    assert_eq!(keys.len(), 1, "one key");
+    let all: BTreeSet<PassivationKey> = r1.candidates.iter().map(key_of).collect();
+    assert_eq!(r1.references.len(), all.len());
+    let bits = |r: &SearchReport| -> Vec<_> {
+        r.references
+            .iter()
+            .map(|(k, v)| (k.clone(), v.energy.to_bits()))
+            .collect()
+    };
+    assert_eq!(bits(&r1), bits(&r4));
+    let view = |r: &SearchReport| -> Vec<_> {
+        r.candidates
+            .iter()
+            .map(|c| (c.key(), c.strain.to_bits(), c.passivants))
+            .collect()
+    };
+    assert_eq!(view(&r1), view(&r4));
+    assert_eq!(r1.relaxed, r4.relaxed);
+}
+
+/// An H placed inside the bound molecule's body is placed anyway (D8), and
+/// the relaxation converges or is marked unconverged, never errors: a
+/// methoxy foot bonds the silyl below it, and a second silyl hangs above
+/// the molecule, its open valence pointing down into the methyl.
+#[test]
+fn an_h_placed_inside_the_molecule_is_kept_and_relaxed() {
+    let mut ads = AtomicStructure::new();
+    add_methoxy(&mut ads, DVec3::ZERO);
+    let mut sub = AtomicStructure::new();
+    let under = add_silyl(&mut sub, DVec3::new(0.0, 0.0, -1.7), 3);
+    let crowded = add_silyl_along(&mut sub, DVec3::new(0.0, 0.0, 4.0), -DVec3::Z, 3);
+    let config = passivated(keep_all(SequentialSearch {
+        anchor_reach: 1.8,
+        clash_filter: false,
+        ..Default::default()
+    }));
+    let (p, r) = run(&ads, &sub, &config);
+    let (_, back) = back_maps(&p.setup);
+    let c = r
+        .candidates
+        .iter()
+        .find(|c| back[&c.formed[0].1] == under)
+        .expect("the foot on the silyl under it");
+    assert_eq!(c.passivants, 1);
+    // The H on the crowded silyl started inside the methyl.
+    let crowded = p.setup.substrate_ids[&crowded];
+    let start = {
+        let h = &p.hypotheses[c.hypothesis];
+        let mut s = p
+            .setup
+            .start_structure(&h.steps, h.seating.as_ref().unwrap());
+        let (_, added) = p.setup.passivate(&mut s);
+        let at = s.get_atom(added[0]).unwrap().position;
+        assert!(s.has_bond_between(added[0], crowded));
+        p.setup
+            .adsorbate_atoms
+            .iter()
+            .map(|&id| s.get_atom(id).unwrap().position.distance(at))
+            .fold(f64::INFINITY, f64::min)
+    };
+    assert!(start < 1.2, "the H starts {start:.2} Å from the molecule");
+    assert!(c.strain.is_finite());
+}
+
+/// `cs_passivant` is on exactly the placed H; with it, inputs carrying 29 tag
+/// names hit the tag limit (an error, never a panic), and without it 29 still
+/// work.
+#[test]
+fn the_passivant_tag_marks_the_placed_h_and_counts_toward_the_limit() {
+    let (ads, sub) = triangle();
+    let (_, r) = run(&ads, &sub, &passivated(triangle_config()));
+    for c in &r.candidates {
+        let tagged = c.structure.atoms_with_tag(PASSIVANT_TAG);
+        assert_eq!(tagged.len(), c.passivants);
+        assert!(
+            tagged
+                .iter()
+                .all(|&id| c.structure.get_atom(id).unwrap().atomic_number == H)
+        );
+    }
+
+    // 20 names on the substrate, 9 on the adsorbate.
+    let (mut tagged, mut tagged_ads) = (sub.clone(), ads.clone());
+    let ids: Vec<u32> = tagged.atom_ids().copied().take(20).collect();
+    for (k, id) in ids.into_iter().enumerate() {
+        tagged.add_atom_tag(id, &format!("t{k}")).unwrap();
+    }
+    let ids: Vec<u32> = tagged_ads.atom_ids().copied().take(9).collect();
+    for (k, id) in ids.into_iter().enumerate() {
+        tagged_ads.add_atom_tag(id, &format!("a{k}")).unwrap();
+    }
+    assert_eq!(tagged.tag_names().len() + tagged_ads.tag_names().len(), 29);
+    let base = SequentialSearch {
+        formed_bonds: Some(3),
+        ..triangle_config()
+    };
+    let distinct_of = |config: &SequentialSearch| {
+        let p = plan(&tagged_ads, &tagged, config).unwrap();
+        evaluate(&p, config, None)
+            .and_then(|r| distinct(&p.setup, &r, &DistinctSettings::default()).map(|_| ()))
+    };
+    assert!(distinct_of(&base).is_ok());
+    assert!(matches!(
+        distinct_of(&passivated(base)),
+        Err(ChemisorptionError::Tag(_))
+    ));
 }
