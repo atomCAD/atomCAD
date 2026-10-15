@@ -14,7 +14,9 @@ use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
 use atomcad_crystolecule::atomic_constants::{ALLOWED_PASSIVANTS, ATOM_INFO, is_allowed_passivant};
-use atomcad_crystolecule::hydrogen_passivation::{AddHydrogensOptions, add_hydrogens_filtered};
+use atomcad_crystolecule::hydrogen_passivation::{
+    AddHydrogensOptions, DEFAULT_PASSIVATION_CLASH_FACTOR, add_hydrogens_filtered,
+};
 use atomcad_crystolecule::lattice_fill::DEFAULT_REGION_MARGIN;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -23,6 +25,14 @@ use std::collections::HashMap;
 /// `{}`) and freshly-added nodes both resolve to H.
 fn default_element() -> i16 {
     1
+}
+
+fn default_clash_factor() -> f64 {
+    DEFAULT_PASSIVATION_CLASH_FACTOR
+}
+
+fn is_default_clash_factor(factor: &f64) -> bool {
+    *factor == DEFAULT_PASSIVATION_CLASH_FACTOR
 }
 
 /// Node data for the `passivate` node (né `add_hydrogen`, issue #405). Places a
@@ -37,12 +47,27 @@ pub struct PassivateData {
     /// serde-default `1` (hydrogen) so pre-halogen files load unchanged.
     #[serde(default = "default_element")]
     pub element: i16,
+    /// Leave an open valence uncapped when its terminator would sit in a
+    /// steric clash (`doc/design_chemisorb_mirrors_and_passivation.md` §5).
+    /// Not written while off, so a node that never used the option saves
+    /// exactly as before it existed.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub skip_clashes: bool,
+    /// The clash rule's factor on the van der Waals sum; used only with
+    /// `skip_clashes`, and must be > 0. Not written at its default.
+    #[serde(
+        default = "default_clash_factor",
+        skip_serializing_if = "is_default_clash_factor"
+    )]
+    pub clash_factor: f64,
 }
 
 impl Default for PassivateData {
     fn default() -> Self {
         Self {
             element: default_element(),
+            skip_clashes: false,
+            clash_factor: default_clash_factor(),
         }
     }
 }
@@ -129,6 +154,18 @@ impl NodeData for PassivateData {
             )));
         }
 
+        let clash = if self.skip_clashes {
+            if !(self.clash_factor > 0.0 && self.clash_factor.is_finite()) {
+                return EvalOutput::single(NetworkResult::Error(format!(
+                    "passivate.clash_factor: must be > 0, got {}",
+                    self.clash_factor
+                )));
+            }
+            Some(self.clash_factor)
+        } else {
+            None
+        };
+
         let at_root = network_stack.len() == 1;
         let output = map_atomic_in_region(
             input_val,
@@ -139,17 +176,21 @@ impl NodeData for PassivateData {
                     selected_only: false,
                     skip_already_passivated: true,
                     passivant_element: element,
+                    clash,
                 };
                 let result = add_hydrogens_filtered(&mut structure, &options, in_region);
 
                 if at_root {
-                    context.selected_node_eval_cache = Some(Box::new(PassivateEvalCache {
-                        message: format!(
-                            "Added {} {} atoms",
-                            result.atoms_added,
-                            element_symbol(element)
-                        ),
-                    }));
+                    let mut message = format!(
+                        "Added {} {} atoms",
+                        result.atoms_added,
+                        element_symbol(element)
+                    );
+                    if clash.is_some() {
+                        message.push_str(&format!(", skipped {} (steric clash)", result.skipped));
+                    }
+                    context.selected_node_eval_cache =
+                        Some(Box::new(PassivateEvalCache { message }));
                 }
                 structure
             },
@@ -182,7 +223,17 @@ impl NodeData for PassivateData {
     }
 
     fn get_text_properties(&self) -> Vec<(String, TextValue)> {
-        vec![("element".to_string(), TextValue::Int(self.element as i32))]
+        let mut props = vec![("element".to_string(), TextValue::Int(self.element as i32))];
+        // Written only when on, so saved networks without the option are
+        // unchanged.
+        if self.skip_clashes {
+            props.push(("skip_clashes".to_string(), TextValue::Bool(true)));
+            props.push((
+                "clash_factor".to_string(),
+                TextValue::Float(self.clash_factor),
+            ));
+        }
+        props
     }
 
     fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
@@ -191,6 +242,16 @@ impl NodeData for PassivateData {
                 .as_int()
                 .ok_or_else(|| "element must be an integer".to_string())?
                 as i16;
+        }
+        if let Some(v) = props.get("skip_clashes") {
+            self.skip_clashes = v
+                .as_bool()
+                .ok_or_else(|| "skip_clashes must be a boolean".to_string())?;
+        }
+        if let Some(v) = props.get("clash_factor") {
+            self.clash_factor = v
+                .as_float()
+                .ok_or_else(|| "clash_factor must be a number".to_string())?;
         }
         Ok(())
     }

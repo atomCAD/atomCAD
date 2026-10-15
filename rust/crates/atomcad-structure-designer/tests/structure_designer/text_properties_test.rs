@@ -1040,16 +1040,29 @@ fn test_drawing_plane_roundtrip() {
 fn test_passivate_roundtrip() {
     // Hydrogen default and a halogen both round-trip through the `element`
     // Int text property.
-    test_roundtrip(&PassivateData { element: 1 });
-    test_roundtrip(&PassivateData { element: 9 });
+    test_roundtrip(&PassivateData {
+        element: 1,
+        ..PassivateData::default()
+    });
+    test_roundtrip(&PassivateData {
+        element: 9,
+        ..PassivateData::default()
+    });
 
     // Explicit value check on the property.
-    let props = PassivateData { element: 17 }.get_text_properties();
+    let props = PassivateData {
+        element: 17,
+        ..PassivateData::default()
+    }
+    .get_text_properties();
     assert_eq!(props.len(), 1);
     assert_eq!(props[0].0, "element");
     assert_eq!(props[0].1, TextValue::Int(17));
 
-    let mut data = PassivateData { element: 1 };
+    let mut data = PassivateData {
+        element: 1,
+        ..PassivateData::default()
+    };
     let mut map = HashMap::new();
     map.insert("element".to_string(), TextValue::Int(35));
     data.set_text_properties(&map).unwrap();

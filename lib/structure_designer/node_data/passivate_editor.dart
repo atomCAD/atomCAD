@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 import 'package:flutter_cad/common/passivant_dropdown.dart';
+import 'package:flutter_cad/inputs/float_input.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 
 /// Index of the `element` input pin on `passivate`.
@@ -40,6 +41,18 @@ class PassivateEditor extends StatelessWidget {
     return false;
   }
 
+  /// Writes the stored data with the given fields changed.
+  void _commit({int? element, bool? skipClashes, double? clashFactor}) {
+    model.setPassivateData(
+      nodeId,
+      APIPassivateData(
+        element: element ?? data!.element,
+        skipClashes: skipClashes ?? data!.skipClashes,
+        clashFactor: clashFactor ?? data!.clashFactor,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (data == null) {
@@ -76,12 +89,7 @@ class PassivateEditor extends StatelessWidget {
               ignoring: connected,
               child: PassivantDropdown(
                 value: data!.element,
-                onChanged: (newValue) {
-                  model.setPassivateData(
-                    nodeId,
-                    APIPassivateData(element: newValue),
-                  );
-                },
+                onChanged: (newValue) => _commit(element: newValue),
               ),
             ),
           ),
@@ -91,6 +99,26 @@ class PassivateEditor extends StatelessWidget {
             'host–terminator bond length. Halogens (F/Cl/Br/I) are placed at '
             'their equilibrium bond length, so no relax pass is needed.',
             style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 8),
+          CheckboxListTile(
+            title: const Text('Skip terminators that clash'),
+            subtitle: const Text(
+              'Leave a valence open when its terminator would sit closer than '
+              'factor × the van der Waals sum to another atom.',
+            ),
+            value: data!.skipClashes,
+            contentPadding: EdgeInsets.zero,
+            controlAffinity: ListTileControlAffinity.leading,
+            onChanged: (newValue) {
+              if (newValue != null) _commit(skipClashes: newValue);
+            },
+          ),
+          FloatInput(
+            label: 'Clash factor',
+            value: data!.clashFactor,
+            enabled: data!.skipClashes,
+            onChanged: (newValue) => _commit(clashFactor: newValue),
           ),
         ],
       ),

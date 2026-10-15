@@ -1,7 +1,7 @@
 # Design: mirrored bindings and passivated sites in `chemisorb`, clash-aware `passivate`
 
-Status: **reviewed 2026-10-15; ready for implementation.** Phases 1–3 are
-agent work; Phase 4 is the maintainer's.
+Status: **reviewed 2026-10-15; Phase 1 done 2026-10-15 (§8.1).** Phases 1–3
+are agent work; Phase 4 is the maintainer's.
 
 Three additions, requested by mechadense for a chemist who runs `chemisorb`
 as a brute-force search and wants to be shown, not told, what the pruning
@@ -661,3 +661,43 @@ where the relaxation goes, so it removes H where the molecule *was*. That is
 why `passivate_sites` caps everything. If the walkthrough shows trapped H
 matter, the remedy is a different design, not a factor: relax bare, cap on
 the relaxed geometry, and relax again, at twice the cost.
+
+### 8.1 Phase 1: nearest contacts on the surface fixtures (2026-10-15)
+
+Measured by `surface_fixtures_nearest_contacts` in
+`hydrogen_passivation_test.rs`. Each fixture is a bare `fill_lattice` cube;
+the hosts are the open-valence atoms of the top layer within 6–8 Å of the
+facet's centre, away from the cube's bare edges. Every slot is capped (no
+rule), and the table gives the smallest `distance / (r_vdW(H) + r_vdW(other))`
+over the pairs the rule tests.
+
+| Fixture | Nearest H–H | Nearest H–heavy | Skipped at 0.7 |
+|---|---|---|---|
+| Si(100) 2×1 monohydride | 3.56 Å (1.48) | 4.12 Å (1.21) | 0 of 12 |
+| Si(111) 1×1 | 3.84 Å (1.60) | 4.12 Å (1.21) | 0 of 19 |
+| Si(100) 1×1 dihydride | 1.42 Å (0.59) | 2.77 Å (0.82) | 8 of 24 |
+| C(100) 1×1 dihydride | 0.74 Å (0.31) | 1.75 Å (0.59) | **32 of 32** |
+
+**0.7 separates the fixtures** (clean surfaces ≥ 1.21, dihydrides ≤ 0.59),
+so the default stays. Any factor in roughly 0.6–1.2 gives the same verdicts.
+
+**C(100) 1×1 ends bare, contrary to §5.1's "a dihydride row keeps one H of
+each clashing pair".** Its clash is not only H–H: every H also sits 1.75 Å
+from the *neighbouring surface carbon* (0.59 of the H–C sum), a structure
+atom, so the greedy order cannot save either H of a host. No single factor
+gives both "Si(100) dihydride skips its H–H clashes" (needs > 0.593) and
+"C(100) keeps one H per carbon" (needs < 0.589). The test pins the bare
+result at 0.7 and the one-per-carbon result at 0.5, and the reference guide
+says so. The ideal C(100) 1×1 surface is unphysical anyway (it reconstructs),
+so this was left as a documented outcome rather than a rule change.
+
+**Clarification of D7: a host's own terminators are not tested against each
+other.** They are the terminator's 1–3 partners, like the host's bonded
+neighbours, and the rule as written would otherwise break small molecules:
+the two H of an ideal OH₂ are 1.57 Å apart and the three of NH₃ 1.65 Å, both
+inside 0.7 of the H–H sum (1.68 Å), so a bare O would get one H and a bare N
+two. `geminal_terminators_do_not_clash_with_each_other` pins it.
+
+**`.cnnd`:** `skip_clashes` is not written while false and `clash_factor` not
+at its default, so a node that never used the option saves byte-identically
+to before (the text format follows §5.2: both only when `skip_clashes` is on).

@@ -5666,25 +5666,37 @@ class APIParameterElement {
           color == other.color;
 }
 
-/// Stored data of a `passivate` node (né `add_hydrogen`, issue #405). Just the
-/// terminator element; the optional `element` input pin overrides it at eval.
+/// Stored data of a `passivate` node (né `add_hydrogen`, issue #405). The
+/// optional `element` input pin overrides `element` at eval.
 class APIPassivateData {
   /// Atomic number of the terminating element (`1`/`9`/`17`/`35`/`53`).
   final int element;
 
+  /// Leave an open valence uncapped when its terminator would clash
+  /// (`doc/design_chemisorb_mirrors_and_passivation.md` §5).
+  final bool skipClashes;
+
+  /// The clash rule's factor on the van der Waals sum; must be > 0.
+  final double clashFactor;
+
   const APIPassivateData({
     required this.element,
+    required this.skipClashes,
+    required this.clashFactor,
   });
 
   @override
-  int get hashCode => element.hashCode;
+  int get hashCode =>
+      element.hashCode ^ skipClashes.hashCode ^ clashFactor.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is APIPassivateData &&
           runtimeType == other.runtimeType &&
-          element == other.element;
+          element == other.element &&
+          skipClashes == other.skipClashes &&
+          clashFactor == other.clashFactor;
 }
 
 /// The outcome of a paste (`doc/design_multiple_documents.md` D9). `error`

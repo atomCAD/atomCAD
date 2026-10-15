@@ -3180,11 +3180,16 @@ pub struct APIMaterializeData {
     pub available_parameters: Vec<APIMotifParameterInfo>, // Parameters from the connected motif (populated after eval)
 }
 
-/// Stored data of a `passivate` node (né `add_hydrogen`, issue #405). Just the
-/// terminator element; the optional `element` input pin overrides it at eval.
+/// Stored data of a `passivate` node (né `add_hydrogen`, issue #405). The
+/// optional `element` input pin overrides `element` at eval.
 pub struct APIPassivateData {
     /// Atomic number of the terminating element (`1`/`9`/`17`/`35`/`53`).
     pub element: i16,
+    /// Leave an open valence uncapped when its terminator would clash
+    /// (`doc/design_chemisorb_mirrors_and_passivation.md` §5).
+    pub skip_clashes: bool,
+    /// The clash rule's factor on the van der Waals sum; must be > 0.
+    pub clash_factor: f64,
 }
 
 /// Configuration for single CLI run

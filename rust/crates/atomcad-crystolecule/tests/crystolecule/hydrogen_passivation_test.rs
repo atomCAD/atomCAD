@@ -469,6 +469,7 @@ fn selected_only_passivates_selected_atoms() {
         selected_only: true,
         skip_already_passivated: true,
         passivant_element: 1,
+        clash: None,
     };
     let result = add_hydrogens(&mut s, &options);
     assert_eq!(result.atoms_added, 4, "Only c1 should get H's");
@@ -493,6 +494,7 @@ fn skip_already_passivated_atoms() {
         selected_only: false,
         skip_already_passivated: true,
         passivant_element: 1,
+        clash: None,
     };
     let result = add_hydrogens(&mut s, &options);
     assert_eq!(result.atoms_added, 0, "Flagged atom should be skipped");
@@ -508,6 +510,7 @@ fn do_not_skip_passivated_when_flag_false() {
         selected_only: false,
         skip_already_passivated: false,
         passivant_element: 1,
+        clash: None,
     };
     let result = add_hydrogens(&mut s, &options);
     assert_eq!(result.atoms_added, 4, "Should passivate despite flag");
@@ -1040,6 +1043,7 @@ fn round_trip_ethane_strip_then_repassivate() {
         selected_only: false,
         skip_already_passivated: false,
         passivant_element: 1,
+        clash: None,
     };
     add_hydrogens(&mut s, &opts);
     assert_eq!(count_hydrogens(&s), 6);
@@ -1059,6 +1063,7 @@ fn round_trip_ethylene_strip_and_repassivate() {
         selected_only: false,
         skip_already_passivated: false,
         passivant_element: 1,
+        clash: None,
     };
     add_hydrogens(&mut s, &opts_no_skip);
     let h_count_original = count_hydrogens(&s);
@@ -1086,6 +1091,7 @@ fn passivant_options(element: i16) -> AddHydrogensOptions {
         selected_only: false,
         skip_already_passivated: true,
         passivant_element: element,
+        clash: None,
     }
 }
 
@@ -1263,4 +1269,510 @@ fn open_valence_slots_is_zero_where_no_terminator_can_go() {
     let marker = s.add_atom(0, DVec3::new(10.0, 0.0, 0.0));
     assert_eq!(open_valence_slots(&s, marker, 1), 0);
     assert_eq!(open_valence_slots(&s, 9999, 1), 0);
+}
+
+// ============================================================================
+// The clash rule (doc/design_chemisorb_mirrors_and_passivation.md §5.1)
+// ============================================================================
+
+use atomcad_crystolecule::atomic_constants::{ATOM_INFO, DEFAULT_ATOM_INFO};
+use atomcad_crystolecule::crystolecule_constants::DEFAULT_ZINCBLENDE_MOTIF;
+use atomcad_crystolecule::hydrogen_passivation::{
+    AddHydrogensResult, DEFAULT_PASSIVATION_CLASH_FACTOR, add_hydrogens_filtered,
+};
+use atomcad_crystolecule::lattice_fill::{LatticeFillConfig, LatticeFillOptions, fill_lattice};
+use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
+use atomcad_geo_tree::GeoNode;
+use atomcad_util::daabox::DAABox;
+use std::collections::HashSet;
+
+const A_SI: f64 = 5.431;
+const A_C: f64 = 3.567;
+
+fn clash_options(factor: Option<f64>) -> AddHydrogensOptions {
+    AddHydrogensOptions {
+        clash: factor,
+        ..AddHydrogensOptions::default()
+    }
+}
+
+fn vdw(z: i16) -> f64 {
+    ATOM_INFO
+        .get(&(z as i32))
+        .unwrap_or(&DEFAULT_ATOM_INFO)
+        .van_der_waals_radius
+}
+
+/// A bare diamond-lattice slab of `element` (lattice constant `a`): a cube of
+/// `cells` cubic cells, cut by `top` (an outward plane normal through the
+/// cube's centre) when given. Returns the slab and the hosts to passivate:
+/// the open-valence atoms of the top layer within `radius` of the facet's
+/// centre, away from the cube's bare edges.
+fn surface(
+    element: i16,
+    a: f64,
+    cells: f64,
+    top: Option<DVec3>,
+    reconstruct: bool,
+    radius: f64,
+) -> (AtomicStructure, HashSet<u32>) {
+    let mut motif = DEFAULT_ZINCBLENDE_MOTIF.clone();
+    for p in &mut motif.parameters {
+        p.default_atomic_number = element;
+    }
+    let size = cells * a;
+    let max = DVec3::splat(size);
+    let mut planes = vec![
+        GeoNode::half_space(DVec3::NEG_X, DVec3::ZERO),
+        GeoNode::half_space(DVec3::X, max),
+        GeoNode::half_space(DVec3::NEG_Y, DVec3::ZERO),
+        GeoNode::half_space(DVec3::Y, max),
+        GeoNode::half_space(DVec3::NEG_Z, DVec3::ZERO),
+    ];
+    // The (100) slab is 1.5 cells deep; a tilted facet cuts the full cube.
+    let normal = match top {
+        Some(n) => {
+            planes.push(GeoNode::half_space(DVec3::Z, max));
+            let n = n.normalize();
+            planes.push(GeoNode::half_space(n, max / 2.0));
+            n
+        }
+        None => {
+            planes.push(GeoNode::half_space(DVec3::Z, DVec3::new(0.0, 0.0, 1.5 * a)));
+            DVec3::Z
+        }
+    };
+    let config = LatticeFillConfig {
+        unit_cell: UnitCellStruct::new(
+            DVec3::new(a, 0.0, 0.0),
+            DVec3::new(0.0, a, 0.0),
+            DVec3::new(0.0, 0.0, a),
+        ),
+        motif,
+        parameter_element_values: std::collections::HashMap::new(),
+        geometry: GeoNode::intersection_3d(planes),
+        motif_offset: DVec3::ZERO,
+        regions: Vec::new(),
+    };
+    let options = LatticeFillOptions {
+        hydrogen_passivation: false,
+        remove_unbonded_atoms: true,
+        remove_single_bond_atoms: true,
+        reconstruct_surface: reconstruct,
+        invert_phase: false,
+        rebond_concave_clashes: true,
+        passivation_element: 1,
+    };
+    let region = DAABox::new(DVec3::splat(-5.0), max + DVec3::splat(5.0));
+    let s = fill_lattice(&config, &options, &region).atomic_structure;
+
+    let height = |p: DVec3| p.dot(normal);
+    let top_height = s
+        .atoms_values()
+        .map(|atom| height(atom.position))
+        .fold(f64::MIN, f64::max);
+    let in_top_layer = |p: DVec3| height(p) > top_height - 0.6;
+    let layer: Vec<DVec3> = s
+        .atoms_values()
+        .filter(|atom| in_top_layer(atom.position))
+        .map(|atom| atom.position)
+        .collect();
+    let centre = layer.iter().copied().sum::<DVec3>() / layer.len() as f64;
+    let hosts: HashSet<u32> = s
+        .atoms_values()
+        .filter(|atom| {
+            let d = atom.position - centre;
+            in_top_layer(atom.position)
+                && (d - normal * d.dot(normal)).length() < radius
+                && open_valence_slots(&s, atom.id, 1) > 0
+        })
+        .map(|atom| atom.id)
+        .collect();
+    assert!(hosts.len() >= 6, "the facet has a patch of hosts");
+    (s, hosts)
+}
+
+fn si100_dimers() -> (AtomicStructure, HashSet<u32>) {
+    surface(14, A_SI, 6.0, None, true, 8.0)
+}
+
+fn si100_dihydride() -> (AtomicStructure, HashSet<u32>) {
+    surface(14, A_SI, 6.0, None, false, 8.0)
+}
+
+fn c100_dihydride() -> (AtomicStructure, HashSet<u32>) {
+    surface(6, A_C, 8.0, None, false, 6.0)
+}
+
+fn si111() -> (AtomicStructure, HashSet<u32>) {
+    surface(14, A_SI, 6.0, Some(DVec3::ONE), false, 8.0)
+}
+
+/// Passivates `hosts` of `input` and returns the output with the result.
+fn passivate_hosts(
+    input: &AtomicStructure,
+    hosts: &HashSet<u32>,
+    factor: Option<f64>,
+) -> (AtomicStructure, AddHydrogensResult) {
+    let mut out = input.clone();
+    let result =
+        add_hydrogens_filtered(&mut out, &clash_options(factor), &|id| hosts.contains(&id));
+    (out, result)
+}
+
+/// The terminators `output` gained over `input`: `(id, host)`.
+fn placed(input: &AtomicStructure, output: &AtomicStructure) -> Vec<(u32, u32)> {
+    output
+        .atoms_values()
+        .filter(|atom| input.get_atom(atom.id).is_none())
+        .map(|atom| {
+            let host = atom.bonds[0].other_atom_id();
+            (atom.id, host)
+        })
+        .collect()
+}
+
+/// Whether `other` is outside the rule's exclusion for a terminator on
+/// `host`, read off `output` (where the host's own terminators are bonded
+/// neighbours too).
+fn tested_against(output: &AtomicStructure, host: u32, other: u32) -> bool {
+    other != host
+        && !output
+            .get_atom(host)
+            .unwrap()
+            .bonds
+            .iter()
+            .any(|b| !b.is_delete_marker() && b.other_atom_id() == other)
+}
+
+/// The brute-force O(n²) oracle, independent of the implementation: the
+/// first atom of `output` a terminator at `p` on `host` would clash with.
+fn first_clash(output: &AtomicStructure, host: u32, p: DVec3, factor: f64) -> Option<u32> {
+    let r = vdw(1);
+    output
+        .atoms_values()
+        .filter(|other| other.atomic_number > 0 && p.distance(other.position) > 1e-9)
+        .filter(|other| tested_against(output, host, other.id))
+        .find(|other| p.distance(other.position) < factor * (r + vdw(other.atomic_number)))
+        .map(|other| other.id)
+}
+
+/// Both directions of §6 Phase 1's oracle check, for a passivation of
+/// `hosts` at `factor`. Returns the number skipped.
+fn assert_rule_holds(input: &AtomicStructure, hosts: &HashSet<u32>, factor: f64) -> usize {
+    let (output, result) = passivate_hosts(input, hosts, Some(factor));
+    let terminators = placed(input, &output);
+    assert_eq!(terminators.len(), result.atoms_added);
+
+    // Sound: no placed terminator is inside the rule with anything.
+    for &(id, host) in &terminators {
+        let p = output.get_atom(id).unwrap().position;
+        assert_eq!(
+            first_clash(&output, host, p, factor),
+            None,
+            "terminator {id} on {host} clashes"
+        );
+    }
+
+    // Not over-eager: every slot the rule skipped would clash, added alone.
+    let (all, _) = passivate_hosts(input, hosts, None);
+    let kept: Vec<(DVec3, u32)> = terminators
+        .iter()
+        .map(|&(id, host)| (output.get_atom(id).unwrap().position, host))
+        .collect();
+    let mut skipped = 0;
+    for (id, host) in placed(input, &all) {
+        let p = all.get_atom(id).unwrap().position;
+        if kept.iter().any(|&(q, h)| h == host && q.distance(p) < 1e-9) {
+            continue;
+        }
+        skipped += 1;
+        assert!(
+            first_clash(&output, host, p, factor).is_some(),
+            "slot at {p:?} on {host} was skipped without a clash"
+        );
+    }
+    assert_eq!(skipped, result.skipped);
+    assert_eq!(
+        result.atoms_added + result.skipped,
+        placed(input, &all).len()
+    );
+    skipped
+}
+
+/// The smallest `distance / (r_vdW(H) + r_vdW(other))` over the pairs the
+/// rule tests, with every terminator placed (no rule).
+fn nearest_contact(input: &AtomicStructure, hosts: &HashSet<u32>) -> f64 {
+    let (output, _) = passivate_hosts(input, hosts, None);
+    let mut best = f64::MAX;
+    for (id, host) in placed(input, &output) {
+        let p = output.get_atom(id).unwrap().position;
+        for other in output.atoms_values() {
+            if other.id == id
+                || other.atomic_number <= 0
+                || !tested_against(&output, host, other.id)
+            {
+                continue;
+            }
+            let ratio = p.distance(other.position) / (vdw(1) + vdw(other.atomic_number));
+            best = best.min(ratio);
+        }
+    }
+    best
+}
+
+#[test]
+fn an_inert_clash_rule_changes_nothing() {
+    // `clash: None` is the code path every existing test above exercises; a
+    // rule that can never reject must produce the same atoms, positions and
+    // ids on every fixture.
+    let mut fixtures: Vec<AtomicStructure> = vec![
+        make_structure(6, &[]).0,
+        make_structure(7, &[]).0,
+        make_structure(8, &[(6, DVec3::new(1.43, 0.0, 0.0))]).0,
+        make_structure(6, &[(6, DVec3::new(1.545, 0.0, 0.0))]).0,
+    ];
+    for (s, hosts) in [si100_dimers(), si100_dihydride(), c100_dihydride(), si111()] {
+        let mut s = s;
+        let ids: Vec<u32> = s.atom_ids().copied().collect();
+        for id in ids {
+            if !hosts.contains(&id) {
+                s.set_atom_hydrogen_passivation(id, true); // skipped by the default options
+            }
+        }
+        fixtures.push(s);
+    }
+    for input in fixtures {
+        let mut none = input.clone();
+        let mut inert = input.clone();
+        let a = add_hydrogens(&mut none, &clash_options(None));
+        let b = add_hydrogens(&mut inert, &clash_options(Some(1e-9)));
+        assert_eq!(a.skipped, 0);
+        assert_eq!(b.skipped, 0);
+        assert_eq!(a.atoms_added, b.atoms_added);
+        let atoms = |s: &AtomicStructure| -> Vec<(u32, i16, [u64; 3])> {
+            s.atoms_values()
+                .map(|atom| {
+                    let p = atom.position;
+                    (
+                        atom.id,
+                        atom.atomic_number,
+                        [p.x.to_bits(), p.y.to_bits(), p.z.to_bits()],
+                    )
+                })
+                .collect()
+        };
+        assert_eq!(atoms(&none), atoms(&inert));
+        assert_eq!(none.get_num_of_bonds(), inert.get_num_of_bonds());
+    }
+}
+
+#[test]
+fn surface_fixtures_nearest_contacts() {
+    // The measured numbers of §8.1: the reconstructed and the (111) surface
+    // must clear the default factor, the dihydrides must fall inside it.
+    let report = [
+        ("Si(100) 2x1 monohydride", si100_dimers()),
+        ("Si(111) 1x1", si111()),
+        ("Si(100) 1x1 dihydride", si100_dihydride()),
+        ("C(100) 1x1 dihydride", c100_dihydride()),
+    ]
+    .map(|(name, (s, hosts))| {
+        let ratio = nearest_contact(&s, &hosts);
+        println!("{name}: nearest contact {ratio:.3} of the vdW sum");
+        ratio
+    });
+    assert!(report[0] > DEFAULT_PASSIVATION_CLASH_FACTOR);
+    assert!(report[1] > DEFAULT_PASSIVATION_CLASH_FACTOR);
+    assert!(report[2] < DEFAULT_PASSIVATION_CLASH_FACTOR);
+    assert!(report[3] < DEFAULT_PASSIVATION_CLASH_FACTOR);
+}
+
+#[test]
+fn monohydride_and_111_surfaces_skip_nothing() {
+    for (s, hosts) in [si100_dimers(), si111()] {
+        let (_, result) = passivate_hosts(&s, &hosts, Some(DEFAULT_PASSIVATION_CLASH_FACTOR));
+        assert_eq!(result.skipped, 0);
+        assert_eq!(result.atoms_added, hosts.len(), "one H per host");
+    }
+}
+
+#[test]
+fn dihydride_surfaces_skip_clashing_terminators() {
+    let factor = DEFAULT_PASSIVATION_CLASH_FACTOR;
+    for (s, hosts) in [si100_dihydride(), c100_dihydride()] {
+        assert!(assert_rule_holds(&s, &hosts, factor) > 0);
+    }
+
+    // Si(100): the clashes are H–H (1.42 Å), so the rule is greedy rather
+    // than all-or-nothing: every host keeps at least one H.
+    let (s, hosts) = si100_dihydride();
+    let (out, _) = passivate_hosts(&s, &hosts, Some(factor));
+    for &host in &hosts {
+        assert!(count_h_bonded_to(&out, host) >= 1);
+    }
+
+    // C(100): every H also sits 1.75 Å from the neighbouring surface carbon
+    // (0.59 of the H–C sum), a structure atom, so at the default factor no
+    // slot survives and the surface stays bare (§8.1).
+    let (s, hosts) = c100_dihydride();
+    let (_, result) = passivate_hosts(&s, &hosts, Some(factor));
+    assert_eq!((result.atoms_added, result.skipped), (0, 2 * hosts.len()));
+    // Below that contact only the overlapping H–H pairs (0.74 Å) clash, and
+    // one H of each survives.
+    let (out, result) = passivate_hosts(&s, &hosts, Some(0.5));
+    assert!(result.skipped > 0);
+    for &host in &hosts {
+        assert!(count_h_bonded_to(&out, host) >= 1);
+    }
+}
+
+#[test]
+fn the_oracle_holds_across_factors() {
+    for (s, hosts) in [si100_dimers(), si100_dihydride(), c100_dihydride(), si111()] {
+        for factor in [0.5, 0.7, 0.9, 1.1] {
+            assert_rule_holds(&s, &hosts, factor);
+        }
+    }
+}
+
+/// Two Si hosts, each with three Si neighbours behind it, whose one open
+/// slot each points at the other: the two H would sit 1.24 Å apart, each
+/// 2.72 Å from the other host (outside 0.7 of the H–Si sum). `first` is the
+/// host built first, and so the one with the lower id.
+fn facing_hosts(first_at_origin: bool) -> (AtomicStructure, u32, u32) {
+    let d = 4.2;
+    let mut s = AtomicStructure::new();
+    let add_host = |s: &mut AtomicStructure, at: DVec3, open: DVec3| {
+        let host = s.add_atom(14, at);
+        // Three neighbours tetrahedral to `open`.
+        let u = open.any_orthonormal_vector();
+        let v = open.cross(u);
+        let cone = (180.0f64 - 109.47).to_radians();
+        for k in 0..3 {
+            let phi = (k as f64) * 120f64.to_radians();
+            let dir = -open * cone.cos() + (u * phi.cos() + v * phi.sin()) * cone.sin();
+            let n = s.add_atom(14, at + dir.normalize() * 2.35);
+            s.add_bond(host, n, 1);
+        }
+        host
+    };
+    let (a, b) = if first_at_origin {
+        let a = add_host(&mut s, DVec3::ZERO, DVec3::X);
+        let b = add_host(&mut s, DVec3::new(d, 0.0, 0.0), DVec3::NEG_X);
+        (a, b)
+    } else {
+        let b = add_host(&mut s, DVec3::new(d, 0.0, 0.0), DVec3::NEG_X);
+        let a = add_host(&mut s, DVec3::ZERO, DVec3::X);
+        (a, b)
+    };
+    (s, a, b)
+}
+
+#[test]
+fn of_a_clashing_pair_the_lower_id_host_keeps_its_terminator() {
+    for first_at_origin in [true, false] {
+        let (s, a, b) = facing_hosts(first_at_origin);
+        let hosts: HashSet<u32> = [a, b].into();
+        let (out, result) = passivate_hosts(&s, &hosts, Some(DEFAULT_PASSIVATION_CLASH_FACTOR));
+        assert_eq!((result.atoms_added, result.skipped), (1, 1));
+        let survivor = a.min(b);
+        assert_eq!(count_h_bonded_to(&out, survivor), 1);
+        assert_eq!(count_h_bonded_to(&out, a.max(b)), 0);
+        // Renumbering swaps which host survives.
+        let expected = if first_at_origin { a } else { b };
+        assert_eq!(survivor, expected);
+        // Without the rule both are placed.
+        let (_, none) = passivate_hosts(&s, &hosts, None);
+        assert_eq!((none.atoms_added, none.skipped), (2, 0));
+    }
+}
+
+/// A zigzag chain of `n` bare carbons on diamond-lattice positions.
+fn carbon_chain(n: usize) -> AtomicStructure {
+    let mut s = AtomicStructure::new();
+    let mut prev = None;
+    for i in 0..n {
+        let k = i as f64;
+        let p = DVec3::new(k, k, (i % 2) as f64) * (A_C / 4.0);
+        let id = s.add_atom(6, p);
+        if let Some(prev) = prev {
+            s.add_bond(prev, id, 1);
+        }
+        prev = Some(id);
+    }
+    s
+}
+
+#[test]
+fn methyl_terminated_chains_passivate_fully() {
+    // The 1–3 exclusion: every H sits ~2.15 Å from the neighbouring C, inside
+    // 0.7 of the H–C sum, and must not be skipped for it.
+    for n in 2..=6 {
+        let mut s = carbon_chain(n);
+        let result = add_hydrogens(
+            &mut s,
+            &clash_options(Some(DEFAULT_PASSIVATION_CLASH_FACTOR)),
+        );
+        assert_eq!(result.skipped, 0, "C{n}");
+        assert_eq!(result.atoms_added, 2 * n + 2, "C{n}H{}", 2 * n + 2);
+    }
+    // Neopentane: four methyls on one carbon.
+    let dirs = tetrahedral_dirs(1.545);
+    let (mut s, _) = make_structure(6, &[(6, dirs[0]), (6, dirs[1]), (6, dirs[2]), (6, dirs[3])]);
+    let result = add_hydrogens(
+        &mut s,
+        &clash_options(Some(DEFAULT_PASSIVATION_CLASH_FACTOR)),
+    );
+    assert_eq!((result.atoms_added, result.skipped), (12, 0));
+}
+
+#[test]
+fn geminal_terminators_do_not_clash_with_each_other() {
+    // The two H of an ideal OH2 are 1.57 Å apart, the three of NH3 1.65 Å,
+    // both inside 0.7 of the H–H sum (1.68 Å). They share a host, so they are
+    // 1–3 partners and the rule does not test them against each other.
+    for (z, expected) in [(8, 2), (7, 3), (6, 4), (14, 4)] {
+        let (mut s, _) = make_structure(z, &[]);
+        let result = add_hydrogens(
+            &mut s,
+            &clash_options(Some(DEFAULT_PASSIVATION_CLASH_FACTOR)),
+        );
+        assert_eq!((result.atoms_added, result.skipped), (expected, 0), "Z={z}");
+    }
+}
+
+#[test]
+fn a_terminator_inside_an_unrelated_molecule_is_skipped() {
+    // An Si host whose one open slot points up; methane above it.
+    let build = |methane_height: f64| {
+        let (mut s, host) = make_structure(14, &[]);
+        // Three legs of a tetrahedron around -z, so the free one is +z.
+        let cone = (180.0f64 - 109.47).to_radians();
+        for k in 0..3 {
+            let phi = (k as f64) * 120f64.to_radians();
+            let dir = DVec3::new(phi.cos() * cone.sin(), phi.sin() * cone.sin(), -cone.cos());
+            let n = s.add_atom(14, dir * 2.35);
+            s.add_bond(host, n, 1);
+        }
+        let c = s.add_atom(6, DVec3::new(0.0, 0.0, methane_height));
+        for d in tetrahedral_dirs(1.09) {
+            let h = s.add_atom(1, DVec3::new(0.0, 0.0, methane_height) + d);
+            s.add_bond(c, h, 1);
+        }
+        (s, host)
+    };
+    let factor = Some(DEFAULT_PASSIVATION_CLASH_FACTOR);
+    // The H would sit at z = 1.48, 1.0 Å below the methane carbon.
+    let (s, host) = build(2.48);
+    let hosts: HashSet<u32> = [host].into();
+    let (out, result) = passivate_hosts(&s, &hosts, factor);
+    assert_eq!((result.atoms_added, result.skipped), (0, 1));
+    assert_eq!(count_h_bonded_to(&out, host), 0);
+    // Moved away, the terminator is placed again.
+    let (s, host) = build(10.0);
+    let hosts: HashSet<u32> = [host].into();
+    let (out, result) = passivate_hosts(&s, &hosts, factor);
+    assert_eq!((result.atoms_added, result.skipped), (1, 0));
+    assert_eq!(count_h_bonded_to(&out, host), 1);
 }

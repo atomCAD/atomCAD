@@ -7886,7 +7886,7 @@ pub fn set_materialize_data(
     }
 }
 
-/// Reads the stored data of a `passivate` node (currently just `element`).
+/// Reads the stored data of a `passivate` node.
 /// Takes a `scope_path` like every sibling node-data accessor.
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_passivate_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIPassivateData> {
@@ -7899,6 +7899,8 @@ pub fn get_passivate_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIPassi
                 let passivate_data = node_data.as_any_ref().downcast_ref::<PassivateData>()?;
                 Some(APIPassivateData {
                     element: passivate_data.element,
+                    skip_clashes: passivate_data.skip_clashes,
+                    clash_factor: passivate_data.clash_factor,
                 })
             },
             None,
@@ -7915,6 +7917,8 @@ pub fn set_passivate_data(scope_path: Vec<u64>, node_id: u64, data: APIPassivate
         with_mut_cad_instance(|cad_instance| {
             let passivate_data = Box::new(PassivateData {
                 element: data.element,
+                skip_clashes: data.skip_clashes,
+                clash_factor: data.clash_factor,
             });
             cad_instance
                 .structure_designer

@@ -21631,10 +21631,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIPassivateData dco_decode_api_passivate_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 1)
-      throw Exception('unexpected arr length: expect 1 but see ${arr.length}');
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
     return APIPassivateData(
       element: dco_decode_i_16(arr[0]),
+      skipClashes: dco_decode_bool(arr[1]),
+      clashFactor: dco_decode_f_64(arr[2]),
     );
   }
 
@@ -28480,7 +28482,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIPassivateData sse_decode_api_passivate_data(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_element = sse_decode_i_16(deserializer);
-    return APIPassivateData(element: var_element);
+    var var_skipClashes = sse_decode_bool(deserializer);
+    var var_clashFactor = sse_decode_f_64(deserializer);
+    return APIPassivateData(
+        element: var_element,
+        skipClashes: var_skipClashes,
+        clashFactor: var_clashFactor);
   }
 
   @protected
@@ -35721,6 +35728,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       APIPassivateData self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_16(self.element, serializer);
+    sse_encode_bool(self.skipClashes, serializer);
+    sse_encode_f_64(self.clashFactor, serializer);
   }
 
   @protected

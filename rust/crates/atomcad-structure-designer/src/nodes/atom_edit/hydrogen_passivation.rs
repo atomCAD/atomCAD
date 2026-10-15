@@ -184,6 +184,7 @@ pub fn add_hydrogen_atom_edit(
             selected_only,
             skip_already_passivated: true,
             passivant_element: 1,
+            clash: None,
         };
         let result = add_hydrogens(&mut cloned, &options);
 

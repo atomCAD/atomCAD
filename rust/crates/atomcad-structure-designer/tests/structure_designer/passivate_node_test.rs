@@ -255,7 +255,10 @@ fn add_passivate_node_with_element(
         "passivate",
         position,
         3,
-        Box::new(PassivateData { element }),
+        Box::new(PassivateData {
+            element,
+            ..PassivateData::default()
+        }),
     )
 }
 
@@ -476,4 +479,240 @@ fn test_passivate_invalid_element_via_pin() {
         matches!(result, NetworkResult::Error(_)),
         "Invalid element via pin should surface an Error"
     );
+}
+
+// ============================================================================
+// skip_clashes (doc/design_chemisorb_mirrors_and_passivation.md §5.2)
+// ============================================================================
+
+use atomcad_crystolecule::hydrogen_passivation::DEFAULT_PASSIVATION_CLASH_FACTOR;
+use atomcad_structure_designer::nodes::passivate::PassivateEvalCache;
+
+/// A bare carbon whose (1,1,1) slot points at a methane carbon 2.3 Å away:
+/// that H would sit 1.21 Å from it, inside 0.7 of the H–C sum; the other
+/// three slots are clear.
+fn carbon_facing_methane() -> AtomicStructure {
+    let mut s = AtomicStructure::new();
+    s.add_atom(6, DVec3::ZERO);
+    let centre = DVec3::ONE.normalize() * 2.3;
+    let methane = s.add_atom(6, centre);
+    for d in [
+        DVec3::new(1.0, 1.0, 1.0),
+        DVec3::new(-1.0, -1.0, 1.0),
+        DVec3::new(-1.0, 1.0, -1.0),
+        DVec3::new(1.0, -1.0, -1.0),
+    ] {
+        let h = s.add_atom(1, centre + d.normalize() * 1.09);
+        s.add_bond(methane, h, BOND_SINGLE);
+    }
+    s
+}
+
+fn add_passivate_node(
+    designer: &mut StructureDesigner,
+    network_name: &str,
+    position: DVec2,
+    data: PassivateData,
+) -> u64 {
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get_mut(network_name)
+        .unwrap();
+    network.add_node("passivate", position, 3, Box::new(data))
+}
+
+/// Evaluates `data` on `structure` and returns the result with the eval-cache
+/// message.
+fn passivate_with(structure: AtomicStructure, data: PassivateData) -> (NetworkResult, String) {
+    let network_name = "test";
+    let mut designer = setup_designer_with_network(network_name);
+    let value_id = add_atomic_value_node(&mut designer, network_name, DVec2::ZERO, structure);
+    let id = add_passivate_node(&mut designer, network_name, DVec2::new(200.0, 0.0), data);
+    designer.connect_nodes(value_id, 0, id, 0);
+
+    let registry = &designer.node_type_registry;
+    let network = registry.node_networks.get(network_name).unwrap();
+    let evaluator = NetworkEvaluator::new();
+    let mut context = NetworkEvaluationContext::new();
+    let network_stack = vec![NetworkStackElement::root(network)];
+    let result = evaluator.evaluate(&network_stack, id, 0, registry, false, &mut context);
+    let message = context
+        .selected_node_eval_cache
+        .as_ref()
+        .and_then(|cache| cache.downcast_ref::<PassivateEvalCache>())
+        .map(|cache| cache.message.clone())
+        .unwrap_or_default();
+    (result, message)
+}
+
+fn hydrogens(result: &NetworkResult) -> usize {
+    match result {
+        NetworkResult::Molecule(m) => m
+            .atoms
+            .atoms_values()
+            .filter(|a| a.atomic_number == 1)
+            .count(),
+        NetworkResult::Error(e) => panic!("unexpected error: {e}"),
+        _ => panic!("expected a molecule"),
+    }
+}
+
+#[test]
+fn skip_clashes_leaves_a_clashing_valence_open() {
+    let on = PassivateData {
+        skip_clashes: true,
+        ..PassivateData::default()
+    };
+    let (result, message) = passivate_with(carbon_facing_methane(), on);
+    assert_eq!(hydrogens(&result), 4 + 3);
+    assert_eq!(message, "Added 3 H atoms, skipped 1 (steric clash)");
+
+    let (result, message) = passivate_with(carbon_facing_methane(), PassivateData::default());
+    assert_eq!(hydrogens(&result), 4 + 4);
+    assert_eq!(message, "Added 4 H atoms");
+}
+
+#[test]
+fn a_non_positive_clash_factor_is_an_error_only_when_used() {
+    for factor in [0.0, -0.5, f64::NAN] {
+        let data = PassivateData {
+            skip_clashes: true,
+            clash_factor: factor,
+            ..PassivateData::default()
+        };
+        match passivate_with(carbon_facing_methane(), data).0 {
+            NetworkResult::Error(msg) => assert!(msg.contains("clash_factor"), "{msg}"),
+            other => panic!("expected an error, got {:?}", other.infer_data_type()),
+        }
+        // With the option off nothing reads the factor.
+        let data = PassivateData {
+            skip_clashes: false,
+            clash_factor: factor,
+            ..PassivateData::default()
+        };
+        assert_eq!(
+            hydrogens(&passivate_with(carbon_facing_methane(), data).0),
+            8
+        );
+    }
+}
+
+#[test]
+fn old_payloads_load_with_the_option_off() {
+    for json in ["{}", "{\"element\":1}"] {
+        let data: PassivateData = serde_json::from_str(json).unwrap();
+        assert_eq!(data.element, 1);
+        assert!(!data.skip_clashes);
+        assert_eq!(data.clash_factor, DEFAULT_PASSIVATION_CLASH_FACTOR);
+    }
+    // And an untouched node writes exactly the old payload.
+    assert_eq!(
+        serde_json::to_string(&PassivateData::default()).unwrap(),
+        "{\"element\":1}"
+    );
+}
+
+fn author_and_serialize(source: &str) -> String {
+    use atomcad_structure_designer::data_type::DataType;
+    use atomcad_structure_designer::node_network::NodeNetwork;
+    use atomcad_structure_designer::node_type::{NodeType, NodeTypeCategory, OutputPinDefinition};
+    use atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
+    use atomcad_structure_designer::text_format::{edit_network, serialize_network};
+
+    let registry = NodeTypeRegistry::new();
+    let mut network = NodeNetwork::new(NodeType {
+        name: "test".to_string(),
+        description: String::new(),
+        summary: None,
+        category: NodeTypeCategory::Custom,
+        parameters: vec![],
+        output_pins: OutputPinDefinition::single(DataType::Molecule),
+        zone_input_pins: vec![],
+        zone_output_pins: vec![],
+        public: true,
+        node_data_creator: || Box::new(atomcad_structure_designer::node_data::NoData {}),
+        node_data_saver: atomcad_structure_designer::node_type::no_data_saver,
+        node_data_loader: atomcad_structure_designer::node_type::no_data_loader,
+    });
+    let result = edit_network(&mut network, &registry, source, true);
+    assert!(result.success, "edit should succeed: {:?}", result.errors);
+    serialize_network(&network, &registry, Some("test"))
+}
+
+#[test]
+fn the_clash_properties_round_trip_through_the_text_format() {
+    const ON: &str = "p = passivate { element: 1, skip_clashes: true, clash_factor: 0.55 }";
+    let serialized = author_and_serialize(&format!("{ON}\n"));
+    assert!(serialized.contains(ON), "got:\n{serialized}");
+    assert_eq!(serialized, author_and_serialize(&serialized));
+
+    // Off: neither property is written.
+    let serialized = author_and_serialize("p = passivate { element: 9 }\n");
+    assert!(
+        serialized.contains("p = passivate { element: 9 }"),
+        "got:\n{serialized}"
+    );
+    assert!(!serialized.contains("skip_clashes") && !serialized.contains("clash_factor"));
+
+    // Turning it on without a factor writes the default.
+    let serialized = author_and_serialize("p = passivate { skip_clashes: true }\n");
+    assert!(
+        serialized.contains("p = passivate { element: 1, skip_clashes: true, clash_factor: 0.7 }"),
+        "got:\n{serialized}"
+    );
+}
+
+#[test]
+fn the_clash_properties_round_trip_through_cnnd() {
+    use atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
+    use atomcad_structure_designer::serialization::node_networks_serialization::{
+        load_node_networks_from_file, save_node_networks_to_file,
+    };
+    use std::collections::HashMap;
+    use tempfile::tempdir;
+
+    let save_and_load = |data: PassivateData| -> (String, PassivateData) {
+        let network_name = "test";
+        let mut designer = setup_designer_with_network(network_name);
+        add_passivate_node(&mut designer, network_name, DVec2::ZERO, data);
+        let tmp = tempdir().unwrap();
+        let path = tmp.path().join("passivate.cnnd");
+        save_node_networks_to_file(
+            &mut designer.node_type_registry,
+            &path,
+            false,
+            &HashMap::new(),
+        )
+        .expect("save");
+        let json = std::fs::read_to_string(&path).unwrap();
+        let mut registry = NodeTypeRegistry::new();
+        load_node_networks_from_file(&mut registry, path.to_str().unwrap()).expect("load");
+        let (_, node) = registry.node_networks[network_name]
+            .nodes
+            .iter()
+            .find(|(_, n)| n.node_type_name == "passivate")
+            .unwrap();
+        let loaded = node
+            .data
+            .as_any_ref()
+            .downcast_ref::<PassivateData>()
+            .unwrap()
+            .clone();
+        (json, loaded)
+    };
+
+    let (json, loaded) = save_and_load(PassivateData {
+        element: 1,
+        skip_clashes: true,
+        clash_factor: 0.55,
+    });
+    assert!(json.contains("skip_clashes") && json.contains("clash_factor"));
+    assert!(loaded.skip_clashes);
+    assert_eq!(loaded.clash_factor, 0.55);
+
+    let (json, loaded) = save_and_load(PassivateData::default());
+    assert!(!json.contains("skip_clashes") && !json.contains("clash_factor"));
+    assert!(!loaded.skip_clashes);
+    assert_eq!(loaded.clash_factor, DEFAULT_PASSIVATION_CLASH_FACTOR);
 }

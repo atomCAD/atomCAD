@@ -1997,7 +1997,7 @@ APIResult setMaterializeData(
         .crateApiStructureDesignerStructureDesignerApiSetMaterializeData(
             scopePath: scopePath, nodeId: nodeId, data: data);
 
-/// Reads the stored data of a `passivate` node (currently just `element`).
+/// Reads the stored data of a `passivate` node.
 /// Takes a `scope_path` like every sibling node-data accessor.
 APIPassivateData? getPassivateData(
         {required Uint64List scopePath, required BigInt nodeId}) =>

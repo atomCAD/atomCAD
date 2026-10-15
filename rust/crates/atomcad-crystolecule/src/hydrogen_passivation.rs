@@ -10,6 +10,7 @@ use crate::guided_placement::{
     gather_bond_directions, sp2_case2, sp3_case2, sp3_case3,
 };
 use glam::f64::DVec3;
+use std::collections::HashMap;
 
 // ============================================================================
 // Options and result types
@@ -124,6 +125,12 @@ pub struct AddHydrogensOptions {
     /// validating the value against `is_allowed_passivant`; this module treats
     /// any non-hydrogen number as "use `halogen_bond_length`".
     pub passivant_element: i16,
+    /// The steric clash rule (`doc/design_chemisorb_mirrors_and_passivation.md`
+    /// §5.1, D7): with `Some(f)`, a terminator is skipped — its host's valence
+    /// left open — when it would sit closer than `f × (r_vdW(terminator) +
+    /// r_vdW(other))` to another atom. `None` (the default) places every
+    /// terminator, exactly as before the option existed.
+    pub clash: Option<f64>,
 }
 
 impl Default for AddHydrogensOptions {
@@ -132,13 +139,23 @@ impl Default for AddHydrogensOptions {
             selected_only: false,
             skip_already_passivated: true,
             passivant_element: 1,
+            clash: None,
         }
     }
 }
 
+/// The default factor of the clash rule ([`AddHydrogensOptions::clash`]): with
+/// the element table's radii, H–H 1.68 Å, H–C 2.08 Å, H–Si 2.37 Å. Checked
+/// against the surface fixtures in §8.1 of
+/// `doc/design_chemisorb_mirrors_and_passivation.md`.
+pub const DEFAULT_PASSIVATION_CLASH_FACTOR: f64 = 0.7;
+
 pub struct AddHydrogensResult {
     /// Number of terminating atoms added (hydrogens or halogens).
     pub atoms_added: usize,
+    /// Number of terminators the clash rule skipped (always 0 with
+    /// `clash: None`).
+    pub skipped: usize,
 }
 
 // ============================================================================
@@ -457,8 +474,17 @@ pub fn add_hydrogens_filtered(
     eligible: &dyn Fn(u32) -> bool,
 ) -> AddHydrogensResult {
     // Step 1: Analysis (immutable scan)
-    let atom_ids: Vec<u32> = structure.atom_ids().copied().collect();
+    let mut atom_ids: Vec<u32> = structure.atom_ids().copied().collect();
     let mut placements: Vec<(u32, Vec<DVec3>)> = Vec::new();
+    let mut clash_rule = options
+        .clash
+        .map(|factor| ClashRule::new(factor, options.passivant_element));
+    let mut skipped = 0;
+    if clash_rule.is_some() {
+        // The rule is greedy, so the visiting order decides which terminator
+        // of a clashing pair survives: hosts in atom-id order (D7).
+        atom_ids.sort_unstable();
+    }
 
     for &atom_id in &atom_ids {
         // Region gate: only passivate in-region host atoms.
@@ -495,7 +521,13 @@ pub fn add_hydrogens_filtered(
         let bond_len = terminator_bond_length(atomic_number, options.passivant_element);
         let open_dirs =
             compute_open_directions(structure, atom_id, hybridization, &existing_dirs, needed);
-        let positions: Vec<DVec3> = open_dirs.iter().map(|d| position + *d * bond_len).collect();
+        let mut positions: Vec<DVec3> =
+            open_dirs.iter().map(|d| position + *d * bond_len).collect();
+        if let Some(rule) = clash_rule.as_mut() {
+            let before = positions.len();
+            positions.retain(|&p| rule.accept(structure, atom_id, p));
+            skipped += before - positions.len();
+        }
 
         if !positions.is_empty() {
             placements.push((atom_id, positions));
@@ -515,5 +547,120 @@ pub fn add_hydrogens_filtered(
         }
     }
 
-    AddHydrogensResult { atoms_added }
+    AddHydrogensResult {
+        atoms_added,
+        skipped,
+    }
+}
+
+// ============================================================================
+// The clash rule
+// ============================================================================
+
+/// The steric test of [`AddHydrogensOptions::clash`], run in the analysis step
+/// against the structure plus the terminators this pass already accepted.
+///
+/// A terminator on host `h` is never tested against `h`, against `h`'s bonded
+/// neighbours (its 1–3 partners: on carbon an H sits ~2.15 Å from the next C,
+/// inside any useful fraction of the van der Waals sum), or against the other
+/// terminators of `h` (also 1–3 partners: the two H of an ideal NH₂ or OH₂ are
+/// 1.57–1.65 Å apart, inside 0.7 of the H–H sum).
+struct ClashRule {
+    factor: f64,
+    passivant_radius: f64,
+    /// The farthest a structure atom can be and still clash: `factor ×
+    /// (r_passivant + the largest radius in the table)`.
+    reach: f64,
+    /// The accepted terminators, `(position, host)`, bucketed by cubes of side
+    /// `cell` (at least the terminator–terminator reach), so the pass stays
+    /// linear.
+    accepted: HashMap<(i64, i64, i64), Vec<(DVec3, u32)>>,
+    cell: f64,
+}
+
+impl ClashRule {
+    fn new(factor: f64, passivant: i16) -> Self {
+        let factor = factor.max(0.0);
+        let passivant_radius = van_der_waals_radius(passivant);
+        let largest = ATOM_INFO
+            .values()
+            .map(|info| info.van_der_waals_radius)
+            .fold(DEFAULT_ATOM_INFO.van_der_waals_radius, f64::max);
+        Self {
+            factor,
+            passivant_radius,
+            reach: factor * (passivant_radius + largest),
+            accepted: HashMap::new(),
+            cell: (factor * 2.0 * passivant_radius).max(1.0),
+        }
+    }
+
+    fn cell_of(&self, p: DVec3) -> (i64, i64, i64) {
+        let c = (p / self.cell).floor();
+        (c.x as i64, c.y as i64, c.z as i64)
+    }
+
+    /// Whether a terminator at `p` on `host` passes the rule. An accepted one
+    /// is recorded, so later candidates are tested against it.
+    fn accept(&mut self, structure: &AtomicStructure, host: u32, p: DVec3) -> bool {
+        if self.clashes(structure, host, p) {
+            return false;
+        }
+        let cell = self.cell_of(p);
+        self.accepted.entry(cell).or_default().push((p, host));
+        true
+    }
+
+    fn clashes(&self, structure: &AtomicStructure, host: u32, p: DVec3) -> bool {
+        let Some(host_atom) = structure.get_atom(host) else {
+            return false;
+        };
+        let excluded = |id: u32| {
+            id == host
+                || host_atom
+                    .bonds
+                    .iter()
+                    .any(|b| !b.is_delete_marker() && b.other_atom_id() == id)
+        };
+        for id in structure.get_atoms_in_radius(&p, self.reach) {
+            if excluded(id) {
+                continue;
+            }
+            let Some(other) = structure.get_atom(id) else {
+                continue;
+            };
+            let z = structure.effective_atomic_number(other);
+            if z <= 0 {
+                continue; // delete markers, unresolved parameters
+            }
+            let limit = self.factor * (self.passivant_radius + van_der_waals_radius(z));
+            if p.distance_squared(other.position) < limit * limit {
+                return true;
+            }
+        }
+        let limit = self.factor * 2.0 * self.passivant_radius;
+        let (cx, cy, cz) = self.cell_of(p);
+        for dx in -1..=1 {
+            for dy in -1..=1 {
+                for dz in -1..=1 {
+                    let Some(bucket) = self.accepted.get(&(cx + dx, cy + dy, cz + dz)) else {
+                        continue;
+                    };
+                    if bucket.iter().any(|&(q, other_host)| {
+                        other_host != host && p.distance_squared(q) < limit * limit
+                    }) {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+}
+
+fn van_der_waals_radius(atomic_number: i16) -> f64 {
+    ATOM_INFO
+        .get(&(atomic_number as i32))
+        .unwrap_or(&DEFAULT_ATOM_INFO)
+        .van_der_waals_radius
 }

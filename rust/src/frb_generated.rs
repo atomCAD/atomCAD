@@ -19461,8 +19461,12 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_element = <i16>::sse_decode(deserializer);
+        let mut var_skipClashes = <bool>::sse_decode(deserializer);
+        let mut var_clashFactor = <f64>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIPassivateData {
             element: var_element,
+            skip_clashes: var_skipClashes,
+            clash_factor: var_clashFactor,
         };
     }
 }
@@ -30106,7 +30110,12 @@ impl flutter_rust_bridge::IntoDart
     for crate::api::structure_designer::structure_designer_api_types::APIPassivateData
 {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [self.element.into_into_dart().into_dart()].into_dart()
+        [
+            self.element.into_into_dart().into_dart(),
+            self.skip_clashes.into_into_dart().into_dart(),
+            self.clash_factor.into_into_dart().into_dart(),
+        ]
+        .into_dart()
     }
 }
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
@@ -35505,6 +35514,8 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i16>::sse_encode(self.element, serializer);
+        <bool>::sse_encode(self.skip_clashes, serializer);
+        <f64>::sse_encode(self.clash_factor, serializer);
     }
 }
 
