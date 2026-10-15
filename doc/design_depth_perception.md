@@ -56,7 +56,8 @@ otherwise light it unevenly around the outline.
   - the studio rig and the *Headlight* preset (D3)
   - the rim band drawn after lighting, at a screen-space width (D4)
   - the depth cue (D5)
-  - per-atom exposure for impostor atoms and bonds (D6, D7)
+  - per-atom exposure for impostor atoms and bonds (D6, D7), with a bent
+    vector so the shading varies across each sphere (D10)
   - preferences for all of it (D8)
   - caching exposure on the scene, so it is not recomputed on every
     refresh (D9)
@@ -416,11 +417,12 @@ Results by position:
 | Atom fully inside the bulk | about 0 |
 
 This is the half-sphere-exposure family of burial measures, not physical
-ambient occlusion. It is a single scalar per atom, so it cannot darken one
-side of a sphere and not the other. What it does convey is the thing the
-report says the user needs to read: which atoms are exposed and which are
-buried. The report's estimate is 70 % of the AO look at a small fraction of
-the cost.
+ambient occlusion. On its own, a scalar would darken a whole sphere
+evenly: it shows which atoms are exposed and which are buried, but not the
+crease where two atoms touch, which is most of what makes ambient occlusion
+read as such. So the same pass also keeps the *direction* of the open sky,
+a bent vector `b_i`, and the shader evaluates visibility per pixel from the
+pair `(E_i, b_i)`. That is D10.
 
 **Occluder radius = covalent radius, for every display style.** With van
 der Waals radii, each bonded neighbour sits closer than its own radius and
@@ -565,7 +567,8 @@ pub fn update_atom_exposure(
 ) -> AtomExposure;
 ```
 
-`AtomExposure` is an `FxHashMap<u32, f32>` wrapped in a newtype. Both
+`AtomExposure` is an `FxHashMap<u32, [i8; 4]>` wrapped in a newtype: the
+packed `(b, E)` of D10, in the vertex format they are uploaded in. Both
 paths compute each receiver with the same kernel over the same neighbour
 set. Since the mask is an OR, neighbour order does not matter. **So an
 incremental update is bit-identical to a full computation**, and Phase 4
@@ -574,37 +577,50 @@ tests exactly that.
 The tessellator does not call these functions directly: it takes the
 exposure from the scene's cache (D9). `tessellate_atomic_structure_impostors`
 gains an `exposure: Option<&AtomExposure>` parameter, where `None` means AO
-is off and every vertex gets 1.0. It also exposes the receiver selection it
+is off and every vertex is fully exposed (`b = 0`, `E = 1`). It also exposes the receiver selection it
 already does (`should_cull_atom`, alpha) as `ao_receivers(structure,
 viz_prefs) -> Vec<u32>`. The cache uses that function, so the two can never
 disagree.
 
 **Into the vertices.**
 
-- `AtomImpostorVertex` gains `exposure: f32`, growing from 60 to 64 bytes.
-- `BondImpostorVertex` gains `exposure_start, exposure_end`. The bond shader
-  mixes the two by the hit point's axial parameter, which `shade_bond_hit`
-  already computes as `projection_length`, so a bond darkens towards its
-  buried end.
-- `add_atom_quad` and `add_bond_quad` keep their signatures and write 1.0.
-  New `…_with_exposure` variants serve the tessellator. Every other
-  producer, including gadgets, anchors and markers, is unchanged and comes
-  out fully exposed.
-- The memory cost on the nanobeam is 16 MB more vertex data, which instanced
-  bond and atom quads (AA design, Future work) would recover several times
-  over.
+- `AtomImpostorVertex` gains `exposure: vec4<f32>` in vertex format
+  `Snorm8x4`: `(b.x, b.y, b.z, E)` in 4 bytes (D10). The vertex grows
+  from 60 to 64 bytes.
+- `BondImpostorVertex` gains `exposure_start, exposure_end`, two more
+  `Snorm8x4`. The bond shader mixes the two by the hit point's axial
+  parameter, which `shade_bond_hit` already computes as
+  `projection_length`, so a bond darkens towards its buried end and on the
+  side facing its neighbours.
+- `add_atom_quad` and `add_bond_quad` keep their signatures and write the
+  fully exposed value `(0, 0, 0, 1)`. New `…_with_exposure` variants serve
+  the tessellator. Every other producer, including gadgets, anchors and
+  markers, is unchanged and comes out fully exposed.
+- The memory cost on the nanobeam is 16 MB more vertex data, the same as a
+  plain `f32` would cost, because the bent vector rides in the same 4 bytes.
+  Instanced bond and atom quads (AA design, Future work) would recover it
+  several times over.
 
-**From exposure to light**, in `light_surface`:
+**From exposure to light**, in `light_surface`, with `V(N)` the per-pixel
+visibility of D10:
 
 ```text
-ambient_factor = mix(1, AO_FLOOR + (1 − AO_FLOOR) · smoothstep(0, AO_OPEN, E), ao_strength)
+ao(N)          = AO_FLOOR + (1 − AO_FLOOR) · smoothstep(0, AO_OPEN, V(N))
+ambient_factor = mix(1, ao(N), ao_strength)              // fill + hemisphere
+key_factor     = mix(1, ao(N), ao_strength · AO_KEY)     // key light
 ```
 
-Starting values: `AO_FLOOR = 0.25`, `AO_OPEN = 0.6`. With these, an adatom
-and anything more open than it is unshaded, a terrace atom is mildly
-darkened and a groove clearly so. The constants are shader constants, tuned
-in the walkthrough. `ao_strength` comes from the `ShadingUniform`, so moving
-the strength slider changes no geometry.
+Starting values: `AO_FLOOR = 0.25`, `AO_OPEN = 0.6`, `AO_KEY = 0.35`.
+- With these, the open side of an adatom and of a terrace atom is unshaded.
+  Their sides facing neighbours darken, and so does the floor of a groove.
+- `AO_KEY` lets AO dim the key light a little: a soft stand-in for the
+  shadows of Future work. Without it, the strong key light washes out the
+  creases on every surface that faces the viewer.
+- `AO_KEY` does not touch the D3 calibration, which is measured on a
+  surface that is fully exposed.
+- The constants are shader constants, tuned in the walkthrough.
+  `ao_strength` comes from the `ShadingUniform`, so moving the strength
+  slider changes no geometry.
 
 ### D8 — Preferences: a lighting preset, a depth cue and ambient occlusion, all on by default
 
@@ -742,6 +758,82 @@ exposure should be paid on the same terms.
   atom would recompute all of them.
 - **Freezing exposure during an atom_edit session.** It is simple, but it
   is wrong on exactly the edits a user is looking at.
+
+### D10 — Directional exposure: a bent vector per atom, visibility evaluated per pixel
+
+**Why.** A scalar per atom darkens buried atoms but leaves each sphere
+evenly shaded. The look people call "ambient occlusion" in ChimeraX's soft
+lighting, QuteMol or a ray tracer is mostly something else: the dark crease
+where two atoms touch, and light falling off across a sphere towards its
+neighbours. D7's 128-bit mask already records which directions are
+blocked. Reducing it to a popcount throws that information away. Keeping
+its first moment costs almost nothing, and it gives the crease.
+
+**What is computed.** From the same mask `M_i` (D7), with `d_k` the Fibonacci
+directions:
+
+```text
+E_i = |{k ∉ M_i}| / D                 // as before: the open fraction
+b_i = (1/D) · Σ_{k ∉ M_i} d_k         // the bent vector: mean open direction, scaled by E
+```
+
+- `b_i` points towards the open sky, and its length says how lopsided the
+  sky is:
+  - isolated atom: `b = 0`
+  - fully buried atom: `b = 0`
+  - atom on a flat terrace: `b = ¼ · surface normal`
+- `|b| ≤ ¼` always: the hemisphere is the extreme case.
+- The sum runs over the set bits in index order, so it is deterministic,
+  and D7's "incremental is bit-identical to full" still holds.
+- It adds one pass over the open directions per receiver. That is ≤ 128
+  vector adds, small next to the ~100 neighbour lookups.
+
+**What the shader evaluates.** For the surface normal `N` at the pixel:
+
+```text
+V(N) = clamp(E + 2 · dot(b, N), 0, 1)
+```
+
+- This is the **cosine-weighted visible fraction** of the hemisphere
+  around `N`, computed from the first two spherical-harmonic bands of the
+  visibility function. It is the irradiance the ambient term would receive
+  from a uniform sky.
+- It is **exact for a half-space sky at any tilt**, which is the terrace
+  case: a terrace atom gives `V = (1 + cos θ)/2`, where θ is the angle
+  between `N` and the terrace normal. So:
+  - the top of the atom is fully lit;
+  - its equator is at ½;
+  - its underside, facing the crystal, is dark.
+- For an atom in a groove or beside a step, the side facing the wall
+  darkens. Where two spheres touch, both sides of the contact darken
+  together, and that makes the crease.
+- An isolated atom (`E = 1`, `b = 0`) gets `V = 1` everywhere, so the D3
+  calibration is untouched.
+- Bonds interpolate `(b, E)` between their two ends and evaluate `V` with
+  the bond surface's normal. A bond thus darkens on the side towards the
+  bulk.
+
+**Packing.**
+- Each atom's value travels as one `Snorm8x4`: `(4b.x, 4b.y, 4b.z, E)`.
+  Scaling by 4 uses the full ±1 range, since `|b| ≤ ¼`.
+- The quantisation step is 1/127, so `V` is off by at most about 0.02.
+  That is invisible after the smoothstep mapping.
+- The cost is the 4 bytes a plain `f32` exposure would have taken (D7,
+  "Into the vertices").
+- The shader unpacks with `V = clamp(E + 0.5 · dot(b4, N), 0, 1)`.
+
+**Rejected:**
+- **Uploading the whole 128-bit mask** and looking up the open direction
+  nearest to `N`. It is sharper, but it needs 16 bytes per vertex, and on a
+  large sphere the 128 directions show as visible facets.
+- **More spherical-harmonic bands** (L2, nine coefficients). That is
+  9× the data for detail the L1 band already gets right on the terrace,
+  the case that matters most.
+- **Bending the lighting normal** (using `b` instead of `N` for the
+  diffuse term). That changes the lit shape of the sphere, and the D3
+  calibration then fails. `b` is used for visibility only.
+- **Per-texel visibility maps** (QuteMol). This is the GPU path D6
+  rejects.
 ## Open questions
 
 1. **Occluder radius: covalent or displayed?** D6 chooses covalent, so that
@@ -929,9 +1021,17 @@ library.
   - Determinism: the same structure gives bit-identical values across runs
     and thread counts (the `rayon` order must not leak into results).
   - Two symmetry-equivalent atoms of a lattice fill get equal values.
+  - Bent vector (D10):
+    - isolated and fully buried atoms have `b = 0`
+    - a (100) terrace atom's `b` is within 10° of the surface normal, with
+      length below ¼
+    - `|b| ≤ ¼` on 1 000 random neighbourhoods
+    - against the closed form: a test-built half-space sky gives
+      `V(N) = (1 + cos θ)/2` within quantisation, at five tilts
+    - packing round-trips within 1/127
   - Display-side tessellation tests: vertices of opaque atoms carry the
-    value; gadget, anchor and marker vertices carry 1.0; `exposure: None`
-    leaves every vertex at 1.0.
+    packed value; gadget, anchor and marker vertices carry `(0, 0, 0, 1)`;
+    `exposure: None` leaves every vertex at `(0, 0, 0, 1)`.
   - Incremental updates (`ambient_occlusion_test.rs`), each compared with
     `==` against `atom_exposure` on the new structure:
     - one atom moved by 0.5 Å in a lattice-filled block; also one added and
@@ -947,10 +1047,14 @@ library.
       pixels are darker by the mapping's factor, measured against the twin.
     - `ao_strength` 0 makes them identical.
     - A bond with exposure 0 → 1 brightens monotonically from start to end.
+    - A sphere with `E = ½` and `b` pointing to screen-right: its right
+      half is brighter than its left, matching the twin. With `b = 0` the
+      two halves are symmetric, which is the mutation: drop the `dot(b, N)`
+      term and the first assertion must fail.
   - **Measure and record** one full `atom_exposure` and the evaluate time
     on a lattice-filled 1 M-atom cuboid and on the 80-cell rod, in a release
     build (D7's absolute budget: at most 15 % of evaluate).
-- Effort: 2 d.
+- Effort: 2.5 d.
 
 ### Phase 4b — Exposure cache on the scene (D9)
 
@@ -996,7 +1100,9 @@ library.
   - AO in both display styles.
   - The rim of selected, frozen and marked atoms at 100 % and 200 %.
   - An exported image and a thumbnail on a light background.
-  - Tune `AO_FLOOR`, `AO_OPEN`, the rig constants and the default
+  - The crease between touching atoms on a (100) 2×1 reconstruction and
+    at a step, space-filling, with `AO_KEY` at 0 and at its start value.
+  - Tune `AO_FLOOR`, `AO_OPEN`, `AO_KEY`, the rig constants and the default
     strengths; settle Open questions 1 and 2.
 - **Docs:**
   - `doc/reference_guide/ui.md`: the five rows of the Rendering section
@@ -1018,7 +1124,7 @@ library.
     the rule that occluders include culled atoms but not ghosts.
 - Effort: 0.5 d.
 
-**Total: about 6–7 d.** That is the report's 3–5 d "Depth" bundle, plus the
+**Total: about 6.5–7.5 d.** That is the report's 3–5 d "Depth" bundle, plus the
 shader unification, the rim fix and the exposure cache, none of which the
 report costed.
 
