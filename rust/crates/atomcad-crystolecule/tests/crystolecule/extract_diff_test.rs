@@ -409,7 +409,12 @@ fn property_composition_interplay() {
     for _ in 0..100 {
         let base = gen_base(&mut rng);
         let mid = mutate(&mut rng, &base);
-        let final_s = mutate(&mut rng, &mid);
+        let mut final_s = mutate(&mut rng, &mid);
+        // The composed diff is applied to `base`, so the passivation rule
+        // holds relative to it: a flag set on an atom after it lost a bond in
+        // the first step is cleared by the composition (one step that loses a
+        // bond), though not by applying the two diffs in turn.
+        obey_passivation_rule(&base, &mut final_s);
 
         let d1 = extract_diff(&base, &mid, 0.0);
         let d2 = extract_diff(&mid, &final_s, 0.0);
@@ -588,7 +593,29 @@ fn mutate(rng: &mut Xorshift, before: &AtomicStructure) -> AtomicStructure {
         }
     }
 
+    obey_passivation_rule(before, &mut after);
     after
+}
+
+/// The passivation flag means "capped": a non-terminator that lost a bond
+/// since `origin` (to a deleted atom or a deleted bond) is not, so
+/// `apply_diff` clears it and no diff from `origin` reproduces a state that
+/// keeps it. Generated states obey the rule; H is the generator's one
+/// terminator element.
+fn obey_passivation_rule(origin: &AtomicStructure, s: &mut AtomicStructure) {
+    let ids: Vec<u32> = s.atom_ids().copied().collect();
+    for id in ids {
+        let Some(o) = origin.get_atom(id) else {
+            continue;
+        };
+        let lost_bond = o
+            .bonds
+            .iter()
+            .any(|b| !s.has_bond_between(id, b.other_atom_id()));
+        if lost_bond && s.get_atom(id).unwrap().atomic_number != 1 {
+            s.set_atom_hydrogen_passivation(id, false);
+        }
+    }
 }
 
 // ============================================================================

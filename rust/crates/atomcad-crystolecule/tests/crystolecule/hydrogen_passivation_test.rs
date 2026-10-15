@@ -815,6 +815,32 @@ fn remove_h_ethane_leaves_two_carbons_with_bond() {
     assert_eq!(count_bonds(&s), 1, "C-C bond remains");
 }
 
+/// A host flagged as passivated (as surface reconstruction flags its dimer
+/// atoms) loses the flag when its H are removed, so a later `passivate` with
+/// the default options caps it again — `remove_hydrogen` → edit → `passivate`.
+#[test]
+fn remove_h_clears_the_hosts_flag_so_passivate_recaps_it() {
+    let mut s = AtomicStructure::new();
+    let c1 = s.add_atom(6, DVec3::ZERO);
+    let c2 = s.add_atom(6, DVec3::new(1.545, 0.0, 0.0));
+    s.add_bond(c1, c2, 1);
+    add_hydrogens(&mut s, &default_options());
+    s.set_atom_hydrogen_passivation(c1, true);
+    s.set_atom_hydrogen_passivation(c2, true);
+
+    remove_hydrogens(&mut s, &remove_all_options());
+    assert!(!s.get_atom(c1).unwrap().is_hydrogen_passivation());
+    assert!(!s.get_atom(c2).unwrap().is_hydrogen_passivation());
+    assert_eq!(add_hydrogens(&mut s, &default_options()).atoms_added, 6);
+
+    // A host left with no bonds at all is cleared too: it is not a terminator.
+    let (mut m, c) = make_structure(6, &[]);
+    add_hydrogens(&mut m, &default_options());
+    m.set_atom_hydrogen_passivation(c, true);
+    remove_hydrogens(&mut m, &remove_all_options());
+    assert_eq!(add_hydrogens(&mut m, &default_options()).atoms_added, 4);
+}
+
 #[test]
 fn remove_h_only_hydrogens_leaves_empty() {
     let mut s = AtomicStructure::new();

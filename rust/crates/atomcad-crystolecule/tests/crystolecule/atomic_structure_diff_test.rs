@@ -1845,6 +1845,146 @@ fn hydrogen_passivation_metadata_diff_addition() {
     );
 }
 
+/// Methane with every atom flagged as passivated, as a passivation pass leaves
+/// a host and its terminators. Returns the structure and the four H positions;
+/// the C is at the origin.
+fn flagged_methane() -> (AtomicStructure, [DVec3; 4]) {
+    let a = 1.09 / 3f64.sqrt();
+    let positions = [
+        DVec3::new(a, a, a),
+        DVec3::new(a, -a, -a),
+        DVec3::new(-a, a, -a),
+        DVec3::new(-a, -a, a),
+    ];
+    let mut s = AtomicStructure::new();
+    let c = s.add_atom(6, DVec3::ZERO);
+    s.set_atom_hydrogen_passivation(c, true);
+    for p in positions {
+        let h = s.add_atom(1, p);
+        s.add_bond(c, h, 1);
+        s.set_atom_hydrogen_passivation(h, true);
+    }
+    (s, positions)
+}
+
+fn result_atom_at(
+    result: &AtomicStructure,
+    p: DVec3,
+) -> &atomcad_crystolecule::atomic_structure::atom::Atom {
+    result
+        .atoms_values()
+        .find(|a| a.position.distance(p) < 1e-9)
+        .expect("an atom at that position")
+}
+
+#[test]
+fn deleting_a_terminator_clears_the_hosts_passivation_flag() {
+    let (base, h) = flagged_methane();
+    let mut diff = AtomicStructure::new_diff();
+    diff.add_atom(DELETED_SITE_ATOMIC_NUMBER, h[0]);
+
+    let r = apply_diff(&base, &diff, DEFAULT_TOLERANCE).result;
+    assert_eq!(r.get_num_of_atoms(), 4);
+    assert!(
+        !result_atom_at(&r, DVec3::ZERO).is_hydrogen_passivation(),
+        "the host lost a terminator, so it has an open valence again"
+    );
+    for p in &h[1..] {
+        let p = *p;
+        assert!(
+            result_atom_at(&r, p).is_hydrogen_passivation(),
+            "untouched terminators keep their flag"
+        );
+    }
+}
+
+#[test]
+fn an_empty_diff_or_an_unrelated_edit_keeps_the_flag() {
+    let (base, _) = flagged_methane();
+    let mut diff = AtomicStructure::new_diff();
+    diff.add_atom(7, DVec3::new(20.0, 0.0, 0.0));
+
+    let r = apply_diff(&base, &diff, DEFAULT_TOLERANCE).result;
+    assert!(result_atom_at(&r, DVec3::ZERO).is_hydrogen_passivation());
+}
+
+#[test]
+fn deleting_a_bond_clears_the_flag_on_the_atom_that_keeps_bonds() {
+    let (base, h) = flagged_methane();
+    let mut diff = AtomicStructure::new_diff();
+    let dc = diff.add_atom(UNCHANGED_ATOMIC_NUMBER, DVec3::ZERO);
+    let dh = diff.add_atom(UNCHANGED_ATOMIC_NUMBER, h[0]);
+    diff.add_bond_checked(dc, dh, BOND_DELETED);
+
+    let r = apply_diff(&base, &diff, DEFAULT_TOLERANCE).result;
+    assert!(!result_atom_at(&r, DVec3::ZERO).is_hydrogen_passivation());
+    assert!(
+        result_atom_at(&r, h[0]).is_hydrogen_passivation(),
+        "an orphaned terminator keeps its flag, so passivate does not cap it into H2"
+    );
+}
+
+#[test]
+fn deleting_the_host_leaves_its_orphaned_terminators_flagged() {
+    let (base, _) = flagged_methane();
+    let mut diff = AtomicStructure::new_diff();
+    diff.add_atom(DELETED_SITE_ATOMIC_NUMBER, DVec3::ZERO);
+
+    let r = apply_diff(&base, &diff, DEFAULT_TOLERANCE).result;
+    assert_eq!(r.get_num_of_atoms(), 4);
+    assert!(r.atoms_values().all(|a| a.is_hydrogen_passivation()));
+}
+
+/// `atom_edit` promotes an atom it tags or moves into a full override that
+/// copies the base's flags — the case on a network whose sites were tagged
+/// after their H were deleted. The copied flag is cleared all the same.
+#[test]
+fn a_promoted_host_with_a_copied_flag_is_cleared_too() {
+    let (base, h) = flagged_methane();
+    let mut diff = AtomicStructure::new_diff();
+    let c = diff.add_atom(6, DVec3::ZERO);
+    diff.set_anchor_position(c, DVec3::ZERO);
+    diff.set_atom_hydrogen_passivation(c, true);
+    diff.add_atom_tag(c, "site").unwrap();
+    diff.add_atom(DELETED_SITE_ATOMIC_NUMBER, h[0]);
+
+    let r = apply_diff(&base, &diff, DEFAULT_TOLERANCE).result;
+    let host = result_atom_at(&r, DVec3::ZERO);
+    assert!(!host.is_hydrogen_passivation());
+    assert_eq!(r.atom_tags(host.id), vec!["site"]);
+}
+
+#[test]
+fn a_host_that_loses_all_its_bonds_is_still_cleared() {
+    let (base, h) = flagged_methane();
+    let mut diff = AtomicStructure::new_diff();
+    for p in h {
+        diff.add_atom(DELETED_SITE_ATOMIC_NUMBER, p);
+    }
+
+    let r = apply_diff(&base, &diff, DEFAULT_TOLERANCE).result;
+    assert_eq!(r.get_num_of_atoms(), 1);
+    assert!(
+        !result_atom_at(&r, DVec3::ZERO).is_hydrogen_passivation(),
+        "a bare carbon is not a terminator, so passivate may cap it"
+    );
+}
+
+#[test]
+fn passivate_restores_a_terminator_deleted_by_a_diff() {
+    use atomcad_crystolecule::hydrogen_passivation::{AddHydrogensOptions, add_hydrogens};
+
+    let (base, h) = flagged_methane();
+    let mut diff = AtomicStructure::new_diff();
+    diff.add_atom(DELETED_SITE_ATOMIC_NUMBER, h[0]);
+    let mut r = apply_diff(&base, &diff, DEFAULT_TOLERANCE).result;
+
+    // The default options skip flagged atoms; the host is no longer one.
+    let added = add_hydrogens(&mut r, &AddHydrogensOptions::default()).atoms_added;
+    assert_eq!(added, 1, "exactly the deleted H comes back, nothing else");
+    assert_eq!(r.get_num_of_atoms(), 5);
+}
+
 #[test]
 fn selected_flag_not_propagated() {
     // Selected flag is UI state and should NOT be copied through apply_diff()

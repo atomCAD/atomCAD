@@ -232,7 +232,7 @@ pub fn apply_diff(
     }
 
     // Step 3: Resolve bonds
-    resolve_bonds(
+    let lost_bond = resolve_bonds(
         base,
         diff,
         &mut result,
@@ -242,6 +242,17 @@ pub fn apply_diff(
         &mut stats,
     );
 
+    // Step 3c: An atom that lost a bond to the diff is no longer "already
+    // passivated": the bond it lost (typically to a deleted terminator) is now
+    // an open valence, and `passivate` skips flagged atoms. Without this, an H
+    // deleted in `atom_edit` could never be put back downstream. This holds
+    // for a full override in the diff too: `atom_edit` promotes an atom (to
+    // tag or move it) by copying the base's flags, so an override's flag is
+    // usually inherited, not a statement. The flag thus means "capped", and a
+    // structure in which a non-terminator lost a bond but kept the flag is not
+    // one any diff reproduces.
+    clear_passivation_after_bond_loss(&mut result, &lost_bond);
+
     // Step 4: Carry per-atom style decorations through to surviving atoms.
     carry_style_decorations(base, &mut result, &provenance);
 
@@ -249,6 +260,21 @@ pub fn apply_diff(
         result,
         provenance,
         stats,
+    }
+}
+
+/// Clears the hydrogen-passivation flag on each of `atoms` (atoms that just
+/// lost a bond), except on a terminator element (H or a halogen): a terminator
+/// that lost its host keeps the flag, so a stray H is not itself passivated
+/// into H₂. Shared by `apply_diff` and `remove_hydrogens`.
+pub fn clear_passivation_after_bond_loss(structure: &mut AtomicStructure, atoms: &[u32]) {
+    for &id in atoms {
+        let is_terminator = structure
+            .get_atom(id)
+            .is_none_or(|a| crate::atomic_constants::is_allowed_passivant(a.atomic_number));
+        if !is_terminator {
+            structure.set_atom_hydrogen_passivation(id, false);
+        }
     }
 }
 
@@ -385,6 +411,9 @@ fn match_diff_atoms(
 ///
 /// Step 3a: Base bond pass-through — iterate base bonds, copy/override/delete.
 /// Step 3b: New diff bonds — iterate diff bonds not already processed.
+///
+/// Returns the surviving result atoms that lost a base bond, to a deleted
+/// atom or by an explicit bond deletion, sorted and deduplicated.
 #[allow(clippy::too_many_arguments)]
 fn resolve_bonds(
     base: &AtomicStructure,
@@ -394,10 +423,11 @@ fn resolve_bonds(
     deleted_base_ids: &rustc_hash::FxHashSet<u32>,
     provenance: &DiffProvenance,
     stats: &mut DiffStats,
-) {
+) -> Vec<u32> {
     // Track which diff bond pairs have been processed (to avoid double-processing in step 3b)
     let mut processed_diff_bond_pairs: rustc_hash::FxHashSet<(u32, u32)> =
         rustc_hash::FxHashSet::default();
+    let mut lost_bond: Vec<u32> = Vec::new();
 
     // Step 3a: Base bond pass-through
     for (_, base_atom) in base.iter_atoms() {
@@ -412,6 +442,11 @@ fn resolve_bonds(
             // If either endpoint was deleted, skip this bond
             if deleted_base_ids.contains(&base_atom.id) || deleted_base_ids.contains(&base_b_id) {
                 stats.bonds_deleted += 1;
+                for id in [base_atom.id, base_b_id] {
+                    if let Some(&result_id) = provenance.base_to_result.get(&id) {
+                        lost_bond.push(result_id);
+                    }
+                }
                 continue;
             }
 
@@ -439,6 +474,8 @@ fn resolve_bonds(
                         Some(order) if order == BOND_DELETED => {
                             // Explicit deletion
                             stats.bonds_deleted += 1;
+                            lost_bond.push(result_a_id);
+                            lost_bond.push(result_b_id);
                         }
                         Some(order) => {
                             // Override with diff bond
@@ -491,6 +528,10 @@ fn resolve_bonds(
             }
         }
     }
+
+    lost_bond.sort_unstable();
+    lost_bond.dedup();
+    lost_bond
 }
 
 /// Find the bond order between two atoms in a structure, if a bond exists.

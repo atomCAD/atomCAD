@@ -103,10 +103,23 @@ pub fn remove_hydrogens_filtered(
         ids_to_remove.push(atom_id);
     }
 
+    // The hosts of the removed H, so their "already passivated" flag can be
+    // cleared below: each now has an open valence, and a later passivation
+    // pass skips flagged atoms. Same rule as `apply_diff`.
+    let mut hosts: Vec<u32> = ids_to_remove
+        .iter()
+        .filter_map(|&id| structure.get_atom(id))
+        .flat_map(|h| h.bonds.iter().filter(|b| !b.is_delete_marker()))
+        .map(|b| b.other_atom_id())
+        .collect();
+    hosts.sort_unstable();
+    hosts.dedup();
+
     // Phase 2: Mutation (remove atoms)
     for &atom_id in &ids_to_remove {
         structure.delete_atom(atom_id);
     }
+    crate::atomic_structure_diff::clear_passivation_after_bond_loss(structure, &hosts);
 
     RemoveHydrogensResult {
         hydrogens_removed: ids_to_remove.len(),
