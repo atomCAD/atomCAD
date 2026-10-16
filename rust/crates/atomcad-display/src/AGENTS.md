@@ -52,6 +52,13 @@ the workspace DAG and for why `scene_tessellator` lives one layer up.
 - The 128 directions are antipodal pairs, not a plain Fibonacci sphere: a plain
   one's mean is about 4·10⁻⁴ off zero, which gives an isolated atom a bent
   vector.
+- **Diff by place when the producer may renumber.** `occlusion_changes` keys
+  on atom ids; `occlusion_changes_by_place` matches atoms by the exact bits of
+  position, occluder radius and occluder flag — all an exposure depends on —
+  after matching by id what kept its id, and returns an `AtomRenumbering` for
+  `AtomExposure::remapped`. The scene cache uses the latter, because
+  `apply_diff` renumbers unmoved atoms. Keep the id-first pass: matching a
+  million atoms by place alone took ~900 ms against ~120 ms.
 
 ## Surface extraction (`isosurface/`)
 

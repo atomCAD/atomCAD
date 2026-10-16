@@ -520,6 +520,137 @@ pub fn occlusion_changes(old: &OccluderSnapshot, new: &AtomicStructure) -> Occlu
     changes
 }
 
+/// The bits an atom's place is matched by: what its neighbours' exposure,
+/// and its own, depend on.
+type PlaceKey = (u64, u64, u64, u64, bool);
+
+fn place_key(state: &OccluderState) -> PlaceKey {
+    (
+        state.position.x.to_bits(),
+        state.position.y.to_bits(),
+        state.position.z.to_bits(),
+        state.radius.to_bits(),
+        state.occluder,
+    )
+}
+
+/// How the atoms of a snapshot are numbered in a newer structure, as
+/// [`occlusion_changes_by_place`] matched them: the ids that changed, and
+/// the ids whose atom has no counterpart. Every other id is unchanged.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct AtomRenumbering {
+    renumbered: FxHashMap<u32, u32>,
+    lost: FxHashSet<u32>,
+}
+
+impl AtomRenumbering {
+    /// Whether no matched atom changed its id.
+    pub fn keeps_ids(&self) -> bool {
+        self.renumbered.is_empty()
+    }
+
+    /// The number of matched atoms whose id changed.
+    pub fn renumbered_count(&self) -> usize {
+        self.renumbered.len()
+    }
+
+    /// The new id of old atom `id`, `None` when it has no counterpart.
+    pub fn new_id(&self, id: u32) -> Option<u32> {
+        if self.lost.contains(&id) {
+            None
+        } else {
+            Some(self.renumbered.get(&id).copied().unwrap_or(id))
+        }
+    }
+}
+
+/// [`occlusion_changes`] matched by **place** rather than by atom id, plus
+/// how the atoms of `old` are numbered in `new`.
+///
+/// An atom of `new` whose position, occluder radius and occluder flag equal,
+/// bit for bit, those of an atom of `old` is the same occluder whatever its
+/// id, and a receiver there keeps its value. This matters because a producer
+/// may renumber atoms that did not move: `atom_edit`'s `apply_diff` does on
+/// every change of its diff, and an id-keyed diff would then report most of
+/// the structure as changed. Atoms that kept their id and their state are
+/// matched first, at the cost of the id diff; only the rest are matched by
+/// place. Atoms at one place are matched one to one, and a surplus on either
+/// side is a change there.
+///
+/// The changes are complete from `old` to `new`, so the result replaces,
+/// rather than extends, a pending set diffed earlier from the same `old`.
+pub fn occlusion_changes_by_place(
+    old: &OccluderSnapshot,
+    new: &AtomicStructure,
+) -> (OcclusionChanges, AtomRenumbering) {
+    let same_as_old = |id: u32, state: &OccluderState| old.0.get(&id) == Some(state);
+
+    // The atoms of `new` that did not keep both their id and their state.
+    let unmatched_new: Vec<(u32, OccluderState)> = new
+        .atoms_values()
+        .map(|atom| (atom.id, occluder_state(new, atom)))
+        .filter(|(id, state)| !same_as_old(*id, state))
+        .collect();
+
+    // The atoms of `old` likewise, by place; a second atom at one place goes
+    // to `more_at`, which is empty but for coincident atoms.
+    let mut at: FxHashMap<PlaceKey, u32> = FxHashMap::default();
+    let mut more_at: FxHashMap<PlaceKey, Vec<u32>> = FxHashMap::default();
+    for (id, state) in &old.0 {
+        let kept = new
+            .get_atom(*id)
+            .is_some_and(|atom| occluder_state(new, atom) == *state);
+        if kept {
+            continue;
+        }
+        let key = place_key(state);
+        match at.entry(key) {
+            std::collections::hash_map::Entry::Occupied(_) => {
+                more_at.entry(key).or_default().push(*id);
+            }
+            std::collections::hash_map::Entry::Vacant(slot) => {
+                slot.insert(*id);
+            }
+        }
+    }
+
+    let mut changes = OcclusionChanges::default();
+    let mut renumbering = AtomRenumbering::default();
+    for (new_id, state) in &unmatched_new {
+        let key = place_key(state);
+        let old_id = match more_at.get_mut(&key).and_then(Vec::pop) {
+            Some(id) => Some(id),
+            None => at.remove(&key),
+        };
+        match old_id {
+            Some(old_id) => {
+                if old_id != *new_id {
+                    renumbering.renumbered.insert(old_id, *new_id);
+                }
+            }
+            None => changes.push(state),
+        }
+    }
+    for id in at.values().chain(more_at.values().flatten()) {
+        changes.push(&old.0[id]);
+        renumbering.lost.insert(*id);
+    }
+    (changes, renumbering)
+}
+
+impl AtomExposure {
+    /// The values re-keyed to the ids of the structure `renumbering` was
+    /// taken against; an atom without a counterpart loses its value.
+    pub fn remapped(&self, renumbering: &AtomRenumbering) -> AtomExposure {
+        AtomExposure(
+            self.0
+                .iter()
+                .filter_map(|(id, packed)| renumbering.new_id(*id).map(|new_id| (new_id, *packed)))
+                .collect(),
+        )
+    }
+}
+
 /// The union of two change sets, keeping every old and new position of
 /// either. Folds a new diff into changes still pending.
 pub fn merge_changes(pending: OcclusionChanges, new: OcclusionChanges) -> OcclusionChanges {
@@ -543,6 +674,56 @@ pub fn update_atom_exposure(
     structure: &AtomicStructure,
     receivers: &[u32],
 ) -> (AtomExposure, ExposureStats) {
+    plan_exposure_update(previous, changes, structure, receivers).run(structure)
+}
+
+/// An [`update_atom_exposure`] split in two: what it keeps and what it would
+/// compute, decided without computing anything. The scene's cache asks
+/// [`ExposureUpdatePlan::takes_full_path`] during a drag, where a full-path
+/// update is deferred to the drag's end (D9).
+pub struct ExposureUpdatePlan {
+    kept: FxHashMap<u32, [i8; 4]>,
+    missing: Vec<u32>,
+    full_path: bool,
+}
+
+impl ExposureUpdatePlan {
+    /// Whether running the plan takes the full path: more than
+    /// [`FULL_PATH_FRACTION`] of the receivers need computing.
+    pub fn takes_full_path(&self) -> bool {
+        self.full_path
+    }
+
+    /// The number of receivers running the plan computes.
+    pub fn receivers_to_compute(&self) -> usize {
+        self.missing.len()
+    }
+
+    /// The updated values, as [`update_atom_exposure`] returns them.
+    pub fn run(self, structure: &AtomicStructure) -> (AtomExposure, ExposureStats) {
+        let computed = if self.full_path {
+            compute_with_spatial_grid(structure, &self.missing)
+        } else {
+            compute_with_structure_grid(structure, &self.missing)
+        };
+        let stats = ExposureStats {
+            receivers_computed: computed.len(),
+            full_path: self.full_path,
+        };
+        let mut values = self.kept;
+        values.extend(computed);
+        (AtomExposure(values), stats)
+    }
+}
+
+/// The first half of [`update_atom_exposure`]: which values survive the
+/// changes and which receivers must be computed.
+pub fn plan_exposure_update(
+    previous: &AtomExposure,
+    changes: &OcclusionChanges,
+    structure: &AtomicStructure,
+    receivers: &[u32],
+) -> ExposureUpdatePlan {
     let limit = receivers.len() as f64 * FULL_PATH_FRACTION;
 
     // The receivers a change may have touched. More changed places than the
@@ -568,15 +749,9 @@ pub fn update_atom_exposure(
     }
 
     let full_path = missing.len() as f64 > limit;
-    let computed = if full_path {
-        compute_with_spatial_grid(structure, &missing)
-    } else {
-        compute_with_structure_grid(structure, &missing)
-    };
-    let stats = ExposureStats {
-        receivers_computed: computed.len(),
+    ExposureUpdatePlan {
+        kept: values,
+        missing,
         full_path,
-    };
-    values.extend(computed);
-    (AtomExposure(values), stats)
+    }
 }

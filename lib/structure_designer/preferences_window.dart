@@ -102,6 +102,10 @@ class PreferencesKeys {
   static const Key lightingDropdown = Key('pref_lighting_dropdown');
   static const Key depthCueCheckbox = Key('pref_depth_cue_checkbox');
   static const Key depthCueStrengthInput = Key('pref_depth_cue_strength_input');
+  static const Key ambientOcclusionCheckbox =
+      Key('pref_ambient_occlusion_checkbox');
+  static const Key ambientOcclusionStrengthInput =
+      Key('pref_ambient_occlusion_strength_input');
 
   static const Key layoutAlgorithmDropdown =
       Key('pref_layout_algorithm_dropdown');
@@ -1384,6 +1388,103 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                                           setState(() {
                                             _preferences.renderingPreferences
                                                     .depthCueStrength =
+                                                value.clamp(0.0, 1.0);
+                                          });
+                                          _applyPreferences();
+                                        },
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.medium),
+
+                          // Ambient occlusion: baked per-atom exposure
+                          // (doc/design_depth_perception.md D6-D9). The
+                          // checkbox is the off switch for huge structures:
+                          // off computes nothing. The strength is a renderer
+                          // setting and changes no geometry.
+                          Row(
+                            children: [
+                              Checkbox(
+                                key: PreferencesKeys.ambientOcclusionCheckbox,
+                                value: _preferences
+                                    .renderingPreferences.ambientOcclusion,
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    setState(() {
+                                      _preferences.renderingPreferences
+                                          .ambientOcclusion = value;
+                                    });
+                                    _applyPreferences();
+                                  }
+                                },
+                              ),
+                              const SizedBox(width: 8),
+                              const Expanded(
+                                child: Tooltip(
+                                  message: 'Darkens atoms and bonds by how '
+                                      'buried they are, so grooves, steps and '
+                                      'the creases between touching atoms '
+                                      'read as such.\n'
+                                      'On a structure of several hundred '
+                                      'thousand atoms it costs about a tenth of '
+                                      'materialize, paid when the structure '
+                                      'changes, not on every edit. Untick to '
+                                      'remove the cost entirely.\n'
+                                      'Thumbnails and exported images use it too.',
+                                  child: Text('Ambient occlusion'),
+                                ),
+                              ),
+                            ],
+                          ),
+                          IgnorePointer(
+                            ignoring: !_preferences
+                                .renderingPreferences.ambientOcclusion,
+                            child: Opacity(
+                              opacity: _preferences
+                                      .renderingPreferences.ambientOcclusion
+                                  ? 1.0
+                                  : 0.4,
+                              child: Padding(
+                                padding: const EdgeInsets.only(left: 24),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Slider(
+                                        value: _preferences.renderingPreferences
+                                            .ambientOcclusionStrength
+                                            .clamp(0.0, 1.0),
+                                        min: 0.0,
+                                        max: 1.0,
+                                        divisions: 100,
+                                        label: _preferences.renderingPreferences
+                                            .ambientOcclusionStrength
+                                            .toStringAsFixed(2),
+                                        onChanged: (value) {
+                                          setState(() {
+                                            _preferences.renderingPreferences
+                                                    .ambientOcclusionStrength =
+                                                value;
+                                          });
+                                          _applyPreferences();
+                                        },
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: 90,
+                                      child: FloatInput(
+                                        key: PreferencesKeys
+                                            .ambientOcclusionStrengthInput,
+                                        label: '',
+                                        value: _preferences.renderingPreferences
+                                            .ambientOcclusionStrength,
+                                        onChanged: (value) {
+                                          setState(() {
+                                            _preferences.renderingPreferences
+                                                    .ambientOcclusionStrength =
                                                 value.clamp(0.0, 1.0);
                                           });
                                           _applyPreferences();

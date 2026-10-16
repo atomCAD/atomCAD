@@ -1548,6 +1548,87 @@ library.
   1 M-atom cuboid with AO on and off. The two should agree within noise,
   and `exposure_ms` should be the cost of the O(atoms) diff alone.
 - Effort: 1 d.
+- **Phase notes (2026-10-16).** Implemented as above, with two deviations
+  forced by one finding, and the reference guide and `AGENTS.md` updates of
+  Phase 5 made here already (the repository's rule is that a user-visible
+  change updates the guide in the same change).
+  - **`apply_diff` renumbers atoms, so the diff matches by place.** Moving one
+    atom of a 1 810-atom `atom_edit` block gave 699 unmoved atoms another id.
+    With D9's id-keyed diff every atom_edit edit — the main case D9 exists
+    for — reported most of the structure as changed and silently took the
+    full path. The carry-over now uses `occlusion_changes_by_place` (display
+    crate): atoms that kept their id and state are matched first, the rest by
+    the exact bits of position, occluder radius and occluder flag, which is
+    all an exposure depends on. It returns an `AtomRenumbering`, and
+    `AtomExposure::remapped` re-keys the values through it. The entry
+    keeps its values keyed by the snapshot's ids and holds the re-keyed copy
+    the tessellator reads. Exactness is unchanged: a matched receiver whose
+    neighbourhood holds no changed place sees the same occluder spheres, so
+    its value is bit-identical, and the tests still compare with `==`.
+  - **Pending changes are replaced, not merged.** As Phase 4's notes
+    predicted, merging is not load-bearing here: every diff starts from the
+    entry's snapshot, which only an update advances, so the newest diff
+    already holds every change since it. Merging would only grow the pending
+    set by the moved atoms' positions on every deferred drag tick (about
+    32 bytes per place, unbounded over a long drag of a large selection)
+    without changing which values are dropped. `carry_over_exposure`
+    therefore assigns the diff, and the "replace instead of merge" mutation
+    was not run; the mutation that does bite the drag test is *advancing the
+    snapshot on a deferred tick*. `merge_changes` stays in the display crate
+    for its own test.
+  - Details the text above leaves open:
+    - AO is computed only when it is on **and** atoms are drawn as impostors
+      (`AtomicStructureVisualizationPreferences::ambient_occlusion_active`,
+      and `StructureDesigner::ambient_occlusion_active` on the domain side):
+      the triangle-mesh drawing does not read exposure.
+    - `exposure_ms` is `None`, not 0, when the pass returned at once
+      (lightweight, AO off); the profiler panel's **AO** column shows `—`
+      there. It is a field of `RefreshSubPhases`, filled by the API layer.
+    - An entry with no receivers (a diff structure, or every atom a ghost) is
+      left empty rather than paying for a snapshot; a first computation is a
+      full one and is deferred during an interaction like any full-path
+      update.
+    - "Re-evaluated nothing" cannot be `eval_ms == None`: a partial refresh
+      that finds no work reports `Some(0.0)` (`refresh_profile.rs`, D6 of the
+      profiling design). The tests arm the per-node profiler and assert that
+      it produced no table.
+    - Gadget-drag ticks are lightweight, so they compute nothing whatever the
+      size of the drag; the deferral matters for the atom_edit drag, whose
+      ticks re-evaluate. The atom drag test goes through
+      `default_tool_pointer_down/move/up`, the gadget test through
+      `gadget_start_drag / gadget_drag / gadget_end_drag` on `structure_move`.
+  - Mutations that fail a test: dropping `carry_over_exposure` from
+    `refresh_partial` (four tests, the node-selection one among them) and from
+    `refresh_full` (the full-refresh test), diffing by id instead of by place
+    (the one-atom move), and advancing the snapshot on a deferred tick (the
+    atom drag).
+    - An entry remembers the display preferences it was last brought up to
+      date for; while they are unchanged and it was not carried over, the pass
+      skips it without running `ao_receivers`. Without this the pass scanned
+      every atom on every refresh: 10 ms on the 1 M-atom cuboid for an
+      unrelated edit, against 0.1 ms with AO off.
+    - The carry-over's time is reported in `exposure_ms`, not `eval_ms`
+      (`refresh_partial` subtracts it from its evaluation bracket), so the
+      profiler's **AO** column carries all of AO's cost.
+  - **Measured** (`ambient_occlusion_cache_timing`, release, 16 threads, the
+    1 M-atom cuboid of Phase 4 behind `structure_move`, 8 Å cull, 309 606
+    receivers, an unrelated displayed `cuboid`):
+
+    | Refresh | AO on | AO off |
+    |---|---|---|
+    | First fill (full refresh) | 1 824 ms, of it exposure 417 ms | 1 416 ms |
+    | Unrelated-node edit | 0.0–0.1 ms, exposure 0.0 ms | 0.1 ms |
+    | Selecting the structure (re-evaluates it; empty diff) | 1 542 ms, of it exposure 122 ms | 1 491 ms |
+
+    - The unrelated edit agrees with AO off within noise, as required.
+    - `exposure_ms` on a re-evaluation is not D9's "20–30 ms per million
+      atoms": the carry-over (an O(atoms) id-first diff plus the hash lookups
+      of the snapshot) and `ao_receivers` together take about 120 ms. The
+      first version, which matched every atom by place, took about 900 ms;
+      matching by id first is what brought it down.
+    - The first fill costs 417 ms against Phase 4's 250 ms for
+      `atom_exposure` alone: the rest is the 1 M-entry `OccluderSnapshot`
+      and `ao_receivers`.
 
 ### Phase 5 — Walkthrough and documentation
 

@@ -490,6 +490,7 @@ fn test_node_scene_data_interactive_pin_single() {
         show_unit_cell_wireframe: false,
         overlays: Vec::new(),
         selected_node_eval_cache: None,
+        exposure: Default::default(),
     };
 
     assert_eq!(scene_data.interactive_pin_index(), Some(0));
@@ -530,6 +531,7 @@ fn test_node_scene_data_interactive_pin_multi() {
         show_unit_cell_wireframe: false,
         overlays: Vec::new(),
         selected_node_eval_cache: None,
+        exposure: Default::default(),
     };
 
     // Both displayed: interactive pin is the lowest (0)
@@ -571,6 +573,7 @@ fn test_node_scene_data_interactive_pin_only_pin1() {
         show_unit_cell_wireframe: false,
         overlays: Vec::new(),
         selected_node_eval_cache: None,
+        exposure: Default::default(),
     };
 
     // Only pin 1 displayed: interactive pin is 1
@@ -595,6 +598,7 @@ fn test_node_scene_data_interactive_pin_empty() {
         show_unit_cell_wireframe: false,
         overlays: Vec::new(),
         selected_node_eval_cache: None,
+        exposure: Default::default(),
     };
 
     assert_eq!(scene_data.interactive_pin_index(), None);

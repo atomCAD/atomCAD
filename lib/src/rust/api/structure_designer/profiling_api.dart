@@ -540,6 +540,11 @@ class APIRefreshProfile {
   /// Gadget rebuild + tessellatable.
   final double gadgetMs;
 
+  /// The baked ambient-occlusion pass between evaluation and tessellation
+  /// (`doc/design_depth_perception.md` D9). `None` when it did not run: a
+  /// lightweight refresh, or ambient occlusion off.
+  final double? exposureMs;
+
   /// Scene tessellation.
   final double tessellateMs;
 
@@ -587,6 +592,7 @@ class APIRefreshProfile {
     this.evalMs,
     required this.sceneDependentMs,
     required this.gadgetMs,
+    this.exposureMs,
     required this.tessellateMs,
     required this.gpuUploadMs,
     this.backgroundMs,
@@ -604,6 +610,7 @@ class APIRefreshProfile {
       evalMs.hashCode ^
       sceneDependentMs.hashCode ^
       gadgetMs.hashCode ^
+      exposureMs.hashCode ^
       tessellateMs.hashCode ^
       gpuUploadMs.hashCode ^
       backgroundMs.hashCode ^
@@ -623,6 +630,7 @@ class APIRefreshProfile {
           evalMs == other.evalMs &&
           sceneDependentMs == other.sceneDependentMs &&
           gadgetMs == other.gadgetMs &&
+          exposureMs == other.exposureMs &&
           tessellateMs == other.tessellateMs &&
           gpuUploadMs == other.gpuUploadMs &&
           backgroundMs == other.backgroundMs &&

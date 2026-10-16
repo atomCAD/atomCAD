@@ -917,6 +917,7 @@ fn cage_display_prefs(show: bool, color: [u8; 3]) -> DisplayPreferences {
             label_scale: 0.7,
             show_tool_envelopes: show,
             tool_envelope_color: color,
+            ambient_occlusion: false,
         },
         background: DisplayBackgroundPreferences {
             show_axes: false,

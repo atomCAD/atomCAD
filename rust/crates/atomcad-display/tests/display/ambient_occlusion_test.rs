@@ -12,7 +12,8 @@ use atomcad_crystolecule::atomic_structure::{AtomicStructure, DELETED_SITE_ATOMI
 use atomcad_display::ambient_occlusion::{
     AtomExposure, DIRECTION_COUNT, FULL_PATH_FRACTION, FULLY_EXPOSED, R_MAX, atom_exposure,
     cap_mask, cap_mask_exact, directions, exposure_of_mask, merge_changes, occluder_snapshot,
-    occlusion_changes, pack_exposure, unpack_exposure, update_atom_exposure,
+    occlusion_changes, occlusion_changes_by_place, pack_exposure, unpack_exposure,
+    update_atom_exposure,
 };
 use atomcad_display::atomic_tessellator::{ao_receivers, tessellate_atomic_structure_impostors};
 use atomcad_display::preferences::{
@@ -126,6 +127,7 @@ fn prefs() -> AtomicStructureVisualizationPreferences {
         label_scale: 0.7,
         show_tool_envelopes: false,
         tool_envelope_color: [0, 0, 0],
+        ambient_occlusion: false,
     }
 }
 
@@ -735,4 +737,72 @@ fn an_occluder_at_r_max_is_judged_alike_by_both_paths() {
             "occluder at {x}"
         );
     }
+}
+
+/// A producer may renumber atoms that did not move (`atom_edit`'s
+/// `apply_diff` does): matched by place, a renumbered block with one atom
+/// moved diffs as that atom's two places, every other value is re-keyed, and
+/// the update equals a full computation on the renumbered structure.
+#[test]
+fn a_renumbered_structure_diffs_by_place() {
+    let sites = diamond_sites(6, 6, 6);
+    let old = structure_of(&sites);
+    let old_ids = all_ids(&old);
+    let (previous, _) = atom_exposure(&old, &old_ids);
+
+    // The same sites in reverse order, so almost every id names another
+    // atom, and the one at the centre moved by 0.5 Å.
+    let centre = atom_near(&old, DVec3::splat(3.0 * A));
+    let centre_site = old.get_atom(centre).unwrap().position;
+    let mut new_sites: Vec<DVec3> = sites.iter().rev().copied().collect();
+    for p in &mut new_sites {
+        if *p == centre_site {
+            *p += DVec3::new(0.5, 0.0, 0.0);
+        }
+    }
+    let new = structure_of(&new_sites);
+    let new_ids = all_ids(&new);
+
+    let by_id = occlusion_changes(&occluder_snapshot(&old), &new);
+    assert!(
+        by_id.len() > old_ids.len(),
+        "by id, nearly everything moved"
+    );
+
+    let (changes, renumbering) = occlusion_changes_by_place(&occluder_snapshot(&old), &new);
+    assert_eq!(changes.len(), 2, "the moved atom's old and new place");
+    assert!(renumbering.renumbered_count() > old_ids.len() / 2);
+    assert_eq!(renumbering.new_id(centre), None, "the moved atom is lost");
+
+    let (updated, stats) =
+        update_atom_exposure(&previous.remapped(&renumbering), &changes, &new, &new_ids);
+    assert!(!stats.full_path);
+    assert!(stats.receivers_computed < new_ids.len() / 4);
+    assert_eq!(updated, atom_exposure(&new, &new_ids).0);
+}
+
+/// Atoms at one place are matched one to one; a surplus is a change there.
+#[test]
+fn coincident_atoms_are_matched_one_to_one() {
+    let p = DVec3::new(1.0, 2.0, 3.0);
+    let old = structure_of(&[p, p]);
+    let new = structure_of(&[p]);
+    let (changes, renumbering) = occlusion_changes_by_place(&occluder_snapshot(&old), &new);
+    assert_eq!(changes.len(), 1);
+    assert!(renumbering.keeps_ids());
+}
+
+/// With ids kept, the place diff equals the id diff and renumbers nothing.
+#[test]
+fn a_structure_that_keeps_its_ids_diffs_as_by_id() {
+    let old = block(4);
+    let mut new = old.clone();
+    let moved = atom_near(&new, DVec3::splat(2.0 * A));
+    let p = new.get_atom(moved).unwrap().position;
+    new.set_atom_position(moved, p + DVec3::new(0.3, 0.0, 0.0));
+    let snapshot = occluder_snapshot(&old);
+    let (changes, renumbering) = occlusion_changes_by_place(&snapshot, &new);
+    assert!(renumbering.keeps_ids());
+    assert_eq!(changes.len(), occlusion_changes(&snapshot, &new).len());
+    assert_eq!(changes.len(), 2);
 }

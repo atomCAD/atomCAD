@@ -21886,22 +21886,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIRefreshProfile dco_decode_api_refresh_profile(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 13)
-      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
+    if (arr.length != 14)
+      throw Exception('unexpected arr length: expect 14 but see ${arr.length}');
     return APIRefreshProfile(
       mode: dco_decode_api_refresh_mode(arr[0]),
       evalMs: dco_decode_opt_box_autoadd_f_64(arr[1]),
       sceneDependentMs: dco_decode_f_64(arr[2]),
       gadgetMs: dco_decode_f_64(arr[3]),
-      tessellateMs: dco_decode_f_64(arr[4]),
-      gpuUploadMs: dco_decode_f_64(arr[5]),
-      backgroundMs: dco_decode_opt_box_autoadd_f_64(arr[6]),
-      totalMs: dco_decode_f_64(arr[7]),
-      count: dco_decode_u_32(arr[8]),
-      maxTotalMs: dco_decode_f_64(arr[9]),
-      csgCache: dco_decode_api_csg_cache_counts(arr[10]),
-      hasNodeStats: dco_decode_bool(arr[11]),
-      memo: dco_decode_api_memo_counts(arr[12]),
+      exposureMs: dco_decode_opt_box_autoadd_f_64(arr[4]),
+      tessellateMs: dco_decode_f_64(arr[5]),
+      gpuUploadMs: dco_decode_f_64(arr[6]),
+      backgroundMs: dco_decode_opt_box_autoadd_f_64(arr[7]),
+      totalMs: dco_decode_f_64(arr[8]),
+      count: dco_decode_u_32(arr[9]),
+      maxTotalMs: dco_decode_f_64(arr[10]),
+      csgCache: dco_decode_api_csg_cache_counts(arr[11]),
+      hasNodeStats: dco_decode_bool(arr[12]),
+      memo: dco_decode_api_memo_counts(arr[13]),
     );
   }
 
@@ -25551,14 +25552,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   RenderingPreferences dco_decode_rendering_preferences(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
     return RenderingPreferences(
       antiAliasing: dco_decode_bool(arr[0]),
       fullDisplayResolution: dco_decode_bool(arr[1]),
       lighting: dco_decode_lighting_preset(arr[2]),
       depthCue: dco_decode_bool(arr[3]),
       depthCueStrength: dco_decode_f_64(arr[4]),
+      ambientOcclusion: dco_decode_bool(arr[5]),
+      ambientOcclusionStrength: dco_decode_f_64(arr[6]),
     );
   }
 
@@ -28756,6 +28759,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_evalMs = sse_decode_opt_box_autoadd_f_64(deserializer);
     var var_sceneDependentMs = sse_decode_f_64(deserializer);
     var var_gadgetMs = sse_decode_f_64(deserializer);
+    var var_exposureMs = sse_decode_opt_box_autoadd_f_64(deserializer);
     var var_tessellateMs = sse_decode_f_64(deserializer);
     var var_gpuUploadMs = sse_decode_f_64(deserializer);
     var var_backgroundMs = sse_decode_opt_box_autoadd_f_64(deserializer);
@@ -28770,6 +28774,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         evalMs: var_evalMs,
         sceneDependentMs: var_sceneDependentMs,
         gadgetMs: var_gadgetMs,
+        exposureMs: var_exposureMs,
         tessellateMs: var_tessellateMs,
         gpuUploadMs: var_gpuUploadMs,
         backgroundMs: var_backgroundMs,
@@ -33625,12 +33630,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_lighting = sse_decode_lighting_preset(deserializer);
     var var_depthCue = sse_decode_bool(deserializer);
     var var_depthCueStrength = sse_decode_f_64(deserializer);
+    var var_ambientOcclusion = sse_decode_bool(deserializer);
+    var var_ambientOcclusionStrength = sse_decode_f_64(deserializer);
     return RenderingPreferences(
         antiAliasing: var_antiAliasing,
         fullDisplayResolution: var_fullDisplayResolution,
         lighting: var_lighting,
         depthCue: var_depthCue,
-        depthCueStrength: var_depthCueStrength);
+        depthCueStrength: var_depthCueStrength,
+        ambientOcclusion: var_ambientOcclusion,
+        ambientOcclusionStrength: var_ambientOcclusionStrength);
   }
 
   @protected
@@ -35971,6 +35980,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_box_autoadd_f_64(self.evalMs, serializer);
     sse_encode_f_64(self.sceneDependentMs, serializer);
     sse_encode_f_64(self.gadgetMs, serializer);
+    sse_encode_opt_box_autoadd_f_64(self.exposureMs, serializer);
     sse_encode_f_64(self.tessellateMs, serializer);
     sse_encode_f_64(self.gpuUploadMs, serializer);
     sse_encode_opt_box_autoadd_f_64(self.backgroundMs, serializer);
@@ -40200,6 +40210,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_lighting_preset(self.lighting, serializer);
     sse_encode_bool(self.depthCue, serializer);
     sse_encode_f_64(self.depthCueStrength, serializer);
+    sse_encode_bool(self.ambientOcclusion, serializer);
+    sse_encode_f_64(self.ambientOcclusionStrength, serializer);
   }
 
   @protected

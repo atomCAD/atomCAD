@@ -461,6 +461,9 @@ class _PhasesTab extends StatelessWidget {
         profile.evalMs == null ? '—' : _ms(profile.evalMs!),
         _ms(profile.sceneDependentMs),
         _ms(profile.gadgetMs),
+        // `—` when the ambient-occlusion pass did not run (a lightweight
+        // refresh, or AO off), as for Eval.
+        profile.exposureMs == null ? '—' : _ms(profile.exposureMs!),
         _ms(profile.tessellateMs),
         _ms(profile.gpuUploadMs),
         profile.backgroundMs == null ? '—' : _ms(profile.backgroundMs!),
@@ -489,6 +492,7 @@ class _PhasesTab extends StatelessWidget {
         _Column('Eval', 5, numeric: true),
         _Column('Scene', 5, numeric: true),
         _Column('Gadget', 5, numeric: true),
+        _Column('AO', 5, numeric: true),
         _Column('Tess', 5, numeric: true),
         _Column('GPU', 5, numeric: true),
         _Column('Bkgnd', 5, numeric: true),
@@ -504,7 +508,9 @@ class _PhasesTab extends StatelessWidget {
           'that triggered the work, not counted separately. A row tagged '
           '“·memo off” was taken with the evaluation memo disabled — that is '
           'what makes an A/B pair readable side by side. “●” marks a refresh '
-          'whose per-node table is the one shown in the other tabs.',
+          'whose per-node table is the one shown in the other tabs. AO is the '
+          'ambient-occlusion pass between evaluation and tessellation; it is '
+          'large only when a structure changed.',
     );
   }
 }

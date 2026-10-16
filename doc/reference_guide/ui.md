@@ -509,8 +509,11 @@ anything on.
 
 A table of the last ~20 refreshes, newest first, with each one broken into its
 phases in milliseconds: **Eval**, **Scene** (scene-dependent node data),
-**Gadget**, **Tess**, **GPU** and **Bkgnd** (the background grid/axes rebuild),
-against the refresh's **Total**.
+**Gadget**, **AO** (working out the ambient occlusion of the displayed atoms —
+see *Ambient occlusion* under [Rendering](#rendering); `—` when it did not run,
+on a *Lightweight* refresh or with ambient occlusion off, and near zero unless a
+structure changed), **Tess**, **GPU** and **Bkgnd** (the background grid/axes
+rebuild), against the refresh's **Total**.
 
 Two columns need a word of explanation:
 
@@ -1170,7 +1173,7 @@ The panel's **Isosurface extraction** group governs how an [`isosurface`](nodes/
 
 ### Rendering
 
-How the [3D viewport](#3d-viewport) is drawn. *Anti-aliasing* and *Full display resolution* trade speed for quality; they do not affect an exported image or a network thumbnail, which are always anti-aliased. *Lighting* and *Depth cue* are a matter of appearance, so exported images and thumbnails use them too and look like the viewport.
+How the [3D viewport](#3d-viewport) is drawn. *Anti-aliasing* and *Full display resolution* trade speed for quality; they do not affect an exported image or a network thumbnail, which are always anti-aliased. *Lighting*, *Depth cue* and *Ambient occlusion* are a matter of appearance, so exported images and thumbnails use them too and look like the viewport.
 
 | Setting | Description |
 |---------|-------------|
@@ -1178,6 +1181,7 @@ How the [3D viewport](#3d-viewport) is drawn. *Anti-aliasing* and *Full display 
 | Full display resolution | Renders the viewport at your display's full pixel density. On a display scaled above 100 % (for example 150 % or 200 % in the Windows display settings) the viewport then has one rendered pixel per screen pixel, so atoms, edges and lines are sharp instead of slightly blurred; lines keep their width. On by default. At 100 % it changes nothing. Turn it off to render faster on a large high-DPI display: at 200 % the viewport has four times the pixels to render and copy to the screen each frame. Takes effect immediately, and follows the window when it moves to a display with a different scale. |
 | Lighting | How surfaces in the viewport are lit. *Studio* (the default) uses a key light from the upper left, a weaker fill light from the lower right and an ambient that is brighter from above than from below, so every atom and every face of a solid shows which way it faces, also on its shadowed side. *Headlight* is the look of earlier versions: one light from just above your eye and the same ambient from every side. The lights move with the camera, so the shading stays put while you orbit. Both keep element colours at about the same brightness. Takes effect immediately. |
 | Depth cue | Fades the content towards the background colour with its distance from you, so the far side of a structure reads as further away than its near side, also in an orthographic view, which has no perspective to show depth. The nearest part of the content is never faded, whichever way you look at it. The fade grows over the diameter of the sphere around the whole content, so a thin slab seen face-on barely fades, and the same slab seen edge-on fades across its width. The slider sets how far the far side goes: at 1 content a full diameter behind the front would vanish into the background, at the default 0.5 it is half-way there. It applies to atoms, bonds, CSG solids and isosurfaces, but not to lines, labels, the gizmo or guide dots, and never to the selection, frozen or marked rim of an atom, which stays its full colour at any depth. On by default. On a close-up of a very large structure the visible part spans a small slice of the whole, so the fade there is weak. Takes effect immediately. |
+| Ambient occlusion | Darkens atoms and bonds by how buried they are: the side of an atom that faces its neighbours, the floor of a groove, the foot of a step and the crease where two atoms touch get less of the ambient light, and a little less of the key light, than the open side facing away from the structure. An isolated atom is not darkened at all. How buried an atom is depends on the structure alone — the positions of the atoms within 6 Å of it — not on the display style, so a structure looks equally buried in ball-and-stick and space-filling. Atoms hidden by the cull depth still shade the atoms above them; x-ray ghosts do not, and are never darkened themselves. Each displayed structure is shaded on its own: a tool does not darken the surface it approaches. The slider sets the strength (1, the default, is full). On by default. Applies to atoms and bonds drawn as impostors; CSG solids and isosurfaces are not darkened. **Cost:** working out how buried each atom is takes time in proportion to the visible atoms — on a structure of several hundred thousand atoms, of the order of a tenth of the time materialize takes. It is paid when a structure changes, not on every edit: selecting a node, editing an unrelated one or changing the strength costs nothing, and moving a few atoms costs only the atoms near them. While you drag a large selection the shading near it is updated when you let go. Unticking the box removes the cost entirely. Takes effect immediately. |
 
 ### Layout
 

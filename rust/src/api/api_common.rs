@@ -55,8 +55,7 @@ fn to_render_quality(
 
 /// Domain *Lighting* preferences → the renderer's shading settings
 /// (`doc/design_depth_perception.md` D8), for the same reason as above.
-/// An unticked *Depth cue* is strength 0. Ambient occlusion stays off until
-/// its phase adds its preferences.
+/// An unticked *Depth cue* or *Ambient occlusion* is strength 0.
 pub fn to_shading_settings(
     prefs: &domain_prefs::RenderingPreferences,
 ) -> atomcad_renderer::shading_uniform::ShadingSettings {
@@ -71,7 +70,11 @@ pub fn to_shading_settings(
         } else {
             0.0
         },
-        ..ShadingSettings::default()
+        ao_strength: if prefs.ambient_occlusion {
+            prefs.ambient_occlusion_strength.clamp(0.0, 1.0) as f32
+        } else {
+            0.0
+        },
     }
 }
 
@@ -201,6 +204,10 @@ pub fn to_display_preferences(
                     .tool_envelope_color
                     .z as u8,
             ],
+            // The off switch for the exposure pass and the tessellator
+            // (`doc/design_depth_perception.md` D8); the strength goes to the
+            // renderer instead, through `to_shading_settings`.
+            ambient_occlusion: preferences.rendering_preferences.ambient_occlusion,
         },
         background: display_prefs::BackgroundPreferences {
             show_axes: preferences.background_preferences.show_axes,
@@ -552,12 +559,19 @@ pub fn refresh_structure_designer(
 
     update_gadget_pick_context(cad_instance);
 
-    let sub_phases = cad_instance.structure_designer.refresh(changes);
+    let mut sub_phases = cad_instance.structure_designer.refresh(changes);
 
     // Get lightweight flag from the changes for renderer
     let renderer_lightweight = changes.is_lightweight();
 
     let display_preferences = to_display_preferences(&cad_instance.structure_designer.preferences);
+    // Baked ambient occlusion (`doc/design_depth_perception.md` D9): fill the
+    // scene's exposure cache between evaluation and tessellation. Called
+    // unconditionally; it returns at once on a lightweight refresh or with AO
+    // off, and the tessellator below only reads what it leaves.
+    sub_phases.exposure_ms = cad_instance
+        .structure_designer
+        .update_exposure(&display_preferences, renderer_lightweight);
     let tessellate_start = Instant::now();
     let (
         lightweight_mesh,

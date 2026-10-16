@@ -159,6 +159,8 @@ fn the_lighting_preset_converts_both_ways() {
             lighting: api,
             depth_cue: true,
             depth_cue_strength: 0.5,
+            ambient_occlusion: true,
+            ambient_occlusion_strength: 1.0,
         };
         let down: domain::RenderingPreferences = (&prefs).into();
         assert_eq!(down.lighting, dom);
@@ -179,6 +181,8 @@ fn the_depth_cue_converts_both_ways() {
         lighting: LightingPreset::Studio,
         depth_cue: false,
         depth_cue_strength: 0.75,
+        ambient_occlusion: true,
+        ambient_occlusion_strength: 1.0,
     };
     let down: domain::RenderingPreferences = (&prefs).into();
     assert!(!down.depth_cue);
@@ -192,9 +196,8 @@ fn the_depth_cue_converts_both_ways() {
     assert_eq!(old.depth_cue_strength, 0.5);
 }
 
-/// The renderer sees an unticked *Depth cue* as strength 0, a ticked one as
-/// its strength clamped to `[0, 1]`, and never the AO it has no preference
-/// for yet.
+/// The renderer sees an unticked *Depth cue* as strength 0 and a ticked one
+/// as its strength clamped to `[0, 1]`, without touching the AO strength.
 #[test]
 fn the_depth_cue_reaches_the_renderer_as_a_strength() {
     use rust_lib_flutter_cad::api::api_common::to_shading_settings;
@@ -206,5 +209,65 @@ fn the_depth_cue_reaches_the_renderer_as_a_strength() {
     prefs.depth_cue = false;
     let settings = to_shading_settings(&prefs);
     assert_eq!(settings.depth_cue_strength, 0.0);
-    assert_eq!(settings.ao_strength, 0.0);
+    assert_eq!(settings.ao_strength, 1.0);
+}
+
+/// Ambient occlusion (`doc/design_depth_perception.md` D8, Phase 4b)
+/// converts both ways, its two fields not swapped with a neighbour, and a
+/// file from before it loads with AO on at strength 1.
+#[test]
+fn ambient_occlusion_converts_both_ways() {
+    let prefs = RenderingPreferences {
+        anti_aliasing: true,
+        full_display_resolution: true,
+        lighting: LightingPreset::Studio,
+        depth_cue: true,
+        depth_cue_strength: 0.5,
+        ambient_occlusion: false,
+        ambient_occlusion_strength: 0.25,
+    };
+    let down: domain::RenderingPreferences = (&prefs).into();
+    assert!(!down.ambient_occlusion);
+    assert_eq!(down.ambient_occlusion_strength, 0.25);
+    let up: RenderingPreferences = (&down).into();
+    assert_eq!(up, prefs);
+
+    let old: RenderingPreferences = serde_json::from_str(r#"{"depth_cue": true}"#).unwrap();
+    assert!(old.ambient_occlusion);
+    assert_eq!(old.ambient_occlusion_strength, 1.0);
+}
+
+/// The checkbox travels two ways (D8): as strength to the renderer, where an
+/// unticked box is strength 0, and as the on/off switch of the display
+/// layer, where it gates the exposure pass and the tessellator.
+#[test]
+fn ambient_occlusion_reaches_the_renderer_and_the_display_layer() {
+    use rust_lib_flutter_cad::api::api_common::{to_display_preferences, to_shading_settings};
+    let mut prefs = domain::StructureDesignerPreferences::default();
+    prefs.rendering_preferences.ambient_occlusion = true;
+    prefs.rendering_preferences.ambient_occlusion_strength = 0.4;
+    assert_eq!(
+        to_shading_settings(&prefs.rendering_preferences).ao_strength,
+        0.4
+    );
+    assert!(
+        to_display_preferences(&prefs)
+            .atomic_structure_visualization
+            .ambient_occlusion
+    );
+    prefs.rendering_preferences.ambient_occlusion_strength = 3.0;
+    assert_eq!(
+        to_shading_settings(&prefs.rendering_preferences).ao_strength,
+        1.0
+    );
+    prefs.rendering_preferences.ambient_occlusion = false;
+    assert_eq!(
+        to_shading_settings(&prefs.rendering_preferences).ao_strength,
+        0.0
+    );
+    assert!(
+        !to_display_preferences(&prefs)
+            .atomic_structure_visualization
+            .ambient_occlusion
+    );
 }

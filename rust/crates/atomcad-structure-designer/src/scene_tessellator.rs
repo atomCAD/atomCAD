@@ -208,7 +208,7 @@ fn tessellate_non_lightweight_content(
         };
 
         // Render every displayed output pin for this node
-        for (_pin_index, pin_output, _pin_geo_tree) in node_data.displayed_outputs() {
+        for (pin_index, pin_output, _pin_geo_tree) in node_data.displayed_outputs() {
             match pin_output {
                 NodeOutput::Atomic(atomic_structure, shell) => {
                     // If a geometry shell is attached (Crystal/Molecule with
@@ -282,9 +282,20 @@ fn tessellate_non_lightweight_content(
                                 &mut transparent_impostor_mesh,
                                 atomic_structure,
                                 &preferences.atomic_structure_visualization,
-                                // Baked AO reaches the app with its cache
-                                // (doc/design_depth_perception.md Phase 4b).
-                                None,
+                                // Baked AO, read from the scene's cache, which
+                                // `update_exposure` filled before this call
+                                // (doc/design_depth_perception.md D9). This
+                                // function never computes exposure: an output
+                                // without values is drawn fully exposed,
+                                // exactly as `None` (AO off) draws it.
+                                if preferences
+                                    .atomic_structure_visualization
+                                    .ambient_occlusion_active()
+                                {
+                                    node_data.exposure.values(pin_index)
+                                } else {
+                                    None
+                                },
                             );
                             // Render guide placement visuals in main impostor pass (normal depth)
                             if let Some(visuals) =

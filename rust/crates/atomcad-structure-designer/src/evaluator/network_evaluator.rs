@@ -1252,6 +1252,8 @@ impl NetworkEvaluator {
             show_unit_cell_wireframe,
             overlays,
             selected_node_eval_cache: context.selected_node_eval_cache.take(),
+            // Filled after evaluation, by `update_exposure` (D9).
+            exposure: Default::default(),
         }
     }
 

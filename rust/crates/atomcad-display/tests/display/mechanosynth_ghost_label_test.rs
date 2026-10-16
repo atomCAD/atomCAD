@@ -44,6 +44,7 @@ fn prefs(label_scale: f32) -> AtomicStructureVisualizationPreferences {
         label_scale,
         show_tool_envelopes: false,
         tool_envelope_color: [0, 0, 0],
+        ambient_occlusion: false,
     }
 }
 

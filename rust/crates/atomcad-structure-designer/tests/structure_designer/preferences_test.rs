@@ -493,6 +493,8 @@ fn test_non_default_values_roundtrip() {
             lighting: LightingPreset::Headlight,
             depth_cue: false,
             depth_cue_strength: 0.8,
+            ambient_occlusion: false,
+            ambient_occlusion_strength: 0.3,
         },
     };
 
@@ -1135,4 +1137,37 @@ fn the_depth_cue_roundtrips_off_with_its_strength_kept() {
     let loaded: StructureDesignerPreferences = serde_json::from_str(&json).unwrap();
     assert!(!loaded.rendering_preferences.depth_cue);
     assert_eq!(loaded.rendering_preferences.depth_cue_strength, 0.8);
+}
+
+// ---- Ambient occlusion (doc/design_depth_perception.md D8, Phase 4b) ------
+
+#[test]
+fn ambient_occlusion_defaults_to_on_at_full_strength() {
+    let prefs = RenderingPreferences::default();
+    assert!(prefs.ambient_occlusion);
+    assert_eq!(prefs.ambient_occlusion_strength, 1.0);
+}
+
+#[test]
+fn a_rendering_section_without_ambient_occlusion_loads_it_on_at_full_strength() {
+    // A file written before Phase 4b, with the Phase 3 depth cue in it.
+    let before: StructureDesignerPreferences = serde_json::from_str(
+        r#"{"rendering_preferences": {"lighting": "Headlight", "depth_cue": false, "depth_cue_strength": 0.8}}"#,
+    )
+    .unwrap();
+    assert!(before.rendering_preferences.ambient_occlusion);
+    assert_eq!(before.rendering_preferences.ambient_occlusion_strength, 1.0);
+    assert!(!before.rendering_preferences.depth_cue);
+    assert_eq!(before.rendering_preferences.depth_cue_strength, 0.8);
+}
+
+#[test]
+fn ambient_occlusion_roundtrips_off_with_its_strength_kept() {
+    let mut prefs = StructureDesignerPreferences::default();
+    prefs.rendering_preferences.ambient_occlusion = false;
+    prefs.rendering_preferences.ambient_occlusion_strength = 0.3;
+    let json = serde_json::to_string(&prefs).unwrap();
+    let loaded: StructureDesignerPreferences = serde_json::from_str(&json).unwrap();
+    assert!(!loaded.rendering_preferences.ambient_occlusion);
+    assert_eq!(loaded.rendering_preferences.ambient_occlusion_strength, 0.3);
 }

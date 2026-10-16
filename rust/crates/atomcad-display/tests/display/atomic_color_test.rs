@@ -37,6 +37,7 @@ fn ball_and_stick_prefs() -> AtomicStructureVisualizationPreferences {
         label_scale: 0.7,
         show_tool_envelopes: false,
         tool_envelope_color: [0, 0, 0],
+        ambient_occlusion: false,
     }
 }
 

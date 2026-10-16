@@ -71,6 +71,7 @@ pub mod preferences;
 pub mod promote_to_parameter;
 pub mod recent_files;
 pub mod refresh_profile;
+pub mod scene_exposure;
 pub mod scene_tessellator;
 pub mod scoped_validation_errors;
 pub mod selection_factoring;

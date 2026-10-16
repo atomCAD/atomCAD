@@ -82,6 +82,14 @@ pub struct RefreshSubPhases {
     /// chasing a memory number should not have to distort the time numbers to
     /// see it.
     pub memo: MemoCounts,
+    /// Time inside `StructureDesigner::update_exposure`, the baked
+    /// ambient-occlusion pass between evaluation and tessellation
+    /// (`doc/design_depth_perception.md` D9), or `None` when the pass did not
+    /// run (a lightweight refresh, or AO off). Filled by the API layer, which
+    /// calls the pass after [`StructureDesigner::refresh`] returns.
+    ///
+    /// [`StructureDesigner::refresh`]: crate::structure_designer::StructureDesigner::refresh
+    pub exposure_ms: Option<f64>,
 }
 
 /// CSG conversion-cache activity over one refresh — the difference between two
@@ -138,6 +146,9 @@ pub struct RefreshProfile {
     pub eval_ms: Option<f64>,
     pub scene_dependent_ms: f64,
     pub gadget_ms: f64,
+    /// `None` when the exposure pass did not run — see
+    /// [`RefreshSubPhases::exposure_ms`].
+    pub exposure_ms: Option<f64>,
     pub tessellate_ms: f64,
     pub gpu_upload_ms: f64,
     /// `None` on a lightweight refresh, which skips the background mesh
@@ -181,6 +192,7 @@ impl RefreshProfile {
             eval_ms: sub_phases.eval_ms,
             scene_dependent_ms: sub_phases.scene_dependent_ms,
             gadget_ms: sub_phases.gadget_ms,
+            exposure_ms: sub_phases.exposure_ms,
             tessellate_ms,
             gpu_upload_ms,
             background_ms,
@@ -198,6 +210,7 @@ impl RefreshProfile {
         self.eval_ms.unwrap_or(0.0)
             + self.scene_dependent_ms
             + self.gadget_ms
+            + self.exposure_ms.unwrap_or(0.0)
             + self.tessellate_ms
             + self.gpu_upload_ms
             + self.background_ms.unwrap_or(0.0)
@@ -211,6 +224,7 @@ impl RefreshProfile {
         self.eval_ms = merge_mean_opt(self.eval_ms, other.eval_ms, n);
         self.scene_dependent_ms = merge_mean(self.scene_dependent_ms, other.scene_dependent_ms, n);
         self.gadget_ms = merge_mean(self.gadget_ms, other.gadget_ms, n);
+        self.exposure_ms = merge_mean_opt(self.exposure_ms, other.exposure_ms, n);
         self.tessellate_ms = merge_mean(self.tessellate_ms, other.tessellate_ms, n);
         self.gpu_upload_ms = merge_mean(self.gpu_upload_ms, other.gpu_upload_ms, n);
         self.background_ms = merge_mean_opt(self.background_ms, other.background_ms, n);

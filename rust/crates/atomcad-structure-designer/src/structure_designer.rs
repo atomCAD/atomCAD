@@ -39,6 +39,7 @@ use crate::nodes::comment::{CommentAnchor, CommentData};
 use crate::nodes::edit_atom::edit_atom::get_selected_edit_atom_data_mut;
 use crate::preferences::MemoryPreferences;
 use crate::preferences::StructureDesignerPreferences;
+use crate::scene_exposure::carry_over_exposure;
 use crate::serialization::node_networks_serialization;
 use crate::structure_designer_scene::StructureDesignerScene;
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
@@ -293,6 +294,16 @@ pub struct StructureDesigner {
     // visibility flag.
     pub eval_profiling_enabled: bool,
 
+    // What the baked-AO exposure cache did during the last refresh
+    // (`doc/design_depth_perception.md` D9): receivers computed, full-path
+    // updates, carry-over diffs, deferred updates. Reset at the start of each
+    // `refresh`, summed by the carry-over and by `update_exposure`. Observed
+    // by tests instead of timing; per instance, never a global.
+    pub last_exposure_stats: crate::scene_exposure::SceneExposureStats,
+    // Time the carry-over of the current refresh took; `update_exposure`
+    // reports it with its own as `exposure_ms`. Reset with the stats.
+    pub(crate) exposure_carry_over_ms: f64,
+
     // The D11 equal-key/equal-result self-check: a **second** toggle, off by
     // default and genuinely expensive, that validates the environment key
     // rather than arguing for it. It retains a summary of each key's first
@@ -416,6 +427,8 @@ impl StructureDesigner {
             pending_load_param_id_repairs: Vec::new(),
             refresh_profiles: RefreshProfileHistory::new(),
             eval_profiling_enabled: false,
+            last_exposure_stats: Default::default(),
+            exposure_carry_over_ms: 0.0,
             eval_self_check_enabled: false,
             eval_self_check_key_mode: SelfCheckKeyMode::Full,
             eval_memo_enabled: true,
@@ -1815,6 +1828,10 @@ impl StructureDesigner {
     pub fn refresh(&mut self, changes: &StructureDesignerChanges) -> RefreshSubPhases {
         // Clear pending changes at the start of refresh
         self.pending_changes.clear();
+        // The exposure counters describe one refresh: this one's carry-over
+        // and the `update_exposure` pass that follows it.
+        self.last_exposure_stats = Default::default();
+        self.exposure_carry_over_ms = 0.0;
 
         // Check if node_network_name exists and clone it to avoid borrow conflicts
         let node_network_name = match &self.active_node_network_name {
@@ -1865,6 +1882,7 @@ impl StructureDesigner {
                     // switched off" — a lightweight row carries no eval time
                     // either.
                     memo: MemoCounts::default(),
+                    exposure_ms: None,
                 }
             }
 
@@ -1927,10 +1945,21 @@ impl StructureDesigner {
 
     // Full refresh implementation - re-evaluates all displayed nodes
     fn refresh_full(&mut self, node_network_name: &str) -> RefreshSubPhases {
-        let (active_node_ref, displayed_node_refs) = {
+        let (active_node_ref, displayed_node_refs, mut carried_exposure) = {
             let network = match self.node_type_registry.node_networks.get(node_network_name) {
                 Some(network) => network,
                 None => return RefreshSubPhases::nothing_ran(),
+            };
+
+            // Take the exposure caches out of the outgoing scene before it is
+            // dropped (`doc/design_depth_perception.md` D9): one move per
+            // entry, so the outgoing structures need not stay alive through
+            // the evaluation below. Only with ambient occlusion on.
+            let carried = if self.ambient_occlusion_active() {
+                self.last_generated_structure_designer_scene
+                    .take_exposure_caches()
+            } else {
+                HashMap::new()
             };
 
             // Create new scene with empty node_data HashMap and invisibility cache.
@@ -1955,7 +1984,7 @@ impl StructureDesigner {
                 }
             }
 
-            (network.active_node_id.map(NodeRef::top), displayed)
+            (network.active_node_id.map(NodeRef::top), displayed, carried)
         };
 
         // Track selected node's unit cell
@@ -1983,7 +2012,13 @@ impl StructureDesigner {
         });
         let eval_ms = elapsed_ms(eval_start);
 
-        for (node_ref, node_data) in new_scenes {
+        for (node_ref, mut node_data) in new_scenes {
+            if let Some(old_exposure) = carried_exposure.remove(&node_ref) {
+                let carry_start = Instant::now();
+                self.last_exposure_stats.diffs_run +=
+                    carry_over_exposure(old_exposure, &mut node_data);
+                self.exposure_carry_over_ms += elapsed_ms(carry_start);
+            }
             self.last_generated_structure_designer_scene
                 .node_data
                 .insert(node_ref, node_data);
@@ -2017,6 +2052,8 @@ impl StructureDesigner {
             node_stats: self.last_eval_profile.take(),
             csg_cache: CsgCacheDelta::default(),
             memo: self.last_memo_counts.take().unwrap_or_default(),
+            // Filled by the API layer, which runs the exposure pass after this.
+            exposure_ms: None,
         }
     }
 
@@ -2225,10 +2262,20 @@ impl StructureDesigner {
                 }
             });
 
-            for (node_ref, node_data) in new_scenes {
-                self.last_generated_structure_designer_scene
-                    .node_data
-                    .insert(node_ref, node_data);
+            let ao_active = self.ambient_occlusion_active();
+            for (node_ref, mut node_data) in new_scenes {
+                let scene = &mut self.last_generated_structure_designer_scene;
+                // The entry this one replaces hands its exposure on (D9).
+                if let Some(old) = scene.node_data.remove(&node_ref)
+                    && ao_active
+                    && !old.exposure.is_empty()
+                {
+                    let carry_start = Instant::now();
+                    self.last_exposure_stats.diffs_run +=
+                        carry_over_exposure(old.exposure, &mut node_data);
+                    self.exposure_carry_over_ms += elapsed_ms(carry_start);
+                }
+                scene.node_data.insert(node_ref, node_data);
             }
 
             // Update the selected node's unit cell if it was re-evaluated
@@ -2237,7 +2284,9 @@ impl StructureDesigner {
                 self.last_generated_structure_designer_scene.unit_cell = selected_node_unit_cell;
             }
         }
-        let eval_ms = elapsed_ms(eval_start);
+        // The carry-over ran inside this bracket; it is reported with the
+        // exposure pass (`exposure_ms`), not as evaluation.
+        let eval_ms = elapsed_ms(eval_start) - self.exposure_carry_over_ms;
 
         let scene_dependent_start = Instant::now();
         self.refresh_scene_dependent_node_data();
@@ -2270,6 +2319,8 @@ impl StructureDesigner {
             node_stats: self.last_eval_profile.take(),
             csg_cache: CsgCacheDelta::default(),
             memo: self.last_memo_counts.take().unwrap_or_default(),
+            // Filled by the API layer, which runs the exposure pass after this.
+            exposure_ms: None,
         }
     }
 
@@ -8151,6 +8202,8 @@ impl StructureDesigner {
             pending_load_param_id_repairs: _,
             last_eval_profile: _,
             last_memo_counts: _,
+            last_exposure_stats: _,
+            exposure_carry_over_ms: _,
             document_id: _,
             // --- App state: follows the session. ---
             preferences,

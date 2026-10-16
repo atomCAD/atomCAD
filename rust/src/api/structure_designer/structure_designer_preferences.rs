@@ -742,10 +742,22 @@ pub struct RenderingPreferences {
     #[frb(non_final)]
     #[serde(default = "default_depth_cue_strength")]
     pub depth_cue_strength: f64,
+    /// Baked ambient occlusion. Off computes nothing. Default on.
+    #[frb(non_final)]
+    #[serde(default = "default_true")]
+    pub ambient_occlusion: bool,
+    /// Ambient occlusion's strength, `[0, 1]`. Default 1.
+    #[frb(non_final)]
+    #[serde(default = "default_ambient_occlusion_strength")]
+    pub ambient_occlusion_strength: f64,
 }
 
 fn default_depth_cue_strength() -> f64 {
     0.5
+}
+
+fn default_ambient_occlusion_strength() -> f64 {
+    1.0
 }
 
 impl Default for RenderingPreferences {
@@ -756,6 +768,8 @@ impl Default for RenderingPreferences {
             lighting: LightingPreset::Studio,
             depth_cue: true,
             depth_cue_strength: default_depth_cue_strength(),
+            ambient_occlusion: true,
+            ambient_occlusion_strength: default_ambient_occlusion_strength(),
         }
     }
 }
@@ -1227,6 +1241,8 @@ impl From<&RenderingPreferences> for domain::RenderingPreferences {
             lighting: (&p.lighting).into(),
             depth_cue: p.depth_cue,
             depth_cue_strength: p.depth_cue_strength,
+            ambient_occlusion: p.ambient_occlusion,
+            ambient_occlusion_strength: p.ambient_occlusion_strength,
         }
     }
 }
@@ -1239,6 +1255,8 @@ impl From<&domain::RenderingPreferences> for RenderingPreferences {
             lighting: (&p.lighting).into(),
             depth_cue: p.depth_cue,
             depth_cue_strength: p.depth_cue_strength,
+            ambient_occlusion: p.ambient_occlusion,
+            ambient_occlusion_strength: p.ambient_occlusion_strength,
         }
     }
 }

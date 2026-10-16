@@ -582,6 +582,27 @@ means updating `NodeSceneData::new()`, the `generate_scene` struct literal, the
 direct-construction sites in
 `tests/structure_designer/multi_output_unit_test.rs`.
 
+**The exposure cache (`NodeSceneData::exposure`, `scene_exposure.rs`) is the
+one field filled *after* evaluation**, not at `generate_scene` time, so that
+evaluation never reads the ambient-occlusion preference
+(`doc/design_depth_perception.md` D9). `StructureDesigner::update_exposure`
+fills it between `refresh` and tessellation; `tessellate_scene_content` only
+reads it and must never compute exposure. Three rules:
+
+- **A new place that inserts a `NodeSceneData` over an older one goes through
+  `carry_over_exposure`** (today the ends of `refresh_partial`'s Step 5 and of
+  `refresh_full`, which takes the caches out of the outgoing scene with
+  `take_exposure_caches` before `fresh_scene()`). Skip it and every edit there
+  recomputes the whole structure's exposure, silently — the picture is right,
+  only slow.
+- **Atoms are matched by place, never by id.** `apply_diff` renumbers
+  `atom_edit`'s result whenever its diff changes, so the carry-over diffs
+  with `occlusion_changes_by_place` and re-keys the values. The diff always
+  starts from the snapshot the values were computed for, so it *replaces* the
+  pending set.
+- **Work is observed through `last_exposure_stats`**, reset at the start of
+  each `refresh`; a test asserts on it, never on timing.
+
 ## Viewport overlays
 
 An **overlay** (`overlay.rs`) is line work a node emits *about* its output — a

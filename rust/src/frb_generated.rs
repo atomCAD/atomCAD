@@ -19751,6 +19751,7 @@ impl SseDecode for crate::api::structure_designer::profiling_api::APIRefreshProf
         let mut var_evalMs = <Option<f64>>::sse_decode(deserializer);
         let mut var_sceneDependentMs = <f64>::sse_decode(deserializer);
         let mut var_gadgetMs = <f64>::sse_decode(deserializer);
+        let mut var_exposureMs = <Option<f64>>::sse_decode(deserializer);
         let mut var_tessellateMs = <f64>::sse_decode(deserializer);
         let mut var_gpuUploadMs = <f64>::sse_decode(deserializer);
         let mut var_backgroundMs = <Option<f64>>::sse_decode(deserializer);
@@ -19771,6 +19772,7 @@ impl SseDecode for crate::api::structure_designer::profiling_api::APIRefreshProf
             eval_ms: var_evalMs,
             scene_dependent_ms: var_sceneDependentMs,
             gadget_ms: var_gadgetMs,
+            exposure_ms: var_exposureMs,
             tessellate_ms: var_tessellateMs,
             gpu_upload_ms: var_gpuUploadMs,
             background_ms: var_backgroundMs,
@@ -24144,7 +24146,9 @@ impl SseDecode
         let mut var_lighting = <crate::api::structure_designer::structure_designer_preferences::LightingPreset>::sse_decode(deserializer);
         let mut var_depthCue = <bool>::sse_decode(deserializer);
         let mut var_depthCueStrength = <f64>::sse_decode(deserializer);
-        return crate::api::structure_designer::structure_designer_preferences::RenderingPreferences{anti_aliasing: var_antiAliasing, full_display_resolution: var_fullDisplayResolution, lighting: var_lighting, depth_cue: var_depthCue, depth_cue_strength: var_depthCueStrength};
+        let mut var_ambientOcclusion = <bool>::sse_decode(deserializer);
+        let mut var_ambientOcclusionStrength = <f64>::sse_decode(deserializer);
+        return crate::api::structure_designer::structure_designer_preferences::RenderingPreferences{anti_aliasing: var_antiAliasing, full_display_resolution: var_fullDisplayResolution, lighting: var_lighting, depth_cue: var_depthCue, depth_cue_strength: var_depthCueStrength, ambient_occlusion: var_ambientOcclusion, ambient_occlusion_strength: var_ambientOcclusionStrength};
     }
 }
 
@@ -30624,6 +30628,7 @@ impl flutter_rust_bridge::IntoDart
             self.eval_ms.into_into_dart().into_dart(),
             self.scene_dependent_ms.into_into_dart().into_dart(),
             self.gadget_ms.into_into_dart().into_dart(),
+            self.exposure_ms.into_into_dart().into_dart(),
             self.tessellate_ms.into_into_dart().into_dart(),
             self.gpu_upload_ms.into_into_dart().into_dart(),
             self.background_ms.into_into_dart().into_dart(),
@@ -32977,6 +32982,8 @@ impl flutter_rust_bridge::IntoDart
             self.lighting.into_into_dart().into_dart(),
             self.depth_cue.into_into_dart().into_dart(),
             self.depth_cue_strength.into_into_dart().into_dart(),
+            self.ambient_occlusion.into_into_dart().into_dart(),
+            self.ambient_occlusion_strength.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -35793,6 +35800,7 @@ impl SseEncode for crate::api::structure_designer::profiling_api::APIRefreshProf
         <Option<f64>>::sse_encode(self.eval_ms, serializer);
         <f64>::sse_encode(self.scene_dependent_ms, serializer);
         <f64>::sse_encode(self.gadget_ms, serializer);
+        <Option<f64>>::sse_encode(self.exposure_ms, serializer);
         <f64>::sse_encode(self.tessellate_ms, serializer);
         <f64>::sse_encode(self.gpu_upload_ms, serializer);
         <Option<f64>>::sse_encode(self.background_ms, serializer);
@@ -39444,6 +39452,8 @@ impl SseEncode
         <crate::api::structure_designer::structure_designer_preferences::LightingPreset>::sse_encode(self.lighting, serializer);
         <bool>::sse_encode(self.depth_cue, serializer);
         <f64>::sse_encode(self.depth_cue_strength, serializer);
+        <bool>::sse_encode(self.ambient_occlusion, serializer);
+        <f64>::sse_encode(self.ambient_occlusion_strength, serializer);
     }
 }
 

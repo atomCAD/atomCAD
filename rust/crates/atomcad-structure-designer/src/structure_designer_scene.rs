@@ -2,6 +2,7 @@ use crate::eval_errors::ErrorOrigin;
 use crate::evaluator::network_result::Alignment;
 use crate::node_network::NodeRef;
 use crate::overlay::Overlay;
+use crate::scene_exposure::ExposureCache;
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::drawing_plane::DrawingPlane;
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
@@ -140,6 +141,15 @@ pub struct NodeSceneData {
     /// Eval cache for this node (used for gadget creation if this is the selected node)
     /// Contains node-specific data needed to reconstruct gadgets across refresh cycles
     pub selected_node_eval_cache: Option<Box<dyn Any>>,
+
+    /// The baked ambient occlusion of this entry's atomic outputs
+    /// (`doc/design_depth_perception.md` D9). Not derived at
+    /// `generate_scene` time like the fields above: it is filled **after**
+    /// evaluation, by `StructureDesigner::update_exposure`, so evaluation
+    /// never reads the AO preference. The tessellator only reads it. A
+    /// re-evaluated entry inherits its predecessor's through
+    /// `scene_exposure::carry_over_exposure`.
+    pub exposure: ExposureCache,
 }
 
 impl NodeSceneData {
@@ -158,7 +168,21 @@ impl NodeSceneData {
             show_unit_cell_wireframe: false,
             overlays: Vec::new(),
             selected_node_eval_cache: None,
+            exposure: ExposureCache::default(),
         }
+    }
+
+    /// The converted output of pin `pin_index`, displayed or not. Pin 0 (and
+    /// the fallback of an entry built without multi-output info) resolves to
+    /// the main `output`.
+    pub fn pin_output(&self, pin_index: i32) -> Option<&NodeOutput> {
+        if pin_index == 0 {
+            return Some(&self.output);
+        }
+        self.pin_outputs
+            .iter()
+            .find(|p| p.pin_index == pin_index)
+            .map(|p| &p.output)
     }
 
     /// Get the interactive pin index (lowest-indexed displayed pin).
@@ -418,6 +442,17 @@ impl StructureDesignerScene {
         self.invisible_node_cache.current_memory_bytes()
     }
 
+    /// Moves the exposure cache out of every live entry that has one
+    /// (`doc/design_depth_perception.md` D9), for `refresh_full` to hand on
+    /// to the entries that replace them. The entries themselves stay.
+    pub fn take_exposure_caches(&mut self) -> HashMap<NodeRef, ExposureCache> {
+        self.node_data
+            .iter_mut()
+            .filter(|(_, data)| !data.exposure.is_empty())
+            .map(|(node_ref, data)| (node_ref.clone(), std::mem::take(&mut data.exposure)))
+            .collect()
+    }
+
     /// Gets the eval cache for a specific node (typically the selected node)
     /// Returns None if the node doesn't exist or has no eval cache
     pub fn get_node_eval_cache(&self, node_ref: &NodeRef) -> Option<&Box<dyn Any>> {
@@ -554,6 +589,9 @@ impl MemorySizeEstimator for NodeSceneData {
             })
             .sum();
 
+        // The exposure cache: values per receiver, a snapshot per atom.
+        let exposure_size = self.exposure.memory_usage_bytes();
+
         base_size
             + output_size
             + geo_tree_size
@@ -565,5 +603,6 @@ impl MemorySizeEstimator for NodeSceneData {
             + surface_distribution_size
             + overlays_size
             + eval_cache_size
+            + exposure_size
     }
 }

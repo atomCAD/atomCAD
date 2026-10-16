@@ -45,6 +45,19 @@ pub struct AtomicStructureVisualizationPreferences {
     pub show_tool_envelopes: bool,
     /// The cage's line colour, RGB 0-255.
     pub tool_envelope_color: [u8; 3],
+    /// Baked ambient occlusion on the impostor vertices
+    /// (`doc/design_depth_perception.md` D8). Off means zero cost: the scene's
+    /// exposure pass computes nothing and the tessellator writes every vertex
+    /// fully exposed. The strength is a renderer setting and is not here.
+    pub ambient_occlusion: bool,
+}
+
+impl AtomicStructureVisualizationPreferences {
+    /// Whether exposure is computed and used at all: AO is on and atoms are
+    /// drawn as impostors, the only drawing that reads it.
+    pub fn ambient_occlusion_active(&self) -> bool {
+        self.ambient_occlusion && self.rendering_method == AtomicRenderingMethod::Impostors
+    }
 }
 
 #[derive(Clone, Debug)]

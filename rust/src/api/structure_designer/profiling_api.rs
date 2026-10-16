@@ -66,6 +66,10 @@ pub struct APIRefreshProfile {
     pub scene_dependent_ms: f64,
     /// Gadget rebuild + tessellatable.
     pub gadget_ms: f64,
+    /// The baked ambient-occlusion pass between evaluation and tessellation
+    /// (`doc/design_depth_perception.md` D9). `None` when it did not run: a
+    /// lightweight refresh, or ambient occlusion off.
+    pub exposure_ms: Option<f64>,
     /// Scene tessellation.
     pub tessellate_ms: f64,
     /// CPU-side mesh upload to the renderer.
@@ -191,6 +195,7 @@ impl From<&RefreshProfile> for APIRefreshProfile {
             eval_ms: profile.eval_ms,
             scene_dependent_ms: profile.scene_dependent_ms,
             gadget_ms: profile.gadget_ms,
+            exposure_ms: profile.exposure_ms,
             tessellate_ms: profile.tessellate_ms,
             gpu_upload_ms: profile.gpu_upload_ms,
             background_ms: profile.background_ms,
