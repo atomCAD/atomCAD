@@ -54,7 +54,9 @@ fn geometry_smith(n: Vec3, v: Vec3, l: Vec3, roughness: f32) -> f32 {
 pub const AO_FLOOR: f32 = 0.25;
 /// The visibility above which AO takes nothing. Twin of `AO_OPEN`.
 pub const AO_OPEN: f32 = 0.6;
-/// The key light's share of the AO darkening. Twin of `AO_KEY`.
+/// The key light's share of the AO darkening, without shadows
+/// (`doc/design_shadows.md` D10). The shader reads it from
+/// `ShadingUniform::ao_key`.
 pub const AO_KEY: f32 = 0.35;
 
 /// The packed exposure `(4b, E)` of a surface nothing occludes, as the
@@ -74,8 +76,9 @@ pub fn ao_visibility(exposure: Vec4, normal: Vec3) -> f32 {
 }
 
 /// The factors burial applies to the fill and hemisphere (`.0`) and to the
-/// key (`.1`) under `ao_strength` (D7). Twin of `ao_factors`.
-pub fn ao_factors(ao_strength: f32, exposure: Vec4, normal: Vec3) -> (f32, f32) {
+/// key (`.1`) under `ao_strength`, the key taking `ao_key` of it (D7;
+/// `doc/design_shadows.md` D10). Twin of `ao_factors`.
+pub fn ao_factors(ao_strength: f32, ao_key: f32, exposure: Vec4, normal: Vec3) -> (f32, f32) {
     if ao_strength <= 0.0 {
         return (1.0, 1.0);
     }
@@ -83,14 +86,22 @@ pub fn ao_factors(ao_strength: f32, exposure: Vec4, normal: Vec3) -> (f32, f32) 
         AO_FLOOR + (1.0 - AO_FLOOR) * smoothstep(0.0, AO_OPEN, ao_visibility(exposure, normal));
     (
         1.0 + (ao - 1.0) * ao_strength,
-        1.0 + (ao - 1.0) * ao_strength * AO_KEY,
+        1.0 + (ao - 1.0) * ao_strength * ao_key,
     )
+}
+
+/// What reaches a surface of the key light, from the shadow lookup's `v`
+/// (1 fully lit, 0 in full shadow) and the uniform's `shadow_strength`
+/// (`doc/design_shadows.md` D1): exactly 1 at strength 0, whatever `v`.
+/// Twin of `key_visibility`.
+pub fn key_visibility(shadow_strength: f32, v: f32) -> f32 {
+    1.0 - shadow_strength * (1.0 - v)
 }
 
 /// The linear (HDR) colour of a surface point with normal `normal`, seen
 /// from direction `view` (towards the eye, see [`view_vector`]), under the
-/// rig in `shading` (D3), fully exposed. Twin of `light_surface` with
-/// `FULLY_EXPOSED`.
+/// rig in `shading` (D3), fully exposed and unshadowed. Twin of
+/// `light_surface` with `FULLY_EXPOSED` and a `key_visibility` of 1.
 pub fn light_surface(
     shading: &ShadingUniform,
     view: Vec3,
@@ -107,11 +118,15 @@ pub fn light_surface(
         roughness,
         metallic,
         FULLY_EXPOSED,
+        1.0,
     )
 }
 
 /// [`light_surface`] with a packed exposure `(4b, E)` (D7, D10), as the
-/// vertex delivers it (see [`decode_exposure`]). Twin of `light_surface`.
+/// vertex delivers it (see [`decode_exposure`]), and the share of the key
+/// that reaches the surface, `key_visibility` (`doc/design_shadows.md` D1,
+/// see [`key_visibility`]). Twin of `light_surface`.
+#[allow(clippy::too_many_arguments)]
 pub fn light_surface_exposed(
     shading: &ShadingUniform,
     view: Vec3,
@@ -120,6 +135,7 @@ pub fn light_surface_exposed(
     roughness: f32,
     metallic: f32,
     exposure: Vec4,
+    key_visibility: f32,
 ) -> Vec3 {
     let v = view;
     let n = normal.normalize();
@@ -135,10 +151,10 @@ pub fn light_surface_exposed(
     let k_d = (Vec3::ONE - f) * (1.0 - metallic);
     let diffuse = k_d * albedo / PI;
 
-    let (ambient_factor, key_factor) = ao_factors(shading.ao_strength, exposure, n);
+    let (ambient_factor, key_factor) = ao_factors(shading.ao_strength, shading.ao_key, exposure, n);
 
     let n_dot_l = n.dot(l).max(0.0);
-    let key = shading.key_intensity * key_factor * n_dot_l;
+    let key = shading.key_intensity * key_factor * key_visibility * n_dot_l;
 
     let t = 0.5 + 0.5 * n.dot(Vec3::from_array(shading.hemisphere_up));
     let ambient_light = (shading.ground + (shading.sky - shading.ground) * t) * ambient_factor;

@@ -19,7 +19,14 @@ fn uniform(camera: &Camera, preset: LightingPreset) -> ShadingUniform {
         preset,
         ..ShadingSettings::default()
     };
-    ShadingUniform::new(camera, None, [0, 0, 0], &settings, ShadingPass::Content)
+    ShadingUniform::new(
+        camera,
+        None,
+        [0, 0, 0],
+        &settings,
+        ShadingPass::Content,
+        None,
+    )
 }
 
 fn camera() -> Camera {
@@ -154,6 +161,7 @@ fn cued(camera: &Camera, strength: f32, background: [u8; 3]) -> ShadingUniform {
         background,
         &settings,
         ShadingPass::Content,
+        None,
     )
 }
 
@@ -224,17 +232,17 @@ fn a_half_space_sky_has_the_closed_form_visibility() {
 #[test]
 fn the_ao_mapping_spans_floor_to_one_and_is_off_at_strength_0() {
     let n = Vec3::Z;
-    assert_eq!(ao_factors(1.0, FULLY_EXPOSED, n), (1.0, 1.0));
+    assert_eq!(ao_factors(1.0, AO_KEY, FULLY_EXPOSED, n), (1.0, 1.0));
     let buried = Vec4::new(0.0, 0.0, 0.0, 0.0);
-    let (ambient, key) = ao_factors(1.0, buried, n);
+    let (ambient, key) = ao_factors(1.0, AO_KEY, buried, n);
     assert!((ambient - AO_FLOOR).abs() < 1e-6, "{ambient}");
     assert!(
         (key - (1.0 - (1.0 - AO_FLOOR) * AO_KEY)).abs() < 1e-6,
         "{key}"
     );
-    assert_eq!(ao_factors(0.0, buried, n), (1.0, 1.0));
+    assert_eq!(ao_factors(0.0, AO_KEY, buried, n), (1.0, 1.0));
     // Half strength is half way.
-    let (half, _) = ao_factors(0.5, buried, n);
+    let (half, _) = ao_factors(0.5, AO_KEY, buried, n);
     assert!((half - (1.0 + AO_FLOOR) / 2.0).abs() < 1e-6, "{half}");
 }
 
@@ -249,9 +257,9 @@ fn burial_darkens_and_full_exposure_changes_nothing() {
         shading.ao_strength = 1.0;
         let albedo = Vec3::new(0.6, 0.5, 0.4);
         let open = light_surface(&shading, v, v, albedo, 0.5, 0.0);
-        let exposed = light_surface_exposed(&shading, v, v, albedo, 0.5, 0.0, FULLY_EXPOSED);
+        let exposed = light_surface_exposed(&shading, v, v, albedo, 0.5, 0.0, FULLY_EXPOSED, 1.0);
         assert_eq!(open, exposed);
-        let buried = light_surface_exposed(&shading, v, v, albedo, 0.5, 0.0, Vec4::ZERO);
+        let buried = light_surface_exposed(&shading, v, v, albedo, 0.5, 0.0, Vec4::ZERO, 1.0);
         assert!(luminance(buried) < 0.9 * luminance(open), "{preset:?}");
     }
 }
@@ -264,4 +272,45 @@ fn snorm_decoding_matches_the_gpu() {
         decode_exposure([-127, -128, 127, 0]),
         Vec4::new(-1.0, -1.0, 1.0, 0.0)
     );
+}
+
+// ---- Shadows (doc/design_shadows.md D1, Testing layer 3) -------------------
+
+use atomcad_renderer::shading::key_visibility;
+
+/// D1: at strength 0 the key is whole whatever the lookup says, so every
+/// image drawn with shadows off is today's.
+#[test]
+fn key_visibility_is_one_at_strength_zero() {
+    for v in [0.0, 0.25, 0.5, 1.0] {
+        assert_eq!(key_visibility(0.0, v), 1.0);
+    }
+    assert_eq!(key_visibility(1.0, 1.0), 1.0);
+    assert_eq!(key_visibility(1.0, 0.0), 0.0);
+    assert!((key_visibility(0.7, 0.0) - 0.3).abs() < 1e-6);
+}
+
+/// D1: a full shadow takes the key's direct term and nothing else: the fill
+/// and the hemisphere stay, so a shadowed surface reads as out of the sun,
+/// not black.
+#[test]
+fn a_full_shadow_takes_only_the_key() {
+    let camera = camera();
+    let v = view_vector(&camera, camera.target);
+    let n = (v + Vec3::new(0.3, 0.5, 0.0)).normalize();
+    let albedo = Vec3::new(0.6, 0.5, 0.4);
+    let studio = uniform(&camera, LightingPreset::Studio);
+    let shadowed = light_surface_exposed(&studio, v, n, albedo, 0.5, 0.0, FULLY_EXPOSED, 0.0);
+    let no_key = ShadingUniform {
+        key_intensity: 0.0,
+        ..studio
+    };
+    let expected = light_surface(&no_key, v, n, albedo, 0.5, 0.0);
+    assert!(
+        (shadowed - expected).length() < 1e-6,
+        "{shadowed} vs {expected}"
+    );
+    let lit = light_surface(&studio, v, n, albedo, 0.5, 0.0);
+    assert!(luminance(shadowed) < 0.8 * luminance(lit));
+    assert!(luminance(shadowed) > 0.0);
 }

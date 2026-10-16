@@ -20,6 +20,8 @@ pub mod render_target;
 pub mod renderer;
 pub mod shading;
 pub mod shading_uniform;
+pub mod shadow_fit;
+pub mod shadow_map;
 pub mod surface_sort;
 pub mod tessellator;
 pub mod thumbnail;

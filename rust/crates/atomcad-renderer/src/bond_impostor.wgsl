@@ -380,6 +380,22 @@ fn fs_main(input: BondImpostorVertexOutput) -> BondFragmentOutput {
     return output;
 }
 
+// The shadow caster (doc/design_shadows.md D4): drawn from the light camera
+// into one layer of the shadow map, depth only. The cylinder's analytic
+// depth along the light ray, nothing else: no colour, no lighting, one
+// sample. It must not read `shading` or group 2, and sits above the
+// per-sample marker.
+@fragment
+fn fs_shadow(input: BondImpostorVertexOutput) -> @builtin(frag_depth) f32 {
+    let ray = view_ray(input.world_position, input.radius);
+    let t = cylinder_hit(ray.origin, ray.dir, input.world_start, input.world_end, input.radius);
+    if t < 0.0 {
+        discard;
+    }
+    let hit_clip = camera.view_proj * vec4<f32>(ray.origin + t * ray.dir, 1.0);
+    return hit_clip.z / hit_clip.w;
+}
+
 // The colour and depth of a surface hit. Shared by `fs_main` and
 // `fs_main_per_sample` (D5), so the two cannot disagree about the surface.
 struct Shaded {
@@ -415,6 +431,7 @@ fn shade_bond_hit(input: BondImpostorVertexOutput, ray: Ray, t: f32) -> Shaded {
         0.5,  // roughness - moderate for bonds
         0.0,  // metallic - bonds are non-metallic
         exposure,
+        key_visibility(shadow_visibility(hit_point, surface_normal)),
     )), hit_point);
 
     var shaded: Shaded;

@@ -6,15 +6,18 @@ use crate::line_mesh::LineSegmentInstance;
 use crate::mesh::Vertex;
 use crate::render_target::{COLOR_FORMAT, DEPTH_FORMAT};
 use crate::renderer::STRAIGHT_ALPHA_BLENDING;
+use crate::shadow_map::SHADOW_MAP_FORMAT;
 use crate::transparent_impostor_mesh::TransparentImpostorVertex;
 use std::collections::HashMap;
 use wgpu::*;
 
-/// The bind group layouts every pipeline is built on, by shape: the shared
-/// `[camera, model]` layout, the line pipeline's `[camera, model, line LOD]`
-/// and the label pipeline's `[camera, model, atlas]`.
+/// The bind group layouts every pipeline is built on, by shape: `[camera,
+/// model]` (the shadow casters), the lit pipelines' `[camera, model, shadow
+/// map]` (`doc/design_shadows.md` D8), the line pipeline's `[camera, model,
+/// line LOD]` and the label pipeline's `[camera, model, atlas]`.
 pub(crate) struct PipelineLayouts {
     pub main: PipelineLayout,
+    pub lit: PipelineLayout,
     pub line: PipelineLayout,
     pub label: PipelineLayout,
 }
@@ -189,21 +192,21 @@ impl PipelineSet {
             (
                 create_atom_impostor_pipeline(
                     device,
-                    &layouts.main,
+                    &layouts.lit,
                     &shaders.atom_impostor,
                     sample_count,
                     fragment_entry,
                 ),
                 create_bond_impostor_pipeline(
                     device,
-                    &layouts.main,
+                    &layouts.lit,
                     &shaders.bond_impostor,
                     sample_count,
                     fragment_entry,
                 ),
                 create_transparent_impostor_pipeline(
                     device,
-                    &layouts.main,
+                    &layouts.lit,
                     &shaders.transparent_impostor,
                     sample_count,
                     fragment_entry,
@@ -227,7 +230,7 @@ impl PipelineSet {
         let surface = |cull_mode| {
             create_surface_transparent_pipeline(
                 device,
-                &layouts.main,
+                &layouts.lit,
                 &shaders.triangle,
                 cull_mode,
                 sample_count,
@@ -237,7 +240,7 @@ impl PipelineSet {
             sample_count,
             triangle: create_triangle_pipeline(
                 device,
-                &layouts.main,
+                &layouts.lit,
                 &shaders.triangle,
                 false, // Normal depth testing
                 sample_count,
@@ -251,6 +254,90 @@ impl PipelineSet {
             surface_back_cull: surface(Some(wgpu::Face::Back)),
             label: create_label_pipeline(device, &layouts.label, &shaders.label, sample_count),
             refined,
+        }
+    }
+}
+
+/// The shadow caster pipelines (`doc/design_shadows.md` D4): they draw only
+/// into the shadow map, which has one sample and no colour attachment
+/// whatever the frame is for, so they exist once and are not in
+/// [`PipelineSet`]. Built from the same [`Shaders`] on
+/// [`PipelineLayouts::main`]: their entry points use no group 2, so they
+/// never sample the map they write. No hardware depth bias: the receiver
+/// biases (D7). No culling: an impostor's quad faces the light, and a mesh
+/// may be open or a single sheet, which must cast from either side.
+pub(crate) struct ShadowCasterPipelines {
+    pub triangle: RenderPipeline,
+    pub atom_impostor: RenderPipeline,
+    pub bond_impostor: RenderPipeline,
+}
+
+impl ShadowCasterPipelines {
+    pub fn new(device: &Device, layouts: &PipelineLayouts, shaders: &Shaders) -> Self {
+        let constants = sample_count_constants(1);
+        let pipeline = |label: &str,
+                        module: &ShaderModule,
+                        buffer: VertexBufferLayout,
+                        fragment_entry: Option<&str>| {
+            device.create_render_pipeline(&RenderPipelineDescriptor {
+                label: Some(label),
+                layout: Some(&layouts.main),
+                vertex: VertexState {
+                    module,
+                    entry_point: Some("vs_main"),
+                    buffers: &[buffer],
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                },
+                fragment: fragment_entry.map(|entry| FragmentState {
+                    module,
+                    entry_point: Some(entry),
+                    targets: &[],
+                    compilation_options: wgpu::PipelineCompilationOptions {
+                        constants: &constants,
+                        ..Default::default()
+                    },
+                }),
+                primitive: wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::TriangleList,
+                    strip_index_format: None,
+                    front_face: wgpu::FrontFace::Ccw,
+                    cull_mode: None,
+                    polygon_mode: wgpu::PolygonMode::Fill,
+                    unclipped_depth: false,
+                    conservative: false,
+                },
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: SHADOW_MAP_FORMAT,
+                    depth_write_enabled: true,
+                    depth_compare: wgpu::CompareFunction::Less,
+                    stencil: wgpu::StencilState::default(),
+                    bias: wgpu::DepthBiasState::default(),
+                }),
+                multisample: wgpu::MultisampleState::default(),
+                multiview: None,
+                cache: None,
+            })
+        };
+        Self {
+            // Vertex only: the rasterised depth is the mesh's own.
+            triangle: pipeline(
+                "Triangle Shadow Caster Pipeline",
+                &shaders.triangle,
+                Vertex::desc(),
+                None,
+            ),
+            atom_impostor: pipeline(
+                "Atom Impostor Shadow Caster Pipeline",
+                &shaders.atom_impostor,
+                crate::atom_impostor_mesh::AtomImpostorVertex::desc(),
+                Some("fs_shadow"),
+            ),
+            bond_impostor: pipeline(
+                "Bond Impostor Shadow Caster Pipeline",
+                &shaders.bond_impostor,
+                crate::bond_impostor_mesh::BondImpostorVertex::desc(),
+                Some("fs_shadow"),
+            ),
         }
     }
 }

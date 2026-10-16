@@ -8,8 +8,8 @@ use atomcad_renderer::camera::Camera;
 use atomcad_renderer::line_mesh::LineMesh;
 use atomcad_renderer::mesh::{Mesh, Vertex};
 use atomcad_renderer::thumbnail::{
-    THUMBNAIL_SIZE, ThumbnailBackground, choose_background, content_bounds, decode_png,
-    downsample_2x2, encode_png, fit_camera_to_bounds, images_differ, square_camera,
+    THUMBNAIL_SIZE, ThumbnailBackground, caster_bounds, choose_background, content_bounds,
+    decode_png, downsample_2x2, encode_png, fit_camera_to_bounds, images_differ, square_camera,
     thumbnail_changed,
 };
 use atomcad_renderer::transparent_impostor_mesh::TransparentImpostorMesh;
@@ -109,6 +109,63 @@ fn wireframe_segments_count_by_both_ends() {
     let (min, max) = content_bounds(&main, &wire, &atoms, &bonds, &transparent, &iso).unwrap();
     assert!(vec_approx_eq(min, DVec3::new(-2.0, 0.0, -1.0)));
     assert!(vec_approx_eq(max, DVec3::new(3.0, 5.0, 1.0)));
+}
+
+/// `doc/design_shadows.md` D3: the casters are the triangle mesh and the
+/// opaque impostors (radius included); the wireframe, the ghosts and the
+/// transparent surfaces are content but do not cast.
+#[test]
+fn caster_bounds_cover_the_opaque_meshes_and_ignore_the_rest() {
+    let (mut main, mut wire, mut atoms, mut bonds, mut transparent, mut iso) = empty_meshes();
+    assert_eq!(caster_bounds(&main, &atoms, &bonds), None);
+
+    let vertex = |position: [f32; 3]| Vertex {
+        position,
+        normal: [0.0, 0.0, 1.0],
+        albedo: [1.0, 1.0, 1.0],
+        roughness: 0.5,
+        metallic: 0.0,
+        alpha: 1.0,
+    };
+    main.vertices.push(vertex([-3.0, 0.0, 0.0]));
+    main.indices.extend([0, 0, 0]);
+    atoms.vertices.push(atom_vertex([0.0, 6.0, 0.0], 1.5));
+    atoms.indices.extend([0, 0, 0]);
+    bonds.vertices.push(BondImpostorVertex {
+        start_position: [0.0, 0.0, 2.0],
+        end_position: [0.0, 0.0, 8.0],
+        quad_offset: [0.0, 0.0],
+        radius: 0.25,
+        color: [1.0, 1.0, 1.0],
+        exposure_start: FULLY_EXPOSED,
+        exposure_end: FULLY_EXPOSED,
+    });
+    bonds.indices.extend([0, 0, 0]);
+    let casters = caster_bounds(&main, &atoms, &bonds).unwrap();
+    assert!(vec_approx_eq(casters.0, DVec3::new(-3.0, -0.25, -1.5)));
+    assert!(vec_approx_eq(casters.1, DVec3::new(1.5, 7.5, 8.25)));
+
+    // Content far outside the casters, of every non-casting kind.
+    wire.add_line_with_uniform_color(
+        &Vec3::new(-50.0, 0.0, 0.0),
+        &Vec3::new(-40.0, 0.0, 0.0),
+        &[1.0, 1.0, 1.0],
+    );
+    transparent.add_atom_quad(
+        &Vec3::new(0.0, 50.0, 0.0),
+        1.0,
+        &[1.0; 3],
+        0.5,
+        0.0,
+        &[0.0; 4],
+        0.5,
+    );
+    iso.vertices.push(vertex([0.0, 0.0, -50.0]));
+    iso.indices.extend([0, 0, 0]);
+    assert_eq!(caster_bounds(&main, &atoms, &bonds), Some(casters));
+    let content = content_bounds(&main, &wire, &atoms, &bonds, &transparent, &iso).unwrap();
+    assert!(vec_approx_eq(content.0, DVec3::new(-50.0, -0.25, -50.0)));
+    assert!(content.1.y >= 51.0);
 }
 
 /// The fitted camera keeps the view direction, looks at the box centre and

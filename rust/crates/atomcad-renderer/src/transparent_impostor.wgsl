@@ -421,6 +421,7 @@ fn shade_atom_hit(input: TransparentImpostorVertexOutput, ray: Ray, t: f32, pixe
         input.roughness,
         input.metallic,
         FULLY_EXPOSED,
+        key_visibility(shadow_visibility(hit_point, world_normal)),
     )), hit_point);
 
     // The rim band (D4): a screen-space ring along the silhouette, mixed in
@@ -500,6 +501,7 @@ fn shade_bond_hit(input: TransparentImpostorVertexOutput, ray: Ray, t: f32) -> S
         0.5, // roughness - moderate for bonds
         0.0, // metallic - bonds are non-metallic
         FULLY_EXPOSED,
+        key_visibility(shadow_visibility(hit_point, surface_normal)),
     )), hit_point);
 
     var shaded: Shaded;

@@ -87,7 +87,8 @@ impl BoundsAccumulator {
 /// transparent isosurface vertices. `None` when there is nothing to frame.
 ///
 /// Gadgets, the lightweight mesh, labels and background lines are not
-/// content and are not passed in.
+/// content and are not passed in. Built on the casters' accumulation
+/// ([`caster_bounds`]), so a mesh added to the casters is content too.
 pub fn content_bounds(
     main_mesh: &Mesh,
     wireframe_mesh: &LineMesh,
@@ -97,14 +98,7 @@ pub fn content_bounds(
     isosurface_transparent_mesh: &Mesh,
 ) -> Option<(DVec3, DVec3)> {
     let mut acc = BoundsAccumulator::default();
-    // Only indexed vertices are drawn, but every mesh here indexes all of its
-    // vertices, so the vertex list is the cheaper exact answer.
-    if !main_mesh.indices.is_empty() {
-        main_mesh
-            .vertices
-            .iter()
-            .for_each(|v| acc.add_point(v.position));
-    }
+    add_casters(&mut acc, main_mesh, atom_impostor_mesh, bond_impostor_mesh);
     if !isosurface_transparent_mesh.indices.is_empty() {
         isosurface_transparent_mesh
             .vertices
@@ -114,6 +108,48 @@ pub fn content_bounds(
     for (p0, p1) in wireframe_mesh.segments() {
         acc.add_point(p0.to_array());
         acc.add_point(p1.to_array());
+    }
+    if !transparent_impostor_mesh.indices.is_empty() {
+        for v in &transparent_impostor_mesh.vertices {
+            acc.add_sphere(v.position_a, v.radius);
+            // `position_b` is unused for atoms (kind 0).
+            if v.kind == 1 {
+                acc.add_sphere(v.position_b, v.radius);
+            }
+        }
+    }
+    acc.bounds
+}
+
+/// The axis-aligned bounding box of the shadow casters
+/// (`doc/design_shadows.md` D3): the opaque triangle mesh's vertices and the
+/// opaque atom and bond impostors grown by their radius. What the shadow map
+/// is fitted to. `None` when nothing casts.
+pub fn caster_bounds(
+    main_mesh: &Mesh,
+    atom_impostor_mesh: &AtomImpostorMesh,
+    bond_impostor_mesh: &BondImpostorMesh,
+) -> Option<(DVec3, DVec3)> {
+    let mut acc = BoundsAccumulator::default();
+    add_casters(&mut acc, main_mesh, atom_impostor_mesh, bond_impostor_mesh);
+    acc.bounds
+}
+
+/// The casters' part of the accumulation, shared by [`caster_bounds`] and
+/// [`content_bounds`].
+fn add_casters(
+    acc: &mut BoundsAccumulator,
+    main_mesh: &Mesh,
+    atom_impostor_mesh: &AtomImpostorMesh,
+    bond_impostor_mesh: &BondImpostorMesh,
+) {
+    // Only indexed vertices are drawn, but every mesh here indexes all of its
+    // vertices, so the vertex list is the cheaper exact answer.
+    if !main_mesh.indices.is_empty() {
+        main_mesh
+            .vertices
+            .iter()
+            .for_each(|v| acc.add_point(v.position));
     }
     if !atom_impostor_mesh.indices.is_empty() {
         atom_impostor_mesh
@@ -127,16 +163,6 @@ pub fn content_bounds(
             acc.add_sphere(v.end_position, v.radius);
         }
     }
-    if !transparent_impostor_mesh.indices.is_empty() {
-        for v in &transparent_impostor_mesh.vertices {
-            acc.add_sphere(v.position_a, v.radius);
-            // `position_b` is unused for atoms (kind 0).
-            if v.kind == 1 {
-                acc.add_sphere(v.position_b, v.radius);
-            }
-        }
-    }
-    acc.bounds
 }
 
 /// The automatic thumbnail camera (D4): `camera`'s viewing **direction** and

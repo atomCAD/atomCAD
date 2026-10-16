@@ -2323,6 +2323,7 @@ fn the_twin_agrees_with_the_gpu_on_a_lit_sphere() {
                 DARK_BACKGROUND,
                 &shading_of(preset),
                 ShadingPass::Content,
+                None,
             );
             // The pixels over the sphere's centre and over four points 60°
             // from the view axis: up, down, left and right. The expectation
@@ -2775,6 +2776,7 @@ fn the_back_sphere_is_fogged_towards_the_background_and_the_front_one_is_not() {
                 background,
                 &cue,
                 ShadingPass::Content,
+                None,
             );
             for centre in [FOG_FRONT, FOG_BACK] {
                 let pixel = pixel_over(&camera, VIEWPORT_WIDTH, VIEWPORT_HEIGHT, centre.as_dvec3());
@@ -2846,6 +2848,7 @@ fn a_thumbnail_is_fogged_towards_its_own_background() {
             background.rgb(),
             &cue,
             ShadingPass::Content,
+            None,
         );
         let size = (THUMBNAIL_SIZE, THUMBNAIL_SIZE);
         let pixel = pixel_over(&camera, size.0, size.1, FOG_BACK.as_dvec3());
@@ -3051,6 +3054,7 @@ fn ao_twin_pixel(
         0.5,
         0.0,
         decode_exposure(exposure),
+        1.0,
     ));
     ((column, row), lit * 255.0)
 }
@@ -3062,6 +3066,7 @@ fn ao_uniform(renderer: &Renderer, settings: &ShadingSettings) -> ShadingUniform
         DARK_BACKGROUND,
         settings,
         ShadingPass::Content,
+        None,
     )
 }
 
@@ -3268,4 +3273,1138 @@ fn a_bond_brightens_from_its_buried_end_to_its_open_end() {
     }
     let (first, last) = (profile[0], profile[profile.len() - 1]);
     assert!(last > first + 20.0, "start {first}, end {last}");
+}
+
+// ---- Shadows, Phase 1 (doc/design_shadows.md) ------------------------------
+//
+// Caster passes, the single-cascade fit and the receiver. Expected colours
+// come from the twin at `key_visibility` 0 (full shadow, strength 1) and 1
+// (lit); the shadow lookup itself has no twin (Testing layer 3). The
+// renderer's default is shadows off, so every image above is unchanged
+// (the anchor, against a dump of the phase before).
+
+use atomcad_renderer::render_target::TargetSpec;
+use atomcad_renderer::shading::FULLY_EXPOSED as SHADING_FULLY_EXPOSED;
+use atomcad_renderer::shadow_fit::{ShadowSetup, shadow_setup};
+use atomcad_renderer::tessellator::tessellator::tessellate_sphere;
+use glam::f64::DVec2;
+
+const SHADOW_GREY: [f32; 3] = [0.7, 0.7, 0.7];
+
+/// *Studio* with shadows at `strength`, nothing else.
+fn shadows_of(strength: f32) -> ShadingSettings {
+    ShadingSettings {
+        preset: LightingPreset::Studio,
+        shadow_strength: strength,
+        ..ShadingSettings::default()
+    }
+}
+
+/// The content of one shadow scene: every kind of caster and receiver, plus
+/// a label and a background grid to take group 2 before the transparent
+/// draws (D8).
+#[derive(Default)]
+struct ShadowScene {
+    main: Mesh,
+    atoms: Option<AtomImpostorMesh>,
+    bonds: Option<BondImpostorMesh>,
+    ghosts: Option<TransparentImpostorMesh>,
+    surfaces: TransparentSurfaceMesh,
+    labels: Option<LabelMesh>,
+    gadget_atoms: Option<AtomImpostorMesh>,
+    grid: bool,
+}
+
+impl ShadowScene {
+    fn atoms(&mut self) -> &mut AtomImpostorMesh {
+        self.atoms.get_or_insert_with(AtomImpostorMesh::new)
+    }
+
+    fn upload(&self, renderer: &mut Renderer) {
+        let empty_atoms = AtomImpostorMesh::new();
+        let empty_bonds = BondImpostorMesh::new();
+        let empty_ghosts = TransparentImpostorMesh::new();
+        let empty_labels = LabelMesh::new();
+        renderer.update_all_gpu_meshes(
+            &Mesh::new(),
+            &LineMesh::new(),
+            &self.main,
+            &LineMesh::new(),
+            &LineMesh::new(),
+            self.atoms.as_ref().unwrap_or(&empty_atoms),
+            self.bonds.as_ref().unwrap_or(&empty_bonds),
+            self.ghosts.as_ref().unwrap_or(&empty_ghosts),
+            &self.surfaces,
+            self.labels.as_ref().unwrap_or(&empty_labels),
+            self.gadget_atoms.as_ref().unwrap_or(&empty_atoms),
+            &BondImpostorMesh::new(),
+            true,
+            Some((1, "Main".to_string())),
+        );
+        let mut grid = LineMesh::new();
+        if self.grid {
+            for i in -4..=4 {
+                let t = i as f32 * 4.0;
+                grid.add_line_with_uniform_color(
+                    &Vec3::new(t, -20.0, -3.0),
+                    &Vec3::new(t, 20.0, -3.0),
+                    &[0.5, 0.5, 0.5],
+                );
+            }
+        }
+        renderer.update_background_mesh(&grid);
+    }
+}
+
+/// A square grid of touching spheres of `radius`, `2n + 1` on a side,
+/// centred on the origin in the plane `z`.
+fn sphere_layer(atoms: &mut AtomImpostorMesh, n: i32, radius: f32, z: f32) {
+    for i in -n..=n {
+        for j in -n..=n {
+            let centre = Vec3::new(i as f32 * 2.0 * radius, j as f32 * 2.0 * radius, z);
+            atoms.add_atom_quad(&centre, radius, &SHADOW_GREY, 0.5, 0.0, &[0.0; 4]);
+        }
+    }
+}
+
+fn add_atom(atoms: &mut AtomImpostorMesh, centre: DVec3, radius: f32, albedo: [f32; 3]) {
+    atoms.add_atom_quad(&centre.as_vec3(), radius, &albedo, 0.5, 0.0, &[0.0; 4]);
+}
+
+/// `mesh` with every vertex moved by `by`.
+fn translated(mut mesh: Mesh, by: Vec3) -> Mesh {
+    for v in &mut mesh.vertices {
+        v.position = (Vec3::from(v.position) + by).to_array();
+    }
+    mesh
+}
+
+/// The live view's shadow setup, as `draw_to_target` computes it.
+fn live_setup(renderer: &Renderer) -> Option<ShadowSetup> {
+    let (width, height) = renderer.get_viewport_size();
+    shadow_setup(
+        &renderer.camera,
+        renderer.caster_bounds(),
+        &renderer.shading(),
+        &TargetSpec::image(width, height, 1),
+    )
+}
+
+/// The live view with shadows at strength 1, then off (both *Studio*),
+/// dumped as `shadow_<name>_on` / `_off`. `still` draws the refined frame.
+fn shadow_pair(renderer: &mut Renderer, name: &str, still: bool) -> (Vec<u8>, Vec<u8>) {
+    let mut render = |strength: f32| {
+        renderer.set_shading(shadows_of(strength));
+        if still {
+            renderer.render_still(DARK_BACKGROUND)
+        } else {
+            renderer.render(DARK_BACKGROUND)
+        }
+    };
+    let on = render(1.0);
+    let off = render(0.0);
+    dump(&format!("shadow_{name}_on"), &on);
+    dump(&format!("shadow_{name}_off"), &off);
+    (on, off)
+}
+
+/// Where `point` lies on the live target, in pixels, y down.
+fn screen_of(renderer: &Renderer, point: DVec3) -> DVec2 {
+    let (width, height) = renderer.get_viewport_size();
+    let ndc = renderer
+        .camera
+        .build_view_projection_matrix()
+        .project_point3(point);
+    DVec2::new(
+        (ndc.x * 0.5 + 0.5) * width as f64,
+        (0.5 - ndc.y * 0.5) * height as f64,
+    )
+}
+
+fn pixel_at(pixels: &[u8], renderer: &Renderer, at: DVec2) -> [u8; 4] {
+    let (width, _) = renderer.get_viewport_size();
+    rgba_at(pixels, width, at.x as u32, at.y as u32)
+}
+
+/// `point` moved along the light's travel direction onto the plane `z`.
+fn along_light_onto(setup: &ShadowSetup, point: DVec3, z: f64) -> DVec3 {
+    point + setup.light_dir * ((z - point.z) / setup.light_dir.z)
+}
+
+/// The light's travel direction on screen, unit, in pixels (y down).
+fn light_on_screen(renderer: &Renderer, setup: &ShadowSetup) -> DVec2 {
+    let camera = &renderer.camera;
+    let forward = (camera.target - camera.eye).normalize();
+    let right = forward.cross(camera.up).normalize();
+    let up = right.cross(forward);
+    DVec2::new(setup.light_dir.dot(right), -setup.light_dir.dot(up)).normalize()
+}
+
+/// The twin's colour, 0–255, of a surface at `hit` with `normal` and
+/// `albedo` (roughness 0.5, not metallic, fully exposed) under `settings`,
+/// with the key at `key_visibility`.
+fn shadow_twin(
+    renderer: &Renderer,
+    settings: &ShadingSettings,
+    hit: DVec3,
+    normal: DVec3,
+    albedo: [f32; 3],
+    key_visibility: f32,
+) -> Vec3 {
+    let camera = &renderer.camera;
+    let (width, height) = renderer.get_viewport_size();
+    let setup = shadow_setup(
+        camera,
+        renderer.caster_bounds(),
+        settings,
+        &TargetSpec::image(width, height, 1),
+    );
+    let uniform = ShadingUniform::new(
+        camera,
+        renderer.content_bounds(),
+        DARK_BACKGROUND,
+        settings,
+        ShadingPass::Content,
+        setup.as_ref(),
+    );
+    to_display(light_surface_exposed(
+        &uniform,
+        view_vector(camera, hit),
+        normal.normalize().as_vec3(),
+        Vec3::from(albedo),
+        0.5,
+        0.0,
+        SHADING_FULLY_EXPOSED,
+        key_visibility,
+    )) * 255.0
+}
+
+/// How much a full shadow takes from a surface, in luminance (0–255): the
+/// twin lit minus the twin in full shadow at strength 1.
+fn full_shadow_drop(renderer: &Renderer, hit: DVec3, normal: DVec3, albedo: [f32; 3]) -> f32 {
+    let lum = |c: Vec3| 0.2126 * c.x + 0.7152 * c.y + 0.0722 * c.z;
+    let settings = shadows_of(1.0);
+    lum(shadow_twin(renderer, &settings, hit, normal, albedo, 1.0))
+        - lum(shadow_twin(renderer, &settings, hit, normal, albedo, 0.0))
+}
+
+/// A far, tiny caster straight behind the view's target, `depth` Å further
+/// along the view axis: hidden behind the scene and shadowing nothing in
+/// it, it stretches the casters' view-depth extent, so the one cascade
+/// spans hundreds of Å and its texel is coarse.
+fn far_caster(renderer: &Renderer, depth: f64) -> DVec3 {
+    let camera = &renderer.camera;
+    camera.target + (camera.target - camera.eye).normalize() * depth
+}
+
+/// D4, D8, D9: with shadows on under *Studio*, the live, the thumbnail and
+/// the export path each record one caster pass (one cascade) and draw
+/// without a validation error; the map exists exactly while shadows are on.
+/// Under *Headlight* a strength of 1 draws nothing and is byte-identical to
+/// strength 0 (D1).
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn shadows_draw_through_every_path_and_count_their_passes() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    upload_fixed_scene(&mut renderer);
+    look_down(&mut renderer, false, 40.0, VIEWPORT_HEIGHT);
+    assert!(
+        !renderer.shadow_map_allocated(),
+        "the default is shadows off"
+    );
+
+    let headlight = |strength| ShadingSettings {
+        shadow_strength: strength,
+        ..ShadingSettings::default()
+    };
+    renderer.set_shading(headlight(0.0));
+    let plain = renderer.render(DARK_BACKGROUND);
+    renderer.set_shading(headlight(1.0));
+    assert!(!renderer.shadow_map_allocated(), "no map under Headlight");
+    let headlight_on = renderer.render(DARK_BACKGROUND);
+    assert_eq!(plain, headlight_on, "Headlight draws no shadow");
+    assert_eq!(renderer.shadow_passes_drawn(), 0);
+
+    renderer.set_shading(shadows_of(0.7));
+    assert!(renderer.shadow_map_allocated());
+    let before = renderer.shadow_passes_drawn();
+    let live = renderer.render(DARK_BACKGROUND);
+    assert_eq!(renderer.shadow_passes_drawn(), before + 1);
+    dump("shadow_paths_live", &live);
+    let camera = renderer.camera.clone();
+    let thumbnail = renderer.render_thumbnail(&camera);
+    // Two backgrounds, no cache yet (Phase 3): two passes.
+    assert_eq!(renderer.shadow_passes_drawn(), before + 3);
+    dump("shadow_paths_thumbnail", &thumbnail);
+    let image = renderer.render_image(200, 120, DARK_BACKGROUND);
+    assert_eq!(renderer.shadow_passes_drawn(), before + 4);
+    dump("shadow_paths_export", &image);
+    // The atom over the quad shadows it: the live frame differs from today's.
+    assert_ne!(live, plain);
+
+    renderer.set_shading(shadows_of(0.0));
+    assert!(
+        !renderer.shadow_map_allocated(),
+        "turning shadows off frees the map"
+    );
+    renderer.render(DARK_BACKGROUND);
+    assert_eq!(renderer.shadow_passes_drawn(), before + 4);
+}
+
+/// The acne detector's lone objects, by name: (name, is a mesh).
+const ACNE_OBJECTS: [(&str, bool); 4] = [
+    ("sphere", false),
+    ("bond", false),
+    ("cube", true),
+    ("tessellated_sphere", true),
+];
+
+/// One lone object for the acne detector, at the origin, with a far caster
+/// at `far` when the texel is to be coarse.
+fn acne_scene(name: &str, far: Option<DVec3>) -> ShadowScene {
+    let mut scene = ShadowScene::default();
+    match name {
+        "sphere" => add_atom(scene.atoms(), DVec3::ZERO, 3.0, [0.2, 0.5, 0.9]),
+        "bond" => {
+            let mut bonds = BondImpostorMesh::new();
+            bonds.add_bond_with_positions(
+                &Vec3::new(-4.0, -1.0, 0.5),
+                &Vec3::new(4.0, 1.0, -0.5),
+                0.6,
+                &[0.7, 0.7, 0.7],
+            );
+            scene.bonds = Some(bonds);
+        }
+        "cube" => scene.main = cube(2.5, Vec3::new(0.8, 0.3, 0.2), 1.0),
+        _ => tessellate_sphere(
+            &mut scene.main,
+            &DVec3::ZERO,
+            3.0,
+            24,
+            12,
+            &Material::new(&Vec3::new(0.3, 0.7, 0.4), 0.5, 0.0),
+        ),
+    }
+    if let Some(far) = far {
+        add_atom(scene.atoms(), far, 0.5, [0.5, 0.5, 0.5]);
+    }
+    scene
+}
+
+/// Testing layer 4, the acne detector (a bias too small): a lone object
+/// has nothing to shadow it, so with shadows on at strength 1 it must look
+/// as with them off. Impostors: every pixel within 2/255. Meshes: at most
+/// 0.5 % of the object's pixels further off than that. At the finest
+/// texel (about 0.01 Å) and a coarse one (at least 0.3 Å, from a far caster
+/// that stretches the cascade), in both projections, with MSAA off and on
+/// and in the refined frame. Mutation: without the normal offset and the
+/// receiver-plane depth, acne appears.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn a_lone_object_does_not_shadow_itself() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    let mut worst = (0u8, String::new());
+    for (name, is_mesh) in ACNE_OBJECTS {
+        for orthographic in [false, true] {
+            renderer.set_orthographic_mode(orthographic);
+            renderer.set_ortho_half_height(7.0);
+            renderer.move_camera(
+                &DVec3::new(10.0, -20.0, 16.0),
+                &DVec3::ZERO,
+                &DVec3::new(0.0, 0.0, 1.0),
+            );
+            for coarse in [false, true] {
+                let far = coarse.then(|| far_caster(&renderer, 1500.0));
+                acne_scene(name, far).upload(&mut renderer);
+                renderer.set_shading(shadows_of(1.0));
+                let texel = live_setup(&renderer).expect("a setup").cascades[0].texel_world;
+                if coarse {
+                    assert!(texel >= 0.3, "{name}: coarse texel {texel}");
+                } else {
+                    assert!(texel <= 0.012, "{name}: fine texel {texel}");
+                }
+                for sampling in ["msaa_off", "msaa_on", "refined"] {
+                    let anti_aliasing = sampling != "msaa_off";
+                    if anti_aliasing && !renderer.msaa_supported()
+                        || sampling == "refined" && !renderer.refinement_supported()
+                    {
+                        continue;
+                    }
+                    renderer.set_render_quality(RenderQuality {
+                        anti_aliasing,
+                        full_display_resolution: true,
+                    });
+                    let projection = if orthographic { "ortho" } else { "persp" };
+                    let texels = if coarse { "coarse" } else { "fine" };
+                    let label = format!("acne_{name}_{projection}_{texels}_{sampling}");
+                    let (on, off) = shadow_pair(&mut renderer, &label, sampling == "refined");
+                    let object = count_non_background(&off, DARK_BACKGROUND, true);
+                    assert!(object > 1000, "{label}: the object is {object} pixels");
+                    let mut acne = 0;
+                    for (a, b) in on.chunks_exact(4).zip(off.chunks_exact(4)) {
+                        let diff = (0..3).map(|c| a[c].abs_diff(b[c])).max().unwrap();
+                        if diff > worst.0 {
+                            worst = (diff, label.clone());
+                        }
+                        acne += (diff > 2) as usize;
+                    }
+                    if is_mesh {
+                        assert!(
+                            acne as f64 <= 0.005 * object as f64,
+                            "{label}: {acne} of {object} pixels darkened (texel {texel:.4} Å)"
+                        );
+                    } else {
+                        assert_eq!(
+                            acne, 0,
+                            "{label}: {acne} pixels darkened (texel {texel:.4} Å)"
+                        );
+                    }
+                }
+            }
+        }
+    }
+    println!(
+        "renderer_gpu: acne detector, largest difference {}/255 ({})",
+        worst.0, worst.1
+    );
+}
+
+/// Testing layer 4, the contact detector (a bias too large): a sphere
+/// resting on a CSG quad, and a sphere resting in the hollow of four
+/// spheres of a layer.
+/// The receiver just outside the resting sphere's silhouette, on the shadow
+/// side, is darker than the same receiver far from it by at least half the
+/// full-shadow difference (the twin at `v = 0` and `v = 1`). Top-down,
+/// orthographic, at the fine and the coarse texel.
+///
+/// Seen from above, that receiver lies under a long chord of the sphere: the
+/// map compares it with the sphere's surface nearest the light, several Å
+/// away, so this bounds the bias only loosely (`CONST_BIAS_TEXELS` × 10
+/// passes it). The tight bound is `a_bond_lying_on_a_quad_shadows_its_contact`.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn a_resting_sphere_shadows_its_contact() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    renderer.set_render_quality(RenderQuality {
+        anti_aliasing: false,
+        full_display_resolution: true,
+    });
+    look_down(&mut renderer, true, 60.0, VIEWPORT_HEIGHT);
+    // (name, resting sphere centre and radius, the layer's sphere radius or
+    // `None` for the quad at z = 0). In the layer, spheres of 1.5 Å touch on
+    // a 3 Å grid, and one of 1.5 Å resting in the hollow at (1.5, 1.5)
+    // touches four of them: its centre is 3/√2 Å above the layer's.
+    let cases: [(&str, DVec3, f64, Option<f64>); 2] = [
+        ("quad", DVec3::new(0.0, 0.0, 2.0), 2.0, None),
+        (
+            "layer",
+            DVec3::new(1.5, 1.5, 3.0 / 2f64.sqrt()),
+            1.5,
+            Some(1.5),
+        ),
+    ];
+    for (name, centre, radius, receiver) in cases {
+        for coarse in [false, true] {
+            let mut scene = ShadowScene::default();
+            add_atom(scene.atoms(), centre, radius as f32, [0.9, 0.4, 0.2]);
+            match receiver {
+                None => scene.main = square(15.0, 0.0, Vec3::from(SHADOW_GREY)),
+                Some(r) => sphere_layer(scene.atoms(), 5, r as f32, 0.0),
+            }
+            if coarse {
+                let far = far_caster(&renderer, 1200.0);
+                add_atom(scene.atoms(), far, 0.5, [0.5, 0.5, 0.5]);
+            }
+            scene.upload(&mut renderer);
+            renderer.set_shading(shadows_of(1.0));
+            let setup = live_setup(&renderer).expect("a setup");
+            let texel = setup.cascades[0].texel_world;
+            let texels = if coarse { "coarse" } else { "fine" };
+            if coarse {
+                assert!(texel >= 0.3, "{name}: coarse texel {texel}");
+            }
+            let (on, _) = shadow_pair(&mut renderer, &format!("contact_{name}_{texels}"), false);
+
+            // Just outside the resting sphere, along the light on screen,
+            // and the same receiver point far from it.
+            let towards = light_on_screen(&renderer, &setup);
+            let radius_px = radius * 10.0;
+            let near_px = screen_of(&renderer, centre) + towards * (radius_px + 3.0);
+            let offset_a = (near_px - screen_of(&renderer, DVec3::ZERO)) / 10.0;
+            let (near_hit, far_hit, normal) = match receiver {
+                None => {
+                    let hit = DVec3::new(offset_a.x, -offset_a.y, 0.0);
+                    (hit, hit + DVec3::new(-9.0, 6.0, 0.0), DVec3::Z)
+                }
+                Some(r) => {
+                    // The layer sphere under that pixel.
+                    let at = DVec2::new(offset_a.x, -offset_a.y);
+                    let c = (at / (2.0 * r)).round() * (2.0 * r);
+                    let (x, y) = (at.x - c.x, at.y - c.y);
+                    let z = (r * r - x * x - y * y).sqrt();
+                    let c = DVec3::new(c.x, c.y, 0.0);
+                    let hit = c + DVec3::new(x, y, z);
+                    // The same point of a layer sphere far to the upper left.
+                    let other = DVec3::new(-6.0 * r, 4.0 * r, 0.0);
+                    (hit, hit + other, (hit - c).normalize())
+                }
+            };
+            let near = luminance_of(pixel_at(&on, &renderer, near_px));
+            let far = luminance_of(pixel_at(&on, &renderer, screen_of(&renderer, far_hit)));
+            let drop = full_shadow_drop(&renderer, near_hit, normal, SHADOW_GREY);
+            println!(
+                "renderer_gpu: contact {name} {texels} (texel {texel:.3} Å): near {near:.1}, \
+                 far {far:.1}, full shadow drop {drop:.1}"
+            );
+            assert!(
+                drop > 10.0,
+                "{name}: the sampled receiver faces away from the key"
+            );
+            assert!(
+                far - near >= 0.5 * drop,
+                "{name} {texels}: beside the contact {near:.1}, far {far:.1}, \
+                 a full shadow takes {drop:.1}"
+            );
+        }
+    }
+}
+
+/// Testing layer 4, the contact detector where it can see the bias: a bond
+/// lying on a CSG quad. A shadow map compares a receiver with the caster's
+/// surface nearest the light, so beside a resting sphere the gap is the
+/// sphere's whole chord (about 5 Å on the shadow side, seen from above) and
+/// no plausible bias leaks there; a stick is thin. Its shadow is a strip
+/// 0.3–0.75 Å from its axis, and the light-facing surface is under 0.9 Å
+/// above the strip's middle along the light. At a texel of about 0.18 Å the
+/// PCF (0.27 Å) still resolves the strip, and the bias (about 0.2 Å) is
+/// well under that gap. The strip's middle is darker than the open quad by
+/// at least half the full-shadow difference. Mutation: `CONST_BIAS_TEXELS`
+/// × 10 (about 0.95 Å here); the strip loses its shadow.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn a_bond_lying_on_a_quad_shadows_its_contact() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    renderer.set_render_quality(RenderQuality {
+        anti_aliasing: false,
+        full_display_resolution: true,
+    });
+    look_down(&mut renderer, true, 60.0, VIEWPORT_HEIGHT);
+    let (_, _, _, probe) = caster_over_layer(&mut renderer, true, false);
+    let light = probe.light_dir;
+    let radius = 0.3;
+    // Across the light's horizontal direction, so the strip lies along it.
+    let along = light.cross(DVec3::Z).normalize() * 6.0;
+    let axis = DVec3::new(0.0, 0.0, radius);
+    let mut scene = ShadowScene {
+        main: square(15.0, 0.0, Vec3::from(SHADOW_GREY)),
+        ..ShadowScene::default()
+    };
+    let mut bonds = BondImpostorMesh::new();
+    bonds.add_bond_with_positions(
+        &(axis - along).as_vec3(),
+        &(axis + along).as_vec3(),
+        radius as f32,
+        &[0.7, 0.7, 0.7],
+    );
+    scene.bonds = Some(bonds);
+    let far = far_caster(&renderer, 610.0);
+    add_atom(scene.atoms(), far, 0.5, [0.5, 0.5, 0.5]);
+    scene.upload(&mut renderer);
+    renderer.set_shading(shadows_of(1.0));
+    let setup = live_setup(&renderer).expect("a setup");
+    let texel = setup.cascades[0].texel_world;
+    assert!((0.15..=0.22).contains(&texel), "texel {texel}");
+    let (on, _) = shadow_pair(&mut renderer, "contact_bond", false);
+    let horizontal = DVec3::new(light.x, light.y, 0.0).normalize();
+    let strip = DVec3::new(0.0, 0.0, 0.0) + horizontal * 0.5;
+    let open = strip - horizontal * 4.0;
+    let near = luminance_of(pixel_at(&on, &renderer, screen_of(&renderer, strip)));
+    let far = luminance_of(pixel_at(&on, &renderer, screen_of(&renderer, open)));
+    let drop = full_shadow_drop(&renderer, strip, DVec3::Z, SHADOW_GREY);
+    println!(
+        "renderer_gpu: contact bond (texel {texel:.3} Å): strip {near:.1}, open {far:.1}, \
+         full shadow drop {drop:.1}"
+    );
+    assert!(drop > 10.0);
+    assert!(
+        far - near >= 0.5 * drop,
+        "the strip beside the bond {near:.1}, the open quad {far:.1}, a full shadow takes {drop:.1}"
+    );
+}
+
+/// The scene of the direction and position checks: a sphere 4 Å above a
+/// receiver (a square layer of spheres or a flat quad), placed so that its
+/// shadow's centre falls on the layer sphere at the origin. With `coarse`,
+/// a far caster makes the texel coarse, and the sphere is larger (4 Å, 8 Å
+/// up), so it still covers many texels and its shadow stays clear of it on
+/// screen.
+fn caster_over_layer(
+    renderer: &mut Renderer,
+    flat: bool,
+    coarse: bool,
+) -> (ShadowScene, DVec3, f64, ShadowSetup) {
+    let (radius, gap) = if coarse { (4.0, 8.0) } else { (1.5, 4.0) };
+    let top = 1.0;
+    // The light direction depends only on the camera, so a first setup
+    // (any casters) gives it.
+    renderer.set_shading(shadows_of(1.0));
+    let mut probe = ShadowScene::default();
+    add_atom(probe.atoms(), DVec3::ZERO, 1.0, SHADOW_GREY);
+    probe.upload(renderer);
+    let light = live_setup(renderer).expect("a setup").light_dir;
+    let height = top + gap + radius;
+    let centre = DVec3::new(0.0, 0.0, top) - light * ((height - top) / -light.z);
+    let mut scene = ShadowScene::default();
+    add_atom(scene.atoms(), centre, radius as f32, [0.9, 0.4, 0.2]);
+    if flat {
+        scene.main = square(18.0, top as f32, Vec3::from(SHADOW_GREY));
+    } else {
+        sphere_layer(scene.atoms(), 8, 1.0, 0.0);
+    }
+    if coarse {
+        let far = far_caster(renderer, 1600.0);
+        add_atom(scene.atoms(), far, 0.5, [0.5, 0.5, 0.5]);
+    }
+    scene.upload(renderer);
+    let setup = live_setup(renderer).expect("a setup");
+    (scene, centre, radius, setup)
+}
+
+/// The luminance drop shadows cause at each pixel: off − on, ≥ 0.
+fn darkening(on: &[u8], off: &[u8]) -> Vec<f32> {
+    on.chunks_exact(4)
+        .zip(off.chunks_exact(4))
+        .map(|(a, b)| {
+            let lum = |p: &[u8]| 0.0722 * p[0] as f32 + 0.7152 * p[1] as f32 + 0.2126 * p[2] as f32;
+            (lum(b) - lum(a)).max(0.0)
+        })
+        .collect()
+}
+
+/// D1, D4, D5, D7: the shadow lands where the light puts it. A sphere 4 Å
+/// above a layer of spheres, looked at from above under *Studio* at strength
+/// 1, in both projections: the layer is darker below and to the right of
+/// the sphere's screen position, not above and to the left; the layer
+/// sphere at the shadow's centre is the twin at `v = 0` there within 2/255,
+/// one far from it the twin at `v = 1`. Mutation: flip `L` in the light
+/// camera.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn a_shadow_falls_below_and_right_of_its_caster_and_is_full_in_its_core() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    renderer.set_render_quality(RenderQuality {
+        anti_aliasing: false,
+        full_display_resolution: true,
+    });
+    for orthographic in [false, true] {
+        look_down(&mut renderer, orthographic, 60.0, VIEWPORT_HEIGHT);
+        let (_, centre, _, _) = caster_over_layer(&mut renderer, false, false);
+        let projection = if orthographic { "ortho" } else { "persp" };
+        let (on, off) = shadow_pair(&mut renderer, &format!("direction_{projection}"), false);
+        let drop = darkening(&on, &off);
+        let caster = screen_of(&renderer, centre);
+        let shadow = screen_of(&renderer, DVec3::new(0.0, 0.0, 1.0));
+        assert!(
+            shadow.x > caster.x && shadow.y > caster.y,
+            "{projection}: the shadow's centre {shadow} is not below and right of the caster {caster}"
+        );
+        let mirrored = caster - (shadow - caster);
+        let mean_drop = |at: DVec2| {
+            let (mut sum, mut n) = (0.0, 0);
+            for (i, d) in drop.iter().enumerate() {
+                let p = DVec2::new(
+                    (i as u32 % VIEWPORT_WIDTH) as f64,
+                    (i as u32 / VIEWPORT_WIDTH) as f64,
+                );
+                if (p - at).length() < 8.0 {
+                    sum += d;
+                    n += 1;
+                }
+            }
+            sum / n as f32
+        };
+        let (below_right, above_left) = (mean_drop(shadow), mean_drop(mirrored));
+        assert!(
+            below_right > 20.0 && above_left < 1.0,
+            "{projection}: darkening below right {below_right}, above left {above_left}"
+        );
+
+        // The layer sphere at the shadow's core, and one far from it, against
+        // the twin.
+        let camera = renderer.camera.clone();
+        for (sphere, key_visibility) in [(DVec3::ZERO, 0.0), (DVec3::new(-12.0, 6.0, 0.0), 1.0)] {
+            let (column, row) =
+                pixel_over(&camera, VIEWPORT_WIDTH, VIEWPORT_HEIGHT, sphere + DVec3::Z);
+            let (origin, dir) =
+                ray_through_pixel(&camera, VIEWPORT_WIDTH, VIEWPORT_HEIGHT, column, row);
+            let hit = ray_sphere(origin, dir, sphere, 1.0).expect("the pixel is on the sphere");
+            let expected = shadow_twin(
+                &renderer,
+                &shadows_of(1.0),
+                hit,
+                hit - sphere,
+                SHADOW_GREY,
+                key_visibility,
+            );
+            assert_near(
+                rgba_at(&on, VIEWPORT_WIDTH, column, row),
+                expected,
+                2.0,
+                &format!("{projection}: layer sphere at {sphere}, v = {key_visibility}"),
+            );
+        }
+    }
+}
+
+/// Testing layer 4, the position check: the darkness-weighted centroid of a
+/// sphere's shadow on a flat layer lies within two output pixels of the CPU
+/// projection of the sphere's centre along `L` onto the layer, in both
+/// projections, at the fine and at a coarse texel. (A flat layer, not the
+/// sphere layer: on bumps the shadow's centroid moves with the surface's
+/// height.) The expectation includes the receiver's normal offset (D7),
+/// which moves a shadow by up to a texel. Mutation: offset the receiver's
+/// light camera (not the caster pass's) by half a texel; at the coarse
+/// texel that is a few pixels. (Offsetting the light camera itself moves
+/// the caster pass and the receiver together and changes nothing.)
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn a_shadow_is_centred_on_the_casters_projection_along_the_light() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    renderer.set_render_quality(RenderQuality {
+        anti_aliasing: false,
+        full_display_resolution: true,
+    });
+    for orthographic in [false, true] {
+        for coarse in [false, true] {
+            look_down(&mut renderer, orthographic, 60.0, VIEWPORT_HEIGHT);
+            let (_, centre, _, setup) = caster_over_layer(&mut renderer, true, coarse);
+            let texel = setup.cascades[0].texel_world;
+            let projection = if orthographic { "ortho" } else { "persp" };
+            let texels = if coarse { "coarse" } else { "fine" };
+            let (on, off) = shadow_pair(
+                &mut renderer,
+                &format!("position_{projection}_{texels}"),
+                false,
+            );
+            let drop = darkening(&on, &off);
+            let (mut sum, mut weight) = (DVec2::ZERO, 0.0);
+            for (i, d) in drop.iter().enumerate() {
+                if *d > 2.0 {
+                    let p = DVec2::new(
+                        (i as u32 % VIEWPORT_WIDTH) as f64 + 0.5,
+                        (i as u32 / VIEWPORT_WIDTH) as f64 + 0.5,
+                    );
+                    sum += p * *d as f64;
+                    weight += *d as f64;
+                }
+            }
+            assert!(weight > 0.0, "{projection} {texels}: no shadow");
+            let centroid = sum / weight;
+            // The receiver looks the map up one texel off the surface along
+            // its normal (`NORMAL_OFFSET_TEXELS · t · sin θ`, D7), which
+            // moves the shadow by as much against it.
+            let sin_theta = (1.0 - setup.light_dir.z * setup.light_dir.z).sqrt();
+            let lookup = DVec3::Z * (texel * sin_theta);
+            let expected = screen_of(&renderer, along_light_onto(&setup, centre - lookup, 1.0));
+            let off_by = (centroid - expected).length();
+            println!(
+                "renderer_gpu: shadow position {projection} {texels} (texel {texel:.3} Å): \
+                 centroid {centroid}, expected {expected}, off by {off_by:.2} px"
+            );
+            assert!(
+                off_by <= 2.0,
+                "{projection} {texels}: the shadow's centroid {centroid} is {off_by:.2} px \
+                 from the caster's projection {expected}"
+            );
+            if coarse {
+                assert!(texel >= 0.4, "{projection}: coarse texel {texel}");
+            }
+        }
+    }
+}
+
+/// D5: a caster above the top edge of the view still shadows the visible
+/// layer: the depth range and the footprint are the casters' sphere's, not
+/// the view's. Mutation: fit the depth range to the view slice's corners
+/// instead; the caster falls out of the map.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn a_caster_off_screen_still_casts() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    renderer.set_render_quality(RenderQuality {
+        anti_aliasing: false,
+        full_display_resolution: true,
+    });
+    for orthographic in [false, true] {
+        look_down(&mut renderer, orthographic, 60.0, VIEWPORT_HEIGHT);
+        let (_, _, _, probe) = caster_over_layer(&mut renderer, true, false);
+        let light = probe.light_dir;
+        // The shadow's centre 6 Å above the view's centre, on the layer; the
+        // caster 20 Å above the layer, back along the light: high enough to
+        // be nearer the light than any corner of the visible slice.
+        let shadow_at = DVec3::new(0.0, 6.0, 0.0);
+        let radius = 1.5;
+        let centre = shadow_at - light * (20.0 / -light.z);
+        let caster_px = screen_of(&renderer, centre);
+        assert!(
+            caster_px.y + radius * 10.0 < 0.0,
+            "the caster is on screen at {caster_px}"
+        );
+        let mut scene = ShadowScene {
+            main: square(60.0, 0.0, Vec3::from(SHADOW_GREY)),
+            ..ShadowScene::default()
+        };
+        add_atom(scene.atoms(), centre, radius as f32, [0.9, 0.4, 0.2]);
+        scene.upload(&mut renderer);
+        let projection = if orthographic { "ortho" } else { "persp" };
+        let (on, off) = shadow_pair(&mut renderer, &format!("offscreen_{projection}"), false);
+        let at = screen_of(&renderer, shadow_at);
+        let got = luminance_of(pixel_at(&off, &renderer, at))
+            - luminance_of(pixel_at(&on, &renderer, at));
+        let drop = full_shadow_drop(&renderer, shadow_at, DVec3::Z, SHADOW_GREY);
+        assert!(
+            got >= 0.5 * drop,
+            "{projection}: the off-screen caster's shadow takes {got:.1} of {drop:.1}"
+        );
+    }
+}
+
+/// D7: a receiver outside the cascade's square is lit. One caster sphere,
+/// mostly beyond the upper left of the view, so that the view's footprint
+/// cuts it and it reaches the square's border,
+/// over a large ghost layer deeper than every caster: ghost pixels whose
+/// light-space position is outside the square and far from the sphere
+/// equal shadows off. Mutation: without the explicit `uv` bounds test the
+/// clamped lookups read the sphere at the border and darken them.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn a_receiver_outside_the_square_is_lit() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    renderer.set_render_quality(RenderQuality {
+        anti_aliasing: false,
+        full_display_resolution: true,
+    });
+    look_down(&mut renderer, true, 60.0, VIEWPORT_HEIGHT);
+    let (radius, sphere) = (3.0, DVec3::new(-17.5, 7.0, 5.0));
+    let ghost_z = -25.0;
+    let mut scene = ShadowScene::default();
+    add_atom(scene.atoms(), sphere, radius as f32, [0.9, 0.4, 0.2]);
+    let mut ghosts = TransparentImpostorMesh::new();
+    for i in -12..=12 {
+        for j in -8..=8 {
+            let centre = Vec3::new(i as f32 * 1.6, j as f32 * 1.6, ghost_z as f32);
+            ghosts.add_atom_quad(&centre, 0.8, &[0.6, 0.8, 0.9], 0.5, 0.0, &[0.0; 4], 0.8);
+        }
+    }
+    scene.ghosts = Some(ghosts);
+    scene.upload(&mut renderer);
+    renderer.set_shading(shadows_of(1.0));
+    let setup = live_setup(&renderer).expect("a setup");
+    let cascade = setup.cascades[0];
+    let (on, off) = shadow_pair(&mut renderer, "outside_square", false);
+
+    // The ghost layer's top under each pixel (orthographic: straight down),
+    // in light space.
+    let half = 0.5 * cascade.side;
+    let sphere_l = setup.to_light_space(sphere).truncate();
+    let sphere_px = screen_of(&renderer, sphere);
+    let mut checked = 0;
+    for row in 0..VIEWPORT_HEIGHT {
+        for column in 0..VIEWPORT_WIDTH {
+            let (x, y) = world_of_pixel((row * VIEWPORT_WIDTH + column) as usize);
+            let point = DVec3::new(x as f64, y as f64, ghost_z + 0.8);
+            let l = setup.to_light_space(point).truncate() - cascade.centre_l;
+            let outside = l.x.abs().max(l.y.abs()) > half + 2.0;
+            let far = (setup.to_light_space(point).truncate() - sphere_l).length() > radius + 3.0;
+            let i = ((row * VIEWPORT_WIDTH + column) * 4) as usize;
+            // A ghost, not the caster in front of it.
+            let on_caster =
+                (DVec2::new(column as f64, row as f64) - sphere_px).length() < radius * 10.0 + 2.0;
+            let is_ghost =
+                !on_caster && count_non_background(&off[i..i + 4], DARK_BACKGROUND, true) == 1;
+            if outside && far && is_ghost {
+                for c in 0..3 {
+                    assert!(
+                        on[i + c].abs_diff(off[i + c]) <= 1,
+                        "pixel ({column}, {row}) outside the square darkened: {:?} vs {:?}",
+                        &on[i..i + 3],
+                        &off[i..i + 3]
+                    );
+                }
+                checked += 1;
+            }
+        }
+    }
+    println!("renderer_gpu: {checked} ghost pixels outside the square checked");
+    assert!(checked > 200, "only {checked} pixels outside the square");
+}
+
+/// D3: casters and receivers of every kind. A bond above a flat layer
+/// casts; a CSG cube above a layer of spheres casts; the flat CSG layer
+/// under an atom receives (the position check's scene, here at the
+/// shadow's core).
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn bonds_and_meshes_cast_and_meshes_receive() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    renderer.set_render_quality(RenderQuality {
+        anti_aliasing: false,
+        full_display_resolution: true,
+    });
+    look_down(&mut renderer, true, 60.0, VIEWPORT_HEIGHT);
+    let (_, atom_centre, _, setup) = caster_over_layer(&mut renderer, true, false);
+    let light = setup.light_dir;
+    let core = DVec3::new(0.0, 0.0, 1.0);
+    let (on, off) = shadow_pair(&mut renderer, "kinds_atom_on_quad", false);
+    let at = screen_of(&renderer, core);
+    let got =
+        luminance_of(pixel_at(&off, &renderer, at)) - luminance_of(pixel_at(&on, &renderer, at));
+    let drop = full_shadow_drop(&renderer, core, DVec3::Z, SHADOW_GREY);
+    assert!(
+        got >= 0.8 * drop,
+        "the quad under an atom: {got:.1} of {drop:.1}"
+    );
+
+    // A bond in the atom's place, across the light's path to the core.
+    let mut scene = ShadowScene {
+        main: square(18.0, 1.0, Vec3::from(SHADOW_GREY)),
+        ..ShadowScene::default()
+    };
+    let across = light.cross(DVec3::Z).normalize() * 3.0;
+    let mut bonds = BondImpostorMesh::new();
+    bonds.add_bond_with_positions(
+        &(atom_centre - across).as_vec3(),
+        &(atom_centre + across).as_vec3(),
+        0.8,
+        &[0.7, 0.7, 0.7],
+    );
+    scene.bonds = Some(bonds);
+    scene.upload(&mut renderer);
+    let (on, off) = shadow_pair(&mut renderer, "kinds_bond_on_quad", false);
+    let got =
+        luminance_of(pixel_at(&off, &renderer, at)) - luminance_of(pixel_at(&on, &renderer, at));
+    assert!(got >= 0.8 * drop, "a bond casts: {got:.1} of {drop:.1}");
+
+    // A cube in the atom's place, over the layer of spheres.
+    let mut scene = ShadowScene {
+        main: translated(
+            cube(1.5, Vec3::new(0.8, 0.3, 0.2), 1.0),
+            atom_centre.as_vec3(),
+        ),
+        ..ShadowScene::default()
+    };
+    sphere_layer(scene.atoms(), 8, 1.0, 0.0);
+    scene.upload(&mut renderer);
+    let (on, off) = shadow_pair(&mut renderer, "kinds_cube_on_layer", false);
+    let got =
+        luminance_of(pixel_at(&off, &renderer, at)) - luminance_of(pixel_at(&on, &renderer, at));
+    let drop = full_shadow_drop(&renderer, core, DVec3::Z, SHADOW_GREY);
+    assert!(
+        got >= 0.8 * drop,
+        "a cube casts on spheres: {got:.1} of {drop:.1}"
+    );
+}
+
+/// D3, D8: transparent content does not cast but does receive. A ghost
+/// sphere and a transparent isosurface above a flat layer leave the image
+/// as with shadows off. In a second scene a ghost inside an atom's shadow
+/// is darker than with shadows off, and one outside it is not. Both scenes
+/// hold a label and a grid, so the transparent draws come after both have
+/// taken group 2: this is what exercises the re-bind (D8). Mutation: skip
+/// the re-bind before the transparent impostors; the draw fails validation.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn transparent_content_receives_but_does_not_cast() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    renderer.set_render_quality(RenderQuality {
+        anti_aliasing: false,
+        full_display_resolution: true,
+    });
+    look_down(&mut renderer, true, 60.0, VIEWPORT_HEIGHT);
+    let mut labels = LabelMesh::new();
+    labels.add_glyph_quad(
+        &Vec3::new(8.0, 6.0, 2.0),
+        [-0.5, -0.5],
+        [0.5, 0.5],
+        [0.0, 0.0],
+        [0.1, 0.1],
+        0.0,
+    );
+    let surface = translated(
+        cube(1.5, Vec3::new(0.3, 0.8, 0.4), 0.5),
+        Vec3::new(6.0, -2.0, 5.0),
+    );
+    let index_count = surface.indices.len() as u32;
+    let mut ghosts = TransparentImpostorMesh::new();
+    ghosts.add_atom_quad(
+        &Vec3::new(-6.0, 2.0, 5.0),
+        1.5,
+        &[0.9, 0.6, 0.2],
+        0.5,
+        0.0,
+        &[0.0; 4],
+        0.5,
+    );
+    let scene = ShadowScene {
+        main: square(18.0, 0.0, Vec3::from(SHADOW_GREY)),
+        ghosts: Some(ghosts),
+        surfaces: TransparentSurfaceMesh {
+            mesh: surface,
+            components: vec![SurfaceComponentRange {
+                first_index: 0,
+                index_count,
+                centroid: Vec3::new(6.0, -2.0, 5.0),
+            }],
+        },
+        labels: Some(labels.clone()),
+        grid: true,
+        ..ShadowScene::default()
+    };
+    scene.upload(&mut renderer);
+    let (on, off) = shadow_pair(&mut renderer, "transparent_casts_nothing", false);
+    let worst = on
+        .iter()
+        .zip(&off)
+        .map(|(a, b)| a.abs_diff(*b))
+        .max()
+        .unwrap();
+    assert!(worst <= 2, "transparent content cast a shadow: {worst}/255");
+
+    // A ghost in an atom's shadow, and one outside it.
+    let (_, _, _, probe) = caster_over_layer(&mut renderer, true, false);
+    let light = probe.light_dir;
+    let ghost_in = DVec3::new(-4.0, 0.0, 3.0);
+    let ghost_out = DVec3::new(6.0, 4.0, 3.0);
+    let caster = ghost_in - light * (5.0 / -light.z);
+    let mut ghosts = TransparentImpostorMesh::new();
+    for centre in [ghost_in, ghost_out] {
+        ghosts.add_atom_quad(
+            &centre.as_vec3(),
+            1.2,
+            &[0.9, 0.6, 0.2],
+            0.5,
+            0.0,
+            &[0.0; 4],
+            0.6,
+        );
+    }
+    let mut scene = ShadowScene {
+        main: square(18.0, 0.0, Vec3::from(SHADOW_GREY)),
+        ghosts: Some(ghosts),
+        labels: Some(labels),
+        grid: true,
+        ..ShadowScene::default()
+    };
+    add_atom(scene.atoms(), caster, 2.0, [0.9, 0.4, 0.2]);
+    scene.upload(&mut renderer);
+    let (on, off) = shadow_pair(&mut renderer, "ghost_receives", false);
+    let lum_drop = |p: DVec3| {
+        let at = screen_of(&renderer, p + DVec3::new(0.0, 0.0, 1.2));
+        luminance_of(pixel_at(&off, &renderer, at)) - luminance_of(pixel_at(&on, &renderer, at))
+    };
+    let (inside, outside) = (lum_drop(ghost_in), lum_drop(ghost_out));
+    assert!(
+        inside > 10.0,
+        "the ghost in the shadow darkened by {inside}"
+    );
+    assert!(
+        outside.abs() <= 1.0,
+        "the ghost outside the shadow changed by {outside}"
+    );
+}
+
+/// D3, D8: the gadget pass receives nothing (its strength is 0): a guide
+/// dot inside a shadow is drawn as with shadows off. And a selected atom
+/// in shadow keeps its rim colour within 2/255: the rim is mixed after the
+/// lighting (DP D4).
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn gadgets_and_rims_are_not_shadowed() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    renderer.set_render_quality(RenderQuality {
+        anti_aliasing: false,
+        full_display_resolution: true,
+    });
+    look_down(&mut renderer, true, 60.0, VIEWPORT_HEIGHT);
+    let (_, caster, caster_radius, setup) = caster_over_layer(&mut renderer, false, false);
+    // The same scene, with the layer sphere at the shadow's core selected,
+    // and a guide dot between the caster and the layer, on the light's path
+    // to that core.
+    let mut scene = ShadowScene::default();
+    add_atom(scene.atoms(), caster, caster_radius as f32, [0.9, 0.4, 0.2]);
+    for i in -8..=8 {
+        for j in -8..=8 {
+            let rim = if i == 0 && j == 0 {
+                RIM_COLOUR
+            } else {
+                [0.0; 4]
+            };
+            let centre = Vec3::new(i as f32 * 2.0, j as f32 * 2.0, 0.0);
+            scene
+                .atoms()
+                .add_atom_quad(&centre, 1.0, &SHADOW_GREY, 0.5, 0.0, &rim);
+        }
+    }
+    let dot = DVec3::new(0.0, 0.0, 1.0) - setup.light_dir * (1.5 / -setup.light_dir.z);
+    let mut gadget_atoms = AtomImpostorMesh::new();
+    add_atom(&mut gadget_atoms, dot, 0.4, [0.9, 0.9, 0.2]);
+    scene.gadget_atoms = Some(gadget_atoms);
+    scene.upload(&mut renderer);
+    let (on, off) = shadow_pair(&mut renderer, "gadget_and_rim", false);
+    let at = screen_of(&renderer, dot);
+    assert_eq!(
+        pixel_at(&on, &renderer, at),
+        pixel_at(&off, &renderer, at),
+        "the guide dot is shadowed"
+    );
+    // The selected atom is in the cast shadow, or this tests nothing: its
+    // inside darkens.
+    let rimmed = DVec3::ZERO;
+    let inside = screen_of(&renderer, rimmed) + DVec2::new(3.0, 3.0);
+    let darkened = luminance_of(pixel_at(&off, &renderer, inside))
+        - luminance_of(pixel_at(&on, &renderer, inside));
+    assert!(
+        darkened > 10.0,
+        "the selected atom is not in the shadow: {darkened}"
+    );
+    let rim = Vec3::new(RIM_COLOUR[0], RIM_COLOUR[1], RIM_COLOUR[2]) * 255.0;
+    for angle in [0.0f64, 120.0, 240.0] {
+        let (s, c) = angle.to_radians().sin_cos();
+        let at = screen_of(&renderer, rimmed) + DVec2::new(c, -s) * (10.0 - 1.5);
+        assert_near(
+            pixel_at(&on, &renderer, at),
+            rim,
+            2.0,
+            &format!("rim at {angle}°"),
+        );
+        let (a, b) = (pixel_at(&on, &renderer, at), pixel_at(&off, &renderer, at));
+        for ch in 0..3 {
+            assert!(
+                a[ch].abs_diff(b[ch]) <= 2,
+                "rim at {angle}°: {a:?} vs {b:?}"
+            );
+        }
+    }
 }

@@ -616,7 +616,13 @@ changes by `offset · tanθ`. So:
 2. **Receiver-plane depth per tap.** Each PCF tap compares against the depth
    of the receiver's tangent plane at that tap's offset, computed from
    `geo_normal` in light space (`∂z/∂x_L = −n_x/n_z`, with `tanθ` clamped at
-   4). A wide filter on a tilted surface then does not self-shadow.
+   100, `RECEIVER_PLANE_MAX_TAN`, only to keep it finite). A wide filter on a
+   tilted surface then does not self-shadow.
+   - *Phase 1 finding:* the plane must follow the receiver's true slope. The
+     first draft clamped it at 4 like the residual below, and a sphere then
+     shadowed itself along its terminator (up to 7/255 in the acne detector):
+     a plane rising at 76° is *not* nearer the light than a sphere that rises
+     faster.
    - On a **convex** receiver (every atom and bond) the surface curves away
      from the light behind its tangent plane, so the plane can only be
      nearer than the stored depth: self-shadowing is impossible.
@@ -1107,6 +1113,34 @@ in DP Phase 4b, **no uncached shadow path ever reaches the app**.
     - *Headlight* with shadow strength 1 is byte-identical to strength 0, and
       `shadow_passes_drawn` stays 0.
 - Effort: 3 d.
+- **Phase 1 notes** (as implemented; the tests are in `shadow_fit_test.rs`,
+  `shader_test.rs`, `shading_test.rs`, `shading_uniform_test.rs`,
+  `thumbnail_test.rs` and `renderer_gpu.rs`, section *Shadows, Phase 1*):
+  - The anchor's mutation as written ("use `v` directly in
+    `key_visibility`") changes nothing, because early out 1 already returns
+    `v = 1` at strength 0. The mutation that ignores the strength altogether
+    (early out 1 removed *and* `v` used directly) does read the placeholder,
+    and the anchor fails on it.
+  - The contact detector's sphere scenes cannot bound the bias from above:
+    seen from above, the receiver beside a resting sphere lies under a long
+    chord of it, and a shadow map compares with the caster's surface nearest
+    the light, several Å away (`CONST_BIAS_TEXELS` × 10 passes them). A bond
+    lying on a quad, at a texel of ~0.18 Å, is the scene that catches that
+    mutation (`a_bond_lying_on_a_quad_shadows_its_contact`).
+  - "Offset the light camera by half a texel" moves the caster pass and the
+    receiver together and so changes nothing; the mutation that matters
+    offsets the receiver's `world_to_clip` only. The position check catches
+    it at a coarse texel (~0.7 Å) once its expectation includes the
+    receiver's normal offset (which moves a shadow by up to a texel) and the
+    coarse caster is large enough to cover many texels. It is done on a
+    flat layer: on a layer of spheres the centroid moves with the surface's
+    height.
+  - The off-screen caster must be nearer the light than every corner of the
+    visible slice for the "fit the depth range to the view" mutation to lose
+    it; 20 Å above the layer is.
+  - A coarse texel comes from a far, hidden caster behind the scene, which
+    stretches the casters' depth extent: in Phase 1 zooming out alone does
+    not change the texel while the casters are in view.
 
 ### Phase 2 — Adaptive cascades
 

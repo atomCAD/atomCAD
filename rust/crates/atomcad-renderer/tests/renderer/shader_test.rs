@@ -480,6 +480,11 @@ fn rust_shading_uniform_layout() -> (Vec<(String, u32)>, u32) {
             offset_of!(ShadingUniform, depth_cue_strength),
         ),
         ("ao_strength", offset_of!(ShadingUniform, ao_strength)),
+        (
+            "shadow_strength",
+            offset_of!(ShadingUniform, shadow_strength),
+        ),
+        ("ao_key", offset_of!(ShadingUniform, ao_key)),
     ];
     (
         members
@@ -672,4 +677,195 @@ fn compose_lit_shader_panics_on_a_host_with_two_markers() {
 fn the_lighting_module_does_not_compile_on_its_own() {
     assert!(naga::front::wgsl::parse_str(LIGHTING_MODULE).is_err());
     assert!(!LIGHTING_MODULE.contains("struct CameraUniform"));
+}
+
+// ---- Shadows, Phase 1 (doc/design_shadows.md D4, D7, D8) ------------------
+
+use atomcad_renderer::shadow_fit::{ShadowCascade, ShadowUniform};
+
+fn layout_of(members: &[(&str, usize)], size: usize) -> (Vec<(String, u32)>, u32) {
+    (
+        members
+            .iter()
+            .map(|(name, offset)| (name.to_string(), *offset as u32))
+            .collect(),
+        size as u32,
+    )
+}
+
+/// D8: every lit shader, as composed, declares the `ShadowCascade` and
+/// `ShadowUniform` of the Rust structs, byte for byte, and binds the
+/// uniform, the map and the comparison sampler at group 2.
+#[test]
+fn every_shadow_uniform_in_wgsl_matches_the_rust_struct() {
+    let cascade = layout_of(
+        &[
+            ("world_to_clip", offset_of!(ShadowCascade, world_to_clip)),
+            ("split_far", offset_of!(ShadowCascade, split_far)),
+            ("texel_world", offset_of!(ShadowCascade, texel_world)),
+            (
+                "filter_radius_uv",
+                offset_of!(ShadowCascade, filter_radius_uv),
+            ),
+            ("depth_range", offset_of!(ShadowCascade, depth_range)),
+        ],
+        std::mem::size_of::<ShadowCascade>(),
+    );
+    let uniform = layout_of(
+        &[
+            ("cascades", offset_of!(ShadowUniform, cascades)),
+            ("count", offset_of!(ShadowUniform, count)),
+            ("blend_fraction", offset_of!(ShadowUniform, blend_fraction)),
+            ("debug_tint", offset_of!(ShadowUniform, debug_tint)),
+            ("_padding", offset_of!(ShadowUniform, _padding)),
+        ],
+        std::mem::size_of::<ShadowUniform>(),
+    );
+    for name in LIT_SHADERS {
+        let path = shader_dir().join(name);
+        assert_eq!(
+            wgsl_struct_layout(&path, "ShadowCascade"),
+            cascade,
+            "{name}"
+        );
+        assert_eq!(
+            wgsl_struct_layout(&path, "ShadowUniform"),
+            uniform,
+            "{name}"
+        );
+        let module = parse(&path);
+        for (global, binding) in [("shadow", 0), ("shadow_map", 1), ("shadow_sampler", 2)] {
+            let (_, var) = module
+                .global_variables
+                .iter()
+                .find(|(_, var)| var.name.as_deref() == Some(global))
+                .unwrap_or_else(|| panic!("{name} has no `{global}`"));
+            assert_eq!(
+                var.binding,
+                Some(naga::ResourceBinding { group: 2, binding }),
+                "{name}: {global}"
+            );
+        }
+    }
+}
+
+/// D4: the caster entry points (`fs_shadow`, and the vertex stages the
+/// caster pipelines use) read neither group 2 nor `shading`: they are drawn
+/// on a layout without group 2, into the map group 2 would sample. From
+/// naga's per-entry-point global usage.
+#[test]
+fn the_caster_entry_points_use_neither_group_2_nor_shading() {
+    let casters: [(&str, &[&str]); 3] = [
+        ("atom_impostor.wgsl", &["vs_main", "fs_shadow"]),
+        ("bond_impostor.wgsl", &["vs_main", "fs_shadow"]),
+        ("mesh.wgsl", &["vs_main"]),
+    ];
+    for (name, entries) in casters {
+        let module = parse(&shader_dir().join(name));
+        let info = naga::valid::Validator::new(
+            naga::valid::ValidationFlags::all(),
+            naga::valid::Capabilities::default(),
+        )
+        .validate(&module)
+        .unwrap_or_else(|e| panic!("{name} does not validate: {e:?}"));
+        for entry in entries {
+            let index = module
+                .entry_points
+                .iter()
+                .position(|e| e.name == *entry)
+                .unwrap_or_else(|| panic!("{name} has no {entry}"));
+            let usage = info.get_entry_point(index);
+            for (handle, var) in module.global_variables.iter() {
+                let forbidden = var.name.as_deref() == Some("shading")
+                    || var.binding.as_ref().is_some_and(|b| b.group == 2);
+                if forbidden {
+                    assert!(
+                        usage[handle].is_empty(),
+                        "{name}: {entry} uses `{}`",
+                        var.name.as_deref().unwrap_or("?")
+                    );
+                }
+            }
+        }
+        // And the lit `fs_main` does sample the map, or this test proves
+        // nothing.
+        if let Some(index) = module.entry_points.iter().position(|e| e.name == "fs_main") {
+            let usage = info.get_entry_point(index);
+            let samples = module.global_variables.iter().any(|(handle, var)| {
+                var.name.as_deref() == Some("shadow_map") && !usage[handle].is_empty()
+            });
+            assert!(samples, "{name}: fs_main does not sample the shadow map");
+        }
+    }
+}
+
+/// D4: `fs_shadow` sits above the per-sample marker, so the cut on an
+/// adapter without per-sample shading keeps it.
+#[test]
+fn fs_shadow_survives_the_per_sample_cut() {
+    for name in ["atom_impostor.wgsl", "bond_impostor.wgsl"] {
+        let composed = source(&shader_dir().join(name));
+        let cut = without_per_sample_shading(&composed);
+        assert!(cut.contains("fn fs_shadow("), "{name}");
+    }
+}
+
+/// The argument list of each call to `function` in `source`, split at its
+/// top-level commas.
+fn call_arguments(source: &str, function: &str) -> Vec<Vec<String>> {
+    let needle = format!("{function}(");
+    let mut calls = Vec::new();
+    for (at, _) in source.match_indices(&needle) {
+        // Not a longer name ending in `function`, and not the definition.
+        let before = source[..at].chars().last();
+        if before.is_some_and(|c| c.is_alphanumeric() || c == '_')
+            || source[..at].trim_end().ends_with("fn")
+        {
+            continue;
+        }
+        let open = at + needle.len();
+        let (mut depth, mut start, mut args) = (0, open, Vec::new());
+        for (i, c) in source[open..].char_indices() {
+            match c {
+                '(' => depth += 1,
+                ')' if depth == 0 => {
+                    args.push(source[start..open + i].trim().to_string());
+                    break;
+                }
+                ')' => depth -= 1,
+                ',' if depth == 0 => {
+                    args.push(source[start..open + i].trim().to_string());
+                    start = open + i + 1;
+                }
+                _ => {}
+            }
+        }
+        args.retain(|a| !a.is_empty());
+        calls.push(args);
+    }
+    calls
+}
+
+/// D7: every `light_surface` call in a host passes, as its `key_visibility`,
+/// `key_visibility(shadow_visibility(…))` of the point it lights, or the
+/// literal `1.0`. A host that forgot the shadow would draw it unshadowed,
+/// silently.
+#[test]
+fn every_light_surface_call_passes_a_shadow_lookup() {
+    for name in LIT_SHADERS {
+        let raw = strip_line_comments(&std::fs::read_to_string(shader_dir().join(name)).unwrap());
+        let calls = call_arguments(&raw, "light_surface");
+        assert!(!calls.is_empty(), "{name} lights nothing");
+        for args in calls {
+            assert_eq!(args.len(), 7, "{name}: {args:?}");
+            let visibility = &args[6];
+            let position = &args[0];
+            assert!(
+                visibility == "1.0"
+                    || visibility
+                        .starts_with(&format!("key_visibility(shadow_visibility({position},")),
+                "{name}: light_surface({position}, …) passes `{visibility}`"
+            );
+        }
+    }
 }

@@ -291,6 +291,24 @@ fn fs_main(input: AtomImpostorVertexOutput) -> AtomFragmentOutput {
     return output;
 }
 
+// The shadow caster (doc/design_shadows.md D4): drawn from the light camera
+// into one layer of the shadow map, depth only. The sphere's analytic depth
+// along the light ray, nothing else: no colour, no lighting, one sample. It
+// must not read `shading` or group 2, and sits above the per-sample marker.
+@fragment
+fn fs_shadow(input: AtomImpostorVertexOutput) -> @builtin(frag_depth) f32 {
+    if dot(input.quad_uv, input.quad_uv) > 1.0 {
+        discard;
+    }
+    let ray = view_ray(input.world_position, input.radius);
+    let t = sphere_hit(ray.origin, ray.dir, input.world_center, input.radius);
+    if t < 0.0 {
+        discard;
+    }
+    let hit_clip = camera.view_proj * vec4<f32>(ray.origin + t * ray.dir, 1.0);
+    return hit_clip.z / hit_clip.w;
+}
+
 // The colour and depth of a surface hit. Shared by `fs_main` and
 // `fs_main_per_sample` (D5), so the two cannot disagree about the surface.
 struct Shaded {
@@ -317,6 +335,7 @@ fn shade_atom_hit(input: AtomImpostorVertexOutput, ray: Ray, t: f32, pixel_world
         input.roughness,
         input.metallic,
         input.exposure,
+        key_visibility(shadow_visibility(hit_point, world_normal)),
     )), hit_point);
 
     // The rim band (D4): a screen-space ring along the silhouette, mixed in

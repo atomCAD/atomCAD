@@ -6,6 +6,7 @@
 // `transparent_impostor.wgsl`, `mesh.wgsl`) at the host's
 // `// ---- lighting ----` marker, after the host's `CameraUniform` and
 // `ModelUniform` declarations. It reads `camera` but does not declare it.
+// It declares group 2, the shadow map (doc/design_shadows.md D8).
 // ============================================================================
 
 const PI: f32 = 3.14159265359;
@@ -27,9 +28,35 @@ struct ShadingUniform {
   depth_cue_span: f32,       // Depth over which it reaches full strength; > 0.
   depth_cue_strength: f32,
   ao_strength: f32,          // Baked ambient occlusion, 0 = off (D7).
+  shadow_strength: f32,      // Shadows, 0 = none (doc/design_shadows.md D1).
+  ao_key: f32,               // AO's share of the key (shadows D10).
 };
 @group(0) @binding(1)
 var<uniform> shading: ShadingUniform;
+
+// The key light's shadow map (doc/design_shadows.md D8). Twins:
+// `shadow_fit::ShadowCascade`, `shadow_fit::ShadowUniform`, whose offsets
+// `shader_test.rs` checks against these structs.
+struct ShadowCascade {
+  world_to_clip: mat4x4<f32>,  // The light camera's view_proj.
+  split_far: f32,              // View depth where the cascade ends (D6).
+  texel_world: f32,            // t, in Å.
+  filter_radius_uv: f32,       // The PCF radius over the square's side.
+  depth_range: f32,            // The light camera's zfar − znear, in Å.
+};
+struct ShadowUniform {
+  cascades: array<ShadowCascade, 4>,
+  count: u32,
+  blend_fraction: f32,
+  debug_tint: u32,             // Colour each receiver by its cascade (D9).
+  _padding: u32,
+};
+@group(2) @binding(0)
+var<uniform> shadow: ShadowUniform;
+@group(2) @binding(1)
+var shadow_map: texture_depth_2d_array;
+@group(2) @binding(2)
+var shadow_sampler: sampler_comparison;
 
 // The exposure of a surface nothing occludes, packed as `(4b, E)` (D10): what
 // a caller without per-atom exposure passes to `light_surface`.
@@ -92,10 +119,9 @@ fn geometry_smith(N: vec3<f32>, V: vec3<f32>, L: vec3<f32>, roughness: f32) -> f
 // ============================================================================
 
 // The mapping from visibility to light. Twins: `shading::AO_FLOOR`,
-// `AO_OPEN`, `AO_KEY`.
+// `AO_OPEN`. The key light's share of the darkening is `shading.ao_key`.
 const AO_FLOOR: f32 = 0.25; // What a fully buried surface keeps.
 const AO_OPEN: f32 = 0.6;   // Visibility above which nothing is taken.
-const AO_KEY: f32 = 0.35;   // The key light's share of the darkening.
 
 // The cosine-weighted visible fraction of the sky around the normal `N`, from
 // the packed `(4b, E)` (D10): `E + 2·dot(b, N)`, with `4b` as delivered.
@@ -114,8 +140,127 @@ fn ao_factors(exposure: vec4<f32>, N: vec3<f32>) -> vec2<f32> {
     let ao = AO_FLOOR + (1.0 - AO_FLOOR) * smoothstep(0.0, AO_OPEN, ao_visibility(exposure, N));
     return vec2<f32>(
         mix(1.0, ao, shading.ao_strength),
-        mix(1.0, ao, shading.ao_strength * AO_KEY),
+        mix(1.0, ao, shading.ao_strength * shading.ao_key),
     );
+}
+
+// ============================================================================
+// Shadows (doc/design_shadows.md D7)
+// ============================================================================
+
+// The bias, in texels of the cascade (D7). Starting values, bounded by the
+// GPU harness's acne and contact detectors.
+const NORMAL_OFFSET_TEXELS: f32 = 1.0; // At most `shadow_fit`'s margin allows.
+const SLOPE_BIAS_TEXELS: f32 = 0.71;
+const CONST_BIAS_TEXELS: f32 = 0.5;
+// The largest receiver slope the residual bias follows, as tan θ.
+const SHADOW_MAX_TAN: f32 = 4.0;
+// The largest slope the receiver plane follows, as tan θ (89.4°). Not the
+// residual's 4: a convex receiver's tangent plane is nearer the light than
+// the surface at every tap only while it has the surface's true slope, and
+// a plane clamped at 76° rises slower than a sphere near its terminator and
+// shadows it (the GPU harness's acne detector). This clamp only keeps the
+// arithmetic finite; the key contributes about 1 % there.
+const RECEIVER_PLANE_MAX_TAN: f32 = 100.0;
+
+// The PCF taps: a fixed 16-point Poisson disk of radius 1, centred.
+fn shadow_tap(i: u32) -> vec2<f32> {
+    var taps = array<vec2<f32>, 16>(
+        vec2<f32>(-0.2992, -0.4867),
+        vec2<f32>(0.9289, 0.3619),
+        vec2<f32>(-0.2741, 0.9356),
+        vec2<f32>(0.7561, -0.5880),
+        vec2<f32>(-0.9193, -0.0445),
+        vec2<f32>(0.0006, 0.2579),
+        vec2<f32>(0.3935, 0.7820),
+        vec2<f32>(-0.8005, 0.5882),
+        vec2<f32>(0.2486, -0.8653),
+        vec2<f32>(0.3185, -0.1971),
+        vec2<f32>(0.9736, -0.1383),
+        vec2<f32>(-0.3670, 0.4965),
+        vec2<f32>(-0.4291, 0.0610),
+        vec2<f32>(-0.1780, -0.9514),
+        vec2<f32>(0.4993, 0.2611),
+        vec2<f32>(-0.8498, -0.4836),
+    );
+    return taps[i];
+}
+
+// 1 where the key light reaches `p`, 0 in full shadow. `geo_normal` is the
+// surface's geometric normal (D7), not a shading normal. Uses only
+// `textureSampleCompareLevel`, so it is valid after a `discard`.
+fn shadow_visibility(p: vec3<f32>, geo_normal: vec3<f32>) -> f32 {
+    // Shadows off, the gadget pass, no casters: nothing is sampled.
+    if shading.shadow_strength <= 0.0 {
+        return 1.0;
+    }
+    let n = normalize(geo_normal);
+    let cos_theta = dot(n, normalize(-shading.key_light_dir));
+    // Facing away from the key, which contributes nothing there anyway.
+    if cos_theta <= 0.0 {
+        return 1.0;
+    }
+    // The first cascade whose slice of view depth reaches `p`; beyond the
+    // last split, the last cascade.
+    let depth = -(camera.view_matrix * vec4<f32>(p, 1.0)).z;
+    var k = 0u;
+    while k + 1u < shadow.count && depth > shadow.cascades[k].split_far {
+        k += 1u;
+    }
+    return cascade_visibility(k, p, n, cos_theta);
+}
+
+// `shadow_visibility` in cascade `k`, for a receiver at `p` with the unit
+// geometric normal `n` at `cos_theta` to the light.
+fn cascade_visibility(k: u32, p: vec3<f32>, n: vec3<f32>, cos_theta: f32) -> f32 {
+    let cascade = shadow.cascades[k];
+    let m = cascade.world_to_clip;
+    let t = cascade.texel_world;
+    let sin_theta = sqrt(max(1.0 - cos_theta * cos_theta, 0.0));
+    let tan_theta = min(sin_theta / cos_theta, SHADOW_MAX_TAN);
+
+    // 1. The normal offset: off the surface by about a texel, nothing where
+    // it faces the light.
+    let q = p + n * (NORMAL_OFFSET_TEXELS * t * sin_theta);
+    // The light camera is orthographic, so w = 1.
+    let clip = (m * vec4<f32>(q, 1.0)).xyz;
+    let uv = vec2<f32>(0.5 + 0.5 * clip.x, 0.5 - 0.5 * clip.y);
+    // Outside the cascade's square nothing casts (D7). The sampler clamps,
+    // so without this test the border texels would repeat out to infinity.
+    if any(uv < vec2<f32>(0.0)) || any(uv > vec2<f32>(1.0)) {
+        return 1.0;
+    }
+
+    // 2. The receiver's tangent plane, as depth per unit uv. The matrix's
+    // first two rows are the light's x and y axes scaled by 2/s.
+    let row_x = vec3<f32>(m[0][0], m[1][0], m[2][0]);
+    let row_y = vec3<f32>(m[0][1], m[1][1], m[2][1]);
+    let side = 2.0 / length(row_x);
+    // Moving the lookup by (du, dv) moves it by du·s along x_L and by −dv·s
+    // along y_L (v runs down); on the plane, depth along L then changes by
+    // (n_x·Δx + n_y·Δy) / cos θ.
+    let slope = vec2<f32>(dot(n, row_x), -dot(n, row_y)) * (0.5 * side) / cos_theta;
+    let slope_tan = length(slope);
+    let clamped = slope * min(1.0, RECEIVER_PLANE_MAX_TAN / max(slope_tan, 1.0e-6));
+    let depth_per_uv = clamped * side / cascade.depth_range;
+
+    // 3. The residual: the comparison's 2×2 footprint.
+    let bias = (SLOPE_BIAS_TEXELS * tan_theta + CONST_BIAS_TEXELS) * t / cascade.depth_range;
+
+    // Fixed-softness PCF: the disk's radius is in Å, not texels.
+    var lit = 0.0;
+    for (var i = 0u; i < 16u; i++) {
+        let offset = shadow_tap(i) * cascade.filter_radius_uv;
+        let reference = clip.z + dot(depth_per_uv, offset) - bias;
+        lit += textureSampleCompareLevel(shadow_map, shadow_sampler, uv + offset, k, reference);
+    }
+    return lit / 16.0;
+}
+
+// The share of the key light that reaches a surface whose shadow lookup gave
+// `v` (D1): exactly 1 at strength 0. Twin: `shading::key_visibility`.
+fn key_visibility(v: f32) -> f32 {
+    return 1.0 - shading.shadow_strength * (1.0 - v);
 }
 
 // ============================================================================
@@ -125,7 +270,9 @@ fn ao_factors(exposure: vec4<f32>, N: vec3<f32>) -> vec2<f32> {
 // The linear (HDR) colour of a surface point under the pass's rig: the key
 // light (diffuse + specular), the diffuse-only fill light and the hemisphere
 // ambient. `exposure` is the packed `(4b, E)` of D10, `FULLY_EXPOSED` for a
-// surface without per-atom exposure. Twin: `shading::light_surface`.
+// surface without per-atom exposure. `key_visibility` is the share of the key
+// that reaches the surface (doc/design_shadows.md D1): `key_visibility(…)` of
+// its shadow lookup, or 1. Twin: `shading::light_surface_exposed`.
 fn light_surface(
     world_position: vec3<f32>,
     normal: vec3<f32>,
@@ -133,6 +280,7 @@ fn light_surface(
     roughness: f32,
     metallic: f32,
     exposure: vec4<f32>,
+    key_visibility: f32,
 ) -> vec3<f32> {
     let V = camera_view_vector(world_position);
     let N = normalize(normal);
@@ -166,7 +314,7 @@ fn light_surface(
     let key_factor = factors.y;
 
     let NdotL = max(dot(N, L), 0.0);
-    let key_contribution = vec3<f32>(shading.key_intensity * key_factor) * NdotL;
+    let key_contribution = vec3<f32>(shading.key_intensity * key_factor * key_visibility) * NdotL;
 
     // Hemisphere ambient: ground below, sky above, around the camera's up.
     // Written as `ground + (sky − ground)·t` rather than `mix`, so a preset

@@ -17,12 +17,21 @@ const BOUNDS: Option<(DVec3, DVec3)> =
     Some((DVec3::new(-5.0, -5.0, -5.0), DVec3::new(5.0, 5.0, 5.0)));
 
 fn content(camera: &Camera, settings: &ShadingSettings) -> ShadingUniform {
-    ShadingUniform::new(camera, BOUNDS, [30, 30, 30], settings, ShadingPass::Content)
+    ShadingUniform::new(
+        camera,
+        BOUNDS,
+        [30, 30, 30],
+        settings,
+        ShadingPass::Content,
+        None,
+    )
 }
 
+/// `doc/design_shadows.md` D8: 96 bytes since the shadows, the two new
+/// fields at 80 and 84 and the struct rounded up to its 16-byte alignment.
 #[test]
-fn shading_uniform_is_80_bytes_without_padding() {
-    assert_eq!(std::mem::size_of::<ShadingUniform>(), 80);
+fn shading_uniform_is_96_bytes_with_the_shadow_fields() {
+    assert_eq!(std::mem::size_of::<ShadingUniform>(), 96);
     // Each vec3 is followed by the f32 that fills its 16-byte slot.
     assert_eq!(offset_of!(ShadingUniform, key_light_dir), 0);
     assert_eq!(offset_of!(ShadingUniform, key_intensity), 12);
@@ -36,6 +45,8 @@ fn shading_uniform_is_80_bytes_without_padding() {
     assert_eq!(offset_of!(ShadingUniform, depth_cue_span), 68);
     assert_eq!(offset_of!(ShadingUniform, depth_cue_strength), 72);
     assert_eq!(offset_of!(ShadingUniform, ao_strength), 76);
+    assert_eq!(offset_of!(ShadingUniform, shadow_strength), 80);
+    assert_eq!(offset_of!(ShadingUniform, ao_key), 84);
 }
 
 /// D2: the renderer's own default is today's look, so every test that sets
@@ -101,7 +112,7 @@ fn only_the_content_pass_with_content_has_a_depth_cue() {
         ao_strength: 0.75,
         ..ShadingSettings::default()
     };
-    let new = |bounds, pass| ShadingUniform::new(&camera, bounds, [0, 0, 0], &settings, pass);
+    let new = |bounds, pass| ShadingUniform::new(&camera, bounds, [0, 0, 0], &settings, pass, None);
 
     assert_eq!(new(BOUNDS, ShadingPass::Content).depth_cue_strength, 0.5);
     assert_eq!(new(BOUNDS, ShadingPass::Gadget).depth_cue_strength, 0.0);
@@ -132,6 +143,7 @@ fn the_background_is_the_clear_colour() {
         [0, 128, 255],
         &ShadingSettings::default(),
         ShadingPass::Content,
+        None,
     );
     assert_eq!(uniform.background, [0.0, 128.0 / 255.0, 1.0]);
 }
@@ -142,6 +154,7 @@ const STUDIO: ShadingSettings = ShadingSettings {
     preset: LightingPreset::Studio,
     depth_cue_strength: 0.0,
     ao_strength: 0.0,
+    shadow_strength: 0.0,
 };
 
 /// `direction` in the camera's frame: (right, up, forward).
@@ -225,6 +238,7 @@ const CUE: ShadingSettings = ShadingSettings {
     preset: LightingPreset::Headlight,
     depth_cue_strength: 0.5,
     ao_strength: 0.0,
+    shadow_strength: 0.0,
 };
 
 fn looking_at(eye: DVec3, target: DVec3, orthographic: bool) -> Camera {
@@ -242,7 +256,14 @@ fn looking_at(eye: DVec3, target: DVec3, orthographic: bool) -> Camera {
 }
 
 fn cue(camera: &Camera, bounds: (DVec3, DVec3)) -> ShadingUniform {
-    ShadingUniform::new(camera, Some(bounds), [0, 0, 0], &CUE, ShadingPass::Content)
+    ShadingUniform::new(
+        camera,
+        Some(bounds),
+        [0, 0, 0],
+        &CUE,
+        ShadingPass::Content,
+        None,
+    )
 }
 
 /// The cue's `f` at a point: strength times the fraction of the span.
@@ -312,7 +333,7 @@ fn the_front_is_clamped_at_the_near_plane() {
 #[test]
 fn without_content_there_is_no_cue() {
     let camera = looking_at(DVec3::new(0.0, 0.0, 50.0), DVec3::ZERO, false);
-    let none = ShadingUniform::new(&camera, None, [0, 0, 0], &CUE, ShadingPass::Content);
+    let none = ShadingUniform::new(&camera, None, [0, 0, 0], &CUE, ShadingPass::Content, None);
     assert_eq!(none.depth_cue_strength, 0.0);
     assert!(none.depth_cue_span > 0.0);
     let point = (DVec3::ONE, DVec3::ONE);
@@ -394,4 +415,40 @@ fn a_cubes_nearest_corner_is_unfogged_at_every_orientation() {
         assert!(fog_at(&camera, &uniform, *nearest) < 1e-5, "eye {eye}");
         assert!(fog_at(&camera, &uniform, *farthest) > 0.1, "eye {eye}");
     }
+}
+
+// ---- Shadows (doc/design_shadows.md D8, Phase 1) ---------------------------
+
+use atomcad_renderer::render_target::TargetSpec;
+use atomcad_renderer::shading::AO_KEY;
+use atomcad_renderer::shadow_fit::shadow_setup;
+
+/// D8: the content pass of a draw with a shadow setup carries the
+/// settings' strength; the gadget pass and a draw without a setup carry 0.
+/// `ao_key` is `AO_KEY` whatever the shadows (D10 is Phase 4's).
+#[test]
+fn only_the_content_pass_with_a_shadow_setup_has_a_shadow_strength() {
+    let camera = looking_at(DVec3::new(0.0, -60.0, 30.0), DVec3::ZERO, false);
+    let settings = ShadingSettings {
+        shadow_strength: 0.7,
+        ..STUDIO
+    };
+    let setup =
+        shadow_setup(&camera, BOUNDS, &settings, &TargetSpec::image(64, 64, 1)).expect("a setup");
+    let new =
+        |pass, shadow| ShadingUniform::new(&camera, BOUNDS, [0, 0, 0], &settings, pass, shadow);
+    assert_eq!(new(ShadingPass::Content, Some(&setup)).shadow_strength, 0.7);
+    assert_eq!(new(ShadingPass::Gadget, Some(&setup)).shadow_strength, 0.0);
+    assert_eq!(new(ShadingPass::Content, None).shadow_strength, 0.0);
+    assert_eq!(new(ShadingPass::Gadget, None).shadow_strength, 0.0);
+    for pass in [ShadingPass::Content, ShadingPass::Gadget] {
+        assert_eq!(new(pass, Some(&setup)).ao_key, AO_KEY);
+        assert_eq!(new(pass, None).ao_key, AO_KEY);
+    }
+    // Without shadows nothing else changes.
+    let without = ShadingUniform {
+        shadow_strength: 0.0,
+        ..new(ShadingPass::Content, Some(&setup))
+    };
+    assert_eq!(without, new(ShadingPass::Content, None));
 }

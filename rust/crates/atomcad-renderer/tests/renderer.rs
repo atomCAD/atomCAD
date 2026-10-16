@@ -55,6 +55,11 @@ mod shading_uniform_test;
 #[path = "renderer/shading_test.rs"]
 mod shading_test;
 
+// Shadows, Phase 1: the shadow fit and its uniform
+// (doc/design_shadows.md D5, D8).
+#[path = "renderer/shadow_fit_test.rs"]
+mod shadow_fit_test;
+
 // Depth perception, Phase 4: the impostor vertices' exposure attributes
 // (doc/design_depth_perception.md D7, Testing layer 1).
 #[path = "renderer/impostor_vertex_layout_test.rs"]

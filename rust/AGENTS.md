@@ -445,6 +445,30 @@ new pipeline goes into `PipelineSet`**, never onto `Renderer`, or it exists
 at one count and panics (or silently misdraws) at the other. Targets are
 sized by the pure `TargetSpec` / `live_target_spec` in `render_target.rs`.
 
+**Shadows** (`doc/design_shadows.md`): the fit is pure (`shadow_fit.rs`), all
+GPU state is in `ShadowMap` (`shadow_map.rs`).
+- Every lit pipeline is on `PipelineLayouts::lit`, whose group 2 is the shadow
+  map, and `draw_to_target` sets each lit pipeline through
+  `set_lit_pipeline`, which re-binds group 2. The labels and the lines bind a
+  different group 2 in the same pass, so a bare `set_pipeline` of a lit
+  pipeline after them fails validation.
+- `ShadowCasterPipelines` is the one exception to "a new pipeline goes into
+  `PipelineSet`": it only ever draws into the single-sample shadow map. Its
+  entry points (`fs_shadow`, the hosts' `vs_main`) must not read `shading` or
+  group 2; `shader_test.rs` checks it.
+- Every `light_surface` call passes `key_visibility(shadow_visibility(p,
+  geometric normal))` or `1.0` (`shader_test.rs`). A new opaque content mesh
+  must also be drawn in the caster passes and added to `caster_bounds`, or it
+  neither casts nor is fitted.
+- The fit and the shading take the key from the one `key_light_direction`; a
+  second derivation puts shadows on lit sides.
+- The receiver-plane slope in `shadow_visibility` is clamped far higher than
+  the residual bias's `tan θ ≤ 4`: clamped at 4, the plane rises slower than a
+  sphere near its terminator and the GPU harness's acne detector fails.
+- The `ShadowUniform` and the map are rewritten before every draw that uses
+  them, so, like the `ShadingUniform`, they are exempt from the per-view pairs
+  rule above.
+
 **The live target is in device pixels** (D7): `Renderer::get_viewport_size`
 is what the texture handed to Flutter measures, twice the logical size on a
 200 % display. Anything authored in logical pixels (a minimum grab radius,

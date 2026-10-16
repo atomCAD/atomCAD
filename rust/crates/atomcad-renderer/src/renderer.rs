@@ -8,11 +8,13 @@ use crate::label_mesh::LabelMesh;
 use crate::line_lod::{LINE_LOD_SLOTS, LodSlot, SlotLod, lod_uniform_entries};
 use crate::line_mesh::LineMesh;
 use crate::live_refinement::{LiveFrameKind, LiveRefinement};
-use crate::pipelines::{PipelineLayouts, PipelineSet, Shaders};
+use crate::pipelines::{PipelineLayouts, PipelineSet, Shaders, ShadowCasterPipelines};
 use crate::render_target::{
     COLOR_FORMAT, DEPTH_FORMAT, RenderQuality, RenderTarget, TargetSpec, ViewportRequest,
 };
-use crate::shading_uniform::{ShadingPass, ShadingSettings, ShadingUniform};
+use crate::shading_uniform::{LightingPreset, ShadingPass, ShadingSettings, ShadingUniform};
+use crate::shadow_fit::shadow_setup;
+use crate::shadow_map::{ShadowCasters, ShadowMap};
 use crate::surface_sort::sorted_component_order;
 use crate::thumbnail::ThumbnailBackground;
 use crate::transparent_impostor_mesh::TransparentImpostorMesh;
@@ -215,6 +217,11 @@ pub struct Renderer {
     /// The single-sample pipelines: the thumbnail, the export, and the live
     /// target with anti-aliasing off.
     offscreen_pipelines: PipelineSet,
+    /// The pipelines that draw the casters into the shadow map
+    /// (`doc/design_shadows.md` D4): one sample, whatever the target.
+    shadow_caster_pipelines: ShadowCasterPipelines,
+    /// All shadow GPU state (`doc/design_shadows.md` D9).
+    shadow_map: ShadowMap,
     /// The live viewport as last requested by `set_viewport_request`: its
     /// size in logical pixels and the display's device pixel ratio (D7), and
     /// the quality settings pushed in from the preferences (D8). The live
@@ -302,6 +309,10 @@ pub struct Renderer {
     /// Axis-aligned bounds of the content meshes on the GPU, recorded at
     /// upload (D4). `None` when the content is empty.
     content_bounds: Option<(DVec3, DVec3)>,
+    /// Axis-aligned bounds of the shadow casters on the GPU, recorded at
+    /// upload next to `content_bounds` (`doc/design_shadows.md` D3): what
+    /// the shadow map is fitted to. `None` when nothing casts.
+    caster_bounds: Option<(DVec3, DVec3)>,
     /// Which network the content meshes on the GPU belong to, as
     /// `(document id, network name)` (D2). The document id is the structure
     /// designer's `DocumentId`, which this crate cannot name. Set by every
@@ -523,6 +534,14 @@ impl Renderer {
         };
         let content_shading_buffer = shading_buffer("Content Shading Buffer");
         let gadget_shading_buffer = shading_buffer("Gadget Shading Buffer");
+        // Before the pipeline layouts: it owns the lit pipelines' group 2
+        // (`doc/design_shadows.md` D9).
+        let shadow_map = ShadowMap::new(
+            &device,
+            &queue,
+            &camera_bind_group_layout,
+            &content_shading_buffer,
+        );
         let view_bind_group = |label, camera: &wgpu::Buffer, shading: &wgpu::Buffer| {
             device.create_bind_group(&wgpu::BindGroupDescriptor {
                 layout: &camera_bind_group_layout,
@@ -565,10 +584,21 @@ impl Renderer {
         // Model bind group layout is already created above
         // Each mesh now has its own model buffer and bind group
 
-        // Pipeline layout - shared between triangle and line pipelines
+        // `[camera, model]`: the shadow casters.
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("Pipeline Layout"),
             bind_group_layouts: &[&camera_bind_group_layout, &model_bind_group_layout],
+            push_constant_ranges: &[],
+        });
+        // `[camera, model, shadow map]`: every lit pipeline
+        // (`doc/design_shadows.md` D8).
+        let lit_pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: Some("Lit Pipeline Layout"),
+            bind_group_layouts: &[
+                &camera_bind_group_layout,
+                &model_bind_group_layout,
+                shadow_map.bind_group_layout(),
+            ],
             push_constant_ranges: &[],
         });
 
@@ -605,9 +635,11 @@ impl Renderer {
         let shaders = Shaders::new(&device, per_sample_shading);
         let layouts = PipelineLayouts {
             main: pipeline_layout,
+            lit: lit_pipeline_layout,
             line: line_pipeline_layout,
             label: label_pipeline_layout,
         };
+        let shadow_caster_pipelines = ShadowCasterPipelines::new(&device, &layouts, &shaders);
         let live_pipelines = msaa_supported.then(|| {
             PipelineSet::new(
                 &device,
@@ -625,6 +657,8 @@ impl Renderer {
             queue,
             live_pipelines,
             offscreen_pipelines,
+            shadow_caster_pipelines,
+            shadow_map,
             viewport_request,
             quality,
             refinement: LiveRefinement::new(),
@@ -660,6 +694,7 @@ impl Renderer {
             view_bind_groups,
             shading: ShadingSettings::default(),
             content_bounds: None,
+            caster_bounds: None,
             content_owner: None,
             render_mutex: Mutex::new(()),
         }
@@ -921,9 +956,19 @@ impl Renderer {
     /// (`doc/design_depth_perception.md` D8). Pushed in from the api on every
     /// refresh, so it bumps the live generation only when the value changes.
     /// Applies to every view: thumbnails and exports look like the screen.
+    ///
+    /// Creates the shadow map when shadows turn on (a strength above 0 under
+    /// *Studio*) and drops it when they turn off (`doc/design_shadows.md`
+    /// D9).
     pub fn set_shading(&mut self, settings: ShadingSettings) {
         if settings != self.shading {
             self.shading = settings;
+            let shadows_on =
+                settings.shadow_strength > 0.0 && settings.preset == LightingPreset::Studio;
+            {
+                let _lock = self.render_mutex.lock().unwrap();
+                self.shadow_map.set_enabled(&self.device, shadows_on);
+            }
             self.bump_live_generation();
         }
     }
@@ -1023,6 +1068,8 @@ impl Renderer {
                 transparent_impostor_mesh,
                 &isosurface_transparent_mesh.mesh,
             );
+            self.caster_bounds =
+                crate::thumbnail::caster_bounds(main_mesh, atom_impostor_mesh, bond_impostor_mesh);
 
             self.main_mesh
                 .update_from_mesh(&self.device, main_mesh, "Main");
@@ -1377,6 +1424,23 @@ impl Renderer {
         self.content_owner.as_ref()
     }
 
+    /// Bounds of the shadow casters on the GPU (`doc/design_shadows.md` D3);
+    /// `None` when nothing casts.
+    pub fn caster_bounds(&self) -> Option<(DVec3, DVec3)> {
+        self.caster_bounds
+    }
+
+    /// How many shadow cascade passes this renderer has recorded
+    /// (`doc/design_shadows.md` D9). Tests assert on it, never on timing.
+    pub fn shadow_passes_drawn(&self) -> u64 {
+        self.shadow_map.passes_drawn()
+    }
+
+    /// Whether the shadow map exists: shadows are on (D9).
+    pub fn shadow_map_allocated(&self) -> bool {
+        self.shadow_map.allocated()
+    }
+
     /// Lazily re-sorts the transparent impostors back-to-front for `view`
     /// before a pass draws them. Recomputes and re-uploads the index buffer
     /// only when the view has changed or a new transparent mesh was uploaded
@@ -1432,7 +1496,10 @@ impl Renderer {
     /// Writes both passes' `ShadingUniform` first
     /// (`doc/design_depth_perception.md` D2): it depends on the background,
     /// which two draws of one view may not share (the thumbnail), so it is
-    /// written for every draw rather than kept per view.
+    /// written for every draw rather than kept per view. Then the shadow
+    /// map's caster passes, when the draw has a shadow setup
+    /// (`doc/design_shadows.md` D4), ahead of the main pass in the same
+    /// submit.
     #[allow(clippy::too_many_arguments)]
     fn draw_to_target(
         &self,
@@ -1443,6 +1510,10 @@ impl Renderer {
         background_color_rgb: [u8; 3],
         flags: PassFlags,
     ) -> Vec<u8> {
+        // No setup without a map: the map exists exactly while the settings
+        // ask for shadows, so this only guards the invariant.
+        let shadow = shadow_setup(camera, self.caster_bounds, &self.shading, &target.spec())
+            .filter(|_| self.shadow_map.allocated());
         for (pass, buffer) in [
             (ShadingPass::Content, &self.content_shading_buffer),
             (ShadingPass::Gadget, &self.gadget_shading_buffer),
@@ -1453,6 +1524,7 @@ impl Renderer {
                 background_color_rgb,
                 &self.shading,
                 pass,
+                shadow.as_ref(),
             );
             self.queue
                 .write_buffer(buffer, 0, bytemuck::cast_slice(&[shading]));
@@ -1482,6 +1554,21 @@ impl Renderer {
             .create_command_encoder(&CommandEncoderDescriptor {
                 label: Some("Command Encoder"),
             });
+
+        self.main_mesh.set_identity_transform(&self.queue);
+        self.atom_impostor_mesh.set_identity_transform(&self.queue);
+        self.bond_impostor_mesh.set_identity_transform(&self.queue);
+        self.shadow_map.prepare(
+            &self.queue,
+            &mut encoder,
+            shadow.as_ref(),
+            &ShadowCasters {
+                pipelines: &self.shadow_caster_pipelines,
+                main_mesh: &self.main_mesh,
+                atom_impostor_mesh: &self.atom_impostor_mesh,
+                bond_impostor_mesh: &self.bond_impostor_mesh,
+            },
+        );
 
         // Convert background color from 0-255 RGB to 0.0-1.0 range
         let bg_color = Color {
@@ -1514,19 +1601,17 @@ impl Renderer {
 
             // Each mesh has its own model bind group (group 1).
 
-            // Set identity transform for main mesh and render it
-            self.main_mesh.set_identity_transform(&self.queue);
-            render_pass.set_pipeline(&pipelines.triangle);
+            // The triangle mesh. Its identity transform, and the opaque
+            // impostors', were set above for the caster passes.
+            self.set_lit_pipeline(&mut render_pass, &pipelines.triangle);
             self.render_mesh(&mut render_pass, &self.main_mesh);
 
             // Render impostor meshes (if they have data)
             // Note: Impostor meshes are only populated when AtomicRenderingMethod::Impostors is selected
-            self.atom_impostor_mesh.set_identity_transform(&self.queue);
-            render_pass.set_pipeline(atom_impostor);
+            self.set_lit_pipeline(&mut render_pass, atom_impostor);
             self.render_mesh(&mut render_pass, &self.atom_impostor_mesh);
 
-            self.bond_impostor_mesh.set_identity_transform(&self.queue);
-            render_pass.set_pipeline(bond_impostor);
+            self.set_lit_pipeline(&mut render_pass, bond_impostor);
             self.render_mesh(&mut render_pass, &self.bond_impostor_mesh);
 
             if flags.editing_aids {
@@ -1572,7 +1657,7 @@ impl Renderer {
             // `resort_transparent_impostors` (called before this draw).
             self.transparent_impostor_mesh
                 .set_identity_transform(&self.queue);
-            render_pass.set_pipeline(transparent_impostor);
+            self.set_lit_pipeline(&mut render_pass, transparent_impostor);
             self.render_mesh(&mut render_pass, &self.transparent_impostor_mesh);
 
             // Transparent isosurfaces last of all. Nothing orders fragments
@@ -1608,21 +1693,23 @@ impl Renderer {
                 &[],
             );
 
-            // Render gadget triangles
+            // Render gadget triangles. The lit pipelines need group 2 here
+            // too; the gadget pass's shadow strength is 0, so it is never
+            // sampled.
             self.lightweight_mesh.set_identity_transform(&self.queue);
-            gadget_render_pass.set_pipeline(&pipelines.triangle);
+            self.set_lit_pipeline(&mut gadget_render_pass, &pipelines.triangle);
             self.render_mesh(&mut gadget_render_pass, &self.lightweight_mesh);
 
             // Render gadget atom impostors (guide dots, always on top)
             self.gadget_atom_impostor_mesh
                 .set_identity_transform(&self.queue);
-            gadget_render_pass.set_pipeline(atom_impostor);
+            self.set_lit_pipeline(&mut gadget_render_pass, atom_impostor);
             self.render_mesh(&mut gadget_render_pass, &self.gadget_atom_impostor_mesh);
 
             // Render gadget bond impostors (guide dot connectors, always on top)
             self.gadget_bond_impostor_mesh
                 .set_identity_transform(&self.queue);
-            gadget_render_pass.set_pipeline(bond_impostor);
+            self.set_lit_pipeline(&mut gadget_render_pass, bond_impostor);
             self.render_mesh(&mut gadget_render_pass, &self.gadget_bond_impostor_mesh);
 
             // Gadget lines last, for the same reason as in the main pass (D6):
@@ -1726,24 +1813,33 @@ impl Renderer {
             && !self.isosurface_components.is_empty();
 
         if self.surface_transparency_mode == SurfaceTransparencyMode::SinglePass {
-            render_pass.set_pipeline(&pipelines.surface_no_cull);
+            self.set_lit_pipeline(render_pass, &pipelines.surface_no_cull);
             render_pass.draw_indexed(0..mesh.num_indices, 0, 0..1);
         } else if sorted {
             for index in sorted_component_order(&self.isosurface_components, view) {
                 let component = self.isosurface_components[index];
                 let range = component.first_index..component.first_index + component.index_count;
                 // Back faces, then front faces, within this component.
-                render_pass.set_pipeline(&pipelines.surface_front_cull);
+                self.set_lit_pipeline(render_pass, &pipelines.surface_front_cull);
                 render_pass.draw_indexed(range.clone(), 0, 0..1);
-                render_pass.set_pipeline(&pipelines.surface_back_cull);
+                self.set_lit_pipeline(render_pass, &pipelines.surface_back_cull);
                 render_pass.draw_indexed(range, 0, 0..1);
             }
         } else {
-            render_pass.set_pipeline(&pipelines.surface_front_cull);
+            self.set_lit_pipeline(render_pass, &pipelines.surface_front_cull);
             render_pass.draw_indexed(0..mesh.num_indices, 0, 0..1);
-            render_pass.set_pipeline(&pipelines.surface_back_cull);
+            self.set_lit_pipeline(render_pass, &pipelines.surface_back_cull);
             render_pass.draw_indexed(0..mesh.num_indices, 0, 0..1);
         }
+    }
+
+    /// Sets a lit pipeline and binds its group 2, the shadow map
+    /// (`doc/design_shadows.md` D8). Every lit `set_pipeline` goes through
+    /// here: the labels and the lines bind a different group 2 in the same
+    /// pass, so a lit draw after them would otherwise find theirs.
+    fn set_lit_pipeline(&self, render_pass: &mut RenderPass<'_>, pipeline: &RenderPipeline) {
+        render_pass.set_pipeline(pipeline);
+        render_pass.set_bind_group(2, self.shadow_map.bind_group(), &[]);
     }
 
     /// Draws `meshes` with the line pipeline. Group 2 (the mesh's line LOD

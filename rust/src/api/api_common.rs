@@ -75,6 +75,8 @@ pub fn to_shading_settings(
         } else {
             0.0
         },
+        // No preference yet (`doc/design_shadows.md` Phase 4): off.
+        shadow_strength: 0.0,
     }
 }
 
