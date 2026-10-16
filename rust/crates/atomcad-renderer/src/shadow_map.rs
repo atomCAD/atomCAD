@@ -2,8 +2,9 @@
 //! the map, its placeholder, the comparison sampler, group 2 of the lit
 //! pipelines, the `ShadowUniform`, the light cameras and the caster passes.
 //!
-//! Phase 1 re-renders the map on every draw that has a shadow setup; the
-//! cache by the remembered setup comes later.
+//! The map is cached by what it holds: it remembers the `ShadowSetup` it
+//! was rendered for, and a draw records caster passes only when its setup
+//! differs. A content upload forgets it (`invalidate`), as does a new map.
 
 use crate::gpu_mesh::GPUMesh;
 use crate::pipelines::ShadowCasterPipelines;
@@ -33,9 +34,13 @@ struct ShadowMapTexture {
     layer_views: Vec<TextureView>,
 }
 
-/// What a draw changes (D9): the pass counter, under `&self`.
+/// What a draw changes (D9), under `&self`: the setup the map was last
+/// rendered for, and the pass counter.
 #[derive(Default)]
 struct ShadowState {
+    /// What the map holds, or `None` when it holds nothing usable: no map,
+    /// a new map, or casters replaced since it was rendered.
+    rendered_for: Option<ShadowSetup>,
     passes_drawn: u64,
 }
 
@@ -238,6 +243,8 @@ impl ShadowMap {
                 layer_views,
             }
         });
+        // A new map holds nothing yet, and a dropped one nothing at all.
+        self.state.get_mut().unwrap().rendered_for = None;
         let view = self
             .map
             .as_ref()
@@ -262,15 +269,23 @@ impl ShadowMap {
         self.map.is_some()
     }
 
+    /// Forgets what the map holds, so the next draw with shadows re-renders
+    /// it (D9). From the upload that replaces the caster meshes.
+    pub fn invalidate(&self) {
+        self.state.lock().unwrap().rendered_for = None;
+    }
+
     /// How many cascade passes have been recorded (D9), for tests.
     pub fn passes_drawn(&self) -> u64 {
         self.state.lock().unwrap().passes_drawn
     }
 
     /// Before a draw: writes the `ShadowUniform` for `setup` and, when there
-    /// is one, the light cameras and one caster pass per cascade into
-    /// `encoder`, ahead of the main pass in the same submit (D4). A setup
-    /// is only ever passed while the map exists.
+    /// is one the map was not last rendered for, the light cameras and one
+    /// caster pass per cascade into `encoder`, ahead of the main pass in the
+    /// same submit (D4, D9). A setup is only ever passed while the map
+    /// exists. The setup is remembered before the submit, which the caller
+    /// makes within the same draw.
     pub fn prepare(
         &self,
         queue: &Queue,
@@ -287,6 +302,9 @@ impl ShadowMap {
             return;
         };
         let mut state = self.state.lock().unwrap();
+        if state.rendered_for.as_ref() == Some(setup) {
+            return;
+        }
         for k in 0..setup.cascades.len().min(MAX_CASCADES) {
             queue.write_buffer(
                 &self.camera_buffers[k],
@@ -317,6 +335,7 @@ impl ShadowMap {
             }
             state.passes_drawn += 1;
         }
+        state.rendered_for = Some(setup.clone());
     }
 }
 

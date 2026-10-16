@@ -465,9 +465,15 @@ GPU state is in `ShadowMap` (`shadow_map.rs`).
 - The receiver-plane slope in `shadow_visibility` is clamped far higher than
   the residual bias's `tan θ ≤ 4`: clamped at 4, the plane rises slower than a
   sphere near its terminator and the GPU harness's acne detector fails.
-- The `ShadowUniform` and the map are rewritten before every draw that uses
-  them, so, like the `ShadingUniform`, they are exempt from the per-view pairs
-  rule above.
+- The `ShadowUniform` is rewritten before every draw, and the map before
+  every draw whose `ShadowSetup` differs from the one it remembers (D9), so,
+  like the `ShadingUniform`, both are exempt from the per-view pairs rule
+  above. Anything that changes what the caster passes draw without changing
+  the setup must forget it: the content upload calls `ShadowMap::invalidate`,
+  and a new map remembers nothing. A new caster mesh replaced elsewhere needs
+  the same call, or the map keeps its old shadows.
+- The shadows' frame cost is measured by `tests/renderer_gpu_timing.rs`
+  (release build, prints only), not by the GPU harness.
 
 **The live target is in device pixels** (D7): `Renderer::get_viewport_size`
 is what the texture handed to Flutter measures, twice the logical size on a

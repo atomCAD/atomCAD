@@ -3513,8 +3513,9 @@ fn far_caster(renderer: &Renderer, depth: f64) -> DVec3 {
 }
 
 /// D4, D8, D9: with shadows on under *Studio*, the live, the thumbnail and
-/// the export path each record one caster pass (one cascade) and draw
-/// without a validation error; the map exists exactly while shadows are on.
+/// the export path draw without a validation error, each recording one
+/// caster pass (one cascade) unless the map already holds its setup (D9);
+/// the map exists exactly while shadows are on.
 /// Under *Headlight* a strength of 1 draws nothing and is byte-identical to
 /// strength 0 (D1).
 #[test]
@@ -3548,13 +3549,34 @@ fn shadows_draw_through_every_path_and_count_their_passes() {
     let live = renderer.render(DARK_BACKGROUND);
     assert_eq!(renderer.shadow_passes_drawn(), before + 1);
     dump("shadow_paths_live", &live);
+    // The offscreen draws record a pass only where their setup differs from
+    // the one the map holds (D9). This compact scene is wholly in every
+    // view, so the footprint is the casters' square whatever the aspect,
+    // and every path may well share the live setup.
+    let live_fit = live_setup(&renderer).expect("a setup");
     let camera = renderer.camera.clone();
+    let mut square = camera.clone();
+    square.aspect = 1.0;
+    let thumbnail_fit = setup_for(
+        &renderer,
+        &square,
+        &TargetSpec::image(THUMBNAIL_SIZE, THUMBNAIL_SIZE, THUMBNAIL_SUPERSAMPLING),
+    );
+    let mut wide = camera.clone();
+    wide.aspect = 200.0 / 120.0;
+    let export_fit = setup_for(
+        &renderer,
+        &wide,
+        &TargetSpec::image(200, 120, IMAGE_EXPORT_SUPERSAMPLING),
+    );
+    let after_thumbnail = before + 1 + passes_after(&live_fit, &thumbnail_fit);
+    let after_export = after_thumbnail + passes_after(&thumbnail_fit, &export_fit);
     let thumbnail = renderer.render_thumbnail(&camera);
-    // Two backgrounds, no cache yet (Phase 3): two passes.
-    assert_eq!(renderer.shadow_passes_drawn(), before + 3);
+    // Two backgrounds, one setup: the second draw finds the map cached.
+    assert_eq!(renderer.shadow_passes_drawn(), after_thumbnail);
     dump("shadow_paths_thumbnail", &thumbnail);
     let image = renderer.render_image(200, 120, DARK_BACKGROUND);
-    assert_eq!(renderer.shadow_passes_drawn(), before + 4);
+    assert_eq!(renderer.shadow_passes_drawn(), after_export);
     dump("shadow_paths_export", &image);
     // The atom over the quad shadows it: the live frame differs from today's.
     assert_ne!(live, plain);
@@ -3565,7 +3587,7 @@ fn shadows_draw_through_every_path_and_count_their_passes() {
         "turning shadows off frees the map"
     );
     renderer.render(DARK_BACKGROUND);
-    assert_eq!(renderer.shadow_passes_drawn(), before + 4);
+    assert_eq!(renderer.shadow_passes_drawn(), after_export);
 }
 
 /// The acne detector's lone objects, by name: (name, is a mesh).
@@ -4957,3 +4979,308 @@ fn a_shadow_in_a_later_cascade_is_centred_on_the_casters_projection() {
 
 /// `shadow_fit::SHADOW_BLEND_FRACTION`, for the band's rows.
 const SHADOW_BLEND_FRACTION_GPU: f64 = atomcad_renderer::shadow_fit::SHADOW_BLEND_FRACTION;
+
+// ---- Shadows, Phase 3: the cache (doc/design_shadows.md D9) ----------------
+//
+// The map remembers the setup it was last rendered for: a draw records
+// caster passes only when its setup differs, and the upload that replaces
+// the casters, or a new map, forgets it. Asserted on `shadow_passes_drawn`,
+// never on timing. Every image the earlier phases draw is byte-identical to
+// Phase 2's (the anchor): the cache changes what is drawn, never how.
+
+use atomcad_renderer::render_target::TargetSpec;
+use atomcad_renderer::thumbnail::THUMBNAIL_SUPERSAMPLING;
+
+/// The cache scene's caster: 1.5 Å above the layer's tops.
+const CACHE_CASTER: DVec3 = DVec3::new(0.0, 0.0, 4.0);
+/// The same caster moved inside the casters' bounds, which stay the same.
+const CACHE_CASTER_MOVED: DVec3 = DVec3::new(3.0, -2.0, 4.0);
+
+/// A sphere at `caster` over a 50 Å layer of spheres, looked down on in
+/// perspective with shadows on at strength 1. The layer runs past every side
+/// of the view, so the view's frustum cuts the footprint (D5) and an
+/// offscreen target of another aspect gets another setup.
+fn upload_cache_scene(renderer: &mut Renderer, caster: DVec3) {
+    let mut scene = ShadowScene::default();
+    sphere_layer(scene.atoms(), 12, 1.0, 0.0);
+    add_atom(scene.atoms(), caster, 1.5, [0.9, 0.4, 0.2]);
+    scene.upload(renderer);
+    look_down(renderer, false, 40.0, VIEWPORT_HEIGHT);
+    renderer.set_shading(shadows_of(1.0));
+}
+
+/// The setup a draw of `camera` into a target of `spec` computes.
+fn setup_for(renderer: &Renderer, camera: &Camera, spec: &TargetSpec) -> ShadowSetup {
+    shadow_setup(camera, renderer.caster_bounds(), &renderer.shading(), spec).expect("a setup")
+}
+
+/// How many caster passes a draw with `setup` records: one per cascade.
+fn passes_of(setup: &ShadowSetup) -> u64 {
+    setup.cascades.len() as u64
+}
+
+/// How many caster passes a draw with `setup` records after one with
+/// `remembered`, nothing having been uploaded between: none when the two
+/// are equal (the map is cached), one per cascade otherwise.
+fn passes_after(remembered: &ShadowSetup, setup: &ShadowSetup) -> u64 {
+    if remembered == setup {
+        0
+    } else {
+        passes_of(setup)
+    }
+}
+
+/// The live view drawn as a normal frame, asserted to be one: a kept frame
+/// would record no pass whatever the cache did.
+fn render_normal(renderer: &mut Renderer, background: [u8; 3]) -> Vec<u8> {
+    let pixels = renderer.render(background);
+    assert_eq!(renderer.last_frame_kind(), Some(LiveFrameKind::Normal));
+    pixels
+}
+
+/// D9: a second draw of an unchanged view records no shadow pass, on the
+/// same background or another, and draws the same shadows.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn an_unchanged_view_records_its_shadow_passes_once() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    upload_cache_scene(&mut renderer, CACHE_CASTER);
+    let passes = passes_of(&live_setup(&renderer).expect("a setup"));
+    let before = renderer.shadow_passes_drawn();
+    let first = render_normal(&mut renderer, DARK_BACKGROUND);
+    assert_eq!(renderer.shadow_passes_drawn(), before + passes);
+    let second = render_normal(&mut renderer, DARK_BACKGROUND);
+    assert_eq!(
+        renderer.shadow_passes_drawn(),
+        before + passes,
+        "an unchanged view re-rendered the shadow map"
+    );
+    assert!(first == second, "the cached map drew other shadows");
+    dump("shadow_cache_unchanged", &second);
+    // The background is not part of the setup.
+    render_normal(&mut renderer, LIGHT_BACKGROUND);
+    assert_eq!(renderer.shadow_passes_drawn(), before + passes);
+}
+
+/// D9: the refined frame drawn once the view rests records no shadow pass,
+/// and draws what a freshly rendered map gives.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn the_refined_frame_after_a_rest_records_no_shadow_pass() {
+    let Some(mut renderer) = try_refining_renderer() else {
+        return;
+    };
+    renderer.set_refine_delay(Some(Duration::ZERO));
+    upload_cache_scene(&mut renderer, CACHE_CASTER);
+    let passes = passes_of(&live_setup(&renderer).expect("a setup"));
+    let before = renderer.shadow_passes_drawn();
+    render_normal(&mut renderer, DARK_BACKGROUND);
+    assert_eq!(renderer.shadow_passes_drawn(), before + passes);
+    let refined = renderer.render(DARK_BACKGROUND);
+    assert_eq!(renderer.last_frame_kind(), Some(LiveFrameKind::Refined));
+    assert_eq!(
+        renderer.shadow_passes_drawn(),
+        before + passes,
+        "the refined frame re-rendered the shadow map"
+    );
+    dump("shadow_cache_refined", &refined);
+
+    // Uploading the same content again forgets the map; the refined frame
+    // drawn over the re-rendered map is the same.
+    upload_cache_scene(&mut renderer, CACHE_CASTER);
+    let fresh = renderer.render_still(DARK_BACKGROUND);
+    assert_eq!(renderer.shadow_passes_drawn(), before + 2 * passes);
+    assert!(
+        refined == fresh,
+        "the cached refined frame differs from a fresh one"
+    );
+}
+
+/// D9: a camera move records the new setup's passes; a content upload
+/// records them even when the setup is unchanged, and the shadows then show
+/// the new casters; a lightweight upload records none. Mutation: skip
+/// `invalidate` in the upload; the moved caster's shadow is then stale.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn camera_moves_and_content_uploads_re_render_the_map_and_lightweight_ones_do_not() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    upload_cache_scene(&mut renderer, CACHE_CASTER);
+    render_normal(&mut renderer, DARK_BACKGROUND);
+    let setup = live_setup(&renderer).expect("a setup");
+
+    // A camera move.
+    let before = renderer.shadow_passes_drawn();
+    renderer.move_camera(
+        &DVec3::new(2.0, 1.0, 40.0),
+        &DVec3::new(2.0, 1.0, 0.0),
+        &DVec3::new(0.0, 1.0, 0.0),
+    );
+    let moved = live_setup(&renderer).expect("a setup");
+    assert_ne!(moved, setup, "the camera move did not change the setup");
+    render_normal(&mut renderer, DARK_BACKGROUND);
+    assert_eq!(renderer.shadow_passes_drawn(), before + passes_of(&moved));
+    look_down(&mut renderer, false, 40.0, VIEWPORT_HEIGHT);
+    render_normal(&mut renderer, DARK_BACKGROUND);
+
+    // A lightweight upload leaves the casters, and so the map, alone.
+    let before = renderer.shadow_passes_drawn();
+    let unchanged = render_normal(&mut renderer, DARK_BACKGROUND);
+    assert_eq!(renderer.shadow_passes_drawn(), before);
+    let mut gizmo = Mesh::new();
+    tessellate_sphere(
+        &mut gizmo,
+        &DVec3::new(-8.0, 5.0, 6.0),
+        1.0,
+        12,
+        12,
+        &Material::new(&Vec3::new(0.9, 0.9, 0.2), 0.5, 0.0),
+    );
+    renderer.update_all_gpu_meshes(
+        &gizmo,
+        &LineMesh::new(),
+        &Mesh::new(),
+        &LineMesh::new(),
+        &LineMesh::new(),
+        &AtomImpostorMesh::new(),
+        &BondImpostorMesh::new(),
+        &TransparentImpostorMesh::new(),
+        &TransparentSurfaceMesh::new(),
+        &LabelMesh::new(),
+        &AtomImpostorMesh::new(),
+        &BondImpostorMesh::new(),
+        false,
+        None,
+    );
+    let with_gizmo = render_normal(&mut renderer, DARK_BACKGROUND);
+    assert_eq!(
+        renderer.shadow_passes_drawn(),
+        before,
+        "a lightweight upload re-rendered the shadow map"
+    );
+    assert!(
+        with_gizmo != unchanged,
+        "the lightweight mesh was not drawn"
+    );
+
+    // A content upload whose caster moves inside the same bounds: the setup
+    // is unchanged, so only the upload's `invalidate` re-renders the map.
+    let bounds = renderer.caster_bounds();
+    upload_cache_scene(&mut renderer, CACHE_CASTER_MOVED);
+    assert_eq!(renderer.caster_bounds(), bounds);
+    assert_eq!(live_setup(&renderer).expect("a setup"), setup);
+    let after_upload = render_normal(&mut renderer, DARK_BACKGROUND);
+    dump("shadow_cache_after_upload", &after_upload);
+    let Some(mut fresh) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    upload_cache_scene(&mut fresh, CACHE_CASTER_MOVED);
+    let reference = render_normal(&mut fresh, DARK_BACKGROUND);
+    // The picture first, so the mutation shows as the stale shadow it is.
+    assert!(
+        after_upload == reference,
+        "after the upload the map still shows the old casters"
+    );
+    assert_eq!(renderer.shadow_passes_drawn(), before + passes_of(&setup));
+}
+
+/// D9: a thumbnail, drawn on two backgrounds, records one set of passes.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn a_thumbnail_records_one_set_of_shadow_passes() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    upload_cache_scene(&mut renderer, CACHE_CASTER);
+    render_normal(&mut renderer, DARK_BACKGROUND);
+    let mut camera = renderer.camera.clone();
+    camera.aspect = 1.0;
+    let thumbnail = setup_for(
+        &renderer,
+        &camera,
+        &TargetSpec::image(THUMBNAIL_SIZE, THUMBNAIL_SIZE, THUMBNAIL_SUPERSAMPLING),
+    );
+    assert_ne!(
+        Some(&thumbnail),
+        live_setup(&renderer).as_ref(),
+        "the thumbnail could reuse the live map, so this proves nothing"
+    );
+    let before = renderer.shadow_passes_drawn();
+    let camera = renderer.camera.clone();
+    let pixels = renderer.render_thumbnail(&camera);
+    dump("shadow_cache_thumbnail", &pixels);
+    assert_eq!(
+        renderer.shadow_passes_drawn(),
+        before + passes_of(&thumbnail)
+    );
+}
+
+/// D9: an export, then a live frame, each record their own passes, and the
+/// live frame shows its own shadows: it equals the live frame drawn before
+/// the export. Mutation: leave the remembered setup unchanged on an
+/// offscreen draw; the live frame then reads the export's map.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn an_export_and_the_next_live_frame_each_draw_their_own_shadows() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    upload_cache_scene(&mut renderer, CACHE_CASTER);
+    let live_before = render_normal(&mut renderer, DARK_BACKGROUND);
+    let live = live_setup(&renderer).expect("a setup");
+    let (width, height) = (400, 100);
+    let mut camera = renderer.camera.clone();
+    camera.aspect = width as f64 / height as f64;
+    let export = setup_for(
+        &renderer,
+        &camera,
+        &TargetSpec::image(width, height, IMAGE_EXPORT_SUPERSAMPLING),
+    );
+    assert_ne!(export, live, "the export could reuse the live map");
+
+    let before = renderer.shadow_passes_drawn();
+    let image = renderer.render_image(width, height, DARK_BACKGROUND);
+    dump("shadow_cache_export", &image);
+    assert_eq!(renderer.shadow_passes_drawn(), before + passes_of(&export));
+    let live_after = render_normal(&mut renderer, DARK_BACKGROUND);
+    assert!(
+        live_after == live_before,
+        "the live frame after an export shows other shadows"
+    );
+    assert_eq!(
+        renderer.shadow_passes_drawn(),
+        before + passes_of(&export) + passes_of(&live)
+    );
+}
+
+/// D9: turning shadows off frees the map; turning them on again draws the
+/// right shadows on the next frame, because a new map remembers no setup.
+/// Mutation: keep the remembered setup when the map is replaced.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn turning_shadows_off_frees_the_map_and_on_again_redraws_it() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    upload_cache_scene(&mut renderer, CACHE_CASTER);
+    let lit = render_normal(&mut renderer, DARK_BACKGROUND);
+    let passes = passes_of(&live_setup(&renderer).expect("a setup"));
+
+    renderer.set_shading(shadows_of(0.0));
+    assert!(
+        !renderer.shadow_map_allocated(),
+        "shadows off keeps the map"
+    );
+    let off = render_normal(&mut renderer, DARK_BACKGROUND);
+    assert!(off != lit, "the scene has no visible shadow");
+
+    renderer.set_shading(shadows_of(1.0));
+    assert!(renderer.shadow_map_allocated());
+    let before = renderer.shadow_passes_drawn();
+    let again = render_normal(&mut renderer, DARK_BACKGROUND);
+    assert!(again == lit, "the new map drew other shadows");
+    assert_eq!(renderer.shadow_passes_drawn(), before + passes);
+}

@@ -1083,6 +1083,9 @@ impl Renderer {
             );
             self.caster_bounds =
                 crate::thumbnail::caster_bounds(main_mesh, atom_impostor_mesh, bond_impostor_mesh);
+            // The casters are replaced: the shadow map no longer shows them
+            // (`doc/design_shadows.md` D9).
+            self.shadow_map.invalidate();
 
             self.main_mesh
                 .update_from_mesh(&self.device, main_mesh, "Main");

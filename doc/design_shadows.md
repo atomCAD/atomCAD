@@ -1282,6 +1282,60 @@ in DP Phase 4b, **no uncached shadow path ever reaches the app**.
   Each changes the picture, so the choice is the walkthrough's.
 - Effort: 1 d.
 
+- **Phase 3 notes** (as implemented; the tests are in `renderer_gpu.rs`,
+  section *Shadows, Phase 3*, and the measurement in
+  `renderer_gpu_timing.rs`):
+  - **The cache** is `ShadowState::rendered_for`, beside the pass counter
+    in the one `Mutex`. `prepare` compares, records and remembers;
+    `invalidate` (the non-lightweight upload) and `set_enabled` (a new or a
+    dropped map) forget. Every image of the harness is byte-identical to
+    Phase 2's (387 compared).
+  - **The D9 table is pessimistic about offscreen draws.** When the whole
+    caster sphere is in view, the footprint is the casters' square `Q`
+    whatever the aspect, and the splits depend only on the camera pose, so
+    a thumbnail or an export of a compact scene usually has the *live*
+    setup and records no pass at all. Phase 1's
+    `shadows_draw_through_every_path_and_count_their_passes` now derives its
+    expected counts from the setups. The Phase 3 tests use a layer wider than
+    the view, so the frustum cuts the footprint, and assert that the
+    offscreen setup differs before counting, or they would prove nothing.
+  - **The upload must invalidate even when the setup is unchanged.** The
+    test moves a caster *inside* the casters' bounds, so the bounds and the
+    setup are equal and only `invalidate` re-renders; the image is then
+    compared with a fresh renderer's.
+  - **Mutations**, each failing its test with the picture rather than the
+    count where the test has both: no `invalidate` (stale shadow after the
+    upload); remembering only the first setup after a forget, the
+    offscreen-draw mutation (the live frame after an export reads the
+    export's map); a new map keeping the old setup (no shadow after
+    off/on); no cache at all (every pass-count test).
+  - **Measurement** (RTX 3060 Laptop GPU, release, 2560 × 1440, 4× MSAA,
+    mean of 20 frames after 3, moving frames orbiting 0.11° per frame;
+    the frame time includes the synchronous 15 MB readback, as the app's
+    does):
+
+    | View | Shadows off | On | |
+    |---|---|---|---|
+    | 1 M cube, full view, moving, 1 cascade | 34.3 ms | 51.1 ms | +49 % |
+    | 1 M cube, full view, refined | 50.5 ms | 82.9 ms | +64 % |
+    | 1 M slab, close-up, moving, 4 cascades | 26.2 ms | 45.8 ms | +75 % |
+    | 1 M slab, close-up, refined | 43.5 ms | 71.2 ms | +64 % |
+    | 1 M slab, full view, moving, 1 cascade | 13.3 ms | 19.4 ms | +45 % |
+    | 100 k-triangle solid, moving and refined | ~6 ms | ~6 ms | noise |
+
+    Both budgets are met (+60 %, +150 %), so no lever is pulled. The
+    refined frame, which is not budgeted, costs about as much as a moving
+    one in relative terms: per-sample shading quadruples the PCF taps, but it
+    draws no caster pass. The solid's frame is dominated by the readback.
+  - **Four cascades need a larger lattice than the cube.** A 1 M-atom cube
+    is 178 Å a side, and at the 0.1 Å floor one cascade covers ~200 Å
+    (D6), so no view of it gets four. The four-cascade row is a 1 M-atom
+    slab, 250 × 250 × 2 cells (892 × 892 × 7 Å), seen from 2 Å above a
+    corner; the test finds that pose among a few and asserts four cascades
+    on every pose of the orbit before timing.
+  - The lattices are drawn whole, without the in-app cull of interior atoms,
+    so they are a worst case for the caster passes.
+
 ### Phase 4 — Preferences, the AO coupling and documentation (shadows become visible)
 
 - `shadows` and `shadow_strength` in `RenderingPreferences`, the API twin,
