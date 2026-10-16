@@ -73,11 +73,12 @@ const GPU_COMPARE_TOLERANCE: u8 = 0;
 /// reference is a dump of the *previous* phase. Each phase that changes
 /// pixels lists them here and tests the change by its own assertions.
 ///
-/// Depth perception Phase 3 (`doc/design_depth_perception.md`) changes no
-/// image the renderer's neutral default draws: the depth cue is off unless a
-/// test sets it, so every image is asserted against a Phase 2 dump.
-/// (Phase 2 listed the rimmed atoms and the top-down orthographic flat
-/// squares here.)
+/// Depth perception Phases 3 and 4 (`doc/design_depth_perception.md`) change
+/// no image the renderer's neutral default draws: the depth cue and AO are
+/// off unless a test sets them, and every vertex a test builds without an
+/// exposure is fully exposed, so every image is asserted against a dump of
+/// the phase before. (Phase 2 listed the rimmed atoms and the top-down
+/// orthographic flat squares here.)
 const GPU_COMPARE_EXEMPT: &[&str] = &[];
 
 /// Writes `pixels` to `$ATOMCAD_GPU_DUMP_DIR/<name>.raw` when that variable is
@@ -2990,4 +2991,281 @@ fn a_gadget_sphere_is_not_fogged() {
         rgba_at(&off, VIEWPORT_WIDTH, column, row),
         "the back sphere is not fogged"
     );
+}
+
+// ---- Baked ambient occlusion (`doc/design_depth_perception.md` D7, D10,
+// Phase 4). These set `ao_strength` with `set_shading`, since the renderer
+// default is 0. Expected colours come from the twin, `light_surface_exposed`.
+
+use atomcad_renderer::atom_impostor_mesh::FULLY_EXPOSED;
+use atomcad_renderer::shading::{decode_exposure, light_surface_exposed};
+
+const AO_ALBEDO: [f32; 3] = [0.7, 0.7, 0.7];
+const AO_RADIUS: f32 = 5.0;
+
+fn ao_of(preset: LightingPreset, strength: f32) -> ShadingSettings {
+    ShadingSettings {
+        preset,
+        ao_strength: strength,
+        ..ShadingSettings::default()
+    }
+}
+
+/// Spheres of `AO_RADIUS` at the given centres, each with its packed
+/// exposure.
+fn exposed_atoms(spheres: &[(Vec3, [i8; 4])]) -> AtomImpostorMesh {
+    let mut atoms = AtomImpostorMesh::new();
+    for (centre, exposure) in spheres {
+        atoms.add_atom_quad_with_exposure(
+            centre, AO_RADIUS, &AO_ALBEDO, 0.5, 0.0, &[0.0; 4], *exposure,
+        );
+    }
+    atoms
+}
+
+/// The pixel over the point of the sphere at `centre` whose normal is
+/// `normal`, and what the twin computes there, 0–255.
+fn ao_twin_pixel(
+    renderer: &Renderer,
+    uniform: &ShadingUniform,
+    centre: Vec3,
+    exposure: [i8; 4],
+    normal: DVec3,
+) -> ((u32, u32), Vec3) {
+    let camera = &renderer.camera;
+    let (column, row) = pixel_over(
+        camera,
+        VIEWPORT_WIDTH,
+        VIEWPORT_HEIGHT,
+        centre.as_dvec3() + normal * AO_RADIUS as f64,
+    );
+    let (origin, dir) = ray_through_pixel(camera, VIEWPORT_WIDTH, VIEWPORT_HEIGHT, column, row);
+    let hit = ray_sphere(origin, dir, centre.as_dvec3(), AO_RADIUS as f64)
+        .expect("the sample pixel is on the sphere");
+    let n = (hit - centre.as_dvec3()).normalize().as_vec3();
+    let lit = to_display(light_surface_exposed(
+        uniform,
+        view_vector(camera, hit),
+        n,
+        Vec3::from(AO_ALBEDO),
+        0.5,
+        0.0,
+        decode_exposure(exposure),
+    ));
+    ((column, row), lit * 255.0)
+}
+
+fn ao_uniform(renderer: &Renderer, settings: &ShadingSettings) -> ShadingUniform {
+    ShadingUniform::new(
+        &renderer.camera,
+        renderer.content_bounds(),
+        DARK_BACKGROUND,
+        settings,
+        ShadingPass::Content,
+    )
+}
+
+fn luminance_of(p: [u8; 4]) -> f32 {
+    0.2126 * p[0] as f32 + 0.7152 * p[1] as f32 + 0.0722 * p[2] as f32
+}
+
+/// D7, and the twin agreement of Testing layer 3 extended to the AO mapping:
+/// of two spheres with exposure 0 and 1, the buried one is darker, and both
+/// are what the twin computes at their centre and at four points 60° from
+/// the view axis, within 2/255, under both presets and projections. At
+/// `ao_strength` 0 the two are drawn alike.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn a_buried_sphere_is_darker_by_the_mapping_and_alike_at_strength_0() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    renderer.set_render_quality(RenderQuality {
+        anti_aliasing: false,
+        full_display_resolution: true,
+    });
+    let open = (Vec3::new(-7.0, 0.0, 0.0), FULLY_EXPOSED);
+    let buried = (Vec3::new(7.0, 0.0, 0.0), [0, 0, 0, 0]);
+    upload_impostors(
+        &mut renderer,
+        &exposed_atoms(&[open, buried]),
+        &BondImpostorMesh::new(),
+        &TransparentImpostorMesh::new(),
+        &AtomImpostorMesh::new(),
+    );
+    let (s, c) = 60f64.to_radians().sin_cos();
+    let normals = [
+        DVec3::Z,
+        DVec3::new(0.0, s, c),
+        DVec3::new(0.0, -s, c),
+        DVec3::new(-s, 0.0, c),
+        DVec3::new(s, 0.0, c),
+    ];
+    let mut worst = 0.0f32;
+    for preset in [LightingPreset::Headlight, LightingPreset::Studio] {
+        for orthographic in [false, true] {
+            look_down(&mut renderer, orthographic, 60.0, VIEWPORT_HEIGHT);
+            let settings = ao_of(preset, 1.0);
+            renderer.set_shading(settings);
+            let pixels = renderer.render(DARK_BACKGROUND);
+            dump(
+                &format!("ao_pair_{preset:?}_{orthographic}").to_lowercase(),
+                &pixels,
+            );
+            let uniform = ao_uniform(&renderer, &settings);
+            for (centre, exposure) in [open, buried] {
+                for normal in normals {
+                    let ((column, row), expected) =
+                        ao_twin_pixel(&renderer, &uniform, centre, exposure, normal);
+                    let got = rgba_at(&pixels, VIEWPORT_WIDTH, column, row);
+                    for ch in 0..3 {
+                        worst = worst.max((got[ch] as f32 - expected[ch]).abs());
+                    }
+                    assert_near(
+                        got,
+                        expected,
+                        2.0,
+                        &format!("{preset:?}, ortho {orthographic}, {exposure:?}, normal {normal}"),
+                    );
+                }
+            }
+            let centre_luminance = |centre: Vec3| {
+                let (column, row) = pixel_over(
+                    &renderer.camera,
+                    VIEWPORT_WIDTH,
+                    VIEWPORT_HEIGHT,
+                    centre.as_dvec3() + DVec3::Z * AO_RADIUS as f64,
+                );
+                luminance_of(rgba_at(&pixels, VIEWPORT_WIDTH, column, row))
+            };
+            let (dark, bright) = (centre_luminance(buried.0), centre_luminance(open.0));
+            assert!(dark < bright - 20.0, "buried {dark}, open {bright}");
+        }
+    }
+    println!("renderer_gpu: AO twin agreement, largest difference {worst}/255");
+
+    // Strength 0: the buried sphere is drawn like the open one.
+    look_down(&mut renderer, true, 60.0, VIEWPORT_HEIGHT);
+    renderer.set_shading(ao_of(LightingPreset::Studio, 0.0));
+    let pixels = renderer.render(DARK_BACKGROUND);
+    dump("ao_pair_strength_0", &pixels);
+    let (left, _) = pixel_of(open.0.x, 0.0);
+    let (right, _) = pixel_of(buried.0.x, 0.0);
+    let half = (AO_RADIUS * 10.0) as u32 + 2;
+    let mut differing = 0;
+    for row in VIEWPORT_HEIGHT / 2 - half..VIEWPORT_HEIGHT / 2 + half {
+        for dx in 0..2 * half {
+            let a = rgba_at(&pixels, VIEWPORT_WIDTH, left - half + dx, row);
+            let b = rgba_at(&pixels, VIEWPORT_WIDTH, right - half + dx, row);
+            if (0..3).any(|ch| a[ch].abs_diff(b[ch]) > 1) {
+                differing += 1;
+            }
+        }
+    }
+    assert_eq!(differing, 0, "the two spheres differ at strength 0");
+}
+
+/// D10: a sphere with `E = ½` and its bent vector pointing to screen-right is
+/// brighter on its right half than on its left, as the twin says at 60° to
+/// either side. With `b = 0` the two halves are alike. Dropping the
+/// `dot(b, N)` term from `ao_visibility` fails the first assertion
+/// (mutation).
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn a_bent_vector_lights_the_side_it_points_to() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    renderer.set_render_quality(RenderQuality {
+        anti_aliasing: false,
+        full_display_resolution: true,
+    });
+    look_down(&mut renderer, true, 60.0, VIEWPORT_HEIGHT);
+    // The headlight is symmetric left to right, so only `b` tells the halves
+    // apart.
+    let settings = ao_of(LightingPreset::Headlight, 1.0);
+    renderer.set_shading(settings);
+    let disc = (
+        VIEWPORT_WIDTH as f32 / 2.0,
+        VIEWPORT_HEIGHT as f32 / 2.0,
+        AO_RADIUS * 10.0 - 2.0,
+    );
+    let (s, c) = 60f64.to_radians().sin_cos();
+    for (exposure, name) in [
+        ([127, 0, 0, 64], "ao_bent_right"),
+        ([0, 0, 0, 64], "ao_bent_none"),
+    ] {
+        upload_impostors(
+            &mut renderer,
+            &exposed_atoms(&[(Vec3::ZERO, exposure)]),
+            &BondImpostorMesh::new(),
+            &TransparentImpostorMesh::new(),
+            &AtomImpostorMesh::new(),
+        );
+        let pixels = renderer.render(DARK_BACKGROUND);
+        dump(name, &pixels);
+        let left = mean_in_disc(&pixels, VIEWPORT_WIDTH, disc, |dx, _| dx < 0.0);
+        let right = mean_in_disc(&pixels, VIEWPORT_WIDTH, disc, |dx, _| dx > 0.0);
+        println!("renderer_gpu: {name}: left {left}, right {right}");
+        if exposure[0] == 0 {
+            assert!((left - right).abs() < 1.0, "left {left}, right {right}");
+            continue;
+        }
+        assert!(right > left + 10.0, "left {left}, right {right}");
+        let uniform = ao_uniform(&renderer, &settings);
+        for normal in [DVec3::new(-s, 0.0, c), DVec3::new(s, 0.0, c), DVec3::Z] {
+            let ((column, row), expected) =
+                ao_twin_pixel(&renderer, &uniform, Vec3::ZERO, exposure, normal);
+            assert_near(
+                rgba_at(&pixels, VIEWPORT_WIDTH, column, row),
+                expected,
+                2.0,
+                &format!("normal {normal}"),
+            );
+        }
+    }
+}
+
+/// D7: a bond whose start is buried and whose end is open brightens
+/// monotonically from start to end.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn a_bond_brightens_from_its_buried_end_to_its_open_end() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    renderer.set_render_quality(RenderQuality {
+        anti_aliasing: false,
+        full_display_resolution: true,
+    });
+    let mut bonds = BondImpostorMesh::new();
+    bonds.add_bond_quad_with_exposure(
+        &Vec3::new(-10.0, 0.0, 0.0),
+        &Vec3::new(10.0, 0.0, 0.0),
+        1.5,
+        &AO_ALBEDO,
+        [[0, 0, 0, 0], FULLY_EXPOSED],
+    );
+    upload_impostors(
+        &mut renderer,
+        &AtomImpostorMesh::new(),
+        &bonds,
+        &TransparentImpostorMesh::new(),
+        &AtomImpostorMesh::new(),
+    );
+    look_down(&mut renderer, true, 60.0, VIEWPORT_HEIGHT);
+    renderer.set_shading(ao_of(LightingPreset::Headlight, 1.0));
+    let pixels = renderer.render(DARK_BACKGROUND);
+    dump("ao_bond", &pixels);
+    let row = VIEWPORT_HEIGHT / 2;
+    let (start, _) = pixel_of(-9.5, 0.0);
+    let (end, _) = pixel_of(9.5, 0.0);
+    let profile: Vec<f32> = (start..=end)
+        .map(|column| luminance_of(rgba_at(&pixels, VIEWPORT_WIDTH, column, row)))
+        .collect();
+    for pair in profile.windows(2) {
+        assert!(pair[1] >= pair[0], "not monotonic: {profile:?}");
+    }
+    let (first, last) = (profile[0], profile[profile.len() - 1]);
+    assert!(last > first + 20.0, "start {first}, end {last}");
 }

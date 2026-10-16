@@ -26,7 +26,7 @@ struct ShadingUniform {
   depth_cue_front: f32,      // View depth where the depth cue starts (D5).
   depth_cue_span: f32,       // Depth over which it reaches full strength; > 0.
   depth_cue_strength: f32,
-  ao_strength: f32,          // D7, Phase 4.
+  ao_strength: f32,          // Baked ambient occlusion, 0 = off (D7).
 };
 @group(0) @binding(1)
 var<uniform> shading: ShadingUniform;
@@ -88,6 +88,37 @@ fn geometry_smith(N: vec3<f32>, V: vec3<f32>, L: vec3<f32>, roughness: f32) -> f
 }
 
 // ============================================================================
+// Baked ambient occlusion (D7, D10)
+// ============================================================================
+
+// The mapping from visibility to light. Twins: `shading::AO_FLOOR`,
+// `AO_OPEN`, `AO_KEY`.
+const AO_FLOOR: f32 = 0.25; // What a fully buried surface keeps.
+const AO_OPEN: f32 = 0.6;   // Visibility above which nothing is taken.
+const AO_KEY: f32 = 0.35;   // The key light's share of the darkening.
+
+// The cosine-weighted visible fraction of the sky around the normal `N`, from
+// the packed `(4b, E)` (D10): `E + 2·dot(b, N)`, with `4b` as delivered.
+// Twin: `shading::ao_visibility`.
+fn ao_visibility(exposure: vec4<f32>, N: vec3<f32>) -> f32 {
+    return clamp(exposure.w + 0.5 * dot(exposure.xyz, N), 0.0, 1.0);
+}
+
+// The factors burial applies to the indirect light (x: fill and hemisphere)
+// and to the key (y). Both exactly 1 when AO is off, whatever the exposure.
+// Twin: `shading::ao_factors`.
+fn ao_factors(exposure: vec4<f32>, N: vec3<f32>) -> vec2<f32> {
+    if shading.ao_strength <= 0.0 {
+        return vec2<f32>(1.0, 1.0);
+    }
+    let ao = AO_FLOOR + (1.0 - AO_FLOOR) * smoothstep(0.0, AO_OPEN, ao_visibility(exposure, N));
+    return vec2<f32>(
+        mix(1.0, ao, shading.ao_strength),
+        mix(1.0, ao, shading.ao_strength * AO_KEY),
+    );
+}
+
+// ============================================================================
 // The rig (D3)
 // ============================================================================
 
@@ -129,10 +160,10 @@ fn light_surface(
     let k_d = (vec3<f32>(1.0) - F) * (1.0 - metallic);
     let diffuse = k_d * albedo / PI;
 
-    // What burial takes from the indirect light and from the key (D7). Both
-    // stay 1 until Phase 4 maps `exposure`.
-    let ambient_factor = 1.0;
-    let key_factor = 1.0;
+    // What burial takes from the indirect light and from the key (D7).
+    let factors = ao_factors(exposure, N);
+    let ambient_factor = factors.x;
+    let key_factor = factors.y;
 
     let NdotL = max(dot(N, L), 0.0);
     let key_contribution = vec3<f32>(shading.key_intensity * key_factor) * NdotL;

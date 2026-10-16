@@ -2,7 +2,7 @@
 //! (`doc/design_network_thumbnails.md`): content bounds and automatic framing
 //! (D4), the downsample (D5), PNG round trip, and the change comparison (D3).
 
-use atomcad_renderer::atom_impostor_mesh::{AtomImpostorMesh, AtomImpostorVertex};
+use atomcad_renderer::atom_impostor_mesh::{AtomImpostorMesh, AtomImpostorVertex, FULLY_EXPOSED};
 use atomcad_renderer::bond_impostor_mesh::{BondImpostorMesh, BondImpostorVertex};
 use atomcad_renderer::camera::Camera;
 use atomcad_renderer::line_mesh::LineMesh;
@@ -29,6 +29,7 @@ fn atom_vertex(center: [f32; 3], radius: f32) -> AtomImpostorVertex {
         roughness: 0.5,
         metallic: 0.0,
         rim_color: [0.0; 4],
+        exposure: FULLY_EXPOSED,
     }
 }
 
@@ -79,6 +80,8 @@ fn bonds_triangles_and_vertices_without_indices() {
         quad_offset: [0.0, 0.0],
         radius: 0.25,
         color: [1.0, 1.0, 1.0],
+        exposure_start: FULLY_EXPOSED,
+        exposure_end: FULLY_EXPOSED,
     });
     bonds.indices.extend([0, 0, 0]);
     // A mesh with vertices but no indices draws nothing, so it is not content.

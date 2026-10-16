@@ -8,7 +8,7 @@
 
 use crate::camera::Camera;
 use crate::shading_uniform::ShadingUniform;
-use glam::f32::Vec3;
+use glam::f32::{Vec3, Vec4};
 use glam::f64::DVec3;
 
 const PI: f32 = std::f32::consts::PI;
@@ -49,10 +49,48 @@ fn geometry_smith(n: Vec3, v: Vec3, l: Vec3, roughness: f32) -> f32 {
         * geometry_schlick_ggx(n.dot(l).max(0.0), roughness)
 }
 
+/// What a fully buried surface keeps of the light AO darkens (D7).
+/// Twin of `AO_FLOOR`.
+pub const AO_FLOOR: f32 = 0.25;
+/// The visibility above which AO takes nothing. Twin of `AO_OPEN`.
+pub const AO_OPEN: f32 = 0.6;
+/// The key light's share of the AO darkening. Twin of `AO_KEY`.
+pub const AO_KEY: f32 = 0.35;
+
+/// The packed exposure `(4b, E)` of a surface nothing occludes, as the
+/// shader reads it. Twin of `FULLY_EXPOSED`.
+pub const FULLY_EXPOSED: Vec4 = Vec4::new(0.0, 0.0, 0.0, 1.0);
+
+/// The packed `Snorm8x4` exposure as the GPU decodes it: each component
+/// over 127, at least −1.
+pub fn decode_exposure(packed: [i8; 4]) -> Vec4 {
+    Vec4::from_array(packed.map(|c| (c as f32 / 127.0).max(-1.0)))
+}
+
+/// The cosine-weighted visible fraction of the sky around `normal`, from the
+/// packed `(4b, E)` (D10). Twin of `ao_visibility`.
+pub fn ao_visibility(exposure: Vec4, normal: Vec3) -> f32 {
+    (exposure.w + 0.5 * exposure.truncate().dot(normal)).clamp(0.0, 1.0)
+}
+
+/// The factors burial applies to the fill and hemisphere (`.0`) and to the
+/// key (`.1`) under `ao_strength` (D7). Twin of `ao_factors`.
+pub fn ao_factors(ao_strength: f32, exposure: Vec4, normal: Vec3) -> (f32, f32) {
+    if ao_strength <= 0.0 {
+        return (1.0, 1.0);
+    }
+    let ao =
+        AO_FLOOR + (1.0 - AO_FLOOR) * smoothstep(0.0, AO_OPEN, ao_visibility(exposure, normal));
+    (
+        1.0 + (ao - 1.0) * ao_strength,
+        1.0 + (ao - 1.0) * ao_strength * AO_KEY,
+    )
+}
+
 /// The linear (HDR) colour of a surface point with normal `normal`, seen
 /// from direction `view` (towards the eye, see [`view_vector`]), under the
-/// rig in `shading` (D3). Fully exposed: the exposure mapping comes with
-/// Phase 4. Twin of `light_surface`.
+/// rig in `shading` (D3), fully exposed. Twin of `light_surface` with
+/// `FULLY_EXPOSED`.
 pub fn light_surface(
     shading: &ShadingUniform,
     view: Vec3,
@@ -60,6 +98,28 @@ pub fn light_surface(
     albedo: Vec3,
     roughness: f32,
     metallic: f32,
+) -> Vec3 {
+    light_surface_exposed(
+        shading,
+        view,
+        normal,
+        albedo,
+        roughness,
+        metallic,
+        FULLY_EXPOSED,
+    )
+}
+
+/// [`light_surface`] with a packed exposure `(4b, E)` (D7, D10), as the
+/// vertex delivers it (see [`decode_exposure`]). Twin of `light_surface`.
+pub fn light_surface_exposed(
+    shading: &ShadingUniform,
+    view: Vec3,
+    normal: Vec3,
+    albedo: Vec3,
+    roughness: f32,
+    metallic: f32,
+    exposure: Vec4,
 ) -> Vec3 {
     let v = view;
     let n = normal.normalize();
@@ -75,17 +135,19 @@ pub fn light_surface(
     let k_d = (Vec3::ONE - f) * (1.0 - metallic);
     let diffuse = k_d * albedo / PI;
 
+    let (ambient_factor, key_factor) = ao_factors(shading.ao_strength, exposure, n);
+
     let n_dot_l = n.dot(l).max(0.0);
-    let key = shading.key_intensity * n_dot_l;
+    let key = shading.key_intensity * key_factor * n_dot_l;
 
     let t = 0.5 + 0.5 * n.dot(Vec3::from_array(shading.hemisphere_up));
-    let ambient_light = shading.ground + (shading.sky - shading.ground) * t;
+    let ambient_light = (shading.ground + (shading.sky - shading.ground) * t) * ambient_factor;
     let ambient_diffuse = ambient_light * albedo;
     let ambient_specular = ambient_light * fresnel_schlick(v.dot(n).max(0.0), f0);
     let ambient = ambient_diffuse.lerp(ambient_specular, metallic);
 
     let l_fill = -Vec3::from_array(shading.fill_light_dir).normalize();
-    let fill = shading.fill_intensity * n.dot(l_fill).max(0.0) * diffuse;
+    let fill = shading.fill_intensity * ambient_factor * n.dot(l_fill).max(0.0) * diffuse;
 
     key * (diffuse + specular) + ambient + fill
 }

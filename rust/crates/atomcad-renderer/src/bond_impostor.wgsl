@@ -30,6 +30,8 @@ struct BondImpostorVertexInput {
     @location(2) quad_offset: vec2<f32>,
     @location(3) radius: f32,
     @location(4) color: vec3<f32>,
+    @location(5) exposure_start: vec4<f32>,  // Packed (4b, E), D10.
+    @location(6) exposure_end: vec4<f32>,
 }
 
 struct BondImpostorVertexOutput {
@@ -40,6 +42,8 @@ struct BondImpostorVertexOutput {
     @location(3) color: vec3<f32>,
     @location(4) quad_uv: vec2<f32>, // For ray-casting
     @location(5) world_position: vec3<f32>, // World position of this fragment
+    @location(6) exposure_start: vec4<f32>,
+    @location(7) exposure_end: vec4<f32>,
 }
 
 // ============================================================================
@@ -184,7 +188,9 @@ fn vs_main(input: BondImpostorVertexInput) -> BondImpostorVertexOutput {
     output.color = input.color;
     output.quad_uv = input.quad_offset;
     output.world_position = quad_world_pos;
-    
+    output.exposure_start = input.exposure_start;
+    output.exposure_end = input.exposure_end;
+
     return output;
 }
 
@@ -397,13 +403,18 @@ fn shade_bond_hit(input: BondImpostorVertexOutput, ray: Ray, t: f32) -> Shaded {
     let clip_pos = camera.proj_matrix * view_pos;
     let depth = clip_pos.z / clip_pos.w;
 
+    // The two ends' exposures mixed by where along the bond the hit lies
+    // (D7), so a bond darkens towards its buried end.
+    let along = clamp(projection_length / length(input.world_end - cylinder_start), 0.0, 1.0);
+    let exposure = mix(input.exposure_start, input.exposure_end, along);
+
     let color = apply_depth_cue(to_display(light_surface(
         hit_point,
         surface_normal,
         input.color,
         0.5,  // roughness - moderate for bonds
         0.0,  // metallic - bonds are non-metallic
-        FULLY_EXPOSED,
+        exposure,
     )), hit_point);
 
     var shaded: Shaded;

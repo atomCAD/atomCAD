@@ -70,7 +70,14 @@ fn tessellate(
     let mut atom = AtomImpostorMesh::new();
     let mut bond = BondImpostorMesh::new();
     let mut transparent = TransparentImpostorMesh::new();
-    tessellate_atomic_structure_impostors(&mut atom, &mut bond, &mut transparent, structure, prefs);
+    tessellate_atomic_structure_impostors(
+        &mut atom,
+        &mut bond,
+        &mut transparent,
+        structure,
+        prefs,
+        None,
+    );
     Meshes {
         atom,
         bond,

@@ -282,6 +282,9 @@ fn tessellate_non_lightweight_content(
                                 &mut transparent_impostor_mesh,
                                 atomic_structure,
                                 &preferences.atomic_structure_visualization,
+                                // Baked AO reaches the app with its cache
+                                // (doc/design_depth_perception.md Phase 4b).
+                                None,
                             );
                             // Render guide placement visuals in main impostor pass (normal depth)
                             if let Some(visuals) =

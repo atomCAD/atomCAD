@@ -1424,6 +1424,69 @@ library.
     asserted, and the budget is checked by hand and recorded in the phase
     notes.
 - Effort: 2.5 d.
+- **Phase notes (2026-10-15).** Implemented as above; `scene_tessellator`
+  passes `None`, so the app shows no AO yet. Against a dump of the Phase 3
+  build every one of the 224 harness images is byte-identical, with
+  `GPU_COMPARE_EXEMPT` empty; the twin agrees with the GPU on the AO pair
+  within 0.48/255. The cap table's error against the exact cone test is
+  0.010 mean, 0.055 at most. Details the text above leaves open:
+  - **The 128 directions are antipodal pairs**, a Fibonacci spiral over the
+    upper hemisphere and its mirror, not a plain Fibonacci sphere. A plain
+    one's directions sum to about 4·10⁻⁴ (per direction), which gave an
+    isolated atom a nonzero `b`. With pairs, an isolated and a fully buried
+    atom get `b = 0` exactly and a half-space blocks exactly 64 directions.
+    With them a (100) terrace atom's `b` is 6.3° from the normal; with the
+    plain sphere it was 10.7°, just outside the test's 10°.
+  - The 32 half-angle buckets are the values `b·90°/31`, so a fully
+    blocking occluder (90°) is represented exactly.
+  - The kernel takes no square root and no `asin`: the cube-map cell is
+    found from the raw offset (it does not depend on length), and the bucket
+    from `r²/d²` against precomputed `sin²` boundaries. A test checks it
+    against `cap_mask` on random occluders.
+  - Delete and unchanged markers neither occlude nor receive.
+    `ao_receivers` leaves them out, and the tessellator writes them fully
+    exposed even when the values passed in hold an entry for them.
+  - The drop radius around a changed place is `R_MAX` plus *that atom's*
+    occluder radius, not the largest radius of any element. When the
+    changed places alone outnumber the full-path limit, every value is
+    dropped without querying the grid around each place.
+  - `AO_FLOOR`, `AO_OPEN` and `AO_KEY` live in `lighting.wgsl` and their
+    twins in `shading.rs`, beside `light_surface_exposed` and
+    `decode_exposure`. `ao_strength ≤ 0` returns factors of exactly 1, as
+    the depth cue does at strength 0.
+  - Mutations that fail a test: replacing instead of merging changes (the
+    three-move test), a strict `<` in one path's neighbour predicate (the
+    `R_MAX` test), dropping `dot(b, N)` (the bent-vector GPU test), a twin
+    constant changed alone (AO twin agreement), and a bond reading only its
+    start exposure (the bond GPU test).
+  - **The budget is missed.** Release build, 16 threads, ball-and-stick:
+
+    | Structure | Evaluate | Receivers | `atom_exposure` | Share |
+    |---|---|---|---|---|
+    | 1 M-atom cuboid (50³ cells, 1 075 735 atoms) | 805 ms | 309 606 (8 Å cull) | 250 ms | 31 % |
+    | same | | 1 075 735 (no cull) | 768 ms | 95 % |
+    | 80-cell rod (80 × 7 × 7, 43 505 atoms) | 27 ms | 38 882 | 23 ms | 83 % |
+
+    250 ms is within D7's own estimate (150–250 ms). D7's 15 % share, though,
+    was set against the nanobeam's 2 089 ms evaluate, and a plain
+    lattice-filled cuboid evaluates in 0.8 s, so the share doubles. The
+    first measurement was 389 ms: a hash map from id to index took 114 ms,
+    and per-neighbour `sqrt` + `asin` the rest of the excess. Both are gone
+    and the values are bit-identical. What remains are D7's levers, `D = 64`
+    and `R_MAX = 5 Å`. Both change the picture, so they are left to the
+    walkthrough. The rod's 23 ms is negligible in absolute terms. On the rod
+    the receivers are most of the atoms, so the share is high whatever the
+    budget. (The report's rod had 33 445 atoms; its exact extent is not
+    recorded, and 80 × 7 × 7 cells gives 43 505.)
+  - **For Phase 4b: the merge mutation may not bite there.** D9 diffs each
+    tick against the entry's snapshot, which does not advance during a drag.
+    Then every tick's diff already contains the snapshot's positions and the
+    current ones. The intermediate positions never fed into any value, so
+    *replacing* the pending set gives the same final update as merging it.
+    Merging matters only when the diff is taken against a snapshot that
+    advances, and that is what this phase's three-move test does. 4b's
+    "replace instead of merge" mutation should be checked against its own
+    drag test before it is relied on.
 
 ### Phase 4b — Exposure cache on the scene (D9)
 

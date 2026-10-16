@@ -611,6 +611,11 @@ mod error_display_test;
 #[path = "structure_designer/atomic_impostor_alpha_test.rs"]
 mod atomic_impostor_alpha_test;
 
+// Baked ambient occlusion: one full computation against the evaluate time,
+// an ignored, print-only measurement (doc/design_depth_perception.md D7).
+#[path = "structure_designer/ambient_occlusion_timing_test.rs"]
+mod ambient_occlusion_timing_test;
+
 #[path = "structure_designer/atom_label_test.rs"]
 mod atom_label_test;
 

@@ -12,6 +12,7 @@ the workspace DAG and for why `scene_tessellator` lives one layer up.
 | Module | What it adapts |
 |---|---|
 | `atomic_tessellator` | atoms and bonds → triangle meshes or impostors |
+| `ambient_occlusion` | per-atom baked exposure `(4b, E)` for the impostor vertices (`doc/design_depth_perception.md` D6, D7, D10) |
 | `csg_to_poly_mesh` | `GeoNode` → `PolyMesh` (csgrs, earcut for sketches) |
 | `poly_mesh` / `poly_mesh_tessellator` | face-centric mesh + its wireframe/solid tessellation |
 | `surface_point_cloud` / `surface_point_tessellator` | SDF surface splatting |
@@ -34,6 +35,23 @@ the workspace DAG and for why `scene_tessellator` lives one layer up.
   smoothing angle and sample density are parameters of *this* layer;
   a node's value stays resolution-free. That is why every adapter here takes a
   preferences argument rather than reading node data.
+
+## Baked ambient occlusion (`ambient_occlusion`)
+
+- **Occluders include culled atoms but not ghosts**, judged by the
+  structure's own alpha (`get_atom_alpha == 1`), never the display alpha the
+  tessellator draws with: that one is scaled by the *Scene transparency*
+  preference, and exposure must depend on the structure alone (the scene's
+  cache relies on it). Receivers are the opaque, unculled atoms, chosen by
+  `atomic_tessellator::ao_receivers` — the cache uses the same function, so the
+  two cannot disagree.
+- **Incremental equals full, bit for bit.** Both paths run one kernel
+  (`add_occluder`) behind one neighbour predicate (`within_r_max`), and the mask
+  is an OR, so neighbour order does not matter. Keep any new path on that
+  kernel; the tests compare with `==`.
+- The 128 directions are antipodal pairs, not a plain Fibonacci sphere: a plain
+  one's mean is about 4·10⁻⁴ off zero, which gives an isolated atom a bent
+  vector.
 
 ## Surface extraction (`isosurface/`)
 

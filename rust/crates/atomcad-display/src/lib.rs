@@ -20,6 +20,7 @@
 //! here — crystallography does not belong in the adapter layer, so it went down
 //! to `atomcad_crystolecule::miller` instead (D5).
 
+pub mod ambient_occlusion;
 pub mod atomic_tessellator;
 pub mod coordinate_system_tessellator;
 pub mod csg_to_poly_mesh;

@@ -55,3 +55,8 @@ mod isosurface_tessellator_test;
 // (doc/design_isosurface_level.md Part 4).
 #[path = "display/isosurface_surface_distribution_test.rs"]
 mod isosurface_surface_distribution_test;
+
+// Baked ambient occlusion, the computation and its vertices
+// (doc/design_depth_perception.md D6, D7, D10, Phase 4).
+#[path = "display/ambient_occlusion_test.rs"]
+mod ambient_occlusion_test;

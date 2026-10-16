@@ -62,6 +62,7 @@ fn tessellate_impostors(s: &AtomicStructure) -> (AtomImpostorMesh, TransparentIm
         &mut transparent,
         s,
         &ball_and_stick_prefs(),
+        None,
     );
     (atom, transparent)
 }

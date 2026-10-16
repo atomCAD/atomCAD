@@ -11,9 +11,17 @@ pub struct AtomImpostorVertex {
     pub roughness: f32,
     pub metallic: f32,
     pub rim_color: [f32; 4], // Rim highlight [R, G, B, intensity]
+    /// Baked ambient occlusion, packed `(4b, E)` as `Snorm8x4`
+    /// (`doc/design_depth_perception.md` D10): the bent vector times 4 and
+    /// the exposure. [`FULLY_EXPOSED`] for an atom nothing occludes.
+    pub exposure: [i8; 4],
 }
 
+/// The packed exposure of an atom nothing occludes: `b = 0`, `E = 1`.
+pub const FULLY_EXPOSED: [i8; 4] = [0, 0, 0, 127];
+
 impl AtomImpostorVertex {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         center_position: &Vec3,
         quad_offset: [f32; 2],
@@ -22,6 +30,7 @@ impl AtomImpostorVertex {
         roughness: f32,
         metallic: f32,
         rim_color: &[f32; 4],
+        exposure: [i8; 4],
     ) -> Self {
         Self {
             center_position: [center_position.x, center_position.y, center_position.z],
@@ -31,6 +40,7 @@ impl AtomImpostorVertex {
             roughness,
             metallic,
             rim_color: *rim_color,
+            exposure,
         }
     }
 
@@ -81,6 +91,12 @@ impl AtomImpostorVertex {
                     shader_location: 6,
                     format: wgpu::VertexFormat::Float32x4,
                 },
+                // exposure
+                wgpu::VertexAttribute {
+                    offset: std::mem::size_of::<[f32; 15]>() as wgpu::BufferAddress,
+                    shader_location: 7,
+                    format: wgpu::VertexFormat::Snorm8x4,
+                },
             ],
         }
     }
@@ -119,6 +135,29 @@ impl AtomImpostorMesh {
         metallic: f32,
         rim_color: &[f32; 4],
     ) -> u32 {
+        self.add_atom_quad_with_exposure(
+            center_position,
+            radius,
+            albedo,
+            roughness,
+            metallic,
+            rim_color,
+            FULLY_EXPOSED,
+        )
+    }
+
+    /// [`Self::add_atom_quad`] with the atom's packed exposure (D10).
+    #[allow(clippy::too_many_arguments)]
+    pub fn add_atom_quad_with_exposure(
+        &mut self,
+        center_position: &Vec3,
+        radius: f32,
+        albedo: &[f32; 3],
+        roughness: f32,
+        metallic: f32,
+        rim_color: &[f32; 4],
+        exposure: [i8; 4],
+    ) -> u32 {
         let base_index = self.vertices.len() as u32;
 
         // Add 4 vertices for quad corners: bottom-left, bottom-right, top-right, top-left
@@ -138,6 +177,7 @@ impl AtomImpostorMesh {
                 roughness,
                 metallic,
                 rim_color,
+                exposure,
             ));
         }
 

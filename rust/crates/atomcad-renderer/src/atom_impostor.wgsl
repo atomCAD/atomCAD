@@ -32,6 +32,7 @@ struct AtomImpostorVertexInput {
     @location(4) roughness: f32,
     @location(5) metallic: f32,
     @location(6) rim_color: vec4<f32>,
+    @location(7) exposure: vec4<f32>,   // Packed (4b, E), D10.
 }
 
 struct AtomImpostorVertexOutput {
@@ -44,6 +45,7 @@ struct AtomImpostorVertexOutput {
     @location(5) metallic: f32,
     @location(6) quad_uv: vec2<f32>, // For ray-casting (-1 to 1 range)
     @location(7) rim_color: vec4<f32>,
+    @location(8) exposure: vec4<f32>,
 }
 
 // ============================================================================
@@ -105,6 +107,7 @@ fn vs_main(input: AtomImpostorVertexInput) -> AtomImpostorVertexOutput {
     output.metallic = input.metallic;
     output.quad_uv = input.quad_offset; // -1 to 1 range for ray-casting
     output.rim_color = input.rim_color;
+    output.exposure = input.exposure;
 
     return output;
 }
@@ -313,7 +316,7 @@ fn shade_atom_hit(input: AtomImpostorVertexOutput, ray: Ray, t: f32, pixel_world
         input.albedo,
         input.roughness,
         input.metallic,
-        FULLY_EXPOSED,
+        input.exposure,
     )), hit_point);
 
     // The rim band (D4): a screen-space ring along the silhouette, mixed in

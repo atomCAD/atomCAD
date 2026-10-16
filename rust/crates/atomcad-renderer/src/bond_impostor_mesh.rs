@@ -1,3 +1,4 @@
+use crate::atom_impostor_mesh::FULLY_EXPOSED;
 use bytemuck;
 use glam::f32::Vec3;
 
@@ -9,6 +10,10 @@ pub struct BondImpostorVertex {
     pub quad_offset: [f32; 2],    // Quad corner offset
     pub radius: f32,              // Bond radius
     pub color: [f32; 3],          // Bond color
+    /// The packed `(4b, E)` exposure of the start and end atoms
+    /// (`doc/design_depth_perception.md` D10), mixed along the bond.
+    pub exposure_start: [i8; 4],
+    pub exposure_end: [i8; 4],
 }
 
 impl BondImpostorVertex {
@@ -18,6 +23,7 @@ impl BondImpostorVertex {
         quad_offset: [f32; 2],
         radius: f32,
         color: &[f32; 3],
+        exposure: [[i8; 4]; 2],
     ) -> Self {
         Self {
             start_position: [start_position.x, start_position.y, start_position.z],
@@ -25,6 +31,8 @@ impl BondImpostorVertex {
             quad_offset,
             radius,
             color: *color,
+            exposure_start: exposure[0],
+            exposure_end: exposure[1],
         }
     }
 
@@ -63,6 +71,18 @@ impl BondImpostorVertex {
                     shader_location: 4,
                     format: wgpu::VertexFormat::Float32x3,
                 },
+                // exposure_start
+                wgpu::VertexAttribute {
+                    offset: std::mem::size_of::<[f32; 12]>() as wgpu::BufferAddress,
+                    shader_location: 5,
+                    format: wgpu::VertexFormat::Snorm8x4,
+                },
+                // exposure_end
+                wgpu::VertexAttribute {
+                    offset: std::mem::size_of::<[f32; 13]>() as wgpu::BufferAddress,
+                    shader_location: 6,
+                    format: wgpu::VertexFormat::Snorm8x4,
+                },
             ],
         }
     }
@@ -99,6 +119,25 @@ impl BondImpostorMesh {
         radius: f32,
         color: &[f32; 3],
     ) -> u32 {
+        self.add_bond_quad_with_exposure(
+            start_position,
+            end_position,
+            radius,
+            color,
+            [FULLY_EXPOSED; 2],
+        )
+    }
+
+    /// [`Self::add_bond_quad`] with the packed exposures of its start and end
+    /// atoms (D10).
+    pub fn add_bond_quad_with_exposure(
+        &mut self,
+        start_position: &Vec3,
+        end_position: &Vec3,
+        radius: f32,
+        color: &[f32; 3],
+        exposure: [[i8; 4]; 2],
+    ) -> u32 {
         let base_index = self.vertices.len() as u32;
 
         // Add 4 vertices for quad corners: bottom-left, bottom-right, top-right, top-left
@@ -116,6 +155,7 @@ impl BondImpostorMesh {
                 offset,
                 radius,
                 color,
+                exposure,
             ));
         }
 

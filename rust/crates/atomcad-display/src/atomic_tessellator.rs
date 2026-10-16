@@ -5,8 +5,9 @@ use atomcad_crystolecule::atomic_structure::{
 };
 use atomcad_renderer::tessellator::tessellator::{self, OccluderSphere};
 // Scene trait removed - is_atom_marked was deprecated and always returned false
+use crate::ambient_occlusion::AtomExposure;
 use crate::preferences::{AtomicStructureVisualization, AtomicStructureVisualizationPreferences};
-use atomcad_renderer::atom_impostor_mesh::AtomImpostorMesh;
+use atomcad_renderer::atom_impostor_mesh::{AtomImpostorMesh, FULLY_EXPOSED};
 use atomcad_renderer::bond_impostor_mesh::BondImpostorMesh;
 use atomcad_renderer::label_atlas::layout_label;
 use atomcad_renderer::label_mesh::LabelMesh;
@@ -134,6 +135,37 @@ fn should_cull_atom(
         |t: Option<f64>| t.is_some_and(|cull_depth| atom.in_crystal_depth > cull_depth as f32);
     let effective = effective_visualization(structure, atom.id, &atomic_viz_prefs.visualization);
     exceeds(threshold(&atomic_viz_prefs.visualization)) && exceeds(threshold(&effective))
+}
+
+/// The atoms that receive baked ambient occlusion
+/// (`doc/design_depth_perception.md` D6): the ones
+/// `tessellate_atomic_structure_impostors` draws opaque — not culled, and
+/// at a display alpha (the *Scene transparency* preference included) of 1 —
+/// minus delete and unchanged markers. A diff structure (an edit overlay,
+/// not matter) has none. The exposure cache uses this very function, so it
+/// and the tessellator cannot disagree about who is a receiver.
+pub fn ao_receivers(
+    structure: &AtomicStructure,
+    atomic_viz_prefs: &AtomicStructureVisualizationPreferences,
+) -> Vec<u32> {
+    if structure.is_diff() {
+        return Vec::new();
+    }
+    let global_alpha: f32 = if atomic_viz_prefs.scene_transparency_enabled {
+        atomic_viz_prefs.scene_alpha.clamp(0.0, 1.0)
+    } else {
+        1.0
+    };
+    structure
+        .atoms_values()
+        .filter(|atom| {
+            !atom.is_delete_marker()
+                && !atom.is_unchanged_marker()
+                && global_alpha * structure.get_atom_alpha(atom.id) >= 1.0
+                && !should_cull_atom(structure, atom, atomic_viz_prefs)
+        })
+        .map(|atom| atom.id)
+        .collect()
 }
 
 /// A bond renders (and picks) as **ball-and-stick** — stick radius, multi-bond
@@ -985,13 +1017,23 @@ fn tessellate_bond_delete_marker(
 /// the ghost region. Fully-opaque atoms/bonds route to the opaque meshes
 /// exactly as before. The transparent path is nothing more than a routing
 /// decision layered on top of the existing appearance computation.
+///
+/// `exposure` is the baked ambient occlusion of the structure's receivers
+/// (`doc/design_depth_perception.md` D7): `None` when AO is off, and every
+/// vertex is then fully exposed. Opaque atoms and bonds read their packed
+/// value from it, an atom without a value is fully exposed, and everything
+/// else (ghosts, markers, anchors) is fully exposed regardless.
 pub fn tessellate_atomic_structure_impostors(
     atom_impostor_mesh: &mut AtomImpostorMesh,
     bond_impostor_mesh: &mut BondImpostorMesh,
     transparent_impostor_mesh: &mut TransparentImpostorMesh,
     atomic_structure: &AtomicStructure,
     atomic_viz_prefs: &AtomicStructureVisualizationPreferences,
+    exposure: Option<&AtomExposure>,
 ) {
+    let packed_exposure =
+        |atom_id: u32| exposure.map_or(FULLY_EXPOSED, |e| e.packed_or_exposed(atom_id));
+
     //let _timer = Timer::new("Atomic impostor tessellation");
 
     // Pre-allocate impostor mesh capacity (much smaller than triangle tessellation)
@@ -1054,6 +1096,7 @@ pub fn tessellate_atomic_structure_impostors(
             &effective_viz,
             atom_alpha,
             atomic_structure.get_atom_color(*id),
+            packed_exposure(*id),
         );
     }
 
@@ -1130,6 +1173,7 @@ pub fn tessellate_atomic_structure_impostors(
                             bond.bond_order(),
                             radius_scale,
                             bond_alpha,
+                            [packed_exposure(atom.id), packed_exposure(other_atom_id)],
                         );
                     }
                 }
@@ -1237,6 +1281,7 @@ pub fn tessellate_atom_impostor(
     visualization: &AtomicStructureVisualization,
     alpha: f32,
     color_override: Option<Vec3>,
+    exposure: [i8; 4],
 ) {
     let radius = get_displayed_atom_radius(atom, visualization) as f32;
     let (color, roughness, metallic, rim_color) =
@@ -1253,13 +1298,20 @@ pub fn tessellate_atom_impostor(
             alpha,
         );
     } else {
-        atom_impostor_mesh.add_atom_quad(
+        // Markers are edit overlays, not matter: never darkened (D6).
+        let exposure = if atom.is_delete_marker() || atom.is_unchanged_marker() {
+            FULLY_EXPOSED
+        } else {
+            exposure
+        };
+        atom_impostor_mesh.add_atom_quad_with_exposure(
             &atom.position.as_vec3(),
             radius,
             &color.to_array(),
             roughness,
             metallic,
             &rim_color,
+            exposure,
         );
     }
 }
@@ -1277,6 +1329,7 @@ fn tessellate_bond_impostor_inline(
     bond_order: u8,
     radius_scale: f64,
     alpha: f32,
+    exposure: [[i8; 4]; 2],
 ) {
     let color = get_bond_color_inline(atom1.id, atom2.id, bond_order, atomic_structure);
 
@@ -1302,11 +1355,12 @@ fn tessellate_bond_impostor_inline(
                 alpha,
             );
         } else {
-            bond_impostor_mesh.add_bond_quad(
+            bond_impostor_mesh.add_bond_quad_with_exposure(
                 &start.as_vec3(),
                 &end.as_vec3(),
                 radius,
                 &color.to_array(),
+                exposure,
             );
         }
     }

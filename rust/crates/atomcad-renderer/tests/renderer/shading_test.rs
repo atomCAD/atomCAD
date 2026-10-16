@@ -193,3 +193,75 @@ fn the_depth_cue_mixes_towards_the_background_in_display_space() {
     assert!((back - colour.lerp(background, f)).abs().max_element() < 1e-6);
     assert!((back - background).length() < (colour - background).length());
 }
+
+// ---- Baked ambient occlusion (Phase 4, D7, D10) ----
+
+use atomcad_renderer::shading::{
+    AO_FLOOR, AO_KEY, FULLY_EXPOSED, ao_factors, ao_visibility, decode_exposure,
+    light_surface_exposed,
+};
+use glam::f32::Vec4;
+
+/// D10: a terrace atom's packed value, `E = ½` and `b = ¼·up` (so `4b = up`),
+/// gives the closed-form visibility `(1 + cos θ)/2` at every tilt.
+#[test]
+fn a_half_space_sky_has_the_closed_form_visibility() {
+    let terrace = Vec4::new(0.0, 0.0, 1.0, 0.5);
+    for degrees in [0.0f32, 30.0, 60.0, 90.0, 135.0, 180.0] {
+        let (s, c) = degrees.to_radians().sin_cos();
+        let v = ao_visibility(terrace, Vec3::new(s, 0.0, c));
+        assert!(
+            (v - (1.0 + c) / 2.0).abs() < 1e-6,
+            "{degrees}°: {v} against {}",
+            (1.0 + c) / 2.0
+        );
+    }
+}
+
+/// D7: the mapping leaves an open surface alone, keeps `AO_FLOOR` of the
+/// indirect light on a buried one, takes only `AO_KEY` of that from the key,
+/// and does nothing at all at strength 0.
+#[test]
+fn the_ao_mapping_spans_floor_to_one_and_is_off_at_strength_0() {
+    let n = Vec3::Z;
+    assert_eq!(ao_factors(1.0, FULLY_EXPOSED, n), (1.0, 1.0));
+    let buried = Vec4::new(0.0, 0.0, 0.0, 0.0);
+    let (ambient, key) = ao_factors(1.0, buried, n);
+    assert!((ambient - AO_FLOOR).abs() < 1e-6, "{ambient}");
+    assert!(
+        (key - (1.0 - (1.0 - AO_FLOOR) * AO_KEY)).abs() < 1e-6,
+        "{key}"
+    );
+    assert_eq!(ao_factors(0.0, buried, n), (1.0, 1.0));
+    // Half strength is half way.
+    let (half, _) = ao_factors(0.5, buried, n);
+    assert!((half - (1.0 + AO_FLOOR) / 2.0).abs() < 1e-6, "{half}");
+}
+
+/// A buried surface is darker than an open one under both presets, and the
+/// fully exposed value reproduces `light_surface` exactly.
+#[test]
+fn burial_darkens_and_full_exposure_changes_nothing() {
+    let camera = camera();
+    let v = view_vector(&camera, camera.target);
+    for preset in [LightingPreset::Headlight, LightingPreset::Studio] {
+        let mut shading = uniform(&camera, preset);
+        shading.ao_strength = 1.0;
+        let albedo = Vec3::new(0.6, 0.5, 0.4);
+        let open = light_surface(&shading, v, v, albedo, 0.5, 0.0);
+        let exposed = light_surface_exposed(&shading, v, v, albedo, 0.5, 0.0, FULLY_EXPOSED);
+        assert_eq!(open, exposed);
+        let buried = light_surface_exposed(&shading, v, v, albedo, 0.5, 0.0, Vec4::ZERO);
+        assert!(luminance(buried) < 0.9 * luminance(open), "{preset:?}");
+    }
+}
+
+/// `Snorm8x4` decoding: 127 is 1, −127 and −128 are −1.
+#[test]
+fn snorm_decoding_matches_the_gpu() {
+    assert_eq!(decode_exposure([0, 0, 0, 127]), FULLY_EXPOSED);
+    assert_eq!(
+        decode_exposure([-127, -128, 127, 0]),
+        Vec4::new(-1.0, -1.0, 1.0, 0.0)
+    );
+}

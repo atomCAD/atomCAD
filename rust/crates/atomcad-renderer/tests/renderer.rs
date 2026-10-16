@@ -55,6 +55,11 @@ mod shading_uniform_test;
 #[path = "renderer/shading_test.rs"]
 mod shading_test;
 
+// Depth perception, Phase 4: the impostor vertices' exposure attributes
+// (doc/design_depth_perception.md D7, Testing layer 1).
+#[path = "renderer/impostor_vertex_layout_test.rs"]
+mod impostor_vertex_layout_test;
+
 // Screen-space lines, Phase 2: the instanced `LineMesh`, the line blend state
 // and the Rust twins of `line_mesh.wgsl` (doc/design_screen_space_lines.md
 // D1, D4, D6, D7).

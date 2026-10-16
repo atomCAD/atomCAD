@@ -120,6 +120,7 @@ fn main() {
             &mut transparent_impostors,
             &structure,
             &viz_prefs,
+            None,
         );
         let impostor = t.elapsed();
 

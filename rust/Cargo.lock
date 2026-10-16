@@ -248,6 +248,8 @@ dependencies = [
  "glam",
  "insta",
  "nalgebra",
+ "rayon",
+ "rustc-hash 2.1.1",
 ]
 
 [[package]]
