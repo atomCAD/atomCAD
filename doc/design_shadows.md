@@ -150,10 +150,16 @@ key_visibility = 1 − shadow_strength · (1 − v)       v ∈ [0, 1], 1 = full
   thin dark sliver under each object, which reads as an artefact. Under
   *Headlight* `shadow_strength` is 0 and no shadow pass runs (D9). *Headlight*
   remains exactly today's look.
-- **Camera-relative, as the key already is.** The shadows move with the
-  camera: while orbiting, the shadow pattern stays put on screen the way the
-  shading does (DP D3), and the shadow always falls down and to the right of
-  its caster, away from the viewer, where it is visible.
+- **Camera-relative, as the key already is.** The shadow always falls down
+  and to the right of its caster, away from the viewer, where it is visible.
+  The price: the light moves relative to the content as the camera orbits, so
+  cast shadows **sweep across the scene while orbiting** — the tool's shadow
+  slides over the workpiece, a step edge's shadow swings round. Shading on a
+  single surface stays put on screen (DP D3); cast shadows do not. DP D3's
+  reasons for a camera-relative key still hold (a world-fixed light would
+  face its dark side to the user during half of every orbit), and the
+  shadows are correct in every frame, but the sweep is a visible behaviour,
+  judged in the walkthrough (Phase 5) on its own, not as shimmer.
 - **The calibration constraint holds by construction.** An unshadowed surface
   has `v = 1`, hence `key_visibility = 1` exactly, and DP D3's front-facing
   white surface is unchanged.
@@ -239,6 +245,13 @@ for AO.
 receiver outside it can be shadowed only by a caster inside it, so fitting to
 the casters loses nothing (D5).
 
+The casters are a subset of the content, so the two bounds share their
+per-mesh code. `thumbnail.rs` gains `pub fn caster_bounds(main_mesh,
+atom_impostor_mesh, bond_impostor_mesh)`, built on the existing
+`BoundsAccumulator`, and `content_bounds` starts from the same accumulation
+and adds the wireframe and the transparent meshes. No mesh's loop is written
+twice, and a mesh added to the casters cannot be missing from the content.
+
 ### D4 — Caster passes: the light as an orthographic camera, through the existing shaders
 
 **The light camera is a `Camera`.** Each cascade (D6) is an orthographic
@@ -279,9 +292,11 @@ receiver's exact normal, serves impostors and meshes alike (D7).
 
 **`ShadowCasterPipelines`, not `PipelineSet`.** The caster pipelines draw
 only into the shadow map, which has one sample and no colour attachment,
-whatever target the frame is for. They are built once, on
+whatever target the frame is for. They live in `pipelines.rs` beside
+`PipelineSet`, and are built once from the **same** `Shaders` modules (no
+second compilation of the composed lit shaders), on
 `PipelineLayouts::main` (`[camera+shading, model]`), with
-`SAMPLE_COUNT = 1`:
+`sample_count_constants(1)` for the impostors' `override SAMPLE_COUNT`:
 
 - atom impostor (`fs_shadow`)
 - bond impostor (`fs_shadow`)
@@ -294,7 +309,7 @@ so the rule does not apply; `rust/AGENTS.md` gains that exception (Phase 4).
 **Group 0 of a caster pass** pairs cascade `k`'s light camera buffer with the
 content `ShadingUniform` buffer, which no caster entry point reads. Four
 camera buffers and four bind groups, one per possible cascade (D6), created
-once.
+once and owned by `ShadowMap` (D9).
 
 **One render pass per cascade.** Each targets layer `k` of the shadow-map
 array (D9), clears depth to 1 and uses `Less`. It draws, in order: the
@@ -305,7 +320,19 @@ the same submit.
 ### D5 — The fit: the casters' bounding sphere, seen from a camera-relative light, stabilised
 
 **The light frame.** With `L` the key's travel direction (unit), the light's
-up is the camera's up made perpendicular to `L`:
+up is the camera's up made perpendicular to `L`.
+
+`L` must be *the* key direction the receiver shades with, not a second
+derivation of it: a map built along a slightly different direction than
+`ShadingUniform.key_light_dir` would put shadows where `N·L` says there is
+light. So `shading_uniform.rs` factors the key out of `ShadingUniform::new`
+into `pub fn key_light_direction(camera, preset) -> DVec3` (f64; the uniform
+casts it), which both `ShadingUniform::new` and `shadow_setup` call. The
+camera basis (`forward`, `right`, `up`) is computed three times in that file
+today (`light_travel_direction`, `camera_up`, and now the fit); it becomes
+one `pub(crate) fn camera_basis(camera)`.
+
+The light's up is then
 `u = normalize(up_cam − L (up_cam · L))`. `L` is never parallel to
 `up_cam`: the key sits 35° above the view direction, so `up_cam · L` is
 about −0.57. Light-space coordinates `(x_L, y_L, z_L)` measure along
@@ -316,19 +343,27 @@ space. That property drives the whole fit.
 
 **Depth range: the whole caster sphere.** With `(c, R)` the centre and half
 diagonal of `caster_bounds`, every caster lies within `z_L ∈ [c·L − R,
-c·L + R]`. The light camera's `znear`/`zfar` cover that range plus a small
-margin. So every caster is in the map, on screen or not:
+c·L + R]`. The light camera covers that range plus a margin of one texel at
+each end (`z_near_l = c·L − R − t`, `depth_range = 2R + 2t`). So every
+caster is in the map, on screen or not:
 
 - A tool tip above the top of the screen still shadows the visible surface.
 - A receiver closer to the light than every caster (depth < 0 after
-  projection) is lit, and the comparison clamps it there.
+  projection) is lit: its reference depth is below every stored depth, so
+  every comparison passes.
 - A receiver behind every caster (depth > 1) is compared against what is
   actually in the map at that texel, which is correct.
 
 **Footprint: the visible slice of the view, cut to the casters.** For a
-cascade covering view depths `[a, b]` (D6):
+cascade covering view depths `[a, b]` (D6), fitted over `[a', b]`:
 
-1. Take the eight corners of the view frustum between depths `a` and `b`:
+0. `a' = a` for cascade 0. For every later cascade `k`, `a'` reaches back
+   over the previous cascade's blend band (D7):
+   `a' = a − SHADOW_BLEND_FRACTION · (b_{k−1} − a_{k−1})`. A receiver in that
+   band is shaded with *both* cascades, so it must be inside both squares.
+   Fitting only `[a, b]` would leave it outside cascade `k`'s square, where
+   it reads as lit, and every split would show a bright fringe.
+1. Take the eight corners of the view frustum between depths `a'` and `b`:
    half extents `d·tan(fovy/2)·(aspect, 1)` at each depth in perspective,
    `ortho_half_height·(aspect, 1)` in orthographic.
 2. Project them to light space and take their bounding rectangle `F`.
@@ -348,24 +383,29 @@ cascade covering view depths `[a, b]` (D6):
   are measured from the world origin, a camera **pan** (translation, no
   rotation) leaves the light frame unchanged and moves the square by whole
   texels: casters fall on the same texels and shadow edges do not crawl.
-- **Orbit.** The frustum's footprint `F` is constant in light space, since
-  light space turns with the view. The casters' square `Q` is a sphere's
-  shadow and is invariant under rotation. So orbiting about the casters'
-  centre keeps the footprint's *size* fixed.
+- **Orbit.** The casters' square `Q` is a sphere's shadow, so its size does
+  not change under rotation. When the whole caster sphere is in view (the
+  common case: one cascade, `F ⊇ Q`), the footprint is `Q` and orbiting
+  about the casters' centre keeps `s` fixed. When it is not, `F` changes
+  with the splits, which follow the casters' AABB along the view axis (D6),
+  so `s` can change by a quantisation step during an orbit. That is
+  acceptable: the steps are discrete, not a continuous breathing.
 
-  What orbiting does change is the content's orientation relative to the
-  texel grid, because the light really does move relative to the content.
-  Shadow edges therefore shimmer slightly while orbiting. That is inherent to
-  a camera-relative light; PCF (D7) keeps it low, and the refined frame at
-  rest (AA D5) is stable.
+  What orbiting does change is the light's direction relative to the
+  content. The shadows therefore sweep across the scene (D1), and on top of
+  that their edges shimmer slightly, because the content turns against the
+  texel grid. Both are inherent to a camera-relative light; PCF (D7) keeps the
+  shimmer low, and the refined frame at rest (AA D5) is stable.
 
 **The light camera of cascade `k`:**
 
 - orthographic, aspect 1, `ortho_half_height = s/2`
 - `up = u`
-- its eye at the square's centre in `x_L, y_L`, behind the depth range in
-  `z_L`; its target one unit further along `L`
-- `znear = 0`, `zfar` = the depth range
+- its eye at light-space `(centre_l, z_near_l)`, the start of the depth
+  range; its target one unit further along `L`
+- `znear = 0`, `zfar = depth_range`
+
+This is `ShadowSetup::light_camera(k)`.
 
 **The fit is one pure function** in a new module `shadow_fit.rs`:
 
@@ -382,18 +422,37 @@ pub fn shadow_setup(
     target: &TargetSpec,
 ) -> Option<ShadowSetup>;
 
-pub struct ShadowSetup { pub cascades: Vec<ShadowCascadeFit> }   // 1..=MAX_CASCADES
+#[derive(Clone, Debug, PartialEq)]
+pub struct ShadowSetup {
+    pub light_dir: DVec3,                // L
+    pub light_up: DVec3,                 // u
+    pub cascades: Vec<ShadowCascadeFit>, // 1..=MAX_CASCADES
+}
 
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ShadowCascadeFit {
-    pub light_camera: Camera,
+    pub centre_l: DVec2,      // the square's centre in (x_L, y_L), snapped
+    pub side: f64,            // s, quantised
+    pub z_near_l: f64,        // where the depth range starts along L
+    pub depth_range: f64,     // its length
     pub split_near: f64,      // view depth where the cascade starts
     pub split_far: f64,       // and ends
     pub texel_world: f64,     // t = s / N, in Å
 }
+
+impl ShadowSetup {
+    /// Cascade `k`'s light camera, built from the fit above.
+    pub fn light_camera(&self, k: usize) -> Camera;
+}
 ```
 
-`ShadowSetup` implements `PartialEq`, by bits, because the cache (D9)
-compares it.
+The setup holds the fit's numbers, not `Camera`s. `Camera` derives neither
+`PartialEq` nor `Copy` and carries fields that mean nothing to a light
+(`pivot_point`, `nav_up`, the `nav_up_label` string), so a setup made of
+cameras would need a hand-written comparison and would clone a `String` per
+cascade per frame. With plain numbers, `PartialEq` is derived, which is what
+the cache (D9) compares; the `Camera` is built only where `CameraUniform::new`
+needs one.
 
 **Rejected:**
 
@@ -433,16 +492,34 @@ H_out = target height / pixel_scale      (output pixels, so HiDPI and the
                                           export's 2× supersampling count once)
 ```
 
-A cascade `[a, b]` is acceptable when its texel `t(a, b) ≤ κ · p(a)`, with
-`κ = SHADOW_TEXELS_PER_PIXEL = 2`. A shadow texel may cover at most two output
-pixels where the cascade starts. The PCF filter (D7) is wider than that
-anyway.
+A cascade `[a, b]` is acceptable when its texel
+
+```text
+t(a, b) ≤ max(κ · p(a), t_floor)
+κ       = SHADOW_TEXELS_PER_PIXEL = 2
+t_floor = SHADOW_SOFTNESS_A / 1.5          (0.1 Å)
+```
+
+- **`κ · p(a)`:** a shadow texel may cover at most two output pixels where
+  the cascade starts.
+- **`t_floor`:** below it, a finer texel buys nothing. The PCF radius is
+  `max(SHADOW_SOFTNESS_A, 1.5 · t)` in world units (D7), so every texel of
+  0.1 Å or less gives the same 0.15 Å penumbra. Without the floor, a
+  close-up (where `p(a)` may be 0.01 Å) would spend cascades resolving detail
+  the filter then blurs away.
+
+With the floor, one cascade covers about `t_floor · N ≈ 200 Å` of light-space
+footprint at full quality, so cascades appear only on structures larger than
+that.
 
 **The splits.**
 
-- `front` and `back` are the support of `caster_bounds` along the view axis
-  (as `depth_cue_range` computes `front`), clamped to `[znear, zfar]`. If
-  `back ≤ front`, there are no shadows.
+- `front` and `back` are the support of `caster_bounds` along the view axis,
+  clamped to `[znear, zfar]`. If `back ≤ front`, there are no shadows.
+  `depth_cue_range` already computes `front` this way; its support-point
+  arithmetic moves into `pub(crate) fn view_depth_extent(camera, bounds) ->
+  (f64, f64)` in `shading_uniform.rs`, which both call, rather than being
+  written a second time in the fit.
 - Cascade 0 starts at `a₀ = front`. Each cascade's `b` is the deepest value in
   `(a, back]` that meets the criterion, found by bisection. `t(a, b)` grows
   with `b`, so bisection finds it.
@@ -451,17 +528,21 @@ anyway.
   `back` whatever its texel.
 - If not even a thin slice meets the criterion, the cascade takes an even
   share of what is left: `b = a + (back − a) / (MAX_CASCADES − k)`. That
-  happens on a wide window with a 2048 map, because the frustum's own width
-  at `a` then exceeds `κ·N` pixels.
+  happens only on an output wider than `κ·N = 4096` pixels whose near slice
+  is also above the floor, because the frustum's own width at `a` then
+  exceeds `κ·N` pixels.
+- The criterion is evaluated on the slice the cascade is fitted over,
+  `[a', b]`, blend extension included (D5).
 
 **What this gives:**
 
 | View | Cascades |
 |---|---|
 | A molecule, a tool, a block in full view, either projection | 1 (`2R / N` is far below `κ·p`) |
+| A tool over a workpiece of up to ~200 Å, any view | 1 (the floor) |
 | A slab face-on, orthographic | 1 |
-| A slab at a grazing angle, perspective | 2–3 |
-| A close-up on the nanobeam | 3–4 |
+| A slab of hundreds of Å at a grazing angle, perspective | 2–3 |
+| A close-up on the nanobeam | 2–4 |
 | A rod end-on, orthographic | 2–3 (the near cascade covers the end face) |
 | An export (the same view, larger `H_out`) | the same or one more, automatically |
 
@@ -505,8 +586,12 @@ first `k` with `d ≤ split_far[k]`; beyond the last split, the last cascade.
 Within the last `SHADOW_BLEND_FRACTION` (10 %) of a cascade's depth range,
 the result is mixed with the next cascade's, so a split never shows as a
 seam. Selection by the same depths the fit used (D6) guarantees the point is
-inside its cascade's square, margin included. A point outside it anyway (a
-receiver beyond the casters' footprint) is lit.
+inside its cascade's square, margin included. The next cascade's fit reaches
+back over the band (D5 step 0), so a point in the band is inside both
+squares. A point outside it anyway (a receiver beyond the casters'
+footprint) is lit. That takes an explicit test on the projected `uv`: the
+sampler clamps to the edge, so without it such a point would repeat the
+border texels and pick up a caster that happens to touch the border.
 
 **The geometric normal.**
 
@@ -543,8 +628,9 @@ changes by `offset · tanθ`. So:
    centres up to ~0.71 texel away.
 
 All three are in texels of the cascade, so they scale with it. The constants
-are starting values. The acne test of Phase 1 bounds them, and the
-walkthrough looks for light leaking at contacts. AO already darkens the
+are starting values. Phase 1's acne detector bounds them from below and its
+contact detector from above (Testing layer 4); the walkthrough looks for
+light leaking at contacts in real structures. AO already darkens the
 contact crease (D10), so a slight leak there is not visible.
 
 **Fixed-softness PCF.**
@@ -616,7 +702,13 @@ struct ShadowUniform {
 
 It has a Rust twin in `shadow_fit.rs` with the same offset table and
 `offset_of!` checks as `ShadingUniform`, in `shader_test.rs`. It is built by
-a pure `ShadowUniform::new(&ShadowSetup)` and written on every draw.
+a pure `ShadowUniform::new(setup: Option<&ShadowSetup>, debug_tint: bool)`
+(`None`: `count = 0`, every slot zeroed) and written on every draw by
+`ShadowMap::prepare` (D9). Each `world_to_clip` is
+`CameraUniform::new(&setup.light_camera(k), (N, N), 1.0).view_proj`, the
+matrix the caster pass draws with. A cascade's start, needed for the blend
+band, is the previous cascade's `split_far` (cascade 0 never blends from
+behind), so it is not stored.
 
 **A new pipeline layout, `PipelineLayouts::lit = [camera+shading, model,
 shadow]`**, for every lit pipeline:
@@ -629,9 +721,7 @@ The caster pipelines (D4) stay on `main`, which has no group 2. Their entry
 points do not use group 2, so they never sample the shadow map in the pass
 that writes it. wgpu validates a pipeline against the resources its entry
 points statically use, so a module that declares group 2 is valid on a
-layout without it. Phase 1 confirms this at pipeline creation in the GPU
-harness. **Fallback** if it does not hold: a caster layout with a group 2
-bound to the 1×1 placeholder map (D9).
+layout without it.
 
 **Group 2 must be re-bound before every lit draw.** In the main pass the
 labels bind the font atlas at group 2 and the lines bind their LOD uniform
@@ -649,24 +739,28 @@ sampled.
 - A `Depth32Float` 2D array texture, `SHADOW_MAP_SIZE = 2048` square,
   `MAX_CASCADES = 4` layers, usage `RENDER_ATTACHMENT | TEXTURE_BINDING`:
   64 MB.
-- It is created on the first draw that needs a shadow and dropped by
-  `set_shading` when shadows become effectively off (strength 0 or
-  *Headlight*). A shadow-free session holds none.
-- Until it exists, group 2 binds a 1×1×1 placeholder, which is never sampled
-  because the strength is 0.
+- It is created and dropped by `set_shading`, the one place that knows
+  whether shadows are effectively on (strength > 0 under *Studio*): created
+  when they turn on, dropped when they turn off. A shadow-free session holds
+  none. Not lazily on the first draw: `draw_to_target` runs under `&self`, and
+  creating the texture there would put the texture and the group-2 bind group
+  behind a lock too, for no gain. `set_shading` is `&mut self` and already
+  bumps the live generation on a change.
+- While it does not exist, group 2 binds a 1×1×1 placeholder, which is never
+  sampled because the strength is 0. The placeholder is cleared to depth 0,
+  which shadows everything, so a path that samples it by mistake shows up as
+  a dark image in the GPU tests rather than as a silently correct one.
 
-**Cached by key.** The renderer keeps the key of what the map holds:
+**Cached by what it holds.** The map remembers the `ShadowSetup` it was
+rendered for, or nothing:
 
-```text
-ShadowMapKey { caster_generation: u64, setup: ShadowSetup }
-```
-
-- `caster_generation` is bumped by every upload that replaces `main_mesh` or
-  the opaque impostor meshes (the non-lightweight branch of
-  `update_all_gpu_meshes`).
+- The non-lightweight branch of `update_all_gpu_meshes` (the only place
+  `main_mesh` and the opaque impostor meshes are replaced) calls
+  `invalidate()`, which forgets it. No generation counter: forgetting is
+  enough.
 - `draw_to_target` computes `shadow_setup(…)`. When the setup is `Some` and
-  the key differs from the stored one, it records the caster passes (D4) and
-  stores the new key. When it is equal, it records nothing.
+  differs from the remembered one, it records the caster passes (D4) and
+  remembers the new setup. When it is equal, it records nothing.
 - This is correct by construction, like the `ShadingUniform`: the map is
   re-rendered before any draw that disagrees with what it holds, so no view
   can see another view's shadows. It is therefore exempt from the "per-view
@@ -685,9 +779,36 @@ ShadowMapKey { caster_generation: u64, setup: ShadowSetup }
 
 **Observed, not inferred.** The renderer counts the cascade passes it
 records, as a per-instance `shadow_passes_drawn()`. Tests assert on it, never
-on timing, as with `last_exposure_stats` (DP Testing layer 1). Interior
-mutability is a `Mutex`, as for `LineLodBinding::was_visible`:
+on timing, as with `last_exposure_stats` (DP Testing layer 1). The remembered
+setup and the counter are the only state a draw changes; they sit together
+in one `Mutex`, as for `LineLodBinding::was_visible`, because
 `draw_to_target` runs under `&self`.
+
+**One owner: `ShadowMap`** (`shadow_map.rs`). `renderer.rs` is already
+~2 000 lines, and the shadow state is self-contained, so it does not spread
+over `Renderer`'s fields. `ShadowMap` owns the array texture (or none), the
+placeholder, the comparison sampler, `shadow_bind_group_layout` and the
+group-2 bind group, the `ShadowUniform` buffer, the four light-camera buffers
+and their group-0 bind groups, the remembered setup and the pass counter. Its
+surface is small:
+
+- `new(device, camera_bind_group_layout, content_shading_buffer)`, created
+  in `Renderer::new` **before** `PipelineLayouts`, which takes its
+  `shadow_bind_group_layout` for `PipelineLayouts::lit`
+- `set_enabled(&mut self, device, on)`, from `set_shading`: creates or drops
+  the array texture and rebuilds the group-2 bind group over it or over the
+  placeholder; a new texture remembers no setup
+- `set_cascade_debug(&mut self, on)`, from `set_shadow_cascade_debug`
+- `invalidate(&self)`, from the upload
+- `prepare(&self, queue, encoder, setup: Option<&ShadowSetup>, casters)`:
+  writes the `ShadowUniform` and, when the setup is `Some` and differs from
+  the remembered one, the light-camera buffers and the caster passes
+- `bind_group(&self)`, for the re-bind helper (D8)
+- `passes_drawn(&self)`, `allocated(&self)`, exposed to tests as
+  `Renderer::shadow_passes_drawn()` and `Renderer::shadow_map_allocated()`
+
+`casters` is a small borrowed struct of the three caster meshes and the
+`ShadowCasterPipelines`; `Renderer` builds it in `draw_to_target`.
 
 **A debug tint**, `Renderer::set_shadow_cascade_debug(bool)`, colours each
 receiver by its cascade (red, green, blue, yellow at 50 %). It is the only
@@ -710,10 +831,12 @@ ao_key = mix(AO_KEY, AO_KEY_WITH_SHADOWS, shadow_strength)
 AO_KEY = 0.35   (unchanged)     AO_KEY_WITH_SHADOWS = 0.1   (starting value)
 ```
 
-`ao_key` is computed by `ShadingUniform::new` and read by `ao_factors` in
-place of the constant (D8), with the twin changed alike. With shadows off
-(`shadow_strength = 0`) it is exactly `AO_KEY`, so every existing AO test and
-image is unchanged.
+`shadow_strength` here is the **uniform's** (D8), which is 0 whenever no
+shadow is drawn (no setup: *Headlight*, no casters, shadows off), not the
+preference. `ao_key` is computed by `ShadingUniform::new` and read by
+`ao_factors` in place of the constant (D8), with the twin changed alike.
+Wherever no shadow is drawn it is exactly `AO_KEY`, so every existing AO
+test and image is unchanged.
 
 The two remain complementary. Shadows give direction and relate separate
 objects; AO gives the contact crease, which a 2048 map spread over a large
@@ -749,6 +872,33 @@ the key keeps the creases legible where the key washes over them.
   walkthrough finds the cost too high on integrated graphics, the levers are
   in Phase 3, in the order given there.
 
+## Where the code goes
+
+Everything except the preference plumbing is in `atomcad-renderer`; no new
+crate edge. Shadows touch neither `atomcad-display` nor the tessellators: the
+casters are the meshes the renderer already holds.
+
+| Where | What |
+|---|---|
+| `atomcad-renderer/src/shadow_fit.rs` (new) | Pure: `shadow_setup`, `ShadowSetup`, `ShadowCascadeFit`, the cascade criterion, `ShadowUniform` and `ShadowUniform::new`, the constants the CPU needs (`SHADOW_MAP_SIZE`, `MAX_CASCADES`, `SHADOW_SOFTNESS_A`, `SHADOW_TEXELS_PER_PIXEL`, `SHADOW_BLEND_FRACTION`) |
+| `atomcad-renderer/src/shadow_map.rs` (new) | GPU: `ShadowMap` (D9), the caster passes it records |
+| `atomcad-renderer/src/shading_uniform.rs` | `ShadingSettings.shadow_strength`, the two new uniform fields, `ao_key` (D10); the shared `key_light_direction`, `camera_basis`, `view_depth_extent` |
+| `atomcad-renderer/src/thumbnail.rs` | `caster_bounds`, with `content_bounds` built on it |
+| `atomcad-renderer/src/pipelines.rs` | `PipelineLayouts::lit`, `ShadowCasterPipelines` |
+| `atomcad-renderer/src/renderer.rs` | Fields: one `ShadowMap`, one `ShadowCasterPipelines`, `caster_bounds`. `draw_to_target` calls `shadow_setup` and `ShadowMap::prepare` before the main pass and re-binds group 2 through the helper; `set_shading` calls `set_enabled`; the upload calls `invalidate`; `set_shadow_cascade_debug` |
+| `lighting.wgsl` | The group-2 declarations, `shadow_visibility`, the `key_visibility` parameter |
+| `atom_impostor.wgsl`, `bond_impostor.wgsl` | `fs_shadow` |
+| `shading.rs` | The twin's `key_visibility` and `ao_key` |
+| `atomcad-structure-designer/src/preferences.rs`, `rust/src/api/structure_designer/structure_designer_preferences.rs` | The two fields and their API twin (D11) |
+| `rust/src/api/api_common.rs` | `to_shading_settings` |
+
+**One home per constant.** The constants that the CPU uses (the softness,
+the blend fraction, the map size) are in `shadow_fit.rs` only and reach the
+shader through `ShadowUniform` (`filter_radius_uv`, `blend_fraction`,
+`texel_world`), so WGSL never restates them. The bias constants
+(`NORMAL_OFFSET_TEXELS`, `SLOPE_BIAS_TEXELS`, `CONST_BIAS_TEXELS`) and the
+16-tap disk are used only by the shader and live only in `lighting.wgsl`.
+
 ## Open questions
 
 1. **Sheets in `main_mesh`.** A 2D sketch's fill and the surface splats are
@@ -759,8 +909,8 @@ the key keeps the creases legible where the key washes over them.
    a shader flag.
 2. **Constants.** `SHADOW_SOFTNESS_A` (0.15 Å), the default strength (0.7)
    and `AO_KEY_WITH_SHADOWS` (0.1) are starting values for the walkthrough.
-   The bias constants are bounded by the acne test first, then the
-   walkthrough.
+   The bias constants are bounded by the acne and contact detectors first
+   (Phase 1), then the walkthrough.
 3. **The terminator band on smooth meshes.** D7's face-normal bias should
    remove it. If a coarse tessellated sphere (a triangle-mesh atom) still
    shows bands near its terminator, the fallback is to fade
@@ -775,8 +925,13 @@ tests are listed in the phase that builds what they test.
    - `shadow_setup` (`shadow_fit_test.rs`, new, in `tests/renderer/`) covers
      the light frame, the depth range, the footprint, the stabilisation, the
      cascade criterion and splits, and the cases that return `None`.
-   - `ShadowUniform::new`, and `ShadingUniform::new`'s new fields.
-   - `caster_bounds`.
+   - `ShadowUniform::new`: each cascade's `world_to_clip` equals
+     `CameraUniform::new(&setup.light_camera(k), …).view_proj`, so the
+     receiver projects with exactly the matrix the caster pass drew with;
+     the derived fields (`filter_radius_uv`, `texel_world`, `split_far`);
+     unused cascade slots zeroed.
+   - `ShadingUniform::new`'s new fields.
+   - `caster_bounds`, and `content_bounds` unchanged by being rebuilt on it.
    - The preferences' serde defaults and `to_shading_settings`.
 2. **Shader structure, naga** (`shader_test.rs`).
    - Every lit shader validates as composed, with the new group 2.
@@ -797,20 +952,38 @@ tests are listed in the phase that builds what they test.
    removed; each phase names the mutation.
    - **The anchor:** with shadows off (the renderer default) every image is
      byte-identical to the previous phase.
-   - **The acne detector:** a scene with nothing to shadow, drawn with
-     shadows on at strength 1, equals the same scene with shadows off.
-     Examples: a lone sphere, a lone bond, a lone CSG cube, a lone
-     tessellated sphere mesh, all lit from the key. The tolerance is 2/255 at
-     every pixel for impostors, and a small pixel count for meshes. Self-
-     shadowing is the only thing that can make them differ.
+   - **The acne detector** (bias too small): a scene with nothing to
+     shadow, drawn with shadows on at strength 1, equals the same scene with
+     shadows off. Examples: a lone sphere, a lone bond, a lone CSG cube, a
+     lone tessellated sphere mesh, all lit from the key. The tolerance is
+     2/255 at every pixel for impostors; for meshes, at most 0.5 % of the
+     object's pixels may differ by more than 2/255. Self-shadowing is the
+     only thing that can make them differ. Each scene is drawn at the finest
+     and at the coarsest texel the tests produce (about 0.01 Å and at least
+     0.3 Å, the latter by zooming out): the bias is in texels, and the coarse
+     end is where acne shows.
+   - **The contact detector** (bias too large). The acne detector alone
+     would pass a bias of any size; this bounds it from above. A sphere
+     resting on a CSG slab, and a sphere touching a layer of spheres: the
+     shadow reaches the contact. The slab pixel just beside the contact, on
+     the shadow side, is darker than the slab far from the sphere by at least
+     half the full-shadow difference (from the twin at `v = 0` and `v = 1`).
+     Drawn at the same two texel sizes.
+   - **The position check:** a shadow lands where the light puts it. The
+     centroid of the darkened pixels of a sphere's shadow on a layer lies
+     within two output pixels of the CPU projection of the sphere's centre
+     along `L` onto the layer. A wrong matrix, a half-texel offset or a
+     wrong depth range fails it; "darker below and to the right" alone does
+     not.
 5. **No new Dart logic.** The two dialog rows are thin editor UI and are
    checked in the walkthrough.
 
 **Not automated, on purpose** (Phase 5's walkthrough):
 
 - whether the shadows look right, and the constants
-- light leaking at contacts
-- shimmer while orbiting
+- light leaking at contacts in real structures, beyond the contact
+  detector's two simple scenes
+- shimmer while orbiting, and the sweep of shadows across the scene (D1)
 - the frame rate on the maintainer's machine and on integrated graphics
 
 ## Phases
@@ -838,16 +1011,22 @@ in DP Phase 4b, **no uncached shadow path ever reaches the app**.
 
 - **Before any code:** dump the whole GPU harness from the current commit
   (`ATOMCAD_GPU_DUMP_DIR`).
-- `caster_bounds` (recorded at upload, D3) and `caster_generation` (D9).
+- The shared helpers first, as a pure refactor under the anchor test:
+  `key_light_direction`, `camera_basis` and `view_depth_extent` in
+  `shading_uniform.rs` (D5, D6), and `content_bounds` rebuilt on
+  `caster_bounds` in `thumbnail.rs` (D3), recorded at upload.
 - `shadow_fit.rs` with `shadow_setup` restricted to one cascade over
   `[front, back]` (D5 complete, D6 not yet), `ShadowSetup`, `ShadowUniform`
   and its twin.
-- `fs_shadow` in the atom and bond shaders, `ShadowCasterPipelines`, the four
-  light camera buffers and bind groups (D4).
-- The shadow map (created lazily), the placeholder, the comparison sampler,
-  `shadow_bind_group_layout`, `PipelineLayouts::lit`, and the group-2 re-bind
-  helper (D8, D9). In this phase the map is re-rendered on every draw that
-  needs it: no cache yet.
+- `fs_shadow` in the atom and bond shaders, `ShadowCasterPipelines` in
+  `pipelines.rs` (D4).
+- `shadow_map.rs`: `ShadowMap` with the map (created and dropped by
+  `set_shading`), the placeholder, the comparison sampler,
+  `shadow_bind_group_layout`, the four light camera buffers and bind groups;
+  `PipelineLayouts::lit` and the group-2 re-bind helper (D8, D9). In this
+  phase `prepare` re-renders the map on every draw that needs it: no cache
+  yet. The pass counter and `Renderer::shadow_passes_drawn()` /
+  `shadow_map_allocated()` come now, because this phase's tests use them.
 - `ShadingUniform` grows to 96 bytes (`shadow_strength`, `ao_key = AO_KEY`
   always, D10 not yet). `ShadingSettings` gains `shadow_strength` (default 0).
 - `shadow_visibility` in `lighting.wgsl` (D7, without the cascade blend), the
@@ -857,47 +1036,77 @@ in DP Phase 4b, **no uncached shadow path ever reaches the app**.
   - `shadow_fit_test.rs`:
     - the light frame is camera-relative: orbiting the camera leaves `L` and
       `u` unchanged in camera space; `u ⊥ L`
+    - `L` equals `ShadingUniform::new(…).key_light_dir` (cast to f32) for
+      the same camera, at several orientations
     - the depth range contains every corner of `caster_bounds`
     - random points of the caster sphere inside the view slice project inside
       the square, margin included (1 000 points, fixed seed)
     - the side is a quarter-octave step ≥ the unquantised side
     - pan stability: translating the camera by a fraction of a texel moves the
       square's centre by a whole number of texels (0 or 1) in light space
-    - orbit stability: orbiting about the caster sphere's centre leaves `s`
-      unchanged at eight orientations
+    - orbit stability: with the whole caster sphere in view, orbiting about
+      its centre leaves `s` unchanged at eight orientations (D5)
     - `None` for strength 0, for *Headlight*, without casters, and with every
       caster behind the camera
+  - also in `shadow_fit_test.rs` (the test file mirrors the source file, and
+    `ShadowUniform` lives in `shadow_fit.rs`; registered in
+    `tests/renderer.rs` like its siblings): the layer-1 checks of
+    `ShadowUniform::new`, including `world_to_clip` against
+    `CameraUniform::new` of `light_camera(k)`.
+  - `thumbnail_test.rs`: `caster_bounds` covers `main_mesh` and the opaque
+    impostors (radius included) and ignores the wireframe and transparent
+    meshes; the existing `content_bounds` tests pass unchanged.
   - `shading_uniform_test.rs`: the new offsets and size; the gadget variant
-    has `shadow_strength = 0`; `None` for the setup gives strength 0.
+    has `shadow_strength = 0`; `None` for the setup gives strength 0; the
+    refactored `depth_cue_range` returns what it did (the existing tests).
   - `shader_test.rs`: the layer-2 checks above.
   - Twin: `key_visibility(0, v) == 1` for every `v`; at strength 1 and
     `v = 0` only the key term goes.
   - GPU:
     - The anchor, against the dump (renderer default): every image is
-      byte-identical. Mutation: make `shadow_visibility` skip early out 1;
-      the comparison must fail.
-    - Pipeline creation of the caster pipelines on `main` succeeds (the D8
-      validation claim). If it fails, the fallback is taken and recorded here.
+      byte-identical. Mutation: drop the strength from `key_visibility` (use
+      `v` directly); the comparison must fail, because the receiver then
+      reads the placeholder, which shadows everything (D9). (Skipping early
+      out 1 is *not* a usable mutation: at strength 0 the formula gives 1
+      anyway.)
+    - Pipeline creation of the caster pipelines on `main` succeeds (D8).
     - The acne detector (Testing layer 4) in perspective and orthographic,
       with MSAA off and on, and the refined frame. Mutation: remove the
       normal offset and the receiver-plane depth; acne pixels must appear.
+    - The contact detector (Testing layer 4). Mutation: multiply
+      `CONST_BIAS_TEXELS` by 10; the contact must lose its shadow.
     - **Direction and depth:** a sphere 4 Å above a square layer of spheres,
       looked at from above, under *Studio* with strength 1. The layer is
       darker below and to the right of the sphere's screen position, not
       above and to the left. A layer sphere's centre pixel in the shadow's
       core matches the twin at `v = 0` within 2/255, one outside it at
-      `v = 1`. Mutation: flip `L` in the light camera.
+      `v = 1`. The position check (Testing layer 4) on the same scene, in
+      both projections. Mutation: flip `L` in the light camera; separately,
+      offset the light camera by half a texel.
+    - **Off-screen caster:** the same sphere moved above the top edge of the
+      view, its shadow still on screen: the shadow is drawn. Mutation: clip
+      the depth range or the footprint to the view instead of the caster
+      sphere (D5).
+    - **Outside the footprint is lit:** a single caster sphere at the edge
+      of a large ghost (transparent) layer that is not a caster: ghost
+      pixels far from the sphere, outside every cascade square, equal
+      shadows off. Mutation: remove the explicit `uv` bounds test (D7).
     - A bond above the layer casts; a CSG quad under an atom receives; a CSG
       cube above the layer casts (casters and receivers of every kind, D3).
     - A ghost sphere (transparent impostor) and a transparent isosurface
       above the layer cast nothing (the layer equals shadows off). A ghost
-      inside the shadow is darker than outside it (receivers).
+      inside the shadow is darker than outside it (receivers). The scene
+      also holds a label and a grid line, so the transparent draws come
+      after both have taken group 2: this is what exercises the re-bind
+      helper (D8). Mutation: skip the re-bind before the transparent
+      impostors; the draw must fail validation or the ghost must stop
+      darkening.
     - A gadget-pass atom inside the shadow is not darkened.
     - A selected atom in shadow keeps its rim colour within 2/255 (the rim is
       mixed after lighting, DP D4).
     - *Headlight* with shadow strength 1 is byte-identical to strength 0, and
       `shadow_passes_drawn` stays 0.
-- Effort: 2.5 d.
+- Effort: 3 d.
 
 ### Phase 2 — Adaptive cascades
 
@@ -910,11 +1119,20 @@ in DP Phase 4b, **no uncached shadow path ever reaches the app**.
     - a perspective close-up on a 1 000 × 1 000 × 20 Å slab at a grazing
       angle: more than one cascade, at most four; the splits are contiguous
       and cover `[front, back]`; every cascade but the last meets
-      `t ≤ κ·p(a)`
+      `t ≤ max(κ·p(a), t_floor)`
+    - the floor: a close-up on a 150 Å block, where `κ·p(a)` is far below
+      `t_floor`, gives one cascade. Mutation: drop `t_floor` from the
+      criterion; the count must rise.
+    - the blend band is covered: on the grazing slab, random points (fixed
+      seed) of each cascade's blend band project inside the *next* cascade's
+      square, margin included. Mutation: fit cascade `k` over `[a, b]`
+      instead of `[a', b]`.
     - an orthographic rod end-on: more than one cascade; cascade 0 meets the
       criterion
-    - a wide window where no thin slice meets it: the even-share rule; the
-      count is still at most four
+    - the even-share rule: an output wider than `κ·N = 4096` pixels on a
+      deep slab, zoomed out so that `κ·p(a)` is above `t_floor`, where no
+      thin slice meets the criterion: the cascades share what is left
+      evenly, and the count is still at most four
     - the count is stable under a small orbit step about the slab's centre
       (no change between neighbouring orientations, ten steps)
   - GPU:
@@ -931,12 +1149,16 @@ in DP Phase 4b, **no uncached shadow path ever reaches the app**.
       Å.
     - The Phase 1 acne detector, repeated on the grazing slab with nothing
       above it.
+    - The Phase 1 position check, with the caster sphere over the grazing
+      slab at a depth that falls in cascade 1 or later (the debug tint
+      confirms which), so a cascade other than 0 is checked against the CPU
+      projection. Mutation: index `world_to_clip` with `k − 1`.
 - Effort: 1.5 d.
 
 ### Phase 3 — The cache, the cost, the levers
 
-- `ShadowMapKey` and the cache in `draw_to_target`, `shadow_passes_drawn`
-  (D9), the map dropped by `set_shading` when shadows go off.
+- The cache in `ShadowMap`: the remembered setup, and `invalidate` from the
+  upload (D9).
 - **Tests** (GPU):
   - Two renders with nothing changed: the second records no shadow pass.
   - The refined frame after a rest records none.
@@ -945,20 +1167,28 @@ in DP Phase 4b, **no uncached shadow path ever reaches the app**.
   - A thumbnail (two backgrounds) records one set.
   - An export, then a live frame: each records its own, and the live frame
     shows its own shadows (it matches a live frame rendered with no export
-    before it). Mutation: leave the key unchanged on an offscreen draw; the
-    live frame must then fail.
+    before it). Mutation: leave the remembered setup unchanged on an
+    offscreen draw; the live frame must then fail.
   - Turning shadows off frees the map: a renderer-side `shadow_map_allocated()`
-    is false afterwards.
+    is false afterwards. Turning them on again draws correct shadows on the
+    next frame (the new map remembers no setup).
 - **Measure and record** in the phase notes, release build, an `#[ignore]`d
   harness test that prints and asserts nothing. The frame time with shadows
   off and on, on a 1 M-sphere impostor lattice (ball-and-stick, bonds
   included) and on a CSG solid of about 100 k triangles, at 2560 × 1440 with
   4× MSAA:
   - a moving frame, one cascade
-  - a moving frame, four cascades
+  - a moving frame, four cascades: a close-up on the lattice, chosen so
+    that `shadow_setup` returns four; the test asserts that count before it
+    times anything, so a fit change cannot silently turn it into a
+    one-cascade measurement
   - the refined frame
-- **Budget:** a moving frame with one cascade costs at most **+60 %** over
-  shadows off on the 1 M lattice. If missed, the levers in order:
+- **Budget,** over shadows off on the 1 M lattice: a moving frame with one
+  cascade at most **+60 %**; with four cascades (the close-up on a large
+  structure, the case cascades exist for) at most **+150 %**. The four-cascade
+  frame draws the whole caster set four times, with early depth testing off
+  for the impostors, so it is budgeted, not just recorded. If either is
+  missed, the levers in order:
   1. 8 PCF taps in normal frames, 16 in the refined frame (the refined frame
      replaces the moving one when the view rests, so the difference is
      transient)
@@ -979,10 +1209,13 @@ in DP Phase 4b, **no uncached shadow path ever reaches the app**.
     on at 0.7; the API twin round-trips; an unticked box gives strength 0;
     the strength is clamped.
   - `shading_uniform_test.rs`: `ao_key == AO_KEY` exactly at strength 0, and
-    `AO_KEY_WITH_SHADOWS` at strength 1.
+    `AO_KEY_WITH_SHADOWS` at strength 1. With `settings.shadow_strength = 0.7`
+    but a `None` setup (*Headlight*, or no casters), `ao_key == AO_KEY`
+    exactly: AO keeps its full share of the key wherever no shadow is drawn.
+    Mutation: compute `ao_key` from `settings.shadow_strength` alone,
+    ignoring the setup.
   - GPU: with shadows off and AO on, byte-identical to Phase 3 (the coupling
-    is inert at strength 0). Mutation: compute `ao_key` from the preference
-    alone, ignoring a `None` setup.
+    is inert at strength 0). The same with shadows on under *Headlight*.
 - **Docs**, in this phase, because this is where the change becomes visible:
   - `doc/reference_guide/ui.md`, Rendering section:
     - A *Shadows* row: what casts and receives (atoms, bonds, solids,
@@ -997,8 +1230,9 @@ in DP Phase 4b, **no uncached shadow path ever reaches the app**.
     - The intro sentence lists *Shadows* among the appearance settings that
       exports and thumbnails follow.
   - `rust/AGENTS.md`, renderer bullets:
-    - the shadow map is rewritten whenever its key disagrees, so it is exempt
-      from the per-view pairs rule
+    - `ShadowMap` (`shadow_map.rs`) owns all shadow GPU state; the shadow
+      map is rewritten whenever the setup it remembers disagrees with the
+      draw's, so it is exempt from the per-view pairs rule
     - `ShadowCasterPipelines` is the one exception to "a new pipeline goes
       into `PipelineSet`", because it has a single target
     - lit pipelines are on `PipelineLayouts::lit`, and group 2 is re-bound
@@ -1006,6 +1240,8 @@ in DP Phase 4b, **no uncached shadow path ever reaches the app**.
     - a new opaque content mesh must be added to the caster passes and to
       `caster_bounds`, or it neither casts nor fits
     - `fs_shadow` must not reach group 2 or `shading`
+    - the shadow fit and the shading take the key from the one
+      `key_light_direction`; a second derivation puts shadows on lit sides
   - `doc/design_depth_perception.md`, Future work: the shadow-map bullet
     points to this document.
 - Effort: 1 d.
@@ -1021,6 +1257,8 @@ in DP Phase 4b, **no uncached shadow path ever reaches the app**.
   - The T-centre scene and the 80-cell rod, perspective and orthographic,
     with the cascade debug tint on and off.
   - The nanobeam: a close-up, a full view, and an orbit (shimmer).
+  - Orbiting a mechanosynthesis step: the shadows sweep across the scene
+    with the camera-relative light (D1). Is it acceptable, or distracting?
   - A CSG solid beside atoms; a sketch on the drawing plane over atoms (Open
     question 1); a triangle-mesh-atom structure (Open question 3).
   - *Headlight*: no shadows, rows disabled. Shadows off: today's picture.
@@ -1031,7 +1269,7 @@ in DP Phase 4b, **no uncached shadow path ever reaches the app**.
     and the Phase 3 levers if the budget was missed.
 - Effort: 0.5 d.
 
-**Total: about 6.5–7 d.** The report costed 4–6 d for one map plus 1–2 d for
+**Total: about 7–7.5 d.** The report costed 4–6 d for one map plus 1–2 d for
 a focus map. This design replaces the focus map with adaptive cascades (the
 same cost), and adds the cache, the AO coupling and the GPU tests the report
 did not count.
