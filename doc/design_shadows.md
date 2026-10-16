@@ -702,7 +702,7 @@ struct ShadowUniform {
   count: u32,
   blend_fraction: f32,
   debug_tint: u32,             // D9: colour each pixel by its cascade
-  _pad: u32,
+  front: f32,                  // view depth where cascade 0 starts
 };                             // 336 bytes
 ```
 
@@ -713,8 +713,9 @@ a pure `ShadowUniform::new(setup: Option<&ShadowSetup>, debug_tint: bool)`
 `ShadowMap::prepare` (D9). Each `world_to_clip` is
 `CameraUniform::new(&setup.light_camera(k), (N, N), 1.0).view_proj`, the
 matrix the caster pass draws with. A cascade's start, needed for the blend
-band, is the previous cascade's `split_far` (cascade 0 never blends from
-behind), so it is not stored.
+band, is the previous cascade's `split_far`; cascade 0's is `front` (the
+band at the end of cascade 0 is a share of its whole slice, so it needs
+its start too; *Phase 2 finding*, this slot was padding before).
 
 **A new pipeline layout, `PipelineLayouts::lit = [camera+shading, model,
 shadow]`**, for every lit pipeline:
@@ -1188,6 +1189,55 @@ in DP Phase 4b, **no uncached shadow path ever reaches the app**.
       confirms which), so a cascade other than 0 is checked against the CPU
       projection. Mutation: index `world_to_clip` with `k − 1`.
 - Effort: 1.5 d.
+
+- **Phase 2 notes** (as implemented; the tests are in `shadow_fit_test.rs`
+  and `renderer_gpu.rs`, section *Shadows, Phase 2*):
+  - **Cascade 0's start is in the uniform** (`ShadowUniform.front`, the old
+    padding slot, D8). D8 said no start is stored because "cascade 0 never
+    blends from behind", but cascade 0 blends *forward* into cascade 1, and
+    its band is a share of `[front, split_far₀]`.
+  - **A slice whose footprint misses the casters** (D5 step 3's "drops the
+    cascade") is served by the previous cascade, whose `split_far` is
+    extended over it: inside its square the map is right about every
+    caster, outside it reads lit. Dropping it outright would leave the
+    previous band blending into a cascade fitted elsewhere.
+  - **The debug tint** is mixed into `light_surface`'s linear result
+    (`apply_cascade_tint`, no twin), so no host changed. It shows only
+    where the pass draws shadows. `Renderer::live_target_spec()` was added
+    so the tests fit with the live target's real pixel scale.
+  - **The seam test as written cannot fail.** "Its position on either side
+    of the blend band" is that of the pure cascades with or without the
+    blend. Worse, without the blend the edge on the plain grazing slab moved
+    by under 0.02 px across the split: the criterion keeps every texel
+    within two output pixels and the bias is in texels, so cascades agree
+    on edge positions to about a pixel at most, by construction. The test
+    instead measures the edge's row-to-row step across the split and band,
+    on a steeper view where a tiny near caster puts the split mid-screen
+    with an 11-row band and a far caster makes cascade 1 ten times coarser
+    (0.84 vs 0.088 Å). Blended, the largest step is 0.48 px; with
+    `blend_fraction` 0 it is 1.30 px; the bound is 1. The margin is thin,
+    and the band is mostly cosmetic for edge position; what it really hides
+    is the change of penumbra width at a split.
+  - **The blend-band fit test needs the rod.** On the grazing slab the next
+    cascade's footprint is set by its far end, so fitting over `[a, b]`
+    instead of `[a', b]` moves its square by 2 Å of 861 and the
+    quantisation slack absorbs it. On an orthographic rod end-on the
+    footprint's near end is the square's edge, and the mutation fails there
+    (5 Å view).
+  - **The floor test uses a 100 Å block**, not 150 Å: a 150 Å block's
+    bounding sphere is 260 Å across, beyond the ~200 Å one cascade at the
+    floor's texel covers, so it legitimately gets two.
+  - **The grazing acne test is on a box**, not a sphere lattice: touching
+    spheres really do shadow their neighbours at the key's elevation.
+  - **Phase 1's coarse-texel tests** used a far hidden caster to stretch
+    the one cascade. With adaptive splits the near scene gets its own fine
+    cascade, so they now also render at a device pixel ratio of 2–4
+    (`set_output_ratio`): the scene is the same in render pixels, but the
+    criterion is per output pixel, so cascade 0 may be that coarse. Their
+    images are byte-identical to Phase 1's, as is every other image of the
+    harness (371 compared).
+  - The penumbra test's texels are 0.019 and 0.053 Å; the widths measured
+    0.299 and 0.294 Å (0.060 and 0.152 Å with the radius in texels).
 
 ### Phase 3 — The cache, the cost, the levers
 

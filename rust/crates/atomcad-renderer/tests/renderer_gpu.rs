@@ -3283,7 +3283,6 @@ fn a_bond_brightens_from_its_buried_end_to_its_open_end() {
 // renderer's default is shadows off, so every image above is unchanged
 // (the anchor, against a dump of the phase before).
 
-use atomcad_renderer::render_target::TargetSpec;
 use atomcad_renderer::shading::FULLY_EXPOSED as SHADING_FULLY_EXPOSED;
 use atomcad_renderer::shadow_fit::{ShadowSetup, shadow_setup};
 use atomcad_renderer::tessellator::tessellator::tessellate_sphere;
@@ -3381,13 +3380,29 @@ fn translated(mut mesh: Mesh, by: Vec3) -> Mesh {
 
 /// The live view's shadow setup, as `draw_to_target` computes it.
 fn live_setup(renderer: &Renderer) -> Option<ShadowSetup> {
-    let (width, height) = renderer.get_viewport_size();
     shadow_setup(
         &renderer.camera,
         renderer.caster_bounds(),
         &renderer.shading(),
-        &TargetSpec::image(width, height, 1),
+        &renderer.live_target_spec(),
     )
+}
+
+/// The live target at the harness's `VIEWPORT_WIDTH × VIEWPORT_HEIGHT`
+/// render pixels with `ratio` of them per output pixel, as on a display of
+/// that device pixel ratio. The scene is drawn alike in render pixels, but
+/// the cascade criterion (D6) is per *output* pixel, so a ratio of 4 lets
+/// cascade 0's texel grow four times coarser. 1 restores the default.
+fn set_output_ratio(renderer: &mut Renderer, ratio: f64) {
+    renderer.set_viewport_request(
+        VIEWPORT_WIDTH as f64 / ratio,
+        VIEWPORT_HEIGHT as f64 / ratio,
+        ratio,
+    );
+    assert_eq!(
+        renderer.get_viewport_size(),
+        (VIEWPORT_WIDTH, VIEWPORT_HEIGHT)
+    );
 }
 
 /// The live view with shadows at strength 1, then off (both *Studio*),
@@ -3452,12 +3467,11 @@ fn shadow_twin(
     key_visibility: f32,
 ) -> Vec3 {
     let camera = &renderer.camera;
-    let (width, height) = renderer.get_viewport_size();
     let setup = shadow_setup(
         camera,
         renderer.caster_bounds(),
         settings,
-        &TargetSpec::image(width, height, 1),
+        &renderer.live_target_spec(),
     );
     let uniform = ShadingUniform::new(
         camera,
@@ -3490,8 +3504,9 @@ fn full_shadow_drop(renderer: &Renderer, hit: DVec3, normal: DVec3, albedo: [f32
 
 /// A far, tiny caster straight behind the view's target, `depth` Å further
 /// along the view axis: hidden behind the scene and shadowing nothing in
-/// it, it stretches the casters' view-depth extent, so the one cascade
-/// spans hundreds of Å and its texel is coarse.
+/// it, it stretches the casters' view-depth extent, so cascade 0 grows as
+/// deep as the cascade criterion lets it (D6) and its texel is as coarse as
+/// `κ` output pixels. With [`set_output_ratio`] that is coarse.
 fn far_caster(renderer: &Renderer, depth: f64) -> DVec3 {
     let camera = &renderer.camera;
     camera.target + (camera.target - camera.eye).normalize() * depth
@@ -3598,7 +3613,8 @@ fn acne_scene(name: &str, far: Option<DVec3>) -> ShadowScene {
 /// as with them off. Impostors: every pixel within 2/255. Meshes: at most
 /// 0.5 % of the object's pixels further off than that. At the finest
 /// texel (about 0.01 Å) and a coarse one (at least 0.3 Å, from a far caster
-/// that stretches the cascade), in both projections, with MSAA off and on
+/// that stretches the casters' depth and an output ratio of 4, which lets
+/// cascade 0 be that coarse), in both projections, with MSAA off and on
 /// and in the refined frame. Mutation: without the normal offset and the
 /// receiver-plane depth, acne appears.
 #[test]
@@ -3618,6 +3634,7 @@ fn a_lone_object_does_not_shadow_itself() {
                 &DVec3::new(0.0, 0.0, 1.0),
             );
             for coarse in [false, true] {
+                set_output_ratio(&mut renderer, if coarse { 4.0 } else { 1.0 });
                 let far = coarse.then(|| far_caster(&renderer, 1500.0));
                 acne_scene(name, far).upload(&mut renderer);
                 renderer.set_shading(shadows_of(1.0));
@@ -3679,7 +3696,8 @@ fn a_lone_object_does_not_shadow_itself() {
 /// The receiver just outside the resting sphere's silhouette, on the shadow
 /// side, is darker than the same receiver far from it by at least half the
 /// full-shadow difference (the twin at `v = 0` and `v = 1`). Top-down,
-/// orthographic, at the fine and the coarse texel.
+/// orthographic, at the fine and the coarse texel (a far caster and an
+/// output ratio of 2).
 ///
 /// Seen from above, that receiver lies under a long chord of the sphere: the
 /// map compares it with the sphere's surface nearest the light, several Å
@@ -3717,6 +3735,7 @@ fn a_resting_sphere_shadows_its_contact() {
                 None => scene.main = square(15.0, 0.0, Vec3::from(SHADOW_GREY)),
                 Some(r) => sphere_layer(scene.atoms(), 5, r as f32, 0.0),
             }
+            set_output_ratio(&mut renderer, if coarse { 2.0 } else { 1.0 });
             if coarse {
                 let far = far_caster(&renderer, 1200.0);
                 add_atom(scene.atoms(), far, 0.5, [0.5, 0.5, 0.5]);
@@ -3843,9 +3862,9 @@ fn a_bond_lying_on_a_quad_shadows_its_contact() {
 /// The scene of the direction and position checks: a sphere 4 Å above a
 /// receiver (a square layer of spheres or a flat quad), placed so that its
 /// shadow's centre falls on the layer sphere at the origin. With `coarse`,
-/// a far caster makes the texel coarse, and the sphere is larger (4 Å, 8 Å
-/// up), so it still covers many texels and its shadow stays clear of it on
-/// screen.
+/// a far caster and an output ratio of 4 make the texel coarse, and the
+/// sphere is larger (4 Å, 8 Å up), so it still covers many texels and its
+/// shadow stays clear of it on screen; without, the ratio is 1.
 fn caster_over_layer(
     renderer: &mut Renderer,
     flat: bool,
@@ -3853,6 +3872,7 @@ fn caster_over_layer(
 ) -> (ShadowScene, DVec3, f64, ShadowSetup) {
     let (radius, gap) = if coarse { (4.0, 8.0) } else { (1.5, 4.0) };
     let top = 1.0;
+    set_output_ratio(renderer, if coarse { 4.0 } else { 1.0 });
     // The light direction depends only on the camera, so a first setup
     // (any casters) gives it.
     renderer.set_shading(shadows_of(1.0));
@@ -4408,3 +4428,532 @@ fn gadgets_and_rims_are_not_shadowed() {
         }
     }
 }
+
+// ---- Shadows, Phase 2: adaptive cascades (doc/design_shadows.md D6) --------
+//
+// A perspective close-up on a slab hundreds of Å deep, at a grazing angle,
+// gets several cascades; the debug tint shows which receiver reads which.
+
+/// The grazing camera of the Phase 2 scenes: perspective, the eye 14 Å above
+/// the slab's top face (z = 0) and just beyond its near edge, looking across
+/// it and slightly down.
+fn look_across_slab(renderer: &mut Renderer) {
+    renderer.set_orthographic_mode(false);
+    renderer.move_camera(
+        &DVec3::new(0.0, -215.0, 14.0),
+        &DVec3::new(0.0, -150.0, 0.0),
+        &DVec3::Z,
+    );
+}
+
+/// An axis-aligned box from `min` to `max`, its faces outward.
+fn box_mesh(min: Vec3, max: Vec3, albedo: Vec3) -> Mesh {
+    let mut mesh = cube(0.5, albedo, 1.0);
+    for v in &mut mesh.vertices {
+        let unit = Vec3::from(v.position) + Vec3::splat(0.5);
+        v.position = (min + unit * (max - min)).to_array();
+    }
+    mesh
+}
+
+/// The grazing slab as a box, 400 × 400 × 20 Å, its top face at z = 0.
+fn slab_box() -> Mesh {
+    box_mesh(
+        Vec3::new(-200.0, -200.0, -20.0),
+        Vec3::new(200.0, 200.0, 0.0),
+        Vec3::from(SHADOW_GREY),
+    )
+}
+
+/// `b` appended to `a`.
+fn merged(mut a: Mesh, b: Mesh) -> Mesh {
+    let first = a.vertices.len() as u32;
+    a.vertices.extend(b.vertices);
+    a.indices.extend(b.indices.iter().map(|i| i + first));
+    a
+}
+
+/// Which cascade's debug tint (D9) turned `plain` into `tinted`: red,
+/// green, blue, yellow for 0–3, from the sign of each channel's change, or
+/// `None` if the change matches none of them.
+fn tint_cascade(plain: [u8; 4], tinted: [u8; 4]) -> Option<usize> {
+    let d = |c: usize| tinted[c] as i32 - plain[c] as i32;
+    let (up, down) = (|c| d(c) > 3, |c| d(c) < -3);
+    match (up(0), up(1), up(2), down(0), down(1), down(2)) {
+        (true, false, false, false, true, true) => Some(0),
+        (false, true, false, true, false, true) => Some(1),
+        (false, false, true, true, true, false) => Some(2),
+        (true, true, false, false, false, true) => Some(3),
+        _ => None,
+    }
+}
+
+/// The live view at strength 1 with the cascade tint off, then on, dumped as
+/// `shadow_<name>_plain` / `_tinted`.
+fn tint_pair(renderer: &mut Renderer, name: &str) -> (Vec<u8>, Vec<u8>) {
+    renderer.set_shading(shadows_of(1.0));
+    renderer.set_shadow_cascade_debug(false);
+    let plain = renderer.render(DARK_BACKGROUND);
+    renderer.set_shadow_cascade_debug(true);
+    let tinted = renderer.render(DARK_BACKGROUND);
+    renderer.set_shadow_cascade_debug(false);
+    dump(&format!("shadow_{name}_plain"), &plain);
+    dump(&format!("shadow_{name}_tinted"), &tinted);
+    (plain, tinted)
+}
+
+/// D6, D9: the debug tint on the grazing slab, built as an impostor lattice
+/// of about 40 000 spheres. The pixels nearest the camera carry cascade 0's
+/// tint, the farthest a higher one, and the tint changes nothing with the
+/// debug flag off (or under a pass without shadows). Mutation: select the
+/// cascade by where it starts instead of where it ends.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn the_debug_tint_shows_the_near_and_far_cascades_on_a_grazing_slab() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    renderer.set_render_quality(RenderQuality {
+        anti_aliasing: false,
+        full_display_resolution: true,
+    });
+    look_across_slab(&mut renderer);
+    let mut scene = ShadowScene::default();
+    sphere_layer(scene.atoms(), 100, 1.0, -1.0);
+    scene.upload(&mut renderer);
+    renderer.set_shading(shadows_of(1.0));
+    let setup = live_setup(&renderer).expect("a setup");
+    println!(
+        "renderer_gpu: tinted slab, {} cascades, splits {:?}",
+        setup.cascades.len(),
+        setup
+            .cascades
+            .iter()
+            .map(|c| c.split_far)
+            .collect::<Vec<_>>()
+    );
+    assert!(setup.cascades.len() >= 2, "one cascade: {setup:?}");
+    let (plain, tinted) = tint_pair(&mut renderer, "tint_slab");
+
+    // The nearest pixels: the bottom rows. The farthest: the topmost row the
+    // slab covers.
+    let (width, height) = (VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
+    let at = |pixels: &[u8], column: u32, row: u32| rgba_at(pixels, width, column, row);
+    let top = (0..height)
+        .find(|&row| {
+            count_non_background(
+                &plain[(row * width * 4) as usize..((row + 1) * width * 4) as usize],
+                DARK_BACKGROUND,
+                true,
+            ) > width as usize / 2
+        })
+        .expect("the slab reaches the horizon");
+    let mut near = [0usize; 5];
+    let mut far = [0usize; 5];
+    for column in (20..width - 20).step_by(7) {
+        for row in height - 4..height {
+            near[tint_cascade(at(&plain, column, row), at(&tinted, column, row)).unwrap_or(4)] += 1;
+        }
+        for row in top + 1..top + 3 {
+            far[tint_cascade(at(&plain, column, row), at(&tinted, column, row)).unwrap_or(4)] += 1;
+        }
+    }
+    println!("renderer_gpu: tint near {near:?}, far {far:?} (cascades 0-3, unmatched)");
+    let near_total: usize = near.iter().sum();
+    assert_eq!(
+        near[0], near_total,
+        "the nearest pixels are not all cascade 0's: {near:?}"
+    );
+    let far_total: usize = far.iter().sum();
+    assert!(
+        far[1..4].iter().sum::<usize>() >= far_total * 9 / 10,
+        "the farthest pixels are not a later cascade's: {far:?}"
+    );
+
+    // The flag off draws the untinted picture.
+    renderer.set_shadow_cascade_debug(false);
+    assert_eq!(renderer.render(DARK_BACKGROUND), plain);
+}
+
+/// Where the darkening `drop` of row `row` first reaches `level`, scanning
+/// columns from `from` in the direction `step` (±1), interpolated between
+/// pixel centres.
+fn crossing_in_row(drop: &[f32], row: u32, from: u32, step: i32, level: f32) -> Option<f64> {
+    let width = VIEWPORT_WIDTH as i32;
+    let d = |column: i32| drop[(row as i32 * width + column) as usize];
+    let mut column = from as i32;
+    while column + step >= 0 && column + step < width {
+        let (a, b) = (d(column), d(column + step));
+        if a < level && b >= level {
+            let f = (level - a) / (b - a);
+            return Some(column as f64 + 0.5 + step as f64 * f as f64);
+        }
+        column += step;
+    }
+    None
+}
+
+/// The steeper view of the seam and position checks: perspective, the eye
+/// 50 Å above a large slab, looking 14° down across it. Its cascade 0 ends
+/// about 217 Å away, mid-screen, once [`near_caster`] fixes the casters'
+/// front close to the eye.
+fn look_down_the_slab(renderer: &mut Renderer) {
+    renderer.set_orthographic_mode(false);
+    renderer.move_camera(
+        &DVec3::new(0.0, -400.0, 50.0),
+        &DVec3::new(0.0, -200.0, 0.0),
+        &DVec3::Z,
+    );
+}
+
+/// An 800 × 800 × 20 Å slab, its top face at z = 0.
+fn large_slab_box() -> Mesh {
+    box_mesh(
+        Vec3::new(-400.0, -400.0, -20.0),
+        Vec3::new(400.0, 400.0, 0.0),
+        Vec3::from(SHADOW_GREY),
+    )
+}
+
+/// A tiny caster 3 Å in front of the eye, off screen to the right, its
+/// shadow off screen too. It puts the casters' front near the eye, so
+/// cascade 0 starts where an output pixel is far below the floor and is as
+/// deep as the floor allows (D6): about 200 Å of footprint.
+fn near_caster(renderer: &Renderer) -> DVec3 {
+    let camera = &renderer.camera;
+    let forward = (camera.target - camera.eye).normalize();
+    let right = forward.cross(camera.up).normalize();
+    camera.eye + forward * 3.0 + right * 6.0 + DVec3::Z * 2.0
+}
+
+/// D7: no seam. A wall standing on a large slab along the view casts a
+/// straight shadow edge that crosses the split between cascade 0 (texel
+/// 0.09 Å) and cascade 1 (0.84 Å, from a far hidden caster). Unblended, the
+/// two cascades put the edge about a pixel apart, and it jumps where the
+/// split falls. Blended, it moves across the band gradually: between any
+/// two neighbouring rows near the split and its band, by at most one output
+/// pixel. Mutation: `blend_fraction` 0 (the jump measured 1.3 px).
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn a_shadow_edge_across_a_split_has_no_seam() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    renderer.set_render_quality(RenderQuality {
+        anti_aliasing: false,
+        full_display_resolution: true,
+    });
+    look_down_the_slab(&mut renderer);
+    let wall = box_mesh(
+        Vec3::new(-1.0, -390.0, 0.0),
+        Vec3::new(0.0, 390.0, 8.0),
+        Vec3::new(0.9, 0.4, 0.2),
+    );
+    let mut scene = ShadowScene {
+        main: merged(large_slab_box(), wall),
+        ..ShadowScene::default()
+    };
+    add_atom(
+        scene.atoms(),
+        far_caster(&renderer, 2000.0),
+        0.5,
+        SHADOW_GREY,
+    );
+    add_atom(scene.atoms(), near_caster(&renderer), 0.05, SHADOW_GREY);
+    scene.upload(&mut renderer);
+    renderer.set_shading(shadows_of(1.0));
+    let setup = live_setup(&renderer).expect("a setup");
+    let (first, second) = (setup.cascades[0], setup.cascades[1]);
+    assert!(
+        second.texel_world > 5.0 * first.texel_world,
+        "the cascades are too alike to show a seam: {:?}",
+        setup.cascades
+    );
+    let (on, off) = shadow_pair(&mut renderer, "seam", false);
+    let drop = darkening(&on, &off);
+    let core = drop.iter().copied().fold(0.0f32, f32::max);
+
+    // The rows of the split and of the band's start: the slab's top face at
+    // those view depths, under the eye.
+    let camera = renderer.camera.clone();
+    let forward = (camera.target - camera.eye).normalize();
+    let foot = DVec3::new(camera.eye.x, camera.eye.y, 0.0);
+    let row_at_depth = |depth: f64| {
+        let along = (depth - (foot - camera.eye).dot(forward)) / DVec3::Y.dot(forward);
+        screen_of(&renderer, foot + DVec3::Y * along).y
+    };
+    let band = SHADOW_BLEND_FRACTION_GPU * (first.split_far - first.split_near);
+    let split_row = row_at_depth(first.split_far);
+    let band_row = row_at_depth(first.split_far - band);
+    assert!(
+        band_row - split_row > 6.0 && split_row > 40.0,
+        "the band (rows {split_row:.1}–{band_row:.1}) is not well inside the view"
+    );
+
+    // The shadow's far edge in every row from 15 above the split to 15
+    // below the band, scanning in from the right.
+    let rows = (split_row - 15.0) as u32..(band_row + 15.0) as u32;
+    let edges: Vec<f64> = rows
+        .clone()
+        .map(|row| {
+            crossing_in_row(&drop, row, VIEWPORT_WIDTH - 1, -1, 0.5 * core)
+                .unwrap_or_else(|| panic!("no shadow edge in row {row}"))
+        })
+        .collect();
+    let (step, at) = edges
+        .windows(2)
+        .zip(rows)
+        .map(|(pair, row)| ((pair[1] - pair[0]).abs(), row))
+        .fold((0.0, 0), |worst, s| if s.0 > worst.0 { s } else { worst });
+    println!(
+        "renderer_gpu: seam, split at row {split_row:.1}, band to row {band_row:.1}, \
+         largest step of the edge {step:.2} px (rows {at}–{})",
+        at + 1
+    );
+    assert!(
+        step <= 1.0,
+        "the shadow edge jumps by {step:.2} px between rows {at} and {}",
+        at + 1
+    );
+}
+
+/// The penumbra's width, in pixels, along the middle row of `drop`: the
+/// distance between where the darkening reaches 10 % and 90 % of `core`,
+/// scanning in from the right.
+fn penumbra_px(drop: &[f32], core: f32) -> f64 {
+    let row = VIEWPORT_HEIGHT / 2;
+    let outer = crossing_in_row(drop, row, VIEWPORT_WIDTH - 1, -1, 0.1 * core).expect("10 %");
+    let inner = crossing_in_row(drop, row, VIEWPORT_WIDTH - 1, -1, 0.9 * core).expect("90 %");
+    outer - inner
+}
+
+/// D7: the softness is in Å, not texels. A plate's straight shadow edge on
+/// a flat quad, top-down and orthographic at 50 render pixels per Å, in a
+/// view whose (one) cascade has a texel of about 0.02 Å and in one of about
+/// 0.06 Å (a far hidden caster at two depths): the penumbra is as wide in
+/// both, within 30 %. Mutation: the PCF radius as `1.5 · t` alone, in
+/// texels.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn the_penumbra_is_as_wide_in_a_fine_and_a_coarse_cascade() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    renderer.set_render_quality(RenderQuality {
+        anti_aliasing: false,
+        full_display_resolution: true,
+    });
+    let pixels_per_a = 50.0;
+    // The plate's right edge is at x = 0 and its top 3 Å above the quad: its
+    // shadow's edge is at `x = 3 · L_x / −L_z`. The camera looks down on that.
+    look_down(&mut renderer, true, 60.0, VIEWPORT_HEIGHT);
+    renderer.set_shading(shadows_of(1.0));
+    let mut probe = ShadowScene::default();
+    add_atom(probe.atoms(), DVec3::ZERO, 1.0, SHADOW_GREY);
+    probe.upload(&mut renderer);
+    let light = live_setup(&renderer).expect("a setup").light_dir;
+    let edge_x = 3.0 * light.x / -light.z;
+    assert!(
+        edge_x > 1.0,
+        "the light does not throw the edge clear of the plate"
+    );
+    renderer.set_ortho_half_height(VIEWPORT_HEIGHT as f64 / (2.0 * pixels_per_a));
+    renderer.move_camera(
+        &DVec3::new(edge_x, 0.0, 60.0),
+        &DVec3::new(edge_x, 0.0, 0.0),
+        &DVec3::Y,
+    );
+    let mut widths = Vec::new();
+    for far in [50.0, 170.0] {
+        let plate = box_mesh(
+            Vec3::new(-20.0, -20.0, 2.8),
+            Vec3::new(0.0, 20.0, 3.0),
+            Vec3::new(0.9, 0.4, 0.2),
+        );
+        let mut scene = ShadowScene {
+            main: merged(square(20.0, 0.0, Vec3::from(SHADOW_GREY)), plate),
+            ..ShadowScene::default()
+        };
+        add_atom(scene.atoms(), far_caster(&renderer, far), 0.5, SHADOW_GREY);
+        scene.upload(&mut renderer);
+        renderer.set_shading(shadows_of(1.0));
+        let setup = live_setup(&renderer).expect("a setup");
+        assert_eq!(setup.cascades.len(), 1);
+        let texel = setup.cascades[0].texel_world;
+        let (on, off) = shadow_pair(&mut renderer, &format!("penumbra_{far}"), false);
+        let drop = darkening(&on, &off);
+        let core = drop.iter().copied().fold(0.0f32, f32::max);
+        let width = penumbra_px(&drop, core) / pixels_per_a;
+        println!("renderer_gpu: penumbra at texel {texel:.4} Å: {width:.3} Å");
+        widths.push((texel, width));
+    }
+    let ((fine_t, fine), (coarse_t, coarse)) = (widths[0], widths[1]);
+    assert!(
+        (0.015..=0.025).contains(&fine_t) && (0.05..=0.07).contains(&coarse_t),
+        "texels {fine_t} and {coarse_t}"
+    );
+    assert!(
+        (coarse / fine - 1.0).abs() <= 0.3,
+        "the penumbra is {fine:.3} Å at a texel of {fine_t:.3} Å but {coarse:.3} Å at {coarse_t:.3} Å"
+    );
+}
+
+/// Testing layer 4, the acne detector on several cascades: the grazing slab
+/// (a box, so nothing on it can shadow anything else) drawn with shadows on
+/// at strength 1 looks as with them off, in every cascade, with MSAA off
+/// and on: at most 0.5 % of its pixels differ by more than 2/255.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn a_grazing_slab_does_not_shadow_itself_in_any_cascade() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    look_across_slab(&mut renderer);
+    ShadowScene {
+        main: slab_box(),
+        ..ShadowScene::default()
+    }
+    .upload(&mut renderer);
+    renderer.set_shading(shadows_of(1.0));
+    let setup = live_setup(&renderer).expect("a setup");
+    assert!(setup.cascades.len() >= 2, "{:?}", setup.cascades);
+    for anti_aliasing in [false, true] {
+        if anti_aliasing && !renderer.msaa_supported() {
+            continue;
+        }
+        renderer.set_render_quality(RenderQuality {
+            anti_aliasing,
+            full_display_resolution: true,
+        });
+        let label = format!("acne_grazing_slab_msaa_{anti_aliasing}");
+        let (on, off) = shadow_pair(&mut renderer, &label, false);
+        let object = count_non_background(&off, DARK_BACKGROUND, true);
+        assert!(object > 10_000, "{label}: the slab is {object} pixels");
+        let acne = on
+            .chunks_exact(4)
+            .zip(off.chunks_exact(4))
+            .filter(|(a, b)| (0..3).any(|c| a[c].abs_diff(b[c]) > 2))
+            .count();
+        println!("renderer_gpu: {label}: {acne} of {object} pixels darkened");
+        assert!(
+            acne as f64 <= 0.005 * object as f64,
+            "{label}: {acne} of {object} pixels darkened"
+        );
+    }
+}
+
+/// Testing layer 4, the position check in a later cascade: a sphere 8 Å
+/// above the large slab, placed so that its shadow's centre falls at a view
+/// depth of 320 Å, well inside cascade 1 (the debug tint confirms it). The
+/// darkness-weighted centroid of its shadow lies within two output pixels
+/// of the CPU projection of its centre along `L` onto the slab, the
+/// receiver's normal offset included. Mutation: index `world_to_clip` with
+/// `k − 1`.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn a_shadow_in_a_later_cascade_is_centred_on_the_casters_projection() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    renderer.set_render_quality(RenderQuality {
+        anti_aliasing: false,
+        full_display_resolution: true,
+    });
+    look_down_the_slab(&mut renderer);
+    renderer.set_shading(shadows_of(1.0));
+    let camera = renderer.camera.clone();
+    let forward = (camera.target - camera.eye).normalize();
+    // The shadow's centre: the slab's top face 320 Å away along the view,
+    // projected straight down onto it.
+    let mut core = camera.eye + forward * 320.0;
+    core.z = 0.0;
+    let build = |renderer: &mut Renderer, light: DVec3| {
+        let (radius, height) = (4.0, 8.0 + 4.0);
+        let centre = core - light * (height / -light.z);
+        let mut scene = ShadowScene {
+            main: large_slab_box(),
+            ..ShadowScene::default()
+        };
+        add_atom(scene.atoms(), centre, radius as f32, [0.9, 0.4, 0.2]);
+        add_atom(
+            scene.atoms(),
+            far_caster(renderer, 2000.0),
+            0.5,
+            SHADOW_GREY,
+        );
+        add_atom(scene.atoms(), near_caster(renderer), 0.05, SHADOW_GREY);
+        scene.upload(renderer);
+        centre
+    };
+    // The light depends only on the camera; a first scene gives it.
+    build(&mut renderer, -DVec3::Z);
+    let light = live_setup(&renderer).expect("a setup").light_dir;
+    let centre = build(&mut renderer, light);
+    let setup = live_setup(&renderer).expect("a setup");
+    let depth = (core - camera.eye).dot(forward);
+    let k = setup
+        .cascades
+        .iter()
+        .position(|c| depth <= c.split_far)
+        .expect("a cascade");
+    let cascade = setup.cascades[k];
+    let band = SHADOW_BLEND_FRACTION_GPU * (cascade.split_far - cascade.split_near);
+    assert!(
+        k >= 1 && depth > cascade.split_near + 1.0 && depth < cascade.split_far - band,
+        "the shadow's centre at depth {depth} is not inside cascade 1 or later: {:?}",
+        setup.cascades
+    );
+
+    let (on, off) = shadow_pair(&mut renderer, "position_cascade_1", false);
+    let (plain, tinted) = tint_pair(&mut renderer, "position_cascade_1");
+    let expected_px = screen_of(&renderer, core);
+    assert_eq!(
+        tint_cascade(
+            pixel_at(&plain, &renderer, expected_px),
+            pixel_at(&tinted, &renderer, expected_px)
+        ),
+        Some(k),
+        "the debug tint disagrees about the shadow's cascade"
+    );
+    // The caster must not hide its own shadow: the two discs, each about
+    // the caster's radius on screen, are apart.
+    let caster_px = screen_of(&renderer, centre);
+    let radius_px = 4.0 * VIEWPORT_HEIGHT as f64 / (2.0 * depth * (0.5 * camera.fovy).tan());
+    assert!(
+        (caster_px - expected_px).length() > 2.5 * radius_px,
+        "the caster at {caster_px} covers its shadow at {expected_px}"
+    );
+
+    let drop = darkening(&on, &off);
+    let (mut sum, mut weight) = (DVec2::ZERO, 0.0);
+    for (i, d) in drop.iter().enumerate() {
+        let p = DVec2::new(
+            (i as u32 % VIEWPORT_WIDTH) as f64 + 0.5,
+            (i as u32 / VIEWPORT_WIDTH) as f64 + 0.5,
+        );
+        if *d > 2.0 && (p - expected_px).length() < 25.0 {
+            sum += p * *d as f64;
+            weight += *d as f64;
+        }
+    }
+    assert!(weight > 0.0, "no shadow");
+    let centroid = sum / weight;
+    // The receiver looks the map up a texel off the surface (D7), which
+    // moves the shadow by as much against its normal.
+    let sin_theta = (1.0 - light.z * light.z).sqrt();
+    let lookup = DVec3::Z * (cascade.texel_world * sin_theta);
+    let expected = screen_of(&renderer, along_light_onto(&setup, centre - lookup, 0.0));
+    let off_by = (centroid - expected).length();
+    println!(
+        "renderer_gpu: shadow position in cascade {k} (texel {:.3} Å): centroid {centroid}, \
+         expected {expected}, off by {off_by:.2} px",
+        cascade.texel_world
+    );
+    assert!(
+        off_by <= 2.0,
+        "the shadow's centroid {centroid} is {off_by:.2} px from the caster's projection {expected}"
+    );
+}
+
+/// `shadow_fit::SHADOW_BLEND_FRACTION`, for the band's rows.
+const SHADOW_BLEND_FRACTION_GPU: f64 = atomcad_renderer::shadow_fit::SHADOW_BLEND_FRACTION;

@@ -49,7 +49,7 @@ struct ShadowUniform {
   count: u32,
   blend_fraction: f32,
   debug_tint: u32,             // Colour each receiver by its cascade (D9).
-  _padding: u32,
+  front: f32,                  // View depth where cascade 0 starts.
 };
 @group(2) @binding(0)
 var<uniform> shadow: ShadowUniform;
@@ -186,6 +186,29 @@ fn shadow_tap(i: u32) -> vec2<f32> {
     return taps[i];
 }
 
+// The view depth of `p`, as the fit measures its splits (D6).
+fn shadow_view_depth(p: vec3<f32>) -> f32 {
+    return -(camera.view_matrix * vec4<f32>(p, 1.0)).z;
+}
+
+// The cascade serving view depth `depth` (D7): the first whose slice reaches
+// it; beyond the last split, the last cascade.
+fn shadow_cascade(depth: f32) -> u32 {
+    var k = 0u;
+    while k + 1u < shadow.count && depth > shadow.cascades[k].split_far {
+        k += 1u;
+    }
+    return k;
+}
+
+// The view depth where cascade `k` starts: the previous one's end.
+fn shadow_split_near(k: u32) -> f32 {
+    if k == 0u {
+        return shadow.front;
+    }
+    return shadow.cascades[k - 1u].split_far;
+}
+
 // 1 where the key light reaches `p`, 0 in full shadow. `geo_normal` is the
 // surface's geometric normal (D7), not a shading normal. Uses only
 // `textureSampleCompareLevel`, so it is valid after a `discard`.
@@ -200,14 +223,44 @@ fn shadow_visibility(p: vec3<f32>, geo_normal: vec3<f32>) -> f32 {
     if cos_theta <= 0.0 {
         return 1.0;
     }
-    // The first cascade whose slice of view depth reaches `p`; beyond the
-    // last split, the last cascade.
-    let depth = -(camera.view_matrix * vec4<f32>(p, 1.0)).z;
-    var k = 0u;
-    while k + 1u < shadow.count && depth > shadow.cascades[k].split_far {
-        k += 1u;
+    let depth = shadow_view_depth(p);
+    let k = shadow_cascade(depth);
+    let v = cascade_visibility(k, p, n, cos_theta);
+    if k + 1u >= shadow.count {
+        return v;
     }
-    return cascade_visibility(k, p, n, cos_theta);
+    // The blend band: the last `blend_fraction` of the cascade's slice is
+    // mixed into the next cascade, so a split never shows as a seam. The
+    // next cascade is fitted back over this band (D5 step 0), so `p` is
+    // inside both squares.
+    let split_far = shadow.cascades[k].split_far;
+    let band = shadow.blend_fraction * (split_far - shadow_split_near(k));
+    let w = (depth - (split_far - band)) / max(band, 1.0e-6);
+    if w <= 0.0 {
+        return v;
+    }
+    return mix(v, cascade_visibility(k + 1u, p, n, cos_theta), min(w, 1.0));
+}
+
+// The debug tint's colours (D9): cascade 0 red, 1 green, 2 blue, 3 yellow.
+fn shadow_cascade_tint(k: u32) -> vec3<f32> {
+    var tints = array<vec3<f32>, 4>(
+        vec3<f32>(1.0, 0.0, 0.0),
+        vec3<f32>(0.0, 1.0, 0.0),
+        vec3<f32>(0.0, 0.0, 1.0),
+        vec3<f32>(1.0, 1.0, 0.0),
+    );
+    return tints[min(k, 3u)];
+}
+
+// A linear colour at `p` mixed half-way to its cascade's tint when the debug
+// tint is on and the pass draws shadows (D9); otherwise unchanged. The only
+// way to see where the splits fall.
+fn apply_cascade_tint(color: vec3<f32>, p: vec3<f32>) -> vec3<f32> {
+    if shadow.debug_tint == 0u || shading.shadow_strength <= 0.0 || shadow.count == 0u {
+        return color;
+    }
+    return mix(color, shadow_cascade_tint(shadow_cascade(shadow_view_depth(p))), 0.5);
 }
 
 // `shadow_visibility` in cascade `k`, for a receiver at `p` with the unit
@@ -272,7 +325,9 @@ fn key_visibility(v: f32) -> f32 {
 // ambient. `exposure` is the packed `(4b, E)` of D10, `FULLY_EXPOSED` for a
 // surface without per-atom exposure. `key_visibility` is the share of the key
 // that reaches the surface (doc/design_shadows.md D1): `key_visibility(…)` of
-// its shadow lookup, or 1. Twin: `shading::light_surface_exposed`.
+// its shadow lookup, or 1. With the cascade debug tint on, the result is
+// tinted by its cascade (`apply_cascade_tint`, which has no twin). Twin:
+// `shading::light_surface_exposed`.
 fn light_surface(
     world_position: vec3<f32>,
     normal: vec3<f32>,
@@ -335,7 +390,7 @@ fn light_surface(
     let L_fill = normalize(-shading.fill_light_dir);
     let fill = vec3<f32>(shading.fill_intensity * ambient_factor) * max(dot(N, L_fill), 0.0) * diffuse;
 
-    return key_contribution * (diffuse + specular) + ambient + fill;
+    return apply_cascade_tint(key_contribution * (diffuse + specular) + ambient + fill, world_position);
 }
 
 // Linear HDR colour to display colour: Reinhard tone mapping, then gamma.

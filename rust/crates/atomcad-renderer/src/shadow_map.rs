@@ -57,8 +57,7 @@ pub(crate) struct ShadowMap {
     /// content shading uniform (which no caster entry point reads).
     camera_buffers: Vec<Buffer>,
     camera_bind_groups: Vec<BindGroup>,
-    /// Colour each receiver by its cascade (D9; its setter comes with the
-    /// cascades).
+    /// Colour each receiver by its cascade (D9).
     debug_tint: bool,
     state: Mutex<ShadowState>,
 }
@@ -250,6 +249,12 @@ impl ShadowMap {
             view,
             &self.sampler,
         );
+    }
+
+    /// Colours each receiver by its cascade (D9), from the next draw on: the
+    /// `ShadowUniform` is written before every draw.
+    pub fn set_cascade_debug(&mut self, on: bool) {
+        self.debug_tint = on;
     }
 
     /// Whether the map exists (shadows are on).

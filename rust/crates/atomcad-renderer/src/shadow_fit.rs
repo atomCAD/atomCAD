@@ -3,8 +3,8 @@
 //! receiver reads it through. Pure, so it is tested without a device; the
 //! GPU side is `shadow_map.rs`.
 //!
-//! Phase 1 fits one cascade over the casters' whole view-depth extent
-//! (D6's adaptive splits come later).
+//! The casters' view-depth extent is cut into as many cascades as the view
+//! needs (D6), usually one.
 
 use crate::camera::Camera;
 use crate::render_target::TargetSpec;
@@ -31,6 +31,15 @@ pub const SHADOW_TEXELS_PER_PIXEL: f64 = 2.0;
 /// The share of a cascade's depth range over which it blends into the next
 /// one (D7).
 pub const SHADOW_BLEND_FRACTION: f64 = 0.1;
+
+/// The texel below which a finer cascade buys nothing (D6, `t_floor`): the
+/// PCF radius is `max(SHADOW_SOFTNESS_A, 1.5·t)`, so every texel up to this
+/// one gives the same penumbra. In Å.
+pub const SHADOW_TEXEL_FLOOR: f64 = SHADOW_SOFTNESS_A / 1.5;
+
+/// Bisection steps for a cascade's far split (D6): the split is then within
+/// `2^-48` of the remaining depth extent of the deepest acceptable one.
+const SPLIT_BISECTION_STEPS: u32 = 48;
 
 /// The margin round a cascade's square beyond the filter radius, in texels
 /// (D5 step 4): the receiver's normal offset (at most one texel,
@@ -131,13 +140,14 @@ impl ShadowSetup {
 /// *Headlight*, there are no casters, or every caster is behind the camera
 /// (or beyond its far plane). Pure, so it is tested without a device.
 ///
-/// `target` is for the cascade criterion (D6), which is per output pixel;
-/// the single cascade of Phase 1 does not need it.
+/// The casters' view-depth extent `[front, back]` is cut into slices, nearest
+/// first, each as deep as it can be while its texel stays within
+/// [`shadow_texel_limit`] of its near edge (D6).
 pub fn shadow_setup(
     camera: &Camera,
     caster_bounds: Option<(DVec3, DVec3)>,
     settings: &ShadingSettings,
-    _target: &TargetSpec,
+    target: &TargetSpec,
 ) -> Option<ShadowSetup> {
     if settings.shadow_strength <= 0.0 || settings.preset != LightingPreset::Studio {
         return None;
@@ -159,20 +169,100 @@ pub fn shadow_setup(
     let mut setup = ShadowSetup {
         light_dir,
         light_up,
-        cascades: Vec::with_capacity(1),
+        cascades: Vec::with_capacity(MAX_CASCADES),
     };
     let centre = 0.5 * (min + max);
     let radius = 0.5 * (max - min).length();
-    let cascade = fit_cascade(camera, &setup, centre, radius, front, back)?;
-    setup.cascades.push(cascade);
+    let fit = |near: f64, far: f64| fit_cascade(camera, &setup, centre, radius, near, far);
+    // Whether a cascade fitted over `[near, far]` has a texel within `limit`.
+    // A slice whose footprint misses the casters is acceptable: it stores
+    // nothing.
+    let meets = |near: f64, far: f64, limit: f64| {
+        fit(near, far).is_none_or(|cascade| cascade.texel_world <= limit)
+    };
+
+    let mut cascades: Vec<ShadowCascadeFit> = Vec::with_capacity(MAX_CASCADES);
+    let mut a = front;
+    for k in 0..MAX_CASCADES {
+        // D5 step 0: a later cascade is fitted back over the previous one's
+        // blend band, where receivers are shaded with both.
+        let fit_near = cascades.last().map_or(a, |previous| {
+            a - SHADOW_BLEND_FRACTION * (previous.split_far - previous.split_near)
+        });
+        let limit = shadow_texel_limit(camera, target, a);
+        let b = if k + 1 == MAX_CASCADES || meets(fit_near, back, limit) {
+            back
+        } else {
+            // `t` grows with `b`: the deepest `b` that meets the criterion.
+            let (mut lo, mut hi) = (a, back);
+            for _ in 0..SPLIT_BISECTION_STEPS {
+                let mid = 0.5 * (lo + hi);
+                if meets(fit_near, mid, limit) {
+                    lo = mid;
+                } else {
+                    hi = mid;
+                }
+            }
+            if lo > a {
+                lo
+            } else {
+                // Not even a thin slice meets it (an output wider than
+                // `κ·N` pixels): an even share of what is left.
+                a + (back - a) / (MAX_CASCADES - k) as f64
+            }
+        };
+        match fit(fit_near, b) {
+            Some(mut cascade) => {
+                cascade.split_near = a;
+                cascades.push(cascade);
+            }
+            // The slice's footprint misses the casters, so every receiver in
+            // it is lit. The previous cascade serves it: inside its square
+            // the map is right about every caster, and outside it reads lit.
+            None => {
+                if let Some(previous) = cascades.last_mut() {
+                    previous.split_far = b;
+                }
+            }
+        }
+        if b >= back {
+            break;
+        }
+        a = b;
+    }
+    if cascades.is_empty() {
+        return None;
+    }
+    setup.cascades = cascades;
     Some(setup)
+}
+
+/// The coarsest texel a cascade starting at view depth `depth` may have
+/// (D6): `κ` output pixels there, but never below [`SHADOW_TEXEL_FLOOR`].
+/// In Å.
+pub fn shadow_texel_limit(camera: &Camera, target: &TargetSpec, depth: f64) -> f64 {
+    (SHADOW_TEXELS_PER_PIXEL * output_pixel_world(camera, target, depth)).max(SHADOW_TEXEL_FLOOR)
+}
+
+/// The world size of an output pixel at view depth `depth` (D6): output
+/// pixels, so HiDPI and the export's supersampling count once.
+fn output_pixel_world(camera: &Camera, target: &TargetSpec, depth: f64) -> f64 {
+    let output_height = target.size.height as f64 / target.pixel_scale as f64;
+    let view_height = if camera.orthographic {
+        2.0 * camera.ortho_half_height
+    } else {
+        2.0 * depth * (0.5 * camera.fovy).tan()
+    };
+    view_height / output_height
 }
 
 /// The cascade serving view depths `[near, far]` of `camera`, fitted to the
 /// casters' bounding sphere `(centre, radius)` (D5): the visible slice's
 /// footprint in light space cut to the sphere's shadow, made square with the
 /// filter's margin, quantised and snapped; the whole sphere's depth range.
-/// `None` when the slice's footprint misses the sphere's shadow.
+/// `None` when the slice's footprint misses the sphere's shadow. Its
+/// `split_near` is `near`; a cascade fitted back over a blend band has its
+/// own start set by the caller.
 fn fit_cascade(
     camera: &Camera,
     setup: &ShadowSetup,
@@ -292,7 +382,7 @@ pub struct ShadowCascade {
 /// |---|---|
 /// | `cascades` | 0 (stride 80) |
 /// | `count`, `blend_fraction` | 320, 324 |
-/// | `debug_tint` | 328 |
+/// | `debug_tint`, `front` | 328, 332 |
 /// | *size* | 336 |
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
@@ -302,7 +392,10 @@ pub struct ShadowUniform {
     pub blend_fraction: f32,
     /// Colour each receiver by its cascade (D9).
     pub debug_tint: u32,
-    pub _padding: u32,
+    /// The view depth where cascade 0 starts. Every later cascade starts
+    /// where the previous one ends; the blend band at the end of a cascade
+    /// is a share of its whole slice (D7), so the receiver needs this one.
+    pub front: f32,
 }
 
 impl ShadowUniform {
@@ -318,6 +411,7 @@ impl ShadowUniform {
         let count = setup.cascades.len().min(MAX_CASCADES);
         uniform.count = count as u32;
         uniform.blend_fraction = SHADOW_BLEND_FRACTION as f32;
+        uniform.front = setup.cascades.first().map_or(0.0, |c| c.split_near as f32);
         for (k, cascade) in setup.cascades.iter().take(count).enumerate() {
             uniform.cascades[k] = ShadowCascade {
                 world_to_clip: light_uniform(setup, k).view_proj,

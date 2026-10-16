@@ -717,7 +717,7 @@ fn every_shadow_uniform_in_wgsl_matches_the_rust_struct() {
             ("count", offset_of!(ShadowUniform, count)),
             ("blend_fraction", offset_of!(ShadowUniform, blend_fraction)),
             ("debug_tint", offset_of!(ShadowUniform, debug_tint)),
-            ("_padding", offset_of!(ShadowUniform, _padding)),
+            ("front", offset_of!(ShadowUniform, front)),
         ],
         std::mem::size_of::<ShadowUniform>(),
     );

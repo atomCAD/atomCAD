@@ -978,6 +978,19 @@ impl Renderer {
         self.shading
     }
 
+    /// Colours each shadow receiver by its cascade (red, green, blue, yellow
+    /// at 50 %; `doc/design_shadows.md` D9): the only way to see where the
+    /// splits fall. For the GPU tests and the walkthrough, not a preference.
+    pub fn set_shadow_cascade_debug(&mut self, on: bool) {
+        self.shadow_map.set_cascade_debug(on);
+        self.bump_live_generation();
+    }
+
+    /// The live target's spec: its size, pixel scale and sample count.
+    pub fn live_target_spec(&self) -> TargetSpec {
+        self.target.spec()
+    }
+
     /// Whether the adapter can multisample the live target (D2). Without it
     /// the live target has one sample whatever the quality settings say.
     pub fn msaa_supported(&self) -> bool {
