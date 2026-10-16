@@ -55,7 +55,7 @@ fn to_render_quality(
 
 /// Domain *Lighting* preferences → the renderer's shading settings
 /// (`doc/design_depth_perception.md` D8), for the same reason as above.
-/// An unticked *Depth cue* or *Ambient occlusion* is strength 0.
+/// An unticked *Depth cue*, *Ambient occlusion* or *Shadows* is strength 0.
 pub fn to_shading_settings(
     prefs: &domain_prefs::RenderingPreferences,
 ) -> atomcad_renderer::shading_uniform::ShadingSettings {
@@ -75,8 +75,11 @@ pub fn to_shading_settings(
         } else {
             0.0
         },
-        // No preference yet (`doc/design_shadows.md` Phase 4): off.
-        shadow_strength: 0.0,
+        shadow_strength: if prefs.shadows {
+            prefs.shadow_strength.clamp(0.0, 1.0) as f32
+        } else {
+            0.0
+        },
     }
 }
 

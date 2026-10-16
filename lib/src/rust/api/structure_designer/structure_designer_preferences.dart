@@ -7,7 +7,7 @@ import '../../frb_generated.dart';
 import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `default_ambient_occlusion_strength`, `default_background_color`, `default_ball_and_stick_cull_depth`, `default_csg_mesh_cache_mb`, `default_csg_sketch_cache_mb`, `default_depth_cue_strength`, `default_drawing_plane_grid_color`, `default_drawing_plane_grid_strong_color`, `default_eval_memo_cache_mb`, `default_grid_color`, `default_grid_size`, `default_grid_strong_color`, `default_hide_coplanar_wireframe_edges`, `default_invisible_node_cache_mb`, `default_isosurface_cell_budget`, `default_isosurface_fallback_spacing`, `default_isosurface_quality_multiplier`, `default_label_scale`, `default_lattice_grid_color`, `default_lattice_grid_strong_color`, `default_max_displacement`, `default_samples_per_unit_cell`, `default_scene_alpha`, `default_settle_steps`, `default_sharpness_angle_threshold`, `default_show_axes`, `default_show_geometry_shell_for_atomic`, `default_show_grid`, `default_show_lattice_axes`, `default_space_filling_cull_depth`, `default_steps_per_frame`, `default_tool_envelope_color`, `default_true`, `default_unit_cell_wireframe_color`, `default_wireframe_active_color`, `default_wireframe_inactive_color`
+// These functions are ignored because they are not marked as `pub`: `default_ambient_occlusion_strength`, `default_background_color`, `default_ball_and_stick_cull_depth`, `default_csg_mesh_cache_mb`, `default_csg_sketch_cache_mb`, `default_depth_cue_strength`, `default_drawing_plane_grid_color`, `default_drawing_plane_grid_strong_color`, `default_eval_memo_cache_mb`, `default_grid_color`, `default_grid_size`, `default_grid_strong_color`, `default_hide_coplanar_wireframe_edges`, `default_invisible_node_cache_mb`, `default_isosurface_cell_budget`, `default_isosurface_fallback_spacing`, `default_isosurface_quality_multiplier`, `default_label_scale`, `default_lattice_grid_color`, `default_lattice_grid_strong_color`, `default_max_displacement`, `default_samples_per_unit_cell`, `default_scene_alpha`, `default_settle_steps`, `default_shadow_strength`, `default_sharpness_angle_threshold`, `default_show_axes`, `default_show_geometry_shell_for_atomic`, `default_show_grid`, `default_show_lattice_axes`, `default_space_filling_cull_depth`, `default_steps_per_frame`, `default_tool_envelope_color`, `default_true`, `default_unit_cell_wireframe_color`, `default_wireframe_active_color`, `default_wireframe_inactive_color`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 enum AtomicRenderingMethod {
@@ -548,6 +548,13 @@ class RenderingPreferences {
   /// Ambient occlusion's strength, `[0, 1]`. Default 1.
   double ambientOcclusionStrength;
 
+  /// Shadows from the *Studio* key light. Off costs nothing. Default on.
+  bool shadows;
+
+  /// How much of the key light a fully shadowed surface loses, `[0, 1]`.
+  /// Default 0.7.
+  double shadowStrength;
+
   RenderingPreferences({
     required this.antiAliasing,
     required this.fullDisplayResolution,
@@ -556,6 +563,8 @@ class RenderingPreferences {
     required this.depthCueStrength,
     required this.ambientOcclusion,
     required this.ambientOcclusionStrength,
+    required this.shadows,
+    required this.shadowStrength,
   });
 
   static Future<RenderingPreferences> default_() => RustLib.instance.api
@@ -569,7 +578,9 @@ class RenderingPreferences {
       depthCue.hashCode ^
       depthCueStrength.hashCode ^
       ambientOcclusion.hashCode ^
-      ambientOcclusionStrength.hashCode;
+      ambientOcclusionStrength.hashCode ^
+      shadows.hashCode ^
+      shadowStrength.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -582,7 +593,9 @@ class RenderingPreferences {
           depthCue == other.depthCue &&
           depthCueStrength == other.depthCueStrength &&
           ambientOcclusion == other.ambientOcclusion &&
-          ambientOcclusionStrength == other.ambientOcclusionStrength;
+          ambientOcclusionStrength == other.ambientOcclusionStrength &&
+          shadows == other.shadows &&
+          shadowStrength == other.shadowStrength;
 }
 
 /// Preferences for energy minimization simulation.

@@ -106,6 +106,8 @@ class PreferencesKeys {
       Key('pref_ambient_occlusion_checkbox');
   static const Key ambientOcclusionStrengthInput =
       Key('pref_ambient_occlusion_strength_input');
+  static const Key shadowsCheckbox = Key('pref_shadows_checkbox');
+  static const Key shadowStrengthInput = Key('pref_shadow_strength_input');
 
   static const Key layoutAlgorithmDropdown =
       Key('pref_layout_algorithm_dropdown');
@@ -259,6 +261,107 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
     // Clone our local preferences before sending to the model
     final updatedPreferences = _preferences.cloneSelf();
     widget.model.setPreferences(updatedPreferences);
+  }
+
+  /// The *Shadows* checkbox and strength row (doc/design_shadows.md D11).
+  /// Both are disabled under *Headlight*, which draws no shadows, with a
+  /// one-line hint; the stored values are kept.
+  Widget _buildShadowRows() {
+    final rendering = _preferences.renderingPreferences;
+    final studio = rendering.lighting == LightingPreset.studio;
+    final strengthEnabled = studio && rendering.shadows;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Opacity(
+          opacity: studio ? 1.0 : 0.4,
+          child: Row(
+            children: [
+              Checkbox(
+                key: PreferencesKeys.shadowsCheckbox,
+                value: rendering.shadows,
+                onChanged: studio
+                    ? (value) {
+                        if (value != null) {
+                          setState(() {
+                            rendering.shadows = value;
+                          });
+                          _applyPreferences();
+                        }
+                      }
+                    : null,
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Tooltip(
+                  message: 'Shadows from the key light: atoms, bonds, solids '
+                      'and opaque surfaces cast them onto everything lit, so '
+                      'a tool over a surface shows its gap and a step shows '
+                      'which side is high. They move with the camera, as the '
+                      'key light does. The strength is how much of the key '
+                      'light a shadowed surface loses.\n'
+                      'Every camera move draws the scene once more from the '
+                      'light, more on a close-up of a very large structure. '
+                      'Untick to remove the cost entirely.\n'
+                      'Thumbnails and exported images use it too.',
+                  child: Text('Shadows'),
+                ),
+              ),
+            ],
+          ),
+        ),
+        IgnorePointer(
+          ignoring: !strengthEnabled,
+          child: Opacity(
+            opacity: strengthEnabled ? 1.0 : 0.4,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 24),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Slider(
+                      value: rendering.shadowStrength.clamp(0.0, 1.0),
+                      min: 0.0,
+                      max: 1.0,
+                      divisions: 100,
+                      label: rendering.shadowStrength.toStringAsFixed(2),
+                      onChanged: (value) {
+                        setState(() {
+                          rendering.shadowStrength = value;
+                        });
+                        _applyPreferences();
+                      },
+                    ),
+                  ),
+                  SizedBox(
+                    width: 90,
+                    child: FloatInput(
+                      key: PreferencesKeys.shadowStrengthInput,
+                      label: '',
+                      value: rendering.shadowStrength,
+                      onChanged: (value) {
+                        setState(() {
+                          rendering.shadowStrength = value.clamp(0.0, 1.0);
+                        });
+                        _applyPreferences();
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        if (!studio)
+          const Padding(
+            padding: EdgeInsets.only(left: 24),
+            child: Text(
+              'Shadows come from the Studio key light.',
+              style: TextStyle(fontSize: 12, color: Colors.black54),
+            ),
+          ),
+      ],
+    );
   }
 
   @override
@@ -1308,6 +1411,13 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                               }
                             },
                           ),
+                          const SizedBox(height: AppSpacing.medium),
+
+                          // Shadows from the Studio key light
+                          // (doc/design_shadows.md D11). Both rows are
+                          // disabled under Headlight, which has no shadows;
+                          // the stored values are kept.
+                          _buildShadowRows(),
                           const SizedBox(height: AppSpacing.medium),
 
                           // Depth cue: fog towards the background with depth

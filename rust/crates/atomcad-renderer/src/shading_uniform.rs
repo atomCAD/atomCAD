@@ -2,7 +2,7 @@
 //! (`doc/design_depth_perception.md` D2, D3).
 
 use crate::camera::Camera;
-use crate::shading::AO_KEY;
+use crate::shading::ao_key;
 use crate::shadow_fit::ShadowSetup;
 use glam::f64::DVec3;
 
@@ -198,8 +198,9 @@ impl ShadingUniform {
             depth_cue_strength,
             ao_strength: settings.ao_strength,
             shadow_strength,
-            // The coupling with the shadows (D10) comes with the preference.
-            ao_key: AO_KEY,
+            // AO cedes the key to the shadows (D10), by the strength actually
+            // drawn: `AO_KEY` exactly wherever there is no shadow.
+            ao_key: ao_key(shadow_strength),
             _padding: [0.0; 2],
         }
     }

@@ -25552,8 +25552,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   RenderingPreferences dco_decode_rendering_preferences(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 7)
-      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
     return RenderingPreferences(
       antiAliasing: dco_decode_bool(arr[0]),
       fullDisplayResolution: dco_decode_bool(arr[1]),
@@ -25562,6 +25562,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       depthCueStrength: dco_decode_f_64(arr[4]),
       ambientOcclusion: dco_decode_bool(arr[5]),
       ambientOcclusionStrength: dco_decode_f_64(arr[6]),
+      shadows: dco_decode_bool(arr[7]),
+      shadowStrength: dco_decode_f_64(arr[8]),
     );
   }
 
@@ -33632,6 +33634,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_depthCueStrength = sse_decode_f_64(deserializer);
     var var_ambientOcclusion = sse_decode_bool(deserializer);
     var var_ambientOcclusionStrength = sse_decode_f_64(deserializer);
+    var var_shadows = sse_decode_bool(deserializer);
+    var var_shadowStrength = sse_decode_f_64(deserializer);
     return RenderingPreferences(
         antiAliasing: var_antiAliasing,
         fullDisplayResolution: var_fullDisplayResolution,
@@ -33639,7 +33643,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         depthCue: var_depthCue,
         depthCueStrength: var_depthCueStrength,
         ambientOcclusion: var_ambientOcclusion,
-        ambientOcclusionStrength: var_ambientOcclusionStrength);
+        ambientOcclusionStrength: var_ambientOcclusionStrength,
+        shadows: var_shadows,
+        shadowStrength: var_shadowStrength);
   }
 
   @protected
@@ -40212,6 +40218,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_f_64(self.depthCueStrength, serializer);
     sse_encode_bool(self.ambientOcclusion, serializer);
     sse_encode_f_64(self.ambientOcclusionStrength, serializer);
+    sse_encode_bool(self.shadows, serializer);
+    sse_encode_f_64(self.shadowStrength, serializer);
   }
 
   @protected

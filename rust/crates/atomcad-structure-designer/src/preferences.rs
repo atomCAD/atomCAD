@@ -683,6 +683,15 @@ pub struct RenderingPreferences {
     /// `ambient_occlusion` is off.
     #[serde(default = "default_ambient_occlusion_strength")]
     pub ambient_occlusion_strength: f64,
+    /// Shadows from the *Studio* key light (`doc/design_shadows.md` D11).
+    /// Off draws no shadow pass and holds no shadow map. No effect under
+    /// *Headlight*.
+    #[serde(default = "default_true")]
+    pub shadows: bool,
+    /// How much of the key light a fully shadowed surface loses, in
+    /// `[0, 1]`. Kept while `shadows` is off.
+    #[serde(default = "default_shadow_strength")]
+    pub shadow_strength: f64,
 }
 
 fn default_depth_cue_strength() -> f64 {
@@ -691,6 +700,10 @@ fn default_depth_cue_strength() -> f64 {
 
 fn default_ambient_occlusion_strength() -> f64 {
     1.0
+}
+
+fn default_shadow_strength() -> f64 {
+    0.7
 }
 
 impl Default for RenderingPreferences {
@@ -703,6 +716,8 @@ impl Default for RenderingPreferences {
             depth_cue_strength: default_depth_cue_strength(),
             ambient_occlusion: true,
             ambient_occlusion_strength: default_ambient_occlusion_strength(),
+            shadows: true,
+            shadow_strength: default_shadow_strength(),
         }
     }
 }

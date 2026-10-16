@@ -24148,7 +24148,9 @@ impl SseDecode
         let mut var_depthCueStrength = <f64>::sse_decode(deserializer);
         let mut var_ambientOcclusion = <bool>::sse_decode(deserializer);
         let mut var_ambientOcclusionStrength = <f64>::sse_decode(deserializer);
-        return crate::api::structure_designer::structure_designer_preferences::RenderingPreferences{anti_aliasing: var_antiAliasing, full_display_resolution: var_fullDisplayResolution, lighting: var_lighting, depth_cue: var_depthCue, depth_cue_strength: var_depthCueStrength, ambient_occlusion: var_ambientOcclusion, ambient_occlusion_strength: var_ambientOcclusionStrength};
+        let mut var_shadows = <bool>::sse_decode(deserializer);
+        let mut var_shadowStrength = <f64>::sse_decode(deserializer);
+        return crate::api::structure_designer::structure_designer_preferences::RenderingPreferences{anti_aliasing: var_antiAliasing, full_display_resolution: var_fullDisplayResolution, lighting: var_lighting, depth_cue: var_depthCue, depth_cue_strength: var_depthCueStrength, ambient_occlusion: var_ambientOcclusion, ambient_occlusion_strength: var_ambientOcclusionStrength, shadows: var_shadows, shadow_strength: var_shadowStrength};
     }
 }
 
@@ -32984,6 +32986,8 @@ impl flutter_rust_bridge::IntoDart
             self.depth_cue_strength.into_into_dart().into_dart(),
             self.ambient_occlusion.into_into_dart().into_dart(),
             self.ambient_occlusion_strength.into_into_dart().into_dart(),
+            self.shadows.into_into_dart().into_dart(),
+            self.shadow_strength.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -39454,6 +39458,8 @@ impl SseEncode
         <f64>::sse_encode(self.depth_cue_strength, serializer);
         <bool>::sse_encode(self.ambient_occlusion, serializer);
         <f64>::sse_encode(self.ambient_occlusion_strength, serializer);
+        <bool>::sse_encode(self.shadows, serializer);
+        <f64>::sse_encode(self.shadow_strength, serializer);
     }
 }
 

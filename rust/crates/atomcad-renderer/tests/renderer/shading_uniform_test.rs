@@ -420,12 +420,12 @@ fn a_cubes_nearest_corner_is_unfogged_at_every_orientation() {
 // ---- Shadows (doc/design_shadows.md D8, Phase 1) ---------------------------
 
 use atomcad_renderer::render_target::TargetSpec;
-use atomcad_renderer::shading::AO_KEY;
+use atomcad_renderer::shading::{AO_KEY, AO_KEY_WITH_SHADOWS};
 use atomcad_renderer::shadow_fit::shadow_setup;
 
 /// D8: the content pass of a draw with a shadow setup carries the
 /// settings' strength; the gadget pass and a draw without a setup carry 0.
-/// `ao_key` is `AO_KEY` whatever the shadows (D10 is Phase 4's).
+/// (`ao_key` follows the strength drawn, see the D10 test below.)
 #[test]
 fn only_the_content_pass_with_a_shadow_setup_has_a_shadow_strength() {
     let camera = looking_at(DVec3::new(0.0, -60.0, 30.0), DVec3::ZERO, false);
@@ -441,14 +441,63 @@ fn only_the_content_pass_with_a_shadow_setup_has_a_shadow_strength() {
     assert_eq!(new(ShadingPass::Gadget, Some(&setup)).shadow_strength, 0.0);
     assert_eq!(new(ShadingPass::Content, None).shadow_strength, 0.0);
     assert_eq!(new(ShadingPass::Gadget, None).shadow_strength, 0.0);
-    for pass in [ShadingPass::Content, ShadingPass::Gadget] {
-        assert_eq!(new(pass, Some(&setup)).ao_key, AO_KEY);
-        assert_eq!(new(pass, None).ao_key, AO_KEY);
-    }
-    // Without shadows nothing else changes.
+    // Without shadows nothing else changes but AO's share of the key.
     let without = ShadingUniform {
         shadow_strength: 0.0,
+        ao_key: AO_KEY,
         ..new(ShadingPass::Content, Some(&setup))
     };
     assert_eq!(without, new(ShadingPass::Content, None));
+}
+
+/// D10: AO cedes the key to the shadows by the strength the uniform carries,
+/// not the setting's: exactly `AO_KEY` wherever no shadow is drawn (no setup,
+/// the gadget pass, strength 0) and `AO_KEY_WITH_SHADOWS` at strength 1.
+#[test]
+fn ao_cedes_the_key_to_the_shadows_actually_drawn() {
+    let camera = looking_at(DVec3::new(0.0, -60.0, 30.0), DVec3::ZERO, false);
+    let target = TargetSpec::image(64, 64, 1);
+    let with = |strength| ShadingSettings {
+        shadow_strength: strength,
+        ..STUDIO
+    };
+    let uniform = |settings: &ShadingSettings, pass| {
+        let setup = shadow_setup(&camera, BOUNDS, settings, &target);
+        ShadingUniform::new(&camera, BOUNDS, [0, 0, 0], settings, pass, setup.as_ref())
+    };
+    assert_eq!(uniform(&with(0.0), ShadingPass::Content).ao_key, AO_KEY);
+    assert_eq!(
+        uniform(&with(1.0), ShadingPass::Content).ao_key,
+        AO_KEY_WITH_SHADOWS
+    );
+    let mid = uniform(&with(0.7), ShadingPass::Content).ao_key;
+    assert!((mid - (0.3 * AO_KEY + 0.7 * AO_KEY_WITH_SHADOWS)).abs() < 1e-6);
+    // The gadget pass draws no shadow, so AO keeps its share there.
+    assert_eq!(uniform(&with(1.0), ShadingPass::Gadget).ao_key, AO_KEY);
+
+    // A strength setting without a setup (Headlight, no casters) draws no
+    // shadow, so AO keeps its full share of the key.
+    let settings = with(0.7);
+    for pass in [ShadingPass::Content, ShadingPass::Gadget] {
+        let none = ShadingUniform::new(&camera, BOUNDS, [0, 0, 0], &settings, pass, None);
+        assert_eq!(none.ao_key, AO_KEY);
+    }
+    let headlight = ShadingSettings {
+        preset: LightingPreset::Headlight,
+        ..settings
+    };
+    assert_eq!(
+        uniform(&headlight, ShadingPass::Content).ao_key,
+        AO_KEY,
+        "Headlight"
+    );
+    let no_casters = ShadingUniform::new(
+        &camera,
+        BOUNDS,
+        [0, 0, 0],
+        &settings,
+        ShadingPass::Content,
+        shadow_setup(&camera, None, &settings, &target).as_ref(),
+    );
+    assert_eq!(no_casters.ao_key, AO_KEY, "no casters");
 }

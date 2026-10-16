@@ -1683,7 +1683,9 @@ All of these build on this design without changing it:
 - **Shadow maps** (report §2.3). D3's key light is the light the report's
   shadow design assumes: camera-relative, upper side, with the ambient term
   separate. A shadow factor multiplies the key term in `light_surface`. The
-  casters and the fit are as the report describes.
+  casters and the fit are as the report describes. **Done:** see
+  `doc/design_shadows.md` (cascaded shadow maps for the Studio key light,
+  which also lowers D7's `AO_KEY` while shadows are drawn).
 - **Cross-structure exposure.** Gather all displayed structures in
   `update_exposure` and run `atom_exposure` over their union, so a tool
   tip darkens the surface it approaches. The pass already sees the whole

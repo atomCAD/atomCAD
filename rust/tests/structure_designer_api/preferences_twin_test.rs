@@ -161,6 +161,8 @@ fn the_lighting_preset_converts_both_ways() {
             depth_cue_strength: 0.5,
             ambient_occlusion: true,
             ambient_occlusion_strength: 1.0,
+            shadows: true,
+            shadow_strength: 0.7,
         };
         let down: domain::RenderingPreferences = (&prefs).into();
         assert_eq!(down.lighting, dom);
@@ -183,6 +185,8 @@ fn the_depth_cue_converts_both_ways() {
         depth_cue_strength: 0.75,
         ambient_occlusion: true,
         ambient_occlusion_strength: 1.0,
+        shadows: true,
+        shadow_strength: 0.7,
     };
     let down: domain::RenderingPreferences = (&prefs).into();
     assert!(!down.depth_cue);
@@ -225,6 +229,8 @@ fn ambient_occlusion_converts_both_ways() {
         depth_cue_strength: 0.5,
         ambient_occlusion: false,
         ambient_occlusion_strength: 0.25,
+        shadows: true,
+        shadow_strength: 0.7,
     };
     let down: domain::RenderingPreferences = (&prefs).into();
     assert!(!down.ambient_occlusion);
@@ -270,4 +276,53 @@ fn ambient_occlusion_reaches_the_renderer_and_the_display_layer() {
             .atomic_structure_visualization
             .ambient_occlusion
     );
+}
+
+/// Shadows (`doc/design_shadows.md` D11, Phase 4) convert both ways, their
+/// two fields not swapped with a neighbour, and a file from before them loads
+/// with shadows on at 0.7.
+#[test]
+fn shadows_convert_both_ways() {
+    let prefs = RenderingPreferences {
+        anti_aliasing: true,
+        full_display_resolution: true,
+        lighting: LightingPreset::Studio,
+        depth_cue: true,
+        depth_cue_strength: 0.5,
+        ambient_occlusion: true,
+        ambient_occlusion_strength: 1.0,
+        shadows: false,
+        shadow_strength: 0.35,
+    };
+    let down: domain::RenderingPreferences = (&prefs).into();
+    assert!(!down.shadows);
+    assert_eq!(down.shadow_strength, 0.35);
+    let up: RenderingPreferences = (&down).into();
+    assert_eq!(up, prefs);
+
+    let old: RenderingPreferences =
+        serde_json::from_str(r#"{"ambient_occlusion": false}"#).unwrap();
+    assert!(old.shadows);
+    assert_eq!(old.shadow_strength, 0.7);
+}
+
+/// The renderer sees an unticked *Shadows* as strength 0 and a ticked one as
+/// its strength clamped to `[0, 1]`, without touching the other strengths.
+/// The preset is passed through: the renderer, not this conversion, draws no
+/// shadow under *Headlight*.
+#[test]
+fn shadows_reach_the_renderer_as_a_strength() {
+    use rust_lib_flutter_cad::api::api_common::to_shading_settings;
+    let mut prefs = domain::RenderingPreferences::default();
+    assert_eq!(to_shading_settings(&prefs).shadow_strength, 0.7);
+    prefs.shadow_strength = 1.4;
+    assert_eq!(to_shading_settings(&prefs).shadow_strength, 1.0);
+    prefs.shadow_strength = -0.5;
+    assert_eq!(to_shading_settings(&prefs).shadow_strength, 0.0);
+    prefs.shadow_strength = 0.4;
+    prefs.shadows = false;
+    let settings = to_shading_settings(&prefs);
+    assert_eq!(settings.shadow_strength, 0.0);
+    assert_eq!(settings.ao_strength, 1.0);
+    assert_eq!(settings.depth_cue_strength, 0.5);
 }

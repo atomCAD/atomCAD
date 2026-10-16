@@ -58,6 +58,16 @@ pub const AO_OPEN: f32 = 0.6;
 /// (`doc/design_shadows.md` D10). The shader reads it from
 /// `ShadingUniform::ao_key`.
 pub const AO_KEY: f32 = 0.35;
+/// The key light's share of the AO darkening at full shadow strength
+/// (`doc/design_shadows.md` D10): the shadows darken the creases the key
+/// does not reach, so AO cedes most of the key to them.
+pub const AO_KEY_WITH_SHADOWS: f32 = 0.1;
+
+/// AO's share of the key under the uniform's `shadow_strength` (D10):
+/// exactly `AO_KEY` wherever no shadow is drawn.
+pub fn ao_key(shadow_strength: f32) -> f32 {
+    AO_KEY * (1.0 - shadow_strength) + AO_KEY_WITH_SHADOWS * shadow_strength
+}
 
 /// The packed exposure `(4b, E)` of a surface nothing occludes, as the
 /// shader reads it. Twin of `FULLY_EXPOSED`.

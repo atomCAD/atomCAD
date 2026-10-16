@@ -1384,6 +1384,29 @@ in DP Phase 4b, **no uncached shadow path ever reaches the app**.
     points to this document.
 - Effort: 1 d.
 
+- **Phase 4 notes** (as implemented; the tests are in
+  `shading_uniform_test.rs`, `preferences_test.rs`,
+  `preferences_twin_test.rs` and `renderer_gpu.rs`, section *Shadows,
+  Phase 4*):
+  - `ao_key` is `shading::ao_key(strength)`, written
+    `AO_KEY·(1 − s) + AO_KEY_WITH_SHADOWS·s` rather than as a `mix` with a
+    difference, so both ends are exact in f32 (`AO_KEY` at 0,
+    `AO_KEY_WITH_SHADOWS` at 1) and the CPU tests compare with `==`.
+  - The GPU anchor is the whole harness against a Phase 3 dump: every image
+    is byte-identical, including the AO-on `ao_pair_*` scenes with shadows
+    off. A new test,
+    `ao_cedes_the_key_only_where_a_shadow_is_drawn`, draws the same AO pair
+    under *Headlight* at shadow strength 1 and 0 (byte-identical, no pass)
+    and, under *Studio* with shadows on, matches the buried sphere's crown
+    against the twin at `AO_KEY_WITH_SHADOWS` (and checks it would differ
+    visibly at `AO_KEY`). The mutation (`ao_key` from the setting alone)
+    fails the *Headlight* comparison on the GPU and the no-setup cases on
+    the CPU.
+  - The `rust/AGENTS.md` bullets listed above were already written in
+    Phases 1–3 as each piece landed; Phase 4 added only the `ao_key` one.
+  - The dialog puts *Shadows* right under *Lighting*, before *Depth cue*,
+    since its disabling depends on the preset.
+
 ### Phase 5 — Walkthrough
 
 - **Maintainer**, in the GUI after `cargo build --release`:

@@ -495,6 +495,8 @@ fn test_non_default_values_roundtrip() {
             depth_cue_strength: 0.8,
             ambient_occlusion: false,
             ambient_occlusion_strength: 0.3,
+            shadows: false,
+            shadow_strength: 0.45,
         },
     };
 
@@ -1170,4 +1172,37 @@ fn ambient_occlusion_roundtrips_off_with_its_strength_kept() {
     let loaded: StructureDesignerPreferences = serde_json::from_str(&json).unwrap();
     assert!(!loaded.rendering_preferences.ambient_occlusion);
     assert_eq!(loaded.rendering_preferences.ambient_occlusion_strength, 0.3);
+}
+
+// ---- Shadows (doc/design_shadows.md D11, Phase 4) ------------------------
+
+#[test]
+fn shadows_default_to_on_at_0_7() {
+    let prefs = RenderingPreferences::default();
+    assert!(prefs.shadows);
+    assert_eq!(prefs.shadow_strength, 0.7);
+}
+
+#[test]
+fn a_rendering_section_without_shadows_loads_them_on_at_0_7() {
+    // A file written before Phase 4, with the depth cue and AO in it.
+    let before: StructureDesignerPreferences = serde_json::from_str(
+        r#"{"rendering_preferences": {"depth_cue": false, "ambient_occlusion": false, "ambient_occlusion_strength": 0.3}}"#,
+    )
+    .unwrap();
+    assert!(before.rendering_preferences.shadows);
+    assert_eq!(before.rendering_preferences.shadow_strength, 0.7);
+    assert!(!before.rendering_preferences.ambient_occlusion);
+    assert_eq!(before.rendering_preferences.ambient_occlusion_strength, 0.3);
+}
+
+#[test]
+fn shadows_roundtrip_off_with_their_strength_kept() {
+    let mut prefs = StructureDesignerPreferences::default();
+    prefs.rendering_preferences.shadows = false;
+    prefs.rendering_preferences.shadow_strength = 0.45;
+    let json = serde_json::to_string(&prefs).unwrap();
+    let loaded: StructureDesignerPreferences = serde_json::from_str(&json).unwrap();
+    assert!(!loaded.rendering_preferences.shadows);
+    assert_eq!(loaded.rendering_preferences.shadow_strength, 0.45);
 }

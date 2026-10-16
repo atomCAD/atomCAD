@@ -462,6 +462,10 @@ GPU state is in `ShadowMap` (`shadow_map.rs`).
   neither casts nor is fitted.
 - The fit and the shading take the key from the one `key_light_direction`; a
   second derivation puts shadows on lit sides.
+- AO's share of the key (`ShadingUniform::ao_key`, D10) follows the
+  uniform's `shadow_strength`, never `ShadingSettings::shadow_strength`: the
+  setting is non-zero under *Headlight* and without casters, where no shadow
+  is drawn and AO must keep its full share.
 - The receiver-plane slope in `shadow_visibility` is clamped far higher than
   the residual bias's `tan θ ≤ 4`: clamped at 4, the plane rises slower than a
   sphere near its terminator and the GPU harness's acne detector fails.

@@ -5284,3 +5284,85 @@ fn turning_shadows_off_frees_the_map_and_on_again_redraws_it() {
     assert!(again == lit, "the new map drew other shadows");
     assert_eq!(renderer.shadow_passes_drawn(), before + passes);
 }
+
+// ---- Shadows, Phase 4: AO cedes the key (doc/design_shadows.md D10) --------
+
+use atomcad_renderer::shading::{AO_KEY, AO_KEY_WITH_SHADOWS};
+
+/// D10: AO's share of the key follows the shadow strength *drawn*, so the
+/// coupling is inert wherever no shadow is drawn. With AO on and shadows
+/// off, the AO scene is what Phase 3 drew (the `ao_pair_*` images of
+/// [`a_buried_sphere_is_darker_by_the_mapping_and_alike_at_strength_0`]
+/// against the dump); under *Headlight* a shadow strength of 1 is
+/// byte-identical to 0 with AO on, too. Under *Studio* with shadows on, the
+/// buried sphere's crown, which nothing shadows, is what the twin computes
+/// with `AO_KEY_WITH_SHADOWS`. Mutation: compute `ao_key` from the setting
+/// alone; the *Headlight* comparison fails.
+#[test]
+#[ignore = "needs a GPU; run with --ignored"]
+fn ao_cedes_the_key_only_where_a_shadow_is_drawn() {
+    let Some(mut renderer) = try_renderer(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) else {
+        return;
+    };
+    renderer.set_render_quality(RenderQuality {
+        anti_aliasing: false,
+        full_display_resolution: true,
+    });
+    let open = (Vec3::new(-7.0, 0.0, 0.0), FULLY_EXPOSED);
+    let buried = (Vec3::new(7.0, 0.0, 0.0), [0, 0, 0, 0]);
+    upload_impostors(
+        &mut renderer,
+        &exposed_atoms(&[open, buried]),
+        &BondImpostorMesh::new(),
+        &TransparentImpostorMesh::new(),
+        &AtomImpostorMesh::new(),
+    );
+    for orthographic in [false, true] {
+        look_down(&mut renderer, orthographic, 60.0, VIEWPORT_HEIGHT);
+        let with = |preset, shadow_strength| ShadingSettings {
+            shadow_strength,
+            ..ao_of(preset, 1.0)
+        };
+        renderer.set_shading(with(LightingPreset::Headlight, 0.0));
+        let passes = renderer.shadow_passes_drawn();
+        let off = renderer.render(DARK_BACKGROUND);
+        renderer.set_shading(with(LightingPreset::Headlight, 1.0));
+        let on = renderer.render(DARK_BACKGROUND);
+        dump(&format!("ao_headlight_shadows_on_{orthographic}"), &on);
+        assert!(off == on, "Headlight with AO, ortho {orthographic}");
+        assert_eq!(renderer.shadow_passes_drawn(), passes);
+
+        let settings = with(LightingPreset::Studio, 1.0);
+        renderer.set_shading(settings);
+        let pixels = renderer.render(DARK_BACKGROUND);
+        dump(&format!("ao_studio_shadows_on_{orthographic}"), &pixels);
+        let setup = live_setup(&renderer).expect("a shadow setup");
+        let uniform = ShadingUniform::new(
+            &renderer.camera,
+            renderer.content_bounds(),
+            DARK_BACKGROUND,
+            &settings,
+            ShadingPass::Content,
+            Some(&setup),
+        );
+        assert_eq!(uniform.ao_key, AO_KEY_WITH_SHADOWS);
+        let ((column, row), expected) =
+            ao_twin_pixel(&renderer, &uniform, buried.0, buried.1, DVec3::Z);
+        assert_near(
+            rgba_at(&pixels, VIEWPORT_WIDTH, column, row),
+            expected,
+            2.0,
+            &format!("buried crown, Studio with shadows, ortho {orthographic}"),
+        );
+        // ... and not what it would be with AO's full share of the key.
+        let full_share = ShadingUniform {
+            ao_key: AO_KEY,
+            ..uniform
+        };
+        let (_, unshared) = ao_twin_pixel(&renderer, &full_share, buried.0, buried.1, DVec3::Z);
+        assert!(
+            (expected - unshared).abs().max_element() > 3.0,
+            "the coupling is visible on the crown: {expected} vs {unshared}"
+        );
+    }
+}
