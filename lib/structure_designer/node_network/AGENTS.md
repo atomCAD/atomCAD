@@ -226,6 +226,14 @@ the handle click and the context menu route through `_removeAnchor`.
 
 ## Node context menu
 
+It opens from **one** `onSecondaryTapDown` wrapping the whole node in
+`NodeWidget.build` (issue #436 — it used to be the title bar only). Don't add a
+second one on an inner part: two pending tap recognizers both fire `onTapDown`
+at the press deadline, so the menu would open twice. The handler defers to
+`resolver.findNodeAtScreenPosition`, the same test the canvas's background menu
+uses, so a right-click in an HOF body's empty space still reaches the canvas
+(Add Node into the body) instead of opening the HOF's menu.
+
 The right-click menu (`node_widget.dart` `_handleContextMenu`) is **grouped into
 titled sections** — Navigate / Edit / Refactor / Node / Body (`doc/design_find_usages.md`
 D9). It is built imperatively via a local `addSection(title, section)` helper, not

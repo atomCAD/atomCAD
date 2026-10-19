@@ -966,15 +966,37 @@ class NodeWidget extends StatelessWidget {
       child: nodeContent,
     );
 
+    // Position the node via the scope resolver: node.position lives in
+    // [scopeChain]'s body-local frame; the resolver maps it to screen.
+    final screenPos =
+        resolver.scopedToScreen(scopeChain, apiVec2ToOffset(node.position));
+
+    // Right-click anywhere on the node opens its context menu (issue #436:
+    // it used to be the title bar only, so the error tooltip's "right-click
+    // the node" hint failed on the body). Secondary-only, so it never
+    // competes with the node's drag/select or the pins' wire drags. A click
+    // in an HOF's body empty space is *not* this node's — the canvas handles
+    // it (Add Node into the body) — so defer to the same resolver hit test
+    // the canvas uses; otherwise both handlers would fire.
+    nodeWidget = GestureDetector(
+      onSecondaryTapDown: (details) {
+        final hit = resolver
+            .findNodeAtScreenPosition(screenPos + details.localPosition);
+        if (hit == null ||
+            hit.node.id != node.id ||
+            !listEquals(hit.scopeChain, scopeChain)) {
+          return;
+        }
+        _handleContextMenu(context, details);
+      },
+      child: nodeWidget,
+    );
+
     // Add tooltip for nodes with errors
     if (node.error != null && node.error!.isNotEmpty) {
       nodeWidget = _wrapWithErrorTooltip(nodeWidget);
     }
 
-    // Position the node via the scope resolver: node.position lives in
-    // [scopeChain]'s body-local frame; the resolver maps it to screen.
-    final screenPos =
-        resolver.scopedToScreen(scopeChain, apiVec2ToOffset(node.position));
     return Positioned(
       left: screenPos.dx,
       top: screenPos.dy,
@@ -993,7 +1015,6 @@ class NodeWidget extends StatelessWidget {
       },
       onPanUpdate: (details) => _handleNodeDrag(context, details),
       onPanEnd: (details) => _handleNodeDragEnd(context),
-      onSecondaryTapDown: (details) => _handleContextMenu(context, details),
       child: Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
@@ -1071,7 +1092,6 @@ class NodeWidget extends StatelessWidget {
           },
           onPanUpdate: (details) => _handleNodeDrag(context, details),
           onPanEnd: (details) => _handleNodeDragEnd(context),
-          onSecondaryTapDown: (details) => _handleContextMenu(context, details),
           child: Container(
             padding:
                 const EdgeInsets.only(top: 4, bottom: 4, left: 8, right: 2),
@@ -1740,7 +1760,7 @@ class NodeWidget extends StatelessWidget {
         children: [
           TextSpan(text: node.error!),
           const TextSpan(
-            text: '\n\nRight-click → Copy error message',
+            text: '\n\nRight-click the node → Copy error message',
             style: TextStyle(fontSize: 12, color: Colors.white70),
           ),
         ],

@@ -240,7 +240,7 @@ Hovering the badge lists the problems; clicking it takes you to them. If there i
 
 - *Edit > Copy all problems* copies **the whole design's** problem list — every network, every entry, with its severity, its kind (structural/runtime), the node it sits on and its downstream trail — as a plain-text report. This is the one to use when filing an issue. It is available in Direct Editing Mode too, where the only other error surface is a banner that carries no message at all.
 - In the problem list opened from a row badge, the header carries a **⧉** that copies just that network's problems, and every entry carries its own **⧉**. Copying does not close the list.
-- Right-click a broken node in the editor → *Copy error message* copies that node's message, prefixed with which network and node it came from. (The red hover tooltip cannot be selected with the mouse — it disappears the moment the pointer leaves the node — so this is how you get its text.)
+- Right-click a broken node in the editor (anywhere on the node — title or body) → *Copy error message* copies that node's message, prefixed with which network and node it came from. (The red hover tooltip itself cannot be clicked or selected — it disappears the moment the pointer leaves the node — so this is how you get its text.)
 - Error dialogs (*Load Error*, *Save Error*, *Import Error*, "cannot delete…") and the red error boxes in the property panels have **selectable** text and a **Copy** button.
 - Failure messages that flash at the bottom of the window carry a **Copy** action for as long as they are on screen.
 
