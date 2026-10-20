@@ -334,11 +334,29 @@ Further candidates, in rough order of value: `atom_replace`, `atom_cut`,
 In `rust/src/api/structure_designer/structure_designer_api.rs`:
 
 ```rust
+/// Step 1: which displayed node does the right-click trace from?
 #[flutter_rust_bridge::frb(sync)]
-pub fn trace_viewport_hit(ray_origin: APIVec3, ray_direction: APIVec3) -> APITraceResult;
+pub fn trace_viewport_pick(ray_origin: APIVec3, ray_direction: APIVec3) -> APITracePick;
+
+/// Step 2: trace the hit of this ray on the given displayed node.
+#[flutter_rust_bridge::frb(sync)]
+pub fn trace_viewport_hit(
+    ray_origin: APIVec3,
+    ray_direction: APIVec3,
+    node_id: u64,
+) -> APITraceResult;
 ```
 
 ```rust
+pub enum APITracePick {
+    NoHit,
+    /// One displayed node was hit (or one is clearly nearest): trace it.
+    Traced(APITraceResult),
+    /// Several displayed nodes were hit within the overlap epsilon: the user
+    /// picks one, then Dart calls `trace_viewport_hit` with its id.
+    Disambiguation { candidates: Vec<APICandidateNode> },
+}
+
 pub struct APITraceResult {
     /// Empty = nothing hit.
     pub rows: Vec<APITraceRow>,
@@ -360,10 +378,21 @@ pub struct APITraceRow {
 }
 ```
 
-If several displayed nodes are hit within click-to-activate's overlap epsilon,
-v1 traces only the nearest, which is the same choice click-to-activate makes
-for an unambiguous hit. Hits are restricted to top-level displayed nodes, as
-in `viewport_pick`.
+**Overlapping displayed nodes** are handled the way left-click handles them.
+`trace_viewport_pick` reuses `viewport_pick`'s overlap rule (hits within
+`OVERLAP_EPSILON` of the nearest) and its `APICandidateNode`. A single hit is
+traced straight away. Overlapping hits return the candidates, and only the one
+the user picks is traced, so a right-click never pays for tracing nodes the
+user did not choose. There are two differences from left-click:
+
+- **The active node is not privileged.** Left-click treats "the active node
+  is among the overlapping hits" as the user having already chosen it. For a
+  trace, the overlapping outputs are equally plausible, so the candidates are
+  always offered.
+- **Gadgets are ignored.** A right-click traces content and never hits a
+  gadget handle.
+
+Hits are restricted to top-level displayed nodes, as in `viewport_pick`.
 
 ## Flutter
 
@@ -374,8 +403,18 @@ Right button down already starts an orbit (Shift: pan) in
 up when the pointer moved less than a small slop (≈ 4 logical px) since
 pointer down. The base class then calls a new overridable
 `onSecondaryClick(Offset)`. The structure designer viewport overrides it:
-build the ray (`getRayFromPointerPos`), call `trace_viewport_hit`, and show the
-menu at the click position. An empty result shows no menu.
+build the ray (`getRayFromPointerPos`) and call `trace_viewport_pick`.
+
+- `NoHit` shows nothing.
+- `Traced` shows the trace menu at the click position.
+- `Disambiguation` first shows the existing disambiguation overlay
+  (`_DisambiguationOverlay`) at the same position. Choosing a candidate calls
+  `trace_viewport_hit(ray, candidate.nodeId)` and replaces the overlay with the
+  trace menu.
+  - The overlay gets a mode in which a row means "trace from this node". The
+    Solo button is hidden there, because hiding nodes is not what the user
+    asked for.
+  - Clicking away dismisses it, as on left-click.
 
 ### Menu
 
@@ -404,8 +443,6 @@ menu header, is a later UI-only change: the category is already on every row.
 ## Open questions
 
 1. **δ.** Fixed 0.5 Å, or derived from the lattice? See Geometry booleans.
-2. **Overlapping displayed nodes.** v1 traces the nearest only. Tracing each
-   overlapping node in its own section is a possible follow-up.
 
 ## Performance
 
@@ -455,16 +492,25 @@ yet, so the fallback is exercised:
 
 ### Phase 2 — Viewport gesture, menu and API (Flutter + FRB)
 
-- `trace_viewport_hit` and its API types; FRB codegen.
-- The right-click slop in `cad_viewport.dart`, `onSecondaryClick`, and the menu
-  in the structure designer viewport, wired to `jumpToNode`.
+- `trace_viewport_pick`, `trace_viewport_hit` and their API types; FRB codegen.
+- The right-click slop in `cad_viewport.dart` and `onSecondaryClick`.
+- The disambiguation overlay's trace mode, with no Solo button.
+- The trace menu in the structure designer viewport, wired to `jumpToNode`.
 - Reference guide: `doc/reference_guide/ui.md`, viewport navigation. Document
   that right-drag still orbits, that a right click opens the contributing-nodes
   menu, and what the labels mean.
 
-Tests: an API-level test that a ray through a known atom of a fixture network
-returns the expected rows. The menu itself is verified manually
-(walkthrough: right-drag still orbits; right click opens the menu; a row lands
+Tests:
+
+- **API tests:**
+  - A ray through a known atom of a fixture network returns `Traced` with the
+    expected rows.
+  - A ray through two overlapping displayed nodes returns `Disambiguation`
+    even when one of them is the active node.
+  - `trace_viewport_hit` on the chosen candidate returns that node's rows.
+- **Manual walkthrough** for the menu: right-drag still orbits; right click
+  opens the menu; overlapping outputs show the candidate overlay first,
+  without Solo; a row lands
 on its node; a custom-node parent row lands on the instance in place, and its
 child row lands inside the custom network; collapse/expand works). The Flutter smoke test is
 a pending manual step for the maintainer.
