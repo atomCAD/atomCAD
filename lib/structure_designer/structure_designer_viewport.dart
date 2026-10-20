@@ -1148,7 +1148,9 @@ class _StructureDesignerViewportState
 
   /// The contributing-nodes menu at the click. A row lands on its node the way
   /// Find Usages does: an instance row in the network being viewed, a row
-  /// inside an instance in that custom network.
+  /// inside an instance in that custom network. Hovering a row of the network
+  /// being viewed highlights its node in the node network editor; closing the
+  /// menu, either way, clears the highlight.
   void _showTraceMenu(Offset pointerPos, APITraceResult result) {
     if (result.rows.isEmpty) return;
     final overlay = Overlay.of(context);
@@ -1163,13 +1165,16 @@ class _StructureDesignerViewportState
         truncated: result.truncated,
         onSelect: (row) {
           entry.remove();
+          widget.graphModel.setTraceHoveredRow(null);
           widget.graphModel
               .jumpToNode(row.hostNetwork, row.scopePath.toList(), row.nodeId);
           renderingNeeded();
         },
         onDismiss: () {
           entry.remove();
+          widget.graphModel.setTraceHoveredRow(null);
         },
+        onHover: widget.graphModel.setTraceHoveredRow,
       ),
     );
     overlay.insert(entry);

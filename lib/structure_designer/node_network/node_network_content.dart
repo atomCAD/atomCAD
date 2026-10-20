@@ -56,6 +56,7 @@ Widget canvasNodeWidget({
   required NodeTitleMode titleMode,
   bool hideSelection = false,
   MemoryImage? thumbnail,
+  bool traceHighlighted = false,
 }) {
   if (node.nodeTypeName == 'Comment') {
     return CommentNodeWidget(
@@ -79,6 +80,7 @@ Widget canvasNodeWidget({
     hideSelection: hideSelection,
     titleMode: titleMode,
     thumbnail: thumbnail,
+    traceHighlighted: traceHighlighted,
   );
 }
 

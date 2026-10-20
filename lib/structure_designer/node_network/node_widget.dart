@@ -78,6 +78,8 @@ const Color NODE_COLOR_SELECTED =
     Color(0xFFE08000); // Selected node border & title
 const Color NODE_BORDER_COLOR_NORMAL = Colors.blueAccent;
 const Color NODE_BORDER_COLOR_ERROR = Colors.red;
+const Color NODE_COLOR_TRACE_HOVER =
+    Colors.white; // Hovered in the viewport's trace menu
 const double NODE_BORDER_WIDTH_ACTIVE = 3.0;
 const double NODE_BORDER_WIDTH_SELECTED = 2.0;
 const double NODE_BORDER_WIDTH_NORMAL = 2.0;
@@ -920,6 +922,11 @@ class NodeWidget extends StatelessWidget {
   /// networks without a thumbnail, and the image export.
   final MemoryImage? thumbnail;
 
+  /// The pointer is over this node's row in the viewport's right-click trace
+  /// menu: draw a highlight that wins over every other state. Transient, so
+  /// the image export never sets it.
+  final bool traceHighlighted;
+
   NodeWidget({
     required this.node,
     required this.panOffset,
@@ -930,6 +937,7 @@ class NodeWidget extends StatelessWidget {
     this.hideSelection = false,
     this.titleMode = NodeTitleMode.type,
     this.thumbnail,
+    this.traceHighlighted = false,
   }) : super(key: NodeWidgetKeys.nodeWidget(node.id, scopeChain: scopeChain));
 
   /// Selection / active state as it should be **drawn** — the styling code uses
@@ -1590,7 +1598,20 @@ class NodeWidget extends StatelessWidget {
   /// [_getNodeDecoration] (uses the shadow) and [_getNodeForegroundDecoration]
   /// (uses the color/width) so the two stay in lockstep.
   (Color, double, List<BoxShadow>?) _nodeBorderStyle() {
-    if (node.error != null) {
+    if (traceHighlighted) {
+      // Hovered in the trace menu: thickest border, strongest glow, so it
+      // reads on an active, selected or errored node too.
+      return (
+        NODE_COLOR_TRACE_HOVER,
+        NODE_BORDER_WIDTH_ACTIVE,
+        [
+          BoxShadow(
+              color: NODE_COLOR_TRACE_HOVER.withValues(alpha: 0.6),
+              blurRadius: WIRE_GLOW_BLUR_RADIUS * 1.5,
+              spreadRadius: WIRE_GLOW_SPREAD_RADIUS * 2)
+        ],
+      );
+    } else if (node.error != null) {
       return (
         NODE_BORDER_COLOR_ERROR,
         NODE_BORDER_WIDTH_NORMAL,

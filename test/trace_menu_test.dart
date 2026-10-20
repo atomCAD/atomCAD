@@ -8,6 +8,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
     show Uint64List;
@@ -44,7 +45,8 @@ final _rows = [
 Future<List<APITraceRow>> _pump(WidgetTester tester,
     {List<APITraceRow>? rows,
     bool truncated = false,
-    VoidCallback? onDismiss}) async {
+    VoidCallback? onDismiss,
+    void Function(APITraceRow? row)? onHover}) async {
   final selected = <APITraceRow>[];
   await tester.pumpWidget(MaterialApp(
     home: Scaffold(
@@ -54,6 +56,7 @@ Future<List<APITraceRow>> _pump(WidgetTester tester,
         truncated: truncated,
         onSelect: selected.add,
         onDismiss: onDismiss ?? () {},
+        onHover: onHover,
       ),
     ),
   ));
@@ -123,6 +126,21 @@ void main() {
     await tester.tap(find.text('fill'));
     expect(selected.map((r) => r.nodeLabel), ['slab1', 'fill']);
     expect(selected[1].hostNetwork, 'inner');
+  });
+
+  testWidgets('hovering reports each row, and null on leaving', (tester) async {
+    final hovered = <String?>[];
+    await _pump(tester, onHover: (row) => hovered.add(row?.nodeLabel));
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: const Offset(790, 590));
+    await mouse.moveTo(tester.getCenter(find.text('slab1')));
+    await tester.pump();
+    await mouse.moveTo(tester.getCenter(find.text('fill')));
+    await tester.pump();
+    await mouse.moveTo(const Offset(790, 590));
+    await tester.pump();
+    expect(hovered, ['slab1', 'fill', null]);
+    await mouse.removePointer();
   });
 
   testWidgets('folding does not select', (tester) async {

@@ -431,8 +431,14 @@ A right **click** opens the contributing-nodes menu
   node is never chosen for the user.
 - **`trace_menu.dart` takes plain data and callbacks** (unit-tested in
   `test/trace_menu_test.dart`). Its only state is which instance rows are
-  folded; a row lands via `model.jumpToNode`, with the row's own
+  folded and which row is hovered; a row lands via `model.jumpToNode`, with the row's own
   `hostNetwork`.
+- **Hovering a row highlights its node in the editor** when the row is in the
+  network being viewed (`depth == 0`): `model.setTraceHoveredRow` →
+  `model.traceHoveredNodeId`, a dedicated `ValueNotifier` (never
+  `notifyListeners`). The editor's per-node `ListenableBuilder` (the drag
+  fast path, `node_network/AGENTS.md`) also listens to it and rebuilds only
+  the nodes whose highlight changed. Every way the menu closes clears it.
 
 ## Find Usages (issue #414)
 

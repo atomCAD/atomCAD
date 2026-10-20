@@ -1469,6 +1469,10 @@ class NodeNetworkState extends State<NodeNetwork> {
   /// other node returns the identical prebuilt [child], which
   /// `Element.updateChild` short-circuits — no rebuild, no re-layout. This is
   /// what keeps dragging O(dragged) instead of O(network).
+  ///
+  /// The trace menu's hover highlight (`model.traceHoveredNodeId`) rides the
+  /// same wrapper: a hover change rebuilds only the node whose highlight
+  /// differs from the one its prebuilt child was drawn with.
   Widget _buildNodeWidget(
     NodeView node,
     List<BigInt> scopeChain,
@@ -1476,19 +1480,25 @@ class NodeNetworkState extends State<NodeNetwork> {
     ScopeResolver resolver,
   ) {
     final model = widget.graphModel;
+    final builtHighlighted = model.isTraceHovered(node.id, scopeChain);
     return ListenableBuilder(
       // The scoped key sits on the Stack's direct child (this wrapper) so
       // sibling reconciliation keeps working; see NodeWidgetKeys.nodeWidget.
       key: NodeWidgetKeys.nodeWidget(node.id, scopeChain: scopeChain),
-      listenable: model.dragRepaint,
+      listenable:
+          Listenable.merge([model.dragRepaint, model.traceHoveredNodeId]),
       builder: (context, child) {
-        if (!model.isNodeDragAffected(node.id, scopeChain)) {
+        final dragAffected = model.isNodeDragAffected(node.id, scopeChain);
+        final highlighted = model.isTraceHovered(node.id, scopeChain);
+        if (!dragAffected && highlighted == builtHighlighted) {
           return child!;
         }
-        return _nodeWidgetFor(
-            node, scopeChain, rootView, _dragFrameResolver(rootView));
+        return _nodeWidgetFor(node, scopeChain, rootView,
+            dragAffected ? _dragFrameResolver(rootView) : resolver,
+            traceHighlighted: highlighted);
       },
-      child: _nodeWidgetFor(node, scopeChain, rootView, resolver),
+      child: _nodeWidgetFor(node, scopeChain, rootView, resolver,
+          traceHighlighted: builtHighlighted),
     );
   }
 
@@ -1496,8 +1506,9 @@ class NodeNetworkState extends State<NodeNetwork> {
     NodeView node,
     List<BigInt> scopeChain,
     NodeNetworkView rootView,
-    ScopeResolver resolver,
-  ) =>
+    ScopeResolver resolver, {
+    bool traceHighlighted = false,
+  }) =>
       canvasNodeWidget(
         node: node,
         scopeChain: scopeChain,
@@ -1509,6 +1520,7 @@ class NodeNetworkState extends State<NodeNetwork> {
         // Non-null only for a custom node whose network has a thumbnail: the
         // lookup is by network name, and only networks are in the list.
         thumbnail: widget.graphModel.networkThumbnailImage(node.nodeTypeName),
+        traceHighlighted: traceHighlighted,
       );
 
   /// Resolver for drag-tick rebuilds of drag-affected nodes. The build-time

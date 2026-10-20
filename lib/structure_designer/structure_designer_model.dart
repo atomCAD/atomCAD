@@ -404,6 +404,30 @@ class StructureDesignerModel extends ChangeNotifier {
   /// restores full coherence everywhere else.
   final ValueNotifier<int> dragRepaint = ValueNotifier(0);
 
+  /// The top-level node of the active network that the pointer is over in the
+  /// viewport's right-click trace menu (`trace_menu.dart`), or null. The node
+  /// network editor draws it highlighted. Transient view state: a dedicated
+  /// notifier, never [notifyListeners], so a hover repaints one or two node
+  /// widgets instead of the editor.
+  final ValueNotifier<BigInt?> traceHoveredNodeId = ValueNotifier(null);
+
+  /// Highlight [row] in the node network editor while the trace menu's
+  /// pointer is over it, or clear the highlight (null). Only a row of the
+  /// network being viewed is highlighted: a row inside a custom-node instance
+  /// lives in another network, which the editor is not showing.
+  void setTraceHoveredRow(APITraceRow? row) {
+    traceHoveredNodeId.value = row != null &&
+            row.depth == 0 &&
+            row.scopePath.isEmpty &&
+            row.hostNetwork == nodeNetworkView?.name
+        ? row.nodeId
+        : null;
+  }
+
+  /// Whether the node at ([nodeId], [scopeChain]) is [traceHoveredNodeId].
+  bool isTraceHovered(BigInt nodeId, List<BigInt> scopeChain) =>
+      scopeChain.isEmpty && traceHoveredNodeId.value == nodeId;
+
   /// Scope + node ids of the node-drag in progress (null scope = no drag).
   /// Drives [isNodeDragAffected]; cleared by [refreshFromKernel], which every
   /// drag-commit path goes through.

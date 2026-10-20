@@ -15,9 +15,15 @@
 /// children lands inside the custom network (the caller's `onSelect` does the
 /// jump — the row's `hostNetwork` already says which).
 ///
+/// Every row highlights under the pointer, and [TraceMenu.onHover] reports
+/// the row (null when the pointer leaves it) so the host can highlight the
+/// node in the node network editor.
+///
 /// The widget takes plain data and callbacks and is unit-tested in
 /// `test/trace_menu_test.dart`.
 library;
+
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -64,6 +70,9 @@ class TraceMenu extends StatefulWidget {
   final void Function(APITraceRow row) onSelect;
   final VoidCallback onDismiss;
 
+  /// The pointer entered [row] (null: it left the row it was on).
+  final void Function(APITraceRow? row)? onHover;
+
   const TraceMenu({
     super.key,
     required this.position,
@@ -71,6 +80,7 @@ class TraceMenu extends StatefulWidget {
     required this.truncated,
     required this.onSelect,
     required this.onDismiss,
+    this.onHover,
   });
 
   @override
@@ -82,12 +92,31 @@ class _TraceMenuState extends State<TraceMenu> {
   /// lists are short.
   final Set<int> _collapsed = {};
 
+  /// The row under the pointer, or null.
+  int? _hovered;
+
   static const double _indentPerDepth = 14.0;
 
   void _toggle(int index) {
     setState(() {
       if (!_collapsed.remove(index)) _collapsed.add(index);
     });
+  }
+
+  void _setHovered(int index, bool hovering) {
+    if (hovering) {
+      if (_hovered == index) return;
+      setState(() => _hovered = index);
+      widget.onHover?.call(widget.rows[index]);
+    } else if (_hovered == index) {
+      // Moving between rows, the old row's exit arrives before the new row's
+      // enter, in the same dispatch. Report "left" only if no row was
+      // entered by then, so the host does not see a null between two rows.
+      setState(() => _hovered = null);
+      scheduleMicrotask(() {
+        if (mounted && _hovered == null) widget.onHover?.call(null);
+      });
+    }
   }
 
   @override
@@ -182,6 +211,8 @@ class _TraceMenuState extends State<TraceMenu> {
     return InkWell(
       key: ValueKey('trace_row_$index'),
       onTap: () => widget.onSelect(row),
+      onHover: (hovering) => _setHovered(index, hovering),
+      hoverColor: Colors.white.withValues(alpha: 0.12),
       child: Padding(
         padding: const EdgeInsets.only(left: 6, right: 12, top: 4, bottom: 4),
         child: Row(

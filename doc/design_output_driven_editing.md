@@ -644,6 +644,11 @@ A popup in the style of the click-to-activate disambiguation overlay:
   header, and its children are reversed the same way. Branches stay grouped:
   `union(A, B)` lists B's chain, then A's, then `union`. Since the row cap
   cuts the far-upstream end, the "… more" line is at the top.
+- **Hover**: every row highlights under the pointer. A row of the network
+  being viewed (depth 0) also highlights its node in the node network editor,
+  until the pointer leaves the row or the menu closes. Rows inside an instance
+  live in a network the editor is not showing, so they highlight only in the
+  menu.
 - **Tree**: a custom-node instance is a parent row, and the nodes traced
   inside its network are its children, indented by `depth`. Each parent has an
   expand/collapse chevron and starts expanded, since trace lists are short.
