@@ -222,7 +222,7 @@ the handle click and the context menu route through `_removeAnchor`.
 - **Active:** Thick border, full glow (0xFFD84315)
 - **Selected:** Medium border, partial glow (0xFFE08000)
 - **Error:** Red border with glow
-- **Trace-hovered:** White thick border, strong glow — wins over all the
+- **Trace-hovered:** Magenta (0xFFD500F9) thick border, strong glow — wins over all the
   others. The pointer is on the node's row in the viewport's right-click trace
   menu (`model.traceHoveredNodeId`, listened to by the per-node
   `ListenableBuilder` beside `dragRepaint`); never set by the image export

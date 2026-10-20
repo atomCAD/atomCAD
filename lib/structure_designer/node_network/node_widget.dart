@@ -78,8 +78,9 @@ const Color NODE_COLOR_SELECTED =
     Color(0xFFE08000); // Selected node border & title
 const Color NODE_BORDER_COLOR_NORMAL = Colors.blueAccent;
 const Color NODE_BORDER_COLOR_ERROR = Colors.red;
-const Color NODE_COLOR_TRACE_HOVER =
-    Colors.white; // Hovered in the viewport's trace menu
+// Hovered in the viewport's trace menu. Magenta reads on both the dark node
+// fill and the light canvas, and no other node state uses it.
+const Color NODE_COLOR_TRACE_HOVER = Color(0xFFD500F9);
 const double NODE_BORDER_WIDTH_ACTIVE = 3.0;
 const double NODE_BORDER_WIDTH_SELECTED = 2.0;
 const double NODE_BORDER_WIDTH_NORMAL = 2.0;
