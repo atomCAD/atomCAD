@@ -56,7 +56,9 @@ during normal evaluation.
   `trace`.
 - Values the nodes need (their inputs, their own output) come from the ordinary
   evaluator, run with the eval memo installed for the duration of one trace, so
-  each upstream node is evaluated at most once per right-click.
+  each upstream node is evaluated at most once per right-click. The trace keeps
+  every value it fetches in its own store for the rest of the trace, so each
+  value is copied out of the memo at most once (see `TraceContext`).
 
 ### Why not record provenance during evaluation
 
@@ -90,7 +92,13 @@ pub enum TraceProbe {
     Atom { id: Option<u32>, position: DVec3 },
     /// A point of geometry. `on_surface` is true for a ray hit on a displayed
     /// surface, false for an atom centre handed down by `materialize`.
-    Point { position: DVec3, on_surface: bool },
+    ///
+    /// `delta` is the tie tolerance δ that the geometry booleans use to decide
+    /// which children decide the shape at this point (see Geometry booleans).
+    /// The node that creates the `Point` sets it, and every later step passes
+    /// it on unchanged (the movement nodes are rigid, so it holds in any
+    /// frame).
+    Point { position: DVec3, on_surface: bool, delta: f64 },
 }
 
 /// What the node did to the probed thing. Shown as the row's label.
@@ -168,12 +176,9 @@ The node's only window onto the evaluator:
 impl TraceContext<'_> {
     /// The evaluated value on input pin `pin`, the same value `eval` sees.
     /// Array pins return the merged `NetworkResult::Array`.
-    pub fn input(&mut self, pin: usize) -> &NetworkResult;
+    pub fn input(&self, pin: usize) -> Rc<NetworkResult>;
     /// This node's own evaluated output on `pin`.
-    pub fn output(&mut self, pin: usize) -> &NetworkResult;
-    /// δ for "does this child decide the surface here" ties
-    /// (see Geometry booleans). One value for every node.
-    pub fn surface_tolerance(&self) -> f64;
+    pub fn output(&self, pin: usize) -> Rc<NetworkResult>;
 }
 ```
 
@@ -182,12 +187,26 @@ registry and a throwaway `NetworkEvaluationContext`, and calls `evaluate_arg`
 and the node's own `eval` the way the evaluator does. The node never sees the
 stack, wires or scopes.
 
-**Values are lent, not copied.** The context fetches each pin's value once per
-step, keeps it for the rest of that step, and hands out references. A
-`Crystal` or `Molecule` deep-clones, and one step touches the same input
-several times (the engine's wire resolution, then the node), so returning owned
-values would copy a million-atom structure several times per step. This keeps
-values only for one step and does not cache across traces.
+**Shared, not copied.** The methods take `&self` and return `Rc`s, so a node
+can hold several values at once — the booleans hold their children and their
+combined output together, `atom_edit` holds its base while it reads its
+output. (Returning `&NetworkResult` from `&mut self` would forbid that.)
+
+The values come from a **trace-lifetime store** keyed by (frame, node, pin);
+see The engine for the frame. The store is filled on first use and lives in a
+`RefCell` inside the context. It is needed because the memo does not lend
+either: `eval_memo::lookup` / `lookup_pin` return a clone, and `CrystalData`
+and `MoleculeData` hold a plain `AtomicStructure`, so every memo hit deep-copies
+the atoms. With the store, each (frame, node, pin) is copied out of the memo
+**at most once per trace**, however many times the engine's wire resolution
+and the nodes ask for it. A source node's output, fetched as its consumer's
+input, is the same entry when the trace moves on to that source. The store is
+dropped when the trace ends; nothing is cached across traces.
+
+The memo is installed for the trace **without a byte budget**: an eviction in
+the middle of a trace would re-run whatever produced the evicted value, which
+could be a `relax`. A trace walks one upstream cone, so the peak is that cone's
+values, held once in the memo and once in the store. Phase 1 measures it.
 
 ## The engine
 
@@ -202,7 +221,13 @@ pub enum RowContribution {
     Unknown,
 }
 
+/// Where a node sits during the trace: the chain of custom-node instances
+/// entered from the top network, outermost first. Empty = the top network.
+/// Each entry is (the network that holds the instance, the instance node).
+pub type TraceFrame = Vec<(String, NodeRef)>;
+
 pub struct TraceRow {
+    pub frame: TraceFrame,
     pub node: NodeRef,
     pub network: String,
     pub contribution: RowContribution,
@@ -224,7 +249,8 @@ a displayed `NodeRef`, the pin, and either an atom (id, position) or a surface
 point. The engine re-evaluates that node's pin. It does not trust ids in the
 decorated display output, so it resolves an atom hit by position against the
 real `NetworkResult`. A bond hit is traced as its endpoint nearer to the hit
-point.
+point. A surface hit starts as `Point { on_surface: true, delta: 0.1 Å }`
+(see Geometry booleans).
 
 **Each step.**
 
@@ -264,10 +290,15 @@ the path appears twice.
 **Opaque constructs.** HOFs, closures, `apply`, and wires crossing a zone
 boundary (`source_scope_depth > 0`) are treated as nodes without `trace` in v1.
 
-**Dedup and bounds.** A visited set keyed by (`NodeRef`, pin, probe kind,
-rounded position) stops diamond-shaped DAGs from repeating. A row cap (e.g.
-200) guards against pathological networks; hitting it adds a final
-"… more" row.
+**Dedup and bounds.** A visited set keyed by (`TraceFrame`, network,
+`NodeRef`, pin, element, probe kind, rounded position) stops diamond-shaped
+DAGs from repeating. `NodeRef` alone is not enough: its `scope_path` is the
+*zone* path inside HOF bodies and says nothing about the network, and node ids
+restart in every network, so node 5 of a custom network and node 5 of its
+parent would share a key. The frame keeps two instances of one network apart,
+which is what lets each instance be its own subtree (above), while a diamond
+*inside* one instance still collapses. A row cap (e.g. 200) guards against
+pathological networks; hitting it adds a final "… more" row.
 
 **Row order.** Rows are listed in walk order: downstream first, branches
 depth-first in input-pin order. That reads as a path from the viewport back
@@ -288,15 +319,23 @@ to the origin.
    `Crystal`, `Molecule`, `HasAtoms`, `HasStructure`, `HasFreeLinOps`, or an
    array of one of these.
 2. **Otherwise**, emit the row with `RowContribution::Unknown`, shown as
-   "possibly contributed", and continue into every phase-typed input with a
-   re-synced probe:
-   - **Atom**: look for an atom within 0.1 Å of the probe position in that
-     input (`get_atoms_in_radius`). If found, the probe is precise again, with
-     the input's atom id. Many unsupported nodes do not move atoms (`passivate`,
-     `tag`, `freeze`, `apply_style`, `infer_bonds`, …), so the trace usually
-     survives them unharmed.
-   - **Point**: keep the point if the input's geometry contains it, or for an
-     `on_surface` probe, if it is within δ of the input's surface.
+   "possibly contributed", and continue into every phase-typed input (every
+   element of an array input) with a probe re-synced **to that input's type**.
+   The probe kind need not match the input: an unsupported node can turn
+   geometry into atoms or atoms into geometry, so the re-sync converts first.
+   - **Atomic input** (`Crystal`, `Molecule`, or an abstract atomic type),
+     either probe kind: look for an atom within 0.1 Å of the probe position
+     (`get_atoms_in_radius`). If found, the probe becomes a precise `Atom` with
+     the input's atom id. Many unsupported nodes do not move atoms
+     (`passivate`, `tag`, `freeze`, `apply_style`, `infer_bonds`, …), so the
+     trace usually survives them unharmed. If no atom is there and the probe is
+     a `Point`, fall back to the input's geometry shell: keep the `Point` if
+     `geo_tree_root` is `Some` and passes the Blueprint test below.
+   - **Blueprint input**: an `Atom` probe becomes
+     `Point { position, on_surface: false, delta }`, with `delta` from
+     `atom_point_delta` (see `materialize`). The point is kept if the geometry
+     contains it, or, for an `on_surface` probe, if it is within the probe's
+     `delta` of the surface.
    - **No match**: the probe is **lost**. Every node upstream of that input
      through phase-typed pins is listed as `Unknown` without calling its
      `trace`. With no probe, nothing can be pruned, so listing everything is
@@ -351,13 +390,28 @@ Re-run `apply_diff(base, &self.diff, tolerance)` on `ctx.input(0)` and read
 ### `materialize`
 
 - Reports `Created("filled")`, or `Created("passivated")` for an atom with the
-  hydrogen-passivation flag.
+  passivation flag (`is_hydrogen_passivation`). Since #405 the terminator can
+  be a halogen as well as hydrogen; both carry the flag.
 - Links to pin 0 (the Blueprint) with
-  `Point { position, on_surface: false }`. This is where the trace crosses from
-  atoms to geometry.
-- For a passivating hydrogen, use the position of the atom it caps. The H sits
-  just outside the geometry; its parent sits inside, like every other filled
-  atom.
+  `Point { position, on_surface: false, delta }`. This is where the trace
+  crosses from atoms to geometry.
+- For a passivating terminator, use the position of the atom it caps (its one
+  bonded neighbour). The terminator sits just outside the geometry; its parent
+  sits inside, like every other filled atom.
+- `delta` comes from a shared helper in `trace/`, also used by the fallback:
+
+  ```rust
+  /// δ for a Point probe made from an atom centre: the length of the atom's
+  /// shortest bond to a non-passivating atom; for an atom with no such bond,
+  /// `crystal_bond_length(z, z)`, else 1.5 Å.
+  pub fn atom_point_delta(atoms: &AtomicStructure, atom_id: u32) -> f64;
+  ```
+
+  Why a bond length: filled atom centres do not sit on the surface. Each one
+  lies somewhere between 0 and about one layer spacing inside every face near
+  it, and the layer spacing is bounded by the bond length. Two faces meeting at
+  an edge can therefore be up to a bond length apart in signed distance at the
+  edge's outermost atom, and a smaller δ would keep only one of them.
 
 ### Geometry booleans
 
@@ -368,14 +422,27 @@ Re-run `apply_diff(base, &self.diff, tolerance)` on `ctx.input(0)` and read
 
 That is, follow the children whose surface decides the shape there:
 
-- `union` keeps children within δ of the minimum.
-- `intersect` keeps children within δ of the maximum.
-- `diff` computes `max(base, −cutter_i)` and keeps whichever terms are within
-  δ of the result.
+- `union` (one array pin, `shapes`) keeps the elements within δ of the
+  minimum.
+- `intersect` keeps the elements within δ of the maximum.
+- `diff` has **two** array pins, `base` and `sub`, each unioned before the
+  difference (`diff.rs`). With `B = min_j base_j` and `S = min_i sub_i`, the
+  combined value is `max(B, −S)`. If `B` is within δ of it, follow the `base`
+  elements within δ of `B` (pin 0, element *j*). If `−S` is within δ of it,
+  follow the `sub` elements within δ of `S` (pin 1, element *i*). Both sides
+  can be followed at an edge where a cut meets an uncut face.
+
+Every link carries the element index, so the trace lands on the one shape
+that decides the point, not on the whole pin. δ is the probe's own `delta`
+(see `TraceProbe::Point`).
 
 All three report `Passed`. Ties are what make this work at edges and corners:
-an atom on a tetrahedron face yields one half space, an edge atom two, a
-vertex atom three. A deep-interior atom yields the nearest face.
+an atom on a tetrahedron face, well away from its edges, yields one half
+space; the outermost atom on an edge two; the atom at a vertex three. A
+deep-interior atom yields the nearest face. Because δ is a bond length (see
+`materialize`), a face atom within about one bond length of an edge also
+yields both of that edge's half spaces. That is acceptable: the atom is
+close to both faces, and editing either moves it.
 
 The heuristic lives in the three nodes' `trace` methods, not in the engine.
 Two shared helpers in `trace/` keep each implementation to a few lines:
@@ -387,9 +454,13 @@ pub fn deciding_children(values: &[f64], combined: f64, delta: f64) -> Vec<usize
 pub fn sdf_at(value: &NetworkResult, point: DVec3) -> Option<f64>;
 ```
 
-`ctx.surface_tolerance()` supplies δ. v1 uses a fixed 0.5 Å. Whether δ should
-follow the lattice's nearest-neighbour distance is left to the Phase 4
-walkthrough.
+δ has two sources, set where the `Point` is created:
+
+- **Atom centres** (`materialize`, and the fallback's atom → point
+  conversion): `atom_point_delta`, a bond length.
+- **Surface ray hits** on a displayed Blueprint: a fixed 0.1 Å. The point is
+  on the tessellated surface, so the children that decide it agree to within
+  the gap between the mesh and the SDF. δ only has to cover that gap.
 
 ### Not in v1
 
@@ -527,24 +598,33 @@ menu header, is a later UI-only change: the category is already on every row.
 
 ## Open questions
 
-1. **δ.** Fixed 0.5 Å, or derived from the lattice? See Geometry booleans.
+1. **Surface-hit δ.** Is 0.1 Å enough to cover the gap between the mesh and
+   the SDF on coarse tessellations? See Geometry booleans; the Phase 4
+   walkthrough settles it. (The atom-centre δ is decided: a bond length.)
 
 ## Performance
 
 A trace re-evaluates the displayed node's upstream chain once, with the memo
-installed, plus the `trace` calls themselves. For CSG and editing chains this
-is about one refresh. Upstream `relax`, `chemisorb` or `mechanosynth` nodes
-can make it take seconds. v1 accepts that; Phase 1 measures it on the demo
-library. Only if that measurement shows a problem is caching considered, for
-example keeping the last refresh's memo.
+installed and unbudgeted, plus the `trace` calls themselves. On top of that it
+pays one deep copy of every (frame, node, pin) value it visits, when the value
+moves from the memo into the trace store (see `TraceContext`). Memory peaks at
+about twice the cone's values: once in the memo, once in the store.
+
+For CSG and editing chains this is about one refresh. Upstream `relax`,
+`chemisorb` or `mechanosynth` nodes can make it take seconds, and a
+million-atom chain pays a copy of the structure per node visited. v1 accepts
+that; Phase 1 measures time and peak memory on the demo library. Only if that
+measurement shows a problem are the alternatives considered, for example
+keeping the last refresh's memo, or sharing atom payloads by `Arc` so that a
+memo hit stops being a deep copy.
 
 ## Phased implementation plan
 
 ### Phase 1 — Engine, trait and fallback (Rust)
 
 - `trace/` module with `TraceProbe`, `Contribution`, `TraceStep`, `TraceLink`,
-  `TraceContext` (which lends values per step), `deciding_children` and
-  `sdf_at`.
+  `TraceContext` (`Rc` values from the trace-lifetime store, memo installed
+  unbudgeted), `deciding_children`, `sdf_at` and `atom_point_delta`.
 - `NodeData::trace` with its default `None`.
 - `trace/engine.rs` returning `Vec<TraceNode>` with `RowContribution`, and a
   thin `StructureDesigner::trace_hit` that delegates to it. The engine covers:
@@ -555,16 +635,17 @@ example keeping the last refresh's memo.
   - custom-node enter and exit through `parameter`, via the evaluator's own
     frame helpers
   - opaque HOFs and zone wires
-  - dedup and the row cap
-  - the fallback with position re-sync and the lost-probe listing
+  - dedup keyed on the `TraceFrame`, and the row cap
+  - the fallback with type-directed re-sync (atom ↔ point conversion,
+    geometry-shell fallback) and the lost-probe listing
 - Extend `PerNodeRayHit` (or add a sibling query) so the raycast also reports
   pin, hit kind, atom id and hit point. Today it reports only `node_ref` and
   distance.
 - Move the overlap rule out of the API layer into
   `StructureDesigner::pick_displayed_candidates`. Switch `viewport_pick` and
   `query_hovered_atom_info` to it with no change in behaviour.
-- Measure trace time on the demo library networks and record the numbers in
-  this doc.
+- Measure trace time and peak memory on the demo library networks and record
+  the numbers in this doc.
 
 Tests (`atomcad-structure-designer/tests/`), all with no node implementations
 yet, so the fallback is exercised:
@@ -582,6 +663,13 @@ yet, so the fallback is exercised:
   with the right `host_network` and `scope_path`. A nested custom node nests
   one level further.
 - A diamond-shaped DAG lists each node once.
+- Two instances of the same custom network on the path both appear, each with
+  its own inner rows. A node inside the custom network whose id equals a
+  parent-network node's id on the path is not deduped against it.
+- An Atom probe reaching an unsupported node through a Blueprint input is
+  converted to a `Point` and keeps pruning, instead of being lost.
+- A node reads two values from `TraceContext` at once, and a value visited
+  twice in one trace is fetched from the memo once.
 - The existing click-to-activate and hover tests still pass after the overlap
   rule moves.
 
@@ -630,8 +718,9 @@ Tests, one per node, on small fixture networks:
   index carries through the `array` node to the right input.
 - `atom_edit`: an added atom stops at the node; an edited atom continues to its
   base atom; an untouched atom is `Passed`.
-- `materialize` hands a `Point` probe to the Blueprint. A passivating H is
-  probed at its parent's position.
+- `materialize` hands a `Point` probe to the Blueprint, with `delta` from
+  `atom_point_delta`. A passivating H, and a halogen terminator, are probed at
+  their parent's position.
 
 ### Phase 4 — Geometry nodes
 
@@ -642,14 +731,16 @@ Tests:
 
 - The sphere ∪ cube example: an atom on the sphere surface lists `sphere` and
   prunes the cube.
-- The tetrahedron example: face, edge and vertex atoms list one, two and three
-  half spaces.
+- The tetrahedron example: a face atom more than two bond lengths from any
+  edge lists one half space, the outermost atom on an edge two, the vertex atom
+  three.
 - `diff`: an atom on a cut face traces to the cutter; one on an uncut face
-  traces to the base.
+  traces to the base. With two `base` and two `sub` elements, each atom traces
+  to its own element on each side, not to the whole pin.
 - A surface ray hit on a displayed Blueprint, as opposed to an atom, gives the
   same result.
 
-Manual walkthrough, which also settles open question 1 (δ).
+Manual walkthrough, which also settles open question 1 (surface-hit δ).
 
 ## Testing
 
