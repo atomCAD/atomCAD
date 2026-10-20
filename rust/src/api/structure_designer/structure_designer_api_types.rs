@@ -3482,13 +3482,14 @@ pub enum APITracePick {
     Disambiguation { candidates: Vec<APICandidateNode> },
 }
 
-/// The nodes that contributed to the thing under the cursor, nearest to the
-/// viewport first.
+/// The nodes that contributed to the thing under the cursor, in build-up
+/// order: where it was made first, the displayed node last.
 pub struct APITraceResult {
     /// Pre-order: a custom-node instance row is followed directly by the rows
     /// traced inside it, one `depth` deeper. Empty = nothing hit.
     pub rows: Vec<APITraceRow>,
-    /// The trace stopped at its row cap; the menu ends in a "… more" line.
+    /// The trace stopped at its row cap; the rows cut off are the farthest
+    /// upstream, so the menu starts with a "… more" line.
     pub truncated: bool,
 }
 

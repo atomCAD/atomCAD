@@ -15,8 +15,8 @@ is almost always further upstream and not displayed.
 ## Goal
 
 Right-click on content in the viewport opens a menu listing the nodes that
-contributed to the thing under the cursor, nearest-to-the-viewport first, each
-labelled with what it did ("filled", "moved", "shape", …). Choosing a row
+contributed to the thing under the cursor, in build-up order (the origin at
+the top, the displayed node at the bottom), each labelled with what it did ("filled", "moved", "shape", …). Choosing a row
 selects that node and scrolls the node network editor to it.
 
 This is the first and simplest **output-driven editing** feature: the user
@@ -31,10 +31,10 @@ they are out of scope here.
 an atom on a face of the tetrahedron:
 
 ```
-materialize      filled
-union            passed
-intersect        passed
 half_space_3     shape
+intersect        passed
+union            passed
+materialize      filled
 ```
 
 The `sphere` and the other three half spaces are **pruned**: the atom does not
@@ -351,7 +351,7 @@ pathological networks; hitting it adds a final "… more" row.
 
 **Row order.** Rows are listed in walk order: downstream first, branches
 depth-first in input-pin order. That reads as a path from the viewport back
-to the origin.
+to the origin. The menu shows the reverse (see Flutter → Menu).
 
 ### Fallback for nodes without `trace`
 
@@ -637,6 +637,13 @@ A popup in the style of the click-to-activate disambiguation overlay:
 
 - **Columns**: one row per trace row, showing the node label and, right-aligned,
   the contribution label. `Passed` and `Unknown` rows are dimmed.
+- **Order**: build-up order, top to bottom: the origin first, the displayed
+  node last, which reads more naturally than a path back from the viewport.
+  The flattening in `view_builders.rs` reverses each sibling list of the
+  engine's walk order. An instance row stays above its children as their
+  header, and its children are reversed the same way. Branches stay grouped:
+  `union(A, B)` lists B's chain, then A's, then `union`. Since the row cap
+  cuts the far-upstream end, the "… more" line is at the top.
 - **Tree**: a custom-node instance is a parent row, and the nodes traced
   inside its network are its children, indented by `depth`. Each parent has an
   expand/collapse chevron and starts expanded, since trace lists are short.

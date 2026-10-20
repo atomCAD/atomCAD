@@ -100,26 +100,26 @@ fn summary(result: &APITraceResult) -> Vec<String> {
 }
 
 #[test]
-fn flattening_lists_each_instance_directly_before_its_children_one_level_deeper() {
+fn flattening_reverses_walk_order_and_lists_each_instance_before_its_children() {
     let result = flatten_trace_report(&nested_report(false), |row| {
         format!("n{}", row.node.node_id)
     });
     assert_eq!(
         summary(&result),
         vec![
+            "n4 @main #4 moved",
+            "n9 @main #9 possibly contributed",
             "n1 @main #1 filled",
+            "  n2 @outer #2 passed",
             "  n7 @outer #7 filled",
             "    n3 @inner #3 filled",
-            "  n2 @outer #2 passed",
-            "n9 @main #9 possibly contributed",
-            "n4 @main #4 moved",
         ]
     );
     let kinds: Vec<_> = result.rows.iter().map(|r| &r.contribution).collect();
-    assert!(matches!(kinds[0], APIContributionKind::Created));
+    assert!(matches!(kinds[0], APIContributionKind::Modified));
+    assert!(matches!(kinds[1], APIContributionKind::Unknown));
+    assert!(matches!(kinds[2], APIContributionKind::Created));
     assert!(matches!(kinds[3], APIContributionKind::Passed));
-    assert!(matches!(kinds[4], APIContributionKind::Unknown));
-    assert!(matches!(kinds[5], APIContributionKind::Modified));
     assert!(result.rows.iter().all(|r| r.scope_path.is_empty()));
     assert!(!result.truncated);
 }
@@ -218,10 +218,10 @@ fn a_ray_through_a_known_atom_is_traced_straight_away() {
     };
     assert_eq!(
         rows(&result),
-        vec!["tag_a possibly contributed", "src_a source"]
+        vec!["src_a source", "tag_a possibly contributed"]
     );
-    assert_eq!(result.rows[0].node_id, tag);
-    assert_eq!(result.rows[1].node_id, value);
+    assert_eq!(result.rows[0].node_id, value);
+    assert_eq!(result.rows[1].node_id, tag);
     assert!(
         result
             .rows
@@ -276,9 +276,9 @@ fn trace_viewport_hit_traces_the_chosen_candidate() {
     refresh(&mut designer);
 
     let a = trace_hit_view(&mut designer, &RAY_ORIGIN, &RAY_DIRECTION, tag_a);
-    assert_eq!(rows(&a), vec!["tag_a possibly contributed", "src_a source"]);
+    assert_eq!(rows(&a), vec!["src_a source", "tag_a possibly contributed"]);
     let b = trace_hit_view(&mut designer, &RAY_ORIGIN, &RAY_DIRECTION, tag_b);
-    assert_eq!(rows(&b), vec!["tag_b possibly contributed", "src_b source"]);
+    assert_eq!(rows(&b), vec!["src_b source", "tag_b possibly contributed"]);
 }
 
 #[test]
@@ -332,7 +332,7 @@ fn gadgets_are_ignored_by_the_trace() {
     };
     assert_eq!(
         rows(&result),
-        vec!["mover moved", "tag_a possibly contributed", "src_a source"]
+        vec!["src_a source", "tag_a possibly contributed", "mover moved"]
     );
 }
 

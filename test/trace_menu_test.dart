@@ -98,7 +98,7 @@ void main() {
     expect(find.text('… more'), findsNothing);
   });
 
-  testWidgets('a truncated trace ends in a "… more" line', (tester) async {
+  testWidgets('a truncated trace starts with a "… more" line', (tester) async {
     await _pump(tester, truncated: true);
     expect(find.text('… more'), findsOneWidget);
   });
