@@ -1,6 +1,8 @@
 use crate::data_type::DataType;
 use crate::evaluator::network_evaluator::NetworkStackElement;
-use crate::evaluator::network_evaluator::{NetworkEvaluationContext, NetworkEvaluator};
+use crate::evaluator::network_evaluator::{
+    NetworkEvaluationContext, NetworkEvaluator, value_or_default,
+};
 use crate::evaluator::network_result::{
     Alignment, BlueprintData, CrystalData, MoleculeData, NetworkResult,
     runtime_type_error_in_input, worsen_alignment_with_reason,
@@ -14,7 +16,7 @@ use crate::node_type::{
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
-use crate::trace::{TraceContext, TraceProbe, TraceStep, trace_same_atom_id};
+use crate::trace::{TraceContext, TraceProbe, TraceStep, trace_moved_point, trace_same_atom_id};
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::atomic_structure_diff::extract_diff;
 use atomcad_crystolecule::motif_symmetry::rotation_preserves_motif;
@@ -59,6 +61,38 @@ pub struct StructureRotData {
     pub pivot_point: IVec3,
 }
 
+impl StructureRotData {
+    /// The axis index, step and pivot `eval` rotates by, each wired pin winning
+    /// over its stored field. `arg(pin)` is the value on input pin `pin`, so
+    /// `eval` and `trace` resolve the pins alike.
+    #[allow(clippy::result_large_err, clippy::type_complexity)]
+    fn rotation_args(
+        &self,
+        arg: &mut dyn FnMut(usize) -> NetworkResult,
+    ) -> Result<(Option<i32>, i32, IVec3), NetworkResult> {
+        let axis_index =
+            value_or_default(arg(1), self.axis_index, NetworkResult::extract_optional_int)?;
+        let step = value_or_default(arg(2), self.step, NetworkResult::extract_int)?;
+        let pivot_point = value_or_default(arg(3), self.pivot_point, NetworkResult::extract_ivec3)?;
+        Ok((axis_index, step, pivot_point))
+    }
+}
+
+/// The rotation and the real-space pivot of a `structure_rot` in `unit_cell`.
+/// Shared by `eval` and `trace`.
+fn rotation(
+    axis_index: Option<i32>,
+    step: i32,
+    pivot_point: IVec3,
+    unit_cell: &UnitCellStruct,
+) -> (DQuat, DVec3) {
+    let symmetry_axes = analyze_unit_cell_symmetries(unit_cell);
+    (
+        compute_rotation_quat(axis_index, step, &symmetry_axes),
+        unit_cell.ivec3_lattice_to_real(&pivot_point),
+    )
+}
+
 impl NodeData for StructureRotData {
     fn provide_gadget(
         &self,
@@ -98,42 +132,10 @@ impl NodeData for StructureRotData {
             return EvalOutput::multi(vec![input_val.clone(), input_val]);
         }
 
-        let axis_index = match network_evaluator.evaluate_or_default(
-            network_stack,
-            node_id,
-            registry,
-            context,
-            1,
-            self.axis_index,
-            NetworkResult::extract_optional_int,
-        ) {
-            Ok(value) => value,
-            Err(error) => return EvalOutput::multi(vec![error.clone(), error]),
-        };
-
-        let step = match network_evaluator.evaluate_or_default(
-            network_stack,
-            node_id,
-            registry,
-            context,
-            2,
-            self.step,
-            NetworkResult::extract_int,
-        ) {
-            Ok(value) => value,
-            Err(error) => return EvalOutput::multi(vec![error.clone(), error]),
-        };
-
-        let pivot_point = match network_evaluator.evaluate_or_default(
-            network_stack,
-            node_id,
-            registry,
-            context,
-            3,
-            self.pivot_point,
-            NetworkResult::extract_ivec3,
-        ) {
-            Ok(value) => value,
+        let (axis_index, step, pivot_point) = match self.rotation_args(&mut |pin| {
+            network_evaluator.evaluate_arg(network_stack, node_id, registry, context, pin)
+        }) {
+            Ok(args) => args,
             Err(error) => return EvalOutput::multi(vec![error.clone(), error]),
         };
 
@@ -147,9 +149,7 @@ impl NodeData for StructureRotData {
         };
         let unit_cell = structure_ref.lattice_vecs.clone();
 
-        let symmetry_axes = analyze_unit_cell_symmetries(&unit_cell);
-        let real_rotation_quat = compute_rotation_quat(axis_index, step, &symmetry_axes);
-        let pivot_real = unit_cell.ivec3_lattice_to_real(&pivot_point);
+        let (real_rotation_quat, pivot_real) = rotation(axis_index, step, pivot_point, &unit_cell);
         let tr = Transform::new_rotation_around_point(pivot_real, real_rotation_quat);
 
         let motif_preserved =
@@ -257,7 +257,8 @@ impl NodeData for StructureRotData {
     }
 
     /// Output-driven editing: atom ids survive the transform, so an atom traces to
-    /// the input atom with the same id.
+    /// the input atom with the same id; a geometry point traces to the point the
+    /// rotation moved there.
     fn trace(
         &self,
         pin: usize,
@@ -265,7 +266,20 @@ impl NodeData for StructureRotData {
         probe: &TraceProbe,
         ctx: &TraceContext,
     ) -> Option<TraceStep> {
-        trace_same_atom_id(pin, element, probe, ctx, "moved")
+        match probe {
+            TraceProbe::Atom { .. } => trace_same_atom_id(pin, element, probe, ctx, "moved"),
+            TraceProbe::Point { .. } => trace_moved_point(pin, element, probe, |p| {
+                let (axis_index, step, pivot_point) =
+                    self.rotation_args(&mut |pin| ctx.input_value(pin)).ok()?;
+                let unit_cell = ctx.input(0).get_unit_cell()?;
+                let (quat, pivot) = rotation(axis_index, step, pivot_point, &unit_cell);
+                Some(
+                    Transform::new_rotation_around_point(pivot, quat)
+                        .inverse()
+                        .apply_to_position(&p),
+                )
+            }),
+        }
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

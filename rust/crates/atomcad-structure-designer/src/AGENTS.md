@@ -654,6 +654,17 @@ evaluation.
   `is_hydrogen_passivation`: lattice fill flags no terminator and surface
   reconstruction flags the dimer *hosts* (`doc/design_halogen_passivation.md`
   D5), so the flag misreads `materialize` output both ways.
+- **A `trace` that needs the node's parameter pins resolves them with the
+  same helper as `eval`**: a method taking `arg: &mut dyn FnMut(usize) ->
+  NetworkResult` (`eval` passes `evaluate_arg`, `trace` passes
+  `TraceContext::input_value`) built on `network_evaluator::value_or_default`.
+  The movers and `geo_trans` are the examples. A second copy of the
+  wired-pin-else-stored-field logic drifts from `eval` silently.
+- **The atom-centre δ is two bond lengths** (`ATOM_POINT_DELTA_BONDS`). One
+  bond length looks right and passes on a tetrahedron centred on a lattice
+  atom, whose symmetry makes every face cut alike; off centre, an edge's two
+  faces sit up to ~2.5 Å apart in signed distance. Test geometry heuristics
+  off centre.
 - The trace uses `StructureDesigner::with_trace_eval_context`, not
   `with_eval_context`: an unbudgeted memo, and nothing parked on `self`.
 - **The right-click pick is `trace/pick.rs`**: click-to-activate's overlap rule

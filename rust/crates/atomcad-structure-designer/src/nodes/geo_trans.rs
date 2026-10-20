@@ -1,6 +1,8 @@
 use crate::data_type::DataType;
 use crate::evaluator::network_evaluator::NetworkStackElement;
-use crate::evaluator::network_evaluator::{NetworkEvaluationContext, NetworkEvaluator};
+use crate::evaluator::network_evaluator::{
+    NetworkEvaluationContext, NetworkEvaluator, value_or_default,
+};
 use crate::evaluator::network_result::{BlueprintData, NetworkResult, runtime_type_error_in_input};
 use crate::node_data::{EvalOutput, NodeData};
 use crate::node_network_gadget::NodeNetworkGadget;
@@ -11,6 +13,7 @@ use crate::node_type::{
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
+use crate::trace::{TraceContext, TraceProbe, TraceStep, trace_moved_point};
 use atomcad_crystolecule::structure::Structure;
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
 use atomcad_display::gadget::{Gadget, GadgetPickContext};
@@ -40,6 +43,49 @@ pub struct GeoTransData {
     #[serde(with = "ivec3_serializer")]
     pub rotation: IVec3, // intrinsic euler angles where 1 increment means 90 degrees.
     pub transform_only_frame: bool, // If true, only the reference frame is transformed, the geometry remains in place.
+}
+
+impl GeoTransData {
+    /// The transform `eval` wraps the shape's geometry in, from the wired
+    /// `translation` / `rotation` pins (else the stored fields) and the shape's
+    /// lattice. `arg(pin)` is the value on input pin `pin`, so `eval` and
+    /// `trace` resolve the pins alike.
+    #[allow(clippy::result_large_err)]
+    fn geometry_transform(
+        &self,
+        arg: &mut dyn FnMut(usize) -> NetworkResult,
+        lattice_vecs: &UnitCellStruct,
+    ) -> Result<Transform, NetworkResult> {
+        let translation = value_or_default(arg(1), self.translation, NetworkResult::extract_ivec3)?;
+        let rotation = value_or_default(arg(2), self.rotation, NetworkResult::extract_ivec3)?;
+
+        let real_translation = lattice_vecs.ivec3_lattice_to_real(&translation);
+
+        if !lattice_vecs.is_approximately_cubic() && rotation != IVec3::ZERO {
+            return Err(NetworkResult::Error(
+                "Nonzero rotation is only allowed for cubic unit cells for now.".to_string(),
+            ));
+        }
+
+        let rotation_euler = rotation.as_dvec3() * PI * 0.5;
+        let rotation_quat = DQuat::from_euler(
+            glam::EulerRot::XYZ,
+            rotation_euler.x,
+            rotation_euler.y,
+            rotation_euler.z,
+        );
+
+        // Source no longer carries a frame transform; treat as identity.
+        let input_frame_transform = Transform::default();
+        let frame_transform = input_frame_transform
+            .apply_lrot_gtrans_new(&Transform::new(real_translation, rotation_quat));
+
+        let rot = frame_transform.rotation * input_frame_transform.rotation.inverse();
+        Ok(Transform::new(
+            rot.mul_vec3(-input_frame_transform.translation) + frame_transform.translation,
+            rot,
+        ))
+    }
 }
 
 impl NodeData for GeoTransData {
@@ -78,57 +124,15 @@ impl NodeData for GeoTransData {
         if let NetworkResult::Error(_) = shape_val {
             EvalOutput::single(shape_val)
         } else if let NetworkResult::Blueprint(shape) = shape_val {
-            let translation = match network_evaluator.evaluate_or_default(
-                network_stack,
-                node_id,
-                registry,
-                context,
-                1,
-                self.translation,
-                NetworkResult::extract_ivec3,
+            let tr = match self.geometry_transform(
+                &mut |pin| {
+                    network_evaluator.evaluate_arg(network_stack, node_id, registry, context, pin)
+                },
+                &shape.structure.lattice_vecs,
             ) {
-                Ok(value) => value,
+                Ok(tr) => tr,
                 Err(error) => return EvalOutput::single(error),
             };
-
-            let rotation = match network_evaluator.evaluate_or_default(
-                network_stack,
-                node_id,
-                registry,
-                context,
-                2,
-                self.rotation,
-                NetworkResult::extract_ivec3,
-            ) {
-                Ok(value) => value,
-                Err(error) => return EvalOutput::single(error),
-            };
-
-            let real_translation = shape
-                .structure
-                .lattice_vecs
-                .ivec3_lattice_to_real(&translation);
-
-            let cubic = shape.structure.lattice_vecs.is_approximately_cubic();
-
-            if (!cubic) && rotation != IVec3::ZERO {
-                return EvalOutput::single(NetworkResult::Error(
-                    "Nonzero rotation is only allowed for cubic unit cells for now.".to_string(),
-                ));
-            }
-
-            let rotation_euler = rotation.as_dvec3() * PI * 0.5;
-            let rotation_quat = DQuat::from_euler(
-                glam::EulerRot::XYZ,
-                rotation_euler.x,
-                rotation_euler.y,
-                rotation_euler.z,
-            );
-
-            // Source no longer carries a frame transform; treat as identity.
-            let input_frame_transform = Transform::default();
-            let frame_transform = input_frame_transform
-                .apply_lrot_gtrans_new(&Transform::new(real_translation, rotation_quat));
 
             // Store evaluation cache for root-level evaluations (used for gadget creation when this node is selected)
             // Only store for direct evaluations of visible nodes, not for upstream dependency calculations
@@ -140,12 +144,6 @@ impl NodeData for GeoTransData {
                 context.selected_node_eval_cache = Some(Box::new(eval_cache));
             }
 
-            let rot = frame_transform.rotation * input_frame_transform.rotation.inverse();
-            let tr = Transform::new(
-                rot.mul_vec3(-input_frame_transform.translation) + frame_transform.translation,
-                rot,
-            );
-
             EvalOutput::single(NetworkResult::Blueprint(BlueprintData {
                 structure: Structure::from_lattice_vecs(shape.structure.lattice_vecs.clone()),
                 geo_tree_root: GeoNode::transform(tr, Box::new(shape.geo_tree_root)),
@@ -155,6 +153,25 @@ impl NodeData for GeoTransData {
         } else {
             EvalOutput::single(runtime_type_error_in_input(0))
         }
+    }
+
+    /// Output-driven editing: a geometry point traces to the point the
+    /// transform moved there. `geo_trans` carries geometry only, so an `Atom`
+    /// probe falls back.
+    fn trace(
+        &self,
+        pin: usize,
+        element: Option<usize>,
+        probe: &TraceProbe,
+        ctx: &TraceContext,
+    ) -> Option<TraceStep> {
+        trace_moved_point(pin, element, probe, |p| {
+            let unit_cell = ctx.input(0).get_unit_cell()?;
+            let tr = self
+                .geometry_transform(&mut |pin| ctx.input_value(pin), &unit_cell)
+                .ok()?;
+            Some(tr.inverse().apply_to_position(&p))
+        })
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

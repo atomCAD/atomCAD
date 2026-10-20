@@ -18,6 +18,10 @@ use crate::node_type::{
 };
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
+use crate::trace::{
+    Contribution, TraceContext, TraceProbe, TraceStep, deciding_children, element_links,
+    element_sdfs,
+};
 use atomcad_crystolecule::structure::Structure;
 use atomcad_geo_tree::GeoNode;
 use serde::{Deserialize, Serialize};
@@ -119,6 +123,52 @@ impl NodeData for DiffData {
             alignment,
             alignment_reason,
         }))
+    }
+
+    /// Output-driven editing: with `B` the union of `base` and `S` the union
+    /// of `sub`, the shape is `max(B, -S)`. A point traces to the `base`
+    /// elements within δ of `B` when `B` decides the shape there, and to the
+    /// `sub` elements within δ of `S` when the cut does; at an edge where a
+    /// cut meets an uncut face, both.
+    fn trace(
+        &self,
+        pin: usize,
+        element: Option<usize>,
+        probe: &TraceProbe,
+        ctx: &TraceContext,
+    ) -> Option<TraceStep> {
+        let TraceProbe::Point {
+            position, delta, ..
+        } = probe
+        else {
+            return None;
+        };
+        if pin != 0 || element.is_some() {
+            return None;
+        }
+        let base = element_sdfs(&ctx.input(0), *position)?;
+        let b = base.iter().copied().reduce(f64::min)?;
+        // An unwired `sub` leaves the base as it is (see `eval`).
+        let sub = match ctx.input(1).as_ref() {
+            NetworkResult::None => Vec::new(),
+            value => element_sdfs(value, *position)?,
+        };
+        let s = sub.iter().copied().reduce(f64::min);
+        let combined = s.map_or(b, |s| b.max(-s));
+
+        let mut upstream = Vec::new();
+        if (b - combined).abs() <= *delta {
+            upstream.extend(element_links(0, deciding_children(&base, b, *delta), probe));
+        }
+        if let Some(s) = s
+            && (-s - combined).abs() <= *delta
+        {
+            upstream.extend(element_links(1, deciding_children(&sub, s, *delta), probe));
+        }
+        Some(TraceStep {
+            contribution: Contribution::Passed,
+            upstream,
+        })
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

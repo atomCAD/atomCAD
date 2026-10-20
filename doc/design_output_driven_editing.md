@@ -659,7 +659,9 @@ menu header, is a later UI-only change: the category is already on every row.
 
 1. **Surface-hit δ.** Is 0.1 Å enough to cover the gap between the mesh and
    the SDF on coarse tessellations? See Geometry booleans; the Phase 4
-   walkthrough settles it. (The atom-centre δ is decided: a bond length.)
+   walkthrough settles it. (The atom-centre δ is decided: two bond lengths,
+   see Phase 4 as built. One bond length, as first written here, was too
+   small.)
 
 ## Performance
 
@@ -994,6 +996,51 @@ The Phase 1 *Fallback, converted* test still passes: it traces through
 result.
 
 Manual walkthrough, which also settles open question 1 (surface-hit δ).
+
+#### Phase 4 as built
+
+Tests: `trace_geometry_nodes_test.rs` (14). The tetrahedron tests run over six
+off-centre placements and check every face, edge and vertex in each; the
+movement-node test covers `geo_trans` and all five movers. Phase 1's
+*Fallback, converted* test passes unchanged.
+
+**Where the build differs from the text above:**
+
+- **The atom-centre δ is two bond lengths, not one**
+  (`trace::ATOM_POINT_DELTA_BONDS`; `atom_point_delta` scales the bond length
+  it finds). The argument under `materialize` does not hold: it assumes a
+  filled atom sits less than one layer spacing below each face near it, and
+  that the layer spacing is bounded by the bond length. A diamond (111) layer
+  period is a/√3 = 2.06 Å (4/3 of a bond), and single-bond removal makes an
+  edge recede further. Measured at the outermost atom of a tetrahedron edge
+  over 24 off-centre placements, the two faces' signed distances differ by up
+  to **1.98 Å** with single-bond removal and **2.45 Å** without (the default),
+  against δ = 1.545 Å, so most edge atoms listed one half space and vertex
+  atoms one of three. With δ = 3.09 Å they list two and three. The price is
+  the one the text already accepts, at a larger distance: a face atom lists
+  the neighbouring face too until it is about δ plus its own depth (≈ 4 bond
+  lengths, 6.2 Å) from the edge, so the face-atom tests ask for four bond
+  lengths where the text says two. Centred on a lattice atom, diamond's
+  tetrahedral symmetry makes all four faces cut alike and hides the problem,
+  which is why the tests move the tetrahedron off centre. This also changes
+  the Phase 3 tests of `atom_point_delta` and `materialize`.
+- **The transform helpers are pin readers.** Each mover and `geo_trans` has
+  one helper that resolves its parameter pins (`motion_args`,
+  `rotation_args`, `pivot_args`, `translation_arg`, `geometry_transform`),
+  taking `arg: &mut dyn FnMut(usize) -> NetworkResult`: `eval` passes a
+  closure over `evaluate_arg`, `trace` one over `TraceContext::input_value`.
+  The wired-pin-else-stored-field rule is `network_evaluator::value_or_default`,
+  factored out of `evaluate_or_default`. The shared `trace::trace_moved_point`
+  builds the `Modified("moved")` step from the mapped point.
+- **The movers' Point path is not limited to Blueprints.** A `Point` on a
+  Crystal or Molecule (the fallback's geometry-shell case) is mapped back the
+  same way; its geometry moves with the atoms.
+- **The booleans fold the children's SDFs** (min, max, `max(B, −S)`) rather
+  than reading `ctx.output(0)`: the same value, by the definitions in
+  `atomcad-geo-tree`, with no output entry in the trace store. A `diff` with
+  `sub` unwired follows its base only.
+- Phase 1's measurement was not re-run; the two traces that hit the row cap
+  should now be shorter.
 
 ## Testing
 

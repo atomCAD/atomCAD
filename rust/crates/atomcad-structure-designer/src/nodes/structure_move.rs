@@ -1,6 +1,8 @@
 use crate::data_type::DataType;
 use crate::evaluator::network_evaluator::NetworkStackElement;
-use crate::evaluator::network_evaluator::{NetworkEvaluationContext, NetworkEvaluator};
+use crate::evaluator::network_evaluator::{
+    NetworkEvaluationContext, NetworkEvaluator, value_or_default,
+};
 use crate::evaluator::network_result::{
     Alignment, BlueprintData, CrystalData, MoleculeData, NetworkResult,
     runtime_type_error_in_input, worsen_alignment_with_reason,
@@ -14,7 +16,7 @@ use crate::node_type::{
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
-use crate::trace::{TraceContext, TraceProbe, TraceStep, trace_same_atom_id};
+use crate::trace::{TraceContext, TraceProbe, TraceStep, trace_moved_point, trace_same_atom_id};
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::atomic_structure_diff::extract_diff;
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
@@ -82,6 +84,38 @@ fn default_lattice_subdivision() -> IVec3 {
     IVec3::ONE
 }
 
+/// The real-space translation of a lattice `translation` in units of
+/// `1/subdivision` cells. Shared by `eval` and `trace`.
+fn real_translation(translation: IVec3, subdivision: IVec3, unit_cell: &UnitCellStruct) -> DVec3 {
+    unit_cell.dvec3_lattice_to_real(&(translation.as_dvec3() / subdivision.as_dvec3()))
+}
+
+impl StructureMoveData {
+    /// The translation and per-axis subdivision `eval` moves by: each wired pin
+    /// wins over its stored field, and the per-axis `subdiv_xyz` (pin 3) wins
+    /// over the uniform `subdivision` (pin 2, splatted). `arg(pin)` is the
+    /// value on input pin `pin`, so `eval` and `trace` resolve the pins alike.
+    #[allow(clippy::result_large_err)]
+    fn motion_args(
+        &self,
+        arg: &mut dyn FnMut(usize) -> NetworkResult,
+    ) -> Result<(IVec3, IVec3), NetworkResult> {
+        let translation = value_or_default(arg(1), self.translation, NetworkResult::extract_ivec3)?;
+        let subdiv_xyz = arg(3);
+        if subdiv_xyz.is_error() {
+            return Err(subdiv_xyz);
+        }
+        let lattice_subdivision = match subdiv_xyz.extract_ivec3() {
+            Some(value) => value,
+            None => value_or_default(arg(2), self.lattice_subdivision, |result| {
+                result.extract_int().map(IVec3::splat)
+            })?,
+        }
+        .max(IVec3::ONE);
+        Ok((translation, lattice_subdivision))
+    }
+}
+
 impl NodeData for StructureMoveData {
     fn provide_gadget(
         &self,
@@ -119,44 +153,12 @@ impl NodeData for StructureMoveData {
             return EvalOutput::multi(vec![input_val.clone(), input_val]);
         }
 
-        let translation = match network_evaluator.evaluate_or_default(
-            network_stack,
-            node_id,
-            registry,
-            context,
-            1,
-            self.translation,
-            NetworkResult::extract_ivec3,
-        ) {
-            Ok(value) => value,
+        let (translation, lattice_subdivision) = match self.motion_args(&mut |pin| {
+            network_evaluator.evaluate_arg(network_stack, node_id, registry, context, pin)
+        }) {
+            Ok(args) => args,
             Err(error) => return EvalOutput::multi(vec![error.clone(), error]),
         };
-
-        // Per-axis `subdiv_xyz` (pin 3) wins over the uniform `subdivision`
-        // (pin 2, splatted); both fall back to the stored per-axis field.
-        let subdiv_xyz_val =
-            network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 3);
-        if subdiv_xyz_val.is_error() {
-            return EvalOutput::multi(vec![subdiv_xyz_val.clone(), subdiv_xyz_val]);
-        }
-        let lattice_subdivision = match subdiv_xyz_val.extract_ivec3() {
-            Some(value) => value,
-            None => match network_evaluator.evaluate_or_default(
-                network_stack,
-                node_id,
-                registry,
-                context,
-                2,
-                self.lattice_subdivision,
-                |result| result.extract_int().map(IVec3::splat),
-            ) {
-                Ok(value) => value,
-                Err(error) => return EvalOutput::multi(vec![error.clone(), error]),
-            },
-        }
-        .max(IVec3::ONE);
-
-        let subdivided_translation = translation.as_dvec3() / lattice_subdivision.as_dvec3();
 
         // Translation is lattice-safe iff each component is divisible by its
         // axis's subdivision.
@@ -167,7 +169,8 @@ impl NodeData for StructureMoveData {
         match input_val {
             NetworkResult::Blueprint(shape) => {
                 let unit_cell = shape.structure.lattice_vecs.clone();
-                let real_translation = unit_cell.dvec3_lattice_to_real(&subdivided_translation);
+                let real_translation =
+                    real_translation(translation, lattice_subdivision, &unit_cell);
 
                 if network_stack.len() == 1 {
                     context.selected_node_eval_cache = Some(Box::new(StructureMoveEvalCache {
@@ -211,7 +214,8 @@ impl NodeData for StructureMoveData {
             }
             NetworkResult::Crystal(crystal) => {
                 let unit_cell = crystal.structure.lattice_vecs.clone();
-                let real_translation = unit_cell.dvec3_lattice_to_real(&subdivided_translation);
+                let real_translation =
+                    real_translation(translation, lattice_subdivision, &unit_cell);
 
                 if network_stack.len() == 1 {
                     context.selected_node_eval_cache = Some(Box::new(StructureMoveEvalCache {
@@ -301,7 +305,8 @@ impl NodeData for StructureMoveData {
     }
 
     /// Output-driven editing: atom ids survive the transform, so an atom traces to
-    /// the input atom with the same id.
+    /// the input atom with the same id; a geometry point traces to the point the
+    /// translation moved there.
     fn trace(
         &self,
         pin: usize,
@@ -309,7 +314,15 @@ impl NodeData for StructureMoveData {
         probe: &TraceProbe,
         ctx: &TraceContext,
     ) -> Option<TraceStep> {
-        trace_same_atom_id(pin, element, probe, ctx, "moved")
+        match probe {
+            TraceProbe::Atom { .. } => trace_same_atom_id(pin, element, probe, ctx, "moved"),
+            TraceProbe::Point { .. } => trace_moved_point(pin, element, probe, |p| {
+                let (translation, subdivision) =
+                    self.motion_args(&mut |pin| ctx.input_value(pin)).ok()?;
+                let unit_cell = ctx.input(0).get_unit_cell()?;
+                Some(p - real_translation(translation, subdivision, &unit_cell))
+            }),
+        }
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

@@ -16,6 +16,10 @@ use crate::node_type::{
 };
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
+use crate::trace::{
+    Contribution, TraceContext, TraceProbe, TraceStep, deciding_children, element_links,
+    element_sdfs,
+};
 use atomcad_geo_tree::GeoNode;
 use serde::{Deserialize, Serialize};
 
@@ -113,6 +117,33 @@ impl NodeData for IntersectData {
             alignment,
             alignment_reason,
         }))
+    }
+
+    /// Output-driven editing: a point traces to the shapes whose own SDF is
+    /// within δ of the intersection's (the maximum), i.e. whose surface decides
+    /// the shape there.
+    fn trace(
+        &self,
+        pin: usize,
+        element: Option<usize>,
+        probe: &TraceProbe,
+        ctx: &TraceContext,
+    ) -> Option<TraceStep> {
+        let TraceProbe::Point {
+            position, delta, ..
+        } = probe
+        else {
+            return None;
+        };
+        if pin != 0 || element.is_some() {
+            return None;
+        }
+        let sdfs = element_sdfs(&ctx.input(0), *position)?;
+        let combined = sdfs.iter().copied().reduce(f64::max)?;
+        Some(TraceStep {
+            contribution: Contribution::Passed,
+            upstream: element_links(0, deciding_children(&sdfs, combined, *delta), probe),
+        })
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

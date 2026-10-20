@@ -18,7 +18,9 @@ use atomcad_structure_designer::nodes::structure_invert::StructureInvertData;
 use atomcad_structure_designer::nodes::structure_move::StructureMoveData;
 use atomcad_structure_designer::nodes::structure_rot::StructureRotData;
 use atomcad_structure_designer::structure_designer::StructureDesigner;
-use atomcad_structure_designer::trace::{TraceProbe, atom_point_delta, is_terminator};
+use atomcad_structure_designer::trace::{
+    ATOM_POINT_DELTA_BONDS, TraceProbe, atom_point_delta, is_terminator,
+};
 use glam::f64::DVec3;
 use glam::i32::IVec3;
 
@@ -397,8 +399,8 @@ fn materialize_hands_a_point_with_a_bond_length_delta_to_the_blueprint() {
     );
     let delta = atom_point_delta(&atoms, id);
     assert!(
-        (delta - 1.545).abs() < 0.01,
-        "δ is the C–C bond, not the 1.09 Å C–H bond: {delta}"
+        (delta - ATOM_POINT_DELTA_BONDS * 1.545).abs() < 0.01,
+        "δ is two C–C bonds, not two 1.09 Å C–H bonds: {delta}"
     );
     assert_point(&only_probe(&probes), atom.position, delta);
 }
@@ -455,7 +457,7 @@ shape source"
 }
 
 #[test]
-fn atom_point_delta_is_the_shortest_bond_to_a_non_terminator() {
+fn atom_point_delta_is_two_shortest_bonds_to_a_non_terminator() {
     let mut atoms = AtomicStructure::new();
     let c = atoms.add_atom(6, DVec3::ZERO);
     let far = atoms.add_atom(6, DVec3::new(1.6, 0.0, 0.0));
@@ -466,17 +468,17 @@ fn atom_point_delta_is_the_shortest_bond_to_a_non_terminator() {
     atoms.add_bond(c, h, 1);
 
     // The 1.0 Å bond to the terminator does not count.
-    assert!((atom_point_delta(&atoms, c) - 1.5).abs() < 1e-9);
+    assert!((atom_point_delta(&atoms, c) - ATOM_POINT_DELTA_BONDS * 1.5).abs() < 1e-9);
 
     // The passivation flag is not what makes a terminator: surface
     // reconstruction sets it on dimer hosts, whose bonds still count.
     atoms.set_atom_hydrogen_passivation(near, true);
-    assert!((atom_point_delta(&atoms, c) - 1.5).abs() < 1e-9);
+    assert!((atom_point_delta(&atoms, c) - ATOM_POINT_DELTA_BONDS * 1.5).abs() < 1e-9);
 
     let lone = atoms.add_atom(14, DVec3::new(10.0, 0.0, 0.0));
     assert_eq!(
         atom_point_delta(&atoms, lone),
-        crystal_bond_length(14, 14).unwrap()
+        ATOM_POINT_DELTA_BONDS * crystal_bond_length(14, 14).unwrap()
     );
 }
 

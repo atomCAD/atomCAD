@@ -1,6 +1,8 @@
 use crate::data_type::DataType;
 use crate::evaluator::network_evaluator::NetworkStackElement;
-use crate::evaluator::network_evaluator::{NetworkEvaluationContext, NetworkEvaluator};
+use crate::evaluator::network_evaluator::{
+    NetworkEvaluationContext, NetworkEvaluator, value_or_default,
+};
 use crate::evaluator::network_result::{
     Alignment, BlueprintData, CrystalData, MoleculeData, NetworkResult,
     runtime_type_error_in_input, worsen_alignment_with_reason,
@@ -14,7 +16,7 @@ use crate::node_type::{
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
-use crate::trace::{TraceContext, TraceProbe, TraceStep, trace_same_atom_id};
+use crate::trace::{TraceContext, TraceProbe, TraceStep, trace_moved_point, trace_same_atom_id};
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::atomic_structure_diff::extract_diff;
 use atomcad_crystolecule::motif_symmetry::inversion_preserves_motif;
@@ -62,6 +64,28 @@ fn default_subdivision() -> i32 {
     1
 }
 
+impl StructureInvertData {
+    /// The pivot and subdivision `eval` inverts through, each wired pin winning
+    /// over its stored field. `arg(pin)` is the value on input pin `pin`, so
+    /// `eval` and `trace` resolve the pins alike.
+    #[allow(clippy::result_large_err)]
+    fn pivot_args(
+        &self,
+        arg: &mut dyn FnMut(usize) -> NetworkResult,
+    ) -> Result<(IVec3, i32), NetworkResult> {
+        let pivot_point = value_or_default(arg(1), self.pivot_point, NetworkResult::extract_ivec3)?;
+        let subdivision =
+            value_or_default(arg(2), self.subdivision, NetworkResult::extract_int)?.max(1);
+        Ok((pivot_point, subdivision))
+    }
+}
+
+/// The real-space inversion centre: `pivot_point` in units of `1/subdivision`
+/// cells. Shared by `eval` and `trace`.
+fn real_pivot(pivot_point: IVec3, subdivision: i32, unit_cell: &UnitCellStruct) -> DVec3 {
+    unit_cell.dvec3_lattice_to_real(&(pivot_point.as_dvec3() / subdivision as f64))
+}
+
 impl NodeData for StructureInvertData {
     fn provide_gadget(
         &self,
@@ -97,32 +121,12 @@ impl NodeData for StructureInvertData {
             return EvalOutput::multi(vec![input_val.clone(), input_val]);
         }
 
-        let pivot_point = match network_evaluator.evaluate_or_default(
-            network_stack,
-            node_id,
-            registry,
-            context,
-            1,
-            self.pivot_point,
-            NetworkResult::extract_ivec3,
-        ) {
-            Ok(value) => value,
+        let (pivot_point, subdivision) = match self.pivot_args(&mut |pin| {
+            network_evaluator.evaluate_arg(network_stack, node_id, registry, context, pin)
+        }) {
+            Ok(args) => args,
             Err(error) => return EvalOutput::multi(vec![error.clone(), error]),
         };
-
-        let subdivision = match network_evaluator.evaluate_or_default(
-            network_stack,
-            node_id,
-            registry,
-            context,
-            2,
-            self.subdivision,
-            NetworkResult::extract_int,
-        ) {
-            Ok(value) => value,
-            Err(error) => return EvalOutput::multi(vec![error.clone(), error]),
-        }
-        .max(1);
 
         let structure_ref = match &input_val {
             NetworkResult::Blueprint(bp) => &bp.structure,
@@ -134,8 +138,7 @@ impl NodeData for StructureInvertData {
         };
         let unit_cell = structure_ref.lattice_vecs.clone();
 
-        let pivot_frac = pivot_point.as_dvec3() / subdivision as f64;
-        let pivot_real = unit_cell.dvec3_lattice_to_real(&pivot_frac);
+        let pivot_real = real_pivot(pivot_point, subdivision, &unit_cell);
 
         // Alignment hierarchy. The full crystal (lattice ⊗ motif) maps onto
         // itself iff the motif check passes — that is the "Aligned" criterion,
@@ -269,7 +272,8 @@ impl NodeData for StructureInvertData {
     }
 
     /// Output-driven editing: atom ids survive the transform, so an atom traces to
-    /// the input atom with the same id.
+    /// the input atom with the same id; a geometry point traces to its mirror
+    /// image through the pivot (an inversion is its own inverse).
     fn trace(
         &self,
         pin: usize,
@@ -277,7 +281,15 @@ impl NodeData for StructureInvertData {
         probe: &TraceProbe,
         ctx: &TraceContext,
     ) -> Option<TraceStep> {
-        trace_same_atom_id(pin, element, probe, ctx, "moved")
+        match probe {
+            TraceProbe::Atom { .. } => trace_same_atom_id(pin, element, probe, ctx, "moved"),
+            TraceProbe::Point { .. } => trace_moved_point(pin, element, probe, |p| {
+                let (pivot_point, subdivision) =
+                    self.pivot_args(&mut |pin| ctx.input_value(pin)).ok()?;
+                let unit_cell = ctx.input(0).get_unit_cell()?;
+                Some(2.0 * real_pivot(pivot_point, subdivision, &unit_cell) - p)
+            }),
+        }
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

@@ -1,6 +1,7 @@
 use crate::data_type::DataType;
 use crate::evaluator::network_evaluator::NetworkEvaluator;
 use crate::evaluator::network_evaluator::NetworkStackElement;
+use crate::evaluator::network_evaluator::value_or_default;
 use crate::evaluator::network_result::{
     Alignment, BlueprintData, MoleculeData, NetworkResult, runtime_type_error_in_input,
     worsen_alignment_with_reason,
@@ -14,7 +15,7 @@ use crate::node_type::{
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
-use crate::trace::{TraceContext, TraceProbe, TraceStep, trace_same_atom_id};
+use crate::trace::{TraceContext, TraceProbe, TraceStep, trace_moved_point, trace_same_atom_id};
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::atomic_structure_diff::extract_diff;
 use atomcad_display::gadget::{Gadget, GadgetPickContext};
@@ -61,6 +62,23 @@ pub struct FreeRotData {
     pub pivot_point: DVec3,
 }
 
+impl FreeRotData {
+    /// The angle (degrees), axis and pivot `eval` rotates by, each wired pin
+    /// winning over its stored field. `arg(pin)` is the value on input pin
+    /// `pin`, so `eval` and `trace` resolve the pins alike.
+    #[allow(clippy::result_large_err)]
+    fn rotation_args(
+        &self,
+        arg: &mut dyn FnMut(usize) -> NetworkResult,
+    ) -> Result<(f64, DVec3, DVec3), NetworkResult> {
+        let angle_degrees =
+            value_or_default(arg(1), self.angle_degrees, NetworkResult::extract_float)?;
+        let rot_axis = value_or_default(arg(2), self.rot_axis, NetworkResult::extract_vec3)?;
+        let pivot_point = value_or_default(arg(3), self.pivot_point, NetworkResult::extract_vec3)?;
+        Ok((angle_degrees, rot_axis, pivot_point))
+    }
+}
+
 impl NodeData for FreeRotData {
     fn provide_gadget(
         &self,
@@ -99,42 +117,10 @@ impl NodeData for FreeRotData {
 
         // The value flowing through pin 1 is now in degrees (issue #384);
         // convert to radians at the single math boundary below.
-        let angle_degrees = match network_evaluator.evaluate_or_default(
-            network_stack,
-            node_id,
-            registry,
-            context,
-            1,
-            self.angle_degrees,
-            NetworkResult::extract_float,
-        ) {
-            Ok(value) => value,
-            Err(error) => return EvalOutput::multi(vec![error.clone(), error]),
-        };
-
-        let rot_axis = match network_evaluator.evaluate_or_default(
-            network_stack,
-            node_id,
-            registry,
-            context,
-            2,
-            self.rot_axis,
-            NetworkResult::extract_vec3,
-        ) {
-            Ok(value) => value,
-            Err(error) => return EvalOutput::multi(vec![error.clone(), error]),
-        };
-
-        let pivot_point = match network_evaluator.evaluate_or_default(
-            network_stack,
-            node_id,
-            registry,
-            context,
-            3,
-            self.pivot_point,
-            NetworkResult::extract_vec3,
-        ) {
-            Ok(value) => value,
+        let (angle_degrees, rot_axis, pivot_point) = match self.rotation_args(&mut |pin| {
+            network_evaluator.evaluate_arg(network_stack, node_id, registry, context, pin)
+        }) {
+            Ok(args) => args,
             Err(error) => return EvalOutput::multi(vec![error.clone(), error]),
         };
 
@@ -218,7 +204,8 @@ impl NodeData for FreeRotData {
     }
 
     /// Output-driven editing: atom ids survive the transform, so an atom traces to
-    /// the input atom with the same id.
+    /// the input atom with the same id; a geometry point traces to the point the
+    /// rotation moved there (itself, for the degenerate axis `eval` skips).
     fn trace(
         &self,
         pin: usize,
@@ -226,7 +213,23 @@ impl NodeData for FreeRotData {
         probe: &TraceProbe,
         ctx: &TraceContext,
     ) -> Option<TraceStep> {
-        trace_same_atom_id(pin, element, probe, ctx, "moved")
+        match probe {
+            TraceProbe::Atom { .. } => trace_same_atom_id(pin, element, probe, ctx, "moved"),
+            TraceProbe::Point { .. } => trace_moved_point(pin, element, probe, |p| {
+                let (angle_degrees, rot_axis, pivot_point) =
+                    self.rotation_args(&mut |pin| ctx.input_value(pin)).ok()?;
+                let axis = rot_axis.normalize_or_zero();
+                if axis == DVec3::ZERO {
+                    return Some(p);
+                }
+                let rotation = DQuat::from_axis_angle(axis, angle_degrees.to_radians());
+                Some(
+                    Transform::new_rotation_around_point(pivot_point, rotation)
+                        .inverse()
+                        .apply_to_position(&p),
+                )
+            }),
+        }
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

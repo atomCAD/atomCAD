@@ -224,6 +224,9 @@ mod trace_engine_test;
 #[path = "structure_designer/trace_atomic_nodes_test.rs"]
 mod trace_atomic_nodes_test;
 
+#[path = "structure_designer/trace_geometry_nodes_test.rs"]
+mod trace_geometry_nodes_test;
+
 #[path = "structure_designer/trace_measurement_test.rs"]
 mod trace_measurement_test;
 

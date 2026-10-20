@@ -1,6 +1,7 @@
 use crate::data_type::DataType;
 use crate::evaluator::network_evaluator::NetworkEvaluator;
 use crate::evaluator::network_evaluator::NetworkStackElement;
+use crate::evaluator::network_evaluator::value_or_default;
 use crate::evaluator::network_result::{
     Alignment, BlueprintData, MoleculeData, NetworkResult, runtime_type_error_in_input,
     worsen_alignment_with_reason,
@@ -14,7 +15,7 @@ use crate::node_type::{
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
-use crate::trace::{TraceContext, TraceProbe, TraceStep, trace_same_atom_id};
+use crate::trace::{TraceContext, TraceProbe, TraceStep, trace_moved_point, trace_same_atom_id};
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::atomic_structure_diff::extract_diff;
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
@@ -51,6 +52,19 @@ pub struct FreeMoveData {
     pub translation: DVec3,
 }
 
+impl FreeMoveData {
+    /// The translation `eval` moves by: the wired pin, else the stored field.
+    /// `arg(pin)` is the value on input pin `pin`, so `eval` and `trace`
+    /// resolve the pin alike.
+    #[allow(clippy::result_large_err)]
+    fn translation_arg(
+        &self,
+        arg: &mut dyn FnMut(usize) -> NetworkResult,
+    ) -> Result<DVec3, NetworkResult> {
+        value_or_default(arg(1), self.translation, NetworkResult::extract_vec3)
+    }
+}
+
 impl NodeData for FreeMoveData {
     fn provide_gadget(
         &self,
@@ -83,15 +97,9 @@ impl NodeData for FreeMoveData {
             return EvalOutput::multi(vec![input_val.clone(), input_val]);
         }
 
-        let translation = match network_evaluator.evaluate_or_default(
-            network_stack,
-            node_id,
-            registry,
-            context,
-            1,
-            self.translation,
-            NetworkResult::extract_vec3,
-        ) {
+        let translation = match self.translation_arg(&mut |pin| {
+            network_evaluator.evaluate_arg(network_stack, node_id, registry, context, pin)
+        }) {
             Ok(value) => value,
             Err(error) => return EvalOutput::multi(vec![error.clone(), error]),
         };
@@ -154,7 +162,8 @@ impl NodeData for FreeMoveData {
     }
 
     /// Output-driven editing: atom ids survive the transform, so an atom traces to
-    /// the input atom with the same id.
+    /// the input atom with the same id; a geometry point traces to the point the
+    /// translation moved there.
     fn trace(
         &self,
         pin: usize,
@@ -162,7 +171,12 @@ impl NodeData for FreeMoveData {
         probe: &TraceProbe,
         ctx: &TraceContext,
     ) -> Option<TraceStep> {
-        trace_same_atom_id(pin, element, probe, ctx, "moved")
+        match probe {
+            TraceProbe::Atom { .. } => trace_same_atom_id(pin, element, probe, ctx, "moved"),
+            TraceProbe::Point { .. } => trace_moved_point(pin, element, probe, |p| {
+                Some(p - self.translation_arg(&mut |pin| ctx.input_value(pin)).ok()?)
+            }),
+        }
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

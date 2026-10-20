@@ -49,9 +49,24 @@ pub const ATOM_MATCH_RADIUS: f64 = 0.1;
 /// between the mesh and the SDF (see Geometry booleans in the design doc).
 pub const SURFACE_HIT_DELTA: f64 = 0.1;
 
-/// δ for an atom with no bond to a non-passivating atom and no tabulated
-/// crystal bond length (see [`atom_point_delta`]).
-pub const FALLBACK_ATOM_POINT_DELTA: f64 = 1.5;
+/// δ for a Point probe made from an atom centre, in bond lengths (see
+/// [`atom_point_delta`]).
+///
+/// One bond length is not enough. A filled atom lies anywhere from 0 to about
+/// 2.5 Å inside each face near it: a diamond (111) layer period is a/√3 =
+/// 2.06 Å, and single-bond removal makes an edge recede further. Measured at
+/// the outermost atom of a tetrahedron edge, the two faces' signed distances
+/// differ by up to 1.98 Å with single-bond removal and 2.45 Å without, so with
+/// δ = 1.545 Å an edge atom would often list only one of its two faces.
+pub const ATOM_POINT_DELTA_BONDS: f64 = 2.0;
+
+/// The bond length assumed for an atom with no bond to a non-passivating atom
+/// and no tabulated crystal bond length (see [`atom_point_delta`]).
+pub const FALLBACK_BOND_LENGTH: f64 = 1.5;
+
+/// δ for an atom centre whose bonds are unknown: [`ATOM_POINT_DELTA_BONDS`] ×
+/// [`FALLBACK_BOND_LENGTH`].
+pub const FALLBACK_ATOM_POINT_DELTA: f64 = ATOM_POINT_DELTA_BONDS * FALLBACK_BOND_LENGTH;
 
 /// What is being traced: one thing visible in a node's output pin.
 #[derive(Debug, Clone, PartialEq)]
@@ -237,6 +252,13 @@ impl TraceContext<'_, '_> {
             .input(self.stack, self.frame, self.node_id, pin)
     }
 
+    /// An owned copy of [`input`](Self::input), for a node's parameter
+    /// helper shared with `eval` (which reads pins by value). Use it for the
+    /// small parameter pins only: an atomic input would be a deep copy.
+    pub fn input_value(&self, pin: usize) -> NetworkResult {
+        self.input(pin).as_ref().clone()
+    }
+
     /// This node's own evaluated output on `pin`.
     pub fn output(&self, pin: usize) -> Rc<NetworkResult> {
         self.session
@@ -256,6 +278,29 @@ pub fn deciding_children(values: &[f64], combined: f64, delta: f64) -> Vec<usize
         .enumerate()
         .filter(|(_, v)| (*v - combined).abs() <= delta)
         .map(|(i, _)| i)
+        .collect()
+}
+
+/// The signed distance at `point` of each element of `value`, an array of
+/// geometry values (a geometry boolean's merged array pin). `None` when
+/// `value` is not an array or an element carries no 3D geometry.
+pub fn element_sdfs(value: &NetworkResult, point: DVec3) -> Option<Vec<f64>> {
+    match value {
+        NetworkResult::Array(items) => items.iter().map(|v| sdf_at(v, point)).collect(),
+        _ => None,
+    }
+}
+
+/// Links to elements `elements` of input pin `pin`, each carrying `probe`
+/// unchanged (a geometry boolean routes the point without moving it).
+pub fn element_links(pin: usize, elements: Vec<usize>, probe: &TraceProbe) -> Vec<TraceLink> {
+    elements
+        .into_iter()
+        .map(|i| TraceLink {
+            pin,
+            element: Some(i),
+            probe: probe.clone(),
+        })
         .collect()
 }
 
@@ -282,12 +327,18 @@ pub fn is_terminator(atom: &Atom) -> bool {
     is_allowed_passivant(atom.atomic_number) && atom.bonds.len() == 1
 }
 
-/// δ for a Point probe made from an atom centre: the length of the atom's
-/// shortest bond to an atom that is not a terminator ([`is_terminator`]); for
-/// an atom with no such bond, `crystal_bond_length(z, z)`, else 1.5 Å.
+/// δ for a Point probe made from an atom centre: [`ATOM_POINT_DELTA_BONDS`]
+/// times the length of the atom's shortest bond to an atom that is not a
+/// terminator ([`is_terminator`]); for an atom with no such bond,
+/// `crystal_bond_length(z, z)`, else [`FALLBACK_BOND_LENGTH`].
 pub fn atom_point_delta(atoms: &AtomicStructure, atom_id: u32) -> f64 {
+    ATOM_POINT_DELTA_BONDS * atom_bond_length(atoms, atom_id)
+}
+
+/// The bond length [`atom_point_delta`] scales.
+fn atom_bond_length(atoms: &AtomicStructure, atom_id: u32) -> f64 {
     let Some(atom) = atoms.get_atom(atom_id) else {
-        return FALLBACK_ATOM_POINT_DELTA;
+        return FALLBACK_BOND_LENGTH;
     };
     let shortest = atom
         .bonds
@@ -300,7 +351,7 @@ pub fn atom_point_delta(atoms: &AtomicStructure, atom_id: u32) -> f64 {
         });
     shortest
         .or_else(|| crystal_bond_length(atom.atomic_number, atom.atomic_number))
-        .unwrap_or(FALLBACK_ATOM_POINT_DELTA)
+        .unwrap_or(FALLBACK_BOND_LENGTH)
 }
 
 /// `trace` for a node that keeps atom ids and changes only positions (the
@@ -330,6 +381,45 @@ pub fn trace_same_atom_id(
             probe: TraceProbe::Atom {
                 id: Some(*id),
                 position: atom.position,
+            },
+        }],
+    })
+}
+
+/// `trace` for a node that moves geometry rigidly (`geo_trans`, the movement
+/// nodes): a `Point` on output pin 0 is the point `map_back` maps it to in
+/// input 0, with `on_surface` and `delta` unchanged (the motion is rigid, so δ
+/// holds in either frame), reported `Modified("moved")`.
+///
+/// `map_back` is called only for a `Point` on pin 0; it returns `None` when the
+/// node's pins cannot be resolved, and the fallback takes over. `None` too for
+/// an `Atom` probe, another pin (a `diff` output) or an array element.
+pub fn trace_moved_point(
+    pin: usize,
+    element: Option<usize>,
+    probe: &TraceProbe,
+    map_back: impl FnOnce(DVec3) -> Option<DVec3>,
+) -> Option<TraceStep> {
+    let TraceProbe::Point {
+        position,
+        on_surface,
+        delta,
+    } = probe
+    else {
+        return None;
+    };
+    if pin != 0 || element.is_some() {
+        return None;
+    }
+    Some(TraceStep {
+        contribution: Contribution::Modified("moved"),
+        upstream: vec![TraceLink {
+            pin: 0,
+            element: None,
+            probe: TraceProbe::Point {
+                position: map_back(*position)?,
+                on_surface: *on_surface,
+                delta: *delta,
             },
         }],
     })

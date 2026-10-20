@@ -917,6 +917,26 @@ impl Drop for CapturesGuard<'_> {
     }
 }
 
+/// [`NetworkEvaluator::evaluate_or_default`]'s rule on an input value already
+/// in hand: an unwired pin (`None`) or a value `extractor` rejects gives
+/// `default_value`, an `Error` is returned as the error. Shared with the
+/// nodes' `trace`, which reads its inputs through a `TraceContext` rather than
+/// the evaluator.
+#[allow(clippy::result_large_err)]
+pub fn value_or_default<T>(
+    result: NetworkResult,
+    default_value: T,
+    extractor: impl FnOnce(NetworkResult) -> Option<T>,
+) -> Result<T, NetworkResult> {
+    if let NetworkResult::None = result {
+        return Ok(default_value);
+    }
+    if result.is_error() {
+        return Err(result);
+    }
+    Ok(extractor(result).unwrap_or(default_value))
+}
+
 pub struct NetworkEvaluator {
     csg_conversion_cache: CsgConversionCache,
 }
@@ -1769,22 +1789,7 @@ impl NetworkEvaluator {
         extractor: impl FnOnce(NetworkResult) -> Option<T>,
     ) -> Result<T, NetworkResult> {
         let result = self.evaluate_arg(network_stack, node_id, registry, context, parameter_index);
-
-        if let NetworkResult::None = result {
-            return Ok(default_value);
-        }
-
-        // Check for error first
-        if result.is_error() {
-            return Err(result);
-        }
-
-        // Try to extract the value
-        if let Some(value) = extractor(result) {
-            Ok(value)
-        } else {
-            Ok(default_value)
-        }
+        value_or_default(result, default_value, extractor)
     }
 
     /// Helper method for the common pattern: get value from required input pin
