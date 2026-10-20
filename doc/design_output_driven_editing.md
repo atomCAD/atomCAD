@@ -90,7 +90,7 @@ pub enum TraceProbe {
 /// What the node did to the probed thing. Shown as the row's label.
 pub enum Contribution {
     /// The node is where the thing comes from: "filled", "added", "shape",
-    /// "imported", "passivated".
+    /// "source", "passivated".
     Created(&'static str),
     /// The node changed it: "moved", "edited", "relaxed", "replaced".
     Modified(&'static str),
@@ -220,14 +220,19 @@ to the origin.
 
 `trace` returned `None`:
 
-1. Emit the row with `Contribution::Unknown`, shown as "possibly contributed".
-2. **No phase-typed inputs**: the node is an origin, labelled
-   `Created("source")`. Leaves (`sphere`, `cuboid`, `half_space`, `import_xyz`,
-   `import_cif`, …) therefore need no implementation. A node counts as having
+1. **No phase-typed inputs**: the node is an origin, and the trace stops. The
+   label comes from the type of the output pin being traced:
+   - Blueprint: `Created("shape")`, e.g. `sphere`, `cuboid`, `half_space`.
+   - Crystal or Molecule: `Created("source")`, e.g. `import_xyz`,
+     `import_cif`.
+
+   Leaves therefore need no implementation. A node counts as having
    phase-typed inputs if one of its declared input pin types is `Blueprint`,
    `Crystal`, `Molecule`, `HasAtoms`, `HasStructure`, `HasFreeLinOps`, or an
    array of one of these.
-3. **Otherwise**, continue into every phase-typed input with a re-synced probe:
+2. **Otherwise**, emit the row with `Contribution::Unknown`, shown as "possibly
+   contributed", and continue into every phase-typed input with a re-synced
+   probe:
    - **Atom**: look for an atom within 0.1 Å of the probe position in that
      input (`get_atoms_in_radius`). If found, the probe is precise again, with
      the input's atom id. Many unsupported nodes do not move atoms (`passivate`,
@@ -477,7 +482,8 @@ example keeping the last refresh's memo.
 Tests (`atomcad-structure-designer/tests/`), all with no node implementations
 yet, so the fallback is exercised:
 
-- A leaf with no phase inputs becomes an origin.
+- A leaf with no phase inputs becomes an origin, labelled "shape" for a
+  Blueprint output and "source" for a Crystal or Molecule output.
 - An unsupported pass-through node (e.g. `tag`) keeps the probe precise by
   position re-sync.
 - An unsupported node that moves atoms loses the probe, and everything
