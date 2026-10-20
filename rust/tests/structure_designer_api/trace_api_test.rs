@@ -332,11 +332,7 @@ fn gadgets_are_ignored_by_the_trace() {
     };
     assert_eq!(
         rows(&result),
-        vec![
-            "mover possibly contributed",
-            "tag_a possibly contributed",
-            "src_a source"
-        ]
+        vec!["mover moved", "tag_a possibly contributed", "src_a source"]
     );
 }
 

@@ -441,9 +441,12 @@ Re-run `apply_diff(base, &self.diff, tolerance)` on `ctx.input(0)` and read
 
 ### `materialize`
 
-- Reports `Created("filled")`, or `Created("passivated")` for an atom with the
-  passivation flag (`is_hydrogen_passivation`). Since #405 the terminator can
-  be a halogen as well as hydrogen; both carry the flag.
+- Reports `Created("filled")`, or `Created("passivated")` for a passivating
+  terminator: an H or halogen (#405) with exactly one bond (`is_terminator`).
+  The test is structural because the `is_hydrogen_passivation` flag cannot
+  answer it: lattice fill flags none of its terminators, and surface
+  reconstruction flags the dimer *hosts* (`doc/design_halogen_passivation.md`
+  D5). See Phase 3 as built.
 - Links to pin 0 (the Blueprint) with
   `Point { position, on_surface: false, delta }`. This is where the trace
   crosses from atoms to geometry.
@@ -454,8 +457,8 @@ Re-run `apply_diff(base, &self.diff, tolerance)` on `ctx.input(0)` and read
 
   ```rust
   /// δ for a Point probe made from an atom centre: the length of the atom's
-  /// shortest bond to a non-passivating atom; for an atom with no such bond,
-  /// `crystal_bond_length(z, z)`, else 1.5 Å.
+  /// shortest bond to an atom that is not a terminator; for an atom with no
+  /// such bond, `crystal_bond_length(z, z)`, else 1.5 Å.
   pub fn atom_point_delta(atoms: &AtomicStructure, atom_id: u32) -> f64;
   ```
 
@@ -919,6 +922,43 @@ built in code:
 
 The Phase 1 tests are unchanged by this phase: their fallback cases use `tag`
 and test-only nodes, none of which gets a `trace` in v1.
+
+#### Phase 3 as built
+
+Tests: `trace_atomic_nodes_test.rs` (18). The Phase 1 tests are unchanged;
+one Phase 2 API test (`gadgets_are_ignored_by_the_trace`) now expects
+`mover moved` where `free_move` used to fall back.
+
+**Where the build differs from the text above:**
+
+- **Terminators are recognised by structure, not by the passivation flag.**
+  The text assumed `materialize`'s terminators carry `is_hydrogen_passivation`.
+  They do not: lattice fill flags no terminator, and surface reconstruction
+  flags the two dimer *hosts* (`doc/design_halogen_passivation.md` D5; only the
+  general `passivate` path flags its terminators). Keyed on the flag,
+  `materialize` would never say "passivated", would probe a dimer host at its
+  first neighbour, and `atom_point_delta` would count the 1.09 Å C–H bond and
+  skip the hosts' C–C bonds. Both now use `trace::is_terminator`: an atom of a
+  passivant element (`ALLOWED_PASSIVANTS`) with exactly one bond. This changes
+  the Phase 1 helper `atom_point_delta` too.
+- **`array` has no input pins** (it holds literal values only), so it has
+  nothing to map an element to. The node that gathers wired values into an
+  array is **`sequence`**, and it got the `trace` instead: output element *k*
+  is the *k*-th *connected* pin, since `eval` skips unwired ones. The
+  `atom_union`-through-an-array test uses `sequence`.
+- **No movement transform helper yet.** The Atom path needs no transform: the
+  id survives, so the position is read from the input atom with that id. The
+  five movers and `relax` share one helper, `trace::trace_same_atom_id`.
+  Factoring the transform out of `eval` belongs with the Point path in
+  Phase 4, its only user.
+- **Nested arrays are not traced.** `sequence` with an array element type, and
+  `array_at` / `array_concat` asked about an element *inside* the element they
+  route, return `None` (the fallback): `TraceLink` holds one element index.
+- `atom_edit` reads its tolerance from the wired `tolerance` pin, else the
+  stored value, as `eval` does, and returns `None` in motif mode.
+- Test support: the recording source can output a Crystal or a Blueprint
+  (`SourceKind`) and records the probes it receives (`add_probe_source`), so
+  the tests assert the upstream id, position and δ, not just the rows.
 
 ### Phase 4 — Geometry nodes
 

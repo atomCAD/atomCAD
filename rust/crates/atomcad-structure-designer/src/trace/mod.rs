@@ -20,7 +20,8 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use atomcad_crystolecule::atomic_structure::AtomicStructure;
+use atomcad_crystolecule::atomic_constants::is_allowed_passivant;
+use atomcad_crystolecule::atomic_structure::{Atom, AtomicStructure};
 use atomcad_crystolecule::guided_placement::crystal_bond_length;
 use atomcad_geo_tree::implicit_geometry::ImplicitGeometry3D;
 use atomcad_util::memory_size_estimator::MemorySizeEstimator;
@@ -270,9 +271,20 @@ pub fn sdf_at(value: &NetworkResult, point: DVec3) -> Option<f64> {
     Some(geo.implicit_eval_3d(&point))
 }
 
+/// Is `atom` a passivating terminator: an atom of a passivant element (H or a
+/// halogen) with exactly one bond?
+///
+/// Structural on purpose. The `is_hydrogen_passivation` flag cannot answer
+/// this: lattice fill flags none of its terminators, and surface
+/// reconstruction flags the dimer *hosts* instead
+/// (`doc/design_halogen_passivation.md` D5).
+pub fn is_terminator(atom: &Atom) -> bool {
+    is_allowed_passivant(atom.atomic_number) && atom.bonds.len() == 1
+}
+
 /// δ for a Point probe made from an atom centre: the length of the atom's
-/// shortest bond to a non-passivating atom; for an atom with no such bond,
-/// `crystal_bond_length(z, z)`, else 1.5 Å.
+/// shortest bond to an atom that is not a terminator ([`is_terminator`]); for
+/// an atom with no such bond, `crystal_bond_length(z, z)`, else 1.5 Å.
 pub fn atom_point_delta(atoms: &AtomicStructure, atom_id: u32) -> f64 {
     let Some(atom) = atoms.get_atom(atom_id) else {
         return FALLBACK_ATOM_POINT_DELTA;
@@ -281,7 +293,7 @@ pub fn atom_point_delta(atoms: &AtomicStructure, atom_id: u32) -> f64 {
         .bonds
         .iter()
         .filter_map(|bond| atoms.get_atom(bond.other_atom_id()))
-        .filter(|other| !other.is_hydrogen_passivation())
+        .filter(|other| !is_terminator(other))
         .map(|other| other.position.distance(atom.position))
         .fold(None, |acc: Option<f64>, d| {
             Some(acc.map_or(d, |a| a.min(d)))
@@ -289,6 +301,38 @@ pub fn atom_point_delta(atoms: &AtomicStructure, atom_id: u32) -> f64 {
     shortest
         .or_else(|| crystal_bond_length(atom.atomic_number, atom.atomic_number))
         .unwrap_or(FALLBACK_ATOM_POINT_DELTA)
+}
+
+/// `trace` for a node that keeps atom ids and changes only positions (the
+/// movement nodes, `relax`): an atom on output pin 0 is the input atom with the
+/// same id, reported `Modified(label)`. `None` for any other pin (a `diff`
+/// output), a `Point` probe, or an id the input does not have.
+pub fn trace_same_atom_id(
+    pin: usize,
+    element: Option<usize>,
+    probe: &TraceProbe,
+    ctx: &TraceContext,
+    label: &'static str,
+) -> Option<TraceStep> {
+    let TraceProbe::Atom { id: Some(id), .. } = probe else {
+        return None;
+    };
+    if pin != 0 || element.is_some() {
+        return None;
+    }
+    let input = ctx.input(0);
+    let atom = atoms_of(&input)?.get_atom(*id)?;
+    Some(TraceStep {
+        contribution: Contribution::Modified(label),
+        upstream: vec![TraceLink {
+            pin: 0,
+            element: None,
+            probe: TraceProbe::Atom {
+                id: Some(*id),
+                position: atom.position,
+            },
+        }],
+    })
 }
 
 /// The atomic structure a value carries, if any.

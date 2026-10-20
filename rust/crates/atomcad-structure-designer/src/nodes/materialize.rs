@@ -15,6 +15,10 @@ use crate::node_type::{
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
+use crate::trace::{
+    Contribution, TraceContext, TraceLink, TraceProbe, TraceStep, atom_point_delta, atoms_of,
+    is_terminator,
+};
 use atomcad_crystolecule::atomic_constants::{ALLOWED_PASSIVANTS, is_allowed_passivant};
 use atomcad_crystolecule::motif_parser::parse_parameter_element_values;
 use atomcad_util::daabox::DAABox;
@@ -377,6 +381,50 @@ impl NodeData for MaterializeData {
             alignment,
             alignment_reason,
         }))
+    }
+
+    /// Output-driven editing: a filled atom crosses from atoms to geometry as a
+    /// `Point` at its centre, handed to `shape`. A passivating terminator sits
+    /// just outside the geometry, so it is probed at the atom it caps.
+    fn trace(
+        &self,
+        pin: usize,
+        element: Option<usize>,
+        probe: &TraceProbe,
+        ctx: &TraceContext,
+    ) -> Option<TraceStep> {
+        let TraceProbe::Atom { id: Some(id), .. } = probe else {
+            return None;
+        };
+        if pin != 0 || element.is_some() {
+            return None;
+        }
+        let output = ctx.output(0);
+        let atoms = atoms_of(&output)?;
+        let atom = atoms.get_atom(*id)?;
+        let (label, filled_id) = if is_terminator(atom) {
+            let parent = atom
+                .bonds
+                .first()
+                .map(|bond| bond.other_atom_id())
+                .unwrap_or(*id);
+            ("passivated", parent)
+        } else {
+            ("filled", *id)
+        };
+        let filled = atoms.get_atom(filled_id)?;
+        Some(TraceStep {
+            contribution: Contribution::Created(label),
+            upstream: vec![TraceLink {
+                pin: 0,
+                element: None,
+                probe: TraceProbe::Point {
+                    position: filled.position,
+                    on_surface: false,
+                    delta: atom_point_delta(atoms, filled_id),
+                },
+            }],
+        })
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

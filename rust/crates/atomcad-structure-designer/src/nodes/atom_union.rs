@@ -13,6 +13,7 @@ use crate::node_type::{
 };
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
+use crate::trace::{Contribution, TraceContext, TraceLink, TraceProbe, TraceStep};
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use serde::{Deserialize, Serialize};
 
@@ -132,6 +133,41 @@ impl NodeData for AtomUnionData {
         }
 
         EvalOutput::single(output)
+    }
+
+    /// Output-driven editing: the union does not move atoms, so the atom is
+    /// matched by position in each element of `structures`. The engine keeps
+    /// the element that has it and drops the rest.
+    fn trace(
+        &self,
+        pin: usize,
+        element: Option<usize>,
+        probe: &TraceProbe,
+        ctx: &TraceContext,
+    ) -> Option<TraceStep> {
+        let TraceProbe::Atom { position, .. } = probe else {
+            return None;
+        };
+        if pin != 0 || element.is_some() {
+            return None;
+        }
+        let input = ctx.input(0);
+        let NetworkResult::Array(items) = input.as_ref() else {
+            return None;
+        };
+        Some(TraceStep {
+            contribution: Contribution::Passed,
+            upstream: (0..items.len())
+                .map(|i| TraceLink {
+                    pin: 0,
+                    element: Some(i),
+                    probe: TraceProbe::Atom {
+                        id: None,
+                        position: *position,
+                    },
+                })
+                .collect(),
+        })
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

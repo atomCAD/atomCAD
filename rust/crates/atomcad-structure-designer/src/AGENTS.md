@@ -650,6 +650,10 @@ evaluation.
   helpers** (`NetworkStackElement::enter_custom_network` /
   `parameter_call_site`). If the evaluator's stack discipline changes, change
   it there and the trace follows.
+- **A terminator is `trace::is_terminator`** (H or halogen, one bond), never
+  `is_hydrogen_passivation`: lattice fill flags no terminator and surface
+  reconstruction flags the dimer *hosts* (`doc/design_halogen_passivation.md`
+  D5), so the flag misreads `materialize` output both ways.
 - The trace uses `StructureDesigner::with_trace_eval_context`, not
   `with_eval_context`: an unbudgeted memo, and nothing parked on `self`.
 - **The right-click pick is `trace/pick.rs`**: click-to-activate's overlap rule

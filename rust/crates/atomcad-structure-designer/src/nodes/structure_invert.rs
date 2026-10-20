@@ -14,6 +14,7 @@ use crate::node_type::{
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
+use crate::trace::{TraceContext, TraceProbe, TraceStep, trace_same_atom_id};
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::atomic_structure_diff::extract_diff;
 use atomcad_crystolecule::motif_symmetry::inversion_preserves_motif;
@@ -265,6 +266,18 @@ impl NodeData for StructureInvertData {
         } else {
             Some(parts.join(" "))
         }
+    }
+
+    /// Output-driven editing: atom ids survive the transform, so an atom traces to
+    /// the input atom with the same id.
+    fn trace(
+        &self,
+        pin: usize,
+        element: Option<usize>,
+        probe: &TraceProbe,
+        ctx: &TraceContext,
+    ) -> Option<TraceStep> {
+        trace_same_atom_id(pin, element, probe, ctx, "moved")
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

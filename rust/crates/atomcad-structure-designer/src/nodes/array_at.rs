@@ -12,6 +12,7 @@ use crate::node_type::{
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
+use crate::trace::{Contribution, TraceContext, TraceLink, TraceProbe, TraceStep};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -98,6 +99,32 @@ impl NodeData for ArrayAtData {
         }
 
         EvalOutput::single(items.into_iter().nth(index as usize).unwrap())
+    }
+
+    /// Output-driven editing: the output is element `index` of `array`.
+    fn trace(
+        &self,
+        pin: usize,
+        element: Option<usize>,
+        probe: &TraceProbe,
+        ctx: &TraceContext,
+    ) -> Option<TraceStep> {
+        // An element of nested arrays would need a second index.
+        if pin != 0 || element.is_some() {
+            return None;
+        }
+        let index = match ctx.input(1).as_ref() {
+            NetworkResult::Int(n) => *n,
+            _ => self.index,
+        };
+        Some(TraceStep {
+            contribution: Contribution::Passed,
+            upstream: vec![TraceLink {
+                pin: 0,
+                element: Some(usize::try_from(index).ok()?),
+                probe: probe.clone(),
+            }],
+        })
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

@@ -576,14 +576,44 @@ fn counting_leaf_node_type() -> NodeType {
 // Test-only node: recording source
 // ============================================================================
 
-/// A leaf whose output is a Molecule (or, with `as_array`, an array of them)
-/// and whose `trace` records the output `element` it was asked about, then
-/// answers `Created("source")`.
+/// What a recording source outputs.
+#[derive(Clone)]
+pub enum SourceKind {
+    Molecule,
+    Crystal,
+    /// A Blueprint of this geometry (the `elements` are ignored).
+    Blueprint(Box<GeoNode>),
+}
+
+/// A leaf whose output is a Molecule (or, with `as_array`, an array of them;
+/// or a Crystal or Blueprint, by `kind`) and whose `trace` records the output
+/// `element` and the probe it was asked about, then answers
+/// `Created("source")`.
 #[derive(Clone)]
 pub struct RecordingSourceData {
     pub elements: Vec<Vec<(i16, DVec3)>>,
     pub as_array: bool,
+    pub kind: SourceKind,
     pub record: Arc<std::sync::Mutex<Vec<Option<usize>>>>,
+    pub probes: Arc<std::sync::Mutex<Vec<TraceProbe>>>,
+}
+
+impl RecordingSourceData {
+    fn value(&self, atoms: &[(i16, DVec3)]) -> NetworkResult {
+        match &self.kind {
+            SourceKind::Molecule => molecule(atoms),
+            SourceKind::Crystal => crystal(atoms, None),
+            SourceKind::Blueprint(geo) => blueprint(geo.as_ref().clone()),
+        }
+    }
+
+    fn element_type(&self) -> DataType {
+        match self.kind {
+            SourceKind::Molecule => DataType::Molecule,
+            SourceKind::Crystal => DataType::Crystal,
+            SourceKind::Blueprint(_) => DataType::Blueprint,
+        }
+    }
 }
 
 impl NodeData for RecordingSourceData {
@@ -597,9 +627,9 @@ impl NodeData for RecordingSourceData {
     fn calculate_custom_node_type(&self, base_node_type: &NodeType) -> Option<NodeType> {
         let mut custom = base_node_type.clone();
         custom.output_pins = OutputPinDefinition::single_fixed(if self.as_array {
-            DataType::Array(Box::new(DataType::Molecule))
+            DataType::Array(Box::new(self.element_type()))
         } else {
-            DataType::Molecule
+            self.element_type()
         });
         Some(custom)
     }
@@ -613,7 +643,7 @@ impl NodeData for RecordingSourceData {
         _decorate: bool,
         _context: &mut NetworkEvaluationContext,
     ) -> EvalOutput {
-        let values: Vec<NetworkResult> = self.elements.iter().map(|e| molecule(e)).collect();
+        let values: Vec<NetworkResult> = self.elements.iter().map(|e| self.value(e)).collect();
         if self.as_array {
             EvalOutput::single(NetworkResult::Array(values))
         } else {
@@ -633,10 +663,11 @@ impl NodeData for RecordingSourceData {
         &self,
         _pin: usize,
         element: Option<usize>,
-        _probe: &TraceProbe,
+        probe: &TraceProbe,
         _ctx: &TraceContext,
     ) -> Option<TraceStep> {
         self.record.lock().unwrap().push(element);
+        self.probes.lock().unwrap().push(probe.clone());
         Some(TraceStep {
             contribution: Contribution::Created("source"),
             upstream: vec![],
@@ -653,7 +684,9 @@ pub fn recording_source_node_type() -> NodeType {
             Box::new(RecordingSourceData {
                 elements: vec![vec![(6, DVec3::ZERO)]],
                 as_array: false,
+                kind: SourceKind::Molecule,
                 record: Arc::new(std::sync::Mutex::new(Vec::new())),
+                probes: Arc::new(std::sync::Mutex::new(Vec::new())),
             })
         },
     )
@@ -671,11 +704,65 @@ pub fn add_recording_source(
     let data = RecordingSourceData {
         elements,
         as_array,
+        kind: SourceKind::Molecule,
         record: record.clone(),
+        probes: Arc::new(std::sync::Mutex::new(Vec::new())),
     };
     let network = designer.active_node_network_name.clone().unwrap();
     set_node_data(designer, &network, id, Box::new(data));
     (id, record)
+}
+
+/// Add a recording source of `kind` holding one value made of `atoms`;
+/// returns its id and the probes it was traced with.
+pub fn add_probe_source(
+    designer: &mut StructureDesigner,
+    label: &str,
+    kind: SourceKind,
+    atoms: Vec<(i16, DVec3)>,
+) -> (u64, Arc<std::sync::Mutex<Vec<TraceProbe>>>) {
+    let id = add(designer, "recording_source", label);
+    let probes = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let data = RecordingSourceData {
+        elements: vec![atoms],
+        as_array: false,
+        kind,
+        record: Arc::new(std::sync::Mutex::new(Vec::new())),
+        probes: probes.clone(),
+    };
+    let network = designer.active_node_network_name.clone().unwrap();
+    set_node_data(designer, &network, id, Box::new(data));
+    (id, probes)
+}
+
+/// The data of node `node_id` in the active network, as `T`.
+pub fn data_mut<T: 'static>(designer: &mut StructureDesigner, node_id: u64) -> &mut T {
+    let network = designer.active_node_network_name.clone().unwrap();
+    designer
+        .node_type_registry
+        .node_networks
+        .get_mut(&network)
+        .unwrap()
+        .nodes
+        .get_mut(&node_id)
+        .unwrap()
+        .data
+        .as_any_mut()
+        .downcast_mut::<T>()
+        .unwrap()
+}
+
+/// The atoms of node `node_id`'s output pin 0 in the active network.
+pub fn output_atoms(designer: &mut StructureDesigner, node_id: u64) -> AtomicStructure {
+    match designer.evaluate_node_output(&[], node_id, 0) {
+        NetworkResult::Molecule(m) => m.atoms,
+        NetworkResult::Crystal(c) => c.atoms,
+        NetworkResult::Error(e) => panic!("node {node_id} failed: {e}"),
+        other => panic!(
+            "node {node_id} is not atomic: {:?}",
+            other.infer_data_type()
+        ),
+    }
 }
 
 // ============================================================================

@@ -12,6 +12,7 @@ use crate::node_type::NodeTypeCategory;
 use crate::node_type::{NodeType, OutputPinDefinition, Parameter};
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
+use crate::trace::{Contribution, TraceContext, TraceLink, TraceProbe, TraceStep};
 use atomcad_crystolecule::atomic_structure::SelectModifier;
 use atomcad_crystolecule::atomic_structure::{AtomicStructure, BondReference, TagError};
 use atomcad_crystolecule::atomic_structure_diff::{
@@ -2355,6 +2356,60 @@ impl NodeData for AtomEditData {
                 geo_tree_root: None,
             }),
         ])
+    }
+
+    /// Output-driven editing: re-run `apply_diff` on the base and read the
+    /// atom's provenance. Reads only the persisted diff, never `cached_input`
+    /// (subnetwork node data is shared by every call site).
+    fn trace(
+        &self,
+        pin: usize,
+        element: Option<usize>,
+        probe: &TraceProbe,
+        ctx: &TraceContext,
+    ) -> Option<TraceStep> {
+        let TraceProbe::Atom { id: Some(id), .. } = probe else {
+            return None;
+        };
+        if self.is_motif_mode || pin != 0 || element.is_some() {
+            return None;
+        }
+        let input = ctx.input(0);
+        let empty = AtomicStructure::new();
+        let base = match input.as_ref() {
+            NetworkResult::Crystal(c) => &c.atoms,
+            NetworkResult::Molecule(m) => &m.atoms,
+            _ => &empty,
+        };
+        let tolerance = match ctx.input(self.tolerance_pin_index()).as_ref() {
+            NetworkResult::Float(t) => *t,
+            _ => self.tolerance,
+        };
+        let diff_result = apply_diff(base, &self.diff, tolerance);
+        let (contribution, base_id) = match diff_result.provenance.sources.get(id)? {
+            AtomSource::DiffAdded(_) => {
+                return Some(TraceStep {
+                    contribution: Contribution::Created("added"),
+                    upstream: vec![],
+                });
+            }
+            AtomSource::DiffMatchedBase { base_id, .. } => {
+                (Contribution::Modified("edited"), *base_id)
+            }
+            AtomSource::BasePassthrough(base_id) => (Contribution::Passed, *base_id),
+        };
+        let base_atom = base.get_atom(base_id)?;
+        Some(TraceStep {
+            contribution,
+            upstream: vec![TraceLink {
+                pin: 0,
+                element: None,
+                probe: TraceProbe::Atom {
+                    id: Some(base_id),
+                    position: base_atom.position,
+                },
+            }],
+        })
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
