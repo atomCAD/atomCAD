@@ -194,7 +194,15 @@ fallback's position re-sync (below) usually recovers it.
 **Custom-node instances.** The engine enters the subnetwork at its return node
 and keeps tracing. At a `parameter` node it steps back out to the instance's
 matching input pin in the parent network, the same stack discipline `eval`
-uses. Rows inside a subnetwork are nested under the instance row.
+uses.
+
+The engine emits a row for the instance itself, then the rows traced inside
+it as that row's children. Rows therefore form a **tree**, and nested custom
+nodes nest deeper. The instance row's contribution is the strongest one among
+its children, in the order `Created` > `Modified` > `Passed` > `Unknown`, with
+that child's label. "filled" on a `slab` instance says the atom was made
+inside it. Each instance is its own subtree: a network instantiated twice on
+the path appears twice.
 
 **Opaque constructs.** HOFs, closures, `apply`, and wires crossing a zone
 boundary (`source_scope_depth > 0`) are treated as nodes without `trace` in v1.
@@ -342,7 +350,9 @@ pub struct APITraceRow {
     pub scope_path: Vec<u64>,
     pub node_id: u64,
     pub node_label: String,
-    /// Nesting level under custom-node instance rows (0 = top network).
+    /// Tree level: 0 = the top network; children of a custom-node instance
+    /// row are one deeper. Rows are in pre-order, so a row's children follow
+    /// it directly.
     pub depth: u32,
     pub contribution: APIContributionKind, // Created | Modified | Passed | Unknown
     /// "filled", "moved", "shape", "possibly contributed", …
@@ -373,12 +383,19 @@ A popup in the style of the click-to-activate disambiguation overlay:
 
 - **Columns**: one row per trace row, showing the node label and, right-aligned,
   the contribution label. `Passed` and `Unknown` rows are dimmed.
-- **Nesting**: rows nested under a custom-node instance are indented by
-  `depth`.
+- **Tree**: a custom-node instance is a parent row, and the nodes traced
+  inside its network are its children, indented by `depth`. Each parent has an
+  expand/collapse chevron and starts expanded, since trace lists are short.
 - **Click a row**:
   `graphModel.jumpToNode(row.hostNetwork, row.scopePath, row.nodeId)`, the path
-  Find Usages already uses. It selects the node, switches network if the row
-  lies inside a custom network, and scrolls the editor.
+  Find Usages already uses. It selects the node and scrolls the editor.
+  Because of the tree, the user chooses where to land:
+  - **Click a parent (instance) row**: land on the instance in the network
+    being viewed. The user stays in place, and the viewport keeps showing the
+    design that was right-clicked.
+  - **Click a child row**: land on that node inside the custom network. The
+    active network switches, so the viewport then shows that network's
+    display.
 - **Dismissal**: clicking away or pressing Escape closes the menu with no change.
 
 All rows are shown. Filtering by contribution, for example a dropdown in the
@@ -386,12 +403,8 @@ menu header, is a later UI-only change: the category is already on every row.
 
 ## Open questions
 
-1. **Rows inside custom networks.** Choosing an inner row switches the active
-   network, so the viewport then shows that network's display rather than the
-   design the user right-clicked. Jumping to the instance row instead would
-   keep the user in place. Decide in the Phase 2 walkthrough.
-2. **δ.** Fixed 0.5 Å, or derived from the lattice? See Geometry booleans.
-3. **Overlapping displayed nodes.** v1 traces the nearest only. Tracing each
+1. **δ.** Fixed 0.5 Å, or derived from the lattice? See Geometry booleans.
+2. **Overlapping displayed nodes.** v1 traces the nearest only. Tracing each
    overlapping node in its own section is a possible follow-up.
 
 ## Performance
@@ -434,8 +447,10 @@ yet, so the fallback is exercised:
   upstream is listed `Unknown`.
 - On a multi-wire array pin, element *i* resolves to the right wire.
 - The trace enters a custom node, reaches its `parameter`, and comes back out
-  to the instance's input. The rows carry the right `host_network`,
-  `scope_path` and depth.
+  to the instance's input. The instance row comes first, with the strongest
+  contribution among its children. The inner rows follow it one level deeper,
+  with the right `host_network` and `scope_path`. A nested custom node nests
+  one level further.
 - A diamond-shaped DAG lists each node once.
 
 ### Phase 2 — Viewport gesture, menu and API (Flutter + FRB)
@@ -450,7 +465,8 @@ yet, so the fallback is exercised:
 Tests: an API-level test that a ray through a known atom of a fixture network
 returns the expected rows. The menu itself is verified manually
 (walkthrough: right-drag still orbits; right click opens the menu; a row lands
-on its node, including one inside a custom network). The Flutter smoke test is
+on its node; a custom-node parent row lands on the instance in place, and its
+child row lands inside the custom network; collapse/expand works). The Flutter smoke test is
 a pending manual step for the maintainer.
 
 ### Phase 3 — Atomic nodes
@@ -485,7 +501,7 @@ Tests:
 - A surface ray hit on a displayed Blueprint, as opposed to an atom, gives the
   same result.
 
-Manual walkthrough, which also settles open question 2 (δ).
+Manual walkthrough, which also settles open question 1 (δ).
 
 ## Testing
 
