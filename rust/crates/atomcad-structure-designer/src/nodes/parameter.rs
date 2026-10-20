@@ -105,9 +105,8 @@ impl NodeData for ParameterData {
             ));
         }
 
-        let parent_node_id = network_stack.last().unwrap().node_id;
-        let mut parent_network_stack = network_stack.to_vec();
-        parent_network_stack.pop();
+        let (parent_network_stack, parent_node_id) =
+            NetworkStackElement::parameter_call_site(network_stack).unwrap();
         let parent_node = parent_network_stack
             .last()
             .unwrap()

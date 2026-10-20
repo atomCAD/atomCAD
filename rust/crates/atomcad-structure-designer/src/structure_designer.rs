@@ -69,6 +69,81 @@ use std::time::Instant;
 pub struct PerNodeRayHit {
     pub node_ref: NodeRef,
     pub distance: f64,
+    /// The displayed output pin whose content was hit nearest.
+    pub pin: i32,
+    /// What was hit, in the display output's terms.
+    pub kind: RayHitKind,
+    /// Where along the ray: `ray_origin + ray_direction * distance`.
+    pub point: DVec3,
+}
+
+/// What a [`PerNodeRayHit`] hit. Atom ids are those of the *display* output,
+/// which may be decorated; the output trace re-resolves by position.
+#[derive(Debug, Clone, PartialEq)]
+pub enum RayHitKind {
+    Atom {
+        atom_id: u32,
+        position: DVec3,
+    },
+    Bond {
+        atom_id1: u32,
+        atom_id2: u32,
+        position1: DVec3,
+        position2: DVec3,
+    },
+    /// A displayed geometry surface (SDF).
+    Surface,
+}
+
+impl PerNodeRayHit {
+    /// The output trace's starting point for this hit
+    /// (`doc/design_output_driven_editing.md`).
+    pub fn trace_hit(&self) -> crate::trace::TraceHit {
+        use crate::trace::TraceHitTarget;
+        let target = match &self.kind {
+            RayHitKind::Atom { position, .. } => TraceHitTarget::Atom {
+                position: *position,
+            },
+            RayHitKind::Bond {
+                position1,
+                position2,
+                ..
+            } => TraceHitTarget::Bond {
+                position1: *position1,
+                position2: *position2,
+                point: self.point,
+            },
+            RayHitKind::Surface => TraceHitTarget::Surface { point: self.point },
+        };
+        crate::trace::TraceHit {
+            node: self.node_ref.clone(),
+            pin: self.pin.max(0) as usize,
+            target,
+        }
+    }
+}
+
+/// Hits from different displayed nodes within this distance (Å) along the ray
+/// are considered overlapping. Shared by click-to-activate, the hover tooltip
+/// and the output trace.
+pub const OVERLAP_EPSILON: f64 = 0.1;
+
+/// The hits within [`OVERLAP_EPSILON`] of `distance`, in the given order.
+pub fn overlapping_hits(hits: &[PerNodeRayHit], distance: f64) -> Vec<&PerNodeRayHit> {
+    hits.iter()
+        .filter(|hit| (hit.distance - distance).abs() < OVERLAP_EPSILON)
+        .collect()
+}
+
+/// The answer of [`StructureDesigner::pick_displayed_candidates`].
+#[derive(Debug, Clone, PartialEq)]
+pub enum DisplayedPick {
+    NoHit,
+    /// One node is clearly the one under the cursor.
+    Single(PerNodeRayHit),
+    /// Several nodes were hit within [`OVERLAP_EPSILON`] of the nearest, in
+    /// distance order.
+    Overlapping(Vec<PerNodeRayHit>),
 }
 
 /// Drag-source context propagated from the add-node popup to `add_node`.
@@ -487,12 +562,7 @@ impl StructureDesigner {
         eval_memo::install(self.eval_memo_enabled.then(|| {
             MemoryPreferences::clamped_bytes(self.preferences.memory_preferences.eval_memo_cache_mb)
         }));
-        let mut context = NetworkEvaluationContext::new();
-        context.execute = execute;
-        context.use_vdw_cutoff = self.preferences.simulation_preferences.use_vdw_cutoff;
-        if let Some(params) = self.cli_top_level_parameters.clone() {
-            context.top_level_parameters = params;
-        }
+        let mut context = self.new_eval_context(execute);
         let result = f(
             &mut self.network_evaluator,
             &self.node_type_registry,
@@ -510,6 +580,57 @@ impl StructureDesigner {
         // to call afterwards, because the memo does not outlive the pass (D10).
         self.last_memo_counts = eval_memo::take();
         result
+    }
+
+    /// The memo counts of the last evaluation pass not yet folded into a
+    /// refresh profile. A trace never writes them (see
+    /// [`Self::with_trace_eval_context`]).
+    pub fn last_memo_counts(&self) -> Option<&MemoCounts> {
+        self.last_memo_counts.as_ref()
+    }
+
+    /// The evaluation context both [`Self::with_eval_context`] and
+    /// [`Self::with_trace_eval_context`] start from.
+    fn new_eval_context(&self, execute: bool) -> NetworkEvaluationContext {
+        let mut context = NetworkEvaluationContext::new();
+        context.execute = execute;
+        context.use_vdw_cutoff = self.preferences.simulation_preferences.use_vdw_cutoff;
+        if let Some(params) = self.cli_top_level_parameters.clone() {
+            context.top_level_parameters = params;
+        }
+        context
+    }
+
+    /// The output trace's sibling of [`Self::with_eval_context`]
+    /// (`doc/design_output_driven_editing.md`, `TraceContext`).
+    ///
+    /// Three differences, each deliberate: the memo is **always** installed and
+    /// **unbudgeted** (an eviction mid-trace would re-run whatever produced the
+    /// evicted value, which could be a `relax`); the pass never executes; and a
+    /// trace is a probe, not a refresh, so nothing is parked on `self` — the
+    /// memo's counts are returned to the caller instead of written to
+    /// `last_memo_counts`, no profile is recorded, and prints are dropped.
+    pub fn with_trace_eval_context<R>(
+        &mut self,
+        f: impl FnOnce(&NetworkEvaluator, &NodeTypeRegistry, &mut NetworkEvaluationContext) -> R,
+    ) -> (R, MemoCounts) {
+        eval_profiler::install(None);
+        eval_memo::install(Some(usize::MAX));
+        let mut context = self.new_eval_context(false);
+        let result = f(
+            &self.network_evaluator,
+            &self.node_type_registry,
+            &mut context,
+        );
+        let memo = eval_memo::take().unwrap_or_default();
+        (result, memo)
+    }
+
+    /// Trace a viewport hit back to the nodes that contributed to it
+    /// (`doc/design_output_driven_editing.md`). Delegates to
+    /// [`crate::trace::engine`].
+    pub fn trace_hit(&mut self, hit: &crate::trace::TraceHit) -> crate::trace::TraceReport {
+        crate::trace::engine::trace_hit(self, hit)
     }
 
     /// Stand up the network stack for `scope_path` and run `f` against the node
@@ -8016,11 +8137,22 @@ impl StructureDesigner {
             .node_data
             .iter()
         {
-            let mut min_distance: Option<f64> = None;
+            // The nearest hit over all displayed outputs of this node.
+            let mut nearest: Option<(f64, i32, RayHitKind)> = None;
+            let mut consider = |distance: f64, pin: i32, kind: RayHitKind| {
+                if nearest.as_ref().is_none_or(|n| distance < n.0) {
+                    nearest = Some((distance, pin, kind));
+                }
+            };
 
-            // Hit-test all displayed outputs for this node
-            for (_pin_index, pin_output, pin_geo_tree) in node_data.displayed_outputs() {
+            for (pin_index, pin_output, pin_geo_tree) in node_data.displayed_outputs() {
                 if let NodeOutput::Atomic(atomic_structure, _) = pin_output {
+                    let position_of = |atom_id: u32| {
+                        atomic_structure
+                            .get_atom(atom_id)
+                            .map(|a| a.position)
+                            .unwrap_or_default()
+                    };
                     match atomic_structure.hit_test(
                         ray_origin,
                         ray_direction,
@@ -8035,19 +8167,29 @@ impl StructureDesigner {
                         BAS_STICK_RADIUS,
                     ) {
                         atomcad_crystolecule::atomic_structure::HitTestResult::Atom(
-                            _,
+                            atom_id,
                             distance,
-                        )
-                        | atomcad_crystolecule::atomic_structure::HitTestResult::Bond(
-                            _,
+                        ) => consider(
                             distance,
-                        ) => {
-                            min_distance = match min_distance {
-                                None => Some(distance),
-                                Some(current_min) if distance < current_min => Some(distance),
-                                _ => min_distance,
-                            };
-                        }
+                            pin_index,
+                            RayHitKind::Atom {
+                                atom_id,
+                                position: position_of(atom_id),
+                            },
+                        ),
+                        atomcad_crystolecule::atomic_structure::HitTestResult::Bond(
+                            bond,
+                            distance,
+                        ) => consider(
+                            distance,
+                            pin_index,
+                            RayHitKind::Bond {
+                                atom_id1: bond.atom_id1,
+                                atom_id2: bond.atom_id2,
+                                position1: position_of(bond.atom_id1),
+                                position2: position_of(bond.atom_id2),
+                            },
+                        ),
                         atomcad_crystolecule::atomic_structure::HitTestResult::None => {}
                     }
                 }
@@ -8057,18 +8199,17 @@ impl StructureDesigner {
                     && let Some(geo_distance) =
                         raytrace_geometry(geo_tree, ray_origin, ray_direction, 1.0)
                 {
-                    min_distance = match min_distance {
-                        None => Some(geo_distance),
-                        Some(current_min) if geo_distance < current_min => Some(geo_distance),
-                        _ => min_distance,
-                    };
+                    consider(geo_distance, pin_index, RayHitKind::Surface);
                 }
             }
 
-            if let Some(distance) = min_distance {
+            if let Some((distance, pin, kind)) = nearest {
                 hits.push(PerNodeRayHit {
                     node_ref: node_ref.clone(),
                     distance,
+                    pin,
+                    kind,
+                    point: *ray_origin + *ray_direction * distance,
                 });
             }
         }
@@ -8077,6 +8218,56 @@ impl StructureDesigner {
         hits.sort_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap());
 
         hits
+    }
+
+    /// Which displayed node does a ray pick? The overlap rule shared by
+    /// click-to-activate and the output trace.
+    ///
+    /// Only **top-level** displayed nodes are candidates: the surfaces that act
+    /// on the answer (the disambiguation overlay, scroll-to-node, solo-hide)
+    /// are keyed by bare node id, and body-internal ids collide with top-level
+    /// ones (`doc/design_zero_ary_closure_body_display.md` §1). Hits within
+    /// [`OVERLAP_EPSILON`] of the nearest overlap.
+    ///
+    /// With `privilege_active`, the active node among the overlapping hits is
+    /// taken as already chosen and returned alone (left-click's rule); without
+    /// it every overlapping hit is a candidate.
+    pub fn pick_displayed_candidates(
+        &self,
+        ray_origin: &DVec3,
+        ray_direction: &DVec3,
+        privilege_active: bool,
+    ) -> DisplayedPick {
+        let mut hits = self.raytrace_per_node(
+            ray_origin,
+            ray_direction,
+            &self
+                .preferences
+                .atomic_structure_visualization_preferences
+                .visualization,
+        );
+        hits.retain(|hit| hit.node_ref.is_top_level());
+        let Some(closest) = hits.first() else {
+            return DisplayedPick::NoHit;
+        };
+        let overlapping: Vec<PerNodeRayHit> = overlapping_hits(&hits, closest.distance)
+            .into_iter()
+            .cloned()
+            .collect();
+        if privilege_active
+            && let Some(active_node_id) = self
+                .get_active_node_network()
+                .and_then(|network| network.active_node_id)
+            && let Some(active) = overlapping
+                .iter()
+                .find(|hit| hit.node_ref.node_id == active_node_id)
+        {
+            return DisplayedPick::Single(active.clone());
+        }
+        if overlapping.len() == 1 {
+            return DisplayedPick::Single(overlapping.into_iter().next().unwrap());
+        }
+        DisplayedPick::Overlapping(overlapping)
     }
 
     /// Returns a human-readable display name for a node.

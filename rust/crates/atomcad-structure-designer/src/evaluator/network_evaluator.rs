@@ -159,6 +159,41 @@ impl<'a> NetworkStackElement<'a> {
             .unwrap()
     }
 
+    /// The stack a custom-network instance's internals are evaluated on: the
+    /// caller's stack plus one [`instance`](Self::instance) frame for
+    /// `child_network`, entered through the instance node `node_id`.
+    ///
+    /// Shared by both `evaluate*` custom-network arms and the output trace
+    /// (`crate::trace`), so the trace enters a custom network exactly the way
+    /// the evaluator does.
+    pub(crate) fn enter_custom_network(
+        network_stack: &[NetworkStackElement<'a>],
+        child_network: &'a NodeNetwork,
+        node_id: u64,
+    ) -> Vec<NetworkStackElement<'a>> {
+        let mut child_network_stack = network_stack.to_vec();
+        child_network_stack.push(NetworkStackElement::instance(child_network, node_id));
+        child_network_stack
+    }
+
+    /// The call site of a custom network's `parameter` node: the stack with the
+    /// instance frame popped, and the id of the instance node in it. `None`
+    /// when the parameter is evaluated in isolation (its network is the root).
+    ///
+    /// Shared by `ParameterData::eval` and the output trace (`crate::trace`),
+    /// which steps back out of a custom network the same way.
+    pub(crate) fn parameter_call_site(
+        network_stack: &[NetworkStackElement<'a>],
+    ) -> Option<(Vec<NetworkStackElement<'a>>, u64)> {
+        if network_stack.len() < 2 {
+            return None;
+        }
+        let parent_node_id = network_stack.last().unwrap().node_id;
+        let mut parent_network_stack = network_stack.to_vec();
+        parent_network_stack.pop();
+        Some((parent_network_stack, parent_node_id))
+    }
+
     pub fn is_node_selected_in_root_network(
         network_stack: &[NetworkStackElement<'a>],
         node_id: u64,
@@ -2452,8 +2487,11 @@ impl NetworkEvaluator {
                         node.node_type_name
                     )));
                 }
-                let mut child_network_stack = network_stack.to_vec();
-                child_network_stack.push(NetworkStackElement::instance(child_network, node_id));
+                let child_network_stack = NetworkStackElement::enter_custom_network(
+                    network_stack,
+                    child_network,
+                    node_id,
+                );
                 if child_network.return_node_id.is_none() {
                     context.eval_in_progress.remove(&frame_key);
                     return EvalOutput::single(NetworkResult::Error(format!(
@@ -2852,8 +2890,11 @@ impl NetworkEvaluator {
                         context.eval_in_progress.remove(&frame_key);
                         return NetworkResult::Error(format!("{} is invalid", node.node_type_name));
                     }
-                    let mut child_network_stack = network_stack.to_vec();
-                    child_network_stack.push(NetworkStackElement::instance(child_network, node_id));
+                    let child_network_stack = NetworkStackElement::enter_custom_network(
+                        network_stack,
+                        child_network,
+                        node_id,
+                    );
                     if child_network.return_node_id.is_none() {
                         context.eval_in_progress.remove(&frame_key);
                         return NetworkResult::Error(format!(

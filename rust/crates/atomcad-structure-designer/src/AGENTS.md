@@ -90,7 +90,8 @@ structure_designer/
 ├── text_format/               # Human-readable text format (AI integration)
 ├── serialization/             # .cnnd JSON file I/O
 ├── layout/                    # Automatic node layout algorithms
-└── implicit_eval/             # SDF evaluation and visualization
+├── implicit_eval/             # SDF evaluation and visualization
+└── trace/                     # Output tracing: viewport hit → contributing nodes (see Output tracing)
 ```
 
 **Domain code that used to live here.** `doc/design_push_domain_code_down.md`
@@ -625,6 +626,35 @@ Two properties are the whole point of the route and are easy to undo:
 
 The unit-cell wireframe predates this and still has its own `NodeSceneData`
 field; the next overlay is a `kind` rather than a third field.
+
+## Output tracing
+
+`trace/` answers "which nodes made the thing under the cursor?"
+(`doc/design_output_driven_editing.md`). It runs on demand, never during
+evaluation.
+
+- **A node opts in with `NodeData::trace`**, a *local* answer: what it did to
+  the probe and which input links it came through. `None` (the default) means
+  "can't say", and the engine's **fallback** takes over: no phase-typed inputs
+  → an origin ("shape" / "source"); otherwise "possibly contributed" and the
+  probe is re-synced by position into every phase-typed input (atoms ↔
+  geometry points as the input's type needs). A probe that matches nothing is
+  *lost*, and everything upstream of it is listed without being asked.
+- **`trace` reads only persisted node data**, never runtime caches
+  (`cached_input`, eval caches): subnetwork node data is shared by every call
+  site, so a cache can hold another instance's state.
+- **Values come through `TraceContext`**, never by calling the evaluator
+  directly: it serves `Rc`s from a per-trace store, so each value is copied
+  out of the memo at most twice per trace.
+- **Custom networks are entered and left with the evaluator's own frame
+  helpers** (`NetworkStackElement::enter_custom_network` /
+  `parameter_call_site`). If the evaluator's stack discipline changes, change
+  it there and the trace follows.
+- The trace uses `StructureDesigner::with_trace_eval_context`, not
+  `with_eval_context`: an unbudgeted memo, and nothing parked on `self`.
+- The engine recurses once per hop on top of the evaluator's own recursion, so
+  test networks stay shallow (a 200-node chain overflows the debug evaluator
+  before the trace starts).
 
 ## User preferences: three files and two apply sites
 

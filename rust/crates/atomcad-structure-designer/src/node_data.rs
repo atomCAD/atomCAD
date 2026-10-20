@@ -10,6 +10,7 @@ use crate::node_type_registry::NodeTypeRegistry;
 use crate::overlay::Overlay;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
+use crate::trace::{TraceContext, TraceProbe, TraceStep};
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
 use atomcad_util::as_any::AsAny;
 use atomcad_util::memory_size_estimator::MemorySizeEstimator;
@@ -445,6 +446,28 @@ pub trait NodeData: Any + AsAny {
     ///
     /// Default: `None` — pin 0, the global default.
     fn default_displayed_output_pins(&self) -> Option<HashSet<i32>> {
+        None
+    }
+
+    /// Output-driven editing (`doc/design_output_driven_editing.md`): `probe` is
+    /// something in this node's output pin `pin` (in element `element` of it,
+    /// when the pin's value is an array). Say what this node did to it and where
+    /// in the inputs it came from. Read inputs and outputs through `ctx`.
+    ///
+    /// `None` = "I cannot answer this": the node does not trace at all, or it
+    /// does not handle this probe kind on this pin. Either way the trace engine
+    /// falls back to "possibly contributed" and continues through every
+    /// phase-typed input.
+    ///
+    /// May read the node's **persisted** data, never runtime caches: subnetwork
+    /// node data is shared by every call site.
+    fn trace(
+        &self,
+        _pin: usize,
+        _element: Option<usize>,
+        _probe: &TraceProbe,
+        _ctx: &TraceContext,
+    ) -> Option<TraceStep> {
         None
     }
 }

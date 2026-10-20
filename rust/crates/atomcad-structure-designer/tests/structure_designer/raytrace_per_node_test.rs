@@ -264,3 +264,102 @@ fn test_unstyled_atom_pick_radius_follows_global_mode() {
     );
     assert!(hits.is_empty(), "no-override ball-and-stick pick unchanged");
 }
+
+// --- Hit details (output-driven editing, `doc/design_output_driven_editing.md`) ---
+
+#[test]
+fn test_atom_hit_reports_pin_kind_atom_and_point() {
+    use atomcad_structure_designer::structure_designer::RayHitKind;
+
+    let designer = setup_designer_with_scene_atoms(vec![(1, vec![(6, DVec3::new(0.0, 0.0, 0.0))])]);
+    let ray_origin = DVec3::new(0.0, 0.0, -50.0);
+    let ray_direction = DVec3::new(0.0, 0.0, 1.0);
+    let hits = designer.raytrace_per_node(
+        &ray_origin,
+        &ray_direction,
+        &AtomicStructureVisualization::BallAndStick,
+    );
+
+    assert_eq!(hits.len(), 1);
+    let hit = &hits[0];
+    assert_eq!(hit.pin, 0);
+    match &hit.kind {
+        RayHitKind::Atom { position, .. } => assert_eq!(*position, DVec3::ZERO),
+        other => panic!("expected an atom hit, got {other:?}"),
+    }
+    assert!((hit.point - (ray_origin + ray_direction * hit.distance)).length() < 1e-9);
+    assert!(
+        hit.point.z < 0.0,
+        "the hit point is on the near side of the atom"
+    );
+}
+
+#[test]
+fn test_bond_hit_reports_both_endpoints() {
+    use atomcad_structure_designer::structure_designer::RayHitKind;
+
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("test");
+    designer.set_active_node_network_name(Some("test".to_string()));
+    let mut structure = AtomicStructure::new();
+    let a = structure.add_atom(6, DVec3::new(-2.0, 0.0, 0.0));
+    let b = structure.add_atom(6, DVec3::new(2.0, 0.0, 0.0));
+    structure.add_bond(a, b, 1);
+    designer
+        .last_generated_structure_designer_scene
+        .node_data
+        .insert(
+            NodeRef::top(1),
+            NodeSceneData::new(NodeOutput::Atomic(structure, None)),
+        );
+
+    // Through the middle of the bond, well clear of both atoms.
+    let hits = designer.raytrace_per_node(
+        &DVec3::new(0.0, 0.0, -50.0),
+        &DVec3::new(0.0, 0.0, 1.0),
+        &AtomicStructureVisualization::BallAndStick,
+    );
+    assert_eq!(hits.len(), 1);
+    match &hits[0].kind {
+        RayHitKind::Bond {
+            position1,
+            position2,
+            ..
+        } => {
+            let mut xs = [position1.x, position2.x];
+            xs.sort_by(f64::total_cmp);
+            assert_eq!(xs, [-2.0, 2.0]);
+        }
+        other => panic!("expected a bond hit, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_surface_hit_reports_a_point_on_the_geometry() {
+    use atomcad_geo_tree::GeoNode;
+    use atomcad_structure_designer::structure_designer::RayHitKind;
+
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("test");
+    designer.set_active_node_network_name(Some("test".to_string()));
+    let mut scene_data = NodeSceneData::new(NodeOutput::None);
+    scene_data.geo_tree = Some(GeoNode::sphere(DVec3::ZERO, 3.0));
+    designer
+        .last_generated_structure_designer_scene
+        .node_data
+        .insert(NodeRef::top(7), scene_data);
+
+    let hits = designer.raytrace_per_node(
+        &DVec3::new(0.0, 0.0, -50.0),
+        &DVec3::new(0.0, 0.0, 1.0),
+        &AtomicStructureVisualization::BallAndStick,
+    );
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0].kind, RayHitKind::Surface);
+    assert_eq!(hits[0].pin, 0);
+    assert!(
+        (hits[0].point - DVec3::new(0.0, 0.0, -3.0)).length() < 0.05,
+        "hit point {:?}",
+        hits[0].point
+    );
+}

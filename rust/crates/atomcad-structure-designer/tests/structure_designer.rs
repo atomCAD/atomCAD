@@ -212,6 +212,18 @@ mod atom_edit_hydrogen_roundtrip_test;
 #[path = "structure_designer/raytrace_per_node_test.rs"]
 mod raytrace_per_node_test;
 
+#[path = "structure_designer/pick_displayed_candidates_test.rs"]
+mod pick_displayed_candidates_test;
+
+#[path = "structure_designer/trace_support.rs"]
+mod trace_support;
+
+#[path = "structure_designer/trace_engine_test.rs"]
+mod trace_engine_test;
+
+#[path = "structure_designer/trace_measurement_test.rs"]
+mod trace_measurement_test;
+
 #[path = "structure_designer/atom_edit_unchanged_test.rs"]
 mod atom_edit_unchanged_test;
 

@@ -81,4 +81,5 @@ pub mod structure_designer_changes;
 pub mod structure_designer_scene;
 pub mod text_format;
 pub mod thumbnail_ops;
+pub mod trace;
 pub mod undo;

@@ -1,0 +1,322 @@
+//! Output-driven editing: trace a thing visible in the viewport back to the
+//! nodes that contributed to it (`doc/design_output_driven_editing.md`).
+//!
+//! The trace is computed **on demand**; nothing is recorded during normal
+//! evaluation. Each node may answer a *local* question through
+//! [`NodeData::trace`](crate::node_data::NodeData::trace) — "this thing is in
+//! my output: where did it come from in my inputs, and what did I do to it?" —
+//! and the engine in [`engine`] owns everything non-local: wires, array pins,
+//! custom-node instances, deduplication and the fallback for nodes that do not
+//! answer.
+//!
+//! This module holds the types a node sees ([`TraceProbe`], [`TraceStep`],
+//! [`TraceLink`], [`Contribution`], [`TraceContext`]) and the helpers shared by
+//! the engine and the node implementations.
+
+pub mod engine;
+
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::rc::Rc;
+
+use atomcad_crystolecule::atomic_structure::AtomicStructure;
+use atomcad_crystolecule::guided_placement::crystal_bond_length;
+use atomcad_geo_tree::implicit_geometry::ImplicitGeometry3D;
+use atomcad_util::memory_size_estimator::MemorySizeEstimator;
+use glam::f64::DVec3;
+
+use crate::evaluator::network_evaluator::{
+    NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
+};
+use crate::evaluator::network_result::NetworkResult;
+use crate::node_network::NodeRef;
+use crate::node_type_registry::NodeTypeRegistry;
+
+pub use engine::{
+    RowContribution, TraceFrame, TraceHit, TraceHitTarget, TraceNode, TraceReport, TraceRow,
+    TraceStats,
+};
+
+/// Distance within which an atom is "the same atom" when a probe is matched by
+/// position (start of trace, match-by-position links, the fallback's re-sync).
+pub const ATOM_MATCH_RADIUS: f64 = 0.1;
+
+/// The tie tolerance δ for a surface ray hit on a displayed Blueprint: the
+/// point lies on the tessellated surface, so δ only has to cover the gap
+/// between the mesh and the SDF (see Geometry booleans in the design doc).
+pub const SURFACE_HIT_DELTA: f64 = 0.1;
+
+/// δ for an atom with no bond to a non-passivating atom and no tabulated
+/// crystal bond length (see [`atom_point_delta`]).
+pub const FALLBACK_ATOM_POINT_DELTA: f64 = 1.5;
+
+/// What is being traced: one thing visible in a node's output pin.
+#[derive(Debug, Clone, PartialEq)]
+pub enum TraceProbe {
+    /// An atom. A `Some` id is valid in the value being traced *only*.
+    ///
+    /// In a link a node returns, `id: None` means **"match by position"**:
+    /// the engine looks the atom up by `position` in that input, and if
+    /// nothing is there it drops the link silently. The thing did not come
+    /// from that input, which is pruning, not loss.
+    Atom { id: Option<u32>, position: DVec3 },
+    /// A point of geometry. `on_surface` is true for a ray hit on a displayed
+    /// surface, false for an atom centre handed down to a Blueprint.
+    ///
+    /// `delta` is the tie tolerance δ the geometry booleans use to decide
+    /// which children decide the shape at this point. The node that creates
+    /// the `Point` sets it, and every later step passes it on unchanged.
+    Point {
+        position: DVec3,
+        on_surface: bool,
+        delta: f64,
+    },
+}
+
+impl TraceProbe {
+    pub fn position(&self) -> DVec3 {
+        match self {
+            TraceProbe::Atom { position, .. } | TraceProbe::Point { position, .. } => *position,
+        }
+    }
+}
+
+/// What the node did to the probed thing. Shown as the row's label.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Contribution {
+    /// The node is where the thing comes from: "filled", "added", "shape",
+    /// "source", "passivated".
+    Created(&'static str),
+    /// The node changed it: "moved", "edited", "relaxed", "replaced".
+    Modified(&'static str),
+    /// The thing went through unchanged; the node only routed it.
+    Passed,
+}
+
+/// A node's answer to [`NodeData::trace`](crate::node_data::NodeData::trace).
+#[derive(Debug, Clone, PartialEq)]
+pub struct TraceStep {
+    pub contribution: Contribution,
+    /// Where the thing came from. Empty = this node is the origin.
+    pub upstream: Vec<TraceLink>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TraceLink {
+    /// Input pin index.
+    pub pin: usize,
+    /// Index into the pin's merged array value, for array pins. The engine
+    /// maps it to the wire that delivered that element.
+    pub element: Option<usize>,
+    /// The probe rewritten into that input's terms.
+    pub probe: TraceProbe,
+}
+
+/// Key of one trace-store entry: (frame, network, node, pin).
+type StoreKey = (TraceFrame, String, u64, usize);
+
+/// The trace-lifetime value store (see `TraceContext` in the design doc).
+///
+/// The memo does not lend values (`lookup` / `lookup_pin` return clones, and
+/// an atomic payload is a deep copy), so every value the trace fetches is kept
+/// here for the rest of the trace and handed out as an `Rc`: each value is
+/// copied at most twice per trace, once as its consumer's input and once as its
+/// own node's output.
+#[derive(Default)]
+pub(crate) struct TraceStore {
+    outputs: HashMap<StoreKey, Rc<NetworkResult>>,
+    inputs: HashMap<StoreKey, Rc<NetworkResult>>,
+    pub(crate) fills: usize,
+    /// Estimated bytes held, by the memo's size estimator.
+    pub(crate) bytes: usize,
+}
+
+/// Everything one trace shares: the evaluator, the registry, the one
+/// evaluation context and the store. Owned by the engine; every
+/// [`TraceContext`] of the trace borrows it.
+pub(crate) struct TraceSession<'a> {
+    pub(crate) evaluator: &'a NetworkEvaluator,
+    pub(crate) registry: &'a NodeTypeRegistry,
+    pub(crate) eval_context: RefCell<&'a mut NetworkEvaluationContext>,
+    pub(crate) store: RefCell<TraceStore>,
+}
+
+impl<'a> TraceSession<'a> {
+    /// The value on input pin `pin` of `node_id` (top of `stack`), the same
+    /// value `eval` sees: `evaluate_arg`, which applies the pin's conversion
+    /// and merges array pins.
+    pub(crate) fn input(
+        &self,
+        stack: &[NetworkStackElement<'a>],
+        frame: &TraceFrame,
+        node_id: u64,
+        pin: usize,
+    ) -> Rc<NetworkResult> {
+        let key = store_key(stack, frame, node_id, pin);
+        if let Some(value) = self.store.borrow().inputs.get(&key) {
+            return value.clone();
+        }
+        let value = {
+            let mut context = self.eval_context.borrow_mut();
+            self.evaluator
+                .evaluate_arg(stack, node_id, self.registry, &mut context, pin)
+        };
+        let value = Rc::new(value);
+        let mut store = self.store.borrow_mut();
+        store.fills += 1;
+        store.bytes += value.estimate_memory_bytes();
+        store.inputs.insert(key, value.clone());
+        value
+    }
+
+    /// `node_id`'s own evaluated output on `pin` (top of `stack`).
+    pub(crate) fn output(
+        &self,
+        stack: &[NetworkStackElement<'a>],
+        frame: &TraceFrame,
+        node_id: u64,
+        pin: usize,
+    ) -> Rc<NetworkResult> {
+        let key = store_key(stack, frame, node_id, pin);
+        if let Some(value) = self.store.borrow().outputs.get(&key) {
+            return value.clone();
+        }
+        let value = {
+            let mut context = self.eval_context.borrow_mut();
+            self.evaluator.evaluate(
+                stack,
+                node_id,
+                pin as i32,
+                self.registry,
+                false,
+                &mut context,
+            )
+        };
+        let value = Rc::new(value);
+        let mut store = self.store.borrow_mut();
+        store.fills += 1;
+        store.bytes += value.estimate_memory_bytes();
+        store.outputs.insert(key, value.clone());
+        value
+    }
+}
+
+fn store_key(
+    stack: &[NetworkStackElement],
+    frame: &TraceFrame,
+    node_id: u64,
+    pin: usize,
+) -> StoreKey {
+    let network = stack
+        .last()
+        .map(|f| f.node_network.node_type.name.clone())
+        .unwrap_or_default();
+    (frame.clone(), network, node_id, pin)
+}
+
+/// A node's only window onto the evaluator during a trace.
+///
+/// The methods take `&self` and return `Rc`s, so a node can hold several
+/// values at once (a boolean holds its children and its combined output; an
+/// `atom_edit` holds its base while it reads its output).
+pub struct TraceContext<'t, 'a> {
+    pub(crate) session: &'t TraceSession<'a>,
+    pub(crate) stack: &'t [NetworkStackElement<'a>],
+    pub(crate) frame: &'t TraceFrame,
+    pub(crate) node_id: u64,
+}
+
+impl TraceContext<'_, '_> {
+    /// The evaluated value on input pin `pin`, the same value `eval` sees.
+    /// Array pins return the merged `NetworkResult::Array`.
+    pub fn input(&self, pin: usize) -> Rc<NetworkResult> {
+        self.session
+            .input(self.stack, self.frame, self.node_id, pin)
+    }
+
+    /// This node's own evaluated output on `pin`.
+    pub fn output(&self, pin: usize) -> Rc<NetworkResult> {
+        self.session
+            .output(self.stack, self.frame, self.node_id, pin)
+    }
+
+    /// The node being traced, as addressed in its own network.
+    pub fn node_ref(&self) -> NodeRef {
+        NodeRef::top(self.node_id)
+    }
+}
+
+/// Indices of `values` within `delta` of `combined`.
+pub fn deciding_children(values: &[f64], combined: f64, delta: f64) -> Vec<usize> {
+    values
+        .iter()
+        .enumerate()
+        .filter(|(_, v)| (*v - combined).abs() <= delta)
+        .map(|(i, _)| i)
+        .collect()
+}
+
+/// Signed distance of one geometry value at `point` (3D), via
+/// `implicit_eval_3d`. `None` for a value that carries no 3D geometry.
+pub fn sdf_at(value: &NetworkResult, point: DVec3) -> Option<f64> {
+    let geo = match value {
+        NetworkResult::Blueprint(b) => &b.geo_tree_root,
+        NetworkResult::Crystal(c) => c.geo_tree_root.as_ref()?,
+        NetworkResult::Molecule(m) => m.geo_tree_root.as_ref()?,
+        _ => return None,
+    };
+    Some(geo.implicit_eval_3d(&point))
+}
+
+/// δ for a Point probe made from an atom centre: the length of the atom's
+/// shortest bond to a non-passivating atom; for an atom with no such bond,
+/// `crystal_bond_length(z, z)`, else 1.5 Å.
+pub fn atom_point_delta(atoms: &AtomicStructure, atom_id: u32) -> f64 {
+    let Some(atom) = atoms.get_atom(atom_id) else {
+        return FALLBACK_ATOM_POINT_DELTA;
+    };
+    let shortest = atom
+        .bonds
+        .iter()
+        .filter_map(|bond| atoms.get_atom(bond.other_atom_id()))
+        .filter(|other| !other.is_hydrogen_passivation())
+        .map(|other| other.position.distance(atom.position))
+        .fold(None, |acc: Option<f64>, d| {
+            Some(acc.map_or(d, |a| a.min(d)))
+        });
+    shortest
+        .or_else(|| crystal_bond_length(atom.atomic_number, atom.atomic_number))
+        .unwrap_or(FALLBACK_ATOM_POINT_DELTA)
+}
+
+/// The atomic structure a value carries, if any.
+pub fn atoms_of(value: &NetworkResult) -> Option<&AtomicStructure> {
+    match value {
+        NetworkResult::Crystal(c) => Some(&c.atoms),
+        NetworkResult::Molecule(m) => Some(&m.atoms),
+        _ => None,
+    }
+}
+
+/// The id of the atom nearest `position` within [`ATOM_MATCH_RADIUS`].
+pub fn atom_at(atoms: &AtomicStructure, position: DVec3) -> Option<u32> {
+    atoms
+        .get_atoms_in_radius(&position, ATOM_MATCH_RADIUS)
+        .into_iter()
+        .filter_map(|id| {
+            atoms
+                .get_atom(id)
+                .map(|a| (id, a.position.distance(position)))
+        })
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(id, _)| id)
+}
+
+/// `value`, or element `element` of it when `value` is an array.
+pub fn element_of(value: &NetworkResult, element: Option<usize>) -> Option<&NetworkResult> {
+    match (value, element) {
+        (_, None) => Some(value),
+        (NetworkResult::Array(items), Some(i)) => items.get(i),
+        _ => None,
+    }
+}

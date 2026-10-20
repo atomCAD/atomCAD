@@ -255,6 +255,7 @@ use atomcad_structure_designer::nodes::switch::{SwitchCaseValue, SwitchData};
 use atomcad_structure_designer::nodes::vec2::Vec2Data;
 use atomcad_structure_designer::nodes::vec3::Vec3Data;
 use atomcad_structure_designer::nodes::zip_with::ZipWithData;
+use atomcad_structure_designer::structure_designer::{DisplayedPick, overlapping_hits};
 use atomcad_structure_designer::text_format::TextValue;
 use glam::{DVec2, DVec3, IVec2, IVec3};
 use std::collections::HashMap;
@@ -9742,10 +9743,6 @@ pub fn query_hovered_atom_info(
     let ray_origin = from_api_vec3(&ray_origin);
     let ray_direction = from_api_vec3(&ray_direction);
 
-    /// Overlap threshold in Angstroms — atoms from different nodes within
-    /// this distance along the ray are considered overlapping.
-    const OVERLAP_EPSILON: f64 = 0.1;
-
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
@@ -9805,7 +9802,8 @@ pub fn query_hovered_atom_info(
                     .structure_designer
                     .get_node_display_name(closest_node_id);
 
-                // Detect overlapping nodes within OVERLAP_EPSILON of the closest hit.
+                // Detect overlapping nodes within OVERLAP_EPSILON of the closest
+                // atom hit (the overlap rule lives in the domain).
                 let visualization = &cad_instance
                     .structure_designer
                     .preferences
@@ -9816,18 +9814,16 @@ pub fn query_hovered_atom_info(
                     &ray_direction,
                     visualization,
                 );
-                let overlapping_node_names: Vec<String> = per_node_hits
-                    .iter()
-                    .filter(|hit| {
-                        hit.node_ref.node_id != closest_node_id
-                            && (hit.distance - closest_distance).abs() < OVERLAP_EPSILON
-                    })
-                    .map(|hit| {
-                        cad_instance
-                            .structure_designer
-                            .get_node_display_name(hit.node_ref.node_id)
-                    })
-                    .collect();
+                let overlapping_node_names: Vec<String> =
+                    overlapping_hits(&per_node_hits, closest_distance)
+                        .into_iter()
+                        .filter(|hit| hit.node_ref.node_id != closest_node_id)
+                        .map(|hit| {
+                            cad_instance
+                                .structure_designer
+                                .get_node_display_name(hit.node_ref.node_id)
+                        })
+                        .collect();
 
                 let inferred_hybridization = {
                     use atomcad_crystolecule::guided_placement::{
@@ -9878,10 +9874,6 @@ pub fn viewport_pick(ray_origin: APIVec3, ray_direction: APIVec3) -> APIViewport
     let ray_origin = from_api_vec3(&ray_origin);
     let ray_direction = from_api_vec3(&ray_direction);
 
-    /// Overlap threshold in Angstroms — hits from different nodes within
-    /// this distance along the ray are considered overlapping.
-    const OVERLAP_EPSILON: f64 = 0.1;
-
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
@@ -9897,94 +9889,41 @@ pub fn viewport_pick(ray_origin: APIVec3, ray_direction: APIVec3) -> APIViewport
                     return APIViewportPickResult::ActiveNodeHit;
                 }
 
-                let visualization = &cad_instance
-                    .structure_designer
-                    .preferences
-                    .atomic_structure_visualization_preferences
-                    .visualization;
-
-                let mut hits = cad_instance.structure_designer.raytrace_per_node(
+                // The overlap rule, the top-level filter and the active node's
+                // privilege live in `pick_displayed_candidates`; this only maps
+                // its answer onto the Dart-facing result.
+                let structure_designer = &cad_instance.structure_designer;
+                match structure_designer.pick_displayed_candidates(
                     &ray_origin,
                     &ray_direction,
-                    visualization,
-                );
-
-                // Click-to-activate is a **top-level-node** surface: its result
-                // types, the Flutter disambiguation overlay, `scrollToNode`,
-                // and the solo-eye "hide others" action are all keyed by bare
-                // node id, and body-internal ids routinely collide with
-                // top-level ones (per-body `next_node_id` counters). Since
-                // nodes inside a 0-ary closure body can now be displayed, their
-                // hits must be dropped from the candidate set — routing a body
-                // node's id through those surfaces would target the wrong node.
-                // Displayed body geometry is therefore visible but not
-                // click-activatable; a click on it falls through to the
-                // existing no-hit / active-node behavior. Scoped pick UX is a
-                // deferred follow-up — see
-                // `doc/design_zero_ary_closure_body_display.md` §1.
-                hits.retain(|hit| hit.node_ref.is_top_level());
-
-                if hits.is_empty() {
-                    return APIViewportPickResult::NoHit;
+                    true,
+                ) {
+                    DisplayedPick::NoHit => APIViewportPickResult::NoHit,
+                    DisplayedPick::Single(hit) => {
+                        let active_node_id = structure_designer
+                            .get_active_node_network()
+                            .and_then(|network| network.active_node_id);
+                        if active_node_id == Some(hit.node_ref.node_id) {
+                            APIViewportPickResult::ActiveNodeHit
+                        } else {
+                            APIViewportPickResult::ActivateNode {
+                                node_id: hit.node_ref.node_id,
+                                node_name: structure_designer
+                                    .get_node_display_name(hit.node_ref.node_id),
+                            }
+                        }
+                    }
+                    DisplayedPick::Overlapping(hits) => APIViewportPickResult::Disambiguation {
+                        candidates: hits
+                            .iter()
+                            .map(|hit| APICandidateNode {
+                                node_id: hit.node_ref.node_id,
+                                node_name: structure_designer
+                                    .get_node_display_name(hit.node_ref.node_id),
+                            })
+                            .collect(),
+                    },
                 }
-
-                // Get the active node ID from the current network.
-                let active_node_id = cad_instance
-                    .structure_designer
-                    .get_active_node_network()
-                    .and_then(|network| network.active_node_id);
-
-                let closest = &hits[0];
-
-                // Click-to-activate is a top-level-node surface (the Flutter
-                // disambiguation overlay / scroll-to-node are keyed by bare
-                // node id), and the scene only ever holds top-level refs
-                // today, so projecting to the bare id is lossless. Phase 2 of
-                // `doc/design_zero_ary_closure_body_display.md` filters the
-                // candidate set explicitly once body nodes can be displayed.
-                if active_node_id == Some(closest.node_ref.node_id) {
-                    return APIViewportPickResult::ActiveNodeHit;
-                }
-
-                // Collect all hits within OVERLAP_EPSILON of the closest hit.
-                let overlapping: Vec<
-                    &atomcad_structure_designer::structure_designer::PerNodeRayHit,
-                > = hits
-                    .iter()
-                    .filter(|hit| (hit.distance - closest.distance).abs() < OVERLAP_EPSILON)
-                    .collect();
-
-                // If the active node is among the overlapping hits, treat as active node hit.
-                if overlapping
-                    .iter()
-                    .any(|hit| active_node_id == Some(hit.node_ref.node_id))
-                {
-                    return APIViewportPickResult::ActiveNodeHit;
-                }
-
-                // If only one node in the overlap set, unambiguous activation.
-                if overlapping.len() == 1 {
-                    let node_name = cad_instance
-                        .structure_designer
-                        .get_node_display_name(closest.node_ref.node_id);
-                    return APIViewportPickResult::ActivateNode {
-                        node_id: closest.node_ref.node_id,
-                        node_name,
-                    };
-                }
-
-                // Multiple overlapping non-active nodes — disambiguation needed.
-                let candidates = overlapping
-                    .iter()
-                    .map(|hit| APICandidateNode {
-                        node_id: hit.node_ref.node_id,
-                        node_name: cad_instance
-                            .structure_designer
-                            .get_node_display_name(hit.node_ref.node_id),
-                    })
-                    .collect();
-
-                APIViewportPickResult::Disambiguation { candidates }
             },
             APIViewportPickResult::NoHit,
         )

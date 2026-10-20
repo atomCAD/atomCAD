@@ -771,6 +771,53 @@ outcome.
   nearest; with `privilege_active`, an active node among overlapping hits is
   chosen alone, and without it all candidates are returned.
 
+#### Phase 1 as built
+
+**Measurement** (`trace_measurement_test.rs`, release, every top-level
+displayed node of every network in `samples/*.cnnd`, 191 traces; "refresh"
+is a full refresh of the same network for comparison):
+
+| | median | max |
+|---|---|---|
+| trace time | 0.5 ms | ~220 ms (`flexure-delta-robot` / `flexidelta-frame` #54; its refresh: ~250 ms) |
+| memo peak | 0.12 MB | 14.6 MB (same trace) |
+| trace store | 0.09 MB | 11.5 MB (same trace) |
+
+A trace costs about one refresh of its cone or less, and memory stays well
+under "three times the cone". No alternative from Performance is needed.
+Two traces hit the 200-row cap (`flexidelta-frame` #54 and
+`flexure-delta-robot` #16): in Phase 1 almost no node has `trace`, so a probe
+lost early lists the whole upstream network. Phases 3–4 should shrink these.
+
+**Where the build differs from the text above:**
+
+- **Array inputs in the fallback.** The probe is re-synced against each
+  element. Elements that match are followed. Elements that do not match are
+  pruned, as long as at least one element matched. The probe counts as lost
+  only when no element matches. This is what *Fallback, converted* needs
+  (`union` keeps only the shape containing the point).
+- **The row cap** is `TraceReport::truncated`, not a row. Phase 2's
+  flattening appends the "… more" row.
+- **A `parameter`** gets its own `passed` row inside the instance. When the
+  call site leaves the pin unwired, the trace continues into the parameter's
+  own default pin.
+- **`query_hovered_atom_info`** does not call `pick_displayed_candidates`.
+  Its reference distance is the nearest *atom* hit, not the nearest hit, and
+  it is not restricted to top-level nodes. It shares `OVERLAP_EPSILON` and
+  `overlapping_hits` instead. `viewport_pick` does call
+  `pick_displayed_candidates`.
+- **The overlap-rule characterization tests** target
+  `pick_displayed_candidates` directly. The API functions need the GPU-backed
+  `CADInstance` and cannot run in a test, so they could not be pinned down
+  before the move.
+- **Iterator chains are cut at the consumer.** `collect`, `map` and
+  `filter` have no phase-typed inputs (`Iter[T]`, `Function`), so a
+  `collect` over molecules becomes an origin labelled "source". A HOF with a
+  phase-typed pin (`fold`'s `init`) falls back as described. The *Opaque
+  constructs* test uses `fold`. The zone-wire case cannot be reached, because
+  the trace never enters a body.
+- `TraceStats` also reports `store_bytes`, for the measurement.
+
 ### Phase 2 — Viewport gesture, menu and API (Flutter + FRB)
 
 - `trace_viewport_pick`, `trace_viewport_hit` and their API types; FRB codegen.
