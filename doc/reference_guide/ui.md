@@ -164,7 +164,9 @@ You can navigate the viewport with the mouse or touchpad. Although it is possibl
   - Option 2: SHIFT right mouse button drag
   - Option 3: SHIFT *touch-pan*  (for Magic Mouse or touchpad)
 
-- **Orbit:** **Right mouse button drag**
+- **Orbit:** **Right mouse button drag**. A right *click* — pressing and
+  releasing without moving the mouse — does not orbit; it opens the
+  [contributing-nodes menu](#which-nodes-made-this-right-click) instead.
 - **Zoom:** 
   - Option 1: **Mouse scroll wheel**
   - Option 2: Vertical component of *touch-pan* (for Magic Mouse and touchpad)
@@ -176,6 +178,30 @@ All three operations use a *pivot point*. The pivot is the point where you click
 Orbiting is constrained so the camera never rolls (no tilt). This prevents users from getting disoriented. If you need complete freedom, a 6-degree-of-freedom (6DoF) camera mode will be developed soon.
 
 By default the axis kept vertical on screen while orbiting is the world **Z** axis. When you work on a crystal surface that is not aligned with Z — a (111) or (110) surface, for example — that surface never levels out on screen and orbiting around it feels awkward. You can pick a different **navigation up-axis** (typically the surface's plane normal) so the surface stays level and orbits naturally. Use the **Up:** button in the [Camera Control Panel](#camera-control-panel). Changing the axis is a view-only convenience: it does not move or re-orient your model, and the background grid keeps showing the true world/lattice orientation.
+
+### Which nodes made this? (right click)
+
+**Right-click** an atom, a bond or a displayed shape to see which nodes it came from. A menu opens at the cursor listing the nodes that contributed to that exact thing, starting with the displayed node and working back towards where it was made. Nodes that had nothing to do with it are left out: right-click an atom of a sphere in `union(sphere, cuboid)` and the cuboid is not listed.
+
+Each row shows the node's name and, on the right, what the node did:
+
+| Label | Meaning |
+|---|---|
+| **shape** | The node made the geometry this came from (`sphere`, `cuboid`, `half_space`, …). |
+| **source** | The node brought these atoms into the design (an import, a value, …). |
+| **filled**, **added**, **passivated** | The node created the atom. |
+| **moved**, **edited**, **relaxed** | The node changed it. |
+| **passed** | It went through the node unchanged (the node only combined or routed it). |
+| **possibly contributed** | The node cannot tell exactly what it did to this thing, so it is listed to be safe. Nodes upstream of it may be listed for the same reason. |
+
+*passed* and *possibly contributed* rows are shown dimmed. Many nodes cannot yet answer precisely and show *possibly contributed*; the list then includes more nodes than strictly needed, but never leaves out one that mattered.
+
+**Custom nodes** appear as a row with a chevron, and the nodes traced *inside* that custom node's network are listed below it, indented. Click the chevron to fold or unfold them. Click a row to select that node and scroll the node network editor to it:
+
+- clicking the custom node's own row selects it in the network you are viewing, so the viewport keeps showing what you right-clicked;
+- clicking one of the indented rows opens the custom node's network and selects the node there. The viewport then shows that network. Use [*Back*](#navigating-between-node-networks) to return.
+
+If the outputs of several displayed nodes overlap under the cursor, the same candidate list as for left-click activation (*Click-to-activate from viewport* under [Manipulating nodes and wires](#manipulating-nodes-and-wires)) appears first (without its Solo button); pick the node to trace from. Press **Escape** or click elsewhere to close either list without changing anything. Very long traces stop after 200 rows and end in a "… more" line.
 
 ## Node network composability and Node Networks list panel
 

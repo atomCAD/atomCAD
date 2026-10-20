@@ -158,6 +158,13 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
   bool isGadgetDragging = false;
   bool _delegateConsumedDown = false;
 
+  /// Where the right button went down, while it is held; `null` otherwise.
+  /// A right press is a *click* until the pointer moves [_clickThreshold] from
+  /// here, and the orbit (or Shift-pan) does not start before that, so a click
+  /// leaves the camera exactly where it was (`onSecondaryClick`).
+  Offset? _secondaryDownPos;
+  bool _secondaryPastSlop = false;
+
   // Coalesced camera drag position — multiple mouse events between frames
   // are merged so only the last position is processed before each render.
   Offset? _pendingCameraDragPos;
@@ -282,7 +289,8 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
           startPrimaryDrag(event.localPosition);
           break;
         case kSecondaryMouseButton:
-          //print('Right mouse button pressed at ${event.position}');
+          _secondaryDownPos = event.localPosition;
+          _secondaryPastSlop = false;
           // Check for Shift + Right mouse for panning
           if (HardwareKeyboard.instance.isShiftPressed) {
             startMoveCamera(event.localPosition);
@@ -310,6 +318,15 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
       switch (dragState) {
         case ViewportDragState.move:
         case ViewportDragState.rotate:
+          // A right press stays a click until it passes the slop.
+          final secondaryDownPos = _secondaryDownPos;
+          if (secondaryDownPos != null && !_secondaryPastSlop) {
+            if ((event.localPosition - secondaryDownPos).distance <
+                _clickThreshold) {
+              break;
+            }
+            _secondaryPastSlop = true;
+          }
           // Coalesce camera drag events — just store latest position,
           // actual update happens once in _handlePersistentFrame before render.
           _pendingCameraDragPos = event.localPosition;
@@ -334,11 +351,17 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
         // Delegate declined up (e.g., gadget dragging) — fall through to base
         _delegateConsumedDown = false;
       }
+      final secondaryClick = _secondaryDownPos != null && !_secondaryPastSlop;
+      _secondaryDownPos = null;
       endDrag(event.localPosition);
+      if (secondaryClick) {
+        onSecondaryClick(event.localPosition);
+      }
     }
   }
 
   void onPointerCancel(PointerCancelEvent event) {
+    _secondaryDownPos = null;
     if (_delegateConsumedDown) {
       final delegate = primaryPointerDelegate;
       delegate?.onPrimaryCancel();
@@ -681,6 +704,11 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
       onDefaultClick(pointerPos);
     }
   }
+
+  /// A right click: the right button went up within [_clickThreshold] of where
+  /// it went down. Right *drag* still orbits (Shift: pans); the camera has not
+  /// moved for a click. Override to act on it.
+  void onSecondaryClick(Offset pointerPos) {}
 
   void onDefaultClick(Offset pointerPos) {
     //print('primary click at ${pointerPos}');

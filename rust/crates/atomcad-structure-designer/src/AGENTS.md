@@ -652,6 +652,10 @@ evaluation.
   it there and the trace follows.
 - The trace uses `StructureDesigner::with_trace_eval_context`, not
   `with_eval_context`: an unbudgeted memo, and nothing parked on `self`.
+- **The right-click pick is `trace/pick.rs`**: click-to-activate's overlap rule
+  (`pick_displayed_candidates`) with the active node *not* privileged and no
+  gadget hit test. Overlapping hits come back untraced; only the candidate the
+  user picks is traced.
 - The engine recurses once per hop on top of the evaluator's own recursion, so
   test networks stay shallow (a 200-node chain overflows the debug evaluator
   before the trace starts).

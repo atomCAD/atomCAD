@@ -14,6 +14,7 @@
 //! the engine and the node implementations.
 
 pub mod engine;
+pub mod pick;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -36,6 +37,7 @@ pub use engine::{
     RowContribution, TraceFrame, TraceHit, TraceHitTarget, TraceNode, TraceReport, TraceRow,
     TraceStats,
 };
+pub use pick::TracePick;
 
 /// Distance within which an atom is "the same atom" when a probe is matched by
 /// position (start of trace, match-by-position links, the fallback's re-sync).

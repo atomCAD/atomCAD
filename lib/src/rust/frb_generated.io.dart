@@ -229,6 +229,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APICompatibilityReport dco_decode_api_compatibility_report(dynamic raw);
 
   @protected
+  APIContributionKind dco_decode_api_contribution_kind(dynamic raw);
+
+  @protected
   APICsgCacheCounts dco_decode_api_csg_cache_counts(dynamic raw);
 
   @protected
@@ -712,6 +715,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APITextError dco_decode_api_text_error(dynamic raw);
 
   @protected
+  APITracePick dco_decode_api_trace_pick(dynamic raw);
+
+  @protected
+  APITraceResult dco_decode_api_trace_result(dynamic raw);
+
+  @protected
+  APITraceRow dco_decode_api_trace_row(dynamic raw);
+
+  @protected
   APITransform dco_decode_api_transform(dynamic raw);
 
   @protected
@@ -1161,6 +1173,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APITagData dco_decode_box_autoadd_api_tag_data(dynamic raw);
 
   @protected
+  APITraceResult dco_decode_box_autoadd_api_trace_result(dynamic raw);
+
+  @protected
   APITransform dco_decode_box_autoadd_api_transform(dynamic raw);
 
   @protected
@@ -1513,6 +1528,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APITextError> dco_decode_list_api_text_error(dynamic raw);
+
+  @protected
+  List<APITraceRow> dco_decode_list_api_trace_row(dynamic raw);
 
   @protected
   List<APIValidationError> dco_decode_list_api_validation_error(dynamic raw);
@@ -2375,6 +2393,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIContributionKind sse_decode_api_contribution_kind(
+      SseDeserializer deserializer);
+
+  @protected
   APICsgCacheCounts sse_decode_api_csg_cache_counts(
       SseDeserializer deserializer);
 
@@ -2920,6 +2942,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APITextError sse_decode_api_text_error(SseDeserializer deserializer);
+
+  @protected
+  APITracePick sse_decode_api_trace_pick(SseDeserializer deserializer);
+
+  @protected
+  APITraceResult sse_decode_api_trace_result(SseDeserializer deserializer);
+
+  @protected
+  APITraceRow sse_decode_api_trace_row(SseDeserializer deserializer);
 
   @protected
   APITransform sse_decode_api_transform(SseDeserializer deserializer);
@@ -3469,6 +3500,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APITagData sse_decode_box_autoadd_api_tag_data(SseDeserializer deserializer);
 
   @protected
+  APITraceResult sse_decode_box_autoadd_api_trace_result(
+      SseDeserializer deserializer);
+
+  @protected
   APITransform sse_decode_box_autoadd_api_transform(
       SseDeserializer deserializer);
 
@@ -3882,6 +3917,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   List<APITextError> sse_decode_list_api_text_error(
       SseDeserializer deserializer);
+
+  @protected
+  List<APITraceRow> sse_decode_list_api_trace_row(SseDeserializer deserializer);
 
   @protected
   List<APIValidationError> sse_decode_list_api_validation_error(
@@ -4876,6 +4914,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APICompatibilityReport self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_contribution_kind(
+      APIContributionKind self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_csg_cache_counts(
       APICsgCacheCounts self, SseSerializer serializer);
 
@@ -5472,6 +5514,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_text_error(APITextError self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_trace_pick(APITracePick self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_trace_result(
+      APITraceResult self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_trace_row(APITraceRow self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_transform(APITransform self, SseSerializer serializer);
 
   @protected
@@ -6027,6 +6079,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APITagData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_api_trace_result(
+      APITraceResult self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_api_transform(
       APITransform self, SseSerializer serializer);
 
@@ -6447,6 +6503,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_api_text_error(
       List<APITextError> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_api_trace_row(
+      List<APITraceRow> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_api_validation_error(

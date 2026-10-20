@@ -14,6 +14,7 @@ structure_designer/
 ├── structure_designer.dart           # Main widget: menu bar + 3-panel layout
 ├── structure_designer_model.dart     # StructureDesignerModel: central state
 ├── structure_designer_viewport.dart  # 3D viewport with ray-cast interaction
+├── trace_menu.dart                   # Right-click contributing-nodes menu (widget-free tree helpers + the popup)
 ├── main_content_area.dart            # Viewport + right properties dock, split from (network editor | schema editor)
 ├── schema_editor.dart                # Record-def field editor (active when activeRecordDefName != null)
 ├── camera_control_widget.dart        # Camera view selector (ortho/perspective)
@@ -412,6 +413,26 @@ panel is `node_data/mechanosynth_edit_editor.dart`.
 Clicking a non-active node's rendered output activates that node (two-step: first click activates, second performs the normal action), via a `viewport_pick()` interception in `onPointerDown` before delegate dispatch. Overlapping outputs raise a disambiguation overlay.
 
 The mechanism, the **scroll-to-node callback pattern** that bridges viewport → model → node-network-widget, and the `scopeChain` / `screenAnchor` extras Find Usages reuses are documented in `structure_designer_viewport.dart`'s library doc.
+
+## Right-click trace (in viewport)
+
+A right **click** opens the contributing-nodes menu
+(`doc/design_output_driven_editing.md`); right **drag** still orbits.
+
+- **The click is recognised in `CadViewportState`** (`lib/common/cad_viewport.dart`):
+  a right press does not orbit until the pointer leaves the 4 px slop, and an
+  up inside it calls `onSecondaryClick`. Don't start the orbit on down again:
+  a sub-slop orbit turns the camera before the up, and the traced ray then
+  misses what was clicked.
+- **Rust owns the pick, the trace, the order and the labels**
+  (`traceViewportPick` → `NoHit` / `Traced` / `Disambiguation`, then
+  `traceViewportHit` for the chosen candidate). The overlay's trace mode is
+  `_showDisambiguationMenu(..., onTrace:)`: no Solo button, and the active
+  node is never chosen for the user.
+- **`trace_menu.dart` takes plain data and callbacks** (unit-tested in
+  `test/trace_menu_test.dart`). Its only state is which instance rows are
+  folded; a row lands via `model.jumpToNode`, with the row's own
+  `hostNetwork`.
 
 ## Find Usages (issue #414)
 

@@ -633,6 +633,28 @@ impl StructureDesigner {
         crate::trace::engine::trace_hit(self, hit)
     }
 
+    /// Right-click step 1: trace the displayed node clearly under the ray, or
+    /// return the overlapping candidates untraced. Delegates to
+    /// [`crate::trace::pick`].
+    pub fn trace_viewport_pick(
+        &mut self,
+        ray_origin: &DVec3,
+        ray_direction: &DVec3,
+    ) -> crate::trace::TracePick {
+        crate::trace::pick::trace_viewport_pick(self, ray_origin, ray_direction)
+    }
+
+    /// Right-click step 2: trace the ray's hit on the chosen displayed node.
+    /// Delegates to [`crate::trace::pick`].
+    pub fn trace_viewport_hit(
+        &mut self,
+        ray_origin: &DVec3,
+        ray_direction: &DVec3,
+        node_id: u64,
+    ) -> crate::trace::TraceReport {
+        crate::trace::pick::trace_viewport_hit(self, ray_origin, ray_direction, node_id)
+    }
+
     /// Stand up the network stack for `scope_path` and run `f` against the node
     /// addressed by (`scope_path`, `node_id`), inside one evaluation pass.
     ///

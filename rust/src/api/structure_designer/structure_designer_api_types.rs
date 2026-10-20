@@ -3469,6 +3469,61 @@ pub enum APIViewportPickResult {
     NoHit,
 }
 
+/// Result of a right-click in the viewport: which displayed node the
+/// contributing-nodes trace runs from (`doc/design_output_driven_editing.md`).
+pub enum APITracePick {
+    /// The ray missed every displayed node — show nothing.
+    NoHit,
+    /// One displayed node was hit (or one is clearly nearest): its trace.
+    Traced(APITraceResult),
+    /// Several displayed nodes were hit within the overlap epsilon: the user
+    /// picks one, then Dart calls `trace_viewport_hit` with its id. Unlike
+    /// left-click, the active node is never chosen on the user's behalf.
+    Disambiguation { candidates: Vec<APICandidateNode> },
+}
+
+/// The nodes that contributed to the thing under the cursor, nearest to the
+/// viewport first.
+pub struct APITraceResult {
+    /// Pre-order: a custom-node instance row is followed directly by the rows
+    /// traced inside it, one `depth` deeper. Empty = nothing hit.
+    pub rows: Vec<APITraceRow>,
+    /// The trace stopped at its row cap; the menu ends in a "… more" line.
+    pub truncated: bool,
+}
+
+/// What a trace row's node did to the traced thing.
+pub enum APIContributionKind {
+    /// The node is where the thing comes from ("filled", "shape", …).
+    Created,
+    /// The node changed it ("moved", "edited", …).
+    Modified,
+    /// The thing went through unchanged.
+    Passed,
+    /// The node cannot say ("possibly contributed").
+    Unknown,
+}
+
+/// One row of the contributing-nodes menu.
+pub struct APITraceRow {
+    /// Same addressing as `APINetworkUsage`, so Dart can `jumpToNode`: the
+    /// network holding the node (for a row inside a custom-node instance, the
+    /// custom network; for the instance row itself, the network it sits in).
+    pub host_network: String,
+    /// Always empty in v1: the trace never enters a zone body.
+    pub scope_path: Vec<u64>,
+    pub node_id: u64,
+    /// The node's name, falling back to its type name (as in Find Usages).
+    pub node_label: String,
+    /// Tree level: 0 = the network the trace started in; children of a
+    /// custom-node instance row are one deeper.
+    pub depth: u32,
+    pub contribution: APIContributionKind,
+    /// "filled", "moved", "shape", … for `Created` / `Modified`; "passed" for
+    /// `Passed`; "possibly contributed" for `Unknown`.
+    pub label: String,
+}
+
 /// The editable subset of `TextValue` that the custom-node property panel can
 /// render. Mirrors the "simple" data types. FRB data-carrying enum — same
 /// shape as the existing `APIMeasurement` enum.

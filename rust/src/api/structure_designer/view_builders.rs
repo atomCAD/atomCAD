@@ -30,6 +30,10 @@ use crate::api::structure_designer::structure_designer_api_types::{
     APIDependencyStatus, APISaveAsResult,
 };
 use crate::api::structure_designer::structure_designer_api_types::{
+    APICandidateNode, APIContributionKind, APIHoveredAtomInfo, APITracePick, APITraceResult,
+    APITraceRow, APIViewportPickResult,
+};
+use crate::api::structure_designer::structure_designer_api_types::{
     APIErrorRootCause, APIErrorSource, APILibraryMount, APIMountStatus, APIMountStatusChange,
     APINetworkWithValidationErrors, APINodeCategoryView, APINodeTypeView, APIRefreshReport,
     APIReportedNode, APIReportedWire, APIValidationError,
@@ -42,11 +46,17 @@ use atomcad_structure_designer::document_set::{
 use atomcad_structure_designer::eval_errors::RootCauseRef;
 use atomcad_structure_designer::library_links::{LibraryMount, MountStatus};
 use atomcad_structure_designer::library_refresh::{RefreshReport, ReportedNode, ReportedWire};
+use atomcad_structure_designer::network_usages::node_label;
 use atomcad_structure_designer::node_type::NodeTypeCategory;
 use atomcad_structure_designer::node_type_registry::{
     NodeTypeRegistry, allowed_in_zone_body, static_match, static_match_strict,
 };
 use atomcad_structure_designer::structure_designer::StructureDesigner;
+use atomcad_structure_designer::structure_designer::{DisplayedPick, overlapping_hits};
+use atomcad_structure_designer::trace::{
+    Contribution, RowContribution, TraceNode, TracePick, TraceReport, TraceRow,
+};
+use glam::f64::DVec3;
 use std::collections::HashMap;
 
 /// The palette's category order. Shared by both node-type view builders so the
@@ -805,5 +815,263 @@ pub fn paste_result_view(outcome: Result<Vec<u64>, PasteRefusal>) -> APIPasteRes
             node_ids: Vec::new(),
             error: Some(refusal.to_string()),
         },
+    }
+}
+
+/// Click-to-activate: what a left-click on the ray should do. The body of
+/// `viewport_pick`.
+pub fn viewport_pick_view(
+    designer: &StructureDesigner,
+    ray_origin: &DVec3,
+    ray_direction: &DVec3,
+) -> APIViewportPickResult {
+    let (ray_origin, ray_direction) = (*ray_origin, *ray_direction);
+    // A click on the active node's gadget (e.g. a translation-gizmo
+    // handle) must never be stolen by click-to-activate, even when
+    // another displayed node's atoms lie behind the gadget along
+    // the ray — pass it through to normal handling.
+    if designer
+        .gadget_hit_test(ray_origin, ray_direction)
+        .is_some()
+    {
+        return APIViewportPickResult::ActiveNodeHit;
+    }
+
+    // The overlap rule, the top-level filter and the active node's
+    // privilege live in `pick_displayed_candidates`; this only maps
+    // its answer onto the Dart-facing result.
+    match designer.pick_displayed_candidates(&ray_origin, &ray_direction, true) {
+        DisplayedPick::NoHit => APIViewportPickResult::NoHit,
+        DisplayedPick::Single(hit) => {
+            let active_node_id = designer
+                .get_active_node_network()
+                .and_then(|network| network.active_node_id);
+            if active_node_id == Some(hit.node_ref.node_id) {
+                APIViewportPickResult::ActiveNodeHit
+            } else {
+                APIViewportPickResult::ActivateNode {
+                    node_id: hit.node_ref.node_id,
+                    node_name: designer.get_node_display_name(hit.node_ref.node_id),
+                }
+            }
+        }
+        DisplayedPick::Overlapping(hits) => APIViewportPickResult::Disambiguation {
+            candidates: hits
+                .iter()
+                .map(|hit| APICandidateNode {
+                    node_id: hit.node_ref.node_id,
+                    node_name: designer.get_node_display_name(hit.node_ref.node_id),
+                })
+                .collect(),
+        },
+    }
+}
+
+/// The atom hover tooltip: the nearest displayed atom under the ray, plus the
+/// names of the other displayed nodes whose hits overlap it. The body of
+/// `query_hovered_atom_info`.
+pub fn hovered_atom_info_view(
+    designer: &StructureDesigner,
+    ray_origin: &DVec3,
+    ray_direction: &DVec3,
+) -> Option<APIHoveredAtomInfo> {
+    let (ray_origin, ray_direction) = (*ray_origin, *ray_direction);
+    let (atom_id, structure, closest_node_ref, closest_distance) =
+        designer.hit_test_all_atomic_structures_with_node_id(&ray_origin, &ray_direction)?;
+    // The tooltip is a top-level-node surface; the scene only ever
+    // holds top-level refs today, so projecting to the bare id is
+    // lossless (see `doc/design_zero_ary_closure_body_display.md` §1).
+    let closest_node_id = closest_node_ref.node_id;
+
+    let atom = structure.get_atom(atom_id)?;
+
+    // Resolve element identity. Check decorator's name overrides first
+    // (set by motif_edit for parameter elements), then fall back to
+    // the standard element database.
+    let (symbol, element_name, display_atomic_number, effective_element) = if let Some(name) =
+        structure
+            .decorator()
+            .element_name_overrides
+            .get(&atom.atomic_number)
+    {
+        use atomcad_crystolecule::atomic_constants::param_atomic_number_to_index;
+        let sym = param_atomic_number_to_index(atom.atomic_number)
+            .map(|idx| format!("P{}", idx + 1))
+            .unwrap_or_else(|| "?".to_string());
+
+        // Resolve effective element for display
+        let eff_z = structure.effective_atomic_number(atom);
+        let eff_str = if eff_z != atom.atomic_number {
+            let eff_info = atomcad_crystolecule::atomic_constants::ATOM_INFO
+                .get(&(eff_z as i32))
+                .unwrap_or(&atomcad_crystolecule::atomic_constants::DEFAULT_ATOM_INFO);
+            format!("{} ({})", eff_info.symbol, eff_info.element_name)
+        } else {
+            String::new()
+        };
+
+        (sym, name.clone(), atom.atomic_number as i32, eff_str)
+    } else {
+        let atom_info = atomcad_crystolecule::atomic_constants::ATOM_INFO
+            .get(&(atom.atomic_number as i32))
+            .unwrap_or(&atomcad_crystolecule::atomic_constants::DEFAULT_ATOM_INFO);
+        (
+            atom_info.symbol.clone(),
+            atom_info.element_name.clone(),
+            atom_info.atomic_number,
+            String::new(),
+        )
+    };
+
+    let bond_count = atom.bonds.len() as u32;
+
+    let node_name = designer.get_node_display_name(closest_node_id);
+
+    // Detect overlapping nodes within OVERLAP_EPSILON of the closest
+    // atom hit (the overlap rule lives in the domain).
+    let visualization = &designer
+        .preferences
+        .atomic_structure_visualization_preferences
+        .visualization;
+    let per_node_hits = designer.raytrace_per_node(&ray_origin, &ray_direction, visualization);
+    let overlapping_node_names: Vec<String> = overlapping_hits(&per_node_hits, closest_distance)
+        .into_iter()
+        .filter(|hit| hit.node_ref.node_id != closest_node_id)
+        .map(|hit| designer.get_node_display_name(hit.node_ref.node_id))
+        .collect();
+
+    let inferred_hybridization = {
+        use atomcad_crystolecule::guided_placement::{Hybridization, detect_hybridization};
+        match detect_hybridization(structure, atom_id, None) {
+            Hybridization::Sp3 => 1,
+            Hybridization::Sp2 => 2,
+            Hybridization::Sp1 => 3,
+        }
+    };
+
+    Some(APIHoveredAtomInfo {
+        atom_id,
+        symbol,
+        element_name,
+        atomic_number: display_atomic_number,
+        effective_element,
+        x: atom.position.x,
+        y: atom.position.y,
+        z: atom.position.z,
+        bond_count,
+        is_frozen: atom.is_frozen(),
+        hybridization_override: atom.hybridization_override(),
+        inferred_hybridization,
+        tags: structure
+            .atom_tags(atom.id)
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
+        node_name,
+        overlapping_node_names,
+    })
+}
+
+// -----------------------------------------------------------------------------
+// Output tracing (`doc/design_output_driven_editing.md`)
+// -----------------------------------------------------------------------------
+
+/// Right-click step 1: the trace of the displayed node clearly under the ray,
+/// or the overlapping candidates. The body of `trace_viewport_pick`.
+pub fn trace_pick_view(
+    designer: &mut StructureDesigner,
+    ray_origin: &DVec3,
+    ray_direction: &DVec3,
+) -> APITracePick {
+    match designer.trace_viewport_pick(ray_origin, ray_direction) {
+        TracePick::NoHit => APITracePick::NoHit,
+        TracePick::Traced(report) => APITracePick::Traced(trace_result_view(designer, &report)),
+        TracePick::Overlapping(hits) => APITracePick::Disambiguation {
+            candidates: hits
+                .iter()
+                .map(|hit| APICandidateNode {
+                    node_id: hit.node_ref.node_id,
+                    node_name: designer.get_node_display_name(hit.node_ref.node_id),
+                })
+                .collect(),
+        },
+    }
+}
+
+/// Right-click step 2: the trace of the ray's hit on the chosen node. The body
+/// of `trace_viewport_hit`.
+pub fn trace_hit_view(
+    designer: &mut StructureDesigner,
+    ray_origin: &DVec3,
+    ray_direction: &DVec3,
+    node_id: u64,
+) -> APITraceResult {
+    let report = designer.trace_viewport_hit(ray_origin, ray_direction, node_id);
+    trace_result_view(designer, &report)
+}
+
+/// A trace report as menu rows, each labelled with its node's name (else its
+/// type name) in the network the row belongs to.
+pub fn trace_result_view(designer: &StructureDesigner, report: &TraceReport) -> APITraceResult {
+    let networks = &designer.node_type_registry.node_networks;
+    flatten_trace_report(report, |row| {
+        networks
+            .get(&row.network)
+            .and_then(|network| network.nodes.get(&row.node.node_id))
+            .map(node_label)
+            .unwrap_or_else(|| format!("node #{}", row.node.node_id))
+    })
+}
+
+/// Flatten the engine's tree into pre-order rows with a `depth`: a custom-node
+/// instance row comes directly before the rows traced inside it, which are one
+/// level deeper. The tree is domain data; this flat shape is Dart's transport.
+pub fn flatten_trace_report(
+    report: &TraceReport,
+    label: impl Fn(&TraceRow) -> String,
+) -> APITraceResult {
+    fn walk(
+        nodes: &[TraceNode],
+        depth: u32,
+        label: &dyn Fn(&TraceRow) -> String,
+        out: &mut Vec<APITraceRow>,
+    ) {
+        for node in nodes {
+            let (contribution, text) = contribution_view(&node.row.contribution);
+            out.push(APITraceRow {
+                host_network: node.row.network.clone(),
+                scope_path: node.row.node.scope_path.clone(),
+                node_id: node.row.node.node_id,
+                node_label: label(&node.row),
+                depth,
+                contribution,
+                label: text,
+            });
+            walk(&node.children, depth + 1, label, out);
+        }
+    }
+    let mut rows = Vec::new();
+    walk(&report.rows, 0, &label, &mut rows);
+    APITraceResult {
+        rows,
+        truncated: report.truncated,
+    }
+}
+
+fn contribution_view(contribution: &RowContribution) -> (APIContributionKind, String) {
+    match contribution {
+        RowContribution::Traced(Contribution::Created(label)) => {
+            (APIContributionKind::Created, label.to_string())
+        }
+        RowContribution::Traced(Contribution::Modified(label)) => {
+            (APIContributionKind::Modified, label.to_string())
+        }
+        RowContribution::Traced(Contribution::Passed) => {
+            (APIContributionKind::Passed, "passed".to_string())
+        }
+        RowContribution::Unknown => (
+            APIContributionKind::Unknown,
+            "possibly contributed".to_string(),
+        ),
     }
 }

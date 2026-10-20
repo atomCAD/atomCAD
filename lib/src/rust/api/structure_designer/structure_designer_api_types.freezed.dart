@@ -1867,6 +1867,188 @@ class _$APISourcePin_ZoneInputCopyWithImpl<$Res>
 }
 
 /// @nodoc
+mixin _$APITracePick {
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType && other is APITracePick);
+  }
+
+  @override
+  int get hashCode => runtimeType.hashCode;
+
+  @override
+  String toString() {
+    return 'APITracePick()';
+  }
+}
+
+/// @nodoc
+class $APITracePickCopyWith<$Res> {
+  $APITracePickCopyWith(APITracePick _, $Res Function(APITracePick) __);
+}
+
+/// @nodoc
+
+class APITracePick_NoHit extends APITracePick {
+  const APITracePick_NoHit() : super._();
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType && other is APITracePick_NoHit);
+  }
+
+  @override
+  int get hashCode => runtimeType.hashCode;
+
+  @override
+  String toString() {
+    return 'APITracePick.noHit()';
+  }
+}
+
+/// @nodoc
+
+class APITracePick_Traced extends APITracePick {
+  const APITracePick_Traced(this.field0) : super._();
+
+  final APITraceResult field0;
+
+  /// Create a copy of APITracePick
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  $APITracePick_TracedCopyWith<APITracePick_Traced> get copyWith =>
+      _$APITracePick_TracedCopyWithImpl<APITracePick_Traced>(this, _$identity);
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is APITracePick_Traced &&
+            (identical(other.field0, field0) || other.field0 == field0));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, field0);
+
+  @override
+  String toString() {
+    return 'APITracePick.traced(field0: $field0)';
+  }
+}
+
+/// @nodoc
+abstract mixin class $APITracePick_TracedCopyWith<$Res>
+    implements $APITracePickCopyWith<$Res> {
+  factory $APITracePick_TracedCopyWith(
+          APITracePick_Traced value, $Res Function(APITracePick_Traced) _then) =
+      _$APITracePick_TracedCopyWithImpl;
+  @useResult
+  $Res call({APITraceResult field0});
+}
+
+/// @nodoc
+class _$APITracePick_TracedCopyWithImpl<$Res>
+    implements $APITracePick_TracedCopyWith<$Res> {
+  _$APITracePick_TracedCopyWithImpl(this._self, this._then);
+
+  final APITracePick_Traced _self;
+  final $Res Function(APITracePick_Traced) _then;
+
+  /// Create a copy of APITracePick
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  $Res call({
+    Object? field0 = null,
+  }) {
+    return _then(APITracePick_Traced(
+      null == field0
+          ? _self.field0
+          : field0 // ignore: cast_nullable_to_non_nullable
+              as APITraceResult,
+    ));
+  }
+}
+
+/// @nodoc
+
+class APITracePick_Disambiguation extends APITracePick {
+  const APITracePick_Disambiguation(
+      {required final List<APICandidateNode> candidates})
+      : _candidates = candidates,
+        super._();
+
+  final List<APICandidateNode> _candidates;
+  List<APICandidateNode> get candidates {
+    if (_candidates is EqualUnmodifiableListView) return _candidates;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_candidates);
+  }
+
+  /// Create a copy of APITracePick
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  $APITracePick_DisambiguationCopyWith<APITracePick_Disambiguation>
+      get copyWith => _$APITracePick_DisambiguationCopyWithImpl<
+          APITracePick_Disambiguation>(this, _$identity);
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is APITracePick_Disambiguation &&
+            const DeepCollectionEquality()
+                .equals(other._candidates, _candidates));
+  }
+
+  @override
+  int get hashCode => Object.hash(
+      runtimeType, const DeepCollectionEquality().hash(_candidates));
+
+  @override
+  String toString() {
+    return 'APITracePick.disambiguation(candidates: $candidates)';
+  }
+}
+
+/// @nodoc
+abstract mixin class $APITracePick_DisambiguationCopyWith<$Res>
+    implements $APITracePickCopyWith<$Res> {
+  factory $APITracePick_DisambiguationCopyWith(
+          APITracePick_Disambiguation value,
+          $Res Function(APITracePick_Disambiguation) _then) =
+      _$APITracePick_DisambiguationCopyWithImpl;
+  @useResult
+  $Res call({List<APICandidateNode> candidates});
+}
+
+/// @nodoc
+class _$APITracePick_DisambiguationCopyWithImpl<$Res>
+    implements $APITracePick_DisambiguationCopyWith<$Res> {
+  _$APITracePick_DisambiguationCopyWithImpl(this._self, this._then);
+
+  final APITracePick_Disambiguation _self;
+  final $Res Function(APITracePick_Disambiguation) _then;
+
+  /// Create a copy of APITracePick
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  $Res call({
+    Object? candidates = null,
+  }) {
+    return _then(APITracePick_Disambiguation(
+      candidates: null == candidates
+          ? _self._candidates
+          : candidates // ignore: cast_nullable_to_non_nullable
+              as List<APICandidateNode>,
+    ));
+  }
+}
+
+/// @nodoc
 mixin _$APIViewportPickResult {
   @override
   bool operator ==(Object other) {

@@ -2620,6 +2620,26 @@ APIViewportPickResult viewportPick(
         .crateApiStructureDesignerStructureDesignerApiViewportPick(
             rayOrigin: rayOrigin, rayDirection: rayDirection);
 
+/// Right-click step 1 (`doc/design_output_driven_editing.md`): which displayed
+/// node does the contributing-nodes trace run from? One clear hit is traced
+/// straight away; overlapping hits come back as candidates, untraced. Gadgets
+/// are ignored and the active node is not privileged.
+APITracePick traceViewportPick(
+        {required APIVec3 rayOrigin, required APIVec3 rayDirection}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiTraceViewportPick(
+            rayOrigin: rayOrigin, rayDirection: rayDirection);
+
+/// Right-click step 2: trace this ray's hit on the displayed node the user
+/// chose from the candidates of [`trace_viewport_pick`].
+APITraceResult traceViewportHit(
+        {required APIVec3 rayOrigin,
+        required APIVec3 rayDirection,
+        required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiTraceViewportHit(
+            rayOrigin: rayOrigin, rayDirection: rayDirection, nodeId: nodeId);
+
 /// Check whether CLI write access is locked for a given network name.
 /// Returns true if the network is locked from CLI write access.
 bool isCliWriteLocked({required String networkName}) => RustLib.instance.api

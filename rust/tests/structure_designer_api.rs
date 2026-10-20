@@ -77,3 +77,6 @@ mod library_links_api_test;
 
 #[path = "structure_designer_api/documents_api_test.rs"]
 mod documents_api_test;
+
+#[path = "structure_designer_api/trace_api_test.rs"]
+mod trace_api_test;

@@ -1916,6 +1916,22 @@ class APICompatibilityReport {
           overcoordinatedAtoms == other.overcoordinatedAtoms;
 }
 
+/// What a trace row's node did to the traced thing.
+enum APIContributionKind {
+  /// The node is where the thing comes from ("filled", "shape", …).
+  created,
+
+  /// The node changed it ("moved", "edited", …).
+  modified,
+
+  /// The thing went through unchanged.
+  passed,
+
+  /// The node cannot say ("possibly contributed").
+  unknown,
+  ;
+}
+
 class APICuboidData {
   final APIIVec3 minCorner;
   final APIIVec3 extent;
@@ -6885,6 +6901,110 @@ class APITextError {
           message == other.message &&
           line == other.line &&
           column == other.column;
+}
+
+@freezed
+sealed class APITracePick with _$APITracePick {
+  const APITracePick._();
+
+  /// The ray missed every displayed node — show nothing.
+  const factory APITracePick.noHit() = APITracePick_NoHit;
+
+  /// One displayed node was hit (or one is clearly nearest): its trace.
+  const factory APITracePick.traced(
+    APITraceResult field0,
+  ) = APITracePick_Traced;
+
+  /// Several displayed nodes were hit within the overlap epsilon: the user
+  /// picks one, then Dart calls `trace_viewport_hit` with its id. Unlike
+  /// left-click, the active node is never chosen on the user's behalf.
+  const factory APITracePick.disambiguation({
+    required List<APICandidateNode> candidates,
+  }) = APITracePick_Disambiguation;
+}
+
+/// The nodes that contributed to the thing under the cursor, nearest to the
+/// viewport first.
+class APITraceResult {
+  /// Pre-order: a custom-node instance row is followed directly by the rows
+  /// traced inside it, one `depth` deeper. Empty = nothing hit.
+  final List<APITraceRow> rows;
+
+  /// The trace stopped at its row cap; the menu ends in a "… more" line.
+  final bool truncated;
+
+  const APITraceResult({
+    required this.rows,
+    required this.truncated,
+  });
+
+  @override
+  int get hashCode => rows.hashCode ^ truncated.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APITraceResult &&
+          runtimeType == other.runtimeType &&
+          rows == other.rows &&
+          truncated == other.truncated;
+}
+
+/// One row of the contributing-nodes menu.
+class APITraceRow {
+  /// Same addressing as `APINetworkUsage`, so Dart can `jumpToNode`: the
+  /// network holding the node (for a row inside a custom-node instance, the
+  /// custom network; for the instance row itself, the network it sits in).
+  final String hostNetwork;
+
+  /// Always empty in v1: the trace never enters a zone body.
+  final Uint64List scopePath;
+  final BigInt nodeId;
+
+  /// The node's name, falling back to its type name (as in Find Usages).
+  final String nodeLabel;
+
+  /// Tree level: 0 = the network the trace started in; children of a
+  /// custom-node instance row are one deeper.
+  final int depth;
+  final APIContributionKind contribution;
+
+  /// "filled", "moved", "shape", … for `Created` / `Modified`; "passed" for
+  /// `Passed`; "possibly contributed" for `Unknown`.
+  final String label;
+
+  const APITraceRow({
+    required this.hostNetwork,
+    required this.scopePath,
+    required this.nodeId,
+    required this.nodeLabel,
+    required this.depth,
+    required this.contribution,
+    required this.label,
+  });
+
+  @override
+  int get hashCode =>
+      hostNetwork.hashCode ^
+      scopePath.hashCode ^
+      nodeId.hashCode ^
+      nodeLabel.hashCode ^
+      depth.hashCode ^
+      contribution.hashCode ^
+      label.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APITraceRow &&
+          runtimeType == other.runtimeType &&
+          hostNetwork == other.hostNetwork &&
+          scopePath == other.scopePath &&
+          nodeId == other.nodeId &&
+          nodeLabel == other.nodeLabel &&
+          depth == other.depth &&
+          contribution == other.contribution &&
+          label == other.label;
 }
 
 class APIUntagData {

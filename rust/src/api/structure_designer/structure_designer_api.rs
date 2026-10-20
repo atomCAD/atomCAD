@@ -10,7 +10,6 @@ use super::structure_designer_api_types::APIArrayNodeData;
 use super::structure_designer_api_types::APIAtomExportFormat;
 use super::structure_designer_api_types::APIAtomReplaceData;
 use super::structure_designer_api_types::APIAtomReplaceRule;
-use super::structure_designer_api_types::APICandidateNode;
 use super::structure_designer_api_types::APICanvasViewport;
 use super::structure_designer_api_types::APICircleData;
 use super::structure_designer_api_types::APIClosureData;
@@ -77,6 +76,7 @@ use super::structure_designer_api_types::APIZipWithData;
 use super::structure_designer_api_types::ARRAY_ELEMENT_VALUE_ROW;
 use super::structure_designer_api_types::OutputPinView;
 use super::structure_designer_api_types::ZoneView;
+use super::structure_designer_api_types::{APITracePick, APITraceResult};
 use super::structure_designer_preferences::StructureDesignerPreferences;
 use crate::api::api_common::apply_camera_settings;
 use crate::api::api_common::capture_active_network_thumbnail;
@@ -255,7 +255,6 @@ use atomcad_structure_designer::nodes::switch::{SwitchCaseValue, SwitchData};
 use atomcad_structure_designer::nodes::vec2::Vec2Data;
 use atomcad_structure_designer::nodes::vec3::Vec3Data;
 use atomcad_structure_designer::nodes::zip_with::ZipWithData;
-use atomcad_structure_designer::structure_designer::{DisplayedPick, overlapping_hits};
 use atomcad_structure_designer::text_format::TextValue;
 use glam::{DVec2, DVec3, IVec2, IVec3};
 use std::collections::HashMap;
@@ -9742,121 +9741,14 @@ pub fn query_hovered_atom_info(
 ) -> Option<APIHoveredAtomInfo> {
     let ray_origin = from_api_vec3(&ray_origin);
     let ray_direction = from_api_vec3(&ray_direction);
-
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
-                let (atom_id, structure, closest_node_ref, closest_distance) = cad_instance
-                    .structure_designer
-                    .hit_test_all_atomic_structures_with_node_id(&ray_origin, &ray_direction)?;
-                // The tooltip is a top-level-node surface; the scene only ever
-                // holds top-level refs today, so projecting to the bare id is
-                // lossless (see `doc/design_zero_ary_closure_body_display.md` §1).
-                let closest_node_id = closest_node_ref.node_id;
-
-                let atom = structure.get_atom(atom_id)?;
-
-                // Resolve element identity. Check decorator's name overrides first
-                // (set by motif_edit for parameter elements), then fall back to
-                // the standard element database.
-                let (symbol, element_name, display_atomic_number, effective_element) =
-                    if let Some(name) = structure
-                        .decorator()
-                        .element_name_overrides
-                        .get(&atom.atomic_number)
-                    {
-                        use atomcad_crystolecule::atomic_constants::param_atomic_number_to_index;
-                        let sym = param_atomic_number_to_index(atom.atomic_number)
-                            .map(|idx| format!("P{}", idx + 1))
-                            .unwrap_or_else(|| "?".to_string());
-
-                        // Resolve effective element for display
-                        let eff_z = structure.effective_atomic_number(atom);
-                        let eff_str = if eff_z != atom.atomic_number {
-                            let eff_info = atomcad_crystolecule::atomic_constants::ATOM_INFO
-                                .get(&(eff_z as i32))
-                                .unwrap_or(
-                                    &atomcad_crystolecule::atomic_constants::DEFAULT_ATOM_INFO,
-                                );
-                            format!("{} ({})", eff_info.symbol, eff_info.element_name)
-                        } else {
-                            String::new()
-                        };
-
-                        (sym, name.clone(), atom.atomic_number as i32, eff_str)
-                    } else {
-                        let atom_info = atomcad_crystolecule::atomic_constants::ATOM_INFO
-                            .get(&(atom.atomic_number as i32))
-                            .unwrap_or(&atomcad_crystolecule::atomic_constants::DEFAULT_ATOM_INFO);
-                        (
-                            atom_info.symbol.clone(),
-                            atom_info.element_name.clone(),
-                            atom_info.atomic_number,
-                            String::new(),
-                        )
-                    };
-
-                let bond_count = atom.bonds.len() as u32;
-
-                let node_name = cad_instance
-                    .structure_designer
-                    .get_node_display_name(closest_node_id);
-
-                // Detect overlapping nodes within OVERLAP_EPSILON of the closest
-                // atom hit (the overlap rule lives in the domain).
-                let visualization = &cad_instance
-                    .structure_designer
-                    .preferences
-                    .atomic_structure_visualization_preferences
-                    .visualization;
-                let per_node_hits = cad_instance.structure_designer.raytrace_per_node(
+                view_builders::hovered_atom_info_view(
+                    &cad_instance.structure_designer,
                     &ray_origin,
                     &ray_direction,
-                    visualization,
-                );
-                let overlapping_node_names: Vec<String> =
-                    overlapping_hits(&per_node_hits, closest_distance)
-                        .into_iter()
-                        .filter(|hit| hit.node_ref.node_id != closest_node_id)
-                        .map(|hit| {
-                            cad_instance
-                                .structure_designer
-                                .get_node_display_name(hit.node_ref.node_id)
-                        })
-                        .collect();
-
-                let inferred_hybridization = {
-                    use atomcad_crystolecule::guided_placement::{
-                        Hybridization, detect_hybridization,
-                    };
-                    match detect_hybridization(structure, atom_id, None) {
-                        Hybridization::Sp3 => 1,
-                        Hybridization::Sp2 => 2,
-                        Hybridization::Sp1 => 3,
-                    }
-                };
-
-                Some(APIHoveredAtomInfo {
-                    atom_id,
-                    symbol,
-                    element_name,
-                    atomic_number: display_atomic_number,
-                    effective_element,
-                    x: atom.position.x,
-                    y: atom.position.y,
-                    z: atom.position.z,
-                    bond_count,
-                    is_frozen: atom.is_frozen(),
-                    hybridization_override: atom.hybridization_override(),
-                    inferred_hybridization,
-                    tags: structure
-                        .atom_tags(atom.id)
-                        .iter()
-                        .map(|s| s.to_string())
-                        .collect(),
-                    node_name,
-                    overlapping_node_names,
-                })
+                )
             },
             None,
         )
@@ -9873,59 +9765,66 @@ pub fn query_hovered_atom_info(
 pub fn viewport_pick(ray_origin: APIVec3, ray_direction: APIVec3) -> APIViewportPickResult {
     let ray_origin = from_api_vec3(&ray_origin);
     let ray_direction = from_api_vec3(&ray_direction);
-
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
-                // A click on the active node's gadget (e.g. a translation-gizmo
-                // handle) must never be stolen by click-to-activate, even when
-                // another displayed node's atoms lie behind the gadget along
-                // the ray — pass it through to normal handling.
-                if cad_instance
-                    .structure_designer
-                    .gadget_hit_test(ray_origin, ray_direction)
-                    .is_some()
-                {
-                    return APIViewportPickResult::ActiveNodeHit;
-                }
-
-                // The overlap rule, the top-level filter and the active node's
-                // privilege live in `pick_displayed_candidates`; this only maps
-                // its answer onto the Dart-facing result.
-                let structure_designer = &cad_instance.structure_designer;
-                match structure_designer.pick_displayed_candidates(
+                view_builders::viewport_pick_view(
+                    &cad_instance.structure_designer,
                     &ray_origin,
                     &ray_direction,
-                    true,
-                ) {
-                    DisplayedPick::NoHit => APIViewportPickResult::NoHit,
-                    DisplayedPick::Single(hit) => {
-                        let active_node_id = structure_designer
-                            .get_active_node_network()
-                            .and_then(|network| network.active_node_id);
-                        if active_node_id == Some(hit.node_ref.node_id) {
-                            APIViewportPickResult::ActiveNodeHit
-                        } else {
-                            APIViewportPickResult::ActivateNode {
-                                node_id: hit.node_ref.node_id,
-                                node_name: structure_designer
-                                    .get_node_display_name(hit.node_ref.node_id),
-                            }
-                        }
-                    }
-                    DisplayedPick::Overlapping(hits) => APIViewportPickResult::Disambiguation {
-                        candidates: hits
-                            .iter()
-                            .map(|hit| APICandidateNode {
-                                node_id: hit.node_ref.node_id,
-                                node_name: structure_designer
-                                    .get_node_display_name(hit.node_ref.node_id),
-                            })
-                            .collect(),
-                    },
-                }
+                )
             },
             APIViewportPickResult::NoHit,
+        )
+    }
+}
+
+/// Right-click step 1 (`doc/design_output_driven_editing.md`): which displayed
+/// node does the contributing-nodes trace run from? One clear hit is traced
+/// straight away; overlapping hits come back as candidates, untraced. Gadgets
+/// are ignored and the active node is not privileged.
+#[flutter_rust_bridge::frb(sync)]
+pub fn trace_viewport_pick(ray_origin: APIVec3, ray_direction: APIVec3) -> APITracePick {
+    let ray_origin = from_api_vec3(&ray_origin);
+    let ray_direction = from_api_vec3(&ray_direction);
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                view_builders::trace_pick_view(
+                    &mut cad_instance.structure_designer,
+                    &ray_origin,
+                    &ray_direction,
+                )
+            },
+            APITracePick::NoHit,
+        )
+    }
+}
+
+/// Right-click step 2: trace this ray's hit on the displayed node the user
+/// chose from the candidates of [`trace_viewport_pick`].
+#[flutter_rust_bridge::frb(sync)]
+pub fn trace_viewport_hit(
+    ray_origin: APIVec3,
+    ray_direction: APIVec3,
+    node_id: u64,
+) -> APITraceResult {
+    let ray_origin = from_api_vec3(&ray_origin);
+    let ray_direction = from_api_vec3(&ray_direction);
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                view_builders::trace_hit_view(
+                    &mut cad_instance.structure_designer,
+                    &ray_origin,
+                    &ray_direction,
+                    node_id,
+                )
+            },
+            APITraceResult {
+                rows: Vec::new(),
+                truncated: false,
+            },
         )
     }
 }

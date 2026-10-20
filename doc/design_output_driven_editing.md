@@ -857,6 +857,36 @@ Tests:
   Rust test. The Flutter smoke test is a pending manual step for the
   maintainer.
 
+#### Phase 2 as built
+
+**Where the build differs from the text above:**
+
+- **The row cap is `APITraceResult::truncated`, not a row.** A "… more" row
+  would carry a node address and be clickable; the menu draws a footer line
+  instead.
+- **The pick steps are domain functions** in `trace/pick.rs`
+  (`trace_viewport_pick` → `TracePick`, `trace_viewport_hit`), reached through
+  thin `StructureDesigner` methods. The FFI functions are one call each into
+  `view_builders::trace_pick_view` / `trace_hit_view`.
+- **`viewport_pick` and `query_hovered_atom_info` moved into view builders
+  too** (`viewport_pick_view`, `hovered_atom_info_view`), with no change in
+  behaviour. The API functions need the GPU-backed `CADInstance`, so this was
+  the only way to run the "still pass through the API" cases in a test.
+- **A right press does not orbit until it leaves the slop.** "Right button
+  down starts an orbit" would let a click turn the camera by up to 4 px ×
+  0.02 rad before the button comes up, and the traced ray would then miss what
+  the user clicked. The orbit (or Shift-pan) starts at the first move past the
+  slop, so a click leaves the camera exactly where it was.
+- **Escape and a right click on the barrier also dismiss the disambiguation
+  overlay**, in both its modes (the left-click mode had neither).
+- The jump is `StructureDesignerModel.jumpToNode(hostNetwork, scopeChain,
+  nodeId)`, the spine shared by Find Usages and error navigation.
+- The menu widget (`lib/structure_designer/trace_menu.dart`) takes plain data
+  and callbacks and has a unit test (`test/trace_menu_test.dart`: folding, row
+  click, dismissal). The gesture and the jump are left to the walkthrough.
+- No real node has a `trace` yet, so until Phases 3–4 the menu mostly shows
+  "possibly contributed" rows ending in a "shape" or "source" origin.
+
 ### Phase 3 — Atomic nodes
 
 `trace` for `structure_move`, `structure_rot`, `free_move`, `free_rot`,

@@ -48,6 +48,7 @@ import 'package:flutter_cad/common/element_symbol_input.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/structure_designer/mechanosynth_ghost_painter.dart';
 import 'package:flutter_cad/structure_designer/mechanosynth_offer_popup.dart';
+import 'package:flutter_cad/structure_designer/trace_menu.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/edit_atom_api.dart'
     as edit_atom_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/atom_edit_api.dart'
@@ -1041,8 +1042,12 @@ class _StructureDesignerViewportState
     return null;
   }
 
+  /// The overlapping-candidates popup. With [onTrace] it is the right-click
+  /// trace's mode: choosing a row traces from that node, and there is no Solo
+  /// button (hiding nodes is not what a trace asked for).
   void _showDisambiguationMenu(
-      Offset pointerPos, List<APICandidateNode> candidates) {
+      Offset pointerPos, List<APICandidateNode> candidates,
+      {void Function(APICandidateNode)? onTrace}) {
     final overlay = Overlay.of(context);
     final renderBox = context.findRenderObject() as RenderBox;
     final globalPos = renderBox.localToGlobal(pointerPos);
@@ -1052,29 +1057,12 @@ class _StructureDesignerViewportState
       builder: (context) => _DisambiguationOverlay(
         position: globalPos,
         candidates: candidates,
+        activateTooltip: onTrace == null ? 'Activate' : 'Trace from this node',
         onActivate: (candidate) {
           entry.remove();
-          widget.graphModel.setSelectedNode(candidate.nodeId);
-          widget.graphModel.scrollToNode(candidate.nodeId);
-          renderingNeeded();
-          ScaffoldMessenger.of(this.context).showSnackBar(
-            SnackBar(
-              content: Text('Activated: ${candidate.nodeName}'),
-              duration: const Duration(seconds: 2),
-            ),
-          );
-        },
-        onSolo: (candidate) {
-          entry.remove();
-          // Hide other overlapping nodes, then activate the chosen one.
-          for (final other in candidates) {
-            if (other.nodeId != candidate.nodeId) {
-              structure_designer_api.setNodeDisplay(
-                scopePath: Uint64List(0),
-                nodeId: other.nodeId,
-                isDisplayed: false,
-              );
-            }
+          if (onTrace != null) {
+            onTrace(candidate);
+            return;
           }
           widget.graphModel.setSelectedNode(candidate.nodeId);
           widget.graphModel.scrollToNode(candidate.nodeId);
@@ -1085,6 +1073,99 @@ class _StructureDesignerViewportState
               duration: const Duration(seconds: 2),
             ),
           );
+        },
+        onSolo: onTrace != null
+            ? null
+            : (candidate) {
+                entry.remove();
+                // Hide other overlapping nodes, then activate the chosen one.
+                for (final other in candidates) {
+                  if (other.nodeId != candidate.nodeId) {
+                    structure_designer_api.setNodeDisplay(
+                      scopePath: Uint64List(0),
+                      nodeId: other.nodeId,
+                      isDisplayed: false,
+                    );
+                  }
+                }
+                widget.graphModel.setSelectedNode(candidate.nodeId);
+                widget.graphModel.scrollToNode(candidate.nodeId);
+                renderingNeeded();
+                ScaffoldMessenger.of(this.context).showSnackBar(
+                  SnackBar(
+                    content: Text('Activated: ${candidate.nodeName}'),
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              },
+        onDismiss: () {
+          entry.remove();
+        },
+      ),
+    );
+    overlay.insert(entry);
+  }
+
+  /// A right click traces the thing under the cursor back to the nodes that
+  /// made it (`doc/design_output_driven_editing.md`). Right *drag* still
+  /// orbits; `CadViewportState` only calls this when the pointer stayed within
+  /// the click slop, so the camera is where it was when the button went down.
+  ///
+  /// One displayed node under the cursor is traced straight away. Overlapping
+  /// outputs first raise the disambiguation overlay in its trace mode (no
+  /// Solo, and the active node is never chosen for the user); only the
+  /// candidate picked is traced.
+  @override
+  void onSecondaryClick(Offset pointerPos) {
+    _clearHoverTooltip();
+    final ray = getRayFromPointerPos(pointerPos);
+    final rayOrigin = vector3ToApiVec3(ray.start);
+    final rayDirection = vector3ToApiVec3(ray.direction);
+    final pick = structure_designer_api.traceViewportPick(
+      rayOrigin: rayOrigin,
+      rayDirection: rayDirection,
+    );
+    switch (pick) {
+      case APITracePick_NoHit():
+        return;
+      case APITracePick_Traced(:final field0):
+        _showTraceMenu(pointerPos, field0);
+      case APITracePick_Disambiguation(:final candidates):
+        _showDisambiguationMenu(
+          pointerPos,
+          candidates,
+          onTrace: (candidate) => _showTraceMenu(
+            pointerPos,
+            structure_designer_api.traceViewportHit(
+              rayOrigin: rayOrigin,
+              rayDirection: rayDirection,
+              nodeId: candidate.nodeId,
+            ),
+          ),
+        );
+    }
+  }
+
+  /// The contributing-nodes menu at the click. A row lands on its node the way
+  /// Find Usages does: an instance row in the network being viewed, a row
+  /// inside an instance in that custom network.
+  void _showTraceMenu(Offset pointerPos, APITraceResult result) {
+    if (result.rows.isEmpty) return;
+    final overlay = Overlay.of(context);
+    final renderBox = context.findRenderObject() as RenderBox;
+    final globalPos = renderBox.localToGlobal(pointerPos);
+
+    late OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (context) => TraceMenu(
+        position: globalPos,
+        rows: result.rows,
+        truncated: result.truncated,
+        onSelect: (row) {
+          entry.remove();
+          widget.graphModel
+              .jumpToNode(row.hostNetwork, row.scopePath.toList(), row.nodeId);
+          renderingNeeded();
         },
         onDismiss: () {
           entry.remove();
@@ -1921,16 +2002,20 @@ class _StructureDesignerViewportState
 ///
 /// Shows a popup near the click position with candidate nodes. Each row has
 /// a clickable name (activate) and a solo eye icon (activate + hide others).
+/// In the right-click trace's mode the name means "trace from this node" and
+/// [onSolo] is null, which hides the Solo button.
 class _DisambiguationOverlay extends StatelessWidget {
   final Offset position;
   final List<APICandidateNode> candidates;
+  final String activateTooltip;
   final void Function(APICandidateNode) onActivate;
-  final void Function(APICandidateNode) onSolo;
+  final void Function(APICandidateNode)? onSolo;
   final VoidCallback onDismiss;
 
   const _DisambiguationOverlay({
     required this.position,
     required this.candidates,
+    required this.activateTooltip,
     required this.onActivate,
     required this.onSolo,
     required this.onDismiss,
@@ -1938,51 +2023,67 @@ class _DisambiguationOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        // Barrier: clicking away dismisses the popup.
-        Positioned.fill(
-          child: GestureDetector(
-            onTap: onDismiss,
-            behavior: HitTestBehavior.opaque,
-            child: const SizedBox.expand(),
+    return Focus(
+      autofocus: true,
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent &&
+            event.logicalKey == LogicalKeyboardKey.escape) {
+          onDismiss();
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: Stack(
+        children: [
+          // Barrier: clicking away (either button) or Escape dismisses the popup.
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: onDismiss,
+              onSecondaryTap: onDismiss,
+              behavior: HitTestBehavior.opaque,
+              child: const SizedBox.expand(),
+            ),
           ),
-        ),
-        Positioned(
-          left: position.dx,
-          top: position.dy,
-          child: Material(
-            elevation: 8,
-            borderRadius: BorderRadius.circular(6),
-            color: const Color(0xFF2D2D30),
-            child: IntrinsicWidth(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  for (final candidate in candidates)
-                    _DisambiguationRow(
-                      candidate: candidate,
-                      onActivate: () => onActivate(candidate),
-                      onSolo: () => onSolo(candidate),
-                    ),
-                ],
+          Positioned(
+            left: position.dx,
+            top: position.dy,
+            child: Material(
+              elevation: 8,
+              borderRadius: BorderRadius.circular(6),
+              color: const Color(0xFF2D2D30),
+              child: IntrinsicWidth(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final candidate in candidates)
+                      _DisambiguationRow(
+                        candidate: candidate,
+                        activateTooltip: activateTooltip,
+                        onActivate: () => onActivate(candidate),
+                        onSolo:
+                            onSolo == null ? null : () => onSolo!(candidate),
+                      ),
+                  ],
+                ),
               ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
 
 class _DisambiguationRow extends StatelessWidget {
   final APICandidateNode candidate;
+  final String activateTooltip;
   final VoidCallback onActivate;
-  final VoidCallback onSolo;
+  final VoidCallback? onSolo;
 
   const _DisambiguationRow({
     required this.candidate,
+    required this.activateTooltip,
     required this.onActivate,
     required this.onSolo,
   });
@@ -1994,7 +2095,7 @@ class _DisambiguationRow extends StatelessWidget {
       children: [
         Expanded(
           child: Tooltip(
-            message: 'Activate',
+            message: activateTooltip,
             child: InkWell(
               onTap: onActivate,
               child: Padding(
@@ -2008,14 +2109,15 @@ class _DisambiguationRow extends StatelessWidget {
             ),
           ),
         ),
-        IconButton(
-          icon: const Icon(Icons.center_focus_strong, size: 18),
-          color: Colors.white70,
-          tooltip: 'Activate and hide other overlapping nodes',
-          onPressed: onSolo,
-          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-          padding: const EdgeInsets.all(6),
-        ),
+        if (onSolo != null)
+          IconButton(
+            icon: const Icon(Icons.center_focus_strong, size: 18),
+            color: Colors.white70,
+            tooltip: 'Activate and hide other overlapping nodes',
+            onPressed: onSolo,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            padding: const EdgeInsets.all(6),
+          ),
       ],
     );
   }
