@@ -58,7 +58,7 @@ during normal evaluation.
   evaluator, run with the eval memo installed for the duration of one trace, so
   each upstream node is evaluated at most once per right-click. The trace keeps
   every value it fetches in its own store for the rest of the trace, so each
-  value is copied out of the memo at most once (see `TraceContext`).
+  value is copied out of the memo at most twice (see `TraceContext`).
 
 ### Why not record provenance during evaluation
 
@@ -153,7 +153,7 @@ fn trace(
     _pin: usize,
     _element: Option<usize>,
     _probe: &TraceProbe,
-    _ctx: &mut TraceContext,
+    _ctx: &TraceContext,
 ) -> Option<TraceStep> {
     None
 }
@@ -192,21 +192,43 @@ can hold several values at once — the booleans hold their children and their
 combined output together, `atom_edit` holds its base while it reads its
 output. (Returning `&NetworkResult` from `&mut self` would forbid that.)
 
-The values come from a **trace-lifetime store** keyed by (frame, node, pin);
-see The engine for the frame. The store is filled on first use and lives in a
-`RefCell` inside the context. It is needed because the memo does not lend
-either: `eval_memo::lookup` / `lookup_pin` return a clone, and `CrystalData`
-and `MoleculeData` hold a plain `AtomicStructure`, so every memo hit deep-copies
-the atoms. With the store, each (frame, node, pin) is copied out of the memo
-**at most once per trace**, however many times the engine's wire resolution
-and the nodes ask for it. A source node's output, fetched as its consumer's
-input, is the same entry when the trace moves on to that source. The store is
-dropped when the trace ends; nothing is cached across traces.
+The values come from a **trace-lifetime store**, shared by the engine and
+every `TraceContext` of the trace. It lives in a `RefCell` and holds two kinds
+of entry, each filled on first use:
+
+- **Output entries**, keyed by (frame, network, node, output pin): a node's
+  evaluated output (the memo's `lookup_pin`, or `eval` on a miss).
+  `ctx.output` reads them, and so does the engine when it resolves wires (step
+  3 of Each step). When the trace moves on to a source node, its
+  `ctx.output` is the entry the engine already filled.
+- **Input entries**, keyed by (frame, network, node, input pin): the value of
+  `evaluate_arg`, which applies the pin's conversion and merges array pins.
+  `ctx.input` reads them. They are separate from the sources' output entries
+  because `evaluate_arg` builds a new value; re-implementing its conversion to
+  share entries is exactly what this design avoids.
+
+The store is needed because the memo does not lend either: `eval_memo::lookup`
+/ `lookup_pin` return a clone, and `CrystalData` and `MoleculeData` hold a
+plain `AtomicStructure`, so every memo hit deep-copies the atoms. With the
+store, a value is copied **at most twice per trace**, once as its consumer's
+input and once as its own node's output, however many times the engine and the
+nodes ask for it. The store is dropped when the trace ends; nothing is cached
+across traces. "Frame" is the `TraceFrame`, see The engine.
 
 The memo is installed for the trace **without a byte budget**: an eviction in
 the middle of a trace would re-run whatever produced the evicted value, which
-could be a `relax`. A trace walks one upstream cone, so the peak is that cone's
-values, held once in the memo and once in the store. Phase 1 measures it.
+could be a `relax`. `StructureDesigner::with_eval_context` cannot be used as
+is: it installs the memo with the user's preference budget, installs nothing
+when the memo is switched off, and stores the pass's counts in
+`last_memo_counts`, which the profiling UI shows as the last refresh's. The
+trace gets a sibling, `with_trace_eval_context`, that shares its setup but
+always installs `eval_memo::install(Some(usize::MAX))` (`None` means "memo
+off"), runs with `execute = false`, and returns the counts from
+`eval_memo::take()` to the caller for `TraceStats` instead of writing
+`last_memo_counts`.
+
+A trace walks one upstream cone, so the peak is that cone's values, held once
+in the memo and up to twice in the store. Phase 1 measures it.
 
 ## The engine
 
@@ -240,11 +262,35 @@ pub struct TraceNode {
 }
 ```
 
-`StructureDesigner::trace_hit(hit) -> Vec<TraceNode>` only delegates to the
+The tree has one kind of nesting only: **custom-node instances**. It is not a
+data-flow tree. Within one network, rows are a flat list in walk order (see
+Row order), and a branch point such as `union` does not get its branches as
+children.
+
+```rust
+pub struct TraceReport {
+    /// The top network's rows in walk order, each with its instance subtree.
+    pub rows: Vec<TraceNode>,
+    pub stats: TraceStats,
+}
+
+/// What the trace cost. Read by the Phase 1 measurement and by tests; the API
+/// drops it.
+pub struct TraceStats {
+    /// Entries filled in the trace store (see `TraceContext`): one per
+    /// distinct input or output entry the trace touched.
+    pub store_fills: usize,
+    /// The memo's own counts for the trace (`eval_memo::take`).
+    pub memo: MemoCounts,
+}
+```
+
+`StructureDesigner::trace_hit(hit) -> TraceReport` only delegates to the
 engine. `structure_designer.rs` is already over 11 000 lines, so it should not
 grow the logic.
 
-**Starting the trace.** The hit comes from the per-node raycast (see Phase 2):
+**Starting the trace.** The hit comes from the per-node raycast, extended in
+Phase 1 to report hit details:
 a displayed `NodeRef`, the pin, and either an atom (id, position) or a surface
 point. The engine re-evaluates that node's pin. It does not trust ids in the
 decorated display output, so it resolves an atom hit by position against the
@@ -254,20 +300,23 @@ point. A surface hit starts as `Point { on_surface: true, delta: 0.1 Å }`
 
 **Each step.**
 
-1. Call `node.trace(pin, element, probe, ctx)`.
-2. Emit a row: node, contribution, scope.
+1. Call `node.trace(pin, element, probe, ctx)`. If it returns `None`, apply
+   the Fallback (below) instead of steps 2–4.
+2. Emit a row: frame, network, node, contribution.
 3. For each returned link, resolve `(pin, element)` to the incoming wire.
    - Array pins mirror `evaluate_arg`'s merge: wires sorted by source node id,
      each value converted to an array and concatenated.
-   - The engine looks at each wire's value, which is a memo hit, to find which
-     wire element *i* falls in.
+   - The engine reads each wire's source value from the store's output
+     entries to find which wire element *i* falls in.
    - If that wire delivered a whole array, the element's index *within* that
      array becomes the source's output `element`. If it delivered one value,
      the source's `element` is `None`.
 4. Resolve a match-by-position atom probe (`id: None`) against the source's
-   output: an atom within 0.1 Å gives the id. If there is none, drop the link
-   silently.
+   output (that element of it, for an array): an atom within 0.1 Å gives the
+   id. If there is none, drop the link silently.
 5. Continue at the source node's output pin with the link's probe and element.
+   A source that is a custom-node instance or a `parameter` node is handled as
+   below.
 
 **Custom-node instances.** Custom networks are dispatched by the evaluator
 itself (`network_evaluator.rs`, the `registry.node_networks` branch), not
@@ -351,14 +400,17 @@ to the origin.
 ### Movement nodes
 
 `structure_move`, `structure_rot`, `free_move`, `free_rot`, `structure_invert`,
-`geo_trans`:
+and `geo_trans` (geometry only, so it handles `Point` probes only):
 
 - **Atom**: the id is preserved, so link to pin 0 with `Some(id)`. The
   position comes from the input atom.
-- **Point**: link to pin 0 with the inverse-transformed point. To avoid
-  duplication, factor the transform out of `eval` into a helper used by both
-  `eval` and `trace`.
+- **Point**: link to pin 0 with the inverse-transformed point; `on_surface`
+  and `delta` pass through unchanged. To avoid duplication, factor the
+  transform out of `eval` into a helper used by both `eval` and `trace`.
 - Reports `Modified("moved")`.
+
+The Atom path is Phase 3 and the Point path is Phase 4. Until a path exists,
+`trace` returns `None` for that probe kind and the fallback runs.
 
 ### `relax`
 
@@ -395,9 +447,9 @@ Re-run `apply_diff(base, &self.diff, tolerance)` on `ctx.input(0)` and read
 - Links to pin 0 (the Blueprint) with
   `Point { position, on_surface: false, delta }`. This is where the trace
   crosses from atoms to geometry.
-- For a passivating terminator, use the position of the atom it caps (its one
-  bonded neighbour). The terminator sits just outside the geometry; its parent
-  sits inside, like every other filled atom.
+- For a passivating terminator, use the atom it caps (its one bonded
+  neighbour) for both `position` and `delta`. The terminator sits just outside
+  the geometry; its parent sits inside, like every other filled atom.
 - `delta` comes from a shared helper in `trace/`, also used by the fallback:
 
   ```rust
@@ -507,6 +559,9 @@ pub struct APITraceResult {
 
 pub struct APITraceRow {
     /// Same addressing as `APINetworkUsage`, so Dart can `jumpToNode`.
+    /// `host_network` is `TraceRow::network`; `scope_path` is the row's
+    /// `NodeRef::scope_path`, always empty in v1 because the trace never
+    /// enters a zone body (see Opaque constructs).
     pub host_network: String,
     pub scope_path: Vec<u64>,
     pub node_id: u64,
@@ -516,7 +571,8 @@ pub struct APITraceRow {
     /// it directly.
     pub depth: u32,
     pub contribution: APIContributionKind, // Created | Modified | Passed | Unknown
-    /// "filled", "moved", "shape", "possibly contributed", …
+    /// The `Created` / `Modified` label ("filled", "moved", "shape", …),
+    /// "passed" for `Passed`, "possibly contributed" for `Unknown`.
     pub label: String,
 }
 ```
@@ -606,9 +662,9 @@ menu header, is a later UI-only change: the category is already on every row.
 
 A trace re-evaluates the displayed node's upstream chain once, with the memo
 installed and unbudgeted, plus the `trace` calls themselves. On top of that it
-pays one deep copy of every (frame, node, pin) value it visits, when the value
-moves from the memo into the trace store (see `TraceContext`). Memory peaks at
-about twice the cone's values: once in the memo, once in the store.
+pays up to two deep copies of every value it visits, when the value moves from
+the memo into the trace store (see `TraceContext`). Memory peaks at up to
+three times the cone's values: once in the memo, up to twice in the store.
 
 For CSG and editing chains this is about one refresh. Upstream `relax`,
 `chemisorb` or `mechanosynth` nodes can make it take seconds, and a
@@ -623,11 +679,14 @@ memo hit stops being a deep copy.
 ### Phase 1 — Engine, trait and fallback (Rust)
 
 - `trace/` module with `TraceProbe`, `Contribution`, `TraceStep`, `TraceLink`,
-  `TraceContext` (`Rc` values from the trace-lifetime store, memo installed
-  unbudgeted), `deciding_children`, `sdf_at` and `atom_point_delta`.
+  `TraceContext` (`Rc` values from the trace-lifetime store),
+  `deciding_children`, `sdf_at` and `atom_point_delta`.
+- `StructureDesigner::with_trace_eval_context` (unbudgeted memo, counts
+  returned instead of written to `last_memo_counts`).
 - `NodeData::trace` with its default `None`.
-- `trace/engine.rs` returning `Vec<TraceNode>` with `RowContribution`, and a
-  thin `StructureDesigner::trace_hit` that delegates to it. The engine covers:
+- `trace/engine.rs` returning a `TraceReport` (the `TraceNode` tree with
+  `RowContribution`, plus `TraceStats`), and a thin
+  `StructureDesigner::trace_hit` that delegates to it. The engine covers:
   - start-of-trace re-sync and bond-to-atom
   - the step loop
   - wire and array-element resolution, both directions
@@ -643,35 +702,74 @@ memo hit stops being a deep copy.
   distance.
 - Move the overlap rule out of the API layer into
   `StructureDesigner::pick_displayed_candidates`. Switch `viewport_pick` and
-  `query_hovered_atom_info` to it with no change in behaviour.
+  `query_hovered_atom_info` to it with no change in behaviour. **No test covers
+  the rule today** (nothing under `rust/tests/` or the crates' `tests/`
+  exercises `raytrace_per_node`, `viewport_pick` or `query_hovered_atom_info`),
+  so its characterization tests below are written and passing **before** the
+  move, against the behaviour as it is.
 - Measure trace time and peak memory on the demo library networks and record
   the numbers in this doc.
 
-Tests (`atomcad-structure-designer/tests/`), all with no node implementations
-yet, so the fallback is exercised:
+Tests (`atomcad-structure-designer/tests/structure_designer/trace_engine_test.rs`).
+Engine behaviour that needs a node to *return* something (links with
+elements, match-by-position links, reading the context) uses the test-only
+`ScriptedTraceNode` (see Testing). Fallback tests use `tag`, which v1 never
+traces, and the test-only `UntracedMoveNode`, so Phases 3–4 cannot change their
+outcome.
 
-- A leaf with no phase inputs becomes an origin, labelled "shape" for a
-  Blueprint output and "source" for a Crystal or Molecule output.
-- An unsupported pass-through node (e.g. `tag`) keeps the probe precise by
-  position re-sync.
-- An unsupported node that moves atoms loses the probe, and everything
-  upstream is listed `Unknown`.
-- On a multi-wire array pin, element *i* resolves to the right wire.
-- The trace enters a custom node, reaches its `parameter`, and comes back out
-  to the instance's input. The instance row comes first, with the strongest
-  contribution among its children. The inner rows follow it one level deeper,
-  with the right `host_network` and `scope_path`. A nested custom node nests
-  one level further.
-- A diamond-shaped DAG lists each node once.
-- Two instances of the same custom network on the path both appear, each with
-  its own inner rows. A node inside the custom network whose id equals a
-  parent-network node's id on the path is not deduped against it.
-- An Atom probe reaching an unsupported node through a Blueprint input is
-  converted to a `Point` and keeps pruning, instead of being lost.
-- A node reads two values from `TraceContext` at once, and a value visited
-  twice in one trace is fetched from the memo once.
-- The existing click-to-activate and hover tests still pass after the overlap
-  rule moves.
+- *Origins.* A leaf with no phase inputs becomes an origin, labelled "shape"
+  for a Blueprint output and "source" for a Crystal or Molecule output.
+- *Fallback, kept.* An unsupported node that does not move atoms (`tag`) keeps
+  the probe precise by position re-sync: the leaf upstream of it is reached
+  with a probe and labelled "source", not listed `Unknown` by the lost-probe
+  path.
+- *Fallback, lost.* An unsupported node that moves atoms (the test-only
+  `UntracedMoveNode`) loses the probe. Everything upstream through
+  phase-typed pins is listed `Unknown`, without calling `trace` on any of it
+  (a `ScriptedTraceNode` upstream records that it was not called).
+- *Fallback, converted.* An Atom probe reaching the test-only
+  `UntracedFillNode` (Blueprint input, atomic output) is converted to a
+  `Point`. Upstream of it, a `union` of two shapes (itself still a fallback
+  node in Phase 1) keeps only the shape that contains the point, instead of
+  the probe being lost. A `Point` link from a `ScriptedTraceNode` into a
+  Crystal input with no atom at the position is kept by the geometry shell
+  when `geo_tree_root` is `Some`, and lost when it is `None`.
+- *Array elements.* A `ScriptedTraceNode` links to element *i* of an array pin
+  fed by three wires, one of which delivers a two-element array. Each *i*
+  lands on the right wire, and the two elements of the array wire arrive at
+  that source as output `element` 0 and 1.
+- *Match by position.* A `ScriptedTraceNode` returns `id: None` links to two
+  inputs; only the input that has an atom at the position is followed. The
+  other is dropped, not listed as `Unknown`.
+- *Custom nodes.* The trace enters a custom node, reaches its `parameter`, and
+  comes back out to the instance's input. The instance row comes first, with
+  the strongest contribution among its children. The inner rows follow as its
+  children, with the right `network` and `TraceFrame`. A nested custom node
+  nests one level further.
+- *Dedup.* A diamond-shaped DAG lists each node once. Two instances of the
+  same custom network on the path both appear, each with its own inner rows. A
+  node inside the custom network whose id equals a parent-network node's id on
+  the path is not deduped against it.
+- *Opaque constructs.* A `map` (HOF) on the path and a wire crossing a zone
+  boundary are both treated as nodes without `trace`.
+- *Row cap.* A chain longer than the cap ends in a "… more" row.
+- *Start of trace.* An atom hit is re-resolved by position against the real
+  `NetworkResult`, and a bond hit is traced from the endpoint nearer the hit
+  point.
+- *Context and cost.* A `ScriptedTraceNode` holds `ctx.input(0)` and
+  `ctx.output(0)` at once. In a chain where every node reads its input and
+  its output several times, `stats.store_fills` equals the number of
+  distinct store entries (one input and one output entry per node), and a
+  counting node upstream (the `CounterUnitNodeData` pattern) evaluates once
+  per trace. A trace leaves `last_memo_counts` unchanged.
+- *Raycast details.* The extended per-node raycast reports pin, hit kind, atom
+  id and hit point for an atom, a bond and a Blueprint surface.
+- *Overlap rule, before the move.* `pick_displayed_candidates`'
+  characterization tests, written against today's API-layer behaviour and
+  kept green across the move: no hit; one hit; two hits within
+  `OVERLAP_EPSILON` give two candidates; two hits farther apart give the
+  nearest; with `privilege_active`, an active node among overlapping hits is
+  chosen alone, and without it all candidates are returned.
 
 ### Phase 2 — Viewport gesture, menu and API (Flutter + FRB)
 
@@ -687,30 +785,46 @@ yet, so the fallback is exercised:
 
 Tests:
 
-- **API tests:**
-  - A ray through a known atom of a fixture network returns `Traced` with the
-    expected rows.
+- **Flattening** (`rust/tests/structure_designer_api/`): a hand-built
+  `TraceNode` tree with two nested instances flattens to pre-order rows. Each
+  parent comes directly before its children, `depth` increases by one per
+  instance, and inner rows carry the custom network as `host_network`. The
+  instance row stays in the viewed network.
+- **API tests** (`rust/tests/structure_designer_api/`, network built in code):
+  - A ray through a known atom returns `Traced` with the expected rows.
+  - A ray that misses everything returns `NoHit`.
   - A ray through two overlapping displayed nodes returns `Disambiguation`
     even when one of them is the active node.
-  - `trace_viewport_hit` on the chosen candidate returns that node's rows.
-- **Manual walkthrough** for the menu: right-drag still orbits; right click
+  - `trace_viewport_hit` on the chosen candidate returns that node's rows, and
+    on the other candidate that node's rows.
+  - Gadgets are ignored: a ray through a gadget handle in front of an atom
+    traces the atom.
+  - `viewport_pick` and `query_hovered_atom_info` still pass the Phase 1
+    characterization cases, now through the API.
+- **Manual walkthrough** for the menu: right-drag still orbits; a right click
   opens the menu; overlapping outputs show the candidate overlay first,
-  without Solo; a row lands
-on its node; a custom-node parent row lands on the instance in place, and its
-child row lands inside the custom network; collapse/expand works). The Flutter smoke test is
-a pending manual step for the maintainer.
+  without Solo; a row lands on its node; a custom-node parent row lands on the
+  instance in place, and its child row lands inside the custom network;
+  collapse and expand work; Escape and clicking away dismiss. The click-versus-
+  drag slop lives in the Flutter gesture code, so it is checked here, not in a
+  Rust test. The Flutter smoke test is a pending manual step for the
+  maintainer.
 
 ### Phase 3 — Atomic nodes
 
 `trace` for `structure_move`, `structure_rot`, `free_move`, `free_rot`,
-`structure_invert`, `relax`, `atom_union`, `atom_edit` and `materialize`,
-including the passivating-H rule. Factor out the movement transform helpers.
+`structure_invert` (Atom probes only), `relax`, `atom_union`, `atom_edit` and
+`materialize`, including the passivating-terminator rule. Factor out the
+movement transform helpers.
 Also the array plumbing nodes `array`, `array_at` and `array_concat`, which
 map an output `element` to an input element.
 
-Tests, one per node, on small fixture networks:
+Tests (`trace_atomic_nodes_test.rs`), one or more per node, on small networks
+built in code:
 
-- A moved atom traces through the move node with the right upstream id.
+- Each movement node, and `relax`: a moved atom traces through the node as
+  `Modified` with the right upstream id, and the row above it is not
+  `Unknown`.
 - `atom_union` element attribution by position: an atom from element 0 and one
   from a later element each list only their own branch. The other elements'
   links are dropped, not listed as `Unknown`.
@@ -720,44 +834,107 @@ Tests, one per node, on small fixture networks:
   base atom; an untouched atom is `Passed`.
 - `materialize` hands a `Point` probe to the Blueprint, with `delta` from
   `atom_point_delta`. A passivating H, and a halogen terminator, are probed at
-  their parent's position.
+  their parent's position. `atom_point_delta` itself: the shortest bond to a
+  non-passivating neighbour for a bulk atom, and the `crystal_bond_length`
+  fallback for an unbonded one.
+- `array_at` and `array_concat` map an output element to the right input
+  element (the `array` case is covered with `atom_union` above).
+
+The Phase 1 tests are unchanged by this phase: their fallback cases use `tag`
+and test-only nodes, none of which gets a `trace` in v1.
 
 ### Phase 4 — Geometry nodes
 
 `trace` for `union`, `intersect`, `diff` and `geo_trans`, plus the inverse-point
 path of the movement nodes on Blueprints.
 
-Tests:
+Tests (`trace_geometry_nodes_test.rs`). Atoms are chosen **by query** on the
+materialized output, never by id or hard-coded position, because both depend
+on the fill. A shared helper picks the atom with the largest projection
+along a direction, optionally restricted to atoms more than a distance from a
+set of planes.
 
-- The sphere ∪ cube example: an atom on the sphere surface lists `sphere` and
-  prunes the cube.
+- `deciding_children` and `sdf_at` on plain numbers and on a sphere value: ties
+  within δ, and none outside it.
+- The sphere ∪ cube example: an atom on the far side of the sphere lists
+  `sphere` and prunes the cube.
 - The tetrahedron example: a face atom more than two bond lengths from any
-  edge lists one half space, the outermost atom on an edge two, the vertex atom
-  three.
+  edge lists one half space; the outermost atom along an edge's direction two;
+  the outermost atom along a vertex's direction three.
 - `diff`: an atom on a cut face traces to the cutter; one on an uncut face
   traces to the base. With two `base` and two `sub` elements, each atom traces
   to its own element on each side, not to the whole pin.
+- `geo_trans` and a movement node on a Blueprint: the inverse-transformed
+  point still selects the right child upstream of the transform.
 - A surface ray hit on a displayed Blueprint, as opposed to an atom, gives the
-  same result.
+  same rows as an atom near that spot, with `delta` 0.1 Å.
+- The top-of-doc example, end to end: for a face atom more than two bond
+  lengths from any edge of the tetrahedron and from the sphere, the four rows
+  exactly as shown.
+
+The Phase 1 *Fallback, converted* test still passes: it traces through
+`UntracedFillNode`, and `union` now prunes by its own `trace` with the same
+result.
 
 Manual walkthrough, which also settles open question 1 (surface-hit δ).
 
 ## Testing
 
-Trace tests build small networks in Rust, issue `trace_hit` with a known probe,
-and assert the row list: node names, contributions and order. Use the existing
-network-building test helpers rather than new `.cnnd` fixtures where possible,
-since each new fixture also updates two corpus snapshots. The UI is verified by
-manual walkthrough. Tests for each phase are listed in that phase.
+Tests for each phase are listed in that phase. This section is the method.
+
+- **Where.** Engine and node tests live in
+  `atomcad-structure-designer/tests/structure_designer/` (`trace_*_test.rs`,
+  registered in that harness's module list). API and flattening tests live in
+  `rust/tests/structure_designer_api/`. Run the harnesses explicitly
+  (`cargo test -p atomcad-structure-designer --test structure_designer trace_`,
+  `cargo test --test structure_designer_api trace_`), because `cargo test
+  --workspace` stops at the first failing harness.
+- **Input.** Tests build small networks in code and call `trace_hit` with a
+  constructed hit (node, pin, atom or surface point), so engine and node tests
+  do not depend on the raycast. The raycast is tested on its own (Phase 1) and
+  end to end through the API (Phase 2). Use the existing network-building
+  helpers rather than new `.cnnd` fixtures; a new fixture also updates two
+  corpus snapshots, in the same change.
+- **Assertion.** A shared helper renders a `TraceReport` as indented text, one
+  line per row: node name, contribution label, children indented. Tests
+  compare it to a literal, like the example at the top of this doc, so a
+  failure shows the whole trace.
+- **Test-only nodes.** Following `execute_flag_test.rs`
+  (`CounterUnitNodeData`), the tests register their own `NodeData` types in
+  the registry:
+  - `ScriptedTraceNode` returns a `TraceStep` given by the test, reads
+    `TraceContext` the way the test says, and records whether `trace` was
+    called. It exercises engine paths that no real node takes in Phase 1, and
+    it keeps those tests independent of real nodes' `trace`.
+  - A counting node records its `eval` calls, for the evaluated-once
+    assertions.
+  - `UntracedMoveNode` translates its atomic input and keeps the default
+    `trace`: the fallback's "moved, so lost" subject.
+  - `UntracedFillNode` takes a Blueprint and outputs a Molecule with one atom
+    at a position the test gives, and keeps the default `trace`: the
+    fallback's atom → point conversion subject. `materialize` cannot serve,
+    because it gets a `trace` in Phase 3.
+- **Fallback subjects.** The "kept" case uses a real node v1 never traces,
+  `tag`, so at least one fallback test runs on production code; the "lost"
+  case uses `UntracedMoveNode`, because every real mover is on the v1 list or
+  may keep some atoms in place. Neither depends on Phases 3–4. Whoever later
+  gives `tag` a `trace` swaps in another untraced node that keeps atoms in
+  place.
+- **No wall-clock assertions** (as in `eval_memo_test.rs`). Cost is asserted
+  through `TraceStats` and eval counts. Time and peak memory are recorded by
+  the Phase 1 measurement, not tested.
+- **UI** is verified by manual walkthrough (Phase 2). The Flutter smoke test
+  is the maintainer's manual step.
 
 ## Files to modify
 
 | Area | Files |
 |---|---|
 | Trait | `rust/crates/atomcad-structure-designer/src/node_data.rs` |
-| Engine | new `rust/crates/atomcad-structure-designer/src/trace/` (`mod.rs` types and helpers, `engine.rs`); `evaluator/network_evaluator.rs` (crate-visible frame helpers for custom-network enter and `parameter` exit); `structure_designer.rs` (thin `trace_hit`, `pick_displayed_candidates`, raycast hit details) |
+| Engine | new `rust/crates/atomcad-structure-designer/src/trace/` (`mod.rs` types and helpers, `engine.rs`); `evaluator/network_evaluator.rs` (crate-visible frame helpers for custom-network enter and `parameter` exit); `structure_designer.rs` (thin `trace_hit`, `with_trace_eval_context`, `pick_displayed_candidates`, raycast hit details) |
 | Nodes | `nodes/{structure_move,structure_rot,free_move,free_rot,structure_invert,relax,atom_union,materialize,union,intersect,diff,geo_trans,array,array_at,array_concat}.rs`, `nodes/atom_edit/atom_edit_data.rs` |
 | API | `rust/src/api/structure_designer/structure_designer_api.rs` (new functions; `viewport_pick` and `query_hovered_atom_info` switched to `pick_displayed_candidates`), `structure_designer_api_types.rs`, `view_builders.rs` (tree → rows) |
 | Untouched | `atomcad-geo-tree` (uses the public `ImplicitGeometry3D`), `atomcad-crystolecule` (reuses `apply_diff` / `DiffProvenance`) |
+| Tests | new `rust/crates/atomcad-structure-designer/tests/structure_designer/trace_{engine,atomic_nodes,geometry_nodes}_test.rs` (plus a shared helper module for the test-only nodes and the trace renderer), registered in `tests/structure_designer.rs`'s module list; new trace and flattening tests under `rust/tests/structure_designer_api/` |
 | Flutter | `lib/common/cad_viewport.dart`, `lib/structure_designer/structure_designer_viewport.dart` |
 | Docs | `doc/reference_guide/ui.md`; `rust/crates/atomcad-structure-designer/src/AGENTS.md` (a short "Output tracing" section: the trait, the fallback, "read only persisted data in `trace`") |
