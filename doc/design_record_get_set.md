@@ -46,7 +46,8 @@ This adds two nodes:
 | Overlapping `record_set` paths (`p` and `p.x`) | Allowed; rows apply **top to bottom**. "Replace `p`, then adjust `p.x`" is well-defined and useful. |
 | Duplicate paths | Rejected at edit time on both nodes. |
 | What a path may step through | Record-typed fields only (named or anonymous record types). **Not** `Array`, **not** `Optional[Record]` in v1. The *leaf* may be any type, including `Optional[T]`. |
-| A path that stops resolving | The row is kept in the node data as a **dangling row**: no pin, a non-blocking warning, shown as broken in the panel. Its wire is dropped, just as `record_construct` / `record_destructure` drop a deleted field's wire. |
+| A path that stops resolving | The row is kept in the node data as a **dangling row**: no pin, a non-blocking warning, shown as broken in the panel. Its wire is dropped, just as `record_construct` / `record_destructure` drop a deleted field's wire. Every by-name edit path (text format, API) can name a dangling row, so editing other rows never forces a decision about it (see "Row editing"). |
+| A path through a def under a missing library mount | **Not** a dangling row: the node is frozen, like a node whose schema is under the missing mount (see "Frozen nodes and nested paths"). |
 
 ## Node shape
 
@@ -81,6 +82,19 @@ wired into `map.f` is the "update every record in the stream" idiom. Under
 the default function-pin partition, the unwired row pins become the
 closure's later parameters, and wired rows are captured.
 
+Per-pin function-pin roles (`Node::function_pin_roles`,
+`doc/design_function_pin_roles.md`) are keyed by **input-pin index**, and
+today nothing moves them when the layout changes. That is a latent bug for
+`switch` and `zip_with` already, but `record_set` makes it likely: its row
+pins shift without the user touching the node, whenever a def edit elsewhere
+dangles a row and removes its pin. A `Delayed` or `Supplied` role would then
+silently move to a different field. Phase 0 therefore makes
+`Node::set_custom_node_type` remap `function_pin_roles` with the **same**
+old-index → new-index map it already builds for `arguments` (id match first,
+then name), and drop the roles of pins that disappeared. A role dropped with
+a dangling row's pin is not restored if the row is revived; undoing the def
+edit restores it with the snapshot.
+
 "Leaf field's pin type" is `DataType::record_field_pin_type()` — an
 `Optional[T]` leaf is a plain `T` pin, the convention `record_construct` and
 `record_destructure` already follow (`doc/design_optional_type.md` §5).
@@ -91,7 +105,7 @@ The code splits by layer:
 
 | Module | Contents | Why there |
 |---|---|---|
-| `record_path.rs` (crate root, beside `data_type.rs`) | `PathSegment`, `resolve_path`, `ResolvedPath`, `DanglingReason`, `resolve_names` (names → segments), the path text syntax (parse / format with backtick quoting) | Type-level logic over record defs. Its callers include registry passes, `library_links` and the API (field picker, dangling reasons), not only nodes. |
+| `record_path.rs` (crate root, beside `data_type.rs`) | `PathSegment`, `resolve_path`, `ResolvedPath`, `DanglingReason`, `resolve_names` (names → segments), `PathSpec`, the path text syntax (parse / format with backtick quoting and the `!` dangling marker) | Type-level logic over record defs. Its callers include registry passes, `library_links` and the API (field picker, dangling reasons), not only nodes. |
 | `nodes/record_path_rows.rs` | `RecordPathRow`, `derived_pin_names`, `merge_rows`, the shared row-to-pins builder both nodes' hooks call | Node-level: pin layout and row editing, shared by the two nodes. |
 | `nodes/variadic_ids.rs` | `merge_ids_by_key`, the generic three-pass id merge | Shared with `switch` (see "Row editing"). |
 | `evaluator/network_result.rs` | `extract_record_path`, `with_record_path_replaced` | Runtime record access lives beside `extract_record_field` / `record()` (see "Runtime semantics"). |
@@ -107,10 +121,12 @@ pub struct PathSegment {
     #[serde(default)]
     pub field_id: Option<u64>,
     /// The field's name when the row was last edited. Used to resolve a
-    /// segment with no `field_id`, and in the "no longer exists" message of
-    /// a dangling row. Never used to resolve a segment that has an id, and
-    /// not kept up to date on renames: current names always come from
-    /// `resolve_path`.
+    /// segment with no `field_id`, and as the **identity of a dangling row**
+    /// (its warning message, its `!path` text form, its API form). Never used
+    /// to resolve a segment that has an id, and not kept up to date on
+    /// renames: current names always come from `resolve_path`. In
+    /// particular, a schema change does not resolve live rows by these names
+    /// (see "Schema change").
     pub name: String,
 }
 
@@ -205,7 +221,10 @@ pub fn resolve_names(
 built-in def maps with one `lookup(name)` (user first, then built-in). The
 registry hands it out as `registry.record_defs()`, and the cache populator,
 which can't borrow the whole registry while it holds `&mut node_networks`,
-builds it from its two map borrows. It replaces the
+builds it from its two map borrows. It can also carry an optional **overlay**
+map, consulted before the other two; only `recorded_layout` uses it, to lay
+recorded interfaces of unloaded library defs over the live ones (see "Frozen
+nodes and nested paths"). It replaces the
 `(record_type_defs, built_in_record_type_defs)` parameter pair that the
 existing `build_node_type_for_schema_with_defs` functions pass around and
 that would otherwise spread to every new function here.
@@ -333,10 +352,33 @@ attempt is made to share structure.
 `record_path_rows::merge_rows(old_rows, new_paths, schema, defs,
 next_row_id)` is shared by both nodes' `set_text_properties` and by the
 `StructureDesigner`-level setters. New paths arrive as **names** (from the
-text format or the API), so `merge_rows` first turns each into segments with
-`resolve_names`. Then it applies `switch`'s value-keyed id merge
-(`doc/design_switch_node.md`, "Case-list editing") with the path as the key,
-since paths are unique per node.
+text format or the API), and each one says whether it names a live path or
+an existing dangling row:
+
+```rust
+// record_path.rs (beside the text syntax that parses into it)
+pub enum PathSpec {
+    /// A path that must resolve against the schema now.
+    Live(Vec<String>),
+    /// An existing dangling row, named by its stored segment names
+    /// (`PathSegment::name`). Never resolved.
+    Dangling(Vec<String>),
+}
+```
+
+A dangling row can't be named by a live path: by definition its names don't
+resolve. Without `Dangling`, every by-name edit of a node that has one would
+either be rejected or would silently delete the dangling row, and the text
+format's `query` → `--replace` would stop being a no-op. The text format
+writes `Dangling` as a `!`-prefixed path (see "Text format"); the API carries
+it as a flag on the row (Phase 4). Both come from what the getter / serializer
+emitted for the row, so echoing a node's rows back unchanged is always a
+no-op.
+
+`merge_rows` turns each `Live` spec into segments with `resolve_names`, then
+applies `switch`'s value-keyed id merge (`doc/design_switch_node.md`,
+"Case-list editing") with the path as the key, since paths are unique per
+node.
 
 The merge is **not** copied from `SwitchData::merge_cases`. Phase 0
 extracts it into `nodes/variadic_ids.rs`:
@@ -360,32 +402,57 @@ with no key, so it stays as it is.)
 
 `merge_rows` does, in order:
 
-1. **Checks.** A name that doesn't resolve, an empty path, or a duplicate
-   path is an error, and the node is unchanged.
-2. **Path match** (`merge_ids_by_key` pass 1). A new path equal to an old
-   row's path keeps that row's id. Handles removal and reorder.
-3. **Positional fallback** (pass 2). A still-unmatched new path inherits the
-   id of the old row at its index, if pass 1 didn't consume that id. Handles
-   editing a row's path in place: the wire follows.
-4. **Mint** (pass 3). Anything still without an id takes `next_row_id`.
-5. **Literals** (`record_set` only). Each row keeps the literal of the old
-   row whose id it inherited, but only if the literal still converts to the
-   row's leaf type.
+1. **Checks.** A `Live` name that doesn't resolve, an empty path, or a
+   duplicate `Live` path is an error, and the node is unchanged.
+2. **Dangling specs.** Each `Dangling` spec claims the first unclaimed old
+   dangling row whose stored names equal it, in order, and that row is kept
+   **verbatim** (id, segments, literal). A `Dangling` spec that matches no
+   old dangling row is dropped with a warning ("dangling path `p.x` not
+   found"), not an error: a pasted or retyped text block may name a row that
+   no longer exists, and there is nothing to revive. `Dangling` specs never
+   take part in the passes below, and old dangling rows they claim are
+   withheld from them.
+3. **Path match** (`merge_ids_by_key` pass 1, `Live` specs only). A new path
+   equal to an old row's path keeps that row's id. Handles removal and
+   reorder.
+4. **Positional fallback** (pass 2). A still-unmatched `Live` path inherits
+   the id of the old row at its index, if no earlier step consumed that id.
+   Indices count every spec and every old row, dangling ones included, so a
+   path edited in place lines up with its old row even when a dangling row
+   sits above it. Handles editing a row's path in place: the wire follows.
+5. **Mint** (pass 3). Anything still without an id takes `next_row_id`.
+6. **Literals** (`record_set` only). Each live row keeps the literal of the
+   old row whose id it inherited, but only if the literal still converts to
+   the row's leaf type.
 
 The passes must run separately; `switch`'s doc explains why a single pass
 steals ids (`[1, 2] → [3, 1]`).
 
-Two paths are equal (`same_key`) when their segments match by `field_id`
-where both sides have one, and by name otherwise. Dangling old rows take
-part like any other: a new path matching one by key revives its id.
+Two live paths are equal (`same_key`) when their segments match by
+`field_id` where both sides have one, and by name otherwise. An old dangling
+row that no `Dangling` spec claimed takes part in passes 3–4 like any other:
+a `Live` path matching it by key revives its id. Old rows claimed by nothing
+are removed, dangling or not — that is how the panel's delete button on a
+broken row works.
 
 ### Schema change
 
-Picking a different `schema` re-resolves each row **by its stored segment
-names** against the new def (field ids are per-def, so ids from the old def
-mean nothing there) and rewrites the segments' `field_id`s. Rows keep their
-ids. Rows whose names don't resolve become dangling. This is an explicit
-user edit, so it goes through the same undoable command as a row edit.
+Picking a different `schema` re-resolves each row **by name** against the
+new def (field ids are per-def, so ids from the old def mean nothing there)
+and rewrites the segments' `field_id`s and stored names. The names used are
+the row's **current** names: `resolve_path` against the *old* schema, which
+still exists during the edit. They are not the stored `PathSegment::name`s,
+which go stale on renames — after `Point.x` → `px`, a row's stored name is
+still `x`, and resolving `x` against the new schema would wrongly dangle the
+row or bind it to some other field that happens to be called `x`. Only a row
+that is already dangling under the old schema falls back to its stored
+names. Rows keep their ids. Rows whose names don't resolve become dangling.
+This is an explicit user edit, so it goes through the same undoable command
+as a row edit.
+
+The by-name callers get this for free: the serializer and the getter emit
+current names, so a text block or API call that changes `schema` and
+re-sends the paths already carries them.
 
 ### Undo
 
@@ -393,10 +460,12 @@ Row edits and schema changes drop or remap wires, which a node-data snapshot
 cannot restore. Use the existing **`NodeStructureEditCommand`**
 (`undo/commands/node_structure_edit.rs`, shared by `zip_with` and `switch`),
 with descriptions "Edit record_get paths" / "Edit record_set paths".
-`StructureDesigner::set_record_get_data(scope_path, node_id, schema, paths)` /
-`set_record_set_data(…)` follow `set_switch_data` as written: a read-only
-pre-check, a no-op check, `snapshot_network` before, mutate, validate/refresh,
-snapshot after, and push only if the snapshots differ. Setting a single
+`StructureDesigner::set_record_get_data(scope_path, node_id, schema, paths:
+Vec<PathSpec>)` / `set_record_set_data(…)` follow `set_switch_data` as
+written: a read-only pre-check that runs the whole edit on a clone, a no-op
+check, `snapshot_network` before, mutate the node data, then
+`finish_node_structure_edit` (repair, validate, refresh, snapshot after,
+push). Setting a single
 literal is a pure node-data edit (no wire fallout). Like
 `set_record_construct_literal`, it is an **API-only** setter that clones the
 node data, changes the row's literal and goes through
@@ -416,16 +485,23 @@ The node carries one **non-blocking** warning per dangling row
 (`ValidationError::warning`), for example "path `p.x` no longer exists in
 `Box`", built from the stored segment names. `NodeData::get_data_error`
 can't produce it, because it gets no registry and can't resolve a path. So
-the warning comes from `network_validator`, through a fourth hook method
-(`record_node_problems`, see "Registry and repair integration"). The node's
+the warning comes from `network_validator`, through the hook method
+`record_node_problems` (see "Registry and repair integration"). The node's
 other rows keep working, which is why the warning doesn't block the node
 (`structure_designer/AGENTS.md`, "is the node's output still useful?").
 
 A dangling row never resolves again by itself: a re-added field has a new
 `FieldId`, and that is the point of field identity. The panel shows the row
-as broken, with a delete button. Undoing the def edit brings everything
-back, pins and wires: `UpdateRecordTypeDefCommand` restores every affected
-network from a snapshot taken before the edit.
+as broken, with a delete button. Editing *other* rows leaves it alone: the
+panel and the text format send it back as a `Dangling` spec, and `merge_rows`
+keeps it verbatim (see "Row editing"). Undoing the def edit that dangled it
+brings everything back, pins and wires: `UpdateRecordTypeDefCommand` restores
+every affected network from a snapshot taken before the edit.
+
+A def that is missing because its **library mount didn't load** is not a
+deletion, and does not dangle a row: the node freezes instead (see "Frozen
+nodes and nested paths"). The validator pass skips frozen nodes, which
+already get their one frozen-node error from `validate_zones_recursive`.
 
 Retyping only the **leaf** is not dangling: the pin is re-typed, and repair
 drops the wire if it no longer fits.
@@ -436,7 +512,7 @@ drops the wire if it no longer fits.
 
 The three existing record nodes get their pins from the registry, not from
 their own data, so `calculate_custom_node_type` can't build them. Instead,
-seven places list them by name with `downcast_ref` chains, or reach them
+six places list them by name with `downcast_ref` chains, or reach them
 through a function that does:
 
 - `NodeTypeRegistry::populate_custom_node_type_cache_with_types`
@@ -493,9 +569,19 @@ fn record_node_problems(&self, _defs: RecordDefs<'_>) -> Vec<String> {
     Vec::new()
 }
 
+/// The names of the defs, other than the schema, that the node's rows walk
+/// into — including a def that is missing (the name a `DefMissing` carries),
+/// where that row's walk stops. Read by `library_links::unresolved_mount_ref`
+/// so that a nested def under a missing mount freezes the node. Only
+/// `record_get` / `record_set` return any.
+fn record_path_defs(&self, _defs: RecordDefs<'_>) -> Vec<String> {
+    Vec::new()
+}
+
 pub enum MissingDefs {
     /// A live node: a missing def is a dangling row (or an empty layout,
-    /// for the three existing nodes, as today).
+    /// for the three existing nodes, as today). A def under an unloaded
+    /// library mount never gets here: the node is frozen instead.
     Dangle,
     /// A frozen node being rebuilt from a recorded interface: refuse.
     Refuse,
@@ -507,11 +593,18 @@ pub enum MissingDefs {
 | `populate_custom_node_type_cache_with_types` | `build_record_node_type(…, Dangle)`; if it returns `Some`, install it; otherwise the usual `calculate_custom_node_type` path |
 | `resolve_drag_candidate_type` | the same call |
 | `record_node_schema` | `node.data.record_schema_ref()` |
-| `recorded_layout` | builds a `RecordDefs` from the recorded entries and calls `build_record_node_type(…, Refuse)` — the `_ =>` fallthrough is gone |
+| `recorded_layout` | builds a `RecordDefs` from the live defs overlaid with the recorded entries (see "Frozen nodes and nested paths") and calls `build_record_node_type(…, Refuse)` — the `_ =>` fallthrough is gone |
 | `collect_record_refs_in_node` / `rewrite_record_names_in_node` | a `Schema` site from `record_schema_ref` / `set_record_schema_ref` (so `invariants.rs` follows with no change of its own) |
+| `unresolved_mount_ref` | additionally checks every name from `record_path_defs(registry.record_defs())` against `name_under_mount_unresolved_record` (empty for the three existing nodes, so no behavior change) |
 
 `record_node_problems` has no existing caller. It arrives with Phase 1 as a
 new pass in `network_validator`.
+
+`record_path_defs` is deliberately **not** folded into
+`collect_record_refs_in_node`: that function has no defs to walk paths with,
+and its other callers (rename, reference check, paste) only care about the
+schema — a nested def is reached through the schema's own field types, which
+those passes already see on the def.
 
 `canonicalize.rs` needs nothing. The node-name string checks in
 `library_refresh` (`"record_destructure"`) are about output reconciliation by
@@ -522,28 +615,49 @@ implement the hook's methods, and that's all.
 
 ### Frozen nodes and nested paths
 
-`recorded_layout` rebuilds a frozen record node (a schema under a library
-mount that didn't load) from the recorded interface of **one** def, the
-schema itself. A `record_get` on `Box` with path `p.x` also needs `Point`.
-Built from `Box` alone, every nested row would look dangling and lose its
-pin and wire. That's wrong: the field still exists, the library is just
-missing.
+Today a record node is frozen (`doc/design_library_linking.md` §8) only when
+its **schema** is under a library mount that didn't load, and
+`recorded_layout` rebuilds it from the recorded interface of that **one**
+def. A nested path breaks both halves of that:
+
+- **Detection.** A `record_get` on a *local* `Box` whose field
+  `p: lib::Point` comes from a missing mount has a resolvable schema, so the
+  node isn't frozen. Built with `MissingDefs::Dangle`, row `p.x` hits
+  `DefMissing`, dangles, and repair drops its wire. Saving then loses the
+  wire for good, although nothing was deleted — the library is just missing.
+  `record_destructure` never had this problem, since it never reaches into a
+  nested def.
+- **Layout.** A `record_get` on a linked `Box` with path `p.x` also needs
+  `Point`. Built from `Box` alone, every nested row would look dangling and
+  lose its pin.
 
 Rule:
 
-- `recorded_layout` builds a `RecordDefs` holding **every** def the `uses`
-  table records for that mount, not just the schema. The nested defs are
-  usually there, since they are under the same mount.
+- **A nested def under a missing mount freezes the node**, exactly as the
+  schema does. `unresolved_mount_ref` checks the names from
+  `record_path_defs` (Phase 0) as well as the schema, so such a node lands in
+  repair's `frozen` set: its arguments are never touched, and its output
+  wires are skipped by the R3 remap and the slot-index check. No wire is
+  dropped.
+- **`recorded_layout` builds its `RecordDefs` from the live defs overlaid
+  with the recorded interface of every def under an unresolved mount** that
+  the `uses` table records, not just the schema's. This covers both a linked
+  schema with linked nested defs and a local schema with a linked nested def
+  (so the `schema != name → None` early return goes away for record nodes:
+  the unresolved name may be a nested def's).
 - It calls the builder with `MissingDefs::Refuse`. A row whose
   `resolve_path` reports `DefMissing` makes the builder return `None`;
   `FieldGone` and `NotARecord` still give dangling rows, because the
   recorded interface really does lack that field.
 - On `None`, `install_recorded_layout` returns `false`, and the frozen
-  branch keeps the cached layout, which is the existing fallback.
+  branch keeps the cached layout, which is the existing fallback. If there
+  is no cached layout yet, the frozen branch builds one as it does today;
+  a nested row may then lack its pin, but the node is frozen, so its wires
+  are kept and come back with their pins when the library loads.
 
-No wire is lost either way. A live node is always built with
-`MissingDefs::Dangle`: there, a missing def is a real deletion, and its rows
-dangle.
+A live node is always built with `MissingDefs::Dangle`, and with the rule
+above a live node's `DefMissing` can only be a real deletion (a def not
+under any unresolved mount), so its rows dangle.
 
 ### Other places that need nothing
 
@@ -571,6 +685,14 @@ s = record_set { schema: "Box", paths: ["p.x", "size"], record: b, p_x: 3.0, siz
   (`identifier::is_valid_user_name`), so the quoting is unambiguous.
   Ids never appear in the text format; the parser resolves names against the
   schema and runs `merge_rows`.
+- A **dangling row** is written with a leading `!` and its stored names:
+  `paths: ["!p.x", "size"]`, parsed as `PathSpec::Dangling`. A first segment
+  whose name itself starts with `!` is written in backticks
+  (`` "`!a`.b" ``), so the marker is unambiguous. This is what keeps a
+  `query` → `--replace` round trip of a node with a dangling row a no-op;
+  without it the row could only be rejected or silently deleted. A dangling
+  `record_set` row has no pin, so its literal is not printed; it survives
+  because `merge_rows` keeps the claimed row verbatim.
 - `record_set` literals are emitted by `get_text_properties` under the row's
   **derived pin name** (`p_x: 3.0`), so they read like any pin literal. The
   text editor accepts a key as a literal when it is in
@@ -592,7 +714,9 @@ s = record_set { schema: "Box", paths: ["p.x", "size"], record: b, p_x: 3.0, siz
 
 - a missing or zero `next_row_id` → max(row ids)+1;
 - a row loaded with `id: None` gets a fresh id;
-- duplicate paths: later duplicates are dropped;
+- duplicate paths: later duplicates are dropped. The loader has no defs, so
+  "duplicate" means identical stored segments (`PathSegment`'s `PartialEq`,
+  ids and names), which is never a false positive;
 - an empty path: the row is dropped.
 
 ## Misc node behaviors
@@ -626,17 +750,30 @@ s = record_set { schema: "Box", paths: ["p.x", "size"], record: b, p_x: 3.0, siz
 
 ---
 
-## Phase 0 — Refactors (no behavior change)
+## Testing conventions
+
+All new tests live in the owning crate's `tests/` directory, never inline.
+Node-level tests go in
+`crates/atomcad-structure-designer/tests/structure_designer/` and must be
+registered as a `#[path = "structure_designer/<file>.rs"] mod <file>;` entry
+in `tests/structure_designer.rs`, or they silently never run. API-level tests
+go in the root package's `rust/tests/structure_designer_api/`. `.cnnd`
+round-trip tests live in the node test files and are named `*_cnnd_roundtrip`,
+so `cargo test cnnd_roundtrip` selects them (there is no single
+`cnnd_roundtrip_test.rs`). Each test below is in the phase that builds what
+it checks; a phase's gate runs everything from the earlier phases too.
+
+## Phase 0 — Refactors (no behavior change except one bug fix)
 
 **Deliverables**
 
 - `RecordDefs<'a>` in `node_type_registry.rs` (a `Copy` view, `lookup`,
-  `NodeTypeRegistry::record_defs()`). The three existing
+  the optional overlay, `NodeTypeRegistry::record_defs()`). The three existing
   `build_node_type_for_schema_with_defs` / `build_node_type_for_target_with_defs`
   functions take it instead of the two maps.
 - The `NodeData` hook (`record_schema_ref`, `set_record_schema_ref`,
-  `build_record_node_type` with `MissingDefs`, and `record_node_problems`
-  with its empty default), implemented by `record_construct`,
+  `build_record_node_type` with `MissingDefs`, and `record_node_problems` /
+  `record_path_defs` with their empty defaults), implemented by `record_construct`,
   `record_destructure` and `product`. Every site in the "After Phase 0"
   table switches to the hook, and `recorded_layout`'s `_ =>` fallthrough
   goes away.
@@ -644,14 +781,26 @@ s = record_set { schema: "Box", paths: ["p.x", "size"], record: b, p_x: 3.0, siz
   rewritten on top of it.
 - `wired_or_literal`, the shared literal-precedence helper, used by
   `record_construct::eval`.
+- `Node::set_custom_node_type` remaps `function_pin_roles` alongside
+  `arguments` (see "Node shape", `record_set`). This is a behavior change,
+  but only a fix: today a role on a `switch` case pin lands on the wrong pin
+  after a case-list edit.
+- `unresolved_mount_ref` consults the new `record_path_defs` hook, and
+  `recorded_layout` builds its defs as live defs overlaid with the recorded
+  interfaces (see "Frozen nodes and nested paths"). Both are no-ops for the
+  three existing nodes.
 - `nodes/AGENTS.md`, **Records** bullet: a record node is one that
   implements the hook, and no site may list record nodes by name.
   `structure_designer/AGENTS.md`'s "keep the downcast lists in sync" notes
   (on `collect_record_refs_in_node` and friends) shrink accordingly.
 
 **Automated tests.** The existing suites are the gate: record types
-(`record_types_*`), `switch_test.rs`, the library-linking suites (including
-the fuzz harness), clipboard, and the node snapshots, all unchanged. Add:
+(`record_types_*`, `record_field_identity_undo_test.rs`), `switch_test.rs`,
+`zip_with_test.rs`, the function-pin suites (`function_pin_test.rs`,
+`text_format_pin_roles_test.rs`), the library-linking suites
+(`library_links_*`, including the fuzz harness), `clipboard_test.rs`, and the
+node snapshots, all unchanged, except where test 3 below pins the role fix.
+Add:
 
 1. A frozen `record_destructure` / `product` still gets its own layout from
    `recorded_layout`. This pins the fallthrough bug that the refactor
@@ -661,8 +810,17 @@ the fuzz harness), clipboard, and the node snapshots, all unchanged. Add:
    their own files, and fails if it finds any. It has one allowed exception:
    `rekey_record_field_literals`, which edits `record_construct`'s
    name-keyed literals and is not a record-node list. The API layer is a
-   different crate and isn't scanned. Like `live_refinement_test.rs`, this
-   keeps the name lists from coming back.
+   different crate and isn't scanned. The precedent for a source-scanning
+   test is the renderer's `shader_test.rs`, which walks
+   `env!("CARGO_MANIFEST_DIR")/src`. This keeps the name lists from coming
+   back.
+3. Function-pin roles follow their pin: on a `switch` with cases `[1, 2, 3]`
+   and a `Delayed` role on case `2`'s pin, removing case `1` moves the role
+   with case `2`; removing case `2` drops it. A `zip_with` lane-type edit
+   that removes a lane drops that lane's role. Undo restores the roles.
+4. `merge_ids_by_key` directly, beside the `switch` tests that now cover it
+   indirectly: key match, positional fallback, mint, the `[1, 2] → [3, 1]`
+   no-steal case, and that `next_id` only grows.
 
 **Gate:** `cd rust && cargo fmt && cargo clippy && cargo test -j 4`, plus the
 `structure_designer_api` and `integration` harnesses explicitly.
@@ -672,18 +830,24 @@ the fuzz harness), clipboard, and the node snapshots, all unchanged. Add:
 **Deliverables**
 
 - `record_path.rs` (crate root): `PathSegment`, `resolve_path` with
-  `DanglingReason`, `resolve_names`, and path parsing and formatting for the
-  text format (backtick quoting).
+  `DanglingReason`, `resolve_names`, `PathSpec`, and path parsing and
+  formatting for the text format (backtick quoting, the `!` marker).
 - `nodes/record_path_rows.rs`: `RecordPathRow`, `derived_pin_names` (dedup;
   the reserved-name list is a parameter, empty for `record_get`), and the
   row-to-pins builder.
 - The `network_validator` pass that turns `record_node_problems` into
-  warnings.
+  non-blocking warnings, skipping frozen nodes.
 - `NetworkResult::extract_record_path`.
 - `nodes/record_get.rs`: `RecordGetData`, `NodeData` impl (the Phase 0 hook,
-  `eval`, `get_subtitle`, `adapt_for_drag_source`, a minimal
-  `get/set_text_properties` with `schema` and `paths`), and the placeholder
-  pin.
+  `record_path_defs`, `eval`, `get_subtitle`, `adapt_for_drag_source`, a
+  minimal `get/set_text_properties` with `schema` and `paths`), and the
+  placeholder pin. The minimal setter **replaces the rows wholesale**: it
+  resolves each `Live` path with `resolve_names`, mints fresh ids, and
+  rejects bad paths and any `!` (`Dangling`) spec. That is enough for the
+  tests below to build nodes through the text format; `merge_rows` replaces
+  it in Phase 3. The getter already prints dangling rows as `!path`, so a
+  node with a dangling row serializes; parsing that back arrives in
+  Phase 3.
 - Registration (`nodes/mod.rs`, `create_built_in_node_types`). No other
   integration sites, thanks to Phase 0.
 - Re-bless node-type snapshots; update registry count/list assertions.
@@ -703,15 +867,21 @@ the fuzz harness), clipboard, and the node snapshots, all unchanged. Add:
 6. Field rename on the **nested** def (`Point.x` → `Point.px`): the pin
    renames to `p_px`, and the downstream wire survives.
 7. Field reorder in the nested def: no change to pins or wires. Field delete
-   → dangling row, no pin, one warning, and the downstream wire is dropped.
+   → dangling row, no pin, one **non-blocking** warning naming the path, and
+   the downstream wire is dropped; the node's other rows still evaluate.
    Undoing the def edit restores pin and wire. Deleting the schema def
-   makes every row dangling and leaves the placeholder pin.
+   makes every row dangling and leaves the placeholder pin. Retyping an
+   inner field away from a record (`Box.p: Point` → `Float`) dangles `p.x`
+   (`NotARecord`) but leaves `size` alone.
 8. Output-pin id remap (the R3 remap reaches `record_get`). Rows
    `[p.x, size]`, both wired downstream. Delete `Point.x`: `size` moves from
    pin 1 to pin 0 and its wire follows. (A control case, rows
    `[size, p.x]`: `size` stays on pin 0.)
 9. Def rename and namespace move rewrite `schema`; deleting a def referenced
-   only by a `record_get` is caught by the reference check.
+   only by a `record_get` is caught by the reference check. In
+   `clipboard_test.rs`: a cross-document paste of a `record_get` on `Box`
+   with row `p.x` resolves to the same fields in the target document when
+   its `Box` has the same interface, and is refused when it does not.
 10. A row in a **zone body** survives a def edit (the `walk_all_nodes` class).
 11. Library linking: a renamed library field keeps the path; a deleted and
     re-added one makes the row dangling; the schema under a missing mount
@@ -720,10 +890,23 @@ the fuzz harness), clipboard, and the node snapshots, all unchanged. Add:
     `record_get` on a linked `Box` with row `p.x` keeps its pin and its
     downstream wire. Test it both with `Point` recorded in `uses` and
     without (the cached-layout fallback).
-13. `extract_record_path`: a hit, a miss part-way down, and a non-record
+13. Nested def under a missing mount, **local** schema: a local `Box` with
+    `p: lib::Point`, a `record_get` on `Box` with rows `[p.x, size]`, both
+    wired downstream. Load with the library missing: the node is frozen (no
+    dangling-row warning), both wires survive, and saving and reloading with
+    the library back restores both pins with their wires. A control case: a
+    *local* `Point` that is really deleted dangles `p.x` and drops its
+    wire.
+14. `extract_record_path`: a hit, a miss part-way down, and a non-record
     part-way down.
-14. Drag-aware add from a `Record(Named)` output produces a `record_get` with
-    the schema set.
+15. Drag-aware add from a `Record(Named)` output produces a `record_get` with
+    the schema set; from an anonymous record output, no schema.
+16. Path text syntax, directly on `record_path.rs`: parse and format round
+    trip for plain paths, a segment containing `.` (backticks), a first
+    segment starting with `!` (backticks), and the `!` dangling marker;
+    malformed input (unclosed backtick, empty segment) is an error.
+    `resolve_names` returns the depth of the first name that fails;
+    `resolve_path` returns each of the three `DanglingReason`s.
 
 **Gate:** `cd rust && cargo fmt && cargo clippy && cargo test -j 4` (and the
 `structure_designer_api` / `integration` harnesses explicitly).
@@ -736,6 +919,8 @@ the fuzz harness), clipboard, and the node snapshots, all unchanged. Add:
   including the Phase 0 hook.
 - `NetworkResult::with_record_path_replaced`.
 - `eval` as specified under "Runtime semantics", using `wired_or_literal`.
+- Registration (`nodes/mod.rs`, `create_built_in_node_types`); re-bless
+  node-type snapshots; update registry count/list assertions.
 
 **Automated tests** — new `record_set_test.rs`:
 
@@ -759,12 +944,19 @@ the fuzz harness), clipboard, and the node snapshots, all unchanged. Add:
    dropped by repair.
 9. The tests from Phase 1 that apply to input pins: nested rename keeps the
    wire (by `Parameter.id`); a nested delete gives a dangling row; a frozen
-   `record_set` with a nested row keeps its input wire.
+   `record_set` with a nested row keeps its input wire, including the
+   local-schema case of Phase 1 test 13.
 10. `with_record_path_replaced`: replace at depth 1 and 2, insert a missing
     leaf, `Err(depth)` on a missing middle record; sibling and extra fields
     are untouched.
 11. Reserved names: rows for fields named `record`, `schema` and `visible`
     get pins `record__2`, `schema__2`, `visible__2`.
+12. Function-pin roles on row pins (the case that motivated the Phase 0
+    fix): rows `[p.x, size]`, a `Delayed` role on `size`. Delete `Point.x`:
+    the role stays on `size`, now at pin 1 instead of 2, and `map.f`'s
+    synthesized function still takes `size` as a parameter.
+13. Drag-aware add produces a `record_set` with the schema set from either
+    direction (dragging off a record output, or from a record input).
 
 **Gate:** as Phase 1.
 
@@ -780,34 +972,49 @@ the fuzz harness), clipboard, and the node snapshots, all unchanged. Add:
 - Full `get/set_text_properties` (the `schema` → `paths` → literals order),
   loader healing.
 
-**Automated tests** — the two node test files, plus `undo_test.rs`,
-`text_format_test.rs`, `cnnd_roundtrip_test.rs`:
+**Automated tests** — the two node test files (row editing, the
+`*_cnnd_roundtrip` tests), plus `undo_test.rs`, `text_format_test.rs` and the
+round-trip corpus:
 
 1. Remove the middle row of three: the survivors' wires follow their ids,
    and the removed row's wire drops. This must be checked on `record_get`
-   **outputs** as well as `record_set` inputs.
+   **outputs** as well as `record_set` inputs, through the
+   `StructureDesigner` setters. Undo restores rows and wires exactly, redo
+   reapplies the edit, and re-sending the unchanged rows pushes no command.
 2. Edit a row's path in place: the wire survives (positional fallback); a
    `record_set` literal survives if it still converts and is dropped if not.
 3. No positional steal: `[a, b] → [c, a]` keeps `a`'s wire.
 4. Removing the highest-id row and adding one doesn't reuse the id.
 5. Duplicate paths, empty paths and names that don't resolve are rejected;
    the node is unchanged.
-6. Schema change: rows re-resolve by stored name and keep their ids;
+6. Schema change: rows re-resolve by current name and keep their ids;
    non-resolving rows go dangling. Undo restores the old schema, rows and
    wires exactly (`normalize_json`), including for a body-internal node.
-7. Text: parse the canonical example and the wires land correctly; the
+   Stale names: rename `Point.x` → `px`, then switch the schema to a `Box2`
+   whose `p` has fields `px` and `x`. The row binds to `px`, not `x`.
+7. Dangling rows in by-name edits. With rows `[p.x, size]` and `p.x`
+   dangling: re-sending `["!p.x", "size", "p.y"]` adds `p.y` and leaves the
+   dangling row and `size`'s wire untouched (and a `record_set`'s dangling
+   literal survives); re-sending `["size"]` deletes the dangling row; a
+   `"!q"` naming no dangling row is dropped with a warning. A `Live` path
+   that revives a dangling row by key keeps its id.
+8. Text: parse the canonical example and the wires land correctly; the
    serialize → `--replace` → serialize round trip is byte-equal, including a
-   dedup-suffixed name and a backtick-quoted segment; one block that changes
-   `schema`, `paths` and a literal applies all three. A wired row with a
-   stored literal prints only the wire.
-8. `.cnnd` round-trip with wired rows, a literal and a dangling row; healing
+   dedup-suffixed name, a backtick-quoted segment, a `` `!a` `` segment and
+   a **dangling row** (`"!p.x"`); one block that changes `schema`, `paths`
+   and a literal applies all three. A wired row with a stored literal prints
+   only the wire.
+9. `.cnnd` round-trip with wired rows, a literal and a dangling row; healing
    of id-less rows, a zero counter and duplicate paths.
-9. Add the canonical example to the text-format round-trip corpus (a new
-   `.cnnd` fixture → two corpus snapshots; use `add_value_node` /
-   `add_typed_value_node`).
+10. Add the canonical example to the text-format round-trip corpus (a new
+    `.cnnd` fixture → two corpus snapshots; use `add_value_node` /
+    `add_typed_value_node`).
+11. Both `StructureDesigner` setters on a **body-internal** node through
+    `scope_path`: the edit lands in the body, and undo restores it.
 
-**Gate:** full `cargo test -j 4`, including `cargo test cnnd_roundtrip` and
-`cargo test node_snapshots`.
+**Gate:** as Phase 1. The full `cargo test -j 4` already includes the
+`cnnd_roundtrip` and `node_snapshots` tests; if a snapshot changes, review it
+with `cargo insta review` rather than blessing blindly.
 
 ## Phase 4 — API, Flutter UI, documentation
 
@@ -816,10 +1023,14 @@ the fuzz harness), clipboard, and the node snapshots, all unchanged. Add:
 - API (`rust/src/api/structure_designer/`): `get_record_get_data` /
   `set_record_get_data`, `get_record_set_data` / `set_record_set_data`, and
   a literal set/clear pair, all `#[frb(sync)]` and all taking **`scope_path`**.
-  Paths cross the API as `Vec<Vec<String>>` (segment names); each row reports
-  its derived pin name, its leaf type, and whether it is dangling (with the
-  reason). Ids never cross the API, and the path setters wrap the Phase 3
-  ops. The literal pair copies `set_record_construct_literal` /
+  Paths cross the API as `APIRecordPath { names: Vec<String>, dangling:
+  bool }`, the API form of `PathSpec`. The getter reports each row with its
+  current names (stored names for a dangling row), its derived pin name, its
+  leaf type, and, for a dangling row, `dangling: true` and the reason. The
+  setter takes the same struct, so the panel edits rows by sending the list
+  it got back with its change applied: a dangling row it re-sends is kept, one
+  it leaves out is deleted. Ids never cross the API, and the path setters
+  wrap the Phase 3 ops. The literal pair copies `set_record_construct_literal` /
   `clear_record_construct_literal` (`set_node_network_data_scoped`, so the
   ordinary `SetNodeData` undo comes with it), keyed by row index. Each
   `record_set` row reports its literal part as an **`APILiteralField`** built
@@ -845,13 +1056,32 @@ the fuzz harness), clipboard, and the node snapshots, all unchanged. Add:
   as the one path resolver and `extract_record_path` /
   `with_record_path_replaced` as the runtime pair.
 
-**Checks**
+**Automated tests** — new
+`rust/tests/structure_designer_api/record_get_set_api_test.rs`, registered in
+`rust/tests/structure_designer_api.rs`:
 
-1. A Rust test that drives the setters on a **body-internal** node through
-   `scope_path`.
-2. `flutter analyze` (no new issues over the baseline), `dart format` on the
-   touched files.
-3. Manual walkthrough (the maintainer's, together with the Flutter smoke
+1. The getters report each row's current names, derived pin name and leaf
+   type; a dangling row comes back with `dangling: true`, its stored names
+   and its reason.
+2. Echo is a no-op: feeding a getter's rows straight back to the setter,
+   with a dangling row among them, changes nothing and pushes no undo
+   command. Leaving the dangling row out deletes it.
+3. The literal pair, keyed by row index: set, then clear, each undoable
+   (`SetNodeData`); a literal that doesn't convert to the row's leaf type is
+   rejected. The row's `APILiteralField` reflects the stored / unset / wired
+   state.
+4. All of the above on a **body-internal** node through `scope_path`.
+
+**Gate:** `cargo fmt`, then `flutter_rust_bridge_codegen generate`, then
+`cargo clippy && cargo test -j 4` (with the `structure_designer_api` harness
+explicitly), `flutter analyze` (no new issues over the baseline), and
+`dart format` on the touched files.
+
+**Manual checks**
+
+1. The Flutter editors are thin UI over the tested API and are checked by
+   hand, not by widget tests.
+2. Manual walkthrough (the maintainer's, together with the Flutter smoke
    test): build `Box`/`Point`, read `p.x` with `record_get`, set `p.x` with a
    literal and then with a wire, rename `Point.x` in the schema editor and
    watch the pin rename with its wire intact, delete `Point.x` and see the
