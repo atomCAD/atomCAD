@@ -8,17 +8,19 @@
 
 use std::path::{Path, PathBuf};
 
-const RECORD_NODE_DATA: [&str; 3] = [
+const RECORD_NODE_DATA: [&str; 4] = [
     "RecordConstructData",
     "RecordDestructureData",
     "ProductData",
+    "RecordGetData",
 ];
 
 /// The files that define the types; a downcast there is the node's own.
-const OWN_FILES: [&str; 3] = [
+const OWN_FILES: [&str; 4] = [
     "nodes/record_construct.rs",
     "nodes/record_destructure.rs",
     "nodes/product.rs",
+    "nodes/record_get.rs",
 ];
 
 /// The one allowed exception: it edits `record_construct`'s name-keyed

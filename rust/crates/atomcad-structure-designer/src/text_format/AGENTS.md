@@ -320,6 +320,16 @@ array type where a type is wanted. Consequences:
 `tests/structure_designer/text_format_type_syntax_test.rs` round-trips each
 form through `query` → `edit --replace`; a new spelling belongs there.
 
+## Properties that need the record defs
+
+The serializer and the editor call `NodeData::get_text_properties_with_defs` /
+`set_text_properties_with_defs`, which default to the defs-free pair. A node
+whose text form depends on the record defs overrides them: `record_get` prints
+its path rows by their *current* field names and resolves the names it is
+given (`doc/design_record_get_set.md`). A new text-format call site must use
+the `_with_defs` variants too, or such a node prints stale names and cannot be
+edited.
+
 ## Round-trip invariants (what the corpus test enforces)
 
 `tests/structure_designer/text_format_roundtrip_corpus_test.rs` replaces every

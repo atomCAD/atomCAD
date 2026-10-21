@@ -852,6 +852,21 @@ Add:
   integration sites, thanks to Phase 0.
 - Re-bless node-type snapshots; update registry count/list assertions.
 
+**As implemented** (two things this document did not anticipate):
+
+- `NodeData::get_text_properties` / `set_text_properties` get no registry, so
+  they cannot print current names or resolve paths. Phase 1 added
+  `get_text_properties_with_defs` / `set_text_properties_with_defs` (taking a
+  `RecordDefs`, defaulting to the defs-free pair), and the serializer and the
+  editor call those. Phase 2/3 setters belong there too.
+- A row through a **missing** def (as opposed to a field that is gone) is
+  written as a live path, not `!path`: on a frozen node the def is only
+  unavailable, and the node must survive `query` → `--replace`. The setter
+  resolves such a path with `resolve_names_allowing_missing_defs`, keeping the
+  segments from the missing def on as name-only (`field_id: None`), which
+  resolve by name once the def is back. A live node whose def was really
+  deleted therefore also prints its rows without `!`.
+
 **Automated tests** — new
 `crates/atomcad-structure-designer/tests/structure_designer/record_get_test.rs`:
 

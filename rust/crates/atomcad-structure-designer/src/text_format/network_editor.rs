@@ -1218,7 +1218,7 @@ impl<'a> NetworkEditor<'a> {
             .and_then(|network| network.nodes.get(&node_id))
             .map(|node| {
                 node.data
-                    .get_text_properties()
+                    .get_text_properties_with_defs(self.registry.record_defs())
                     .iter()
                     .map(|(name, _)| name.clone())
                     .collect()
@@ -1315,7 +1315,7 @@ impl<'a> NetworkEditor<'a> {
             // are positional, so a tail drop is the only shrink shape.
             let old_zip_lane_count = zip_with_lane_count(node);
             node.data
-                .set_text_properties(&literal_props)
+                .set_text_properties_with_defs(&literal_props, self.registry.record_defs())
                 .map_err(|e| format!("Error setting properties on '{}': {}", path, e))?;
             if let (Some(old_count), Some(new_count)) =
                 (old_zip_lane_count, zip_with_lane_count(node))
@@ -1433,7 +1433,7 @@ impl<'a> NetworkEditor<'a> {
             return true;
         }
         node.data
-            .get_text_properties()
+            .get_text_properties_with_defs(self.registry.record_defs())
             .iter()
             .any(|(name, _)| name == prop_name)
     }

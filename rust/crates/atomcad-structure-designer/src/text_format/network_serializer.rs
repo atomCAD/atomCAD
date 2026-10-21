@@ -413,7 +413,9 @@ impl<'a> NetworkSerializer<'a> {
         }
 
         // Second pass: add stored properties (skip those with connections)
-        let text_props = node.data.get_text_properties();
+        let text_props = node
+            .data
+            .get_text_properties_with_defs(self.registry.record_defs());
         for (prop_name, prop_value) in text_props {
             // Only include properties that don't have connections
             if !connected_params.contains(&prop_name) {

@@ -322,6 +322,14 @@ impl NetworkResult {
         }
     }
 
+    /// Follows `path` through nested records (`record_get`,
+    /// `doc/design_record_get_set.md`). `None` if any step is missing or not a
+    /// record. An empty path is `self`.
+    pub fn extract_record_path(&self, path: &[&str]) -> Option<&NetworkResult> {
+        path.iter()
+            .try_fold(self, |value, name| value.extract_record_field(name))
+    }
+
     /// Returns the DataType corresponding to this result's variant,
     /// or None for variants without a clear single type (None, Error, Array).
     /// A `Function(ZoneClosure)` reports its `DataType::Function` from the

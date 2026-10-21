@@ -50,6 +50,7 @@ structure_designer/
 ├── node_type.rs               # NodeType: node signature definition
 ├── node_data.rs               # NodeData trait: per-node behavior
 ├── data_type.rs               # DataType enum: type system for pins
+├── record_path.rs             # Paths into nested record types: the one resolver (by FieldId), path text syntax
 ├── node_type_registry.rs      # Central registry of all node types
 ├── network_usages.rs          # Find Usages: read-only collection of a network's instance nodes
 ├── node_name_search.rs        # Find Node: name-path resolution (`map4/e1`) and the ranked name search

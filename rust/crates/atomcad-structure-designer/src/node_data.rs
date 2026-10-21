@@ -279,6 +279,27 @@ pub trait NodeData: Any + AsAny {
         Ok(())
     }
 
+    /// [`get_text_properties`](Self::get_text_properties) for a node whose
+    /// text form depends on the record defs — `record_get` prints its path
+    /// rows by their **current** field names, which only the defs know. The
+    /// text format (serializer and editor) calls this one. Default: the
+    /// defs-free version.
+    fn get_text_properties_with_defs(&self, _defs: RecordDefs<'_>) -> Vec<(String, TextValue)> {
+        self.get_text_properties()
+    }
+
+    /// [`set_text_properties`](Self::set_text_properties) for a node that has
+    /// to resolve what it is given against the record defs (`record_get`'s
+    /// path rows arrive as names). The text-format editor calls this one.
+    /// Default: the defs-free version.
+    fn set_text_properties_with_defs(
+        &mut self,
+        props: &HashMap<String, TextValue>,
+        _defs: RecordDefs<'_>,
+    ) -> Result<(), String> {
+        self.set_text_properties(props)
+    }
+
     /// Clears any cached input data used for interactive editing performance.
     /// Called by the refresh system before evaluation when upstream may have changed.
     /// Default implementation does nothing.

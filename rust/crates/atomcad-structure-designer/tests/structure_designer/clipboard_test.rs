@@ -966,3 +966,119 @@ fn duplicate_into_my_file_rebases_relative_paths() {
         "../libs/tip.xyz"
     );
 }
+
+// ---------------------------------------------------------------------------
+// record_get across documents (`doc/design_record_get_set.md` Phase 1 test 9)
+// ---------------------------------------------------------------------------
+
+/// `shapes.cnnd` defines `Point { x, y }` and `Box { p: Point, size }`; `h1`
+/// links it as `s` with a `record_get` on `s.Box` reading `p.x`, `h2` links it
+/// as `t`.
+fn record_get_workspace() -> (tempfile::TempDir, PathBuf, PathBuf, PathBuf) {
+    use atomcad_structure_designer::data_type::{DataType, RecordType};
+    use atomcad_structure_designer::node_type_registry::RecordTypeDef;
+    let dir = tempfile::tempdir().unwrap();
+    let shapes = dir.path().join("libs/shapes.cnnd");
+    {
+        let mut d = new_design(&shapes);
+        d.add_record_type_def(int_record("Point", &["x", "y"]))
+            .unwrap();
+        d.add_record_type_def(RecordTypeDef::from_named_fields(
+            "Box",
+            vec![
+                (
+                    "p".to_string(),
+                    DataType::Record(RecordType::Named("Point".to_string())),
+                ),
+                ("size".to_string(), DataType::Int),
+            ],
+        ))
+        .unwrap();
+        edit(&mut d, "Main", TARGET_MAIN);
+        save(&mut d);
+    }
+    let h1 = dir.path().join("h1.cnnd");
+    write_design(
+        &h1,
+        &[("libs/shapes.cnnd", "s")],
+        &[(
+            "Main",
+            "g = record_get { schema: \"s.Box\", paths: [\"p.x\", \"size\"] }\n",
+        )],
+    );
+    let h2 = dir.path().join("h2.cnnd");
+    write_design(&h2, &[("libs/shapes.cnnd", "t")], &[("Main", TARGET_MAIN)]);
+    (dir, shapes, h1, h2)
+}
+
+fn pasted_record_get(d: &StructureDesigner, ids: &[u64]) -> (String, Vec<String>) {
+    use atomcad_structure_designer::node_data::NodeData;
+    let net = &d.node_type_registry.node_networks["Main"];
+    let node = &net.nodes[&ids[0]];
+    assert!(!is_frozen(node, &d.node_type_registry));
+    let schema = node.data.record_schema_ref().unwrap().to_string();
+    let pins = node
+        .custom_node_type
+        .as_ref()
+        .unwrap()
+        .output_pins
+        .iter()
+        .map(|p| p.name.clone())
+        .collect();
+    (schema, pins)
+}
+
+#[test]
+fn a_record_get_pastes_onto_the_same_fields_or_is_refused() {
+    let (_dir, shapes, h1, h2) = record_get_workspace();
+    let mut tabs = Tabs::new();
+    let h1 = tabs.open(&h1);
+    let h2 = tabs.open(&h2);
+
+    // Same interface: the rows resolve to the same fields under the target's
+    // alias.
+    tabs.copy(h1, &["g"]);
+    tabs.activate(h2);
+    let ids = paste_into(&mut tabs.active, Into::TopLevel).unwrap();
+    assert_eq!(
+        pasted_record_get(&tabs.active, &ids),
+        (
+            "t.Box".to_string(),
+            vec!["p_x".to_string(), "size".to_string()]
+        )
+    );
+    tabs.active
+        .set_active_node_network_name(Some("Main".to_string()));
+    tabs.active.validate_active_network();
+    assert!(
+        tabs.active.node_type_registry.node_networks["Main"]
+            .validation_errors
+            .iter()
+            .all(|e| e.node_id != Some(ids[0])),
+        "no dangling rows"
+    );
+
+    // A different interface (an unsaved edit of `Box` in its own file):
+    // refused, nothing pasted.
+    let lib = tabs.open(&shapes);
+    tabs.activate(lib);
+    tabs.active
+        .update_record_type_def(
+            "Box",
+            vec![(
+                "size".to_string(),
+                atomcad_structure_designer::data_type::DataType::Int,
+            )],
+        )
+        .unwrap();
+    tabs.copy(h1, &["g"]);
+    tabs.activate(lib);
+    let before = saved_text(&mut tabs.active, None);
+    let refusal = paste_into(&mut tabs.active, Into::TopLevel).unwrap_err();
+    assert_eq!(
+        refused_names(&refusal),
+        BTreeSet::from(["s.Box".to_string()])
+    );
+    assert!(refusal.lines[0].1.contains("different fields"), "{refusal}");
+    assert_eq!(saved_text(&mut tabs.active, None), before);
+}

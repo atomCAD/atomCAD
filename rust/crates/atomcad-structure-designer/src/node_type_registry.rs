@@ -92,6 +92,7 @@ use super::nodes::proxy::get_node_type as proxy_get_node_type;
 use super::nodes::range::get_node_type as range_get_node_type;
 use super::nodes::record_construct::get_node_type as record_construct_get_node_type;
 use super::nodes::record_destructure::get_node_type as record_destructure_get_node_type;
+use super::nodes::record_get::get_node_type as record_get_get_node_type;
 use super::nodes::rect::get_node_type as rect_get_node_type;
 use super::nodes::reg_poly::get_node_type as reg_poly_get_node_type;
 use super::nodes::relax::get_node_type as relax_get_node_type;
@@ -1199,6 +1200,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(range_get_node_type());
         ret.add_node_type(record_construct_get_node_type());
         ret.add_node_type(record_destructure_get_node_type());
+        ret.add_node_type(record_get_get_node_type());
         ret.add_node_type(product_get_node_type());
         ret.add_node_type(array_get_node_type());
         ret.add_node_type(array_at_get_node_type());
@@ -3255,8 +3257,10 @@ impl NodeTypeRegistry {
         // R3 (`doc/design_record_field_identity.md` §4.4): capture each record
         // node's current output-pin index -> `FieldId` map BEFORE the populate
         // loop below refreshes `custom_node_type` from the (possibly just-
-        // changed) registry def. Only `record_destructure` per-field output
-        // pins carry ids, so this naturally restricts to those nodes. After the
+        // changed) registry def. Any output pin carrying an id is covered —
+        // `record_destructure`'s per-field pins (a `FieldId`) and
+        // `record_get`'s per-row pins (a row id) — so the remap needs no list
+        // of record nodes (`record_get_test.rs` pins it). After the
         // refresh we remap consumer output wires by identity: a field
         // reorder/rename follows the field to its new pin slot, and a deleted
         // field's wire is dropped rather than silently re-pointed at whatever

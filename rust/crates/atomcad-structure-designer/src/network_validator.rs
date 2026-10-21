@@ -1631,6 +1631,18 @@ fn validate_zones_recursive(
             network.validation_errors.push(error);
         }
 
+        // Record-node problems that need the defs to compute — one per
+        // dangling `record_get` / `record_set` path row
+        // (`doc/design_record_get_set.md`, "Dangling rows"). Non-blocking: the
+        // node's other rows keep working. A frozen node never gets here (it
+        // was skipped above with its one frozen-node error), and like the
+        // stored-data errors this does not set `ok`.
+        for problem in node.data.record_node_problems(registry.record_defs()) {
+            network
+                .validation_errors
+                .push(ValidationError::warning(problem, Some(node_id)));
+        }
+
         // Rule 1: every zone-output pin must have at least one incoming wire.
         //
         // Suspended for an HOF whose `f` (Function) pin is connected: the
