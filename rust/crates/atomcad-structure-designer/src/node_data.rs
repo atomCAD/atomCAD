@@ -300,6 +300,15 @@ pub trait NodeData: Any + AsAny {
         self.set_text_properties(props)
     }
 
+    /// Pin names the text format accepts a stored literal under although
+    /// [`get_text_properties_with_defs`](Self::get_text_properties_with_defs)
+    /// lists no value for them yet — a `record_set` row with no literal. The
+    /// editor treats these like listed properties: known keys, and a literal
+    /// on such a pin replaces its wire. Default: none.
+    fn text_literal_keys_with_defs(&self, _defs: RecordDefs<'_>) -> Vec<String> {
+        Vec::new()
+    }
+
     /// Clears any cached input data used for interactive editing performance.
     /// Called by the refresh system before evaluation when upstream may have changed.
     /// Default implementation does nothing.

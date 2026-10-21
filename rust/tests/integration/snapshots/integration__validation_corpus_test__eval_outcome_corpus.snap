@@ -101,6 +101,8 @@ expression: out
   network 'proxy_demo' node=5 pin=0 -> Ok
 === proxy/proxy_worked_example.cnnd
   network 'proxy_worked_example' node=14 pin=0 -> Ok
+=== record_get_set/record_get_set.cnnd
+  network 'Main' node=10 pin=0 -> Ok
 === rename_wire_loss/before.cnnd
   network '0test' node=1 pin=0 -> Ok
   network '0test' node=2 pin=0 -> Ok

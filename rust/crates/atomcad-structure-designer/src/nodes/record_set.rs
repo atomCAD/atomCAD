@@ -21,20 +21,21 @@ use crate::evaluator::network_result::NetworkResult;
 use crate::node_data::{DragDirection, EvalOutput, MissingDefs, NodeData};
 use crate::node_network_gadget::NodeNetworkGadget;
 use crate::node_type::{
-    NodeType, NodeTypeCategory, OutputPinDefinition, Parameter, generic_node_data_loader,
-    generic_node_data_saver,
+    NodeType, NodeTypeCategory, OutputPinDefinition, Parameter, generic_node_data_saver,
 };
 use crate::node_type_registry::{NodeTypeRegistry, RecordDefs};
 use crate::nodes::comment::ANCHOR_PROPERTY;
 use crate::nodes::record_path_rows::{
-    RecordPathRow, dangling_row_problems, parse_paths, paths_text_value, paths_text_value_stored,
-    replace_rows, row_pins, rows_path_defs,
+    RecordPathRow, dangling_row_problems, heal_rows, literal_fits, merge_rows, parse_paths,
+    paths_text_value, paths_text_value_stored, row_pins, rows_path_defs, text_pin_names,
 };
-use crate::record_path::format_path;
+use crate::record_path::{PathSpec, format_path};
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::{PIN_ROLES_PROPERTY, TextValue};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::HashMap;
+use std::io;
 
 /// Names a row pin may not take: `record_set`'s row pins are inputs, so they
 /// share the text format's `{ … }` block with the fixed `record` pin, the
@@ -49,7 +50,7 @@ pub const RESERVED_PIN_NAMES: [&str; 6] = [
     PIN_ROLES_PROPERTY,
 ];
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RecordSetRow {
     #[serde(flatten)]
     pub row: RecordPathRow,
@@ -67,7 +68,13 @@ impl AsRef<RecordPathRow> for RecordSetRow {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+impl AsMut<RecordPathRow> for RecordSetRow {
+    fn as_mut(&mut self) -> &mut RecordPathRow {
+        &mut self.row
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct RecordSetData {
     /// Name of the record def the paths start at, and the output type.
     /// Empty = none chosen yet.
@@ -82,22 +89,83 @@ pub struct RecordSetData {
 }
 
 impl RecordSetData {
-    /// Replaces the rows wholesale from a `paths` text value (fresh ids, no
-    /// literals). The Phase 1/2 minimal setter; `merge_rows` replaces it.
-    fn set_paths(
+    /// Sets the schema and edits the rows from by-name specs
+    /// ([`merge_rows`]): ids are kept so wires follow their rows, and a
+    /// schema change re-resolves the rows by their current names. A row keeps
+    /// the literal of the old row whose id it inherited, if the literal still
+    /// converts to the row's pin type; a dangling row keeps everything.
+    /// `specs: None` keeps the rows. On error nothing changes.
+    pub fn edit_rows(
         &mut self,
-        schema: &str,
-        paths: &TextValue,
+        schema: String,
+        specs: Option<&[PathSpec]>,
         defs: RecordDefs<'_>,
-    ) -> Result<Vec<RecordSetRow>, String> {
-        let specs = parse_paths(paths)?;
+    ) -> Result<(), String> {
         let mut next_row_id = self.next_row_id;
-        let rows = replace_rows(schema, &specs, defs, &mut next_row_id)?;
-        self.next_row_id = next_row_id;
-        Ok(rows
+        let merged = merge_rows(
+            &self.schema,
+            &self.rows,
+            &schema,
+            specs,
+            defs,
+            &mut next_row_id,
+        )?;
+        let rows = merged
+            .rows
             .into_iter()
-            .map(|row| RecordSetRow { row, literal: None })
-            .collect())
+            .zip(merged.sources)
+            .map(|(row, source)| {
+                let literal = source
+                    .and_then(|oi| self.rows[oi].literal.clone())
+                    .filter(|literal| literal_fits(&schema, &row, literal, defs));
+                RecordSetRow { row, literal }
+            })
+            .collect();
+        self.schema = schema;
+        self.rows = rows;
+        self.next_row_id = next_row_id;
+        Ok(())
+    }
+
+    /// The pin names the text format writes the rows' literals under
+    /// ([`text_pin_names`]), `None` for a dangling row.
+    fn literal_keys(&self, defs: RecordDefs<'_>) -> Vec<Option<String>> {
+        text_pin_names(&self.schema, &self.rows, defs, &RESERVED_PIN_NAMES)
+    }
+
+    /// Stores the literals in `props` whose keys name a row pin. A literal
+    /// that does not convert to its row's pin type is an error; keys that
+    /// name no row are left to the caller (the text editor warns).
+    fn set_literals(
+        &mut self,
+        props: &HashMap<String, TextValue>,
+        defs: RecordDefs<'_>,
+    ) -> Result<(), String> {
+        let keys = self.literal_keys(defs);
+        for (index, key) in keys.iter().enumerate() {
+            let Some((key, literal)) = key
+                .as_ref()
+                .and_then(|key| props.get(key).map(|literal| (key, literal)))
+            else {
+                continue;
+            };
+            let row = &mut self.rows[index];
+            if !literal_fits(&self.schema, &row.row, literal, defs) {
+                return Err(format!(
+                    "`{}`: {} does not fit the field's type",
+                    key,
+                    literal.to_text()
+                ));
+            }
+            row.literal = Some(literal.clone());
+        }
+        Ok(())
+    }
+
+    /// Restores the invariants the setters keep after a raw deserialize
+    /// ([`heal_rows`]). Idempotent.
+    pub fn heal(&mut self) {
+        heal_rows(&mut self.rows, &mut self.next_row_id);
     }
 }
 
@@ -222,14 +290,28 @@ impl NodeData for RecordSetData {
         ]
     }
 
+    /// `schema`, `paths`, then each stored literal under its row's pin name
+    /// (`p_x: 3.0`), so it reads like any pin literal. The serializer leaves
+    /// out a literal whose pin is wired.
     fn get_text_properties_with_defs(&self, defs: RecordDefs<'_>) -> Vec<(String, TextValue)> {
-        vec![
+        let mut props = vec![
             ("schema".to_string(), TextValue::String(self.schema.clone())),
             (
                 "paths".to_string(),
                 paths_text_value(&self.schema, &self.rows, defs),
             ),
-        ]
+        ];
+        for (row, key) in self.rows.iter().zip(self.literal_keys(defs)) {
+            if let (Some(key), Some(literal)) = (key, &row.literal) {
+                props.push((key, literal.clone()));
+            }
+        }
+        props
+    }
+
+    /// Every row pin takes a literal, stored or not.
+    fn text_literal_keys_with_defs(&self, defs: RecordDefs<'_>) -> Vec<String> {
+        self.literal_keys(defs).into_iter().flatten().collect()
     }
 
     /// Paths need the defs to resolve; without them only `schema` can be set.
@@ -246,9 +328,9 @@ impl NodeData for RecordSetData {
         Ok(())
     }
 
-    /// `schema` first, then `paths` resolved against it. Like `record_get`'s
-    /// Phase 1 setter, the paths replace the rows wholesale with fresh ids and
-    /// no literals; a `!`-prefixed (dangling) path is rejected.
+    /// `schema` first, then `paths` resolved against it ([`Self::edit_rows`]),
+    /// and only then the literal keys, against the **new** pin names: one
+    /// block can change all three. All or nothing.
     fn set_text_properties_with_defs(
         &mut self,
         props: &HashMap<String, TextValue>,
@@ -261,14 +343,11 @@ impl NodeData for RecordSetData {
                 .to_string(),
             None => self.schema.clone(),
         };
-        let rows = match props.get("paths") {
-            Some(v) => Some(self.set_paths(&schema, v, defs)?),
-            None => None,
-        };
-        self.schema = schema;
-        if let Some(rows) = rows {
-            self.rows = rows;
-        }
+        let specs = props.get("paths").map(parse_paths).transpose()?;
+        let mut edited = self.clone();
+        edited.edit_rows(schema, specs.as_deref(), defs)?;
+        edited.set_literals(props, defs)?;
+        *self = edited;
         Ok(())
     }
 
@@ -360,6 +439,18 @@ pub fn get_node_type() -> NodeType {
         public: true,
         node_data_creator: || Box::new(RecordSetData::default()),
         node_data_saver: generic_node_data_saver::<RecordSetData>,
-        node_data_loader: generic_node_data_loader::<RecordSetData>,
+        node_data_loader: record_set_node_data_loader,
     }
+}
+
+/// Loader that heals persisted row state (missing / zero `next_row_id`,
+/// id-less rows, duplicate or empty paths) after the generic deserialize.
+fn record_set_node_data_loader(
+    value: &Value,
+    _design_dir: Option<&str>,
+) -> io::Result<Box<dyn NodeData>> {
+    let mut data: RecordSetData = serde_json::from_value(value.clone())
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    data.heal();
+    Ok(Box::new(data))
 }

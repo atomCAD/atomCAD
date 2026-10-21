@@ -17,7 +17,7 @@ use super::node_network::{
 use super::node_network_gadget::NodeNetworkGadget;
 use super::node_networks_import_manager::NodeNetworksImportManager;
 use super::node_type::{NodeType, OutputPinDefinition};
-use super::node_type_registry::{NodeTypeRegistry, UserTypeKind, allowed_in_zone_body};
+use super::node_type_registry::{NodeTypeRegistry, RecordDefs, UserTypeKind, allowed_in_zone_body};
 use super::preferences::load_preferences;
 use super::refresh_profile::{
     CsgCacheDelta, RefreshProfile, RefreshProfileHistory, RefreshSubPhases, elapsed_ms,
@@ -5845,6 +5845,103 @@ impl StructureDesigner {
             before,
             "Edit switch cases",
         );
+        Ok(())
+    }
+
+    /// Set a `record_get`'s schema and path rows in one step
+    /// (`doc/design_record_get_set.md`, "Row editing"). `paths` arrive by
+    /// name; rows keep their ids through the merge so output wires follow
+    /// them, a `Dangling` spec keeps its dangling row, and a schema change
+    /// re-resolves the rows by their current names.
+    pub fn set_record_get_data(
+        &mut self,
+        scope_path: &[u64],
+        node_id: u64,
+        schema: String,
+        paths: Vec<crate::record_path::PathSpec>,
+    ) -> Result<(), String> {
+        self.edit_record_path_node::<crate::nodes::record_get::RecordGetData>(
+            scope_path,
+            node_id,
+            "a record_get",
+            "Edit record_get paths",
+            |data, defs| data.edit_rows(schema, Some(&paths), defs),
+        )
+    }
+
+    /// [`Self::set_record_get_data`] for a `record_set`. Literals ride along
+    /// with the rows whose ids they belong to; setting one literal is a plain
+    /// node-data edit and has no op here.
+    pub fn set_record_set_data(
+        &mut self,
+        scope_path: &[u64],
+        node_id: u64,
+        schema: String,
+        paths: Vec<crate::record_path::PathSpec>,
+    ) -> Result<(), String> {
+        self.edit_record_path_node::<crate::nodes::record_set::RecordSetData>(
+            scope_path,
+            node_id,
+            "a record_set",
+            "Edit record_set paths",
+            |data, defs| data.edit_rows(schema, Some(&paths), defs),
+        )
+    }
+
+    /// Shared body of the `record_get` / `record_set` row setters, after
+    /// `set_switch_data`: the edit runs on a **clone** first, so a rejection
+    /// leaves the designer untouched; an edit that changes nothing pushes no
+    /// command; otherwise the whole-network [`NodeStructureEditCommand`]
+    /// covers the wires the edit drops or remaps.
+    ///
+    /// [`NodeStructureEditCommand`]: super::undo::commands::node_structure_edit::NodeStructureEditCommand
+    fn edit_record_path_node<T: NodeData + Clone + PartialEq + 'static>(
+        &mut self,
+        scope_path: &[u64],
+        node_id: u64,
+        kind: &str,
+        description: &str,
+        edit: impl FnOnce(&mut T, RecordDefs<'_>) -> Result<(), String>,
+    ) -> Result<(), String> {
+        // Read-only guard (`doc/design_library_linking.md` §6).
+        self.ensure_active_editable()?;
+        let network_name = self
+            .active_node_network_name
+            .clone()
+            .ok_or_else(|| "No active network".to_string())?;
+
+        let new_data = {
+            let node = self
+                .get_scope_network(scope_path)
+                .and_then(|net| net.nodes.get(&node_id))
+                .ok_or_else(|| "Node not found".to_string())?;
+            let data = node
+                .data
+                .as_any_ref()
+                .downcast_ref::<T>()
+                .ok_or_else(|| format!("Node is not {}", kind))?;
+            let mut trial = data.clone();
+            edit(&mut trial, self.node_type_registry.record_defs())?;
+            if trial == *data {
+                // No-op: don't push an empty command (it would truncate redo).
+                return Ok(());
+            }
+            trial
+        };
+
+        let before = self.snapshot_network(&network_name);
+        {
+            let node = self
+                .get_scope_network_mut(scope_path)
+                .and_then(|net| net.nodes.get_mut(&node_id))
+                .ok_or_else(|| "Node not found".to_string())?;
+            *node
+                .data
+                .as_any_mut()
+                .downcast_mut::<T>()
+                .ok_or_else(|| format!("Node is not {}", kind))? = new_data;
+        }
+        self.finish_node_structure_edit(scope_path, node_id, &network_name, before, description);
         Ok(())
     }
 

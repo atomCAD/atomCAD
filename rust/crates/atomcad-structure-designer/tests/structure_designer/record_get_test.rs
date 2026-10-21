@@ -279,7 +279,6 @@ fn bad_paths_are_rejected_by_the_text_format() {
         "[\"q\"]",
         "[\"size.x\"]",
         "[\"p.x\", \"p.x\"]",
-        "[\"!p.x\"]",
         "[\"p.`x\"]",
         "[\"\"]",
     ] {
@@ -1203,14 +1202,13 @@ fn a_frozen_record_get_survives_query_then_replace() {
 }
 
 #[test]
-fn a_dangling_row_serializes_but_is_not_accepted_back_yet() {
-    // Phase 1: the getter prints `!p.x`; parsing it back arrives with
-    // `merge_rows` in Phase 3, so the minimal setter rejects it.
+fn a_dangling_row_round_trips_through_replace() {
+    // The getter prints `!p.x`, and since Phase 3 the setter takes it back
+    // (`record_path_rows_test.rs` has the details).
     let mut d = standard();
     set_point_fields(&mut d, &["y"]);
-    let text = main_text(&d);
-    assert!(text.contains("\"!p.x\""), "{}", text);
-    d.set_active_node_network_name(Some("Main".to_string()));
-    let outcome = d.ai_text_edit(&text, true);
-    assert!(!outcome.result.errors.is_empty());
+    let (before, after) = replace_with_own_text(&mut d);
+    assert_eq!(before, after);
+    assert!(after.contains("\"!p.x\""), "{}", after);
+    assert_eq!(g_data(&d).rows.len(), 2);
 }

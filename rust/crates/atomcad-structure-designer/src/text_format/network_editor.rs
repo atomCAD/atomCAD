@@ -1214,16 +1214,7 @@ impl<'a> NetworkEditor<'a> {
             .unwrap_or_else(|| (Vec::new(), std::collections::HashSet::new(), String::new()));
 
         // Get text property names (for literal-only properties that aren't in parameters)
-        let text_prop_names: std::collections::HashSet<String> = scope_net(self.network, scope)
-            .and_then(|network| network.nodes.get(&node_id))
-            .map(|node| {
-                node.data
-                    .get_text_properties_with_defs(self.registry.record_defs())
-                    .iter()
-                    .map(|(name, _)| name.clone())
-                    .collect()
-            })
-            .unwrap_or_default();
+        let text_prop_names = self.text_property_keys(scope, node_id);
 
         // Check if this is a custom node (user-defined node network)
         // Custom nodes can accept literal values for ALL their parameters
@@ -1231,6 +1222,10 @@ impl<'a> NetworkEditor<'a> {
 
         // Collect literal properties into a HashMap
         let mut literal_props: HashMap<String, TextValue> = HashMap::new();
+        // Keys unknown *before* the block is applied. Reported only if still
+        // unknown after it: a block can create the very keys it sets (a
+        // `record_set` block that adds a path row and its literal).
+        let mut unknown_props: Vec<String> = Vec::new();
 
         for (prop_name, prop_value) in properties {
             // Skip special properties. Neither is `NodeData` state: `visible`
@@ -1277,10 +1272,7 @@ impl<'a> NetworkEditor<'a> {
                     && !valid_params.contains(prop_name)
                     && !text_prop_names.contains(prop_name)
                 {
-                    self.result.add_warning(format!(
-                        "Unknown property '{}' on node type '{}'",
-                        prop_name, node_type_name
-                    ));
+                    unknown_props.push(prop_name.clone());
                 }
                 // Warn if trying to set a literal on a wire-only parameter
                 // (a parameter that exists but has no text property backing)
@@ -1325,7 +1317,36 @@ impl<'a> NetworkEditor<'a> {
             }
         }
 
+        if !unknown_props.is_empty() {
+            let known = self.text_property_keys(scope, node_id);
+            for prop_name in unknown_props {
+                if !known.contains(&prop_name) {
+                    self.result.add_warning(format!(
+                        "Unknown property '{}' on node type '{}'",
+                        prop_name, node_type_name
+                    ));
+                }
+            }
+        }
+
         Ok(())
+    }
+
+    /// The keys a node's data accepts a stored value under: its text
+    /// properties, plus the pins it takes a literal for without one stored yet
+    /// (`NodeData::text_literal_keys_with_defs`).
+    fn text_property_keys(&self, scope: &[u64], node_id: u64) -> std::collections::HashSet<String> {
+        let Some(node) = scope_net(self.network, scope).and_then(|net| net.nodes.get(&node_id))
+        else {
+            return std::collections::HashSet::new();
+        };
+        let defs = self.registry.record_defs();
+        node.data
+            .get_text_properties_with_defs(defs)
+            .into_iter()
+            .map(|(name, _)| name)
+            .chain(node.data.text_literal_keys_with_defs(defs))
+            .collect()
     }
 
     // ------------------------------------------------------------------
@@ -1432,10 +1453,7 @@ impl<'a> NetworkEditor<'a> {
         if self.registry.is_custom_node_type(&node.node_type_name) {
             return true;
         }
-        node.data
-            .get_text_properties_with_defs(self.registry.record_defs())
-            .iter()
-            .any(|(name, _)| name == prop_name)
+        self.text_property_keys(scope, node_id).contains(prop_name)
     }
 
     /// Extract source node references from a property value.

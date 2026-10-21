@@ -330,6 +330,15 @@ given (`doc/design_record_get_set.md`). A new text-format call site must use
 the `_with_defs` variants too, or such a node prints stale names and cannot be
 edited.
 
+The editor's set of keys a node takes a stored value under is
+`text_property_keys`: the getter's keys **plus**
+`NodeData::text_literal_keys_with_defs`. That second hook is for pins whose
+literal is optional and so has no getter entry while unset (`record_set`'s
+row pins). Without it such a literal reads as "wire-only" and is dropped, and it
+never clears the pin's wire. "Unknown property" is checked **after** the block
+is applied, because one block can create the very key it sets (a `record_set`
+that adds a path row and its literal).
+
 ## Round-trip invariants (what the corpus test enforces)
 
 `tests/structure_designer/text_format_roundtrip_corpus_test.rs` replaces every

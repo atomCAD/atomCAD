@@ -19,20 +19,22 @@ use crate::evaluator::network_result::NetworkResult;
 use crate::node_data::{DragDirection, EvalOutput, MissingDefs, NodeData};
 use crate::node_network_gadget::NodeNetworkGadget;
 use crate::node_type::{
-    NodeType, NodeTypeCategory, OutputPinDefinition, Parameter, generic_node_data_loader,
-    generic_node_data_saver,
+    NodeType, NodeTypeCategory, OutputPinDefinition, Parameter, generic_node_data_saver,
 };
 use crate::node_type_registry::{NodeTypeRegistry, RecordDefs};
 use crate::nodes::record_path_rows::{
-    RecordPathRow, dangling_row_problems, parse_paths, paths_text_value, paths_text_value_stored,
-    replace_rows, row_pins, rows_path_defs,
+    RecordPathRow, dangling_row_problems, heal_rows, merge_rows, parse_paths, paths_text_value,
+    paths_text_value_stored, row_pins, rows_path_defs,
 };
+use crate::record_path::PathSpec;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::HashMap;
+use std::io;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct RecordGetData {
     /// Name of the record def the paths start at. Empty = none chosen yet.
     #[serde(default)]
@@ -43,6 +45,39 @@ pub struct RecordGetData {
     /// (`doc/design_parameter_wire_stability.md`).
     #[serde(default)]
     pub next_row_id: u64,
+}
+
+impl RecordGetData {
+    /// Sets the schema and edits the rows from by-name specs
+    /// ([`merge_rows`]): ids are kept so wires follow their rows, and a
+    /// schema change re-resolves the rows by their current names. `specs:
+    /// None` keeps the rows. On error nothing changes.
+    pub fn edit_rows(
+        &mut self,
+        schema: String,
+        specs: Option<&[PathSpec]>,
+        defs: RecordDefs<'_>,
+    ) -> Result<(), String> {
+        let mut next_row_id = self.next_row_id;
+        let merged = merge_rows(
+            &self.schema,
+            &self.rows,
+            &schema,
+            specs,
+            defs,
+            &mut next_row_id,
+        )?;
+        self.schema = schema;
+        self.rows = merged.rows;
+        self.next_row_id = next_row_id;
+        Ok(())
+    }
+
+    /// Restores the invariants the setters keep after a raw deserialize
+    /// ([`heal_rows`]). Idempotent.
+    pub fn heal(&mut self) {
+        heal_rows(&mut self.rows, &mut self.next_row_id);
+    }
 }
 
 impl NodeData for RecordGetData {
@@ -153,9 +188,8 @@ impl NodeData for RecordGetData {
         Ok(())
     }
 
-    /// `schema` first, then `paths` resolved against it. Phase 1: the paths
-    /// replace the rows wholesale with fresh ids (`replace_rows`); a
-    /// `!`-prefixed (dangling) path is rejected.
+    /// `schema` first, then `paths` resolved against it ([`Self::edit_rows`]:
+    /// rows keep their ids, a `!`-prefixed path keeps its dangling row).
     fn set_text_properties_with_defs(
         &mut self,
         props: &HashMap<String, TextValue>,
@@ -168,21 +202,8 @@ impl NodeData for RecordGetData {
                 .to_string(),
             None => self.schema.clone(),
         };
-        let rows = match props.get("paths") {
-            Some(v) => {
-                let specs = parse_paths(v)?;
-                let mut next_row_id = self.next_row_id;
-                let rows = replace_rows(&schema, &specs, defs, &mut next_row_id)?;
-                self.next_row_id = next_row_id;
-                Some(rows)
-            }
-            None => None,
-        };
-        self.schema = schema;
-        if let Some(rows) = rows {
-            self.rows = rows;
-        }
-        Ok(())
+        let specs = props.get("paths").map(parse_paths).transpose()?;
+        self.edit_rows(schema, specs.as_deref(), defs)
     }
 
     /// The `record` input takes a record, so a record dragged off an output
@@ -278,6 +299,18 @@ pub fn get_node_type() -> NodeType {
         public: true,
         node_data_creator: || Box::new(RecordGetData::default()),
         node_data_saver: generic_node_data_saver::<RecordGetData>,
-        node_data_loader: generic_node_data_loader::<RecordGetData>,
+        node_data_loader: record_get_node_data_loader,
     }
+}
+
+/// Loader that heals persisted row state (missing / zero `next_row_id`,
+/// id-less rows, duplicate or empty paths) after the generic deserialize.
+fn record_get_node_data_loader(
+    value: &Value,
+    _design_dir: Option<&str>,
+) -> io::Result<Box<dyn NodeData>> {
+    let mut data: RecordGetData = serde_json::from_value(value.clone())
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    data.heal();
+    Ok(Box::new(data))
 }

@@ -157,6 +157,10 @@ expression: out
   network 'proxy_demo' valid=true
 === proxy/proxy_worked_example.cnnd
   network 'proxy_worked_example' valid=true
+=== record_get_set/record_get_set.cnnd
+  network 'Main' valid=true
+    scope=[] node=11 blocking=false "path `a.gone` no longer exists in `Odd`"
+    scope=[] node=12 blocking=false "path `a.gone` no longer exists in `Odd`"
 === rename_wire_loss/before.cnnd
   network '0test' valid=true
   network 'BIG_tip' valid=true

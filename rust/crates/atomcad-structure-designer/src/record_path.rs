@@ -35,6 +35,24 @@ pub struct PathSegment {
     pub name: String,
 }
 
+impl PathSegment {
+    /// The `field_id` of a segment whose field is known to be gone, but not
+    /// which field it was: a dangling row recreated from its `!path` text by a
+    /// node that never held it (a `--replace` builds every node afresh). Real
+    /// ids count up from 0 per def, so it matches no field, and the row stays
+    /// dangling even if a field of the same name is added later — as a row
+    /// that lost its field to a delete does.
+    pub const GONE_FIELD_ID: u64 = u64::MAX;
+
+    /// A segment that resolves to nothing (see [`Self::GONE_FIELD_ID`]).
+    pub fn gone(name: String) -> Self {
+        PathSegment {
+            field_id: Some(Self::GONE_FIELD_ID),
+            name,
+        }
+    }
+}
+
 /// A path that resolves: its current segment names and the leaf field's
 /// declared type (possibly `Optional[T]`).
 #[derive(Debug, Clone, PartialEq)]
@@ -274,6 +292,44 @@ pub fn resolve_names_allowing_missing_defs(
         current = step.data_type.clone();
     }
     Ok(segments)
+}
+
+/// Segments for `names` against `schema` that never fail: each segment gets
+/// its field's id as far as the names resolve, and the rest are kept by name
+/// only. Used when a schema change moves a row onto a def where its names do
+/// not resolve (`doc/design_record_get_set.md`, "Schema change"): the row
+/// goes dangling under its current names, and its unresolved tail resolves
+/// again only by name.
+pub fn resolve_names_partially(
+    schema: &str,
+    names: &[String],
+    defs: RecordDefs<'_>,
+) -> Vec<PathSegment> {
+    let mut segments = Vec::with_capacity(names.len());
+    let mut current = DataType::Record(RecordType::Named(schema.to_string()));
+    for name in names {
+        let step = match record_fields(&current, defs) {
+            Ok(Some(fields)) => fields
+                .into_iter()
+                .find(|f| f.name == name.as_str())
+                .map(|f| (f.field_id, f.data_type.clone())),
+            _ => None,
+        };
+        let Some((field_id, data_type)) = step else {
+            break;
+        };
+        segments.push(PathSegment {
+            field_id,
+            name: name.clone(),
+        });
+        current = data_type;
+    }
+    let resolved = segments.len();
+    segments.extend(names[resolved..].iter().map(|n| PathSegment {
+        field_id: None,
+        name: n.clone(),
+    }));
+    segments
 }
 
 /// The names of the defs below `schema` that `path` walks into, including a

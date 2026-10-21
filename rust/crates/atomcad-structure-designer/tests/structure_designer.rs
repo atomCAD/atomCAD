@@ -470,6 +470,8 @@ mod record_types_phase4_test;
 mod record_get_test;
 #[path = "structure_designer/record_node_hook_test.rs"]
 mod record_node_hook_test;
+#[path = "structure_designer/record_path_rows_test.rs"]
+mod record_path_rows_test;
 #[path = "structure_designer/record_set_test.rs"]
 mod record_set_test;
 #[path = "structure_designer/record_types_phase8_test.rs"]

@@ -407,9 +407,11 @@ with no key, so it stays as it is.)
 2. **Dangling specs.** Each `Dangling` spec claims the first unclaimed old
    dangling row whose stored names equal it, in order, and that row is kept
    **verbatim** (id, segments, literal). A `Dangling` spec that matches no
-   old dangling row is dropped with a warning ("dangling path `p.x` not
-   found"), not an error: a pasted or retyped text block may name a row that
-   no longer exists, and there is nothing to revive. `Dangling` specs never
+   old dangling row is **recreated** as a dangling row with a fresh id, whose
+   segments carry `PathSegment::GONE_FIELD_ID` and so resolve to nothing, not
+   even a field of the same name added later. This is the common case, not a
+   corner: a `--replace` builds every node afresh, so its `!path`s have no
+   old row to claim (see Phase 3, "As implemented"). `Dangling` specs never
    take part in the passes below, and old dangling rows they claim are
    withheld from them.
 3. **Path match** (`merge_ids_by_key` pass 1, `Live` specs only). A new path
@@ -691,8 +693,9 @@ s = record_set { schema: "Box", paths: ["p.x", "size"], record: b, p_x: 3.0, siz
   (`` "`!a`.b" ``), so the marker is unambiguous. This is what keeps a
   `query` → `--replace` round trip of a node with a dangling row a no-op;
   without it the row could only be rejected or silently deleted. A dangling
-  `record_set` row has no pin, so its literal is not printed; it survives
-  because `merge_rows` keeps the claimed row verbatim.
+  `record_set` row has no pin, so its literal is not printed. An incremental
+  edit keeps it, because `merge_rows` keeps the claimed row verbatim; a
+  `--replace` recreates the row without it.
 - `record_set` literals are emitted by `get_text_properties` under the row's
   **derived pin name** (`p_x: 3.0`), so they read like any pin literal. The
   text editor accepts a key as a literal when it is in
@@ -1034,8 +1037,9 @@ round-trip corpus:
    dangling: re-sending `["!p.x", "size", "p.y"]` adds `p.y` and leaves the
    dangling row and `size`'s wire untouched (and a `record_set`'s dangling
    literal survives); re-sending `["size"]` deletes the dangling row; a
-   `"!q"` naming no dangling row is dropped with a warning. A `Live` path
-   that revives a dangling row by key keeps its id.
+   `"!q"` naming no dangling row is recreated as a dangling row (see "As
+   implemented"). A `Live` path that revives a dangling row by key keeps its
+   id.
 8. Text: parse the canonical example and the wires land correctly; the
    serialize → `--replace` → serialize round trip is byte-equal, including a
    dedup-suffixed name, a backtick-quoted segment, a `` `!a` `` segment and
@@ -1053,6 +1057,49 @@ round-trip corpus:
 **Gate:** as Phase 1. The full `cargo test -j 4` already includes the
 `cnnd_roundtrip` and `node_snapshots` tests; if a snapshot changes, review it
 with `cargo insta review` rather than blessing blindly.
+
+**As implemented:**
+
+- **`--replace` does not keep node data.** The editor clears the network and
+  builds every node afresh. Only positions and the other D14 identity state
+  are carried across, by name path. So a `!path` written by `query` has no
+  old dangling row to claim. As first designed, `merge_rows` would drop it, and
+  the round trip test 8 asks for could never be a no-op. A `Dangling` spec that
+  claims nothing is therefore recreated as a dangling row (see "Row editing",
+  step 2), and the "not found" warning is gone with nothing left to report. Test 7's
+  `"!q"` case checks the recreation instead. What a `--replace` still loses is
+  what the text cannot spell: a recreated row's id and segment ids (both
+  invisible), and a dangling `record_set` row's literal.
+- **Schema change claims rows by name.** When `schema` changes, every spec
+  (live or dangling) first claims the old row it names *as the getter printed
+  it under the old schema*. The row is moved onto the new schema by its
+  current names (`rebase_rows`), keeps its id, and dangles if the names don't
+  resolve there. So "change the schema, re-send the same paths" works, as the
+  schema-change section promises. A row that dangles this way keeps its
+  unresolved tail by **name** (`resolve_names_partially`), the same
+  representation as a path through a missing def. A field of that name added
+  later revives it.
+- **A path match keeps the old row's path verbatim**, stale stored names
+  included, so echoing a node's rows back is a true no-op (no command pushed).
+- **New `NodeData::text_literal_keys_with_defs`.** The editor decides "known
+  key" and "a literal clears this pin's wire" from the getter's keys. A
+  `record_set` row with no literal yet has no getter entry, so without this hook
+  `p_x: 3.0` on such a row was dropped as "wire-only". The editor also checks
+  "Unknown property" **after** applying the block, which removes the spurious
+  warning the Phase 2 note predicted. A literal that does not convert to its
+  row's pin type is an error, and the whole block for that node is rejected.
+- `merge_ids_by_key` gained a masked sibling, `merge_ids_by_optional_key`.
+  `None` entries keep their index but take part in no pass. `merge_rows` uses
+  it for the claimed rows.
+- Test 7's "a `Live` path that revives a dangling row by key" has no
+  reachable case. A live path must resolve now, and a dangling row's key is
+  one that doesn't, so the two never match. The test checks the reachable
+  form instead: a live path edited in place over a dangling row takes its id
+  positionally.
+- The tests are in one file, `record_path_rows_test.rs` (it mirrors the
+  source module and shares helpers between both nodes), instead of being
+  split across the node test files, `undo_test.rs` and `text_format_test.rs`.
+  The corpus fixture is `rust/tests/fixtures/record_get_set/record_get_set.cnnd`.
 
 ## Phase 4 — API, Flutter UI, documentation
 

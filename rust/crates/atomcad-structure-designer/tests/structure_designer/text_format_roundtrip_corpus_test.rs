@@ -302,6 +302,16 @@ fn the_mechanosynth_trajectory_fixture_round_trips() {
     ));
 }
 
+/// The `record_get` / `record_set` fixture (`doc/design_record_get_set.md`
+/// Phase 3): a literal, a wired row, dedup-suffixed pin names, a
+/// backtick-quoted segment, a `` `!e` `` segment and dangling (`!path`) rows.
+#[test]
+fn the_record_get_set_fixture_round_trips() {
+    run_round_trips(&atomcad_test_support::fixture_path(
+        "record_get_set/record_get_set.cnnd",
+    ));
+}
+
 /// The `proxy` fixture (`doc/design_proxy_node.md` Phase 3). The node carries
 /// eight text properties of four different kinds, every one of which the
 /// serializer writes unconditionally — a property the text drops or re-spells

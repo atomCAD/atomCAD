@@ -13,15 +13,16 @@
 use crate::data_type::DataType;
 use crate::node_data::MissingDefs;
 use crate::node_type_registry::RecordDefs;
+use crate::nodes::variadic_ids::merge_ids_by_optional_key;
 use crate::record_path::{
     DanglingReason, PathSegment, PathSpec, ResolvedPath, display_names, format_path,
-    resolve_names_allowing_missing_defs, resolve_path,
+    resolve_names_allowing_missing_defs, resolve_names_partially, resolve_path,
 };
 use crate::text_format::TextValue;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RecordPathRow {
     /// Hidden stable identity: the pin id. Wires survive path edits,
     /// reorders, and removals of other rows.
@@ -35,6 +36,12 @@ pub struct RecordPathRow {
 /// that wraps one with more per-row state (`record_set`'s literal).
 impl AsRef<RecordPathRow> for RecordPathRow {
     fn as_ref(&self) -> &RecordPathRow {
+        self
+    }
+}
+
+impl AsMut<RecordPathRow> for RecordPathRow {
+    fn as_mut(&mut self) -> &mut RecordPathRow {
         self
     }
 }
@@ -263,65 +270,283 @@ pub fn parse_paths(value: &TextValue) -> Result<Vec<PathSpec>, String> {
         .collect()
 }
 
-/// Replaces the rows **wholesale** from live specs: each path is resolved by
-/// name and gets a freshly minted id. Rejects a `Dangling` spec, an empty or
-/// duplicate path, and a name that does not resolve; on error nothing is
-/// changed. A path through a def that is *missing* (as opposed to a name not
-/// in a def that exists) is kept by name
-/// ([`resolve_names_allowing_missing_defs`]), so a frozen node survives a
-/// text-format `--replace`.
+/// The result of [`merge_rows`].
+#[derive(Debug, Clone)]
+pub struct MergedRows {
+    /// The new rows, in spec order.
+    pub rows: Vec<RecordPathRow>,
+    /// Per new row, the index of the old row it continues — whose id it has
+    /// (and, for a claimed row, everything else) — if any. A `record_set`
+    /// carries that row's literal over from here.
+    pub sources: Vec<Option<usize>>,
+}
+
+/// Two paths are the same key when their segments match by `field_id` where
+/// both sides have one, and by name otherwise.
+fn same_path(a: &[PathSegment], b: &[PathSegment]) -> bool {
+    a.len() == b.len()
+        && a.iter()
+            .zip(b)
+            .all(|(x, y)| match (x.field_id, y.field_id) {
+                (Some(i), Some(j)) => i == j,
+                _ => x.name == y.name,
+            })
+}
+
+/// The error for a live path whose names do not resolve: `depth` is the
+/// first name that fails.
+fn unresolved_path_error(schema: &str, names: &[String], depth: usize) -> String {
+    format!(
+        "path `{}`: `{}` is not a field of `{}`",
+        format_path(names),
+        names[depth],
+        if depth == 0 {
+            schema.to_string()
+        } else {
+            format_path(&names[..depth])
+        }
+    )
+}
+
+/// Moves `rows` from `old_schema` onto `new_schema`, keeping their ids: each
+/// row is re-resolved **by its current names** under the old schema (its
+/// [`row_spec`] names — the stored names only for a row already dangling),
+/// never by the stored names, which go stale on renames. A row whose names do
+/// not resolve against the new schema becomes dangling
+/// ([`resolve_names_partially`]).
+pub fn rebase_rows<R: AsRef<RecordPathRow>>(
+    old_schema: &str,
+    new_schema: &str,
+    rows: &[R],
+    defs: RecordDefs<'_>,
+) -> Vec<RecordPathRow> {
+    rows.iter()
+        .map(|row| {
+            let row = row.as_ref();
+            let names = match row_spec(old_schema, row, defs) {
+                PathSpec::Live(names) | PathSpec::Dangling(names) => names,
+            };
+            RecordPathRow {
+                id: row.id,
+                path: resolve_names_partially(new_schema, &names, defs),
+            }
+        })
+        .collect()
+}
+
+/// Edits a node's rows from by-name specs (the text format, the
+/// `StructureDesigner` setters), preserving ids so wires follow their rows
+/// (`doc/design_record_get_set.md`, "Row editing"). `specs: None` keeps the
+/// rows (a schema-only edit).
 ///
-/// This is the minimal Phase 1 setter; `merge_rows` (Phase 3) replaces it
-/// with an id-preserving merge.
-pub fn replace_rows(
+/// 1. **Checks.** An empty or duplicate `Live` path, a `Live` path that does
+///    not resolve (and claims no row, below), or paths without a schema are
+///    errors; nothing is changed.
+/// 2. **Claims.** A `Dangling` spec claims the first unclaimed old dangling
+///    row with the same stored names, kept verbatim. One that matches none is
+///    **recreated** as a dangling row with a fresh id whose segments resolve
+///    to nothing ([`PathSegment::gone`]): a `--replace` builds every node
+///    afresh, so this is how its dangling rows survive the round trip. When
+///    the **schema changes**, every spec instead
+///    claims the old row it names under the old schema (its current names,
+///    as the getter and serializer print them): the row is moved onto the new
+///    schema by [`rebase_rows`], keeps its id, and goes dangling if its names
+///    do not resolve there.
+/// 3. **Merge.** The remaining `Live` specs go through the three-pass id
+///    merge ([`merge_ids_by_optional_key`]): path match, positional fallback
+///    (indices count every spec and every old row), mint. Claimed specs and
+///    rows take no part. A path match keeps the old row's path verbatim, so
+///    echoing a node's rows back changes nothing.
+pub fn merge_rows<R: AsRef<RecordPathRow>>(
+    old_schema: &str,
+    old_rows: &[R],
     schema: &str,
-    specs: &[PathSpec],
+    specs: Option<&[PathSpec]>,
     defs: RecordDefs<'_>,
     next_row_id: &mut u64,
-) -> Result<Vec<RecordPathRow>, String> {
+) -> Result<MergedRows, String> {
+    let changed = old_schema != schema;
+    let old_specs: Vec<PathSpec> = old_rows
+        .iter()
+        .map(|row| row_spec(old_schema, row.as_ref(), defs))
+        .collect();
+    let base: Vec<RecordPathRow> = if changed {
+        rebase_rows(old_schema, schema, old_rows, defs)
+    } else {
+        old_rows.iter().map(|row| row.as_ref().clone()).collect()
+    };
+    let specs: Vec<PathSpec> = match specs {
+        Some(specs) => specs.to_vec(),
+        None if !changed => {
+            return Ok(MergedRows {
+                sources: (0..base.len()).map(Some).collect(),
+                rows: base,
+            });
+        }
+        None => old_specs.clone(),
+    };
+
+    // 1. Checks that need no resolution.
     if schema.is_empty() && !specs.is_empty() {
         return Err("paths need a schema".to_string());
     }
-    let mut paths: Vec<Vec<PathSegment>> = Vec::with_capacity(specs.len());
     let mut seen: Vec<&Vec<String>> = Vec::new();
-    for spec in specs {
-        let names = match spec {
-            PathSpec::Live(names) => names,
-            PathSpec::Dangling(names) => {
-                return Err(format!(
-                    "dangling path `!{}` cannot be set here",
-                    format_path(names)
-                ));
+    for spec in &specs {
+        if let PathSpec::Live(names) = spec {
+            if names.is_empty() {
+                return Err("empty path".to_string());
             }
-        };
-        if names.is_empty() {
-            return Err("empty path".to_string());
+            if seen.contains(&names) {
+                return Err(format!("duplicate path `{}`", format_path(names)));
+            }
+            seen.push(names);
         }
-        if seen.contains(&names) {
-            return Err(format!("duplicate path `{}`", format_path(names)));
-        }
-        seen.push(names);
-        let segments =
-            resolve_names_allowing_missing_defs(schema, names, defs).map_err(|depth| {
-                format!(
-                    "path `{}`: `{}` is not a field of {}",
-                    format_path(names),
-                    names[depth],
-                    if depth == 0 {
-                        format!("`{}`", schema)
-                    } else {
-                        format!("`{}`", format_path(&names[..depth]))
-                    }
-                )
-            })?;
-        paths.push(segments);
     }
-    Ok(paths
-        .into_iter()
-        .map(|path| {
-            let id = *next_row_id;
+
+    // 2. Claims.
+    let mut claimed = vec![false; base.len()];
+    let mut claims: Vec<Option<usize>> = vec![None; specs.len()];
+    for (si, spec) in specs.iter().enumerate() {
+        if !changed && matches!(spec, PathSpec::Live(_)) {
+            continue;
+        }
+        if let Some(oi) = (0..base.len()).find(|&oi| !claimed[oi] && old_specs[oi] == *spec) {
+            claimed[oi] = true;
+            claims[si] = Some(oi);
+        }
+    }
+
+    // The rest of the live specs must resolve now.
+    let mut keys: Vec<Option<Vec<PathSegment>>> = Vec::with_capacity(specs.len());
+    for (si, spec) in specs.iter().enumerate() {
+        match spec {
+            PathSpec::Live(names) if claims[si].is_none() => {
+                let segments = resolve_names_allowing_missing_defs(schema, names, defs)
+                    .map_err(|depth| unresolved_path_error(schema, names, depth))?;
+                keys.push(Some(segments));
+            }
+            _ => keys.push(None),
+        }
+    }
+
+    // 3. Merge.
+    let old_keys: Vec<(Option<u64>, Vec<PathSegment>)> = base
+        .iter()
+        .zip(&claimed)
+        .map(|(row, &claimed)| (if claimed { None } else { row.id }, row.path.clone()))
+        .collect();
+    let ids = merge_ids_by_optional_key(&old_keys, &keys, |a, b| same_path(a, b), next_row_id);
+
+    let mut rows: Vec<RecordPathRow> = Vec::with_capacity(specs.len());
+    let mut sources = Vec::with_capacity(specs.len());
+    for (si, key) in keys.into_iter().enumerate() {
+        if let Some(oi) = claims[si] {
+            rows.push(base[oi].clone());
+            sources.push(Some(oi));
+            continue;
+        }
+        let (Some(path), Some(id)) = (key, ids[si]) else {
+            // An unclaimed dangling spec: recreate the row. Two identical
+            // ones would be identical rows, which the loader's healing drops
+            // anyway, so the second is dropped here.
+            let PathSpec::Dangling(names) = &specs[si] else {
+                unreachable!("every live spec has a key")
+            };
+            let path: Vec<PathSegment> = names.iter().cloned().map(PathSegment::gone).collect();
+            if !rows.iter().any(|row| row.path == path) {
+                rows.push(RecordPathRow {
+                    id: Some(*next_row_id),
+                    path,
+                });
+                *next_row_id += 1;
+                sources.push(None);
+            }
+            continue;
+        };
+        let source = (0..base.len()).find(|&oi| !claimed[oi] && base[oi].id == Some(id));
+        let path = match source {
+            Some(oi) if same_path(&base[oi].path, &path) => base[oi].path.clone(),
+            _ => path,
+        };
+        rows.push(RecordPathRow { id: Some(id), path });
+        sources.push(source);
+    }
+    Ok(MergedRows { rows, sources })
+}
+
+/// Loader healing (`doc/design_record_get_set.md`, "Serialization and
+/// healing"): drops rows with an empty path and later duplicates of a path
+/// (identical stored segments — the loader has no defs, so this is never a
+/// false positive), bumps `next_row_id` past every id, and gives id-less rows
+/// fresh ids. Idempotent.
+pub fn heal_rows<R: AsRef<RecordPathRow> + AsMut<RecordPathRow>>(
+    rows: &mut Vec<R>,
+    next_row_id: &mut u64,
+) {
+    let mut kept: Vec<R> = Vec::with_capacity(rows.len());
+    for row in rows.drain(..) {
+        let path = &row.as_ref().path;
+        if path.is_empty() || kept.iter().any(|k| k.as_ref().path == *path) {
+            continue;
+        }
+        kept.push(row);
+    }
+    *rows = kept;
+    if let Some(max_id) = rows.iter().filter_map(|r| r.as_ref().id).max()
+        && *next_row_id <= max_id
+    {
+        *next_row_id = max_id + 1;
+    }
+    for row in rows.iter_mut() {
+        let row = row.as_mut();
+        if row.id.is_none() {
+            row.id = Some(*next_row_id);
             *next_row_id += 1;
-            RecordPathRow { id: Some(id), path }
+        }
+    }
+}
+
+/// Per row, the pin name the text format writes a `record_set` literal
+/// under (`None` for a dangling row). Like [`row_pins`]' names, except that a
+/// row through a **missing** def is named too, from its display names: a
+/// frozen node keeps that row's pin from its recorded interface, and its
+/// literal must survive a `query` → `--replace`.
+pub fn text_pin_names<R: AsRef<RecordPathRow>>(
+    schema: &str,
+    rows: &[R],
+    defs: RecordDefs<'_>,
+    reserved: &[&str],
+) -> Vec<Option<String>> {
+    let resolved: Vec<Option<ResolvedPath>> = rows
+        .iter()
+        .map(|row| {
+            let path = &row.as_ref().path;
+            match resolve_path(schema, path, defs) {
+                Ok(r) => Some(r),
+                Err(DanglingReason::DefMissing(_)) => Some(ResolvedPath {
+                    names: display_names(schema, path, defs),
+                    leaf_type: DataType::None,
+                }),
+                Err(_) => None,
+            }
         })
-        .collect())
+        .collect();
+    derived_pin_names(&resolved, reserved)
+}
+
+/// Whether `literal` can be a row's stored value: it converts to the row's
+/// pin type. A row that does not resolve has no known type, and its literal
+/// is kept unchecked.
+pub fn literal_fits(
+    schema: &str,
+    row: &RecordPathRow,
+    literal: &TextValue,
+    defs: RecordDefs<'_>,
+) -> bool {
+    match resolve_path(schema, &row.path, defs) {
+        Ok(r) => literal
+            .to_network_result(&r.leaf_type.record_field_pin_type())
+            .is_some(),
+        Err(_) => true,
+    }
 }

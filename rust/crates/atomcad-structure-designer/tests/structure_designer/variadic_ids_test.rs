@@ -2,7 +2,9 @@
 //! case list and the `record_get` / `record_set` path rows. `switch_test.rs`
 //! covers it through `merge_cases` too.
 
-use atomcad_structure_designer::nodes::variadic_ids::merge_ids_by_key;
+use atomcad_structure_designer::nodes::variadic_ids::{
+    merge_ids_by_key, merge_ids_by_optional_key,
+};
 
 fn merge(old: &[(Option<u64>, &str)], new: &[&str], next_id: &mut u64) -> Vec<u64> {
     let old: Vec<(Option<u64>, &str)> = old.to_vec();
@@ -81,4 +83,18 @@ fn empty_lists() {
     assert!(merge(&[(Some(1), "a")], &[], &mut next).is_empty());
     assert_eq!(merge(&[], &["a"], &mut next), vec![7]);
     assert_eq!(next, 8);
+}
+
+#[test]
+fn unkeyed_elements_keep_their_index_but_take_part_in_nothing() {
+    // `record_get` / `record_set` pass their claimed dangling rows as `None`
+    // (new) and `id: None` (old).
+    let old: Vec<(Option<u64>, &str)> = vec![(None, "gone"), (Some(2), "b"), (Some(3), "c")];
+    let new: Vec<Option<&str>> = vec![None, Some("x"), Some("c"), Some("d")];
+    let mut next = 10;
+    let ids = merge_ids_by_optional_key(&old, &new, |a, b| a == b, &mut next);
+    // `x` takes `b`'s id positionally (index 1); the `None` at index 0 neither
+    // takes the withheld row's place nor mints.
+    assert_eq!(ids, vec![None, Some(2), Some(3), Some(10)]);
+    assert_eq!(next, 11);
 }
