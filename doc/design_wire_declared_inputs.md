@@ -27,6 +27,14 @@ row under its last input pin. Dropping a wire on it appends an input of the
 wire's type, under a derived name, connects the wire, and puts the cursor in
 the new input's name field so a rename is one keystroke away.
 
+The type is copied once, at the drop, and does not follow the wire afterwards.
+When the source changes later, the input's type goes stale and the wire
+reports a mismatch. **Take type from wire** is the repair: one click copies
+the source's current type again. It applies to any input the node declares
+itself, however that input was made, and it matters most for anonymous
+records: renaming one of their fields changes their type, so every input that
+copied the old type goes stale at once.
+
 The record half also makes a second change: **structure first, name later**.
 Today a record must be designed before it can be built: create a def in the
 user-types panel, add fields, pick types, then place a `record_construct`.
@@ -43,8 +51,10 @@ five things", and the name is added when sharing, cascading renames or
 
 In scope:
 
+- the `DeclaredInputs` capability trait that both nodes implement;
 - the open port on `expr`;
 - an anonymous mode for `record_construct`, with an open port;
+- **Take type from wire** on both nodes' declared inputs;
 - promoting an anonymous `record_construct` to a named def, or pointing it at
   an existing def with the same shape;
 - the parser fix that lets anonymous record types round-trip through type
@@ -69,10 +79,15 @@ In scope:
 
 | Question | Decision |
 |---|---|
-| Which nodes get an open port | `expr` (always) and `record_construct` **in anonymous mode** (its `schema` is empty). Nothing else in this doc. |
+| Which nodes get an open port | `expr` (always) and `record_construct` **in anonymous mode** (its `schema` is empty). Nothing else in this doc. Both are exactly the nodes whose `NodeData::declared_inputs()` returns `Some`, so the open port and Take type from wire share one gate. |
+| The abstraction | A capability trait, `DeclaredInputs`, which a node hands out through `NodeData::declared_inputs()` / `declared_inputs_mut()` (default `None`). This avoids a set of separate `NodeData` hooks with "no open port" defaults. The `Option` expresses the mode dependence directly: `record_construct` returns `Some(self)` only in anonymous mode. The orchestrators in `declared_input_ops.rs` never name a node type. |
 | How the open port looks | A **permanent** `+` row below the last input pin, drawn subdued, and highlighted while a compatible wire hovers it. It is not a ghost that appears only during a drag: a row that appears mid-drag would change the node's footprint, move every pin offset below it, and trigger reflow, all while the user is aiming. A permanent row keeps the layout stable and makes the feature visible. |
 | Gesture direction | **Output → `+` only** in v1: drag from a source pin (a node output, a function pin, or a zone input) and drop on the `+`. The `+` itself is not draggable. Dragging from `+` to an output is a later addition (see "Future work"). |
-| The declared type | The source pin's **resolved type at drop time**, snapshotted (`NodeTypeRegistry::resolve_output_type_scoped` for node outputs, the HOF's zone-input pin type for zone inputs). The type does not follow the wire afterwards. If upstream changes, the wire shows a type error like any other wire. A live type would make the interface depend on wiring, and undo and the text format would have to track that dependency. |
+| The declared type | The source pin's **resolved type at drop time**, snapshotted (`NodeTypeRegistry::resolve_output_type_scoped` for node outputs, the HOF's zone-input pin type for zone inputs). The type does not follow the wire afterwards. If upstream changes, the wire shows a type error like any other wire. A live type would make the interface depend on wiring, and undo and the text format would have to track that dependency. A stale type is repaired by Take type from wire. |
+| Take type from wire — what it does | It sets a declared input's type to the **current** resolved type of the single wire on it, through `DeclaredInputs::retype`. The pin id, the name, the wire and the expression text are untouched. One undo step, "Take type from wire", recorded as a `NetworkSnapshotCommand`. |
+| Take type from wire — when it is offered | Only on a real mismatch. All of these must hold: (1) the node has declared inputs, and `declares_pin(pin_id)` is true; (2) exactly one wire is on the pin; (3) the source's resolved type fails `can_be_converted_to` against the declared type; (4) `accepts_type(source type)` passes. A wire that is compatible but different (`Int` into a `Float` parameter) gets no offer: it is not broken. A source that turned into something the node cannot declare, such as a `Function`, keeps the plain mismatch error and gets no offer. |
+| Take type from wire — where | The property panel is the primary surface: a stale row gets a warning marker and a **Use wire's type: `<type>`** button under its type selector. The node context menu's **Edit** section adds **Take types from wires**, which repairs every stale input in one step and appears only when at least one qualifies. There is no wire context menu in v1, because the canvas has none today (see "Future work"). |
+| Renaming an anonymous field | The rename changes the record's type (`{a: Float}` becomes `{b: Float}`), so every input that copied the old type now mismatches. The wire is kept and reported, not dropped: `repair_node_network` drops no node-output wire over a type change (only `repair_zone_body`'s zone-input wires are type-checked, and a rename does not change a zone-input pin's type), so `validate_wires` reports the mismatch on the consumer. The renamed node's own input wire survives through the stable pin id. The repairs are Take type from wire for each stale input, or promotion, after which renames of the named def's fields go through `FieldId`s. A rename does **not** retype downstream inputs automatically, because that would be the live typing the "declared type" row rules out. |
 | Which types an open port accepts | `expr`: the predicate its drag-aware adapter already applies: no abstract types, `Function`, `Iterator`, `Unit` or `None` (`ExprData::adapt_for_drag_source`), factored into a shared `ExprData::accepts_parameter_type`. `record_construct`: any type a record def field may hold (see Phase 2), and never `None`, `Unit` or `AnyFunction`. While a wire with a rejected type hovers the `+`, the row is drawn in a refused style with the reason as a one-line label beside it. A tooltip would not work here, because Flutter shows no tooltips during a drag. |
 | The derived name | The source **node's name** (`custom_name`, e.g. `gap` or `sphere1`). When the source node has more than one output pin, or the source is a zone input, the **pin name** is used instead; if that is already taken, `<node>_<pin>`. The name is sanitized to `[A-Za-z_][A-Za-z0-9_]*`, made to avoid reserved words, and deduplicated as `name`, `name_2`, `name_3`, … (details under "Name derivation"). |
 | After the drop | The destination node becomes the selected node, and its property panel focuses the new input's name field with the text selected. Typing renames it; anything else keeps the derived name. Stable ids mean a rename never drops the wire. |
@@ -88,38 +103,105 @@ In scope:
 | Promotion — downstream nodes | Not touched. Downstream wires stay valid because the named type has exactly the anonymous type's shape. In particular, a downstream `expr` whose parameter was declared with the anonymous type, for example by dropping this node's output on its `+`, keeps that type, so `r.a` in it keeps working. Retyping such a parameter to the new name would *break* it, since `expr` cannot read fields of a named record. |
 | Switching mode from the schema dropdown | Picking a def on an anonymous node is allowed. Local fields are cleared. Wires and literals carry over by name where the def has a same-named field; the other wires are dropped (the usual repair rule), and so are the other literals. A literal is never left behind to reappear when a field of the same name is added later. Picking "none" on a named-mode node leaves an anonymous node with **no** fields, under the same literal rule. Copying the def's fields into local ones (un-promotion) is future work. |
 | Text format | No new syntax beyond a `fields` property mirroring `expr`'s `parameters`: `r = record_construct { fields: [{name: "a", data_type: Float}], a: x }`. The open port is a GUI gesture; in text, declaring is already just writing. |
-| Reserved names | `expr`: the lexer's keywords, plus `expression` and `parameters` (its property keys). `record_construct`: `schema`, `fields` and `literal_values`. When a derived name hits one, `_` is appended. |
+| Reserved names | `expr`: the lexer's keywords, plus `expression` and `parameters` (its property keys). `record_construct`: `schema`, `fields` and `literal_values`. Each node supplies its list through `DeclaredInputs::reserved_names`. When a derived name hits one, `_` is appended. |
 
-## The open port, in general
+## Declared inputs, in general
 
-A node opts in through four new `NodeData` hooks. The defaults mean "no
-port":
+### The `DeclaredInputs` trait
+
+A node whose input list is its own data implements one capability trait and
+hands it out through two `NodeData` accessors. Every operation in this doc,
+the open-port drop and Take type from wire alike, reaches the node only
+through it:
 
 ```rust
-// node_data.rs
-/// Whether this node currently shows an open input port (the `+` row).
-/// May depend on the data — `record_construct` has one only in anonymous mode.
-fn has_open_input_port(&self) -> bool { false }
+// declared_inputs.rs (crate root)
 
-/// Append a wire-declared input. `name` is already derived, sanitized and
-/// deduplicated against the node's current input names; `data_type` is the source's
-/// resolved type. Returns the new input's **pin id**, so the caller can find
-/// its index after the node type is re-derived. Errors when the type is not
-/// acceptable (the same predicate `accepts_open_port_type` reports).
-fn append_open_port_input(&mut self, name: String, data_type: DataType) -> Result<u64, String> {
-    Err("no open input port".into())
+/// A node whose input pins are declared by its own data, one pin per
+/// declared input: `expr`'s parameters, an anonymous `record_construct`'s
+/// fields. Declared inputs are addressed by **pin id**, the id the node puts
+/// on the pin's `Parameter` in `calculate_custom_node_type`. Ids survive
+/// renames, reorders and the re-derivation of the node type; indices do not.
+///
+/// Every mutating method edits the node's data only. The caller re-derives
+/// the node type (`Node::set_custom_node_type`), revalidates and records
+/// undo; see `declared_input_ops.rs`.
+pub trait DeclaredInputs {
+    /// Type gate shared by the open port (append) and Take type from wire
+    /// (retype). `Err` carries the user-facing reason. It is shown beside a
+    /// refused `+` row, and the retype offer is withheld.
+    fn accepts_type(&self, data_type: &DataType) -> Result<(), String>;
+
+    /// Names a derived name must avoid beyond the current input names:
+    /// keywords and property keys.
+    fn reserved_names(&self) -> &'static [&'static str];
+
+    /// The name to use when the source offers none: `"x"` for `expr`,
+    /// `"field"` for `record_construct`.
+    fn fallback_name(&self) -> &'static str;
+
+    /// Whether `pin_id` names one of the declared inputs. It is `true` for
+    /// every input pin of the two nodes in this doc. It is a method rather
+    /// than an invariant so that a future node can mix fixed pins with
+    /// declared ones.
+    fn declares_pin(&self, pin_id: u64) -> bool;
+
+    /// Append a declared input. `name` is already derived, sanitized and
+    /// deduplicated. Returns the new input's pin id. Errors when
+    /// `accepts_type` refuses `data_type`.
+    fn append(&mut self, name: String, data_type: DataType) -> Result<u64, String>;
+
+    /// Retype the declared input `pin_id` in place. The name, the id and the
+    /// position are kept. Errors when the pin is not declared or
+    /// `accepts_type` refuses `data_type`.
+    fn retype(&mut self, pin_id: u64, data_type: DataType) -> Result<(), String>;
 }
 
-/// Type gate for the drop, consulted on hover (Flutter `onWillAccept`) and
-/// again by the orchestrator. `Err` carries the user-facing reason.
-fn accepts_open_port_type(&self, data_type: &DataType) -> Result<(), String> {
-    Err("no open input port".into())
-}
-
-/// Names the derived name must avoid, beyond the node's current input
-/// names (keywords, property keys).
-fn open_port_reserved_names(&self) -> &'static [&'static str] { &[] }
+// node_data.rs, in the NodeData trait
+/// The node's declared inputs, when its input list is its own data. `None`
+/// (the default) means the node's inputs are fixed by its type or by a def.
+/// May depend on the data: `record_construct` answers `Some` only in
+/// anonymous mode. `Some` is also what puts the open port (`+` row) on the
+/// node.
+fn declared_inputs(&self) -> Option<&dyn DeclaredInputs> { None }
+fn declared_inputs_mut(&mut self) -> Option<&mut dyn DeclaredInputs> { None }
 ```
+
+`ExprData` and `RecordConstructData` implement `DeclaredInputs` and return
+`Some(self)` (anonymous mode only, for the latter). Nothing else in the crate
+checks for these two node types by name: `NodeView.has_open_input_port` is
+`declared_inputs().is_some()`, and the orchestrators below take whatever the
+accessor returns.
+
+A capability trait rather than flat `NodeData` hooks: the methods are only
+meaningful together, the open port and the retype share the gate, and a node
+without declared inputs implements nothing. It does not need four defaults
+that each return "no open port".
+
+### Shared pieces
+
+`declared_input_ops.rs` (an `impl StructureDesigner` file, like
+`library_link_ops.rs`) holds both orchestrators and the one helper they share:
+
+```rust
+/// The resolved type of the source a wire describes. A node output resolves
+/// through `NodeTypeRegistry::resolve_output_type_scoped`, which follows
+/// `SameAsInput` up the chain. A zone input resolves to the HOF's zone-input
+/// pin type at `source_scope_depth`. The function pin resolves to the
+/// node's function signature. It must give the same answer as the type
+/// `validate_wires` checks a wire against (its `ValidationContext::resolve`),
+/// so an offer and the validator can never disagree about a mismatch. If the
+/// two paths cannot share code, a test pins them together.
+fn resolve_wire_source_type(
+    &self,
+    dest_scope_path: &[u64],
+    source_node_id: u64,
+    source_pin: SourcePin,
+    source_scope_depth: u32,
+) -> Option<DataType>
+```
+
+### Adding an input: the open port
 
 The orchestrator is `StructureDesigner::add_input_from_wire`, which takes the
 same source description as `connect_wire`:
@@ -138,14 +220,14 @@ pub fn add_input_from_wire(
 Steps 1–4 only check; nothing changes until step 5, so every refusal leaves
 the network untouched and pushes no undo step.
 
-1. Refuse when the network is read-only (linked library) or the destination
-   has no open port.
-2. Resolve the source's type (the "declared type" rule in the decision
-   table). Refuse `None`.
-3. `accepts_open_port_type`.
-4. Derive the name (below).
+1. Refuse when the network is read-only (linked library) or the destination's
+   `declared_inputs()` is `None`.
+2. `resolve_wire_source_type`. Refuse `None`, both an unresolvable source and
+   a `None`-typed one.
+3. `accepts_type`.
+4. Derive the name (below), passing `reserved_names()` and `fallback_name()`.
 5. Snapshot the network, and capture pre-edit footprints for reflow.
-6. `append_open_port_input`, re-derive the node's custom type
+6. `declared_inputs_mut()?.append`, re-derive the node's custom type
    (`set_custom_node_type`), find the new pin's index **by `pin_id`**, and
    connect the wire through the same internal path `connect_wire` uses.
 7. Reflow neighbours if the node grew
@@ -164,8 +246,8 @@ The API takes the same arguments as `connect_wire` (`dest_scope_path`,
 
 ### Name derivation
 
-`open_port_name.rs` (crate root, beside `record_path.rs`) holds a pure
-function so it can be tested without a network:
+`declared_inputs.rs`, beside the trait, holds a pure function so it can be
+tested without a network:
 
 ```rust
 pub struct NameSource<'a> {
@@ -177,10 +259,13 @@ pub struct NameSource<'a> {
 pub fn derive_open_port_name(
     src: &NameSource,
     taken: &HashSet<String>,          // current input names on the destination
-    reserved: &[&str],
-    fallback: &str,                   // "x" for expr, "field" for record_construct
+    reserved: &[&str],                // DeclaredInputs::reserved_names
+    fallback: &str,                   // DeclaredInputs::fallback_name
 ) -> String
 ```
+
+It takes the two node-supplied lists as plain arguments rather than a
+`&dyn DeclaredInputs`, so its tests need no node.
 
 The rules:
 
@@ -199,14 +284,86 @@ The rules:
 
 The case of the name is left as it is.
 
+### Repairing a type: Take type from wire
+
+Two `StructureDesigner` methods in `declared_input_ops.rs`, one read and one
+write. Both compute the offers the same way:
+
+```rust
+/// One entry per input pin of the node, by pin index: `Some(type)` when Take
+/// type from wire is offered for that pin, carrying the type it would set.
+/// Empty when the node has no declared inputs. Read-only: no refresh, no undo.
+pub fn wire_type_offers(&self, scope_path: &[u64], node_id: u64) -> Vec<Option<DataType>>;
+
+/// Retype each listed input to its wire's current type, in one undo step.
+pub fn take_types_from_wires(
+    &mut self,
+    scope_path: &[u64],
+    node_id: u64,
+    pin_indices: &[usize],
+) -> Result<(), String>;
+```
+
+`wire_type_offers` walks the node's input pins. For pin index `i`, with pin
+id `id` (from the node type's `Parameter`), it offers `Some(t)` exactly when
+all four conditions of the decision table hold:
+
+1. `declared_inputs()` is `Some` and `declares_pin(id)`;
+2. the argument at `i` has exactly one incoming wire;
+3. `resolve_wire_source_type` of that wire gives `t`, and
+   `can_be_converted_to(t, declared)` is false;
+4. `accepts_type(&t)` is `Ok`.
+
+`take_types_from_wires` never trusts types sent by the caller. It recomputes
+the offers and works all or nothing:
+
+1. Refuse when the network is read-only, or any listed index has no offer.
+   An empty list is refused too. Nothing has changed yet, and no undo step
+   is pushed.
+2. Snapshot the network.
+3. For each listed pin, `declared_inputs_mut()?.retype(id, t)`. Retyping
+   never changes a node's footprint, so no reflow is needed.
+4. Re-derive the node's custom type (`set_custom_node_type`). The pin ids are
+   unchanged, so every wire stays on its pin.
+5. Revalidate and mark the design dirty. Snapshot again, push one
+   `NetworkSnapshotCommand { description: "Take type from wire", .. }` with
+   `Full` refresh. The node's output type can change (an `expr` reading
+   `r.b`), and that can clear or raise errors downstream.
+
+Both node surfaces go through `take_types_from_wires`: the panel button with
+one index, the context-menu item with every offered index.
+
+API: `get_wire_type_offers(scope_path, node_id) -> Vec<Option<APIDataType>>`
+and `take_types_from_wires(scope_path, node_id, pin_indices) -> Result<(),
+String>`, both scoped like every other node-property API.
+
 ## `expr`
 
-The data model doesn't change. `append_open_port_input` pushes
-`ExprParameter { id: max_id + 1, name, data_type, data_type_str: None }`, the
-same id rule `set_text_properties` uses, and re-runs `parse_and_validate` so
-the output type stays current. The expression text is **not** edited: the
-new parameter is unused until the user writes it in. That's a cheap state
-(no error), and guessing an edit to the user's expression is not.
+The data model doesn't change. `ExprData` implements `DeclaredInputs`, and
+`declared_inputs()` always returns `Some(self)`. A pin's id is its
+`ExprParameter::id`, which `calculate_custom_node_type` already copies onto
+the `Parameter`. That field is an `Option`, so Phase 1 makes sure every
+loaded parameter has one: if a legacy file can still produce an id-less
+parameter, the loader gives it `max_id + 1`, the same rule as `append`.
+`declares_pin` matches ids only, so an id-less parameter would otherwise be
+silently unrepairable.
+
+- `accepts_type` is `accepts_parameter_type`, factored out of
+  `adapt_for_drag_source`, so drag-aware add and the open port share one
+  predicate.
+- `reserved_names`: the lexer's keywords plus `expression` and `parameters`.
+  `fallback_name`: `"x"`.
+- `append` pushes `ExprParameter { id: max_id + 1, name, data_type,
+  data_type_str: None }`, the same id rule `set_text_properties` uses.
+- `retype` replaces `data_type` on the parameter with that id and clears its
+  `data_type_str`, so the stored text form cannot disagree with the new type.
+- Both re-run `parse_and_validate` so the output type stays current.
+
+The expression text is **never** edited. A new parameter is unused until the
+user writes it in. That's a cheap state (no error), and guessing an edit to
+the user's expression is not. A retype that breaks a member access (`r.a`
+after the field became `b`) shows up as the expression's own error, which
+the user fixes in the text.
 
 ## Anonymous `record_construct`
 
@@ -263,6 +420,18 @@ today, so existing files and corpus snapshots don't churn.
   before inputs, so `a: x` finds its pin.
 - **Rename** (panel / API) moves the field's `literal_values` key. Delete
   drops it.
+- **`DeclaredInputs`:** `declared_inputs()` is `Some(self)` while `schema` is
+  empty, and `None` in named mode. A def's fields are retyped in the schema
+  editor, never from a wire. A pin's id is `ANON_FIELD_PIN_ID_BASE |
+  field.id`, so `declares_pin` checks the base bit and looks up the low bits.
+  `accepts_type` is the field-type predicate of Phase 2, `reserved_names` is
+  `schema`, `fields` and `literal_values`, and `fallback_name` is `"field"`.
+  `append` allocates from `next_field_id`. `retype` replaces the field's
+  `data_type` and drops the field's literal. A retype only happens on a
+  wired field, whose literal is not in use, and only to a different type,
+  which the literal was not written for. The rule is the mode switch's: a
+  literal is never kept where it could reappear with the wrong type.
+  Undo brings it back.
 
 ### Promotion
 
@@ -301,7 +470,8 @@ pub fn promote_record_construct(
 
 ## Flutter
 
-- **`NodeView` / API:** `has_open_input_port: bool` per node, from the hook.
+- **`NodeView` / API:** `has_open_input_port: bool` per node, which is
+  `declared_inputs().is_some()`.
 - **Node widget:** when set, one extra input row below the last pin, holding
   a `+` glyph in the pin column. It is a `DragTarget<PinReference>`. Its
   `onWillAcceptWithDetails` applies the scope-prefix and zone-input rules of
@@ -331,6 +501,24 @@ pub fn promote_record_construct(
 - **Name this record… dialog:** a name field and, when
   `matching_record_defs_for` is non-empty, a "Same shape as:" list. Each
   entry is a **Use** button that points the node at that def instead.
+- **Take type from wire, in the panel:** both editors fetch
+  `getWireTypeOffers(scopePath, nodeId)` alongside their data and index it by
+  row. A row with an offer gets a warning marker and, under its type
+  selector, a **Use wire's type: `<type>`** button. The type is printed with
+  the same formatter as the type selector, so `{b: Float}` reads as the
+  wire's tooltip does. The button calls
+  `model.takeTypesFromWires(nodeId, [index], scopeChain:
+  propertyEditorScopeChain)`. The offers are re-fetched on every rebuild of
+  the panel. They are cheap (one type resolution per wired input), and a
+  cached copy would go stale exactly when upstream changes, which is the
+  case they exist for.
+- **Take type from wire, in the node context menu:** `_handleContextMenu`
+  computes the offers before `showMenu`, as it does for the other gated
+  items, and adds **Take types from wires** to the **Edit** section when any
+  entry is `Some`. It calls `model.takeTypesFromWires(nodeId, offeredIndices,
+  scopeChain: <the clicked node's scope chain>)`, like the menu's other
+  node operations, so it acts on the clicked node even when the property
+  panel shows another one.
 
 ## Phases
 
@@ -372,15 +560,21 @@ anonymous-typed parameter survives a `set_expr_data` round-trip of its
 parameter list. Docs: the reference-guide sentence becomes true; nothing to
 change there beyond an example.
 
-### Phase 1 — the open port core, and `expr`
+### Phase 1 — declared inputs core, the open port and Take type from wire, on `expr`
 
-- `NodeData` hooks; `open_port_name.rs`; `StructureDesigner::add_input_from_wire`
-  and `NetworkSnapshotCommand` (`undo/commands/network_snapshot.rs`); `ExprData` implements the hooks and
-  `accepts_parameter_type` is factored out of `adapt_for_drag_source`.
+- `declared_inputs.rs`: the `DeclaredInputs` trait and
+  `derive_open_port_name`. The `declared_inputs` / `declared_inputs_mut`
+  accessors on `NodeData`.
+- `declared_input_ops.rs`: `resolve_wire_source_type`,
+  `add_input_from_wire`, `wire_type_offers`, `take_types_from_wires`.
+- `NetworkSnapshotCommand` (`undo/commands/network_snapshot.rs`).
+- `ExprData` implements `DeclaredInputs`, and `accepts_parameter_type` is
+  factored out of `adapt_for_drag_source`.
 - API: `add_input_from_wire`, `can_add_input_from_wire`,
+  `get_wire_type_offers`, `take_types_from_wires`, and
   `has_open_input_port` on the node view. Run `cargo fmt`, then FRB codegen.
 
-Tests (`tests/structure_designer/open_port_test.rs` and
+Tests (`tests/structure_designer/declared_inputs_test.rs` and
 `tests/structure_designer/open_port_name_test.rs` in the crate, plus
 `rust/tests/structure_designer_api/`):
 
@@ -398,14 +592,40 @@ Tests (`tests/structure_designer/open_port_test.rs` and
   unchanged and pushes no undo step;
 - capture wire: source in the parent scope, destination inside a `map` body;
 - undo restores parameter list and wires in one step; redo reapplies;
-- a later rename through `set_expr_data` keeps the wire (id preserved).
+- a later rename through `set_expr_data` keeps the wire (id preserved);
+- offers: an `expr` parameter declared `Float` and fed by a `Vec3` output is
+  offered `Vec3`. One fed by `Int` is **not** offered (compatible). An
+  unwired parameter is not offered. A source that resolves to a `Function`
+  is not offered (refused by `accepts_type`). The offers agree with
+  `validate_wires`: a pin is offered exactly when it carries a mismatch
+  error and `accepts_type` passes. This is checked over a small table of
+  source/declared pairs, which pins `resolve_wire_source_type` to the
+  validator;
+- offers through a polymorphic chain (`SameAsInput`): the offered type is
+  the resolved concrete type;
+- `take_types_from_wires` retypes the parameter, keeps its id, name and
+  wire, leaves the expression text unchanged, and clears the mismatch error.
+  The `expr`'s output type follows (e.g. `x * 2` changes from `Float` to
+  `Vec3`). Two stale inputs taken together give one undo step; undo
+  restores both types; redo reapplies;
+- refusals: an index with no offer, an empty list, read-only network. Each
+  leaves the network unchanged and pushes no undo step. A list that mixes an
+  offered and a non-offered index changes nothing.
+
+Docs: `crates/atomcad-structure-designer/src/nodes/AGENTS.md` gets a short
+"Declared inputs" note. A node whose input list is its own data implements
+`DeclaredInputs` and returns it from `declared_inputs()`, and that is all it
+takes to get the open port and Take type from wire; no orchestrator names a
+node type. Pins are addressed by id. No user-visible change yet, so no
+reference-guide change.
 
 ### Phase 2 — anonymous `record_construct`
 
 - Data model, `ANON_FIELD_PIN_ID_BASE`, anonymous node-type branch,
-  factored eval, text-format `fields`, the hooks, the `FromInput` anonymous
-  adaptation, rename moving literal keys, and a mode switch dropping the
-  literals that do not carry over.
+  factored eval, text-format `fields`, the `DeclaredInputs` impl (`Some`
+  only in anonymous mode, `retype` dropping the field's literal), the
+  `FromInput` anonymous adaptation, rename moving literal keys, and a mode
+  switch dropping the literals that do not carry over.
 - Field-type predicate: reuse the one the schema editor / def validator
   applies to a field type. If none exists as a function, add
   `is_valid_record_field_type` beside `validate_field_optionals` and have
@@ -424,6 +644,19 @@ API tests, cnnd round-trip):
 - the output wires into an `expr` parameter typed with the same anonymous
   type, and `r.a` evaluates;
 - `add_input_from_wire` appends a field; refusals as in Phase 1;
+- `declared_inputs()` is `Some` in anonymous mode and `None` in named mode;
+  a named-mode node has no open port and no offers, even with a mismatched
+  wire on a field;
+- **the rename scenario, end to end:** anonymous node `r` with field `a`,
+  its output dropped on an `expr` `+` (parameter declared `{a: Float}`,
+  expression `p.a`). Rename `a` to `b`. `r`'s input wire is kept. The
+  `expr`'s wire is kept and carries a mismatch error. `wire_type_offers`
+  offers `{b: Float}`. Take it: the mismatch clears, and the expression's
+  `p.a` now reports its own error. Edit the expression to `p.b`: it
+  evaluates;
+- `take_types_from_wires` on an anonymous field: the field is retyped, its
+  pin id and wire are kept, and its literal is dropped. Undo restores the
+  type and the literal;
 - mode switch: an anonymous node with fields `a` and `b` (wired, `a` also
   with a literal) picks def `Foo { b, c }`. `b`'s wire is kept, `a`'s wire
   and literal are dropped, and no wire lands on `c`. Run this a second time
@@ -481,6 +714,9 @@ Tests:
 - `expr` editor: consume `pendingNameFocus`.
 - `record_construct` editor: anonymous field list, Add field, Name this
   record… dialog with the "Same shape as" list, and the context-menu entry.
+- Take type from wire: the per-row marker and **Use wire's type** button in
+  both editors, the **Take types from wires** context-menu item, and
+  `model.takeTypesFromWires`.
 
 Tests: a Rust test that the estimators count the open-port row (an `expr`
 with *n* parameters estimates as *n*+1 rows; named-mode `record_construct`
@@ -501,19 +737,28 @@ as *n*). The UI itself is checked by a manual walkthrough
 6. Inside a `map` body, drop a captured outer value on an `expr` `+`.
 7. Auto-layout a network containing these nodes: no overlaps (height
    accounting).
-8. Flutter smoke test (`flutter test integration_test/`): **human-only**, run
+8. Take type from wire: in the network from step 3, rename a field of the
+   `record_construct`. The downstream `expr` turns red. Select it: the
+   stale parameter row shows the marker and **Use wire's type: `{…}`**.
+   Click it: the error moves into the expression text; fix the member
+   access and the node evaluates. Ctrl+Z restores the old type. Make two
+   inputs stale and use **Take types from wires** from the node's context
+   menu: both are fixed, and one Ctrl+Z undoes both. On a healthy node the
+   menu item is absent.
+9. Flutter smoke test (`flutter test integration_test/`): **human-only**, run
    by the maintainer.
 
 Docs: `reference_guide/node_networks.md` gets a short "open port" paragraph
 (where it appears, what a drop does, renaming after); the `expr` and
-`record_construct` sections mention the `+` row and Name this record…; and
+`record_construct` sections mention the `+` row, Name this record… and Take
+type from wire, the last with the rename case as its example; and
 `lib/structure_designer/AGENTS.md` notes that the `+` row counts in node
 height on both sides.
 
 ## Testing
 
 Rust behaviour is tested at the layer that owns it: name derivation as a
-pure function, the orchestrator and node behaviour through
+pure function, the orchestrators and each node's `DeclaredInputs` impl through
 `StructureDesigner` in the crate's `tests/`, and the FFI surface in
 `rust/tests/structure_designer_api/`. Persistence uses the existing `.cnnd`
 round-trip corpus and the text-format `query` → `--replace` no-op rule. If
@@ -525,6 +770,14 @@ by the Phase 4 walkthrough.
 
 - **Drag from `+`** to a source output: the same operation started from the
   other end.
+- **A wire context menu**, with Take type from wire on a mismatched wire into
+  a declared input. The canvas has no wire menu today: a right-click reaches
+  the background or a node menu. When it gets one, the item calls the same
+  `take_types_from_wires` with one index. No new backend is needed.
+- **Rename following into consumers:** retyping downstream inputs
+  automatically when an anonymous field is renamed. This would make declared
+  types live, which the "declared type" decision rules out. Promotion gives
+  cascading renames through `FieldId`s instead.
 - **Pack selection into record:** select several nodes and choose "Pack
   outputs into record". This creates an anonymous `record_construct` with
   one field per selected node's primary output, which is the bulk form of
