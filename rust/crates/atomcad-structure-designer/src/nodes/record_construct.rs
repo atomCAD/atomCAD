@@ -3,13 +3,13 @@ use crate::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::evaluator::network_evaluator::NetworkEvaluator;
 use crate::evaluator::network_evaluator::NetworkStackElement;
 use crate::evaluator::network_result::NetworkResult;
-use crate::node_data::{DragDirection, EvalOutput, NodeData};
+use crate::node_data::{DragDirection, EvalOutput, MissingDefs, NodeData};
 use crate::node_network_gadget::NodeNetworkGadget;
 use crate::node_type::NodeTypeCategory;
 use crate::node_type::{
     NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
 };
-use crate::node_type_registry::{NodeTypeRegistry, RecordTypeDef};
+use crate::node_type_registry::{NodeTypeRegistry, RecordDefs};
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
 use serde::{Deserialize, Serialize};
@@ -40,9 +40,7 @@ impl NodeData for RecordConstructData {
     }
 
     /// `record_construct`'s parameters and output pin depend on the registry,
-    /// not on data alone. The registry-aware path in
-    /// `NodeTypeRegistry::populate_custom_node_type_cache_with_types`
-    /// installs the cached `NodeType` for record nodes.
+    /// not on data alone; they are built by `build_record_node_type`.
     fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
         None
     }
@@ -89,34 +87,26 @@ impl NodeData for RecordConstructData {
             // `evaluate_arg`, which on an unwired pin yields None — which then
             // collapses the record for a required field, or is kept as an
             // explicit `None` for an `Optional` field (below).
-            let wired = node
-                .arguments
-                .get(param_index)
-                .map(|arg| !arg.is_empty())
-                .unwrap_or(false);
-            let value = if wired {
-                network_evaluator.evaluate_arg(
+            let value = network_evaluator
+                .wired_or_literal(
                     network_stack,
                     node_id,
                     registry,
                     context,
+                    node,
                     param_index,
+                    self.literal_values.get(field_name),
+                    &pin_type,
                 )
-            } else if let Some(literal) = self
-                .literal_values
-                .get(field_name)
-                .and_then(|tv| tv.to_network_result(&pin_type))
-            {
-                literal
-            } else {
-                network_evaluator.evaluate_arg(
-                    network_stack,
-                    node_id,
-                    registry,
-                    context,
-                    param_index,
-                )
-            };
+                .unwrap_or_else(|| {
+                    network_evaluator.evaluate_arg(
+                        network_stack,
+                        node_id,
+                        registry,
+                        context,
+                        param_index,
+                    )
+                });
             match &value {
                 // A `None` on a required field still collapses the whole record
                 // to `None` (pre-Optional all-or-nothing behavior). A `None` on
@@ -194,6 +184,30 @@ impl NodeData for RecordConstructData {
             literal_values: HashMap::new(),
         }))
     }
+
+    fn record_schema_ref(&self) -> Option<&str> {
+        Some(&self.schema)
+    }
+
+    fn set_record_schema_ref(&mut self, name: String) {
+        self.schema = name;
+    }
+
+    fn build_record_node_type(
+        &self,
+        base: &NodeType,
+        defs: RecordDefs<'_>,
+        missing: MissingDefs,
+    ) -> Option<NodeType> {
+        if missing == MissingDefs::Refuse && defs.lookup(&self.schema).is_none() {
+            return None;
+        }
+        Some(build_node_type_for_schema_with_defs(
+            base,
+            &self.schema,
+            defs,
+        ))
+    }
 }
 
 /// Build the `NodeType` for a `record_construct` node bound to the given
@@ -206,31 +220,21 @@ pub fn build_node_type_for_schema(
     schema: &str,
     registry: &NodeTypeRegistry,
 ) -> NodeType {
-    build_node_type_for_schema_with_defs(
-        base_node_type,
-        schema,
-        &registry.record_type_defs,
-        &registry.built_in_record_type_defs,
-    )
+    build_node_type_for_schema_with_defs(base_node_type, schema, registry.record_defs())
 }
 
-/// Same as `build_node_type_for_schema`, but takes the record-type-defs maps
-/// directly so the cache populator can call it without conflicting with a
-/// concurrent `&mut node_networks` borrow on the registry. Looks up the
-/// schema name in `record_type_defs` first, then `built_in_record_type_defs`.
+/// Same as `build_node_type_for_schema`, but takes a [`RecordDefs`] view so
+/// the cache populator can call it without conflicting with a concurrent
+/// `&mut node_networks` borrow on the registry.
 pub fn build_node_type_for_schema_with_defs(
     base_node_type: &NodeType,
     schema: &str,
-    record_type_defs: &HashMap<String, RecordTypeDef>,
-    built_in_record_type_defs: &HashMap<String, RecordTypeDef>,
+    defs: RecordDefs<'_>,
 ) -> NodeType {
     let mut custom = base_node_type.clone();
     custom.output_pins =
         OutputPinDefinition::single_fixed(DataType::Record(RecordType::Named(schema.to_string())));
-    if let Some(def) = record_type_defs
-        .get(schema)
-        .or_else(|| built_in_record_type_defs.get(schema))
-    {
+    if let Some(def) = defs.lookup(schema) {
         // Pin order = authored field order. An `Optional[T]` field is exposed
         // as a plain `T` input pin (the value/wire layer never sees `Optional`;
         // the optional behavior lives in `eval`'s collapse exemption). See

@@ -466,6 +466,8 @@ mod record_types_phase3_test;
 #[path = "structure_designer/record_types_phase4_test.rs"]
 mod record_types_phase4_test;
 
+#[path = "structure_designer/record_node_hook_test.rs"]
+mod record_node_hook_test;
 #[path = "structure_designer/record_types_phase8_test.rs"]
 mod record_types_phase8_test;
 
@@ -504,6 +506,8 @@ mod record_construct_property_panel_test;
 
 #[path = "structure_designer/switch_test.rs"]
 mod switch_test;
+#[path = "structure_designer/variadic_ids_test.rs"]
+mod variadic_ids_test;
 
 #[path = "structure_designer/cone_scoped_blocking_test.rs"]
 mod cone_scoped_blocking_test;

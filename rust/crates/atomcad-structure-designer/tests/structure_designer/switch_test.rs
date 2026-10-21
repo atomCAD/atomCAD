@@ -11,6 +11,7 @@ use atomcad_structure_designer::evaluator::network_evaluator::{
 };
 use atomcad_structure_designer::evaluator::network_result::NetworkResult;
 use atomcad_structure_designer::node_data::NodeData;
+use atomcad_structure_designer::node_network::FunctionPinRole;
 use atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
 use atomcad_structure_designer::nodes::array_at::ArrayAtData;
 use atomcad_structure_designer::nodes::int::IntData;
@@ -1840,5 +1841,109 @@ fn test_set_switch_data_targets_body_node_via_scope_path() {
             .collect::<Vec<_>>(),
         vec![SwitchCaseValue::Int(0), SwitchCaseValue::Int(1)],
         "the same-id top-level switch must NOT be affected by the scoped edit"
+    );
+}
+
+// ============================================================================
+// Function-pin roles follow their pin across a case-list edit
+// (`doc/design_record_get_set.md` Phase 0, test 3)
+// ============================================================================
+
+fn switch_roles(
+    designer: &StructureDesigner,
+    node_id: u64,
+) -> std::collections::BTreeMap<usize, FunctionPinRole> {
+    designer.node_type_registry.node_networks["test"].nodes[&node_id]
+        .function_pin_roles
+        .clone()
+}
+
+/// Cases `[10, 20, 30]`, `Delayed` on `case_20` (pin 2) and `Supplied` on
+/// `default` (pin 4).
+fn three_case_switch_with_roles(designer: &mut StructureDesigner) -> u64 {
+    let (sw, ..) = build_three_case_int_switch(designer, 30);
+    designer.set_function_pin_role(&[], sw, 2, FunctionPinRole::Delayed);
+    designer.set_function_pin_role(&[], sw, 4, FunctionPinRole::Supplied);
+    assert_eq!(
+        switch_roles(designer, sw),
+        [
+            (2, FunctionPinRole::Delayed),
+            (4, FunctionPinRole::Supplied)
+        ]
+        .into()
+    );
+    sw
+}
+
+#[test]
+fn test_function_pin_roles_follow_their_case_pin() {
+    let mut designer = setup_designer_with_network("test");
+    let sw = three_case_switch_with_roles(&mut designer);
+
+    // Remove case 10: case_20 moves from pin 2 to pin 1, default from 4 to 3,
+    // and each role moves with its pin.
+    designer
+        .set_switch_data(
+            &[],
+            sw,
+            DataType::Int,
+            DataType::Int,
+            vec![SwitchCaseValue::Int(20), SwitchCaseValue::Int(30)],
+        )
+        .unwrap();
+    assert_eq!(
+        switch_case_pin_names(&designer, "test", sw),
+        vec!["selector", "case_20", "case_30", "default"]
+    );
+    assert_eq!(
+        switch_roles(&designer, sw),
+        [
+            (1, FunctionPinRole::Delayed),
+            (3, FunctionPinRole::Supplied)
+        ]
+        .into()
+    );
+
+    // Undo restores the roles where they were.
+    assert!(designer.undo());
+    assert_eq!(
+        switch_roles(&designer, sw),
+        [
+            (2, FunctionPinRole::Delayed),
+            (4, FunctionPinRole::Supplied)
+        ]
+        .into()
+    );
+}
+
+#[test]
+fn test_function_pin_role_of_a_removed_case_is_dropped() {
+    let mut designer = setup_designer_with_network("test");
+    let sw = three_case_switch_with_roles(&mut designer);
+
+    // Remove case 20 itself: its role goes with it and does not land on
+    // case_30, which now sits at pin 2.
+    designer
+        .set_switch_data(
+            &[],
+            sw,
+            DataType::Int,
+            DataType::Int,
+            vec![SwitchCaseValue::Int(10), SwitchCaseValue::Int(30)],
+        )
+        .unwrap();
+    assert_eq!(
+        switch_roles(&designer, sw),
+        [(3, FunctionPinRole::Supplied)].into()
+    );
+
+    assert!(designer.undo());
+    assert_eq!(
+        switch_roles(&designer, sw),
+        [
+            (2, FunctionPinRole::Delayed),
+            (4, FunctionPinRole::Supplied)
+        ]
+        .into()
     );
 }

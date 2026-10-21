@@ -63,6 +63,7 @@ use crate::node_network_gadget::NodeNetworkGadget;
 use crate::node_type::NodeTypeCategory;
 use crate::node_type::{NodeType, OutputPinDefinition, Parameter, generic_node_data_saver};
 use crate::node_type_registry::NodeTypeRegistry;
+use crate::nodes::variadic_ids::merge_ids_by_key;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
 use serde::{Deserialize, Serialize};
@@ -203,14 +204,10 @@ impl SwitchData {
     /// resolving *all* value matches before any positional fallback prevents an
     /// early positional fallback from stealing the id a later value match needs.
     ///
-    /// 1. Reject duplicates / empty list (node left unchanged on error).
-    /// 2. **Value-match pass**: a new value equal to an old case's value keeps
-    ///    that old case's id (removal + reorder).
-    /// 3. **Positional-fallback pass**: a still-unmatched new value inherits the
-    ///    id of the old case at its index if that case exists and its id was not
-    ///    consumed by the value-match pass (in-place value edit — the wire
-    ///    follows).
-    /// 4. **Mint pass**: any new value still without an id takes `next_case_id`.
+    /// Rejects duplicates / an empty list (node left unchanged on error), then
+    /// runs the shared three-pass merge [`merge_ids_by_key`] keyed by value:
+    /// value match (removal + reorder), positional fallback (in-place value
+    /// edit — the wire follows), mint from `next_case_id`.
     pub fn merge_cases(&mut self, new_values: Vec<SwitchCaseValue>) -> Result<(), String> {
         if new_values.is_empty() {
             return Err("switch requires at least one case".to_string());
@@ -226,52 +223,17 @@ impl SwitchData {
             }
         }
 
-        let old = std::mem::take(&mut self.cases);
-        let mut consumed = vec![false; old.len()];
-        let mut assigned: Vec<Option<u64>> = vec![None; new_values.len()];
-
-        // Pass 2: value match. Old and new values are each unique, so a given
-        // new value matches at most one old case and no two new values contend
-        // for the same old id — the match is unambiguous.
-        for (ni, nv) in new_values.iter().enumerate() {
-            if let Some(oi) = old.iter().position(|c| &c.value == nv)
-                && let Some(id) = old[oi].id
-            {
-                assigned[ni] = Some(id);
-                consumed[oi] = true;
-            }
-        }
-
-        // Pass 3: positional fallback for unmatched new values. A new value at
-        // index `ni` inherits the old case at the *same* index, if that old case
-        // exists and its id was not already claimed by the value-match pass. The
-        // `consumed`/`old` vectors are old-length, so `ni` can run past them when
-        // the list grows — treat an out-of-range index as "no old case here"
-        // (mint below) rather than indexing out of bounds.
-        for (ni, slot) in assigned.iter_mut().enumerate() {
-            if slot.is_some() || consumed.get(ni).copied().unwrap_or(true) {
-                continue;
-            }
-            if let Some(id) = old.get(ni).and_then(|c| c.id) {
-                *slot = Some(id);
-                consumed[ni] = true;
-            }
-        }
-
-        // Pass 4: mint fresh ids for whatever remains.
+        let old: Vec<(Option<u64>, SwitchCaseValue)> = std::mem::take(&mut self.cases)
+            .into_iter()
+            .map(|c| (c.id, c.value))
+            .collect();
+        let ids = merge_ids_by_key(&old, &new_values, |a, b| a == b, &mut self.next_case_id);
         self.cases = new_values
             .into_iter()
-            .zip(assigned)
-            .map(|(value, id)| {
-                let id = id.unwrap_or_else(|| {
-                    let fresh = self.next_case_id;
-                    self.next_case_id += 1;
-                    fresh
-                });
-                SwitchCase {
-                    id: Some(id),
-                    value,
-                }
+            .zip(ids)
+            .map(|(value, id)| SwitchCase {
+                id: Some(id),
+                value,
             })
             .collect();
         Ok(())

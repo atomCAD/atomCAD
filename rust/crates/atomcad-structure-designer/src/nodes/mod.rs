@@ -110,6 +110,7 @@ pub mod tag;
 pub mod union;
 pub mod union_2d;
 pub mod value;
+pub mod variadic_ids;
 pub mod vec2;
 pub mod vec3;
 pub mod with_structure;

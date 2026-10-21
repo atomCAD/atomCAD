@@ -590,8 +590,9 @@ fn name_under_mount_unresolved_record(registry: &NodeTypeRegistry, name: &str) -
 }
 
 /// The first name under a mount that `node` refers to and that does not
-/// resolve, if any: its `node_type_name`, a record schema / target, or a
-/// `Named` record inside any `DataType` stored in its data. Whatever the
+/// resolve, if any: its `node_type_name`, a record schema / target, a
+/// `Named` record inside any `DataType` stored in its data, or a def a record
+/// node's path rows walk into (`NodeData::record_path_defs`). Whatever the
 /// mount's status — a `Loaded` mount that dropped the name counts. Names
 /// outside every mount are not reported (they keep today's behaviour).
 pub fn unresolved_mount_ref(node: &Node, registry: &NodeTypeRegistry) -> Option<String> {
@@ -607,7 +608,16 @@ pub fn unresolved_mount_ref(node: &Node, registry: &NodeTypeRegistry) -> Option<
             found = Some(name.to_string());
         }
     });
-    found
+    if found.is_some() {
+        return found;
+    }
+    // A def a record node's path rows walk into (not only its schema) freezes
+    // the node too (`doc/design_record_get_set.md`, "Frozen nodes and nested
+    // paths").
+    node.data
+        .record_path_defs(registry.record_defs())
+        .into_iter()
+        .find(|name| name_under_mount_unresolved_record(registry, name))
 }
 
 /// Shorthand for `unresolved_mount_ref(..).is_some()`.
@@ -773,11 +783,11 @@ pub(crate) fn recorded_entry<'r, T>(
 
 /// The pin layout a **frozen** node gets from the recorded interface of the
 /// name it refers to (§13 item 6): an instance gets the entry's parameters
-/// (with their ids) and outputs; a `record_construct` / `record_destructure`
-/// / `product` gets the entry's fields, stamped exactly as
-/// `build_node_type_for_schema_with_defs` would stamp them from a live def.
-/// `None` when the node is not frozen, refers to the name only through a type,
-/// or no `uses` entry records the name.
+/// (with their ids) and outputs; a record node builds its own layout
+/// (`NodeData::build_record_node_type`) from the live defs overlaid with the
+/// recorded interface of every unresolved def the `uses` table records, exactly
+/// as it would from live defs. `None` when the node is not frozen, refers to
+/// the name only through a type, or a def it needs is recorded nowhere.
 ///
 /// `owner` is the mount owning the network the node lives in (see
 /// [`owner_mount`]).
@@ -821,57 +831,62 @@ pub fn recorded_layout(
             public: true,
         });
     }
-    let schema = record_node_schema(node)?;
-    if schema != name {
-        return None;
-    }
-    let entry = recorded_entry(registry, &name, owner, |u, k| u.records.get(k))?;
-    let def = RecordTypeDef {
-        name: name.clone(),
-        fields: entry
-            .fields
-            .iter()
-            .map(|f| crate::node_type_registry::RecordField {
-                id: crate::node_type_registry::FieldId(f.id),
-                name: f.name.clone(),
-                data_type: parse_recorded_type(&f.data_type),
-                hint: None,
-            })
-            .collect(),
-        next_field_id: entry.fields.iter().map(|f| f.id + 1).max().unwrap_or(0),
-    };
-    let defs: std::collections::HashMap<String, RecordTypeDef> =
-        std::iter::once((name.clone(), def)).collect();
+    // A record node. The unresolved name may be its schema or a def one of
+    // its rows walks into, so lay the recorded interface of every unresolved
+    // record def this file's `uses` records over the live defs, and let the
+    // node build its own layout. `Refuse`: a def still missing after that
+    // keeps the cached layout (`install_recorded_layout` returns `false`).
+    node.data.record_schema_ref()?;
     let base = registry.built_in_node_types.get(&node.node_type_name)?;
-    let built_in = &registry.built_in_record_type_defs;
-    Some(match node.node_type_name.as_str() {
-        "record_construct" => crate::nodes::record_construct::build_node_type_for_schema_with_defs(
-            base, &name, &defs, built_in,
-        ),
-        "record_destructure" => {
-            crate::nodes::record_destructure::build_node_type_for_schema_with_defs(
-                base, &name, &defs, built_in,
-            )
-        }
-        _ => crate::nodes::product::build_node_type_for_target_with_defs(
-            base, &name, &defs, built_in,
-        ),
-    })
+    let overlay = recorded_unresolved_record_defs(registry, owner);
+    node.data.build_record_node_type(
+        base,
+        registry.record_defs().with_overlay(&overlay),
+        crate::node_data::MissingDefs::Refuse,
+    )
 }
 
-/// The record def a `record_construct` / `record_destructure` / `product`
-/// node is built on.
-pub(crate) fn record_node_schema(node: &Node) -> Option<String> {
-    let data = node.data.as_any_ref();
-    if let Some(d) = data.downcast_ref::<crate::nodes::record_construct::RecordConstructData>() {
-        return Some(d.schema.clone());
-    }
-    if let Some(d) = data.downcast_ref::<crate::nodes::record_destructure::RecordDestructureData>()
+/// The recorded interface (as a def) of every record def that the `uses`
+/// tables of `owner`'s mounts record and that does not resolve: the overlay
+/// [`recorded_layout`] lays over the live defs.
+fn recorded_unresolved_record_defs(
+    registry: &NodeTypeRegistry,
+    owner: Option<&str>,
+) -> std::collections::HashMap<String, RecordTypeDef> {
+    let mut out = std::collections::HashMap::new();
+    for m in registry
+        .library_links
+        .iter()
+        .filter(|m| m.parent.as_deref() == owner)
     {
-        return Some(d.schema.clone());
+        for (key, entry) in &m.stored_uses.records {
+            let name = format!("{}.{}", m.mount_path, key);
+            if out.contains_key(&name) || !name_under_mount_unresolved_record(registry, &name) {
+                continue;
+            }
+            let def = RecordTypeDef {
+                name: name.clone(),
+                fields: entry
+                    .fields
+                    .iter()
+                    .map(|f| crate::node_type_registry::RecordField {
+                        id: crate::node_type_registry::FieldId(f.id),
+                        name: f.name.clone(),
+                        data_type: parse_recorded_type(&f.data_type),
+                        hint: None,
+                    })
+                    .collect(),
+                next_field_id: entry.fields.iter().map(|f| f.id + 1).max().unwrap_or(0),
+            };
+            out.insert(name, def);
+        }
     }
-    data.downcast_ref::<crate::nodes::product::ProductData>()
-        .map(|d| d.target.clone())
+    out
+}
+
+/// The record def a record node is built on.
+pub(crate) fn record_node_schema(node: &Node) -> Option<String> {
+    node.data.record_schema_ref().map(str::to_string)
 }
 
 /// Installs the recorded layout (§13 item 6) on `node` if it is frozen and

@@ -805,6 +805,94 @@ fn wires_out_of_a_frozen_record_destructure_survive() {
     }
 }
 
+/// Each frozen record node gets *its own* layout from the recorded interface.
+/// `recorded_layout` used to end in a `_ =>` arm that gave any record node it
+/// did not list `product`'s layout; the layouts now come from the nodes'
+/// `build_record_node_type` hook (`doc/design_record_get_set.md` Phase 0).
+#[test]
+fn frozen_record_nodes_get_their_own_recorded_layout() {
+    use atomcad_structure_designer::data_type::RecordType;
+    use atomcad_structure_designer::library_links::recorded_layout;
+    use atomcad_structure_designer::node_type::PinOutputType;
+
+    let (_ws, host) = broken_host(Cause::Missing);
+    let d = open(&host);
+    let registry = &d.node_type_registry;
+    let main = &registry.node_networks["Main"];
+    let miller = DataType::Record(RecordType::Named("demolib.Miller".to_string()));
+    let fixed = |t: &PinOutputType| match t {
+        PinOutputType::Fixed(t) => t.clone(),
+        other => panic!("expected a fixed pin, got {:?}", other),
+    };
+
+    let rd = &main.nodes[&node_id(&d, "Main", "rd")];
+    assert!(is_frozen(rd, registry));
+    let layout = recorded_layout(rd, registry, None).expect("record_destructure layout");
+    assert_eq!(layout.name, "record_destructure");
+    assert_eq!(layout.parameters.len(), 1);
+    assert_eq!(layout.parameters[0].name, "record");
+    assert_eq!(layout.parameters[0].data_type, miller);
+    let outputs: Vec<(&str, DataType, Option<u64>)> = layout
+        .output_pins
+        .iter()
+        .map(|p| (p.name.as_str(), fixed(&p.data_type), p.id))
+        .collect();
+    assert_eq!(
+        outputs,
+        vec![
+            ("h", DataType::Int, Some(0)),
+            ("k", DataType::Int, Some(1)),
+            ("l", DataType::Int, Some(2)),
+        ]
+    );
+
+    let pr = &main.nodes[&node_id(&d, "Main", "pr")];
+    assert!(is_frozen(pr, registry));
+    let layout = recorded_layout(pr, registry, None).expect("product layout");
+    assert_eq!(layout.name, "product");
+    let params: Vec<(&str, DataType, Option<u64>)> = layout
+        .parameters
+        .iter()
+        .map(|p| (p.name.as_str(), p.data_type.clone(), p.id))
+        .collect();
+    let iter_int = DataType::Iterator(Box::new(DataType::Int));
+    assert_eq!(
+        params,
+        vec![
+            ("h", iter_int.clone(), Some(0)),
+            ("k", iter_int.clone(), Some(1)),
+            ("l", iter_int, Some(2)),
+        ]
+    );
+    assert_eq!(layout.output_pins.len(), 1);
+    assert_eq!(
+        fixed(&layout.output_pins[0].data_type),
+        DataType::Iterator(Box::new(miller.clone()))
+    );
+
+    let rc = &main.nodes[&node_id(&d, "Main", "rc")];
+    let layout = recorded_layout(rc, registry, None).expect("record_construct layout");
+    assert_eq!(layout.name, "record_construct");
+    let params: Vec<(&str, DataType)> = layout
+        .parameters
+        .iter()
+        .map(|p| (p.name.as_str(), p.data_type.clone()))
+        .collect();
+    assert_eq!(
+        params,
+        vec![
+            ("h", DataType::Int),
+            ("k", DataType::Int),
+            ("l", DataType::Int)
+        ]
+    );
+    assert_eq!(fixed(&layout.output_pins[0].data_type), miller);
+
+    // The installed layouts are those layouts.
+    assert_eq!(rd.custom_node_type.as_ref().unwrap().output_pins.len(), 3);
+    assert_eq!(pr.custom_node_type.as_ref().unwrap().parameters.len(), 3);
+}
+
 #[test]
 fn body_wires_of_a_map_over_a_linked_record_survive() {
     for cause in CAUSES {

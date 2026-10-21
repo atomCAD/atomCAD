@@ -955,6 +955,11 @@ impl Node {
                 // Rebuild the arguments array, preserving connections using
                 // ID-based matching (primary) or name-based (fallback).
                 let mut new_arguments = vec![Argument::new(); new_node_type.parameters.len()];
+                // `function_pin_roles` is input-pin-index-keyed like
+                // `arguments`, so it follows the same old → new index map; the
+                // role of a pin that disappeared is dropped
+                // (`doc/design_record_get_set.md`, "Node shape").
+                let old_roles = std::mem::take(&mut self.function_pin_roles);
 
                 // Build ID map for old parameters
                 let old_id_map: std::collections::HashMap<u64, usize> = old_node_type
@@ -990,6 +995,9 @@ impl Node {
                     {
                         new_arguments[new_index] = self.arguments[old_idx].clone();
                     }
+                    if let Some(role) = old_index.and_then(|o| old_roles.get(&o)) {
+                        self.function_pin_roles.insert(new_index, *role);
+                    }
                 }
 
                 self.arguments = new_arguments;
@@ -1015,6 +1023,7 @@ impl Node {
                 } else if self.arguments.len() > want {
                     self.arguments.truncate(want);
                 }
+                self.function_pin_roles.retain(|&i, _| i < want);
             }
         }
         self.custom_node_type = custom_node_type;

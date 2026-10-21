@@ -14,7 +14,7 @@ use atomcad_structure_designer::evaluator::network_evaluator::{
 use atomcad_structure_designer::evaluator::network_result::NetworkResult;
 use atomcad_structure_designer::node_data::NodeData;
 use atomcad_structure_designer::node_network::{
-    Argument, ArgumentKind, IncomingWire, SourcePin, Wire,
+    Argument, ArgumentKind, FunctionPinRole, IncomingWire, SourcePin, Wire,
 };
 use atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
 use atomcad_structure_designer::nodes::closure::{ClosureData, ClosureKind};
@@ -3467,4 +3467,39 @@ fn zip_phase5_scoped_setter_and_removal_target_body_node() {
         2,
         "the decoy stays at 2 lanes after a scoped removal"
     );
+}
+
+// ============================================================================
+// Function-pin roles follow their pin across a lane edit
+// (`doc/design_record_get_set.md` Phase 0, test 3)
+// ============================================================================
+
+#[test]
+fn zip_lane_removal_drops_the_lane_role_and_moves_the_f_role() {
+    let mut designer = setup_designer_with_network("main");
+    let (zip_id, ..) = build_three_lane_ac_zip(&mut designer);
+    let roles = |designer: &StructureDesigner| {
+        designer.node_type_registry.node_networks["main"].nodes[&zip_id]
+            .function_pin_roles
+            .clone()
+    };
+    // Pins: xs1 (0), xs2 (1), xs3 (2), f (3).
+    designer.set_function_pin_role(&[], zip_id, 2, FunctionPinRole::Delayed);
+    designer.set_function_pin_role(&[], zip_id, 3, FunctionPinRole::Supplied);
+    let before: std::collections::BTreeMap<usize, FunctionPinRole> = [
+        (2, FunctionPinRole::Delayed),
+        (3, FunctionPinRole::Supplied),
+    ]
+    .into();
+    assert_eq!(roles(&designer), before);
+
+    // Drop lane 3: its role is dropped, and `f` (now pin 2) keeps its own role
+    // instead of inheriting lane 3's.
+    designer
+        .set_zip_with_lanes(&[], zip_id, vec![DataType::Int, DataType::Int])
+        .unwrap();
+    assert_eq!(roles(&designer), [(2, FunctionPinRole::Supplied)].into());
+
+    assert!(designer.undo());
+    assert_eq!(roles(&designer), before);
 }

@@ -604,6 +604,53 @@ pub enum UserTypeKind {
     Record,
 }
 
+/// A `Copy` view over the record type defs a pin layout is built from: the
+/// user-declared and built-in maps, looked up user first (as
+/// [`NodeTypeRegistry::lookup_record_type_def`] does), plus an optional
+/// **overlay** consulted before both. Only `library_links::recorded_layout`
+/// sets an overlay, to lay the recorded interfaces of defs under an unloaded
+/// library mount over the live ones.
+///
+/// The registry hands one out as [`NodeTypeRegistry::record_defs`]; the cache
+/// populator, which holds `&mut node_networks` and so cannot borrow the whole
+/// registry, builds one from its two map borrows with [`RecordDefs::new`].
+#[derive(Clone, Copy)]
+pub struct RecordDefs<'a> {
+    overlay: Option<&'a HashMap<String, RecordTypeDef>>,
+    user: &'a HashMap<String, RecordTypeDef>,
+    built_in: &'a HashMap<String, RecordTypeDef>,
+}
+
+impl<'a> RecordDefs<'a> {
+    pub fn new(
+        user: &'a HashMap<String, RecordTypeDef>,
+        built_in: &'a HashMap<String, RecordTypeDef>,
+    ) -> Self {
+        RecordDefs {
+            overlay: None,
+            user,
+            built_in,
+        }
+    }
+
+    /// The same view with `overlay` consulted before the user and built-in
+    /// defs.
+    pub fn with_overlay(self, overlay: &'a HashMap<String, RecordTypeDef>) -> Self {
+        RecordDefs {
+            overlay: Some(overlay),
+            ..self
+        }
+    }
+
+    /// Resolves a def by name: overlay, then user, then built-in.
+    pub fn lookup(&self, name: &str) -> Option<&'a RecordTypeDef> {
+        self.overlay
+            .and_then(|o| o.get(name))
+            .or_else(|| self.user.get(name))
+            .or_else(|| self.built_in.get(name))
+    }
+}
+
 pub struct NodeTypeRegistry {
     pub built_in_node_types: HashMap<String, NodeType>,
     pub node_networks: HashMap<String, NodeNetwork>,
@@ -1243,58 +1290,24 @@ impl NodeTypeRegistry {
     /// Resolve the `NodeType` a drag candidate would have once instantiated
     /// with `data`, for verifying an `adapt_for_drag_source` claim.
     ///
-    /// Most nodes derive their pins from `calculate_custom_node_type`. The
-    /// registry-driven record nodes (`record_construct` / `record_destructure`
-    /// / `product`) instead build their pins from the schema's authored fields
-    /// and return `None` from `calculate_custom_node_type` — so the bare base
-    /// type (with placeholder `Record(Named(""))` pins) would never
-    /// strict-match a concrete record drag. Route those through the same
-    /// registry-aware builders the cache populator uses, so the resolved
-    /// record pin reflects the adapter's chosen schema. See issue #312.
+    /// Most nodes derive their pins from `calculate_custom_node_type`. Record
+    /// nodes instead build their pins from the schema's fields through
+    /// `NodeData::build_record_node_type` and return `None` from
+    /// `calculate_custom_node_type` — so the bare base type (with placeholder
+    /// `Record(Named(""))` pins) would never strict-match a concrete record
+    /// drag. Route them through the same hook the cache populator uses, so the
+    /// resolved record pin reflects the adapter's chosen schema. See issue #312.
     pub fn resolve_drag_candidate_type(
         &self,
         node_type: &NodeType,
         data: &dyn crate::node_data::NodeData,
     ) -> NodeType {
-        use crate::nodes::{product, record_construct, record_destructure};
-        match node_type.name.as_str() {
-            "record_construct" => {
-                if let Some(d) = data
-                    .as_any_ref()
-                    .downcast_ref::<record_construct::RecordConstructData>()
-                {
-                    return record_construct::build_node_type_for_schema_with_defs(
-                        node_type,
-                        &d.schema,
-                        &self.record_type_defs,
-                        &self.built_in_record_type_defs,
-                    );
-                }
-            }
-            "record_destructure" => {
-                if let Some(d) = data
-                    .as_any_ref()
-                    .downcast_ref::<record_destructure::RecordDestructureData>()
-                {
-                    return record_destructure::build_node_type_for_schema_with_defs(
-                        node_type,
-                        &d.schema,
-                        &self.record_type_defs,
-                        &self.built_in_record_type_defs,
-                    );
-                }
-            }
-            "product" => {
-                if let Some(d) = data.as_any_ref().downcast_ref::<product::ProductData>() {
-                    return product::build_node_type_for_target_with_defs(
-                        node_type,
-                        &d.target,
-                        &self.record_type_defs,
-                        &self.built_in_record_type_defs,
-                    );
-                }
-            }
-            _ => {}
+        if let Some(record_type) = data.build_record_node_type(
+            node_type,
+            self.record_defs(),
+            crate::node_data::MissingDefs::Dangle,
+        ) {
+            return record_type;
         }
         data.calculate_custom_node_type(node_type)
             .unwrap_or_else(|| node_type.clone())
@@ -1399,10 +1412,10 @@ impl NodeTypeRegistry {
     /// Returns whether a custom node type was populated or not
     ///
     /// `record_type_defs` and `built_in_record_type_defs` are consulted only
-    /// by record-typed nodes (`record_construct`, `record_destructure`,
-    /// `product`) — every other node derives its custom type from per-node
-    /// data via `calculate_custom_node_type`. The two maps are looked up
-    /// user-first then built-in (matching `lookup_record_type_def`).
+    /// by record nodes (`NodeData::build_record_node_type`) — every other
+    /// node derives its custom type from per-node data via
+    /// `calculate_custom_node_type`. The two maps are looked up user-first
+    /// then built-in (matching `lookup_record_type_def`).
     pub fn populate_custom_node_type_cache_with_types(
         built_in_types: &std::collections::HashMap<String, NodeType>,
         record_type_defs: &std::collections::HashMap<String, RecordTypeDef>,
@@ -1414,55 +1427,14 @@ impl NodeTypeRegistry {
             return false;
         };
 
-        // Record nodes derive their custom node type from the registry (the
-        // schema's authored fields), not from per-node data alone. We use a
-        // wrapper registry here that exposes only the record-type-defs slices
-        // — `build_node_type_for_schema` reads only those fields.
-        if node.node_type_name == "record_construct" {
-            if let Some(data) =
-                node.data
-                    .as_any_ref()
-                    .downcast_ref::<crate::nodes::record_construct::RecordConstructData>()
-            {
-                let schema = data.schema.clone();
-                let custom = crate::nodes::record_construct::build_node_type_for_schema_with_defs(
-                    base_node_type,
-                    &schema,
-                    record_type_defs,
-                    built_in_record_type_defs,
-                );
-                node.set_custom_node_type(Some(custom), refresh_args);
-                return true;
-            }
-        } else if node.node_type_name == "record_destructure" {
-            if let Some(data) =
-                node.data
-                    .as_any_ref()
-                    .downcast_ref::<crate::nodes::record_destructure::RecordDestructureData>()
-            {
-                let schema = data.schema.clone();
-                let custom = crate::nodes::record_destructure::build_node_type_for_schema_with_defs(
-                    base_node_type,
-                    &schema,
-                    record_type_defs,
-                    built_in_record_type_defs,
-                );
-                node.set_custom_node_type(Some(custom), refresh_args);
-                return true;
-            }
-        } else if node.node_type_name == "product"
-            && let Some(data) = node
-                .data
-                .as_any_ref()
-                .downcast_ref::<crate::nodes::product::ProductData>()
-        {
-            let target = data.target.clone();
-            let custom = crate::nodes::product::build_node_type_for_target_with_defs(
-                base_node_type,
-                &target,
-                record_type_defs,
-                built_in_record_type_defs,
-            );
+        // Record nodes derive their custom node type from the record defs
+        // (the schema's fields), not from per-node data alone.
+        let record_type = node.data.build_record_node_type(
+            base_node_type,
+            RecordDefs::new(record_type_defs, built_in_record_type_defs),
+            crate::node_data::MissingDefs::Dangle,
+        );
+        if let Some(custom) = record_type {
             node.set_custom_node_type(Some(custom), refresh_args);
             return true;
         }
@@ -2115,9 +2087,12 @@ impl NodeTypeRegistry {
     /// built-ins are uniformly visible. See
     /// `doc/design_atom_replace_rules_input.md` Phase A.
     pub fn lookup_record_type_def(&self, name: &str) -> Option<&RecordTypeDef> {
-        self.record_type_defs
-            .get(name)
-            .or_else(|| self.built_in_record_type_defs.get(name))
+        self.record_defs().lookup(name)
+    }
+
+    /// The registry's record defs as a [`RecordDefs`] view (no overlay).
+    pub fn record_defs(&self) -> RecordDefs<'_> {
+        RecordDefs::new(&self.record_type_defs, &self.built_in_record_type_defs)
     }
 
     /// True iff `name` names a built-in record type def. Used by mutation
@@ -3968,9 +3943,8 @@ pub enum RecordRefSite {
     /// (parameter type, `element_type`, `type_args`, `expr` param/return
     /// types, …). The name follows a record rename via the `DataType` walk.
     EmbeddedType,
-    /// A bare schema/target string property naming a record def
-    /// (`record_construct` / `record_destructure` `schema`, `product`
-    /// `target`). May be the empty string when the user has not yet picked a
+    /// A record node's bare schema/target string naming a record def
+    /// (`NodeData::record_schema_ref`). May be the empty string when the user has not yet picked a
     /// schema — callers that resolve the name must treat `""` as "no reference".
     Schema,
 }
@@ -3986,7 +3960,8 @@ pub enum RecordRefSite {
 ///
 /// **Keep this list in sync with `canonicalize::canonicalize_node_data` and
 /// [`rewrite_record_names_in_node`]** — every node-data variant that embeds a
-/// `DataType` or a schema/target name must appear here. The clipboard's
+/// `DataType` must appear here. Record nodes' schema names need no entry: they
+/// come through the `NodeData::record_schema_ref` hook. The clipboard's
 /// cross-document paste (`clipboard.rs`) relies on both.
 pub fn collect_record_refs_in_node(
     node: &crate::node_network::Node,
@@ -4006,9 +3981,6 @@ pub fn collect_record_refs_in_node(
     use crate::nodes::foreach::ForeachData;
     use crate::nodes::map::MapData;
     use crate::nodes::parameter::ParameterData;
-    use crate::nodes::product::ProductData;
-    use crate::nodes::record_construct::RecordConstructData;
-    use crate::nodes::record_destructure::RecordDestructureData;
     use crate::nodes::sequence::SequenceData;
 
     // Emit every `Named` record name embedded in a `DataType` field.
@@ -4058,20 +4030,16 @@ pub fn collect_record_refs_in_node(
         emit(&d.element_type, f);
     } else if let Some(d) = data.as_any_ref().downcast_ref::<ArrayLenData>() {
         emit(&d.element_type, f);
-    } else if let Some(d) = data.as_any_ref().downcast_ref::<RecordConstructData>() {
-        f(&d.schema, RecordRefSite::Schema);
-    } else if let Some(d) = data.as_any_ref().downcast_ref::<RecordDestructureData>() {
-        f(&d.schema, RecordRefSite::Schema);
-    } else if let Some(d) = data.as_any_ref().downcast_ref::<ProductData>() {
-        f(&d.target, RecordRefSite::Schema);
+    } else if let Some(schema) = data.record_schema_ref() {
+        f(schema, RecordRefSite::Schema);
     }
 }
 
 /// Collect every record-def name referenced anywhere in `network`: its
 /// custom-node-type signature (parameter + output-pin `Fixed` types), every
 /// node's embedded `DataType` fields (recursing into HOF zone bodies via
-/// `walk_all_nodes`), and the bare `schema` / `target` record-def names on
-/// `record_construct` / `record_destructure` / `product`. Mirrors the read
+/// `walk_all_nodes`), and the bare `schema` / `target` record-def names of
+/// record nodes. Mirrors the read
 /// surface of `rewrite_record_name_in_registry`. Used by the namespace-delete
 /// reference check. See `doc/design_hierarchical_records.md`.
 ///
@@ -4196,9 +4164,6 @@ pub fn rewrite_record_names_in_node(
     use crate::nodes::foreach::ForeachData;
     use crate::nodes::map::MapData;
     use crate::nodes::parameter::ParameterData;
-    use crate::nodes::product::ProductData;
-    use crate::nodes::record_construct::RecordConstructData;
-    use crate::nodes::record_destructure::RecordDestructureData;
     use crate::nodes::sequence::SequenceData;
 
     // Per-node data containers that embed a DataType.
@@ -4252,14 +4217,11 @@ pub fn rewrite_record_names_in_node(
         walk_data_type_record_names_mut(&mut d.element_type, &mut rename);
     } else if let Some(d) = data.as_any_mut().downcast_mut::<ArrayLenData>() {
         walk_data_type_record_names_mut(&mut d.element_type, &mut rename);
-    } else if let Some(d) = data.as_any_mut().downcast_mut::<RecordConstructData>() {
-        // `schema` is a bare record-def name (possibly empty).
-        rename(&mut d.schema);
-    } else if let Some(d) = data.as_any_mut().downcast_mut::<RecordDestructureData>() {
-        rename(&mut d.schema);
-    } else if let Some(d) = data.as_any_mut().downcast_mut::<ProductData>() {
-        // `target` is a bare record-def name (possibly empty).
-        rename(&mut d.target);
+    } else if let Some(schema) = data.record_schema_ref() {
+        // A record node's schema is a bare record-def name (possibly empty).
+        let mut schema = schema.to_string();
+        rename(&mut schema);
+        data.set_record_schema_ref(schema);
     }
 }
 

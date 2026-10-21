@@ -1773,6 +1773,34 @@ impl NetworkEvaluator {
         }
     }
 
+    /// The `wired > literal` precedence of a pin that has a stored literal
+    /// (`record_construct`'s fields, `record_set`'s rows): a wired pin is
+    /// evaluated; an unwired one uses `literal` if it converts to `pin_type`.
+    /// `None` means "unwired, no usable literal" — the caller picks its own
+    /// fallback. One helper so the precedence cannot drift between the nodes
+    /// (`doc/design_record_get_set.md`, "Runtime semantics").
+    #[allow(clippy::too_many_arguments)]
+    pub fn wired_or_literal<'a>(
+        &self,
+        network_stack: &[NetworkStackElement<'a>],
+        node_id: u64,
+        registry: &NodeTypeRegistry,
+        context: &mut NetworkEvaluationContext,
+        node: &Node,
+        param_index: usize,
+        literal: Option<&crate::text_format::TextValue>,
+        pin_type: &DataType,
+    ) -> Option<NetworkResult> {
+        let wired = node
+            .arguments
+            .get(param_index)
+            .is_some_and(|arg| !arg.is_empty());
+        if wired {
+            return Some(self.evaluate_arg(network_stack, node_id, registry, context, param_index));
+        }
+        literal.and_then(|tv| tv.to_network_result(pin_type))
+    }
+
     /// Helper method for the common pattern: get value from node data, or override with input pin
     /// Returns the input pin value if connected, otherwise returns the default value
     /// If the input pin evaluation results in an error, returns that error

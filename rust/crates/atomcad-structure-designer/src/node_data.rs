@@ -6,7 +6,7 @@ use crate::evaluator::network_result::NetworkResult;
 use crate::node_jobs::{JobInputs, JobWork};
 use crate::node_network_gadget::NodeNetworkGadget;
 use crate::node_type::NodeType;
-use crate::node_type_registry::NodeTypeRegistry;
+use crate::node_type_registry::{NodeTypeRegistry, RecordDefs};
 use crate::overlay::Overlay;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
@@ -17,6 +17,18 @@ use atomcad_util::memory_size_estimator::MemorySizeEstimator;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
+
+/// What [`NodeData::build_record_node_type`] does when a def the node needs is
+/// not in the [`RecordDefs`] it is given.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MissingDefs {
+    /// A live node: a missing def gives an empty (or dangling-row) layout. A
+    /// def under an unloaded library mount never gets here: the node is frozen
+    /// instead.
+    Dangle,
+    /// A frozen node being rebuilt from a recorded interface: return `None`.
+    Refuse,
+}
 
 /// Direction the user dragged a wire from when opening the add-node popup.
 /// Drives `NodeData::adapt_for_drag_source`: an adapter must arrange for an
@@ -408,6 +420,48 @@ pub trait NodeData: Any + AsAny {
     /// `doc/design_drag_aware_add_node.md`.
     fn drag_hint_for_input_pin(&self, _pin_index: usize) -> Option<DataType> {
         None
+    }
+
+    // --- Record nodes (`doc/design_record_get_set.md`, "Registry and repair
+    // integration"). A record node is one whose pins come from a record def
+    // rather than from its own data alone. Every site that needs to know about
+    // record nodes goes through these hooks; no site lists them by name.
+
+    /// The record def the node's pins are built on (`schema` / `target`),
+    /// possibly the empty string when none is chosen yet. `None` (the
+    /// default) means "not a record node".
+    fn record_schema_ref(&self) -> Option<&str> {
+        None
+    }
+
+    /// Rewrites the schema name (record-def rename, namespace move,
+    /// cross-document paste). Called only when `record_schema_ref` is `Some`.
+    fn set_record_schema_ref(&mut self, _name: String) {}
+
+    /// Builds the node's pins from `defs`. `None` for a non-record node, and
+    /// for a record node only under [`MissingDefs::Refuse`] when a def it needs
+    /// is missing; the caller then keeps whatever layout the node has.
+    fn build_record_node_type(
+        &self,
+        _base: &NodeType,
+        _defs: RecordDefs<'_>,
+        _missing: MissingDefs,
+    ) -> Option<NodeType> {
+        None
+    }
+
+    /// Per-node warnings that need the defs to compute (one per dangling
+    /// path row). Only path-based record nodes return any.
+    fn record_node_problems(&self, _defs: RecordDefs<'_>) -> Vec<String> {
+        Vec::new()
+    }
+
+    /// The names of the defs, other than the schema, that the node's rows walk
+    /// into — including a missing one, where a row's walk stops. Read by
+    /// `library_links::unresolved_mount_ref` so that a nested def under a
+    /// missing mount freezes the node. Only path-based record nodes return any.
+    fn record_path_defs(&self, _defs: RecordDefs<'_>) -> Vec<String> {
+        Vec::new()
     }
 
     /// Whether a freshly-added instance of this node should display *all* of its
