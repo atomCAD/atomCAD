@@ -82,10 +82,18 @@ wired into `map.f` is the "update every record in the array" idiom.
 
 ## Data model
 
-New shared module `nodes/record_path.rs` (both nodes use it), plus
-`nodes/record_get.rs` and `nodes/record_set.rs`.
+The code splits by layer:
+
+| Module | Contents | Why there |
+|---|---|---|
+| `record_path.rs` (crate root, beside `data_type.rs`) | `PathSegment`, `resolve_path`, `ResolvedPath`, `DanglingReason`, the path text syntax (parse / format with backtick quoting) | Type-level logic over record defs. Its callers include registry passes, `library_links` and the API (field picker, dangling reasons), not only nodes. |
+| `nodes/record_path_rows.rs` | `RecordPathRow`, `derived_pin_names`, `merge_rows` | Node-level: pin layout and row editing, shared by the two nodes. |
+| `nodes/variadic_ids.rs` | `merge_ids_by_key`, the generic three-pass id merge | Shared with `switch` (see "Row editing"). |
+| `evaluator/network_result.rs` | `extract_record_path`, `with_record_path_replaced` | Runtime record access lives beside `extract_record_field` / `record()` (see "Runtime semantics"). |
+| `nodes/record_get.rs`, `nodes/record_set.rs` | the node data and `NodeData` impls | |
 
 ```rust
+// record_path.rs
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PathSegment {
     /// The field's stable identity when the containing record type is a
@@ -99,6 +107,7 @@ pub struct PathSegment {
     pub name: String,
 }
 
+// nodes/record_path_rows.rs
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RecordPathRow {
     /// Hidden stable identity: the pin id. Wires survive path edits,
@@ -157,8 +166,7 @@ that needs a row's pin:
 pub fn resolve_path(
     schema: &str,
     path: &[PathSegment],
-    record_type_defs: &HashMap<String, RecordTypeDef>,
-    built_in_record_type_defs: &HashMap<String, RecordTypeDef>,
+    defs: RecordDefs<'_>,
 ) -> Result<ResolvedPath, DanglingReason>;
 
 pub struct ResolvedPath {
@@ -167,14 +175,19 @@ pub struct ResolvedPath {
 }
 ```
 
-It takes the two def maps, not `&NodeTypeRegistry`, for the same reason
-`record_construct::build_node_type_for_schema_with_defs` does: the cache
-populator calls it under a concurrent `&mut node_networks` borrow.
+`RecordDefs` is introduced in Phase 0: a `Copy` view over the user and
+built-in def maps with one `lookup(name)` (user first, then built-in). The
+registry hands it out as `registry.record_defs()`, and the cache populator,
+which can't borrow the whole registry while it holds `&mut node_networks`,
+builds it from its two map borrows. It replaces the
+`(record_type_defs, built_in_record_type_defs)` parameter pair that the
+existing `build_node_type_for_schema_with_defs` functions pass around and
+that would otherwise spread to every new function here.
 
 Walking a segment: if the current record type is `Named(def)`, find the field
-by `field_id` (looked up user-first then built-in, as
-`lookup_record_type_def` does); if it is `Anonymous(fields)`, find it by
-`name`. Every segment except the last must land on a field whose declared
+by `field_id` through `defs.lookup`; if it is `Anonymous(fields)`, find it by
+`name`. (`RecordType::resolve_fields` can't be reused for the named case: it
+projects fields down to `(name, type)` and drops the `FieldId`.) Every segment except the last must land on a field whose declared
 type is `Record(_)` — not `Optional`, not `Array`. Failure reasons: the schema
 does not resolve; a segment's field is gone; an inner segment's field is no
 longer a record.
@@ -187,9 +200,9 @@ comment in that pass). Phase 1 has a test for it.
 
 ## Pin name derivation
 
-One helper, `record_path::derived_pin_names(resolved: &[Option<ResolvedPath>],
+One helper, `record_path_rows::derived_pin_names(resolved: &[Option<ResolvedPath>],
 reserved: &[&str]) -> Vec<Option<String>>`, used by both nodes'
-`build_node_type_for_schema_with_defs`, and therefore by the text-format
+`build_record_node_type` (the Phase 0 hook), and therefore by the text-format
 serializer and parser, which resolve pin names through the custom node type.
 
 - **Base name:** the current segment names joined with `_` — `p.x` → `p_x`.
@@ -224,14 +237,37 @@ claim with a test**, since the block's comment says "only
 
 ## Runtime semantics
 
+The record walking is not written in the nodes. Two methods go on
+`NetworkResult` in `evaluator/network_result.rs`, beside
+`extract_record_field` and `record()`, so the canonical-order and
+binary-search details stay in one file:
+
+```rust
+/// Follows `path` through nested records. `None` if any step is missing
+/// or not a record.
+pub fn extract_record_path(&self, path: &[&str]) -> Option<&NetworkResult>;
+
+/// A copy of `self` with the field at `path` replaced by `value`
+/// (inserted if the leaf is missing). `Err(depth)` if a record part-way
+/// down is missing or not a record.
+pub fn with_record_path_replaced(
+    &self,
+    path: &[&str],
+    value: NetworkResult,
+) -> Result<NetworkResult, usize>;
+```
+
+Later callers can use them too: a `trace` for these nodes, or `expr` field
+access if it is ever allowed on named records.
+
 ### `record_get`
 
 1. No resolvable schema → `EvalOutput::single(None)` (placeholder pin).
 2. `evaluate_arg(0)`: `None` → `None` on every pin; `Error` → that error on
    **every** pin (the multi-output rule in `nodes/AGENTS.md`).
-3. For each resolving row, walk the runtime value with
-   `NetworkResult::extract_record_field` segment by segment. A missing field
-   or a `None` part-way down → `None` on that pin. (Records pass through
+3. For each resolving row, `extract_record_path` with the row's current
+   segment names. A missing field or a `None` part-way down → `None` on that
+   pin. (Records pass through
    without projection, so the runtime value may also carry extra fields;
    these are ignored.)
 
@@ -241,18 +277,20 @@ claim with a test**, since the block's comment says "only
 2. `evaluate_arg(0)`: `None` → `None`; `Error` → forward verbatim.
 3. For each resolving row, in order, pick the value: a wired pin wins; else
    the row's `literal` if it converts to the pin type (`TextValue::to_network_result`);
-   else skip the row (no-op). The record_construct rule
-   `wired > literal > fallback` holds, with "leave the field unchanged" as the
-   fallback.
+   else skip the row (no-op). This is `record_construct`'s
+   `wired > literal > fallback` rule, with "leave the field unchanged" as the
+   fallback. `record_construct::eval` has the rule inline today; Phase 0 moves
+   it into a shared helper both nodes call (`wired_or_literal(node,
+   param_index, literal, pin_type, …) -> Option<NetworkResult>`, `None` meaning
+   "unwired, no usable literal"), so the precedence can't drift.
 4. A picked value that is `Error` → forward it as the output. A picked `None`:
    on an `Optional[T]` leaf, store an explicit `None` (this is how a user
    *unsets* an optional field); on a required leaf, the output collapses to
    `None` — `record_construct`'s all-or-nothing rule.
-5. Write the value: rebuild each record along the path with the one field
-   replaced (`NetworkResult::record` re-sorts into canonical order). A record
-   part-way down that is missing at runtime (only reachable with a malformed
-   value, since the static type guarantees it) → a localized `Error` naming
-   the path. A missing *leaf* field is simply inserted.
+5. Write the value with `with_record_path_replaced`. A record part-way down
+   that is missing at runtime (only reachable with a malformed value, since
+   the static type guarantees it) → a localized `Error` naming the path. A
+   missing *leaf* field is simply inserted.
 
 Untouched fields — declared or extra — are copied through, so the width
 subtyping pass-through rule (`doc/design_record_types.md`, principle 5)
@@ -264,10 +302,32 @@ attempt is made to share structure.
 
 ## Row editing
 
-`record_path::merge_rows(old, new_paths, next_row_id)` — shared by both
-nodes' `set_text_properties` and the `StructureDesigner`-level setters. It is
-`switch`'s value-keyed merge (`doc/design_switch_node.md`, "Case-list
-editing"), with the *path* as the key, because paths are unique per node:
+`record_path_rows::merge_rows(old, new_paths, next_row_id)` — shared by both
+nodes' `set_text_properties` and the `StructureDesigner`-level setters. It
+uses `switch`'s value-keyed merge (`doc/design_switch_node.md`, "Case-list
+editing"), with the *path* as the key, because paths are unique per node.
+
+The merge is **not** copied from `SwitchData::merge_cases`. Phase 0
+extracts it into `nodes/variadic_ids.rs`:
+
+```rust
+/// The three-pass id merge: key match, then positional fallback, then mint.
+/// Returns one id per element of `new`. Rejects nothing: callers check
+/// duplicates and emptiness first.
+pub fn merge_ids_by_key<K>(
+    old: &[(Option<u64>, K)],
+    new: &[K],
+    same_key: impl Fn(&K, &K) -> bool,
+    next_id: &mut u64,
+) -> Vec<u64>;
+```
+
+`merge_cases` becomes a wrapper over it, and so does `merge_rows`.
+`switch`'s existing merge tests (the `[1, 2] → [3, 1]` steal case among them)
+then cover both nodes. (`zip_with`'s `merge_lane_types` is a positional merge
+with no key, so it stays as it is.)
+
+The passes are:
 
 1. Reject duplicates and empty paths (error, node unchanged).
 2. **Path-match pass** — a new path equal to an old row's path keeps that
@@ -302,8 +362,11 @@ with descriptions "Edit record_get paths" / "Edit record_set paths".
 `set_record_set_data(…)` follow `set_switch_data` as written: a read-only
 pre-check, a no-op check, `snapshot_network` before, mutate, validate/refresh,
 snapshot after, and push only if the snapshots differ. Setting a single
-literal is a pure node-data edit (no wire fallout) and uses the ordinary
-node-data path, as `set_record_construct_literal` does.
+literal is a pure node-data edit (no wire fallout). Like
+`set_record_construct_literal`, it is an **API-only** setter that clones the
+node data, changes the row's literal and goes through
+`set_node_network_data_scoped`, which brings the ordinary `SetNodeData`
+undo with it. There is no `StructureDesigner` op for it.
 
 The text path pushes nothing of its own (`TextEditNetworkCommand` covers it).
 
@@ -332,22 +395,96 @@ drops the wire if it no longer fits.
 
 ## Registry and repair integration
 
-The three existing record nodes are special-cased by name in several places
-because their pins come from the registry, not from node data. Each place
-gets a `record_get` and a `record_set` arm:
+### Today: name-keyed special cases
 
-- `NodeTypeRegistry::populate_custom_node_type_cache_with_types` and
-  `resolve_drag_candidate_type` — call the new
-  `build_node_type_for_schema_with_defs`.
-- `library_links::record_node_schema` (the frozen-node rule: a `schema` under
-  an unresolved mount freezes the node) and `library_links::recorded_layout`.
+The three existing record nodes get their pins from the registry, not from
+their own data, so `calculate_custom_node_type` can't build them. Instead,
+about eight places list them by name with `downcast_ref` chains:
+
+- `NodeTypeRegistry::populate_custom_node_type_cache_with_types`
+- `NodeTypeRegistry::resolve_drag_candidate_type`
+- `library_links::record_node_schema` (the frozen-node rule)
+- `library_links::recorded_layout`
 - `collect_record_refs_in_node` / `rewrite_record_names_in_node` (record-def
-  rename, the namespace-delete reference check, cross-document paste) — the
-  `schema` string, as a `Schema` site. Paths need no rewrite: they hold ids,
-  plus names that are only fallbacks.
-- `canonicalize::canonicalize_node_data`'s downcast list (it must stay in
-  sync with the two above).
-- `invariants.rs`'s dangling-schema check.
+  rename, the namespace-delete reference check, cross-document paste)
+- `invariants.rs`'s dangling-schema check
+- `canonicalize.rs` (a comment noting there is nothing to canonicalize)
+
+Adding two arms to each would grow every list from three to five. Leaving
+one out isn't caught by the compiler, and some misses do damage: for
+example, `recorded_layout` ends in
+`_ => product::build_node_type_for_target_with_defs(…)`, so a record node it
+doesn't know about silently gets **`product`'s pin layout**.
+
+### Phase 0: a `NodeData` hook
+
+Before either node exists, move the three existing nodes onto a trait hook
+and make every site above generic:
+
+```rust
+// node_data.rs
+/// For nodes whose pins come from a record def rather than from their own
+/// data (`record_construct`, `record_destructure`, `product`,
+/// `record_get`, `record_set`). The default (`None`) means "not a record
+/// node".
+fn record_schema_ref(&self) -> Option<&str> { None }
+
+/// Rewrites the schema name (record-def rename, namespace move,
+/// cross-document paste). Called only when `record_schema_ref` is `Some`.
+fn set_record_schema_ref(&mut self, _name: String) {}
+
+/// Builds the node's pins from the defs. `None` when the node can't build
+/// its layout from `defs` (it keeps whatever layout it has).
+fn build_record_node_type(&self, _base: &NodeType, _defs: RecordDefs<'_>) -> Option<NodeType> {
+    None
+}
+```
+
+| Site | After Phase 0 |
+|---|---|
+| `populate_custom_node_type_cache_with_types` | if `build_record_node_type` returns `Some`, install it; otherwise the usual `calculate_custom_node_type` path |
+| `resolve_drag_candidate_type` | the same call |
+| `record_node_schema` | `node.data.record_schema_ref()` |
+| `recorded_layout` | builds a `RecordDefs` from the recorded entries and calls `build_record_node_type` — the `_ =>` fallthrough is gone |
+| `collect_record_refs_in_node` / `rewrite_record_names_in_node` | a `Schema` site from `record_schema_ref` / `set_record_schema_ref` |
+| `invariants.rs` | `record_schema_ref` |
+
+`canonicalize.rs` needs nothing (schema names are strings). The node-name
+string checks in `library_refresh` (`"record_destructure"`) are about output
+reconciliation by `FieldId`, which is particular to that one node. They stay.
+
+After Phase 0, `record_get` and `record_set` need **no** arm anywhere: they
+implement the three methods, and that's all.
+
+### Frozen nodes and nested paths
+
+`recorded_layout` rebuilds a frozen record node (a schema under a library
+mount that didn't load) from the recorded interface of **one** def, the
+schema itself. A `record_get` on `Box` with path `p.x` also needs `Point`.
+Built from `Box` alone, every nested row would look dangling and lose its
+pin and wire. That's wrong: the field still exists, the library is just
+missing.
+
+Rule: `build_record_node_type` returns `None` when **any** def on its paths
+fails to resolve in `defs`. That only happens for a frozen node, because for
+a live node a missing def means dangling rows, which resolve per row. For
+the frozen case, `recorded_layout` builds a `RecordDefs` holding every def
+the `uses` table records for that mount (not just the schema). The nested
+defs are usually there, since they are under the same mount. When they
+aren't, the `None` makes `install_recorded_layout` return `false`, and the
+frozen branch keeps the cached layout, which is the existing fallback. No
+wire is lost either way.
+
+Telling the two cases apart needs `resolve_path` to report "the def is not
+in `defs`" as its own `DanglingReason` (not "the field is gone"). The
+builders use that for the frozen case and turn every other reason into a
+dangling row.
+
+### Other places that need nothing
+
+- `rekey_record_field_literals` (re-keys literals on a field rename) needs
+  **no** arm: `record_set` literals are stored per row id, not per field
+  name. That is deliberate, so nobody should "fix" it by adding one.
 - `library_refresh` reconciles `record_destructure` outputs and
   `record_construct` inputs by `FieldId` across a library change. The new
   nodes' pins carry **row ids**, which are local to the node, so there is
@@ -355,10 +492,6 @@ gets a `record_get` and a `record_set` arm:
   and `claim_field_ids` keeps a file's field ids unique across its history.
   So a field the library renamed keeps resolving, and a field it deleted and
   re-added gets a new id and the row goes dangling. Phase 1 tests both.
-
-When a grep for `"record_destructure"` turns up a further site during
-implementation, it gets an arm too; the list above is the set known at
-design time.
 
 ## Text format
 
@@ -424,19 +557,59 @@ s = record_set { schema: "Box", paths: ["p.x", "size"], record: b, p_x: 3.0, siz
 
 ---
 
+## Phase 0 — Refactors (no behavior change)
+
+**Deliverables**
+
+- `RecordDefs<'a>` in `node_type_registry.rs` (a `Copy` view, `lookup`,
+  `NodeTypeRegistry::record_defs()`). The three existing
+  `build_node_type_for_schema_with_defs` / `build_node_type_for_target_with_defs`
+  functions take it instead of the two maps.
+- The `NodeData` hook (`record_schema_ref`, `set_record_schema_ref`,
+  `build_record_node_type`), implemented by `record_construct`,
+  `record_destructure` and `product`. Every site in the "After Phase 0"
+  table switches to the hook, and `recorded_layout`'s `_ =>` fallthrough
+  goes away.
+- `nodes/variadic_ids.rs::merge_ids_by_key`, with `SwitchData::merge_cases`
+  rewritten on top of it.
+- `wired_or_literal`, the shared literal-precedence helper, used by
+  `record_construct::eval`.
+- `nodes/AGENTS.md`, **Records** bullet: a record node is one that
+  implements the hook, and no site may list record nodes by name.
+  `structure_designer/AGENTS.md`'s "keep the downcast lists in sync" notes
+  (on `collect_record_refs_in_node` and friends) shrink accordingly.
+
+**Automated tests.** The existing suites are the gate: record types
+(`record_types_*`), `switch_test.rs`, the library-linking suites (including
+the fuzz harness), clipboard, and the node snapshots, all unchanged. Add:
+
+1. A frozen `record_destructure` / `product` still gets its own layout from
+   `recorded_layout`. This pins the fallthrough bug that the refactor
+   removes.
+2. A test that greps the crate sources for `downcast_ref::<RecordConstructData>`
+   (and the other two) outside their own files and the API layer, and fails
+   if it finds any. Like `live_refinement_test.rs`, it keeps the name lists
+   from coming back.
+
+**Gate:** `cd rust && cargo fmt && cargo clippy && cargo test -j 4`, plus the
+`structure_designer_api` and `integration` harnesses explicitly.
+
 ## Phase 1 — Path core + `record_get`
 
 **Deliverables**
 
-- `nodes/record_path.rs`: `PathSegment`, `RecordPathRow`, `resolve_path`,
-  `derived_pin_names` (with dedup and reserved names), path parsing and
-  formatting for the text format (backtick quoting).
-- `nodes/record_get.rs`: `RecordGetData`, `NodeData` impl (`eval`,
-  `get_subtitle`, `adapt_for_drag_source`, a minimal
-  `get/set_text_properties` with `schema` and `paths`),
-  `build_node_type_for_schema_with_defs`, and the placeholder pin.
-- Registration (`nodes/mod.rs`, `create_built_in_node_types`), plus every
-  arm listed in "Registry and repair integration" for `record_get`.
+- `record_path.rs` (crate root): `PathSegment`, `resolve_path` (with the
+  "def not in `defs`" reason), path parsing and formatting for the text
+  format (backtick quoting).
+- `nodes/record_path_rows.rs`: `RecordPathRow`, `derived_pin_names` (dedup,
+  reserved names).
+- `NetworkResult::extract_record_path`.
+- `nodes/record_get.rs`: `RecordGetData`, `NodeData` impl (the Phase 0 hook,
+  `eval`, `get_subtitle`, `adapt_for_drag_source`, a minimal
+  `get/set_text_properties` with `schema` and `paths`), and the placeholder
+  pin.
+- Registration (`nodes/mod.rs`, `create_built_in_node_types`). No other
+  integration sites, thanks to Phase 0.
 - Re-bless node-type snapshots; update registry count/list assertions.
 
 **Automated tests** — new
@@ -465,7 +638,13 @@ s = record_set { schema: "Box", paths: ["p.x", "size"], record: b, p_x: 3.0, siz
 11. Library linking: a renamed library field keeps the path; a deleted and
     re-added one makes the row dangling; the schema under a missing mount
     freezes the node.
-12. Drag-aware add from a `Record(Named)` output produces a `record_get` with
+12. Frozen node with a nested path: with the library missing, a
+    `record_get` on a linked `Box` with row `p.x` keeps its pin and its
+    downstream wire. Test it both with `Point` recorded in `uses` and
+    without (the cached-layout fallback).
+13. `extract_record_path`: a hit, a miss part-way down, and a non-record
+    part-way down.
+14. Drag-aware add from a `Record(Named)` output produces a `record_get` with
     the schema set.
 
 **Gate:** `cd rust && cargo fmt && cargo clippy && cargo test -j 4` (and the
@@ -475,9 +654,10 @@ s = record_set { schema: "Box", paths: ["p.x", "size"], record: b, p_x: 3.0, siz
 
 **Deliverables**
 
-- `nodes/record_set.rs`: `RecordSetData` / `RecordSetRow`, `NodeData` impl,
-  `build_node_type_for_schema_with_defs`, the integration arms.
-- `eval` as specified under "Runtime semantics".
+- `nodes/record_set.rs`: `RecordSetData` / `RecordSetRow`, `NodeData` impl
+  including the Phase 0 hook.
+- `NetworkResult::with_record_path_replaced`.
+- `eval` as specified under "Runtime semantics", using `wired_or_literal`.
 
 **Automated tests** — new `record_set_test.rs`:
 
@@ -499,7 +679,11 @@ s = record_set { schema: "Box", paths: ["p.x", "size"], record: b, p_x: 3.0, siz
 8. Leaf retype in the def: the pin is retyped, and an incompatible wire is
    dropped by repair.
 9. The tests from Phase 1 that apply to input pins: nested rename keeps the
-   wire (by `Parameter.id`); a nested delete gives a dangling row.
+   wire (by `Parameter.id`); a nested delete gives a dangling row; a frozen
+   `record_set` with a nested row keeps its input wire.
+10. `with_record_path_replaced`: replace at depth 1 and 2, insert a missing
+    leaf, `Err(depth)` on a missing middle record; sibling and extra fields
+    are untouched.
 
 **Gate:** as Phase 1.
 
@@ -507,9 +691,11 @@ s = record_set { schema: "Box", paths: ["p.x", "size"], record: b, p_x: 3.0, siz
 
 **Deliverables**
 
-- `record_path::merge_rows` (three passes), schema-change re-resolution.
-- `StructureDesigner::set_record_get_data` / `set_record_set_data` and a
-  literal setter for `record_set` rows, all taking `scope_path`.
+- `record_path_rows::merge_rows` (a wrapper over `merge_ids_by_key`), and
+  schema-change re-resolution.
+- `StructureDesigner::set_record_get_data` / `set_record_set_data`, both
+  taking `scope_path`. (The literal setter is API-only and comes in
+  Phase 4.)
 - Full `get/set_text_properties` (the `schema` → `paths` → literals order),
   loader healing.
 
@@ -549,7 +735,13 @@ s = record_set { schema: "Box", paths: ["p.x", "size"], record: b, p_x: 3.0, siz
   a literal set/clear pair, all `#[frb(sync)]` and all taking **`scope_path`**.
   Paths cross the API as `Vec<Vec<String>>` (segment names); each row reports
   its derived pin name, its leaf type, and whether it is dangling (with the
-  reason). Ids never cross the API, and the setters wrap the Phase 3 ops.
+  reason). Ids never cross the API, and the path setters wrap the Phase 3
+  ops. The literal pair copies `set_record_construct_literal` /
+  `clear_record_construct_literal` (`set_node_network_data_scoped`, so the
+  ordinary `SetNodeData` undo comes with it), keyed by row index. Each
+  `record_set` row reports its literal part as an **`APILiteralField`** built
+  with the existing `text_value_to_api_literal` / `data_type_to_simple_param_type`
+  helpers, so the Flutter side can use the existing literal editor as it is.
   The picker needs a def's fields one level at a time; use the existing
   record-def getters, and add a field-tree getter only if recursing from
   Dart proves awkward.
@@ -565,8 +757,10 @@ s = record_set { schema: "Box", paths: ["p.x", "size"], record: b, p_x: 3.0, siz
 - Reference guide: `doc/reference_guide/nodes/math_programming.md` — new
   `## record_get` and `## record_set` sections after `record_destructure`,
   and a line in "Record types" pointing to them for nested access.
-- `nodes/AGENTS.md`: add both nodes to the **Records** bullet, and note
-  `record_path.rs` as the one path resolver.
+- `nodes/AGENTS.md`: add both nodes to the **Records** bullet.
+  `structure_designer/AGENTS.md` (Record Type Defs): name `record_path.rs`
+  as the one path resolver and `extract_record_path` /
+  `with_record_path_replaced` as the runtime pair.
 
 **Checks**
 
