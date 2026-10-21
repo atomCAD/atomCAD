@@ -1330,7 +1330,7 @@ impl NetworkEvaluator {
             }
             GeometryVisualization::ExplicitMesh => {
                 let csg_mesh = geo_tree.to_csg_mesh_cached(Some(&mut self.csg_conversion_cache))?;
-                let mut poly_mesh = convert_csg_mesh_to_poly_mesh(&csg_mesh, false, false);
+                let mut poly_mesh = convert_csg_mesh_to_poly_mesh(&csg_mesh, false);
                 poly_mesh.detect_sharp_edges(
                     geometry_visualization_preferences.sharpness_angle_threshold_degree,
                     true,
@@ -1370,8 +1370,7 @@ impl NetworkEvaluator {
                         .get(&node_id)
                         .unwrap();
                     let is_half_space = node.node_type_name == "half_space";
-                    let mut poly_mesh =
-                        convert_csg_mesh_to_poly_mesh(&csg_mesh, is_half_space, is_half_space);
+                    let mut poly_mesh = convert_csg_mesh_to_poly_mesh(&csg_mesh, is_half_space);
                     poly_mesh.detect_sharp_edges(
                         geometry_visualization_preferences.sharpness_angle_threshold_degree,
                         true,

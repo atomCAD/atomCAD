@@ -31,6 +31,12 @@ the workspace DAG and for why `scene_tessellator` lives one layer up.
   for translucent surfaces, the two-pass `cull_mode: Front` then `Back` draw
   both depend on it. An inverted mesh does not look obviously broken — it looks
   slightly wrong — so winding is asserted, not eyeballed.
+- **A CSG solid is drawn from both sides by duplication, not by the shader.**
+  `tessellate_poly_mesh` emits a second, reversed-winding copy with flipped
+  normals in the inside material whenever it is given one, and culling picks
+  the copy that faces the camera (issue #342: the inside of a solid is red, not
+  invisible). The lit shaders have no `front_facing` logic, so a new surface
+  that must be seen from inside needs the same copy.
 - **Quality settings come from preferences, never from the value.** Resolution,
   smoothing angle and sample density are parameters of *this* layer;
   a node's value stays resolution-free. That is why every adapter here takes a

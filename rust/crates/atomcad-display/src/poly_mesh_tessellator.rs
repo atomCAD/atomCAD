@@ -419,7 +419,10 @@ fn tessellate_poly_mesh_smoothing_group_based(
 /// * `mesh` - The target mesh to add vertices and faces to
 /// * `smoothing` - Controls how normals are calculated and vertices are shared
 /// * `outside_material` - The material to apply to the mesh vertices for outside faces
-/// * `inside_material` - The material to apply to the mesh vertices for inside faces (if poly_mesh is open)
+/// * `inside_material` - The material for the inside faces. When given, a second copy of the
+///   mesh is emitted with reversed winding and flipped normals, so back-face culling shows the
+///   inside copy wherever the camera sees a face from behind — from inside a solid, or through
+///   the cut of a semi-infinite shape (issue #342). `None` draws the outside only.
 /// * `highlighted_material` - The material to apply to highlighted faces
 pub fn tessellate_poly_mesh(
     poly_mesh: &PolyMesh,
@@ -437,9 +440,7 @@ pub fn tessellate_poly_mesh(
         highlighted_material,
         true,
     );
-    if poly_mesh.open
-        && let Some(material) = inside_material
-    {
+    if let Some(material) = inside_material {
         tessellate_poly_mesh_one_sided(
             poly_mesh,
             mesh,

@@ -14,8 +14,8 @@ use nalgebra::Point3;
 ///
 /// This helps avoid issues with floating point precision in the CSG operations, where vertices
 /// that should be identical might have slight differences in their coordinates.
-pub fn convert_csg_mesh_to_poly_mesh(csg_mesh: &CSGMesh, open_3d: bool, hatched: bool) -> PolyMesh {
-    convert_polygons_to_poly_mesh(&csg_mesh.polygons, open_3d, hatched)
+pub fn convert_csg_mesh_to_poly_mesh(csg_mesh: &CSGMesh, hatched: bool) -> PolyMesh {
+    convert_polygons_to_poly_mesh(&csg_mesh.polygons, hatched)
 }
 
 pub fn convert_csg_sketch_to_poly_mesh(
@@ -61,20 +61,16 @@ pub fn convert_csg_sketch_to_poly_mesh(
         }
     }
 
-    convert_polygons_to_poly_mesh(&polys, true, false)
+    convert_polygons_to_poly_mesh(&polys, false)
 }
 
-fn convert_polygons_to_poly_mesh(
-    polygons: &Vec<Polygon<()>>,
-    open: bool,
-    hatched: bool,
-) -> PolyMesh {
+fn convert_polygons_to_poly_mesh(polygons: &Vec<Polygon<()>>, hatched: bool) -> PolyMesh {
     // Use our spatial hashing structure with a small epsilon for vertex precision
     // The epsilon value should be adjusted based on the scale of your models
     let epsilon = unscale_from_csg(1e-5);
     let mut unique_vertices = Unique3DPoints::new(epsilon);
 
-    let mut poly_mesh = PolyMesh::new(open, hatched);
+    let mut poly_mesh = PolyMesh::new(hatched);
 
     // Process each polygon in the CSG
     for polygon in polygons {

@@ -1014,7 +1014,7 @@ Choose how geometry node outputs are rendered:
 - **Wireframe (Explicit Mesh)** — The geometry is evaluated to a polygonal mesh and displayed as a wireframe (edges only). Use this mode when you need to inspect mesh topology or see precise polygon edges.
 - **Solid (Explicit Mesh)** — The geometry is evaluated to a polygonal mesh and rendered as a solid. This is the default mode.
 
-In **Surface Splatting** and **Solid** modes the outer surface is shown in green and the inner surface in red (inner = surface facing inward).
+In **Surface Splatting** and **Solid** modes every surface has two colors: the outside, seen from outside the solid, and the inside, seen from within it. The outside is orange for the active node and blue-gray for the others; the inside is red (a dusky red for the others). So when the camera ends up inside a shape — easy with a semi-infinite one such as a `half_space` cut — you see red walls around you instead of nothing. A lone `half_space` follows the same rule: its outside color from the empty side, red from within the half space it fills.
 
 A separate **Show geometry shell on Crystal and Molecule** toggle (next to the three rendering-mode buttons) controls whether the geometry shell carried by a Crystal or Molecule is rendered alongside its atoms. Crystals always have a shell (it is the cookie-cutter geometry that produced them); Molecules can also carry a shell when they were built from a Blueprint via `exit_structure`. Turn the toggle off when the shell would obscure the atoms; turn it on to see how the shell aligns with the atomic structure. The toggle persists in preferences.
 
