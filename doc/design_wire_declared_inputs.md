@@ -23,14 +23,16 @@ The wire already carries most of the declaration:
 
 So the first step is redundant. This doc makes **connecting declare the
 input**. A node that declares its own inputs gets an **open port**: a `+`
-row under its last input pin. Dropping a wire on it appends an input of the
-wire's type, under a derived name, connects the wire, and puts the cursor in
-the new input's name field so a rename is one keystroke away.
+tab that hangs below the node while a wire is being dragged. Dropping the
+wire on it appends an input of the wire's type, under a derived name,
+connects the wire, and puts the cursor in the new input's name field so a
+rename is one keystroke away.
 
 The type is copied once, at the drop, and does not follow the wire afterwards.
-When the source changes later, the input's type goes stale and the wire
-reports a mismatch. **Take type from wire** is the repair: one click copies
-the source's current type again. It applies to any input the node declares
+When the source changes later, the input's type goes stale: the wire reports
+a mismatch, or, for a record that gained a field, it stays valid but is too
+narrow to read the new field. **Take type from wire** is the repair: one
+click copies the type from the wire again. It applies to any input the node declares
 itself, however that input was made, and it matters most for anonymous
 records: renaming one of their fields changes their type, so every input that
 copied the old type goes stale at once.
@@ -81,14 +83,15 @@ In scope:
 |---|---|
 | Which nodes get an open port | `expr` (always) and `record_construct` **in anonymous mode** (its `schema` is empty). Nothing else in this doc. Both are exactly the nodes whose `NodeData::declared_inputs()` returns `Some`, so the open port and Take type from wire share one gate. |
 | The abstraction | A capability trait, `DeclaredInputs`, which a node hands out through `NodeData::declared_inputs()` / `declared_inputs_mut()` (default `None`). This avoids a set of separate `NodeData` hooks with "no open port" defaults. The `Option` expresses the mode dependence directly: `record_construct` returns `Some(self)` only in anonymous mode. The orchestrators in `declared_input_ops.rs` never name a node type. |
-| How the open port looks | A **permanent** `+` row below the last input pin, drawn subdued, and highlighted while a compatible wire hovers it. It is not a ghost that appears only during a drag: a row that appears mid-drag would change the node's footprint, move every pin offset below it, and trigger reflow, all while the user is aiming. A permanent row keeps the layout stable and makes the feature visible. |
+| How the open port looks | A `+` **tab hanging below the node's bottom edge**, at the input-pin column. It is shown on every visible node with declared inputs while a wire is being dragged, and nowhere else. It is highlighted while a compatible wire hovers it. The tab is drawn **outside** the node's footprint, in a canvas layer above the nodes. So the node's size, its pin offsets and every saved layout stay as they are, and nothing reflows, mid-drag or ever. Two alternatives were rejected. An *in-node row that appears mid-drag* would change the footprint and move pins while the user is aiming. A *permanent in-node row* would make every existing `expr` one row taller: saved `.cnnd` layouts were positioned for today's heights, so they would overlap wherever a node sits tightly below an `expr`, and reflow runs only on edits, never on load. The tab may briefly cover the top of a node beneath it. That is acceptable for the length of a drag, and because the tab is on top, it wins the hit test. |
 | Gesture direction | **Output → `+` only** in v1: drag from a source pin (a node output, a function pin, or a zone input) and drop on the `+`. The `+` itself is not draggable. Dragging from `+` to an output is a later addition (see "Future work"). |
-| The declared type | The source pin's **resolved type at drop time**, snapshotted (`NodeTypeRegistry::resolve_output_type_scoped` for node outputs, the HOF's zone-input pin type for zone inputs). The type does not follow the wire afterwards. If upstream changes, the wire shows a type error like any other wire. A live type would make the interface depend on wiring, and undo and the text format would have to track that dependency. A stale type is repaired by Take type from wire. |
-| Take type from wire — what it does | It sets a declared input's type to the **current** resolved type of the single wire on it, through `DeclaredInputs::retype`. The pin id, the name, the wire and the expression text are untouched. One undo step, "Take type from wire", recorded as a `NetworkSnapshotCommand`. |
-| Take type from wire — when it is offered | Only on a real mismatch. All of these must hold: (1) the node has declared inputs, and `declares_pin(pin_id)` is true; (2) exactly one wire is on the pin; (3) the source's resolved type fails `can_be_converted_to` against the declared type; (4) `accepts_type(source type)` passes. A wire that is compatible but different (`Int` into a `Float` parameter) gets no offer: it is not broken. A source that turned into something the node cannot declare, such as a `Function`, keeps the plain mismatch error and gets no offer. |
+| The declared type | The source pin's **resolved type at drop time**, snapshotted (`NodeTypeRegistry::resolve_output_type_scoped` for node outputs, the HOF's zone-input pin type for zone inputs). The type does not follow the wire afterwards. If upstream changes, the wire shows a type error like any other wire, or, when a record source gains a field, stays valid but too narrow (see the Take type from wire rows). A live type would make the interface depend on wiring, and undo and the text format would have to track that dependency. A stale type is repaired by Take type from wire. |
+| Take type from wire — what it does | It sets a declared input's type to the **offered type** (next rows), computed from the single wire on it at the time of the click, through `DeclaredInputs::retype`. The pin id, the name, the wire and the expression text are untouched. One undo step, "Take type from wire", recorded as a `NetworkSnapshotCommand`. |
+| Take type from wire — when it is offered | Only on a **stale** input. All of these must hold: (1) the node has declared inputs, and `declares_pin(pin_id)` is true; (2) exactly one wire is on the pin; (3) the source's resolved type is stale against the declared type: either it fails `can_be_converted_to`, or both are records whose resolved fields differ (next row); (4) `accepts_type(offered type)` passes. A scalar wire that is compatible but different (`Int` into a `Float` parameter) gets no offer: it is not broken. A **record** wire that is compatible but different does get one. Records have width subtyping (`can_be_converted_to_impl` in `data_type.rs`), so when a field is added to an anonymous `record_construct` that already feeds an `expr`, the wire `{a, b, c} → {a, b}` stays valid with no error. `r.c` in the expression then fails, and nothing else would repair it. This is the most common way a record input goes stale. A source that turned into something the node cannot declare, such as a `Function`, keeps the plain mismatch error and gets no offer. |
+| Take type from wire — record staleness and the offered type | Two records "differ" when their resolved, canonically sorted field lists are not equal (names and `DataType`s). This is not `DataType` equality: a promoted source `Named(Box)` with exactly the declared anonymous shape is **not** stale. The offered type is the source's resolved type, with one exception. When the declared type is an anonymous record and the source is a named record, the offer is the source's **anonymous form** (`RecordType::anonymous` of its resolved fields). An anonymous declared input stays anonymous: `expr` cannot read a named record's fields, so offering the name would swap a stale type for a broken one (see "Promotion — downstream nodes"). |
 | Take type from wire — where | The property panel is the primary surface: a stale row gets a warning marker and a **Use wire's type: `<type>`** button under its type selector. The node context menu's **Edit** section adds **Take types from wires**, which repairs every stale input in one step and appears only when at least one qualifies. There is no wire context menu in v1, because the canvas has none today (see "Future work"). |
 | Renaming an anonymous field | The rename changes the record's type (`{a: Float}` becomes `{b: Float}`), so every input that copied the old type now mismatches. The wire is kept and reported, not dropped: `repair_node_network` drops no node-output wire over a type change (only `repair_zone_body`'s zone-input wires are type-checked, and a rename does not change a zone-input pin's type), so `validate_wires` reports the mismatch on the consumer. The renamed node's own input wire survives through the stable pin id. The repairs are Take type from wire for each stale input, or promotion, after which renames of the named def's fields go through `FieldId`s. A rename does **not** retype downstream inputs automatically, because that would be the live typing the "declared type" row rules out. |
-| Which types an open port accepts | `expr`: the predicate its drag-aware adapter already applies: no abstract types, `Function`, `Iterator`, `Unit` or `None` (`ExprData::adapt_for_drag_source`), factored into a shared `ExprData::accepts_parameter_type`. `record_construct`: any type a record def field may hold (see Phase 2), and never `None`, `Unit` or `AnyFunction`. While a wire with a rejected type hovers the `+`, the row is drawn in a refused style with the reason as a one-line label beside it. A tooltip would not work here, because Flutter shows no tooltips during a drag. |
+| Which types an open port accepts | `expr`: the predicate its drag-aware adapter already applies: no abstract types, `Function`, `Iterator`, `Unit` or `None` (`ExprData::adapt_for_drag_source`), factored into a shared `ExprData::accepts_parameter_type`. `record_construct`: any type a record def field may hold (see Phase 2), and never `None`, `Unit` or `AnyFunction`. While a wire with a rejected type hovers the `+`, the tab is drawn in a refused style with the reason as a one-line label beside it. A tooltip would not work here, because Flutter shows no tooltips during a drag. |
 | The derived name | The source **node's name** (`custom_name`, e.g. `gap` or `sphere1`). When the source node has more than one output pin, or the source is a zone input, the **pin name** is used instead; if that is already taken, `<node>_<pin>`. The name is sanitized to `[A-Za-z_][A-Za-z0-9_]*`, made to avoid reserved words, and deduplicated as `name`, `name_2`, `name_3`, … (details under "Name derivation"). |
 | After the drop | The destination node becomes the selected node, and its property panel focuses the new input's name field with the text selected. Typing renames it; anything else keeps the derived name. Stable ids mean a rename never drops the wire. |
 | Undo | **One step** per drop ("Add input from wire"): the input declaration, the wire, and any reflow of neighbours the taller node causes. It is recorded as a whole-network snapshot: a new generic `NetworkSnapshotCommand { network_name, description, before, after }`, the pattern `PromoteToParameterCommand` already uses, so redo never depends on the order of re-deriving a pin and re-adding a wire. |
@@ -102,6 +105,8 @@ In scope:
 | Promotion — reuse instead of create | The dialog first lists every def (user and linked) whose field set is **exactly** the anonymous one: the same names with equal types, with no `Optional` fields and no extra fields. Choosing one just sets `schema` (pins reorder to that def's authored order; wires are kept by name). A wider def is not offered: its extra required fields would be unwired, and the record would become `None`. |
 | Promotion — downstream nodes | Not touched. Downstream wires stay valid because the named type has exactly the anonymous type's shape. In particular, a downstream `expr` whose parameter was declared with the anonymous type, for example by dropping this node's output on its `+`, keeps that type, so `r.a` in it keeps working. Retyping such a parameter to the new name would *break* it, since `expr` cannot read fields of a named record. |
 | Switching mode from the schema dropdown | Picking a def on an anonymous node is allowed. Local fields are cleared. Wires and literals carry over by name where the def has a same-named field; the other wires are dropped (the usual repair rule), and so are the other literals. A literal is never left behind to reappear when a field of the same name is added later. Picking "none" on a named-mode node leaves an anonymous node with **no** fields, under the same literal rule. Copying the def's fields into local ones (un-promotion) is future work. |
+| Undo of a schema change | One `NetworkSnapshotCommand` ("Set record schema"), **not** the `SetNodeDataCommand` that `set_record_construct_data` records today (through `set_node_network_data_scoped`). That command restores node data only. The wires a switch drops are lost when the pins are re-derived, so undo would bring back field `a` without its wire. The setter becomes a `StructureDesigner` method: snapshot the network, write the data, re-derive the node type (which drops the wires that do not carry over), snapshot again, push. A named → named switch has the same gap today, and this change closes it too. |
+| Def references in local fields | A local field's type can name a def. Dropping a `Box` output on the `+` declares a `Record(Named("Box"))` field, so this is common. Every place that finds or rewrites record-def names in node data must therefore see local field types, not only `schema`. Those places are: `collect_record_refs_in_node`, which feeds the delete and namespace-delete reference checks, the library dependency closure / `uses`, frozen-node detection, the invariant checker and cross-document paste; `rewrite_record_names_in_node`, for def rename; and `canonicalize::canonicalize_node_data`, which their doc comments require to stay in sync. These are hand-maintained downcast chains, and `record_construct` reaches them today only through the trailing `record_schema_ref` fallback. It gets an explicit `RecordConstructData` branch ahead of that fallback, which handles `schema` (skipped when empty) **and** every `fields[*].data_type`. Without it, renaming `Box` leaves a dangling `Named("Box")` in the field, the delete reference check does not see the node, and a linked def named only by a field is missing from `uses` and never freezes the node. |
 | Text format | No new syntax beyond a `fields` property mirroring `expr`'s `parameters`: `r = record_construct { fields: [{name: "a", data_type: Float}], a: x }`. The open port is a GUI gesture; in text, declaring is already just writing. |
 | Reserved names | `expr`: the lexer's keywords, plus `expression` and `parameters` (its property keys). `record_construct`: `schema`, `fields` and `literal_values`. Each node supplies its list through `DeclaredInputs::reserved_names`. When a derived name hits one, `_` is appended. |
 
@@ -120,8 +125,10 @@ through it:
 /// A node whose input pins are declared by its own data, one pin per
 /// declared input: `expr`'s parameters, an anonymous `record_construct`'s
 /// fields. Declared inputs are addressed by **pin id**, the id the node puts
-/// on the pin's `Parameter` in `calculate_custom_node_type`. Ids survive
-/// renames, reorders and the re-derivation of the node type; indices do not.
+/// on the pin's `Parameter` when it builds its node type
+/// (`calculate_custom_node_type` for `expr`, `build_record_node_type` for
+/// `record_construct`). Ids survive renames, reorders and the re-derivation
+/// of the node type; indices do not.
 ///
 /// Every mutating method edits the node's data only. The caller re-derives
 /// the node type (`Node::set_custom_node_type`), revalidates and records
@@ -129,7 +136,7 @@ through it:
 pub trait DeclaredInputs {
     /// Type gate shared by the open port (append) and Take type from wire
     /// (retype). `Err` carries the user-facing reason. It is shown beside a
-    /// refused `+` row, and the retype offer is withheld.
+    /// refused `+` tab, and the retype offer is withheld.
     fn accepts_type(&self, data_type: &DataType) -> Result<(), String>;
 
     /// Names a derived name must avoid beyond the current input names:
@@ -161,15 +168,17 @@ pub trait DeclaredInputs {
 /// The node's declared inputs, when its input list is its own data. `None`
 /// (the default) means the node's inputs are fixed by its type or by a def.
 /// May depend on the data: `record_construct` answers `Some` only in
-/// anonymous mode. `Some` is also what puts the open port (`+` row) on the
-/// node.
+/// anonymous mode. `Some` is also what gives the node the open port (the
+/// `+` tab shown during a wire drag).
 fn declared_inputs(&self) -> Option<&dyn DeclaredInputs> { None }
 fn declared_inputs_mut(&mut self) -> Option<&mut dyn DeclaredInputs> { None }
 ```
 
 `ExprData` and `RecordConstructData` implement `DeclaredInputs` and return
-`Some(self)` (anonymous mode only, for the latter). Nothing else in the crate
-checks for these two node types by name: `NodeView.has_open_input_port` is
+`Some(self)` (anonymous mode only, for the latter). Nothing on the open-port
+or Take type from wire paths checks for these two node types by name (the
+record-def reference walkers are a separate matter; see "Def references in
+local fields"): `NodeView.has_open_input_port` is
 `declared_inputs().is_some()`, and the orchestrators below take whatever the
 accessor returns.
 
@@ -197,7 +206,7 @@ fn resolve_wire_source_type(
     dest_scope_path: &[u64],
     source_node_id: u64,
     source_pin: SourcePin,
-    source_scope_depth: u32,
+    source_scope_depth: u8,
 ) -> Option<DataType>
 ```
 
@@ -213,7 +222,7 @@ pub fn add_input_from_wire(
     dest_node_id: u64,
     source_node_id: u64,
     source_pin: SourcePin,        // NodeOutput { pin_index } | ZoneInput { pin_index }
-    source_scope_depth: u32,      // capture wires across zone boundaries, as connect_wire
+    source_scope_depth: u8,       // capture wires across zone boundaries, as connect_wire
 ) -> Result<AddedInput, String>   // AddedInput { pin_index, pin_id, name }
 ```
 
@@ -295,7 +304,7 @@ write. Both compute the offers the same way:
 /// Empty when the node has no declared inputs. Read-only: no refresh, no undo.
 pub fn wire_type_offers(&self, scope_path: &[u64], node_id: u64) -> Vec<Option<DataType>>;
 
-/// Retype each listed input to its wire's current type, in one undo step.
+/// Retype each listed input to its offered type, in one undo step.
 pub fn take_types_from_wires(
     &mut self,
     scope_path: &[u64],
@@ -310,9 +319,11 @@ all four conditions of the decision table hold:
 
 1. `declared_inputs()` is `Some` and `declares_pin(id)`;
 2. the argument at `i` has exactly one incoming wire;
-3. `resolve_wire_source_type` of that wire gives `t`, and
-   `can_be_converted_to(t, declared)` is false;
-4. `accepts_type(&t)` is `Ok`.
+3. `resolve_wire_source_type` of that wire gives `s`, and `s` is stale
+   against `declared`: `can_be_converted_to(s, declared)` is false, or both
+   are records whose resolved field lists differ;
+4. the offered type `t` is `s`, or `s`'s anonymous form when `declared` is
+   an anonymous record and `s` a named one, and `accepts_type(&t)` is `Ok`.
 
 `take_types_from_wires` never trusts types sent by the caller. It recomputes
 the offers and works all or nothing:
@@ -329,6 +340,11 @@ the offers and works all or nothing:
    `NetworkSnapshotCommand { description: "Take type from wire", .. }` with
    `Full` refresh. The node's output type can change (an `expr` reading
    `r.b`), and that can clear or raise errors downstream.
+
+A record input can be offered while its wire carries **no** error (the width
+case in the decision table). So the offers are a superset of the validator's
+mismatch errors, not the same set. The test that pins
+`resolve_wire_source_type` to the validator states it that way.
 
 Both node surfaces go through `take_types_from_wires`: the panel button with
 one index, the context-menu item with every offered index.
@@ -357,7 +373,8 @@ silently unrepairable.
   data_type_str: None }`, the same id rule `set_text_properties` uses.
 - `retype` replaces `data_type` on the parameter with that id and clears its
   `data_type_str`, so the stored text form cannot disagree with the new type.
-- Both re-run `parse_and_validate` so the output type stays current.
+- Both re-run `parse_and_validate`, which updates the cached `output_type`
+  inside `ExprData`. That is still a data-only edit, as the trait requires.
 
 The expression text is **never** edited. A new parameter is unused until the
 user writes it in. That's a cheap state (no error), and guessing an edit to
@@ -432,6 +449,14 @@ today, so existing files and corpus snapshots don't churn.
   which the literal was not written for. The rule is the mode switch's: a
   literal is never kept where it could reappear with the wrong type.
   Undo brings it back.
+- **Schema changes** go through a `StructureDesigner` method that records a
+  `NetworkSnapshotCommand`, so undo restores the wires a switch drops (see
+  "Undo of a schema change").
+- **Record-def references:** a `RecordConstructData` branch in
+  `collect_record_refs_in_node`, `rewrite_record_names_in_node` and
+  `canonicalize::canonicalize_node_data`, placed ahead of the
+  `record_schema_ref` fallback. It covers `schema` (when non-empty) and every
+  local field's `data_type` (see "Def references in local fields").
 
 ### Promotion
 
@@ -465,27 +490,37 @@ pub fn promote_record_construct(
    described as "Name record". Undo restores the network, then removes the
    def; redo adds the def, then restores the promoted network.
 
-"Use existing def" is the ordinary schema setter (the dropdown's own path,
-`SetNodeDataCommand`), so it needs no new command.
+"Use existing def" is the schema setter, the dropdown's own path, which now
+records a `NetworkSnapshotCommand` (see "Undo of a schema change"). It needs
+no command of its own.
 
 ## Flutter
 
 - **`NodeView` / API:** `has_open_input_port: bool` per node, which is
   `declared_inputs().is_some()`.
-- **Node widget:** when set, one extra input row below the last pin, holding
-  a `+` glyph in the pin column. It is a `DragTarget<PinReference>`. Its
-  `onWillAcceptWithDetails` applies the scope-prefix and zone-input rules of
-  `canConnectPins`, then calls `can_add_input_from_wire`, keeping the refusal
-  reason in widget state. `onAcceptWithDetails` calls
-  `model.addInputFromWire(...)`. The builder draws the accepted highlight
-  from `candidateData`, and the refused style plus the reason label from
-  `rejectedData`. Both are per-target and need no `notifyListeners`, which
-  keeps "drag ticks never notify" intact
-  (`project_canvas_drag_performance`).
-- **Node height:** the extra row counts as one input row in Flutter's
-  `getNodeSize()` **and** in the Rust estimators that mirror it
-  (`node_layout::estimate_node_height` callers, `layout/common.rs::node_height`),
-  or auto-layout and reflow will place the node one row short.
+- **Open-port tab layer:** while `model.draggedWire` is non-null, the canvas
+  shows one extra layer above the nodes. It holds a `+` tab for each visible
+  node with `has_open_input_port`, placed just below the node's bottom edge
+  at the input-pin column. The layer must live in the canvas's own stack,
+  not inside the node widget: Flutter does not hit-test a child outside its
+  parent's bounds, so a tab hanging out of the node widget would never
+  receive the drop. The layer rebuilds only when `draggedWire` changes
+  between null and non-null: twice per drag, never per tick, which keeps
+  "drag ticks never notify" intact (`project_canvas_drag_performance`). Tab
+  positions come from the node positions and sizes the canvas already has.
+- **Each tab** is a `DragTarget<PinReference>`. Its `onWillAcceptWithDetails`
+  applies the scope-prefix and zone-input rules of `canConnectPins`, then
+  calls `can_add_input_from_wire`, keeping the refusal reason in widget
+  state. `onAcceptWithDetails` calls `model.addInputFromWire(...)`. The
+  builder draws the accepted highlight from `candidateData`, and the refused
+  style plus the reason label from `rejectedData`. Both are per-target and
+  need no `notifyListeners`. `addInputFromWire` clears `draggedWire` the way
+  `connectPins` does. Otherwise the source pin's `onDragEnd` would also
+  treat the drop as an empty-space drop and open the add-node popup.
+- **Node height:** unchanged. The tab is outside the footprint, so neither
+  `getNodeSize()` nor the Rust estimators that mirror it count it. Only a
+  real appended input grows the node, as any new pin does, and the drop's
+  reflow handles that.
 - **After the drop:** `addInputFromWire` selects the destination node and
   sets `pendingNameFocus = (nodeId, inputIndex)` from the result's
   `pin_index`. It is keyed by index, not pin id, because `APIExprParameter`
@@ -524,7 +559,8 @@ pub fn promote_record_construct(
 
 Each phase leaves `main` green: `cargo test -j 4` (the `structure_designer_api`,
 `integration` and `renderer_api` harnesses run explicitly), `cargo clippy`
-with no new warnings, and `flutter analyze` at baseline.
+with no new warnings, `flutter analyze` at baseline, and `flutter test` (the
+Dart unit tests in `test/`, not the smoke test).
 
 ### Phase 0 — anonymous record types parse from strings
 
@@ -554,6 +590,16 @@ Tests (`crates/atomcad-structure-designer/tests/structure_designer/anonymous_rec
   array of records, and a function type with a record parameter;
 - duplicate-name rejection;
 - field order canonicalizes (`{b: Int, a: Int}` == `{a: Int, b: Int}`).
+
+Text-format test (beside the existing text-format round-trip tests): an
+`expr` whose parameter is typed `{a: Float, p: {x: Int}}` survives `query` →
+`--replace` as a no-op. The text format does not use `from_string` here. It
+reads `{…}` as an object and converts it in `TextValue::to_data_type`, so
+this path already works; the test keeps the open port from relying on it
+untested. That arm builds `RecordType::Anonymous(fields)` directly, skipping
+the canonical sort of `RecordType::anonymous`, so the test also loads a
+hand-written `{b: Int, a: Int}` and requires it to equal `{a: Int, b: Int}`.
+If it does not, Phase 0 fixes the arm.
 
 API test (`rust/tests/structure_designer_api/`): an `expr` with an
 anonymous-typed parameter survives a `set_expr_data` round-trip of its
@@ -591,26 +637,65 @@ Tests (`tests/structure_designer/declared_inputs_test.rs` and
   read-only network, destination without a port. Each leaves the network
   unchanged and pushes no undo step;
 - capture wire: source in the parent scope, destination inside a `map` body;
-- undo restores parameter list and wires in one step; redo reapplies;
+- undo: the drop is one step, checked with `assert_undo_redo_roundtrip`
+  (`undo_test.rs`). It compares every network, serialized, before, after
+  undo, and after redo, so it catches stray changes anywhere, not only on
+  the edited node. This covers the top-level case and the capture-wire case;
+- refresh after undo/redo: `NetworkSnapshotCommand`'s `Full` refresh leaves
+  derived state current. After undoing a drop, the `expr`'s `output_type`
+  and the network's validation errors equal a freshly validated copy. When
+  the edited network is used as a custom node in another network, and the
+  `expr` feeds its return node, the instance's output type in the parent
+  follows the undo and the redo;
+- `NetworkSnapshotCommand` itself, in `undo_test.rs`, as the undo
+  `AGENTS.md` asks for a new command: undo/redo restore the snapshot exactly,
+  including an edit inside a zone body;
 - a later rename through `set_expr_data` keeps the wire (id preserved);
 - offers: an `expr` parameter declared `Float` and fed by a `Vec3` output is
   offered `Vec3`. One fed by `Int` is **not** offered (compatible). An
   unwired parameter is not offered. A source that resolves to a `Function`
   is not offered (refused by `accepts_type`). The offers agree with
-  `validate_wires`: a pin is offered exactly when it carries a mismatch
-  error and `accepts_type` passes. This is checked over a small table of
-  source/declared pairs, which pins `resolve_wire_source_type` to the
-  validator;
+  `validate_wires` over a small table of source/declared pairs, which pins
+  `resolve_wire_source_type` to the validator. For a non-record pair, a pin
+  is offered exactly when it carries a mismatch error and `accepts_type`
+  passes. For a record pair, it is offered exactly when it carries a
+  mismatch error **or** the resolved fields differ, and `accepts_type`
+  passes;
+- record width (sources are `expr` record literals): a parameter declared
+  `{a: Float}` fed by `{a: Float, b: Float}` carries no error and **is**
+  offered `{a: Float, b: Float}`. Taking it lets `p.b` validate. A named
+  source whose fields equal the declared anonymous type is **not** offered.
+  A named source wider than the declared anonymous type is offered in its
+  anonymous form, never as the name;
 - offers through a polymorphic chain (`SameAsInput`): the offered type is
   the resolved concrete type;
 - `take_types_from_wires` retypes the parameter, keeps its id, name and
   wire, leaves the expression text unchanged, and clears the mismatch error.
   The `expr`'s output type follows (e.g. `x * 2` changes from `Float` to
-  `Vec3`). Two stale inputs taken together give one undo step; undo
-  restores both types; redo reapplies;
+  `Vec3`), and so does the evaluated value: re-evaluating after the retype
+  yields a `Vec3`, so no memoized result outlives the type change. Two stale
+  inputs taken together give one undo step (`assert_undo_redo_roundtrip`);
 - refusals: an index with no offer, an empty list, read-only network. Each
   leaves the network unchanged and pushes no undo step. A list that mixes an
   offered and a non-offered index changes nothing.
+
+API tests (`rust/tests/structure_designer_api/`). These pin what the Flutter
+side relies on but cannot check itself:
+
+- **the hover check agrees with the drop.** Over one table of sources
+  (accepted, abstract, `Function`, `None`-typed, read-only network,
+  destination without a port, capture across a zone), `can_add_input_from_wire`
+  returns `None` exactly when `add_input_from_wire` succeeds. A tab that
+  lights up green must never refuse the drop, and a refused one must never
+  have accepted it;
+- `AddedInput.pin_index` is the new parameter's row in `get_expr_data`.
+  `pendingNameFocus` keys on it;
+- `get_wire_type_offers` returns one entry per input pin, in the editor's
+  row order;
+- `has_open_input_port` is `true` on `expr` and `false` on a sample of other
+  nodes, including a custom-node instance and `record_construct`. Phase 2
+  extends this: `true` on an anonymous `record_construct`, `false` in named
+  mode.
 
 Docs: `crates/atomcad-structure-designer/src/nodes/AGENTS.md` gets a short
 "Declared inputs" note. A node whose input list is its own data implements
@@ -626,6 +711,21 @@ reference-guide change.
   only in anonymous mode, `retype` dropping the field's literal), the
   `FromInput` anonymous adaptation, rename moving literal keys, and a mode
   switch dropping the literals that do not carry over.
+- The schema setter as a `StructureDesigner` method recording a
+  `NetworkSnapshotCommand` ("Set record schema"), replacing the
+  `set_node_network_data_scoped` path of `set_record_construct_data`.
+- The `RecordConstructData` branch in `collect_record_refs_in_node`,
+  `rewrite_record_names_in_node` and `canonicalize_node_data`, covering
+  local field types.
+- Invariant checker (`invariants.rs`): extend `DuplicateFieldId` and
+  `FieldIdFloor` to a `record_construct`'s local `fields` / `next_field_id`,
+  and add a Tier 1 check that a named-mode node has empty `fields`.
+  `validate_network` debug-asserts these on every edit, so every test in
+  this doc exercises them for free, and `check_document_invariants` covers
+  save → load.
+- Correct the doc comment on `build_node_type_for_schema`. It says mismatched
+  downstream wires "get disconnected by network validation", but
+  `validate_wires` only reports them, and this design relies on that.
 - Field-type predicate: reuse the one the schema editor / def validator
   applies to a field type. If none exists as a function, add
   `is_valid_record_field_type` beside `validate_field_optionals` and have
@@ -644,7 +744,22 @@ API tests, cnnd round-trip):
 - the output wires into an `expr` parameter typed with the same anonymous
   type, and `r.a` evaluates;
 - `add_input_from_wire` appends a field; refusals as in Phase 1;
-- `declared_inputs()` is `Some` in anonymous mode and `None` in named mode;
+- the drag-aware-add sequence Phase 4 wires up, at API level: add a
+  zero-field `record_construct` from a `FromOutput` drag, then
+  `add_input_from_wire` from the dragged source. The result is a one-field
+  anonymous record whose field has the derived name and is wired. Flutter
+  only picks this call instead of a pin index, so the behavior is tested
+  here;
+- `set_record_construct_fields`: rename keeps the wire (pin id) and moves
+  the literal key; reorder keeps every wire on its field; delete drops the
+  field's wire and literal; add takes the next id from `next_field_id`,
+  never reusing a deleted field's id. Each is one undo step
+  (`assert_undo_redo_roundtrip`);
+- invariants: a duplicated local field id, a `next_field_id` at or below the
+  largest local id, and a named-mode node with non-empty `fields` are each
+  reported (`invariants_test.rs`);
+- `declared_inputs()` is `Some` in anonymous mode and `None` in named mode,
+  and `has_open_input_port` follows it through the API;
   a named-mode node has no open port and no offers, even with a mismatched
   wire on a field;
 - **the rename scenario, end to end:** anonymous node `r` with field `a`,
@@ -654,6 +769,12 @@ API tests, cnnd round-trip):
   offers `{b: Float}`. Take it: the mismatch clears, and the expression's
   `p.a` now reports its own error. Edit the expression to `p.b`: it
   evaluates;
+- **the add-a-field scenario, end to end:** anonymous node `r` with field
+  `a`, its output dropped on an `expr` `+` (parameter declared
+  `{a: Float}`). Drop another output on `r`'s `+`, giving field `b`. The
+  `expr`'s wire carries **no** error, and `wire_type_offers` still offers
+  `{a: Float, b: Float}`. Take it: `p.b` in the expression validates and
+  evaluates;
 - `take_types_from_wires` on an anonymous field: the field is retyped, its
   pin id and wire are kept, and its literal is dropped. Undo restores the
   type and the literal;
@@ -661,12 +782,27 @@ API tests, cnnd round-trip):
   with a literal) picks def `Foo { b, c }`. `b`'s wire is kept, `a`'s wire
   and literal are dropped, and no wire lands on `c`. Run this a second time
   with local ids chosen to collide numerically with `Foo`'s `FieldId`s,
-  which is the case the id base exists for. Undo of the switch restores `a`
-  and both wires;
+  which is the case the id base exists for. The switch passes
+  `assert_undo_redo_roundtrip`: undo restores `a`, its literal and both
+  wires in one step (the assertion that fails under `SetNodeDataCommand`),
+  and redo drops them again. A named → named switch that drops a wire
+  passes it too;
+- def references in local fields: an anonymous field typed `Box` (from
+  dropping a `Box` output on the `+`). Renaming def `Box` to `Crate`
+  rewrites the field to `Crate`, and its wire stays valid. The delete
+  reference check for `Box` finds the node. `collect_record_refs_in_network`
+  lists `Box`. If `Box` goes missing anyway (a hand-edited file), the
+  invariant checker's `UnresolvedRecordName` is accounted for by a
+  validation error, not silent. An empty `schema` is never reported as a reference. With a
+  field typed by a linked library's def, removing that def from the library
+  and refreshing freezes the node, and its wires survive refresh and
+  reopen (`library_links` tests);
 - legacy: a saved `record_construct` with an empty `schema` loads as an
   anonymous node with no fields, outputting `{}`;
 - text format: `query` → `--replace` of an anonymous node is a no-op
-  (round-trip corpus rule); `fields` + `a: x` builds the node from text;
+  (round-trip corpus rule), including a field whose type is itself an
+  anonymous record (Phase 0's parser); `fields` + `a: x` builds the node
+  from text;
 - `.cnnd` round-trip with a new fixture holding an anonymous node. Build its
   source values with `add_value_node` / `add_typed_value_node`. The new
   fixture adds two corpus snapshots, to be accepted with `cargo insta review`.
@@ -676,7 +812,7 @@ API tests, cnnd round-trip):
 
 Docs: the `record_construct` section of
 `reference_guide/nodes/math_programming.md` (anonymous mode and its text
-form; the `+` row is documented in Phase 4, where it appears); the records
+form; the `+` tab is documented in Phase 4, where it appears); the records
 bullet in
 `crates/atomcad-structure-designer/src/nodes/AGENTS.md` (anonymous mode, the
 pin-id base invariant).
@@ -695,7 +831,9 @@ Tests:
 - a downstream `expr` declared with the anonymous type still validates and
   evaluates `r.a`;
 - undo removes the def and restores the anonymous node with its wires in one
-  step; redo reinstates both;
+  step; redo reinstates both. `assert_undo_redo_roundtrip` compares networks
+  only, so the test also asserts the def registry: no `Box` after undo, and
+  `Box` with the same `FieldId`s after redo;
 - refusals: name taken, linked namespace, not anonymous, no fields. Each
   leaves no def and no undo step;
 - matching: an exact def is listed; a def with an extra field, a missing
@@ -704,10 +842,11 @@ Tests:
 - "use existing": pins reorder to the def's authored order and wires follow
   by name.
 
-### Phase 4 — Flutter: the `+` row, dropping, and the panels
+### Phase 4 — Flutter: the `+` tab, dropping, and the panels
 
-- `+` row and `DragTarget`, hover check, refused style and reason label,
-  node-height accounting on both sides, `pendingNameFocus`.
+- The open-port tab layer (shown while a wire is dragged), each tab's
+  `DragTarget`, hover check, refused style and reason label, clearing
+  `draggedWire` on a tab drop, and `pendingNameFocus`.
 - Drag-aware add: auto-connect to a newly created `record_construct` (zero
   fields, from a `FromOutput` drag) goes through `addInputFromWire` instead
   of a pin index.
@@ -718,14 +857,25 @@ Tests:
   both editors, the **Take types from wires** context-menu item, and
   `model.takeTypesFromWires`.
 
-Tests: a Rust test that the estimators count the open-port row (an `expr`
-with *n* parameters estimates as *n*+1 rows; named-mode `record_construct`
-as *n*). The UI itself is checked by a manual walkthrough
-(`feedback_manual_test_for_editor_ui`):
+Tests. The tab layer's placement and eligibility depend only on data, so
+they live in a pure function, roughly `openPortTabs(nodes, scopeChain, zoom)
+→ [(nodeId, Rect)]`. It gets a unit test in `test/open_port_tabs_test.dart`,
+following `test/mechanosynth_popup_layout_test.dart`; agents run these with
+`flutter test`:
+
+- only nodes with `hasOpenInputPort` in the visible scope get a tab, and a
+  node inside a collapsed HOF body gets none;
+- each tab rect sits directly below its node's bottom edge, at the
+  input-pin column, and scales with the zoom level;
+- the tab does not change the node: `getNodeSize()` returns the same size
+  for a node whether `hasOpenInputPort` is true or false.
+
+Hit-test priority, drag feedback and panel focus need a running app, so they
+are checked by a manual walkthrough (`feedback_manual_test_for_editor_ui`):
 
 1. Drop three outputs on an `expr` `+`: three parameters with derived names,
    name field focused each time; rename one; the wire stays.
-2. Hover an abstract-typed or a function output over an `expr` `+`: the row
+2. Hover an abstract-typed or a function output over an `expr` `+`: the tab
    shows the refused style and the reason, and the drop does nothing.
 3. Drag an output into empty space → `record_construct`: one-field anonymous
    record. Drop two more on its `+`. Wire its output into a new `expr`
@@ -735,8 +885,12 @@ as *n*). The UI itself is checked by a manual walkthrough
 5. A second anonymous node with the same shape: the dialog offers `Box`
    under "Same shape as"; Use → pins reorder, wires stay.
 6. Inside a `map` body, drop a captured outer value on an `expr` `+`.
-7. Auto-layout a network containing these nodes: no overlaps (height
-   accounting).
+7. Open an existing file with tightly stacked `expr` nodes: nothing moved,
+   nothing overlaps. Start a wire drag: `+` tabs appear under every `expr`
+   and anonymous `record_construct` in view, and none under other nodes.
+   They disappear on a drop or a cancel. Dropping on a tab adds the input
+   without opening the add-node popup. A tab covering the top of the
+   node beneath it still takes the drop.
 8. Take type from wire: in the network from step 3, rename a field of the
    `record_construct`. The downstream `expr` turns red. Select it: the
    stale parameter row shows the marker and **Use wire's type: `{…}`**.
@@ -744,27 +898,59 @@ as *n*). The UI itself is checked by a manual walkthrough
    access and the node evaluates. Ctrl+Z restores the old type. Make two
    inputs stale and use **Take types from wires** from the node's context
    menu: both are fixed, and one Ctrl+Z undoes both. On a healthy node the
-   menu item is absent.
-9. Flutter smoke test (`flutter test integration_test/`): **human-only**, run
+   menu item is absent. Then drop one more output on the
+   `record_construct`'s `+`: the downstream `expr` stays error-free, but its
+   parameter row shows the marker and offers the wider type. Take it, and
+   `r.<new field>` works.
+9. Schema switch: on an anonymous node with two wired fields, pick a def
+   that shares only one of them; one wire drops. Ctrl+Z brings back both
+   wires and the local fields.
+10. Flutter smoke test (`flutter test integration_test/`): **human-only**, run
    by the maintainer.
 
 Docs: `reference_guide/node_networks.md` gets a short "open port" paragraph
 (where it appears, what a drop does, renaming after); the `expr` and
-`record_construct` sections mention the `+` row, Name this record… and Take
-type from wire, the last with the rename case as its example; and
-`lib/structure_designer/AGENTS.md` notes that the `+` row counts in node
-height on both sides.
+`record_construct` sections mention the `+` tab, Name this record… and Take
+type from wire, with the rename and add-a-field cases as its examples; and
+`lib/structure_designer/AGENTS.md` notes that the open-port tabs live in a
+canvas layer outside the node footprints, and why: hit testing, and saved
+layouts that must not move.
 
 ## Testing
 
-Rust behaviour is tested at the layer that owns it: name derivation as a
-pure function, the orchestrators and each node's `DeclaredInputs` impl through
-`StructureDesigner` in the crate's `tests/`, and the FFI surface in
-`rust/tests/structure_designer_api/`. Persistence uses the existing `.cnnd`
-round-trip corpus and the text-format `query` → `--replace` no-op rule. If
-the `record_construct` node-type description changes, `node_snapshots`
-needs a `cargo insta review`. The Flutter canvas and panel work is verified
-by the Phase 4 walkthrough.
+Behavior is tested at the layer that owns it:
+
+- **Pure functions:** name derivation (Rust), and the open-port tab
+  placement (Dart, `test/`, which agents run with `flutter test`).
+- **Orchestrators and `DeclaredInputs` impls:** through `StructureDesigner`
+  in the crate's `tests/structure_designer/`. Each new test file is
+  registered as a `mod` in `tests/structure_designer.rs`, or it silently
+  never runs.
+- **Undo:** every undoable operation in this doc goes through
+  `assert_undo_redo_roundtrip`, which compares every network, serialized,
+  rather than the fields a test thought to check. Promotion adds a registry
+  assertion, because the helper does not compare defs.
+- **The FFI surface:** in `rust/tests/structure_designer_api/`, where the
+  hover check (`can_add_input_from_wire`) is pinned to the drop, and indices
+  to editor rows.
+- **The invariant checker:** extended to local fields in Phase 2.
+  `validate_network` debug-asserts it after every edit, so stale but
+  still-wired inputs are checked throughout the suite: each one must be
+  accounted for by a validation error, never silent.
+- **Persistence:** the existing `.cnnd` round-trip corpus, `check_document_invariants`
+  across save → load, and the text-format `query` → `--replace` no-op rule,
+  including anonymous record types. Phase 0 covers both the type-string
+  parser the panel and API use and the text format's own path.
+- **Snapshots:** Phase 2 rewrites the `record_construct` node-type
+  description, which no longer requires a def, so `node_snapshots` changes
+  and needs a `cargo insta review`.
+
+Every phase runs the gate listed under "Phases". The `structure_designer_api`,
+`integration` and `renderer_api` harnesses are named explicitly because
+`--workspace` stops at the first failing harness. Phase 4 is the first phase
+to add Dart unit tests to `flutter test`. Only drag feedback, hit-test
+priority and panel focus are left to the Phase 4 walkthrough, along with the
+Flutter smoke test, which is human-only.
 
 ## Future work
 
