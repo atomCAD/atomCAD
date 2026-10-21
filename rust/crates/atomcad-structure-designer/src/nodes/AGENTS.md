@@ -200,6 +200,21 @@ If your new node has user-configurable type properties that drive its pin types 
 
 The implementation pattern is short: clone `self`, overwrite the type properties to match the drag source (typically via `DataType::drag_element_type_from_output` to peel `Iter[T]`/`Array[T]` or broadcast a scalar), and return the adapted data. Return `None` for inputs that can't yield a valid configuration (abstract types, `Function(_)`, or — for nodes like `collect` — scalar broadcast that doesn't make semantic sense). The popup filter and `add_node_with_drag_source` both verify the adapter's claim by re-running the static-pin check against the resolved node type, so over-promising is silently dropped to default data rather than producing a mis-typed node — adapters can be loose. See `map.rs` / `array_at.rs` / `parameter.rs` for reference and `doc/design_drag_aware_add_node.md` for the full design.
 
+### Declared inputs (open port, Take type from wire)
+
+A node whose input list is its **own data** (`expr`'s parameters; Phase 2 of
+`doc/design_wire_declared_inputs.md` adds an anonymous `record_construct`)
+implements `crate::declared_inputs::DeclaredInputs` and returns it from
+`NodeData::declared_inputs()` / `declared_inputs_mut()`. That is all it takes:
+the open port (a dropped wire appends an input of its type, under a name
+derived from the source) and *Take type from wire* (retyping a stale input)
+come from the orchestrators in `declared_input_ops.rs`, which never name a node
+type. Two rules: inputs are addressed by **pin id** — the `Parameter.id` the
+node puts on each pin — never by index; and the trait methods edit the node's
+data only (the orchestrator re-derives the node type, validates and records the
+one `NetworkSnapshotCommand`). The `Option` may depend on the data, so a node
+can have declared inputs in one mode and fixed ones in another.
+
 ### NodeType Registration
 
 **IMPORTANT:** `output_type` field no longer exists on `NodeType`. Use `output_pins` with one of the helper constructors on `OutputPinDefinition`:

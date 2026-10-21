@@ -1,4 +1,5 @@
 use crate::data_type::DataType;
+use crate::declared_inputs::DeclaredInputs;
 use crate::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::evaluator::network_evaluator::NetworkEvaluator;
 use crate::evaluator::network_evaluator::NetworkStackElement;
@@ -48,6 +49,7 @@ impl ExprData {
         // Clear previous state
         self.expr = None;
         self.output_type = None;
+        self.error = None;
 
         // Skip validation if expression is empty
         if self.expression.trim().is_empty() {
@@ -90,6 +92,113 @@ impl ExprData {
         }
 
         errors
+    }
+
+    /// The types a parameter can take: a value the expression language can
+    /// hold in a variable. Abstract supertypes have no concrete
+    /// representation, functions are callable rather than data, iterators are
+    /// lazy walkers that can't be re-read like values, and `Unit` / `None`
+    /// carry no value. Shared by the drag-aware add adapter and the open port
+    /// (`DeclaredInputs::accepts_type`), so the two can never disagree.
+    pub fn accepts_parameter_type(data_type: &DataType) -> Result<(), String> {
+        if data_type.is_abstract() {
+            return Err(format!(
+                "an expr parameter can't be the abstract type {}",
+                data_type
+            ));
+        }
+        match data_type {
+            DataType::Function(_) | DataType::AnyFunction { .. } => {
+                Err("an expr parameter can't be a function".to_string())
+            }
+            DataType::Iterator(_) => {
+                Err("an expr parameter can't be an iterator; collect it first".to_string())
+            }
+            DataType::Unit => Err("an expr parameter can't be Unit".to_string()),
+            DataType::None => Err("the source has no type".to_string()),
+            _ => Ok(()),
+        }
+    }
+
+    /// The id the next new parameter gets: one past the largest in use, the
+    /// rule `set_text_properties` and the API's `set_expr_data` also follow.
+    fn next_parameter_id(&self) -> u64 {
+        self.parameters
+            .iter()
+            .filter_map(|p| p.id)
+            .max()
+            .unwrap_or(0)
+            + 1
+    }
+
+    /// Gives every id-less parameter (a file written before ids existed) a
+    /// fresh id, so each pin can be addressed by id
+    /// (`DeclaredInputs::declares_pin` matches ids only).
+    fn assign_missing_parameter_ids(&mut self) {
+        let mut next_id = self.next_parameter_id();
+        for param in &mut self.parameters {
+            if param.id.is_none() {
+                param.id = Some(next_id);
+                next_id += 1;
+            }
+        }
+    }
+}
+
+impl DeclaredInputs for ExprData {
+    fn accepts_type(&self, data_type: &DataType) -> Result<(), String> {
+        Self::accepts_parameter_type(data_type)
+    }
+
+    fn reserved_names(&self) -> &'static [&'static str] {
+        // The lexer's keywords, plus the node's property keys in the text
+        // format.
+        &[
+            "if",
+            "then",
+            "else",
+            "true",
+            "false",
+            "expression",
+            "parameters",
+        ]
+    }
+
+    fn fallback_name(&self) -> &'static str {
+        "x"
+    }
+
+    fn declares_pin(&self, pin_id: u64) -> bool {
+        self.parameters.iter().any(|p| p.id == Some(pin_id))
+    }
+
+    fn append(&mut self, name: String, data_type: DataType) -> Result<u64, String> {
+        Self::accepts_parameter_type(&data_type)?;
+        let id = self.next_parameter_id();
+        self.parameters.push(ExprParameter {
+            id: Some(id),
+            name,
+            data_type,
+            data_type_str: None,
+        });
+        // Refresh the cached parse result and output type. Data-only: the
+        // node id only labels errors, which the caller's validation redoes.
+        self.parse_and_validate(0);
+        Ok(id)
+    }
+
+    fn retype(&mut self, pin_id: u64, data_type: DataType) -> Result<(), String> {
+        Self::accepts_parameter_type(&data_type)?;
+        let param = self
+            .parameters
+            .iter_mut()
+            .find(|p| p.id == Some(pin_id))
+            .ok_or_else(|| format!("expr has no parameter with id {}", pin_id))?;
+        param.data_type = data_type;
+        // The stored text form would otherwise disagree with the new type.
+        param.data_type_str = None;
+        self.parse_and_validate(0);
+        Ok(())
     }
 }
 
@@ -137,16 +246,8 @@ impl NodeData for ExprData {
         // `doc/design_drag_aware_add_node.md` (per-node adapter table).
         //
         // Reject types that can't sensibly be variables in the expression
-        // language: abstract supertypes (no concrete representation),
-        // function-typed values (callable, not data), iterators (lazy
-        // walkers can't be re-read like values), and `Unit` (no value to
-        // pass through).
-        if source_type.is_abstract()
-            || matches!(
-                source_type,
-                DataType::Function(_) | DataType::Iterator(_) | DataType::Unit
-            )
-        {
+        // language (see `accepts_parameter_type`, shared with the open port).
+        if Self::accepts_parameter_type(source_type).is_err() {
             return None;
         }
         let mut adapted = ExprData {
@@ -219,6 +320,14 @@ impl NodeData for ExprData {
 
     fn clone_box(&self) -> Box<dyn NodeData> {
         Box::new(self.clone())
+    }
+
+    fn declared_inputs(&self) -> Option<&dyn DeclaredInputs> {
+        Some(self)
+    }
+
+    fn declared_inputs_mut(&mut self) -> Option<&mut dyn DeclaredInputs> {
+        Some(self)
     }
 
     fn get_subtitle(
@@ -367,6 +476,10 @@ pub fn expr_data_loader(value: &Value, _design_dir: Option<&str>) -> io::Result<
     // First deserialize the basic data
     let mut data: ExprData = serde_json::from_value(value.clone())
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+    // A file from before parameter ids existed: give each parameter one, so
+    // every pin is addressable by id (wires are positional, so no wire moves).
+    data.assign_missing_parameter_ids();
 
     // Use the existing parse_and_validate method to handle expression parsing and validation
     // We pass a dummy node_id (0) since validation errors aren't used in the loader context

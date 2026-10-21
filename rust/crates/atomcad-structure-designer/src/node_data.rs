@@ -1,4 +1,5 @@
 use crate::data_type::DataType;
+use crate::declared_inputs::DeclaredInputs;
 use crate::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::evaluator::network_evaluator::NetworkEvaluator;
 use crate::evaluator::network_evaluator::NetworkStackElement;
@@ -431,6 +432,21 @@ pub trait NodeData: Any + AsAny {
         _direction: DragDirection,
         _registry: &NodeTypeRegistry,
     ) -> Option<Box<dyn NodeData>> {
+        None
+    }
+
+    /// The node's declared inputs, when its input list is its own data. `None`
+    /// (the default) means the node's inputs are fixed by its type or by a def.
+    /// May depend on the data. `Some` is also what gives the node the open
+    /// port (the `+` tab shown during a wire drag) and *Take type from wire*;
+    /// see `crate::declared_inputs` and `doc/design_wire_declared_inputs.md`.
+    fn declared_inputs(&self) -> Option<&dyn DeclaredInputs> {
+        None
+    }
+
+    /// Mutable counterpart of [`Self::declared_inputs`]; must answer `Some`
+    /// exactly when it does.
+    fn declared_inputs_mut(&mut self) -> Option<&mut dyn DeclaredInputs> {
         None
     }
 

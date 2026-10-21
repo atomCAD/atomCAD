@@ -52,6 +52,8 @@ structure_designer/
 ├── data_type.rs               # DataType enum: type system for pins
 ├── record_path.rs             # Paths into nested record types: the one resolver (by FieldId), path text syntax
 ├── node_type_registry.rs      # Central registry of all node types
+├── declared_inputs.rs         # DeclaredInputs trait (nodes whose inputs are their own data) + open-port name derivation
+├── declared_input_ops.rs      # Open port (add_input_from_wire) and Take type from wire, for any DeclaredInputs node
 ├── network_usages.rs          # Find Usages: read-only collection of a network's instance nodes
 ├── node_name_search.rs        # Find Node: name-path resolution (`map4/e1`) and the ranked name search
 ├── network_validator.rs       # Validates and repairs networks

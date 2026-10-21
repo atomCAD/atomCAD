@@ -1,3 +1,4 @@
+use super::structure_designer_api_types::APIAddedInput;
 use super::structure_designer_api_types::APIAlignment;
 use super::structure_designer_api_types::APIApplyData;
 use super::structure_designer_api_types::APIArgumentKind;
@@ -888,6 +889,7 @@ fn build_node_view(
         closure_custom_label,
         zone,
         derived_shape,
+        has_open_input_port: super::view_builders::has_open_input_port(node),
     })
 }
 
@@ -1231,6 +1233,121 @@ pub fn connect_wire(
             );
             refresh_structure_designer_auto(cad_instance);
         });
+    }
+}
+
+fn api_source_pin_to_domain(
+    source_pin: APISourcePin,
+) -> atomcad_structure_designer::node_network::SourcePin {
+    use atomcad_structure_designer::node_network::SourcePin;
+    match source_pin {
+        APISourcePin::NodeOutput { pin_index } => SourcePin::NodeOutput { pin_index },
+        APISourcePin::ZoneInput { pin_index } => SourcePin::ZoneInput {
+            pin_index: pin_index as usize,
+        },
+    }
+}
+
+/// The open-port drop (`doc/design_wire_declared_inputs.md`): append an input
+/// of the wire's type to `dest_node_id` under a derived name and connect the
+/// wire to it, as one undo step. Same arguments as [`connect_wire`]. Only a
+/// node with declared inputs (`NodeView::has_open_input_port`) accepts it.
+#[flutter_rust_bridge::frb(sync)]
+pub fn add_input_from_wire(
+    dest_scope_path: Vec<u64>,
+    source_node_id: u64,
+    source_pin: APISourcePin,
+    source_scope_depth: u32,
+    dest_node_id: u64,
+) -> Result<APIAddedInput, String> {
+    let source_pin = api_source_pin_to_domain(source_pin);
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let added = cad_instance.structure_designer.add_input_from_wire(
+                    &dest_scope_path,
+                    dest_node_id,
+                    source_node_id,
+                    source_pin,
+                    source_scope_depth as u8,
+                )?;
+                refresh_structure_designer_auto(cad_instance);
+                Ok(super::view_builders::added_input_view(&added))
+            },
+            Err("CAD instance not available".to_string()),
+        )
+    }
+}
+
+/// The hover check paired with [`add_input_from_wire`]: `None` when the drop
+/// would succeed, `Some(reason)` when it would be refused.
+#[flutter_rust_bridge::frb(sync)]
+pub fn can_add_input_from_wire(
+    dest_scope_path: Vec<u64>,
+    source_node_id: u64,
+    source_pin: APISourcePin,
+    source_scope_depth: u32,
+    dest_node_id: u64,
+) -> Option<String> {
+    let source_pin = api_source_pin_to_domain(source_pin);
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                cad_instance.structure_designer.can_add_input_from_wire(
+                    &dest_scope_path,
+                    dest_node_id,
+                    source_node_id,
+                    source_pin,
+                    source_scope_depth as u8,
+                )
+            },
+            Some("CAD instance not available".to_string()),
+        )
+    }
+}
+
+/// Take type from wire: one entry per input pin of the node, in pin (= editor
+/// row) order — the type a retype would set, or `None` when none is offered.
+/// Empty for a node without declared inputs.
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_wire_type_offers(scope_path: Vec<u64>, node_id: u64) -> Vec<Option<APIDataType>> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                super::view_builders::wire_type_offers_view(
+                    &cad_instance.structure_designer,
+                    &scope_path,
+                    node_id,
+                )
+            },
+            Vec::new(),
+        )
+    }
+}
+
+/// Retype the listed declared inputs of a node to the types their wires now
+/// carry, in one undo step. All or nothing: an index without an offer
+/// refuses the whole call.
+#[flutter_rust_bridge::frb(sync)]
+pub fn take_types_from_wires(
+    scope_path: Vec<u64>,
+    node_id: u64,
+    pin_indices: Vec<u32>,
+) -> Result<(), String> {
+    let pin_indices: Vec<usize> = pin_indices.into_iter().map(|i| i as usize).collect();
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                cad_instance.structure_designer.take_types_from_wires(
+                    &scope_path,
+                    node_id,
+                    &pin_indices,
+                )?;
+                refresh_structure_designer_auto(cad_instance);
+                Ok(())
+            },
+            Err("CAD instance not available".to_string()),
+        )
     }
 }
 
@@ -7257,7 +7374,7 @@ pub fn set_foreach_data(scope_path: Vec<u64>, node_id: u64, data: APIForeachData
 
 /// Whole-list lane + output-type edit on a `zip_with` node (the positional id
 /// merge). Delegates to `StructureDesigner::set_zip_with_data` so the shared
-/// `NodeStructureEditCommand` undo capture (whole-network snapshots covering the
+/// `NetworkSnapshotCommand` undo capture (whole-network snapshots covering the
 /// wire fallout) is used — the API layer adds no undo logic of its own. Lane
 /// ids are managed Rust-side and never cross the API.
 #[flutter_rust_bridge::frb(sync)]
@@ -7313,7 +7430,7 @@ pub fn remove_zip_with_lane(scope_path: Vec<u64>, node_id: u64, lane_index: usiz
 /// that is not a valid integer under an Int selector is reported back through
 /// the `APIResult` so the panel can display it inline (nothing is mutated).
 /// Otherwise delegates to `StructureDesigner::set_switch_data`, which performs
-/// the value-keyed id merge and pushes the shared `NodeStructureEditCommand`
+/// the value-keyed id merge and pushes the shared `NetworkSnapshotCommand`
 /// undo capture — the API layer adds no undo logic and never sees the hidden
 /// case ids.
 #[flutter_rust_bridge::frb(sync)]

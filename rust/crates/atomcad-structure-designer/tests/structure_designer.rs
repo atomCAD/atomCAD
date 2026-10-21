@@ -756,6 +756,12 @@ mod network_thumbnail_test;
 #[path = "structure_designer/wiring_revalidation_test.rs"]
 mod wiring_revalidation_test;
 
+#[path = "structure_designer/declared_inputs_test.rs"]
+mod declared_inputs_test;
+
+#[path = "structure_designer/open_port_name_test.rs"]
+mod open_port_name_test;
+
 // Baked AO: the exposure cache on the scene, through refreshes
 // (doc/design_depth_perception.md D9, Phase 4b).
 #[path = "structure_designer/ambient_occlusion_cache_test.rs"]

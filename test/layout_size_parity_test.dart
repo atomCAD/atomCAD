@@ -124,6 +124,7 @@ NodeView _nodeFrom(Map<String, dynamic> json) {
     displayedPins: Int32List(0),
     functionType: '',
     functionPinConsumed: false,
+    hasOpenInputPort: false,
     selected: false,
     active: false,
     displayed: false,

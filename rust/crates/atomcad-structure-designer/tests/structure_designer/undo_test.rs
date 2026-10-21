@@ -157,7 +157,7 @@ fn normalize_json(value: &mut Value) {
 }
 
 /// Captures state, runs an action, then verifies undo/redo invariants.
-fn assert_undo_redo_roundtrip(
+pub(crate) fn assert_undo_redo_roundtrip(
     designer: &mut StructureDesigner,
     action: impl FnOnce(&mut StructureDesigner),
 ) {
@@ -2851,13 +2851,13 @@ fn undo_intra_body_wire() {
     });
 }
 
-// ===== switch case-list edits (NodeStructureEditCommand, design Phase 2) =====
+// ===== switch case-list edits (NetworkSnapshotCommand, design Phase 2) =====
 
 /// Design test 8 (top level): undo/redo of a `switch` case removal with a wire
 /// attached restores the wire and `next_case_id` exactly. The default switch
 /// (cases `[0, 1]`, ids 1/2, `next_case_id = 3`) has a float wired into
 /// `case_1`; removing case 1 drops that wire — a fallout the node-data blob
-/// alone could not restore, hence the whole-network `NodeStructureEditCommand`.
+/// alone could not restore, hence the whole-network `NetworkSnapshotCommand`.
 #[test]
 fn undo_switch_remove_wired_case() {
     let mut designer = setup_designer_with_network("test");
@@ -3946,4 +3946,67 @@ fn undo_redo_of_a_body_node_rename() {
 
     assert!(designer.redo());
     assert_eq!(name_now(&designer), Some("counter".to_string()));
+}
+
+// ===== NetworkSnapshotCommand (doc/design_wire_declared_inputs.md Phase 1) =====
+
+/// The generic whole-network snapshot command restores its before/after
+/// snapshots exactly — including an edit inside a zone body, which travels
+/// inside its HOF node.
+#[test]
+fn network_snapshot_command_restores_both_snapshots_exactly() {
+    use atomcad_structure_designer::undo::commands::network_snapshot::NetworkSnapshotCommand;
+
+    let mut designer = setup_designer_with_network("Main");
+    let outcome = designer.ai_text_edit(
+        "r = range { count: 2 }
+mp = map { xs: r, input_type: Int, output_type: Int, body { g = int { value: 1 } output g } }
+f = float { value: 1.5 }
+",
+        true,
+    );
+    assert!(
+        outcome.result.errors.is_empty(),
+        "{:?}",
+        outcome.result.errors
+    );
+    let mp = designer.node_type_registry.node_networks["Main"]
+        .nodes
+        .values()
+        .find(|n| n.custom_name.as_deref() == Some("mp"))
+        .unwrap()
+        .id;
+
+    let before_state = snapshot_all_networks(&mut designer.node_type_registry);
+    let before = designer.snapshot_network("Main").unwrap();
+    // Two edits — one top-level, one in the body — recorded by nobody else.
+    designer.undo_stack.suppress_recording();
+    designer.add_node("int", DVec2::new(500.0, 0.0));
+    designer.add_node_scoped(&[mp], "float", DVec2::new(20.0, 20.0), None);
+    designer.undo_stack.resume_recording();
+    let after_state = snapshot_all_networks(&mut designer.node_type_registry);
+    let after = designer.snapshot_network("Main").unwrap();
+    assert_ne!(before_state, after_state);
+
+    designer.push_command(NetworkSnapshotCommand {
+        network_name: "Main".to_string(),
+        description: "Test snapshot".to_string(),
+        before_snapshot: before,
+        after_snapshot: after,
+    });
+    assert_eq!(
+        designer.undo_stack.undo_description(),
+        Some("Test snapshot")
+    );
+
+    assert!(designer.undo());
+    assert_eq!(
+        snapshot_all_networks(&mut designer.node_type_registry),
+        before_state
+    );
+    assert!(designer.redo());
+    assert_eq!(
+        snapshot_all_networks(&mut designer.node_type_registry),
+        after_state
+    );
 }

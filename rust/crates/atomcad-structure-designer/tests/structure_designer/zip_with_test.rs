@@ -217,8 +217,12 @@ fn add_expr_to_network(
 ) -> u64 {
     let expr_params: Vec<ExprParameter> = parameters
         .into_iter()
-        .map(|(name, dt)| ExprParameter {
-            id: None,
+        .enumerate()
+        // Ids as every authoring path assigns them (the loader backfills
+        // missing ones, so an id-less fixture would not survive a snapshot
+        // restore unchanged).
+        .map(|(i, (name, dt))| ExprParameter {
+            id: Some(i as u64 + 1),
             name,
             data_type: dt,
             data_type_str: None,

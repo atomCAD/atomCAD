@@ -1776,7 +1776,7 @@ impl NodeTypeRegistry {
     /// `ancestors` / `ancestor_hof_ids` are its enclosing-zone chain (see
     /// [`Self::resolve_output_type_scoped`]). Returns `None` for
     /// unresolvable sources, matching the rest of the resolver.
-    fn resolve_wire_source_type_scoped(
+    pub fn resolve_wire_source_type_scoped(
         &self,
         wire: &IncomingWire,
         network: &NodeNetwork,

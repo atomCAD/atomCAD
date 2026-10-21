@@ -32,6 +32,8 @@ pub mod clipboard;
 pub mod closure_network_conversion;
 pub mod common_constants;
 pub mod data_type;
+pub mod declared_input_ops;
+pub mod declared_inputs;
 pub mod displayed_node_refs;
 pub mod document_set;
 pub mod eval_errors;

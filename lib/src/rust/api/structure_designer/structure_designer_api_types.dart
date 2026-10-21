@@ -109,6 +109,38 @@ class APIAddBondMoveResult {
           bondOrder == other.bondOrder;
 }
 
+/// Discriminator for which side of an HOF node a wire's source pin sits on.
+/// What an open-port drop (`add_input_from_wire`) created.
+class APIAddedInput {
+  /// The new input's pin index, which is also its row in the node's editor
+  /// list (`pendingNameFocus` keys on it).
+  final int pinIndex;
+
+  /// The new input's stable pin id.
+  final BigInt pinId;
+
+  /// The name the input was given, derived from the source.
+  final String name;
+
+  const APIAddedInput({
+    required this.pinIndex,
+    required this.pinId,
+    required this.name,
+  });
+
+  @override
+  int get hashCode => pinIndex.hashCode ^ pinId.hashCode ^ name.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIAddedInput &&
+          runtimeType == other.runtimeType &&
+          pinIndex == other.pinIndex &&
+          pinId == other.pinId &&
+          name == other.name;
+}
+
 /// Blueprint/Crystal alignment state, mirrored from `network_result::Alignment`.
 /// Surfaced in the Flutter UI as wire dash style + pin tooltip colouring.
 enum APIAlignment {
@@ -8027,6 +8059,11 @@ class NodeView {
   /// `doc/design_function_pin_unification.md` (Phase D).
   final APIDerivedShapeView? derivedShape;
 
+  /// The node declares its own inputs (`NodeData::declared_inputs()` is
+  /// `Some`: `expr`), so it gets the open port — the `+` tab shown while a
+  /// wire is dragged (`doc/design_wire_declared_inputs.md`).
+  final bool hasOpenInputPort;
+
   NodeView({
     required this.id,
     required this.nodeTypeName,
@@ -8053,6 +8090,7 @@ class NodeView {
     this.closureCustomLabel,
     this.zone,
     this.derivedShape,
+    required this.hasOpenInputPort,
   });
 
   @override
@@ -8081,7 +8119,8 @@ class NodeView {
       commentAnchors.hashCode ^
       closureCustomLabel.hashCode ^
       zone.hashCode ^
-      derivedShape.hashCode;
+      derivedShape.hashCode ^
+      hasOpenInputPort.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -8112,7 +8151,8 @@ class NodeView {
           commentAnchors == other.commentAnchors &&
           closureCustomLabel == other.closureCustomLabel &&
           zone == other.zone &&
-          derivedShape == other.derivedShape;
+          derivedShape == other.derivedShape &&
+          hasOpenInputPort == other.hasOpenInputPort;
 }
 
 class OutputPinView {

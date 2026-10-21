@@ -39,7 +39,7 @@
 //!
 //! Because these edits drop and retype wires they are **not** pure node-data
 //! edits: the `StructureDesigner`-level `set_switch_data` pushes the shared
-//! whole-network-snapshot `NodeStructureEditCommand` (the same command
+//! whole-network-snapshot `NetworkSnapshotCommand` (the same command
 //! `zip_with` lane edits use). The API layer (`get_switch_data` /
 //! `set_switch_data`, both `scope_path`-taking) is a thin wrapper that adds no
 //! undo logic — case values cross the FFI boundary as **strings** and the setter

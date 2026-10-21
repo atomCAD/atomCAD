@@ -5551,10 +5551,10 @@ impl StructureDesigner {
     /// referencing the dropped tail indices** (recursively, including nested
     /// HOF bodies — validation rule 3 only flags those red, it never cleans
     /// them). An empty lane list is rejected. Undo: whole-top-level-network
-    /// before/after snapshots via [`NodeStructureEditCommand`] — a node-data
+    /// before/after snapshots via [`NetworkSnapshotCommand`] — a node-data
     /// snapshot cannot capture the wire fallout.
     ///
-    /// [`NodeStructureEditCommand`]: super::undo::commands::node_structure_edit::NodeStructureEditCommand
+    /// [`NetworkSnapshotCommand`]: super::undo::commands::network_snapshot::NetworkSnapshotCommand
     pub fn set_zip_with_lanes(
         &mut self,
         scope_path: &[u64],
@@ -5592,10 +5592,10 @@ impl StructureDesigner {
     /// alongside so a retype of the `result` zone-output pin flows through the
     /// same repair + undo path (`repair_zone_body` drops an incompatible result
     /// wire). Empty lane list is rejected. Undo: whole-top-level-network
-    /// before/after snapshots via [`NodeStructureEditCommand`], shared with
+    /// before/after snapshots via [`NetworkSnapshotCommand`], shared with
     /// [`Self::remove_zip_with_lane`] — the API layer adds no undo logic.
     ///
-    /// [`NodeStructureEditCommand`]: super::undo::commands::node_structure_edit::NodeStructureEditCommand
+    /// [`NetworkSnapshotCommand`]: super::undo::commands::network_snapshot::NetworkSnapshotCommand
     pub fn set_zip_with_data(
         &mut self,
         scope_path: &[u64],
@@ -5750,10 +5750,10 @@ impl StructureDesigner {
     /// String→Int flip, duplicate / empty case list, domain mismatch) leaves the
     /// designer completely untouched — no snapshot, no command. Undo: whole-
     /// top-level-network before/after snapshots via
-    /// [`NodeStructureEditCommand`] (a node-data snapshot cannot capture the
+    /// [`NetworkSnapshotCommand`] (a node-data snapshot cannot capture the
     /// dropped-case / retype wire fallout), shared with the `zip_with` ops.
     ///
-    /// [`NodeStructureEditCommand`]: super::undo::commands::node_structure_edit::NodeStructureEditCommand
+    /// [`NetworkSnapshotCommand`]: super::undo::commands::network_snapshot::NetworkSnapshotCommand
     pub fn set_switch_data(
         &mut self,
         scope_path: &[u64],
@@ -5891,10 +5891,10 @@ impl StructureDesigner {
     /// Shared body of the `record_get` / `record_set` row setters, after
     /// `set_switch_data`: the edit runs on a **clone** first, so a rejection
     /// leaves the designer untouched; an edit that changes nothing pushes no
-    /// command; otherwise the whole-network [`NodeStructureEditCommand`]
+    /// command; otherwise the whole-network [`NetworkSnapshotCommand`]
     /// covers the wires the edit drops or remaps.
     ///
-    /// [`NodeStructureEditCommand`]: super::undo::commands::node_structure_edit::NodeStructureEditCommand
+    /// [`NetworkSnapshotCommand`]: super::undo::commands::network_snapshot::NetworkSnapshotCommand
     fn edit_record_path_node<T: NodeData + Clone + PartialEq + 'static>(
         &mut self,
         scope_path: &[u64],
@@ -5956,7 +5956,7 @@ impl StructureDesigner {
     /// stops evaluating until the user retypes or rewires.
     ///
     /// That network-wide validation state is why this rides
-    /// [`NodeStructureEditCommand`] (shared with the `zip_with` / `switch` ops)
+    /// [`NetworkSnapshotCommand`] (shared with the `zip_with` / `switch` ops)
     /// instead of the plain `set_node_network_data_scoped` path every *element*
     /// edit uses: only this path re-validates and full-refreshes. A node-data
     /// undo would restore `element_type` and leave the network stuck invalid on
@@ -5967,7 +5967,7 @@ impl StructureDesigner {
     /// surface as localized per-element eval errors and the editor offers a
     /// reset (the no-silent-data-loss stance).
     ///
-    /// [`NodeStructureEditCommand`]: super::undo::commands::node_structure_edit::NodeStructureEditCommand
+    /// [`NetworkSnapshotCommand`]: super::undo::commands::network_snapshot::NetworkSnapshotCommand
     pub fn set_array_element_type(
         &mut self,
         scope_path: &[u64],
@@ -6073,7 +6073,7 @@ impl StructureDesigner {
             (before, self.snapshot_network(network_name))
         {
             self.push_command(
-                super::undo::commands::node_structure_edit::NodeStructureEditCommand {
+                super::undo::commands::network_snapshot::NetworkSnapshotCommand {
                     network_name: network_name.to_string(),
                     description: description.to_string(),
                     before_snapshot,

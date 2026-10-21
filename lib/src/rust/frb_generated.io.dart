@@ -67,6 +67,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIAddBondMoveResult dco_decode_api_add_bond_move_result(dynamic raw);
 
   @protected
+  APIAddedInput dco_decode_api_added_input(dynamic raw);
+
+  @protected
   APIAiActivitySummary dco_decode_api_ai_activity_summary(dynamic raw);
 
   @protected
@@ -1577,6 +1580,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<Int32List> dco_decode_list_list_prim_i_32_strict(dynamic raw);
 
   @protected
+  List<APIDataType?> dco_decode_list_opt_box_autoadd_api_data_type(dynamic raw);
+
+  @protected
   List<OutputPinView> dco_decode_list_output_pin_view(dynamic raw);
 
   @protected
@@ -1584,6 +1590,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Int32List dco_decode_list_prim_i_32_strict(dynamic raw);
+
+  @protected
+  List<int> dco_decode_list_prim_u_32_loose(dynamic raw);
 
   @protected
   Uint32List dco_decode_list_prim_u_32_strict(dynamic raw);
@@ -2242,6 +2251,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   APIAddBondMoveResult sse_decode_api_add_bond_move_result(
       SseDeserializer deserializer);
+
+  @protected
+  APIAddedInput sse_decode_api_added_input(SseDeserializer deserializer);
 
   @protected
   APIAiActivitySummary sse_decode_api_ai_activity_summary(
@@ -4012,6 +4024,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  List<APIDataType?> sse_decode_list_opt_box_autoadd_api_data_type(
+      SseDeserializer deserializer);
+
+  @protected
   List<OutputPinView> sse_decode_list_output_pin_view(
       SseDeserializer deserializer);
 
@@ -4020,6 +4036,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Int32List sse_decode_list_prim_i_32_strict(SseDeserializer deserializer);
+
+  @protected
+  List<int> sse_decode_list_prim_u_32_loose(SseDeserializer deserializer);
 
   @protected
   Uint32List sse_decode_list_prim_u_32_strict(SseDeserializer deserializer);
@@ -4782,6 +4801,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_add_bond_move_result(
       APIAddBondMoveResult self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_added_input(APIAddedInput self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_ai_activity_summary(
@@ -6642,6 +6664,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<Int32List> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_opt_box_autoadd_api_data_type(
+      List<APIDataType?> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_output_pin_view(
       List<OutputPinView> self, SseSerializer serializer);
 
@@ -6652,6 +6678,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_prim_i_32_strict(
       Int32List self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_prim_u_32_loose(
+      List<int> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_prim_u_32_strict(

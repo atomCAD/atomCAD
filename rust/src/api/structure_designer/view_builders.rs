@@ -1080,3 +1080,39 @@ fn contribution_view(contribution: &RowContribution) -> (APIContributionKind, St
         ),
     }
 }
+
+/// `NodeView::has_open_input_port`: the node declares its own inputs, so it
+/// gets the open port (`doc/design_wire_declared_inputs.md`). Exactly
+/// `NodeData::declared_inputs().is_some()` — no node type is named here.
+pub fn has_open_input_port(node: &atomcad_structure_designer::node_network::Node) -> bool {
+    node.data.declared_inputs().is_some()
+}
+
+/// The Dart shape of an open-port drop's result.
+pub fn added_input_view(
+    added: &atomcad_structure_designer::declared_input_ops::AddedInput,
+) -> crate::api::structure_designer::structure_designer_api_types::APIAddedInput {
+    crate::api::structure_designer::structure_designer_api_types::APIAddedInput {
+        pin_index: added.pin_index as u32,
+        pin_id: added.pin_id,
+        name: added.name.clone(),
+    }
+}
+
+/// `get_wire_type_offers`: one entry per input pin of the node, in pin order
+/// (which is the order of the node's editor rows).
+pub fn wire_type_offers_view(
+    designer: &StructureDesigner,
+    scope_path: &[u64],
+    node_id: u64,
+) -> Vec<Option<crate::api::structure_designer::structure_designer_api_types::APIDataType>> {
+    designer
+        .wire_type_offers(scope_path, node_id)
+        .iter()
+        .map(|offer| {
+            offer.as_ref().map(
+                crate::api::structure_designer::structure_designer_api::data_type_to_api_data_type,
+            )
+        })
+        .collect()
+}

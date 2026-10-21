@@ -24,6 +24,9 @@ mod chain_hygiene_test;
 #[path = "structure_designer_api/data_type_test.rs"]
 mod data_type_test;
 
+#[path = "structure_designer_api/declared_inputs_api_test.rs"]
+mod declared_inputs_api_test;
+
 #[path = "structure_designer_api/drag_adapter_test.rs"]
 mod drag_adapter_test;
 

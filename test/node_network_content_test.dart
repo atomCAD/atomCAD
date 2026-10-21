@@ -40,6 +40,7 @@ NodeView _node(int id, double x, double y, {bool selected = false}) => NodeView(
       commentAnchors: const [],
       functionType: '',
       functionPinConsumed: false,
+      hasOpenInputPort: false,
       selected: selected,
       active: false,
       displayed: false,

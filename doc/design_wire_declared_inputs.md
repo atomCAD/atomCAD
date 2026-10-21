@@ -613,7 +613,9 @@ change there beyond an example.
   accessors on `NodeData`.
 - `declared_input_ops.rs`: `resolve_wire_source_type`,
   `add_input_from_wire`, `wire_type_offers`, `take_types_from_wires`.
-- `NetworkSnapshotCommand` (`undo/commands/network_snapshot.rs`).
+- `NetworkSnapshotCommand` (`undo/commands/network_snapshot.rs`). Implemented by
+  renaming the existing `NodeStructureEditCommand` (the `zip_with` / `switch`
+  structural edits), which already had exactly this shape.
 - `ExprData` implements `DeclaredInputs`, and `accepts_parameter_type` is
   factored out of `adapt_for_drag_source`.
 - API: `add_input_from_wire`, `can_add_input_from_wire`,

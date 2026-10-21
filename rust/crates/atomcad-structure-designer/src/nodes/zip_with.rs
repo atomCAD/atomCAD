@@ -22,7 +22,7 @@
 //! Because lane edits drop and remap wires they are **not** pure node-data
 //! edits: the `StructureDesigner`-level ops `set_zip_with_data` (positional
 //! whole-list id merge + output type) and `remove_zip_with_lane` (id-accurate)
-//! push a whole-network-snapshot `NodeStructureEditCommand` (shared with
+//! push a whole-network-snapshot `NetworkSnapshotCommand` (shared with
 //! `switch` case edits). The API layer (`get`/`set_zip_with_data`,
 //! `remove_zip_with_lane`) is a thin `scope_path`-taking wrapper adding no undo
 //! logic.

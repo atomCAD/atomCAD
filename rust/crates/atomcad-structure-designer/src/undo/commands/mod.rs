@@ -26,7 +26,7 @@ pub mod mechanosynth_edit_block;
 pub mod mechanosynth_edit_mute;
 pub mod motif_edit_property;
 pub mod move_nodes;
-pub mod node_structure_edit;
+pub mod network_snapshot;
 pub mod paste_nodes;
 pub mod promote_to_parameter;
 pub mod refresh_dependencies;

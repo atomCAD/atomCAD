@@ -239,6 +239,10 @@ pub struct NodeView {
     /// `None` for every other node type. See
     /// `doc/design_function_pin_unification.md` (Phase D).
     pub derived_shape: Option<APIDerivedShapeView>,
+    /// The node declares its own inputs (`NodeData::declared_inputs()` is
+    /// `Some`: `expr`), so it gets the open port — the `+` tab shown while a
+    /// wire is dragged (`doc/design_wire_declared_inputs.md`).
+    pub has_open_input_port: bool,
 }
 
 /// "Is this node's layout/output type derived from a wired input pin?"
@@ -467,6 +471,17 @@ impl From<APIArgumentKind> for DomainArgumentKind {
 }
 
 /// Discriminator for which side of an HOF node a wire's source pin sits on.
+/// What an open-port drop (`add_input_from_wire`) created.
+pub struct APIAddedInput {
+    /// The new input's pin index, which is also its row in the node's editor
+    /// list (`pendingNameFocus` keys on it).
+    pub pin_index: u32,
+    /// The new input's stable pin id.
+    pub pin_id: u64,
+    /// The name the input was given, derived from the source.
+    pub name: String,
+}
+
 /// Mirrors `node_network::SourcePin`. See `doc/design_zones_ui.md`
 /// §"Data model — Rust API extensions" → "WireView carries source kind".
 #[derive(Clone, Copy, PartialEq, Eq)]

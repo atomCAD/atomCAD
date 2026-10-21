@@ -20,7 +20,9 @@ use std::path::{Path, PathBuf};
 
 /// The node set every alphabet target network has, by name: `x`, `y` (int
 /// sources), `s` (an `expr` fed by both), `c` (a custom-network instance),
-/// `mp` (a `map` with a body node `g`), `cl` (a `closure`).
+/// `mp` (a `map` with a body node `g`), `cl` (a `closure`), and `t` (an
+/// `expr` whose `{a: Float}` parameter is fed by the wider record `w` — a
+/// valid wire but a stale type, so Take type from wire has something to take).
 fn target_code(instance_type: &str) -> String {
     format!(
         "x = int {{ value: 1 }}
@@ -30,6 +32,8 @@ c = {} {{ p: x }}
 r = range {{ count: 2 }}
 mp = map {{ xs: r, input_type: Int, output_type: Int, body {{ g = int {{ value: 1 }} output g }} }}
 cl = closure {{ kind: \"custom\", params: [\"q\"], type_args: [Int, Int], body {{ k = int {{ value: 3 }} output k }} }}
+w = expr {{ expression: \"{{a: 1.0, b: 2.0}}\", parameters: [] }}
+t = expr {{ a: w, expression: \"a.a\", parameters: [{{ name: \"a\", data_type: {{a: Float}} }}] }}
 output s
 ",
         instance_type
@@ -160,6 +164,20 @@ fn alphabet() -> Vec<(&'static str, OpFn)> {
             let (y, s) = (id(d, t, "y"), id(d, t, "s"));
             d.connect_nodes(y, 0, s, 0);
             None
+        }),
+        ("add input from wire", |d, t| {
+            use atomcad_structure_designer::node_network::SourcePin;
+            let (y, s) = (id(d, t, "y"), id(d, t, "s"));
+            let out = SourcePin::NodeOutput { pin_index: 0 };
+            // The hover check must refuse exactly when the drop does.
+            let hover_refused = d.can_add_input_from_wire(&[], s, y, out, 0).is_some();
+            let drop_refused = d.add_input_from_wire(&[], s, y, out, 0).is_err();
+            assert_eq!(hover_refused, drop_refused, "hover check and drop disagree");
+            Some(drop_refused)
+        }),
+        ("take types from wires", |d, t| {
+            let e = id(d, t, "t");
+            Some(d.take_types_from_wires(&[], e, &[0]).is_err())
         }),
         ("delete wire", |d, t| {
             let (x, s) = (id(d, t, "x"), id(d, t, "s"));

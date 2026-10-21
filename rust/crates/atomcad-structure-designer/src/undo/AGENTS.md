@@ -18,6 +18,7 @@ undo/
     ├── duplicate_node.rs, paste_nodes.rs
     ├── add_network.rs, delete_network.rs, rename_network.rs
     ├── text_edit_network.rs, factor_selection.rs
+    ├── network_snapshot.rs        # Generic whole-network before/after snapshot (zip_with/switch edits, declared inputs)
     ├── set_network_thumbnail.rs   # Set / reset a user thumbnail (the only command that changes one)
     ├── inline_node.rs             # Inline a custom node (top-level; whole-network snapshot, like text_edit)
     ├── convert_files_to_nodes.rs  # mechanosynth "Convert to nodes" (same whole-network snapshot shape)

@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'structure_designer_api_types.dart';
 import 'structure_designer_preferences.dart';
 
-// These functions are ignored because they are not marked as `pub`: `alignment_to_api`, `api_closure_kind_to_closure_kind`, `api_field_editor_hint_to_core`, `api_literal_to_text_value`, `api_to_type_args`, `atom_symbol`, `build_derived_shape_view`, `build_node_view`, `build_wires_for_network`, `build_zone_view`, `closure_kind_to_api_closure_kind`, `compute_last_selected_result_atom_id`, `compute_selection_measurement`, `crystal_system_to_string`, `data_type_to_simple_param_type`, `field_editor_hint_to_api`, `from_api_colormap`, `from_api_level_mode`, `network_result_to_api_literal`, `param_element_color_u32`, `record_element_fields`, `rows_f64_to_vecs`, `rows_i32_to_vecs`, `simple_element_row`, `text_value_to_api_literal`, `to_api_colormap`, `to_api_level_mode`, `type_args_to_api`, `vecs_to_rows_f64`, `vecs_to_rows_i32`, `with_array_data`
+// These functions are ignored because they are not marked as `pub`: `alignment_to_api`, `api_closure_kind_to_closure_kind`, `api_field_editor_hint_to_core`, `api_literal_to_text_value`, `api_source_pin_to_domain`, `api_to_type_args`, `atom_symbol`, `build_derived_shape_view`, `build_node_view`, `build_wires_for_network`, `build_zone_view`, `closure_kind_to_api_closure_kind`, `compute_last_selected_result_atom_id`, `compute_selection_measurement`, `crystal_system_to_string`, `data_type_to_simple_param_type`, `field_editor_hint_to_api`, `from_api_colormap`, `from_api_level_mode`, `network_result_to_api_literal`, `param_element_color_u32`, `record_element_fields`, `rows_f64_to_vecs`, `rows_i32_to_vecs`, `simple_element_row`, `text_value_to_api_literal`, `to_api_colormap`, `to_api_level_mode`, `type_args_to_api`, `vecs_to_rows_f64`, `vecs_to_rows_i32`, `with_array_data`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `api_data_type_to_data_type`, `build_function_pin_role_views`, `data_type_to_api_data_type`
 
 NodeNetworkView? getNodeNetworkView() => RustLib.instance.api
@@ -103,6 +103,60 @@ void connectWire(
             sourceScopeDepth: sourceScopeDepth,
             destNodeId: destNodeId,
             destParamIndex: destParamIndex);
+
+/// The open-port drop (`doc/design_wire_declared_inputs.md`): append an input
+/// of the wire's type to `dest_node_id` under a derived name and connect the
+/// wire to it, as one undo step. Same arguments as [`connect_wire`]. Only a
+/// node with declared inputs (`NodeView::has_open_input_port`) accepts it.
+APIAddedInput addInputFromWire(
+        {required Uint64List destScopePath,
+        required BigInt sourceNodeId,
+        required APISourcePin sourcePin,
+        required int sourceScopeDepth,
+        required BigInt destNodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiAddInputFromWire(
+            destScopePath: destScopePath,
+            sourceNodeId: sourceNodeId,
+            sourcePin: sourcePin,
+            sourceScopeDepth: sourceScopeDepth,
+            destNodeId: destNodeId);
+
+/// The hover check paired with [`add_input_from_wire`]: `None` when the drop
+/// would succeed, `Some(reason)` when it would be refused.
+String? canAddInputFromWire(
+        {required Uint64List destScopePath,
+        required BigInt sourceNodeId,
+        required APISourcePin sourcePin,
+        required int sourceScopeDepth,
+        required BigInt destNodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiCanAddInputFromWire(
+            destScopePath: destScopePath,
+            sourceNodeId: sourceNodeId,
+            sourcePin: sourcePin,
+            sourceScopeDepth: sourceScopeDepth,
+            destNodeId: destNodeId);
+
+/// Take type from wire: one entry per input pin of the node, in pin (= editor
+/// row) order — the type a retype would set, or `None` when none is offered.
+/// Empty for a node without declared inputs.
+List<APIDataType?> getWireTypeOffers(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetWireTypeOffers(
+            scopePath: scopePath, nodeId: nodeId);
+
+/// Retype the listed declared inputs of a node to the types their wires now
+/// carry, in one undo step. All or nothing: an index without an offer
+/// refuses the whole call.
+void takeTypesFromWires(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required List<int> pinIndices}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiTakeTypesFromWires(
+            scopePath: scopePath, nodeId: nodeId, pinIndices: pinIndices);
 
 /// Predicate pair for [`connect_wire`]. Returns `true` when a cross-scope
 /// wire with this shape is type-compatible and structurally valid.
@@ -1829,7 +1883,7 @@ void setForeachData(
 
 /// Whole-list lane + output-type edit on a `zip_with` node (the positional id
 /// merge). Delegates to `StructureDesigner::set_zip_with_data` so the shared
-/// `NodeStructureEditCommand` undo capture (whole-network snapshots covering the
+/// `NetworkSnapshotCommand` undo capture (whole-network snapshots covering the
 /// wire fallout) is used — the API layer adds no undo logic of its own. Lane
 /// ids are managed Rust-side and never cross the API.
 void setZipWithData(
@@ -1861,7 +1915,7 @@ void removeZipWithLane(
 /// that is not a valid integer under an Int selector is reported back through
 /// the `APIResult` so the panel can display it inline (nothing is mutated).
 /// Otherwise delegates to `StructureDesigner::set_switch_data`, which performs
-/// the value-keyed id merge and pushes the shared `NodeStructureEditCommand`
+/// the value-keyed id merge and pushes the shared `NetworkSnapshotCommand`
 /// undo capture — the API layer adds no undo logic and never sees the hidden
 /// case ids.
 APIResult setSwitchData(
