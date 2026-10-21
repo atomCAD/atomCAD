@@ -1124,6 +1124,9 @@ enum DataTypeToken {
     Arrow,        // ->
     FatArrow,     // =>
     Comma,        // ,
+    LeftBrace,    // {
+    RightBrace,   // }
+    Colon,        // :
     /// `*` — the "any tail allowed" marker used by `AnyFunction`. Reserved
     /// for `Function*` and `Function(T1, .., *)` syntax; never appears
     /// elsewhere in the data-type grammar.
@@ -1326,6 +1329,7 @@ impl DataTypeParser {
             DataTypeToken::Identifier(_) => self.parse_builtin_type(),
             DataTypeToken::LeftBracket => self.parse_array_type(),
             DataTypeToken::LeftParen => self.parse_parenthesized_type(),
+            DataTypeToken::LeftBrace => self.parse_anonymous_record_type(),
             other => Err(format!(
                 "Unexpected token while parsing primary type: {:?}",
                 other
@@ -1339,9 +1343,9 @@ impl DataTypeParser {
                 self.bump();
                 // Explicit named-record syntax: `Record(Name)`. Disambiguates
                 // record references from built-ins and from bare-identifier
-                // node references in the text-format parser. Anonymous record
-                // syntax (`{x: Int, y: Int}`) is reserved for Phase 7 (the
-                // expression language) and is not parsed here.
+                // node references in the text-format parser. Anonymous
+                // records use brace syntax (`{x: Int, y: Int}`), parsed by
+                // `parse_anonymous_record_type`.
                 if name == "Record" {
                     self.expect(DataTypeToken::LeftParen)?;
                     let inner_name = match self.peek().clone() {
@@ -1475,6 +1479,52 @@ impl DataTypeParser {
             }
             other => Err(format!("Expected identifier, found {:?}", other)),
         }
+    }
+
+    /// Anonymous record type: `{}` or `{name: Type, ...}` — the form `Display`
+    /// prints for `RecordType::Anonymous`. Field names are bare identifiers
+    /// (the printer never quotes them); a duplicate name is an error. Fields
+    /// are canonicalized (sorted by name) through `RecordType::anonymous`.
+    fn parse_anonymous_record_type(&mut self) -> Result<DataType, String> {
+        self.expect(DataTypeToken::LeftBrace)?;
+        let mut fields: Vec<(String, DataType)> = Vec::new();
+        if self.peek() != &DataTypeToken::RightBrace {
+            loop {
+                let name = match self.peek().clone() {
+                    DataTypeToken::Identifier(n) if is_simple_identifier(&n) => {
+                        self.bump();
+                        n
+                    }
+                    other => {
+                        return Err(format!(
+                            "Expected field name in anonymous record type, found {:?}",
+                            other
+                        ));
+                    }
+                };
+                if fields.iter().any(|(n, _)| n == &name) {
+                    return Err(format!(
+                        "Duplicate field name `{}` in anonymous record type",
+                        name
+                    ));
+                }
+                self.expect(DataTypeToken::Colon)?;
+                let field_type = self.parse_data_type()?;
+                fields.push((name, field_type));
+                match self.peek() {
+                    DataTypeToken::Comma => self.bump(),
+                    DataTypeToken::RightBrace => break,
+                    other => {
+                        return Err(format!(
+                            "Expected ',' or '}}' in anonymous record type, found {:?}",
+                            other
+                        ));
+                    }
+                }
+            }
+        }
+        self.expect(DataTypeToken::RightBrace)?;
+        Ok(DataType::Record(RecordType::anonymous(fields)))
     }
 
     fn parse_array_type(&mut self) -> Result<DataType, String> {
@@ -1614,6 +1664,18 @@ impl DataTypeLexer {
             Some(',') => {
                 self.advance();
                 Ok(DataTypeToken::Comma)
+            }
+            Some('{') => {
+                self.advance();
+                Ok(DataTypeToken::LeftBrace)
+            }
+            Some('}') => {
+                self.advance();
+                Ok(DataTypeToken::RightBrace)
+            }
+            Some(':') => {
+                self.advance();
+                Ok(DataTypeToken::Colon)
             }
             Some('*') => {
                 self.advance();

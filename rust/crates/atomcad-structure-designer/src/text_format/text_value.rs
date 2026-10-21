@@ -356,7 +356,15 @@ impl TextValue {
                     .iter()
                     .map(|(name, value)| value.to_data_type().map(|t| (name.clone(), t)))
                     .collect::<Option<Vec<_>>>()?;
-                Some(DataType::Record(RecordType::Anonymous(fields)))
+                // Same rules as `DataType::from_string`'s `{..}` syntax: a
+                // duplicate field name is not a type, and the fields are
+                // canonicalized (sorted by name) so a hand-written
+                // `{b: Int, a: Int}` equals `{a: Int, b: Int}`.
+                let mut seen = std::collections::HashSet::new();
+                if !fields.iter().all(|(name, _)| seen.insert(name.as_str())) {
+                    return None;
+                }
+                Some(DataType::Record(RecordType::anonymous(fields)))
             }
             _ => None,
         }

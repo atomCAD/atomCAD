@@ -389,8 +389,9 @@ pub fn data_type_to_api_data_type(data_type: &DataType) -> APIDataType {
     };
 
     // Named records get a first-class `Record` base with the def name in
-    // `custom_data_type`. Anonymous records fall through to `Custom` (no
-    // UI in v1; only the expression language can produce them).
+    // `custom_data_type`. Anonymous records fall through to `Custom`: their
+    // `Display` string (`{x: Int, y: Int}`) parses back through
+    // `DataType::from_string`.
     if let DataType::Record(RecordType::Named(name)) = base_data_type {
         return APIDataType {
             data_type_base: APIDataTypeBase::Record,

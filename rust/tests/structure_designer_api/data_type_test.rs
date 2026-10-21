@@ -753,3 +753,46 @@ fn scalar_field_array_round_trips_through_the_api_boundary() {
 
     assert_eq!(api_data_type_to_data_type(&api), Ok(array));
 }
+
+/// An `expr` parameter typed as an anonymous record survives the property
+/// panel's round trip: `get_expr_data` sends it to Dart through
+/// `data_type_to_api_data_type` (anonymous records have no structural API
+/// variant, so they travel as `Custom` with the `Display` string), and
+/// `set_expr_data` reads every parameter back through
+/// `api_data_type_to_data_type` whenever the user edits *any* parameter.
+/// Before `DataType::from_string` parsed `{..}` this turned the type into
+/// `None` (`doc/design_wire_declared_inputs.md`, Phase 0).
+#[test]
+fn anonymous_record_parameter_types_survive_the_panel_round_trip() {
+    let rec = |fields: Vec<(&str, DataType)>| {
+        DataType::Record(RecordType::anonymous(
+            fields
+                .into_iter()
+                .map(|(n, t)| (n.to_string(), t))
+                .collect(),
+        ))
+    };
+    let flat = rec(vec![("x", DataType::Int), ("y", DataType::Int)]);
+    let nested = rec(vec![
+        ("a", DataType::Float),
+        ("p", rec(vec![("x", DataType::Int)])),
+    ]);
+    let cases = vec![
+        rec(vec![]),
+        flat.clone(),
+        nested.clone(),
+        DataType::Array(Box::new(flat.clone())),
+        rec(vec![(
+            "b",
+            DataType::Record(RecordType::Named("Box".to_string())),
+        )]),
+        DataType::Function(FunctionType::new(vec![nested.clone()], DataType::Float)),
+        DataType::Iterator(Box::new(flat.clone())),
+    ];
+    for data_type in cases {
+        let api = data_type_to_api_data_type(&data_type);
+        let back = api_data_type_to_data_type(&api)
+            .unwrap_or_else(|e| panic!("{data_type} does not survive the panel: {e}"));
+        assert_eq!(back, data_type);
+    }
+}

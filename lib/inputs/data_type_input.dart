@@ -175,8 +175,8 @@ class _DataTypeInputState extends State<DataTypeInput> {
           ),
 
         // Conditional record def dropdown (named records only — anonymous
-        // record types are reachable from the expression language, not the
-        // type-selector UI).
+        // record types have no structural variant; they are entered as a
+        // Custom string such as `{x: Int, y: Int}`).
         if (widget.value.dataTypeBase == APIDataTypeBase.record)
           Padding(
             padding: const EdgeInsets.only(top: 8.0),

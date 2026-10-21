@@ -11,6 +11,8 @@
 //! the canonical spelling, then `--replace` with that text and assert the
 //! serialization is unchanged.
 
+use atomcad_structure_designer::data_type::DataType;
+use atomcad_structure_designer::nodes::expr::ExprData;
 use atomcad_structure_designer::preferences::NodeDisplayPolicy;
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 use atomcad_structure_designer::text_format::serialize_network;
@@ -149,4 +151,56 @@ fn a_function_type_inside_an_expr_parameter_object_literal() {
     sd.ai_text_edit(&first, true);
     assert!(applied(&sd), "{:?}", sd.ai_edit_log.last().unwrap().errors);
     assert_eq!(text(&sd), first);
+}
+
+fn expr_parameter_type(sd: &StructureDesigner, index: usize) -> DataType {
+    let network = sd.node_type_registry.node_networks.get("main").unwrap();
+    let expr = network
+        .nodes
+        .values()
+        .find_map(|node| node.data.as_any_ref().downcast_ref::<ExprData>())
+        .expect("an expr node");
+    expr.parameters[index].data_type.clone()
+}
+
+#[test]
+fn an_anonymous_record_type_inside_an_expr_parameter() {
+    // The text format reads `{..}` as an object literal and converts it in
+    // `TextValue::to_data_type`, not through `DataType::from_string`; this
+    // pins that path (`doc/design_wire_declared_inputs.md`, Phase 0).
+    let mut sd = designer();
+    sd.ai_text_edit(
+        "e = expr { expression: \"r.a\", parameters: [{ name: \"r\", data_type: {a: Float, p: {x: Int}} }] }\n",
+        false,
+    );
+    assert!(applied(&sd), "{:?}", sd.ai_edit_log.last().unwrap().errors);
+    assert_eq!(
+        expr_parameter_type(&sd, 0),
+        DataType::from_string("{a: Float, p: {x: Int}}").unwrap()
+    );
+    let first = text(&sd);
+    assert!(
+        first.contains("data_type: {a: Float, p: {x: Int}} }"),
+        "{first}"
+    );
+    sd.ai_text_edit(&first, true);
+    assert!(applied(&sd), "{:?}", sd.ai_edit_log.last().unwrap().errors);
+    assert_eq!(text(&sd), first);
+}
+
+#[test]
+fn a_hand_written_anonymous_record_type_is_canonicalized() {
+    // Fields written out of order must equal the canonical (sorted) type —
+    // the `RecordType::Anonymous` invariant every comparison relies on.
+    let mut sd = designer();
+    sd.ai_text_edit(
+        "e = expr { expression: \"r.a\", parameters: [{ name: \"r\", data_type: {b: Int, a: Int} }] }\n",
+        false,
+    );
+    assert!(applied(&sd), "{:?}", sd.ai_edit_log.last().unwrap().errors);
+    assert_eq!(
+        expr_parameter_type(&sd, 0),
+        DataType::from_string("{a: Int, b: Int}").unwrap()
+    );
+    assert!(text(&sd).contains("data_type: {a: Int, b: Int} }"));
 }

@@ -166,6 +166,7 @@ Outputs a String value.
 
 You can type in a mathematical expression and it will be evaluated on its output pin.
 The input pins can be dynamically added on the node editor panel, you can select the name and data type of the input parameters.
+To give a parameter an anonymous record type, choose **Custom...** in its type selector and type the record, e.g. `{x: Int, y: Int}`. Records nest and can be put in arrays (`{a: Float, p: {x: Int}}`, `[{x: Int, y: Int}]`); field names must be distinct identifiers, and their order does not matter — `{y: Int, x: Int}` is the same type as `{x: Int, y: Int}`.
 
 The expr node supports scalar arithmetic, vector operations, conditional expressions, and a comprehensive set of built-in mathematical functions.
 
