@@ -330,6 +330,41 @@ impl NetworkResult {
             .try_fold(self, |value, name| value.extract_record_field(name))
     }
 
+    /// A copy of `self` with the field at `path` replaced by `value`
+    /// (`record_set`, `doc/design_record_get_set.md`). A missing **leaf** is
+    /// inserted in canonical order; every other field, declared or extra, is
+    /// copied through. `Err(depth)` if the value at `path[..depth]` — `self`
+    /// at depth 0, a record part-way down otherwise — is missing or not a
+    /// record. An empty path is `value` itself.
+    pub fn with_record_path_replaced(
+        &self,
+        path: &[&str],
+        value: NetworkResult,
+    ) -> Result<NetworkResult, usize> {
+        self.replace_at_path(path, value, 0)
+    }
+
+    fn replace_at_path(
+        &self,
+        path: &[&str],
+        value: NetworkResult,
+        depth: usize,
+    ) -> Result<NetworkResult, usize> {
+        let Some((name, rest)) = path.split_first() else {
+            return Ok(value);
+        };
+        let NetworkResult::Record(fields) = self else {
+            return Err(depth);
+        };
+        let mut fields = fields.clone();
+        match fields.binary_search_by(|(n, _)| n.as_str().cmp(name)) {
+            Ok(i) => fields[i].1 = fields[i].1.replace_at_path(rest, value, depth + 1)?,
+            Err(i) if rest.is_empty() => fields.insert(i, (name.to_string(), value)),
+            Err(_) => return Err(depth + 1),
+        }
+        Ok(NetworkResult::Record(fields))
+    }
+
     /// Returns the DataType corresponding to this result's variant,
     /// or None for variants without a clear single type (None, Error, Array).
     /// A `Function(ZoneClosure)` reports its `DataType::Function` from the

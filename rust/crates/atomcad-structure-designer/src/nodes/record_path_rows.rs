@@ -31,6 +31,14 @@ pub struct RecordPathRow {
     pub path: Vec<PathSegment>,
 }
 
+/// The helpers below take a bare [`RecordPathRow`] (`record_get`) or a row
+/// that wraps one with more per-row state (`record_set`'s literal).
+impl AsRef<RecordPathRow> for RecordPathRow {
+    fn as_ref(&self) -> &RecordPathRow {
+        self
+    }
+}
+
 impl RecordPathRow {
     /// The stored segment names: a dangling row's identity.
     pub fn stored_names(&self) -> Vec<String> {
@@ -91,22 +99,22 @@ pub fn derived_pin_names(
 }
 
 /// Resolves every row against `schema`.
-pub fn resolve_rows(
+pub fn resolve_rows<R: AsRef<RecordPathRow>>(
     schema: &str,
-    rows: &[RecordPathRow],
+    rows: &[R],
     defs: RecordDefs<'_>,
 ) -> Vec<Result<ResolvedPath, DanglingReason>> {
     rows.iter()
-        .map(|row| resolve_path(schema, &row.path, defs))
+        .map(|row| resolve_path(schema, &row.as_ref().path, defs))
         .collect()
 }
 
 /// The row-to-pins builder: one [`RowPin`] per resolving row, in row order.
 /// `None` only under [`MissingDefs::Refuse`] when the schema or a def a row
 /// walks into is missing (a frozen node keeps its cached layout then).
-pub fn row_pins(
+pub fn row_pins<R: AsRef<RecordPathRow>>(
     schema: &str,
-    rows: &[RecordPathRow],
+    rows: &[R],
     defs: RecordDefs<'_>,
     reserved: &[&str],
     missing: MissingDefs,
@@ -133,7 +141,7 @@ pub fn row_pins(
                 let r = r?;
                 Some(RowPin {
                     row_index,
-                    id: rows[row_index].id,
+                    id: rows[row_index].as_ref().id,
                     name: name?,
                     names: r.names,
                     leaf_type: r.leaf_type,
@@ -144,13 +152,14 @@ pub fn row_pins(
 }
 
 /// One warning per dangling row, built from the row's stored names.
-pub fn dangling_row_problems(
+pub fn dangling_row_problems<R: AsRef<RecordPathRow>>(
     schema: &str,
-    rows: &[RecordPathRow],
+    rows: &[R],
     defs: RecordDefs<'_>,
 ) -> Vec<String> {
     rows.iter()
         .filter_map(|row| {
+            let row = row.as_ref();
             let reason = resolve_path(schema, &row.path, defs).err()?;
             let path = format_path(&row.stored_names());
             Some(match reason {
@@ -177,10 +186,14 @@ pub fn dangling_row_problems(
 
 /// The defs below `schema` that the rows walk into (deduplicated, first-seen
 /// order), including a missing one. For `NodeData::record_path_defs`.
-pub fn rows_path_defs(schema: &str, rows: &[RecordPathRow], defs: RecordDefs<'_>) -> Vec<String> {
+pub fn rows_path_defs<R: AsRef<RecordPathRow>>(
+    schema: &str,
+    rows: &[R],
+    defs: RecordDefs<'_>,
+) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for row in rows {
-        for name in crate::record_path::path_defs(schema, &row.path, defs) {
+        for name in crate::record_path::path_defs(schema, &row.as_ref().path, defs) {
             if name != schema && !out.contains(&name) {
                 out.push(name);
             }
@@ -206,12 +219,18 @@ pub fn row_spec(schema: &str, row: &RecordPathRow, defs: RecordDefs<'_>) -> Path
 }
 
 /// The `paths` text property of a node's rows.
-pub fn paths_text_value(schema: &str, rows: &[RecordPathRow], defs: RecordDefs<'_>) -> TextValue {
+pub fn paths_text_value<R: AsRef<RecordPathRow>>(
+    schema: &str,
+    rows: &[R],
+    defs: RecordDefs<'_>,
+) -> TextValue {
     TextValue::Array(
         rows.iter()
             .map(|row| {
                 TextValue::String(crate::record_path::format_path_spec(&row_spec(
-                    schema, row, defs,
+                    schema,
+                    row.as_ref(),
+                    defs,
                 )))
             })
             .collect(),
@@ -220,10 +239,10 @@ pub fn paths_text_value(schema: &str, rows: &[RecordPathRow], defs: RecordDefs<'
 
 /// The `paths` text property without the defs (stored names only, every row
 /// written as live). Only for callers that have no registry.
-pub fn paths_text_value_stored(rows: &[RecordPathRow]) -> TextValue {
+pub fn paths_text_value_stored<R: AsRef<RecordPathRow>>(rows: &[R]) -> TextValue {
     TextValue::Array(
         rows.iter()
-            .map(|row| TextValue::String(format_path(&row.stored_names())))
+            .map(|row| TextValue::String(format_path(&row.as_ref().stored_names())))
             .collect(),
     )
 }

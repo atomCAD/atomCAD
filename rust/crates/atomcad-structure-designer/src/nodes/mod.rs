@@ -93,6 +93,7 @@ pub mod record_construct;
 pub mod record_destructure;
 pub mod record_get;
 pub mod record_path_rows;
+pub mod record_set;
 pub mod rect;
 pub mod reg_poly;
 pub mod relax;

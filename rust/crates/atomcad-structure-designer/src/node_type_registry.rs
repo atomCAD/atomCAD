@@ -93,6 +93,7 @@ use super::nodes::range::get_node_type as range_get_node_type;
 use super::nodes::record_construct::get_node_type as record_construct_get_node_type;
 use super::nodes::record_destructure::get_node_type as record_destructure_get_node_type;
 use super::nodes::record_get::get_node_type as record_get_get_node_type;
+use super::nodes::record_set::get_node_type as record_set_get_node_type;
 use super::nodes::rect::get_node_type as rect_get_node_type;
 use super::nodes::reg_poly::get_node_type as reg_poly_get_node_type;
 use super::nodes::relax::get_node_type as relax_get_node_type;
@@ -1201,6 +1202,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(record_construct_get_node_type());
         ret.add_node_type(record_destructure_get_node_type());
         ret.add_node_type(record_get_get_node_type());
+        ret.add_node_type(record_set_get_node_type());
         ret.add_node_type(product_get_node_type());
         ret.add_node_type(array_get_node_type());
         ret.add_node_type(array_at_get_node_type());

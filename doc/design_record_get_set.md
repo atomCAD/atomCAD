@@ -937,6 +937,29 @@ Add:
 - Registration (`nodes/mod.rs`, `create_built_in_node_types`); re-bless
   node-type snapshots; update registry count/list assertions.
 
+**As implemented:**
+
+- **A leaf retype keeps an incompatible wire and flags it**; it does not drop
+  it, contrary to test 8 below and to "Dangling rows" above. That is the
+  codebase's rule for every record node: `record_construct`'s incompatible
+  retype is pinned by
+  `record_field_rename_wire_loss_test.rs::guard_incompatible_retype_preserves_wire_but_flags_error`
+  (a blocking type error on the node; the user fixes the wire). Test 8 checks
+  that instead.
+- The text properties are the Phase 1 minimum, as on `record_get`: `schema`
+  and `paths` (rows replaced wholesale, no literals). Literal keys arrive in
+  Phase 3, so the literal tests set `RecordSetRow::literal` on the node data
+  directly. Phase 3 heads-up: `apply_literal_properties` computes the known
+  keys (`text_prop_names`) from the node's data *before* the block is applied,
+  so a block that creates the rows and sets `p_x: 3.0` in one go will likely
+  get a spurious "Unknown property" warning (the literal is still passed on).
+- The row helpers in `record_path_rows.rs` take any `R: AsRef<RecordPathRow>`,
+  so `record_set` passes its `RecordSetRow`s without copying.
+  `record_set::RESERVED_PIN_NAMES` is the reserved list (`record`, `schema`,
+  `paths`, `visible`, `on`, `pin_roles`).
+- `with_record_path_replaced`'s `Err(depth)` names the value at
+  `path[..depth]` that is missing or not a record (0 = the input itself).
+
 **Automated tests** — new `record_set_test.rs`:
 
 1. Set a top-level field and a two-level field; untouched fields, declared
