@@ -80,3 +80,6 @@ mod documents_api_test;
 
 #[path = "structure_designer_api/trace_api_test.rs"]
 mod trace_api_test;
+
+#[path = "structure_designer_api/record_get_set_api_test.rs"]
+mod record_get_set_api_test;

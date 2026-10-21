@@ -996,6 +996,8 @@ Records are **structurally subtyped** — compatibility between two record types
 
 Record-typed pins render in a single neutral color (no per-name hashing — the visual reflects structural compatibility, not the def name). Hovering a record-typed pin shows the resolved schema in the def's authored field order.
 
+To read or update fields of nested records without unpacking every level, use [`record_get`](#record_get) and [`record_set`](#record_set), which address a field by path (`p.x`).
+
 Record defs may freely contain other record types as field types, but the dependency graph among defs must be acyclic. `Tree = { children: [Record(Tree)] }` is rejected; build recursive shapes by linking records via integer IDs in arrays instead.
 
 Some node types ship with **built-in record defs** — schemas baked into the application that you don't have to author yourself. Five ship today:
@@ -1074,6 +1076,78 @@ Splits a record value into its constituent fields, one per output pin.
 **Behavior**
 
 Reads each field by name. Because compatibility is width-subtyped, the runtime record may carry extra fields beyond the declared schema; those extras are simply not surfaced as output pins. If the input record happens to be missing a declared field (an unreachable case under pass-through, but defensive), the corresponding output pin emits `None`.
+
+To read only a few fields, or fields of a nested record, use [`record_get`](#record_get) instead.
+
+## record_get
+
+Reads chosen fields of a record by **path**, at any depth: `size`, `p.x`, `p.corner.z`. Where `record_destructure` shows every top-level field, `record_get` shows just the ones you pick.
+
+**Properties**
+
+- `Schema` — the record type def the paths start at. Same dropdown as `record_construct`, including *Edit definition…*.
+- `Paths` — the list of paths to read. In the **Node Properties** panel each path is a row showing the path and the leaf field's type, with a delete button. **Add path** opens a tree of the schema's fields: a record-typed field expands to show its own fields, and clicking any field — a leaf or a whole nested record — adds it as a row.
+
+**Input pin**
+
+- `record: Record(Schema)`.
+
+**Output pins**
+
+- One pin per path, in row order, typed to the leaf field's type. The pin is named after the path with `.` replaced by `_` (`p.x` → `p_x`). If two paths would produce the same name (path `a.b` beside a field named `a_b`), the later one gets a `__2` suffix. With no paths, the node has a single placeholder pin.
+
+**Behavior**
+
+Each pin carries the field at its path. A path can step through any record-typed field (a named def or an anonymous record), but not through an array or an `Optional` record; the leaf itself may be any type, and an `Optional[T]` leaf is a plain `T` pin that is `None` when the field is unset. An error on the input is passed to every pin.
+
+Paths follow **field identity**, not field names: renaming a field anywhere along a path (say `Point.x` → `px`) keeps the row, renames its pin to `p_px`, and keeps its wire. Reordering fields changes nothing.
+
+If a field on a path is **deleted**, or an inner field stops being a record, the row becomes **broken**: it stays in the list (shown struck through in red, with the reason), loses its pin and that pin's wire, and the node shows a warning. The node's other rows keep working. A broken row never comes back by itself — a field re-added under the same name is a different field — so delete the row, or undo the schema edit (which restores the row, its pin and its wire). A path through a record type from a linked library that did not load is *not* broken: the node is frozen until the library is back, and keeps its wires.
+
+Changing the `Schema` re-resolves each path by its current field names in the new schema; a path that does not exist there becomes a broken row.
+
+In the text format, `paths` is a list of strings. A segment containing `.` is written in backticks, and a broken row is written with a leading `!`:
+
+```
+g = record_get { schema: "Box", paths: ["p.x", "size"], record: b }
+h = record_get { schema: "Box", paths: ["!p.x", "size"], record: b }
+```
+
+A one-path `record_get` used through its function pin (`-1`) is the "pluck" idiom: wired into `map.f`, it turns a stream of `Box` into a stream of its `size`s.
+
+## record_set
+
+Updates chosen fields of a record by **path**, at any depth, and passes every other field through untouched. `record_set` is the write twin of [`record_get`](#record_get): setting `box.p.x` takes one node instead of a destructure / construct pair per level.
+
+**Properties**
+
+- `Schema` and `Paths` — as on `record_get`, with the same panel and the same tree picker.
+- An inline value per path. In the panel each row has the same literal editor as `record_construct` (for the simple editable types), with the same *stored*, *unset* and *wired* states.
+
+**Input pins**
+
+- `record: Record(Schema)` — always pin 0.
+- One pin per path, in row order, typed to the leaf field's type and named like `record_get`'s pins. A name that would clash with `record`, `schema`, `paths` or the text format's special keys (`visible`, `on`, `pin_roles`) gets a `__2` suffix.
+
+**Output (single pin)**
+
+- `Record(Schema)`.
+
+**Behavior**
+
+Rows apply top to bottom. For each row, a wired pin wins; otherwise the row's inline value is used; a row with neither leaves its field unchanged. A wired value converts like on any pin (an `Int` into a `Float` field). Two rows may overlap: `p` then `p.x` replaces `p` and then adjusts its `x`.
+
+Fields no row names pass through unchanged, including extra fields the runtime value carries beyond the schema. `None` on an `Optional` field unsets it; `None` on a required field makes the output `None`. An error on the record or on a row value is passed through as the output.
+
+`record_set` only updates: every path must exist in the schema, and the output type is the schema. Renames, deletes and schema changes behave as on `record_get`; a broken row keeps its inline value but has no pin and no effect.
+
+Because `record` is pin 0, `record_set`'s function pin wired into `map.f` updates every record of a stream. Wired rows are captured; unwired rows become further parameters of the function.
+
+In the text format, a row's inline value is written under its pin name:
+
+```
+s = record_set { schema: "Box", paths: ["p.x", "size"], record: b, p_x: 3.0, size: g.size }
+```
 
 ## product
 

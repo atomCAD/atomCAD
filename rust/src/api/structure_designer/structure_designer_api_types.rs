@@ -3610,6 +3610,56 @@ pub struct APILiteralField {
     pub hint: Option<APIFieldEditorHint>,
 }
 
+/// A `record_get` / `record_set` path as it crosses the API: the API form of
+/// `record_path::PathSpec` (`doc/design_record_get_set.md` Phase 4). A live
+/// path carries its **current** segment names; a dangling one (`dangling:
+/// true`) the stored names it had when it was last edited, which is how the
+/// setter recognizes it. Row ids never cross the API, so the panel edits rows
+/// by sending back the list the getter gave it with its change applied.
+pub struct APIRecordPath {
+    pub names: Vec<String>,
+    pub dangling: bool,
+}
+
+/// One row of a `record_get` / `record_set` node, shaped for the panel.
+pub struct APIRecordPathRow {
+    pub path: APIRecordPath,
+    /// The derived pin name (`p.x` → `p_x`, deduplicated); `None` for a row
+    /// that has no pin.
+    pub pin_name: Option<String>,
+    /// The leaf field's declared type as text (`Float`, `Optional[Int]`);
+    /// `None` when the path does not resolve.
+    pub leaf_type: Option<String>,
+    /// Why the path does not resolve (the node's warning text): set for a
+    /// dangling row, and for a row through a record type that is missing
+    /// (`dangling: false` — the type may only be unavailable, e.g. under a
+    /// library that did not load).
+    pub problem: Option<String>,
+    /// `record_set` only: the row's inline literal, in the shape the shared
+    /// literal editor takes (`name` = the pin name). `None` on `record_get`,
+    /// on a row without a pin, and on a leaf type with no inline editor.
+    pub literal: Option<APILiteralField>,
+}
+
+/// Property payload of a `record_get` or `record_set` node: the schema and
+/// the rows, in row order.
+pub struct APIRecordPathNodeData {
+    pub schema: String,
+    pub rows: Vec<APIRecordPathRow>,
+}
+
+/// One field of a record type, for the `record_get` / `record_set` path
+/// picker. `children` is filled for a field the path can step through (a
+/// named or anonymous record type) and empty otherwise.
+pub struct APIRecordFieldNode {
+    pub name: String,
+    /// The field's declared type as text.
+    pub data_type: String,
+    /// Whether a path can step through this field (it is a record type).
+    pub steppable: bool,
+    pub children: Vec<APIRecordFieldNode>,
+}
+
 /// One stored element of an `array` node, shaped for the element list in
 /// `array_editor.dart`.
 ///

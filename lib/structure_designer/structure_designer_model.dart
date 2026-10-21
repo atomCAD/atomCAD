@@ -35,6 +35,8 @@ import 'package:flutter_cad/src/rust/api/structure_designer/mechanosynth_edit_ap
     as mechanosynth_edit_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/proxy_api.dart'
     as proxy_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/record_path_api.dart'
+    as record_path_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/chemisorb_api.dart'
     as chemisorb_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/tag_api.dart'
@@ -3308,6 +3310,64 @@ class StructureDesignerModel extends ChangeNotifier {
         nodeId: nodeId,
         fieldName: fieldName);
     refreshFromKernel();
+  }
+
+  // --- `record_get` / `record_set` (doc/design_record_get_set.md Phase 4) ---
+  //
+  // Rows are named by path, never by id: the panel sends back the row list it
+  // got with its change applied (a dangling row it re-sends is kept, one it
+  // leaves out is deleted). Each setter returns the kernel's `APIResult` so
+  // the panel can show a rejection inline.
+
+  APIRecordPathNodeData? getRecordGetData(BigInt nodeId) => record_path_api
+      .getRecordGetData(scopePath: propertyEditorScopePath, nodeId: nodeId);
+
+  APIRecordPathNodeData? getRecordSetData(BigInt nodeId) => record_path_api
+      .getRecordSetData(scopePath: propertyEditorScopePath, nodeId: nodeId);
+
+  List<APIRecordFieldNode> getRecordFieldTree(String schema) =>
+      record_path_api.getRecordFieldTree(schema: schema);
+
+  APIResult setRecordGetData(
+      BigInt nodeId, String schema, List<APIRecordPath> paths) {
+    final result = record_path_api.setRecordGetData(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        schema: schema,
+        paths: paths);
+    refreshFromKernel();
+    return result;
+  }
+
+  APIResult setRecordSetData(
+      BigInt nodeId, String schema, List<APIRecordPath> paths) {
+    final result = record_path_api.setRecordSetData(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        schema: schema,
+        paths: paths);
+    refreshFromKernel();
+    return result;
+  }
+
+  APIResult setRecordSetLiteral(
+      BigInt nodeId, int rowIndex, APILiteralValue value) {
+    final result = record_path_api.setRecordSetLiteral(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        rowIndex: rowIndex,
+        value: value);
+    refreshFromKernel();
+    return result;
+  }
+
+  APIResult clearRecordSetLiteral(BigInt nodeId, int rowIndex) {
+    final result = record_path_api.clearRecordSetLiteral(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        rowIndex: rowIndex);
+    refreshFromKernel();
+    return result;
   }
 
   // --- `array` node (doc/design_array_node_and_field_hints.md Part B) ---

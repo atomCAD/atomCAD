@@ -165,30 +165,33 @@ pub fn dangling_row_problems<R: AsRef<RecordPathRow>>(
     defs: RecordDefs<'_>,
 ) -> Vec<String> {
     rows.iter()
-        .filter_map(|row| {
-            let row = row.as_ref();
-            let reason = resolve_path(schema, &row.path, defs).err()?;
-            let path = format_path(&row.stored_names());
-            Some(match reason {
-                DanglingReason::DefMissing(def) if def == schema => {
-                    format!("path `{}`: record type `{}` does not exist", path, def)
-                }
-                DanglingReason::DefMissing(def) => format!(
-                    "path `{}` no longer exists in `{}`: record type `{}` does not exist",
-                    path, schema, def
-                ),
-                DanglingReason::FieldGone { .. } => {
-                    format!("path `{}` no longer exists in `{}`", path, schema)
-                }
-                DanglingReason::NotARecord { depth } => format!(
-                    "path `{}` no longer exists in `{}`: `{}` is not a record",
-                    path,
-                    schema,
-                    format_path(&row.stored_names()[..=depth])
-                ),
-            })
-        })
+        .filter_map(|row| row_problem(schema, row.as_ref(), defs))
         .collect()
+}
+
+/// Why `row` does not resolve, as the warning text the validator reports
+/// (built from the stored names); `None` for a row that resolves.
+pub fn row_problem(schema: &str, row: &RecordPathRow, defs: RecordDefs<'_>) -> Option<String> {
+    let reason = resolve_path(schema, &row.path, defs).err()?;
+    let path = format_path(&row.stored_names());
+    Some(match reason {
+        DanglingReason::DefMissing(def) if def == schema => {
+            format!("path `{}`: record type `{}` does not exist", path, def)
+        }
+        DanglingReason::DefMissing(def) => format!(
+            "path `{}` no longer exists in `{}`: record type `{}` does not exist",
+            path, schema, def
+        ),
+        DanglingReason::FieldGone { .. } => {
+            format!("path `{}` no longer exists in `{}`", path, schema)
+        }
+        DanglingReason::NotARecord { depth } => format!(
+            "path `{}` no longer exists in `{}`: `{}` is not a record",
+            path,
+            schema,
+            format_path(&row.stored_names()[..=depth])
+        ),
+    })
 }
 
 /// The defs below `schema` that the rows walk into (deduplicated, first-seen

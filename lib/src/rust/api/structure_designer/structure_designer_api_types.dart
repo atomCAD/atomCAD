@@ -6199,6 +6199,145 @@ class APIRangeData {
           count == other.count;
 }
 
+/// One field of a record type, for the `record_get` / `record_set` path
+/// picker. `children` is filled for a field the path can step through (a
+/// named or anonymous record type) and empty otherwise.
+class APIRecordFieldNode {
+  final String name;
+
+  /// The field's declared type as text.
+  final String dataType;
+
+  /// Whether a path can step through this field (it is a record type).
+  final bool steppable;
+  final List<APIRecordFieldNode> children;
+
+  const APIRecordFieldNode({
+    required this.name,
+    required this.dataType,
+    required this.steppable,
+    required this.children,
+  });
+
+  @override
+  int get hashCode =>
+      name.hashCode ^
+      dataType.hashCode ^
+      steppable.hashCode ^
+      children.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIRecordFieldNode &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          dataType == other.dataType &&
+          steppable == other.steppable &&
+          children == other.children;
+}
+
+/// A `record_get` / `record_set` path as it crosses the API: the API form of
+/// `record_path::PathSpec` (`doc/design_record_get_set.md` Phase 4). A live
+/// path carries its **current** segment names; a dangling one (`dangling:
+/// true`) the stored names it had when it was last edited, which is how the
+/// setter recognizes it. Row ids never cross the API, so the panel edits rows
+/// by sending back the list the getter gave it with its change applied.
+class APIRecordPath {
+  final List<String> names;
+  final bool dangling;
+
+  const APIRecordPath({
+    required this.names,
+    required this.dangling,
+  });
+
+  @override
+  int get hashCode => names.hashCode ^ dangling.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIRecordPath &&
+          runtimeType == other.runtimeType &&
+          names == other.names &&
+          dangling == other.dangling;
+}
+
+/// Property payload of a `record_get` or `record_set` node: the schema and
+/// the rows, in row order.
+class APIRecordPathNodeData {
+  final String schema;
+  final List<APIRecordPathRow> rows;
+
+  const APIRecordPathNodeData({
+    required this.schema,
+    required this.rows,
+  });
+
+  @override
+  int get hashCode => schema.hashCode ^ rows.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIRecordPathNodeData &&
+          runtimeType == other.runtimeType &&
+          schema == other.schema &&
+          rows == other.rows;
+}
+
+/// One row of a `record_get` / `record_set` node, shaped for the panel.
+class APIRecordPathRow {
+  final APIRecordPath path;
+
+  /// The derived pin name (`p.x` → `p_x`, deduplicated); `None` for a row
+  /// that has no pin.
+  final String? pinName;
+
+  /// The leaf field's declared type as text (`Float`, `Optional[Int]`);
+  /// `None` when the path does not resolve.
+  final String? leafType;
+
+  /// Why the path does not resolve (the node's warning text): set for a
+  /// dangling row, and for a row through a record type that is missing
+  /// (`dangling: false` — the type may only be unavailable, e.g. under a
+  /// library that did not load).
+  final String? problem;
+
+  /// `record_set` only: the row's inline literal, in the shape the shared
+  /// literal editor takes (`name` = the pin name). `None` on `record_get`,
+  /// on a row without a pin, and on a leaf type with no inline editor.
+  final APILiteralField? literal;
+
+  const APIRecordPathRow({
+    required this.path,
+    this.pinName,
+    this.leafType,
+    this.problem,
+    this.literal,
+  });
+
+  @override
+  int get hashCode =>
+      path.hashCode ^
+      pinName.hashCode ^
+      leafType.hashCode ^
+      problem.hashCode ^
+      literal.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIRecordPathRow &&
+          runtimeType == other.runtimeType &&
+          path == other.path &&
+          pinName == other.pinName &&
+          leafType == other.leafType &&
+          problem == other.problem &&
+          literal == other.literal;
+}
+
 /// Shared payload for `record_construct` and `record_destructure` node
 /// properties. Both nodes hold a single `schema: String` (the name of a
 /// record type def in the project's registry; empty when no schema is

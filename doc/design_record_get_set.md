@@ -1162,6 +1162,30 @@ with `cargo insta review` rather than blessing blindly.
 explicitly), `flutter analyze` (no new issues over the baseline), and
 `dart format` on the touched files.
 
+**As implemented:**
+
+- The API is its own module, `rust/src/api/structure_designer/record_path_api.rs`
+  (added to `rust_input`). The work is in `#[frb(ignore)]` functions over a
+  plain `StructureDesigner` (`record_get_view`, `edit_record_set_literal`, …)
+  with thin `frb(sync)` wrappers, so the tests need no `CAD_INSTANCE`. Both
+  getters return one shape, `APIRecordPathNodeData { schema, rows }`; a row is
+  `APIRecordPathRow { path: APIRecordPath, pin_name, leaf_type, problem,
+  literal }`, `literal` being `record_set`'s `APILiteralField`. The setters
+  and the literal pair return `APIResult`.
+- **A field-tree getter was needed** (`get_record_field_tree`): the existing
+  `get_record_type_def` returns user defs only, and anonymous record types
+  cross the API as `Custom` strings, so Dart could not recurse through a
+  built-in def or an anonymous field.
+- `problem` is set for a dangling row **and** for a row through a missing def,
+  which `row_spec` reports as live (`dangling: false`, see Phase 1) — so the
+  panel can show it as broken while echoing it back as live.
+- A literal's `is_wired` looks the pin up **by row id** in the node's installed
+  layout rather than by position, so it is right on a frozen node too. Setting
+  a literal on a row without a pin is refused; clearing an unset literal pushes
+  nothing.
+- `record_path_rows::row_problem` (one row's warning text) was split out of
+  `dangling_row_problems` for the getter.
+
 **Manual checks**
 
 1. The Flutter editors are thin UI over the tested API and are checked by

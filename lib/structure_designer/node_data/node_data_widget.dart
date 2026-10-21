@@ -72,6 +72,8 @@ import 'package:flutter_cad/structure_designer/node_data/range_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/product_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/record_construct_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/record_destructure_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/record_get_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/record_set_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/string_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/bool_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/float_editor.dart';
@@ -1051,6 +1053,18 @@ class NodeDataWidget extends StatelessWidget {
         return RecordDestructureEditor(
           nodeId: selectedNode.id,
           data: recordDestructureData,
+          model: model,
+        );
+      case 'record_get':
+        return RecordGetEditor(
+          nodeId: selectedNode.id,
+          data: model.getRecordGetData(selectedNode.id),
+          model: model,
+        );
+      case 'record_set':
+        return RecordSetEditor(
+          nodeId: selectedNode.id,
+          data: model.getRecordSetData(selectedNode.id),
           model: model,
         );
       case 'product':

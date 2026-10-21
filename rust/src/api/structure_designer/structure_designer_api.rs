@@ -6364,7 +6364,8 @@ pub fn set_parameter_data(scope_path: Vec<u64>, node_id: u64, data: APIParameter
 
 /// Maps a `DataType` to its `APISimpleParamType`, or `None` for any pin type
 /// that the custom-node panel does not render inline.
-fn data_type_to_simple_param_type(data_type: &DataType) -> Option<APISimpleParamType> {
+#[flutter_rust_bridge::frb(ignore)]
+pub(crate) fn data_type_to_simple_param_type(data_type: &DataType) -> Option<APISimpleParamType> {
     Some(match data_type {
         DataType::Bool => APISimpleParamType::Bool,
         DataType::Int => APISimpleParamType::Int,
@@ -6414,7 +6415,11 @@ fn vecs_to_rows_f64(rows: Vec<Vec<f64>>) -> [[f64; 3]; 3] {
 /// current `data_type`. Returns `None` when the stored value cannot be coerced
 /// to that type — the parameter was retyped in the subnetwork and the stale
 /// literal should render as a placeholder instead.
-fn text_value_to_api_literal(value: &TextValue, data_type: &DataType) -> Option<APILiteralValue> {
+#[flutter_rust_bridge::frb(ignore)]
+pub(crate) fn text_value_to_api_literal(
+    value: &TextValue,
+    data_type: &DataType,
+) -> Option<APILiteralValue> {
     Some(match data_type {
         DataType::Bool => APILiteralValue::Bool(value.as_bool()?),
         DataType::Int => APILiteralValue::Int(value.as_int()?),
@@ -6489,7 +6494,8 @@ fn network_result_to_api_literal(
 
 /// Converts an `APILiteralValue` from FFI into the `TextValue` stored in
 /// `CustomNodeData.literal_values`.
-fn api_literal_to_text_value(value: APILiteralValue) -> TextValue {
+#[flutter_rust_bridge::frb(ignore)]
+pub(crate) fn api_literal_to_text_value(value: APILiteralValue) -> TextValue {
     match value {
         APILiteralValue::Bool(b) => TextValue::Bool(b),
         APILiteralValue::Int(i) => TextValue::Int(i),
@@ -6645,7 +6651,8 @@ pub fn clear_custom_node_literal(scope_path: Vec<u64>, node_id: u64, param_name:
 /// validation (the def-mutation entry points already rejected inapplicable
 /// hints, and the load path dropped them). See
 /// `doc/design_array_node_and_field_hints.md` Part A.
-fn field_editor_hint_to_api(
+#[flutter_rust_bridge::frb(ignore)]
+pub(crate) fn field_editor_hint_to_api(
     hint: &atomcad_structure_designer::node_type_registry::FieldEditorHint,
 ) -> APIFieldEditorHint {
     use atomcad_structure_designer::node_type_registry::FieldEditorHint;
