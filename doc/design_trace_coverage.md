@@ -140,7 +140,26 @@ pub enum RowContribution {
   is on the path, it just could not say more. The instance-row strength order
   becomes `Created` > `Modified` > `Passed` > `Unknown` = `Opaque` >
   `Unreached`, so an instance whose children were all reached only through
-  wiring is itself `Unreached`.
+  wiring is itself `Unreached`. An instance row with no children (an empty
+  subnetwork walk) defaults to `Unreached` when it was entered with a lost
+  probe, and to `Unknown` otherwise, instead of always `Unknown` as today.
+- **A hit that resolves to nothing.** When `start_atom` cannot find the hit atom
+  in the displayed output, the displayed node is visited with a lost probe.
+  That node is where the probe was lost, so it reads `Unknown`, not
+  `Unreached`; only the nodes above it are `Unreached`. `visit` tells the two
+  apart by whether the caller is `start` (pass an explicit flag, do not infer
+  it from the row count).
+- **One row per node: precise beats wired.** The dedup key includes the probe
+  kind, so today a node reached both with a probe and through a lost cone gets
+  two rows. Under the new labels these would contradict each other
+  (`materialize filled` and `materialize wired upstream`). That happens
+  whenever one input of a node keeps the probe and another loses it into
+  shared upstream, and on the diff chains that stay on the fallback
+  (`apply_diff` → a producer's pin 1). So when the tree is built,
+  `finish` drops every `Unreached` row whose (frame, network, node) was also
+  emitted under any other kind, wherever in the walk that happened. A dropped
+  instance row takes its subtree with it; its children's own rows survive only
+  where they were emitted elsewhere.
 - **`Opaque`** is emitted by the fallback instead of an origin label when the
   node has no phase-typed input but **does** have a wired input whose type
   could carry a phase value (`may_carry_phase`, below). The trace stops there,
@@ -257,10 +276,15 @@ Blueprint's geometry, so link pin 0 with the same Point, `Passed`. Without this
 the fallback would answer correctly anyway (it keeps a Point the Blueprint
 contains), but the row would read "possibly contributed".
 
-**`lattice_symop`** moves its Blueprint rigidly, like `geo_trans`. Factor the
-transform `eval` applies to the geometry out of `eval` into a helper taking the
-`arg` closure (the movers' pattern), and answer with `trace_moved_point` and the
-inverse transform. Report `Modified("moved")`.
+**`lattice_symop`** moves its Blueprint rigidly, like `geo_trans`, unless
+`transform_only_frame` ("keep_geo") is set, in which case only the reference
+frame moves and the geometry stays in place. Factor the transform `eval`
+applies to the geometry out of `eval` into a helper taking the `arg` closure
+(the movers' pattern), resolving `transform_only_frame` from its wired pin or
+stored value as `eval` does; the helper returns the identity in keep-geo mode.
+Answer with `trace_moved_point` and the inverse transform, reporting
+`Modified("moved")`, or, for the identity, link pin 0 with the same probe,
+`Passed`.
 
 ### Region-gated atom ops
 
@@ -282,7 +306,14 @@ pub struct RegionOpSpec {
     pub acted: Option<fn(&Atom, &Atom) -> bool>,
     /// Label for an atom the node created; `None` = the node creates none.
     pub created: Option<&'static str>,
+    /// What the region gates. `Atom`: the op touches an atom only when that
+    /// atom is in the region (every node but `infer_bonds`). `Bond`: the op
+    /// touches a bond when **either** end is in the region, so an
+    /// out-of-region atom can still change (`infer_bonds`).
+    pub gate: RegionGate,
 }
+
+pub enum RegionGate { Atom, Bond }
 ```
 
 For an `Atom { id: Some(id) }` probe on pin 0:
@@ -301,19 +332,33 @@ For an `Atom { id: Some(id) }` probe on pin 0:
    host — the region decided that the host was passivated. This mirrors
    `materialize`, which probes a terminator at its parent.
 
+With `gate: Bond` (`infer_bonds`), step 1 changes: `eval` re-infers every
+bond with at least one end in the region and keeps only bonds with **both**
+ends outside, so an atom outside the region can still gain or lose a bond to
+one inside. The node acted on the atom when `acted` (bonds differ) holds,
+whatever the atom's own position. Then `Modified(spec.modified)`, link the
+molecule with the same id, and, if the region is wired, link it with
+`atom_point_probe` of each **in-region** end among the atom itself and the
+other ends of its added or removed bonds (input positions; the deciding
+`half_space`s below dedupe across them). An atom whose bonds did not change is
+`Passed`, molecule only, as in the `Atom` gate.
+
 Anything else (a Point probe, another pin, an element) returns `None`.
 
-| Node | `modified` | `acted` | `created` |
-|---|---|---|---|
-| `passivate` | "passivated" | bonds differ | "passivated" |
-| `remove_hydrogen` | "depassivated" | bonds differ | — |
-| `infer_bonds` | "bonded" | bonds differ | — |
-| `atom_replace` | "replaced" | element differs | — |
-| `freeze` / `unfreeze` | "frozen" / "unfrozen" | frozen flag differs | — |
-| `tag` / `untag` | "tagged" / "untagged" | `tag_bits` differ | — |
-| `xray` | "faded" | `None` (every in-region atom) | — |
+| Node | `modified` | `acted` | `created` | `gate` |
+|---|---|---|---|---|
+| `passivate` | "passivated" | bonds differ | "passivated" | Atom |
+| `remove_hydrogen` | "depassivated" | bonds differ | — | Atom |
+| `infer_bonds` | "bonded" | bonds differ | — | Bond |
+| `atom_replace` | "replaced" | element differs | — | Atom |
+| `freeze` / `unfreeze` | "frozen" / "unfrozen" | frozen flag differs | — | Atom |
+| `tag` / `untag` | "tagged" / "untagged" | `tag_bits` differ | — | Atom |
+| `xray` | "faded" | `None` (every in-region atom) | — | Atom |
 
 "Bonds differ" compares the two atoms' bond lists as sets of (other id, order).
+For `remove_hydrogen` and `passivate` the `Atom` gate is the host: `eval`
+strips or adds terminators of in-region hosts, which is the atom whose bonds
+change.
 
 The pin indices come from each node type's parameter list (the region is the
 last pin everywhere except `xray`, where `fade_depth` follows it); name them as
@@ -427,30 +472,56 @@ generate`, after `cargo fmt`).
 
 - `Unreached` rows render fainter than `Passed` / `Unknown` (one more step of
   the existing white54/white38 scale).
-- A maximal run of consecutive `Unreached` rows in the flattened list is shown
-  **collapsed** as one summary line, "N wired upstream", with the expand
-  chevron the instance rows already use. A lost probe's cone is emitted
-  depth-first in one go, so it is one contiguous run, instance rows and their
-  children included. Expanding shows the rows; the run's collapse state lives
-  beside the instance-row state (`collapsed`) and is computed by the same
-  visible-rows pass.
+- **Custom-node instance rows start collapsed** too (today they start
+  expanded). The instance row still shows the label derived from its
+  strongest child, so the collapsed menu reads as the chain at the level the
+  user is looking at; the chevron opens the subnetwork's rows. `_collapsed`
+  is seeded with every instance row when the menu's rows change, instead of
+  starting empty.
+- A maximal run of consecutive `Unreached` **siblings** — rows at one tree
+  level, under one parent (the top level or one instance row) — is shown
+  **collapsed** as one summary line, "N wired upstream", at that level's
+  indent, with the expand chevron the instance rows already use. N counts the
+  run's rows and everything nested under them. A run never crosses a tree
+  level: a lost cone that leaves an instance through a `parameter` continues at
+  the parent level, after the instance's subtree, and so becomes two runs,
+  one closing the instance's children and one among the instance's siblings.
+  Each collapses on its own, and a collapsed instance hides its inner run with
+  the rest of its children. Expanding shows the rows; each run's collapse
+  state is keyed by (parent, index of its first row), lives beside the
+  instance-row state (`collapsed`), and is computed by the same visible-rows
+  pass.
 - The summary line is not a node: hover highlights nothing in the editor, and
-  clicking it only expands or collapses.
+  clicking it only expands or collapses. It exists only in Dart: the visible-
+  rows pass synthesizes it, and neither the Rust report nor `APITraceRow` has
+  a row for it. It shares only the chevron and its level's indent with an
+  instance row, which *is* a node and whose children sit one level deeper.
+- **Expanded**, the summary line stays as a header with the down chevron, so
+  the run can be collapsed again, and the run's rows follow it **at their own
+  depth's indent**, not one step further in: they are siblings that the header
+  groups, not children of it, and indenting them would read as nesting inside
+  a node. Their fainter text marks them as the group. Folding a run hides a
+  same-depth range (its first row to its last, with everything nested under
+  them), which the instance rule in `visibleTraceRows` (hide the *deeper* rows
+  after a collapsed row) does not express; the pass handles the two separately.
 
 **Reference guide** (`doc/reference_guide/ui.md`, the contributing-nodes
 section). Add "trace stops here" and "wired upstream" to the label table, say
 that the wired-upstream rows start collapsed, and extend the paragraph that
-lists which nodes answer precisely, phase by phase as the nodes land.
+lists which nodes answer precisely, phase by phase as the nodes land. Say
+that custom-node rows start collapsed, and change any text that says they
+start expanded.
 
 ## Phased implementation plan
 
 ### Phase 1 — Row kinds and the honest stop
 
 - `RowContribution::Unreached` and `Opaque`; the lost-probe sites emit
-  `Unreached`; instance strength order; `may_carry_phase` and the fallback's
-  `Opaque` branch.
+  `Unreached`; instance strength order and the childless-instance default; the
+  unresolved-hit case; dropping `Unreached` rows of nodes emitted under another
+  kind; `may_carry_phase` and the fallback's `Opaque` branch.
 - API kind, label mapping, codegen; menu fading and run collapsing;
-  `ui.md` label table.
+  instance rows collapsed by default; `ui.md` label table.
 - `trace_support::label` learns the two kinds ("wired upstream", "trace stops
   here").
 
@@ -462,6 +533,13 @@ Tests (`trace_engine_test.rs`, `trace_api_test.rs`):
   `Unreached`.
 - A custom-node instance reached only through a lost probe is itself
   `Unreached`; one with a traced child keeps that child's label.
+- One row per node: a node whose one input keeps the probe and whose other
+  input loses it into shared upstream (an untraced two-input test node, both
+  inputs fed by one `materialize`) lists that `materialize` once, with its
+  traced label, and no "wired upstream" row for it — whichever of the two
+  visits came first.
+- A hit position matching no atom of the displayed output: the displayed node
+  reads `possibly contributed`, its inputs `wired upstream`.
 - `Opaque`: `record_construct(field = molecule) → record_destructure` displayed
   → `record_destructure trace stops here`, and the trace does not list
   `record_construct` or the molecule. The same through `collect` fed a
@@ -472,8 +550,20 @@ Tests (`trace_engine_test.rs`, `trace_api_test.rs`):
   a function returning Molecule → true; an unresolvable name → true.
 - Flattening (API test): `Unreached` rows carry the new kind and label; an
   `Opaque` row carries `Unknown` with "trace stops here".
-- Mutation check: emit `Unknown` instead of `Unreached` at the lost-probe
-  site; the lost-probe tests must fail.
+- Mutation checks: emit `Unknown` instead of `Unreached` at the lost-probe
+  site; the lost-probe tests must fail. Skip the `Unreached` drop in `finish`;
+  the one-row-per-node test must fail.
+
+Flutter (`test/trace_menu_test.dart`): an instance row with traced children
+starts collapsed (its children not shown, `chevron_right`) and its chevron
+expands it; existing tests that assume expanded instances expand them first.
+A run of `Unreached` top-level rows
+collapses to one line with the right N; expanded, the header stays (down
+chevron) and the rows keep their own depth's indent; hovering the header
+reports no row to `onHover`; a lost cone that leaves an instance
+through a `parameter` gives two summary lines, one inside the instance and one
+after it at the top level, each expanding on its own; collapsing the instance
+hides the inner one.
 
 UI (manual walkthrough, maintainer): a design with an untraced mover upstream
 of a large cone shows one collapsed "N wired upstream" line; expanding it shows
@@ -507,7 +597,9 @@ Tests (`trace_atomic_nodes_test.rs` for the atom paths,
   rather than "possibly contributed".
 - `lattice_symop` with a non-identity symmetry rotation and translation: a
   surface point maps back onto the right face of the input shape (an
-  off-centre shape, per the δ lesson in the parent design).
+  off-centre shape, per the δ lesson in the parent design). With
+  `transform_only_frame` set, the same hit reads `passed` and reaches the input
+  face at the unchanged position.
 - Mutation checks: make `if` link both branches; the untaken-branch test must
   fail. Drop the inverse in `lattice_symop`; its test must fail.
 
@@ -518,8 +610,9 @@ The region family through `trace_region_op` and `RegionOpSpec`
 `unfreeze`, `tag`, `untag`, `xray`), `region_contains` in `atom_op.rs`,
 `apply_style`, `edit_atom`, `proxy`, `apply_diff`.
 
-`tag` is the Phase 1 fallback tests' real "kept" subject
-(`fallback_kept_…` and three more in `trace_engine_test.rs`). Giving it a
+`tag` is the real "kept" subject of the fallback tests written in
+`doc/design_output_driven_editing.md`'s Phase 1 (`fallback_kept_…` and three
+more in `trace_engine_test.rs`). Giving it a
 `trace` removes that subject, so this phase adds a test-only
 `UntracedKeepData` to `trace_support.rs` (a molecule pass-through with the
 default `trace`, like `UntracedMoveData`) and moves those tests to it. No real
@@ -534,6 +627,10 @@ Tests (`trace_atomic_nodes_test.rs`):
   atom inside that the node did not change (an already saturated host under
   `passivate`, an element not in `atom_replace`'s rules) → `passed`, region
   not listed. With the region unwired, a changed atom reads its label.
+- `infer_bonds` (`gate: Bond`): an atom outside the region that gained a bond
+  to an atom inside reads `bonded` and lists the region, probed at the
+  in-region partner; an atom outside the region with unchanged bonds reads
+  `passed`, region not listed.
 - `passivate`: a placed H reads `passivated`, continues to its host in the
   input, and lists the region at the host's position.
 - `region_contains` agrees with `map_atomic_in_region` for an atom exactly at
