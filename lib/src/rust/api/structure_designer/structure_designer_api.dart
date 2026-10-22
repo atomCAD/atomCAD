@@ -1243,6 +1243,30 @@ void setRecordConstructFields(
         .crateApiStructureDesignerStructureDesignerApiSetRecordConstructFields(
             scopePath: scopePath, nodeId: nodeId, fields: fields);
 
+/// The record defs (user and linked) whose fields are exactly an anonymous
+/// `record_construct`'s: same names, equal types, no `Optional` and no extra
+/// field. The "Same shape as:" list of the Name this record… dialog; choosing
+/// one goes through `set_record_construct_data`. Sorted by name; empty for a
+/// named-mode node or one with no fields.
+List<String> getMatchingRecordDefsFor(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetMatchingRecordDefsFor(
+            scopePath: scopePath, nodeId: nodeId);
+
+/// Name this record…: creates the def `def_name` from an anonymous
+/// `record_construct`'s fields and points the node at it, in one undo step
+/// ("Name record"). Every wire and literal is kept. Refused, with nothing
+/// changed, for a named-mode node, a node with no fields, a read-only
+/// network, or a name that is invalid, taken or inside a linked library.
+void promoteRecordConstruct(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required String defName}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiPromoteRecordConstruct(
+            scopePath: scopePath, nodeId: nodeId, defName: defName);
+
 /// Writes the `schema` property of a `record_destructure` node. Same
 /// post-write behavior as `set_record_construct_data` — pin layout is
 /// re-derived from the chosen def, dangling references leave the node with

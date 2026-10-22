@@ -54,7 +54,7 @@ structure_designer/
 ├── node_type_registry.rs      # Central registry of all node types
 ├── declared_inputs.rs         # DeclaredInputs trait (nodes whose inputs are their own data) + open-port name derivation
 ├── declared_input_ops.rs      # Open port (add_input_from_wire) and Take type from wire, for any DeclaredInputs node
-├── record_construct_ops.rs    # record_construct's schema switch and anonymous field-list edit (one NetworkSnapshotCommand each)
+├── record_construct_ops.rs    # record_construct's schema switch, anonymous field-list edit (one NetworkSnapshotCommand each) and promotion to a named def
 ├── network_usages.rs          # Find Usages: read-only collection of a network's instance nodes
 ├── node_name_search.rs        # Find Node: name-path resolution (`map4/e1`) and the ranked name search
 ├── network_validator.rs       # Validates and repairs networks

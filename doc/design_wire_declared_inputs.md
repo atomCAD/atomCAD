@@ -1,6 +1,6 @@
 # Wire-declared inputs: the open port on `expr` and anonymous `record_construct`
 
-## Status: Draft (2026-10-21)
+## Status: Phases 0–3 implemented (2026-10-22); Phase 4 (Flutter) open
 
 ## Motivation
 
@@ -464,7 +464,9 @@ today, so existing files and corpus snapshots don't churn.
 ```rust
 /// Exact-shape matches for an anonymous `record_construct`: every def whose
 /// fields are the same name set with equal types and no `Optional`. Sorted by
-/// name. Includes linked defs.
+/// name. Includes linked defs, not built-in ones. Empty for a node with no
+/// fields, which promotion refuses too (otherwise every empty def would be
+/// listed for every fresh node).
 pub fn matching_record_defs_for(&self, scope_path: &[u64], node_id: u64) -> Vec<String>;
 
 /// Create def `def_name` from the node's anonymous fields and point the node at it.
@@ -477,14 +479,18 @@ pub fn promote_record_construct(
 
 1. Refuse when the node is not in anonymous mode, has no fields, or the
    network is read-only.
-2. Validate `def_name` as the user-types panel does (not taken, not under a
-   linked namespace, a valid qualified name).
+2. Validate `def_name`: `identifier::is_valid_user_name`, not under (or
+   above) a linked mount (`library_links::name_conflicts_with_mount`, checked
+   first for a clearer message), and not taken (`name_is_taken`, which also
+   covers built-ins). All checks run before anything changes.
 3. Snapshot the network. Build the `RecordTypeDef`, `claim_field_ids`, and
    add it through the **non-pushing** registry call.
 4. Set `schema = def_name` and clear `fields`; keep `literal_values` (all of
    them still name a field) and `next_field_id` (it never decreases). Re-derive
    the node type: the pins now carry `FieldId`s, none of which can equal a
-   `BASE | id` pin id, so every wire matches by name.
+   `BASE | id` pin id, so every wire matches by name. Reflow neighbours if the
+   node grew: a named node shows its schema as a subtitle, an anonymous one
+   does not.
 5. Revalidate, mark the design dirty and request a full refresh. Snapshot the
    network again, then push
    `CompositeCommand [AddRecordTypeDefCommand, NetworkSnapshotCommand]`

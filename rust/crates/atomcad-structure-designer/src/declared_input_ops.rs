@@ -411,18 +411,36 @@ impl StructureDesigner {
         before: crate::serialization::node_networks_serialization::SerializableNodeNetwork,
         description: &str,
     ) {
+        if let Some(command) =
+            self.finish_network_edit(scope_path, node_id, network_name, before, description)
+        {
+            self.push_command(command);
+        }
+    }
+
+    /// [`Self::finish_declared_input_edit`] without the push: the command is
+    /// returned for a caller that bundles it with another (promotion's
+    /// `CompositeCommand`). `None` only when the network cannot be
+    /// snapshotted.
+    pub(crate) fn finish_network_edit(
+        &mut self,
+        scope_path: &[u64],
+        node_id: u64,
+        network_name: &str,
+        before: crate::serialization::node_networks_serialization::SerializableNodeNetwork,
+        description: &str,
+    ) -> Option<NetworkSnapshotCommand> {
         self.validate_active_network();
         self.set_dirty(true);
         self.mark_node_data_changed_scoped(scope_path, node_id);
         self.mark_full_refresh();
-        if let Some(after) = self.snapshot_network(network_name) {
-            self.push_command(NetworkSnapshotCommand {
-                network_name: network_name.to_string(),
-                description: description.to_string(),
-                before_snapshot: before,
-                after_snapshot: after,
-            });
-        }
+        let after = self.snapshot_network(network_name)?;
+        Some(NetworkSnapshotCommand {
+            network_name: network_name.to_string(),
+            description: description.to_string(),
+            before_snapshot: before,
+            after_snapshot: after,
+        })
     }
 
     /// One entry per input pin of the node, by pin index: `Some(type)` when

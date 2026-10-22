@@ -192,6 +192,11 @@ fn alphabet() -> Vec<(&'static str, OpFn)> {
             let fields = vec![("b".to_string(), DataType::Int)];
             Some(d.set_record_construct_fields(&[], rc, fields).is_err())
         }),
+        ("name record", |d, t| {
+            let rc = id(d, t, "rc");
+            let name = format!("{}Named", t.ns_dot);
+            Some(d.promote_record_construct(&[], rc, &name).is_err())
+        }),
         ("delete wire", |d, t| {
             let (x, s) = (id(d, t, "x"), id(d, t, "s"));
             d.select_wire(x, 0, s, 0);

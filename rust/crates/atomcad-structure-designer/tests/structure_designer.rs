@@ -760,6 +760,8 @@ mod wiring_revalidation_test;
 mod declared_inputs_test;
 #[path = "structure_designer/record_construct_anonymous_test.rs"]
 mod record_construct_anonymous_test;
+#[path = "structure_designer/record_construct_promotion_test.rs"]
+mod record_construct_promotion_test;
 
 #[path = "structure_designer/open_port_name_test.rs"]
 mod open_port_name_test;
