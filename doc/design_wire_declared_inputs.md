@@ -1076,4 +1076,5 @@ Flutter smoke test, which is human-only.
 - **Anonymous schemas on `record_get` / `record_set` / `record_destructure`**
   ("schema from input wire", `doc/design_record_get_set.md` open question 2).
   It would make promotion optional rather than required for deep reads and
-  updates.
+  updates. Designed in `doc/design_anonymous_record_readers.md`, together
+  with named-record field access in `expr`.
