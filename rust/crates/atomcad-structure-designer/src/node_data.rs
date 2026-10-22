@@ -9,6 +9,7 @@ use crate::node_network_gadget::NodeNetworkGadget;
 use crate::node_type::NodeType;
 use crate::node_type_registry::{NodeTypeRegistry, RecordDefs};
 use crate::overlay::Overlay;
+use crate::record_typed_input::RecordTypedInput;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
 use crate::trace::{TraceContext, TraceProbe, TraceStep};
@@ -450,6 +451,22 @@ pub trait NodeData: Any + AsAny {
         None
     }
 
+    /// The node's record-typed input, when its pins are derived from the
+    /// record type of its `record` input (`record_destructure`). `None` (the
+    /// default) for every other node. Through it the node is adopted from a
+    /// wire on drag-place, on connect while uncommitted and by *Take type from
+    /// wire*; see `crate::record_typed_input` and
+    /// `doc/design_anonymous_record_readers.md`.
+    fn record_typed_input(&self) -> Option<&dyn RecordTypedInput> {
+        None
+    }
+
+    /// Mutable counterpart of [`Self::record_typed_input`]; must answer `Some`
+    /// exactly when it does.
+    fn record_typed_input_mut(&mut self) -> Option<&mut dyn RecordTypedInput> {
+        None
+    }
+
     /// A concrete type hint for dragging a wire *off* the given input pin,
     /// overriding the pin's declared type for drag-aware add-node inference.
     ///
@@ -497,16 +514,16 @@ pub trait NodeData: Any + AsAny {
     }
 
     /// The record fields the node declares in its own data — an anonymous
-    /// `record_construct`'s — with the allocator floor of their ids. `None`
-    /// (the default) for every other node. A named-mode `record_construct`
-    /// answers `Some` with no fields, so the invariant checker sees a node
-    /// that has both. The record-def reference walkers
+    /// `record_construct`'s or an anonymous `record_destructure`'s — with the
+    /// allocator floor of their ids. `None` (the default) for every other
+    /// node. A named-mode node answers `Some` with no fields, so the invariant
+    /// checker sees a node that has both. The record-def reference walkers
     /// (`collect_record_refs_in_node`, `rewrite_record_names_in_node`,
     /// `canonicalize`) read the field types through this hook, never by
     /// downcast.
     fn local_record_fields(
         &self,
-    ) -> Option<(&[crate::nodes::record_construct::LocalRecordField], u64)> {
+    ) -> Option<(&[crate::nodes::local_record_fields::LocalRecordField], u64)> {
         None
     }
 
@@ -514,7 +531,7 @@ pub trait NodeData: Any + AsAny {
     /// canonicalizing the field types (which never allocates an id).
     fn local_record_fields_mut(
         &mut self,
-    ) -> Option<&mut [crate::nodes::record_construct::LocalRecordField]> {
+    ) -> Option<&mut [crate::nodes::local_record_fields::LocalRecordField]> {
         None
     }
 

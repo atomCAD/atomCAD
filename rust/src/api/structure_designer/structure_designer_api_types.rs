@@ -533,17 +533,26 @@ pub struct APIStringData {
     pub value: String,
 }
 
-/// Shared payload for `record_construct` and `record_destructure` node
-/// properties. Both nodes hold a single `schema: String` (the name of a
-/// record type def in the project's registry; empty when no schema is
-/// chosen yet).
+/// Shared payload for `record_construct` and `product` node properties. Both
+/// nodes hold a single `schema: String` (the name of a record type def in the
+/// project's registry; empty when no schema is chosen yet).
 pub struct APIRecordSchemaData {
     pub schema: String,
 }
 
-/// One field an anonymous `record_construct` declares itself, for its field
-/// list in the property panel. The list's order is the pin order; ids stay in
-/// Rust (kept by name, then position, like `APIExprParameter`).
+/// The properties of a `record_destructure` node
+/// (`doc/design_anonymous_record_readers.md`): its `schema` in named mode, or
+/// the fields of the record type it took from its wire in anonymous mode
+/// (read-only: they always describe the input type). Both empty when the node
+/// is unset.
+pub struct APIRecordDestructureData {
+    pub schema: String,
+    pub fields: Vec<APIRecordLocalField>,
+}
+
+/// One field an anonymous `record_construct` declares itself, or an anonymous
+/// `record_destructure` took from its wire, for its field list in the
+/// property panel. The list's order is the pin order; ids stay in Rust.
 pub struct APIRecordLocalField {
     pub name: String,
     pub data_type: APIDataType,

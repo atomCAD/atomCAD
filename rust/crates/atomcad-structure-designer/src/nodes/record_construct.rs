@@ -10,7 +10,7 @@
 //!   record of those fields. Only this mode has declared inputs (the open
 //!   port and *Take type from wire*).
 
-use crate::data_type::{DataType, RecordType, walk_data_type_record_names};
+use crate::data_type::{DataType, RecordType};
 use crate::declared_inputs::DeclaredInputs;
 use crate::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::evaluator::network_evaluator::NetworkEvaluator;
@@ -22,18 +22,13 @@ use crate::node_type::NodeTypeCategory;
 use crate::node_type::{
     NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
 };
-use crate::node_type_registry::{NodeTypeRegistry, RecordDefs, is_valid_record_field_type};
+use crate::node_type_registry::{NodeTypeRegistry, RecordDefs};
+use crate::nodes::local_record_fields::{self, is_zero};
+pub use crate::nodes::local_record_fields::{ANON_FIELD_PIN_ID_BASE, LocalRecordField};
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-
-/// Anonymous field pins carry `ANON_FIELD_PIN_ID_BASE | field.id`. `FieldId`s
-/// are counters allocated from a per-file floor and never reach this range, so
-/// `Node::set_custom_node_type`'s id-first matching can never pair an
-/// anonymous field with an unrelated def field on a mode switch: it falls
-/// through to name matching, which is the intended correspondence.
-pub const ANON_FIELD_PIN_ID_BASE: u64 = 1 << 62;
 
 /// The property keys of the node in the text format. A field may not take one
 /// of these names: `r = record_construct { schema: x }` would be ambiguous.
@@ -69,21 +64,6 @@ pub struct RecordConstructData {
     pub literal_values: HashMap<String, TextValue>,
 }
 
-/// One field of an anonymous `record_construct`.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct LocalRecordField {
-    /// Stable within the node; the pin id is `ANON_FIELD_PIN_ID_BASE | id`.
-    pub id: u64,
-    pub name: String,
-    /// Never `Optional`: the type comes from a pin, and `Optional` is never a
-    /// pin type. A promoted def can make the field optional later.
-    pub data_type: DataType,
-}
-
-fn is_zero(value: &u64) -> bool {
-    *value == 0
-}
-
 /// The identifier rule anonymous record field names follow: `Display` prints
 /// them unquoted and the type parser reads them back as identifiers.
 fn is_identifier(name: &str) -> bool {
@@ -100,40 +80,21 @@ impl RecordConstructData {
         self.schema.is_empty()
     }
 
-    /// The type gate of an anonymous field: any type a record def field may
-    /// hold ([`is_valid_record_field_type`]), except the ones a declared field
-    /// can never have — `None`, `Unit`, `AnyFunction` (not a value type) and
-    /// `Optional` (never a pin type).
+    /// The type gate of an anonymous field
+    /// ([`local_record_fields::accepts_field_type`]).
     pub fn accepts_field_type(data_type: &DataType) -> Result<(), String> {
-        match data_type {
-            DataType::None => Err("A record field cannot have type None".to_string()),
-            DataType::Unit => Err("A record field cannot have type Unit".to_string()),
-            DataType::AnyFunction { .. } => {
-                Err("A record field needs a concrete function type".to_string())
-            }
-            DataType::Optional(_) => {
-                Err("An anonymous record field cannot be Optional".to_string())
-            }
-            _ => is_valid_record_field_type(data_type),
-        }
+        local_record_fields::accepts_field_type(data_type)
     }
 
     /// A fresh local field id: at or above `next_field_id` and above every
     /// live id.
     fn allocate_field_id(&mut self) -> u64 {
-        let floor = self.fields.iter().map(|f| f.id + 1).max().unwrap_or(0);
-        let id = self.next_field_id.max(floor);
-        self.next_field_id = id + 1;
-        id
+        local_record_fields::allocate_field_id(&self.fields, &mut self.next_field_id)
     }
 
     /// The local field a pin id names, if any.
     fn field_index_for_pin(&self, pin_id: u64) -> Option<usize> {
-        if pin_id & ANON_FIELD_PIN_ID_BASE == 0 {
-            return None;
-        }
-        let id = pin_id & !ANON_FIELD_PIN_ID_BASE;
-        self.fields.iter().position(|f| f.id == id)
+        local_record_fields::field_index_for_pin(&self.fields, pin_id)
     }
 
     /// Replace the anonymous field list with `new_fields` (names and types in
@@ -595,18 +556,7 @@ impl NodeData for RecordConstructData {
     /// name, and this is what tells the user so. A name under a library mount
     /// freezes the node instead and never gets here.
     fn record_node_problems(&self, defs: RecordDefs<'_>) -> Vec<String> {
-        let mut problems = Vec::new();
-        for field in &self.fields {
-            walk_data_type_record_names(&field.data_type, &mut |name| {
-                if defs.lookup(name).is_none() {
-                    problems.push(format!(
-                        "Field '{}' has unknown record type '{}'",
-                        field.name, name
-                    ));
-                }
-            });
-        }
-        problems
+        local_record_fields::local_field_problems(&self.fields, defs)
     }
 }
 

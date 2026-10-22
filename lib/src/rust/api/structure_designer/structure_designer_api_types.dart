@@ -6265,6 +6265,32 @@ class APIRangeData {
           count == other.count;
 }
 
+/// The properties of a `record_destructure` node
+/// (`doc/design_anonymous_record_readers.md`): its `schema` in named mode, or
+/// the fields of the record type it took from its wire in anonymous mode
+/// (read-only: they always describe the input type). Both empty when the node
+/// is unset.
+class APIRecordDestructureData {
+  final String schema;
+  final List<APIRecordLocalField> fields;
+
+  const APIRecordDestructureData({
+    required this.schema,
+    required this.fields,
+  });
+
+  @override
+  int get hashCode => schema.hashCode ^ fields.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIRecordDestructureData &&
+          runtimeType == other.runtimeType &&
+          schema == other.schema &&
+          fields == other.fields;
+}
+
 /// One field of a record type, for the `record_get` / `record_set` path
 /// picker. `children` is filled for a field the path can step through (a
 /// named or anonymous record type) and empty otherwise.
@@ -6303,9 +6329,9 @@ class APIRecordFieldNode {
           children == other.children;
 }
 
-/// One field an anonymous `record_construct` declares itself, for its field
-/// list in the property panel. The list's order is the pin order; ids stay in
-/// Rust (kept by name, then position, like `APIExprParameter`).
+/// One field an anonymous `record_construct` declares itself, or an anonymous
+/// `record_destructure` took from its wire, for its field list in the
+/// property panel. The list's order is the pin order; ids stay in Rust.
 class APIRecordLocalField {
   final String name;
   final APIDataType dataType;
@@ -6428,10 +6454,9 @@ class APIRecordPathRow {
           literal == other.literal;
 }
 
-/// Shared payload for `record_construct` and `record_destructure` node
-/// properties. Both nodes hold a single `schema: String` (the name of a
-/// record type def in the project's registry; empty when no schema is
-/// chosen yet).
+/// Shared payload for `record_construct` and `product` node properties. Both
+/// nodes hold a single `schema: String` (the name of a record type def in the
+/// project's registry; empty when no schema is chosen yet).
 class APIRecordSchemaData {
   final String schema;
 

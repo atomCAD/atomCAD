@@ -151,10 +151,7 @@ fn destructure_optional_field_pin_is_plain_inner_type() {
         &mut designer,
         "test",
         id,
-        Box::new(RecordDestructureData {
-            schema: "Settings".to_string(),
-            ..Default::default()
-        }),
+        Box::new(RecordDestructureData::named("Settings")),
     );
 
     let registry = &designer.node_type_registry;
@@ -340,10 +337,7 @@ fn construct_destructure_optional_none_flows_to_plain_consumer() {
         &mut designer,
         "test",
         destructure,
-        Box::new(RecordDestructureData {
-            schema: "Settings".to_string(),
-            ..Default::default()
-        }),
+        Box::new(RecordDestructureData::named("Settings")),
     );
 
     designer.validate_active_network();

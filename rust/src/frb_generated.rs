@@ -26,7 +26,7 @@
 // Section: imports
 
 use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
-use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
+use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
 use flutter_rust_bridge::{Handler, IntoIntoDart};
 
 // Section: boilerplate
@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.10.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1093040380;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 2009946508;
 
 // Section: executor
 
@@ -15083,19 +15083,19 @@ let api_value = <crate::api::structure_designer::structure_designer_api_types::A
                      let output_ok = Result::<_,()>::Ok({ crate::api::structure_designer::structure_designer_api::set_record_construct_literal(api_scope_path, api_node_id, api_field_name, api_value); })?;   Ok(output_ok)
                 })()) })
 }
-fn wire__crate__api__structure_designer__structure_designer_api__set_record_destructure_data_impl(
+fn wire__crate__api__structure_designer__structure_designer_api__set_record_destructure_schema_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec,_>(flutter_rust_bridge::for_generated::TaskInfo{ debug_name: "set_record_destructure_data", port: None, mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync }, move || { 
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec,_>(flutter_rust_bridge::for_generated::TaskInfo{ debug_name: "set_record_destructure_schema", port: None, mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync }, move || { 
             let message = unsafe { flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(ptr_, rust_vec_len_, data_len_) };
             let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_scope_path = <Vec<u64>>::sse_decode(&mut deserializer);
 let api_node_id = <u64>::sse_decode(&mut deserializer);
-let api_data = <crate::api::structure_designer::structure_designer_api_types::APIRecordSchemaData>::sse_decode(&mut deserializer);deserializer.end();
-                transform_result_sse::<_, ()>((move || {
-                     let output_ok = Result::<_,()>::Ok({ crate::api::structure_designer::structure_designer_api::set_record_destructure_data(api_scope_path, api_node_id, api_data); })?;   Ok(output_ok)
+let api_schema = <String>::sse_decode(&mut deserializer);deserializer.end();
+                transform_result_sse::<_, String>((move || {
+                     let output_ok = crate::api::structure_designer::structure_designer_api::set_record_destructure_schema(api_scope_path, api_node_id, api_schema)?;   Ok(output_ok)
                 })()) })
 }
 fn wire__crate__api__structure_designer__record_path_api__set_record_get_data_impl(
@@ -20232,6 +20232,19 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
 }
 
 impl SseDecode
+    for crate::api::structure_designer::structure_designer_api_types::APIRecordDestructureData
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_schema = <String>::sse_decode(deserializer);
+        let mut var_fields = <Vec<
+            crate::api::structure_designer::structure_designer_api_types::APIRecordLocalField,
+        >>::sse_decode(deserializer);
+        return crate::api::structure_designer::structure_designer_api_types::APIRecordDestructureData{schema: var_schema, fields: var_fields};
+    }
+}
+
+impl SseDecode
     for crate::api::structure_designer::structure_designer_api_types::APIRecordFieldNode
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -24161,6 +24174,21 @@ impl SseDecode
 }
 
 impl SseDecode
+    for Option<
+        crate::api::structure_designer::structure_designer_api_types::APIRecordDestructureData,
+    >
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::structure_designer::structure_designer_api_types::APIRecordDestructureData>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode
     for Option<crate::api::structure_designer::structure_designer_api_types::APIRecordPathNodeData>
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -25765,7 +25793,7 @@ fn pde_ffi_dispatcher_sync_impl(
 548 => wire__crate__api__structure_designer__structure_designer_api__set_record_construct_data_impl(ptr, rust_vec_len, data_len),
 549 => wire__crate__api__structure_designer__structure_designer_api__set_record_construct_fields_impl(ptr, rust_vec_len, data_len),
 550 => wire__crate__api__structure_designer__structure_designer_api__set_record_construct_literal_impl(ptr, rust_vec_len, data_len),
-551 => wire__crate__api__structure_designer__structure_designer_api__set_record_destructure_data_impl(ptr, rust_vec_len, data_len),
+551 => wire__crate__api__structure_designer__structure_designer_api__set_record_destructure_schema_impl(ptr, rust_vec_len, data_len),
 552 => wire__crate__api__structure_designer__record_path_api__set_record_get_data_impl(ptr, rust_vec_len, data_len),
 553 => wire__crate__api__structure_designer__record_path_api__set_record_set_data_impl(ptr, rust_vec_len, data_len),
 554 => wire__crate__api__structure_designer__record_path_api__set_record_set_literal_impl(ptr, rust_vec_len, data_len),
@@ -31431,6 +31459,34 @@ impl
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart
+    for crate::api::structure_designer::structure_designer_api_types::APIRecordDestructureData
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.schema.into_into_dart().into_dart(),
+            self.fields.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::structure_designer::structure_designer_api_types::APIRecordDestructureData
+{
+}
+impl
+    flutter_rust_bridge::IntoIntoDart<
+        crate::api::structure_designer::structure_designer_api_types::APIRecordDestructureData,
+    > for crate::api::structure_designer::structure_designer_api_types::APIRecordDestructureData
+{
+    fn into_into_dart(
+        self,
+    ) -> crate::api::structure_designer::structure_designer_api_types::APIRecordDestructureData
+    {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
     for crate::api::structure_designer::structure_designer_api_types::APIRecordFieldNode
 {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
@@ -36940,6 +36996,16 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
 }
 
 impl SseEncode
+    for crate::api::structure_designer::structure_designer_api_types::APIRecordDestructureData
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.schema, serializer);
+        <Vec<crate::api::structure_designer::structure_designer_api_types::APIRecordLocalField>>::sse_encode(self.fields, serializer);
+    }
+}
+
+impl SseEncode
     for crate::api::structure_designer::structure_designer_api_types::APIRecordFieldNode
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -40128,6 +40194,20 @@ impl SseEncode
 }
 
 impl SseEncode
+    for Option<
+        crate::api::structure_designer::structure_designer_api_types::APIRecordDestructureData,
+    >
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::structure_designer::structure_designer_api_types::APIRecordDestructureData>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode
     for Option<crate::api::structure_designer::structure_designer_api_types::APIRecordPathNodeData>
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -41043,7 +41123,7 @@ mod io {
     use flutter_rust_bridge::for_generated::byteorder::{
         NativeEndian, ReadBytesExt, WriteBytesExt,
     };
-    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
+    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate
@@ -41067,7 +41147,7 @@ mod web {
     };
     use flutter_rust_bridge::for_generated::wasm_bindgen;
     use flutter_rust_bridge::for_generated::wasm_bindgen::prelude::*;
-    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
+    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate

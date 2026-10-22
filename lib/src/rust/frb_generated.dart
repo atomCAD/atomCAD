@@ -95,7 +95,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.10.0';
 
   @override
-  int get rustContentHash => 1093040380;
+  int get rustContentHash => 2009946508;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -1117,7 +1117,7 @@ abstract class RustLibApi extends BaseApi {
       crateApiStructureDesignerStructureDesignerApiGetRecordConstructLocalFields(
           {required Uint64List scopePath, required BigInt nodeId});
 
-  APIRecordSchemaData?
+  APIRecordDestructureData?
       crateApiStructureDesignerStructureDesignerApiGetRecordDestructureData(
           {required Uint64List scopePath, required BigInt nodeId});
 
@@ -2129,10 +2129,10 @@ abstract class RustLibApi extends BaseApi {
       required String fieldName,
       required APILiteralValue value});
 
-  void crateApiStructureDesignerStructureDesignerApiSetRecordDestructureData(
+  void crateApiStructureDesignerStructureDesignerApiSetRecordDestructureSchema(
       {required Uint64List scopePath,
       required BigInt nodeId,
-      required APIRecordSchemaData data});
+      required String schema});
 
   APIResult crateApiStructureDesignerRecordPathApiSetRecordGetData(
       {required Uint64List scopePath,
@@ -10742,7 +10742,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
 
   @override
-  APIRecordSchemaData?
+  APIRecordDestructureData?
       crateApiStructureDesignerStructureDesignerApiGetRecordDestructureData(
           {required Uint64List scopePath, required BigInt nodeId}) {
     return handler.executeSync(SyncTask(
@@ -10753,7 +10753,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 295)!;
       },
       codec: SseCodec(
-        decodeSuccessData: sse_decode_opt_box_autoadd_api_record_schema_data,
+        decodeSuccessData:
+            sse_decode_opt_box_autoadd_api_record_destructure_data,
         decodeErrorData: null,
       ),
       constMeta:
@@ -18151,34 +18152,34 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
 
   @override
-  void crateApiStructureDesignerStructureDesignerApiSetRecordDestructureData(
+  void crateApiStructureDesignerStructureDesignerApiSetRecordDestructureSchema(
       {required Uint64List scopePath,
       required BigInt nodeId,
-      required APIRecordSchemaData data}) {
+      required String schema}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
-        sse_encode_box_autoadd_api_record_schema_data(data, serializer);
+        sse_encode_String(schema, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 551)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
-        decodeErrorData: null,
+        decodeErrorData: sse_decode_String,
       ),
       constMeta:
-          kCrateApiStructureDesignerStructureDesignerApiSetRecordDestructureDataConstMeta,
-      argValues: [scopePath, nodeId, data],
+          kCrateApiStructureDesignerStructureDesignerApiSetRecordDestructureSchemaConstMeta,
+      argValues: [scopePath, nodeId, schema],
       apiImpl: this,
     ));
   }
 
   TaskConstMeta
-      get kCrateApiStructureDesignerStructureDesignerApiSetRecordDestructureDataConstMeta =>
+      get kCrateApiStructureDesignerStructureDesignerApiSetRecordDestructureSchemaConstMeta =>
           const TaskConstMeta(
-            debugName: "set_record_destructure_data",
-            argNames: ["scopePath", "nodeId", "data"],
+            debugName: "set_record_destructure_schema",
+            argNames: ["scopePath", "nodeId", "schema"],
           );
 
   @override
@@ -22577,6 +22578,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIRecordDestructureData dco_decode_api_record_destructure_data(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return APIRecordDestructureData(
+      schema: dco_decode_String(arr[0]),
+      fields: dco_decode_list_api_record_local_field(arr[1]),
+    );
+  }
+
+  @protected
   APIRecordFieldNode dco_decode_api_record_field_node(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -24073,6 +24086,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIRangeData dco_decode_box_autoadd_api_range_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_api_range_data(raw);
+  }
+
+  @protected
+  APIRecordDestructureData dco_decode_box_autoadd_api_record_destructure_data(
+      dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_api_record_destructure_data(raw);
   }
 
   @protected
@@ -25999,6 +26019,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIRangeData? dco_decode_opt_box_autoadd_api_range_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_api_range_data(raw);
+  }
+
+  @protected
+  APIRecordDestructureData?
+      dco_decode_opt_box_autoadd_api_record_destructure_data(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_api_record_destructure_data(raw);
   }
 
   @protected
@@ -29694,6 +29723,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIRecordDestructureData sse_decode_api_record_destructure_data(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_schema = sse_decode_String(deserializer);
+    var var_fields = sse_decode_list_api_record_local_field(deserializer);
+    return APIRecordDestructureData(schema: var_schema, fields: var_fields);
+  }
+
+  @protected
   APIRecordFieldNode sse_decode_api_record_field_node(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -31227,6 +31265,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_api_range_data(deserializer));
+  }
+
+  @protected
+  APIRecordDestructureData sse_decode_box_autoadd_api_record_destructure_data(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_api_record_destructure_data(deserializer));
   }
 
   @protected
@@ -34120,6 +34165,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_box_autoadd_api_range_data(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  APIRecordDestructureData?
+      sse_decode_opt_box_autoadd_api_record_destructure_data(
+          SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_api_record_destructure_data(deserializer));
     } else {
       return null;
     }
@@ -37200,6 +37258,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_api_record_destructure_data(
+      APIRecordDestructureData self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.schema, serializer);
+    sse_encode_list_api_record_local_field(self.fields, serializer);
+  }
+
+  @protected
   void sse_encode_api_record_field_node(
       APIRecordFieldNode self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -38519,6 +38585,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       APIRangeData self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_api_range_data(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_api_record_destructure_data(
+      APIRecordDestructureData self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_api_record_destructure_data(self, serializer);
   }
 
   @protected
@@ -41008,6 +41081,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_api_range_data(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_record_destructure_data(
+      APIRecordDestructureData? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_api_record_destructure_data(self, serializer);
     }
   }
 

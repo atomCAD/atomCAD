@@ -180,10 +180,7 @@ fn record_destructure_pins_match_authored_field_order() {
         &mut designer,
         "test",
         id,
-        Box::new(RecordDestructureData {
-            schema: "Point".to_string(),
-            ..Default::default()
-        }),
+        Box::new(RecordDestructureData::named("Point")),
     );
 
     let registry = &designer.node_type_registry;
@@ -242,10 +239,7 @@ fn construct_destructure_round_trip() {
         &mut designer,
         "test",
         destructure,
-        Box::new(RecordDestructureData {
-            schema: "Point".to_string(),
-            ..Default::default()
-        }),
+        Box::new(RecordDestructureData::named("Point")),
     );
 
     designer.validate_active_network();
@@ -361,10 +355,7 @@ fn nested_def_construct_and_destructure() {
         &mut designer,
         "test",
         unbox,
-        Box::new(RecordDestructureData {
-            schema: "Box".to_string(),
-            ..Default::default()
-        }),
+        Box::new(RecordDestructureData::named("Box")),
     );
 
     let unpoint = designer.add_node("record_destructure", DVec2::new(800.0, 0.0));
@@ -372,10 +363,7 @@ fn nested_def_construct_and_destructure() {
         &mut designer,
         "test",
         unpoint,
-        Box::new(RecordDestructureData {
-            schema: "Point".to_string(),
-            ..Default::default()
-        }),
+        Box::new(RecordDestructureData::named("Point")),
     );
 
     designer.validate_active_network();
@@ -447,10 +435,7 @@ fn missing_input_propagates_through_destructure() {
         &mut designer,
         "test",
         destructure,
-        Box::new(RecordDestructureData {
-            schema: "Point".to_string(),
-            ..Default::default()
-        }),
+        Box::new(RecordDestructureData::named("Point")),
     );
 
     designer.validate_active_network();
@@ -512,10 +497,7 @@ fn destructure_passes_through_extra_fields() {
         &mut designer,
         "test",
         destructure,
-        Box::new(RecordDestructureData {
-            schema: "Point".to_string(),
-            ..Default::default()
-        }),
+        Box::new(RecordDestructureData::named("Point")),
     );
 
     designer.validate_active_network();
@@ -584,10 +566,7 @@ fn empty_schema_destructure_returns_none() {
         &mut designer,
         "test",
         id,
-        Box::new(RecordDestructureData {
-            schema: "".to_string(),
-            ..Default::default()
-        }),
+        Box::new(RecordDestructureData::named("")),
     );
     designer.validate_active_network();
     let r = evaluate_node_pin(&designer, "test", id, 0);

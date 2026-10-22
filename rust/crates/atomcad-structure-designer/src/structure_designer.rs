@@ -4581,6 +4581,24 @@ impl StructureDesigner {
 
         let network_name_owned = node_network_name.clone();
 
+        // A record reader nothing depends on yet adopts the type of the record
+        // wired into it (`doc/design_anonymous_record_readers.md`). Decided
+        // before the wire exists; then the whole connect is one network
+        // snapshot, because `ConnectWireCommand` restores the wire only.
+        let adoption = self.connect_adoption(
+            &[],
+            dest_node_id,
+            dest_param_index,
+            &crate::node_network::IncomingWire::node_output(
+                source_node_id,
+                source_output_pin_index,
+            ),
+        );
+        let adoption_before = match adoption {
+            Some(_) => self.snapshot_network(&network_name_owned),
+            None => None,
+        };
+
         // Then make the connection
         if let Some(node_network) = self
             .node_type_registry
@@ -4607,6 +4625,19 @@ impl StructureDesigner {
 
             // Apply display policy considering only these nodes as dirty
             self.apply_node_display_policy(Some(&dirty_nodes));
+        }
+
+        if let (Some(data), Some(before)) = (adoption, adoption_before) {
+            self.install_connect_adoption(&[], dest_node_id, data);
+            // Revalidates, marks dirty and records the one step.
+            self.finish_declared_input_edit(
+                &[],
+                dest_node_id,
+                &network_name_owned,
+                before,
+                crate::record_input_type_ops::CONNECT_WIRE_DESCRIPTION,
+            );
+            return;
         }
 
         // Always re-validate. The connect-time type gate (`can_connect_nodes`)
@@ -4725,6 +4756,17 @@ impl StructureDesigner {
                 None => return,
             }
         };
+        // A record reader adopts the wire's type inside the body's own undo
+        // step (`doc/design_anonymous_record_readers.md`).
+        let adoption = self.connect_adoption(
+            scope_path,
+            dest_node_id,
+            dest_param_index,
+            &crate::node_network::IncomingWire::node_output(
+                source_node_id,
+                source_output_pin_index,
+            ),
+        );
         if let Some(network) = self.get_scope_network_mut(scope_path) {
             network.connect_nodes(
                 source_node_id,
@@ -4733,6 +4775,9 @@ impl StructureDesigner {
                 dest_param_index,
                 dest_param_is_multi,
             );
+        }
+        if let Some(data) = adoption {
+            self.install_connect_adoption(scope_path, dest_node_id, data);
         }
         self.set_dirty(true);
         // Mark the destination dirty at its actual scope so the partial-refresh
@@ -4824,6 +4869,18 @@ impl StructureDesigner {
                 None => return,
             }
         };
+        // A capture into a record reader's `record` pin adopts its type, as a
+        // same-scope wire does in `connect_nodes_scoped`.
+        let adoption = self.connect_adoption(
+            dest_scope_path,
+            dest_node_id,
+            dest_param_index,
+            &crate::node_network::IncomingWire {
+                source_node_id,
+                source_pin,
+                source_scope_depth,
+            },
+        );
         if let Some(network) = self.get_scope_network_mut(dest_scope_path) {
             network.connect_wire(
                 source_node_id,
@@ -4833,6 +4890,9 @@ impl StructureDesigner {
                 dest_param_index,
                 dest_param_is_multi,
             );
+        }
+        if let Some(data) = adoption {
+            self.install_connect_adoption(dest_scope_path, dest_node_id, data);
         }
         self.set_dirty(true);
         // Mark the destination dirty so the partial-refresh path picks up the
@@ -4955,9 +5015,41 @@ impl StructureDesigner {
             }
         };
 
+        if self.record_reader_accepts_any_record(
+            dest_scope_path,
+            dest_node_id,
+            dest_param_index,
+            &source_type,
+        ) {
+            return true;
+        }
         crate::data_type::DataType::can_be_converted_to(
             &source_type,
             &dest_param_type,
+            &self.node_type_registry,
+        )
+    }
+
+    /// The connect gate's exception for record readers
+    /// (`doc/design_anonymous_record_readers.md`): while nothing depends on a
+    /// reader, its `record` pin accepts any resolvable record, whose type the
+    /// connect then adopts.
+    fn record_reader_accepts_any_record(
+        &self,
+        dest_scope_path: &[u64],
+        dest_node_id: u64,
+        dest_param_index: usize,
+        source_type: &crate::data_type::DataType,
+    ) -> bool {
+        let Some(network) = self.get_scope_network(dest_scope_path) else {
+            return false;
+        };
+        crate::node_network::record_reader_accepts_any_record(
+            network,
+            self.scope_owner(dest_scope_path),
+            dest_node_id,
+            dest_param_index,
+            source_type,
             &self.node_type_registry,
         )
     }

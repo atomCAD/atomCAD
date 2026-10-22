@@ -159,6 +159,8 @@ expression: out
   network 'proxy_worked_example' valid=true
 === record_construct_anonymous/record_construct_anonymous.cnnd
   network 'Main' valid=true
+=== record_destructure_anonymous/record_destructure_anonymous.cnnd
+  network 'Main' valid=true
 === record_get_set/record_get_set.cnnd
   network 'Main' valid=true
     scope=[] node=11 blocking=false "path `a.gone` no longer exists in `Odd`"

@@ -3485,12 +3485,21 @@ class StructureDesignerModel extends ChangeNotifier {
     return null;
   }
 
-  void setRecordDestructureData(BigInt nodeId, APIRecordSchemaData data) {
-    structure_designer_api.setRecordDestructureData(
-        scopePath: scopeChainToBytes(propertyEditorScopeChain),
-        nodeId: nodeId,
-        data: data);
+  /// Point a `record_destructure` at the def `schema`, or at none (`''`,
+  /// which makes it unset), in one undo step that keeps the output wires of
+  /// the fields the new type shares by name. Returns the refusal message, or
+  /// null on success.
+  String? setRecordDestructureSchema(BigInt nodeId, String schema) {
+    try {
+      structure_designer_api.setRecordDestructureSchema(
+          scopePath: scopeChainToBytes(propertyEditorScopeChain),
+          nodeId: nodeId,
+          schema: schema);
+    } catch (e) {
+      return bridgeErrorMessage(e);
+    }
     refreshFromKernel();
+    return null;
   }
 
   void setProductData(BigInt nodeId, APIRecordSchemaData data) {

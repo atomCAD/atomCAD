@@ -58,9 +58,7 @@ fn offered_type(
     declared: &DataType,
     registry: &NodeTypeRegistry,
 ) -> Option<DataType> {
-    let stale = !DataType::can_be_converted_to(source, declared, registry)
-        || records_differ(source, declared, registry);
-    if !stale {
+    if !is_stale_record_wire(source, declared, registry) {
         return None;
     }
     // An anonymous declared input stays anonymous: `expr` cannot read a named
@@ -75,6 +73,21 @@ fn offered_type(
         return Some(DataType::Record(RecordType::anonymous(fields.to_vec())));
     }
     Some(source.clone())
+}
+
+/// Whether a wire carrying `source` into a pin typed `declared` is **stale**:
+/// the source fails to convert, or both are records whose resolved,
+/// canonically sorted fields differ ([`records_differ`]) — so a *wider* record
+/// source is stale too, although the wire stays valid under width subtyping.
+/// The one staleness rule of *Take type from wire*, for declared inputs and
+/// for a reader's record pin (`record_input_type_ops.rs`) alike.
+pub(crate) fn is_stale_record_wire(
+    source: &DataType,
+    declared: &DataType,
+    registry: &NodeTypeRegistry,
+) -> bool {
+    !DataType::can_be_converted_to(source, declared, registry)
+        || records_differ(source, declared, registry)
 }
 
 /// Whether both types are records whose resolved, canonically sorted field
@@ -509,7 +522,14 @@ impl StructureDesigner {
     /// whose resolved fields differ — and (4) the node accepts the offered
     /// type. The offered type is the source's, except that an anonymous
     /// declared record is offered the anonymous form of a named source.
+    ///
+    /// A node with a record-typed input (`record_destructure`) is offered on
+    /// its record pin instead, by the reader's rule
+    /// ([`Self::record_input_type_offers`]).
     pub fn wire_type_offers(&self, scope_path: &[u64], node_id: u64) -> Vec<Option<DataType>> {
+        if let Some(offers) = self.record_input_type_offers(scope_path, node_id) {
+            return offers;
+        }
         let Some(network) = self.get_scope_network(scope_path) else {
             return Vec::new();
         };
@@ -554,7 +574,9 @@ impl StructureDesigner {
     /// wire"). The offers are recomputed here, never trusted from the caller,
     /// and the operation is all or nothing: an empty list, a read-only
     /// network, or any listed index without an offer is refused before
-    /// anything changes.
+    /// anything changes. On a node with a record-typed input, the record pin's
+    /// offer is *adopted* (`record_input_type_ops.rs`): pins, output wires and
+    /// reflow, refused with the node's reason when it cannot hold the type.
     pub fn take_types_from_wires(
         &mut self,
         scope_path: &[u64],
@@ -571,6 +593,19 @@ impl StructureDesigner {
             .clone()
             .ok_or_else(|| "No active network".to_string())?;
         let offers = self.wire_type_offers(scope_path, node_id);
+        let is_reader = self
+            .get_scope_network(scope_path)
+            .and_then(|network| network.nodes.get(&node_id))
+            .is_some_and(|node| node.data.record_typed_input().is_some());
+        if is_reader {
+            return self.take_record_input_type_from_wire(
+                scope_path,
+                node_id,
+                pin_indices,
+                &offers,
+                TAKE_TYPE_FROM_WIRE_DESCRIPTION,
+            );
+        }
         let retypes: Vec<(u64, DataType)> = {
             let node_type = self
                 .get_scope_network(scope_path)

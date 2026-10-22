@@ -9,7 +9,7 @@ import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 /// per-field output pins are derived in Rust from the chosen def.
 class RecordDestructureEditor extends StatelessWidget {
   final BigInt nodeId;
-  final APIRecordSchemaData? data;
+  final APIRecordDestructureData? data;
   final StructureDesignerModel model;
 
   const RecordDestructureEditor({
@@ -40,10 +40,7 @@ class RecordDestructureEditor extends StatelessWidget {
             emptyHint: '— No schema chosen —',
             model: model,
             onChanged: (newName) {
-              model.setRecordDestructureData(
-                nodeId,
-                APIRecordSchemaData(schema: newName),
-              );
+              model.setRecordDestructureSchema(nodeId, newName);
             },
           ),
         ],

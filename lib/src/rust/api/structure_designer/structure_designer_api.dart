@@ -790,9 +790,10 @@ APIRecordSchemaData? getRecordConstructData(
         .crateApiStructureDesignerStructureDesignerApiGetRecordConstructData(
             scopePath: scopePath, nodeId: nodeId);
 
-/// Reads the `schema` property of a `record_destructure` node — same shape
-/// and semantics as `get_record_construct_data`.
-APIRecordSchemaData? getRecordDestructureData(
+/// Reads a `record_destructure` node's mode: its `schema` (named mode), or
+/// the fields of the type it took from its wire (anonymous mode, empty
+/// `schema`); both empty when it is unset.
+APIRecordDestructureData? getRecordDestructureData(
         {required Uint64List scopePath, required BigInt nodeId}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiGetRecordDestructureData(
@@ -1293,17 +1294,18 @@ void promoteRecordConstruct(
         .crateApiStructureDesignerStructureDesignerApiPromoteRecordConstruct(
             scopePath: scopePath, nodeId: nodeId, defName: defName);
 
-/// Writes the `schema` property of a `record_destructure` node. Same
-/// post-write behavior as `set_record_construct_data` — pin layout is
-/// re-derived from the chosen def, dangling references leave the node with
-/// a placeholder layout and broken downstream wires.
-void setRecordDestructureData(
+/// Points a `record_destructure` node at the def `schema`, or at none (`""`,
+/// which makes it unset), in one undo step that also restores the output
+/// wires a switch drops (`StructureDesigner::set_record_input_schema`). The
+/// output wires of the fields the new type shares by name with the old one
+/// are kept; the rest are dropped.
+void setRecordDestructureSchema(
         {required Uint64List scopePath,
         required BigInt nodeId,
-        required APIRecordSchemaData data}) =>
+        required String schema}) =>
     RustLib.instance.api
-        .crateApiStructureDesignerStructureDesignerApiSetRecordDestructureData(
-            scopePath: scopePath, nodeId: nodeId, data: data);
+        .crateApiStructureDesignerStructureDesignerApiSetRecordDestructureSchema(
+            scopePath: scopePath, nodeId: nodeId, schema: schema);
 
 /// Writes the `target` property of a `product` node. The API's `schema`
 /// field is mapped onto the underlying `ProductData.target`. After the

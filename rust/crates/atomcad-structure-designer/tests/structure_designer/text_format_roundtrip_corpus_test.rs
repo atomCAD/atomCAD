@@ -323,6 +323,18 @@ fn the_anonymous_record_construct_fixture_round_trips() {
     ));
 }
 
+/// The anonymous `record_destructure` fixture
+/// (`doc/design_anonymous_record_readers.md`, Phase 1): a reader whose type
+/// was taken from an anonymous `record_construct`, in its authored field
+/// order, with a consumer on one of its fields. `query` writes its `fields`,
+/// so the round trip never depends on the wire declaring the type.
+#[test]
+fn the_anonymous_record_destructure_fixture_round_trips() {
+    run_round_trips(&atomcad_test_support::fixture_path(
+        "record_destructure_anonymous/record_destructure_anonymous.cnnd",
+    ));
+}
+
 /// The `proxy` fixture (`doc/design_proxy_node.md` Phase 3). The node carries
 /// eight text properties of four different kinds, every one of which the
 /// serializer writes unconditionally — a property the text drops or re-spells

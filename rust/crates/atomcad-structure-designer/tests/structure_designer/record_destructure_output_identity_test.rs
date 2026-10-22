@@ -93,9 +93,7 @@ fn set_record_destructure(
     let registry = &mut designer.node_type_registry;
     let net = registry.node_networks.get_mut(network).unwrap();
     let node = net.nodes.get_mut(&node_id).unwrap();
-    node.data = Box::new(RecordDestructureData {
-        schema: schema.to_string(),
-    });
+    node.data = Box::new(RecordDestructureData::named(schema.to_string()));
     NodeTypeRegistry::populate_custom_node_type_cache_with_types(
         &registry.built_in_node_types,
         &registry.record_type_defs,

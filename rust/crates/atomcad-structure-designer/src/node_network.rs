@@ -1744,6 +1744,23 @@ impl NodeNetwork {
             None => return false,
         };
 
+        // A record reader nothing depends on yet takes any resolvable record
+        // on its `record` pin, and adopts its type on connect.
+        let owner = ancestors
+            .last()
+            .zip(ancestor_hof_ids.last())
+            .and_then(|(parent, hof_id)| parent.nodes.get(hof_id));
+        if record_reader_accepts_any_record(
+            self,
+            owner,
+            dest_node_id,
+            dest_param_index,
+            &source_output_type,
+            node_type_registry,
+        ) {
+            return true;
+        }
+
         // Check if the data types are compatible using conversion rules.
         // The starts-with rule for `map.f` (Currying Phase 4) is no longer
         // a name-matched exception here — `map.f`'s declared type is
@@ -2608,6 +2625,35 @@ pub fn walk_all_nodes(network: &NodeNetwork, f: &mut impl FnMut(&Node)) {
             walk_all_nodes(body, f);
         }
     }
+}
+
+/// The connect gate's exception for record readers
+/// (`doc/design_anonymous_record_readers.md`): `true` when `dest_param_index`
+/// is the `record` pin of a reader in `network` that nothing depends on yet
+/// ([`is_uncommitted_record_reader`]) and `source_type` is a record whose
+/// fields resolve. Such a connect adopts the source's type, so the reader's
+/// current input type does not gate it. `owner` is the HOF whose body
+/// `network` is, if any.
+///
+/// [`is_uncommitted_record_reader`]: crate::record_input_type_ops::is_uncommitted_record_reader
+pub fn record_reader_accepts_any_record(
+    network: &NodeNetwork,
+    owner: Option<&Node>,
+    dest_node_id: u64,
+    dest_param_index: usize,
+    source_type: &DataType,
+    registry: &crate::node_type_registry::NodeTypeRegistry,
+) -> bool {
+    let DataType::Record(record_type) = source_type else {
+        return false;
+    };
+    network
+        .nodes
+        .get(&dest_node_id)
+        .and_then(|node| node.data.record_typed_input())
+        .is_some_and(|typed_input| typed_input.is_record_input_pin(dest_param_index))
+        && record_type.resolve_fields(registry).is_some()
+        && crate::record_input_type_ops::is_uncommitted_record_reader(network, owner, dest_node_id)
 }
 
 /// Mutable counterpart to [`walk_all_nodes`]. The callback receives a

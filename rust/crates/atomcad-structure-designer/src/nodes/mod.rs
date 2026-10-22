@@ -69,6 +69,7 @@ pub mod lattice_symop;
 pub mod lattice_vecs;
 pub mod lattice_vecs_params;
 pub mod lattice_vecs_unpack;
+pub mod local_record_fields;
 pub mod map;
 pub mod mat3_cols;
 pub mod mat3_diag;

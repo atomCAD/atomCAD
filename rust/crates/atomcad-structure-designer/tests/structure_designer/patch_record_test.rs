@@ -120,10 +120,7 @@ fn record_destructure_pins_match_patch_schema() {
         &mut designer,
         "test",
         id,
-        Box::new(RecordDestructureData {
-            schema: "Patch".to_string(),
-            ..Default::default()
-        }),
+        Box::new(RecordDestructureData::named("Patch")),
     );
 
     let registry = &designer.node_type_registry;

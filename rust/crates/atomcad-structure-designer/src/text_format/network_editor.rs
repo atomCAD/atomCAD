@@ -378,6 +378,12 @@ struct PendingConnection {
     /// array) and the statement does not list the inputs itself
     /// (`DeclaredInputs::declaring_property`). See `declare_input_from_wire`.
     may_declare: bool,
+    /// Whether this wire, once made, gives an unset record reader its type:
+    /// it goes into the reader's `record` pin, is a single reference, and the
+    /// statement sets neither `schema` nor `fields`
+    /// (`doc/design_anonymous_record_readers.md`). See
+    /// `apply_pending_adoptions`.
+    may_adopt: bool,
 }
 
 /// One comment anchor target, still in name form.
@@ -486,6 +492,10 @@ pub struct NetworkEditor<'a> {
     /// wire, which the same pass is only now creating. Retried once the
     /// layouts are derived.
     deferred_connections: Vec<PendingConnection>,
+    /// Wires made into an unset record reader's `record` pin whose statement
+    /// left its type to the wire (`PendingConnection::may_adopt`). Adopted in
+    /// the retry pass, once the source's type has resolved.
+    pending_adoptions: Vec<PendingConnection>,
     /// Nodes that should be visible after edit, per scope, with the display
     /// state each `visible:` value spelled.
     visible_nodes: Vec<PendingVisibility>,
@@ -510,6 +520,7 @@ impl<'a> NetworkEditor<'a> {
             new_node_count: 0,
             pending_connections: Vec::new(),
             deferred_connections: Vec::new(),
+            pending_adoptions: Vec::new(),
             visible_nodes: Vec::new(),
             pending_anchors: Vec::new(),
             pending_pin_roles: Vec::new(),
@@ -1429,9 +1440,15 @@ impl<'a> NetworkEditor<'a> {
             if !source_refs.is_empty()
                 || self.property_disconnects_pin(scope, node_id, prop_name, prop_value)
             {
-                let may_declare = source_refs.len() == 1
-                    && !matches!(prop_value, PropertyValue::Array(_))
-                    && !self.statement_declares_inputs(scope, node_id, properties);
+                let single_reference =
+                    source_refs.len() == 1 && !matches!(prop_value, PropertyValue::Array(_));
+                let may_declare =
+                    single_reference && !self.statement_declares_inputs(scope, node_id, properties);
+                let may_adopt = single_reference
+                    && self.is_record_input_param(scope, node_id, prop_name)
+                    && !properties
+                        .iter()
+                        .any(|(name, _)| name == "schema" || name == "fields");
                 self.pending_connections.push(PendingConnection {
                     scope: scope.to_vec(),
                     dest_node_name: dest_node_name.to_string(),
@@ -1439,6 +1456,7 @@ impl<'a> NetworkEditor<'a> {
                     param_name: prop_name.clone(),
                     source_refs,
                     may_declare,
+                    may_adopt,
                 });
             }
         }
@@ -1462,6 +1480,21 @@ impl<'a> NetworkEditor<'a> {
         };
         let key = declared.declaring_property();
         properties.iter().any(|(name, _)| name == key)
+    }
+
+    /// Whether `prop_name` is the `record` pin of a node whose pins are
+    /// derived from the record type of that input (`RecordTypedInput`).
+    fn is_record_input_param(&self, scope: &[u64], node_id: u64, prop_name: &str) -> bool {
+        let Some(node) =
+            scope_net(self.network, scope).and_then(|network| network.nodes.get(&node_id))
+        else {
+            return false;
+        };
+        let Some(typed_input) = node.data.record_typed_input() else {
+            return false;
+        };
+        self.get_param_index(scope, node_id, prop_name)
+            .is_ok_and(|(index, _)| typed_input.is_record_input_pin(index))
     }
 
     /// Whether a source-free property should disconnect the pin it names.
@@ -1589,7 +1622,7 @@ impl<'a> NetworkEditor<'a> {
     /// wire what was deferred; whatever still fails is a real warning.
     fn wire_deferred_connections(&mut self) {
         let connections = std::mem::take(&mut self.deferred_connections);
-        if connections.is_empty() {
+        if connections.is_empty() && self.pending_adoptions.is_empty() {
             return;
         }
         self.registry
@@ -1598,22 +1631,36 @@ impl<'a> NetworkEditor<'a> {
         // in place, so a source's type resolves through its own inputs. A
         // declaration can make another one resolvable (an `expr` fed by an
         // `expr` whose parameters are being declared too), so retry until a
-        // round makes no progress.
+        // round makes no progress. An unset record reader takes its type here
+        // too, which gives it the output pins a wire written *before* its
+        // statement (`x = foo { v: d.a }`) is waiting for.
         let mut pending = connections;
         let mut last_failed = usize::MAX;
         let failures = loop {
+            let adopted = self.apply_pending_adoptions();
             let mut failed = Vec::new();
             for conn in pending {
                 if let Err(e) = self.wire_connection_declaring(&conn) {
                     failed.push((conn, e));
                 }
             }
-            if failed.is_empty() || failed.len() >= last_failed {
+            if failed.is_empty() {
+                // A wire made in this round can be a reader's own record wire.
+                self.apply_pending_adoptions();
+                break failed;
+            }
+            if failed.len() >= last_failed && adopted == 0 {
                 break failed;
             }
             last_failed = failed.len();
             pending = failed.into_iter().map(|(conn, _)| conn).collect();
         };
+        for conn in std::mem::take(&mut self.pending_adoptions) {
+            self.result.add_warning(format!(
+                "{}.{}: the type of its source could not be inferred; set 'schema' or 'fields'",
+                conn.dest_node_path, conn.param_name
+            ));
+        }
         for (conn, e) in failures {
             self.result.add_warning(format!(
                 "Connection warning for {}.{}: {}",
@@ -1717,6 +1764,92 @@ impl<'a> NetworkEditor<'a> {
         }
     }
 
+    /// Give each unset record reader in [`Self::pending_adoptions`] the type of
+    /// the record wired into it (`doc/design_anonymous_record_readers.md`),
+    /// in the field order of an anonymous `record_construct` source. A source
+    /// whose type has not resolved yet stays pending for the next round; a
+    /// reader that is no longer unset, or a source that is not a record, is
+    /// left alone (validation reports a mismatch). Returns how many readers
+    /// took a type.
+    fn apply_pending_adoptions(&mut self) -> usize {
+        let mut adopted = 0;
+        for conn in std::mem::take(&mut self.pending_adoptions) {
+            match self.adopt_from_wire(&conn) {
+                Some(Ok(())) => adopted += 1,
+                Some(Err(reason)) => self.result.add_warning(format!(
+                    "{}.{}: cannot take the type of its source: {}",
+                    conn.dest_node_path, conn.param_name, reason
+                )),
+                None => {}
+            }
+        }
+        adopted
+    }
+
+    /// One adoption of [`Self::apply_pending_adoptions`]: `None` when there is
+    /// nothing to do now — still pending (pushed back) or not applicable.
+    fn adopt_from_wire(&mut self, conn: &PendingConnection) -> Option<Result<(), String>> {
+        let dest_node_id = self.lookup(&conn.scope, &conn.dest_node_name)?;
+        let (wire, _) = self
+            .resolve_source(&conn.scope, &conn.source_refs[0])
+            .ok()?;
+        let (data_type, order) = {
+            let network = scope_net(self.network, &conn.scope)?;
+            let node = network.nodes.get(&dest_node_id)?;
+            if node
+                .data
+                .record_typed_input()?
+                .record_input_type()
+                .is_some()
+            {
+                return None;
+            }
+            let (ancestors, ancestor_hof_ids) = scope_ancestors(self.network, &conn.scope);
+            let data_type = self
+                .registry
+                .resolve_wire_source_type_scoped(&wire, network, &ancestors, &ancestor_hof_ids)
+                .map(|resolved| resolved.data_type);
+            let depth = wire.source_scope_depth as usize;
+            let order = (depth <= conn.scope.len())
+                .then(|| scope_net(self.network, &conn.scope[..conn.scope.len() - depth]))
+                .flatten()
+                .and_then(|source_network| {
+                    crate::record_input_type_ops::authored_field_order(source_network, &wire)
+                });
+            (data_type, order)
+        };
+        let record_type = match data_type {
+            Some(DataType::Record(record_type)) => record_type,
+            None | Some(DataType::None) => {
+                self.pending_adoptions.push(conn.clone());
+                return None;
+            }
+            Some(_) => return None,
+        };
+        let defs = self.registry.record_defs();
+        let node = scope_net_mut(self.network, &conn.scope)?
+            .nodes
+            .get_mut(&dest_node_id)?;
+        if let Err(reason) = node
+            .data
+            .record_typed_input_mut()?
+            .set_record_input_type(&record_type, defs)
+        {
+            return Some(Err(reason));
+        }
+        if let Some(order) = order {
+            crate::record_input_type_ops::apply_field_order(node.data.as_mut(), &order);
+        }
+        self.refresh_node_layout(&conn.scope, dest_node_id, false);
+        self.result.connections_made.push(format!(
+            "{}.{} took the type {}",
+            conn.dest_node_path,
+            conn.param_name,
+            DataType::Record(record_type)
+        ));
+        Some(Ok(()))
+    }
+
     /// Wire a single connection.
     fn wire_connection(&mut self, conn: &PendingConnection) -> Result<(), String> {
         // Resolve destination node
@@ -1785,6 +1918,9 @@ impl<'a> NetworkEditor<'a> {
             ));
         }
 
+        if conn.may_adopt {
+            self.pending_adoptions.push(conn.clone());
+        }
         Ok(())
     }
 

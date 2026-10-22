@@ -1993,6 +1993,44 @@ fn record_destructure_adapter_rejects_from_input() {
     );
 }
 
+/// An anonymous record output lists `record_destructure`
+/// (`doc/design_anonymous_record_readers.md`), and the adapter gives a reader
+/// in anonymous mode with one field per field of the type.
+#[test]
+fn record_destructure_surfaces_for_an_anonymous_record_output() {
+    let designer = setup_designer_with_point();
+    let reg = &designer.node_type_registry;
+    let anon = DataType::Record(RecordType::anonymous(vec![
+        ("b".to_string(), DataType::Int),
+        ("a".to_string(), DataType::Float),
+    ]));
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            reg, &anon, true,
+        );
+    assert!(names_of(&categories).contains(&"record_destructure"));
+
+    let adapted = RecordDestructureData::default()
+        .adapt_for_drag_source(&anon, DragDirection::FromOutput, reg)
+        .expect("an anonymous record adapts");
+    let data = adapted
+        .as_any_ref()
+        .downcast_ref::<RecordDestructureData>()
+        .expect("RecordDestructureData");
+    assert!(data.schema.is_empty(), "anonymous mode");
+    let fields: Vec<(&str, &DataType)> = data
+        .fields
+        .iter()
+        .map(|f| (f.name.as_str(), &f.data_type))
+        .collect();
+    assert_eq!(fields, vec![("a", &DataType::Float), ("b", &DataType::Int)]);
+    let base = reg.built_in_node_types.get("record_destructure").unwrap();
+    let node_type = adapted
+        .build_record_node_type(base, reg.record_defs(), MissingDefs::Dangle)
+        .unwrap();
+    assert_eq!(node_type.parameters[0].data_type, anon);
+}
+
 // --- Create-time plumbing ----------------------------------------------------
 
 #[test]

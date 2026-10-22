@@ -252,7 +252,7 @@ pub fn debug_assert_network_invariants(network: &NodeNetwork, registry: &NodeTyp
 /// id, and none at all while the node names a schema.
 fn check_local_record_fields(
     node: &crate::node_network::Node,
-    fields: &[crate::nodes::record_construct::LocalRecordField],
+    fields: &[crate::nodes::local_record_fields::LocalRecordField],
     next_field_id: u64,
     report: &mut dyn FnMut(InvariantKind, String),
 ) {

@@ -55,6 +55,8 @@ structure_designer/
 ├── declared_inputs.rs         # DeclaredInputs trait (nodes whose inputs are their own data) + open-port name derivation
 ├── declared_input_ops.rs      # Open port (add_input_from_wire) and Take type from wire, for any DeclaredInputs node
 ├── record_construct_ops.rs    # record_construct's schema switch, anonymous field-list edit (one NetworkSnapshotCommand each) and promotion to a named def
+├── record_typed_input.rs      # RecordTypedInput trait (readers whose pins derive from the type of their `record` input)
+├── record_input_type_ops.rs   # Adopting a reader's type from a wire (connect while uncommitted, Take type from wire), the schema op, the output-wire remap
 ├── network_usages.rs          # Find Usages: read-only collection of a network's instance nodes
 ├── node_name_search.rs        # Find Node: name-path resolution (`map4/e1`) and the ranked name search
 ├── network_validator.rs       # Validates and repairs networks
@@ -539,7 +541,7 @@ all or nothing, when it cannot. Two rules follow:
   capture and translation use), or a cross-document paste silently keeps the
   old name. A record node's schema needs no entry there: it comes through the
   `NodeData::record_schema_ref` hook, and an anonymous `record_construct`'s
-  field types through `NodeData::local_record_fields` (`nodes/AGENTS.md`,
+  field types (and an anonymous reader's) through `NodeData::local_record_fields` (`nodes/AGENTS.md`,
   Records). A new stored file path needs `NodeData::rebase_file_paths`, or a
   paste keeps a relative path that now resolves against the wrong folder.
 

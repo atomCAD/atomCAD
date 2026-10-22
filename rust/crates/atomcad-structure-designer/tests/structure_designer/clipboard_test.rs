@@ -53,6 +53,8 @@ f2 = `demolib.foo` {}
 ap = apply { f: @f2, arg0: i1, arg1: i2 }
 rc = record_construct { schema: \"demolib.Miller\", h: i1, k: i2, l: i1 }
 rd = record_destructure { schema: \"demolib.Miller\", record: rc }
+ar = record_construct { fields: [{ name: \"p\", data_type: Record(`demolib.Miller`) }], p: rc }
+ad = record_destructure { fields: [{ name: \"p\", data_type: Record(`demolib.Miller`) }], record: ar }
 r1 = range { count: 2 }
 pr = product { target: \"demolib.Miller\", h: r1, k: r1, l: r1 }
 m = parameter { param_name: \"m\", data_type: Record(`demolib.Miller`), sort_order: 0 }
@@ -89,6 +91,11 @@ const KINDS: &[Kind] = &[
     Kind {
         name: "record_construct / record_destructure",
         nodes: &["i1", "i2", "rc", "rd"],
+        into_body: true,
+    },
+    Kind {
+        name: "anonymous record_construct / record_destructure with a user record field",
+        nodes: &["i1", "i2", "rc", "ar", "ad"],
         into_body: true,
     },
     Kind {

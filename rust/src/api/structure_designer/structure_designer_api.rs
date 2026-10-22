@@ -134,6 +134,7 @@ use crate::api::structure_designer::structure_designer_api_types::APIMat3ColsDat
 use crate::api::structure_designer::structure_designer_api_types::APIMat3DiagData;
 use crate::api::structure_designer::structure_designer_api_types::APIMat3RowsData;
 use crate::api::structure_designer::structure_designer_api_types::APIRangeData;
+use crate::api::structure_designer::structure_designer_api_types::APIRecordDestructureData;
 use crate::api::structure_designer::structure_designer_api_types::APIRecordLocalField;
 use crate::api::structure_designer::structure_designer_api_types::APIRecordSchemaData;
 use crate::api::structure_designer::structure_designer_api_types::APIRecordTypeDef;
@@ -3206,13 +3207,14 @@ pub fn get_record_construct_data(
     }
 }
 
-/// Reads the `schema` property of a `record_destructure` node — same shape
-/// and semantics as `get_record_construct_data`.
+/// Reads a `record_destructure` node's mode: its `schema` (named mode), or
+/// the fields of the type it took from its wire (anonymous mode, empty
+/// `schema`); both empty when it is unset.
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_record_destructure_data(
     scope_path: Vec<u64>,
     node_id: u64,
-) -> Option<APIRecordSchemaData> {
+) -> Option<APIRecordDestructureData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
@@ -3222,8 +3224,20 @@ pub fn get_record_destructure_data(
                 let data = node_data
                     .as_any_ref()
                     .downcast_ref::<RecordDestructureData>()?;
-                Some(APIRecordSchemaData {
+                let fields = if data.is_anonymous() {
+                    data.fields
+                        .iter()
+                        .map(|field| APIRecordLocalField {
+                            name: field.name.clone(),
+                            data_type: data_type_to_api_data_type(&field.data_type),
+                        })
+                        .collect()
+                } else {
+                    Vec::new()
+                };
+                Some(APIRecordDestructureData {
                     schema: data.schema.clone(),
+                    fields,
                 })
             },
             None,
@@ -5633,22 +5647,30 @@ pub fn promote_record_construct(
     }
 }
 
-/// Writes the `schema` property of a `record_destructure` node. Same
-/// post-write behavior as `set_record_construct_data` — pin layout is
-/// re-derived from the chosen def, dangling references leave the node with
-/// a placeholder layout and broken downstream wires.
+/// Points a `record_destructure` node at the def `schema`, or at none (`""`,
+/// which makes it unset), in one undo step that also restores the output
+/// wires a switch drops (`StructureDesigner::set_record_input_schema`). The
+/// output wires of the fields the new type shares by name with the old one
+/// are kept; the rest are dropped.
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_record_destructure_data(scope_path: Vec<u64>, node_id: u64, data: APIRecordSchemaData) {
+pub fn set_record_destructure_schema(
+    scope_path: Vec<u64>,
+    node_id: u64,
+    schema: String,
+) -> Result<(), String> {
     unsafe {
-        with_mut_cad_instance(|cad_instance| {
-            let record_data = Box::new(RecordDestructureData {
-                schema: data.schema,
-            });
-            cad_instance
-                .structure_designer
-                .set_node_network_data_scoped(&scope_path, node_id, record_data);
-            refresh_structure_designer_auto(cad_instance);
-        });
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                cad_instance.structure_designer.set_record_input_schema(
+                    &scope_path,
+                    node_id,
+                    &schema,
+                )?;
+                refresh_structure_designer_auto(cad_instance);
+                Ok(())
+            },
+            Err("CAD instance not available".to_string()),
+        )
     }
 }
 

@@ -139,3 +139,31 @@ fn the_scan_recognises_a_downcast() {
         None
     );
 }
+
+/// Every node that can declare record fields in its own data answers the
+/// local-field hook, so the reference walkers, the frozen-node check and the
+/// invariant checker reach its field types with no list of node types: an
+/// anonymous `record_construct`'s fields and an anonymous reader's
+/// (`doc/design_anonymous_record_readers.md`). A reader also answers the
+/// record-typed-input hook, through which it adopts a wire's type.
+#[test]
+fn nodes_with_local_record_fields_answer_the_hooks() {
+    use atomcad_structure_designer::node_data::NodeData;
+    use atomcad_structure_designer::nodes::record_construct::RecordConstructData;
+    use atomcad_structure_designer::nodes::record_destructure::RecordDestructureData;
+
+    let construct = RecordConstructData::default();
+    let destructure = RecordDestructureData::default();
+    for (name, data) in [
+        ("record_construct", &construct as &dyn NodeData),
+        ("record_destructure", &destructure as &dyn NodeData),
+    ] {
+        assert!(data.local_record_fields().is_some(), "{}", name);
+        assert!(data.record_schema_ref().is_some(), "{}", name);
+    }
+    assert!(destructure.record_typed_input().is_some());
+    assert!(
+        construct.record_typed_input().is_none(),
+        "the constructor's record is its output, not an input"
+    );
+}

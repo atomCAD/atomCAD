@@ -1,6 +1,22 @@
 # Anonymous records on the record readers: `record_destructure`, `record_get`, `record_set` — and named fields in `expr`
 
-## Status: Design, reviewed — not implemented (2026-10-22)
+## Status: Design, reviewed — Phase 1 implemented (2026-10-22); Phases 2–4 open
+
+Phase 1 implementation notes (where the code differs from the text below):
+
+- The schema op is the generic `StructureDesigner::set_record_input_schema`
+  in `record_input_type_ops.rs`, written against `RecordTypedInput` so the
+  Phase 3 readers get it too. The API function keeps the planned name,
+  `set_record_destructure_schema`.
+- `adopt_record_input_type` also takes the reader's record wire, which it
+  reads the authored field order of an anonymous `record_construct` source
+  from. Drag-place applies that order when the drop's wire is connected: the
+  connect adopts whenever adopting would change the data, a reorder included.
+- A capture into a reader's `record` pin (`connect_wire_scoped`) adopts like a
+  same-scope wire.
+- The Dart side got only the minimum to keep compiling
+  (`model.setRecordDestructureSchema`, the editor reading
+  `APIRecordDestructureData`); the editor itself is still Phase 2.
 
 ## Motivation
 
