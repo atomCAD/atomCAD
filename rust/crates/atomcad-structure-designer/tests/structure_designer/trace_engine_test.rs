@@ -2,9 +2,10 @@
 //! trait's default and the fallback.
 //!
 //! Engine behaviour that needs a node to *return* something uses the test-only
-//! `ScriptedTraceNode`; fallback tests use `tag` (never traced in v1) and the
-//! test-only `UntracedMoveNode` / `UntracedFillNode`, so Phases 3–4 cannot
-//! change their outcome.
+//! `ScriptedTraceNode`; fallback tests use the test-only `UntracedKeepNode` /
+//! `UntracedMoveNode` / `UntracedFillNode`, so no node gaining a `trace` can
+//! change their outcome (they used `tag` until it gained one,
+//! `doc/design_trace_coverage.md` Phase 3).
 
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -71,12 +72,12 @@ fn an_atomic_leaf_is_an_origin_labelled_source() {
 fn fallback_kept_an_untraced_node_that_does_not_move_atoms_keeps_the_probe() {
     let mut d = setup();
     let mol = add_value(&mut d, molecule(&[(6, ORIGIN)]), "mol");
-    let tag = add(&mut d, "tag", "tag");
-    d.connect_nodes(mol, 0, tag, 0);
+    let keep = add(&mut d, "untraced_keep", "keep");
+    d.connect_nodes(mol, 0, keep, 0);
 
     assert_eq!(
-        trace(&mut d, &atom_hit(tag, ORIGIN)),
-        "tag possibly contributed\nmol source"
+        trace(&mut d, &atom_hit(keep, ORIGIN)),
+        "keep possibly contributed\nmol source"
     );
 }
 
@@ -153,14 +154,14 @@ fn fallback_converted_a_point_is_kept_by_a_crystal_geometry_shell() {
         crystal(&[(6, far)], Some(sphere(ORIGIN, 3.0))),
         "xtal",
     );
-    let tag = add(&mut d, "tag", "tag");
+    let keep = add(&mut d, "untraced_keep", "keep");
     let (s, _) = add_scripted(&mut d, "s", point_at_origin_script());
-    d.connect_nodes(xtal, 0, tag, 0);
-    d.connect_nodes(tag, 0, s, 0);
+    d.connect_nodes(xtal, 0, keep, 0);
+    d.connect_nodes(keep, 0, s, 0);
 
     assert_eq!(
         trace(&mut d, &atom_hit(s, far)),
-        "s passed\ntag possibly contributed\nxtal source"
+        "s passed\nkeep possibly contributed\nxtal source"
     );
 }
 
@@ -169,14 +170,14 @@ fn fallback_converted_a_point_is_lost_without_a_geometry_shell() {
     let far = DVec3::new(20.0, 0.0, 0.0);
     let mut d = setup();
     let xtal = add_value(&mut d, crystal(&[(6, far)], None), "xtal");
-    let tag = add(&mut d, "tag", "tag");
+    let keep = add(&mut d, "untraced_keep", "keep");
     let (s, _) = add_scripted(&mut d, "s", point_at_origin_script());
-    d.connect_nodes(xtal, 0, tag, 0);
-    d.connect_nodes(tag, 0, s, 0);
+    d.connect_nodes(xtal, 0, keep, 0);
+    d.connect_nodes(keep, 0, s, 0);
 
     assert_eq!(
         trace(&mut d, &atom_hit(s, far)),
-        "s passed\ntag possibly contributed\nxtal wired upstream"
+        "s passed\nkeep possibly contributed\nxtal wired upstream"
     );
 }
 

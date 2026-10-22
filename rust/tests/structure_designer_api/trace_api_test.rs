@@ -244,7 +244,7 @@ fn a_ray_through_a_known_atom_is_traced_straight_away() {
     };
     assert_eq!(
         rows(&result),
-        vec!["tag_a possibly contributed", "src_a source"]
+        vec!["tag_a tagged", "src_a source"]
     );
     assert_eq!(result.rows[0].node_id, tag);
     assert_eq!(result.rows[1].node_id, value);
@@ -302,9 +302,9 @@ fn trace_viewport_hit_traces_the_chosen_candidate() {
     refresh(&mut designer);
 
     let a = trace_hit_view(&mut designer, &RAY_ORIGIN, &RAY_DIRECTION, tag_a);
-    assert_eq!(rows(&a), vec!["tag_a possibly contributed", "src_a source"]);
+    assert_eq!(rows(&a), vec!["tag_a tagged", "src_a source"]);
     let b = trace_hit_view(&mut designer, &RAY_ORIGIN, &RAY_DIRECTION, tag_b);
-    assert_eq!(rows(&b), vec!["tag_b possibly contributed", "src_b source"]);
+    assert_eq!(rows(&b), vec!["tag_b tagged", "src_b source"]);
 }
 
 #[test]
@@ -358,7 +358,7 @@ fn gadgets_are_ignored_by_the_trace() {
     };
     assert_eq!(
         rows(&result),
-        vec!["mover moved", "tag_a possibly contributed", "src_a source"]
+        vec!["mover moved", "tag_a tagged", "src_a source"]
     );
 }
 

@@ -33,10 +33,40 @@ use crate::node_type::{
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
-use atomcad_crystolecule::lattice_fill::DEFAULT_REGION_MARGIN;
+use crate::trace::{
+    RegionGate, RegionOpSpec, TraceContext, TraceProbe, TraceStep, trace_region_op,
+};
+use atomcad_crystolecule::atomic_structure::Atom;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
+
+/// Input pins, as the trace names them.
+const MOLECULE_PIN: usize = 0;
+const REGION_PIN: usize = 2;
+
+const TAG_TRACE_SPEC: RegionOpSpec = RegionOpSpec {
+    molecule_pin: MOLECULE_PIN,
+    region_pin: REGION_PIN,
+    modified: "tagged",
+    acted: Some(tags_differ),
+    created: None,
+    gate: RegionGate::Atom,
+};
+
+const UNTAG_TRACE_SPEC: RegionOpSpec = RegionOpSpec {
+    molecule_pin: MOLECULE_PIN,
+    region_pin: REGION_PIN,
+    modified: "untagged",
+    acted: Some(tags_differ),
+    created: None,
+    gate: RegionGate::Atom,
+};
+
+/// `acted` for the trace: the node changed this atom's tags.
+fn tags_differ(input: &Atom, output: &Atom) -> bool {
+    input.tag_bits != output.tag_bits
+}
 
 /// Reads the input's `tag_names()` table (empty for non-atomic inputs) so the
 /// Flutter property editor can offer existing names as suggestions (Phase 5).
@@ -150,7 +180,6 @@ fn eval_tag_op<'a>(
     let output = map_atomic_in_region(
         input_val,
         region_geo.as_ref(),
-        DEFAULT_REGION_MARGIN,
         |mut structure, in_region| {
             let ids: Vec<u32> = structure
                 .iter_atoms()
@@ -233,6 +262,17 @@ impl NodeData for TagData {
             registry,
             context,
         )
+    }
+
+    /// `doc/design_trace_coverage.md`, Region-gated atom ops.
+    fn trace(
+        &self,
+        pin: usize,
+        element: Option<usize>,
+        probe: &TraceProbe,
+        ctx: &TraceContext,
+    ) -> Option<TraceStep> {
+        trace_region_op(pin, element, probe, ctx, &TAG_TRACE_SPEC)
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -340,6 +380,17 @@ impl NodeData for UntagData {
             registry,
             context,
         )
+    }
+
+    /// `doc/design_trace_coverage.md`, Region-gated atom ops.
+    fn trace(
+        &self,
+        pin: usize,
+        element: Option<usize>,
+        probe: &TraceProbe,
+        ctx: &TraceContext,
+    ) -> Option<TraceStep> {
+        trace_region_op(pin, element, probe, ctx, &UNTAG_TRACE_SPEC)
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

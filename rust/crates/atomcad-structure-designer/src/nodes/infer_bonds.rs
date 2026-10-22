@@ -13,12 +13,27 @@ use crate::node_type::{
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
+use crate::trace::{
+    RegionGate, RegionOpSpec, TraceContext, TraceProbe, TraceStep, bonds_differ, trace_region_op,
+};
 use atomcad_crystolecule::atomic_structure_utils::{
     auto_create_bonds_with_tolerance, auto_create_bonds_with_tolerance_filtered,
 };
-use atomcad_crystolecule::lattice_fill::DEFAULT_REGION_MARGIN;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+/// Input pins, as the trace names them.
+const MOLECULE_PIN: usize = 0;
+const REGION_PIN: usize = 3;
+
+const TRACE_SPEC: RegionOpSpec = RegionOpSpec {
+    molecule_pin: MOLECULE_PIN,
+    region_pin: REGION_PIN,
+    modified: "bonded",
+    acted: Some(bonds_differ),
+    created: None,
+    gate: RegionGate::Bond,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InferBondsData {
@@ -97,7 +112,6 @@ impl NodeData for InferBondsData {
         EvalOutput::single(map_atomic_in_region(
             input_val,
             region_geo.as_ref(),
-            DEFAULT_REGION_MARGIN,
             move |mut result, in_region| {
                 // With a region wired, we must additionally preserve bonds whose
                 // both endpoints are out-of-region (they are "untouched"), so we
@@ -154,6 +168,17 @@ impl NodeData for InferBondsData {
                 result
             },
         ))
+    }
+
+    /// `doc/design_trace_coverage.md`, Region-gated atom ops.
+    fn trace(
+        &self,
+        pin: usize,
+        element: Option<usize>,
+        probe: &TraceProbe,
+        ctx: &TraceContext,
+    ) -> Option<TraceStep> {
+        trace_region_op(pin, element, probe, ctx, &TRACE_SPEC)
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

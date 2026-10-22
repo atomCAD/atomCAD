@@ -23,6 +23,8 @@
 //!   (`infer_bonds` is one-endpoint-inside).
 //! - Evaluate `region` with `evaluate_arg` (optional), **not**
 //!   `evaluate_arg_required`.
+//! - Test membership of a single point with [`region_contains`] (what `trace`
+//!   does), never by re-deriving the margin: the two must agree.
 //! - **Multiple regions = chained nodes.** There is no multi-region pin here;
 //!   the painter's-algorithm pattern is unique to `materialize.regions` (Part B).
 //! - No `.cnnd` migration is needed — the new pin appears unconnected on
@@ -70,8 +72,11 @@ use crate::evaluator::network_result::{MoleculeData, NetworkResult};
 use crate::node_data::EvalOutput;
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::atomic_structure_diff::extract_diff;
+use atomcad_crystolecule::lattice_fill::DEFAULT_REGION_MARGIN;
 use atomcad_geo_tree::GeoNode;
 use atomcad_geo_tree::batched_implicit_evaluator::BatchedImplicitEvaluator;
+use atomcad_geo_tree::implicit_geometry::ImplicitGeometry3D;
+use glam::f64::DVec3;
 use std::collections::HashSet;
 
 /// Applies a transformation to the `AtomicStructure` inside a `Crystal` or `Molecule`
@@ -101,6 +106,20 @@ where
     }
 }
 
+/// Is a point with signed distance `sdf` to a region inside that region, as
+/// the region-gated ops count it? The one place the margin is applied, so
+/// [`map_atomic_in_region`] and [`region_contains`] cannot disagree.
+fn sdf_in_region(sdf: f64) -> bool {
+    sdf <= DEFAULT_REGION_MARGIN
+}
+
+/// Is `position` inside `region` as the region-gated ops count it? The
+/// single-point form of [`map_atomic_in_region`]'s batch test, for `trace`
+/// (`doc/design_trace_coverage.md`).
+pub fn region_contains(region: &GeoNode, position: DVec3) -> bool {
+    sdf_in_region(region.implicit_eval_3d(&position))
+}
+
 /// Like [`map_atomic`], but the closure additionally receives a membership
 /// predicate telling it which atoms lie inside an optional region volume.
 ///
@@ -108,7 +127,7 @@ where
 /// behavior; the helper subsumes the old one so each op keeps a single code
 /// path). `region == Some(geo)` → membership of an atom is decided by the
 /// region SDF at the atom's **raw real-space position**:
-/// `geo.implicit_eval_3d(atom.position) ≤ margin`. `geo_tree_root` is already
+/// `geo.implicit_eval_3d(atom.position) ≤ DEFAULT_REGION_MARGIN` ([`region_contains`]). `geo_tree_root` is already
 /// in absolute real (Å) coordinates, so there is **no** unit-cell rescaling
 /// (contrast the legacy `atom_cut`, which divides by `unit_cell_size` — that
 /// is a known bug, not a pattern to copy). See
@@ -122,7 +141,6 @@ where
 pub fn map_atomic_in_region<F>(
     input: NetworkResult,
     region: Option<&GeoNode>,
-    margin: f64,
     f: F,
 ) -> NetworkResult
 where
@@ -148,7 +166,7 @@ where
             let in_region: HashSet<u32> = atom_ids
                 .iter()
                 .zip(sdf_values.iter())
-                .filter(|&(_, &sdf)| sdf <= margin)
+                .filter(|&(_, &sdf)| sdf_in_region(sdf))
                 .map(|(&atom_id, _)| atom_id)
                 .collect();
 

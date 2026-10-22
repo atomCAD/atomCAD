@@ -34,6 +34,7 @@ use crate::node_type::{
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::nodes::xray::depth_faded_alpha;
 use crate::structure_designer::StructureDesigner;
+use crate::trace::{Contribution, TraceContext, TraceLink, TraceProbe, TraceStep, atoms_of};
 use atomcad_crystolecule::atomic_structure::{AtomRenderStyle, AtomicStructure};
 use glam::Vec3;
 use serde::{Deserialize, Serialize};
@@ -223,6 +224,36 @@ impl NodeData for ApplyStyleData {
         });
 
         EvalOutput::single(output)
+    }
+
+    /// Styling is not provenance: an atom passes to the input atom with the
+    /// same id (`map_atomic` keeps ids), and the `rules` are not followed.
+    fn trace(
+        &self,
+        pin: usize,
+        element: Option<usize>,
+        probe: &TraceProbe,
+        ctx: &TraceContext,
+    ) -> Option<TraceStep> {
+        let TraceProbe::Atom { id: Some(id), .. } = probe else {
+            return None;
+        };
+        if pin != 0 || element.is_some() {
+            return None;
+        }
+        let input = ctx.input(0);
+        let atom = atoms_of(&input)?.get_atom(*id)?;
+        Some(TraceStep {
+            contribution: Contribution::Passed,
+            upstream: vec![TraceLink {
+                pin: 0,
+                element: None,
+                probe: TraceProbe::Atom {
+                    id: Some(*id),
+                    position: atom.position,
+                },
+            }],
+        })
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

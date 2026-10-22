@@ -23,9 +23,24 @@ use crate::node_type::{
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
-use atomcad_crystolecule::lattice_fill::DEFAULT_REGION_MARGIN;
+use crate::trace::{
+    RegionGate, RegionOpSpec, TraceContext, TraceProbe, TraceStep, trace_region_op,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+
+/// Input pins, as the trace names them.
+const MOLECULE_PIN: usize = 0;
+const REGION_PIN: usize = 2;
+
+const TRACE_SPEC: RegionOpSpec = RegionOpSpec {
+    molecule_pin: MOLECULE_PIN,
+    region_pin: REGION_PIN,
+    modified: "faded",
+    acted: None,
+    created: None,
+    gate: RegionGate::Atom,
+};
 
 fn default_alpha() -> f64 {
     0.5
@@ -156,7 +171,6 @@ impl NodeData for XrayData {
         let output = map_atomic_in_region(
             input_val,
             region_geo.as_ref(),
-            DEFAULT_REGION_MARGIN,
             |mut structure, in_region| {
                 // Read each atom's depth in the same pass that collects ids —
                 // `set_atom_alpha` needs `&mut structure`, so the immutable
@@ -173,6 +187,17 @@ impl NodeData for XrayData {
             },
         );
         EvalOutput::single(output)
+    }
+
+    /// `doc/design_trace_coverage.md`, Region-gated atom ops.
+    fn trace(
+        &self,
+        pin: usize,
+        element: Option<usize>,
+        probe: &TraceProbe,
+        ctx: &TraceContext,
+    ) -> Option<TraceStep> {
+        trace_region_op(pin, element, probe, ctx, &TRACE_SPEC)
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

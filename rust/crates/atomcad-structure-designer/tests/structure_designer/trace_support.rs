@@ -54,6 +54,7 @@ pub fn register_test_nodes(registry: &mut NodeTypeRegistry) {
     for node_type in [
         scripted_trace_node_type(),
         untraced_move_node_type(),
+        untraced_keep_node_type(),
         untraced_fill_node_type(),
         counting_leaf_node_type(),
         recording_source_node_type(),
@@ -452,6 +453,64 @@ fn untraced_move_node_type() -> NodeType {
         vec![param("input", DataType::HasAtoms)],
         OutputPinDefinition::single_same_as("input"),
         || Box::new(UntracedMoveData),
+    )
+}
+
+// ============================================================================
+// Test-only node: UntracedKeepNode
+// ============================================================================
+
+/// Outputs its atomic input unchanged and keeps the default `trace`: the
+/// fallback's "kept" subject. Every real node that keeps atoms in place has a
+/// `trace` (`doc/design_trace_coverage.md` Phase 3), so none is a stable one.
+#[derive(Clone)]
+pub struct UntracedKeepData;
+
+impl NodeData for UntracedKeepData {
+    fn provide_gadget(
+        &self,
+        _structure_designer: &StructureDesigner,
+    ) -> Option<Box<dyn atomcad_structure_designer::node_network_gadget::NodeNetworkGadget>> {
+        None
+    }
+
+    fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
+        None
+    }
+
+    fn eval<'a>(
+        &self,
+        evaluator: &NetworkEvaluator,
+        network_stack: &[NetworkStackElement<'a>],
+        node_id: u64,
+        registry: &NodeTypeRegistry,
+        _decorate: bool,
+        context: &mut NetworkEvaluationContext,
+    ) -> EvalOutput {
+        EvalOutput::single(evaluator.evaluate_arg_required(
+            network_stack,
+            node_id,
+            registry,
+            context,
+            0,
+        ))
+    }
+
+    fn clone_box(&self) -> Box<dyn NodeData> {
+        Box::new(self.clone())
+    }
+
+    fn get_subtitle(&self, _connected_input_pins: &HashSet<String>) -> Option<String> {
+        None
+    }
+}
+
+fn untraced_keep_node_type() -> NodeType {
+    test_node_type(
+        "untraced_keep",
+        vec![param("input", DataType::HasAtoms)],
+        OutputPinDefinition::single_same_as("input"),
+        || Box::new(UntracedKeepData),
     )
 }
 

@@ -13,11 +13,32 @@ use crate::node_type::{
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
+use crate::trace::{
+    RegionGate, RegionOpSpec, TraceContext, TraceProbe, TraceStep, trace_region_op,
+};
 use atomcad_crystolecule::atomic_constants::ATOM_INFO;
-use atomcad_crystolecule::lattice_fill::DEFAULT_REGION_MARGIN;
+use atomcad_crystolecule::atomic_structure::Atom;
 use glam::IVec2;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+/// Input pins, as the trace names them.
+const MOLECULE_PIN: usize = 0;
+const REGION_PIN: usize = 2;
+
+const TRACE_SPEC: RegionOpSpec = RegionOpSpec {
+    molecule_pin: MOLECULE_PIN,
+    region_pin: REGION_PIN,
+    modified: "replaced",
+    acted: Some(element_differs),
+    created: None,
+    gate: RegionGate::Atom,
+};
+
+/// `acted` for the trace: the rules changed this atom's element.
+fn element_differs(input: &Atom, output: &Atom) -> bool {
+    input.atomic_number != output.atomic_number
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AtomReplaceData {
@@ -120,7 +141,6 @@ impl NodeData for AtomReplaceData {
         let result = map_atomic_in_region(
             molecule_input_val,
             region_geo.as_ref(),
-            DEFAULT_REGION_MARGIN,
             move |mut structure, in_region| {
                 if replacements.is_empty() {
                     return structure;
@@ -167,6 +187,17 @@ impl NodeData for AtomReplaceData {
         );
 
         eval_output_with_diff(result, before)
+    }
+
+    /// `doc/design_trace_coverage.md`, Region-gated atom ops.
+    fn trace(
+        &self,
+        pin: usize,
+        element: Option<usize>,
+        probe: &TraceProbe,
+        ctx: &TraceContext,
+    ) -> Option<TraceStep> {
+        trace_region_op(pin, element, probe, ctx, &TRACE_SPEC)
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

@@ -666,7 +666,11 @@ evaluation.
 - **A side input is followed only when it decided what happened to the
   probed thing** (a region that gated *this* atom, the taken branch, a diff
   that touched it); otherwise a `trace` leaves it out rather than letting the
-  fallback list its whole cone.
+  fallback list its whole cone. The region-gated atom ops share
+  `trace::trace_region_op` (configured by a `RegionOpSpec`) and decide
+  membership with `atom_op::region_contains`, the single-point form of
+  `map_atomic_in_region`'s test with the same margin, so a trace cannot
+  disagree with `eval` about whether an atom was in the region.
 - **`trace` reads only persisted node data**, never runtime caches
   (`cached_input`, eval caches): subnetwork node data is shared by every call
   site, so a cache can hold another instance's state.

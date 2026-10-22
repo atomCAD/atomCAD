@@ -361,8 +361,9 @@ strips or adds terminators of in-region hosts, which is the atom whose bonds
 change.
 
 The pin indices come from each node type's parameter list (the region is the
-last pin everywhere except `xray`, where `fade_depth` follows it); name them as
-constants beside the node type, not as literals in `trace`.
+last pin everywhere except `xray`, where `fade_depth` follows it, and
+`passivate`, where `element` does); name them as constants beside the node
+type, not as literals in `trace`.
 
 ### Other single-structure atom ops
 

@@ -36,6 +36,9 @@ use crate::node_type::{
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
+use crate::trace::{
+    Contribution, TraceContext, TraceLink, TraceProbe, TraceStep, atom_at, atoms_of, is_terminator,
+};
 use atomcad_crystolecule::atomic_constants::{ALLOWED_PASSIVANTS, is_allowed_passivant};
 use atomcad_crystolecule::proxy_cut::{ProxyError, ProxyOptions, proxy_cut};
 use serde::{Deserialize, Serialize};
@@ -273,6 +276,55 @@ impl NodeData for ProxyData {
         }
 
         EvalOutput::single(output)
+    }
+
+    /// `apply_proxy` hands out fresh ids but moves no atom, so atoms are
+    /// matched by position: a kept atom passes to the input atom at its
+    /// position; a severed-bond cap was created here and continues to its
+    /// host (`doc/design_trace_coverage.md`).
+    fn trace(
+        &self,
+        pin: usize,
+        element: Option<usize>,
+        probe: &TraceProbe,
+        ctx: &TraceContext,
+    ) -> Option<TraceStep> {
+        let TraceProbe::Atom { id: Some(id), .. } = probe else {
+            return None;
+        };
+        if pin != 0 || element.is_some() {
+            return None;
+        }
+        let output = ctx.output(0);
+        let out_atoms = atoms_of(&output)?;
+        let out_atom = out_atoms.get_atom(*id)?;
+        let input = ctx.input(0);
+        let in_atoms = atoms_of(&input)?;
+        let link = |position| {
+            let in_id = atom_at(in_atoms, position)?;
+            Some(TraceLink {
+                pin: 0,
+                element: None,
+                probe: TraceProbe::Atom {
+                    id: Some(in_id),
+                    position: in_atoms.get_atom(in_id)?.position,
+                },
+            })
+        };
+        if let Some(kept) = link(out_atom.position) {
+            return Some(TraceStep {
+                contribution: Contribution::Passed,
+                upstream: vec![kept],
+            });
+        }
+        if !is_terminator(out_atom) {
+            return None;
+        }
+        let host = out_atoms.get_atom(out_atom.bonds.first()?.other_atom_id())?;
+        Some(TraceStep {
+            contribution: Contribution::Created("capped"),
+            upstream: vec![link(host.position)?],
+        })
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

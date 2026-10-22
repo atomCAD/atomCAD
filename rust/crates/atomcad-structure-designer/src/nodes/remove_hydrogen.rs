@@ -12,11 +12,26 @@ use crate::node_type::{
 };
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
+use crate::trace::{
+    RegionGate, RegionOpSpec, TraceContext, TraceProbe, TraceStep, bonds_differ, trace_region_op,
+};
 use atomcad_crystolecule::hydrogen_passivation::{
     RemoveHydrogensOptions, remove_hydrogens_filtered,
 };
-use atomcad_crystolecule::lattice_fill::DEFAULT_REGION_MARGIN;
 use serde::{Deserialize, Serialize};
+
+/// Input pins, as the trace names them.
+const MOLECULE_PIN: usize = 0;
+const REGION_PIN: usize = 1;
+
+const TRACE_SPEC: RegionOpSpec = RegionOpSpec {
+    molecule_pin: MOLECULE_PIN,
+    region_pin: REGION_PIN,
+    modified: "depassivated",
+    acted: Some(bonds_differ),
+    created: None,
+    gate: RegionGate::Atom,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HydrogenDepassivateData {}
@@ -75,7 +90,6 @@ impl NodeData for HydrogenDepassivateData {
         let output = map_atomic_in_region(
             input_val,
             region_geo.as_ref(),
-            DEFAULT_REGION_MARGIN,
             |mut structure, in_region| {
                 let options = RemoveHydrogensOptions {
                     selected_only: false,
@@ -92,6 +106,17 @@ impl NodeData for HydrogenDepassivateData {
             },
         );
         EvalOutput::single(output)
+    }
+
+    /// `doc/design_trace_coverage.md`, Region-gated atom ops.
+    fn trace(
+        &self,
+        pin: usize,
+        element: Option<usize>,
+        probe: &TraceProbe,
+        ctx: &TraceContext,
+    ) -> Option<TraceStep> {
+        trace_region_op(pin, element, probe, ctx, &TRACE_SPEC)
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

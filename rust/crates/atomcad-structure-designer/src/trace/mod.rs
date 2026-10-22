@@ -17,7 +17,7 @@ pub mod engine;
 pub mod pick;
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use atomcad_crystolecule::atomic_constants::is_allowed_passivant;
@@ -27,6 +27,7 @@ use atomcad_geo_tree::implicit_geometry::ImplicitGeometry3D;
 use atomcad_util::memory_size_estimator::MemorySizeEstimator;
 use glam::f64::DVec3;
 
+use crate::evaluator::atom_op::region_contains;
 use crate::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
@@ -490,5 +491,152 @@ pub fn element_of(value: &NetworkResult, element: Option<usize>) -> Option<&Netw
         (_, None) => Some(value),
         (NetworkResult::Array(items), Some(i)) => items.get(i),
         _ => None,
+    }
+}
+
+/// What a region-gated atom op's `region` decides about (see [`RegionOpSpec`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegionGate {
+    /// The op touches an atom only when that atom is in the region.
+    Atom,
+    /// The op touches a bond when **either** end is in the region, so an
+    /// atom outside the region can still change (`infer_bonds`).
+    Bond,
+}
+
+/// How one region-gated atom op (`passivate`, `remove_hydrogen`,
+/// `infer_bonds`, `atom_replace`, `freeze` / `unfreeze`, `tag` / `untag`,
+/// `xray`) answers [`trace_region_op`].
+pub struct RegionOpSpec {
+    pub molecule_pin: usize,
+    pub region_pin: usize,
+    /// Label when the node changed the atom ("frozen", "tagged", …).
+    pub modified: &'static str,
+    /// Did the node change this atom? Compares the input atom with the output
+    /// atom of the same id. `None` = every in-region atom (`xray`: the alpha
+    /// lives in the decorator, not on the atom).
+    pub acted: Option<fn(&Atom, &Atom) -> bool>,
+    /// Label for an atom the node created; `None` = the node creates none.
+    pub created: Option<&'static str>,
+    pub gate: RegionGate,
+}
+
+/// `acted` for an op that adds or removes bonds: the two atoms' bonds differ
+/// as sets of (other id, order).
+pub fn bonds_differ(input: &Atom, output: &Atom) -> bool {
+    bond_set(input) != bond_set(output)
+}
+
+fn bond_set(atom: &Atom) -> HashSet<(u32, u8)> {
+    atom.bonds
+        .iter()
+        .map(|bond| (bond.other_atom_id(), bond.bond_order()))
+        .collect()
+}
+
+/// `trace` for the region-gated atom ops (`doc/design_trace_coverage.md`,
+/// Region-gated atom ops). The main input is always followed; the `region` is
+/// followed only when it decided what happened to the probed atom, with a
+/// Point probe at the atom (or the in-region end that decided it).
+///
+/// Answers an `Atom { id: Some(_) }` probe on output pin 0 only. Ids survive
+/// in place (the ops mutate a clone), so an id the input lacks is an atom the
+/// node created, traced to its one bonded neighbour, the host.
+pub fn trace_region_op(
+    pin: usize,
+    element: Option<usize>,
+    probe: &TraceProbe,
+    ctx: &TraceContext,
+    spec: &RegionOpSpec,
+) -> Option<TraceStep> {
+    let TraceProbe::Atom { id: Some(id), .. } = probe else {
+        return None;
+    };
+    if pin != 0 || element.is_some() {
+        return None;
+    }
+    let region_value = ctx.input(spec.region_pin);
+    let region = match region_value.as_ref() {
+        NetworkResult::None => None,
+        NetworkResult::Blueprint(bp) => Some(&bp.geo_tree_root),
+        _ => return None,
+    };
+    let input_value = ctx.input(spec.molecule_pin);
+    let input = atoms_of(&input_value)?;
+    let output_value = ctx.output(0);
+    let output = atoms_of(&output_value)?;
+    let out_atom = output.get_atom(*id)?;
+
+    let molecule_link = |atom_id: u32, atom: &Atom| TraceLink {
+        pin: spec.molecule_pin,
+        element: None,
+        probe: TraceProbe::Atom {
+            id: Some(atom_id),
+            position: atom.position,
+        },
+    };
+    let region_link = |atom_id: u32| -> Option<TraceLink> {
+        Some(TraceLink {
+            pin: spec.region_pin,
+            element: None,
+            probe: atom_point_probe(input, atom_id)?,
+        })
+    };
+    let in_region = |atom: &Atom| region.is_none_or(|geo| region_contains(geo, atom.position));
+
+    let Some(in_atom) = input.get_atom(*id) else {
+        // Created by the node: trace it to its host.
+        let label = spec.created?;
+        let host_id = out_atom.bonds.first()?.other_atom_id();
+        let host = input.get_atom(host_id)?;
+        let mut upstream = vec![molecule_link(host_id, host)];
+        if region.is_some() {
+            upstream.extend(region_link(host_id));
+        }
+        return Some(TraceStep {
+            contribution: Contribution::Created(label),
+            upstream,
+        });
+    };
+
+    let acted = spec.acted.is_none_or(|acted| acted(in_atom, out_atom));
+    let decided_by: Vec<u32> = match spec.gate {
+        RegionGate::Atom if acted && in_region(in_atom) => vec![*id],
+        RegionGate::Atom => {
+            return Some(passed(molecule_link(*id, in_atom)));
+        }
+        RegionGate::Bond if acted => {
+            // The atom itself and the other ends of its added or removed
+            // bonds, those in the region.
+            let before = bond_set(in_atom);
+            let after = bond_set(out_atom);
+            let mut ends: Vec<u32> = vec![*id];
+            for (other, _) in before.symmetric_difference(&after) {
+                if !ends.contains(other) {
+                    ends.push(*other);
+                }
+            }
+            ends.into_iter()
+                .filter(|end| input.get_atom(*end).is_some_and(in_region))
+                .collect()
+        }
+        RegionGate::Bond => {
+            return Some(passed(molecule_link(*id, in_atom)));
+        }
+    };
+    let mut upstream = vec![molecule_link(*id, in_atom)];
+    if region.is_some() {
+        upstream.extend(decided_by.into_iter().filter_map(region_link));
+    }
+    Some(TraceStep {
+        contribution: Contribution::Modified(spec.modified),
+        upstream,
+    })
+}
+
+fn passed(link: TraceLink) -> TraceStep {
+    TraceStep {
+        contribution: Contribution::Passed,
+        upstream: vec![link],
     }
 }

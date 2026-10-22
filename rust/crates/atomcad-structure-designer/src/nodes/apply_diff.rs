@@ -2,6 +2,7 @@ use crate::data_type::DataType;
 use crate::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::evaluator::network_evaluator::NetworkEvaluator;
 use crate::evaluator::network_evaluator::NetworkStackElement;
+use crate::evaluator::network_evaluator::value_or_default;
 use crate::evaluator::network_result::NetworkResult;
 use crate::node_data::{EvalOutput, NodeData};
 use crate::node_network_gadget::NodeNetworkGadget;
@@ -12,7 +13,9 @@ use crate::node_type::{
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
-use atomcad_crystolecule::atomic_structure_diff;
+use crate::trace::{Contribution, TraceContext, TraceLink, TraceProbe, TraceStep, atoms_of};
+use atomcad_crystolecule::atomic_structure::AtomicStructure;
+use atomcad_crystolecule::atomic_structure_diff::{self, AtomSource};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
@@ -22,6 +25,40 @@ use std::collections::{HashMap, HashSet};
 pub struct ApplyDiffData {
     pub tolerance: f64,
     pub error_on_stale: bool,
+}
+
+/// Input pins.
+const BASE_PIN: usize = 0;
+const DIFF_PIN: usize = 1;
+const TOLERANCE_PIN: usize = 2;
+
+impl ApplyDiffData {
+    /// The matching tolerance `eval` applies: the wired pin, else the stored
+    /// field. `arg(pin)` is the value on input pin `pin`, so `eval` and
+    /// `trace` resolve the pin alike.
+    #[allow(clippy::result_large_err)]
+    fn tolerance_arg(
+        &self,
+        arg: &mut dyn FnMut(usize) -> NetworkResult,
+    ) -> Result<f64, NetworkResult> {
+        value_or_default(
+            arg(TOLERANCE_PIN),
+            self.tolerance,
+            NetworkResult::extract_float,
+        )
+    }
+}
+
+/// A link to atom `id` of `atoms` on input `pin`.
+fn atom_link(pin: usize, atoms: &AtomicStructure, id: u32) -> Option<TraceLink> {
+    Some(TraceLink {
+        pin,
+        element: None,
+        probe: TraceProbe::Atom {
+            id: Some(id),
+            position: atoms.get_atom(id)?.position,
+        },
+    })
 }
 
 impl NodeData for ApplyDiffData {
@@ -95,15 +132,9 @@ impl NodeData for ApplyDiffData {
         }
 
         // 5. Get tolerance from pin 2 or property (default from self.tolerance)
-        let tolerance = match network_evaluator.evaluate_or_default(
-            network_stack,
-            node_id,
-            registry,
-            context,
-            2,
-            self.tolerance,
-            NetworkResult::extract_float,
-        ) {
+        let tolerance = match self.tolerance_arg(&mut |pin| {
+            network_evaluator.evaluate_arg(network_stack, node_id, registry, context, pin)
+        }) {
             Ok(value) => value,
             Err(error) => return EvalOutput::single(error),
         };
@@ -146,6 +177,51 @@ impl NodeData for ApplyDiffData {
             _ => unreachable!(),
         }
         EvalOutput::single(base_wrapper)
+    }
+
+    /// Re-runs the diff application and reads its provenance
+    /// (`doc/design_trace_coverage.md`): the `diff` is followed only for an
+    /// atom it touched, the `base` only for an atom that came from it.
+    fn trace(
+        &self,
+        pin: usize,
+        element: Option<usize>,
+        probe: &TraceProbe,
+        ctx: &TraceContext,
+    ) -> Option<TraceStep> {
+        let TraceProbe::Atom { id: Some(id), .. } = probe else {
+            return None;
+        };
+        if pin != 0 || element.is_some() {
+            return None;
+        }
+        let base_value = ctx.input(BASE_PIN);
+        let base = atoms_of(&base_value)?;
+        let diff_value = ctx.input(DIFF_PIN);
+        let diff = atoms_of(&diff_value)?;
+        let tolerance = self.tolerance_arg(&mut |pin| ctx.input_value(pin)).ok()?;
+        let diff_result = atomic_structure_diff::apply_diff(base, diff, tolerance);
+        let (contribution, upstream) = match diff_result.provenance.sources.get(id)? {
+            AtomSource::BasePassthrough(base_id) => (
+                Contribution::Passed,
+                vec![atom_link(BASE_PIN, base, *base_id)?],
+            ),
+            AtomSource::DiffMatchedBase { diff_id, base_id } => (
+                Contribution::Modified("edited"),
+                vec![
+                    atom_link(BASE_PIN, base, *base_id)?,
+                    atom_link(DIFF_PIN, diff, *diff_id)?,
+                ],
+            ),
+            AtomSource::DiffAdded(diff_id) => (
+                Contribution::Created("added"),
+                vec![atom_link(DIFF_PIN, diff, *diff_id)?],
+            ),
+        };
+        Some(TraceStep {
+            contribution,
+            upstream,
+        })
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

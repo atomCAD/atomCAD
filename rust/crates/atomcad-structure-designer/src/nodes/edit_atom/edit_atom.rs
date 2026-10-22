@@ -19,6 +19,7 @@ use crate::serialization::edit_atom_data_serialization::{
     SerializableEditAtomData, edit_atom_data_to_serializable, serializable_to_edit_atom_data,
 };
 use crate::structure_designer::StructureDesigner;
+use crate::trace::{Contribution, TraceContext, TraceLink, TraceProbe, TraceStep, atoms_of};
 use atomcad_crystolecule::atomic_structure::BondReference;
 use atomcad_crystolecule::atomic_structure::HitTestResult;
 use atomcad_crystolecule::atomic_structure::SelectModifier;
@@ -176,6 +177,51 @@ impl NodeData for EditAtomData {
             self.eval(&mut atomic_structure, decorate);
             atomic_structure
         }))
+    }
+
+    /// The history replays on a clone of the input (`map_atomic`), so ids
+    /// survive: an id the input lacks was added here; one it has was edited
+    /// if its position or element changed, else passed.
+    fn trace(
+        &self,
+        pin: usize,
+        element: Option<usize>,
+        probe: &TraceProbe,
+        ctx: &TraceContext,
+    ) -> Option<TraceStep> {
+        let TraceProbe::Atom { id: Some(id), .. } = probe else {
+            return None;
+        };
+        if pin != 0 || element.is_some() {
+            return None;
+        }
+        let output = ctx.output(0);
+        let out_atom = atoms_of(&output)?.get_atom(*id)?;
+        let input = ctx.input(0);
+        let Some(in_atom) = atoms_of(&input)?.get_atom(*id) else {
+            return Some(TraceStep {
+                contribution: Contribution::Created("added"),
+                upstream: vec![],
+            });
+        };
+        let contribution = if in_atom.position != out_atom.position
+            || in_atom.atomic_number != out_atom.atomic_number
+        {
+            Contribution::Modified("edited")
+        } else {
+            Contribution::Passed
+        };
+        Some(TraceStep {
+            contribution,
+            upstream: vec![TraceLink {
+                pin: 0,
+                element: None,
+                probe: TraceProbe::Atom {
+                    id: Some(*id),
+                    position: in_atom.position,
+                },
+            }],
+        })
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

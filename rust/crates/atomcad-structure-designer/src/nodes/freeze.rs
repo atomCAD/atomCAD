@@ -25,8 +25,38 @@ use crate::node_type::{
 };
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
-use atomcad_crystolecule::lattice_fill::DEFAULT_REGION_MARGIN;
+use crate::trace::{
+    RegionGate, RegionOpSpec, TraceContext, TraceProbe, TraceStep, trace_region_op,
+};
+use atomcad_crystolecule::atomic_structure::Atom;
 use serde::{Deserialize, Serialize};
+
+/// Input pins, as the trace names them.
+const MOLECULE_PIN: usize = 0;
+const REGION_PIN: usize = 1;
+
+const FREEZE_TRACE_SPEC: RegionOpSpec = RegionOpSpec {
+    molecule_pin: MOLECULE_PIN,
+    region_pin: REGION_PIN,
+    modified: "frozen",
+    acted: Some(frozen_differs),
+    created: None,
+    gate: RegionGate::Atom,
+};
+
+const UNFREEZE_TRACE_SPEC: RegionOpSpec = RegionOpSpec {
+    molecule_pin: MOLECULE_PIN,
+    region_pin: REGION_PIN,
+    modified: "unfrozen",
+    acted: Some(frozen_differs),
+    created: None,
+    gate: RegionGate::Atom,
+};
+
+/// `acted` for the trace: the node flipped this atom's frozen flag.
+fn frozen_differs(input: &Atom, output: &Atom) -> bool {
+    input.is_frozen() != output.is_frozen()
+}
 
 /// Shared `eval` body for both nodes. Reads the required atomic input (pin 0)
 /// and the optional `region` Blueprint (pin 1), then sets the frozen flag to
@@ -67,7 +97,6 @@ fn eval_set_frozen<'a>(
     let output = map_atomic_in_region(
         input_val,
         region_geo.as_ref(),
-        DEFAULT_REGION_MARGIN,
         |mut structure, in_region| {
             let ids: Vec<u32> = structure
                 .iter_atoms()
@@ -144,6 +173,17 @@ impl NodeData for FreezeData {
         )
     }
 
+    /// `doc/design_trace_coverage.md`, Region-gated atom ops.
+    fn trace(
+        &self,
+        pin: usize,
+        element: Option<usize>,
+        probe: &TraceProbe,
+        ctx: &TraceContext,
+    ) -> Option<TraceStep> {
+        trace_region_op(pin, element, probe, ctx, &FREEZE_TRACE_SPEC)
+    }
+
     fn clone_box(&self) -> Box<dyn NodeData> {
         Box::new(self.clone())
     }
@@ -217,6 +257,17 @@ impl NodeData for UnfreezeData {
             registry,
             context,
         )
+    }
+
+    /// `doc/design_trace_coverage.md`, Region-gated atom ops.
+    fn trace(
+        &self,
+        pin: usize,
+        element: Option<usize>,
+        probe: &TraceProbe,
+        ctx: &TraceContext,
+    ) -> Option<TraceStep> {
+        trace_region_op(pin, element, probe, ctx, &UNFREEZE_TRACE_SPEC)
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

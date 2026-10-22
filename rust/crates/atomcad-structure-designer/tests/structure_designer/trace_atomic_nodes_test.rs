@@ -6,31 +6,47 @@
 //! Phase 2 of `doc/design_trace_coverage.md`: the selectors (`if`, `switch`),
 //! `array_append`, and the atom paths of the phase pass-throughs
 //! (`exit_structure`, `enter_structure`).
+//!
+//! Phase 3 of `doc/design_trace_coverage.md`: the region-gated atom ops
+//! (`trace_region_op`), `apply_style`, `edit_atom`, `proxy`, `apply_diff`.
 
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
+use atomcad_crystolecule::atomic_structure::SelectModifier;
 use atomcad_crystolecule::guided_placement::crystal_bond_length;
+use atomcad_crystolecule::lattice_fill::DEFAULT_REGION_MARGIN;
 use atomcad_crystolecule::structure::Structure;
 use atomcad_geo_tree::GeoNode;
-use atomcad_structure_designer::data_type::DataType;
-use atomcad_structure_designer::evaluator::network_result::NetworkResult;
+use atomcad_structure_designer::data_type::{DataType, RecordType};
+use atomcad_structure_designer::evaluator::atom_op::region_contains;
+use atomcad_structure_designer::evaluator::network_result::{MoleculeData, NetworkResult};
 use atomcad_structure_designer::nodes::array_append::ArrayAppendData;
 use atomcad_structure_designer::nodes::array_at::ArrayAtData;
 use atomcad_structure_designer::nodes::array_concat::ArrayConcatData;
+use atomcad_structure_designer::nodes::atom_cut::AtomCutData;
 use atomcad_structure_designer::nodes::atom_edit::atom_edit::AtomEditData;
+use atomcad_structure_designer::nodes::atom_replace::AtomReplaceData;
+use atomcad_structure_designer::nodes::edit_atom::commands::add_atom_command::AddAtomCommand;
+use atomcad_structure_designer::nodes::edit_atom::commands::select_command::SelectCommand;
+use atomcad_structure_designer::nodes::edit_atom::commands::transform_command::TransformCommand;
+use atomcad_structure_designer::nodes::edit_atom::edit_atom::EditAtomData;
 use atomcad_structure_designer::nodes::free_move::FreeMoveData;
 use atomcad_structure_designer::nodes::free_rot::FreeRotData;
 use atomcad_structure_designer::nodes::if_else::IfData;
 use atomcad_structure_designer::nodes::materialize::MaterializeData;
+use atomcad_structure_designer::nodes::proxy::ProxyData;
 use atomcad_structure_designer::nodes::sequence::SequenceData;
 use atomcad_structure_designer::nodes::structure_invert::StructureInvertData;
 use atomcad_structure_designer::nodes::structure_move::StructureMoveData;
 use atomcad_structure_designer::nodes::structure_rot::StructureRotData;
 use atomcad_structure_designer::nodes::switch::{SwitchCase, SwitchCaseValue, SwitchData};
+use atomcad_structure_designer::nodes::tag::TagData;
+use atomcad_structure_designer::nodes::value::add_typed_value_node;
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 use atomcad_structure_designer::trace::{
     ATOM_POINT_DELTA_BONDS, TraceProbe, atom_point_delta, is_terminator,
 };
-use glam::f64::DVec3;
+use atomcad_util::transform::Transform;
+use glam::f64::{DQuat, DVec2, DVec3};
 use glam::i32::IVec3;
 
 use crate::trace_support::*;
@@ -735,4 +751,608 @@ exit passed
 src source"
     );
     assert_eq!(only_probe(&probes), atom_probe(2, B));
+}
+
+// ============================================================================
+// Region-gated atom ops (`doc/design_trace_coverage.md` Phase 3)
+// ============================================================================
+
+/// Inside the test region (x ≤ 1, x ≥ −50): the atom the node acts on.
+const INSIDE: DVec3 = DVec3::new(0.0, 0.0, 0.0);
+/// Outside the test region.
+const OUTSIDE: DVec3 = DVec3::new(10.0, 0.0, 0.0);
+/// Inside the test region: an atom the node leaves unchanged.
+const INSIDE_KEPT: DVec3 = DVec3::new(-5.0, 0.0, 0.0);
+
+type ProbeLog = std::sync::Arc<std::sync::Mutex<Vec<TraceProbe>>>;
+
+fn molecule_of(atoms: AtomicStructure) -> NetworkResult {
+    NetworkResult::Molecule(MoleculeData {
+        atoms,
+        geo_tree_root: None,
+    })
+}
+
+/// `src` (a Molecule value of `atoms`) → `node` of `node_type`, configured by
+/// `configure`. With `region_pin`, `region` = `intersect(hs, far)` is wired to
+/// it: `hs` (x ≤ 1, a probe source, so the test reads the Point it is handed)
+/// decides near the atoms, `far` (x ≥ −50) never does.
+fn region_net(
+    node_type: &str,
+    atoms: AtomicStructure,
+    region_pin: Option<usize>,
+    configure: fn(&mut StructureDesigner, u64),
+) -> (StructureDesigner, u64, ProbeLog) {
+    let mut d = setup();
+    let src = add_value(&mut d, molecule_of(atoms), "src");
+    let node = add(&mut d, node_type, "node");
+    configure(&mut d, node);
+    d.connect_nodes(src, 0, node, 0);
+    let (hs, probes) = add_probe_source(
+        &mut d,
+        "hs",
+        SourceKind::Blueprint(Box::new(GeoNode::half_space(
+            DVec3::X,
+            DVec3::new(1.0, 0.0, 0.0),
+        ))),
+        vec![],
+    );
+    if let Some(region_pin) = region_pin {
+        let far = add_value(
+            &mut d,
+            blueprint(GeoNode::half_space(-DVec3::X, DVec3::new(-50.0, 0.0, 0.0))),
+            "far",
+        );
+        let region = add(&mut d, "intersect", "region");
+        d.connect_nodes(hs, 0, region, 0);
+        d.connect_nodes(far, 0, region, 0);
+        d.connect_nodes(region, 0, node, region_pin);
+    }
+    (d, node, probes)
+}
+
+/// The Point the region's `hs` was handed, which must be at `at`.
+fn assert_region_probed_at(probes: &ProbeLog, at: DVec3) {
+    let TraceProbe::Point { position, .. } = only_probe(probes) else {
+        panic!("the region gets a Point");
+    };
+    assert!(position.distance(at) < 1e-9, "{position} vs {at}");
+}
+
+/// The three wired-region cases and the unwired one for a region-gated op.
+/// `atoms` has the atom the node acts on at [`INSIDE`], one at [`OUTSIDE`]
+/// that it would act on were it inside, and, if `inside_kept`, one at
+/// [`INSIDE_KEPT`] that it leaves unchanged.
+fn assert_region_op(
+    node_type: &str,
+    region_pin: usize,
+    label: &str,
+    atoms: fn() -> AtomicStructure,
+    configure: fn(&mut StructureDesigner, u64),
+    inside_kept: bool,
+) {
+    // Outside the region: passed, region not listed.
+    let (mut d, node, probes) = region_net(node_type, atoms(), Some(region_pin), configure);
+    assert_eq!(
+        trace(&mut d, &atom_hit(node, OUTSIDE)),
+        "node passed\nsrc source",
+        "{node_type}: outside"
+    );
+    assert!(probes.lock().unwrap().is_empty());
+
+    // Inside, changed: the label, and the region down to the deciding `hs`,
+    // probed at the atom.
+    let (mut d, node, probes) = region_net(node_type, atoms(), Some(region_pin), configure);
+    assert_eq!(
+        trace(&mut d, &atom_hit(node, INSIDE)),
+        format!("node {label}\nsrc source\nregion passed\nhs source"),
+        "{node_type}: inside"
+    );
+    assert_region_probed_at(&probes, INSIDE);
+
+    // Inside, unchanged: passed, region not listed.
+    if inside_kept {
+        let (mut d, node, probes) = region_net(node_type, atoms(), Some(region_pin), configure);
+        assert_eq!(
+            trace(&mut d, &atom_hit(node, INSIDE_KEPT)),
+            "node passed\nsrc source",
+            "{node_type}: inside, unchanged"
+        );
+        assert!(probes.lock().unwrap().is_empty());
+    }
+
+    // Region unwired: every atom is in the region.
+    let (mut d, node, _) = region_net(node_type, atoms(), None, configure);
+    assert_eq!(
+        trace(&mut d, &atom_hit(node, INSIDE)),
+        format!("node {label}\nsrc source"),
+        "{node_type}: unwired"
+    );
+}
+
+fn no_config(_: &mut StructureDesigner, _: u64) {}
+
+fn carbons(positions: &[DVec3]) -> AtomicStructure {
+    let mut atoms = AtomicStructure::new();
+    for p in positions {
+        atoms.add_atom(6, *p);
+    }
+    atoms
+}
+
+/// A carbon at `at` with one hydrogen bonded to it on its −x side.
+fn add_ch(atoms: &mut AtomicStructure, at: DVec3) {
+    let c = atoms.add_atom(6, at);
+    let h = atoms.add_atom(1, at - DVec3::new(1.09, 0.0, 0.0));
+    atoms.add_bond(c, h, 1);
+}
+
+#[test]
+fn passivate_follows_its_region_only_for_a_host_it_passivated() {
+    assert_region_op(
+        "passivate",
+        1,
+        "passivated",
+        || {
+            let mut atoms = carbons(&[INSIDE, OUTSIDE]);
+            // A saturated methane carbon: nothing to passivate.
+            let c = atoms.add_atom(6, INSIDE_KEPT);
+            for dir in [
+                DVec3::new(1.0, 1.0, 1.0),
+                DVec3::new(1.0, -1.0, -1.0),
+                DVec3::new(-1.0, 1.0, -1.0),
+                DVec3::new(-1.0, -1.0, 1.0),
+            ] {
+                let h = atoms.add_atom(1, INSIDE_KEPT + dir.normalize() * 1.09);
+                atoms.add_bond(c, h, 1);
+            }
+            atoms
+        },
+        no_config,
+        true,
+    );
+}
+
+#[test]
+fn passivate_traces_a_placed_hydrogen_to_its_host_and_the_region_at_the_host() {
+    let (mut d, node, probes) =
+        region_net("passivate", carbons(&[INSIDE, OUTSIDE]), Some(1), no_config);
+    let atoms = output_atoms(&mut d, node);
+    let (_, h) = atoms
+        .iter_atoms()
+        .find(|(_, a)| a.atomic_number == 1)
+        .expect("passivate placed a hydrogen");
+    assert_eq!(
+        atoms.get_atom(h.bonds[0].other_atom_id()).unwrap().position,
+        INSIDE,
+        "precondition: only the in-region carbon is passivated"
+    );
+    assert_eq!(
+        trace(&mut d, &atom_hit(node, h.position)),
+        "node passivated\nsrc source\nregion passed\nhs source"
+    );
+    assert_region_probed_at(&probes, INSIDE);
+}
+
+#[test]
+fn remove_hydrogen_follows_its_region_only_for_a_host_it_stripped() {
+    assert_region_op(
+        "remove_hydrogen",
+        1,
+        "depassivated",
+        || {
+            let mut atoms = AtomicStructure::new();
+            add_ch(&mut atoms, INSIDE);
+            add_ch(&mut atoms, OUTSIDE);
+            // A bare carbon: nothing to strip.
+            atoms.add_atom(6, INSIDE_KEPT);
+            atoms
+        },
+        no_config,
+        true,
+    );
+}
+
+#[test]
+fn atom_replace_follows_its_region_only_for_an_atom_it_replaced() {
+    assert_region_op(
+        "atom_replace",
+        2,
+        "replaced",
+        || {
+            let mut atoms = carbons(&[INSIDE, OUTSIDE]);
+            // Nitrogen: no rule for it.
+            atoms.add_atom(7, INSIDE_KEPT);
+            atoms
+        },
+        |d, node| data_mut::<AtomReplaceData>(d, node).replacements = vec![(6, 14)],
+        true,
+    );
+}
+
+#[test]
+fn freeze_and_unfreeze_follow_their_region_only_for_an_atom_they_flipped() {
+    assert_region_op(
+        "freeze",
+        1,
+        "frozen",
+        || {
+            let mut atoms = carbons(&[INSIDE, OUTSIDE, INSIDE_KEPT]);
+            atoms.set_atom_frozen(3, true);
+            atoms
+        },
+        no_config,
+        true,
+    );
+    assert_region_op(
+        "unfreeze",
+        1,
+        "unfrozen",
+        || {
+            let mut atoms = carbons(&[INSIDE, OUTSIDE, INSIDE_KEPT]);
+            atoms.set_atom_frozen(1, true);
+            atoms.set_atom_frozen(2, true);
+            atoms
+        },
+        no_config,
+        true,
+    );
+}
+
+#[test]
+fn tag_and_untag_follow_their_region_only_for_an_atom_they_changed() {
+    assert_region_op(
+        "tag",
+        2,
+        "tagged",
+        || {
+            let mut atoms = carbons(&[INSIDE, OUTSIDE, INSIDE_KEPT]);
+            atoms.add_atom_tag(3, "t").unwrap();
+            atoms
+        },
+        |d, node| data_mut::<TagData>(d, node).name = "t".to_string(),
+        true,
+    );
+    // `untag` with an empty name clears every tag.
+    assert_region_op(
+        "untag",
+        2,
+        "untagged",
+        || {
+            let mut atoms = carbons(&[INSIDE, OUTSIDE, INSIDE_KEPT]);
+            atoms.add_atom_tag(1, "t").unwrap();
+            atoms.add_atom_tag(2, "t").unwrap();
+            atoms
+        },
+        no_config,
+        true,
+    );
+}
+
+#[test]
+fn xray_follows_its_region_for_every_atom_inside_it() {
+    // The alpha lives in the decorator, so every in-region atom is "faded":
+    // there is no unchanged in-region case.
+    assert_region_op(
+        "xray",
+        2,
+        "faded",
+        || carbons(&[INSIDE, OUTSIDE]),
+        no_config,
+        false,
+    );
+}
+
+/// `infer_bonds` (`RegionGate::Bond`): C at x = 0.5 (in the region) and 2.0
+/// (outside) bond to each other; C at 10 (outside) and −10 (inside) stay
+/// alone.
+fn infer_bonds_net() -> (StructureDesigner, u64, ProbeLog) {
+    region_net(
+        "infer_bonds",
+        carbons(&[
+            DVec3::new(0.5, 0.0, 0.0),
+            DVec3::new(2.0, 0.0, 0.0),
+            DVec3::new(10.0, 0.0, 0.0),
+            DVec3::new(-10.0, 0.0, 0.0),
+        ]),
+        Some(3),
+        no_config,
+    )
+}
+
+#[test]
+fn infer_bonds_follows_its_region_for_an_outside_atom_bonded_to_an_inside_one() {
+    let inside = DVec3::new(0.5, 0.0, 0.0);
+    let (mut d, node, probes) = infer_bonds_net();
+    assert!(
+        output_atoms(&mut d, node).has_bond_between(1, 2),
+        "precondition: the pair bonded"
+    );
+    assert_eq!(
+        trace(&mut d, &atom_hit(node, DVec3::new(2.0, 0.0, 0.0))),
+        "node bonded\nsrc source\nregion passed\nhs source"
+    );
+    // Probed at the in-region partner, not at the atom itself.
+    assert_region_probed_at(&probes, inside);
+
+    let (mut d, node, probes) = infer_bonds_net();
+    assert_eq!(
+        trace(&mut d, &atom_hit(node, inside)),
+        "node bonded\nsrc source\nregion passed\nhs source"
+    );
+    assert_region_probed_at(&probes, inside);
+}
+
+#[test]
+fn infer_bonds_passes_an_atom_whose_bonds_did_not_change() {
+    for at in [DVec3::new(10.0, 0.0, 0.0), DVec3::new(-10.0, 0.0, 0.0)] {
+        let (mut d, node, probes) = infer_bonds_net();
+        assert_eq!(
+            trace(&mut d, &atom_hit(node, at)),
+            "node passed\nsrc source",
+            "{at}"
+        );
+        assert!(probes.lock().unwrap().is_empty());
+    }
+}
+
+#[test]
+fn region_contains_agrees_with_the_region_gated_ops_at_the_margin() {
+    // A half space through the origin: an atom at x has signed distance x, so
+    // x = DEFAULT_REGION_MARGIN is exactly on the margin.
+    let geo = GeoNode::half_space(DVec3::X, DVec3::ZERO);
+    let positions: Vec<DVec3> = [
+        0.05,
+        DEFAULT_REGION_MARGIN,
+        DEFAULT_REGION_MARGIN + 1e-9,
+        0.2,
+    ]
+    .iter()
+    .map(|x| DVec3::new(*x, 0.0, 0.0))
+    .collect();
+    let mut d = setup();
+    let src = add_value(&mut d, molecule_of(carbons(&positions)), "src");
+    let region = add_value(&mut d, blueprint(geo.clone()), "region");
+    let freeze = add(&mut d, "freeze", "freeze");
+    d.connect_nodes(src, 0, freeze, 0);
+    d.connect_nodes(region, 0, freeze, 1);
+    let atoms = output_atoms(&mut d, freeze);
+    for (i, p) in positions.iter().enumerate() {
+        let frozen = atoms.get_atom(i as u32 + 1).unwrap().is_frozen();
+        assert_eq!(frozen, region_contains(&geo, *p), "x = {}", p.x);
+    }
+    assert!(region_contains(&geo, positions[1]), "the margin is inside");
+    assert!(!region_contains(&geo, positions[3]));
+}
+
+// ============================================================================
+// apply_style, edit_atom, proxy
+// ============================================================================
+
+#[test]
+fn apply_style_passes_an_atom_without_listing_its_rules() {
+    let mut d = setup();
+    let (src, probes) = add_probe_source(&mut d, "src", SourceKind::Molecule, vec![(6, A), (6, B)]);
+    let rules = {
+        let network = d.node_type_registry.node_networks.get_mut(MAIN).unwrap();
+        add_typed_value_node(
+            network,
+            DVec2::ZERO,
+            NetworkResult::Array(vec![]),
+            DataType::Array(Box::new(DataType::Record(RecordType::Named(
+                "StyleRule".to_string(),
+            )))),
+        )
+    };
+    let style = add(&mut d, "apply_style", "style");
+    d.connect_nodes(src, 0, style, 0);
+    d.connect_nodes(rules, 0, style, 1);
+    assert_eq!(
+        trace(&mut d, &atom_hit(style, B)),
+        "style passed\nsrc source"
+    );
+    assert_eq!(only_probe(&probes), atom_probe(2, B));
+}
+
+/// `src` (C at 0, 3 and 6 Å along x, ids 1–3) → `edit` (`edit_atom`), whose
+/// history moves atom 1 up by 1 Å and adds an N at 10 Å.
+fn edit_atom_chain() -> (StructureDesigner, u64, ProbeLog) {
+    let mut d = setup();
+    let (src, probes) = add_probe_source(
+        &mut d,
+        "src",
+        SourceKind::Molecule,
+        vec![
+            (6, A),
+            (6, DVec3::new(3.0, 0.0, 0.0)),
+            (6, DVec3::new(6.0, 0.0, 0.0)),
+        ],
+    );
+    let edit = add(&mut d, "edit_atom", "edit");
+    d.connect_nodes(src, 0, edit, 0);
+    let data = data_mut::<EditAtomData>(&mut d, edit);
+    data.add_command(Box::new(SelectCommand::new(
+        vec![1],
+        vec![],
+        SelectModifier::Replace,
+    )));
+    data.add_command(Box::new(TransformCommand::new(Transform::new(
+        DVec3::new(0.0, 0.0, 1.0),
+        DQuat::IDENTITY,
+    ))));
+    data.add_command(Box::new(AddAtomCommand::new(7, DVec3::new(10.0, 0.0, 0.0))));
+    (d, edit, probes)
+}
+
+#[test]
+fn edit_atom_an_added_atom_stops_at_the_node() {
+    let (mut d, edit, probes) = edit_atom_chain();
+    assert_eq!(
+        trace(&mut d, &atom_hit(edit, DVec3::new(10.0, 0.0, 0.0))),
+        "edit added"
+    );
+    assert!(probes.lock().unwrap().is_empty());
+}
+
+#[test]
+fn edit_atom_a_moved_atom_is_edited_with_its_id() {
+    let (mut d, edit, probes) = edit_atom_chain();
+    assert_eq!(
+        trace(&mut d, &atom_hit(edit, DVec3::new(0.0, 0.0, 1.0))),
+        "edit edited\nsrc source"
+    );
+    assert_eq!(only_probe(&probes), atom_probe(1, A));
+}
+
+#[test]
+fn edit_atom_an_untouched_atom_is_passed() {
+    let (mut d, edit, probes) = edit_atom_chain();
+    let untouched = DVec3::new(3.0, 0.0, 0.0);
+    assert_eq!(
+        trace(&mut d, &atom_hit(edit, untouched)),
+        "edit passed\nsrc source"
+    );
+    assert_eq!(only_probe(&probes), atom_probe(2, untouched));
+}
+
+/// A chain of six carbons along x (ids 1–6, 1.54 Å apart), atom 1 tagged `f`
+/// → `proxy` keeping two hops around it and capping the severed bond.
+fn proxy_chain() -> (StructureDesigner, u64) {
+    let mut d = setup();
+    let mut atoms = AtomicStructure::new();
+    let ids: Vec<u32> = (0..6)
+        .map(|i| atoms.add_atom(6, DVec3::new(1.54 * i as f64, 0.0, 0.0)))
+        .collect();
+    for pair in ids.windows(2) {
+        atoms.add_bond(pair[0], pair[1], 1);
+    }
+    atoms.add_atom_tag(ids[0], "f").unwrap();
+    let src = add_value(&mut d, molecule_of(atoms), "src");
+    let proxy = add(&mut d, "proxy", "proxy");
+    let data = data_mut::<ProxyData>(&mut d, proxy);
+    data.focus = "f".to_string();
+    data.hops = 2;
+    data.rim = 0;
+    data.rm_single = false;
+    data.passivate = true;
+    data.fill = false;
+    data.core = -1;
+    d.connect_nodes(src, 0, proxy, 0);
+    (d, proxy)
+}
+
+#[test]
+fn proxy_passes_a_kept_atom_found_by_position() {
+    let (mut d, proxy) = proxy_chain();
+    assert_eq!(
+        trace(&mut d, &atom_hit(proxy, DVec3::new(1.54, 0.0, 0.0))),
+        "proxy passed\nsrc source"
+    );
+}
+
+#[test]
+fn proxy_traces_a_cap_to_its_host() {
+    let (mut d, proxy) = proxy_chain();
+    let atoms = output_atoms(&mut d, proxy);
+    let (_, cap) = atoms
+        .iter_atoms()
+        .find(|(_, a)| a.atomic_number == 1)
+        .expect("precondition: a severed bond was capped");
+    let host = atoms.get_atom(cap.bonds[0].other_atom_id()).unwrap();
+    assert_eq!(
+        host.atomic_number, 6,
+        "precondition: the cap sits on a carbon"
+    );
+    assert_eq!(
+        trace(&mut d, &atom_hit(proxy, cap.position)),
+        "proxy capped\nsrc source"
+    );
+}
+
+// ============================================================================
+// apply_diff
+// ============================================================================
+
+#[test]
+fn apply_diff_of_an_atom_cut_lists_only_the_base_chain_for_an_untouched_atom() {
+    let mut d = setup();
+    let (src, probes) = add_probe_source(
+        &mut d,
+        "src",
+        SourceKind::Molecule,
+        vec![(6, A), (6, DVec3::new(3.0, 0.0, 0.0))],
+    );
+    let cutter = add_value(
+        &mut d,
+        blueprint(GeoNode::half_space(DVec3::X, DVec3::new(1.0, 0.0, 0.0))),
+        "cutter",
+    );
+    let cut = add(&mut d, "atom_cut", "cut");
+    set_node_data(
+        &mut d,
+        MAIN,
+        cut,
+        Box::new(AtomCutData {
+            cut_sdf_value: 0.0,
+            unit_cell_size: 1.0,
+        }),
+    );
+    d.connect_nodes(src, 0, cut, 0);
+    d.connect_nodes(cutter, 0, cut, 1);
+    let apply = add(&mut d, "apply_diff", "apply");
+    d.connect_nodes(src, 0, apply, 0);
+    d.connect_nodes(cut, 1, apply, 1);
+    assert_eq!(
+        output_atoms(&mut d, apply).get_num_of_atoms(),
+        1,
+        "precondition: the cut applied"
+    );
+
+    assert_eq!(
+        trace(&mut d, &atom_hit(apply, A)),
+        "apply passed\nsrc source"
+    );
+    assert_eq!(only_probe(&probes), atom_probe(1, A));
+}
+
+/// `src` → `edit` (`atom_edit`, as in `atom_edit_chain`); `apply` applies
+/// `edit`'s `diff` pin to `src`.
+fn apply_atom_edit_diff() -> (StructureDesigner, u64) {
+    let (mut d, edit, _) = atom_edit_chain();
+    let src = d
+        .get_active_node_network()
+        .unwrap()
+        .nodes
+        .values()
+        .find(|n| n.custom_name.as_deref() == Some("src"))
+        .unwrap()
+        .id;
+    let apply = add(&mut d, "apply_diff", "apply");
+    d.connect_nodes(src, 0, apply, 0);
+    d.connect_nodes(edit, 1, apply, 1);
+    (d, apply)
+}
+
+#[test]
+fn apply_diff_of_an_atom_edit_follows_each_chain_only_for_its_own_atoms() {
+    // Untouched: the base chain only.
+    let (mut d, apply) = apply_atom_edit_diff();
+    assert_eq!(
+        trace(&mut d, &atom_hit(apply, DVec3::new(3.0, 0.0, 0.0))),
+        "apply passed\nsrc source"
+    );
+    // Edited: both chains. `edit`'s `diff` pin has no `trace` and falls back
+    // (`doc/design_trace_coverage.md`, apply_diff).
+    let (mut d, apply) = apply_atom_edit_diff();
+    assert_eq!(
+        trace(&mut d, &atom_hit(apply, DVec3::new(0.0, 0.0, 1.0))),
+        "apply edited\nsrc source\nedit possibly contributed"
+    );
+    // Added: the diff chain only. The fallback loses the probe at `edit`'s
+    // input (the added atom is not there), so `src` is only wired upstream.
+    let (mut d, apply) = apply_atom_edit_diff();
+    assert_eq!(
+        trace(&mut d, &atom_hit(apply, DVec3::new(10.0, 0.0, 0.0))),
+        "apply added\nedit possibly contributed\nsrc wired upstream"
+    );
 }
