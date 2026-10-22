@@ -3598,8 +3598,23 @@ class StructureDesignerModel extends ChangeNotifier {
   APIRecordPathNodeData? getRecordSetData(BigInt nodeId) => record_path_api
       .getRecordSetData(scopePath: propertyEditorScopePath, nodeId: nodeId);
 
-  List<APIRecordFieldNode> getRecordFieldTree(String schema) =>
-      record_path_api.getRecordFieldTree(schema: schema);
+  /// The path picker's tree for a `record_get` / `record_set`, from its root:
+  /// its schema's fields, or those of the type it took from its wire.
+  List<APIRecordFieldNode> getRecordPathFieldTree(BigInt nodeId) =>
+      record_path_api.getRecordPathFieldTree(
+          scopePath: propertyEditorScopePath, nodeId: nodeId);
+
+  /// The schema dropdown of a `record_get` / `record_set`: point it at the def
+  /// `schema`, or at none (`''`, which makes it unset), in one undo step. The
+  /// rows move onto the new root by their current names.
+  APIResult setRecordPathNodeSchema(BigInt nodeId, String schema) {
+    final result = record_path_api.setRecordPathNodeSchema(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        schema: schema);
+    refreshFromKernel();
+    return result;
+  }
 
   APIResult setRecordGetData(
       BigInt nodeId, String schema, List<APIRecordPath> paths) {

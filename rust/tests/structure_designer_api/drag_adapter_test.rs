@@ -2031,6 +2031,26 @@ fn record_destructure_surfaces_for_an_anonymous_record_output() {
     assert_eq!(node_type.parameters[0].data_type, anon);
 }
 
+/// An anonymous record output lists `record_get` and `record_set` too
+/// (`doc/design_anonymous_record_readers.md`, Phase 3): their paths start at
+/// the dragged type.
+#[test]
+fn record_get_and_record_set_surface_for_an_anonymous_record_output() {
+    let designer = setup_designer_with_point();
+    let reg = &designer.node_type_registry;
+    let anon = DataType::Record(RecordType::anonymous(vec![(
+        "a".to_string(),
+        DataType::Float,
+    )]));
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            reg, &anon, true,
+        );
+    let names = names_of(&categories);
+    assert!(names.contains(&"record_get"), "{names:?}");
+    assert!(names.contains(&"record_set"), "{names:?}");
+}
+
 // --- Create-time plumbing ----------------------------------------------------
 
 #[test]

@@ -1151,14 +1151,24 @@ To read only a few fields, or fields of a nested record, use [`record_get`](#rec
 
 Reads chosen fields of a record by **path**, at any depth: `size`, `p.x`, `p.corner.z`. Where `record_destructure` shows every top-level field, `record_get` shows just the ones you pick.
 
+**Modes**
+
+The paths start at the node's **root** record type, which comes from one of three modes — the same three as [`record_destructure`](#record_destructure)'s:
+
+- **Named** — `Schema` names a record type def; the paths start at its fields.
+- **Anonymous** — no schema; the root is an anonymous record type the node **took from its wire**. The panel lists it read-only under the dropdown, captioned **Type from wire**.
+- **Unset** — neither. The input accepts any record, and no path can be added until the node has a root.
+
+The type is taken from the wire exactly as on `record_destructure`: on **drag-place** from a record output, on **connect** while the node is uncommitted (nothing reads its outputs, its function pin included, and it is not its network's return node), and by **Take type from wire** (**Use wire's type** in the panel, **Take types from wires** in the context menu) once the upstream record changes shape. A named record gives named mode, an anonymous one anonymous mode. Each is one undo step.
+
 **Properties**
 
-- `Schema` — the record type def the paths start at. Same dropdown as `record_construct`, including *Edit definition…*.
-- `Paths` — the list of paths to read. In the **Node Properties** panel each path is a row showing the path and the leaf field's type, with a delete button. **Add path** opens a tree of the schema's fields: a record-typed field expands to show its own fields, and clicking any field — a leaf or a whole nested record — adds it as a row.
+- `Schema` — the record type def the paths start at. Same dropdown as `record_construct`, including *Edit definition…*. Picking a def switches to named mode; picking *None* makes the node unset.
+- `Paths` — the list of paths to read. In the **Node Properties** panel each path is a row showing the path and the leaf field's type, with a delete button. **Add path** opens a tree of the root's fields: a record-typed field expands to show its own fields, and clicking any field — a leaf or a whole nested record — adds it as a row.
 
 **Input pin**
 
-- `record: Record(Schema)`.
+- `record` — `Record(Schema)` in named mode, the anonymous record type in anonymous mode, and `{}` (any record) when unset.
 
 **Output pins**
 
@@ -1172,13 +1182,21 @@ Paths follow **field identity**, not field names: renaming a field anywhere alon
 
 If a field on a path is **deleted**, or an inner field stops being a record, the row becomes **broken**: it stays in the list (shown struck through in red, with the reason), loses its pin and that pin's wire, and the node shows a warning. The node's other rows keep working. A broken row never comes back by itself — a field re-added under the same name is a different field — so delete the row, or undo the schema edit (which restores the row, its pin and its wire). A path through a record type from a linked library that did not load is *not* broken: the node is frozen until the library is back, and keeps its wires.
 
-Changing the `Schema` re-resolves each path by its current field names in the new schema; a path that does not exist there becomes a broken row.
+Changing the root — picking another `Schema`, *None*, or taking a new type from the wire — re-resolves each path by its current field names in the new root; a path that does not exist there becomes a broken row. The output wires stay with their rows.
+
+**Paths on an anonymous root.** An anonymous record type has no field identity, so the part of a path that runs through anonymous records is matched **by name**, down to the first named def; inside a def it follows field identity as above. Renaming `Point.x` keeps the row `p.x` (now `p.px`), but renaming the root field `p` upstream and taking the new type from the wire turns the row into a broken row, named after the anonymous type in its warning (*path `p.x` no longer exists in `{q: Record(Point), s: Float}`*). That is the cost of not naming the record; promote it with *Name this record…* on its `record_construct` if you want renames to follow.
 
 In the text format, `paths` is a list of strings. A segment containing `.` is written in backticks, and a broken row is written with a leading `!`:
 
 ```
 g = record_get { schema: "Box", paths: ["p.x", "size"], record: b }
 h = record_get { schema: "Box", paths: ["!p.x", "size"], record: b }
+```
+
+An anonymous node writes its root as `fields`, exactly as `record_destructure` does. A statement that sets none of `schema`, `fields` and `paths` takes its root from the `record:` wire (`g = record_get { record: r }`). A statement **with** `paths` must state its root itself, because the paths are resolved when the statement is applied; `paths` with neither `schema` nor `fields` on a node that has no root is an error.
+
+```
+g = record_get { fields: [{ name: "p", data_type: Record(Point) }, { name: "s", data_type: Float }], paths: ["p.x"], record: r }
 ```
 
 A one-path `record_get` used through its function pin (`-1`) is the "pluck" idiom: wired into `map.f`, it turns a stream of `Box` into a stream of its `size`s.
@@ -1189,17 +1207,17 @@ Updates chosen fields of a record by **path**, at any depth, and passes every ot
 
 **Properties**
 
-- `Schema` and `Paths` — as on `record_get`, with the same panel and the same tree picker.
+- `Schema` and `Paths` — as on `record_get`, with the same three modes, the same panel and the same tree picker. The root is taken from the wire as on `record_get`; dragging from `record_set`'s output works as well as from its input, since both are the record. A row pin with a wire makes the node *committed*, like a wire out of it; inline values do not.
 - An inline value per path. In the panel each row has the same literal editor as `record_construct` (for the simple editable types), with the same *stored*, *unset* and *wired* states.
 
 **Input pins**
 
-- `record: Record(Schema)` — always pin 0.
-- One pin per path, in row order, typed to the leaf field's type and named like `record_get`'s pins. A name that would clash with `record`, `schema`, `paths` or the text format's special keys (`visible`, `on`, `pin_roles`) gets a `__2` suffix.
+- `record` — the root type (as on `record_get`), always pin 0.
+- One pin per path, in row order, typed to the leaf field's type and named like `record_get`'s pins. A name that would clash with `record`, `schema`, `fields`, `paths` or the text format's special keys (`visible`, `on`, `pin_roles`) gets a `__2` suffix.
 
 **Output (single pin)**
 
-- `Record(Schema)`.
+- The root type: `Record(Schema)`, or the anonymous record type. An unset node outputs `None`.
 
 **Behavior**
 
@@ -1207,7 +1225,7 @@ Rows apply top to bottom. For each row, a wired pin wins; otherwise the row's in
 
 Fields no row names pass through unchanged, including extra fields the runtime value carries beyond the schema. `None` on an `Optional` field unsets it; `None` on a required field makes the output `None`. An error on the record or on a row value is passed through as the output.
 
-`record_set` only updates: every path must exist in the schema, and the output type is the schema. Renames, deletes and schema changes behave as on `record_get`; a broken row keeps its inline value but has no pin and no effect.
+`record_set` only updates: every path must exist in the root, and the output type is the root. Renames, deletes and root changes behave as on `record_get`; a broken row keeps its inline value but has no pin and no effect, and a row that survives a root change keeps its inline value while it still fits.
 
 Because `record` is pin 0, `record_set`'s function pin wired into `map.f` updates every record of a stream. Wired rows are captured; unwired rows become further parameters of the function.
 

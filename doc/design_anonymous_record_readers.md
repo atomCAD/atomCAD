@@ -1,6 +1,6 @@
 # Anonymous records on the record readers: `record_destructure`, `record_get`, `record_set` — and named fields in `expr`
 
-## Status: Design, reviewed — Phases 1–2 implemented (2026-10-22); Phases 3–4 open
+## Status: Design, reviewed — Phases 1–3 implemented (2026-10-22); Phase 4 open
 
 Phase 1 implementation notes (where the code differs from the text below):
 
@@ -21,6 +21,35 @@ Phase 1 implementation notes (where the code differs from the text below):
 Phase 2 implementation notes: the editor's dropdown labels its empty entry
 *None* (*None (type from wire)* in anonymous mode); a refused schema change
 is shown as an error snackbar. The Phase 2 walkthrough is open.
+
+Phase 3 implementation notes (where the code differs from the text below):
+
+- The root is a `RecordType` everywhere in `record_path.rs` and
+  `record_path_rows.rs`; an unset node's root is `{}`
+  (`record_path_rows::reader_root` / `is_unset_root`), not a separate
+  `Option`. `merge_rows` refuses only **live** paths on `{}`, and only when
+  paths are listed: a root change that merely moves the rows (adoption, the
+  dropdown's *None*) never fails, and an unset node may keep broken rows, which
+  `query` writes as `!path` and reads back.
+- `record_get`'s output pins carry row ids, which survive any type change, so
+  output wires are matched by id across modes too. The trait gained
+  `output_pin_ids_survive_type_change` (default `false`) for this; without it a
+  mode switch that dangles a row shifts the next row's derived pin name and the
+  name match moves the wire to the wrong row. `pin_mapping` also lets an
+  id-less pin match an id-less pin of the same name, so `record_set`'s single
+  `result` output keeps its wires.
+- The panel's dropdown goes through `set_record_input_schema` (new API
+  `set_record_path_node_schema`); the row setters keep their `schema`
+  parameter, where the current schema (`""` on an anonymous node) keeps the
+  root. The path-picker tree is fetched per node
+  (`get_record_path_field_tree`), and `get_record_field_tree` is gone.
+- `record_set` reserves `fields` as a row pin name (a `fields` row would
+  collide with the property). An unset `record_set` outputs `None`, as an
+  unchosen schema did.
+- A dangling-row warning names an anonymous root by `DataType`'s display, so a
+  named field inside it reads `Record(Point)`:
+  "path `p.x` no longer exists in `{q: Record(Point), s: Float}`".
+- The Phase 3 walkthrough is open.
 
 ## Motivation
 

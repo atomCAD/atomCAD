@@ -1064,3 +1064,92 @@ mp = map {{ xs: r, input_type: Int, output_type: Float, body {{ g = record_get {
     assert!(d.undo());
     assert_eq!(fingerprint(&mut d), original);
 }
+
+// ============================================================================
+// An anonymous root (`doc/design_anonymous_record_readers.md`, Phase 3)
+// ============================================================================
+
+/// `{p: Point, s: Float}`.
+fn anonymous_root() -> RecordType {
+    RecordType::anonymous(vec![
+        ("p".to_string(), named("Point")),
+        ("s".to_string(), DataType::Float),
+    ])
+}
+
+#[test]
+fn an_anonymous_root_segment_resolves_by_name_and_a_def_below_it_by_id() {
+    use atomcad_structure_designer::record_path::{resolve_names, resolve_path};
+    let d = setup();
+    let defs = d.node_type_registry.record_defs();
+    let root = anonymous_root();
+    let names = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+
+    let segments = resolve_names(&root, &names(&["p", "x"]), defs).unwrap();
+    assert_eq!(segments[0].field_id, None, "the root segment has no id");
+    assert_eq!(
+        segments[1].field_id,
+        Some(field_id(&d, "Point", "x").0),
+        "a field of a named def carries its FieldId"
+    );
+    let resolved = resolve_path(&root, &segments, defs).unwrap();
+    assert_eq!(resolved.names, names(&["p", "x"]));
+    assert_eq!(resolved.leaf_type, DataType::Float);
+    assert_eq!(resolve_names(&root, &names(&["q"]), defs), Err(0));
+    assert_eq!(resolve_names(&root, &names(&["s", "x"]), defs), Err(1));
+}
+
+#[test]
+fn merge_rows_on_an_anonymous_root_and_its_dangling_row_warning() {
+    use atomcad_structure_designer::nodes::record_path_rows::{
+        PATHS_NEED_A_ROOT, dangling_row_problems, merge_rows,
+    };
+    let d = setup();
+    let defs = d.node_type_registry.record_defs();
+    let root = anonymous_root();
+    let empty = RecordType::anonymous(vec![]);
+    let mut next_row_id = 0;
+    let no_rows: Vec<atomcad_structure_designer::nodes::record_path_rows::RecordPathRow> = vec![];
+
+    let merged = merge_rows(
+        &root,
+        &no_rows,
+        &root,
+        Some(&specs(&["p.x", "s"])),
+        defs,
+        &mut next_row_id,
+    )
+    .unwrap();
+    assert_eq!(merged.rows.len(), 2);
+    assert!(dangling_row_problems(&root, &merged.rows, defs).is_empty());
+
+    // The root loses `p` (a re-adopted type): the row dangles, named by the
+    // root's type.
+    let narrowed = RecordType::anonymous(vec![("s".to_string(), DataType::Float)]);
+    let moved = merge_rows(&root, &merged.rows, &narrowed, None, defs, &mut next_row_id).unwrap();
+    assert_eq!(
+        moved.rows.iter().map(|r| r.id).collect::<Vec<_>>(),
+        merged.rows.iter().map(|r| r.id).collect::<Vec<_>>(),
+        "rows keep their ids"
+    );
+    assert_eq!(
+        dangling_row_problems(&narrowed, &moved.rows, defs),
+        vec!["path `p.x` no longer exists in `{s: Float}`".to_string()]
+    );
+
+    // Moving rows onto the unset root never fails; listing live paths there
+    // does.
+    assert!(merge_rows(&root, &merged.rows, &empty, None, defs, &mut next_row_id).is_ok());
+    assert_eq!(
+        merge_rows(
+            &empty,
+            &no_rows,
+            &empty,
+            Some(&specs(&["s"])),
+            defs,
+            &mut next_row_id
+        )
+        .unwrap_err(),
+        PATHS_NEED_A_ROOT
+    );
+}

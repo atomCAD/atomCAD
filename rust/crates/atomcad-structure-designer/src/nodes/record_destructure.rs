@@ -28,7 +28,8 @@ use crate::node_type::{
 };
 use crate::node_type_registry::{NodeTypeRegistry, RecordDefs};
 use crate::nodes::local_record_fields::{
-    self, ANON_FIELD_PIN_ID_BASE, LocalRecordField, is_zero, rebuild_fields_by_name,
+    self, ANON_FIELD_PIN_ID_BASE, LocalRecordField, adopted_reader_fields, is_zero,
+    rebuild_fields_by_name,
 };
 use crate::record_typed_input::RecordTypedInput;
 use crate::structure_designer::StructureDesigner;
@@ -104,20 +105,11 @@ impl RecordTypedInput for RecordDestructureData {
         t: &RecordType,
         _defs: RecordDefs<'_>,
     ) -> Result<(), String> {
-        match t {
-            RecordType::Named(name) => {
-                self.schema = name.clone();
-                self.fields.clear();
-            }
-            RecordType::Anonymous(type_fields) => {
-                let mut fields = self.fields.clone();
-                let mut next_field_id = self.next_field_id;
-                rebuild_fields_by_name(&mut fields, &mut next_field_id, type_fields.clone())?;
-                self.schema.clear();
-                self.fields = fields;
-                self.next_field_id = next_field_id;
-            }
-        }
+        let (schema, fields, next_field_id) =
+            adopted_reader_fields(t, &self.fields, self.next_field_id)?;
+        self.schema = schema;
+        self.fields = fields;
+        self.next_field_id = next_field_id;
         Ok(())
     }
 }
@@ -207,20 +199,10 @@ impl NodeData for RecordDestructureData {
     fn get_text_properties(&self) -> Vec<(String, TextValue)> {
         let mut props = vec![("schema".to_string(), TextValue::String(self.schema.clone()))];
         if self.is_anonymous() {
-            let fields = self
-                .fields
-                .iter()
-                .map(|f| {
-                    TextValue::Object(vec![
-                        ("name".to_string(), TextValue::String(f.name.clone())),
-                        (
-                            "data_type".to_string(),
-                            TextValue::DataType(f.data_type.clone()),
-                        ),
-                    ])
-                })
-                .collect();
-            props.push(("fields".to_string(), TextValue::Array(fields)));
+            props.push((
+                "fields".to_string(),
+                local_record_fields::fields_text_value(&self.fields),
+            ));
         }
         props
     }
@@ -246,36 +228,7 @@ impl NodeData for RecordDestructureData {
             }
         }
         if let Some(v) = props.get("fields") {
-            let TextValue::Array(entries) = v else {
-                return Err("fields must be an array".to_string());
-            };
-            let mut new_fields: Vec<(String, DataType)> = Vec::with_capacity(entries.len());
-            for entry in entries {
-                let TextValue::Object(obj) = entry else {
-                    return Err("each field must be an object { name, data_type }".to_string());
-                };
-                let name = obj
-                    .iter()
-                    .find(|(k, _)| k == "name")
-                    .and_then(|(_, v)| v.as_string())
-                    .ok_or_else(|| "field name must be a string".to_string())?
-                    .to_string();
-                let data_type = obj
-                    .iter()
-                    .find(|(k, _)| k == "data_type")
-                    .and_then(|(_, v)| v.to_data_type())
-                    .ok_or_else(|| "field data_type must be a DataType".to_string())?;
-                if !crate::declared_inputs::is_input_identifier(&name) {
-                    return Err(format!(
-                        "Field name '{}' must be a letter or '_' followed by letters, digits or '_'",
-                        name
-                    ));
-                }
-                if new_fields.iter().any(|(n, _)| *n == name) {
-                    return Err(format!("Duplicate field name '{}'", name));
-                }
-                new_fields.push((name, data_type));
-            }
+            let new_fields = local_record_fields::parse_fields_text_value(v)?;
             if self.schema.is_empty() {
                 rebuild_fields_by_name(&mut self.fields, &mut self.next_field_id, new_fields)?;
             } else if !new_fields.is_empty() {

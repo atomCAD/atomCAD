@@ -8,8 +8,8 @@ import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'structure_designer_api_types.dart';
 
-// These functions are ignored because they are not marked as `pub`: `api_result`, `field_node`, `leaf_hint`, `no_instance`, `path_specs`, `row_pin_wired`, `rows_view`
-// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `edit_record_get`, `edit_record_set_literal`, `edit_record_set`, `record_field_tree`, `record_get_view`, `record_set_view`
+// These functions are ignored because they are not marked as `pub`: `api_result`, `field_node`, `leaf_hint`, `local_fields_view`, `no_instance`, `path_specs`, `row_pin_wired`, `rows_view`
+// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `edit_record_get`, `edit_record_set_literal`, `edit_record_set`, `record_field_tree_for_root`, `record_field_tree`, `record_get_view`, `record_path_node_field_tree`, `record_set_view`
 
 /// The `record_get` panel's data: the schema and each row's path (current
 /// names; stored names and `dangling: true` for a dangling row), pin name,
@@ -70,7 +70,24 @@ APIResult clearRecordSetLiteral(
         .crateApiStructureDesignerRecordPathApiClearRecordSetLiteral(
             scopePath: scopePath, nodeId: nodeId, rowIndex: rowIndex);
 
-/// The fields of the record def `schema` as a tree, for the path picker.
-List<APIRecordFieldNode> getRecordFieldTree({required String schema}) => RustLib
-    .instance.api
-    .crateApiStructureDesignerRecordPathApiGetRecordFieldTree(schema: schema);
+/// The path picker's tree for a `record_get` / `record_set` node, from its
+/// root: its schema's fields, or those of the type it took from its wire.
+/// Empty when the node is unset or is neither.
+List<APIRecordFieldNode> getRecordPathFieldTree(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerRecordPathApiGetRecordPathFieldTree(
+            scopePath: scopePath, nodeId: nodeId);
+
+/// Point a `record_get` / `record_set` at the def `schema`, or at none (`""`,
+/// which makes it unset), from its schema dropdown — one undo step, "Set
+/// record schema" (`StructureDesigner::set_record_input_schema`). Rows move
+/// onto the new root by their current names; a row that does not resolve
+/// there is kept as a broken row.
+APIResult setRecordPathNodeSchema(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required String schema}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerRecordPathApiSetRecordPathNodeSchema(
+            scopePath: scopePath, nodeId: nodeId, schema: schema);

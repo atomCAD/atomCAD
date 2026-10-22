@@ -109,11 +109,13 @@ fn has_consumer(network: &NodeNetwork, node_id: u64, level: usize) -> bool {
 pub type OutputPinKeys = Vec<(Option<u64>, String)>;
 
 /// For each old output pin, the index of the new pin its wires move to, or
-/// `None` when its wires are dropped. A pin without an id (the unset node's
-/// placeholder) neither keeps nor receives a wire. With `same_id_space` an id
-/// match wins and a name match is the fallback; otherwise names alone decide,
-/// because ids from two different defs (or a def and the local ids) can
-/// coincide without naming the same field. No new pin receives two old ones.
+/// `None` when its wires are dropped. With `same_id_space` an id match wins
+/// and a name match is the fallback; otherwise names alone decide, because
+/// ids from two different defs (or a def and the local ids) can coincide
+/// without naming the same field. A pin without an id matches only a pin
+/// without one: `record_set`'s single `result` keeps its wires, while the
+/// unset destructure's placeholder never trades wires with a field that
+/// happens to be called `result`. No new pin receives two old ones.
 fn pin_mapping(
     old: &[(Option<u64>, String)],
     new: &OutputPinKeys,
@@ -132,12 +134,12 @@ fn pin_mapping(
         }
     }
     for (slot, (id, name)) in mapping.iter_mut().zip(old) {
-        if slot.is_some() || id.is_none() {
+        if slot.is_some() {
             continue;
         }
         if let Some(index) = new
             .iter()
-            .position(|(new_id, new_name)| new_id.is_some() && new_name == name)
+            .position(|(new_id, new_name)| new_id.is_some() == id.is_some() && new_name == name)
             && taken.insert(index)
         {
             *slot = Some(index);
@@ -374,7 +376,7 @@ impl StructureDesigner {
         if !cascade {
             old_sizes.truncate(1);
         }
-        let (old_pins, old_type): (OutputPinKeys, Option<RecordType>) = {
+        let (old_pins, old_type, ids_survive): (OutputPinKeys, Option<RecordType>, bool) = {
             let node = self
                 .get_scope_network(scope_path)
                 .and_then(|network| network.nodes.get(&node_id))
@@ -390,7 +392,11 @@ impl StructureDesigner {
                         .collect()
                 })
                 .unwrap_or_default();
-            (pins, reader_shape(node.data.as_ref()).0)
+            let ids_survive = node
+                .data
+                .record_typed_input()
+                .is_some_and(|typed_input| typed_input.output_pin_ids_survive_type_change());
+            (pins, reader_shape(node.data.as_ref()).0, ids_survive)
         };
         let new_type = reader_shape(data.as_ref()).0;
         {
@@ -402,7 +408,7 @@ impl StructureDesigner {
         }
         self.rederive_node_type(scope_path, node_id);
 
-        let same = same_id_space(&old_type, &new_type);
+        let same = ids_survive || same_id_space(&old_type, &new_type);
         let mapping = match self.get_scope_network_mut(scope_path) {
             Some(network) => remap_record_output_wires(network, node_id, &old_pins, same),
             None => Vec::new(),

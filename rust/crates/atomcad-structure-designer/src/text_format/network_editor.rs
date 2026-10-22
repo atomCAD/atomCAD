@@ -380,7 +380,7 @@ struct PendingConnection {
     may_declare: bool,
     /// Whether this wire, once made, gives an unset record reader its type:
     /// it goes into the reader's `record` pin, is a single reference, and the
-    /// statement sets neither `schema` nor `fields`
+    /// statement sets none of `schema`, `fields` and `paths`
     /// (`doc/design_anonymous_record_readers.md`). See
     /// `apply_pending_adoptions`.
     may_adopt: bool,
@@ -1444,11 +1444,13 @@ impl<'a> NetworkEditor<'a> {
                     source_refs.len() == 1 && !matches!(prop_value, PropertyValue::Array(_));
                 let may_declare =
                     single_reference && !self.statement_declares_inputs(scope, node_id, properties);
+                // A statement with `paths` resolves them against a root when
+                // it is applied, so it must state its root itself.
                 let may_adopt = single_reference
                     && self.is_record_input_param(scope, node_id, prop_name)
                     && !properties
                         .iter()
-                        .any(|(name, _)| name == "schema" || name == "fields");
+                        .any(|(name, _)| name == "schema" || name == "fields" || name == "paths");
                 self.pending_connections.push(PendingConnection {
                     scope: scope.to_vec(),
                     dest_node_name: dest_node_name.to_string(),

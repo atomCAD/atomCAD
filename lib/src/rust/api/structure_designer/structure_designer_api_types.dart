@@ -6380,19 +6380,24 @@ class APIRecordPath {
           dangling == other.dangling;
 }
 
-/// Property payload of a `record_get` or `record_set` node: the schema and
-/// the rows, in row order.
+/// Property payload of a `record_get` or `record_set` node: its mode — the
+/// `schema` (named), or the fields of the type it took from its wire
+/// (anonymous, empty `schema`; read-only, in pin-irrelevant authored order),
+/// both empty when unset — and the rows, in row order
+/// (`doc/design_anonymous_record_readers.md`).
 class APIRecordPathNodeData {
   final String schema;
+  final List<APIRecordLocalField> fields;
   final List<APIRecordPathRow> rows;
 
   const APIRecordPathNodeData({
     required this.schema,
+    required this.fields,
     required this.rows,
   });
 
   @override
-  int get hashCode => schema.hashCode ^ rows.hashCode;
+  int get hashCode => schema.hashCode ^ fields.hashCode ^ rows.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -6400,6 +6405,7 @@ class APIRecordPathNodeData {
       other is APIRecordPathNodeData &&
           runtimeType == other.runtimeType &&
           schema == other.schema &&
+          fields == other.fields &&
           rows == other.rows;
 }
 

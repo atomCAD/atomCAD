@@ -16,7 +16,9 @@
 //!   `set_record_construct_literal`.
 //! - **The field tree is built here, not in Dart**: a path steps through
 //!   built-in defs and anonymous record types, neither of which the record-def
-//!   getters expose.
+//!   getters expose. It starts at the node's root — its `schema` def, or the
+//!   anonymous type it took from its wire
+//!   (`doc/design_anonymous_record_readers.md`).
 //!
 //! The work is in `#[frb(ignore)]` functions over a plain `StructureDesigner`
 //! so the api-side tests reach it without the global `CAD_INSTANCE`.
@@ -26,17 +28,18 @@ use crate::api::api_common::{
 };
 use crate::api::common_api_types::APIResult;
 use crate::api::structure_designer::structure_designer_api::{
-    api_literal_to_text_value, data_type_to_simple_param_type, field_editor_hint_to_api,
-    text_value_to_api_literal,
+    api_literal_to_text_value, data_type_to_api_data_type, data_type_to_simple_param_type,
+    field_editor_hint_to_api, text_value_to_api_literal,
 };
 use crate::api::structure_designer::structure_designer_api_types::{
-    APILiteralField, APILiteralValue, APIRecordFieldNode, APIRecordPath, APIRecordPathNodeData,
-    APIRecordPathRow,
+    APILiteralField, APILiteralValue, APIRecordFieldNode, APIRecordLocalField, APIRecordPath,
+    APIRecordPathNodeData, APIRecordPathRow,
 };
 use atomcad_structure_designer::data_type::{DataType, RecordType};
 use atomcad_structure_designer::node_data::MissingDefs;
 use atomcad_structure_designer::node_network::Node;
 use atomcad_structure_designer::node_type_registry::{FieldEditorHint, RecordDefs};
+use atomcad_structure_designer::nodes::local_record_fields::LocalRecordField;
 use atomcad_structure_designer::nodes::record_get::RecordGetData;
 use atomcad_structure_designer::nodes::record_path_rows::{
     RecordPathRow, literal_fits, row_pins, row_problem, row_spec,
@@ -65,7 +68,8 @@ pub fn record_get_view(
     let defs = designer.node_type_registry.record_defs();
     Some(APIRecordPathNodeData {
         schema: data.schema.clone(),
-        rows: rows_view(&data.schema, &data.rows, &[], defs, |_, _, _| None),
+        fields: local_fields_view(&data.fields),
+        rows: rows_view(&data.root(), &data.rows, &[], defs, |_, _, _| None),
     })
 }
 
@@ -83,10 +87,12 @@ pub fn record_set_view(
         .get(&node_id)?;
     let data = node.data.as_any_ref().downcast_ref::<RecordSetData>()?;
     let defs = designer.node_type_registry.record_defs();
+    let root = data.root();
     Some(APIRecordPathNodeData {
         schema: data.schema.clone(),
+        fields: local_fields_view(&data.fields),
         rows: rows_view(
-            &data.schema,
+            &root,
             &data.rows,
             &RESERVED_PIN_NAMES,
             defs,
@@ -103,7 +109,7 @@ pub fn record_set_view(
                     // No default layer: an unset row leaves the field unchanged.
                     default_value: None,
                     is_wired: row_pin_wired(node, row.row.id),
-                    hint: leaf_hint(&data.schema, &row.row, defs)
+                    hint: leaf_hint(&root, &row.row, defs)
                         .as_ref()
                         .map(field_editor_hint_to_api),
                 })
@@ -112,22 +118,34 @@ pub fn record_set_view(
     })
 }
 
+/// An anonymous node's root fields, for the read-only "Type from wire" list
+/// (empty in the other modes, which have none).
+fn local_fields_view(fields: &[LocalRecordField]) -> Vec<APIRecordLocalField> {
+    fields
+        .iter()
+        .map(|field| APIRecordLocalField {
+            name: field.name.clone(),
+            data_type: data_type_to_api_data_type(&field.data_type),
+        })
+        .collect()
+}
+
 /// The rows as the panel shows them. `literal(row_index, pin_name,
 /// pin_type)` builds a resolving row's literal part (`record_set` only).
 fn rows_view<R: AsRef<RecordPathRow>>(
-    schema: &str,
+    root: &RecordType,
     rows: &[R],
     reserved: &[&str],
     defs: RecordDefs<'_>,
     literal: impl Fn(usize, &str, &DataType) -> Option<APILiteralField>,
 ) -> Vec<APIRecordPathRow> {
-    let pins = row_pins(schema, rows, defs, reserved, MissingDefs::Dangle).unwrap_or_default();
+    let pins = row_pins(root, rows, defs, reserved, MissingDefs::Dangle).unwrap_or_default();
     rows.iter()
         .enumerate()
         .map(|(row_index, row)| {
             let row = row.as_ref();
             let pin = pins.iter().find(|pin| pin.row_index == row_index);
-            let path = match row_spec(schema, row, defs) {
+            let path = match row_spec(root, row, defs) {
                 PathSpec::Live(names) => APIRecordPath {
                     names,
                     dangling: false,
@@ -141,7 +159,7 @@ fn rows_view<R: AsRef<RecordPathRow>>(
                 path,
                 pin_name: pin.map(|pin| pin.name.clone()),
                 leaf_type: pin.map(|pin| pin.leaf_type.to_string()),
-                problem: row_problem(schema, row, defs),
+                problem: row_problem(root, row, defs),
                 literal: pin.and_then(|pin| literal(row_index, &pin.name, &pin.pin_type())),
             }
         })
@@ -164,12 +182,19 @@ fn row_pin_wired(node: &Node, row_id: Option<u64>) -> bool {
 
 /// The editor hint of the field `row` ends on, when that field is in a named
 /// def (an anonymous record type has none).
-fn leaf_hint(schema: &str, row: &RecordPathRow, defs: RecordDefs<'_>) -> Option<FieldEditorHint> {
+fn leaf_hint(
+    root: &RecordType,
+    row: &RecordPathRow,
+    defs: RecordDefs<'_>,
+) -> Option<FieldEditorHint> {
     let (leaf, parent) = row.path.split_last()?;
     let def_name = if parent.is_empty() {
-        schema.to_string()
+        match root {
+            RecordType::Named(name) => name.clone(),
+            RecordType::Anonymous(_) => return None,
+        }
     } else {
-        match resolve_path(schema, parent, defs).ok()?.leaf_type {
+        match resolve_path(root, parent, defs).ok()?.leaf_type {
             DataType::Record(RecordType::Named(name)) => name,
             _ => return None,
         }
@@ -188,15 +213,53 @@ fn leaf_hint(schema: &str, row: &RecordPathRow, defs: RecordDefs<'_>) -> Option<
 /// recursion ends.
 #[flutter_rust_bridge::frb(ignore)]
 pub fn record_field_tree(designer: &StructureDesigner, schema: &str) -> Vec<APIRecordFieldNode> {
+    record_field_tree_for_root(designer, &RecordType::Named(schema.to_string()))
+}
+
+/// [`record_field_tree`] from a root record type: a def (in its authored field
+/// order), or an anonymous type (in its canonical order). Empty for a missing
+/// def and for the unset node's `{}`.
+#[flutter_rust_bridge::frb(ignore)]
+pub fn record_field_tree_for_root(
+    designer: &StructureDesigner,
+    root: &RecordType,
+) -> Vec<APIRecordFieldNode> {
     let defs = designer.node_type_registry.record_defs();
-    match defs.lookup(schema) {
-        Some(def) => def
-            .fields
+    match root {
+        RecordType::Named(schema) => match defs.lookup(schema) {
+            Some(def) => def
+                .fields
+                .iter()
+                .map(|f| field_node(&f.name, &f.data_type, defs))
+                .collect(),
+            None => Vec::new(),
+        },
+        RecordType::Anonymous(fields) => fields
             .iter()
-            .map(|f| field_node(&f.name, &f.data_type, defs))
+            .map(|(name, data_type)| field_node(name, data_type, defs))
             .collect(),
-        None => Vec::new(),
     }
+}
+
+/// The path picker's tree for the `record_get` / `record_set` node `node_id`,
+/// from its root. `None` if the node is neither.
+#[flutter_rust_bridge::frb(ignore)]
+pub fn record_path_node_field_tree(
+    designer: &StructureDesigner,
+    scope_path: &[u64],
+    node_id: u64,
+) -> Option<Vec<APIRecordFieldNode>> {
+    let data = &designer
+        .get_scope_network(scope_path)?
+        .nodes
+        .get(&node_id)?
+        .data;
+    let root = if let Some(get) = data.as_any_ref().downcast_ref::<RecordGetData>() {
+        get.root()
+    } else {
+        data.as_any_ref().downcast_ref::<RecordSetData>()?.root()
+    };
+    Some(record_field_tree_for_root(designer, &root))
 }
 
 fn field_node(name: &str, data_type: &DataType, defs: RecordDefs<'_>) -> APIRecordFieldNode {
@@ -284,18 +347,18 @@ pub fn edit_record_set_literal(
         .ok_or_else(|| "Node is not a record_set".to_string())?
         .clone();
     let defs = designer.node_type_registry.record_defs();
-    let schema = data.schema.clone();
+    let root = data.root();
     let row = data
         .rows
         .get_mut(row_index)
         .ok_or_else(|| format!("record_set has no row {}", row_index))?;
     let literal = match value {
         Some(value) => {
-            if resolve_path(&schema, &row.row.path, defs).is_err() {
+            if resolve_path(&root, &row.row.path, defs).is_err() {
                 return Err("the row's path does not resolve, so it has no pin".to_string());
             }
             let literal = api_literal_to_text_value(value);
-            if !literal_fits(&schema, &row.row, &literal, defs) {
+            if !literal_fits(&root, &row.row, &literal, defs) {
                 return Err(format!(
                     "{} does not fit the field's type",
                     literal.to_text()
@@ -465,13 +528,45 @@ pub fn clear_record_set_literal(scope_path: Vec<u64>, node_id: u64, row_index: u
     }
 }
 
-/// The fields of the record def `schema` as a tree, for the path picker.
+/// The path picker's tree for a `record_get` / `record_set` node, from its
+/// root: its schema's fields, or those of the type it took from its wire.
+/// Empty when the node is unset or is neither.
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_record_field_tree(schema: String) -> Vec<APIRecordFieldNode> {
+pub fn get_record_path_field_tree(scope_path: Vec<u64>, node_id: u64) -> Vec<APIRecordFieldNode> {
     unsafe {
         with_cad_instance_or(
-            |cad_instance| record_field_tree(&cad_instance.structure_designer, &schema),
+            |cad_instance| {
+                record_path_node_field_tree(&cad_instance.structure_designer, &scope_path, node_id)
+                    .unwrap_or_default()
+            },
             Vec::new(),
+        )
+    }
+}
+
+/// Point a `record_get` / `record_set` at the def `schema`, or at none (`""`,
+/// which makes it unset), from its schema dropdown — one undo step, "Set
+/// record schema" (`StructureDesigner::set_record_input_schema`). Rows move
+/// onto the new root by their current names; a row that does not resolve
+/// there is kept as a broken row.
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_record_path_node_schema(
+    scope_path: Vec<u64>,
+    node_id: u64,
+    schema: String,
+) -> APIResult {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let result = cad_instance.structure_designer.set_record_input_schema(
+                    &scope_path,
+                    node_id,
+                    &schema,
+                );
+                refresh_structure_designer_auto(cad_instance);
+                api_result(result)
+            },
+            no_instance(),
         )
     }
 }

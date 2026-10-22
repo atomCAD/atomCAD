@@ -2,8 +2,10 @@
 //! resolver every user of a `record_get` / `record_set` row goes through, and
 //! the path text syntax.
 //!
-//! A path is a list of [`PathSegment`]s starting at a record def (the node's
-//! `schema`). A segment inside a **named** def is identified by its field's
+//! A path is a list of [`PathSegment`]s starting at a **root** record type:
+//! the node's `schema` def, or the anonymous type it took from its wire
+//! (`doc/design_anonymous_record_readers.md`). A segment inside a **named**
+//! def is identified by its field's
 //! [`FieldId`](crate::node_type_registry::FieldId), so a field rename anywhere
 //! along the path keeps the path; inside an **anonymous** record type, which
 //! has no ids, it is identified by name. The stored names are a snapshot taken
@@ -64,7 +66,8 @@ pub struct ResolvedPath {
 /// Why a path no longer resolves.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DanglingReason {
-    /// A def the path needs (the schema, or a nested def) is not in the defs.
+    /// A def the path needs (a named root, or a nested def) is not in the
+    /// defs. An anonymous root cannot be missing.
     DefMissing(String),
     /// Segment `depth`'s field is not in its record type any more.
     FieldGone { depth: usize },
@@ -76,7 +79,7 @@ pub enum DanglingReason {
 /// A path as the text format and the API carry it: by names.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PathSpec {
-    /// A path that must resolve against the schema now.
+    /// A path that must resolve against the root now.
     Live(Vec<String>),
     /// An existing dangling row, named by its stored segment names
     /// (`PathSegment::name`). Never resolved.
@@ -124,28 +127,53 @@ fn record_fields<'a>(
     }
 }
 
+/// The fields of the root record type, as steps, or `Err` naming a missing
+/// def (a named root that is not in the defs).
+fn root_fields<'a>(root: &'a RecordType, defs: RecordDefs<'a>) -> Result<Vec<Step<'a>>, String> {
+    match root {
+        RecordType::Named(n) => match defs.lookup(n) {
+            Some(def) => Ok(def
+                .fields
+                .iter()
+                .map(|f| Step {
+                    field_id: Some(f.id.0),
+                    name: &f.name,
+                    data_type: &f.data_type,
+                })
+                .collect()),
+            None => Err(n.clone()),
+        },
+        RecordType::Anonymous(fields) => Ok(fields
+            .iter()
+            .map(|(name, data_type)| Step {
+                field_id: None,
+                name,
+                data_type,
+            })
+            .collect()),
+    }
+}
+
+/// How a root is named in a message: a named root by its def, an anonymous
+/// one by its type (`{p: Record(Point), s: Float}`).
+pub fn root_display_name(root: &RecordType) -> String {
+    match root {
+        RecordType::Named(n) => n.clone(),
+        RecordType::Anonymous(_) => DataType::Record(root.clone()).to_string(),
+    }
+}
+
 /// The common walk. `pick(depth, fields)` chooses the field of segment
-/// `depth`; `visit_def` sees every named def stepped *into* below the schema
+/// `depth`; `visit_def` sees every named def stepped *into* below the root
 /// (including a missing one). Returns the steps taken, or why the walk stopped.
 fn walk<'a>(
-    schema: &str,
+    root: &'a RecordType,
     len: usize,
     defs: RecordDefs<'a>,
     mut pick: impl FnMut(usize, &[Step<'a>]) -> Option<usize>,
     mut visit_def: impl FnMut(&str),
 ) -> Result<Vec<Step<'a>>, DanglingReason> {
-    let schema_def = defs
-        .lookup(schema)
-        .ok_or_else(|| DanglingReason::DefMissing(schema.to_string()))?;
-    let mut fields: Vec<Step<'a>> = schema_def
-        .fields
-        .iter()
-        .map(|f| Step {
-            field_id: Some(f.id.0),
-            name: &f.name,
-            data_type: &f.data_type,
-        })
-        .collect();
+    let mut fields = root_fields(root, defs).map_err(DanglingReason::DefMissing)?;
     let mut taken = Vec::with_capacity(len);
     for depth in 0..len {
         let index = pick(depth, &fields).ok_or(DanglingReason::FieldGone { depth })?;
@@ -165,13 +193,13 @@ fn walk<'a>(
     Ok(taken)
 }
 
-/// Resolves `path` against `schema`: the current segment names and the leaf's
+/// Resolves `path` against `root`: the current segment names and the leaf's
 /// declared type, or why the path no longer resolves. A segment with a
 /// `field_id` is found by id, one without by name. Every segment but the last
 /// must land on a `Record` field — not `Optional`, not `Array`. An empty path
 /// is `FieldGone { depth: 0 }`.
 pub fn resolve_path(
-    schema: &str,
+    root: &RecordType,
     path: &[PathSegment],
     defs: RecordDefs<'_>,
 ) -> Result<ResolvedPath, DanglingReason> {
@@ -179,7 +207,7 @@ pub fn resolve_path(
         return Err(DanglingReason::FieldGone { depth: 0 });
     }
     let steps = walk(
-        schema,
+        root,
         path.len(),
         defs,
         |depth, fields| {
@@ -200,11 +228,11 @@ pub fn resolve_path(
 }
 
 /// The inverse direction, for the text format and the API, where paths
-/// arrive as names: resolves `names` against `schema` and returns the
+/// arrive as names: resolves `names` against `root` and returns the
 /// segments with their current `FieldId`s, or the depth of the first name
-/// that does not resolve (a missing schema, or an empty path, is depth 0).
+/// that does not resolve (a missing named root, or an empty path, is depth 0).
 pub fn resolve_names(
-    schema: &str,
+    root: &RecordType,
     names: &[String],
     defs: RecordDefs<'_>,
 ) -> Result<Vec<PathSegment>, usize> {
@@ -212,7 +240,7 @@ pub fn resolve_names(
         return Err(0);
     }
     let steps = walk(
-        schema,
+        root,
         names.len(),
         defs,
         |depth, fields| fields.iter().position(|f| f.name == names[depth]),
@@ -220,9 +248,9 @@ pub fn resolve_names(
     )
     .map_err(|reason| match reason {
         DanglingReason::DefMissing(_) => {
-            // The schema (depth 0), or the def under the deepest resolved
+            // The root (depth 0), or the def under the deepest resolved
             // segment. Find how far the names do resolve.
-            resolved_prefix_len(schema, names, defs)
+            resolved_prefix_len(root, names, defs)
         }
         DanglingReason::FieldGone { depth } => depth,
         DanglingReason::NotARecord { depth } => depth + 1,
@@ -237,15 +265,15 @@ pub fn resolve_names(
 }
 
 /// How many leading `names` resolve, segment by segment.
-fn resolved_prefix_len(schema: &str, names: &[String], defs: RecordDefs<'_>) -> usize {
+fn resolved_prefix_len(root: &RecordType, names: &[String], defs: RecordDefs<'_>) -> usize {
     (1..=names.len())
-        .take_while(|&n| resolve_names_exact(schema, &names[..n], defs))
+        .take_while(|&n| resolve_names_exact(root, &names[..n], defs))
         .count()
 }
 
-fn resolve_names_exact(schema: &str, names: &[String], defs: RecordDefs<'_>) -> bool {
+fn resolve_names_exact(root: &RecordType, names: &[String], defs: RecordDefs<'_>) -> bool {
     walk(
-        schema,
+        root,
         names.len(),
         defs,
         |depth, fields| fields.iter().position(|f| f.name == names[depth]),
@@ -261,7 +289,7 @@ fn resolve_names_exact(schema: &str, names: &[String], defs: RecordDefs<'_>) -> 
 /// frozen node (`doc/design_library_linking.md` §8) rebuilt by a text-format
 /// `--replace`. `Err(depth)` as for `resolve_names`.
 pub fn resolve_names_allowing_missing_defs(
-    schema: &str,
+    root: &RecordType,
     names: &[String],
     defs: RecordDefs<'_>,
 ) -> Result<Vec<PathSegment>, usize> {
@@ -269,7 +297,7 @@ pub fn resolve_names_allowing_missing_defs(
         return Err(0);
     }
     let mut segments = Vec::with_capacity(names.len());
-    let mut current = DataType::Record(RecordType::Named(schema.to_string()));
+    let mut current = DataType::Record(root.clone());
     for (depth, name) in names.iter().enumerate() {
         let fields = match record_fields(&current, defs) {
             Ok(Some(fields)) => fields,
@@ -294,19 +322,19 @@ pub fn resolve_names_allowing_missing_defs(
     Ok(segments)
 }
 
-/// Segments for `names` against `schema` that never fail: each segment gets
+/// Segments for `names` against `root` that never fail: each segment gets
 /// its field's id as far as the names resolve, and the rest are kept by name
-/// only. Used when a schema change moves a row onto a def where its names do
+/// only. Used when a root change moves a row onto a type where its names do
 /// not resolve (`doc/design_record_get_set.md`, "Schema change"): the row
 /// goes dangling under its current names, and its unresolved tail resolves
 /// again only by name.
 pub fn resolve_names_partially(
-    schema: &str,
+    root: &RecordType,
     names: &[String],
     defs: RecordDefs<'_>,
 ) -> Vec<PathSegment> {
     let mut segments = Vec::with_capacity(names.len());
-    let mut current = DataType::Record(RecordType::Named(schema.to_string()));
+    let mut current = DataType::Record(root.clone());
     for name in names {
         let step = match record_fields(&current, defs) {
             Ok(Some(fields)) => fields
@@ -332,12 +360,12 @@ pub fn resolve_names_partially(
     segments
 }
 
-/// The names of the defs below `schema` that `path` walks into, including a
+/// The names of the defs below `root` that `path` walks into, including a
 /// missing one (where the walk stops). For `NodeData::record_path_defs`.
-pub fn path_defs(schema: &str, path: &[PathSegment], defs: RecordDefs<'_>) -> Vec<String> {
+pub fn path_defs(root: &RecordType, path: &[PathSegment], defs: RecordDefs<'_>) -> Vec<String> {
     let mut out = Vec::new();
     let _ = walk(
-        schema,
+        root,
         path.len(),
         defs,
         |depth, fields| {
@@ -357,10 +385,10 @@ pub fn path_defs(schema: &str, path: &[PathSegment], defs: RecordDefs<'_>) -> Ve
 /// The names to show for `path` when it does not resolve because a def is
 /// missing: the current names as far as the path resolves, the stored names
 /// from there on.
-pub fn display_names(schema: &str, path: &[PathSegment], defs: RecordDefs<'_>) -> Vec<String> {
+pub fn display_names(root: &RecordType, path: &[PathSegment], defs: RecordDefs<'_>) -> Vec<String> {
     let resolved = (1..=path.len())
         .rev()
-        .find_map(|n| resolve_path(schema, &path[..n], defs).ok());
+        .find_map(|n| resolve_path(root, &path[..n], defs).ok());
     let mut names = resolved.map(|r| r.names).unwrap_or_default();
     names.extend(path[names.len()..].iter().map(|s| s.name.clone()));
     names

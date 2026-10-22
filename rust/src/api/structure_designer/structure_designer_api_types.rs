@@ -3686,10 +3686,14 @@ pub struct APIRecordPathRow {
     pub literal: Option<APILiteralField>,
 }
 
-/// Property payload of a `record_get` or `record_set` node: the schema and
-/// the rows, in row order.
+/// Property payload of a `record_get` or `record_set` node: its mode — the
+/// `schema` (named), or the fields of the type it took from its wire
+/// (anonymous, empty `schema`; read-only, in pin-irrelevant authored order),
+/// both empty when unset — and the rows, in row order
+/// (`doc/design_anonymous_record_readers.md`).
 pub struct APIRecordPathNodeData {
     pub schema: String,
+    pub fields: Vec<APIRecordLocalField>,
     pub rows: Vec<APIRecordPathRow>,
 }
 

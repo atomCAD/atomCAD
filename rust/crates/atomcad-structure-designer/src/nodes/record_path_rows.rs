@@ -1,6 +1,7 @@
 //! Path rows, shared by `record_get` and `record_set`
 //! (`doc/design_record_get_set.md`): one row per user-chosen path into the
-//! node's schema, each with a hidden stable id that its pin carries, so wires
+//! node's root record type — its `schema` def, or the anonymous type it took
+//! from its wire (`doc/design_anonymous_record_readers.md`) — each with a hidden stable id that its pin carries, so wires
 //! survive path edits and the removal of other rows.
 //!
 //! A row whose path no longer resolves ([`resolve_path`]) is **dangling**: it
@@ -10,13 +11,13 @@
 //! one place both nodes' `build_record_node_type` and `eval` agree on which
 //! rows have a pin and in what order.
 
-use crate::data_type::DataType;
+use crate::data_type::{DataType, RecordType};
 use crate::node_data::MissingDefs;
 use crate::node_type_registry::RecordDefs;
 use crate::nodes::variadic_ids::merge_ids_by_optional_key;
 use crate::record_path::{
     DanglingReason, PathSegment, PathSpec, ResolvedPath, display_names, format_path,
-    resolve_names_allowing_missing_defs, resolve_names_partially, resolve_path,
+    resolve_names_allowing_missing_defs, resolve_names_partially, resolve_path, root_display_name,
 };
 use crate::text_format::TextValue;
 use serde::{Deserialize, Serialize};
@@ -105,31 +106,34 @@ pub fn derived_pin_names(
         .collect()
 }
 
-/// Resolves every row against `schema`.
+/// Resolves every row against `root`.
 pub fn resolve_rows<R: AsRef<RecordPathRow>>(
-    schema: &str,
+    root: &RecordType,
     rows: &[R],
     defs: RecordDefs<'_>,
 ) -> Vec<Result<ResolvedPath, DanglingReason>> {
     rows.iter()
-        .map(|row| resolve_path(schema, &row.as_ref().path, defs))
+        .map(|row| resolve_path(root, &row.as_ref().path, defs))
         .collect()
 }
 
 /// The row-to-pins builder: one [`RowPin`] per resolving row, in row order.
-/// `None` only under [`MissingDefs::Refuse`] when the schema or a def a row
+/// `None` only under [`MissingDefs::Refuse`] when a named root or a def a row
 /// walks into is missing (a frozen node keeps its cached layout then).
 pub fn row_pins<R: AsRef<RecordPathRow>>(
-    schema: &str,
+    root: &RecordType,
     rows: &[R],
     defs: RecordDefs<'_>,
     reserved: &[&str],
     missing: MissingDefs,
 ) -> Option<Vec<RowPin>> {
-    if missing == MissingDefs::Refuse && defs.lookup(schema).is_none() {
+    if missing == MissingDefs::Refuse
+        && let RecordType::Named(schema) = root
+        && defs.lookup(schema).is_none()
+    {
         return None;
     }
-    let results = resolve_rows(schema, rows, defs);
+    let results = resolve_rows(root, rows, defs);
     if missing == MissingDefs::Refuse
         && results
             .iter()
@@ -160,22 +164,24 @@ pub fn row_pins<R: AsRef<RecordPathRow>>(
 
 /// One warning per dangling row, built from the row's stored names.
 pub fn dangling_row_problems<R: AsRef<RecordPathRow>>(
-    schema: &str,
+    root: &RecordType,
     rows: &[R],
     defs: RecordDefs<'_>,
 ) -> Vec<String> {
     rows.iter()
-        .filter_map(|row| row_problem(schema, row.as_ref(), defs))
+        .filter_map(|row| row_problem(root, row.as_ref(), defs))
         .collect()
 }
 
 /// Why `row` does not resolve, as the warning text the validator reports
 /// (built from the stored names); `None` for a row that resolves.
-pub fn row_problem(schema: &str, row: &RecordPathRow, defs: RecordDefs<'_>) -> Option<String> {
-    let reason = resolve_path(schema, &row.path, defs).err()?;
+/// A named root is named by its def, an anonymous one by its type.
+pub fn row_problem(root: &RecordType, row: &RecordPathRow, defs: RecordDefs<'_>) -> Option<String> {
+    let reason = resolve_path(root, &row.path, defs).err()?;
     let path = format_path(&row.stored_names());
+    let schema = root_display_name(root);
     Some(match reason {
-        DanglingReason::DefMissing(def) if def == schema => {
+        DanglingReason::DefMissing(def) if matches!(root, RecordType::Named(n) if *n == def) => {
             format!("path `{}`: record type `{}` does not exist", path, def)
         }
         DanglingReason::DefMissing(def) => format!(
@@ -194,17 +200,18 @@ pub fn row_problem(schema: &str, row: &RecordPathRow, defs: RecordDefs<'_>) -> O
     })
 }
 
-/// The defs below `schema` that the rows walk into (deduplicated, first-seen
+/// The defs below `root` that the rows walk into (deduplicated, first-seen
 /// order), including a missing one. For `NodeData::record_path_defs`.
 pub fn rows_path_defs<R: AsRef<RecordPathRow>>(
-    schema: &str,
+    root: &RecordType,
     rows: &[R],
     defs: RecordDefs<'_>,
 ) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for row in rows {
-        for name in crate::record_path::path_defs(schema, &row.as_ref().path, defs) {
-            if name != schema && !out.contains(&name) {
+        for name in crate::record_path::path_defs(root, &row.as_ref().path, defs) {
+            let is_root = matches!(root, RecordType::Named(n) if *n == name);
+            if !is_root && !out.contains(&name) {
                 out.push(name);
             }
         }
@@ -218,19 +225,17 @@ pub fn rows_path_defs<R: AsRef<RecordPathRow>>(
 /// resolvable prefix by current names, the rest by stored names): the def may
 /// only be unavailable — a frozen node under an unloaded library — and the
 /// path itself is not known to be broken.
-pub fn row_spec(schema: &str, row: &RecordPathRow, defs: RecordDefs<'_>) -> PathSpec {
-    match resolve_path(schema, &row.path, defs) {
+pub fn row_spec(root: &RecordType, row: &RecordPathRow, defs: RecordDefs<'_>) -> PathSpec {
+    match resolve_path(root, &row.path, defs) {
         Ok(r) => PathSpec::Live(r.names),
-        Err(DanglingReason::DefMissing(_)) => {
-            PathSpec::Live(display_names(schema, &row.path, defs))
-        }
+        Err(DanglingReason::DefMissing(_)) => PathSpec::Live(display_names(root, &row.path, defs)),
         Err(_) => PathSpec::Dangling(row.stored_names()),
     }
 }
 
 /// The `paths` text property of a node's rows.
 pub fn paths_text_value<R: AsRef<RecordPathRow>>(
-    schema: &str,
+    root: &RecordType,
     rows: &[R],
     defs: RecordDefs<'_>,
 ) -> TextValue {
@@ -238,7 +243,7 @@ pub fn paths_text_value<R: AsRef<RecordPathRow>>(
         rows.iter()
             .map(|row| {
                 TextValue::String(crate::record_path::format_path_spec(&row_spec(
-                    schema,
+                    root,
                     row.as_ref(),
                     defs,
                 )))
@@ -273,6 +278,36 @@ pub fn parse_paths(value: &TextValue) -> Result<Vec<PathSpec>, String> {
         .collect()
 }
 
+/// The error for live paths on a node with no root: the text format names
+/// both properties a statement can give it one with.
+pub const PATHS_NEED_A_ROOT: &str =
+    "paths need a root record type: set `schema` or `fields` (or wire `record:` without `paths`)";
+
+/// Whether `root` is the unset node's: the empty record `{}`, which has no
+/// field a path could start at.
+pub fn is_unset_root(root: &RecordType) -> bool {
+    matches!(root, RecordType::Anonymous(fields) if fields.is_empty())
+}
+
+/// The root record type of a reader in one of the three modes
+/// (`doc/design_anonymous_record_readers.md`): `Named(schema)`, the anonymous
+/// type of its own `fields`, or `{}` when it is unset.
+pub fn reader_root(
+    schema: &str,
+    fields: &[crate::nodes::local_record_fields::LocalRecordField],
+) -> RecordType {
+    if !schema.is_empty() {
+        RecordType::Named(schema.to_string())
+    } else {
+        RecordType::anonymous(
+            fields
+                .iter()
+                .map(|f| (f.name.clone(), f.data_type.clone()))
+                .collect(),
+        )
+    }
+}
+
 /// The result of [`merge_rows`].
 #[derive(Debug, Clone)]
 pub struct MergedRows {
@@ -298,40 +333,40 @@ fn same_path(a: &[PathSegment], b: &[PathSegment]) -> bool {
 
 /// The error for a live path whose names do not resolve: `depth` is the
 /// first name that fails.
-fn unresolved_path_error(schema: &str, names: &[String], depth: usize) -> String {
+fn unresolved_path_error(root: &RecordType, names: &[String], depth: usize) -> String {
     format!(
         "path `{}`: `{}` is not a field of `{}`",
         format_path(names),
         names[depth],
         if depth == 0 {
-            schema.to_string()
+            root_display_name(root)
         } else {
             format_path(&names[..depth])
         }
     )
 }
 
-/// Moves `rows` from `old_schema` onto `new_schema`, keeping their ids: each
-/// row is re-resolved **by its current names** under the old schema (its
+/// Moves `rows` from `old_root` onto `new_root`, keeping their ids: each
+/// row is re-resolved **by its current names** under the old root (its
 /// [`row_spec`] names — the stored names only for a row already dangling),
 /// never by the stored names, which go stale on renames. A row whose names do
-/// not resolve against the new schema becomes dangling
+/// not resolve against the new root becomes dangling
 /// ([`resolve_names_partially`]).
 pub fn rebase_rows<R: AsRef<RecordPathRow>>(
-    old_schema: &str,
-    new_schema: &str,
+    old_root: &RecordType,
+    new_root: &RecordType,
     rows: &[R],
     defs: RecordDefs<'_>,
 ) -> Vec<RecordPathRow> {
     rows.iter()
         .map(|row| {
             let row = row.as_ref();
-            let names = match row_spec(old_schema, row, defs) {
+            let names = match row_spec(old_root, row, defs) {
                 PathSpec::Live(names) | PathSpec::Dangling(names) => names,
             };
             RecordPathRow {
                 id: row.id,
-                path: resolve_names_partially(new_schema, &names, defs),
+                path: resolve_names_partially(new_root, &names, defs),
             }
         })
         .collect()
@@ -340,20 +375,20 @@ pub fn rebase_rows<R: AsRef<RecordPathRow>>(
 /// Edits a node's rows from by-name specs (the text format, the
 /// `StructureDesigner` setters), preserving ids so wires follow their rows
 /// (`doc/design_record_get_set.md`, "Row editing"). `specs: None` keeps the
-/// rows (a schema-only edit).
+/// rows (a root-only edit).
 ///
 /// 1. **Checks.** An empty or duplicate `Live` path, a `Live` path that does
-///    not resolve (and claims no row, below), or paths without a schema are
-///    errors; nothing is changed.
+///    not resolve (and claims no row, below), or live paths without a root
+///    (an unset node, root `{}`) are errors; nothing is changed.
 /// 2. **Claims.** A `Dangling` spec claims the first unclaimed old dangling
 ///    row with the same stored names, kept verbatim. One that matches none is
 ///    **recreated** as a dangling row with a fresh id whose segments resolve
 ///    to nothing ([`PathSegment::gone`]): a `--replace` builds every node
 ///    afresh, so this is how its dangling rows survive the round trip. When
-///    the **schema changes**, every spec instead
-///    claims the old row it names under the old schema (its current names,
+///    the **root changes**, every spec instead
+///    claims the old row it names under the old root (its current names,
 ///    as the getter and serializer print them): the row is moved onto the new
-///    schema by [`rebase_rows`], keeps its id, and goes dangling if its names
+///    root by [`rebase_rows`], keeps its id, and goes dangling if its names
 ///    do not resolve there.
 /// 3. **Merge.** The remaining `Live` specs go through the three-pass id
 ///    merge ([`merge_ids_by_optional_key`]): path match, positional fallback
@@ -361,23 +396,26 @@ pub fn rebase_rows<R: AsRef<RecordPathRow>>(
 ///    rows take no part. A path match keeps the old row's path verbatim, so
 ///    echoing a node's rows back changes nothing.
 pub fn merge_rows<R: AsRef<RecordPathRow>>(
-    old_schema: &str,
+    old_root: &RecordType,
     old_rows: &[R],
-    schema: &str,
+    root: &RecordType,
     specs: Option<&[PathSpec]>,
     defs: RecordDefs<'_>,
     next_row_id: &mut u64,
 ) -> Result<MergedRows, String> {
-    let changed = old_schema != schema;
+    let changed = old_root != root;
     let old_specs: Vec<PathSpec> = old_rows
         .iter()
-        .map(|row| row_spec(old_schema, row.as_ref(), defs))
+        .map(|row| row_spec(old_root, row.as_ref(), defs))
         .collect();
     let base: Vec<RecordPathRow> = if changed {
-        rebase_rows(old_schema, schema, old_rows, defs)
+        rebase_rows(old_root, root, old_rows, defs)
     } else {
         old_rows.iter().map(|row| row.as_ref().clone()).collect()
     };
+    // Rows that are only moved onto a new root are never refused for want of
+    // one: they go dangling instead.
+    let listed = specs.is_some();
     let specs: Vec<PathSpec> = match specs {
         Some(specs) => specs.to_vec(),
         None if !changed => {
@@ -390,8 +428,8 @@ pub fn merge_rows<R: AsRef<RecordPathRow>>(
     };
 
     // 1. Checks that need no resolution.
-    if schema.is_empty() && !specs.is_empty() {
-        return Err("paths need a schema".to_string());
+    if listed && is_unset_root(root) && specs.iter().any(|spec| matches!(spec, PathSpec::Live(_))) {
+        return Err(PATHS_NEED_A_ROOT.to_string());
     }
     let mut seen: Vec<&Vec<String>> = Vec::new();
     for spec in &specs {
@@ -424,8 +462,8 @@ pub fn merge_rows<R: AsRef<RecordPathRow>>(
     for (si, spec) in specs.iter().enumerate() {
         match spec {
             PathSpec::Live(names) if claims[si].is_none() => {
-                let segments = resolve_names_allowing_missing_defs(schema, names, defs)
-                    .map_err(|depth| unresolved_path_error(schema, names, depth))?;
+                let segments = resolve_names_allowing_missing_defs(root, names, defs)
+                    .map_err(|depth| unresolved_path_error(root, names, depth))?;
                 keys.push(Some(segments));
             }
             _ => keys.push(None),
@@ -515,7 +553,7 @@ pub fn heal_rows<R: AsRef<RecordPathRow> + AsMut<RecordPathRow>>(
 /// frozen node keeps that row's pin from its recorded interface, and its
 /// literal must survive a `query` → `--replace`.
 pub fn text_pin_names<R: AsRef<RecordPathRow>>(
-    schema: &str,
+    root: &RecordType,
     rows: &[R],
     defs: RecordDefs<'_>,
     reserved: &[&str],
@@ -524,10 +562,10 @@ pub fn text_pin_names<R: AsRef<RecordPathRow>>(
         .iter()
         .map(|row| {
             let path = &row.as_ref().path;
-            match resolve_path(schema, path, defs) {
+            match resolve_path(root, path, defs) {
                 Ok(r) => Some(r),
                 Err(DanglingReason::DefMissing(_)) => Some(ResolvedPath {
-                    names: display_names(schema, path, defs),
+                    names: display_names(root, path, defs),
                     leaf_type: DataType::None,
                 }),
                 Err(_) => None,
@@ -541,12 +579,12 @@ pub fn text_pin_names<R: AsRef<RecordPathRow>>(
 /// pin type. A row that does not resolve has no known type, and its literal
 /// is kept unchecked.
 pub fn literal_fits(
-    schema: &str,
+    root: &RecordType,
     row: &RecordPathRow,
     literal: &TextValue,
     defs: RecordDefs<'_>,
 ) -> bool {
-    match resolve_path(schema, &row.path, defs) {
+    match resolve_path(root, &row.path, defs) {
         Ok(r) => literal
             .to_network_result(&r.leaf_type.record_field_pin_type())
             .is_some(),

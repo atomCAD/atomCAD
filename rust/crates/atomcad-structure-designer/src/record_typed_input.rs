@@ -13,8 +13,7 @@ use crate::data_type::RecordType;
 use crate::node_type_registry::RecordDefs;
 
 /// A node whose pins are derived from the record type of its `record` input
-/// (`record_destructure`; `record_get` and `record_set` in Phase 3 of the
-/// design). The type is a snapshot, taken from the wire on drag-place, on
+/// (`record_destructure`, `record_get`, `record_set`). The type is a snapshot, taken from the wire on drag-place, on
 /// connect while the node is uncommitted, and by Take type from wire.
 /// Mutating methods edit the data only; the caller re-derives, remaps output
 /// wires, reflows, revalidates and records undo (`record_input_type_ops.rs`).
@@ -32,5 +31,15 @@ pub trait RecordTypedInput {
     /// The `record` pin: index 0 on all three readers.
     fn is_record_input_pin(&self, index: usize) -> bool {
         index == 0
+    }
+
+    /// Whether the node's output pin ids name the same thing whatever its
+    /// input type — `record_get`'s pins carry row ids, which a type change
+    /// keeps. Then output wires across any type change are matched by id
+    /// first. `false` (the default) when the ids come from the type, as a
+    /// destructure's `FieldId`s do: ids of two defs can coincide, so a change
+    /// between defs or modes matches by name alone.
+    fn output_pin_ids_survive_type_change(&self) -> bool {
+        false
     }
 }

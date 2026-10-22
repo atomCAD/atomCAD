@@ -13,7 +13,7 @@ use atomcad_structure_designer::structure_designer::StructureDesigner;
 use atomcad_structure_designer::text_format::TextValue;
 use rust_lib_flutter_cad::api::structure_designer::record_path_api::{
     edit_record_get, edit_record_set, edit_record_set_literal, record_field_tree, record_get_view,
-    record_set_view,
+    record_path_node_field_tree, record_set_view,
 };
 use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::{
     APILiteralValue, APIRecordPath, APIRecordPathNodeData, APISimpleParamType,
@@ -518,4 +518,41 @@ fn the_field_tree_expands_record_fields_named_and_anonymous() {
     let view = record_get_view(&d, &[], g).unwrap();
     assert_eq!(view.rows[0].pin_name.as_deref(), Some("box_p_x"));
     assert_eq!(view.rows[1].leaf_type.as_deref(), Some("Int"));
+}
+
+// ============================================================================
+// An anonymous root (`doc/design_anonymous_record_readers.md`, Phase 3)
+// ============================================================================
+
+/// A `record_get` that took `{p: Point, s: Float}` from its wire: the picker
+/// tree starts at that type — `p` expands to `Point`'s fields, `s` is a leaf —
+/// and the view lists the type's fields under an empty schema.
+#[test]
+fn the_field_tree_of_an_anonymous_root() {
+    let mut d = with(
+        "rc = record_construct { fields: [{ name: \"p\", data_type: Record(Point) }, { name: \"s\", data_type: Float }], p: pt, s: fs }
+g = record_get { record: rc }
+u = record_get {}
+",
+    );
+    let (g, u) = (id(&d, "g"), id(&d, "u"));
+    let tree = record_path_node_field_tree(&d, &[], g).unwrap();
+    let top: Vec<&str> = tree.iter().map(|n| n.name.as_str()).collect();
+    assert_eq!(top, ["p", "s"]);
+    assert!(tree[0].steppable);
+    let p: Vec<&str> = tree[0].children.iter().map(|c| c.name.as_str()).collect();
+    assert_eq!(p, ["x", "y"]);
+    assert!(!tree[1].steppable);
+    assert!(
+        record_path_node_field_tree(&d, &[], u).unwrap().is_empty(),
+        "an unset node has no root to pick from"
+    );
+
+    edit_record_get(&mut d, &[], g, String::new(), vec![live(&["p", "x"])]).unwrap();
+    let view = record_get_view(&d, &[], g).unwrap();
+    assert_eq!(view.schema, "");
+    let fields: Vec<&str> = view.fields.iter().map(|f| f.name.as_str()).collect();
+    assert_eq!(fields, ["p", "s"]);
+    assert_eq!(view.rows[0].pin_name.as_deref(), Some("p_x"));
+    assert!(record_get_view(&d, &[], u).unwrap().fields.is_empty());
 }

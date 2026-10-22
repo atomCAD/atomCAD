@@ -1056,20 +1056,45 @@ fn path_text_round_trips() {
 fn resolve_names_and_resolve_path_report_where_and_why() {
     let d = setup();
     let defs = d.node_type_registry.record_defs();
-    assert_eq!(resolve_names("Box", &names(&["q"]), defs), Err(0));
-    assert_eq!(resolve_names("Box", &names(&["p", "z"]), defs), Err(1));
-    assert_eq!(resolve_names("Box", &names(&["size", "x"]), defs), Err(1));
-    assert_eq!(resolve_names("Nope", &names(&["p"]), defs), Err(0));
-    let segs = resolve_names("Box", &names(&["p", "x"]), defs).unwrap();
+    assert_eq!(
+        resolve_names(&RecordType::Named("Box".to_string()), &names(&["q"]), defs),
+        Err(0)
+    );
+    assert_eq!(
+        resolve_names(
+            &RecordType::Named("Box".to_string()),
+            &names(&["p", "z"]),
+            defs
+        ),
+        Err(1)
+    );
+    assert_eq!(
+        resolve_names(
+            &RecordType::Named("Box".to_string()),
+            &names(&["size", "x"]),
+            defs
+        ),
+        Err(1)
+    );
+    assert_eq!(
+        resolve_names(&RecordType::Named("Nope".to_string()), &names(&["p"]), defs),
+        Err(0)
+    );
+    let segs = resolve_names(
+        &RecordType::Named("Box".to_string()),
+        &names(&["p", "x"]),
+        defs,
+    )
+    .unwrap();
     assert_eq!(segs[0].field_id, Some(field_id(&d, "Box", "p").0));
     assert_eq!(segs[1].field_id, Some(field_id(&d, "Point", "x").0));
 
-    let ok = resolve_path("Box", &segs, defs).unwrap();
+    let ok = resolve_path(&RecordType::Named("Box".to_string()), &segs, defs).unwrap();
     assert_eq!(ok.names, names(&["p", "x"]));
     assert_eq!(ok.leaf_type, DataType::Float);
 
     assert_eq!(
-        resolve_path("Nope", &segs, defs),
+        resolve_path(&RecordType::Named("Nope".to_string()), &segs, defs),
         Err(DanglingReason::DefMissing("Nope".to_string()))
     );
     let gone = vec![
@@ -1080,7 +1105,7 @@ fn resolve_names_and_resolve_path_report_where_and_why() {
         },
     ];
     assert_eq!(
-        resolve_path("Box", &gone, defs),
+        resolve_path(&RecordType::Named("Box".to_string()), &gone, defs),
         Err(DanglingReason::FieldGone { depth: 1 }),
         "an id that is gone is not resolved by its name"
     );
@@ -1092,7 +1117,7 @@ fn resolve_names_and_resolve_path_report_where_and_why() {
         segs[1].clone(),
     ];
     assert_eq!(
-        resolve_path("Box", &through_leaf, defs),
+        resolve_path(&RecordType::Named("Box".to_string()), &through_leaf, defs),
         Err(DanglingReason::NotARecord { depth: 0 })
     );
 
@@ -1102,7 +1127,11 @@ fn resolve_names_and_resolve_path_report_where_and_why() {
         .delete_record_type_def("Point")
         .unwrap();
     assert_eq!(
-        resolve_path("Box", &segs, d2.node_type_registry.record_defs()),
+        resolve_path(
+            &RecordType::Named("Box".to_string()),
+            &segs,
+            d2.node_type_registry.record_defs()
+        ),
         Err(DanglingReason::DefMissing("Point".to_string()))
     );
 }

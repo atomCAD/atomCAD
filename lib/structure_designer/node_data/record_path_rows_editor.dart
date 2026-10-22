@@ -5,25 +5,40 @@ import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/structure_designer/node_data/literal_fields_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
+import 'package:flutter_cad/inputs/type_editor_dialog.dart';
 import 'package:flutter_cad/structure_designer/node_data/record_def_dropdown.dart';
+import 'package:flutter_cad/structure_designer/node_data/wire_type_offer.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
+
+/// The `record` input pin, whose wire the node's root type is taken from.
+const int _recordPinIndex = 0;
 
 /// The shared body of the `record_get` and `record_set` property editors
 /// (`doc/design_record_get_set.md` Phase 4): the schema dropdown, one row per
 /// path (path, leaf type, delete button; a broken row in the error style), and
-/// an "Add path" button opening a tree picker of the schema's fields.
+/// an "Add path" button opening a tree picker of the root's fields.
+///
+/// The root is the node's mode, decided in Rust
+/// (`doc/design_anonymous_record_readers.md`): **named** (a def picked from the
+/// dropdown), **anonymous** (a type taken from the wire, listed read-only under
+/// the dropdown, with an empty schema) or **unset** (neither — no path can be
+/// added). The dropdown is one undo step through
+/// [StructureDesignerModel.setRecordPathNodeSchema], which moves the rows onto
+/// the new root by their current names; **Use wire's type** re-adopts a stale
+/// wire's type, as on `record_destructure`.
 ///
 /// Rows are named by path, never by id. Every edit sends the row list the
 /// getter returned with the change applied ([onSetData]) — a dangling row in
 /// that list is kept by the kernel, one left out is deleted — so this widget
-/// never has to know which row is which. A schema change re-sends the same
-/// paths: the kernel re-resolves them by their current names against the new
-/// schema. Rejections come back as an [APIResult] and are shown inline.
+/// never has to know which row is which. A row edit sends the current schema
+/// back (empty on an anonymous node, which keeps its root). Rejections come
+/// back as an [APIResult] and are shown inline.
 ///
 /// `record_set` passes [onSetLiteral] / [onClearLiteral], and each row with an
 /// inline-editable leaf then gets the shared [LiteralFieldsEditor] (stored /
 /// unset / wired states, as on `record_construct`), keyed by row index.
 class RecordPathRowsEditor extends StatefulWidget {
+  final BigInt nodeId;
   final String title;
   final String nodeTypeName;
   final APIRecordPathNodeData? data;
@@ -34,6 +49,7 @@ class RecordPathRowsEditor extends StatefulWidget {
 
   const RecordPathRowsEditor({
     super.key,
+    required this.nodeId,
     required this.title,
     required this.nodeTypeName,
     required this.data,
@@ -60,7 +76,7 @@ class _RecordPathRowsEditorState extends State<RecordPathRowsEditor> {
       .toList();
 
   void _setSchema(String schema) {
-    _apply(widget.onSetData(schema, _paths));
+    _apply(widget.model.setRecordPathNodeSchema(widget.nodeId, schema));
   }
 
   void _removeRow(int index) {
@@ -76,8 +92,8 @@ class _RecordPathRowsEditorState extends State<RecordPathRowsEditor> {
         .toSet();
     final picked = await showRecordFieldPicker(
       context: context,
-      schema: data.schema,
-      tree: widget.model.getRecordFieldTree(data.schema),
+      rootLabel: data.schema.isEmpty ? "the wire's type" : data.schema,
+      tree: widget.model.getRecordPathFieldTree(widget.nodeId),
       taken: taken,
     );
     if (picked == null || !mounted) return;
@@ -91,7 +107,16 @@ class _RecordPathRowsEditorState extends State<RecordPathRowsEditor> {
     if (data == null) {
       return const Center(child: CircularProgressIndicator());
     }
-    final schemaChosen = data.schema.isNotEmpty;
+    final theme = Theme.of(context);
+    final anonymous = data.schema.isEmpty && data.fields.isNotEmpty;
+    final unset = data.schema.isEmpty && data.fields.isEmpty;
+    // Re-read on every build (see wire_type_offer.dart).
+    final offer = wireTypeOfferAt(
+        widget.model.getWireTypeOffers(widget.nodeId), _recordPinIndex);
+    final hintStyle = theme.textTheme.bodyMedium?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+      fontStyle: FontStyle.italic,
+    );
     return Padding(
       padding: const EdgeInsets.all(8.0),
       child: Column(
@@ -105,13 +130,41 @@ class _RecordPathRowsEditorState extends State<RecordPathRowsEditor> {
           RecordDefDropdown(
             value: data.schema,
             label: 'Schema',
-            emptyHint: '— No schema chosen —',
+            emptyHint: anonymous ? '— None (type from wire) —' : '— None —',
             model: widget.model,
             onChanged: _setSchema,
           ),
-          if (schemaChosen) ...[
+          const SizedBox(height: 8),
+          if (unset)
+            Text('Wire a record into `record`, or pick a schema.',
+                style: hintStyle),
+          if (anonymous) ...[
+            Text('Type from wire', style: theme.textTheme.titleSmall),
+            const SizedBox(height: 4),
+            for (final field in data.fields)
+              Padding(
+                padding: const EdgeInsets.only(left: 8.0, bottom: 2.0),
+                child: SelectableText(
+                  '${field.name}: ${apiDataTypeToString(field.dataType)}',
+                  style: theme.textTheme.bodyMedium
+                      ?.copyWith(fontFamily: 'monospace'),
+                ),
+              ),
+          ],
+          if (offer != null) ...[
+            const SizedBox(height: 4),
+            WireTypeOfferButton(
+              model: widget.model,
+              nodeId: widget.nodeId,
+              index: _recordPinIndex,
+              offeredType: offer,
+            ),
+          ],
+          // An unset node can still hold broken rows (its schema was set to
+          // none), so they are listed for deletion; only adding needs a root.
+          if (!unset || data.rows.isNotEmpty) ...[
             const SizedBox(height: 12),
-            Text('Paths', style: Theme.of(context).textTheme.titleSmall),
+            Text('Paths', style: theme.textTheme.titleSmall),
             const SizedBox(height: 4),
             if (data.rows.isEmpty)
               const Text(
@@ -119,13 +172,15 @@ class _RecordPathRowsEditorState extends State<RecordPathRowsEditor> {
                 style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
               ),
             for (int i = 0; i < data.rows.length; i++) _buildRow(i),
-            const SizedBox(height: 4),
-            TextButton.icon(
-              key: const ValueKey('record_path_add'),
-              icon: const Icon(Icons.add, size: 16),
-              label: const Text('Add path'),
-              onPressed: _addPath,
-            ),
+            if (!unset) ...[
+              const SizedBox(height: 4),
+              TextButton.icon(
+                key: const ValueKey('record_path_add'),
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('Add path'),
+                onPressed: _addPath,
+              ),
+            ],
           ],
           if (_error != null) ...[
             const SizedBox(height: 8),
@@ -217,13 +272,14 @@ class _RecordPathRowsEditorState extends State<RecordPathRowsEditor> {
 String formatRecordPath(List<String> names) =>
     names.map((n) => n.contains('.') || n.isEmpty ? '`$n`' : n).join('.');
 
-/// Opens the field tree of [schema] and returns the picked path (segment
-/// names), or `null` if the dialog was dismissed. Record-typed fields expand;
+/// Opens the field [tree] of a root record type (named in the title by
+/// [rootLabel]) and returns the picked path (segment names), or `null` if the
+/// dialog was dismissed. Record-typed fields expand;
 /// any field, record-typed or not, can be picked. Paths in [taken] (formatted
 /// with [formatRecordPath]) are shown but not pickable.
 Future<List<String>?> showRecordFieldPicker({
   required BuildContext context,
-  required String schema,
+  required String rootLabel,
   required List<APIRecordFieldNode> tree,
   required Set<String> taken,
 }) {
@@ -239,7 +295,7 @@ Future<List<String>?> showRecordFieldPicker({
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Add a path into $schema',
+            Text('Add a path into $rootLabel',
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             ConstrainedBox(

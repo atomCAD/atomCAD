@@ -335,6 +335,19 @@ fn the_anonymous_record_destructure_fixture_round_trips() {
     ));
 }
 
+/// The anonymous `record_get` / `record_set` fixture
+/// (`doc/design_anonymous_record_readers.md`, Phase 3): both took
+/// `{p: Point, s: Float}` from an anonymous `record_construct`; the
+/// `record_get` reads `p.x` (wired on) and `s`, the `record_set` stores a
+/// literal on `s` and has `p.y` wired. `query` writes their `fields`, so the
+/// round trip never depends on the wire declaring the root.
+#[test]
+fn the_anonymous_record_get_fixture_round_trips() {
+    run_round_trips(&atomcad_test_support::fixture_path(
+        "record_get_anonymous/record_get_anonymous.cnnd",
+    ));
+}
+
 /// The `proxy` fixture (`doc/design_proxy_node.md` Phase 3). The node carries
 /// eight text properties of four different kinds, every one of which the
 /// serializer writes unconditionally — a property the text drops or re-spells

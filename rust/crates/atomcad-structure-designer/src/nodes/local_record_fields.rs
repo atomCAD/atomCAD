@@ -1,13 +1,15 @@
 //! Record fields a node declares in its own data rather than taking from a
 //! record def: an anonymous `record_construct`'s fields
 //! (`doc/design_wire_declared_inputs.md`) and an anonymous reader's —
-//! `record_destructure` (`doc/design_anonymous_record_readers.md`). The field
+//! `record_destructure`, `record_get` and `record_set`
+//! (`doc/design_anonymous_record_readers.md`). The field
 //! type, its id allocation, the type gate and the pin-id space are shared, so
 //! every node that holds such fields gets the same rules; the reference
 //! walkers reach them through `NodeData::local_record_fields[_mut]`.
 
-use crate::data_type::{DataType, walk_data_type_record_names};
+use crate::data_type::{DataType, RecordType, walk_data_type_record_names};
 use crate::node_type_registry::{RecordDefs, is_valid_record_field_type};
+use crate::text_format::TextValue;
 use serde::{Deserialize, Serialize};
 
 /// Anonymous field pins carry `ANON_FIELD_PIN_ID_BASE | field.id`. `FieldId`s
@@ -115,4 +117,122 @@ pub fn local_field_problems(fields: &[LocalRecordField], defs: RecordDefs<'_>) -
         });
     }
     problems
+}
+
+/// The `fields` text property of a reader in anonymous mode, written exactly
+/// like `record_construct`'s: `[{name: "a", data_type: Float}, …]`.
+pub fn fields_text_value(fields: &[LocalRecordField]) -> TextValue {
+    TextValue::Array(
+        fields
+            .iter()
+            .map(|f| {
+                TextValue::Object(vec![
+                    ("name".to_string(), TextValue::String(f.name.clone())),
+                    (
+                        "data_type".to_string(),
+                        TextValue::DataType(f.data_type.clone()),
+                    ),
+                ])
+            })
+            .collect(),
+    )
+}
+
+/// Parses a reader's `fields` text property into names and types, in order.
+/// Errors on a malformed entry, a name that is not an identifier, or a
+/// duplicate name. The types are checked when the fields are installed
+/// ([`rebuild_fields_by_name`]).
+pub fn parse_fields_text_value(value: &TextValue) -> Result<Vec<(String, DataType)>, String> {
+    let TextValue::Array(entries) = value else {
+        return Err("fields must be an array".to_string());
+    };
+    let mut new_fields: Vec<(String, DataType)> = Vec::with_capacity(entries.len());
+    for entry in entries {
+        let TextValue::Object(obj) = entry else {
+            return Err("each field must be an object { name, data_type }".to_string());
+        };
+        let name = obj
+            .iter()
+            .find(|(k, _)| k == "name")
+            .and_then(|(_, v)| v.as_string())
+            .ok_or_else(|| "field name must be a string".to_string())?
+            .to_string();
+        let data_type = obj
+            .iter()
+            .find(|(k, _)| k == "data_type")
+            .and_then(|(_, v)| v.to_data_type())
+            .ok_or_else(|| "field data_type must be a DataType".to_string())?;
+        if !crate::declared_inputs::is_input_identifier(&name) {
+            return Err(format!(
+                "Field name '{}' must be a letter or '_' followed by letters, digits or '_'",
+                name
+            ));
+        }
+        if new_fields.iter().any(|(n, _)| *n == name) {
+            return Err(format!("Duplicate field name '{}'", name));
+        }
+        new_fields.push((name, data_type));
+    }
+    Ok(new_fields)
+}
+
+/// A reader's mode change as its data sees it: the `schema` / `fields` /
+/// `next_field_id` triple after adopting `t` (`RecordTypedInput::
+/// set_record_input_type`). A named type sets the schema and clears the
+/// fields; an anonymous one clears the schema and rebuilds the fields from
+/// `current`, keeping ids by name; `{}` leaves both empty (unset). Refuses,
+/// with nothing changed, when a field type fails [`accepts_field_type`].
+pub fn adopted_reader_fields(
+    t: &RecordType,
+    current: &[LocalRecordField],
+    next_field_id: u64,
+) -> Result<(String, Vec<LocalRecordField>, u64), String> {
+    match t {
+        RecordType::Named(name) => Ok((name.clone(), Vec::new(), next_field_id)),
+        RecordType::Anonymous(type_fields) => {
+            let mut fields = current.to_vec();
+            let mut next_field_id = next_field_id;
+            rebuild_fields_by_name(&mut fields, &mut next_field_id, type_fields.clone())?;
+            Ok((String::new(), fields, next_field_id))
+        }
+    }
+}
+
+/// A reader's `schema` and `fields` text properties applied to its current
+/// `schema` / `fields` / `next_field_id`, `schema` first: a schema that
+/// differs from the current one clears the fields, and `fields` is then
+/// rebuilt by name when there is no schema (`fields: []` makes the node
+/// unset) and refused on a named node. `kind` names the node in the refusal.
+pub fn reader_fields_from_text(
+    props: &std::collections::HashMap<String, TextValue>,
+    schema: &str,
+    fields: &[LocalRecordField],
+    next_field_id: u64,
+    kind: &str,
+) -> Result<(String, Vec<LocalRecordField>, u64), String> {
+    let new_schema = match props.get("schema") {
+        Some(v) => v
+            .as_string()
+            .ok_or_else(|| "schema must be a String".to_string())?
+            .to_string(),
+        None => schema.to_string(),
+    };
+    let mut new_fields = if new_schema == schema {
+        fields.to_vec()
+    } else {
+        Vec::new()
+    };
+    let mut next_field_id = next_field_id;
+    if let Some(v) = props.get("fields") {
+        let listed = parse_fields_text_value(v)?;
+        if new_schema.is_empty() {
+            rebuild_fields_by_name(&mut new_fields, &mut next_field_id, listed)?;
+        } else if !listed.is_empty() {
+            return Err(format!(
+                "fields can only be listed on a {} with no schema",
+                kind
+            ));
+        }
+    }
+    Ok((new_schema, new_fields, next_field_id))
 }

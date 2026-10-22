@@ -378,12 +378,14 @@ same file.
   while a round makes progress, because one declaration can give another
   source its type. `query` always writes `parameters` / `fields`, so the
   round-trip never depends on this. An **unset record reader**
-  (`record_destructure`) whose statement sets neither `schema` nor `fields`
-  takes its type from its `record:` wire in the same pass
-  (`apply_pending_adoptions`): the wire itself connects in the first pass
-  (the unset input is `{}`), so the hook is on the connect's *success* path,
-  not in `declare_input_from_wire`. `query` writes `schema: ""` for an unset
-  reader precisely so that its round trip does not adopt.
+  (`record_destructure`, `record_get`, `record_set`) whose statement sets none
+  of `schema`, `fields` and `paths` takes its type from its `record:` wire in
+  the same pass (`apply_pending_adoptions`): the wire itself connects in the
+  first pass (the unset input is `{}`), so the hook is on the connect's
+  *success* path, not in `declare_input_from_wire`. A statement with `paths`
+  must state its root, because the paths are resolved when its properties
+  are applied, before any wire exists. `query` writes `schema: ""` for an
+  unset reader precisely so that its round trip does not adopt.
 - **Wires an edit cannot make yet are retried, not dropped.** An `apply`'s
   arg pins are derived from its `f` wire, which the same wire pass is
   creating, so `arg0: x` finds no pin the first time; `wire_pending_connections`
