@@ -76,3 +76,33 @@ class WireTypeOfferButton extends StatelessWidget {
     );
   }
 }
+
+/// The rename chip under a just-dropped input's row: the name derived from the
+/// wire's source, when the node named the input otherwise (`expr` hands out
+/// letters). One click renames; typing a name or selecting another node
+/// dismisses it (`StructureDesignerModel.nameSuggestion`).
+class NameSuggestionChip extends StatelessWidget {
+  final String name;
+  final VoidCallback onUse;
+
+  const NameSuggestionChip(
+      {super.key, required this.name, required this.onUse});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 2.0),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: ActionChip(
+          avatar: const Icon(Icons.drive_file_rename_outline, size: 16),
+          label: Text('Name after source: $name'),
+          tooltip: 'Rename this input to the name of the node it is wired to',
+          onPressed: onUse,
+          visualDensity: VisualDensity.compact,
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+      ),
+    );
+  }
+}

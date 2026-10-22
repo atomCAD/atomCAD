@@ -2108,18 +2108,13 @@ mod node_type_introspection_tests {
             "Should show 'Dynamic Configuration' section for expr, got:\n{}",
             result
         );
+        // A fresh expr declares no parameters: wires add them
         assert!(
-            result.contains("Dynamic Inputs:"),
-            "Should show 'Dynamic Inputs' section for expr, got:\n{}",
+            !result.contains("Dynamic Inputs:"),
+            "A default expr has no dynamic inputs, got:\n{}",
             result
         );
-        // The default expr has parameter "x" of type Int
-        assert!(
-            result.contains("x : Int"),
-            "Should show dynamic input 'x : Int' for expr, got:\n{}",
-            result
-        );
-        // The default expr has output type Int
+        // The default expr's body is the constant `0`, so its output is Int
         assert!(
             result.contains("Dynamic Output: Int"),
             "Should show 'Dynamic Output: Int' for expr, got:\n{}",

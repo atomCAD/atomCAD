@@ -191,13 +191,16 @@ e = expr { expression: \"x * 2\", parameters: [{ name: \"x\", data_type: Int }],
 
     let added = d.add_input_from_wire(&[], e, v, OUT, 0).unwrap();
 
-    assert_eq!(added.name, "v");
+    // `expr` names a new parameter with the next free letter, and offers the
+    // source's own name as a rename.
+    assert_eq!(added.name, "y");
+    assert_eq!(added.source_name.as_deref(), Some("v"));
     assert_eq!(added.pin_index, 1);
     assert_eq!(
         params(&d, e),
         vec![
             ("x".to_string(), DataType::Int),
-            ("v".to_string(), DataType::Vec3)
+            ("y".to_string(), DataType::Vec3)
         ]
     );
     let new_param = &expr(&d, e).parameters[1];
@@ -241,16 +244,42 @@ e = expr { expression: \"1\", parameters: [{ name: \"a\", data_type: Int }, { na
 }
 
 #[test]
-fn a_second_drop_of_the_same_source_is_deduplicated() {
+fn successive_drops_on_an_expr_take_the_next_free_letter() {
     let mut d = setup(
         "v = vec3 { x: 1.0, y: 2.0, z: 3.0 }
 e = expr { expression: \"1\", parameters: [] }
 ",
     );
     let (v, e) = (id(&d, "v"), id(&d, "e"));
-    assert_eq!(d.add_input_from_wire(&[], e, v, OUT, 0).unwrap().name, "v");
+    assert_eq!(d.add_input_from_wire(&[], e, v, OUT, 0).unwrap().name, "x");
+    assert_eq!(d.add_input_from_wire(&[], e, v, OUT, 0).unwrap().name, "y");
+}
+
+#[test]
+fn a_renamed_letter_is_handed_out_again() {
+    let mut d = setup(
+        "v = vec3 { x: 1.0, y: 2.0, z: 3.0 }
+e = expr { expression: \"1\", parameters: [{ name: \"radius\", data_type: Float }, { name: \"y\", data_type: Float }] }
+",
+    );
+    let (v, e) = (id(&d, "v"), id(&d, "e"));
+    assert_eq!(d.add_input_from_wire(&[], e, v, OUT, 0).unwrap().name, "x");
+    assert_eq!(d.add_input_from_wire(&[], e, v, OUT, 0).unwrap().name, "z");
+}
+
+#[test]
+fn a_second_drop_of_the_same_source_on_a_record_is_deduplicated() {
+    let mut d = setup(
+        "v = vec3 { x: 1.0, y: 2.0, z: 3.0 }
+r = record_construct {}
+",
+    );
+    let (v, r) = (id(&d, "v"), id(&d, "r"));
+    let first = d.add_input_from_wire(&[], r, v, OUT, 0).unwrap();
+    assert_eq!(first.name, "v");
+    assert_eq!(first.source_name, None, "the name already is the source's");
     assert_eq!(
-        d.add_input_from_wire(&[], e, v, OUT, 0).unwrap().name,
+        d.add_input_from_wire(&[], r, v, OUT, 0).unwrap().name,
         "v_2"
     );
 }
@@ -260,13 +289,16 @@ fn a_multi_output_source_names_the_input_after_its_pin() {
     let mut d = setup(
         "u = lattice_vecs_unpack {}
 e = expr { expression: \"1\", parameters: [] }
+r = record_construct {}
 ",
     );
-    let (u, e) = (id(&d, "u"), id(&d, "e"));
+    let (u, e, r) = (id(&d, "u"), id(&d, "e"), id(&d, "r"));
     let b = SourcePin::NodeOutput { pin_index: 1 };
+    assert_eq!(d.add_input_from_wire(&[], r, u, b, 0).unwrap().name, "b");
     let added = d.add_input_from_wire(&[], e, u, b, 0).unwrap();
-    assert_eq!(added.name, "b");
-    assert_eq!(params(&d, e), vec![("b".to_string(), DataType::Vec3)]);
+    assert_eq!(added.name, "x");
+    assert_eq!(added.source_name.as_deref(), Some("b"));
+    assert_eq!(params(&d, e), vec![("x".to_string(), DataType::Vec3)]);
 }
 
 #[test]
@@ -338,15 +370,16 @@ mp = map { xs: r, input_type: Int, output_type: Int, body { g = int { value: 1 }
 
     assert_undo_redo_roundtrip(&mut d, |d| {
         let added = d.add_input_from_wire(&[mp], body_expr, f, OUT, 1).unwrap();
-        assert_eq!(added.name, "f");
-        assert_eq!(added.pin_index, 1);
+        assert_eq!(added.name, "x");
+        assert_eq!(added.source_name.as_deref(), Some("f"));
+        assert_eq!(added.pin_index, 0);
     });
 
     // After the roundtrip helper's final undo, redo to inspect the result.
     assert!(d.redo());
     let data = expr_at(&d, &[mp], body_expr);
-    assert_eq!(data.parameters[1].data_type, DataType::Float);
-    assert_eq!(wires_into(&d, &[mp], body_expr)[1], vec![(f, OUT, 1)]);
+    assert_eq!(data.parameters[0].data_type, DataType::Float);
+    assert_eq!(wires_into(&d, &[mp], body_expr)[0], vec![(f, OUT, 1)]);
 }
 
 #[test]
@@ -364,10 +397,11 @@ mp = map { xs: r, input_type: Int, output_type: Int, body { g = int { value: 1 }
         .add_input_from_wire(&[mp], body_expr, mp, element, 1)
         .unwrap();
 
-    assert_eq!(added.name, "element");
+    assert_eq!(added.name, "x");
+    assert_eq!(added.source_name.as_deref(), Some("element"));
     let data = expr_at(&d, &[mp], body_expr);
-    assert_eq!(data.parameters[1].data_type, DataType::Int);
-    assert_eq!(wires_into(&d, &[mp], body_expr)[1], vec![(mp, element, 1)]);
+    assert_eq!(data.parameters[0].data_type, DataType::Int);
+    assert_eq!(wires_into(&d, &[mp], body_expr)[0], vec![(mp, element, 1)]);
 }
 
 #[test]
@@ -396,7 +430,7 @@ fn undo_and_redo_of_a_drop_leave_derived_state_current() {
     edit(
         &mut d,
         "v = vec3 { x: 1.0, y: 2.0, z: 3.0 }
-e = expr { expression: \"v * 2.0\", parameters: [] }
+e = expr { expression: \"x * 2.0\", parameters: [] }
 output e
 ",
     );
@@ -434,7 +468,7 @@ output e
         output
     };
 
-    // The expression names `v` before the input exists: no output type yet.
+    // The expression names `x` before the input exists: no output type yet.
     assert_eq!(derived(&mut d), None);
     assert_eq!(instance_type(&d), DataType::None);
 

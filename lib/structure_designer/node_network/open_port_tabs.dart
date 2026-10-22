@@ -127,10 +127,11 @@ class OpenPortTabLayer extends StatelessWidget {
   }
 }
 
-/// One `+` tab: a drop target for a dragged wire. Highlighted while an
-/// acceptable wire hovers it; drawn in a refused style with the reason beside
-/// it otherwise (Flutter shows no tooltips during a drag, so the reason is a
-/// label).
+/// One `+` tab: a drop target for a dragged wire. While an acceptable wire
+/// hovers it, it is highlighted with the name the drop will give the new
+/// input beside it, so the name is never a surprise; a refused wire draws it
+/// in a refused style with the reason beside it instead (Flutter shows no
+/// tooltips during a drag, so both are labels).
 class OpenPortTab extends StatefulWidget {
   final StructureDesignerModel model;
   final BigInt nodeId;
@@ -153,15 +154,24 @@ class _OpenPortTabState extends State<OpenPortTab> {
   /// Why the hovering wire is refused, from the last hover check.
   String? _refusal;
 
+  /// The name the hovering wire's drop would create, from the last hover
+  /// check.
+  String? _name;
+
   @override
   Widget build(BuildContext context) {
     return DragTarget<PinReference>(
       onWillAcceptWithDetails: (details) {
-        final reason = widget.model.canAddInputFromWire(
+        final preview = widget.model.previewAddInputFromWire(
             details.data, widget.nodeId,
             scopeChain: widget.scopeChain);
-        if (reason != _refusal) setState(() => _refusal = reason);
-        return reason == null;
+        if (preview.refusal != _refusal || preview.name != _name) {
+          setState(() {
+            _refusal = preview.refusal;
+            _name = preview.name;
+          });
+        }
+        return preview.refusal == null;
       },
       onAcceptWithDetails: (details) {
         final error = widget.model.addInputFromWire(details.data, widget.nodeId,
@@ -195,7 +205,8 @@ class _OpenPortTabState extends State<OpenPortTab> {
           child: Icon(refused ? Icons.block : Icons.add,
               size: widget.size.height * 0.85, color: glyph),
         );
-        if (!refused || _refusal == null) return tab;
+        final String? label = refused ? _refusal : (accepted ? _name : null);
+        if (label == null) return tab;
         return Row(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -205,12 +216,16 @@ class _OpenPortTabState extends State<OpenPortTab> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: colors.errorContainer,
+                color: refused ? colors.errorContainer : colors.primary,
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
-                _refusal!,
-                style: TextStyle(fontSize: 11, color: colors.onErrorContainer),
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: refused ? colors.onErrorContainer : colors.onPrimary,
+                  fontFamily: refused ? null : 'monospace',
+                ),
               ),
             ),
           ],

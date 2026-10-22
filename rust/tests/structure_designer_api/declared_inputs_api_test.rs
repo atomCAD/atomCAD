@@ -129,7 +129,8 @@ e = expr { expression: \"1\", parameters: [{ name: \"a\", data_type: Int }] }
     let api = added_input_view(&added);
     assert_eq!(api.pin_index, 1);
     assert_eq!(api.pin_id, added.pin_id);
-    assert_eq!(api.name, "v");
+    assert_eq!(api.name, "x");
+    assert_eq!(api.source_name.as_deref(), Some("v"));
 }
 
 #[test]

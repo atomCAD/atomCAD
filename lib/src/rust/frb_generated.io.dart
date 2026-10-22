@@ -577,6 +577,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIOpenDocumentResult dco_decode_api_open_document_result(dynamic raw);
 
   @protected
+  APIOpenPortPreview dco_decode_api_open_port_preview(dynamic raw);
+
+  @protected
   APIOpsLibraryData dco_decode_api_ops_library_data(dynamic raw);
 
   @protected
@@ -2841,6 +2844,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIOpenDocumentResult sse_decode_api_open_document_result(
+      SseDeserializer deserializer);
+
+  @protected
+  APIOpenPortPreview sse_decode_api_open_port_preview(
       SseDeserializer deserializer);
 
   @protected
@@ -5463,6 +5470,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_open_document_result(
       APIOpenDocumentResult self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_open_port_preview(
+      APIOpenPortPreview self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_ops_library_data(

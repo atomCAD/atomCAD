@@ -441,7 +441,7 @@ fn an_apply_argument_wire_survives_a_replace() {
     // `apply`'s arg pins are derived from the `f` wire, which the same script
     // is only now making, so `arg0` found no pin the first time round.
     let text = replace_is_a_no_op(
-        "sq = expr { expression: \"x * x\" }\n\
+        "sq = expr { expression: \"x * x\", parameters: [{ name: \"x\", data_type: Int }] }\n\
          v = int { value: 3 }\n\
          a = apply { f: @sq, arg0: v }\n",
     );

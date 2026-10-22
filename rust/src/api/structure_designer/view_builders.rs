@@ -1108,6 +1108,7 @@ pub fn added_input_view(
         pin_index: added.pin_index as u32,
         pin_id: added.pin_id,
         name: added.name.clone(),
+        source_name: added.source_name.clone(),
     }
 }
 

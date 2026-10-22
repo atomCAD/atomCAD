@@ -56,6 +56,7 @@ use super::structure_designer_api_types::APINetworkUsage;
 use super::structure_designer_api_types::APINodeEvaluationResult;
 use super::structure_designer_api_types::APINodeNameMatch;
 use super::structure_designer_api_types::APINodeRef;
+use super::structure_designer_api_types::APIOpenPortPreview;
 use super::structure_designer_api_types::APIParameterData;
 use super::structure_designer_api_types::APIPassivateData;
 use super::structure_designer_api_types::APIPasteResult;
@@ -1276,6 +1277,61 @@ pub fn add_input_from_wire(
                 Ok(super::view_builders::added_input_view(&added))
             },
             Err("CAD instance not available".to_string()),
+        )
+    }
+}
+
+/// The hover check of the `+` tab: the name a drop would give the new input,
+/// or why it would be refused. Runs the same checks as
+/// [`add_input_from_wire`], so the tab can never promise a drop that fails.
+#[flutter_rust_bridge::frb(sync)]
+pub fn preview_add_input_from_wire(
+    dest_scope_path: Vec<u64>,
+    source_node_id: u64,
+    source_pin: APISourcePin,
+    source_scope_depth: u32,
+    dest_node_id: u64,
+) -> APIOpenPortPreview {
+    let source_pin = api_source_pin_to_domain(source_pin);
+    let result = unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                cad_instance.structure_designer.preview_add_input_from_wire(
+                    &dest_scope_path,
+                    dest_node_id,
+                    source_node_id,
+                    source_pin,
+                    source_scope_depth as u8,
+                )
+            },
+            Err("CAD instance not available".to_string()),
+        )
+    };
+    match result {
+        Ok(name) => APIOpenPortPreview {
+            name: Some(name),
+            refusal: None,
+        },
+        Err(reason) => APIOpenPortPreview {
+            name: None,
+            refusal: Some(reason),
+        },
+    }
+}
+
+/// The name the node's next declared input gets when no wire names it — what
+/// a panel's add button uses, so it names inputs as the `+` tab does (`expr`:
+/// the next free letter). `None` for a node without declared inputs.
+#[flutter_rust_bridge::frb(sync)]
+pub fn next_declared_input_name(scope_path: Vec<u64>, node_id: u64) -> Option<String> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                cad_instance
+                    .structure_designer
+                    .next_declared_input_name(&scope_path, node_id)
+            },
+            None,
         )
     }
 }

@@ -1,6 +1,6 @@
 # Wire-declared inputs: the open port on `expr` and anonymous `record_construct`
 
-## Status: Phases 0–4 implemented (2026-10-22); Phase 4 manual walkthrough pending
+## Status: Phases 0–5 implemented (2026-10-22); Phase 4 and Phase 5 manual walkthroughs pending
 
 ## Motivation
 
@@ -92,7 +92,7 @@ In scope:
 | Take type from wire — where | The property panel is the primary surface: a stale row gets a warning marker and a **Use wire's type: `<type>`** button under its type selector. The node context menu's **Edit** section adds **Take types from wires**, which repairs every stale input in one step and appears only when at least one qualifies. There is no wire context menu in v1, because the canvas has none today (see "Future work"). |
 | Renaming an anonymous field | The rename changes the record's type (`{a: Float}` becomes `{b: Float}`), so every input that copied the old type now mismatches. The wire is kept and reported, not dropped: `repair_node_network` drops no node-output wire over a type change (only `repair_zone_body`'s zone-input wires are type-checked, and a rename does not change a zone-input pin's type), so `validate_wires` reports the mismatch on the consumer. The renamed node's own input wire survives through the stable pin id. The repairs are Take type from wire for each stale input, or promotion, after which renames of the named def's fields go through `FieldId`s. A rename does **not** retype downstream inputs automatically, because that would be the live typing the "declared type" row rules out. |
 | Which types an open port accepts | `expr`: the predicate its drag-aware adapter already applies: no abstract types, `Function`, `Iterator`, `Unit` or `None` (`ExprData::adapt_for_drag_source`), factored into a shared `ExprData::accepts_parameter_type`. `record_construct`: any type a record def field may hold (see Phase 2), and never `None`, `Unit` or `AnyFunction`. While a wire with a rejected type hovers the `+`, the tab is drawn in a refused style with the reason as a one-line label beside it. A tooltip would not work here, because Flutter shows no tooltips during a drag. |
-| The derived name | The source **node's name** (`custom_name`, e.g. `gap` or `sphere1`). When the source node has more than one output pin, or the source is a zone input, the **pin name** is used instead; if that is already taken, `<node>_<pin>`. The name is sanitized to `[A-Za-z_][A-Za-z0-9_]*`, made to avoid reserved words, and deduplicated as `name`, `name_2`, `name_3`, … (details under "Name derivation"). |
+| The derived name | The source **node's name** (`custom_name`, e.g. `gap` or `sphere1`). When the source node has more than one output pin, or the source is a zone input, the **pin name** is used instead; if that is already taken, `<node>_<pin>`. The name is sanitized to `[A-Za-z_][A-Za-z0-9_]*`, made to avoid reserved words, and deduplicated as `name`, `name_2`, `name_3`, … (details under "Name derivation"). **Superseded for `expr` by Phase 5:** a node with a name pool (`expr`: `x, y, z, a, …`) takes the next free pool name instead, and the source-derived name is offered as a one-click rename. This rule still names `record_construct` fields. |
 | After the drop | The destination node becomes the selected node, and its property panel focuses the new input's name field with the text selected. Typing renames it; anything else keeps the derived name. Stable ids mean a rename never drops the wire. |
 | Undo | **One step** per drop ("Add input from wire"): the input declaration, the wire, and any reflow of neighbours the taller node causes. It is recorded as a whole-network snapshot: a new generic `NetworkSnapshotCommand { network_name, description, before, after }`, the pattern `PromoteToParameterCommand` already uses, so redo never depends on the order of re-deriving a pin and re-adding a wire. |
 | Pin position | Always **appended**. No existing pin index shifts, so wires, function-pin roles (keyed by input index) and the text format's positional state are untouched. |
@@ -255,6 +255,10 @@ The API takes the same arguments as `connect_wire` (`dest_scope_path`,
 
 ### Name derivation
 
+*Phase 5 note:* this is how a node **without** a name pool names a new input
+(`record_construct`). `expr` now has a pool and takes letters; this
+derivation still computes the name its rename chip offers. See Phase 5.
+
 `declared_inputs.rs`, beside the trait, holds a pure function so it can be
 tested without a network:
 
@@ -368,7 +372,8 @@ silently unrepairable.
   `adapt_for_drag_source`, so drag-aware add and the open port share one
   predicate.
 - `reserved_names`: the lexer's keywords plus `expression` and `parameters`.
-  `fallback_name`: `"x"`.
+  `fallback_name`: `"x"`. (Phase 5 adds `pi` to the reserved names and a name
+  pool, `x, y, z, a, …`, so a new parameter is named by letter.)
 - `append` pushes `ExprParameter { id: max_id + 1, name, data_type,
   data_type_str: None }`, the same id rule `set_text_properties` uses.
 - `retype` replaces `data_type` on the parameter with that id and clears its
@@ -934,6 +939,83 @@ type from wire, with the rename and add-a-field cases as its examples; and
 `lib/structure_designer/AGENTS.md` notes that the open-port tabs live in a
 canvas layer outside the node footprints, and why: hit testing, and saved
 layouts that must not move.
+
+### Phase 5 — `expr` starts empty; one naming rule; wires declare in text
+
+Added after Phases 0–4 were in use. With the open port, a fresh `expr`'s
+default parameter (`x: Int`, body `x`) was mostly in the way: `Int` was
+usually the wrong type, and the first input was wired differently from every
+later one.
+
+- **A fresh `expr` has no parameters and the body `0`** (`node_data_creator`).
+  There is one default, used by the GUI and the text format alike. The body is
+  a constant so the new node evaluates and shows no error.
+- **The text format: a wire declares a missing input.** `y: src` on a node with
+  declared inputs that has no input `y` appends one named `y`, of `src`'s
+  resolved type, then wires it (`network_editor.rs`,
+  `declare_input_from_wire`). It works for both nodes in this document,
+  through the trait. The rules:
+  - Only a single reference declares. A literal carries no type, and an array
+    is several wires.
+  - **Explicit wins.** A statement that sets the node's
+    `DeclaredInputs::declaring_property` (`parameters` / `fields`) declares
+    nothing more; a wire to another name stays the warning it was.
+  - The name is the key as written: a non-identifier key (`@0`) is not a
+    declaration attempt, and a reserved one is refused with its reason.
+  - Declarations happen only in the retry pass (`wire_deferred_connections`),
+    after every ordinary wire is made, so a polymorphic source resolves
+    through its own inputs. The pass repeats while a round makes progress,
+    which resolves chains of `expr`s written in any order.
+
+  This keeps the old spelling `expr { expression: "x * 2", x: val }` working,
+  now with `val`'s type rather than `Int`, and it resolves
+  `doc/research/expr-parameter-auto-inference.md`.
+- **One naming rule for a new input.** `DeclaredInputs::name_pool` (default
+  empty) and `declared_inputs::next_declared_input_name`:
+  - A node with a pool takes the first pool name that is neither taken nor
+    reserved, then `x_2`, `y_2`, … once the pool runs out (`next_pool_name`).
+    `expr`'s pool is `x, y, z, a, b, …, w`: an `expr` parameter is a variable
+    in a formula, so a letter reads better than `sphere1`.
+  - A node without a pool (`record_construct`, whose field names are data) is
+    named after the source, as before.
+  - Every path goes through it: the open port, `expr`'s drag adapter (which
+    still gives `x` with identity body `x`) and the panel's **Add Parameter**
+    (`StructureDesigner::next_declared_input_name`, API
+    `next_declared_input_name`), replacing a Dart-side letter list.
+  - The text format is the exception by design: there the name is what was
+    written.
+- **The source's name stays one click away.** `AddedInput::source_name` is
+  the source-derived name when it differs from the one given. The panel shows
+  it as a **Name after source** chip under the focused name field
+  (`NameSuggestionChip`, `model.nameSuggestion`); the chip is dropped once
+  another node is shown, the name is typed, or it is used. A user setting and
+  a two-zone tab (drop on the left for a letter, on the right for the source's
+  name) were considered and rejected: a hidden switch that changes what a
+  gesture does, and a target too small to split.
+- **The tab previews the name.** `preview_add_input_from_wire` runs the drop's
+  checks and returns the name (or the refusal), and an accepted hover draws
+  the name beside the tab. `can_add_input_from_wire` remains, as its `err()`.
+- `pi` (the expression language's constant) joins `expr`'s reserved names.
+
+Tests: `tests/structure_designer/wire_declared_text_test.rs` (the fresh node,
+the text-format declaration and each of its rules, the chain, an incremental
+append, `record_construct`, a `query` → `--replace` no-op, the add-button
+name, the hover preview) and the pool table in `open_port_name_test.rs`. The
+open-port tests now expect letters on `expr` and keep the source-naming cases
+on `record_construct`.
+
+Manual walkthrough:
+
+1. Drop a fresh `expr`: no input pins, it shows `0`, no error.
+2. Drag a wire over its `+` tab: the label beside it reads `x`. Drop: parameter
+   `x` of the wire's type, name focused, and a **Name after source: `<node>`**
+   chip under it. Click the chip: the parameter is renamed.
+3. Drop a second wire: `y`. Rename `x` to `radius` and drop a third: `x` again.
+4. **Add Parameter** names the next free letter.
+5. Drag an output into empty space and pick `expr`: `x` of that type, body `x`.
+6. Drop on an anonymous `record_construct`'s `+`: the label shows the source's
+   name, and no chip appears.
+7. Select another node and come back: the chip is gone.
 
 ## Testing
 

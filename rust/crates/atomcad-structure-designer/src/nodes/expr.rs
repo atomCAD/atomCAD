@@ -1,5 +1,5 @@
 use crate::data_type::DataType;
-use crate::declared_inputs::DeclaredInputs;
+use crate::declared_inputs::{DeclaredInputs, next_declared_input_name};
 use crate::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::evaluator::network_evaluator::NetworkEvaluator;
 use crate::evaluator::network_evaluator::NetworkStackElement;
@@ -40,6 +40,15 @@ pub struct ExprData {
     #[serde(skip)]
     pub output_type: Option<DataType>,
 }
+
+/// The names a new `expr` parameter takes, in order: the conventional math
+/// variables first, then the rest of the alphabet
+/// (`DeclaredInputs::name_pool`). An `expr` parameter is a variable typed in a
+/// formula, so a short letter beats the source's name.
+pub const EXPR_PARAMETER_NAME_POOL: &[&str] = &[
+    "x", "y", "z", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p",
+    "q", "r", "s", "t", "u", "v", "w",
+];
 
 impl ExprData {
     /// Parses and validates the expression and returns any validation errors
@@ -159,6 +168,8 @@ impl DeclaredInputs for ExprData {
             "else",
             "true",
             "false",
+            // A built-in constant, which a parameter of the same name shadows.
+            "pi",
             "expression",
             "parameters",
         ]
@@ -166,6 +177,14 @@ impl DeclaredInputs for ExprData {
 
     fn fallback_name(&self) -> &'static str {
         "x"
+    }
+
+    fn name_pool(&self) -> &'static [&'static str] {
+        EXPR_PARAMETER_NAME_POOL
+    }
+
+    fn declaring_property(&self) -> &'static str {
+        "parameters"
     }
 
     fn declares_pin(&self, pin_id: u64) -> bool {
@@ -237,8 +256,8 @@ impl NodeData for ExprData {
         _direction: DragDirection,
         _registry: &NodeTypeRegistry,
     ) -> Option<Box<dyn NodeData>> {
-        // Adapt the default expr template (one parameter `x` of the drag
-        // source's type, identity body `x`) so the resulting node passes the
+        // Build a one-parameter expr (the pool's first name, `x`, of the drag
+        // source's type, with an identity body) so the resulting node passes the
         // source value through unchanged. Both drag directions adapt
         // identically: the identity body means input type == output type, so
         // a `FromInput` drag (where the popup wants `node.output → source`)
@@ -250,14 +269,17 @@ impl NodeData for ExprData {
         if Self::accepts_parameter_type(source_type).is_err() {
             return None;
         }
+        // Named through the same helper as the open port, so the two
+        // gestures can never name a parameter differently.
+        let name = next_declared_input_name(self, None, &Default::default());
         let mut adapted = ExprData {
             parameters: vec![ExprParameter {
                 id: Some(1),
-                name: "x".to_string(),
+                name: name.clone(),
                 data_type: source_type.clone(),
                 data_type_str: None,
             }],
-            expression: "x".to_string(),
+            expression: name,
             expr: None,
             error: None,
             output_type: None,
@@ -495,7 +517,7 @@ pub fn get_node_type() -> NodeType {
 
 ## Defining Input Parameters
 
-The `parameters` property defines which variables can be used in the expression. Each parameter becomes an input pin on the node. In the node editor UI, input pins can be added dynamically via the node's property panel.
+The `parameters` property defines which variables can be used in the expression. Each parameter becomes an input pin on the node. A new `expr` node has no parameters and evaluates its default body `0`. In the node editor, the usual way to add one is to drop a wire on the `+` tab that appears below the node while a wire is dragged: that adds a parameter of the wire's type, named `x`, then `y`, `z`, `a`, … Parameters can also be added, renamed and retyped in the node's property panel.
 
 **Available data types:** Int, Float, Bool, Vec2, Vec3, IVec2, IVec3
 
@@ -698,10 +720,11 @@ distance3(vec3(0,0,0), vec3(1,1,1)) // 3D distance
 Most users define parameters and the expression through the property panel. When
 editing the node network as text instead, they are given inline:
 ```
-# Default: single parameter 'x' of type Int
-result = expr { expression: "x * 2", x: some_int_node }
+# Wiring a name declares it: each wired input becomes a parameter of the
+# source's type
+result = expr { expression: "x * 2 + y", x: some_node, y: other_node }
 
-# Multiple parameters: must specify the parameters array
+# Or declare the parameters explicitly (then wires must name declared ones)
 result = expr {
   expression: "a + b",
   parameters: [{ name: "a", data_type: Int }, { name: "b", data_type: Int }],
@@ -722,14 +745,13 @@ result = expr {
         // until the user opens the property panel and saves — and for nodes
         // added inside an HOF body there is no scope-aware
         // `set_node_network_data` path today, so the parse would never run.
+        //
+        // A fresh node declares no parameters: inputs are added by dropping a
+        // wire on its `+` tab (or, in the text format, by wiring a name), which
+        // gets the type right. Its body is a constant, so it evaluates as is.
         let mut data = ExprData {
-          parameters: vec![ExprParameter {
-            id: Some(1),
-            name: "x".to_string(),
-            data_type: DataType::Int,
-            data_type_str: None,
-          }],
-          expression: "x".to_string(),
+          parameters: vec![],
+          expression: "0".to_string(),
           expr: None,
           error: None,
           output_type: None,

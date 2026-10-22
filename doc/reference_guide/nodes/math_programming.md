@@ -165,10 +165,14 @@ Outputs a String value.
 ![](../../atomCAD_images/expr_node_props.png)
 
 You can type in a mathematical expression and it will be evaluated on its output pin.
-The input pins can be dynamically added on the node editor panel, you can select the name and data type of the input parameters.
+A new `expr` node has no parameters and evaluates its default expression, `0`. Its input pins are its parameters: you add them by dropping wires on the node (below), or with **Add Parameter** in the node editor panel, where you can also set each parameter's name and data type.
 To give a parameter an anonymous record type, choose **Custom...** in its type selector and type the record, e.g. `{x: Int, y: Int}`. Records nest and can be put in arrays (`{a: Float, p: {x: Int}}`, `[{x: Int, y: Int}]`); field names must be distinct identifiers, and their order does not matter — `{y: Int, x: Int}` is the same type as `{x: Int, y: Int}`.
 
-You can also add a parameter by dropping a wire on the node's **`+` tab**, which appears below the node while you drag a wire from an output (see [the open port](../node_networks.md#adding-an-input-by-dropping-a-wire-the-open-port)). The parameter gets the wire's type and a name derived from the source, and the name field is focused so you can rename it right away. The expression text is never changed for you: the new parameter is unused until you write it in.
+The usual way to add a parameter is to drop a wire on the node's **`+` tab**, which appears below the node while you drag a wire from an output (see [the open port](../node_networks.md#adding-an-input-by-dropping-a-wire-the-open-port)). The parameter gets the wire's type and the next free variable name — `x`, then `y`, `z`, `a`, `b`, … — which the tab shows while the wire hovers it. After the drop the name field is focused so you can type another name, and a **Name after source: `<name>`** chip under it renames the parameter after the node the wire comes from in one click. **Add Parameter** names parameters the same way. The expression text is never changed for you: the new parameter is unused until you write it in.
+
+Dragging a wire from an output into empty space and picking `expr` gives an `expr` with one parameter, `x`, of the wire's type and the expression `x`, so the node passes the value through until you edit the expression.
+
+In the [text format](../../node_network_text_format.md), wiring a name declares it: `doubled = expr { expression: "x * 2", x: val }` gives `doubled` a parameter `x` of `val`'s type. A statement that lists `parameters` explicitly declares exactly those, and a wire to any other name is reported instead.
 
 **Take type from wire.** A parameter's type is copied from the wire once and does not follow it afterwards. When it goes stale, its row in the property panel shows a warning marker and a **Use wire's type: `<type>`** button; the node's context menu has **Take types from wires** to fix all of them in one step. Both are one undo step, keep the wire and the name, and leave the expression alone. Two typical cases:
 

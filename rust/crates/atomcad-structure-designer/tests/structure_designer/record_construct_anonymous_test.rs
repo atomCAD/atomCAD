@@ -736,12 +736,12 @@ e = expr { expression: \"1.0\", parameters: [] }
     );
     let (x, r, e) = (id(&d, "x"), id(&d, "r"), id(&d, "e"));
     let added = d.add_input_from_wire(&[], e, r, OUT, 0).unwrap();
-    assert_eq!(added.name, "r");
+    assert_eq!(added.name, "x");
     assert_eq!(
         expr_param_types(&d, e),
         vec![anon(&[("a", DataType::Float)])]
     );
-    set_expression(&mut d, e, "r.a");
+    set_expression(&mut d, e, "x.a");
     assert!(errors_on(&d, e).is_empty(), "{:?}", errors_on(&d, e));
 
     d.set_record_construct_fields(&[], r, owned(&[("b", DataType::Float)]))
@@ -757,7 +757,7 @@ e = expr { expression: \"1.0\", parameters: [] }
 
     d.take_types_from_wires(&[], e, &[0]).unwrap();
     assert!(!has_mismatch(&d, e));
-    // `r.a` now reports its own error: in the expression (what the editor
+    // `x.a` now reports its own error: in the expression (what the editor
     // shows under the text) and when the node evaluates.
     let expr_error = d
         .get_node_network_data_scoped(&[], e)
@@ -774,7 +774,7 @@ e = expr { expression: \"1.0\", parameters: [] }
     );
     assert!(matches!(eval(&d, e), NetworkResult::Error(_)));
 
-    set_expression(&mut d, e, "r.b");
+    set_expression(&mut d, e, "x.b");
     assert!(errors_on(&d, e).is_empty(), "{:?}", errors_on(&d, e));
     assert!(matches!(eval(&d, e), NetworkResult::Float(v) if v == 1.5));
 }
@@ -793,7 +793,7 @@ e = expr { expression: \"1.0\", parameters: [] }
     );
     let (y, r, e) = (id(&d, "y"), id(&d, "r"), id(&d, "e"));
     d.add_input_from_wire(&[], e, r, OUT, 0).unwrap();
-    set_expression(&mut d, e, "r.a");
+    set_expression(&mut d, e, "x.a");
 
     d.add_input_from_wire(&[], r, y, OUT, 0).unwrap();
 
@@ -803,7 +803,7 @@ e = expr { expression: \"1.0\", parameters: [] }
 
     d.take_types_from_wires(&[], e, &[0]).unwrap();
     assert_eq!(expr_param_types(&d, e), vec![wider]);
-    set_expression(&mut d, e, "r.y");
+    set_expression(&mut d, e, "x.y");
     assert!(errors_on(&d, e).is_empty(), "{:?}", errors_on(&d, e));
     assert!(matches!(eval(&d, e), NetworkResult::Float(v) if v == 2.5));
 }

@@ -608,8 +608,15 @@ fn test_expr_add_parameter_preserves_existing_wires() {
     // Create int source and expr node
     let int_id = designer.add_node("int", DVec2::new(0.0, 0.0));
     let expr_id = designer.add_node("expr", DVec2::new(100.0, 0.0));
+    update_expr_parameters(
+        &mut designer,
+        "main",
+        expr_id,
+        vec![("x", DataType::Int)],
+        "x",
+    );
 
-    // Default expr has parameter "x", wire to it
+    // Wire to the parameter "x"
     designer.connect_nodes(int_id, 0, expr_id, 0);
 
     assert!(
@@ -690,6 +697,13 @@ fn test_expr_change_parameter_type_preserves_wire() {
 
     let int_id = designer.add_node("int", DVec2::new(0.0, 0.0));
     let expr_id = designer.add_node("expr", DVec2::new(100.0, 0.0));
+    update_expr_parameters(
+        &mut designer,
+        "main",
+        expr_id,
+        vec![("x", DataType::Int)],
+        "x",
+    );
 
     designer.connect_nodes(int_id, 0, expr_id, 0);
 
@@ -865,6 +879,13 @@ fn test_expr_rename_parameter_preserves_wire() {
 
     // Create expr node with parameter "x"
     let expr_id = designer.add_node("expr", DVec2::new(100.0, 0.0));
+    update_expr_parameters(
+        &mut designer,
+        "main",
+        expr_id,
+        vec![("x", DataType::Int)],
+        "x",
+    );
 
     // Wire int to expr's "x" parameter (index 0)
     designer.connect_nodes(int_id, 0, expr_id, 0);

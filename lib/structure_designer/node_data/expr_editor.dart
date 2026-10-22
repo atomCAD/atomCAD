@@ -84,52 +84,12 @@ class ExprEditorState extends State<ExprEditor> {
     );
   }
 
-  String _generateParameterName(int index) {
-    // Use x, y, z for first three parameters
-    if (index == 0) return 'x';
-    if (index == 1) return 'y';
-    if (index == 2) return 'z';
-
-    // After x, y, z, use w, u, v, s, t, then a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r
-    const additionalNames = [
-      'w',
-      'u',
-      'v',
-      's',
-      't',
-      'a',
-      'b',
-      'c',
-      'd',
-      'e',
-      'f',
-      'g',
-      'h',
-      'i',
-      'j',
-      'k',
-      'l',
-      'm',
-      'n',
-      'o',
-      'p',
-      'q',
-      'r'
-    ];
-
-    if (index - 3 < additionalNames.length) {
-      return additionalNames[index - 3];
-    }
-
-    // If we run out of single letters, use param pattern
-    return 'param${index + 1}';
-  }
-
   void _addParameter() {
     final currentParameters = widget.data?.parameters ?? [];
     final newParameters = List<APIExprParameter>.from(currentParameters)
       ..add(APIExprParameter(
-        name: _generateParameterName(currentParameters.length),
+        // The kernel's rule, shared with the `+` tab: the next free letter.
+        name: widget.model.nextDeclaredInputName(widget.nodeId) ?? 'x',
         dataType: const APIDataType(
             dataTypeBase: APIDataTypeBase.float,
             customDataType: null,
@@ -168,6 +128,8 @@ class ExprEditorState extends State<ExprEditor> {
     // from wire offers are re-read on every build (see wire_type_offer.dart).
     final focusIndex = widget.model.takePendingNameFocus(widget.nodeId);
     final offers = widget.model.getWireTypeOffers(widget.nodeId);
+    // The source's own name for a just-dropped parameter, as a rename chip.
+    final suggestion = widget.model.nameSuggestionFor(widget.nodeId);
 
     return Padding(
       padding: const EdgeInsets.all(8.0),
@@ -256,7 +218,7 @@ class ExprEditorState extends State<ExprEditor> {
               padding: const EdgeInsets.all(16.0),
               child: Center(
                 child: Text(
-                  'No parameters defined. Click "Add Parameter" to get started.',
+                  'No parameters. Drop a wire on the + tab below the node, or click "Add Parameter".',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
@@ -279,6 +241,9 @@ class ExprEditorState extends State<ExprEditor> {
                       value: parameter.name,
                       requestFocus: index == focusIndex,
                       onChanged: (newName) {
+                        if (newName != parameter.name) {
+                          widget.model.clearNameSuggestion();
+                        }
                         _updateParameter(
                           index,
                           APIExprParameter(
@@ -328,18 +293,33 @@ class ExprEditorState extends State<ExprEditor> {
 
               return Padding(
                 padding: const EdgeInsets.only(bottom: 4.0),
-                child: offer == null
+                child: offer == null && suggestion?.index != index
                     ? row
                     : Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           row,
-                          WireTypeOfferButton(
-                            model: widget.model,
-                            nodeId: widget.nodeId,
-                            index: index,
-                            offeredType: offer,
-                          ),
+                          if (suggestion != null && suggestion.index == index)
+                            NameSuggestionChip(
+                              name: suggestion.name,
+                              onUse: () {
+                                widget.model.clearNameSuggestion();
+                                _updateParameter(
+                                  index,
+                                  APIExprParameter(
+                                    name: suggestion.name,
+                                    dataType: parameter.dataType,
+                                  ),
+                                );
+                              },
+                            ),
+                          if (offer != null)
+                            WireTypeOfferButton(
+                              model: widget.model,
+                              nodeId: widget.nodeId,
+                              index: index,
+                              offeredType: offer,
+                            ),
                         ],
                       ),
               );

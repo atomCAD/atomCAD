@@ -286,6 +286,10 @@ impl DeclaredInputs for RecordConstructData {
         "field"
     }
 
+    fn declaring_property(&self) -> &'static str {
+        "fields"
+    }
+
     fn declares_pin(&self, pin_id: u64) -> bool {
         self.field_index_for_pin(pin_id).is_some()
     }

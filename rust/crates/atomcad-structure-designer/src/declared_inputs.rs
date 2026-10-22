@@ -35,6 +35,21 @@ pub trait DeclaredInputs {
     /// `"field"` for `record_construct`.
     fn fallback_name(&self) -> &'static str;
 
+    /// Names a new input takes in order, ignoring the source: `expr`'s
+    /// variables `x, y, z, a, b, …`. Empty (the default) means a new input is
+    /// named after its source ([`derive_open_port_name`]). Read through
+    /// [`next_declared_input_name`], which every path that names a new input
+    /// goes through — the open port, the drag adapter, the panel's add button.
+    fn name_pool(&self) -> &'static [&'static str] {
+        &[]
+    }
+
+    /// The text-format property that lists the declared inputs explicitly
+    /// (`parameters` for `expr`, `fields` for `record_construct`). A statement
+    /// that sets it declares its inputs itself; one that does not lets a
+    /// wire to an undeclared name declare it (`network_editor.rs`).
+    fn declaring_property(&self) -> &'static str;
+
     /// Whether `pin_id` names one of the declared inputs. It is a method rather
     /// than an invariant so that a future node can mix fixed pins with
     /// declared ones.
@@ -108,6 +123,75 @@ pub fn derive_open_port_name(
         .map(|counter| format!("{}_{}", base, counter))
         .find(|candidate| !taken.contains(candidate))
         .expect("a free suffixed name exists: the taken set is finite")
+}
+
+/// The name a new declared input gets. With a [`DeclaredInputs::name_pool`],
+/// the first pool name that is neither taken nor reserved
+/// ([`next_pool_name`]); otherwise the name derived from `src`
+/// ([`derive_open_port_name`]), or from nothing — the fallback — when there is
+/// no source (an add button).
+pub fn next_declared_input_name(
+    declared: &dyn DeclaredInputs,
+    src: Option<&NameSource>,
+    taken: &HashSet<String>,
+) -> String {
+    let reserved = declared.reserved_names();
+    if let Some(name) = next_pool_name(declared.name_pool(), taken, reserved) {
+        return name;
+    }
+    let no_source = NameSource {
+        node_name: None,
+        pin_name: None,
+        prefer_pin: false,
+    };
+    derive_open_port_name(
+        src.unwrap_or(&no_source),
+        taken,
+        reserved,
+        declared.fallback_name(),
+    )
+}
+
+/// The first name of `pool` that is neither in `taken` nor in `reserved`.
+/// Once every pool name is taken, the pool is walked again with the
+/// `_2`, `_3`, … suffix of `NodeNetwork::unique_name_for` (`x_2`, `y_2`, …).
+/// `None` only for an empty pool.
+pub fn next_pool_name(pool: &[&str], taken: &HashSet<String>, reserved: &[&str]) -> Option<String> {
+    if pool.is_empty() {
+        return None;
+    }
+    let free = |name: &str| !taken.contains(name) && !reserved.contains(&name);
+    if let Some(name) = pool.iter().find(|name| free(name)) {
+        return Some(name.to_string());
+    }
+    (2u64..).find_map(|counter| {
+        pool.iter()
+            .map(|name| format!("{}_{}", name, counter))
+            .find(|candidate| free(candidate))
+    })
+}
+
+/// Whether `name`, written by the user, can name a new declared input: an
+/// identifier (`[A-Za-z_][A-Za-z0-9_]*`) the node does not reserve. A name
+/// taken by an existing input is the caller's concern.
+pub fn check_declared_input_name(declared: &dyn DeclaredInputs, name: &str) -> Result<(), String> {
+    if !is_input_identifier(name) {
+        return Err(format!("'{}' is not a valid input name", name));
+    }
+    if declared.reserved_names().contains(&name) {
+        return Err(format!("'{}' is a reserved name", name));
+    }
+    Ok(())
+}
+
+/// Whether `name` follows the identifier rule a declared input's name must:
+/// `[A-Za-z_][A-Za-z0-9_]*`.
+pub fn is_input_identifier(name: &str) -> bool {
+    let mut chars = name.chars();
+    chars
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
 /// Step 2 of [`derive_open_port_name`]: map `raw` onto the identifier rule.

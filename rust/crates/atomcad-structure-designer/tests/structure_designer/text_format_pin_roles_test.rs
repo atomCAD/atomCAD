@@ -152,7 +152,7 @@ fn a_role_on_an_applys_derived_argument_pin_resolves_after_its_f_wire() {
     let mut sd = designer();
     let warnings = edit(
         &mut sd,
-        "sq = expr { expression: \"x * x\" }\n\
+        "sq = expr { expression: \"x * x\", parameters: [{ name: \"x\", data_type: Int }] }\n\
          v = int { value: 3 }\n\
          a = apply { f: @sq, arg0: v, pin_roles: { arg0: delayed } }\n",
     );

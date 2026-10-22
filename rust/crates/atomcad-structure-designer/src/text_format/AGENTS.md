@@ -370,6 +370,14 @@ same file.
   the API can still build one. The corpus test is the proof that it renames
   nothing on a real file; there is deliberately no assertion inside the
   function.
+- **Wire-declared inputs happen only in the retry pass.** A wire to a name a
+  declared-inputs node (`expr`, anonymous `record_construct`) lacks declares
+  that input (`declare_input_from_wire`), typed by its source — but only in
+  `wire_deferred_connections`, after every ordinary wire is in place, so a
+  polymorphic source's type resolves through its own inputs. The pass repeats
+  while a round makes progress, because one declaration can give another
+  source its type. `query` always writes `parameters` / `fields`, so the
+  round-trip never depends on this.
 - **Wires an edit cannot make yet are retried, not dropped.** An `apply`'s
   arg pins are derived from its `f` wire, which the same wire pass is
   creating, so `arg0: x` finds no pin the first time; `wire_pending_connections`

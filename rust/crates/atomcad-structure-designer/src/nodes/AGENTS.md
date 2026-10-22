@@ -220,6 +220,16 @@ popup's filter (`view_builders::get_compatible_node_types`) also reads it: an
 output drag offers any node whose **default** data has declared inputs that
 `accepts_type` the source, because Flutter's auto-connect then goes through the
 open port. So a node needs no `FromOutput` drag adapter to be offered there.
+The text format reads it too: a wire to a name such a node lacks declares it
+(`network_editor.rs`, `declare_input_from_wire`), unless the statement sets
+the node's `declaring_property`.
+
+**Naming a new input goes through `declared_inputs::next_declared_input_name`,
+from every path** — the open port, a drag adapter (`expr`'s), the panel's add
+button (`StructureDesigner::next_declared_input_name`). A node with a
+`name_pool` (`expr`: `x, y, z, a, …`) takes the next free pool name; one
+without is named after the source. Don't hard-code a name in an adapter or a
+Dart editor, or two gestures name the same input differently.
 
 ### NodeType Registration
 

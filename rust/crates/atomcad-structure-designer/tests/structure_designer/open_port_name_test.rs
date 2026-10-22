@@ -2,7 +2,10 @@
 //! (`doc/design_wire_declared_inputs.md`, "Name derivation"). A pure function,
 //! so it is tested as a table with no network.
 
-use atomcad_structure_designer::declared_inputs::{NameSource, derive_open_port_name};
+use atomcad_structure_designer::declared_inputs::{
+    NameSource, derive_open_port_name, next_pool_name,
+};
+use atomcad_structure_designer::nodes::expr::EXPR_PARAMETER_NAME_POOL;
 use std::collections::HashSet;
 
 const RESERVED: &[&str] = &[
@@ -98,4 +101,50 @@ fn nothing_usable_gives_the_fallback() {
 #[test]
 fn case_is_kept() {
     assert_eq!(derive(Some("MyNode"), None, false, &[]), "MyNode");
+}
+
+// ---------------------------------------------------------------------------
+// The name pool (`expr`'s letters)
+// ---------------------------------------------------------------------------
+
+fn pool_name(taken: &[&str]) -> Option<String> {
+    let taken: HashSet<String> = taken.iter().map(|s| s.to_string()).collect();
+    next_pool_name(EXPR_PARAMETER_NAME_POOL, &taken, RESERVED)
+}
+
+#[test]
+fn the_pool_starts_with_x_y_z() {
+    assert_eq!(pool_name(&[]).as_deref(), Some("x"));
+    assert_eq!(pool_name(&["x"]).as_deref(), Some("y"));
+    assert_eq!(pool_name(&["x", "y"]).as_deref(), Some("z"));
+    assert_eq!(pool_name(&["x", "y", "z"]).as_deref(), Some("a"));
+}
+
+#[test]
+fn the_first_free_pool_name_is_taken_not_the_next_one() {
+    assert_eq!(pool_name(&["y", "z"]).as_deref(), Some("x"));
+    assert_eq!(pool_name(&["x", "z", "radius"]).as_deref(), Some("y"));
+}
+
+#[test]
+fn an_exhausted_pool_continues_with_suffixes() {
+    let all: Vec<&str> = EXPR_PARAMETER_NAME_POOL.to_vec();
+    assert_eq!(pool_name(&all).as_deref(), Some("x_2"));
+    let mut more = all.clone();
+    more.push("x_2");
+    assert_eq!(pool_name(&more).as_deref(), Some("y_2"));
+}
+
+#[test]
+fn a_reserved_pool_name_is_skipped() {
+    let taken: HashSet<String> = HashSet::new();
+    assert_eq!(
+        next_pool_name(&["if", "x"], &taken, RESERVED).as_deref(),
+        Some("x")
+    );
+}
+
+#[test]
+fn an_empty_pool_names_nothing() {
+    assert_eq!(next_pool_name(&[], &HashSet::new(), RESERVED), None);
 }

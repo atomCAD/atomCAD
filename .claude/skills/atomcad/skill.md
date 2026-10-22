@@ -1000,24 +1000,23 @@ Extra parameters beyond the expected function signature are bound at wire-time (
 
 The `expr` node evaluates mathematical expressions with dynamic input pins.
 
-**Important:** The `parameters` property defines which input pins the expression uses. Each parameter needs a `name` and `data_type`. The default expr node only has one parameter named `x` of type `Int`.
+**Parameters are the input pins.** A fresh `expr` has no parameters and the expression `0`. Wiring a name declares it: each wired input becomes a parameter typed by its source, so you rarely need to write `parameters`. Write `parameters` explicitly only to declare an input you will not wire, or to pin a type; a statement that sets `parameters` declares exactly what it lists, and a wire to any other name is a warning.
 
 ```bash
-# Simple case: using the default 'x' parameter
-atomcad-cli edit <<'EOF'
-val = int { value: 5 }
-doubled = expr { expression: "x * 2", x: val }
-EOF
-
-# Multiple inputs: must define parameters explicitly
+# Wired names declare themselves, typed by their sources
 atomcad-cli edit <<'EOF'
 a = int { value: 5 }
-b = int { value: 3 }
-sum = expr {
-  expression: "x + y",
-  parameters: [{ name: "x", data_type: Int }, { name: "y", data_type: Int }],
-  x: a,
-  y: b
+b = float { value: 3.0 }
+sum = expr { expression: "x + y", x: a, y: b }
+EOF
+
+# Explicit parameters (e.g. a parameter with no wire yet)
+atomcad-cli edit <<'EOF'
+a = int { value: 5 }
+scaled = expr {
+  expression: "x * k",
+  parameters: [{ name: "x", data_type: Int }, { name: "k", data_type: Int }],
+  x: a
 }
 EOF
 ```

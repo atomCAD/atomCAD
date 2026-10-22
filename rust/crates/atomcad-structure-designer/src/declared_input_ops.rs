@@ -14,7 +14,7 @@
 //! [`DeclaredInputs`]: crate::declared_inputs::DeclaredInputs
 
 use crate::data_type::{DataType, RecordType};
-use crate::declared_inputs::{NameSource, derive_open_port_name};
+use crate::declared_inputs::{NameSource, derive_open_port_name, next_declared_input_name};
 use crate::node_network::{IncomingWire, NodeNetwork, SourcePin};
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
@@ -33,8 +33,12 @@ pub struct AddedInput {
     pub pin_index: usize,
     /// The new input's pin id (`DeclaredInputs::append`'s return).
     pub pin_id: u64,
-    /// The derived name.
+    /// The name the input was given.
     pub name: String,
+    /// The name derived from the source, when the node named the input
+    /// otherwise (`expr`'s letters) and the source has a name of its own: the
+    /// panel offers it as a one-click rename. `None` when it would be `name`.
+    pub source_name: Option<String>,
 }
 
 /// Everything the drop needs, gathered by the read-only checks
@@ -43,6 +47,7 @@ struct AddInputPlan {
     network_name: String,
     data_type: DataType,
     name: String,
+    source_name: Option<String>,
 }
 
 /// The offered type for one declared input, or `None`: the four conditions of
@@ -127,7 +132,7 @@ impl StructureDesigner {
         source_pin: SourcePin,
         source_scope_depth: u8,
     ) -> Option<String> {
-        self.check_add_input_from_wire(
+        self.preview_add_input_from_wire(
             dest_scope_path,
             dest_node_id,
             source_node_id,
@@ -135,6 +140,27 @@ impl StructureDesigner {
             source_scope_depth,
         )
         .err()
+    }
+
+    /// [`Self::can_add_input_from_wire`] with the answer the hovered `+` tab
+    /// shows: `Ok(name)` — the name the drop would give the new input — or
+    /// `Err(reason)`. The same checks as the drop, so the preview is exact.
+    pub fn preview_add_input_from_wire(
+        &self,
+        dest_scope_path: &[u64],
+        dest_node_id: u64,
+        source_node_id: u64,
+        source_pin: SourcePin,
+        source_scope_depth: u8,
+    ) -> Result<String, String> {
+        self.check_add_input_from_wire(
+            dest_scope_path,
+            dest_node_id,
+            source_node_id,
+            source_pin,
+            source_scope_depth,
+        )
+        .map(|plan| plan.name)
     }
 
     /// Steps 1–4 of the drop: every refusal, and the type and name the new
@@ -196,9 +222,53 @@ impl StructureDesigner {
                 source_scope_depth,
             )
             .ok_or_else(|| "Source node not found".to_string())?;
-        let taken: HashSet<String> = self
-            .node_type_registry
-            .get_node_type_for_node(dest_node)
+        let taken = self.input_pin_names(dest_node);
+        let source = NameSource {
+            node_name: name_source.0.as_deref(),
+            pin_name: name_source.1.as_deref(),
+            prefer_pin: name_source.2,
+        };
+        let name = next_declared_input_name(declared, Some(&source), &taken);
+        // The source's own name, offered as a rename when the node chose
+        // another (a name pool). A source with no name offers nothing: the
+        // derivation would only fall back.
+        let source_name = (source.node_name.is_some() || source.pin_name.is_some())
+            .then(|| {
+                derive_open_port_name(
+                    &source,
+                    &taken,
+                    declared.reserved_names(),
+                    declared.fallback_name(),
+                )
+            })
+            .filter(|derived| *derived != name);
+
+        Ok(AddInputPlan {
+            network_name,
+            data_type,
+            name,
+            source_name,
+        })
+    }
+
+    /// The name the node's next declared input would get with no wire to name
+    /// it after — what the panel's add button uses, so it names inputs the way
+    /// the open port does (`expr`: the next free letter). `None` when the node
+    /// has no declared inputs. Read-only.
+    pub fn next_declared_input_name(&self, scope_path: &[u64], node_id: u64) -> Option<String> {
+        let node = self.get_scope_network(scope_path)?.nodes.get(&node_id)?;
+        let declared = node.data.declared_inputs()?;
+        Some(next_declared_input_name(
+            declared,
+            None,
+            &self.input_pin_names(node),
+        ))
+    }
+
+    /// The names of `node`'s input pins.
+    fn input_pin_names(&self, node: &crate::node_network::Node) -> HashSet<String> {
+        self.node_type_registry
+            .get_node_type_for_node(node)
             .map(|node_type| {
                 node_type
                     .parameters
@@ -206,23 +276,7 @@ impl StructureDesigner {
                     .map(|p| p.name.clone())
                     .collect()
             })
-            .unwrap_or_default();
-        let name = derive_open_port_name(
-            &NameSource {
-                node_name: name_source.0.as_deref(),
-                pin_name: name_source.1.as_deref(),
-                prefer_pin: name_source.2,
-            },
-            &taken,
-            declared.reserved_names(),
-            declared.fallback_name(),
-        );
-
-        Ok(AddInputPlan {
-            network_name,
-            data_type,
-            name,
-        })
+            .unwrap_or_default()
     }
 
     /// `(node name, pin name, prefer pin)` for [`NameSource`]: the node is the
@@ -368,6 +422,7 @@ impl StructureDesigner {
             pin_index,
             pin_id,
             name: plan.name.clone(),
+            source_name: plan.source_name.clone(),
         })
     }
 

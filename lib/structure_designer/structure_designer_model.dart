@@ -171,6 +171,17 @@ class PendingNameFocus {
   const PendingNameFocus(this.nodeId, this.scopeChain, this.index);
 }
 
+/// A rename chip: the source-derived name for row [index] of [nodeId]'s
+/// declared-input list ([StructureDesignerModel.nameSuggestion]).
+class NameSuggestion {
+  final BigInt nodeId;
+  final List<BigInt> scopeChain;
+  final int index;
+  final String name;
+
+  const NameSuggestion(this.nodeId, this.scopeChain, this.index, this.name);
+}
+
 /// The message of an error thrown across the bridge by a Rust function that
 /// returns `Result<_, String>` (a thrown `String`) or an anyhow error.
 String bridgeErrorMessage(Object e) =>
@@ -404,6 +415,14 @@ class StructureDesignerModel extends ChangeNotifier {
   /// next build — set by an open-port drop ([addInputFromWire]) and taken by
   /// the `expr` / `record_construct` editors via [takePendingNameFocus].
   PendingNameFocus? pendingNameFocus;
+
+  /// The source's own name for the input an open-port drop just added, when
+  /// the node named it otherwise (`expr`'s letters): the panel shows it as a
+  /// one-click rename chip beside the focused name field. Unlike
+  /// [pendingNameFocus] it is not consumed by a build — it lasts while the
+  /// node stays selected, and is dropped by [nameSuggestionFor] once another
+  /// node is shown, or by [clearNameSuggestion] when used.
+  NameSuggestion? nameSuggestion;
 
   /// Not null while a comment's anchor handle is being dragged toward a
   /// target. See [DraggedCommentAnchor].
@@ -1509,6 +1528,7 @@ class StructureDesignerModel extends ChangeNotifier {
     draggedWire = null;
     draggedCommentAnchor = null;
     pendingNameFocus = null;
+    nameSuggestion = null;
     inPlaceEditRef = null;
   }
 
@@ -2132,20 +2152,23 @@ class StructureDesignerModel extends ChangeNotifier {
     );
   }
 
-  /// The hover check of an open-port `+` tab: null when dropping a wire from
-  /// [source] on node [destNodeId] (in [scopeChain]) would add an input, the
-  /// reason otherwise. Pinned to [addInputFromWire] Rust-side.
-  String? canAddInputFromWire(PinReference source, BigInt destNodeId,
+  /// The hover check of an open-port `+` tab: the name dropping a wire from
+  /// [source] on node [destNodeId] (in [scopeChain]) would give the new input
+  /// (the tab shows it), or the reason the drop would be refused. Exactly one
+  /// is set. Pinned to [addInputFromWire] Rust-side.
+  ({String? name, String? refusal}) previewAddInputFromWire(
+      PinReference source, BigInt destNodeId,
       {List<BigInt> scopeChain = const []}) {
     final wire = _openPortWire(source, scopeChain);
-    if (wire.refusal != null) return wire.refusal;
-    return structure_designer_api.canAddInputFromWire(
+    if (wire.refusal != null) return (name: null, refusal: wire.refusal);
+    final preview = structure_designer_api.previewAddInputFromWire(
       destScopePath: scopeChainToBytes(scopeChain),
       sourceNodeId: source.nodeId,
       sourcePin: wire.sourcePin!,
       sourceScopeDepth: wire.sourceScopeDepth,
       destNodeId: destNodeId,
     );
+    return (name: preview.name, refusal: preview.refusal);
   }
 
   /// The open-port drop: append an input of the wire's type to [destNodeId]
@@ -2177,6 +2200,10 @@ class StructureDesignerModel extends ChangeNotifier {
       return bridgeErrorMessage(e);
     }
     pendingNameFocus = PendingNameFocus(destNodeId, scopeChain, added.pinIndex);
+    final sourceName = added.sourceName;
+    nameSuggestion = sourceName == null
+        ? null
+        : NameSuggestion(destNodeId, scopeChain, added.pinIndex, sourceName);
     final dest = _findNodeInScope(destNodeId, scopeChain);
     if (dest != null && !dest.selected) {
       structure_designer_api.selectNode(
@@ -2201,6 +2228,35 @@ class StructureDesignerModel extends ChangeNotifier {
     pendingNameFocus = null;
     return pending.index;
   }
+
+  /// The rename chip for [nodeId]'s editor, or null. Asking for another node
+  /// (the panel now shows something else) drops the suggestion for good, so
+  /// it does not come back when the node is selected again. Non-notifying:
+  /// called from `build`.
+  NameSuggestion? nameSuggestionFor(BigInt nodeId) {
+    final suggestion = nameSuggestion;
+    if (suggestion == null) return null;
+    if (suggestion.nodeId != nodeId ||
+        !listEquals(suggestion.scopeChain, propertyEditorScopeChain)) {
+      nameSuggestion = null;
+      return null;
+    }
+    return suggestion;
+  }
+
+  /// Drop the rename chip (it was used, or the input it names was renamed).
+  void clearNameSuggestion() {
+    nameSuggestion = null;
+  }
+
+  /// The name a panel's add button gives [nodeId]'s next declared input — the
+  /// same rule the `+` tab uses (`expr`: the next free letter). Null for a
+  /// node without declared inputs. Defaults to the property panel's scope.
+  String? nextDeclaredInputName(BigInt nodeId, {List<BigInt>? scopeChain}) =>
+      structure_designer_api.nextDeclaredInputName(
+        scopePath: scopeChainToBytes(scopeChain ?? propertyEditorScopeChain),
+        nodeId: nodeId,
+      );
 
   /// Take type from wire: per input pin of [nodeId], the type a retype would
   /// set, or null where none is offered. Empty for a node without declared

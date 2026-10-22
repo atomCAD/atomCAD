@@ -53,6 +53,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use glam::DVec2;
 
+use crate::data_type::DataType;
 use crate::node_network::{
     Argument, ArgumentKind, CollapseMode, FunctionPinRole, IncomingWire, NodeDisplayState,
     NodeDisplayType, NodeNetwork, SourcePin, Wire,
@@ -239,6 +240,33 @@ fn scope_net<'n>(root: &'n NodeNetwork, scope: &[u64]) -> Option<&'n NodeNetwork
     Some(network)
 }
 
+/// The ancestor networks of `scope` (outermost first) and the HOF ids that
+/// lead into each next one: the frame `resolve_wire_source_type_scoped`
+/// expects, the editor's twin of `StructureDesigner::get_scope_ancestors`.
+fn scope_ancestors<'n>(root: &'n NodeNetwork, scope: &[u64]) -> (Vec<&'n NodeNetwork>, Vec<u64>) {
+    let mut ancestors = Vec::with_capacity(scope.len());
+    let mut network = root;
+    for owner_id in scope {
+        ancestors.push(network);
+        match network.nodes.get(owner_id).and_then(|n| n.zone.as_deref()) {
+            Some(body) => network = body,
+            None => break,
+        }
+    }
+    (ancestors, scope.to_vec())
+}
+
+/// What [`NetworkEditor::declare_input_from_wire`] did.
+enum Declared {
+    /// Appended the input; wire it.
+    Yes,
+    /// Not a declaration (no declared inputs, may not declare, the input
+    /// exists): the original wiring error stands.
+    NotApplicable,
+    /// A declaration that cannot be made, with the reason to report.
+    Refused(String),
+}
+
 /// Walk down to the network a scope path names, for mutation. Each step goes
 /// through `zone_mut()` so the `Arc` copy-on-write stays intact.
 fn scope_net_mut<'n>(root: &'n mut NodeNetwork, scope: &[u64]) -> Option<&'n mut NodeNetwork> {
@@ -345,6 +373,11 @@ struct PendingConnection {
     dest_node_path: String,
     param_name: String,
     source_refs: Vec<SourceRef>,
+    /// Whether a missing `param_name` on a node with declared inputs may be
+    /// declared by this wire: the property is a single reference (not an
+    /// array) and the statement does not list the inputs itself
+    /// (`DeclaredInputs::declaring_property`). See `declare_input_from_wire`.
+    may_declare: bool,
 }
 
 /// One comment anchor target, still in name form.
@@ -1396,15 +1429,39 @@ impl<'a> NetworkEditor<'a> {
             if !source_refs.is_empty()
                 || self.property_disconnects_pin(scope, node_id, prop_name, prop_value)
             {
+                let may_declare = source_refs.len() == 1
+                    && !matches!(prop_value, PropertyValue::Array(_))
+                    && !self.statement_declares_inputs(scope, node_id, properties);
                 self.pending_connections.push(PendingConnection {
                     scope: scope.to_vec(),
                     dest_node_name: dest_node_name.to_string(),
                     dest_node_path: dest_node_path.to_string(),
                     param_name: prop_name.clone(),
                     source_refs,
+                    may_declare,
                 });
             }
         }
+    }
+
+    /// Whether the statement sets the node's declaring property (`parameters`
+    /// / `fields`): then its inputs are what it lists, and a wire to a name it
+    /// does not list stays a warning. `false` for a node without declared
+    /// inputs, which has nothing to declare.
+    fn statement_declares_inputs(
+        &self,
+        scope: &[u64],
+        node_id: u64,
+        properties: &[(String, PropertyValue)],
+    ) -> bool {
+        let Some(declared) = scope_net(self.network, scope)
+            .and_then(|network| network.nodes.get(&node_id))
+            .and_then(|node| node.data.declared_inputs())
+        else {
+            return false;
+        };
+        let key = declared.declaring_property();
+        properties.iter().any(|(name, _)| name == key)
     }
 
     /// Whether a source-free property should disconnect the pin it names.
@@ -1537,13 +1594,126 @@ impl<'a> NetworkEditor<'a> {
         }
         self.registry
             .update_apply_pin_layouts_for_network(self.network);
-        for conn in connections {
-            if let Err(e) = self.wire_connection(&conn) {
-                self.result.add_warning(format!(
-                    "Connection warning for {}.{}: {}",
-                    conn.dest_node_path, conn.param_name, e
-                ));
+        // Inputs are declared by wires only here, once every ordinary wire is
+        // in place, so a source's type resolves through its own inputs. A
+        // declaration can make another one resolvable (an `expr` fed by an
+        // `expr` whose parameters are being declared too), so retry until a
+        // round makes no progress.
+        let mut pending = connections;
+        let mut last_failed = usize::MAX;
+        let failures = loop {
+            let mut failed = Vec::new();
+            for conn in pending {
+                if let Err(e) = self.wire_connection_declaring(&conn) {
+                    failed.push((conn, e));
+                }
             }
+            if failed.is_empty() || failed.len() >= last_failed {
+                break failed;
+            }
+            last_failed = failed.len();
+            pending = failed.into_iter().map(|(conn, _)| conn).collect();
+        };
+        for (conn, e) in failures {
+            self.result.add_warning(format!(
+                "Connection warning for {}.{}: {}",
+                conn.dest_node_path, conn.param_name, e
+            ));
+        }
+    }
+
+    /// [`Self::wire_connection`], declaring the destination input first when
+    /// it is missing and the connection may declare it.
+    fn wire_connection_declaring(&mut self, conn: &PendingConnection) -> Result<(), String> {
+        match self.wire_connection(conn) {
+            Ok(()) => Ok(()),
+            Err(e) => match self.declare_input_from_wire(conn) {
+                Declared::Yes => self.wire_connection(conn),
+                Declared::NotApplicable => Err(e),
+                Declared::Refused(reason) => Err(reason),
+            },
+        }
+    }
+
+    /// The text-format half of the open port
+    /// (`doc/design_wire_declared_inputs.md`, Phase 5): `y: src` on a node with
+    /// declared inputs that has no input `y` appends one, named `y` exactly as
+    /// written, of `src`'s resolved type. The wire itself is made by the
+    /// caller. Only a single reference may declare (a literal carries no type,
+    /// an array is several wires), and never in a statement that lists the
+    /// inputs itself.
+    fn declare_input_from_wire(&mut self, conn: &PendingConnection) -> Declared {
+        if !conn.may_declare {
+            return Declared::NotApplicable;
+        }
+        let Some(dest_node_id) = self.lookup(&conn.scope, &conn.dest_node_name) else {
+            return Declared::NotApplicable;
+        };
+        let data_type = {
+            let Some(network) = scope_net(self.network, &conn.scope) else {
+                return Declared::NotApplicable;
+            };
+            let Some(node) = network.nodes.get(&dest_node_id) else {
+                return Declared::NotApplicable;
+            };
+            let Some(declared) = node.data.declared_inputs() else {
+                return Declared::NotApplicable;
+            };
+            let has_input = self
+                .registry
+                .get_node_type_for_node(node)
+                .is_some_and(|t| t.parameters.iter().any(|p| p.name == conn.param_name));
+            if has_input {
+                // The input exists; whatever failed is not a missing declaration.
+                return Declared::NotApplicable;
+            }
+            // A key that could never name an input (`@0`, a positional pin) is
+            // not an attempt to declare one: its own error stands.
+            if !crate::declared_inputs::is_input_identifier(&conn.param_name) {
+                return Declared::NotApplicable;
+            }
+            if let Err(reason) =
+                crate::declared_inputs::check_declared_input_name(declared, &conn.param_name)
+            {
+                return Declared::Refused(reason);
+            }
+            let wire = match self.resolve_source(&conn.scope, &conn.source_refs[0]) {
+                Ok((wire, _)) => wire,
+                Err(reason) => return Declared::Refused(reason),
+            };
+            let (ancestors, ancestor_hof_ids) = scope_ancestors(self.network, &conn.scope);
+            let resolved = self
+                .registry
+                .resolve_wire_source_type_scoped(&wire, network, &ancestors, &ancestor_hof_ids)
+                .map(|resolved| resolved.data_type)
+                .filter(|data_type| *data_type != DataType::None);
+            let Some(data_type) = resolved else {
+                return Declared::Refused(format!(
+                    "the type of '{}' cannot be inferred from its source; declare it in '{}'",
+                    conn.param_name,
+                    declared.declaring_property()
+                ));
+            };
+            if let Err(reason) = declared.accepts_type(&data_type) {
+                return Declared::Refused(reason);
+            }
+            data_type
+        };
+        let appended = scope_net_mut(self.network, &conn.scope)
+            .and_then(|network| network.nodes.get_mut(&dest_node_id))
+            .and_then(|node| node.data.declared_inputs_mut())
+            .map(|declared| declared.append(conn.param_name.clone(), data_type.clone()));
+        match appended {
+            Some(Ok(_)) => {
+                self.refresh_node_layout(&conn.scope, dest_node_id, false);
+                self.result.connections_made.push(format!(
+                    "{}.{} declared as {}",
+                    conn.dest_node_path, conn.param_name, data_type
+                ));
+                Declared::Yes
+            }
+            Some(Err(reason)) => Declared::Refused(reason),
+            None => Declared::NotApplicable,
         }
     }
 

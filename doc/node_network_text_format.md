@@ -566,6 +566,34 @@ expr1 = expr {
 }
 ```
 
+**Wiring a name declares it.** On a node that declares its own inputs
+(`expr`, and a `record_construct` with no `schema`), a wire to a name the node
+does not have yet adds that input, typed by its source, before the wire is
+made:
+
+```
+a = float { value: 1.5 }
+v = vec3 { x: 1.0, y: 2.0, z: 3.0 }
+e = expr { expression: "v * a", a: a, v: v }      # a: Float, v: Vec3
+r = record_construct { size: a, at: v }           # fields size: Float, at: Vec3
+```
+
+The rules:
+
+- Only a single reference declares. A literal (`y: 5`) carries no type, and an
+  array of references is several wires; both leave the name undeclared.
+- A statement that sets `parameters` (or `fields`) declares exactly what it
+  lists, and a wire to any other name is reported as a warning.
+- The name is the key as written. It must be an identifier the node does not
+  reserve (`pi`, `if`, `expression`, …); otherwise the edit reports why.
+- A source whose type depends on inputs declared in the same edit (an `expr`
+  fed by another `expr`) is resolved after them, in whatever order the
+  statements appear. A source whose type still cannot be worked out is
+  reported, naming the input.
+- A fresh `expr` has no parameters and the expression `0`. `query` always
+  writes `parameters` out, so a `query` → `--replace` round trip never relies
+  on this rule.
+
 ### Map Node
 
 ```

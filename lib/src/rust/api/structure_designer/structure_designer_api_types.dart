@@ -119,17 +119,24 @@ class APIAddedInput {
   /// The new input's stable pin id.
   final BigInt pinId;
 
-  /// The name the input was given, derived from the source.
+  /// The name the input was given (`expr`: the next free letter; otherwise
+  /// derived from the source).
   final String name;
+
+  /// The name derived from the source, when it differs from `name`: the
+  /// panel offers it as a one-click rename. `None` otherwise.
+  final String? sourceName;
 
   const APIAddedInput({
     required this.pinIndex,
     required this.pinId,
     required this.name,
+    this.sourceName,
   });
 
   @override
-  int get hashCode => pinIndex.hashCode ^ pinId.hashCode ^ name.hashCode;
+  int get hashCode =>
+      pinIndex.hashCode ^ pinId.hashCode ^ name.hashCode ^ sourceName.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -138,7 +145,8 @@ class APIAddedInput {
           runtimeType == other.runtimeType &&
           pinIndex == other.pinIndex &&
           pinId == other.pinId &&
-          name == other.name;
+          name == other.name &&
+          sourceName == other.sourceName;
 }
 
 /// Blueprint/Crystal alignment state, mirrored from `network_result::Alignment`.
@@ -5542,6 +5550,32 @@ class APIOpenDocumentResult {
           paramIdRepairs == other.paramIdRepairs &&
           loadLibraryReport == other.loadLibraryReport &&
           libraryReport == other.libraryReport;
+}
+
+/// The hover check of the open port (`preview_add_input_from_wire`): exactly
+/// one of the two is set.
+class APIOpenPortPreview {
+  /// The name a drop would give the new input; the tab shows it.
+  final String? name;
+
+  /// Why a drop would be refused; the tab shows it in the refused style.
+  final String? refusal;
+
+  const APIOpenPortPreview({
+    this.name,
+    this.refusal,
+  });
+
+  @override
+  int get hashCode => name.hashCode ^ refusal.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIOpenPortPreview &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          refusal == other.refusal;
 }
 
 /// The stored data of an `ops_library` node plus what the panel cannot compute

@@ -122,6 +122,32 @@ APIAddedInput addInputFromWire(
             sourceScopeDepth: sourceScopeDepth,
             destNodeId: destNodeId);
 
+/// The hover check of the `+` tab: the name a drop would give the new input,
+/// or why it would be refused. Runs the same checks as
+/// [`add_input_from_wire`], so the tab can never promise a drop that fails.
+APIOpenPortPreview previewAddInputFromWire(
+        {required Uint64List destScopePath,
+        required BigInt sourceNodeId,
+        required APISourcePin sourcePin,
+        required int sourceScopeDepth,
+        required BigInt destNodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiPreviewAddInputFromWire(
+            destScopePath: destScopePath,
+            sourceNodeId: sourceNodeId,
+            sourcePin: sourcePin,
+            sourceScopeDepth: sourceScopeDepth,
+            destNodeId: destNodeId);
+
+/// The name the node's next declared input gets when no wire names it — what
+/// a panel's add button uses, so it names inputs as the `+` tab does (`expr`:
+/// the next free letter). `None` for a node without declared inputs.
+String? nextDeclaredInputName(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiNextDeclaredInputName(
+            scopePath: scopePath, nodeId: nodeId);
+
 /// The hover check paired with [`add_input_from_wire`]: `None` when the drop
 /// would succeed, `Some(reason)` when it would be refused.
 String? canAddInputFromWire(

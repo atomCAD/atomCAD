@@ -478,8 +478,21 @@ pub struct APIAddedInput {
     pub pin_index: u32,
     /// The new input's stable pin id.
     pub pin_id: u64,
-    /// The name the input was given, derived from the source.
+    /// The name the input was given (`expr`: the next free letter; otherwise
+    /// derived from the source).
     pub name: String,
+    /// The name derived from the source, when it differs from `name`: the
+    /// panel offers it as a one-click rename. `None` otherwise.
+    pub source_name: Option<String>,
+}
+
+/// The hover check of the open port (`preview_add_input_from_wire`): exactly
+/// one of the two is set.
+pub struct APIOpenPortPreview {
+    /// The name a drop would give the new input; the tab shows it.
+    pub name: Option<String>,
+    /// Why a drop would be refused; the tab shows it in the refused style.
+    pub refusal: Option<String>,
 }
 
 /// Mirrors `node_network::SourcePin`. See `doc/design_zones_ui.md`

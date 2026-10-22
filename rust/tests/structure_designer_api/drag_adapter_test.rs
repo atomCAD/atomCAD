@@ -1474,7 +1474,7 @@ fn add_node_with_drag_source_configures_expr_float() {
 #[test]
 fn add_node_with_drag_source_falls_back_for_expr_on_iter() {
     // expr's adapter rejects `Iter[T]`, so create-time should keep the
-    // default Int template (not adopt some half-resolved iter shape).
+    // default template (not adopt some half-resolved iter shape).
     let mut designer = setup_designer();
     let node_id = designer.add_node_with_drag_source(
         "expr",
@@ -1486,10 +1486,9 @@ fn add_node_with_drag_source_falls_back_for_expr_on_iter() {
     );
     assert_ne!(node_id, 0);
     let data = get_expr_data(&designer, node_id);
-    // Default ExprData from `node_data_creator`: x: Int, expr "x",
-    // output Int.
-    assert_eq!(data.parameters[0].data_type, DataType::Int);
-    assert_eq!(data.expression, "x");
+    // Default ExprData from `node_data_creator`: no parameters, body `0`.
+    assert!(data.parameters.is_empty());
+    assert_eq!(data.expression, "0");
 }
 
 // ============================================================================

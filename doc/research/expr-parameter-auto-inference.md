@@ -1,5 +1,9 @@
 # Research: Auto-Inference of expr Node Input Parameters
 
+> **Resolved (2026-10-22).** Implemented as "wiring a name declares it": see
+> `doc/design_wire_declared_inputs.md`, Phase 5. The types come from the wired
+> sources (option 1 + 3 below); an explicit `parameters` list wins.
+
 ## Problem
 
 When creating an `expr` node via CLI/text format, users must manually specify the `parameters` array if they need inputs beyond the default `x`:
