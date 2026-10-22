@@ -125,6 +125,32 @@ fn flattening_keeps_walk_order_and_lists_each_instance_before_its_children() {
 }
 
 #[test]
+fn flattening_maps_wired_upstream_and_trace_stops_here() {
+    let report = TraceReport {
+        rows: vec![
+            leaf("main", 1, RowContribution::Opaque),
+            leaf("main", 2, RowContribution::Unreached),
+        ],
+        truncated: false,
+        stats: Default::default(),
+    };
+    let result = flatten_trace_report(&report, |row| format!("n{}", row.node.node_id));
+    assert_eq!(
+        summary(&result),
+        vec!["n1 @main #1 trace stops here", "n2 @main #2 wired upstream"]
+    );
+    // "trace stops here" reads and dims like an unknown row.
+    assert!(matches!(
+        result.rows[0].contribution,
+        APIContributionKind::Unknown
+    ));
+    assert!(matches!(
+        result.rows[1].contribution,
+        APIContributionKind::Unreached
+    ));
+}
+
+#[test]
 fn flattening_carries_the_row_cap() {
     let result = flatten_trace_report(&nested_report(true), |_| String::new());
     assert!(result.truncated);

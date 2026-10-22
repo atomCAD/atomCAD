@@ -1967,8 +1967,13 @@ enum APIContributionKind {
   /// The thing went through unchanged.
   passed,
 
-  /// The node cannot say ("possibly contributed").
+  /// The node cannot say ("possibly contributed"), or the trace cannot see
+  /// past it ("trace stops here").
   unknown,
+
+  /// Listed only because it is wired upstream of a node where the probe was
+  /// lost ("wired upstream").
+  unreached,
   ;
 }
 
@@ -7231,7 +7236,8 @@ class APITraceRow {
   final APIContributionKind contribution;
 
   /// "filled", "moved", "shape", … for `Created` / `Modified`; "passed" for
-  /// `Passed`; "possibly contributed" for `Unknown`.
+  /// `Passed`; "possibly contributed" or "trace stops here" for `Unknown`;
+  /// "wired upstream" for `Unreached`.
   final String label;
 
   const APITraceRow({

@@ -653,6 +653,20 @@ evaluation.
   probe is re-synced by position into every phase-typed input (atoms ↔
   geometry points as the input's type needs). A probe that matches nothing is
   *lost*, and everything upstream of it is listed without being asked.
+  An exception to "origin" (`doc/design_trace_coverage.md`): a node with no phase-typed input but a
+  wired input that `may_carry_phase` (record, iterator, function) is `Opaque`
+  ("trace stops here"), not an origin.
+- **`Unknown` is on the path, `Unreached` is only wired to it.** The node
+  where the probe was lost keeps `Unknown` (including the displayed node when
+  the hit resolves to nothing — `visit_from`'s `at_start`); every row emitted
+  with a lost probe above it is `Unreached`. `finish` drops an `Unreached` row
+  of any node also emitted under another kind (one row per node), and derives
+  instance labels **before** that drop. A new place that emits a row for a lost
+  probe goes through `lost_kind`.
+- **A side input is followed only when it decided what happened to the
+  probed thing** (a region that gated *this* atom, the taken branch, a diff
+  that touched it); otherwise a `trace` leaves it out rather than letting the
+  fallback list its whole cone.
 - **`trace` reads only persisted node data**, never runtime caches
   (`cached_input`, eval caches): subnetwork node data is shared by every call
   site, so a cache can hold another instance's state.

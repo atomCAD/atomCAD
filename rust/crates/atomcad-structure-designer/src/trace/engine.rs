@@ -16,7 +16,7 @@ use super::{
     Contribution, SURFACE_HIT_DELTA, TraceContext, TraceProbe, TraceSession, TraceStore, atom_at,
     atom_point_delta, atoms_of, element_of, sdf_at,
 };
-use crate::data_type::DataType;
+use crate::data_type::{DataType, RecordType};
 use crate::evaluator::eval_memo::MemoCounts;
 use crate::evaluator::network_evaluator::NetworkStackElement;
 use crate::evaluator::network_result::NetworkResult;
@@ -31,13 +31,20 @@ pub const ROW_CAP: usize = 200;
 /// A point counts as inside a geometry when its SDF is at most this (Å).
 const CONTAINS_TOLERANCE: f64 = 0.01;
 
-/// What a row says about its node. Only the engine creates `Unknown`.
+/// What a row says about its node. Only the engine creates the non-`Traced`
+/// kinds.
 #[derive(Debug, Clone, PartialEq)]
 pub enum RowContribution {
     Traced(Contribution),
-    /// The node has no `trace`, or the probe was lost upstream of it:
-    /// "possibly contributed".
+    /// The node has no `trace`, or cannot answer this probe: "possibly
+    /// contributed". It is on the hit path.
     Unknown,
+    /// Listed only because it is wired upstream of a node where the probe was
+    /// lost. Nothing is known about it: "wired upstream".
+    Unreached,
+    /// The probe reached the node through an input the trace cannot see into
+    /// (a record, an iterator, a function): "trace stops here".
+    Opaque,
 }
 
 /// Where a node sits during the trace: the chain of custom-node instances
@@ -186,7 +193,8 @@ struct ArenaNode {
     row: TraceRow,
     children: Vec<usize>,
     /// A custom-node instance row, whose contribution is derived from its
-    /// children once the walk is done.
+    /// children once the walk is done; its own `contribution` is the default
+    /// for an instance without children.
     is_instance: bool,
 }
 
@@ -252,14 +260,16 @@ impl<'a> Walker<'_, 'a> {
                 )
             }
         };
-        self.visit(position, node_id, hit.pin, element, probe);
+        // A probe lost here was lost at the displayed node itself, which is on
+        // the path: it reads "possibly contributed", not "wired upstream".
+        self.visit_from(position, node_id, hit.pin, element, probe, true);
     }
 
     // ------------------------------------------------------------------
     // The step loop
     // ------------------------------------------------------------------
 
-    /// Trace `probe` (`None` = lost) at `node_id`'s output `pin`.
+    /// Trace `probe` (`None` = lost upstream) at `node_id`'s output `pin`.
     fn visit(
         &mut self,
         position: &Position<'a>,
@@ -267,6 +277,20 @@ impl<'a> Walker<'_, 'a> {
         pin: usize,
         element: Option<usize>,
         probe: Option<TraceProbe>,
+    ) {
+        self.visit_from(position, node_id, pin, element, probe, false);
+    }
+
+    /// [`Self::visit`]; `at_start` = the node is where the trace starts, so a
+    /// `None` probe was lost *at* it rather than upstream of it.
+    fn visit_from(
+        &mut self,
+        position: &Position<'a>,
+        node_id: u64,
+        pin: usize,
+        element: Option<usize>,
+        probe: Option<TraceProbe>,
+        at_start: bool,
     ) {
         if self.truncated {
             return;
@@ -294,7 +318,7 @@ impl<'a> Walker<'_, 'a> {
         {
             // A custom-node instance: enter the subnetwork at its return node,
             // the way the evaluator does.
-            let row = self.emit(position, node_id, RowContribution::Unknown, true);
+            let row = self.emit(position, node_id, lost_kind(&probe, at_start), true);
             let mut inner = position.clone();
             inner.stack =
                 NetworkStackElement::enter_custom_network(&position.stack, child, node_id);
@@ -302,21 +326,28 @@ impl<'a> Walker<'_, 'a> {
                 .frame
                 .push((position.network_name(), NodeRef::top(node_id)));
             inner.sinks.push(Some(row));
-            self.visit(&inner, return_node_id, pin, element, probe);
+            self.visit_from(&inner, return_node_id, pin, element, probe, at_start);
             return;
         }
 
         if node.node_type_name == "parameter"
             && let Some(param) = node.data.as_any_ref().downcast_ref::<ParameterData>()
         {
-            self.visit_parameter(position, node_id, param.param_index, element, probe);
+            self.visit_parameter(
+                position,
+                node_id,
+                param.param_index,
+                element,
+                probe,
+                at_start,
+            );
             return;
         }
 
         let Some(probe) = probe else {
             // Lost: list without calling `trace`, continue through every
             // phase-typed input.
-            self.emit(position, node_id, RowContribution::Unknown, false);
+            self.emit(position, node_id, lost_kind(&None, at_start), false);
             for input_pin in phase_input_pins(registry, node) {
                 self.follow_link(position, node_id, input_pin, None, None);
             }
@@ -358,11 +389,12 @@ impl<'a> Walker<'_, 'a> {
         param_index: usize,
         element: Option<usize>,
         probe: Option<TraceProbe>,
+        at_start: bool,
     ) {
         let contribution = if probe.is_some() {
             RowContribution::Traced(Contribution::Passed)
         } else {
-            RowContribution::Unknown
+            lost_kind(&None, at_start)
         };
         self.emit(position, node_id, contribution, false);
         let in_zone_body = position.stack.last().is_some_and(|f| f.is_zone_body);
@@ -405,6 +437,13 @@ impl<'a> Walker<'_, 'a> {
     ) {
         let registry = self.session.registry;
         let phase_pins = phase_input_pins(registry, node);
+        if phase_pins.is_empty() && reads_opaque_input(registry, node) {
+            // The probe came in through a record, an iterator or a function:
+            // the node did not make the thing, the trace just cannot see past
+            // it.
+            self.emit(position, node_id, RowContribution::Opaque, false);
+            return;
+        }
         if phase_pins.is_empty() {
             // An origin: the label comes from the type of the traced pin.
             let network = position.stack.last().unwrap().node_network;
@@ -716,29 +755,79 @@ impl<'a> Walker<'_, 'a> {
     }
 
     /// Build the tree, giving each instance row the strongest contribution
-    /// among its children.
+    /// among its children, and drop every `Unreached` row of a node that was
+    /// also listed under another kind, wherever in the walk (one row per
+    /// node: precise beats wired).
     fn finish(&mut self) -> Vec<TraceNode> {
         let roots = std::mem::take(&mut self.roots);
-        roots.into_iter().map(|i| self.build(i)).collect()
+        for &root in &roots {
+            self.derive(root);
+        }
+        let reached: HashSet<RowKey> = self
+            .arena
+            .iter()
+            .filter(|n| n.row.contribution != RowContribution::Unreached)
+            .map(|n| row_key(&n.row))
+            .collect();
+        roots
+            .into_iter()
+            .filter_map(|i| self.build(i, &reached))
+            .collect()
     }
 
-    fn build(&mut self, index: usize) -> TraceNode {
-        let child_indices = std::mem::take(&mut self.arena[index].children);
-        let children: Vec<TraceNode> = child_indices.into_iter().map(|i| self.build(i)).collect();
-        let mut row = self.arena[index].row.clone();
-        if self.arena[index].is_instance {
+    /// Settle the contribution of every instance row under `index`,
+    /// bottom-up. A childless instance keeps the default it was emitted with.
+    fn derive(&mut self, index: usize) {
+        let child_indices = self.arena[index].children.clone();
+        for &child in &child_indices {
+            self.derive(child);
+        }
+        if self.arena[index].is_instance && !child_indices.is_empty() {
             // The first (nearest) of the strongest children gives the label.
-            row.contribution = children
+            let strongest = child_indices
                 .iter()
-                .map(|c| &c.row.contribution)
+                .map(|&c| &self.arena[c].row.contribution)
                 .fold(None, |best: Option<&RowContribution>, c| match best {
                     Some(b) if strength(b) >= strength(c) => Some(b),
                     _ => Some(c),
                 })
                 .cloned()
-                .unwrap_or(RowContribution::Unknown);
+                .unwrap();
+            self.arena[index].row.contribution = strongest;
         }
-        TraceNode { row, children }
+    }
+
+    /// The tree under `index`, or `None` for an `Unreached` row of a node in
+    /// `reached` (which takes its whole subtree with it).
+    fn build(&mut self, index: usize, reached: &HashSet<RowKey>) -> Option<TraceNode> {
+        let row = self.arena[index].row.clone();
+        if row.contribution == RowContribution::Unreached && reached.contains(&row_key(&row)) {
+            return None;
+        }
+        let child_indices = std::mem::take(&mut self.arena[index].children);
+        let children: Vec<TraceNode> = child_indices
+            .into_iter()
+            .filter_map(|i| self.build(i, reached))
+            .collect();
+        Some(TraceNode { row, children })
+    }
+}
+
+/// A row's node: (frame, network, node id).
+type RowKey = (TraceFrame, String, u64);
+
+fn row_key(row: &TraceRow) -> RowKey {
+    (row.frame.clone(), row.network.clone(), row.node.node_id)
+}
+
+/// The kind of a row the engine emits without asking the node: `Unknown`
+/// while the probe is alive or was lost at the start node itself,
+/// `Unreached` once it was lost upstream.
+fn lost_kind(probe: &Option<TraceProbe>, at_start: bool) -> RowContribution {
+    if probe.is_some() || at_start {
+        RowContribution::Unknown
+    } else {
+        RowContribution::Unreached
     }
 }
 
@@ -825,6 +914,52 @@ pub fn is_phase_type(data_type: &DataType) -> bool {
     }
 }
 
+/// Can a value of this type contain a Blueprint, Crystal or Molecule
+/// somewhere inside it? A record (any field, through named defs), an array or
+/// iterator of one, a function whose return type can, `AnyFunction`.
+///
+/// Named defs form an acyclic graph (checked when a def is added), so the
+/// walk terminates. An unresolvable name answers `true`: "trace stops here"
+/// is the honest answer for a type we cannot see into.
+pub fn may_carry_phase(
+    data_type: &DataType,
+    registry: &crate::node_type_registry::NodeTypeRegistry,
+) -> bool {
+    match data_type {
+        DataType::Array(inner) | DataType::Iterator(inner) | DataType::Optional(inner) => {
+            may_carry_phase(inner, registry)
+        }
+        DataType::Record(RecordType::Named(name)) => match registry.lookup_record_type_def(name) {
+            Some(def) => def
+                .fields
+                .iter()
+                .any(|field| may_carry_phase(&field.data_type, registry)),
+            None => true,
+        },
+        DataType::Record(RecordType::Anonymous(fields)) => {
+            fields.iter().any(|(_, t)| may_carry_phase(t, registry))
+        }
+        DataType::Function(function_type) => may_carry_phase(&function_type.output_type, registry),
+        DataType::AnyFunction { .. } => true,
+        other => is_phase_type(other),
+    }
+}
+
+/// Does `node` have a wired input whose type may carry a phase value
+/// ([`may_carry_phase`])? Asked of a node with no phase-typed input.
+fn reads_opaque_input(registry: &crate::node_type_registry::NodeTypeRegistry, node: &Node) -> bool {
+    let Some(node_type) = registry.get_node_type_for_node(node) else {
+        return false;
+    };
+    node_type
+        .parameters
+        .iter()
+        .zip(&node.arguments)
+        .any(|(parameter, argument)| {
+            !argument.is_empty() && may_carry_phase(&parameter.data_type, registry)
+        })
+}
+
 fn phase_input_pins(
     registry: &crate::node_type_registry::NodeTypeRegistry,
     node: &Node,
@@ -859,9 +994,10 @@ fn array_depth(data_type: &DataType) -> usize {
 
 fn strength(contribution: &RowContribution) -> u8 {
     match contribution {
-        RowContribution::Traced(Contribution::Created(_)) => 3,
-        RowContribution::Traced(Contribution::Modified(_)) => 2,
-        RowContribution::Traced(Contribution::Passed) => 1,
-        RowContribution::Unknown => 0,
+        RowContribution::Traced(Contribution::Created(_)) => 4,
+        RowContribution::Traced(Contribution::Modified(_)) => 3,
+        RowContribution::Traced(Contribution::Passed) => 2,
+        RowContribution::Unknown | RowContribution::Opaque => 1,
+        RowContribution::Unreached => 0,
     }
 }

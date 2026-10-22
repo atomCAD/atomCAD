@@ -176,6 +176,8 @@ pub fn label(contribution: &RowContribution) -> String {
         | RowContribution::Traced(Contribution::Modified(l)) => l.to_string(),
         RowContribution::Traced(Contribution::Passed) => "passed".to_string(),
         RowContribution::Unknown => "possibly contributed".to_string(),
+        RowContribution::Unreached => "wired upstream".to_string(),
+        RowContribution::Opaque => "trace stops here".to_string(),
     }
 }
 

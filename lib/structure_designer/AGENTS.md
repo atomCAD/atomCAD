@@ -431,8 +431,11 @@ A right **click** opens the contributing-nodes menu
   node is never chosen for the user.
 - **`trace_menu.dart` takes plain data and callbacks** (unit-tested in
   `test/trace_menu_test.dart`). Its only state is which instance rows are
-  folded and which row is hovered; a row lands via `model.jumpToNode`, with the row's own
-  `hostNetwork`.
+  folded (all, initially), which wired-upstream runs are unfolded (none,
+  initially) and which row is hovered; a row lands via `model.jumpToNode`, with the row's own
+  `hostNetwork`. A run's "N wired upstream" header exists only in Dart
+  (`visibleTraceLines`) — it is not a row and never reaches `onHover` /
+  `onSelect`.
 - **Hovering a row highlights its node in the editor** when the row is in the
   network being viewed (`depth == 0`): `model.setTraceHoveredRow` →
   `model.traceHoveredNodeId`, a dedicated `ValueNotifier` (never

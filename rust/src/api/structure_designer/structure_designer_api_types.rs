@@ -3546,8 +3546,12 @@ pub enum APIContributionKind {
     Modified,
     /// The thing went through unchanged.
     Passed,
-    /// The node cannot say ("possibly contributed").
+    /// The node cannot say ("possibly contributed"), or the trace cannot see
+    /// past it ("trace stops here").
     Unknown,
+    /// Listed only because it is wired upstream of a node where the probe was
+    /// lost ("wired upstream").
+    Unreached,
 }
 
 /// One row of the contributing-nodes menu.
@@ -3566,7 +3570,8 @@ pub struct APITraceRow {
     pub depth: u32,
     pub contribution: APIContributionKind,
     /// "filled", "moved", "shape", … for `Created` / `Modified`; "passed" for
-    /// `Passed`; "possibly contributed" for `Unknown`.
+    /// `Passed`; "possibly contributed" or "trace stops here" for `Unknown`;
+    /// "wired upstream" for `Unreached`.
     pub label: String,
 }
 

@@ -17850,6 +17850,7 @@ impl SseDecode
 1 => crate::api::structure_designer::structure_designer_api_types::APIContributionKind::Modified,
 2 => crate::api::structure_designer::structure_designer_api_types::APIContributionKind::Passed,
 3 => crate::api::structure_designer::structure_designer_api_types::APIContributionKind::Unknown,
+4 => crate::api::structure_designer::structure_designer_api_types::APIContributionKind::Unreached,
             _ => unreachable!("Invalid variant for APIContributionKind: {}", inner),
         };
     }
@@ -27654,6 +27655,7 @@ impl flutter_rust_bridge::IntoDart
             Self::Modified => 1.into_dart(),
             Self::Passed => 2.into_dart(),
             Self::Unknown => 3.into_dart(),
+            Self::Unreached => 4.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -35373,6 +35375,7 @@ impl SseEncode
 crate::api::structure_designer::structure_designer_api_types::APIContributionKind::Modified => { 1 }
 crate::api::structure_designer::structure_designer_api_types::APIContributionKind::Passed => { 2 }
 crate::api::structure_designer::structure_designer_api_types::APIContributionKind::Unknown => { 3 }
+crate::api::structure_designer::structure_designer_api_types::APIContributionKind::Unreached => { 4 }
  _ => { unimplemented!(""); }}, serializer);
     }
 }

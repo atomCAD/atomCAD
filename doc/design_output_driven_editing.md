@@ -525,7 +525,8 @@ helpers above.
 
 Further candidates, in rough order of value: `atom_replace`, `atom_cut`,
 `passivate`, `remove_hydrogen`, the `apply_diff` node, `supercell`,
-`dematerialize`.
+`dematerialize`. Most of them are taken up, with the "wired upstream" /
+"trace stops here" row kinds, by `doc/design_trace_coverage.md`.
 
 ## Rust API
 

@@ -1090,6 +1090,10 @@ fn contribution_view(contribution: &RowContribution) -> (APIContributionKind, St
             APIContributionKind::Unknown,
             "possibly contributed".to_string(),
         ),
+        RowContribution::Opaque => (APIContributionKind::Unknown, "trace stops here".to_string()),
+        RowContribution::Unreached => {
+            (APIContributionKind::Unreached, "wired upstream".to_string())
+        }
     }
 }
 
