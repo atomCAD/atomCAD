@@ -320,6 +320,27 @@ void main() {
     expect(selected, isEmpty);
   });
 
+  testWidgets(
+      'a separator marks each change of network, and only when unfolded',
+      (tester) async {
+    await _pump(tester);
+    // Folded, every visible row is in `main`.
+    expect(find.byKey(const ValueKey('trace_separator_4')), findsNothing);
+    expect(
+        find.byWidgetPredicate((w) =>
+            w.key is ValueKey<String> &&
+            (w.key as ValueKey<String>).value.startsWith('trace_separator_')),
+        findsNothing);
+
+    await _expandInstances(tester);
+    // main | slab | inner | slab | main: one above rows 1, 2, 3 and 4.
+    for (final index in [1, 2, 3, 4]) {
+      expect(find.byKey(ValueKey('trace_separator_$index')), findsOneWidget,
+          reason: 'row $index starts another network');
+    }
+    expect(find.byKey(const ValueKey('trace_separator_0')), findsNothing);
+  });
+
   testWidgets('Escape and clicking away dismiss', (tester) async {
     var dismissed = 0;
     await _pump(tester, onDismiss: () => dismissed++);

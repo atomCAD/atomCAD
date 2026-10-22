@@ -137,6 +137,15 @@ List<TraceMenuLine> visibleTraceLines(
   return lines;
 }
 
+/// Whether a separator goes above visible line [k] of [lines]: its row is in
+/// a different node network from the line above it. This brackets an unfolded
+/// instance's children, which are in the custom network, from the rows around
+/// them.
+bool traceLineStartsNetwork(
+        List<APITraceRow> rows, List<TraceMenuLine> lines, int k) =>
+    k > 0 &&
+    rows[lines[k].index].hostNetwork != rows[lines[k - 1].index].hostNetwork;
+
 /// The indices of [rows] that show (see [visibleTraceLines]; header lines
 /// left out).
 List<int> visibleTraceRows(List<APITraceRow> rows, Set<int> collapsed,
@@ -284,6 +293,7 @@ class _TraceMenuState extends State<TraceMenu> {
 
   Widget _buildMenu() {
     final rows = widget.rows;
+    final lines = visibleTraceLines(rows, _collapsed, _expandedRuns);
     return Material(
       elevation: 8,
       borderRadius: BorderRadius.circular(6),
@@ -308,11 +318,13 @@ class _TraceMenuState extends State<TraceMenu> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      for (final line
-                          in visibleTraceLines(rows, _collapsed, _expandedRuns))
-                        line.isRunHeader
-                            ? _buildRunHeader(line)
-                            : _buildRow(line.index),
+                      for (var k = 0; k < lines.length; k++) ...[
+                        if (traceLineStartsNetwork(rows, lines, k))
+                          _buildNetworkSeparator(lines, k),
+                        lines[k].isRunHeader
+                            ? _buildRunHeader(lines[k])
+                            : _buildRow(lines[k].index),
+                      ],
                     ],
                   ),
                 ),
@@ -334,6 +346,24 @@ class _TraceMenuState extends State<TraceMenu> {
           ),
         ),
       ),
+    );
+  }
+
+  /// A hairline between line [k] and the line above it, which are in different
+  /// networks. It starts at the deeper line's indent, so it brackets the
+  /// nested block without cutting through the column of the level above.
+  Widget _buildNetworkSeparator(List<TraceMenuLine> lines, int k) {
+    final rows = widget.rows;
+    final depth = [
+      rows[lines[k].index].depth,
+      rows[lines[k - 1].index].depth,
+    ].reduce((a, b) => a > b ? a : b);
+    return Container(
+      key: ValueKey('trace_separator_${lines[k].index}'),
+      height: 1,
+      margin: EdgeInsets.only(
+          left: 6 + depth * _indentPerDepth, right: 12, top: 2, bottom: 2),
+      color: Colors.white24,
     );
   }
 
