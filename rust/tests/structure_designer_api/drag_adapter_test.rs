@@ -1376,6 +1376,57 @@ fn crystal_from_input_surfaces_expr_via_adapter() {
     );
 }
 
+fn compatible_names(source: &DataType, dragging_from_output: bool) -> Vec<String> {
+    let registry = NodeTypeRegistry::new();
+    rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+        &registry,
+        source,
+        dragging_from_output,
+    )
+    .iter()
+    .flat_map(|c| c.nodes.iter().map(|n| n.name.clone()))
+    .collect()
+}
+
+#[test]
+fn output_drag_surfaces_record_construct_through_its_open_port() {
+    // A fresh `record_construct` is anonymous with no fields, so it has no pin
+    // of any type and its adapter declines `FromOutput`. It must still be
+    // offered: the auto-connect declares the field through the open port
+    // (`doc/design_wire_declared_inputs.md` Phase 4).
+    for source in [
+        DataType::Float,
+        DataType::Crystal,
+        DataType::Record(RecordType::anonymous(vec![(
+            "a".to_string(),
+            DataType::Int,
+        )])),
+    ] {
+        let names = compatible_names(&source, true);
+        assert!(
+            names.iter().any(|n| n == "record_construct"),
+            "record_construct must surface for {source} from output; got {names:?}"
+        );
+    }
+}
+
+#[test]
+fn open_port_offer_follows_accepts_type_and_direction() {
+    // `Unit` is not a legal field type, so the open port refuses it and the
+    // popup must not offer a node the drop would then leave unwired.
+    let names = compatible_names(&DataType::Unit, true);
+    assert!(
+        !names.iter().any(|n| n == "record_construct"),
+        "record_construct must not surface for Unit; got {names:?}"
+    );
+    // The open port is a destination: an input drag gains nothing from it.
+    let names = compatible_names(&DataType::Float, false);
+    assert!(
+        !names.iter().any(|n| n == "record_construct"),
+        "record_construct must not surface for a Float input drag; got {names:?}"
+    );
+}
+
 // --- Create-time tests ----------------------------------------------------
 
 fn get_expr_data(designer: &StructureDesigner, node_id: u64) -> ExprData {
@@ -1765,6 +1816,9 @@ fn record_construct_surfaces_for_record_input_drag() {
 #[test]
 fn record_nodes_respect_drag_direction_in_popup() {
     // construct only adapts FromInput; destructure only adapts FromOutput.
+    // From an output, construct still surfaces, but through its open port as
+    // a fresh anonymous record (the drop declares one field), never adapted
+    // to the dragged def — see `output_drag_surfaces_record_construct_*`.
     let designer = setup_designer_with_point();
     let from_output_cats =
         rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
@@ -1781,8 +1835,8 @@ fn record_nodes_respect_drag_direction_in_popup() {
     let from_output = names_of(&from_output_cats);
     let from_input = names_of(&from_input_cats);
     assert!(
-        !from_output.contains(&"record_construct"),
-        "record_construct should not surface dragging from an output pin"
+        from_output.contains(&"record_construct"),
+        "record_construct should surface dragging from an output pin (open port)"
     );
     assert!(
         !from_input.contains(&"record_destructure"),

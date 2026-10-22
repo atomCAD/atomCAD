@@ -8,12 +8,19 @@ class StringInput extends StatefulWidget {
   final ValueChanged<String> onChanged;
   final Key? inputKey;
 
+  /// When this turns true (or is true when the field is created), the field
+  /// takes focus with its whole text selected, so typing replaces it. Used to
+  /// put the cursor in a just-created input's name (the open-port drop,
+  /// `doc/design_wire_declared_inputs.md`).
+  final bool requestFocus;
+
   const StringInput({
     super.key,
     required this.label,
     required this.value,
     required this.onChanged,
     this.inputKey,
+    this.requestFocus = false,
   });
 
   @override
@@ -35,11 +42,23 @@ class _StringInputState extends State<StringInput> {
         _updateValueFromText(_controller.text);
       }
     });
+    if (widget.requestFocus) _focusAndSelectAll();
+  }
+
+  /// Focus the field and select its text, after the frame that builds it.
+  void _focusAndSelectAll() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _focusNode.requestFocus();
+      _controller.selection =
+          TextSelection(baseOffset: 0, extentOffset: _controller.text.length);
+    });
   }
 
   @override
   void didUpdateWidget(StringInput oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.requestFocus && !oldWidget.requestFocus) _focusAndSelectAll();
     if (oldWidget.value != widget.value) {
       final selection = _controller.selection;
       _controller.text = widget.value;

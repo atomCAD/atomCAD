@@ -1,6 +1,6 @@
 # Wire-declared inputs: the open port on `expr` and anonymous `record_construct`
 
-## Status: Phases 0–3 implemented (2026-10-22); Phase 4 (Flutter) open
+## Status: Phases 0–4 implemented (2026-10-22); Phase 4 manual walkthrough pending
 
 ## Motivation
 
@@ -861,6 +861,14 @@ Tests:
 - Drag-aware add: auto-connect to a newly created `record_construct` (zero
   fields, from a `FromOutput` drag) goes through `addInputFromWire` instead
   of a pin index.
+  *Implementation note:* this also needed a backend change the phases above
+  missed. The add-node popup's filter (`get_compatible_node_types`) offers a
+  node only when a pin of its default type, or its drag adapter, matches the
+  source, and a fresh `record_construct` has neither for a `FromOutput` drag
+  — so it was never listed. The filter now also offers, for an output drag,
+  any node whose default data has declared inputs that `accepts_type` the
+  source. The old test that `record_construct` never surfaces from an output
+  was updated to the new rule.
 - `expr` editor: consume `pendingNameFocus`.
 - `record_construct` editor: anonymous field list, Add field, Name this
   record… dialog with the "Same shape as" list, and the context-menu entry.

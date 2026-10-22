@@ -215,7 +215,11 @@ type. Two rules: inputs are addressed by **pin id** — the `Parameter.id` the
 node puts on each pin — never by index; and the trait methods edit the node's
 data only (the orchestrator re-derives the node type, validates and records the
 one `NetworkSnapshotCommand`). The `Option` may depend on the data, so a node
-can have declared inputs in one mode and fixed ones in another.
+can have declared inputs in one mode and fixed ones in another. The add-node
+popup's filter (`view_builders::get_compatible_node_types`) also reads it: an
+output drag offers any node whose **default** data has declared inputs that
+`accepts_type` the source, because Flutter's auto-connect then goes through the
+open port. So a node needs no `FromOutput` drag adapter to be offered there.
 
 ### NodeType Registration
 

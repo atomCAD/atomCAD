@@ -8,6 +8,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_description_button.dart';
+import 'package:flutter_cad/structure_designer/node_data/wire_type_offer.dart';
 
 /// Editor widget for expression nodes
 class ExprEditor extends StatefulWidget {
@@ -163,6 +164,10 @@ class ExprEditorState extends State<ExprEditor> {
     }
 
     final parameters = widget.data!.parameters;
+    // An open-port drop leaves the new parameter's row to focus; Take type
+    // from wire offers are re-read on every build (see wire_type_offer.dart).
+    final focusIndex = widget.model.takePendingNameFocus(widget.nodeId);
+    final offers = widget.model.getWireTypeOffers(widget.nodeId);
 
     return Padding(
       padding: const EdgeInsets.all(8.0),
@@ -262,63 +267,81 @@ class ExprEditorState extends State<ExprEditor> {
             ...parameters.asMap().entries.map((entry) {
               final index = entry.key;
               final parameter = entry.value;
+              final offer = wireTypeOfferAt(offers, index);
+
+              final row = Row(
+                children: [
+                  // Parameter name input - takes up available space
+                  Expanded(
+                    flex: 3,
+                    child: StringInput(
+                      label: 'Name',
+                      value: parameter.name,
+                      requestFocus: index == focusIndex,
+                      onChanged: (newName) {
+                        _updateParameter(
+                          index,
+                          APIExprParameter(
+                            name: newName,
+                            dataType: parameter.dataType,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+
+                  // Data type input
+                  Expanded(
+                    flex: 3,
+                    child: DataTypeInput(
+                      label: 'Type',
+                      value: parameter.dataType,
+                      onChanged: (newDataType) {
+                        _updateParameter(
+                          index,
+                          APIExprParameter(
+                            name: parameter.name,
+                            dataType: newDataType,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  if (offer != null) const WireTypeOfferMarker(),
+
+                  // Delete button - more compact
+                  SizedBox(
+                    width: 36,
+                    height: 36,
+                    child: IconButton(
+                      onPressed: () => _removeParameter(index),
+                      icon: const Icon(Icons.delete, size: 18),
+                      tooltip: 'Delete Parameter',
+                      color: Theme.of(context).colorScheme.error,
+                      padding: EdgeInsets.zero,
+                    ),
+                  ),
+                ],
+              );
 
               return Padding(
                 padding: const EdgeInsets.only(bottom: 4.0),
-                child: Row(
-                  children: [
-                    // Parameter name input - takes up available space
-                    Expanded(
-                      flex: 3,
-                      child: StringInput(
-                        label: 'Name',
-                        value: parameter.name,
-                        onChanged: (newName) {
-                          _updateParameter(
-                            index,
-                            APIExprParameter(
-                              name: newName,
-                              dataType: parameter.dataType,
-                            ),
-                          );
-                        },
+                child: offer == null
+                    ? row
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          row,
+                          WireTypeOfferButton(
+                            model: widget.model,
+                            nodeId: widget.nodeId,
+                            index: index,
+                            offeredType: offer,
+                          ),
+                        ],
                       ),
-                    ),
-                    const SizedBox(width: 6),
-
-                    // Data type input
-                    Expanded(
-                      flex: 3,
-                      child: DataTypeInput(
-                        label: 'Type',
-                        value: parameter.dataType,
-                        onChanged: (newDataType) {
-                          _updateParameter(
-                            index,
-                            APIExprParameter(
-                              name: parameter.name,
-                              dataType: newDataType,
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-
-                    // Delete button - more compact
-                    SizedBox(
-                      width: 36,
-                      height: 36,
-                      child: IconButton(
-                        onPressed: () => _removeParameter(index),
-                        icon: const Icon(Icons.delete, size: 18),
-                        tooltip: 'Delete Parameter',
-                        color: Theme.of(context).colorScheme.error,
-                        padding: EdgeInsets.zero,
-                      ),
-                    ),
-                  ],
-                ),
               );
             }),
 

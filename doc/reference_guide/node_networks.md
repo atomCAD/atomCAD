@@ -177,6 +177,18 @@ As an example see the input pins and the properties of the `cuboid` node:
 
 ![](../atomCAD_images/cuboid_props.png)
 
+## Adding an input by dropping a wire: the open port
+
+Two nodes declare their own inputs: [`expr`](./nodes/math_programming.md#expr) (its parameters) and an anonymous [`record_construct`](./nodes/math_programming.md#record_construct) (its fields). Instead of declaring an input in the property panel and then drawing the wire, you can let the wire declare it.
+
+While you drag a wire from an output pin, every such node in view shows a small **`+` tab** hanging below its bottom-left corner, at the input-pin column. Drop the wire on the tab, and the node gets a new input at the end of its list: its type is the type the wire carries, and its name is derived from the source — the source node's name, or the output pin's name when the source has several outputs (or is an HOF body's zone input). The wire is connected to it, the node becomes the selected node, and its property panel puts the cursor in the new input's name field with the name selected, so typing a better name is one step. Renaming it later never disconnects the wire. The whole drop is one undo step.
+
+The tab lights up while a wire it accepts hovers it. A wire it cannot accept (an abstract type, a function, a value that is not in scope there) turns it red, with the reason written beside it, and dropping does nothing. The tabs appear only during a wire drag and are drawn on top of the canvas, outside the nodes: no node changes size or moves, and a tab that overlaps the node beneath it still takes the drop.
+
+The type is copied once, when you drop. If the source later changes type, the input does not follow: the wire reports a type mismatch, or — when a record source gains a field — stays valid but too narrow to read the new field. The repair is **Take type from wire**: the stale input's row in the property panel shows a warning marker and a **Use wire's type** button, and the node's context menu offers **Take types from wires** to fix every stale input at once. See [`expr`](./nodes/math_programming.md#expr) for examples.
+
+Custom node instances have no open port: their inputs belong to the network definition shared by every instance.
+
 ## Subnetworks
 
 You create a custom node by adding a node network whose name matches the custom node’s name — that node network becomes the implementation of the custom node. In other words, node networks act like functions: when node `B` is used inside node network `A`, the network `B` serves as a subnetwork of `A`.

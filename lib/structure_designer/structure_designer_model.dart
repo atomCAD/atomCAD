@@ -158,6 +158,24 @@ class DraggedWire {
   DraggedWire(this.startPin, this.wireEndPosition);
 }
 
+/// A request, left by an open-port drop, for the property panel to focus the
+/// name field of a node's declared input at row [index] and select its text
+/// (`doc/design_wire_declared_inputs.md`, "After the drop"). Keyed by index,
+/// not pin id: on both nodes with declared inputs an input's pin index is also
+/// its row in the editor's list.
+class PendingNameFocus {
+  final BigInt nodeId;
+  final List<BigInt> scopeChain;
+  final int index;
+
+  const PendingNameFocus(this.nodeId, this.scopeChain, this.index);
+}
+
+/// The message of an error thrown across the bridge by a Rust function that
+/// returns `Result<_, String>` (a thrown `String`) or an anyhow error.
+String bridgeErrorMessage(Object e) =>
+    e is AnyhowException ? e.message : e.toString();
+
 /// An anchor drag in progress: the user is pulling a leader line off a comment
 /// note toward whatever it should document
 /// (`doc/design_wire_annotations.md` Interaction).
@@ -364,7 +382,28 @@ class StructureDesignerModel extends ChangeNotifier {
   APIEditAtomTool? activeEditAtomTool = APIEditAtomTool.default_;
   APIAtomEditTool? activeAtomEditTool = APIAtomEditTool.default_;
   int? atomEditSelectedElement;
-  DraggedWire? draggedWire; // not null if there is a wire dragging in progress
+
+  /// Not null while a wire is being dragged off a pin. Every write also
+  /// updates [wireDragSource], which is what the open-port tab layer listens
+  /// to.
+  DraggedWire? get draggedWire => _draggedWire;
+  set draggedWire(DraggedWire? value) {
+    _draggedWire = value;
+    wireDragSource.value = value?.startPin;
+  }
+
+  DraggedWire? _draggedWire;
+
+  /// The pin a wire drag started on, or null when no wire is being dragged.
+  /// Changes exactly twice per drag (null → pin, pin → null), never per
+  /// pointer tick, so the open-port `+` tab layer (`open_port_tabs.dart`)
+  /// rebuilds on those two edges alone — the drag fast path stays intact.
+  final ValueNotifier<PinReference?> wireDragSource = ValueNotifier(null);
+
+  /// The declared input whose name field the property panel focuses on its
+  /// next build — set by an open-port drop ([addInputFromWire]) and taken by
+  /// the `expr` / `record_construct` editors via [takePendingNameFocus].
+  PendingNameFocus? pendingNameFocus;
 
   /// Not null while a comment's anchor handle is being dragged toward a
   /// target. See [DraggedCommentAnchor].
@@ -1469,6 +1508,7 @@ class StructureDesignerModel extends ChangeNotifier {
     aiActivity = [];
     draggedWire = null;
     draggedCommentAnchor = null;
+    pendingNameFocus = null;
     inPlaceEditRef = null;
   }
 
@@ -2064,6 +2104,127 @@ class StructureDesignerModel extends ChangeNotifier {
       case PinKind.zoneOutput:
         return null;
     }
+  }
+
+  // --- Declared inputs: the open port and Take type from wire --------------
+  // (`doc/design_wire_declared_inputs.md`). Rust owns every rule about types,
+  // names and which nodes have a port; Flutter adds only the scope rules of
+  // [canConnectPins], which Rust delegates to the caller.
+
+  /// The `(sourcePin, sourceScopeDepth)` of a wire from [source] to a node in
+  /// [destScopeChain], or a refusal reason when the wire cannot exist at all.
+  ({APISourcePin? sourcePin, int sourceScopeDepth, String? refusal})
+      _openPortWire(PinReference source, List<BigInt> destScopeChain) {
+    ({APISourcePin? sourcePin, int sourceScopeDepth, String? refusal}) refuse(
+            String reason) =>
+        (sourcePin: null, sourceScopeDepth: 0, refusal: reason);
+    final sourcePin =
+        source.isOutput ? _pinReferenceToApiSourcePin(source) : null;
+    if (sourcePin == null) return refuse('Drag from an output to add an input');
+    if (!_isScopePrefix(source.scopeChain, destScopeChain) ||
+        !_zoneInputSourceInScope(source, destScopeChain)) {
+      return refuse('That value is not in scope here');
+    }
+    return (
+      sourcePin: sourcePin,
+      sourceScopeDepth: destScopeChain.length - source.scopeChain.length,
+      refusal: null
+    );
+  }
+
+  /// The hover check of an open-port `+` tab: null when dropping a wire from
+  /// [source] on node [destNodeId] (in [scopeChain]) would add an input, the
+  /// reason otherwise. Pinned to [addInputFromWire] Rust-side.
+  String? canAddInputFromWire(PinReference source, BigInt destNodeId,
+      {List<BigInt> scopeChain = const []}) {
+    final wire = _openPortWire(source, scopeChain);
+    if (wire.refusal != null) return wire.refusal;
+    return structure_designer_api.canAddInputFromWire(
+      destScopePath: scopeChainToBytes(scopeChain),
+      sourceNodeId: source.nodeId,
+      sourcePin: wire.sourcePin!,
+      sourceScopeDepth: wire.sourceScopeDepth,
+      destNodeId: destNodeId,
+    );
+  }
+
+  /// The open-port drop: append an input of the wire's type to [destNodeId]
+  /// under a derived name and connect the wire, in one undo step. On success
+  /// the destination becomes the selected node and its panel focuses the new
+  /// input's name field ([pendingNameFocus]). Returns the refusal message, or
+  /// null on success.
+  ///
+  /// Clears [draggedWire] like [connectPins] does, so the source pin's
+  /// `onDragEnd` does not also treat the drop as an empty-space drop and open
+  /// the add-node popup.
+  String? addInputFromWire(PinReference source, BigInt destNodeId,
+      {List<BigInt> scopeChain = const []}) {
+    draggedWire = null;
+    if (activeNetworkReadOnly) return 'This network is read-only';
+    final wire = _openPortWire(source, scopeChain);
+    if (wire.refusal != null) return wire.refusal;
+    final APIAddedInput added;
+    try {
+      added = structure_designer_api.addInputFromWire(
+        destScopePath: scopeChainToBytes(scopeChain),
+        sourceNodeId: source.nodeId,
+        sourcePin: wire.sourcePin!,
+        sourceScopeDepth: wire.sourceScopeDepth,
+        destNodeId: destNodeId,
+      );
+    } catch (e) {
+      refreshFromKernel();
+      return bridgeErrorMessage(e);
+    }
+    pendingNameFocus = PendingNameFocus(destNodeId, scopeChain, added.pinIndex);
+    final dest = _findNodeInScope(destNodeId, scopeChain);
+    if (dest != null && !dest.selected) {
+      structure_designer_api.selectNode(
+        scopePath: scopeChainToBytes(scopeChain),
+        nodeId: destNodeId,
+      );
+    }
+    refreshFromKernel();
+    return null;
+  }
+
+  /// The row of [nodeId]'s editor list whose name field should take focus
+  /// now, consuming the request. Null when there is none for this node in the
+  /// property panel's scope.
+  int? takePendingNameFocus(BigInt nodeId) {
+    final pending = pendingNameFocus;
+    if (pending == null ||
+        pending.nodeId != nodeId ||
+        !listEquals(pending.scopeChain, propertyEditorScopeChain)) {
+      return null;
+    }
+    pendingNameFocus = null;
+    return pending.index;
+  }
+
+  /// Take type from wire: per input pin of [nodeId], the type a retype would
+  /// set, or null where none is offered. Empty for a node without declared
+  /// inputs. Defaults to the property panel's scope.
+  List<APIDataType?> getWireTypeOffers(BigInt nodeId,
+          {List<BigInt>? scopeChain}) =>
+      structure_designer_api.getWireTypeOffers(
+          scopePath: scopeChainToBytes(scopeChain ?? propertyEditorScopeChain),
+          nodeId: nodeId);
+
+  /// Retype the declared inputs at [pinIndices] to their wires' types, in one
+  /// undo step. Returns the refusal message, or null on success.
+  String? takeTypesFromWires(BigInt nodeId, List<int> pinIndices,
+      {List<BigInt>? scopeChain}) {
+    try {
+      structure_designer_api.takeTypesFromWires(
+          scopePath: scopeChainToBytes(scopeChain ?? propertyEditorScopeChain),
+          nodeId: nodeId,
+          pinIndices: pinIndices);
+    } catch (e) {
+      return bridgeErrorMessage(e);
+    }
+    refreshFromKernel();
+    return null;
   }
 
   /// Auto-connects a source pin to the first compatible pin on a target node.
@@ -3213,12 +3374,59 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
-  void setRecordConstructData(BigInt nodeId, APIRecordSchemaData data) {
+  void setRecordConstructData(BigInt nodeId, APIRecordSchemaData data,
+      {List<BigInt>? scopeChain}) {
     structure_designer_api.setRecordConstructData(
-        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(scopeChain ?? propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
+  }
+
+  /// An anonymous `record_construct`'s own fields in pin order; null in named
+  /// mode.
+  List<APIRecordLocalField>? getRecordConstructLocalFields(BigInt nodeId) =>
+      structure_designer_api.getRecordConstructLocalFields(
+          scopePath: propertyEditorScopePath, nodeId: nodeId);
+
+  /// Replace an anonymous `record_construct`'s field list in one undo step.
+  /// Returns the refusal message (invalid or duplicate name, a type a field
+  /// cannot have), or null on success.
+  String? setRecordConstructFields(
+      BigInt nodeId, List<APIRecordLocalField> fields) {
+    try {
+      structure_designer_api.setRecordConstructFields(
+          scopePath: propertyEditorScopePath, nodeId: nodeId, fields: fields);
+    } catch (e) {
+      return bridgeErrorMessage(e);
+    }
+    refreshFromKernel();
+    return null;
+  }
+
+  /// The defs with exactly an anonymous `record_construct`'s shape, for the
+  /// "Same shape as:" list of Name this record….
+  List<String> getMatchingRecordDefsFor(BigInt nodeId,
+          {List<BigInt>? scopeChain}) =>
+      structure_designer_api.getMatchingRecordDefsFor(
+          scopePath: scopeChainToBytes(scopeChain ?? propertyEditorScopeChain),
+          nodeId: nodeId);
+
+  /// Name this record…: create def [defName] from the node's anonymous fields
+  /// and point the node at it, in one undo step. Returns the refusal message,
+  /// or null on success.
+  String? promoteRecordConstruct(BigInt nodeId, String defName,
+      {List<BigInt>? scopeChain}) {
+    try {
+      structure_designer_api.promoteRecordConstruct(
+          scopePath: scopeChainToBytes(scopeChain ?? propertyEditorScopeChain),
+          nodeId: nodeId,
+          defName: defName);
+    } catch (e) {
+      return bridgeErrorMessage(e);
+    }
+    refreshFromKernel();
+    return null;
   }
 
   void setRecordDestructureData(BigInt nodeId, APIRecordSchemaData data) {

@@ -11,6 +11,7 @@ import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_widget.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network_content.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network_painter.dart';
+import 'package:flutter_cad/structure_designer/node_network/open_port_tabs.dart';
 import 'package:flutter_cad/structure_designer/node_network/scope_resolver.dart';
 import 'package:flutter_cad/structure_designer/node_networks_list/user_type_drag.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
@@ -733,7 +734,19 @@ class NodeNetworkState extends State<NodeNetwork> {
       );
     }
 
-    if (compatiblePins.isEmpty) return;
+    if (compatiblePins.isEmpty) {
+      // No pin to connect to, but the new node declares its own inputs (a
+      // zero-field anonymous `record_construct` made from an output drag):
+      // connect through its open port instead, which declares the input from
+      // the wire (`doc/design_wire_declared_inputs.md`).
+      final newNode = _lookupNodeInScope(newNodeId, scope.scopeChain);
+      if (isOutput && newNode != null && newNode.hasOpenInputPort) {
+        final error = widget.graphModel.addInputFromWire(startPin, newNodeId,
+            scopeChain: scope.scopeChain);
+        if (error != null && mounted) showErrorSnackBar(context, error);
+      }
+      return;
+    }
 
     int targetPinIndex;
     if (compatiblePins.length == 1) {
@@ -1451,6 +1464,13 @@ class NodeNetworkState extends State<NodeNetwork> {
         panOffset: _panOffset,
         zoomLevel: _zoomLevel,
         overlay: true));
+
+    // Open-port `+` tabs, shown only while a wire is dragged. Above the nodes
+    // so a tab hanging over the node beneath it still takes the drop, and
+    // outside every node's footprint so no node grows or moves. Not canvas
+    // *content*: the image export never shows them. See `open_port_tabs.dart`.
+    children.add(Positioned.fill(
+        child: OpenPortTabLayer(model: model, resolver: resolver)));
 
     children.add(_buildSelectionRectangle());
     return children;

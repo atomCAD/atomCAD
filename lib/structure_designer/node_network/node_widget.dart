@@ -13,6 +13,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
     as sd_api;
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
+import 'package:flutter_cad/structure_designer/node_data/name_record_dialog.dart';
 import 'package:flutter_cad/structure_designer/node_jobs.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network_painter.dart'
@@ -1912,6 +1913,23 @@ class NodeWidget extends StatelessWidget {
     final bool canExtractToNetwork = node.nodeTypeName == 'closure' &&
         model.canExtractClosureToNetwork(node.id, scopeChain: scopeChain);
 
+    // Take type from wire (`doc/design_wire_declared_inputs.md`): the indices
+    // of this node's stale declared inputs, computed now like the other gates.
+    // Empty for a node without declared inputs, so the item stays hidden.
+    final List<int> wireTypeOfferIndices = [];
+    if (node.hasOpenInputPort && !readOnly) {
+      final offers = model.getWireTypeOffers(node.id, scopeChain: scopeChain);
+      for (int i = 0; i < offers.length; i++) {
+        if (offers[i] != null) wireTypeOfferIndices.add(i);
+      }
+    }
+    // Name this record…: an anonymous `record_construct` (it has the open
+    // port only in anonymous mode) with at least one field.
+    final bool canNameRecord = node.nodeTypeName == 'record_construct' &&
+        node.hasOpenInputPort &&
+        node.inputPins.isNotEmpty &&
+        !readOnly;
+
     // D9 (`doc/design_find_usages.md`): the menu is grouped into titled
     // sections — Navigate / Edit / Refactor / Node / Body — using the existing
     // disabled-header + divider idiom (the same one the Body group already
@@ -1988,6 +2006,11 @@ class NodeWidget extends StatelessWidget {
       // *action* instead, and it lives in Edit because it is a clipboard
       // operation like the two above it (the label disambiguates it from
       // "Copy", which copies the node itself).
+      if (wireTypeOfferIndices.isNotEmpty)
+        const PopupMenuItem(
+          value: 'take_types_from_wires',
+          child: Text('Take types from wires'),
+        ),
       if (nodeHasError)
         const PopupMenuItem(
           value: 'copy_error',
@@ -2033,6 +2056,11 @@ class NodeWidget extends StatelessWidget {
         const PopupMenuItem(
           value: 'extract_to_network',
           child: Text('Convert Closure to Network...'),
+        ),
+      if (canNameRecord)
+        const PopupMenuItem(
+          value: 'name_record',
+          child: Text('Name this record…'),
         ),
     ]);
 
@@ -2099,6 +2127,16 @@ class NodeWidget extends StatelessWidget {
             Provider.of<StructureDesignerModel>(context, listen: false);
         copyTextToClipboard(context, _errorReportForNode(model),
             confirmation: 'Error message copied to clipboard');
+      } else if (value == 'take_types_from_wires') {
+        final model =
+            Provider.of<StructureDesignerModel>(context, listen: false);
+        final error = model.takeTypesFromWires(node.id, wireTypeOfferIndices,
+            scopeChain: scopeChain);
+        if (error != null) showErrorSnackBar(context, error);
+      } else if (value == 'name_record') {
+        final model =
+            Provider.of<StructureDesignerModel>(context, listen: false);
+        showNameRecordDialog(context, model, node.id, scopeChain);
       } else if (value == 'copy_node_name') {
         final path = nodeNamePath(resolver.root, scopeChain, node);
         copyTextToClipboard(context, path,

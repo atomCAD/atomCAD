@@ -153,6 +153,18 @@ pub fn get_compatible_node_types(
                 return true;
             }
             let default_data = (node_type.node_data_creator)();
+            // A node that declares its own inputs takes an output drag through
+            // its open port: the auto-connect declares the input from the wire
+            // (`add_input_from_wire`), so it needs no pin of the source's type
+            // beforehand — a fresh anonymous `record_construct` has none
+            // (`doc/design_wire_declared_inputs.md`).
+            if direction == atomcad_structure_designer::node_data::DragDirection::FromOutput
+                && default_data
+                    .declared_inputs()
+                    .is_some_and(|declared| declared.accepts_type(source_type).is_ok())
+            {
+                return true;
+            }
             let Some(adapted) =
                 default_data.adapt_for_drag_source(source_type, direction, registry)
             else {

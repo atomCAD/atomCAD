@@ -168,6 +168,15 @@ You can type in a mathematical expression and it will be evaluated on its output
 The input pins can be dynamically added on the node editor panel, you can select the name and data type of the input parameters.
 To give a parameter an anonymous record type, choose **Custom...** in its type selector and type the record, e.g. `{x: Int, y: Int}`. Records nest and can be put in arrays (`{a: Float, p: {x: Int}}`, `[{x: Int, y: Int}]`); field names must be distinct identifiers, and their order does not matter — `{y: Int, x: Int}` is the same type as `{x: Int, y: Int}`.
 
+You can also add a parameter by dropping a wire on the node's **`+` tab**, which appears below the node while you drag a wire from an output (see [the open port](../node_networks.md#adding-an-input-by-dropping-a-wire-the-open-port)). The parameter gets the wire's type and a name derived from the source, and the name field is focused so you can rename it right away. The expression text is never changed for you: the new parameter is unused until you write it in.
+
+**Take type from wire.** A parameter's type is copied from the wire once and does not follow it afterwards. When it goes stale, its row in the property panel shows a warning marker and a **Use wire's type: `<type>`** button; the node's context menu has **Take types from wires** to fix all of them in one step. Both are one undo step, keep the wire and the name, and leave the expression alone. Two typical cases:
+
+- *A record field was renamed.* An anonymous `record_construct` with field `a` feeds parameter `p` (typed `{a: Float}`, expression `p.a`). Renaming the field to `b` turns the wire red. Take the wire's type: the mismatch clears, and `p.a` now reports its own error in the expression, which you fix by writing `p.b`.
+- *A record gained a field.* Add field `b` to the same `record_construct`. The wire stays valid — a wider record is accepted — but `p.b` would not compile, because `p` is still declared `{a: Float}`. The row offers the wider type `{a: Float, b: Float}`; take it, and `p.b` works.
+
+An `Int` wire into a `Float` parameter is compatible and is not offered a change.
+
 The expr node supports scalar arithmetic, vector operations, conditional expressions, and a comprehensive set of built-in mathematical functions.
 
 **Expression Language Features:**
@@ -1040,8 +1049,8 @@ Bundles N input values into a single record value — either of a named record t
 
 **Properties**
 
-- `Schema` — the name of a record type def in the project's User Types panel. The dropdown lists every existing def alphabetically; pick *Edit definition…* to jump to the schema editor for the selected def. New defs are created from the User Types panel, not from this dropdown. Leave it empty (`— No schema chosen —`) for anonymous mode.
-- `Fields` — anonymous mode only: the node's own field list, each with a name and a type, in the order the pins appear. A field name is an identifier (a letter or `_`, then letters, digits or `_`) and may not be `schema`, `fields` or `literal_values`. A field's type is any type a record field can hold except `Optional`, `Unit`, `None` and an "any function" type.
+- `Schema` — the name of a record type def in the project's User Types panel. The dropdown lists every existing def alphabetically; pick *Edit definition…* to jump to the schema editor for the selected def. New defs are created from the User Types panel or with *Name this record…* (below), not from this dropdown. Leave it empty (`— Anonymous record —`) for anonymous mode.
+- `Fields` — anonymous mode only: the node's own field list, each with a name and a type, in the order the pins appear. In the property panel each field row has a name, a type selector, move-up / move-down buttons and a delete button; **Add field** appends a `Float` field. A field name is an identifier (a letter or `_`, then letters, digits or `_`) and may not be `schema`, `fields` or `literal_values`. A field's type is any type a record field can hold except `Optional`, `Unit`, `None` and an "any function" type.
 
 **Input pins**
 
@@ -1058,6 +1067,10 @@ Bundles N input values into a single record value — either of a named record t
 An anonymous `record_construct` is for bundling values before you have decided the bundle deserves a name: the record is just "these few things", and its type is their shape. Because records are structurally typed, its output wires into any pin that accepts a record of that shape — an `expr` parameter typed `{a: Float, b: Int}` can read `p.a` from it, and a named def with the same fields accepts it too.
 
 Renaming, retyping, reordering, adding or removing a field re-derives the pins. A renamed or moved field keeps its wire and its inline value; a removed field loses both, and a retyped field loses its inline value (it was written for the old type). Renaming a field changes the record's type (`{a: Float}` becomes `{b: Float}`), so a downstream input declared with the old type reports a type mismatch until it is updated.
+
+The quickest way to build one is with wires. Drag a wire from an output into empty space and pick `record_construct`: you get an anonymous record with one field, named after the source and already wired. Then drop more outputs on the node's **`+` tab** (shown below the node while a wire is dragged, see [the open port](../node_networks.md#adding-an-input-by-dropping-a-wire-the-open-port)); each drop appends a field of the wire's type and focuses its name for renaming. A field whose wire now carries a different type gets the same **Use wire's type** button and context-menu **Take types from wires** as an [`expr`](#expr) parameter; retyping a field this way drops its inline value.
+
+**Name this record…** (a button in the panel, and an item in the node's context menu) turns the bundle into a named def once it proves worth keeping. Enter a name: a def with the node's fields — same names, same types, in the same order — is created in the User Types panel, and the node switches to named mode on it. Every wire and inline value is kept, and downstream nodes are untouched. One Ctrl+Z undoes both the node change and the new def. If defs with exactly the same fields already exist, the dialog lists them under *Same shape as:*; **Use** points the node at that def instead of creating a new one (the pins reorder to the def's field order, and the wires follow their fields).
 
 In the text format the field list is the `fields` property, written before the field pins it declares:
 

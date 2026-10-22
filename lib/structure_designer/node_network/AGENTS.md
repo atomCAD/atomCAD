@@ -16,6 +16,7 @@ Interactive visual node graph editor widget. Handles rendering, interaction, and
 | `add_node_popup.dart` | Node type picker dialog with category filtering (+ the `inZoneBody` filter, below) |
 | `node_title.dart` | What a title bar says under the current `NodeTitleMode` — type name or node name (`doc/design_node_names_in_ui.md` D4/D5). Every node kind goes through it; the size rule deliberately does not |
 | `node_name_path.dart` | Composes a node's **name path** (`map4/e1`) from a `NodeNetworkView` — the spelling the AI is handed in error paths, diff hunk titles and the Layout log. Kept for the surfaces that *display* a path for a node already in hand (the name strip, *Copy node name*); anything that *matches* a path goes through Rust instead (`find_nodes_by_name` / `resolve_node_path`) |
+| `open_port_tabs.dart` | The open-port `+` tabs (`doc/design_wire_declared_inputs.md`): the pure placement `openPortTabs` (tested in `test/open_port_tabs_test.dart`), the canvas layer and each tab's `DragTarget` |
 | `find_node_picker.dart` | **Find Node** (`doc/design_node_names_in_ui.md` D7): the top-of-canvas "go to symbol" overlay and its rows. Matching, ranking and the path spelling are Rust's (`find_nodes_by_name`) — this file is the overlay, the keyboard and the landing |
 
 ## Coordinate System
@@ -39,7 +40,8 @@ Three discrete levels with different detail:
 - **Select node:** Click (Ctrl=toggle, Shift=add)
 - **Rectangle select:** Click+drag on empty space
 - **Wire creation:** Drag from pin → drop on compatible pin
-- **Auto-connect:** Drop wire in empty space → opens `AddNodePopup` filtered by type
+- **Auto-connect:** Drop wire in empty space → opens `AddNodePopup` filtered by type. A new node with no compatible pin but an open port (a fresh anonymous `record_construct`) is connected through `addInputFromWire` instead
+- **Open port:** while a wire is dragged, nodes with `hasOpenInputPort` show a `+` tab below them; dropping on it declares an input from the wire (see "Open-port tabs" below)
 - **Keyboard:** Ctrl+C/X/V (copy/cut/paste), Del (delete), Ctrl+D (duplicate)
 
 ## The canvas is rendered twice (live editor + image export)
@@ -159,6 +161,33 @@ Two further rules the note editor follows, worth copying:
   Field Must Own Its Own Vertical Scroll" (issue #422). The note's static branch
   keeps its `SingleChildScrollView`; the editing branch uses `expands: true`
   instead.
+
+## Open-port tabs (declared inputs)
+
+`expr` and an anonymous `record_construct` declare their own inputs, and while a
+wire is dragged they show a `+` tab hanging below the node
+(`open_port_tabs.dart`, `doc/design_wire_declared_inputs.md`). Three rules:
+
+1. **The tabs live in their own layer of the canvas `Stack`, above the nodes and
+   outside every node's footprint — never inside `NodeWidget`.** Flutter does
+   not hit-test a child outside its parent's bounds, so a tab hanging out of
+   the node widget would never receive the drop. And the footprint must not
+   change: `getNodeSize` and the Rust estimators know nothing of the tab, so
+   saved layouts — positioned for today's node heights, with no reflow on load
+   — never overlap or move. Being on top is also what lets a tab that covers
+   the node beneath it win the hit test.
+2. **The layer listens to `model.wireDragSource`, not to `draggedWire`.** The
+   notifier changes only when a drag starts and ends, so the layer rebuilds
+   twice per drag and the drag fast path (above) stays intact. `draggedWire`
+   is a setter that keeps the two in step; don't bypass it with the field.
+3. **A tab drop clears `draggedWire`** (inside `model.addInputFromWire`), as
+   `connectPins` does; otherwise the source pin's `onDragEnd` treats the drop
+   as an empty-space drop and opens the add-node popup.
+
+The tabs are interaction, not content: the image export does not draw them.
+Rust owns every rule (which nodes have a port, which types it accepts, the
+derived name); Flutter adds only the scope-prefix and zone-input rules of
+`canConnectPins`, which Rust delegates to the caller.
 
 ## Wire Rendering
 
