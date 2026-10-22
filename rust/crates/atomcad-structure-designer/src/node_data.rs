@@ -496,8 +496,30 @@ pub trait NodeData: Any + AsAny {
         None
     }
 
+    /// The record fields the node declares in its own data — an anonymous
+    /// `record_construct`'s — with the allocator floor of their ids. `None`
+    /// (the default) for every other node. A named-mode `record_construct`
+    /// answers `Some` with no fields, so the invariant checker sees a node
+    /// that has both. The record-def reference walkers
+    /// (`collect_record_refs_in_node`, `rewrite_record_names_in_node`,
+    /// `canonicalize`) read the field types through this hook, never by
+    /// downcast.
+    fn local_record_fields(
+        &self,
+    ) -> Option<(&[crate::nodes::record_construct::LocalRecordField], u64)> {
+        None
+    }
+
+    /// Mutable counterpart of [`Self::local_record_fields`], for rewriting and
+    /// canonicalizing the field types (which never allocates an id).
+    fn local_record_fields_mut(
+        &mut self,
+    ) -> Option<&mut [crate::nodes::record_construct::LocalRecordField]> {
+        None
+    }
+
     /// Per-node warnings that need the defs to compute (one per dangling
-    /// path row). Only path-based record nodes return any.
+    /// path row, or per local field type naming a missing def).
     fn record_node_problems(&self, _defs: RecordDefs<'_>) -> Vec<String> {
         Vec::new()
     }

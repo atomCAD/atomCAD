@@ -113,6 +113,7 @@ fn set_record_construct(
     node.data = Box::new(RecordConstructData {
         schema: schema.to_string(),
         literal_values: HashMap::new(),
+        ..Default::default()
     });
     NodeTypeRegistry::populate_custom_node_type_cache_with_types(
         &registry.built_in_node_types,

@@ -133,6 +133,7 @@ use crate::api::structure_designer::structure_designer_api_types::APIMat3ColsDat
 use crate::api::structure_designer::structure_designer_api_types::APIMat3DiagData;
 use crate::api::structure_designer::structure_designer_api_types::APIMat3RowsData;
 use crate::api::structure_designer::structure_designer_api_types::APIRangeData;
+use crate::api::structure_designer::structure_designer_api_types::APIRecordLocalField;
 use crate::api::structure_designer::structure_designer_api_types::APIRecordSchemaData;
 use crate::api::structure_designer::structure_designer_api_types::APIRecordTypeDef;
 use crate::api::structure_designer::structure_designer_api_types::APIRecordTypeField;
@@ -5444,32 +5445,89 @@ pub fn set_string_data(scope_path: Vec<u64>, node_id: u64, data: APIStringData) 
     }
 }
 
-/// Writes the `schema` property of a `record_construct` node. After the
-/// write, the node-network refresh re-runs the registry-aware cache
-/// populator, which rebuilds the per-field input pin layout from the chosen
-/// def. An empty string clears the schema. Preserves any existing
-/// `literal_values` — entries whose keys no longer match a current field of
-/// the new def are inert (see `RecordConstructData::literal_values`).
+/// Writes the `schema` property of a `record_construct` node, in one undo
+/// step that also restores the wires a switch drops
+/// (`StructureDesigner::set_record_construct_schema`). The pins are re-derived
+/// from the chosen def; an empty string switches the node to anonymous mode
+/// with no fields. Wires and literals carry over by field name; the others
+/// are dropped.
 #[flutter_rust_bridge::frb(sync)]
 pub fn set_record_construct_data(scope_path: Vec<u64>, node_id: u64, data: APIRecordSchemaData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            let existing = cad_instance
+            if cad_instance
                 .structure_designer
-                .get_scope_network(&scope_path)
-                .and_then(|network| network.nodes.get(&node_id))
-                .and_then(|node| node.data.as_any_ref().downcast_ref::<RecordConstructData>())
-                .cloned()
-                .unwrap_or_default();
-            let record_data = Box::new(RecordConstructData {
-                schema: data.schema,
-                literal_values: existing.literal_values,
-            });
-            cad_instance
-                .structure_designer
-                .set_node_network_data_scoped(&scope_path, node_id, record_data);
-            refresh_structure_designer_auto(cad_instance);
+                .set_record_construct_schema(&scope_path, node_id, &data.schema)
+                .is_ok()
+            {
+                refresh_structure_designer_auto(cad_instance);
+            }
         });
+    }
+}
+
+/// The fields an anonymous `record_construct` declares itself, in pin (and
+/// editor-row) order. `None` when the node is not a `record_construct` or is
+/// in named mode (its fields are its def's).
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_record_construct_local_fields(
+    scope_path: Vec<u64>,
+    node_id: u64,
+) -> Option<Vec<APIRecordLocalField>> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let data = cad_instance
+                    .structure_designer
+                    .record_construct_data(&scope_path, node_id)?;
+                if !data.is_anonymous() {
+                    return None;
+                }
+                Some(
+                    data.fields
+                        .iter()
+                        .map(|field| APIRecordLocalField {
+                            name: field.name.clone(),
+                            data_type: data_type_to_api_data_type(&field.data_type),
+                        })
+                        .collect(),
+                )
+            },
+            None,
+        )
+    }
+}
+
+/// Replaces an anonymous `record_construct`'s field list (rename / retype /
+/// delete / reorder / add) in one undo step. Ids are kept by name, then by
+/// position, as `set_expr_data` keeps parameter ids, so a rename or reorder
+/// keeps every wire and a delete drops only its own. Refused on a named-mode
+/// node, for an invalid or duplicate name, or for a type a field cannot have.
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_record_construct_fields(
+    scope_path: Vec<u64>,
+    node_id: u64,
+    fields: Vec<APIRecordLocalField>,
+) -> Result<(), String> {
+    let fields = fields
+        .into_iter()
+        .map(|field| {
+            api_data_type_to_data_type(&field.data_type)
+                .map(|data_type| (field.name.clone(), data_type))
+                .map_err(|e| format!("Field '{}': {}", field.name, e))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                cad_instance
+                    .structure_designer
+                    .set_record_construct_fields(&scope_path, node_id, fields)?;
+                refresh_structure_designer_auto(cad_instance);
+                Ok(())
+            },
+            Err("CAD instance not available".to_string()),
+        )
     }
 }
 
@@ -6806,9 +6864,9 @@ fn api_field_editor_hint_to_core(
 }
 
 /// Returns `None` if `node_id` is not a `record_construct` node, or if its
-/// chosen `schema` is empty / not in the registry. Returns `Some(vec)` —
-/// possibly empty — listing only the def's simple-typed fields, in authored
-/// field order.
+/// chosen `schema` is not in the registry. Returns `Some(vec)` — possibly
+/// empty — listing only the simple-typed fields, in pin order: the def's in
+/// named mode, the node's own in anonymous mode.
 ///
 /// Pure read — `&self`, no subnetwork evaluation. Safe to call on every
 /// panel rebuild.
@@ -6830,12 +6888,28 @@ pub fn get_record_construct_fields(
                     .data
                     .as_any_ref()
                     .downcast_ref::<RecordConstructData>()?;
-                let def = sd.node_type_registry.lookup_record_type_def(&data.schema)?;
+                // `(name, type, hint)` per pin. Anonymous fields carry no hint
+                // and are never `Optional`.
+                let rows: Vec<(
+                    &str,
+                    &DataType,
+                    Option<&atomcad_structure_designer::node_type_registry::FieldEditorHint>,
+                )> = if data.is_anonymous() {
+                    data.fields
+                        .iter()
+                        .map(|f| (f.name.as_str(), &f.data_type, None))
+                        .collect()
+                } else {
+                    sd.node_type_registry
+                        .lookup_record_type_def(&data.schema)?
+                        .fields
+                        .iter()
+                        .map(|f| (f.name.as_str(), &f.data_type, f.hint.as_ref()))
+                        .collect()
+                };
 
                 let mut result = Vec::new();
-                for (i, field) in def.fields.iter().enumerate() {
-                    let field_name = &field.name;
-                    let field_type = &field.data_type;
+                for (i, (field_name, field_type, hint)) in rows.into_iter().enumerate() {
                     // An `Optional[T]` field is exposed at the value/literal layer
                     // as a plain `T` (Core Decision 2). Peel the Optional so the
                     // literal editor renders `T`'s input; the tri-state "unset"
@@ -6856,13 +6930,13 @@ pub fn get_record_construct_fields(
                         .get(field_name)
                         .and_then(|tv| text_value_to_api_literal(tv, &value_type));
                     result.push(APILiteralField {
-                        name: field_name.clone(),
+                        name: field_name.to_string(),
                         data_type: simple_type,
                         stored_value,
                         // No default layer for record_construct fields.
                         default_value: None,
                         is_wired,
-                        hint: field.hint.as_ref().map(field_editor_hint_to_api),
+                        hint: hint.map(field_editor_hint_to_api),
                     });
                 }
                 Some(result)

@@ -312,6 +312,17 @@ fn the_record_get_set_fixture_round_trips() {
     ));
 }
 
+/// The anonymous `record_construct` fixture
+/// (`doc/design_wire_declared_inputs.md` Phase 2): a `fields` list with an
+/// anonymous-record-typed field, and an `expr` parameter typed by the node's
+/// output.
+#[test]
+fn the_anonymous_record_construct_fixture_round_trips() {
+    run_round_trips(&atomcad_test_support::fixture_path(
+        "record_construct_anonymous/record_construct_anonymous.cnnd",
+    ));
+}
+
 /// The `proxy` fixture (`doc/design_proxy_node.md` Phase 3). The node carries
 /// eight text properties of four different kinds, every one of which the
 /// serializer writes unconditionally — a property the text drops or re-spells
@@ -394,6 +405,27 @@ fn a_structure_rot_axis_survives_a_replace() {
         text.contains("axis_index: -1"),
         "no axis is spelled -1: {text}"
     );
+}
+
+#[test]
+fn an_anonymous_record_construct_survives_a_replace() {
+    // `fields` is the anonymous node's declaration, written before its
+    // wires; one field's type is itself an anonymous record, which the text
+    // reads as an object (`doc/design_wire_declared_inputs.md`, Phase 2).
+    let text = replace_is_a_no_op(
+        "x = float { value: 1.5 }\n\
+         q = expr { expression: \"{x: 1}\", parameters: [] }\n\
+         r = record_construct { fields: [{ name: \"b\", data_type: Float }, { name: \"p\", data_type: {x: Int} }], b: x, p: q }\n",
+    );
+    assert!(text.contains("fields: ["), "{text}");
+    assert!(text.contains("b: x"), "{text}");
+    assert!(text.contains("p: q"), "{text}");
+    // An anonymous node always writes `fields`, even empty, so the key is
+    // known on a fresh node; a named-mode node never does.
+    let text = replace_is_a_no_op("r = record_construct {}\n");
+    assert!(text.contains("fields: []"), "{text}");
+    let text = replace_is_a_no_op("r = record_construct { schema: \"ElementMapping\" }\n");
+    assert!(!text.contains("fields"), "{text}");
 }
 
 #[test]

@@ -6269,6 +6269,30 @@ class APIRecordFieldNode {
           children == other.children;
 }
 
+/// One field an anonymous `record_construct` declares itself, for its field
+/// list in the property panel. The list's order is the pin order; ids stay in
+/// Rust (kept by name, then position, like `APIExprParameter`).
+class APIRecordLocalField {
+  final String name;
+  final APIDataType dataType;
+
+  const APIRecordLocalField({
+    required this.name,
+    required this.dataType,
+  });
+
+  @override
+  int get hashCode => name.hashCode ^ dataType.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIRecordLocalField &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          dataType == other.dataType;
+}
+
 /// A `record_get` / `record_set` path as it crosses the API: the API form of
 /// `record_path::PathSpec` (`doc/design_record_get_set.md` Phase 4). A live
 /// path carries its **current** segment names; a dangling one (`dangling:

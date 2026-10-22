@@ -52,6 +52,9 @@ pub enum InvariantKind {
     FieldIdFloor,
     /// `next_node_id <= max(node id)` in this network / body.
     NextNodeIdFloor,
+    /// A record node names a schema and also declares local fields (an
+    /// anonymous `record_construct`'s fields must be empty in named mode).
+    NamedRecordWithLocalFields,
 
     // ----- Tier 2 — reference resolution (fatal only if NOT accounted-for) -----
     /// `node_type_name` resolves to neither a built-in nor a network.
@@ -84,6 +87,7 @@ impl InvariantKind {
                 | InvariantKind::NextNodeIdFloor
                 | InvariantKind::DuplicateFieldId
                 | InvariantKind::FieldIdFloor
+                | InvariantKind::NamedRecordWithLocalFields
         )
     }
 
@@ -243,6 +247,52 @@ pub fn debug_assert_network_invariants(network: &NodeNetwork, registry: &NodeTyp
     );
 }
 
+/// Tier-1 checks on a node's own record fields
+/// (`NodeData::local_record_fields`): ids unique, `next_field_id` above every
+/// id, and none at all while the node names a schema.
+fn check_local_record_fields(
+    node: &crate::node_network::Node,
+    fields: &[crate::nodes::record_construct::LocalRecordField],
+    next_field_id: u64,
+    report: &mut dyn FnMut(InvariantKind, String),
+) {
+    if !fields.is_empty() && node.data.record_schema_ref().is_some_and(|s| !s.is_empty()) {
+        report(
+            InvariantKind::NamedRecordWithLocalFields,
+            format!(
+                "node {} ('{}') names schema '{}' but also declares {} local field(s)",
+                node.id,
+                node.node_type_name,
+                node.data.record_schema_ref().unwrap_or_default(),
+                fields.len()
+            ),
+        );
+    }
+    let mut seen: HashMap<u64, &str> = HashMap::new();
+    for field in fields {
+        if let Some(prev) = seen.insert(field.id, &field.name) {
+            report(
+                InvariantKind::DuplicateFieldId,
+                format!(
+                    "node {} ('{}') has local field id {} shared by fields '{}' and '{}'",
+                    node.id, node.node_type_name, field.id, prev, field.name
+                ),
+            );
+        }
+    }
+    if let Some(max) = fields.iter().map(|f| f.id).max()
+        && next_field_id <= max
+    {
+        report(
+            InvariantKind::FieldIdFloor,
+            format!(
+                "node {} ('{}'): next_field_id ({}) <= max local field id ({}) — recycling will collide",
+                node.id, node.node_type_name, next_field_id, max
+            ),
+        );
+    }
+}
+
 /// Recursive per-scope worker. Mirrors `validate_zones_recursive`'s shape so
 /// wire-source checks resolve against the correct network. `scope_path` is the
 /// chain of HOF node ids from the root down to (but not including) `network`.
@@ -350,6 +400,15 @@ fn check_one_scope(
             .validation_errors
             .iter()
             .any(|e| e.node_id == Some(node_id));
+
+        // B5: the fields an anonymous `record_construct` declares itself —
+        // the per-def `DuplicateFieldId` / `FieldIdFloor` checks applied to
+        // its local list, and no local fields in named mode.
+        if let Some((fields, next_field_id)) = node.data.local_record_fields() {
+            check_local_record_fields(node, fields, next_field_id, &mut |kind, detail| {
+                push(out, Some(node_id), kind, detail, false)
+            });
+        }
 
         // R1: node type resolves.
         let resolved_type = if is_frozen {

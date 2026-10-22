@@ -194,5 +194,11 @@ fn canonicalize_node_data(data: &mut dyn NodeData) {
         canonicalize_data_type(&mut d.value_type);
     }
     // Record* / ProductData store schema names (Strings), not DataTypes —
-    // nothing to canonicalize.
+    // nothing to canonicalize — except an anonymous `record_construct`'s own
+    // field types, reached through the record-node hook (never a downcast).
+    if let Some(fields) = data.local_record_fields_mut() {
+        for field in fields.iter_mut() {
+            canonicalize_data_type(&mut field.data_type);
+        }
+    }
 }

@@ -632,6 +632,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIRecordFieldNode dco_decode_api_record_field_node(dynamic raw);
 
   @protected
+  APIRecordLocalField dco_decode_api_record_local_field(dynamic raw);
+
+  @protected
   APIRecordPath dco_decode_api_record_path(dynamic raw);
 
   @protected
@@ -1535,6 +1538,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<APIRecordFieldNode> dco_decode_list_api_record_field_node(dynamic raw);
 
   @protected
+  List<APIRecordLocalField> dco_decode_list_api_record_local_field(dynamic raw);
+
+  @protected
   List<APIRecordPath> dco_decode_list_api_record_path(dynamic raw);
 
   @protected
@@ -2141,6 +2147,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APINodeCategoryView>? dco_decode_opt_list_api_node_category_view(
+      dynamic raw);
+
+  @protected
+  List<APIRecordLocalField>? dco_decode_opt_list_api_record_local_field(
       dynamic raw);
 
   @protected
@@ -2893,6 +2903,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIRecordFieldNode sse_decode_api_record_field_node(
+      SseDeserializer deserializer);
+
+  @protected
+  APIRecordLocalField sse_decode_api_record_local_field(
       SseDeserializer deserializer);
 
   @protected
@@ -3967,6 +3981,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  List<APIRecordLocalField> sse_decode_list_api_record_local_field(
+      SseDeserializer deserializer);
+
+  @protected
   List<APIRecordPath> sse_decode_list_api_record_path(
       SseDeserializer deserializer);
 
@@ -4679,6 +4697,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APINodeCategoryView>? sse_decode_opt_list_api_node_category_view(
+      SseDeserializer deserializer);
+
+  @protected
+  List<APIRecordLocalField>? sse_decode_opt_list_api_record_local_field(
       SseDeserializer deserializer);
 
   @protected
@@ -5507,6 +5529,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_record_field_node(
       APIRecordFieldNode self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_record_local_field(
+      APIRecordLocalField self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_record_path(APIRecordPath self, SseSerializer serializer);
@@ -6606,6 +6632,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<APIRecordFieldNode> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_api_record_local_field(
+      List<APIRecordLocalField> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_api_record_path(
       List<APIRecordPath> self, SseSerializer serializer);
 
@@ -7324,6 +7354,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_list_api_node_category_view(
       List<APINodeCategoryView>? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_list_api_record_local_field(
+      List<APIRecordLocalField>? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_list_prim_u_8_strict(

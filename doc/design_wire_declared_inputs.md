@@ -106,7 +106,7 @@ In scope:
 | Promotion — downstream nodes | Not touched. Downstream wires stay valid because the named type has exactly the anonymous type's shape. In particular, a downstream `expr` whose parameter was declared with the anonymous type, for example by dropping this node's output on its `+`, keeps that type, so `r.a` in it keeps working. Retyping such a parameter to the new name would *break* it, since `expr` cannot read fields of a named record. |
 | Switching mode from the schema dropdown | Picking a def on an anonymous node is allowed. Local fields are cleared. Wires and literals carry over by name where the def has a same-named field; the other wires are dropped (the usual repair rule), and so are the other literals. A literal is never left behind to reappear when a field of the same name is added later. Picking "none" on a named-mode node leaves an anonymous node with **no** fields, under the same literal rule. Copying the def's fields into local ones (un-promotion) is future work. |
 | Undo of a schema change | One `NetworkSnapshotCommand` ("Set record schema"), **not** the `SetNodeDataCommand` that `set_record_construct_data` records today (through `set_node_network_data_scoped`). That command restores node data only. The wires a switch drops are lost when the pins are re-derived, so undo would bring back field `a` without its wire. The setter becomes a `StructureDesigner` method: snapshot the network, write the data, re-derive the node type (which drops the wires that do not carry over), snapshot again, push. A named → named switch has the same gap today, and this change closes it too. |
-| Def references in local fields | A local field's type can name a def. Dropping a `Box` output on the `+` declares a `Record(Named("Box"))` field, so this is common. Every place that finds or rewrites record-def names in node data must therefore see local field types, not only `schema`. Those places are: `collect_record_refs_in_node`, which feeds the delete and namespace-delete reference checks, the library dependency closure / `uses`, frozen-node detection, the invariant checker and cross-document paste; `rewrite_record_names_in_node`, for def rename; and `canonicalize::canonicalize_node_data`, which their doc comments require to stay in sync. These are hand-maintained downcast chains, and `record_construct` reaches them today only through the trailing `record_schema_ref` fallback. It gets an explicit `RecordConstructData` branch ahead of that fallback, which handles `schema` (skipped when empty) **and** every `fields[*].data_type`. Without it, renaming `Box` leaves a dangling `Named("Box")` in the field, the delete reference check does not see the node, and a linked def named only by a field is missing from `uses` and never freezes the node. |
+| Def references in local fields | A local field's type can name a def. Dropping a `Box` output on the `+` declares a `Record(Named("Box"))` field, so this is common. Every place that finds or rewrites record-def names in node data must therefore see local field types, not only `schema`. Those places are: `collect_record_refs_in_node`, which feeds the delete and namespace-delete reference checks, the library dependency closure / `uses`, frozen-node detection, the invariant checker and cross-document paste; `rewrite_record_names_in_node`, for def rename; and `canonicalize::canonicalize_node_data`, which their doc comments require to stay in sync. These are hand-maintained downcast chains, and `record_construct` reaches them only through the trailing `record_schema_ref` fallback. A downcast branch for it is not allowed: `record_node_hook_test.rs` forbids downcasting to a record node outside its own files. So the fallback itself reads the local field types, through a record-node hook, `NodeData::local_record_fields` / `local_record_fields_mut` (default `None`). The fallback skips an empty `schema` and covers every `fields[*].data_type`. Without it, renaming `Box` leaves a dangling `Named("Box")` in the field, the delete reference check does not see the node, and a linked def named only by a field is missing from `uses` and never freezes the node. |
 | Text format | No new syntax beyond a `fields` property mirroring `expr`'s `parameters`: `r = record_construct { fields: [{name: "a", data_type: Float}], a: x }`. The open port is a GUI gesture; in text, declaring is already just writing. |
 | Reserved names | `expr`: the lexer's keywords, plus `expression` and `parameters` (its property keys). `record_construct`: `schema`, `fields` and `literal_values`. Each node supplies its list through `DeclaredInputs::reserved_names`. When a derived name hits one, `_` is appended. |
 
@@ -452,11 +452,12 @@ today, so existing files and corpus snapshots don't churn.
 - **Schema changes** go through a `StructureDesigner` method that records a
   `NetworkSnapshotCommand`, so undo restores the wires a switch drops (see
   "Undo of a schema change").
-- **Record-def references:** a `RecordConstructData` branch in
-  `collect_record_refs_in_node`, `rewrite_record_names_in_node` and
-  `canonicalize::canonicalize_node_data`, placed ahead of the
-  `record_schema_ref` fallback. It covers `schema` (when non-empty) and every
-  local field's `data_type` (see "Def references in local fields").
+- **Record-def references:** `collect_record_refs_in_node`,
+  `rewrite_record_names_in_node` and `canonicalize::canonicalize_node_data`
+  read the local field types through the `NodeData::local_record_fields[_mut]`
+  hook in their record-node fallback, which also skips an empty `schema` (see
+  "Def references in local fields"). A field type naming a def that does not
+  exist is reported on the node as a warning (`record_node_problems`).
 
 ### Promotion
 
@@ -716,9 +717,11 @@ reference-guide change.
 - The schema setter as a `StructureDesigner` method recording a
   `NetworkSnapshotCommand` ("Set record schema"), replacing the
   `set_node_network_data_scoped` path of `set_record_construct_data`.
-- The `RecordConstructData` branch in `collect_record_refs_in_node`,
-  `rewrite_record_names_in_node` and `canonicalize_node_data`, covering
-  local field types.
+- The local field types in `collect_record_refs_in_node`,
+  `rewrite_record_names_in_node` and `canonicalize_node_data`, through the
+  `NodeData::local_record_fields[_mut]` hook (a downcast is forbidden by
+  `record_node_hook_test.rs`). The schema setter and the field-list setter
+  live in `record_construct_ops.rs`, which that test lists as the node's own.
 - Invariant checker (`invariants.rs`): extend `DuplicateFieldId` and
   `FieldIdFloor` to a `record_construct`'s local `fields` / `next_field_id`,
   and add a Tier 1 check that a named-mode node has empty `fields`.
@@ -943,9 +946,9 @@ Behavior is tested at the layer that owns it:
   across save → load, and the text-format `query` → `--replace` no-op rule,
   including anonymous record types. Phase 0 covers both the type-string
   parser the panel and API use and the text format's own path.
-- **Snapshots:** Phase 2 rewrites the `record_construct` node-type
-  description, which no longer requires a def, so `node_snapshots` changes
-  and needs a `cargo insta review`.
+- **Snapshots:** no snapshot records the `record_construct` node type, so
+  the rewritten description changes none. The Phase 2 fixture adds one entry
+  to the integration harness's validation-corpus snapshot.
 
 Every phase runs the gate listed under "Phases". The `structure_designer_api`,
 `integration` and `renderer_api` harnesses are named explicitly because

@@ -528,6 +528,14 @@ pub struct APIRecordSchemaData {
     pub schema: String,
 }
 
+/// One field an anonymous `record_construct` declares itself, for its field
+/// list in the property panel. The list's order is the pin order; ids stay in
+/// Rust (kept by name, then position, like `APIExprParameter`).
+pub struct APIRecordLocalField {
+    pub name: String,
+    pub data_type: APIDataType,
+}
+
 /// One field of a record type def, surfaced for the schema editor UI.
 pub struct APIRecordTypeField {
     /// Editing identity of an **existing** field; `None` for a freshly added

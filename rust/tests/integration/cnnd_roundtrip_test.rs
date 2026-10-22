@@ -211,6 +211,15 @@ fn test_demolib_proxy_roundtrip() {
 /// multi-output pin wires (including non-zero pins) intact. These nodes follow
 /// the ordinary fixed-pin serialization path, so this is greenfield coverage,
 /// not new plumbing — see `doc/design_structure_lattice_unpack_nodes.md`.
+/// An anonymous `record_construct` (`doc/design_wire_declared_inputs.md`
+/// Phase 2) keeps its local fields and their wires across save → load.
+#[test]
+fn anonymous_record_construct_roundtrip() {
+    roundtrip_cnnd_file(&atomcad_test_support::fixture_path_str(
+        "record_construct_anonymous/record_construct_anonymous.cnnd",
+    ));
+}
+
 #[test]
 fn unpack_nodes_cnnd_roundtrip() {
     use atomcad_structure_designer::serialization::node_networks_serialization::save_node_networks_to_file;

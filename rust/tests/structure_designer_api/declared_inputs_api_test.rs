@@ -1,5 +1,5 @@
 //! The FFI surface of declared inputs (`doc/design_wire_declared_inputs.md`,
-//! Phase 1). The `#[frb(sync)]` wrappers need the GPU-backed `CADInstance`;
+//! Phases 1 and 2). The `#[frb(sync)]` wrappers need the GPU-backed `CADInstance`;
 //! what they hand Dart is built by the `view_builders` helpers tested here:
 //! `NodeView::has_open_input_port`, the `APIAddedInput` of a drop, and the
 //! offer list of `get_wire_type_offers`. The behavior behind them is tested in
@@ -7,6 +7,7 @@
 
 use atomcad_structure_designer::data_type::DataType;
 use atomcad_structure_designer::node_network::SourcePin;
+use atomcad_structure_designer::node_type_registry::RecordTypeDef;
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 use glam::f64::DVec2;
 use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::APIDataTypeBase;
@@ -44,30 +45,76 @@ fn open_port(d: &StructureDesigner, node_id: u64) -> bool {
     has_open_input_port(&d.get_scope_network(&[]).unwrap().nodes[&node_id])
 }
 
+/// The open port is exactly `declared_inputs().is_some()`: `expr` and an
+/// anonymous `record_construct` have one; a named-mode `record_construct`
+/// (its fields are its def's), a custom-node instance and ordinary nodes do
+/// not.
 #[test]
-fn only_expr_has_an_open_input_port() {
+fn open_input_ports_follow_declared_inputs() {
     let mut d = StructureDesigner::new();
     d.add_node_network("Sub");
     d.add_node_network("Main");
     d.set_active_node_network_name(Some("Main".to_string()));
+    d.add_record_type_def(RecordTypeDef::from_named_fields(
+        "Box",
+        vec![("a".to_string(), DataType::Float)],
+    ))
+    .unwrap();
     let e = d.add_node("expr", DVec2::ZERO);
     let int = d.add_node("int", DVec2::ZERO);
     let sphere = d.add_node("sphere", DVec2::ZERO);
     let map = d.add_node("map", DVec2::ZERO);
     let instance = d.add_node("Sub", DVec2::ZERO);
-    let construct = d.add_node("record_construct", DVec2::ZERO);
+    let anonymous = d.add_node("record_construct", DVec2::ZERO);
+    let named = d.add_node("record_construct", DVec2::ZERO);
+    d.set_record_construct_schema(&[], named, "Box").unwrap();
 
     assert!(open_port(&d, e));
+    assert!(open_port(&d, anonymous), "an anonymous record_construct");
     for (label, node) in [
         ("int", int),
         ("sphere", sphere),
         ("map", map),
         ("custom-node instance", instance),
-        // Until Phase 2 gives it an anonymous mode.
-        ("record_construct", construct),
+        ("named-mode record_construct", named),
     ] {
         assert!(!open_port(&d, node), "{} has an open port", label);
     }
+
+    // The port follows the mode both ways.
+    d.set_record_construct_schema(&[], named, "").unwrap();
+    assert!(open_port(&d, named));
+    d.set_record_construct_schema(&[], anonymous, "Box")
+        .unwrap();
+    assert!(!open_port(&d, anonymous));
+}
+
+/// A named-mode `record_construct` offers no Take type from wire, even with
+/// a mismatched wire on a field: a def's fields are retyped in the schema
+/// editor.
+#[test]
+fn a_named_record_construct_crosses_no_offers() {
+    let mut d = setup("v = vec3 { x: 1.0, y: 2.0, z: 3.0 }");
+    d.add_record_type_def(RecordTypeDef::from_named_fields(
+        "Box",
+        vec![("a".to_string(), DataType::Float)],
+    ))
+    .unwrap();
+    let r = d.add_node("record_construct", DVec2::ZERO);
+    d.set_record_construct_schema(&[], r, "Box").unwrap();
+    d.connect_nodes(id(&d, "v"), 0, r, 0);
+    d.validate_active_network();
+    assert!(
+        d.get_scope_network(&[])
+            .unwrap()
+            .validation_errors
+            .iter()
+            .any(|e| e.node_id == Some(r)),
+        "the Vec3 wire into the Float field is reported"
+    );
+
+    assert!(d.wire_type_offers(&[], r).is_empty());
+    assert!(wire_type_offers_view(&d, &[], r).is_empty());
 }
 
 #[test]

@@ -22,7 +22,8 @@ use std::path::{Path, PathBuf};
 /// sources), `s` (an `expr` fed by both), `c` (a custom-network instance),
 /// `mp` (a `map` with a body node `g`), `cl` (a `closure`), and `t` (an
 /// `expr` whose `{a: Float}` parameter is fed by the wider record `w` — a
-/// valid wire but a stale type, so Take type from wire has something to take).
+/// valid wire but a stale type, so Take type from wire has something to take),
+/// and `rc` (an anonymous `record_construct` with one field, `a`).
 fn target_code(instance_type: &str) -> String {
     format!(
         "x = int {{ value: 1 }}
@@ -34,6 +35,7 @@ mp = map {{ xs: r, input_type: Int, output_type: Int, body {{ g = int {{ value: 
 cl = closure {{ kind: \"custom\", params: [\"q\"], type_args: [Int, Int], body {{ k = int {{ value: 3 }} output k }} }}
 w = expr {{ expression: \"{{a: 1.0, b: 2.0}}\", parameters: [] }}
 t = expr {{ a: w, expression: \"a.a\", parameters: [{{ name: \"a\", data_type: {{a: Float}} }}] }}
+rc = record_construct {{ fields: [{{ name: \"a\", data_type: Int }}] }}
 output s
 ",
         instance_type
@@ -178,6 +180,17 @@ fn alphabet() -> Vec<(&'static str, OpFn)> {
         ("take types from wires", |d, t| {
             let e = id(d, t, "t");
             Some(d.take_types_from_wires(&[], e, &[0]).is_err())
+        }),
+        ("set record schema", |d, t| {
+            let rc = id(d, t, "rc");
+            let record = t.record.clone();
+            Some(d.set_record_construct_schema(&[], rc, &record).is_err())
+        }),
+        ("set record fields", |d, t| {
+            use atomcad_structure_designer::data_type::DataType;
+            let rc = id(d, t, "rc");
+            let fields = vec![("b".to_string(), DataType::Int)];
+            Some(d.set_record_construct_fields(&[], rc, fields).is_err())
         }),
         ("delete wire", |d, t| {
             let (x, s) = (id(d, t, "x"), id(d, t, "s"));

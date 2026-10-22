@@ -16,9 +16,11 @@ const RECORD_NODE_DATA: [&str; 5] = [
     "RecordSetData",
 ];
 
-/// The files that define the types; a downcast there is the node's own.
-const OWN_FILES: [&str; 5] = [
+/// The files that define the types, plus a node's own `StructureDesigner`
+/// edits; a downcast there is the node's own.
+const OWN_FILES: [&str; 6] = [
     "nodes/record_construct.rs",
+    "record_construct_ops.rs",
     "nodes/record_destructure.rs",
     "nodes/product.rs",
     "nodes/record_get.rs",

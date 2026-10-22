@@ -374,7 +374,7 @@ impl StructureDesigner {
     /// Re-derive one node's custom node type from its data, rebuilding its
     /// arguments by pin id (`Node::set_custom_node_type` with `refresh_args`),
     /// so every existing wire stays on its pin.
-    fn rederive_node_type(&mut self, scope_path: &[u64], node_id: u64) {
+    pub(crate) fn rederive_node_type(&mut self, scope_path: &[u64], node_id: u64) {
         let Some(network_name) = self.active_node_network_name.clone() else {
             return;
         };
@@ -403,7 +403,7 @@ impl StructureDesigner {
     /// and the node changed, request a full refresh (the node's output type
     /// can change, which can clear or raise errors downstream), and push one
     /// [`NetworkSnapshotCommand`] labelled `description`.
-    fn finish_declared_input_edit(
+    pub(crate) fn finish_declared_input_edit(
         &mut self,
         scope_path: &[u64],
         node_id: u64,

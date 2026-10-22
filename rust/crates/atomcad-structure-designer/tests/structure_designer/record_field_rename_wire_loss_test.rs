@@ -94,6 +94,7 @@ fn set_record_construct(
     node.data = Box::new(RecordConstructData {
         schema: schema.to_string(),
         literal_values: HashMap::new(),
+        ..Default::default()
     });
     NodeTypeRegistry::populate_custom_node_type_cache_with_types(
         &registry.built_in_node_types,
@@ -302,6 +303,7 @@ fn rename_preserves_wire_inside_hof_body() {
             Box::new(RecordConstructData {
                 schema: "Pair".to_string(),
                 literal_values: HashMap::new(),
+                ..Default::default()
             }),
         );
         // Re-fetch through the registry to populate the body node's pin cache.
@@ -536,6 +538,7 @@ fn literal_values_follow_rename() {
         let mut data = RecordConstructData {
             schema: "Pair".to_string(),
             literal_values: HashMap::new(),
+            ..Default::default()
         };
         data.literal_values
             .insert("a".to_string(), TextValue::Int(7));

@@ -420,6 +420,7 @@ fn schema_change_preserves_literal_values_for_matching_fields() {
         Box::new(RecordConstructData {
             schema: "PointPlusZ".to_string(),
             literal_values: existing.literal_values,
+            ..Default::default()
         }),
     );
 

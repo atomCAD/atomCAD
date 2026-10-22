@@ -289,6 +289,7 @@ fn unwired_optional_field_with_literal_uses_literal() {
         Box::new(RecordConstructData {
             schema: "Settings".to_string(),
             literal_values: literals,
+            ..Default::default()
         }),
     );
 

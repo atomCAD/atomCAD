@@ -72,6 +72,7 @@ pub mod overlay;
 pub mod preferences;
 pub mod promote_to_parameter;
 pub mod recent_files;
+pub mod record_construct_ops;
 pub mod record_path;
 pub mod refresh_profile;
 pub mod scene_exposure;

@@ -11,7 +11,7 @@
 
 use atomcad_structure_designer::data_type::RecordType;
 use atomcad_structure_designer::data_type::{DataType, FunctionType};
-use atomcad_structure_designer::node_data::{DragDirection, NodeData};
+use atomcad_structure_designer::node_data::{DragDirection, MissingDefs, NodeData};
 use atomcad_structure_designer::node_type_registry::{NodeTypeRegistry, RecordTypeDef};
 use atomcad_structure_designer::nodes::array_append::ArrayAppendData;
 use atomcad_structure_designer::nodes::array_at::ArrayAtData;
@@ -1833,6 +1833,44 @@ fn record_construct_adapter_sets_schema_from_input() {
     assert_eq!(data.schema, "Point");
 }
 
+/// `FromInput` from an anonymous record type adapts into anonymous mode with
+/// those fields (`doc/design_wire_declared_inputs.md`, Phase 2): dragging off
+/// an `expr` parameter typed `{a: Float, b: Int}` gives a matching builder,
+/// whose output type is exactly the dragged type.
+#[test]
+fn record_construct_adapter_builds_an_anonymous_record_from_input() {
+    let designer = setup_designer_with_point();
+    let reg = &designer.node_type_registry;
+    let anon = DataType::Record(RecordType::anonymous(vec![
+        ("b".to_string(), DataType::Int),
+        ("a".to_string(), DataType::Float),
+    ]));
+    let adapted = RecordConstructData::default()
+        .adapt_for_drag_source(&anon, DragDirection::FromInput, reg)
+        .expect("an anonymous record adapts");
+    let data = adapted
+        .as_any_ref()
+        .downcast_ref::<RecordConstructData>()
+        .expect("RecordConstructData");
+    assert!(data.schema.is_empty(), "anonymous mode");
+    let fields: Vec<(&str, &DataType)> = data
+        .fields
+        .iter()
+        .map(|f| (f.name.as_str(), &f.data_type))
+        .collect();
+    assert_eq!(
+        fields,
+        vec![("a", &DataType::Float), ("b", &DataType::Int)],
+        "the type's (canonical) field order"
+    );
+
+    let base = reg.built_in_node_types.get("record_construct").unwrap();
+    let node_type = adapted
+        .build_record_node_type(base, reg.record_defs(), MissingDefs::Dangle)
+        .unwrap();
+    assert_eq!(node_type.output_type(), &anon);
+}
+
 #[test]
 fn record_construct_adapter_rejects_from_output_and_unknowns() {
     let designer = setup_designer_with_point();
@@ -1853,14 +1891,14 @@ fn record_construct_adapter_rejects_from_output_and_unknowns() {
             )
             .is_none()
     );
-    // Anonymous record (no def name to store).
-    let anon = DataType::Record(RecordType::anonymous(vec![(
-        "x".to_string(),
+    // An anonymous record whose field cannot be declared (a reserved name).
+    let reserved = DataType::Record(RecordType::anonymous(vec![(
+        "schema".to_string(),
         DataType::Float,
     )]));
     assert!(
         RecordConstructData::default()
-            .adapt_for_drag_source(&anon, DragDirection::FromInput, reg)
+            .adapt_for_drag_source(&reserved, DragDirection::FromInput, reg)
             .is_none()
     );
     // Non-record source.

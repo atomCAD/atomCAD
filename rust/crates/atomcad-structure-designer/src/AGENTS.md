@@ -54,6 +54,7 @@ structure_designer/
 ├── node_type_registry.rs      # Central registry of all node types
 ├── declared_inputs.rs         # DeclaredInputs trait (nodes whose inputs are their own data) + open-port name derivation
 ├── declared_input_ops.rs      # Open port (add_input_from_wire) and Take type from wire, for any DeclaredInputs node
+├── record_construct_ops.rs    # record_construct's schema switch and anonymous field-list edit (one NetworkSnapshotCommand each)
 ├── network_usages.rs          # Find Usages: read-only collection of a network's instance nodes
 ├── node_name_search.rs        # Find Node: name-path resolution (`map4/e1`) and the ranked name search
 ├── network_validator.rs       # Validates and repairs networks
@@ -537,7 +538,9 @@ all or nothing, when it cannot. Two rules follow:
   single collect and the single rewrite enumeration, which the clipboard's
   capture and translation use), or a cross-document paste silently keeps the
   old name. A record node's schema needs no entry there: it comes through the
-  `NodeData::record_schema_ref` hook (`nodes/AGENTS.md`, Records). A new stored file path needs `NodeData::rebase_file_paths`, or a
+  `NodeData::record_schema_ref` hook, and an anonymous `record_construct`'s
+  field types through `NodeData::local_record_fields` (`nodes/AGENTS.md`,
+  Records). A new stored file path needs `NodeData::rebase_file_paths`, or a
   paste keeps a relative path that now resolves against the wrong folder.
 
 ## Change Tracking & Refresh

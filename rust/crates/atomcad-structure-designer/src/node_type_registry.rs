@@ -3820,6 +3820,17 @@ fn validate_distinct_fields(
     Ok(())
 }
 
+/// Whether `data_type` may be the type of a record field: the one predicate
+/// both the def validator ([`validate_field_optionals`]) and an anonymous
+/// `record_construct`'s field gate apply (the latter excludes a few more
+/// top-level types a declared field can never have, `RecordConstructData::
+/// accepts_field_type`). Every `Optional` reachable from it must be
+/// well-formed. `Iter[T]` is allowed, as it always was for def fields: a
+/// record holding a lazy stream is a value like any other.
+pub fn is_valid_record_field_type(data_type: &DataType) -> Result<(), String> {
+    validate_optionals_in_type(data_type)
+}
+
 /// Validates that every `Optional[..]` reachable from a record def's field
 /// list is well-formed (no nested `Optional`, no `Iter`, `Unit`, or `None`
 /// inner type — see `doc/design_optional_type.md` §3). This guards `.cnnd`
@@ -3830,7 +3841,7 @@ fn validate_field_optionals(
     fields: &[RecordField],
 ) -> Result<(), RecordTypeDefError> {
     for field in fields {
-        if let Err(message) = validate_optionals_in_type(&field.data_type) {
+        if let Err(message) = is_valid_record_field_type(&field.data_type) {
             return Err(RecordTypeDefError::IllFormedType(
                 def_name.to_string(),
                 field.name.clone(),
@@ -3950,8 +3961,8 @@ pub enum RecordRefSite {
     /// types, …). The name follows a record rename via the `DataType` walk.
     EmbeddedType,
     /// A record node's bare schema/target string naming a record def
-    /// (`NodeData::record_schema_ref`). May be the empty string when the user has not yet picked a
-    /// schema — callers that resolve the name must treat `""` as "no reference".
+    /// (`NodeData::record_schema_ref`). Never the empty string: an unset
+    /// schema is not reported.
     Schema,
 }
 
@@ -3966,8 +3977,10 @@ pub enum RecordRefSite {
 ///
 /// **Keep this list in sync with `canonicalize::canonicalize_node_data` and
 /// [`rewrite_record_names_in_node`]** — every node-data variant that embeds a
-/// `DataType` must appear here. Record nodes' schema names need no entry: they
-/// come through the `NodeData::record_schema_ref` hook. The clipboard's
+/// `DataType` must appear here. Record nodes need no entry: their schema names
+/// come through the `NodeData::record_schema_ref` hook, and an anonymous
+/// `record_construct`'s field types through `NodeData::local_record_fields`
+/// (`nodes/AGENTS.md`, Records, forbids downcasting to a record node). The clipboard's
 /// cross-document paste (`clipboard.rs`) relies on both.
 pub fn collect_record_refs_in_node(
     node: &crate::node_network::Node,
@@ -4037,7 +4050,18 @@ pub fn collect_record_refs_in_node(
     } else if let Some(d) = data.as_any_ref().downcast_ref::<ArrayLenData>() {
         emit(&d.element_type, f);
     } else if let Some(schema) = data.record_schema_ref() {
-        f(schema, RecordRefSite::Schema);
+        // An empty schema (no def chosen; an anonymous `record_construct`) is
+        // not a reference.
+        if !schema.is_empty() {
+            f(schema, RecordRefSite::Schema);
+        }
+        // An anonymous `record_construct`'s own field types can name defs
+        // (dropping a `Box` output on its open port declares a `Box` field).
+        if let Some((fields, _)) = data.local_record_fields() {
+            for field in fields {
+                emit(&field.data_type, f);
+            }
+        }
     }
 }
 
@@ -4069,10 +4093,8 @@ pub fn collect_record_refs_in_network(network: &NodeNetwork, out: &mut HashSet<S
     }
 
     // Per-node embedded references, via the single shared enumerator (so the
-    // downcast list cannot drift from the invariant checker's). Schema/target
-    // names — including the empty string for an unset schema — are inserted
-    // verbatim; an empty string never matches a real (dotted) def name, so it
-    // is harmless here.
+    // downcast list cannot drift from the invariant checker's). An unset
+    // schema is not reported.
     crate::node_network::walk_all_nodes(network, &mut |node| {
         collect_record_refs_in_node(node, &mut |name, _site| {
             out.insert(name.to_string());
@@ -4228,6 +4250,12 @@ pub fn rewrite_record_names_in_node(
         let mut schema = schema.to_string();
         rename(&mut schema);
         data.set_record_schema_ref(schema);
+        // And an anonymous `record_construct`'s own field types.
+        if let Some(fields) = data.local_record_fields_mut() {
+            for field in fields.iter_mut() {
+                walk_data_type_record_names_mut(&mut field.data_type, &mut rename);
+            }
+        }
     }
 }
 

@@ -552,8 +552,10 @@ fn destructure_passes_through_extra_fields() {
 // Dangling schema (empty + deleted def)
 // ============================================================================
 
+/// An empty schema is anonymous mode (`doc/design_wire_declared_inputs.md`):
+/// with no local fields the node outputs the empty record `{}`, not `None`.
 #[test]
-fn empty_schema_construct_returns_none() {
+fn empty_schema_construct_returns_the_empty_record() {
     let mut designer = setup_designer_with_network("test");
     let id = designer.add_node("record_construct", DVec2::new(0.0, 0.0));
     set_node_data(
@@ -567,7 +569,11 @@ fn empty_schema_construct_returns_none() {
     );
     designer.validate_active_network();
     let r = evaluate_node_pin(&designer, "test", id, 0);
-    assert!(matches!(r, NetworkResult::None));
+    assert!(
+        matches!(&r, NetworkResult::Record(fields) if fields.is_empty()),
+        "expected {{}}, got {}",
+        r.to_display_string()
+    );
 }
 
 #[test]

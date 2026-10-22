@@ -1207,12 +1207,12 @@ void setStringData(
         .crateApiStructureDesignerStructureDesignerApiSetStringData(
             scopePath: scopePath, nodeId: nodeId, data: data);
 
-/// Writes the `schema` property of a `record_construct` node. After the
-/// write, the node-network refresh re-runs the registry-aware cache
-/// populator, which rebuilds the per-field input pin layout from the chosen
-/// def. An empty string clears the schema. Preserves any existing
-/// `literal_values` — entries whose keys no longer match a current field of
-/// the new def are inert (see `RecordConstructData::literal_values`).
+/// Writes the `schema` property of a `record_construct` node, in one undo
+/// step that also restores the wires a switch drops
+/// (`StructureDesigner::set_record_construct_schema`). The pins are re-derived
+/// from the chosen def; an empty string switches the node to anonymous mode
+/// with no fields. Wires and literals carry over by field name; the others
+/// are dropped.
 void setRecordConstructData(
         {required Uint64List scopePath,
         required BigInt nodeId,
@@ -1220,6 +1220,28 @@ void setRecordConstructData(
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetRecordConstructData(
             scopePath: scopePath, nodeId: nodeId, data: data);
+
+/// The fields an anonymous `record_construct` declares itself, in pin (and
+/// editor-row) order. `None` when the node is not a `record_construct` or is
+/// in named mode (its fields are its def's).
+List<APIRecordLocalField>? getRecordConstructLocalFields(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetRecordConstructLocalFields(
+            scopePath: scopePath, nodeId: nodeId);
+
+/// Replaces an anonymous `record_construct`'s field list (rename / retype /
+/// delete / reorder / add) in one undo step. Ids are kept by name, then by
+/// position, as `set_expr_data` keeps parameter ids, so a rename or reorder
+/// keeps every wire and a delete drops only its own. Refused on a named-mode
+/// node, for an invalid or duplicate name, or for a type a field cannot have.
+void setRecordConstructFields(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required List<APIRecordLocalField> fields}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetRecordConstructFields(
+            scopePath: scopePath, nodeId: nodeId, fields: fields);
 
 /// Writes the `schema` property of a `record_destructure` node. Same
 /// post-write behavior as `set_record_construct_data` — pin layout is
@@ -1709,9 +1731,9 @@ void clearCustomNodeLiteral(
             scopePath: scopePath, nodeId: nodeId, paramName: paramName);
 
 /// Returns `None` if `node_id` is not a `record_construct` node, or if its
-/// chosen `schema` is empty / not in the registry. Returns `Some(vec)` —
-/// possibly empty — listing only the def's simple-typed fields, in authored
-/// field order.
+/// chosen `schema` is not in the registry. Returns `Some(vec)` — possibly
+/// empty — listing only the simple-typed fields, in pin order: the def's in
+/// named mode, the node's own in anonymous mode.
 ///
 /// Pure read — `&self`, no subnetwork evaluation. Safe to call on every
 /// panel rebuild.

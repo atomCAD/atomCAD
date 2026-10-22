@@ -1036,19 +1036,38 @@ Several built-in defs ship with hints already declared — `ElementMapping`'s `f
 
 ## record_construct
 
-Bundles N input values into a single record value of the target schema.
+Bundles N input values into a single record value — either of a named record type def (**named mode**) or of an anonymous record type whose fields the node declares itself (**anonymous mode**).
 
-**Property**
+**Properties**
 
-- `Schema` — the name of a record type def in the project's User Types panel. The dropdown lists every existing def alphabetically; pick *Edit definition…* to jump to the schema editor for the selected def. New defs are created from the User Types panel, not from this dropdown.
+- `Schema` — the name of a record type def in the project's User Types panel. The dropdown lists every existing def alphabetically; pick *Edit definition…* to jump to the schema editor for the selected def. New defs are created from the User Types panel, not from this dropdown. Leave it empty (`— No schema chosen —`) for anonymous mode.
+- `Fields` — anonymous mode only: the node's own field list, each with a name and a type, in the order the pins appear. A field name is an identifier (a letter or `_`, then letters, digits or `_`) and may not be `schema`, `fields` or `literal_values`. A field's type is any type a record field can hold except `Optional`, `Unit`, `None` and an "any function" type.
 
 **Input pins**
 
-- One pin per field of the chosen schema, named after the field and typed to the field's declared type. Pins appear in the def's **authored field order** (the order shown in the schema editor) — they do not re-sort alphabetically.
+- Named mode: one pin per field of the chosen schema, named after the field and typed to the field's declared type. Pins appear in the def's **authored field order** (the order shown in the schema editor) — they do not re-sort alphabetically.
+- Anonymous mode: one pin per declared field, in the order of the field list.
 
 **Output (single pin)**
 
-- `Record(Schema)`.
+- Named mode: `Record(Schema)`.
+- Anonymous mode: the anonymous record type of the fields, e.g. `{a: Float, b: Int}` (an anonymous record type lists its fields alphabetically, whatever the pin order). With no fields the output is the empty record `{}`.
+
+**Anonymous mode**
+
+An anonymous `record_construct` is for bundling values before you have decided the bundle deserves a name: the record is just "these few things", and its type is their shape. Because records are structurally typed, its output wires into any pin that accepts a record of that shape — an `expr` parameter typed `{a: Float, b: Int}` can read `p.a` from it, and a named def with the same fields accepts it too.
+
+Renaming, retyping, reordering, adding or removing a field re-derives the pins. A renamed or moved field keeps its wire and its inline value; a removed field loses both, and a retyped field loses its inline value (it was written for the old type). Renaming a field changes the record's type (`{a: Float}` becomes `{b: Float}`), so a downstream input declared with the old type reports a type mismatch until it is updated.
+
+In the text format the field list is the `fields` property, written before the field pins it declares:
+
+```
+r = record_construct { fields: [{ name: "a", data_type: Float }, { name: "p", data_type: {x: Int} }], a: x, p: q }
+```
+
+**Changing the schema**
+
+Picking another def, or none, re-derives the pins: wires and inline values carry over to the new layout by field name, and the others are dropped. Picking a def on an anonymous node discards its own field list; picking *no schema* on a named node leaves an anonymous node with no fields. Undo restores the previous schema with all of its wires and inline values in one step.
 
 **Behavior**
 
@@ -1056,7 +1075,7 @@ When you select a `record_construct` node, the **Node Properties** panel shows t
 
 For each field, a value wired into the corresponding input pin takes precedence over the value set inline; if neither is supplied, the output is `None` (propagates as a missing-input). Unlike custom node parameters, `record_construct` fields have no *default* layer to fall back to. Otherwise the node assembles a record value carrying every field. Editing the schema (renaming a field, retyping one, adding or removing fields) immediately re-derives this node's pin layout; wires whose source type no longer matches the corresponding field's type are disconnected, and inline values whose field was renamed or retyped become inert (they linger in the saved file but are ignored at eval).
 
-If the `Schema` property is empty (`— No schema chosen —`) or names a deleted def, the node's output type is dangling and downstream wires are disconnected by the network's repair pass.
+An empty `Schema` is anonymous mode (above), not an error. If the `Schema` property names a deleted def, the node's output type is dangling: its pins disappear, and each downstream wire the dangling type no longer satisfies is reported as a type mismatch.
 
 ## record_destructure
 
