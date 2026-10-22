@@ -3909,12 +3909,15 @@ impl StructureDesigner {
         // `doc/design_drag_aware_add_node.md` §"Asymmetric verification".
         if let Some(drag) = drag_source.as_ref()
             && let Some(node_type) = self.node_type_registry.get_node_type(node_type_name)
-            && let Some(adapted) = node_data.adapt_for_drag_source(
+            && let Some(mut adapted) = node_data.adapt_for_drag_source(
                 &drag.source_type,
                 drag.direction,
                 &self.node_type_registry,
             )
         {
+            // The adapter has no defs to type with; settle what needs them
+            // before the adapted type is checked against the drag.
+            adapted.refresh_with_record_defs(self.node_type_registry.record_defs());
             let resolved = self
                 .node_type_registry
                 .resolve_drag_candidate_type(node_type, adapted.as_ref());
@@ -5541,7 +5544,8 @@ impl StructureDesigner {
                 .as_any_mut()
                 .downcast_mut::<crate::nodes::expr::ExprData>()
         {
-            expr_validation_errors = expr_data.parse_and_validate(node_id);
+            expr_validation_errors = expr_data
+                .parse_and_validate_with_defs(node_id, Some(self.node_type_registry.record_defs()));
         }
 
         // Apply mutation in the resolved scope. The block scopes the

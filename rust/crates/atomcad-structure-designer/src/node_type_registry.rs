@@ -1430,12 +1430,17 @@ impl NodeTypeRegistry {
         let Some(base_node_type) = built_in_types.get(&node.node_type_name) else {
             return false;
         };
+        let defs = RecordDefs::new(record_type_defs, built_in_record_type_defs);
+
+        // Settle data that needs the defs to type (`expr`'s `r.x` on a named
+        // record) before the type is derived from it.
+        node.data.refresh_with_record_defs(defs);
 
         // Record nodes derive their custom node type from the record defs
         // (the schema's fields), not from per-node data alone.
         let record_type = node.data.build_record_node_type(
             base_node_type,
-            RecordDefs::new(record_type_defs, built_in_record_type_defs),
+            defs,
             crate::node_data::MissingDefs::Dangle,
         );
         if let Some(custom) = record_type {

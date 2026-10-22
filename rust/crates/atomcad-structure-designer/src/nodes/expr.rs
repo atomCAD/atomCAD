@@ -4,7 +4,7 @@ use crate::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::evaluator::network_evaluator::NetworkEvaluator;
 use crate::evaluator::network_evaluator::NetworkStackElement;
 use crate::evaluator::network_result::{NetworkResult, input_missing_error};
-use crate::expr::expr::Expr;
+use crate::expr::expr::{Expr, ExprTypeError};
 use crate::expr::parser::parse;
 use crate::expr::validation::{get_function_implementations, get_function_signatures};
 use crate::node_data::{DragDirection, EvalOutput, NodeData};
@@ -12,7 +12,7 @@ use crate::node_network::ValidationError;
 use crate::node_network_gadget::NodeNetworkGadget;
 use crate::node_type::NodeTypeCategory;
 use crate::node_type::{NodeType, OutputPinDefinition, Parameter, generic_node_data_saver};
-use crate::node_type_registry::NodeTypeRegistry;
+use crate::node_type_registry::{NodeTypeRegistry, RecordDefs};
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
 use serde::{Deserialize, Serialize};
@@ -51,8 +51,24 @@ pub const EXPR_PARAMETER_NAME_POOL: &[&str] = &[
 ];
 
 impl ExprData {
-    /// Parses and validates the expression and returns any validation errors
+    /// Parses and validates the expression and returns any validation errors.
+    ///
+    /// Without the record defs, a field access on a named record (`r.x` on a
+    /// `Record(Box)` parameter) is *pending*: no output type yet and no error.
+    /// [`NodeData::refresh_with_record_defs`] settles it, and the cache
+    /// populator calls that before every re-derive
+    /// (`doc/design_anonymous_record_readers.md` Part 3).
     pub fn parse_and_validate(&mut self, node_id: u64) -> Vec<ValidationError> {
+        self.parse_and_validate_with_defs(node_id, None)
+    }
+
+    /// [`parse_and_validate`](Self::parse_and_validate) with the record defs,
+    /// which settle a field access on a named record.
+    pub fn parse_and_validate_with_defs(
+        &mut self,
+        node_id: u64,
+        defs: Option<RecordDefs<'_>>,
+    ) -> Vec<ValidationError> {
         let mut errors = Vec::new();
 
         // Clear previous state
@@ -79,28 +95,43 @@ impl ExprData {
             }
         };
 
-        // Create variables map for validation
-        let mut variables = HashMap::new();
+        self.type_parsed_expr(&parsed_expr, node_id, defs, &mut errors);
+        errors
+    }
 
-        // Add parameters as variables
-        for param in &self.parameters {
-            variables.insert(param.name.clone(), param.data_type.clone());
-        }
+    /// Types an already parsed expression against the parameters, setting
+    /// `output_type` and `error`.
+    fn type_parsed_expr(
+        &mut self,
+        parsed_expr: &Expr,
+        node_id: u64,
+        defs: Option<RecordDefs<'_>>,
+        errors: &mut Vec<ValidationError>,
+    ) {
+        self.output_type = None;
+        self.error = None;
+
+        let variables: HashMap<String, DataType> = self
+            .parameters
+            .iter()
+            .map(|param| (param.name.clone(), param.data_type.clone()))
+            .collect();
 
         // Validate the parsed expression using global function registry
-        match parsed_expr.validate(&variables, get_function_signatures()) {
+        match parsed_expr.validate_with_defs(&variables, get_function_signatures(), defs) {
             Ok(output_type) => {
                 // Expression is valid - set the output type
                 self.output_type = Some(output_type);
             }
-            Err(validation_error) => {
+            // A named field access validated without the defs: no type yet,
+            // and no error until a validation with the defs says otherwise.
+            Err(ExprTypeError::Pending) => {}
+            Err(ExprTypeError::Invalid(validation_error)) => {
                 let error_msg = format!("Validation error: {}", validation_error);
                 self.error = Some(error_msg.clone());
                 errors.push(ValidationError::new(error_msg, Some(node_id)));
             }
         }
-
-        errors
     }
 
     /// The types a parameter can take: a value the expression language can
@@ -227,6 +258,14 @@ impl NodeData for ExprData {
         _structure_designer: &StructureDesigner,
     ) -> Option<Box<dyn NodeNetworkGadget>> {
         None
+    }
+
+    fn refresh_with_record_defs(&mut self, defs: RecordDefs<'_>) {
+        // Re-type the cached parse; a parse error (no `expr`) stays as it is.
+        if let Some(parsed_expr) = self.expr.take() {
+            self.type_parsed_expr(&parsed_expr, 0, Some(defs), &mut Vec::new());
+            self.expr = Some(parsed_expr);
+        }
     }
 
     fn calculate_custom_node_type(&self, base_node_type: &NodeType) -> Option<NodeType> {

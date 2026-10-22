@@ -42,3 +42,6 @@ mod string_concat_test;
 
 #[path = "expr/string_compare_test.rs"]
 mod string_compare_test;
+
+#[path = "expr/expr_named_record_access_test.rs"]
+mod expr_named_record_access_test;

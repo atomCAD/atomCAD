@@ -777,5 +777,8 @@ mod ambient_occlusion_cache_test;
 // Anonymous record readers (doc/design_anonymous_record_readers.md, Phase 1).
 #[path = "structure_designer/record_destructure_anonymous_test.rs"]
 mod record_destructure_anonymous_test;
+
+#[path = "structure_designer/expr_named_record_node_test.rs"]
+mod expr_named_record_node_test;
 #[path = "structure_designer/record_get_anonymous_test.rs"]
 mod record_get_anonymous_test;

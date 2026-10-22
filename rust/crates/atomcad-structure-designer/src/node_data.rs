@@ -490,6 +490,18 @@ pub trait NodeData: Any + AsAny {
     // rather than from its own data alone. Every site that needs to know about
     // record nodes goes through these hooks; no site lists them by name.
 
+    /// Settles whatever of this node's stored data needs the record defs to
+    /// type: `expr`'s field access on a named record (`r.x` on
+    /// `Record(Box)`), which `parse_and_validate` leaves pending because it
+    /// has no defs (`doc/design_anonymous_record_readers.md` Part 3). Mutable
+    /// so the node can record the error it displays.
+    ///
+    /// `populate_custom_node_type_cache_with_types` calls it before every
+    /// re-derive, which covers load, repair and every op. A place that
+    /// changes such a node's data and then wires it **before** the next
+    /// populate must call it itself. Default: nothing to settle.
+    fn refresh_with_record_defs(&mut self, _defs: RecordDefs<'_>) {}
+
     /// The record def the node's pins are built on (`schema` / `target`),
     /// possibly the empty string when none is chosen yet. `None` (the
     /// default) means "not a record node".

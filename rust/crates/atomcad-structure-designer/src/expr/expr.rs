@@ -1,6 +1,7 @@
 use crate::data_type::{DataType, RecordType};
 use crate::evaluator::network_result::NetworkResult;
 use crate::expr::validation::{EvaluationFunction, FunctionSignature};
+use crate::node_type_registry::RecordDefs;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
@@ -64,13 +65,73 @@ pub enum TemplatePart {
     Expr(Box<Expr>),
 }
 
+/// Why [`Expr::validate_with_defs`] gave no type.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ExprTypeError {
+    /// The expression reads a field of a named record, and was validated
+    /// without the record defs that say what the field's type is. Not an
+    /// error: the type is settled by a later validation that has the defs
+    /// (`NodeData::refresh_with_record_defs`,
+    /// `doc/design_anonymous_record_readers.md` Part 3). Every operator,
+    /// call and literal with a pending operand is pending too, before it
+    /// checks any operand type, so a pending operand never turns into an
+    /// error.
+    Pending,
+    /// The expression is ill-typed.
+    Invalid(String),
+}
+
+impl From<String> for ExprTypeError {
+    fn from(message: String) -> Self {
+        ExprTypeError::Invalid(message)
+    }
+}
+
+/// `format!` into an [`ExprTypeError::Invalid`].
+macro_rules! type_err {
+    ($($arg:tt)*) => {
+        ExprTypeError::Invalid(format!($($arg)*))
+    };
+}
+
 impl Expr {
-    /// Validates the expression and returns its inferred type
+    /// Validates the expression and returns its inferred type. Without the
+    /// record defs, a field access on a named record is reported as an error;
+    /// a caller that may meet named records uses
+    /// [`validate_with_defs`](Self::validate_with_defs).
     pub fn validate(
         &self,
         variables: &HashMap<String, DataType>,
         functions: &HashMap<String, FunctionSignature>,
     ) -> Result<DataType, String> {
+        self.validate_with_defs(variables, functions, None)
+            .map_err(|e| match e {
+                ExprTypeError::Invalid(message) => message,
+                ExprTypeError::Pending => {
+                    "a field of a named record cannot be resolved without the record defs"
+                        .to_string()
+                }
+            })
+    }
+
+    /// Validates the expression and returns its inferred type. `defs`
+    /// resolves field access on a named record (`r.x` on `Record(Named(n))`);
+    /// with `None` such an access is [`ExprTypeError::Pending`].
+    pub fn validate_with_defs(
+        &self,
+        variables: &HashMap<String, DataType>,
+        functions: &HashMap<String, FunctionSignature>,
+        defs: Option<RecordDefs<'_>>,
+    ) -> Result<DataType, ExprTypeError> {
+        self.infer(variables, functions, defs)
+    }
+
+    fn infer(
+        &self,
+        variables: &HashMap<String, DataType>,
+        functions: &HashMap<String, FunctionSignature>,
+        defs: Option<RecordDefs<'_>>,
+    ) -> Result<DataType, ExprTypeError> {
         match self {
             Expr::Int(_) => Ok(DataType::Int),
             Expr::Float(_) => Ok(DataType::Float),
@@ -88,22 +149,23 @@ impl Expr {
                         None
                     }
                 })
-                .ok_or_else(|| format!("Unknown variable: {}", name)),
+                .ok_or_else(|| type_err!("Unknown variable: {}", name)),
             Expr::Unary(op, expr) => {
-                let expr_type = expr.validate(variables, functions)?;
+                let expr_type = expr.infer(variables, functions, defs)?;
                 match op {
                     UnOp::Neg | UnOp::Pos => match expr_type {
                         DataType::Int | DataType::Float => Ok(expr_type),
-                        _ => Err(format!(
+                        _ => Err(type_err!(
                             "Unary {:?} operator requires numeric type, got {:?}",
-                            op, expr_type
+                            op,
+                            expr_type
                         )),
                     },
                     UnOp::Not => {
                         match expr_type {
                             DataType::Bool => Ok(DataType::Bool),
                             DataType::Int => Ok(DataType::Bool), // Allow int as bool
-                            _ => Err(format!(
+                            _ => Err(type_err!(
                                 "Logical NOT requires boolean or int type, got {:?}",
                                 expr_type
                             )),
@@ -112,8 +174,8 @@ impl Expr {
                 }
             }
             Expr::Binary(left, op, right) => {
-                let left_type = left.validate(variables, functions)?.clone();
-                let right_type = right.validate(variables, functions)?.clone();
+                let left_type = left.infer(variables, functions, defs)?.clone();
+                let right_type = right.infer(variables, functions, defs)?.clone();
 
                 match op {
                     BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Pow => {
@@ -228,9 +290,11 @@ impl Expr {
                                 Ok(DataType::String)
                             }
 
-                            _ => Err(format!(
+                            _ => Err(type_err!(
                                 "Arithmetic operation {:?} not supported for types {:?} and {:?}",
-                                op, left_type, right_type
+                                op,
+                                left_type,
+                                right_type
                             )),
                         }
                     }
@@ -238,9 +302,10 @@ impl Expr {
                         // Modulo operation - only works with integers
                         match (&left_type, &right_type) {
                             (DataType::Int, DataType::Int) => Ok(DataType::Int),
-                            _ => Err(format!(
+                            _ => Err(type_err!(
                                 "Modulo operation not supported for types {:?} and {:?}",
-                                left_type, right_type
+                                left_type,
+                                right_type
                             )),
                         }
                     }
@@ -249,9 +314,10 @@ impl Expr {
                         if Self::types_compatible(&left_type, &right_type) {
                             Ok(DataType::Bool)
                         } else {
-                            Err(format!(
+                            Err(type_err!(
                                 "Cannot compare incompatible types {:?} and {:?}",
-                                left_type, right_type
+                                left_type,
+                                right_type
                             ))
                         }
                     }
@@ -262,9 +328,11 @@ impl Expr {
                             | (DataType::Float, DataType::Float)
                             | (DataType::Int, DataType::Float)
                             | (DataType::Float, DataType::Int) => Ok(DataType::Bool),
-                            _ => Err(format!(
+                            _ => Err(type_err!(
                                 "Comparison operation {:?} requires numeric types, got {:?} and {:?}",
-                                op, left_type, right_type
+                                op,
+                                left_type,
+                                right_type
                             )),
                         }
                     }
@@ -276,9 +344,11 @@ impl Expr {
                             (DataType::Bool, DataType::Int) | (DataType::Int, DataType::Bool) => {
                                 Ok(DataType::Bool)
                             }
-                            _ => Err(format!(
+                            _ => Err(type_err!(
                                 "Logical operation {:?} requires boolean or int types, got {:?} and {:?}",
-                                op, left_type, right_type
+                                op,
+                                left_type,
+                                right_type
                             )),
                         }
                     }
@@ -289,16 +359,16 @@ impl Expr {
                 // by FunctionSignature's fixed parameter_types model.
                 if name == "len" {
                     if args.len() != 1 {
-                        return Err(format!(
+                        return Err(type_err!(
                             "Function len expects 1 argument, got {}",
                             args.len()
                         ));
                     }
-                    let arg_type = args[0].validate(variables, functions)?;
+                    let arg_type = args[0].infer(variables, functions, defs)?;
                     match arg_type {
                         DataType::Array(_) => return Ok(DataType::Int),
                         other => {
-                            return Err(format!(
+                            return Err(type_err!(
                                 "Function len argument 1 expects an array type, got {}",
                                 other
                             ));
@@ -310,17 +380,17 @@ impl Expr {
                 // Same rationale as `len` — the polymorphic shape doesn't fit FunctionSignature.
                 if name == "concat" {
                     if args.len() != 2 {
-                        return Err(format!(
+                        return Err(type_err!(
                             "Function concat expects 2 arguments, got {}",
                             args.len()
                         ));
                     }
-                    let a_ty = args[0].validate(variables, functions)?;
-                    let b_ty = args[1].validate(variables, functions)?;
+                    let a_ty = args[0].infer(variables, functions, defs)?;
+                    let b_ty = args[1].infer(variables, functions, defs)?;
                     let elem_a = match a_ty {
                         DataType::Array(t) => *t,
                         other => {
-                            return Err(format!(
+                            return Err(type_err!(
                                 "Function concat argument 1 expects an array type, got {}",
                                 other
                             ));
@@ -329,16 +399,17 @@ impl Expr {
                     let elem_b = match b_ty {
                         DataType::Array(t) => *t,
                         other => {
-                            return Err(format!(
+                            return Err(type_err!(
                                 "Function concat argument 2 expects an array type, got {}",
                                 other
                             ));
                         }
                     };
                     let elem = unify_array_element_types(&elem_a, &elem_b).map_err(|_| {
-                        format!(
+                        type_err!(
                             "concat arguments have incompatible element types: {} and {}",
-                            elem_a, elem_b
+                            elem_a,
+                            elem_b
                         )
                     })?;
                     return Ok(DataType::Array(Box::new(elem)));
@@ -349,26 +420,27 @@ impl Expr {
                 // FunctionSignature.
                 if name == "append" {
                     if args.len() != 2 {
-                        return Err(format!(
+                        return Err(type_err!(
                             "Function append expects 2 arguments, got {}",
                             args.len()
                         ));
                     }
-                    let arr_ty = args[0].validate(variables, functions)?;
-                    let elem_ty = args[1].validate(variables, functions)?;
+                    let arr_ty = args[0].infer(variables, functions, defs)?;
+                    let elem_ty = args[1].infer(variables, functions, defs)?;
                     let arr_elem = match arr_ty {
                         DataType::Array(t) => *t,
                         other => {
-                            return Err(format!(
+                            return Err(type_err!(
                                 "Function append argument 1 expects an array type, got {}",
                                 other
                             ));
                         }
                     };
                     let unified = unify_array_element_types(&arr_elem, &elem_ty).map_err(|_| {
-                        format!(
+                        type_err!(
                             "append element type {} is incompatible with array element type {}",
-                            elem_ty, arr_elem
+                            elem_ty,
+                            arr_elem
                         )
                     })?;
                     return Ok(DataType::Array(Box::new(unified)));
@@ -383,7 +455,7 @@ impl Expr {
                 // entry (deprecated alias, kept for backward compatibility).
                 if matches!(name.as_str(), "min" | "max") {
                     if args.len() < 2 {
-                        return Err(format!(
+                        return Err(type_err!(
                             "Function {} expects at least 2 arguments, got {}",
                             name,
                             args.len()
@@ -391,43 +463,46 @@ impl Expr {
                     }
                     let mut arg_types = Vec::with_capacity(args.len());
                     for arg in args {
-                        arg_types.push(arg.validate(variables, functions)?);
+                        arg_types.push(arg.infer(variables, functions, defs)?);
                     }
-                    return int_preserving_numeric_result(name, &arg_types);
+                    return int_preserving_numeric_result(name, &arg_types)
+                        .map_err(ExprTypeError::Invalid);
                 }
                 if name == "clamp" {
                     if args.len() != 3 {
-                        return Err(format!(
+                        return Err(type_err!(
                             "Function clamp expects 3 arguments, got {}",
                             args.len()
                         ));
                     }
                     let mut arg_types = Vec::with_capacity(3);
                     for arg in args {
-                        arg_types.push(arg.validate(variables, functions)?);
+                        arg_types.push(arg.infer(variables, functions, defs)?);
                     }
-                    return int_preserving_numeric_result(name, &arg_types);
+                    return int_preserving_numeric_result(name, &arg_types)
+                        .map_err(ExprTypeError::Invalid);
                 }
                 if matches!(name.as_str(), "abs" | "sign") {
                     if args.len() != 1 {
-                        return Err(format!(
+                        return Err(type_err!(
                             "Function {} expects 1 argument, got {}",
                             name,
                             args.len()
                         ));
                     }
-                    let arg_type = args[0].validate(variables, functions)?;
-                    return int_preserving_numeric_result(name, &[arg_type]);
+                    let arg_type = args[0].infer(variables, functions, defs)?;
+                    return int_preserving_numeric_result(name, &[arg_type])
+                        .map_err(ExprTypeError::Invalid);
                 }
 
                 // Validate function exists
                 let signature = functions
                     .get(name)
-                    .ok_or_else(|| format!("Unknown function: {}", name))?;
+                    .ok_or_else(|| type_err!("Unknown function: {}", name))?;
 
                 // Check argument count
                 if args.len() != signature.parameter_types.len() {
-                    return Err(format!(
+                    return Err(type_err!(
                         "Function {} expects {} arguments, got {}",
                         name,
                         signature.parameter_types.len(),
@@ -439,9 +514,9 @@ impl Expr {
                 for (i, (arg, expected_type)) in
                     args.iter().zip(&signature.parameter_types).enumerate()
                 {
-                    let arg_type = arg.validate(variables, functions)?;
+                    let arg_type = arg.infer(variables, functions, defs)?;
                     if !Self::types_compatible(&arg_type, expected_type) {
-                        return Err(format!(
+                        return Err(type_err!(
                             "Function {} argument {} expects type {}, got {}",
                             name,
                             i + 1,
@@ -454,15 +529,15 @@ impl Expr {
                 Ok(signature.return_type.clone())
             }
             Expr::Conditional(condition, then_expr, else_expr) => {
-                let condition_type = condition.validate(variables, functions)?;
-                let then_type = then_expr.validate(variables, functions)?;
-                let else_type = else_expr.validate(variables, functions)?;
+                let condition_type = condition.infer(variables, functions, defs)?;
+                let then_type = then_expr.infer(variables, functions, defs)?;
+                let else_type = else_expr.infer(variables, functions, defs)?;
 
                 // Condition must be boolean or int
                 match condition_type {
                     DataType::Bool | DataType::Int => {}
                     _ => {
-                        return Err(format!(
+                        return Err(type_err!(
                             "Conditional condition must be boolean or int, got {}",
                             condition_type
                         ));
@@ -479,14 +554,15 @@ impl Expr {
                         _ => Ok(then_type.clone()), // Same types or other compatible combinations
                     }
                 } else {
-                    Err(format!(
+                    Err(type_err!(
                         "Conditional branches have incompatible types: {} and {}",
-                        then_type, else_type
+                        then_type,
+                        else_type
                     ))
                 }
             }
             Expr::MemberAccess(expr, member) => {
-                let expr_type = expr.validate(variables, functions)?.clone();
+                let expr_type = expr.infer(variables, functions, defs)?.clone();
                 // Records take precedence over the vector/matrix rules: a
                 // `Record(_)` receiver always resolves `.<ident>` against its
                 // schema (or errors), even when the field name happens to be
@@ -499,14 +575,25 @@ impl Expr {
                             .find(|(n, _)| n == member)
                             .map(|(_, t)| t.clone())
                             .ok_or_else(|| {
-                                format!("Record {} has no field '{}'", expr_type, member)
+                                type_err!("Record {} has no field '{}'", expr_type, member)
                             }),
-                        RecordType::Named(name) => Err(format!(
-                            "Cannot resolve field '{}' on named record `{}` in this context — \
-                             record name resolution requires a registry. Use destructure or \
-                             pass the record through a record_destructure node first.",
-                            member, name
-                        )),
+                        RecordType::Named(name) => {
+                            let Some(defs) = defs else {
+                                return Err(ExprTypeError::Pending);
+                            };
+                            let def = defs
+                                .lookup(name)
+                                .ok_or_else(|| type_err!("Unknown record type `{}`", name))?;
+                            // An `Optional[T]` field reads as `T`, as on a
+                            // `record_destructure` pin; an unset one is `None`.
+                            def.fields
+                                .iter()
+                                .find(|field| field.name == *member)
+                                .map(|field| field.data_type.record_field_pin_type())
+                                .ok_or_else(|| {
+                                    type_err!("Record `{}` has no field '{}'", name, member)
+                                })
+                        }
                     };
                 }
                 match (expr_type.clone(), member.as_str()) {
@@ -522,37 +609,40 @@ impl Expr {
                     // See doc/design_matrix_types.md D7.
                     (DataType::Mat3, m) if is_matrix_accessor(m) => Ok(DataType::Float),
                     (DataType::IMat3, m) if is_matrix_accessor(m) => Ok(DataType::Int),
-                    _ => Err(format!(
+                    _ => Err(type_err!(
                         "Type {} does not have member '{}'",
-                        expr_type, member
+                        expr_type,
+                        member
                     )),
                 }
             }
             Expr::EmptyArray(t) => Ok(DataType::Array(Box::new(t.clone()))),
             Expr::Index(arr, idx) => {
-                let arr_ty = arr.validate(variables, functions)?;
-                let idx_ty = idx.validate(variables, functions)?;
+                let arr_ty = arr.infer(variables, functions, defs)?;
+                let idx_ty = idx.infer(variables, functions, defs)?;
                 let elem_ty = match arr_ty {
                     DataType::Array(inner) => *inner,
                     other => {
-                        return Err(format!("cannot index into non-array type {}", other));
+                        return Err(type_err!("cannot index into non-array type {}", other));
                     }
                 };
                 if !matches!(idx_ty, DataType::Int) {
-                    return Err(format!("array index must be Int, got {}", idx_ty));
+                    return Err(type_err!("array index must be Int, got {}", idx_ty));
                 }
                 Ok(elem_ty)
             }
             Expr::Array(elements) => {
                 // elements is non-empty by construction (parser produces this only
                 // when at least one element was parsed).
-                let mut unified = elements[0].validate(variables, functions)?;
+                let mut unified = elements[0].infer(variables, functions, defs)?;
                 for (i, e) in elements.iter().enumerate().skip(1) {
-                    let ti = e.validate(variables, functions)?;
+                    let ti = e.infer(variables, functions, defs)?;
                     unified = unify_array_element_types(&unified, &ti).map_err(|_| {
-                        format!(
+                        type_err!(
                             "array element {} has type {}, incompatible with prior element type {}",
-                            i, ti, unified
+                            i,
+                            ti,
+                            unified
                         )
                     })?;
                 }
@@ -563,9 +653,9 @@ impl Expr {
                 let mut typed = Vec::with_capacity(fields.len());
                 for (name, value_expr) in fields {
                     if !seen.insert(name.as_str()) {
-                        return Err(format!("Record literal has duplicate field '{}'", name));
+                        return Err(type_err!("Record literal has duplicate field '{}'", name));
                     }
-                    let ty = value_expr.validate(variables, functions)?;
+                    let ty = value_expr.infer(variables, functions, defs)?;
                     typed.push((name.clone(), ty));
                 }
                 // RecordType::anonymous canonicalizes field order on
@@ -576,12 +666,12 @@ impl Expr {
             Expr::Template(parts) => {
                 for part in parts {
                     if let TemplatePart::Expr(e) = part {
-                        let t = e.validate(variables, functions)?;
+                        let t = e.infer(variables, functions, defs)?;
                         match t {
                             DataType::String | DataType::Int | DataType::Float | DataType::Bool => {
                             }
                             other => {
-                                return Err(format!(
+                                return Err(type_err!(
                                     "template interpolation `${{...}}` must produce String, Int, Float, or Bool; got {}",
                                     other
                                 ));

@@ -1,6 +1,6 @@
 # Anonymous records on the record readers: `record_destructure`, `record_get`, `record_set` — and named fields in `expr`
 
-## Status: Design, reviewed — Phases 1–3 implemented (2026-10-22); Phase 4 open
+## Status: Design, reviewed — all four phases implemented (2026-10-22); walkthroughs open
 
 Phase 1 implementation notes (where the code differs from the text below):
 
@@ -50,6 +50,29 @@ Phase 3 implementation notes (where the code differs from the text below):
   named field inside it reads `Record(Point)`:
   "path `p.x` no longer exists in `{q: Record(Point), s: Float}`".
 - The Phase 3 walkthrough is open.
+
+Phase 4 implementation notes (where the code differs from the text below):
+
+- `Expr::validate` keeps its two-argument signature and `Result<DataType,
+  String>`, for callers that never meet a named record (the expr harness
+  uses it some seventy times). The defs-aware form is
+  `Expr::validate_with_defs(variables, functions, defs: Option<RecordDefs>)`,
+  which returns `ExprTypeError::{Pending, Invalid(String)}`; `validate` is
+  `validate_with_defs(None)` and reports a pending access as an error.
+  `ExprData::parse_and_validate` goes through `validate_with_defs`, so on the
+  node a pending access is "no type, no error" as designed.
+- Pending propagates by `?`: every arm infers its operands before checking
+  their types, so a pending operand returns pending first. An operand error
+  that does not depend on the pending one is still reported
+  (`undefined + r.x`).
+- `NetworkEditor` needs no explicit call: both the property pass and
+  `declare_input_from_wire` end in `refresh_node_layout`, whose populate runs
+  the hook. The drag-place plumbing calls it on the adapted data. The
+  property panel's `set_node_network_data_scoped` validates an `expr` with
+  the defs (`parse_and_validate_with_defs`), so a named-field error reaches
+  the node's validation errors the way an anonymous one does.
+- An anonymous record's `Optional` field is unchanged (it still types as
+  `Optional[T]`); only the named case projects to `T`.
 
 ## Motivation
 
