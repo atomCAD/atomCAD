@@ -242,10 +242,7 @@ fn a_ray_through_a_known_atom_is_traced_straight_away() {
     else {
         panic!("one displayed node under the ray must be traced straight away");
     };
-    assert_eq!(
-        rows(&result),
-        vec!["tag_a tagged", "src_a source"]
-    );
+    assert_eq!(rows(&result), vec!["tag_a tagged", "src_a source"]);
     assert_eq!(result.rows[0].node_id, tag);
     assert_eq!(result.rows[1].node_id, value);
     assert!(
