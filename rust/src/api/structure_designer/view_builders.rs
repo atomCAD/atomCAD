@@ -1039,10 +1039,10 @@ pub fn trace_result_view(designer: &StructureDesigner, report: &TraceReport) -> 
 /// instance row comes directly before the rows traced inside it, which are one
 /// level deeper. The tree is domain data; this flat shape is Dart's transport.
 ///
-/// Each sibling list is listed in **reverse** walk order, so the menu reads as
-/// the build-up, top to bottom: the origin first, the displayed node last.
-/// Within an instance the same holds for its children; the instance row stays
-/// above them as their header.
+/// Rows keep the engine's walk order, so the menu reads downstream first, top
+/// to bottom: the displayed node first, the origin last. Within an instance
+/// the same holds for its children (the return node first); the instance row
+/// stays above them as their header, as a tree view's parent does.
 pub fn flatten_trace_report(
     report: &TraceReport,
     label: impl Fn(&TraceRow) -> String,
@@ -1053,7 +1053,7 @@ pub fn flatten_trace_report(
         label: &dyn Fn(&TraceRow) -> String,
         out: &mut Vec<APITraceRow>,
     ) {
-        for node in nodes.iter().rev() {
+        for node in nodes {
             let (contribution, text) = contribution_view(&node.row.contribution);
             out.push(APITraceRow {
                 host_network: node.row.network.clone(),

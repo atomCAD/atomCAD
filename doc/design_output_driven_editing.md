@@ -15,8 +15,8 @@ is almost always further upstream and not displayed.
 ## Goal
 
 Right-click on content in the viewport opens a menu listing the nodes that
-contributed to the thing under the cursor, in build-up order (the origin at
-the top, the displayed node at the bottom), each labelled with what it did ("filled", "moved", "shape", …). Choosing a row
+contributed to the thing under the cursor, downstream first (the displayed
+node at the top, the origin at the bottom), each labelled with what it did ("filled", "moved", "shape", …). Choosing a row
 selects that node and scrolls the node network editor to it.
 
 This is the first and simplest **output-driven editing** feature: the user
@@ -637,13 +637,15 @@ A popup in the style of the click-to-activate disambiguation overlay:
 
 - **Columns**: one row per trace row, showing the node label and, right-aligned,
   the contribution label. `Passed` and `Unknown` rows are dimmed.
-- **Order**: build-up order, top to bottom: the origin first, the displayed
-  node last, which reads more naturally than a path back from the viewport.
-  The flattening in `view_builders.rs` reverses each sibling list of the
-  engine's walk order. An instance row stays above its children as their
-  header, and its children are reversed the same way. Branches stay grouped:
-  `union(A, B)` lists B's chain, then A's, then `union`. Since the row cap
-  cuts the far-upstream end, the "… more" line is at the top.
+- **Order**: downstream first, top to bottom: the displayed node first, the
+  origin last — the engine's walk order, which the flattening in
+  `view_builders.rs` keeps. (An earlier build-up order, origin first, was
+  dropped: with an instance row as the header above its children, a reader
+  would expect the parent below its children too, an unusual tree.) An
+  instance row stays above its children, which start at the return node.
+  Branches stay grouped: `union(A, B)` lists `union`, then A's chain, then
+  B's. Since the row cap cuts the far-upstream end, the "… more" line is at
+  the bottom.
 - **Hover**: every row highlights under the pointer. A row of the network
   being viewed (depth 0) also highlights its node in the node network editor,
   until the pointer leaves the row or the menu closes. Rows inside an instance

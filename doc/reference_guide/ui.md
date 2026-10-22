@@ -181,7 +181,7 @@ By default the axis kept vertical on screen while orbiting is the world **Z** ax
 
 ### Which nodes made this? (right click)
 
-**Right-click** an atom, a bond or a displayed shape to see which nodes it came from. A menu opens at the cursor listing the nodes that contributed to that exact thing, in the order it was built up: where it was made at the top, the displayed node at the bottom. Nodes that had nothing to do with it are left out: right-click an atom of a sphere in `union(sphere, cuboid)` and the cuboid is not listed.
+**Right-click** an atom, a bond or a displayed shape to see which nodes it came from. A menu opens at the cursor listing the nodes that contributed to that exact thing, downstream first: the displayed node at the top, working back to where it was made at the bottom. Nodes that had nothing to do with it are left out: right-click an atom of a sphere in `union(sphere, cuboid)` and the cuboid is not listed.
 
 Each row shows the node's name and, on the right, what the node did:
 
@@ -196,12 +196,12 @@ Each row shows the node's name and, on the right, what the node did:
 
 *passed* and *possibly contributed* rows are shown dimmed. These nodes answer precisely: the movement nodes (`structure_move`, `structure_rot`, `free_move`, `free_rot`, `structure_invert`) and `relax` follow the atom back to where it was before, and `geo_trans` and the movement nodes follow a point of a shape back the same way; `union`, `intersect` and `diff` list only the inputs whose surface shapes the result at that point (one face of a box, the two faces at an edge, the cutter for a point on a cut face), and the others are left out; `atom_union` lists only the input the atom came from; `atom_edit` says whether it added, edited or only passed the atom; `materialize` says *filled*, or *passivated* for a terminating H or halogen, and continues into the shape at the atom's position (a terminator's, at the atom it caps); `sequence`, `array_at` and `array_concat` follow the array element to the input it came from. Other nodes cannot yet answer precisely and show *possibly contributed*; the list then includes more nodes than strictly needed, but never leaves out one that mattered.
 
-**Custom nodes** appear as a row with a chevron, and the nodes traced *inside* that custom node's network are listed below it, indented, in the same build-up order. Click the chevron to fold or unfold them. Hovering a row highlights it; for a node of the network you are viewing (an unindented row), the node is also highlighted in the node network editor. Click a row to select that node and scroll the node network editor to it:
+**Custom nodes** appear as a row with a chevron, and the nodes traced *inside* that custom node's network are listed below it, indented, in the same downstream-first order (the custom network's output node first). Click the chevron to fold or unfold them. Hovering a row highlights it; for a node of the network you are viewing (an unindented row), the node is also highlighted in the node network editor. Click a row to select that node and scroll the node network editor to it:
 
 - clicking the custom node's own row selects it in the network you are viewing, so the viewport keeps showing what you right-clicked;
 - clicking one of the indented rows opens the custom node's network and selects the node there. The viewport then shows that network. Use [*Back*](#navigating-between-node-networks) to return.
 
-If the outputs of several displayed nodes overlap under the cursor, the same candidate list as for left-click activation (*Click-to-activate from viewport* under [Manipulating nodes and wires](#manipulating-nodes-and-wires)) appears first (without its Solo button); pick the node to trace from. Press **Escape** or click elsewhere to close either list without changing anything. Very long traces stop after 200 rows; the nodes farthest upstream are the ones left out, and the list starts with a "… more" line.
+If the outputs of several displayed nodes overlap under the cursor, the same candidate list as for left-click activation (*Click-to-activate from viewport* under [Manipulating nodes and wires](#manipulating-nodes-and-wires)) appears first (without its Solo button); pick the node to trace from. Press **Escape** or click elsewhere to close either list without changing anything. Very long traces stop after 200 rows; the nodes farthest upstream are the ones left out, and the list ends with a "… more" line.
 
 ## Node network composability and Node Networks list panel
 

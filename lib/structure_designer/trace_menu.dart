@@ -1,8 +1,8 @@
 /// The contributing-nodes menu of a right click in the viewport
 /// (`doc/design_output_driven_editing.md`, Flutter → Menu).
 ///
-/// One row per node the kernel traced the thing under the cursor back to, in
-/// build-up order (where it was made first, the displayed node last), each
+/// One row per node the kernel traced the thing under the cursor back to,
+/// downstream first (the displayed node first, where it was made last), each
 /// with what the node did to it
 /// ("filled", "moved", "shape", "passed", "possibly contributed"). The rows
 /// come pre-ordered and pre-labelled from Rust (`APITraceResult`); nothing here
@@ -64,7 +64,7 @@ class TraceMenu extends StatefulWidget {
   final Offset position;
   final List<APITraceRow> rows;
 
-  /// The trace stopped at its row cap: the menu starts with a "… more" line,
+  /// The trace stopped at its row cap: the menu ends with a "… more" line,
   /// since the rows cut off are the farthest upstream.
   final bool truncated;
   final void Function(APITraceRow row) onSelect;
@@ -171,18 +171,6 @@ class _TraceMenuState extends State<TraceMenu> {
                   style: TextStyle(color: Colors.white54, fontSize: 11),
                 ),
               ),
-              if (widget.truncated)
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(12, 0, 12, 4),
-                  child: Text(
-                    '… more',
-                    style: TextStyle(
-                      color: Colors.white38,
-                      fontSize: 12,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ),
               Flexible(
                 child: SingleChildScrollView(
                   child: Column(
@@ -195,6 +183,18 @@ class _TraceMenuState extends State<TraceMenu> {
                   ),
                 ),
               ),
+              if (widget.truncated)
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(12, 4, 12, 0),
+                  child: Text(
+                    '… more',
+                    style: TextStyle(
+                      color: Colors.white38,
+                      fontSize: 12,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
               const SizedBox(height: 4),
             ],
           ),

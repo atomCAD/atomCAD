@@ -101,9 +101,11 @@ void main() {
     expect(find.text('… more'), findsNothing);
   });
 
-  testWidgets('a truncated trace starts with a "… more" line', (tester) async {
+  testWidgets('a truncated trace ends with a "… more" line', (tester) async {
     await _pump(tester, truncated: true);
     expect(find.text('… more'), findsOneWidget);
+    expect(tester.getTopLeft(find.text('… more')).dy,
+        greaterThan(tester.getTopLeft(find.text(_rows.last.nodeLabel)).dy));
   });
 
   testWidgets('the chevron folds and unfolds an instance', (tester) async {
