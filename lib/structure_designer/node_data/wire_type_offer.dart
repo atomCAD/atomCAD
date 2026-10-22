@@ -1,8 +1,9 @@
 /// Take type from wire, in the property panel
 /// (`doc/design_wire_declared_inputs.md`): the marker and the **Use wire's
 /// type** button a declared-input row gets when its wire now carries a type
-/// the input was not declared with. Shared by the `expr` parameter list and
-/// the anonymous `record_construct` field list.
+/// the input was not declared with. Shared by the `expr` parameter list, the
+/// anonymous `record_construct` field list and the `record_destructure` panel
+/// (whose offer, on pin 0, re-adopts the whole record type).
 ///
 /// Which rows get an offer, and with which type, is Rust's
 /// (`model.getWireTypeOffers`, one entry per input pin = editor row). The

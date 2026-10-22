@@ -1,6 +1,6 @@
 # Anonymous records on the record readers: `record_destructure`, `record_get`, `record_set` — and named fields in `expr`
 
-## Status: Design, reviewed — Phase 1 implemented (2026-10-22); Phases 2–4 open
+## Status: Design, reviewed — Phases 1–2 implemented (2026-10-22); Phases 3–4 open
 
 Phase 1 implementation notes (where the code differs from the text below):
 
@@ -16,7 +16,11 @@ Phase 1 implementation notes (where the code differs from the text below):
   same-scope wire.
 - The Dart side got only the minimum to keep compiling
   (`model.setRecordDestructureSchema`, the editor reading
-  `APIRecordDestructureData`); the editor itself is still Phase 2.
+  `APIRecordDestructureData`); the editor itself is Phase 2.
+
+Phase 2 implementation notes: the editor's dropdown labels its empty entry
+*None* (*None (type from wire)* in anonymous mode); a refused schema change
+is shown as an error snackbar. The Phase 2 walkthrough is open.
 
 ## Motivation
 

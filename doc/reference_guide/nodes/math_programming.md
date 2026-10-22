@@ -1096,19 +1096,50 @@ An empty `Schema` is anonymous mode (above), not an error. If the `Schema` prope
 
 ## record_destructure
 
-Splits a record value into its constituent fields, one per output pin.
+Splits a record value into its constituent fields, one per output pin. It reads named records (of a def) and anonymous ones (such as an `expr` record literal or an anonymous `record_construct`).
+
+**Modes**
+
+The node is in one of three modes:
+
+- **Named** — `Schema` names a record type def. One output pin per field of the def.
+- **Anonymous** — no schema; the node holds the field list of an anonymous record type it **took from its wire**. One output pin per field. You never type these fields: they always describe the record wired into `record`.
+- **Unset** — neither. The input accepts any record, and the node has no field pins yet.
 
 **Property**
 
-- `Schema` — the name of a record type def. Same dropdown as `record_construct`, including the *Edit definition…* affordance.
+- `Schema` — the name of a record type def. Same dropdown as `record_construct`, including the *Edit definition…* affordance. Picking a def switches the node to named mode; picking *None* makes it unset.
+
+In the property panel an anonymous node lists its type read-only under the dropdown, captioned **Type from wire**, one `name: Type` line per field. An unset node shows a hint instead.
 
 **Input pin**
 
-- `record: Record(Schema)`.
+- `record` — `Record(Schema)` in named mode, the anonymous record type in anonymous mode, and `{}` (any record) when unset.
 
 **Output pins**
 
-- One pin per field of the chosen schema, named after the field and typed to the field's declared type. Pins appear in the def's **authored field order**.
+- Named mode: one pin per field of the chosen schema, named after the field and typed to the field's declared type. Pins appear in the def's **authored field order**.
+- Anonymous mode: one pin per field. When the type came straight from an anonymous `record_construct`, the pins follow that node's field order; otherwise they are alphabetical (an anonymous record type has no order of its own).
+
+**Taking the type from the wire**
+
+The node takes the type of the record wired into it, so you do not need to name a record to look inside it:
+
+- **Drag-place.** Drag a wire from a record output into empty space and pick `record_destructure`. The node is created already typed and wired: in named mode for a named record (`Box`), in anonymous mode for an anonymous one.
+- **Connect.** Wiring a record into an unset node gives it that record's type. The same happens while the node is *uncommitted* — none of its outputs is wired (its function pin included), nothing inside a nested body reads them, and it is not its network's return node — so a reader whose outputs you have not used yet can be pointed at a different record just by wiring it. Once something reads its outputs, the node keeps its type: a record of another shape is refused, and a compatible but different one is accepted and becomes stale (below). One Ctrl+Z undoes the wire and the type change together.
+- **Take type from wire.** The type is a snapshot: when the upstream record changes shape (gains, loses or renames a field), the node does not follow by itself. Its panel then shows **Use wire's type**, and its context menu offers **Take types from wires**. A wider source counts as changed, so a field added upstream is how you get its new pin.
+
+Whenever the type changes, the output wires follow their fields by name. A wire whose field is gone is dropped. (Renaming a field in a def is different: a named node's pins follow the rename and keep their wires.) The same holds for picking another def from the dropdown, and for *None*, which drops every output wire. Each of these is one undo step.
+
+A record field type the node cannot hold refuses the type change with the reason; the wire made by a connect stays, and the node keeps its previous type.
+
+In the text format an anonymous node writes its field list as `fields`, exactly as `record_construct` does; a named node writes `schema`:
+
+```
+d = record_destructure { fields: [{ name: "a", data_type: Float }, { name: "b", data_type: Vec3 }], record: r }
+```
+
+A statement that sets neither `schema` nor `fields` takes its type from the `record:` wire, so `d = record_destructure { record: r }` is enough. An explicit `schema` or `fields` wins.
 
 **Behavior**
 
