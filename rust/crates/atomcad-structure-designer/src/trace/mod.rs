@@ -354,6 +354,42 @@ fn atom_bond_length(atoms: &AtomicStructure, atom_id: u32) -> f64 {
         .unwrap_or(FALLBACK_BOND_LENGTH)
 }
 
+/// A Point probe on a Blueprint input made from atom `id` of `atoms`: the
+/// atom's centre, `on_surface: false`, δ = [`atom_point_delta`]. `None` when
+/// `atoms` has no such atom.
+pub fn atom_point_probe(atoms: &AtomicStructure, id: u32) -> Option<TraceProbe> {
+    let atom = atoms.get_atom(id)?;
+    Some(TraceProbe::Point {
+        position: atom.position,
+        on_surface: false,
+        delta: atom_point_delta(atoms, id),
+    })
+}
+
+/// `trace` for a node whose output on pin 0 *is* the value on input `in_pin`,
+/// with every atom id and every point of geometry unchanged (`exit_structure`,
+/// `enter_structure`, `with_structure`, `dematerialize`, the selectors): link
+/// `in_pin` with the same probe and element, reported `Passed`. `None` for
+/// any output pin but 0.
+pub fn trace_passthrough(
+    out_pin: usize,
+    element: Option<usize>,
+    probe: &TraceProbe,
+    in_pin: usize,
+) -> Option<TraceStep> {
+    if out_pin != 0 {
+        return None;
+    }
+    Some(TraceStep {
+        contribution: Contribution::Passed,
+        upstream: vec![TraceLink {
+            pin: in_pin,
+            element,
+            probe: probe.clone(),
+        }],
+    })
+}
+
 /// `trace` for a node that keeps atom ids and changes only positions (the
 /// movement nodes, `relax`): an atom on output pin 0 is the input atom with the
 /// same id, reported `Modified(label)`. `None` for any other pin (a `diff`

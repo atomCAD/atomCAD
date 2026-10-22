@@ -1,6 +1,8 @@
 use crate::data_type::DataType;
 use crate::evaluator::network_evaluator::NetworkStackElement;
-use crate::evaluator::network_evaluator::{NetworkEvaluationContext, NetworkEvaluator};
+use crate::evaluator::network_evaluator::{
+    NetworkEvaluationContext, NetworkEvaluator, value_or_default,
+};
 use crate::evaluator::network_result::{
     BlueprintData, NetworkResult, error_in_input, runtime_type_error_in_input,
 };
@@ -13,6 +15,7 @@ use crate::node_type::{
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
+use crate::trace::{TraceContext, TraceProbe, TraceStep, trace_moved_point, trace_passthrough};
 use atomcad_crystolecule::structure::Structure;
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
 use atomcad_crystolecule::unit_cell_symmetries::analyze_unit_cell_symmetries;
@@ -43,6 +46,112 @@ pub struct LatticeSymopData {
     pub rotation_axis: Option<DVec3>, // Optional real axis direction unit vector, None means no rotation
     pub rotation_angle_degrees: f64, // Real angle of rotation in degrees
     pub transform_only_frame: bool, // (a.k.a keep_geo) If true, only the reference frame is transformed, the geometry remains in place.
+}
+
+impl LatticeSymopData {
+    /// The transform `eval` wraps the shape's geometry in, from the wired
+    /// pins (else the stored fields) and the shape's lattice; `None` in
+    /// keep-geo mode (`transform_only_frame`), where the geometry stays in
+    /// place. `arg(pin)` is the value on input pin `pin`, so `eval` and
+    /// `trace` resolve the pins alike.
+    #[allow(clippy::result_large_err)]
+    fn geometry_transform(
+        &self,
+        arg: &mut dyn FnMut(usize) -> NetworkResult,
+        lattice_vecs: &UnitCellStruct,
+    ) -> Result<Option<Transform>, NetworkResult> {
+        let translation = value_or_default(arg(1), self.translation, NetworkResult::extract_ivec3)?;
+        let rotation_axis = value_or_default(
+            arg(2),
+            self.rotation_axis,
+            NetworkResult::extract_optional_dvec3,
+        )?;
+        let rotation_angle_degrees = value_or_default(
+            arg(3),
+            self.rotation_angle_degrees,
+            NetworkResult::extract_float,
+        )?;
+        let transform_only_frame = value_or_default(
+            arg(4),
+            self.transform_only_frame,
+            NetworkResult::extract_bool,
+        )?;
+
+        let real_translation = lattice_vecs.ivec3_lattice_to_real(&translation);
+        // Get all available symmetry axes for this unit cell
+        let symmetry_axes = analyze_unit_cell_symmetries(lattice_vecs);
+
+        // Validate the rotation against available symmetries and calculate quaternion
+        let real_rotation_quat = if rotation_axis.is_none() || rotation_angle_degrees.abs() < 1e-6 {
+            // No rotation case
+            DQuat::IDENTITY
+        } else {
+            let rotation_axis = rotation_axis.unwrap();
+
+            // Check for zero-length axis
+            if rotation_axis.length() < 1e-12 {
+                DQuat::IDENTITY
+            } else {
+                // Normalize the rotation axis
+                let normalized_axis = rotation_axis.normalize();
+
+                // Validate against available symmetries
+                let mut is_valid = false;
+
+                if !symmetry_axes.is_empty() {
+                    // Check if the rotation matches any available symmetry
+                    const AXIS_TOLERANCE: f64 = 1e-6;
+                    const ANGLE_TOLERANCE: f64 = 1e-4;
+
+                    for symmetry in &symmetry_axes {
+                        // Check if axes are parallel (or anti-parallel)
+                        let dot_product = normalized_axis.dot(symmetry.axis).abs();
+                        if (1.0 - dot_product).abs() < AXIS_TOLERANCE {
+                            // Axes match, check if angle is a valid multiple
+                            let fundamental_angle = symmetry.smallest_angle_degrees();
+                            let angle_ratio = rotation_angle_degrees.abs() / fundamental_angle;
+                            let rounded_ratio = angle_ratio.round();
+
+                            if (angle_ratio - rounded_ratio).abs() < ANGLE_TOLERANCE {
+                                is_valid = true;
+                                break;
+                            }
+                        }
+                    }
+                } else {
+                    // No symmetries available (triclinic system) - only allow identity rotation
+                    is_valid = false;
+                }
+
+                if !is_valid {
+                    return Err(error_in_input(&format!(
+                        "Rotation axis {:?} with angle {:.2}° is not allowed for this crystal system",
+                        rotation_axis, rotation_angle_degrees
+                    )));
+                }
+
+                // Create rotation quaternion
+                let angle_radians = rotation_angle_degrees.to_radians();
+                DQuat::from_axis_angle(normalized_axis, angle_radians)
+            }
+        };
+
+        if transform_only_frame {
+            return Ok(None);
+        }
+        // The frame moves by `real_translation`; the geometry turns about the
+        // input frame's origin (identity: movement nodes bake transforms in).
+        let input_frame_transform = Transform::default();
+        let frame_transform = Transform::new(
+            input_frame_transform.translation + real_translation,
+            DQuat::IDENTITY,
+        );
+        Ok(Some(Transform::new(
+            real_rotation_quat.mul_vec3(-input_frame_transform.translation)
+                + frame_transform.translation,
+            real_rotation_quat,
+        )))
+    }
 }
 
 impl NodeData for LatticeSymopData {
@@ -81,121 +190,14 @@ impl NodeData for LatticeSymopData {
         if let NetworkResult::Error(_) = shape_val {
             EvalOutput::single(shape_val)
         } else if let NetworkResult::Blueprint(shape) = shape_val {
-            let translation = match network_evaluator.evaluate_or_default(
-                network_stack,
-                node_id,
-                registry,
-                context,
-                1,
-                self.translation,
-                NetworkResult::extract_ivec3,
+            let tr = match self.geometry_transform(
+                &mut |pin| {
+                    network_evaluator.evaluate_arg(network_stack, node_id, registry, context, pin)
+                },
+                &shape.structure.lattice_vecs,
             ) {
-                Ok(value) => value,
+                Ok(tr) => tr,
                 Err(error) => return EvalOutput::single(error),
-            };
-
-            let rotation_axis = match network_evaluator.evaluate_or_default(
-                network_stack,
-                node_id,
-                registry,
-                context,
-                2,
-                self.rotation_axis,
-                NetworkResult::extract_optional_dvec3,
-            ) {
-                Ok(value) => value,
-                Err(error) => return EvalOutput::single(error),
-            };
-
-            let rotation_angle_degrees = match network_evaluator.evaluate_or_default(
-                network_stack,
-                node_id,
-                registry,
-                context,
-                3,
-                self.rotation_angle_degrees,
-                NetworkResult::extract_float,
-            ) {
-                Ok(value) => value,
-                Err(error) => return EvalOutput::single(error),
-            };
-
-            let transform_only_frame = match network_evaluator.evaluate_or_default(
-                network_stack,
-                node_id,
-                registry,
-                context,
-                4,
-                self.transform_only_frame,
-                NetworkResult::extract_bool,
-            ) {
-                Ok(value) => value,
-                Err(error) => return EvalOutput::single(error),
-            };
-
-            let real_translation = shape
-                .structure
-                .lattice_vecs
-                .ivec3_lattice_to_real(&translation);
-
-            // Get all available symmetry axes for this unit cell
-            let symmetry_axes = analyze_unit_cell_symmetries(&shape.structure.lattice_vecs);
-
-            // Validate the rotation against available symmetries and calculate quaternion
-            let real_rotation_quat = if rotation_axis.is_none()
-                || rotation_angle_degrees.abs() < 1e-6
-            {
-                // No rotation case
-                DQuat::IDENTITY
-            } else {
-                let rotation_axis = rotation_axis.unwrap();
-
-                // Check for zero-length axis
-                if rotation_axis.length() < 1e-12 {
-                    DQuat::IDENTITY
-                } else {
-                    // Normalize the rotation axis
-                    let normalized_axis = rotation_axis.normalize();
-
-                    // Validate against available symmetries
-                    let mut is_valid = false;
-
-                    if !symmetry_axes.is_empty() {
-                        // Check if the rotation matches any available symmetry
-                        const AXIS_TOLERANCE: f64 = 1e-6;
-                        const ANGLE_TOLERANCE: f64 = 1e-4;
-
-                        for symmetry in &symmetry_axes {
-                            // Check if axes are parallel (or anti-parallel)
-                            let dot_product = normalized_axis.dot(symmetry.axis).abs();
-                            if (1.0 - dot_product).abs() < AXIS_TOLERANCE {
-                                // Axes match, check if angle is a valid multiple
-                                let fundamental_angle = symmetry.smallest_angle_degrees();
-                                let angle_ratio = rotation_angle_degrees.abs() / fundamental_angle;
-                                let rounded_ratio = angle_ratio.round();
-
-                                if (angle_ratio - rounded_ratio).abs() < ANGLE_TOLERANCE {
-                                    is_valid = true;
-                                    break;
-                                }
-                            }
-                        }
-                    } else {
-                        // No symmetries available (triclinic system) - only allow identity rotation
-                        is_valid = false;
-                    }
-
-                    if !is_valid {
-                        return EvalOutput::single(error_in_input(&format!(
-                            "Rotation axis {:?} with angle {:.2}° is not allowed for this crystal system",
-                            rotation_axis, rotation_angle_degrees
-                        )));
-                    }
-
-                    // Create rotation quaternion
-                    let angle_radians = rotation_angle_degrees.to_radians();
-                    DQuat::from_axis_angle(normalized_axis, angle_radians)
-                }
             };
 
             // Store evaluation cache for root-level evaluations (used for gadget creation when this node is selected)
@@ -208,33 +210,16 @@ impl NodeData for LatticeSymopData {
                 context.selected_node_eval_cache = Some(Box::new(eval_cache));
             }
 
-            // Move fields we need by value out of the shape summary
             let BlueprintData {
                 structure,
                 geo_tree_root,
                 alignment,
                 alignment_reason,
             } = shape;
-            let input_frame_transform = Transform::default();
-
-            // Calculate the new frame transform (no longer stored; kept for local geometry math)
-            let frame_transform = Transform::new(
-                input_frame_transform.translation + real_translation,
-                DQuat::IDENTITY,
-            );
-
-            // Build the output geometry, moving the geo_tree_root instead of cloning it
-            let output_geo_tree_root = if transform_only_frame {
-                // Only transform the reference frame, leave geometry in place
-                geo_tree_root
-            } else {
-                let tr = Transform::new(
-                    real_rotation_quat.mul_vec3(-input_frame_transform.translation)
-                        + frame_transform.translation,
-                    real_rotation_quat,
-                );
-
-                GeoNode::transform(tr, Box::new(geo_tree_root))
+            let output_geo_tree_root = match tr {
+                Some(tr) => GeoNode::transform(tr, Box::new(geo_tree_root)),
+                // keep_geo: only the reference frame moves, the geometry stays.
+                None => geo_tree_root,
             };
 
             EvalOutput::single(NetworkResult::Blueprint(BlueprintData {
@@ -245,6 +230,32 @@ impl NodeData for LatticeSymopData {
             }))
         } else {
             EvalOutput::single(runtime_type_error_in_input(0))
+        }
+    }
+
+    /// Output-driven editing: a geometry point traces to the point the
+    /// symmetry operation moved there, or, in keep-geo mode, where the
+    /// geometry stayed, to the same point.
+    fn trace(
+        &self,
+        pin: usize,
+        element: Option<usize>,
+        probe: &TraceProbe,
+        ctx: &TraceContext,
+    ) -> Option<TraceStep> {
+        if !matches!(probe, TraceProbe::Point { .. }) {
+            return None;
+        }
+        let lattice_vecs = ctx.input(0).get_unit_cell()?;
+        let tr = self
+            .geometry_transform(&mut |pin| ctx.input_value(pin), &lattice_vecs)
+            .ok()?;
+        match tr {
+            Some(tr) => trace_moved_point(pin, element, probe, |p| {
+                Some(tr.inverse().apply_to_position(&p))
+            }),
+            None if element.is_none() => trace_passthrough(pin, None, probe, 0),
+            None => None,
         }
     }
 

@@ -20,6 +20,7 @@ use crate::node_type::{
 };
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
+use crate::trace::{TraceContext, TraceProbe, TraceStep, trace_passthrough};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -123,6 +124,19 @@ impl NodeData for WithStructureData {
             alignment,
             alignment_reason,
         }))
+    }
+
+    /// Output-driven editing: the geometry is `shape`'s unchanged (only the
+    /// structure is re-labelled), so a point passes to `shape`; `structure`
+    /// does not place it and is not followed.
+    fn trace(
+        &self,
+        pin: usize,
+        element: Option<usize>,
+        probe: &TraceProbe,
+        _ctx: &TraceContext,
+    ) -> Option<TraceStep> {
+        trace_passthrough(pin, element, probe, 0)
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

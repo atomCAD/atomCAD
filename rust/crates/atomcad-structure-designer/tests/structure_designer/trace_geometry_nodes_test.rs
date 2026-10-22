@@ -2,18 +2,25 @@
 //! nodes (`union`, `intersect`, `diff`, `geo_trans`) and the inverse-point path
 //! of the movement nodes on Blueprints.
 //!
+//! Phase 2 of `doc/design_trace_coverage.md`: the point paths of the phase
+//! pass-throughs (`exit_structure`, `enter_structure`, `with_structure`,
+//! `dematerialize`), `materialize`'s Point path, and `lattice_symop`.
+//!
 //! Atoms are chosen **by query** on the materialized output (the outermost
 //! carbon along a direction, see [`outermost`]), never by id or hard-coded
 //! position, because both depend on the fill.
 
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::guided_placement::crystal_bond_length;
+use atomcad_crystolecule::structure::Structure;
 use atomcad_geo_tree::GeoNode;
+use atomcad_structure_designer::evaluator::network_result::NetworkResult;
 use atomcad_structure_designer::node_data::NodeData;
 use atomcad_structure_designer::node_network::NodeRef;
 use atomcad_structure_designer::nodes::free_move::FreeMoveData;
 use atomcad_structure_designer::nodes::free_rot::FreeRotData;
 use atomcad_structure_designer::nodes::geo_trans::GeoTransData;
+use atomcad_structure_designer::nodes::lattice_symop::LatticeSymopData;
 use atomcad_structure_designer::nodes::structure_invert::StructureInvertData;
 use atomcad_structure_designer::nodes::structure_move::StructureMoveData;
 use atomcad_structure_designer::nodes::structure_rot::StructureRotData;
@@ -629,4 +636,175 @@ fn the_design_doc_example_end_to_end() {
         trace(&mut d, &atom_hit(fill, atom)),
         "materialize filled\nunion passed\nintersect passed\nhs3 shape"
     );
+}
+
+// ============================================================================
+// Phase pass-throughs (doc/design_trace_coverage.md Phase 2)
+// ============================================================================
+
+fn surface_hit(node_id: u64, point: DVec3) -> TraceHit {
+    TraceHit {
+        node: NodeRef::top(node_id),
+        pin: 0,
+        target: TraceHitTarget::Surface { point },
+    }
+}
+
+fn surface_probe(point: DVec3) -> TraceProbe {
+    TraceProbe::Point {
+        position: point,
+        on_surface: true,
+        delta: SURFACE_HIT_DELTA,
+    }
+}
+
+/// `shape` (a sphere) → `fill` → `exit` → `enter`: a point of the molecule's
+/// and then the crystal's geometry passes every node unchanged, and
+/// `materialize` reads `passed` for it, not "possibly contributed".
+#[test]
+fn exit_and_enter_structure_pass_a_surface_point() {
+    let mut d = setup();
+    let (shape, probes) = add_probe_source(
+        &mut d,
+        "shape",
+        SourceKind::Blueprint(Box::new(GeoNode::sphere(DVec3::ZERO, 5.0))),
+        vec![],
+    );
+    let fill = add(&mut d, "materialize", "fill");
+    d.connect_nodes(shape, 0, fill, 0);
+    let exit = add(&mut d, "exit_structure", "exit");
+    d.connect_nodes(fill, 0, exit, 0);
+    let structure = add_value(&mut d, NetworkResult::Structure(Structure::diamond()), "st");
+    let enter = add(&mut d, "enter_structure", "enter");
+    d.connect_nodes(exit, 0, enter, 0);
+    d.connect_nodes(structure, 0, enter, 1);
+
+    let point = DVec3::new(5.0, 0.0, 0.0);
+    assert_eq!(
+        trace(&mut d, &surface_hit(exit, point)),
+        "exit passed
+fill passed
+shape source"
+    );
+    assert_eq!(
+        trace(&mut d, &surface_hit(enter, point)),
+        "enter passed
+exit passed
+fill passed
+shape source"
+    );
+    let probes = probes.lock().unwrap();
+    assert!(
+        probes.iter().all(|p| *p == surface_probe(point)),
+        "{probes:?}"
+    );
+}
+
+/// `sphere ∪ cube` → `fill` → `demat` → `ws` (a new structure): a surface hit
+/// on the Blueprint goes back through the crystal to the union, which keeps
+/// only the sphere.
+#[test]
+fn with_structure_and_dematerialize_reach_the_deciding_shape() {
+    let (mut d, _, fill) = sphere_union_cube();
+    let demat = add(&mut d, "dematerialize", "demat");
+    d.connect_nodes(fill, 0, demat, 0);
+    let structure = add_value(&mut d, NetworkResult::Structure(Structure::diamond()), "st");
+    let ws = add(&mut d, "with_structure", "ws");
+    d.connect_nodes(demat, 0, ws, 0);
+    d.connect_nodes(structure, 0, ws, 1);
+
+    assert_eq!(
+        trace(&mut d, &surface_hit(ws, DVec3::new(-5.0, 0.0, 0.0))),
+        "ws passed
+demat passed
+fill passed
+union passed
+sphere shape"
+    );
+}
+
+// ============================================================================
+// lattice_symop
+// ============================================================================
+
+/// `a` (r 4 at the origin) ∪ `b` (r 4, four cells along +x), both probe
+/// sources → `symop` (`data`). Returns the designer, the symop and `b`'s
+/// probes.
+fn symop_spheres(
+    data: LatticeSymopData,
+) -> (
+    StructureDesigner,
+    u64,
+    std::sync::Arc<std::sync::Mutex<Vec<TraceProbe>>>,
+) {
+    let mut d = setup();
+    let (a, _) = add_probe_source(
+        &mut d,
+        "a",
+        SourceKind::Blueprint(Box::new(GeoNode::sphere(DVec3::ZERO, 4.0))),
+        vec![],
+    );
+    let (b, b_probes) = add_probe_source(
+        &mut d,
+        "b",
+        SourceKind::Blueprint(Box::new(GeoNode::sphere(
+            DVec3::new(2.0 * two_cells(), 0.0, 0.0),
+            4.0,
+        ))),
+        vec![],
+    );
+    let union = add(&mut d, "union", "union");
+    d.connect_nodes(a, 0, union, 0);
+    d.connect_nodes(b, 0, union, 0);
+    let symop = add_with(&mut d, "lattice_symop", "symop", Box::new(data));
+    d.connect_nodes(union, 0, symop, 0);
+    (d, symop, b_probes)
+}
+
+fn quarter_turn_and_one_cell(keep_geo: bool) -> LatticeSymopData {
+    LatticeSymopData {
+        translation: IVec3::new(1, 0, 0),
+        rotation_axis: Some(DVec3::Z),
+        rotation_angle_degrees: 90.0,
+        transform_only_frame: keep_geo,
+    }
+}
+
+/// A quarter turn about z then one cell along +x takes `b` (off centre) to
+/// (one cell, four cells, 0). A hit on its far side maps back to `b`'s +x
+/// face; without the inverse the point would be nearer `a`.
+#[test]
+fn lattice_symop_maps_a_surface_point_back_onto_the_input_face() {
+    let (mut d, symop, b_probes) = symop_spheres(quarter_turn_and_one_cell(false));
+    let cell = two_cells() / 2.0;
+    let b_far = 2.0 * two_cells() + 4.0;
+    assert_eq!(
+        trace(&mut d, &surface_hit(symop, DVec3::new(cell, b_far, 0.0))),
+        "symop moved
+union passed
+b source"
+    );
+    let probes = b_probes.lock().unwrap();
+    let TraceProbe::Point { position, .. } = probes[0] else {
+        panic!("{probes:?}");
+    };
+    assert!(
+        position.distance(DVec3::new(b_far, 0.0, 0.0)) < 1e-9,
+        "{position}"
+    );
+}
+
+/// In keep-geo mode the geometry stays where it was, so the same kind of hit
+/// reads `passed` and reaches `b` at the unchanged position.
+#[test]
+fn lattice_symop_keep_geo_passes_the_point_unchanged() {
+    let (mut d, symop, b_probes) = symop_spheres(quarter_turn_and_one_cell(true));
+    let point = DVec3::new(2.0 * two_cells() + 4.0, 0.0, 0.0);
+    assert_eq!(
+        trace(&mut d, &surface_hit(symop, point)),
+        "symop passed
+union passed
+b source"
+    );
+    assert_eq!(b_probes.lock().unwrap().as_slice(), [surface_probe(point)]);
 }

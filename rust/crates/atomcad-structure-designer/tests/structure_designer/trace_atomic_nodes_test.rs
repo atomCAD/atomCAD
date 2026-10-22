@@ -2,21 +2,30 @@
 //! nodes (the movement nodes, `relax`, `atom_union`, `atom_edit`,
 //! `materialize`) and on the array plumbing nodes (`sequence`, `array_at`,
 //! `array_concat`).
+//!
+//! Phase 2 of `doc/design_trace_coverage.md`: the selectors (`if`, `switch`),
+//! `array_append`, and the atom paths of the phase pass-throughs
+//! (`exit_structure`, `enter_structure`).
 
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::guided_placement::crystal_bond_length;
+use atomcad_crystolecule::structure::Structure;
 use atomcad_geo_tree::GeoNode;
 use atomcad_structure_designer::data_type::DataType;
+use atomcad_structure_designer::evaluator::network_result::NetworkResult;
+use atomcad_structure_designer::nodes::array_append::ArrayAppendData;
 use atomcad_structure_designer::nodes::array_at::ArrayAtData;
 use atomcad_structure_designer::nodes::array_concat::ArrayConcatData;
 use atomcad_structure_designer::nodes::atom_edit::atom_edit::AtomEditData;
 use atomcad_structure_designer::nodes::free_move::FreeMoveData;
 use atomcad_structure_designer::nodes::free_rot::FreeRotData;
+use atomcad_structure_designer::nodes::if_else::IfData;
 use atomcad_structure_designer::nodes::materialize::MaterializeData;
 use atomcad_structure_designer::nodes::sequence::SequenceData;
 use atomcad_structure_designer::nodes::structure_invert::StructureInvertData;
 use atomcad_structure_designer::nodes::structure_move::StructureMoveData;
 use atomcad_structure_designer::nodes::structure_rot::StructureRotData;
+use atomcad_structure_designer::nodes::switch::{SwitchCase, SwitchCaseValue, SwitchData};
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 use atomcad_structure_designer::trace::{
     ATOM_POINT_DELTA_BONDS, TraceProbe, atom_point_delta, is_terminator,
@@ -559,4 +568,171 @@ fn array_concat_maps_an_output_element_to_the_right_input_element() {
             format!("concat passed\n{want}")
         );
     }
+}
+
+// ============================================================================
+// Selectors: if, switch (doc/design_trace_coverage.md Phase 2)
+// ============================================================================
+
+/// `cond` (a Bool value) → `if` over Molecules; the branch `cond` takes is a
+/// probe source `src` with a carbon at A, the other a counting leaf whose one
+/// carbon is at A too, so only the selection can tell them apart.
+fn if_chain(cond: bool) -> (StructureDesigner, u64) {
+    let mut d = setup();
+    let c = add_value(&mut d, NetworkResult::Bool(cond), "cond");
+    let (src, _) = add_probe_source(&mut d, "src", SourceKind::Molecule, vec![(6, A)]);
+    let leaf = add(&mut d, "counting_leaf", "leaf");
+    let node = add(&mut d, "if", "if");
+    set_node_data(
+        &mut d,
+        MAIN,
+        node,
+        Box::new(IfData {
+            value_type: DataType::Molecule,
+        }),
+    );
+    name(&mut d, MAIN, node, "if");
+    let (taken, untaken) = if cond { (1, 2) } else { (2, 1) };
+    d.connect_nodes(c, 0, node, 0);
+    d.connect_nodes(src, 0, node, taken);
+    d.connect_nodes(leaf, 0, node, untaken);
+    (d, node)
+}
+
+#[test]
+fn if_lists_only_the_taken_branch_and_never_evaluates_the_other() {
+    for cond in [true, false] {
+        LEAF_EVALS.set(0);
+        let (mut d, node) = if_chain(cond);
+        assert_eq!(
+            trace(&mut d, &atom_hit(node, A)),
+            "if passed
+src source",
+            "cond = {cond}"
+        );
+        assert_eq!(LEAF_EVALS.get(), 0, "cond = {cond}: the untaken branch ran");
+    }
+}
+
+/// `sel` (an Int value) → `switch` over Molecules with cases 1, 2, 3 and a
+/// default; each input is a probe source with its carbon at A.
+fn switch_chain(selector: i32) -> (StructureDesigner, u64) {
+    let mut d = setup();
+    let sel = add_value(&mut d, NetworkResult::Int(selector), "sel");
+    let node = add(&mut d, "switch", "switch");
+    set_node_data(
+        &mut d,
+        MAIN,
+        node,
+        Box::new(SwitchData {
+            selector_type: DataType::Int,
+            value_type: DataType::Molecule,
+            cases: (1..=3)
+                .map(|v| SwitchCase {
+                    id: Some(v as u64),
+                    value: SwitchCaseValue::Int(v),
+                })
+                .collect(),
+            next_case_id: 4,
+        }),
+    );
+    name(&mut d, MAIN, node, "switch");
+    d.connect_nodes(sel, 0, node, 0);
+    for (pin, label) in ["one", "two", "three", "default"].iter().enumerate() {
+        let (src, _) = add_probe_source(&mut d, label, SourceKind::Molecule, vec![(6, A)]);
+        d.connect_nodes(src, 0, node, pin + 1);
+    }
+    (d, node)
+}
+
+#[test]
+fn switch_lists_only_the_matching_case() {
+    let (mut d, node) = switch_chain(2);
+    assert_eq!(
+        trace(&mut d, &atom_hit(node, A)),
+        "switch passed
+two source"
+    );
+}
+
+#[test]
+fn switch_with_an_unmatched_selector_lists_the_default() {
+    let (mut d, node) = switch_chain(7);
+    assert_eq!(
+        trace(&mut d, &atom_hit(node, A)),
+        "switch passed
+default source"
+    );
+}
+
+// ============================================================================
+// array_append
+// ============================================================================
+
+#[test]
+fn array_append_maps_an_output_element_to_the_array_or_the_appended_element() {
+    let b_at = DVec3::new(10.0, 0.0, 0.0);
+    let c_at = DVec3::new(20.0, 0.0, 0.0);
+    for (hit, want) in [
+        (
+            b_at,
+            "seq passed
+b source",
+        ),
+        (c_at, "c source"),
+    ] {
+        let mut d = setup();
+        let seq = two_source_sequence(&mut d, "seq", &[("a", A), ("b", b_at)]);
+        let (c, _) = add_probe_source(&mut d, "c", SourceKind::Molecule, vec![(6, c_at)]);
+        let append = add(&mut d, "array_append", "append");
+        set_node_data(
+            &mut d,
+            MAIN,
+            append,
+            Box::new(ArrayAppendData {
+                element_type: DataType::Molecule,
+            }),
+        );
+        name(&mut d, MAIN, append, "append");
+        d.connect_nodes(seq, 0, append, 0);
+        d.connect_nodes(c, 0, append, 1);
+        let union = add(&mut d, "atom_union", "union");
+        d.connect_nodes(append, 0, union, 0);
+
+        assert_eq!(
+            trace(&mut d, &atom_hit(union, hit)),
+            format!(
+                "union passed
+append passed
+{want}"
+            )
+        );
+    }
+}
+
+// ============================================================================
+// Phase pass-throughs: exit_structure, enter_structure
+// ============================================================================
+
+/// `src` (a Crystal, atoms A = id 1 and B = id 2) → `exit` → `enter`, with
+/// `enter`'s structure from a `value`. Atom B passes both with its id, and the
+/// structure is not listed: it does not place the atom.
+#[test]
+fn exit_and_enter_structure_pass_an_atom_with_its_id() {
+    let mut d = setup();
+    let (src, probes) = add_probe_source(&mut d, "src", SourceKind::Crystal, vec![(6, A), (6, B)]);
+    let exit = add(&mut d, "exit_structure", "exit");
+    d.connect_nodes(src, 0, exit, 0);
+    let structure = add_value(&mut d, NetworkResult::Structure(Structure::diamond()), "st");
+    let enter = add(&mut d, "enter_structure", "enter");
+    d.connect_nodes(exit, 0, enter, 0);
+    d.connect_nodes(structure, 0, enter, 1);
+
+    assert_eq!(
+        trace(&mut d, &atom_hit(enter, B)),
+        "enter passed
+exit passed
+src source"
+    );
+    assert_eq!(only_probe(&probes), atom_probe(2, B));
 }

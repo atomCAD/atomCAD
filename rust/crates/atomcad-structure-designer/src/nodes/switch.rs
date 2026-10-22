@@ -66,6 +66,7 @@ use crate::node_type_registry::NodeTypeRegistry;
 use crate::nodes::variadic_ids::merge_ids_by_key;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
+use crate::trace::{TraceContext, TraceProbe, TraceStep, trace_passthrough};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -139,6 +140,30 @@ impl Default for SwitchData {
 }
 
 impl SwitchData {
+    /// The input pin a selector value takes: `1 + case_index` of the first
+    /// case whose literal equals it, the `default` pin (`1 + cases.len()`)
+    /// when none does. First match wins for the impossible hand-authored
+    /// duplicate state (documented, not policed). `None` for a value that is
+    /// neither `Int` nor `String` (unwired, an error, a wrong type). Shared by
+    /// `eval` and `trace`.
+    pub fn taken_pin(&self, selector: &NetworkResult) -> Option<usize> {
+        let matched_index = match selector {
+            NetworkResult::Int(v) => self
+                .cases
+                .iter()
+                .position(|c| c.value == SwitchCaseValue::Int(*v)),
+            NetworkResult::String(s) => self
+                .cases
+                .iter()
+                .position(|c| c.value == SwitchCaseValue::String(s.clone())),
+            _ => return None,
+        };
+        Some(match matched_index {
+            Some(i) => 1 + i,
+            None => 1 + self.cases.len(),
+        })
+    }
+
     /// The derived external/inside pin name for each case, the single source of
     /// truth used by `calculate_custom_node_type` (and hence the text-format
     /// serializer/parser). Wire identity never depends on these names — they
@@ -458,40 +483,34 @@ impl NodeData for SwitchData {
             _ => {}
         }
 
-        // 2. Find the case whose literal equals the selector value. A `Float`
-        // wired to an Int selector was already truncated at the wire, so the
-        // returned variant matches `selector_type`; any other variant is a
-        // localized error (mirrors `if.cond`).
-        let matched_index = match sel_val {
-            NetworkResult::Int(v) => self
-                .cases
-                .iter()
-                .position(|c| c.value == SwitchCaseValue::Int(v)),
-            NetworkResult::String(ref s) => self
-                .cases
-                .iter()
-                .position(|c| c.value == SwitchCaseValue::String(s.clone())),
-            other => {
-                return EvalOutput::single(NetworkResult::Error(format!(
-                    "switch.selector: expected {}, got {:?}",
-                    self.selector_type,
-                    other.infer_data_type()
-                )));
-            }
-        };
-
-        // 3. Lazily pull *only* the taken pin: `1 + case_index` on a match, the
-        // `default` pin (`1 + cases.len()`) otherwise. An unwired taken pin
-        // yields `None`, which flows through unchanged — exactly `if`'s
-        // contract. First match wins for the impossible hand-authored duplicate
-        // state (documented, not policed).
-        let pin_index = match matched_index {
-            Some(i) => 1 + i,
-            None => 1 + self.cases.len(),
+        // 2-3. Find the taken pin and lazily pull *only* it. A `Float` wired to
+        // an Int selector was already truncated at the wire, so the returned
+        // variant matches `selector_type`; any other variant is a localized
+        // error (mirrors `if.cond`). An unwired taken pin yields `None`, which
+        // flows through unchanged — exactly `if`'s contract.
+        let Some(pin_index) = self.taken_pin(&sel_val) else {
+            return EvalOutput::single(NetworkResult::Error(format!(
+                "switch.selector: expected {}, got {:?}",
+                self.selector_type,
+                sel_val.infer_data_type()
+            )));
         };
         let branch_val =
             network_evaluator.evaluate_arg(network_stack, node_id, registry, context, pin_index);
         EvalOutput::single(branch_val)
+    }
+
+    /// Output-driven editing: the value came from the taken case (or the
+    /// default) only; the other cases are neither listed nor evaluated.
+    fn trace(
+        &self,
+        pin: usize,
+        element: Option<usize>,
+        probe: &TraceProbe,
+        ctx: &TraceContext,
+    ) -> Option<TraceStep> {
+        let taken = self.taken_pin(&ctx.input_value(0))?;
+        trace_passthrough(pin, element, probe, taken)
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

@@ -12,6 +12,7 @@ use crate::node_type::{
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
+use crate::trace::{Contribution, TraceContext, TraceLink, TraceProbe, TraceStep};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -83,6 +84,45 @@ impl NodeData for ArrayAppendData {
         combined.push(element_val);
 
         EvalOutput::single(NetworkResult::Array(combined))
+    }
+
+    /// Output-driven editing: output element `k` is element `k` of `array`
+    /// while `k` is inside it, and the appended `element` at its length.
+    fn trace(
+        &self,
+        pin: usize,
+        element: Option<usize>,
+        probe: &TraceProbe,
+        ctx: &TraceContext,
+    ) -> Option<TraceStep> {
+        // An element of nested arrays would need an index into the input too.
+        if pin != 0 || self.element_type.is_array() {
+            return None;
+        }
+        let k = element?;
+        let len = match ctx.input(0).as_ref() {
+            NetworkResult::Array(items) => items.len(),
+            _ => return None,
+        };
+        let link = if k < len {
+            TraceLink {
+                pin: 0,
+                element: Some(k),
+                probe: probe.clone(),
+            }
+        } else if k == len {
+            TraceLink {
+                pin: 1,
+                element: None,
+                probe: probe.clone(),
+            }
+        } else {
+            return None;
+        };
+        Some(TraceStep {
+            contribution: Contribution::Passed,
+            upstream: vec![link],
+        })
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

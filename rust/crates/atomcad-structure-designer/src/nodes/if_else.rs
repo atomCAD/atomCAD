@@ -39,6 +39,7 @@ use crate::node_type::{
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
+use crate::trace::{TraceContext, TraceProbe, TraceStep, trace_passthrough};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -78,6 +79,17 @@ impl Default for IfData {
     }
 }
 
+/// The input pin of the branch `cond` selects: `then` (pin 1) for `true`,
+/// `else` (pin 2) for `false`; `None` when `cond` is not a `Bool` (unwired,
+/// an error, a wrong type). Shared by `eval` and `trace`.
+fn taken_pin(cond: &NetworkResult) -> Option<usize> {
+    match cond {
+        NetworkResult::Bool(true) => Some(1),
+        NetworkResult::Bool(false) => Some(2),
+        _ => None,
+    }
+}
+
 impl NodeData for IfData {
     fn provide_gadget(
         &self,
@@ -111,24 +123,33 @@ impl NodeData for IfData {
             NetworkResult::Error(_) => return EvalOutput::single(cond_val),
             _ => {}
         }
-        let cond = match cond_val {
-            NetworkResult::Bool(b) => b,
-            other => {
-                return EvalOutput::single(NetworkResult::Error(format!(
-                    "if.cond: expected Bool, got {:?}",
-                    other.infer_data_type()
-                )));
-            }
+        let Some(branch_index) = taken_pin(&cond_val) else {
+            return EvalOutput::single(NetworkResult::Error(format!(
+                "if.cond: expected Bool, got {:?}",
+                cond_val.infer_data_type()
+            )));
         };
 
-        // Lazily pull *only* the taken branch: pin 1 = then, pin 2 = else.
-        // The other branch's upstream cone is never evaluated. An unwired taken
-        // branch yields `None` (evaluate_arg's disconnected result), which flows
-        // through unchanged.
-        let branch_index = if cond { 1 } else { 2 };
+        // Lazily pull *only* the taken branch. The other branch's upstream
+        // cone is never evaluated. An unwired taken branch yields `None`
+        // (evaluate_arg's disconnected result), which flows through unchanged.
         let branch_val =
             network_evaluator.evaluate_arg(network_stack, node_id, registry, context, branch_index);
         EvalOutput::single(branch_val)
+    }
+
+    /// Output-driven editing: the value came from the taken branch only, so
+    /// the probe goes there unchanged and the untaken branch is neither listed
+    /// nor evaluated. An unwired, `None` or erroring `cond` cannot say.
+    fn trace(
+        &self,
+        pin: usize,
+        element: Option<usize>,
+        probe: &TraceProbe,
+        ctx: &TraceContext,
+    ) -> Option<TraceStep> {
+        let branch = taken_pin(&ctx.input_value(0))?;
+        trace_passthrough(pin, element, probe, branch)
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

@@ -14,6 +14,7 @@ use crate::node_type::{
 };
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
+use crate::trace::{TraceContext, TraceProbe, TraceStep, trace_passthrough};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -55,6 +56,18 @@ impl NodeData for ExitStructureData {
             }
             _ => EvalOutput::single(runtime_type_error_in_input(0)),
         }
+    }
+
+    /// Output-driven editing: the molecule is the crystal's atoms and
+    /// geometry unchanged, so atoms keep their ids and points their place.
+    fn trace(
+        &self,
+        pin: usize,
+        element: Option<usize>,
+        probe: &TraceProbe,
+        _ctx: &TraceContext,
+    ) -> Option<TraceStep> {
+        trace_passthrough(pin, element, probe, 0)
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
