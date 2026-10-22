@@ -88,8 +88,13 @@ use crate::node_type::{
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
+use crate::trace::{
+    Contribution, TraceContext, TraceLink, TraceProbe, TraceStep, atoms_of as trace_atoms,
+    is_terminator,
+};
 use atomcad_crystolecule::atomic_constants::element_symbol;
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
+use atomcad_crystolecule::chemisorption::sequential::setup::Setup;
 use atomcad_crystolecule::chemisorption::sequential::{
     Candidate, ChildVerdict, DebugForm, DebugItem, DebugShapes, DebugView, Hypothesis, LevelStats,
     Mirror, PlanStats, RowKind, SHAPE_ALPHA, SHAPE_COLOR, SHAPE_LEVEL, SearchReport, SearchTree,
@@ -104,6 +109,7 @@ use atomcad_crystolecule::chemisorption::{
 use atomcad_crystolecule::field::isosurface::{IsosurfaceColoring, IsosurfaceData, LevelBasis};
 use atomcad_crystolecule::simulation::uff::VdwMode;
 use atomcad_crystolecule::structure_compare::Motion;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -124,6 +130,10 @@ pub const CANDIDATES_OUTPUT_PIN: usize = 0;
 pub const STATS_OUTPUT_PIN: usize = 1;
 pub const DEBUG_OUTPUT_PIN: usize = 2;
 pub const DEBUG_SHAPES_OUTPUT_PIN: usize = 3;
+
+/// Below this, a debug-view atom sits at its input position (the posed view
+/// copies positions exactly).
+const POSITION_EPSILON: f64 = 1e-9;
 
 /// The van der Waals cutoff `relax` uses when the preference asks for one.
 const VDW_CUTOFF: f64 = 6.0;
@@ -1472,6 +1482,73 @@ impl NodeData for ChemisorbData {
             }
             Err(message) => all_pins(NetworkResult::Error(message)),
         }
+    }
+
+    /// The `debug` pin only (`doc/design_trace_coverage.md`). Every debug form
+    /// — posed, seated, relaxed — is a copy of the plan's combined structure,
+    /// so its atoms carry combined ids, and the `Setup` rebuilt from the inputs
+    /// (cheap, no relaxation, never the stored search or view) maps them back
+    /// to one side. An id on neither side was added by a passivated
+    /// relaxation. The `candidates` pin is an array of records and is not
+    /// traced (records are not yet).
+    fn trace(
+        &self,
+        pin: usize,
+        element: Option<usize>,
+        probe: &TraceProbe,
+        ctx: &TraceContext,
+    ) -> Option<TraceStep> {
+        let TraceProbe::Atom { id: Some(id), .. } = probe else {
+            return None;
+        };
+        if pin != DEBUG_OUTPUT_PIN || element.is_some() {
+            return None;
+        }
+        let output = ctx.output(pin);
+        let out_atom = trace_atoms(&output)?.get_atom(*id)?;
+        let adsorbate_value = ctx.input(ADSORBATE_INPUT_PIN);
+        let adsorbate = trace_atoms(&adsorbate_value)?;
+        let substrate_value = ctx.input(SUBSTRATE_INPUT_PIN);
+        let substrate = trace_atoms(&substrate_value)?;
+        let transfers = transfer_rules(ctx.input_value(TRANSFERS_INPUT_PIN)).ok()?;
+        // The vdW mode is a relaxation setting; the setup does not read it.
+        let config = self.search_config(false, transfers).ok()?;
+        let setup = Setup::new(adsorbate, substrate, &config).ok()?;
+
+        // Input id → combined id, inverted for the one id asked about.
+        let side = |ids: &FxHashMap<u32, u32>, ids_pin: usize, atoms: &AtomicStructure| {
+            let (input_id, _) = ids.iter().find(|(_, combined)| **combined == *id)?;
+            Some((ids_pin, *input_id, atoms.get_atom(*input_id)?.position))
+        };
+        let found = side(&setup.adsorbate_ids, ADSORBATE_INPUT_PIN, adsorbate)
+            .or_else(|| side(&setup.substrate_ids, SUBSTRATE_INPUT_PIN, substrate));
+        let Some((input_pin, input_id, position)) = found else {
+            let label = if is_terminator(out_atom) {
+                "passivated"
+            } else {
+                "added"
+            };
+            return Some(TraceStep {
+                contribution: Contribution::Created(label),
+                upstream: Vec::new(),
+            });
+        };
+        let contribution = if position.distance(out_atom.position) > POSITION_EPSILON {
+            Contribution::Modified("chemisorbed")
+        } else {
+            Contribution::Passed
+        };
+        Some(TraceStep {
+            contribution,
+            upstream: vec![TraceLink {
+                pin: input_pin,
+                element: None,
+                probe: TraceProbe::Atom {
+                    id: Some(input_id),
+                    position,
+                },
+            }],
+        })
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

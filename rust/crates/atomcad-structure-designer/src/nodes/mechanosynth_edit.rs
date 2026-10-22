@@ -43,9 +43,12 @@ use crate::node_type_registry::NodeTypeRegistry;
 use crate::nodes::build_step::{
     BUILD_STEP_RECORD, build_step_record, is_identity_rotation, steps_from_array,
 };
-use crate::nodes::mechanosynth::{MS_CURRENT_TAG, MS_FEEDSTOCK_TAG, MS_TOOL_TAG, participants};
+use crate::nodes::mechanosynth::{
+    MS_CURRENT_TAG, MS_FEEDSTOCK_TAG, MS_TOOL_TAG, ScenePins, participants, trace_scene_atom,
+};
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
+use crate::trace::{TraceContext, TraceProbe, TraceStep};
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::atomic_structure::atomic_structure_decorator::MechanosynthGhostVisuals;
 use atomcad_crystolecule::mechanosynth::{
@@ -793,6 +796,30 @@ impl NodeData for MechanosynthEditData {
     /// may have changed, which is what makes reading the cache safe.
     fn clear_input_cache(&self) {
         self.invalidate_input_cache();
+    }
+
+    /// The replayer's trace ([`trace_scene_atom`]): the prefix and the
+    /// authored block replay onto one scene, so an atom either of them added
+    /// is `deposited` and every other atom is the merged one it was. It reads
+    /// the inputs through the context, never `cached_input`.
+    fn trace(
+        &self,
+        pin: usize,
+        element: Option<usize>,
+        probe: &TraceProbe,
+        ctx: &TraceContext,
+    ) -> Option<TraceStep> {
+        trace_scene_atom(
+            pin,
+            element,
+            probe,
+            ctx,
+            &ScenePins {
+                base: BASE_PIN,
+                feedstocks: FEEDSTOCKS_PIN,
+                tools: TOOLS_PIN,
+            },
+        )
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

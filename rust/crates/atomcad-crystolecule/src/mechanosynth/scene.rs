@@ -386,6 +386,57 @@ pub fn build_scene(
     library: &OpLibrary,
 ) -> Result<Scene, MechanosynthError> {
     let tolerance = resolve_tolerance(library);
+    let MergedCast {
+        structure,
+        participants,
+        tool_atoms,
+    } = merge_cast(base, feedstocks, tools)?;
+
+    let bindings = bind_tools(&structure, &tool_atoms, library, tolerance)?;
+
+    let scene = Scene {
+        structure,
+        participants,
+        bindings,
+    };
+    check_participants(&scene, library.clash_factor())?;
+
+    // **Containment is checked, not assumed.** A type that claims a smaller
+    // envelope than the molecule playing it would have the sweep call a site
+    // reachable the molecule cannot reach, so it is refused here — once, before
+    // any step, beside the frame residual it is the twin of.
+    for (index, binding) in scene.bindings.iter().enumerate() {
+        let tool_type = library
+            .tool_type(&binding.tool_type)
+            .expect("binding named a declared tool type");
+        check_containment(&scene, index, tool_type, library, &tool_atoms[index])?;
+    }
+
+    Ok(scene)
+}
+
+/// The base, the reservoirs and the tools merged into one structure, before
+/// any binding or check: what [`build_scene`] starts from.
+pub struct MergedCast {
+    pub structure: AtomicStructure,
+    /// The participant of every atom of `structure`.
+    pub participants: FxHashMap<u32, Participant>,
+    /// The merged ids of each tool's atoms, in pin order.
+    pub tool_atoms: Vec<Vec<u32>>,
+}
+
+/// The merge half of [`build_scene`]: clones the base and appends every
+/// reservoir, then every tool, recording the participant of each atom. Needs
+/// no library, so a caller that only wants to know which input a scene atom
+/// came from (an output trace) can ask without binding anything.
+///
+/// Atoms a replay adds are appended after these and never reuse an id, so an
+/// id of a replayed scene that is in the merge is the merged atom it was.
+pub fn merge_cast(
+    base: &AtomicStructure,
+    feedstocks: &[AtomicStructure],
+    tools: &[AtomicStructure],
+) -> Result<MergedCast, MechanosynthError> {
     // The base is cloned first, so its atom ids are unchanged and `result` is
     // atom-for-atom comparable with a tool-free replay.
     let mut structure = base.clone();
@@ -437,27 +488,11 @@ pub fn build_scene(
         tool_atoms.push(remap.into_values().collect());
     }
 
-    let bindings = bind_tools(&structure, &tool_atoms, library, tolerance)?;
-
-    let scene = Scene {
+    Ok(MergedCast {
         structure,
         participants,
-        bindings,
-    };
-    check_participants(&scene, library.clash_factor())?;
-
-    // **Containment is checked, not assumed.** A type that claims a smaller
-    // envelope than the molecule playing it would have the sweep call a site
-    // reachable the molecule cannot reach, so it is refused here — once, before
-    // any step, beside the frame residual it is the twin of.
-    for (index, binding) in scene.bindings.iter().enumerate() {
-        let tool_type = library
-            .tool_type(&binding.tool_type)
-            .expect("binding named a declared tool type");
-        check_containment(&scene, index, tool_type, library, &tool_atoms[index])?;
-    }
-
-    Ok(scene)
+        tool_atoms,
+    })
 }
 
 /// The same two predicates the engine applies to every step, applied once to

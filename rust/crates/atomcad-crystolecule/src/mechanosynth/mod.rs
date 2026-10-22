@@ -59,9 +59,9 @@ pub use place::{
 };
 pub use pose::{ToolPose, tool_pose};
 pub use scene::{
-    LandingPlan, Participant, Scene, SceneEffect, StepPlan, ToolBinding, apply_step_in_scene,
-    build_scene, event_indices, match_step_in_scene, replay_scene, replay_scene_partial,
-    replay_steps,
+    LandingPlan, MergedCast, Participant, Scene, SceneEffect, StepPlan, ToolBinding,
+    apply_step_in_scene, build_scene, event_indices, match_step_in_scene, merge_cast, replay_scene,
+    replay_scene_partial, replay_steps,
 };
 pub use schema::{
     APEX_FRAME_TAG, BUILD_FORMAT, BondMismatch, BuildScript, CLASH_BLOCK, CLASH_SEARCH_RADIUS,

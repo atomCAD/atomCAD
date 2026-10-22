@@ -9,22 +9,30 @@
 //!
 //! Phase 3 of `doc/design_trace_coverage.md`: the region-gated atom ops
 //! (`trace_region_op`), `apply_style`, `edit_atom`, `proxy`, `apply_diff`.
+//!
+//! Phase 4 of `doc/design_trace_coverage.md`: the multi-participant nodes
+//! (`mechanosynth`, `mechanosynth_edit`, `patch_latticefill`, `chemisorb`'s
+//! debug pin).
 
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::atomic_structure::SelectModifier;
 use atomcad_crystolecule::guided_placement::crystal_bond_length;
+use atomcad_crystolecule::io::xyz_loader::load_xyz;
 use atomcad_crystolecule::lattice_fill::DEFAULT_REGION_MARGIN;
+use atomcad_crystolecule::mechanosynth::{APEX_FRAME_TAG, Step};
 use atomcad_crystolecule::structure::Structure;
 use atomcad_geo_tree::GeoNode;
 use atomcad_structure_designer::data_type::{DataType, RecordType};
 use atomcad_structure_designer::evaluator::atom_op::region_contains;
 use atomcad_structure_designer::evaluator::network_result::{MoleculeData, NetworkResult};
+use atomcad_structure_designer::node_network::NodeRef;
 use atomcad_structure_designer::nodes::array_append::ArrayAppendData;
 use atomcad_structure_designer::nodes::array_at::ArrayAtData;
 use atomcad_structure_designer::nodes::array_concat::ArrayConcatData;
 use atomcad_structure_designer::nodes::atom_cut::AtomCutData;
 use atomcad_structure_designer::nodes::atom_edit::atom_edit::AtomEditData;
 use atomcad_structure_designer::nodes::atom_replace::AtomReplaceData;
+use atomcad_structure_designer::nodes::build_script::BuildScriptData;
 use atomcad_structure_designer::nodes::edit_atom::commands::add_atom_command::AddAtomCommand;
 use atomcad_structure_designer::nodes::edit_atom::commands::select_command::SelectCommand;
 use atomcad_structure_designer::nodes::edit_atom::commands::transform_command::TransformCommand;
@@ -33,6 +41,10 @@ use atomcad_structure_designer::nodes::free_move::FreeMoveData;
 use atomcad_structure_designer::nodes::free_rot::FreeRotData;
 use atomcad_structure_designer::nodes::if_else::IfData;
 use atomcad_structure_designer::nodes::materialize::MaterializeData;
+use atomcad_structure_designer::nodes::mechanosynth::MechanosynthData;
+use atomcad_structure_designer::nodes::mechanosynth_edit::{AuthoredStep, MechanosynthEditData};
+use atomcad_structure_designer::nodes::ops_library::OpsLibraryData;
+use atomcad_structure_designer::nodes::patch_latticefill::PatchLatticeFillData;
 use atomcad_structure_designer::nodes::proxy::ProxyData;
 use atomcad_structure_designer::nodes::sequence::SequenceData;
 use atomcad_structure_designer::nodes::structure_invert::StructureInvertData;
@@ -45,6 +57,8 @@ use atomcad_structure_designer::structure_designer::StructureDesigner;
 use atomcad_structure_designer::trace::{
     ATOM_POINT_DELTA_BONDS, TraceProbe, atom_point_delta, is_terminator,
 };
+use atomcad_structure_designer::trace::{TraceHit, TraceHitTarget};
+use atomcad_test_support::fixture_path_str;
 use atomcad_util::transform::Transform;
 use glam::f64::{DQuat, DVec2, DVec3};
 use glam::i32::IVec3;
@@ -1354,5 +1368,333 @@ fn apply_diff_of_an_atom_edit_follows_each_chain_only_for_its_own_atoms() {
     assert_eq!(
         trace(&mut d, &atom_hit(apply, DVec3::new(10.0, 0.0, 0.0))),
         "apply added\nedit possibly contributed\nsrc wired upstream"
+    );
+}
+
+// ============================================================================
+// mechanosynth / mechanosynth_edit
+// ============================================================================
+
+/// The tool fixtures of `mechanosynth_tools_node_test.rs`: two methanes
+/// (`tool_scene.xyz`, ids 1–10), the reservoir (`tool_dump.xyz`), the
+/// charged tip and the bare probe, against `tool_ops.json` /
+/// `tool_build.json`.
+fn ms_fixture(name: &str) -> String {
+    fixture_path_str(&format!("mechanosynth/{name}"))
+}
+
+fn ms_molecule(name: &str) -> AtomicStructure {
+    load_xyz(&ms_fixture(name), true).unwrap()
+}
+
+fn sorted_ids(s: &AtomicStructure) -> Vec<u32> {
+    let mut ids: Vec<u32> = s.iter_atoms().map(|(id, _)| *id).collect();
+    ids.sort_unstable();
+    ids
+}
+
+/// A tool molecule tagged as a design tags it: the type on every atom, then
+/// `apex` and the three legs on the frame atoms (apex first, legs at 3, 4, 5).
+fn ms_tool(name: &str, tool_type: &str) -> AtomicStructure {
+    let mut s = ms_molecule(name);
+    let ids = sorted_ids(&s);
+    for id in &ids {
+        s.add_atom_tag(*id, tool_type).unwrap();
+    }
+    s.add_atom_tag(ids[0], APEX_FRAME_TAG).unwrap();
+    for (tag, index) in ["a", "b", "c"].into_iter().zip([3, 4, 5]) {
+        s.add_atom_tag(ids[index], tag).unwrap();
+    }
+    s
+}
+
+/// `base`, `dump`, `tip`, `probe` (value nodes), `ops` and `steps` (from the
+/// fixture files) wired into a `node_type` (`mechanosynth` or
+/// `mechanosynth_edit`) named `ms`, whose feedstock and tool pins are
+/// `feedstocks_pin` / `tools_pin`.
+fn ms_net(node_type: &str, feedstocks_pin: usize, tools_pin: usize) -> (StructureDesigner, u64) {
+    ms_net_with_probe(node_type, feedstocks_pin, tools_pin, DVec3::ZERO)
+}
+
+/// [`ms_net`] with the probe translated by `probe_shift`.
+fn ms_net_with_probe(
+    node_type: &str,
+    feedstocks_pin: usize,
+    tools_pin: usize,
+    probe_shift: DVec3,
+) -> (StructureDesigner, u64) {
+    let mut probe_atoms = ms_tool("tool_probe.xyz", "probe");
+    for id in sorted_ids(&probe_atoms) {
+        let p = probe_atoms.get_atom(id).unwrap().position;
+        probe_atoms.set_atom_position(id, p + probe_shift);
+    }
+    let mut d = setup();
+    let base = add_value(&mut d, molecule_of(ms_molecule("tool_scene.xyz")), "base");
+    let dump = add_value(&mut d, molecule_of(ms_molecule("tool_dump.xyz")), "dump");
+    let tip = add_value(
+        &mut d,
+        molecule_of(ms_tool("tool_tip.xyz", "habst_tool")),
+        "tip",
+    );
+    let probe = add_value(&mut d, molecule_of(probe_atoms), "probe");
+    let ops = add(&mut d, "ops_library", "ops");
+    let data = data_mut::<OpsLibraryData>(&mut d, ops);
+    data.file = Some(ms_fixture("tool_ops.json"));
+    data.reload_missing(None);
+    let steps = add(&mut d, "build_script", "steps");
+    let data = data_mut::<BuildScriptData>(&mut d, steps);
+    data.file = Some(ms_fixture("tool_build.json"));
+    data.reload_missing(None);
+    let ms = add(&mut d, node_type, "ms");
+    d.connect_nodes(base, 0, ms, 0);
+    d.connect_nodes(ops, 0, ms, 1);
+    d.connect_nodes(steps, 0, ms, 2);
+    d.connect_nodes(dump, 0, ms, feedstocks_pin);
+    d.connect_nodes(tip, 0, ms, tools_pin);
+    d.connect_nodes(probe, 0, ms, tools_pin);
+    (d, ms)
+}
+
+fn mechanosynth_net(step: i32, time: f64) -> (StructureDesigner, u64) {
+    let (mut d, ms) = ms_net("mechanosynth", 4, 5);
+    let data = data_mut::<MechanosynthData>(&mut d, ms);
+    data.step = step;
+    data.time = time;
+    (d, ms)
+}
+
+fn pin_hit(node_id: u64, pin: usize, position: DVec3) -> TraceHit {
+    TraceHit {
+        node: NodeRef::top(node_id),
+        pin,
+        target: TraceHitTarget::Atom { position },
+    }
+}
+
+fn pin_atoms(d: &mut StructureDesigner, node_id: u64, pin: i32) -> AtomicStructure {
+    d.evaluate_node_output(&[], node_id, pin)
+        .extract_atomic()
+        .expect("an atomic output")
+}
+
+fn has_atom_at(atoms: &AtomicStructure, position: DVec3) -> bool {
+    atoms
+        .iter_atoms()
+        .any(|(_, a)| a.position.distance(position) < 1e-4)
+}
+
+/// Methane B's `+x` hydrogen: no step touches it.
+const MS_UNTOUCHED_H: DVec3 = DVec3::new(11.027662, 0.0, -0.363333);
+/// Where `settle` moves methane A's hydrogen at (−0.51, 0.89, −0.36): 0.2 Å up.
+const MS_SETTLED_H: DVec3 = DVec3::new(-0.513831, 0.889981, -0.163333);
+/// The fluorine the first `expose` deposits on methane A's carbon.
+const MS_DEPOSITED_F: DVec3 = DVec3::new(0.0, 0.0, 1.4);
+
+#[test]
+fn mechanosynth_passes_an_untouched_base_atom_without_listing_tools_or_feedstocks() {
+    let (mut d, ms) = mechanosynth_net(-1, 1.0);
+    assert_eq!(
+        trace(&mut d, &atom_hit(ms, MS_UNTOUCHED_H)),
+        "ms passed\nbase source"
+    );
+}
+
+#[test]
+fn mechanosynth_reports_a_base_atom_a_step_moved_as_reacted() {
+    let (mut d, ms) = mechanosynth_net(-1, 1.0);
+    assert!(
+        has_atom_at(&pin_atoms(&mut d, ms, 0), MS_SETTLED_H),
+        "precondition: settle moved the hydrogen"
+    );
+    assert_eq!(
+        trace(&mut d, &atom_hit(ms, MS_SETTLED_H)),
+        "ms reacted\nbase source"
+    );
+}
+
+#[test]
+fn mechanosynth_stops_at_a_deposited_atom() {
+    let (mut d, ms) = mechanosynth_net(-1, 1.0);
+    assert!(
+        has_atom_at(&pin_atoms(&mut d, ms, 0), MS_DEPOSITED_F),
+        "precondition: expose deposited the fluorine"
+    );
+    assert_eq!(trace(&mut d, &atom_hit(ms, MS_DEPOSITED_F)), "ms deposited");
+}
+
+#[test]
+fn mechanosynth_scene_lists_only_the_tool_or_reservoir_an_atom_belongs_to() {
+    // The probe is shifted so that its leg `a` sits exactly where the tip's
+    // does in the inputs: a match by position alone would find both, so only
+    // the participant map keeps the probe off the list.
+    let tip = ms_molecule("tool_tip.xyz");
+    let input = tip.get_atom(sorted_ids(&tip)[3]).unwrap().position;
+    let probe = ms_molecule("tool_probe.xyz");
+    let probe_leg = probe.get_atom(sorted_ids(&probe)[3]).unwrap().position;
+    let (mut d, ms) = ms_net_with_probe("mechanosynth", 4, 5, input - probe_leg);
+    // Step 1 a quarter in: the tip is flying to its site, away from where
+    // its input has it.
+    let data = data_mut::<MechanosynthData>(&mut d, ms);
+    data.step = 1;
+    data.time = 0.25;
+    let scene = pin_atoms(&mut d, ms, 2);
+    let leg = scene
+        .atoms_with_tag("habst_tool")
+        .into_iter()
+        .find(|id| scene.atom_has_tag(*id, "a"))
+        .expect("the tip's leg a is in the scene");
+    let posed = scene.get_atom(leg).unwrap().position;
+    assert!(
+        posed.distance(input) > 1.0,
+        "precondition: the tip is posed away from its input position"
+    );
+    assert_eq!(
+        trace(&mut d, &pin_hit(ms, 2, posed)),
+        "ms passed\ntip source"
+    );
+    // A reservoir carbon: the reservoir alone.
+    assert_eq!(
+        trace(&mut d, &pin_hit(ms, 2, DVec3::new(20.0, 0.0, 0.0))),
+        "ms passed\ndump source"
+    );
+}
+
+#[test]
+fn mechanosynth_edit_reports_prefix_and_block_deposits_and_passes_a_base_atom() {
+    let (mut d, edit) = ms_net("mechanosynth_edit", 3, 4);
+    let data = data_mut::<MechanosynthEditData>(&mut d, edit);
+    // After the whole prefix, fluorinate the reservoir's first carbon.
+    data.authored = vec![AuthoredStep {
+        step: Step::new("expose".to_string(), DVec3::new(20.0, 0.0, 0.0)),
+        residual: 0.0,
+        approximate: false,
+    }];
+    data.cursor = 1;
+    let block_f = DVec3::new(20.0, 0.0, 1.4);
+    let scene = pin_atoms(&mut d, edit, 2);
+    assert!(
+        has_atom_at(&scene, block_f) && has_atom_at(&scene, MS_DEPOSITED_F),
+        "precondition: both the prefix and the block deposited"
+    );
+    assert_eq!(
+        trace(&mut d, &pin_hit(edit, 2, MS_DEPOSITED_F)),
+        "ms deposited"
+    );
+    assert_eq!(trace(&mut d, &pin_hit(edit, 2, block_f)), "ms deposited");
+    assert_eq!(
+        trace(&mut d, &pin_hit(edit, 2, MS_UNTOUCHED_H)),
+        "ms passed\nbase source"
+    );
+}
+
+// ============================================================================
+// patch_latticefill
+// ============================================================================
+
+/// A bulk carbon far from the region.
+const BULK: DVec3 = DVec3::new(10.0, 10.0, 10.0);
+/// The tile's one interior atom, as cell 0 places it.
+const TILE_ATOM: DVec3 = DVec3::new(1.0, 1.0, 1.0);
+
+/// `target` (one bulk carbon) and `region` (a sphere admitting cell 0 only)
+/// wired into `fill`, with a one-atom tile tiled along x and a cut volume that
+/// cuts nothing.
+fn patch_net() -> (StructureDesigner, u64) {
+    let mut d = setup();
+    let target = add_value(&mut d, crystal(&[(6, BULK)], None), "target");
+    let region = add_value(&mut d, blueprint(GeoNode::sphere(TILE_ATOM, 1.5)), "region");
+    let mut tile = AtomicStructure::new();
+    tile.add_atom(6, TILE_ATOM);
+    let patch_value = NetworkResult::record(vec![
+        ("tile".to_string(), molecule_of(tile)),
+        (
+            "tiling_vectors".to_string(),
+            NetworkResult::Array(vec![NetworkResult::IVec3(IVec3::new(1, 0, 0))]),
+        ),
+        (
+            "cut_volume".to_string(),
+            blueprint(GeoNode::sphere(DVec3::new(-50.0, -50.0, -50.0), 0.0)),
+        ),
+    ]);
+    let network = d.node_type_registry.node_networks.get_mut(MAIN).unwrap();
+    let patch = add_typed_value_node(
+        network,
+        DVec2::ZERO,
+        patch_value,
+        DataType::Record(RecordType::Named("Patch".to_string())),
+    );
+    name(&mut d, MAIN, patch, "patch");
+    let fill = add(&mut d, "patch_latticefill", "fill");
+    let data = data_mut::<PatchLatticeFillData>(&mut d, fill);
+    data.passivate = false;
+    // Test on the plane through the lattice origin: cell k's atom tests at
+    // (1 + 3.567 k, 0, 0), which the sphere admits for k = 0 only.
+    data.test_height_at_origin = true;
+    d.connect_nodes(target, 0, fill, 0);
+    d.connect_nodes(region, 0, fill, 1);
+    d.connect_nodes(patch, 0, fill, 2);
+    (d, fill)
+}
+
+#[test]
+fn patch_latticefill_passes_a_bulk_atom_without_listing_the_region() {
+    let (mut d, fill) = patch_net();
+    assert_eq!(
+        trace(&mut d, &atom_hit(fill, BULK)),
+        "fill passed\ntarget source"
+    );
+}
+
+#[test]
+fn patch_latticefill_traces_a_tile_atom_to_the_region() {
+    let (mut d, fill) = patch_net();
+    assert!(
+        has_atom_at(&output_atoms(&mut d, fill), TILE_ATOM),
+        "precondition: cell 0 was tiled"
+    );
+    assert_eq!(
+        trace(&mut d, &atom_hit(fill, TILE_ATOM)),
+        "fill patched\nregion shape"
+    );
+}
+
+// ============================================================================
+// chemisorb (debug pin)
+// ============================================================================
+
+#[test]
+fn chemisorb_debug_root_view_lists_only_the_side_an_atom_came_from() {
+    let mut d = setup();
+    // •OH over a silyl radical.
+    let mut adsorbate = AtomicStructure::new();
+    let o = adsorbate.add_atom(8, DVec3::new(0.3, 0.2, 2.2));
+    let h = adsorbate.add_atom(1, DVec3::new(0.3, 0.2, 3.17));
+    adsorbate.add_bond(o, h, 1);
+    let mut substrate = AtomicStructure::new();
+    let si = substrate.add_atom(14, DVec3::ZERO);
+    let (sin, cos) = ((8.0f64 / 9.0).sqrt(), -1.0 / 3.0);
+    for deg in [0.0f64, 120.0, 240.0] {
+        let phi = deg.to_radians();
+        let h = substrate.add_atom(1, DVec3::new(sin * phi.cos(), sin * phi.sin(), cos) * 1.48);
+        substrate.add_bond(si, h, 1);
+    }
+    let ads = add_value(&mut d, molecule_of(adsorbate), "ads");
+    let sub = add_value(&mut d, molecule_of(substrate), "sub");
+    let chem = add(&mut d, "chemisorb", "chem");
+    d.connect_nodes(ads, 0, chem, 0);
+    d.connect_nodes(sub, 0, chem, 1);
+    assert_eq!(
+        pin_atoms(&mut d, chem, 2).get_num_of_atoms(),
+        6,
+        "precondition: the root view is the posed pair"
+    );
+
+    assert_eq!(
+        trace(&mut d, &pin_hit(chem, 2, DVec3::new(0.3, 0.2, 2.2))),
+        "chem passed\nads source"
+    );
+    assert_eq!(
+        trace(&mut d, &pin_hit(chem, 2, DVec3::ZERO)),
+        "chem passed\nsub source"
     );
 }

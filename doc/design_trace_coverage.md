@@ -409,12 +409,15 @@ atoms get remapped ids; atoms a step adds are appended. `Scene::participants`
 records which input every atom belongs to.
 
 `trace` reads nothing the node stored at eval time (`record_last_scene` is
-runtime state shared by every call site of a subnetwork). It rebuilds what it
-needs from the inputs through a helper factored out of `eval`, which returns
-the replayed `Scene` and the posed copy the `scene` pin shows (for
-`mechanosynth_edit`, the result of its two replays). It also calls
-`build_scene` on the same inputs, which is cheap, to know which atoms existed
-before any step.
+runtime state shared by every call site of a subnetwork). It needs no replay:
+a replay only deletes atoms and appends new ids, never re-labels an atom's
+participant, so the merge alone (`mechanosynth::merge_cast`, the library-free
+first half of `build_scene`, factored out of it) says which input every
+pre-existing atom of either output pin came from, and the pin's own value
+(`ctx.output`) gives its replayed state. Both nodes share one
+implementation (`nodes/mechanosynth.rs::trace_scene_atom`), which needs no
+library at all — a library on a legacy file property would otherwise need
+the design directory the trace cannot see.
 
 For an `Atom { id: Some(id) }` probe on pin 0 (`result`) or pin 2 (`scene`) —
 both carry scene ids:
@@ -439,7 +442,9 @@ from the patch: `Created("patched")`, or `Created("passivated")` for a
 terminator, and link `region` (pin 1) with a Point at the atom's position (for
 a terminator, at its host's), δ from the output structure. `region` is
 `HasStructure`, so it may be a Crystal; the engine's Point handling already
-covers both. The `patch` pin is a record and is not followed (Deferred).
+covers both. With `region` unwired, `eval` takes the region from the
+`target` (a Crystal), so the Point goes to `target` (pin 0) instead. The
+`patch` pin is a record and is not followed (Deferred).
 
 **`chemisorb`** (`debug` pin, pin 2). The debug view's atoms carry the plan's
 *combined* ids, and `Setup` maps each input atom to its combined id per side
@@ -669,7 +674,9 @@ Tests (`trace_atomic_nodes_test.rs`; the mechanosynth fixtures from
 - `chemisorb` debug pin, root (posed) view: an adsorbate atom lists only the
   adsorbate chain, a substrate atom only the substrate chain.
 - Mutation check: link every tool element in `mechanosynth`; the tool test must
-  fail.
+  fail. It fails only if another tool has an atom at the same input position:
+  a by-position link into a tool with nothing there is dropped by the engine,
+  so the test shifts the probe onto the tip's leg.
 
 Manual walkthrough (maintainer): mechadense's original network, before and
 after, for the hit that prompted the feedback.

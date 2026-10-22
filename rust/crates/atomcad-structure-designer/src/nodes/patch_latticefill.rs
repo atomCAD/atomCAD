@@ -68,6 +68,10 @@ use crate::node_type::{
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
+use crate::trace::{
+    Contribution, TraceContext, TraceLink, TraceProbe, TraceStep, atom_at, atom_point_probe,
+    atoms_of, is_terminator,
+};
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::patch::{
     CompatibilityReport, DEFAULT_WELD_TOLERANCE, apply_patch, atom_aabb,
@@ -79,6 +83,10 @@ use glam::i32::IVec3;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::HashMap;
+
+/// Input pins the trace follows.
+const TARGET_PIN: usize = 0;
+const REGION_PIN: usize = 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PatchLatticeFillData {
@@ -235,8 +243,13 @@ impl NodeData for PatchLatticeFillData {
         *self.last_report.borrow_mut() = None;
 
         // Pin 0: target (HasAtoms) — the structure being reconstructed.
-        let target_val =
-            network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
+        let target_val = network_evaluator.evaluate_arg_required(
+            network_stack,
+            node_id,
+            registry,
+            context,
+            TARGET_PIN,
+        );
         if let NetworkResult::Error(_) = target_val {
             return EvalOutput::single(target_val);
         }
@@ -252,7 +265,7 @@ impl NodeData for PatchLatticeFillData {
         // Pin 1: region (HasStructure, optional). Defaults to `target` (which
         // must then be a Crystal so it carries a structure).
         let region_val =
-            network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 1);
+            network_evaluator.evaluate_arg(network_stack, node_id, registry, context, REGION_PIN);
         if let NetworkResult::Error(_) = region_val {
             return EvalOutput::single(region_val);
         }
@@ -368,6 +381,65 @@ impl NodeData for PatchLatticeFillData {
             alignment,
             alignment_reason,
         }))
+    }
+
+    /// `apply_patch` rebuilds the structure (cut, place, weld, drop,
+    /// passivate), so atoms are matched by position
+    /// (`doc/design_trace_coverage.md`): an atom at a `target` atom's position
+    /// passes to it; any other atom came from the patch, and the region that
+    /// admitted its cell is followed with a Point at the atom (at the host for
+    /// a terminator). With `region` unwired the region is the target's own
+    /// geometry, so the Point goes to `target`. The `patch` record is not
+    /// followed (records are not traced yet).
+    fn trace(
+        &self,
+        pin: usize,
+        element: Option<usize>,
+        probe: &TraceProbe,
+        ctx: &TraceContext,
+    ) -> Option<TraceStep> {
+        let TraceProbe::Atom { id: Some(id), .. } = probe else {
+            return None;
+        };
+        if pin != 0 || element.is_some() {
+            return None;
+        }
+        let output = ctx.output(0);
+        let out_atoms = atoms_of(&output)?;
+        let out_atom = out_atoms.get_atom(*id)?;
+        let target = ctx.input(TARGET_PIN);
+        let target_atoms = atoms_of(&target)?;
+        if let Some(target_id) = atom_at(target_atoms, out_atom.position) {
+            return Some(TraceStep {
+                contribution: Contribution::Passed,
+                upstream: vec![TraceLink {
+                    pin: TARGET_PIN,
+                    element: None,
+                    probe: TraceProbe::Atom {
+                        id: Some(target_id),
+                        position: target_atoms.get_atom(target_id)?.position,
+                    },
+                }],
+            });
+        }
+        let (label, at) = if is_terminator(out_atom) {
+            ("passivated", out_atom.bonds.first()?.other_atom_id())
+        } else {
+            ("patched", *id)
+        };
+        let region_pin = if matches!(ctx.input(REGION_PIN).as_ref(), NetworkResult::None) {
+            TARGET_PIN
+        } else {
+            REGION_PIN
+        };
+        Some(TraceStep {
+            contribution: Contribution::Created(label),
+            upstream: vec![TraceLink {
+                pin: region_pin,
+                element: None,
+                probe: atom_point_probe(out_atoms, at)?,
+            }],
+        })
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

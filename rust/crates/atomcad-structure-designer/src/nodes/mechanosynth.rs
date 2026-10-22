@@ -57,11 +57,15 @@ use crate::nodes::build_step::{BUILD_STEP_RECORD, steps_from_array};
 use crate::overlay::{Overlay, OverlayKind};
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
+use crate::trace::{
+    Contribution, TraceContext, TraceLink, TraceProbe, TraceStep, atoms_of as trace_atoms,
+    bonds_differ,
+};
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::mechanosynth::{
-    BuildScript, HighlightTags, MechanosynthError, NO_LAYER, NO_SITE, OpLibrary, Pose, Scene,
-    ToolMotion, apply_tool_pose, load_build_script, load_library, replay_scene_at, steps_applied,
-    tool_envelope_cages,
+    BuildScript, HighlightTags, MechanosynthError, NO_LAYER, NO_SITE, OpLibrary, Participant, Pose,
+    Scene, ToolMotion, apply_tool_pose, load_build_script, load_library, merge_cast,
+    replay_scene_at, steps_applied, tool_envelope_cages,
 };
 use atomcad_util::path_utils::{resolve_path, try_make_relative};
 use glam::DMat3;
@@ -622,6 +626,28 @@ impl NodeData for MechanosynthData {
         }
     }
 
+    /// Which input a hit atom came from, without a replay
+    /// ([`trace_scene_atom`]).
+    fn trace(
+        &self,
+        pin: usize,
+        element: Option<usize>,
+        probe: &TraceProbe,
+        ctx: &TraceContext,
+    ) -> Option<TraceStep> {
+        trace_scene_atom(
+            pin,
+            element,
+            probe,
+            ctx,
+            &ScenePins {
+                base: 0,
+                feedstocks: FEEDSTOCKS_PIN,
+                tools: TOOLS_PIN,
+            },
+        )
+    }
+
     fn clone_box(&self) -> Box<dyn NodeData> {
         Box::new(self.clone())
     }
@@ -791,10 +817,22 @@ pub(crate) fn participants<'a>(
     pin: usize,
     pin_name: &str,
 ) -> Result<Vec<AtomicStructure>, Box<NetworkResult>> {
+    participants_from(
+        network_evaluator.evaluate_arg(network_stack, node_id, registry, context, pin),
+        pin_name,
+    )
+}
+
+/// [`participants`] for a value already in hand (`trace` reads it through its
+/// `TraceContext`).
+pub(crate) fn participants_from(
+    value: NetworkResult,
+    pin_name: &str,
+) -> Result<Vec<AtomicStructure>, Box<NetworkResult>> {
     // The error is boxed: `NetworkResult` is a wide enum (a `Crystal` variant
     // alone is over a kilobyte), so an unboxed `Err` would make every `Ok`
     // return pay for it.
-    match network_evaluator.evaluate_arg(network_stack, node_id, registry, context, pin) {
+    match value {
         NetworkResult::None => Ok(Vec::new()),
         propagated @ NetworkResult::Error(_) => Err(Box::new(propagated)),
         NetworkResult::Array(elements) => {
@@ -820,6 +858,97 @@ pub(crate) fn participants<'a>(
         )))),
     }
 }
+
+/// The input pins a scene-atom trace follows ([`trace_scene_atom`]), which
+/// sit at different indices on `mechanosynth` and `mechanosynth_edit`.
+pub(crate) struct ScenePins {
+    pub base: usize,
+    pub feedstocks: usize,
+    pub tools: usize,
+}
+
+/// `trace` for an atom on `result` (pin 0) or `scene` (`SCENE_OUTPUT_PIN`)
+/// of either mechanosynth node (`doc/design_trace_coverage.md`,
+/// Multi-participant nodes).
+///
+/// Both pins carry scene ids, and an id the replay did not add is the merged
+/// atom it was (`merge_cast`; added atoms are appended and ids never reused),
+/// so the merge alone says which input an atom came from — no replay, no
+/// library, and nothing the node parked at eval time. Only that input is
+/// linked: a base atom to `base` by id, a reservoir or tool atom to its own
+/// element of `feedstocks` / `tools` by its **merged** position (its input
+/// position; the `scene` pin may show the tool posed elsewhere). An atom a
+/// step added stops here, `deposited`: the scene does not record which
+/// participant it was taken from.
+pub(crate) fn trace_scene_atom(
+    pin: usize,
+    element: Option<usize>,
+    probe: &TraceProbe,
+    ctx: &TraceContext,
+    pins: &ScenePins,
+) -> Option<TraceStep> {
+    let TraceProbe::Atom { id: Some(id), .. } = probe else {
+        return None;
+    };
+    if element.is_some() || (pin != 0 && pin != SCENE_OUTPUT_PIN) {
+        return None;
+    }
+    let output = ctx.output(pin);
+    let out_atom = trace_atoms(&output)?.get_atom(*id)?;
+    let base_value = ctx.input(pins.base);
+    let base = trace_atoms(&base_value)?;
+    let feedstocks = participants_from(ctx.input_value(pins.feedstocks), "feedstocks").ok()?;
+    let tools = participants_from(ctx.input_value(pins.tools), "tools").ok()?;
+    let cast = merge_cast(base, &feedstocks, &tools).ok()?;
+
+    let Some(merged) = cast.structure.get_atom(*id) else {
+        return Some(TraceStep {
+            contribution: Contribution::Created("deposited"),
+            upstream: Vec::new(),
+        });
+    };
+    let by_position = |pin: usize, index: usize| TraceLink {
+        pin,
+        element: Some(index),
+        probe: TraceProbe::Atom {
+            id: None,
+            position: merged.position,
+        },
+    };
+    let (contribution, link) = match cast.participants.get(id)? {
+        Participant::Base => {
+            let changed = merged.position.distance(out_atom.position) > POSITION_EPSILON
+                || merged.atomic_number != out_atom.atomic_number
+                || bonds_differ(merged, out_atom);
+            let contribution = if changed {
+                Contribution::Modified("reacted")
+            } else {
+                Contribution::Passed
+            };
+            let link = TraceLink {
+                pin: pins.base,
+                element: None,
+                probe: TraceProbe::Atom {
+                    id: Some(*id),
+                    position: merged.position,
+                },
+            };
+            (contribution, link)
+        }
+        Participant::Feedstock(index) => {
+            (Contribution::Passed, by_position(pins.feedstocks, *index))
+        }
+        Participant::Tool(index) => (Contribution::Passed, by_position(pins.tools, *index)),
+    };
+    Some(TraceStep {
+        contribution,
+        upstream: vec![link],
+    })
+}
+
+/// Below this, a base atom has not moved. A kept atom is never snapped
+/// (`atomcad_crystolecule::mechanosynth`), so any real move is far larger.
+const POSITION_EPSILON: f64 = 1e-9;
 
 /// The `MechanosynthStep` record describing the **last step applied** — the
 /// same "current step" the property panel names.
