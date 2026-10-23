@@ -1,6 +1,6 @@
 # Insert node on wire, and dissolve node
 
-## Status: Phases 0–4 implemented (2026-10-23); Phases 5–6 not started
+## Status: Phases 0–5 implemented (2026-10-23); Phase 6 (manual walkthrough) open
 
 ## Motivation
 
@@ -1037,6 +1037,17 @@ insert flow with the type preselected. The guide's insertion entry gains the
 panel drop.
 
 *Tests:* none beyond Phase 1's (the commit is the same call).
+
+*Implementation notes (Phase 5, where the code differs from the text above):*
+- **The highlight is decided in the drop target and painted by the
+  painters.** `onMove` hit-tests the pointer and stores the answer with
+  `model.setUserTypeDropWire`, which repaints through `dragRepaint` only when
+  the wire changes; the painters draw it with the Phase 4 highlight. A pointer
+  over a node targets no wire, as for the wire context menu.
+- **The memo key includes `C`**, not only the wire: a capture wire splices at
+  a different depth either side of the body border, so the answer can differ.
+- **The commit path is the wire menu's tail** (`_spliceNewNode`), so the drop
+  and **Insert node…** cannot diverge.
 
 ### Phase 6 — manual walkthrough
 

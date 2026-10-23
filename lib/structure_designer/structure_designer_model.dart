@@ -635,6 +635,21 @@ class StructureDesignerModel extends ChangeNotifier {
     return zone!.wires;
   }
 
+  /// The wire a network dragged out of the user-types panel would be
+  /// inserted into if dropped now (`doc/design_insert_node_on_wire.md`
+  /// Phase 5), or null. The editor's drop target decides it; the painters
+  /// draw it like the node-drag highlight.
+  WireHitResult? get userTypeDropWire => _userTypeDropWire;
+  WireHitResult? _userTypeDropWire;
+
+  /// Sets [userTypeDropWire], repainting through [dragRepaint] only when the
+  /// wire changes — never [notifyListeners], since it moves with the pointer.
+  void setUserTypeDropWire(WireHitResult? wire) {
+    if (wire?.key == _userTypeDropWire?.key) return;
+    _userTypeDropWire = wire;
+    dragRepaint.value++;
+  }
+
   /// Registered by the node network editor: splice node [nodeId] (in
   /// [scopeChain]) into [wire] after a drag released it there. The editor
   /// owns the arrangement dialog and the snackbars.
@@ -5177,6 +5192,7 @@ class StructureDesignerModel extends ChangeNotifier {
     _dragScopeChain = null;
     _draggedNodeIds.clear();
     _endSpliceDrag();
+    _userTypeDropWire = null;
     nodeNetworkView = structure_designer_api.getNodeNetworkView();
     nodeNetworkNames =
         structure_designer_api.getNodeNetworksWithValidation() ?? [];

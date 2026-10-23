@@ -324,6 +324,15 @@ splice with `APINodeSource.existing`. It lives in the drag fast path, so:
   the splice a second one (`onNodeDroppedOnWire` → `_spliceDroppedNode`, which
   plans again before committing).
 
+**Dropping a network from the user-types panel onto a wire** (Phase 5) is the
+canvas `DragTarget`'s `onMove`: it hit-tests the pointer (no wire when over a
+node), asks a `PerDragPlanMemo` keyed by wire **and** clicked scope, and
+publishes the answer with `model.setUserTypeDropWire` — a dragRepaint bump on
+change, never a notify — which the painters draw like the node-drag highlight.
+`onMove` also fires for a drag the target rejected, hence
+`_userTypeDropAccepted`. The drop commits through `_spliceNewNode`, the wire
+menu's own tail.
+
 ## Constants (must match Rust `node_layout.rs`)
 
 - `BASE_NODE_WIDTH = 160`

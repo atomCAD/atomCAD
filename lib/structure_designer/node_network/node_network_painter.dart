@@ -322,6 +322,10 @@ class NodeNetworkPainter extends CustomPainter {
   /// once per tick. The image export has no drag, so it never gets one.
   WireHitResult? _spliceDropTarget(ScopeResolver resolver) {
     if (hideSelection) return null;
+    // A network dragged from the user-types panel (Phase 5): the editor's
+    // drop target has already decided.
+    final panelTarget = graphModel.userTypeDropWire;
+    if (panelTarget != null) return panelTarget;
     return graphModel.spliceDropTargetForTick((scopeChain, nodeId) {
       final node = resolver.findNodeInScope(scopeChain, nodeId);
       if (node == null) return null;

@@ -12,6 +12,7 @@ import 'package:flutter_cad/structure_designer/node_network/node_network_content
 import 'package:flutter_cad/structure_designer/node_network/node_network_painter.dart';
 import 'package:flutter_cad/structure_designer/node_network/open_port_tabs.dart';
 import 'package:flutter_cad/structure_designer/node_network/scope_resolver.dart';
+import 'package:flutter_cad/structure_designer/node_network/splice_drop_memo.dart';
 import 'package:flutter_cad/structure_designer/node_networks_list/user_type_drag.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
@@ -827,7 +828,18 @@ class NodeNetworkState extends State<NodeNetwork> {
     // scope, which can be shallower than the clicked one, so no `inZoneBody`.
     final nodeType = await showAddNodePopup(context, categories: categories);
     if (nodeType == null || !mounted) return;
+    await _spliceNewNode(model, nodeType, wireScope, wire, clickedScope);
+  }
 
+  /// Plan a new [nodeType] node into [wire], ask only when the plan is
+  /// ambiguous, and commit — one undo step. Shared by the wire menu and the
+  /// drop from the user-types panel (Phase 5).
+  Future<void> _spliceNewNode(
+      StructureDesignerModel model,
+      String nodeType,
+      List<BigInt> wireScope,
+      APIWireAnchor wire,
+      List<BigInt> clickedScope) async {
     final node = APINodeSource.new_(nodeTypeName: nodeType);
     final plan = model.planInsertOnWire(wireScope, wire, clickedScope, node);
     final refusal = plan.refusal;
@@ -1410,17 +1422,87 @@ class NodeNetworkState extends State<NodeNetwork> {
     focusNode.requestFocus();
   }
 
+  /// Asks Rust whether the dragged network can be inserted into a wire,
+  /// once per (wire, clicked scope) per drag (`doc/design_insert_node_on_wire.md`
+  /// Phase 5). The clicked scope is part of the key: a capture wire splices
+  /// at a different depth either side of the body border.
+  PerDragPlanMemo<(WireHitResult, List<BigInt>)>? _userTypeSpliceMemo;
+
+  /// Whether the drag hovering the canvas was accepted on entry. `onMove`
+  /// also fires for a rejected drag, which must light nothing up.
+  bool _userTypeDropAccepted = false;
+
+  void _endUserTypeDrag(StructureDesignerModel model) {
+    _userTypeSpliceMemo = null;
+    _userTypeDropAccepted = false;
+    model.setUserTypeDropWire(null);
+  }
+
+  /// The wire under [globalPosition] that [networkName] can be inserted
+  /// into, with the clicked scope `C` there, or null. A pointer over a node
+  /// targets no wire, as for the wire context menu.
+  (WireHitResult, List<BigInt>)? _userTypeSpliceTarget(
+      StructureDesignerModel model, String networkName, Offset globalPosition) {
+    final box = context.findRenderObject() as RenderBox?;
+    final resolver = _makeResolver();
+    if (box == null || resolver == null) return null;
+    final localPosition = box.globalToLocal(globalPosition);
+    if (resolver.isPositionOnNode(localPosition)) return null;
+    final hit =
+        NodeNetworkPainter(model, panOffset: _panOffset, zoomLevel: _zoomLevel)
+            .findWireAtPosition(localPosition,
+                includeBodyReturn: true, resolver: resolver);
+    if (hit == null) return null;
+    final clickedScope = resolver.findContainingScope(localPosition).scopeChain;
+    final node = APINodeSource.new_(nodeTypeName: networkName);
+    final memo =
+        _userTypeSpliceMemo ??= PerDragPlanMemo<(WireHitResult, List<BigInt>)>(
+      (w) => model
+          .planInsertOnWire(w.$1.wireScope, w.$1.anchor, w.$2, node)
+          .arrangements
+          .isNotEmpty,
+      (w) => '${w.$1.key}@${w.$2.join('/')}',
+    );
+    final target = (hit, clickedScope);
+    return memo.accepts(target) ? target : null;
+  }
+
   /// Wraps the canvas in the drop target for networks dragged out of the
   /// user-types panel. [canvas] stays the first child of the builder's
   /// `Stack` whether or not a drag hovers, so the highlight never remounts
-  /// the node widgets.
+  /// the node widgets. A wire the network can be inserted into lights up
+  /// under the pointer (painted through [StructureDesignerModel.dragRepaint],
+  /// never a rebuild); dropping there splices it in.
   Widget _buildUserTypeDropTarget(StructureDesignerModel model, Widget canvas) {
     return DragTarget<UserTypeDragData>(
-      onWillAcceptWithDetails: (details) =>
-          _canDropUserType(model, details.data),
+      onWillAcceptWithDetails: (details) {
+        _endUserTypeDrag(model);
+        return _userTypeDropAccepted = _canDropUserType(model, details.data);
+      },
+      onMove: (details) {
+        final name = details.data.placeableNetworkName;
+        if (!_userTypeDropAccepted || name == null) return;
+        model.setUserTypeDropWire(
+            _userTypeSpliceTarget(model, name, details.offset)?.$1);
+      },
+      onLeave: (_) => _endUserTypeDrag(model),
       onAcceptWithDetails: (details) {
         final name = details.data.placeableNetworkName;
-        if (name != null) _dropUserType(model, name, details.offset);
+        final target = name == null
+            ? null
+            : _userTypeSpliceTarget(model, name, details.offset);
+        _endUserTypeDrag(model);
+        if (name == null) return;
+        if (target == null) {
+          _dropUserType(model, name, details.offset);
+          return;
+        }
+        final (hit, clickedScope) = target;
+        model.setActiveScopeChain(hit.scopeChain);
+        _spliceNewNode(model, name, hit.wireScope, hit.anchor, clickedScope)
+            .then((_) {
+          if (mounted) focusNode.requestFocus();
+        });
       },
       builder: (context, candidates, rejected) {
         return Stack(
