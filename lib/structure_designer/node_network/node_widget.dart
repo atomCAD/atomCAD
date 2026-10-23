@@ -1838,9 +1838,13 @@ class NodeWidget extends StatelessWidget {
     }
   }
 
-  /// Handles end of node drag - commits position of all moved nodes
+  /// Handles end of node drag - commits position of all moved nodes, then,
+  /// when the node was released over a highlighted wire, splices it in as a
+  /// second undo step (`doc/design_insert_node_on_wire.md` Phase 4).
   void _handleNodeDragEnd(BuildContext context) {
     final model = Provider.of<StructureDesignerModel>(context, listen: false);
+    // Taken before the commit, whose refresh ends the drag state.
+    final spliceTarget = model.takeSpliceDropTarget();
 
     if (node.selected) {
       model.updateSelectedNodesPosition(scopeChain: scopeChain);
@@ -1848,6 +1852,9 @@ class NodeWidget extends StatelessWidget {
       model.updateNodePosition(node.id, scopeChain: scopeChain);
     }
     model.endMoveNodes(scopeChain: scopeChain);
+    if (spliceTarget != null) {
+      model.onNodeDroppedOnWire?.call(node.id, scopeChain, spliceTarget);
+    }
   }
 
   /// Handles context menu for node

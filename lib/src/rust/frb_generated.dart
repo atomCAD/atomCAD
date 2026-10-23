@@ -22642,6 +22642,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         return APINodeSource_New(
           nodeTypeName: dco_decode_String(raw[1]),
         );
+      case 1:
+        return APINodeSource_Existing(
+          nodeId: dco_decode_u_64(raw[1]),
+        );
       default:
         throw Exception("unreachable");
     }
@@ -29912,6 +29916,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       case 0:
         var var_nodeTypeName = sse_decode_String(deserializer);
         return APINodeSource_New(nodeTypeName: var_nodeTypeName);
+      case 1:
+        var var_nodeId = sse_decode_u_64(deserializer);
+        return APINodeSource_Existing(nodeId: var_nodeId);
       default:
         throw UnimplementedError('');
     }
@@ -37684,6 +37691,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       case APINodeSource_New(nodeTypeName: final nodeTypeName):
         sse_encode_i_32(0, serializer);
         sse_encode_String(nodeTypeName, serializer);
+      case APINodeSource_Existing(nodeId: final nodeId):
+        sse_encode_i_32(1, serializer);
+        sse_encode_u_64(nodeId, serializer);
     }
   }
 

@@ -59,6 +59,9 @@ import 'package:flutter_cad/structure_designer/node_jobs.dart';
 import 'package:flutter_cad/structure_designer/node_data/mechanosynth_transport.dart';
 import 'package:flutter_cad/structure_designer/namespace_utils.dart';
 import 'package:flutter_cad/structure_designer/network_thumbnails.dart';
+import 'package:flutter_cad/structure_designer/node_network/node_network_painter.dart'
+    show WireHitResult;
+import 'package:flutter_cad/structure_designer/node_network/splice_drop_memo.dart';
 import 'package:flutter_cad/structure_designer/namespace_utils.dart' as ns
     show mountFor;
 
@@ -543,6 +546,100 @@ class StructureDesignerModel extends ChangeNotifier {
     // the dragged nodes (i.e. this node lives inside a dragged HOF's body).
     return _draggedNodeIds.contains(scopeChain[dragScope.length]);
   }
+
+  // ----- Drag onto a wire (`doc/design_insert_node_on_wire.md` Phase 4) -----
+
+  /// Asks Rust whether the dragged node fits a wire, once per wire per drag.
+  /// Created on the drag's first hit test, dropped with the drag state.
+  PerDragPlanMemo<WireHitResult>? _spliceMemo;
+
+  /// [spliceDropTargetForTick]'s answer for the [dragRepaint] tick
+  /// [_spliceTargetTick], shared by the two painter layers.
+  WireHitResult? _spliceDropTarget;
+  int _spliceTargetTick = -1;
+
+  /// The node of a drag that may end in a splice: exactly one node is being
+  /// dragged and no wire in its scope touches it. Rust has the last word
+  /// (a capture from a deeper body is only seen there); this keeps a wired
+  /// node's drag from asking it at all.
+  (List<BigInt>, BigInt)? get _spliceDragNode {
+    final scope = _dragScopeChain;
+    if (scope == null || _draggedNodeIds.length != 1) return null;
+    if (activeNetworkReadOnly) return null;
+    final nodeId = _draggedNodeIds.first;
+    final node = _nodesAtScope(scope)?[nodeId];
+    if (node == null || node.nodeTypeName == 'Comment') return null;
+    final wires = _wiresAtScope(scope);
+    if (wires == null ||
+        wires.any((w) => w.sourceNodeId == nodeId || w.destNodeId == nodeId)) {
+      return null;
+    }
+    return (scope, nodeId);
+  }
+
+  /// The wire the dragged node would be spliced into if released now, or
+  /// null. Called by both painter layers on every paint; computed once per
+  /// [dragRepaint] tick. [hitTest] finds the wire under the node's title bar
+  /// (the painter owns the geometry); the per-drag memo decides whether the
+  /// node fits it. Non-notifying: the painters are already repainting.
+  WireHitResult? spliceDropTargetForTick(
+      WireHitResult? Function(List<BigInt> scopeChain, BigInt nodeId) hitTest) {
+    final tick = dragRepaint.value;
+    if (tick == _spliceTargetTick) return _spliceDropTarget;
+    _spliceTargetTick = tick;
+    _spliceDropTarget = null;
+    final dragged = _spliceDragNode;
+    if (dragged == null) return null;
+    final (scope, nodeId) = dragged;
+    final hit = hitTest(scope, nodeId);
+    if (hit == null) return null;
+    final memo = _spliceMemo ??= PerDragPlanMemo<WireHitResult>(
+      (wire) => planInsertOnWire(wire.wireScope, wire.anchor, scope,
+              APINodeSource.existing(nodeId: nodeId))
+          .arrangements
+          .isNotEmpty,
+      (wire) => wire.key,
+    );
+    if (memo.accepts(hit)) _spliceDropTarget = hit;
+    return _spliceDropTarget;
+  }
+
+  /// The highlighted wire at the moment a node drag is released, taken
+  /// before the move is committed (the commit's refresh clears it).
+  WireHitResult? takeSpliceDropTarget() {
+    final target = _spliceDropTarget;
+    _endSpliceDrag();
+    return target;
+  }
+
+  void _endSpliceDrag() {
+    _spliceMemo?.endDrag();
+    _spliceMemo = null;
+    _spliceDropTarget = null;
+    _spliceTargetTick = -1;
+  }
+
+  /// The wires stored at [scopeChain] (empty = top level), or null when the
+  /// chain does not resolve.
+  List<WireView>? _wiresAtScope(List<BigInt> scopeChain) {
+    final view = nodeNetworkView;
+    if (view == null) return null;
+    if (scopeChain.isEmpty) return view.wires;
+    Map<BigInt, NodeView> nodes = view.nodes;
+    ZoneView? zone;
+    for (final hofId in scopeChain) {
+      zone = nodes[hofId]?.zone;
+      if (zone == null) return null;
+      nodes = zone.nodes;
+    }
+    return zone!.wires;
+  }
+
+  /// Registered by the node network editor: splice node [nodeId] (in
+  /// [scopeChain]) into [wire] after a drag released it there. The editor
+  /// owns the arrangement dialog and the snackbars.
+  void Function(BigInt nodeId, List<BigInt> scopeChain, WireHitResult wire)?
+      onNodeDroppedOnWire;
 
   WireDropCallback?
       onWireDroppedInEmptySpace; // Callback for wire drop in empty space
@@ -3372,10 +3469,11 @@ class StructureDesignerModel extends ChangeNotifier {
     );
   }
 
-  /// The arrangements a new [nodeTypeName] node offers spliced into [wire].
+  /// The arrangements [node] (a new node of a type, or an existing
+  /// unconnected one dragged onto the wire) offers spliced into [wire].
   /// Read-only, like [planWireDrop].
   APIArrangementPlan planInsertOnWire(List<BigInt> wireScope,
-      APIWireAnchor wire, List<BigInt> clickedScope, String nodeTypeName) {
+      APIWireAnchor wire, List<BigInt> clickedScope, APINodeSource node) {
     if (activeNetworkReadOnly) {
       return const APIArrangementPlan(
           arrangements: [], refusal: 'This network is read-only');
@@ -3384,18 +3482,19 @@ class StructureDesignerModel extends ChangeNotifier {
       wireScope: scopeChainToBytes(wireScope),
       wire: wire,
       clickedScope: scopeChainToBytes(clickedScope),
-      node: APINodeSource.new_(nodeTypeName: nodeTypeName),
+      node: node,
     );
   }
 
-  /// Splices a new [nodeTypeName] node into [wire] with [arrangement] (from
-  /// [planInsertOnWire]), as one undo step; Rust places it and selects it.
-  /// Returns the refusal text, or null on success.
+  /// Splices [node] into [wire] with [arrangement] (from
+  /// [planInsertOnWire]), as one undo step; Rust places a new node (an
+  /// existing one stays where it was dropped) and selects it. Returns the
+  /// refusal text, or null on success.
   String? insertNodeOnWire(
     List<BigInt> wireScope,
     APIWireAnchor wire,
     List<BigInt> clickedScope,
-    String nodeTypeName,
+    APINodeSource node,
     APIArrangement arrangement,
   ) {
     if (activeNetworkReadOnly) return 'This network is read-only';
@@ -3403,7 +3502,7 @@ class StructureDesignerModel extends ChangeNotifier {
       wireScope: scopeChainToBytes(wireScope),
       wire: wire,
       clickedScope: scopeChainToBytes(clickedScope),
-      node: APINodeSource.new_(nodeTypeName: nodeTypeName),
+      node: node,
       arrangement: arrangement,
     );
     refreshFromKernel();
@@ -5077,6 +5176,7 @@ class StructureDesignerModel extends ChangeNotifier {
     // the drag was mutating anyway (the next drag tick re-arms the state).
     _dragScopeChain = null;
     _draggedNodeIds.clear();
+    _endSpliceDrag();
     nodeNetworkView = structure_designer_api.getNodeNetworkView();
     nodeNetworkNames =
         structure_designer_api.getNodeNetworksWithValidation() ?? [];

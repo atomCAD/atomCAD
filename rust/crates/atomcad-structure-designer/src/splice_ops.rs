@@ -14,10 +14,12 @@
 //!   empty space adds a node there and connects it. Planning first means a
 //!   cancelled dialog leaves the network untouched, and the commit is one
 //!   step;
-//! - **insertion** (Phase 1): a node spliced into an existing wire. The source
-//!   is wired into the new node, and the old wire's slot is re-pointed at the
-//!   new node through [`StructureDesigner::replace_wire_source`], the one
-//!   primitive that edits an existing wire (D5, D11);
+//! - **insertion** (Phases 1 and 4): a node spliced into an existing wire —
+//!   a new one ([`NodeSource::New`]), or an unconnected one the user dragged
+//!   onto it ([`NodeSource::Existing`]). The source is wired into the node,
+//!   and the old wire's slot is re-pointed at it through
+//!   [`StructureDesigner::replace_wire_source`], the one primitive that edits
+//!   an existing wire (D5, D11);
 //! - **dissolve** (Phase 3): the inverse. A node is removed and every wire
 //!   that read it is re-pointed, through the same primitive, at the one input
 //!   wire's source that fits them all (D13, D14). A plan, not a dialog: when
@@ -81,14 +83,24 @@ pub enum SpliceRefusal {
 }
 
 /// The node an insertion splices into a wire.
-///
-/// Phase 1 of `doc/design_insert_node_on_wire.md` splices only new nodes; an
-/// existing, wireless node (`Existing(id)`, the drag-onto-wire gesture) joins
-/// in Phase 4.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NodeSource {
-    /// A new node of the named type.
+    /// A new node of the named type, adapted to the wire's source and placed
+    /// by the incremental layout.
     New(String),
+    /// An existing node with no wires, in the clicked scope: the
+    /// drag-onto-wire gesture (Phase 4). Its data is used as the user
+    /// configured it, not adapted, and it keeps its position.
+    Existing(u64),
+}
+
+impl NodeSource {
+    /// Whether an input declared through the open port is made the node's
+    /// identity (D9). Only for a new node: an existing one keeps the
+    /// expression the user wrote.
+    fn pass_through(&self) -> bool {
+        matches!(self, NodeSource::New(_))
+    }
 }
 
 /// Why [`StructureDesigner::replace_wire_source`] refused. On either, nothing
@@ -126,6 +138,8 @@ struct ResolvedInsert {
     /// The destination slot's declared type, which the new node's output must
     /// convert to.
     target: DataType,
+    /// `C`, the scope the user clicked in (for a drag, the node's own scope).
+    clicked_scope: Vec<u64>,
 }
 
 impl ResolvedInsert {
@@ -740,29 +754,37 @@ impl StructureDesigner {
             )
         };
 
-        // 3. The node, adapted to the source as the plan's was. Its position
-        //    is a placeholder; the layout places it (step 6).
-        let NodeSource::New(node_type) = node;
-        let node_id = self.add_node_core(&scope, node_type, DVec2::ZERO, Some(&insert.drag()));
-        if node_id == 0 {
-            return Err(SpliceRefusal::ScopeNotFound);
-        }
+        // 3. A new node, adapted to the source as the plan's was. Its
+        //    position is a placeholder; the layout places it (step 6). An
+        //    existing node is already there, where the user dropped it.
+        let node_id = match node {
+            NodeSource::New(node_type) => {
+                let node_id =
+                    self.add_node_core(&scope, node_type, DVec2::ZERO, Some(&insert.drag()));
+                if node_id == 0 {
+                    return Err(SpliceRefusal::ScopeNotFound);
+                }
+                node_id
+            }
+            NodeSource::Existing(node_id) => *node_id,
+        };
 
         // 4. The source into the chosen input, then 5. the downstream half
         //    takes the old wire's slot and its anchors. Neither can fail
         //    after a fresh plan; if one does, the network is put back.
-        let spliced = self.connect_splice_input(&scope, node_id, insert, input)
-            && self
-                .replace_wire_source(
-                    wire_scope,
-                    wire,
-                    node_id,
-                    SourcePin::NodeOutput {
-                        pin_index: output.pin,
-                    },
-                    insert.placement.depth_out,
-                )
-                .is_ok();
+        let spliced =
+            self.connect_splice_input(&scope, node_id, insert, input, node.pass_through())
+                && self
+                    .replace_wire_source(
+                        wire_scope,
+                        wire,
+                        node_id,
+                        SourcePin::NodeOutput {
+                            pin_index: output.pin,
+                        },
+                        insert.placement.depth_out,
+                    )
+                    .is_ok();
         if !spliced {
             self.node_type_registry
                 .node_networks
@@ -772,7 +794,9 @@ impl StructureDesigner {
 
         // 6. Place the node: the incremental layout puts an added block with
         //    one upstream and one downstream anchor between them, and makes
-        //    room to the right when there is none (D7).
+        //    room to the right when there is none (D7). An existing node is a
+        //    kept node to it, so only a wire the drop left running backwards
+        //    is repaired.
         let algorithm = self.preferences.layout_preferences.layout_algorithm.into();
         let registry_ptr = &self.node_type_registry as *const NodeTypeRegistry;
         // SAFETY: as in `ai_text_edit`: the layout reads node types through
@@ -810,7 +834,9 @@ impl StructureDesigner {
             self.pending_changes.mark_node_visibility_changed(node_id);
             self.apply_node_display_policy(Some(&dirty));
         }
-        self.apply_default_all_pin_display(&scope, node_type, node_id);
+        if let NodeSource::New(node_type) = node {
+            self.apply_default_all_pin_display(&scope, node_type, node_id);
+        }
         self.mark_node_data_changed_scoped(wire_scope, insert.wire.destination_node_id);
         self.select_node_scoped(&scope, node_id);
         if let Some(command) = self.finish_network_edit(
@@ -827,13 +853,15 @@ impl StructureDesigner {
 
     /// Step 4 of the splice: wire the source into `input` of the new node in
     /// `scope`, with D6's `depth_in`. Through the open port the input is
-    /// declared first and made the node's identity (D9), as the plan did.
+    /// declared first and, with `pass_through`, made the node's identity
+    /// (D9), as the plan did.
     fn connect_splice_input(
         &mut self,
         scope: &[u64],
         node_id: u64,
         insert: &ResolvedInsert,
         input: &ArrangementInput,
+        pass_through: bool,
     ) -> bool {
         let source_node_id = insert.wire.source_node_id;
         let source_pin = insert.wire.source_pin;
@@ -871,10 +899,11 @@ impl StructureDesigner {
                 ) else {
                     return false;
                 };
-                if let Some(declared) = self
-                    .get_scope_network_mut(scope)
-                    .and_then(|network| network.nodes.get_mut(&node_id))
-                    .and_then(|node| node.data.declared_inputs_mut())
+                if pass_through
+                    && let Some(declared) = self
+                        .get_scope_network_mut(scope)
+                        .and_then(|network| network.nodes.get_mut(&node_id))
+                        .and_then(|node| node.data.declared_inputs_mut())
                 {
                     declared.make_pass_through(added.pin_id);
                 }
@@ -1063,6 +1092,7 @@ impl StructureDesigner {
             pin_name,
             prefer_pin,
             target,
+            clicked_scope: clicked_scope.to_vec(),
         }))
     }
 
@@ -1073,10 +1103,16 @@ impl StructureDesigner {
         node: &NodeSource,
     ) -> Result<Vec<Arrangement>, SpliceRefusal> {
         let registry = &self.node_type_registry;
-        let NodeSource::New(node_type) = node;
-        let planned = PlannedNode::new_of_type(registry, node_type, Some(&insert.drag()))
-            .ok_or_else(|| SpliceRefusal::UnknownNodeType(node_type.clone()))?;
-        if !insert.placement.scope.is_empty() && !allowed_in_zone_body(node_type) {
+        let planned = match node {
+            NodeSource::New(node_type) => {
+                PlannedNode::new_of_type(registry, node_type, Some(&insert.drag()))
+                    .ok_or_else(|| SpliceRefusal::UnknownNodeType(node_type.clone()))?
+            }
+            NodeSource::Existing(node_id) => {
+                PlannedNode::existing(self.existing_splice_node(insert, *node_id)?)
+            }
+        };
+        if !insert.placement.scope.is_empty() && !allowed_in_zone_body(&planned.type_name) {
             return Ok(Vec::new());
         }
         let source = insert.source();
@@ -1085,8 +1121,40 @@ impl StructureDesigner {
             &planned,
             Some(&source),
             Some(&insert.target),
-            true,
+            node.pass_through(),
         ))
+    }
+
+    /// The checks of insert-plan step 4 for an existing node, in order: it is
+    /// in the clicked scope (`NodeNotFound`), it has no wires
+    /// (`NodeHasWires`), and the splice would not move it to another scope
+    /// (`WrongScope`, when D6 clamps `S` away from the clicked scope).
+    ///
+    /// "No wires" means none into its inputs and none reading its outputs,
+    /// from any scope. Its own body's wires (captures included) are inside
+    /// the node and stay as they are.
+    fn existing_splice_node(
+        &self,
+        insert: &ResolvedInsert,
+        node_id: u64,
+    ) -> Result<&Node, SpliceRefusal> {
+        let scope = &insert.clicked_scope;
+        let network = self
+            .get_scope_network(scope)
+            .ok_or(SpliceRefusal::NodeNotFound)?;
+        let node = network
+            .nodes
+            .get(&node_id)
+            .ok_or(SpliceRefusal::NodeNotFound)?;
+        let mut consumers = Vec::new();
+        collect_consumers(network, &mut scope.clone(), scope, node_id, &mut consumers);
+        if node.arguments.iter().any(|argument| !argument.is_empty()) || !consumers.is_empty() {
+            return Err(SpliceRefusal::NodeHasWires);
+        }
+        if insert.placement.scope != *scope {
+            return Err(SpliceRefusal::WrongScope);
+        }
+        Ok(node)
     }
 
     /// Whether output `pin` of `node_id` in `scope`, resolved in the live

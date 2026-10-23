@@ -536,6 +536,7 @@ class NodeNetworkState extends State<NodeNetwork> {
     widget.graphModel.onWireDroppedInEmptySpace = _handleWireDropInEmptySpace;
     // Register scroll-to-node callback for click-to-activate
     widget.graphModel.onScrollToNode = _scrollToNode;
+    widget.graphModel.onNodeDroppedOnWire = _spliceDroppedNode;
   }
 
   @override
@@ -551,6 +552,9 @@ class NodeNetworkState extends State<NodeNetwork> {
     }
     if (widget.graphModel.onScrollToNode == _scrollToNode) {
       widget.graphModel.onScrollToNode = null;
+    }
+    if (widget.graphModel.onNodeDroppedOnWire == _spliceDroppedNode) {
+      widget.graphModel.onNodeDroppedOnWire = null;
     }
     focusNode.dispose();
     super.dispose();
@@ -824,8 +828,8 @@ class NodeNetworkState extends State<NodeNetwork> {
     final nodeType = await showAddNodePopup(context, categories: categories);
     if (nodeType == null || !mounted) return;
 
-    final plan =
-        model.planInsertOnWire(wireScope, wire, clickedScope, nodeType);
+    final node = APINodeSource.new_(nodeTypeName: nodeType);
+    final plan = model.planInsertOnWire(wireScope, wire, clickedScope, node);
     final refusal = plan.refusal;
     if (refusal != null) {
       showErrorSnackBar(context, refusal);
@@ -841,7 +845,32 @@ class NodeNetworkState extends State<NodeNetwork> {
     if (arrangement == null || !mounted) return;
 
     final error = model.insertNodeOnWire(
-        wireScope, wire, clickedScope, nodeType, arrangement);
+        wireScope, wire, clickedScope, node, arrangement);
+    if (error != null && mounted) showErrorSnackBar(context, error);
+  }
+
+  /// Drag onto a wire (`doc/design_insert_node_on_wire.md` Phase 4): the
+  /// node drag was released over a highlighted wire and its move is already
+  /// committed (its own undo step). Plan again — the highlight's answer may
+  /// be a whole drag old — ask only when the plan is ambiguous, and splice
+  /// as a second step. Cancelling leaves the node where it was dropped.
+  Future<void> _spliceDroppedNode(
+      BigInt nodeId, List<BigInt> scopeChain, WireHitResult hit) async {
+    final model = widget.graphModel;
+    final node = APINodeSource.existing(nodeId: nodeId);
+    final plan =
+        model.planInsertOnWire(hit.wireScope, hit.anchor, scopeChain, node);
+    final refusal = plan.refusal;
+    if (refusal != null) {
+      showErrorSnackBar(context, refusal);
+      return;
+    }
+    if (plan.arrangements.isEmpty) return;
+    final arrangement =
+        await _pickArrangement(plan.arrangements, 'Insert node');
+    if (arrangement == null || !mounted) return;
+    final error = model.insertNodeOnWire(
+        hit.wireScope, hit.anchor, scopeChain, node, arrangement);
     if (error != null && mounted) showErrorSnackBar(context, error);
   }
 

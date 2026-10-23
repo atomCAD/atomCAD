@@ -50,9 +50,21 @@ class WireHitResult {
   /// latter.
   final APIArgumentKind destArgumentKind;
 
+  /// The wire's drawn endpoints in screen space at the time of the hit, for
+  /// painting it highlighted (the drag-onto-wire gesture).
+  final Offset? sourcePos;
+  final Offset? destPos;
+
   WireHitResult(this.sourceNodeId, this.sourcePinIndex, this.destNodeId,
       this.destParamIndex, this.scopeChain,
-      {this.destArgumentKind = APIArgumentKind.external_});
+      {this.destArgumentKind = APIArgumentKind.external_,
+      this.sourcePos,
+      this.destPos});
+
+  /// The wire's identity by value: its storage scope and anchor. Two hits on
+  /// the same wire in different frames have equal keys.
+  String get key => '${wireScope.join('/')}|$sourceNodeId|$destNodeId|'
+      '${destArgumentKind.name}|$destParamIndex';
 
   /// The scope the wire is *stored* in, as Rust addresses it. A body-return
   /// wire is listed with its body ([scopeChain] ends in the HOF's id) but
@@ -89,6 +101,13 @@ class _CollapsedCrossingWire {
   _CollapsedCrossingWire(
       this.wire, this.scopeChain, this.sourcePos, this.dataType, this.destPos);
 }
+
+/// The highlight of the wire a dragged node would be spliced into.
+const Color WIRE_COLOR_SPLICE_TARGET = Color(0xFF00C853);
+
+/// Logical distance from a node's top edge to its title bar's centre line:
+/// where the drag-onto-wire gesture hit-tests.
+const double SPLICE_DROP_TITLE_OFFSET = 15.0;
 
 // Grid appearance constants
 const double GRID_MAJOR_SPACING = 100.0;
@@ -222,6 +241,8 @@ class NodeNetworkPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final resolver = _makeResolver();
     if (resolver == null) return;
+    // Whichever layer paints first in a drag tick hit-tests for both.
+    final spliceTarget = _spliceDropTarget(resolver);
 
     // Bottom layer: grid + top-level wires only. Top-level wires render under
     // the node widgets so external pin circles visually cover the wire ends
@@ -266,6 +287,10 @@ class NodeNetworkPainter extends CustomPainter {
     // The anchor rubber band, above body wires like the dragged wire below.
     _drawDraggedAnchor(resolver, canvas);
 
+    // The wire a dragged node would be spliced into, above everything so it
+    // stays visible under the node being dragged.
+    if (spliceTarget != null) _drawSpliceTarget(spliceTarget, canvas);
+
     // Draw dragged wire on top of body wires.
     if (graphModel.draggedWire != null) {
       final startPin = graphModel.draggedWire!.startPin;
@@ -287,6 +312,46 @@ class NodeNetworkPainter extends CustomPainter {
             alignment);
       }
     }
+  }
+
+  /// The wire the node being dragged would be spliced into if released now
+  /// (`doc/design_insert_node_on_wire.md` Phase 4), or null. Runs in the drag
+  /// fast path: a hit test of the dragged node's title-bar centre against the
+  /// wires, with this frame's resolver. Whether the wire can take the node is
+  /// the model's per-drag memo, so Rust is asked once per wire touched, not
+  /// once per tick. The image export has no drag, so it never gets one.
+  WireHitResult? _spliceDropTarget(ScopeResolver resolver) {
+    if (hideSelection) return null;
+    return graphModel.spliceDropTargetForTick((scopeChain, nodeId) {
+      final node = resolver.findNodeInScope(scopeChain, nodeId);
+      if (node == null) return null;
+      final topLeft = resolver.scopedToScreen(
+          scopeChain, Offset(node.position.x, node.position.y));
+      final size = resolver.effectiveNodeSizeScreen(node, scopeChain);
+      final titleCentre = topLeft +
+          Offset(size.width / 2, SPLICE_DROP_TITLE_OFFSET * resolver.scale);
+      return findWireAtPosition(titleCentre,
+          includeBodyReturn: true, resolver: resolver);
+    });
+  }
+
+  void _drawSpliceTarget(WireHitResult target, Canvas canvas) {
+    final source = target.sourcePos;
+    final dest = target.destPos;
+    if (source == null || dest == null) return;
+    final path = _getPath(source, dest);
+    canvas.drawPath(
+        path,
+        Paint()
+          ..color = WIRE_COLOR_SPLICE_TARGET.withValues(alpha: 0.35)
+          ..strokeWidth = WIRE_WIDTH_SELECTED * 4
+          ..style = PaintingStyle.stroke);
+    canvas.drawPath(
+        path,
+        Paint()
+          ..color = WIRE_COLOR_SPLICE_TARGET
+          ..strokeWidth = WIRE_WIDTH_SELECTED
+          ..style = PaintingStyle.stroke);
   }
 
   /// Walk every body reachable from the top-level network and paint each
@@ -759,9 +824,11 @@ class NodeNetworkPainter extends CustomPainter {
   /// [includeBodyReturn] also reports body-return (`ZoneOutput`) wires, which
   /// cannot be selected but can take an inserted node
   /// (`doc/design_insert_node_on_wire.md`, wire context menu).
+  ///
+  /// [resolver] reuses one the caller already built for this frame.
   WireHitResult? findWireAtPosition(Offset position,
-      {bool includeBodyReturn = false}) {
-    final resolver = _makeResolver();
+      {bool includeBodyReturn = false, ScopeResolver? resolver}) {
+    resolver ??= _makeResolver();
     if (resolver == null) return null;
 
     for (final node in resolver.root.nodes.values) {
@@ -840,6 +907,8 @@ class NodeNetworkPainter extends CustomPainter {
           c.wire.destParamIndex,
           c.scopeChain,
           destArgumentKind: c.wire.destinationArgumentKind,
+          sourcePos: c.sourcePos,
+          destPos: c.destPos,
         );
       }
     }
@@ -871,6 +940,8 @@ class NodeNetworkPainter extends CustomPainter {
           wire.destParamIndex,
           scopeChain,
           destArgumentKind: wire.destinationArgumentKind,
+          sourcePos: source.$1,
+          destPos: dest.$1,
         );
       }
     }

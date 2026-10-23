@@ -5599,6 +5599,12 @@ sealed class APINodeSource with _$APINodeSource {
   const factory APINodeSource.new_({
     required String nodeTypeName,
   }) = APINodeSource_New;
+
+  /// An existing, unconnected node in the clicked scope (dragged onto the
+  /// wire).
+  const factory APINodeSource.existing({
+    required BigInt nodeId,
+  }) = APINodeSource_Existing;
 }
 
 class APINodeTypeView {

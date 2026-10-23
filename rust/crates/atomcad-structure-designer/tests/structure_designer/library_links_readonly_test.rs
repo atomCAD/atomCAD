@@ -259,6 +259,45 @@ fn alphabet() -> Vec<(&'static str, OpFn)> {
                     .is_err(),
             )
         }),
+        ("insert existing node on wire", |d, t| {
+            use atomcad_structure_designer::data_type::DataType;
+            use atomcad_structure_designer::node_network::{ArgumentKind, WireAnchor};
+            use atomcad_structure_designer::splice_ops::NodeSource;
+            use atomcad_structure_designer::splice_plan::{
+                Arrangement, ArrangementInput, ArrangementOutput, InputChoice,
+            };
+            let wire = WireAnchor {
+                destination_node_id: id(d, t, "s"),
+                destination_argument_kind: ArgumentKind::External,
+                destination_argument_index: 0,
+                destination_param_id: None,
+                source_node_id: id(d, t, "x"),
+            };
+            // The unconnected node to drop: on linked content the add is
+            // refused too, and the splice must still be refused as
+            // read-only, not for the missing node.
+            let node = NodeSource::Existing(d.add_node("expr", DVec2::new(900.0, 900.0)));
+            let arrangement = d
+                .plan_insert_on_wire(&[], &wire, &[], &node)
+                .ok()
+                .and_then(|plan| plan.into_iter().next())
+                .unwrap_or(Arrangement {
+                    input: Some(ArrangementInput {
+                        choice: InputChoice::OpenPort,
+                        name: "a".to_string(),
+                        data_type: DataType::Int,
+                    }),
+                    output: Some(ArrangementOutput {
+                        pin: 0,
+                        name: "result".to_string(),
+                        data_type: DataType::Int,
+                    }),
+                });
+            Some(
+                d.insert_node_on_wire(&[], &wire, &[], &node, &arrangement)
+                    .is_err(),
+            )
+        }),
         ("dissolve node", |d, t| {
             let dv = id(d, t, "dv");
             Some(d.dissolve_node(&[], dv).is_err())

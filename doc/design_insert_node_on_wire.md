@@ -1,6 +1,6 @@
 # Insert node on wire, and dissolve node
 
-## Status: Phases 0–3 implemented (2026-10-23); Phases 4–6 not started
+## Status: Phases 0–4 implemented (2026-10-23); Phases 5–6 not started
 
 ## Motivation
 
@@ -851,9 +851,8 @@ off the `dst` chain).
   than on a hand-picked fixture.
 
 *Implementation notes (Phase 1, where the code differs from the text above):*
-- **`NodeSource` has only `New` so far**, and so does its twin `APINodeSource`.
-  `Existing(id)` and its refusals (`NodeNotFound`, `NodeHasWires`,
-  `WrongScope`) arrive with Phase 4; the refusal variants already exist.
+- `NodeSource` had only `New` in this phase; `Existing(id)` arrived with
+  Phase 4.
 - **A wire's depth counts from `dst`, not from its storage scope.** That is
   the same scope for an `External` wire, but a body-return wire is stored on the
   HOF in the HOF's network while its depth (0 for a body-internal source) is
@@ -1006,6 +1005,30 @@ guide's insertion entry gains the drag gesture.
 planner) asks once per wire across many hover ticks, and forgets everything
 when the drag ends. This is the one piece of the fast path whose failure
 would be silent: a plan per tick still works, only slowly.
+
+*Implementation notes (Phase 4, where the code differs from the text above):*
+- **An existing node is never made a pass-through.** D9's identity applies
+  only to `New`: an `expr` the user has already written keeps its expression,
+  and an input declared through the open port of an existing node is declared
+  and wired, nothing more. The plan passes `pass_through: false` for
+  `Existing`, so plan and commit agree. Consequently an unconfigured `expr`
+  (constant `0`) dragged onto a Blueprint wire has no arrangement, while
+  inserting a new one from the wire menu does.
+- **"No wires" means none into the node's inputs and none reading its
+  outputs**, from any scope (`collect_consumers`, the dissolve walk). The
+  wires of the node's own body, captures included, are inside the node and do
+  not count.
+- **The commit does not apply the new-node pin display**
+  (`apply_default_all_pin_display`) to an existing node; the display policy,
+  selection and `layout_incremental` run as for a new node. The layout treats
+  the node as kept, so it moves only through the backward-wire repair.
+- **The highlight's hit test runs in the painters; the decision is cached
+  in the model per `dragRepaint` tick** (`spliceDropTargetForTick`), so the
+  two layers share one hit test and one memo lookup. Flutter's
+  wireless pre-check covers only wires in the node's own scope; a capture into
+  a deeper body is refused by Rust (`NodeHasWires`) and remembered as "no".
+- The highlight is green (`WIRE_COLOR_SPLICE_TARGET`), drawn by the overlay
+  layer above the nodes, so it stays visible under the dragged node.
 
 ### Phase 5 — drop a network from the user-types panel onto a wire
 

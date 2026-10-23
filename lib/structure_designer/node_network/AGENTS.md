@@ -305,6 +305,25 @@ know:
    the dialog only appears when the plan has several rows and a cancel changes
    nothing.
 
+**Dragging an unconnected node onto a wire** (Phase 4) reaches the same
+splice with `APINodeSource.existing`. It lives in the drag fast path, so:
+
+- **The hit test runs in the painters, the decision in the model.** Each
+  painter layer calls `model.spliceDropTargetForTick` from `paint`; it computes
+  once per `dragRepaint` tick (whichever layer paints first), hit-testing the
+  dragged node's title-bar centre with that frame's resolver
+  (`findWireAtPosition(…, resolver:)`). Nothing notifies.
+- **Rust is asked once per wire per drag**, through `PerDragPlanMemo`
+  (`splice_drop_memo.dart`, tested in `test/splice_drop_memo_test.dart`),
+  keyed by `WireHitResult.key`. Only a single-node drag with no wire in its
+  own scope asks at all; Rust still refuses a wired node, so the Dart check is
+  only a filter.
+- **The highlight is taken before the move commits**
+  (`model.takeSpliceDropTarget()` in `_handleNodeDragEnd`), because the commit's
+  `refreshFromKernel` ends the drag state. The move is its own undo step and
+  the splice a second one (`onNodeDroppedOnWire` → `_spliceDroppedNode`, which
+  plans again before committing).
+
 ## Constants (must match Rust `node_layout.rs`)
 
 - `BASE_NODE_WIDTH = 160`

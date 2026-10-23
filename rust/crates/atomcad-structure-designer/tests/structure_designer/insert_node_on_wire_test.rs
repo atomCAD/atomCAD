@@ -730,3 +730,216 @@ fn with_room_the_node_lands_between_its_neighbours_and_nothing_moves() {
     assert!(position(&d, mv).x > b_at.x + width(&d, b));
     assert!(position(&d, mv).x + width(&d, mv) < mt_at.x);
 }
+
+// ---------------------------------------------------------------------------
+// An existing node dragged onto a wire (Phase 4)
+// ---------------------------------------------------------------------------
+
+fn existing(node_id: u64) -> NodeSource {
+    NodeSource::Existing(node_id)
+}
+
+/// Add an unconnected node of `type_name` at the top level, unadapted, as the
+/// Add Node popup does.
+fn add_loose(d: &mut StructureDesigner, type_name: &str, at: DVec2) -> u64 {
+    let node_id = d.add_node(type_name, at);
+    assert_ne!(node_id, 0);
+    node_id
+}
+
+#[test]
+fn an_existing_node_offers_the_arrangements_its_data_allows() {
+    let mut d = setup();
+    let (b, mt) = (id(&d, "b"), id(&d, "mt"));
+    let w = wire(mt, 0, b);
+
+    let mv = add_loose(&mut d, "structure_move", DVec2::new(0.0, 900.0));
+    let plan = assert_no_mutation(&mut d, |d| {
+        d.plan_insert_on_wire(&[], &w, &[], &existing(mv))
+    })
+    .unwrap();
+    assert_eq!(pairs(&plan), [("input".into(), "result".into())]);
+
+    // An `expr` as the popup adds it is not adapted to the Blueprint, and an
+    // existing node is not made an identity: nothing it outputs fits
+    // `materialize`. A new one adapts and fits.
+    let x = add_loose(&mut d, "expr", DVec2::new(0.0, 1100.0));
+    assert_eq!(
+        d.plan_insert_on_wire(&[], &w, &[], &existing(x)),
+        Ok(vec![])
+    );
+    assert_eq!(
+        pairs(&d.plan_insert_on_wire(&[], &w, &[], &new("expr")).unwrap()),
+        [("x".into(), "result".into())]
+    );
+}
+
+#[test]
+fn an_existing_expr_keeps_its_expression() {
+    let mut d = setup();
+    let (f, fe) = (id(&d, "f"), id(&d, "fe"));
+    assert!(
+        d.ai_text_edit(
+            "px = expr { expression: \"x * 10.0\", parameters: [{ name: \"x\", data_type: Float }] }",
+            false
+        )
+        .result
+        .errors
+        .is_empty()
+    );
+    let px = id(&d, "px");
+    let w = wire(fe, 0, f);
+    let plan = d.plan_insert_on_wire(&[], &w, &[], &existing(px)).unwrap();
+    assert_eq!(pairs(&plan), [("x".into(), "result".into())]);
+    let spliced = assert_one_step_round_trip(&mut d, |d| {
+        d.insert_node_on_wire(&[], &w, &[], &existing(px), &plan[0])
+            .unwrap()
+    });
+    assert_eq!(spliced, px);
+    assert_eq!(wires_into(&d, &[], px)[0], [(f, OUT, 0)]);
+    assert_eq!(wires_into(&d, &[], fe)[0], [(px, OUT, 0)]);
+    // `f` is 2.0: the node computes what the user wrote, not an identity.
+    assert_eq!(display(&mut d, &[], px), "20.000000");
+}
+
+#[test]
+fn an_existing_node_with_wires_or_elsewhere_is_refused() {
+    let mut d = setup();
+    let (b, mt, mv, f, mp) = (
+        id(&d, "b"),
+        id(&d, "mt"),
+        id(&d, "mv"),
+        id(&d, "f"),
+        id(&d, "mp"),
+    );
+    let w = wire(mt, 0, b);
+    let refusal = |d: &mut StructureDesigner, clicked: &[u64], node: u64| {
+        assert_no_mutation(d, |d| {
+            d.plan_insert_on_wire(&[], &w, clicked, &existing(node))
+        })
+        .unwrap_err()
+    };
+    // An input wire; only output wires (one of them a capture into a body).
+    assert_eq!(refusal(&mut d, &[], mv), SpliceRefusal::NodeHasWires);
+    assert_eq!(refusal(&mut d, &[], f), SpliceRefusal::NodeHasWires);
+    // Not in the clicked scope: a top-level node looked for in `mp`'s body
+    // (whose ids are its own, so this one is not there), and no node at all.
+    let loose = add_loose(&mut d, "structure_move", DVec2::new(0.0, 900.0));
+    assert!(
+        !d.get_scope_network(&[mp])
+            .unwrap()
+            .nodes
+            .contains_key(&loose)
+    );
+    assert_eq!(refusal(&mut d, &[mp], loose), SpliceRefusal::NodeNotFound);
+    assert_eq!(refusal(&mut d, &[], 9999), SpliceRefusal::NodeNotFound);
+
+    // The commit refuses the same way, whatever arrangement it is handed.
+    let arrangement = d
+        .plan_insert_on_wire(&[], &w, &[], &new("structure_move"))
+        .unwrap()
+        .remove(0);
+    assert_eq!(
+        assert_no_mutation(&mut d, |d| d.insert_node_on_wire(
+            &[],
+            &w,
+            &[],
+            &existing(mv),
+            &arrangement
+        )),
+        Err(SpliceRefusal::NodeHasWires)
+    );
+}
+
+#[test]
+fn an_existing_node_never_changes_scope() {
+    let mut d = setup();
+    let (f, mp) = (id(&d, "f"), id(&d, "mp"));
+    let (k, e) = (body_id(&d, &[mp], "k"), body_id(&d, &[mp], "e"));
+    let top = add_loose(&mut d, "expr", DVec2::new(0.0, 1100.0));
+
+    // `element → k` is visible only inside the body: a top-level node would
+    // have to move into it.
+    assert_eq!(
+        assert_no_mutation(&mut d, |d| d.plan_insert_on_wire(
+            &[mp],
+            &wire(k, 0, mp),
+            &[],
+            &existing(top)
+        )),
+        Err(SpliceRefusal::WrongScope)
+    );
+
+    // The capture `f → e.a` takes a node from either end.
+    let capture = wire(e, 0, f);
+    for clicked in [vec![], vec![mp]] {
+        let mut d = setup();
+        let node = if clicked.is_empty() {
+            add_loose(&mut d, "expr", DVec2::new(0.0, 1100.0))
+        } else {
+            d.add_node_scoped(&[mp], "expr", DVec2::new(0.0, 300.0), None)
+        };
+        assert_ne!(node, 0);
+        let plan = d
+            .plan_insert_on_wire(&[mp], &capture, &clicked, &existing(node))
+            .unwrap();
+        assert!(!plan.is_empty(), "clicked {clicked:?}");
+        assert_one_step_round_trip(&mut d, |d| {
+            d.insert_node_on_wire(&[mp], &capture, &clicked, &existing(node), &plan[0])
+                .unwrap()
+        });
+        if clicked.is_empty() {
+            assert_eq!(wires_into(&d, &[], node)[0], [(f, OUT, 0)]);
+            assert_eq!(wires_into(&d, &[mp], e)[0], [(node, OUT, 1)]);
+        } else {
+            assert_eq!(wires_into(&d, &[mp], node)[0], [(f, OUT, 1)]);
+            assert_eq!(wires_into(&d, &[mp], e)[0], [(node, OUT, 0)]);
+        }
+    }
+}
+
+#[test]
+fn an_existing_node_keeps_where_it_was_dropped() {
+    let mut d = setup();
+    let (b, mt) = (id(&d, "b"), id(&d, "mt"));
+    // Open a wide gap right of `b`, and drop the node into it.
+    let b_right = position(&d, b).x + width(&d, b);
+    for node in d.get_scope_network_mut(&[]).unwrap().nodes.values_mut() {
+        if node.position.x >= b_right {
+            node.position.x += 1000.0;
+        }
+    }
+    let dropped = DVec2::new(b_right + 300.0, position(&d, b).y + 40.0);
+    let mv = add_loose(&mut d, "structure_move", dropped);
+    let mt_at = position(&d, mt);
+    let w = wire(mt, 0, b);
+    let plan = d.plan_insert_on_wire(&[], &w, &[], &existing(mv)).unwrap();
+    assert_one_step_round_trip(&mut d, |d| {
+        d.insert_node_on_wire(&[], &w, &[], &existing(mv), &plan[0])
+            .unwrap()
+    });
+    assert_eq!(position(&d, mv), dropped);
+    assert_eq!(position(&d, mt), mt_at);
+}
+
+#[test]
+fn an_existing_node_dropped_upstream_of_its_source_is_repaired() {
+    let mut d = setup();
+    let (b, mt) = (id(&d, "b"), id(&d, "mt"));
+    let b_at = position(&d, b);
+    // Left of `b`: the wire `b → mv` would run backwards.
+    let mv = add_loose(&mut d, "structure_move", b_at - DVec2::new(400.0, -500.0));
+    let w = wire(mt, 0, b);
+    let plan = d.plan_insert_on_wire(&[], &w, &[], &existing(mv)).unwrap();
+    d.insert_node_on_wire(&[], &w, &[], &existing(mv), &plan[0])
+        .unwrap();
+    assert_eq!(position(&d, b), b_at, "the source stays");
+    assert!(
+        position(&d, mv).x > b_at.x + width(&d, b),
+        "b → mv runs forward"
+    );
+    assert!(
+        position(&d, mv).x + width(&d, mv) < position(&d, mt).x,
+        "mv → mt runs forward"
+    );
+}

@@ -520,12 +520,14 @@ impl From<APISourcePin> for atomcad_structure_designer::node_network::SourcePin 
 }
 
 /// Mirrors `splice_ops::NodeSource`: the node an insertion splices into a
-/// wire (`doc/design_insert_node_on_wire.md` Phase 1). Only new nodes so far;
-/// an existing wireless node joins in Phase 4.
+/// wire (`doc/design_insert_node_on_wire.md` Phases 1 and 4).
 #[derive(Clone, PartialEq, Eq)]
 pub enum APINodeSource {
     /// A new node of the named type.
     New { node_type_name: String },
+    /// An existing, unconnected node in the clicked scope (dragged onto the
+    /// wire).
+    Existing { node_id: u64 },
 }
 
 impl From<&APINodeSource> for atomcad_structure_designer::splice_ops::NodeSource {
@@ -533,6 +535,7 @@ impl From<&APINodeSource> for atomcad_structure_designer::splice_ops::NodeSource
         use atomcad_structure_designer::splice_ops::NodeSource;
         match source {
             APINodeSource::New { node_type_name } => NodeSource::New(node_type_name.clone()),
+            APINodeSource::Existing { node_id } => NodeSource::Existing(*node_id),
         }
     }
 }
@@ -544,6 +547,7 @@ impl From<&atomcad_structure_designer::splice_ops::NodeSource> for APINodeSource
             NodeSource::New(node_type_name) => APINodeSource::New {
                 node_type_name: node_type_name.clone(),
             },
+            NodeSource::Existing(node_id) => APINodeSource::Existing { node_id: *node_id },
         }
     }
 }

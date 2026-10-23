@@ -20168,6 +20168,10 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
                 let mut var_nodeTypeName = <String>::sse_decode(deserializer);
                 return crate::api::structure_designer::structure_designer_api_types::APINodeSource::New{node_type_name: var_nodeTypeName};
             }
+            1 => {
+                let mut var_nodeId = <u64>::sse_decode(deserializer);
+                return crate::api::structure_designer::structure_designer_api_types::APINodeSource::Existing{node_id: var_nodeId};
+            }
             _ => {
                 unimplemented!("");
             }
@@ -31371,14 +31375,11 @@ impl flutter_rust_bridge::IntoDart
     for crate::api::structure_designer::structure_designer_api_types::APINodeSource
 {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        match self {
-            crate::api::structure_designer::structure_designer_api_types::APINodeSource::New {
-                node_type_name,
-            } => [0.into_dart(), node_type_name.into_into_dart().into_dart()].into_dart(),
-            _ => {
-                unimplemented!("");
-            }
-        }
+        match self {crate::api::structure_designer::structure_designer_api_types::APINodeSource::New{node_type_name} => { [0.into_dart(),
+node_type_name.into_into_dart().into_dart()].into_dart() }
+crate::api::structure_designer::structure_designer_api_types::APINodeSource::Existing{node_id} => { [1.into_dart(),
+node_id.into_into_dart().into_dart()].into_dart() }
+ _ => { unimplemented!(""); }}
     }
 }
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
@@ -37391,17 +37392,11 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
 impl SseEncode for crate::api::structure_designer::structure_designer_api_types::APINodeSource {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        match self {
-            crate::api::structure_designer::structure_designer_api_types::APINodeSource::New {
-                node_type_name,
-            } => {
-                <i32>::sse_encode(0, serializer);
-                <String>::sse_encode(node_type_name, serializer);
-            }
-            _ => {
-                unimplemented!("");
-            }
-        }
+        match self {crate::api::structure_designer::structure_designer_api_types::APINodeSource::New{node_type_name} => { <i32>::sse_encode(0, serializer); <String>::sse_encode(node_type_name, serializer);
+ }
+crate::api::structure_designer::structure_designer_api_types::APINodeSource::Existing{node_id} => { <i32>::sse_encode(1, serializer); <u64>::sse_encode(node_id, serializer);
+ }
+ _ => { unimplemented!(""); }}
     }
 }
 
