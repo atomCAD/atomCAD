@@ -1170,11 +1170,6 @@ pub enum DissolveRefusal {
     UsedAsFunction { node: String },
     #[error("Can't dissolve {node}: it is the network's return node")]
     ReturnNode { node: String },
-    /// A `parameter` is an input pin of its network: dissolving it would
-    /// remove that pin, and the wires into it at every call site with it,
-    /// which the one-network undo step cannot bring back.
-    #[error("Can't dissolve {node}: it is one of the network's parameters")]
-    Parameter { node: String },
     #[error("Can't dissolve {node}: no input wire fits where its output goes")]
     NoCandidate { node: String },
     #[error("Can't dissolve {node}: {candidates}")]
@@ -1306,9 +1301,6 @@ impl StructureDesigner {
         if network.return_node_id == Some(node_id) {
             return Err(DissolveRefusal::ReturnNode { node: name });
         }
-        if node.node_type_name == "parameter" {
-            return Err(DissolveRefusal::Parameter { node: name });
-        }
 
         // Each consumer's pin type (`None` when it cannot be read, which no
         // candidate fits).
@@ -1432,10 +1424,22 @@ impl StructureDesigner {
             .clone()
             .ok_or(DissolveRefusal::NodeNotFound)?;
 
-        // 1. Snapshot for undo, and a copy to roll back to.
+        // 1. Snapshot for undo, and a copy to roll back to. Dissolving a
+        //    `parameter` takes a pin off the network, and the call-site repair
+        //    then drops the instances' wires into it in other networks: the
+        //    undo step puts them back from `call_sites`.
         let before = self
             .snapshot_network(&network_name)
             .ok_or(DissolveRefusal::NodeNotFound)?;
+        let dissolves_parameter = self
+            .get_scope_network(scope)
+            .and_then(|network| network.nodes.get(&node_id))
+            .is_some_and(|node| node.node_type_name == "parameter");
+        let call_sites = if dissolves_parameter {
+            crate::network_validator::capture_call_sites(&self.node_type_registry, &network_name)
+        } else {
+            Vec::new()
+        };
         let rollback = self
             .node_type_registry
             .node_networks
@@ -1520,6 +1524,7 @@ impl StructureDesigner {
                 description: DISSOLVE_NODE_DESCRIPTION.to_string(),
                 before_snapshot: before,
                 after_snapshot: after,
+                call_sites,
             });
         }
         Ok(())

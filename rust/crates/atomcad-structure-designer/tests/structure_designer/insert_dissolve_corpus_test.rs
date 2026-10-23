@@ -204,22 +204,16 @@ fn run_insert_half(d: &mut StructureDesigner, seed: u64) {
                 .cloned()
                 .collect();
         assert_eq!(added.len(), 1, "{context}: one node added");
-        // An inserted `parameter` is the one node a dissolve refuses: it is
-        // part of the network's interface.
         let (scope, inserted) = &added[0];
-        match d.dissolve_node(scope, *inserted) {
-            Ok(()) => {
-                let wiring_after = wiring(d, &wire.network);
-                assert!(
-                    wiring_before == wiring_after,
-                    "{context}: dissolve after insert differs at {:?}",
-                    json_diff(&wiring_before, &wiring_after)
-                );
-                assert!(d.undo(), "{context}: undo the dissolve");
-            }
-            Err(DissolveRefusal::Parameter { .. }) if type_name == "parameter" => {}
-            Err(refusal) => panic!("{context}: dissolve: {refusal:?}"),
-        }
+        d.dissolve_node(scope, *inserted)
+            .unwrap_or_else(|refusal| panic!("{context}: dissolve: {refusal:?}"));
+        let wiring_after = wiring(d, &wire.network);
+        assert!(
+            wiring_before == wiring_after,
+            "{context}: dissolve after insert differs at {:?}",
+            json_diff(&wiring_before, &wiring_after)
+        );
+        assert!(d.undo(), "{context}: undo the dissolve");
         assert!(d.undo(), "{context}: undo");
     }
 }

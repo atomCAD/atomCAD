@@ -508,6 +508,7 @@ impl StructureDesigner {
             description: description.to_string(),
             before_snapshot: before,
             after_snapshot: after,
+            call_sites: Vec::new(),
         })
     }
 

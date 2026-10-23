@@ -1196,9 +1196,11 @@ impl StructureDesigner {
             active_record_def_name: &mut self.active_record_def_name,
             eval_error_snapshots: &mut self.eval_error_snapshots,
             clipboard: ClipboardSlot::own(&mut self.clipboard, self.document_id),
+            call_site_restores: Vec::new(),
         };
         let result = stack.undo(&mut ctx);
         let clipboard_changed = ctx.clipboard.changed;
+        let call_site_restores = std::mem::take(&mut ctx.call_site_restores);
         self.undo_stack = stack;
         if clipboard_changed {
             self.recapture_own_clipboard_owners();
@@ -1209,12 +1211,42 @@ impl StructureDesigner {
                 self.ai_edit_log.note_ai_edit_undo();
             }
             self.apply_undo_refresh_mode(refresh_mode);
+            self.apply_call_site_restores(call_site_restores);
             // The picked atom of the Guideline tool may have moved/vanished;
             // auto-unpick to avoid a stale constrained-drag state (#368).
             crate::nodes::atom_edit::atom_edit::auto_unpick_active_atom_edit_guideline(self);
             true
         } else {
             false
+        }
+    }
+
+    /// Give the instances of each restored network the wiring an undone
+    /// command recorded for them (`UndoContext::restore_call_sites`), then
+    /// re-validate the networks holding them. Runs after the undo's refresh.
+    /// Each restored network is validated first (a no-op for the active one,
+    /// which the refresh validated), because that is what re-derives its
+    /// interface and remaps its callers to it; the recorded arguments then
+    /// line up with the slots again.
+    fn apply_call_site_restores(
+        &mut self,
+        restores: Vec<(String, Vec<crate::network_validator::CallSite>)>,
+    ) {
+        for (network_name, sites) in restores {
+            // The refresh rebuilt the per-node type cache of the active
+            // network only; an undo can restore another one.
+            if self.active_node_network_name.as_deref() != Some(network_name.as_str()) {
+                self.repopulate_custom_node_types(network_name.clone());
+            }
+            self.validate_network_and_users(network_name.clone(), None);
+            let hosts = crate::network_validator::restore_call_sites(
+                &mut self.node_type_registry,
+                &network_name,
+                &sites,
+            );
+            for host in hosts {
+                self.validate_network_and_users(host, None);
+            }
         }
     }
 
@@ -1232,6 +1264,7 @@ impl StructureDesigner {
             active_record_def_name: &mut self.active_record_def_name,
             eval_error_snapshots: &mut self.eval_error_snapshots,
             clipboard: ClipboardSlot::own(&mut self.clipboard, self.document_id),
+            call_site_restores: Vec::new(),
         };
         let result = stack.redo(&mut ctx);
         let clipboard_changed = ctx.clipboard.changed;
@@ -1643,6 +1676,11 @@ impl StructureDesigner {
         let Some(name) = self.active_node_network_name.clone() else {
             return;
         };
+        self.repopulate_custom_node_types(name);
+    }
+
+    /// [`Self::repopulate_active_network_custom_node_types`] for any network.
+    fn repopulate_custom_node_types(&mut self, name: String) {
         if let Some(mut network) = self.node_type_registry.node_networks.remove(&name) {
             self.node_type_registry
                 .initialize_custom_node_types_for_network(&mut network);
@@ -6044,6 +6082,7 @@ impl StructureDesigner {
                     description: description.to_string(),
                     before_snapshot,
                     after_snapshot,
+                    call_sites: Vec::new(),
                 },
             );
         }
@@ -7773,6 +7812,33 @@ impl StructureDesigner {
             .get(&node_network_name)
             .map(|n| n.collect_deletion_info());
 
+        // A deleted `parameter` takes a pin off this network, and the call-site
+        // repair then drops every instance's wire into it, in other networks:
+        // record their wiring so the undo can put it back.
+        let deletes_parameter = deletion_info.as_ref().is_some_and(|info| {
+            info.is_node_deletion
+                && self
+                    .node_type_registry
+                    .node_networks
+                    .get(&node_network_name)
+                    .is_some_and(|network| {
+                        info.deleted_node_ids.iter().any(|id| {
+                            network
+                                .nodes
+                                .get(id)
+                                .is_some_and(|node| node.node_type_name == "parameter")
+                        })
+                    })
+        });
+        let call_sites = if deletes_parameter {
+            crate::network_validator::capture_call_sites(
+                &self.node_type_registry,
+                &node_network_name,
+            )
+        } else {
+            Vec::new()
+        };
+
         // Snapshot deleted nodes before deletion
         let mut deleted_node_snapshots = Vec::new();
         if let Some(ref info) = deletion_info
@@ -7864,6 +7930,7 @@ impl StructureDesigner {
                         was_return_node: info.was_return_node,
                         display_states: info.display_states,
                         description,
+                        call_sites,
                     },
                 ));
             } else if !info.is_node_deletion && !info.selected_wires.is_empty() {
@@ -9389,7 +9456,17 @@ impl StructureDesigner {
             Some(name) => name.clone(),
             None => return None,
         };
+        self.validate_network_and_users(network_name, initial_errors)
+    }
 
+    /// Validates `network_name`, then every network whose validity or
+    /// interface that changes, transitively: the cascade of
+    /// [`Self::validate_active_network`], from any network.
+    fn validate_network_and_users(
+        &mut self,
+        network_name: String,
+        initial_errors: Option<Vec<crate::node_network::ValidationError>>,
+    ) -> Option<NetworkValidationResult> {
         // Initialize the set of networks to validate
         let mut to_validate = HashSet::new();
         to_validate.insert(network_name.clone());

@@ -1,6 +1,5 @@
-use crate::serialization::node_networks_serialization::{
-    SerializableNodeNetwork, serializable_to_node_network,
-};
+use crate::network_validator::CallSite;
+use crate::serialization::node_networks_serialization::SerializableNodeNetwork;
 use crate::undo::{UndoCommand, UndoContext, UndoRefreshMode};
 
 /// Command for undoing/redoing text-based network edits.
@@ -23,6 +22,11 @@ pub struct TextEditNetworkCommand {
     pub after_snapshot: SerializableNodeNetwork,
     /// Undo-tooltip label naming the edit's origin.
     pub description: &'static str,
+    /// The wiring of this network's instances before the edit
+    /// (`network_validator::capture_call_sites`): a text edit can delete or
+    /// reorder `parameter`s, and the call-site repair then drops the
+    /// instances' wires, outside this network.
+    pub call_sites: Vec<CallSite>,
 }
 
 // Manual Debug impl because SerializableNodeNetwork doesn't derive Debug
@@ -35,31 +39,21 @@ impl std::fmt::Debug for TextEditNetworkCommand {
     }
 }
 
-impl TextEditNetworkCommand {
-    /// Replace a network in the registry with one deserialized from a snapshot.
-    fn restore_network(ctx: &mut UndoContext, name: &str, snapshot: &SerializableNodeNetwork) {
-        if let Ok(network) = serializable_to_node_network(
-            snapshot,
-            &ctx.node_type_registry.built_in_node_types,
-            None,
-        ) {
-            ctx.node_type_registry
-                .replace_network_keeping_thumbnail(name.to_string(), network);
-        }
-    }
-}
-
 impl UndoCommand for TextEditNetworkCommand {
     fn description(&self) -> &str {
         self.description
     }
 
+    /// The network is restored keeping the live interface
+    /// ([`UndoContext::restore_network_keeping_interface`]), and the callers'
+    /// wiring is handed back for after the refresh's validation.
     fn undo(&self, ctx: &mut UndoContext) {
-        Self::restore_network(ctx, &self.network_name, &self.before_snapshot);
+        ctx.restore_network_keeping_interface(&self.network_name, &self.before_snapshot);
+        ctx.restore_call_sites(&self.network_name, &self.call_sites);
     }
 
     fn redo(&self, ctx: &mut UndoContext) {
-        Self::restore_network(ctx, &self.network_name, &self.after_snapshot);
+        ctx.restore_network_keeping_interface(&self.network_name, &self.after_snapshot);
     }
 
     fn refresh_mode(&self) -> UndoRefreshMode {

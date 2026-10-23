@@ -443,6 +443,136 @@ pub fn remap_node_arguments(node: &mut Node, mapping: &[Option<usize>]) {
     }
 }
 
+/// The networks holding an instance of `network_name` that the call-site
+/// repair reaches: the parents **in the same file** (see
+/// [`repair_call_sites_for_network`]).
+fn same_file_callers(registry: &NodeTypeRegistry, network_name: &str) -> Vec<String> {
+    let owner = crate::library_links::owner_mount(registry, network_name);
+    let mut parents: Vec<String> = registry
+        .find_parent_networks(network_name)
+        .into_iter()
+        .filter(|parent| crate::library_links::owner_mount(registry, parent) == owner)
+        .collect();
+    parents.sort();
+    parents
+}
+
+/// One instance of a network, with the wiring it has: where it is, its
+/// `arguments` and its index-keyed `function_pin_roles`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CallSite {
+    pub host_network: String,
+    /// The chain of HOF ids from the host's top level down to the body
+    /// holding the instance (empty at top level).
+    pub scope_path: Vec<u64>,
+    pub node_id: u64,
+    pub arguments: Vec<Argument>,
+    pub function_pin_roles: std::collections::BTreeMap<usize, crate::node_network::FunctionPinRole>,
+}
+
+/// The wiring of every instance of `network_name` that
+/// [`repair_call_sites_for_network`] would remap, bodies included.
+///
+/// The call-site repair is the one place an edit of a network changes *other*
+/// networks: when the network loses a parameter (or a parameter's slot moves),
+/// each instance's argument for it is dropped, wire and all. An undo step that
+/// restores only the edited network can then give the slot back but not the
+/// wire. A command whose edit can remove a parameter takes this before the
+/// edit and hands it back on undo ([`crate::undo::UndoContext::restore_call_sites`]),
+/// so the undo restores the callers too (`undo/AGENTS.md` → Known Pitfalls).
+pub fn capture_call_sites(registry: &NodeTypeRegistry, network_name: &str) -> Vec<CallSite> {
+    fn walk(
+        network: &NodeNetwork,
+        host: &str,
+        callee: &str,
+        scope: &mut Vec<u64>,
+        out: &mut Vec<CallSite>,
+    ) {
+        let mut ids: Vec<u64> = network.nodes.keys().copied().collect();
+        ids.sort_unstable();
+        for id in ids {
+            let node = &network.nodes[&id];
+            if node.node_type_name == callee {
+                out.push(CallSite {
+                    host_network: host.to_string(),
+                    scope_path: scope.clone(),
+                    node_id: id,
+                    arguments: node.arguments.clone(),
+                    function_pin_roles: node.function_pin_roles.clone(),
+                });
+            }
+            if let Some(body) = node.zone.as_deref() {
+                scope.push(id);
+                walk(body, host, callee, scope, out);
+                scope.pop();
+            }
+        }
+    }
+    let mut out = Vec::new();
+    for host in same_file_callers(registry, network_name) {
+        if let Some(network) = registry.node_networks.get(&host) {
+            walk(network, &host, network_name, &mut Vec::new(), &mut out);
+        }
+    }
+    out
+}
+
+/// Put back the wiring [`capture_call_sites`] recorded for the instances of
+/// `network_name`, wherever it differs from what is there now. Meant to run
+/// once `network_name` has its pre-edit interface again, after the
+/// validation that re-derived it: an instance is restored only while it still
+/// exists, is still an instance of `network_name`, and the recorded arguments
+/// match that interface's parameter count. Returns the host networks it
+/// changed, which the caller re-validates.
+pub fn restore_call_sites(
+    registry: &mut NodeTypeRegistry,
+    network_name: &str,
+    sites: &[CallSite],
+) -> Vec<String> {
+    let Some(parameter_count) = registry
+        .node_networks
+        .get(network_name)
+        .map(|network| network.node_type.parameters.len())
+    else {
+        return Vec::new();
+    };
+    let mut changed: Vec<String> = Vec::new();
+    for site in sites {
+        if site.arguments.len() != parameter_count {
+            continue;
+        }
+        let Some(node) = registry
+            .node_networks
+            .get_mut(&site.host_network)
+            .and_then(|network| body_mut(network, &site.scope_path))
+            .and_then(|network| network.nodes.get_mut(&site.node_id))
+        else {
+            continue;
+        };
+        if node.node_type_name != network_name
+            || (node.arguments == site.arguments
+                && node.function_pin_roles == site.function_pin_roles)
+        {
+            continue;
+        }
+        node.arguments = site.arguments.clone();
+        node.function_pin_roles = site.function_pin_roles.clone();
+        if !changed.contains(&site.host_network) {
+            changed.push(site.host_network.clone());
+        }
+    }
+    changed
+}
+
+/// The body at `scope_path` (a chain of HOF ids) below `network`, cloning
+/// shared bodies on the way (`Node::zone_mut`).
+fn body_mut<'a>(network: &'a mut NodeNetwork, scope_path: &[u64]) -> Option<&'a mut NodeNetwork> {
+    match scope_path.split_first() {
+        None => Some(network),
+        Some((hof_id, rest)) => body_mut(network.nodes.get_mut(hof_id)?.zone_mut()?, rest),
+    }
+}
+
 /// Repairs call sites when a network's parameter interface changes.
 /// This function updates all nodes that use the given network as their type,
 /// preserving argument connections based on parameter IDs (primary) or names (fallback).
@@ -465,13 +595,7 @@ fn repair_call_sites_for_network(
         &std::collections::BTreeSet::new(),
     );
 
-    // Find all parent networks that use this network, in the same file.
-    let owner = crate::library_links::owner_mount(node_type_registry, network_name);
-    let parent_network_names: Vec<String> = node_type_registry
-        .find_parent_networks(network_name)
-        .into_iter()
-        .filter(|parent| crate::library_links::owner_mount(node_type_registry, parent) == owner)
-        .collect();
+    let parent_network_names = same_file_callers(node_type_registry, network_name);
 
     // Update each parent network's call sites. Walk recursively into HOF
     // zone bodies so a body-internal node calling the renamed network has

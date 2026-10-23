@@ -139,6 +139,7 @@ fn composite_redo_forward_undo_reverse_order() {
         active_record_def_name: &mut designer.active_record_def_name,
         eval_error_snapshots: &mut designer.eval_error_snapshots,
         clipboard: atomcad_structure_designer::clipboard::ClipboardSlot::none(),
+        call_site_restores: Vec::new(),
     };
 
     composite.redo(&mut ctx);

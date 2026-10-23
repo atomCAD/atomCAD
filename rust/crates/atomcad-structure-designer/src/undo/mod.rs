@@ -66,9 +66,75 @@ pub struct UndoContext<'a> {
     /// exactly as the forward operation did, so an undone rename takes the
     /// clipboard's references back with it.
     pub clipboard: crate::clipboard::ClipboardSlot<'a>,
+    /// Callers' wiring to put back once the refresh after this undo has
+    /// re-derived the restored networks' interfaces, as `(network, its
+    /// instances)`. Filled through [`UndoContext::restore_call_sites`];
+    /// applied by `StructureDesigner::undo`. Construct it empty.
+    pub call_site_restores: Vec<(String, Vec<crate::network_validator::CallSite>)>,
 }
 
 impl<'a> UndoContext<'a> {
+    /// Ask for the instances of `network_name` to get the wiring in `sites`
+    /// back (`network_validator::capture_call_sites`, taken before the edit
+    /// being undone). It cannot be written here: the network's interface is
+    /// re-derived, and its callers remapped to it, only by the validation of
+    /// the refresh that follows the undo, so `StructureDesigner::undo` writes
+    /// it after that and re-validates the callers.
+    pub fn restore_call_sites(
+        &mut self,
+        network_name: &str,
+        sites: &[crate::network_validator::CallSite],
+    ) {
+        if !sites.is_empty() {
+            self.call_site_restores
+                .push((network_name.to_string(), sites.to_vec()));
+        }
+    }
+
+    /// Replace the network `name` with one deserialized from `snapshot`,
+    /// keeping the **live** interface (`node_type`'s `parameters` and
+    /// `output_pins`) rather than the snapshot's.
+    ///
+    /// The validator repairs call sites, and re-validates the networks that
+    /// use this one, only when the interface it derives from the nodes differs
+    /// from the stored one; the users were last repaired against the live one.
+    /// Restoring the snapshot's interface as well would hide an edit that
+    /// added or removed a `parameter`, or changed the output type, and the
+    /// callers would keep an argument slot or an output type the restored
+    /// network no longer has. The refresh's validation then derives the
+    /// snapshot's interface again and propagates it. A network that does not
+    /// exist takes the snapshot's interface.
+    pub fn restore_network_keeping_interface(
+        &mut self,
+        name: &str,
+        snapshot: &crate::serialization::node_networks_serialization::SerializableNodeNetwork,
+    ) {
+        let live_interface = self
+            .node_type_registry
+            .node_networks
+            .get(name)
+            .map(|network| {
+                (
+                    network.node_type.parameters.clone(),
+                    network.node_type.output_pins.clone(),
+                )
+            });
+        if let Ok(mut network) =
+            crate::serialization::node_networks_serialization::serializable_to_node_network(
+                snapshot,
+                &self.node_type_registry.built_in_node_types,
+                None,
+            )
+        {
+            if let Some((parameters, output_pins)) = live_interface {
+                network.node_type.parameters = parameters;
+                network.node_type.output_pins = output_pins;
+            }
+            self.node_type_registry
+                .replace_network_keeping_thumbnail(name.to_string(), network);
+        }
+    }
+
     /// Get mutable reference to a network by name.
     /// Commands use this with their stored network_name — NOT the active network,
     /// since undo/redo may fire while a different network is active.

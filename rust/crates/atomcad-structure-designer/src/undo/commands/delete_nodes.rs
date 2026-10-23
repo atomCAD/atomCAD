@@ -16,6 +16,11 @@ pub struct DeleteNodesCommand {
     /// Display state of deleted nodes
     pub display_states: Vec<(u64, NodeDisplayType)>,
     pub description: String,
+    /// The wiring of this network's instances before the deletion
+    /// (`network_validator::capture_call_sites`), when a `parameter` was
+    /// among the deleted: the call-site repair then drops every instance's
+    /// wire into it, outside this network. Empty otherwise.
+    pub call_sites: Vec<crate::network_validator::CallSite>,
 }
 
 impl DeleteNodesCommand {
@@ -59,6 +64,9 @@ impl DeleteNodesCommand {
                     snap.arguments.len(),
                     data,
                 );
+                // `add_node_with_id` always displays the node; the display
+                // states below put back the ones that were displayed.
+                network.displayed_nodes.remove(&snap.node_id);
 
                 // Restore custom name, arguments, and zone state
                 if let Some(node) = network.nodes.get_mut(&snap.node_id) {
@@ -136,6 +144,7 @@ impl UndoCommand for DeleteNodesCommand {
 
     fn undo(&self, ctx: &mut UndoContext) {
         self.restore_nodes(ctx);
+        ctx.restore_call_sites(&self.network_name, &self.call_sites);
     }
 
     fn redo(&self, ctx: &mut UndoContext) {

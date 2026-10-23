@@ -10144,6 +10144,12 @@ pub fn apply_text_to_active_network(code: String) -> APITextEditResult {
                     false,
                 )
                 .ok();
+                // A text edit can delete or reorder `parameter`s; the undo
+                // step restores the callers' wires into them from this.
+                let call_sites = atomcad_structure_designer::network_validator::capture_call_sites(
+                    &structure_designer.node_type_registry,
+                    &network_name,
+                );
 
                 // Apply edits in replace mode
                 let result = text_edit_network(
@@ -10217,6 +10223,7 @@ pub fn apply_text_to_active_network(code: String) -> APITextEditResult {
                                 before_snapshot: before,
                                 after_snapshot: after,
                                 description: "Text edit network",
+                                call_sites,
                             });
                     }
                 }

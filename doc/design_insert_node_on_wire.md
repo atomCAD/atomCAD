@@ -521,7 +521,6 @@ source in the last row.
 | there is no consumer | `Can't dissolve N: nothing uses its output — use Delete` | With no consumer, Dissolve is just Delete. |
 | something consumes `N`'s function pin (`-1`) | `Can't dissolve N: it is used as a function` | That consumer wants `N` *as a function*; no input wire can stand in for it. |
 | `N` is its network's return node | `Can't dissolve N: it is the network's return node` | The return node is the custom network's interface. Moving it is a separate decision. |
-| `N` is a `parameter` | `Can't dissolve N: it is one of the network's parameters` | Also the interface: removing the pin drops every caller's wire into it, in other networks, beyond the reach of the one-network undo step (Phase 3 notes). |
 | there is no candidate | `Can't dissolve N: no input wire fits where its output goes` | — |
 | there is more than one candidate | `Can't dissolve N: 2 input wires could replace it (base, sub)`. The list names each pin with candidates in pin order, and a pin holding several reads `3 wires into shapes`, as in `Can't dissolve union: 3 input wires could replace it (3 wires into shapes)` | D13, D14 |
 | a consumer's slot would get two wires from the candidate's source node (`slot_accepts_source` is false) | `Can't dissolve N: union would receive a twice` (consumer, then source) | `Argument::incoming_wires` holds at most one wire per source node, so `union(a, move(a))` → `union(a, a)` cannot be represented. |
@@ -562,8 +561,6 @@ pub enum DissolveRefusal {
     UsedAsFunction { node: String },
     #[error("Can't dissolve {node}: it is the network's return node")]
     ReturnNode { node: String },
-    #[error("Can't dissolve {node}: it is one of the network's parameters")]
-    Parameter { node: String },
     #[error("Can't dissolve {node}: no input wire fits where its output goes")]
     NoCandidate { node: String },
     #[error("Can't dissolve {node}: {candidates}")]
@@ -958,13 +955,15 @@ keyboard list in `node_network/AGENTS.md` → Interaction Model.
   over the corpus (method in Testing).
 
 *Implementation notes (Phase 3, where the code differs from the text above):*
-- **A `parameter` is refused too** (`DissolveRefusal::Parameter`, after
-  `ReturnNode`: `Can't dissolve N: it is one of the network's parameters`).
-  Found by the corpus run. A `parameter` is an input pin of its network, like
-  the return node is its output: dissolving one removes the pin, the repair
-  then drops every caller's wire into it in *other* networks, and the
-  one-network `NetworkSnapshotCommand` cannot bring those wires back. Undo left
-  the callers disconnected.
+- **Dissolving a `parameter` records its callers' wiring.** The corpus run
+  found that undoing it left the callers disconnected: the pin's removal makes
+  the call-site repair drop every instance's wire into it, in *other*
+  networks, which the one-network `NetworkSnapshotCommand` does not cover.
+  Plain Delete (and an AI edit deleting a parameter) had the same flaw. The fix
+  is general, not Dissolve's: the command records the callers' wiring and the
+  undo puts it back (`undo/AGENTS.md` → Known Pitfalls,
+  `call_site_undo_test.rs`). Dissolve fills `NetworkSnapshotCommand::call_sites`
+  when the node is a `parameter`.
 - **"No consumer" counts the function pin's wires too.** Read literally, the
   checks table sends a node used *only* as a function to `NoConsumer` ("use
   Delete"), which would lose the function wire. Counting every wire leaving the
@@ -979,8 +978,7 @@ keyboard list in `node_network/AGENTS.md` → Interaction Model.
   `activeScopeChain`.
 - The insert-then-dissolve round trip ignores node positions, body sizes and
   the `next_node_id` / `next_param_id` counters, which an insert advances and
-  a dissolve does not take back. An inserted `parameter` is skipped (see the
-  first note).
+  a dissolve does not take back.
 - The demolib run plans 979 nodes and dissolves 114; with the 150 sampled
   inserts it takes about a minute in a debug build.
 

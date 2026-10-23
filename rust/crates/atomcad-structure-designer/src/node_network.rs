@@ -284,7 +284,7 @@ impl IncomingWire {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Argument {
     /// Inbound wires on this argument pin. Phase 1 invariant: every entry has
     /// `source_pin = NodeOutput { .. }` and `source_scope_depth = 0`, and at

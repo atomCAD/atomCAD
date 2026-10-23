@@ -122,7 +122,6 @@ impl CloneForTest for DissolveRefusal {
             NoConsumer { node } => NoConsumer { node: node.clone() },
             UsedAsFunction { node } => UsedAsFunction { node: node.clone() },
             ReturnNode { node } => ReturnNode { node: node.clone() },
-            Parameter { node } => Parameter { node: node.clone() },
             NoCandidate { node } => NoCandidate { node: node.clone() },
             SeveralCandidates { node, candidates } => SeveralCandidates {
                 node: node.clone(),
@@ -169,10 +168,6 @@ fn every_refusal_reads_as_the_checks_table() {
         (
             ReturnNode { node: node("n") },
             "Can't dissolve n: it is the network's return node",
-        ),
-        (
-            Parameter { node: node("n") },
-            "Can't dissolve n: it is one of the network's parameters",
         ),
         (
             NoCandidate { node: node("n") },
@@ -333,25 +328,8 @@ output mv
     );
 }
 
-/// Found by the corpus run: dissolving a `parameter` removes a pin of the
-/// network, and every caller's wire into it with it; the undo step restores
-/// only this network, so the callers' wires would be lost for good.
-#[test]
-fn a_parameter_is_refused() {
-    let mut d = design(
-        "i = int { value: 1 }
-p = parameter { param_name: \"p\", data_type: Int, sort_order: 0, default: i }
-e = expr { a: p, expression: \"a\", parameters: [{ name: \"a\", data_type: Int }] }
-",
-    );
-    let p = id(&d, "p");
-    assert_refused(
-        &mut d,
-        &[],
-        p,
-        DissolveRefusal::Parameter { node: node("p") },
-    );
-}
+// A `parameter` dissolves like any node; that its undo restores the callers'
+// wires (found by the corpus run) is `call_site_undo_test.rs`'s.
 
 #[test]
 fn a_consumer_that_would_receive_a_source_twice_is_refused() {

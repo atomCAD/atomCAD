@@ -165,6 +165,11 @@ impl StructureDesigner {
             false,
         )
         .ok();
+        // An edit can delete or reorder `parameter`s, which drops the
+        // instances' wires into them in other networks (the call-site repair);
+        // the undo step puts them back from this.
+        let call_sites =
+            crate::network_validator::capture_call_sites(&self.node_type_registry, &network_name);
 
         // Apply the edit commands
         let mut result = text_edit_network(&mut network, &self.node_type_registry, code, replace);
@@ -386,6 +391,7 @@ impl StructureDesigner {
                     // which recognises this exact string to word its
                     // "edit #N undone" marker (D7).
                     description: AI_EDIT_COMMAND_DESCRIPTION,
+                    call_sites,
                 });
             }
         }

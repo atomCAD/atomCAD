@@ -1,6 +1,5 @@
-use crate::serialization::node_networks_serialization::{
-    SerializableNodeNetwork, serializable_to_node_network,
-};
+use crate::network_validator::CallSite;
+use crate::serialization::node_networks_serialization::SerializableNodeNetwork;
 use crate::undo::{UndoCommand, UndoContext, UndoRefreshMode};
 
 /// Generic whole-network snapshot command: one undo step for any edit of a
@@ -28,6 +27,11 @@ pub struct NetworkSnapshotCommand {
     pub before_snapshot: SerializableNodeNetwork,
     /// Serialized network state after the edit.
     pub after_snapshot: SerializableNodeNetwork,
+    /// The wiring of this network's instances before the edit
+    /// (`network_validator::capture_call_sites`), for an edit that can remove
+    /// a `parameter`: the call-site repair drops the instances' wires into
+    /// it, outside this network. Empty when the edit cannot.
+    pub call_sites: Vec<CallSite>,
 }
 
 // Manual Debug impl because SerializableNodeNetwork doesn't derive Debug.
@@ -40,57 +44,21 @@ impl std::fmt::Debug for NetworkSnapshotCommand {
     }
 }
 
-impl NetworkSnapshotCommand {
-    /// Replace a network in the registry with one deserialized from a snapshot.
-    ///
-    /// The restored network keeps the **live** interface — `node_type`'s
-    /// `parameters` and `output_pins` — rather than the snapshot's. The
-    /// validator repairs call sites and re-validates the networks that use
-    /// this one only when the interface it derives from the nodes differs from
-    /// the stored one, and the users were last repaired against the live
-    /// interface. Restoring the snapshot's interface as well would hide an edit
-    /// that added or removed a `parameter`, or changed the output type
-    /// (inserting a node on a wire, `doc/design_insert_node_on_wire.md`, does
-    /// both): the callers would keep an argument slot, or an output type, the
-    /// restored network no longer has. The Full refresh's validation then
-    /// derives the snapshot's interface again and propagates it.
-    fn restore_network(ctx: &mut UndoContext, name: &str, snapshot: &SerializableNodeNetwork) {
-        let live_interface = ctx
-            .node_type_registry
-            .node_networks
-            .get(name)
-            .map(|network| {
-                (
-                    network.node_type.parameters.clone(),
-                    network.node_type.output_pins.clone(),
-                )
-            });
-        if let Ok(mut network) = serializable_to_node_network(
-            snapshot,
-            &ctx.node_type_registry.built_in_node_types,
-            None,
-        ) {
-            if let Some((parameters, output_pins)) = live_interface {
-                network.node_type.parameters = parameters;
-                network.node_type.output_pins = output_pins;
-            }
-            ctx.node_type_registry
-                .replace_network_keeping_thumbnail(name.to_string(), network);
-        }
-    }
-}
-
 impl UndoCommand for NetworkSnapshotCommand {
     fn description(&self) -> &str {
         &self.description
     }
 
+    /// The network is restored keeping the live interface
+    /// ([`UndoContext::restore_network_keeping_interface`]), and the callers'
+    /// wiring is handed back for after the refresh's validation.
     fn undo(&self, ctx: &mut UndoContext) {
-        Self::restore_network(ctx, &self.network_name, &self.before_snapshot);
+        ctx.restore_network_keeping_interface(&self.network_name, &self.before_snapshot);
+        ctx.restore_call_sites(&self.network_name, &self.call_sites);
     }
 
     fn redo(&self, ctx: &mut UndoContext) {
-        Self::restore_network(ctx, &self.network_name, &self.after_snapshot);
+        ctx.restore_network_keeping_interface(&self.network_name, &self.after_snapshot);
     }
 
     fn refresh_mode(&self) -> UndoRefreshMode {

@@ -235,6 +235,7 @@ fn undo_stack_empty_stack_returns_none() {
         active_record_def_name: &mut designer.active_record_def_name,
         eval_error_snapshots: &mut designer.eval_error_snapshots,
         clipboard: atomcad_structure_designer::clipboard::ClipboardSlot::none(),
+        call_site_restores: Vec::new(),
     };
 
     assert!(!stack.can_undo());
@@ -264,6 +265,7 @@ fn undo_stack_push_undo_redo_cursor_behavior() {
         active_record_def_name: &mut designer.active_record_def_name,
         eval_error_snapshots: &mut designer.eval_error_snapshots,
         clipboard: atomcad_structure_designer::clipboard::ClipboardSlot::none(),
+        call_site_restores: Vec::new(),
     };
     assert!(stack.undo(&mut ctx).is_some());
 
@@ -298,6 +300,7 @@ fn undo_stack_redo_tail_truncation_on_push() {
         active_record_def_name: &mut designer.active_record_def_name,
         eval_error_snapshots: &mut designer.eval_error_snapshots,
         clipboard: atomcad_structure_designer::clipboard::ClipboardSlot::none(),
+        call_site_restores: Vec::new(),
     };
 
     stack.push(Box::new(DummyCommand::new("cmd1")));
@@ -339,6 +342,7 @@ fn undo_stack_max_history_eviction() {
         active_record_def_name: &mut designer.active_record_def_name,
         eval_error_snapshots: &mut designer.eval_error_snapshots,
         clipboard: atomcad_structure_designer::clipboard::ClipboardSlot::none(),
+        call_site_restores: Vec::new(),
     };
 
     // Can only undo 3 times (cmd4, cmd3, cmd2), not 4
@@ -382,6 +386,7 @@ fn undo_stack_suppression() {
         active_record_def_name: &mut designer.active_record_def_name,
         eval_error_snapshots: &mut designer.eval_error_snapshots,
         clipboard: atomcad_structure_designer::clipboard::ClipboardSlot::none(),
+        call_site_restores: Vec::new(),
     };
 
     stack.undo(&mut ctx);
@@ -1497,6 +1502,7 @@ fn apply_text_edit_inner(
                 before_snapshot: before,
                 after_snapshot: after,
                 description,
+                call_sites: Vec::new(),
             });
         }
     }
@@ -3994,6 +4000,7 @@ f = float { value: 1.5 }
         description: "Test snapshot".to_string(),
         before_snapshot: before,
         after_snapshot: after,
+        call_sites: Vec::new(),
     });
     assert_eq!(
         designer.undo_stack.undo_description(),

@@ -1,6 +1,4 @@
-use crate::serialization::node_networks_serialization::{
-    SerializableNodeNetwork, serializable_to_node_network,
-};
+use crate::serialization::node_networks_serialization::SerializableNodeNetwork;
 use crate::undo::{UndoCommand, UndoContext, UndoRefreshMode};
 
 /// Command for undoing/redoing the "Promote to Parameter" operation.
@@ -23,30 +21,23 @@ impl std::fmt::Debug for PromoteToParameterCommand {
     }
 }
 
-impl PromoteToParameterCommand {
-    fn restore_network(ctx: &mut UndoContext, name: &str, snapshot: &SerializableNodeNetwork) {
-        if let Ok(network) = serializable_to_node_network(
-            snapshot,
-            &ctx.node_type_registry.built_in_node_types,
-            None,
-        ) {
-            ctx.node_type_registry
-                .replace_network_keeping_thumbnail(name.to_string(), network);
-        }
-    }
-}
-
 impl UndoCommand for PromoteToParameterCommand {
     fn description(&self) -> &str {
         "Promote to parameter"
     }
 
+    /// Keeps the live interface
+    /// ([`UndoContext::restore_network_keeping_interface`]), so the refresh's
+    /// validation sees the parameter come and go and repairs the callers: an
+    /// undo takes the promoted parameter's slot away from every instance.
+    /// Nothing is captured for the callers, since a promote only adds a
+    /// parameter, and the slot it adds is empty.
     fn undo(&self, ctx: &mut UndoContext) {
-        Self::restore_network(ctx, &self.network_name, &self.network_before);
+        ctx.restore_network_keeping_interface(&self.network_name, &self.network_before);
     }
 
     fn redo(&self, ctx: &mut UndoContext) {
-        Self::restore_network(ctx, &self.network_name, &self.network_after);
+        ctx.restore_network_keeping_interface(&self.network_name, &self.network_after);
     }
 
     fn refresh_mode(&self) -> UndoRefreshMode {
