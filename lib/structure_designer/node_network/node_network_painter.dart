@@ -63,16 +63,34 @@ class WireHitResult {
 
   /// The wire's identity by value: its storage scope and anchor. Two hits on
   /// the same wire in different frames have equal keys.
-  String get key => '${wireScope.join('/')}|$sourceNodeId|$destNodeId|'
-      '${destArgumentKind.name}|$destParamIndex';
+  String get key => _key(
+      scopeChain, sourceNodeId, destNodeId, destArgumentKind, destParamIndex);
+
+  /// [key] of [wire], listed under [scopeChain] (as the painter walks it).
+  static String keyOf(List<BigInt> scopeChain, WireView wire) => _key(
+      scopeChain,
+      wire.sourceNodeId,
+      wire.destNodeId,
+      wire.destinationArgumentKind,
+      wire.destParamIndex);
+
+  static String _key(List<BigInt> scopeChain, BigInt sourceNodeId,
+      BigInt destNodeId, APIArgumentKind kind, BigInt destParamIndex) {
+    final storage = _storageScope(scopeChain, kind);
+    return '${storage.join('/')}|$sourceNodeId|$destNodeId|'
+        '${kind.name}|$destParamIndex';
+  }
+
+  static List<BigInt> _storageScope(
+          List<BigInt> scopeChain, APIArgumentKind kind) =>
+      kind == APIArgumentKind.zoneOutput && scopeChain.isNotEmpty
+          ? scopeChain.sublist(0, scopeChain.length - 1)
+          : scopeChain;
 
   /// The scope the wire is *stored* in, as Rust addresses it. A body-return
   /// wire is listed with its body ([scopeChain] ends in the HOF's id) but
   /// stored on the HOF, in the HOF's own network.
-  List<BigInt> get wireScope =>
-      destArgumentKind == APIArgumentKind.zoneOutput && scopeChain.isNotEmpty
-          ? scopeChain.sublist(0, scopeChain.length - 1)
-          : scopeChain;
+  List<BigInt> get wireScope => _storageScope(scopeChain, destArgumentKind);
 
   /// The wire's address for the splice APIs. The canvas knows no persistent
   /// parameter ids; Rust resolves the slot by index when none is given.
@@ -178,6 +196,16 @@ class NodeNetworkPainter extends CustomPainter {
   /// A wire's selection state as it should be **drawn**; hit testing keeps
   /// reading `wire.selected`.
   bool _drawSelected(bool wireSelected) => wireSelected && !hideSelection;
+
+  /// The key of the wire under the pointer ([StructureDesignerModel.canvasHover]),
+  /// or null. Hover is interaction, so the image export never draws it.
+  String? get _hoveredWireKey =>
+      hideSelection ? null : graphModel.canvasHover.value?.wireKey;
+
+  /// Whether [wire], listed under [scopeChain], is the hovered one.
+  static bool _isHovered(
+          String? hoveredKey, List<BigInt> scopeChain, WireView wire) =>
+      hoveredKey != null && WireHitResult.keyOf(scopeChain, wire) == hoveredKey;
 
   /// Build a [ScopeResolver] for the current frame. Returns null when no
   /// network is active. Constructed once per `paint` and once per
@@ -534,11 +562,13 @@ class NodeNetworkPainter extends CustomPainter {
     if (crossing.isEmpty) return;
     canvas.save();
     canvas.clipRect(clipRect, clipOp: ClipOp.difference);
+    final hoveredKey = _hoveredWireKey;
     for (final c in crossing) {
       // Alignment dashes are top-level-only (see _drawWiresAtScope); body
       // captures render solid.
       _drawWire(c.sourcePos, c.destPos, canvas, paint, c.dataType,
-          _drawSelected(c.wire.selected), null);
+          _drawSelected(c.wire.selected), null,
+          hovered: _isHovered(hoveredKey, c.scopeChain, c.wire));
     }
     canvas.restore();
   }
@@ -693,6 +723,7 @@ class NodeNetworkPainter extends CustomPainter {
     Canvas canvas,
     Paint paint,
   ) {
+    final hoveredKey = _hoveredWireKey;
     for (var wire in wires) {
       final source =
           resolver.tryPinScreenPosition(_wireSourcePin(wire, scopeChain));
@@ -705,7 +736,8 @@ class NodeNetworkPainter extends CustomPainter {
           ? _getSourcePinAlignment(wire.sourceNodeId, wire.sourceOutputPinIndex)
           : null;
       _drawWire(source.$1, dest.$1, canvas, paint, source.$2,
-          _drawSelected(wire.selected), alignment);
+          _drawSelected(wire.selected), alignment,
+          hovered: _isHovered(hoveredKey, scopeChain, wire));
     }
   }
 
@@ -719,12 +751,26 @@ class NodeNetworkPainter extends CustomPainter {
     return node.outputPins[pinIndex].alignment;
   }
 
+  /// [hovered] draws the wire under the pointer thicker, with a glow in its
+  /// own colour — unlike the selected wire's orange, so the two never read
+  /// alike. A selected wire keeps its selected look under the pointer.
   _drawWire(Offset sourcePos, Offset destPos, Canvas canvas, Paint paint,
-      String dataType, bool selected, APIAlignment? alignment) {
+      String dataType, bool selected, APIAlignment? alignment,
+      {bool hovered = false}) {
     paint.color = getDataTypeColor(dataType);
-    paint.strokeWidth = selected ? WIRE_WIDTH_SELECTED : WIRE_WIDTH_NORMAL;
+    paint.strokeWidth =
+        selected || hovered ? WIRE_WIDTH_SELECTED : WIRE_WIDTH_NORMAL;
 
     final path = _getPath(sourcePos, destPos);
+
+    if (hovered && !selected) {
+      canvas.drawPath(
+          path,
+          Paint()
+            ..color = paint.color.withValues(alpha: WIRE_GLOW_OPACITY)
+            ..strokeWidth = WIRE_WIDTH_SELECTED * 2
+            ..style = PaintingStyle.stroke);
+    }
 
     if (selected) {
       paint.color = WIRE_COLOR_SELECTED;

@@ -354,6 +354,8 @@ Each node network remembers its own canvas view (pan position and zoom level). W
 
 ### Manipulating nodes and wires
 
+**What is under the pointer.** The node or wire under the mouse pointer is highlighted, so you can see what a click will hit before you click: a node's title bar lightens, and a wire is drawn thicker with a soft glow in its own colour. Wires are thin, so this is the quickest way to tell which of two neighbouring wires you are about to select or right-click. Comment notes are not highlighted.
+
 **Add nodes**
 Right-click in the node editor to open the **Add Node** window and add a new node.
 

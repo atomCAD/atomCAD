@@ -87,6 +87,9 @@ const double NODE_BORDER_WIDTH_SELECTED = 2.0;
 const double NODE_BORDER_WIDTH_NORMAL = 2.0;
 const double NODE_BORDER_RADIUS = 8.0;
 const Color NODE_TITLE_COLOR_NORMAL = Color(0xFF37474F); // Colors.blueGrey[800]
+
+/// How far a hovered node's title bar is blended toward white.
+const double NODE_TITLE_HOVER_LIGHTEN = 0.15;
 const Color NODE_TITLE_COLOR_RETURN = Color(0xFF0D47A1); // Dark blue
 const Color NODE_TITLE_COLOR_PARAMETER = Color(0xFF1B5E20); // Dark green
 
@@ -929,6 +932,12 @@ class NodeWidget extends StatelessWidget {
   /// the image export never sets it.
   final bool traceHighlighted;
 
+  /// The pointer is over this node on the canvas: its title bar lightens
+  /// ([NODE_TITLE_HOVER_LIGHTEN]). Deliberately the subtlest state, and on a
+  /// different channel from the others (the border), so it never competes
+  /// with them. Transient, so the image export never sets it.
+  final bool hovered;
+
   NodeWidget({
     required this.node,
     required this.panOffset,
@@ -940,6 +949,7 @@ class NodeWidget extends StatelessWidget {
     this.titleMode = NodeTitleMode.type,
     this.thumbnail,
     this.traceHighlighted = false,
+    this.hovered = false,
   }) : super(key: NodeWidgetKeys.nodeWidget(node.id, scopeChain: scopeChain));
 
   /// Selection / active state as it should be **drawn** — the styling code uses
@@ -1106,7 +1116,7 @@ class NodeWidget extends StatelessWidget {
             padding:
                 const EdgeInsets.only(top: 4, bottom: 4, left: 8, right: 2),
             decoration: BoxDecoration(
-              color: _getSpecialNodeColor() ?? _getTitleColor(),
+              color: _hoverTint(_getSpecialNodeColor() ?? _getTitleColor()),
               borderRadius: BorderRadius.vertical(
                   top: Radius.circular(NODE_BORDER_RADIUS - 2)),
             ),
@@ -1583,6 +1593,11 @@ class NodeWidget extends StatelessWidget {
     }
     return null;
   }
+
+  /// [color] lightened when the node is hovered.
+  Color _hoverTint(Color color) => hovered && !hideSelection
+      ? Color.lerp(color, Colors.white, NODE_TITLE_HOVER_LIGHTEN)!
+      : color;
 
   /// Returns the title bar color based on selection state
   Color _getTitleColor() {

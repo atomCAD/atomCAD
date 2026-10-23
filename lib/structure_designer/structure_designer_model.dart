@@ -363,6 +363,34 @@ class DocumentUiState {
       );
 }
 
+/// What the pointer is over on the node network canvas
+/// ([StructureDesignerModel.canvasHover]): a node, or a wire named by
+/// [WireHitResult.key]. Equal when it is the same node or wire, so a re-hit
+/// of the same thing on the next mouse move changes nothing.
+class CanvasHover {
+  CanvasHover.node(BigInt this.nodeId, this.scopeChain) : wireKey = null;
+  CanvasHover.wire(String this.wireKey)
+      : nodeId = null,
+        scopeChain = const [];
+
+  final BigInt? nodeId;
+  final List<BigInt> scopeChain;
+  final String? wireKey;
+
+  bool isNode(BigInt id, List<BigInt> chain) =>
+      nodeId == id && listEquals(scopeChain, chain);
+
+  @override
+  bool operator ==(Object other) =>
+      other is CanvasHover &&
+      other.nodeId == nodeId &&
+      other.wireKey == wireKey &&
+      listEquals(other.scopeChain, scopeChain);
+
+  @override
+  int get hashCode => Object.hash(nodeId, wireKey, Object.hashAll(scopeChain));
+}
+
 class StructureDesignerModel extends ChangeNotifier {
   List<APINetworkWithValidationErrors> nodeNetworkNames = [];
 
@@ -521,6 +549,18 @@ class StructureDesignerModel extends ChangeNotifier {
   /// Whether the node at ([nodeId], [scopeChain]) is [traceHoveredNodeId].
   bool isTraceHovered(BigInt nodeId, List<BigInt> scopeChain) =>
       scopeChain.isEmpty && traceHoveredNodeId.value == nodeId;
+
+  /// The node or wire under the pointer on the node network canvas, or null:
+  /// the hover highlight (a node's title lightens, a wire glows). Like
+  /// [traceHoveredNodeId], a dedicated notifier and never [notifyListeners]:
+  /// it changes as the mouse moves, and a change rebuilds the two affected
+  /// node widgets and repaints the wire painters, nothing else. The editor
+  /// sets it at most once per frame and only while no button is held.
+  final ValueNotifier<CanvasHover?> canvasHover = ValueNotifier(null);
+
+  /// Whether the node at ([nodeId], [scopeChain]) is under the pointer.
+  bool isNodeHovered(BigInt nodeId, List<BigInt> scopeChain) =>
+      canvasHover.value?.isNode(nodeId, scopeChain) ?? false;
 
   /// Scope + node ids of the node-drag in progress (null scope = no drag).
   /// Drives [isNodeDragAffected]; cleared by [refreshFromKernel], which every

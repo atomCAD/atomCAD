@@ -193,6 +193,14 @@ derived name); Flutter adds only the scope-prefix and zone-input rules of
 
 Wires use cubic Bezier curves with data-type-based coloring:
 - Selected wires get a glow effect
+- The hovered wire is drawn thicker with a glow in its own colour (a selected
+  wire keeps its orange look). Hover is `model.canvasHover`, matched in the
+  draw loop by `WireHitResult.keyOf`, so it is drawn in the wire's own layer
+  from that frame's positions. It is set by `_scheduleHoverUpdate` at most once
+  per frame, from hover events only (no button held), so no drag touches it;
+  a press clears it and the release re-hit-tests. Like the trace hover, it is a
+  dedicated notifier, never `notifyListeners`, and the image export never
+  draws it
 - Hit testing uses expanded area for easier clicking
 - Pin positions calculated differently per zoom level
 
@@ -251,6 +259,10 @@ the handle click and the context menu route through `_removeAnchor`.
 - **Active:** Thick border, full glow (0xFFD84315)
 - **Selected:** Medium border, partial glow (0xFFE08000)
 - **Error:** Red border with glow
+- **Hovered:** the title bar blends `NODE_TITLE_HOVER_LIGHTEN` toward white,
+  on top of whatever title colour the node has. The pointer is over it on the
+  canvas (`model.canvasHover`); a separate channel from the border, so it never
+  competes with the states above or below. Not drawn on comment notes
 - **Trace-hovered:** Magenta (0xFFD500F9) thick border, strong glow — wins over all the
   others. The pointer is on the node's row in the viewport's right-click trace
   menu (`model.traceHoveredNodeId`, listened to by the per-node

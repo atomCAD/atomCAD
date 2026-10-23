@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_cad/structure_designer/node_network/add_node_popup.dart';
@@ -458,7 +459,8 @@ class NodeNetworkInteractionLayer extends StatelessWidget {
               zoomLevel: zoomLevel,
               overlay: true,
               hideSelection: hideSelection,
-              repaint: model.dragRepaint),
+              repaint:
+                  Listenable.merge([model.dragRepaint, model.canvasHover])),
           child: Container(),
         ),
       );
@@ -468,7 +470,7 @@ class NodeNetworkInteractionLayer extends StatelessWidget {
           panOffset: panOffset,
           zoomLevel: zoomLevel,
           hideSelection: hideSelection,
-          repaint: model.dragRepaint),
+          repaint: Listenable.merge([model.dragRepaint, model.canvasHover])),
       // A plain Container (no gesture/opaque behavior) so the layer fills the
       // Stack for painting but stays transparent to pointer events — taps are
       // handled by the outer Listener (see `_handleCanvasTap`).
@@ -1601,9 +1603,10 @@ class NodeNetworkState extends State<NodeNetwork> {
   /// `Element.updateChild` short-circuits — no rebuild, no re-layout. This is
   /// what keeps dragging O(dragged) instead of O(network).
   ///
-  /// The trace menu's hover highlight (`model.traceHoveredNodeId`) rides the
-  /// same wrapper: a hover change rebuilds only the node whose highlight
-  /// differs from the one its prebuilt child was drawn with.
+  /// The trace menu's hover highlight (`model.traceHoveredNodeId`) and the
+  /// canvas hover (`model.canvasHover`) ride the same wrapper: a hover change
+  /// rebuilds only the nodes whose highlight differs from the one their
+  /// prebuilt child was drawn with.
   Widget _buildNodeWidget(
     NodeView node,
     List<BigInt> scopeChain,
@@ -1612,24 +1615,28 @@ class NodeNetworkState extends State<NodeNetwork> {
   ) {
     final model = widget.graphModel;
     final builtHighlighted = model.isTraceHovered(node.id, scopeChain);
+    final builtHovered = model.isNodeHovered(node.id, scopeChain);
     return ListenableBuilder(
       // The scoped key sits on the Stack's direct child (this wrapper) so
       // sibling reconciliation keeps working; see NodeWidgetKeys.nodeWidget.
       key: NodeWidgetKeys.nodeWidget(node.id, scopeChain: scopeChain),
-      listenable:
-          Listenable.merge([model.dragRepaint, model.traceHoveredNodeId]),
+      listenable: Listenable.merge(
+          [model.dragRepaint, model.traceHoveredNodeId, model.canvasHover]),
       builder: (context, child) {
         final dragAffected = model.isNodeDragAffected(node.id, scopeChain);
         final highlighted = model.isTraceHovered(node.id, scopeChain);
-        if (!dragAffected && highlighted == builtHighlighted) {
+        final hovered = model.isNodeHovered(node.id, scopeChain);
+        if (!dragAffected &&
+            highlighted == builtHighlighted &&
+            hovered == builtHovered) {
           return child!;
         }
         return _nodeWidgetFor(node, scopeChain, rootView,
             dragAffected ? _dragFrameResolver(rootView) : resolver,
-            traceHighlighted: highlighted);
+            traceHighlighted: highlighted, hovered: hovered);
       },
       child: _nodeWidgetFor(node, scopeChain, rootView, resolver,
-          traceHighlighted: builtHighlighted),
+          traceHighlighted: builtHighlighted, hovered: builtHovered),
     );
   }
 
@@ -1639,6 +1646,7 @@ class NodeNetworkState extends State<NodeNetwork> {
     NodeNetworkView rootView,
     ScopeResolver resolver, {
     bool traceHighlighted = false,
+    bool hovered = false,
   }) =>
       canvasNodeWidget(
         node: node,
@@ -1652,6 +1660,7 @@ class NodeNetworkState extends State<NodeNetwork> {
         // lookup is by network name, and only networks are in the list.
         thumbnail: widget.graphModel.networkThumbnailImage(node.nodeTypeName),
         traceHighlighted: traceHighlighted,
+        hovered: hovered,
       );
 
   /// Resolver for drag-tick rebuilds of drag-affected nodes. The build-time
@@ -1676,6 +1685,7 @@ class NodeNetworkState extends State<NodeNetwork> {
 
   /// Handle pointer down event - check for middle mouse button, Shift + right mouse, or left-click for rectangle selection
   void _handlePointerDown(PointerDownEvent event) {
+    _clearHover();
     // Check if middle mouse button (button 2)
     if (event.buttons == kTertiaryButton) {
       setState(() {
@@ -1706,6 +1716,55 @@ class NodeNetworkState extends State<NodeNetwork> {
   /// containing scope) instead of the zone actually under the cursor.
   void _handlePointerHover(PointerHoverEvent event) {
     _lastMousePosition = event.localPosition;
+    _scheduleHoverUpdate(event.localPosition);
+  }
+
+  // ===== HOVER HIGHLIGHT =====
+  // The node or wire under the pointer (`model.canvasHover`). Hover events
+  // come only while no button is held, so no drag ever updates it; a press
+  // clears it and the release re-hit-tests where the pointer stopped.
+
+  Offset? _pendingHoverPosition;
+  bool _hoverFrameScheduled = false;
+
+  /// Hit-test [position] for the hover highlight at the next frame, not on
+  /// every mouse event: the wire hit test builds a band per wire.
+  void _scheduleHoverUpdate(Offset position) {
+    _pendingHoverPosition = position;
+    if (_hoverFrameScheduled) return;
+    _hoverFrameScheduled = true;
+    SchedulerBinding.instance.scheduleFrameCallback((_) {
+      _hoverFrameScheduled = false;
+      final pending = _pendingHoverPosition;
+      _pendingHoverPosition = null;
+      if (!mounted || pending == null) return;
+      widget.graphModel.canvasHover.value = _hoverAt(pending);
+    });
+  }
+
+  void _clearHover() {
+    _pendingHoverPosition = null;
+    widget.graphModel.canvasHover.value = null;
+  }
+
+  /// The node under [position], else the wire, as the click tests rank them
+  /// (a node wins over a wire passing under it). Comment notes are not
+  /// highlighted, and a wire under one is not reached.
+  CanvasHover? _hoverAt(Offset position) {
+    final model = widget.graphModel;
+    final resolver = _makeResolver();
+    if (resolver == null) return null;
+    final nodeHit = resolver.findNodeAtScreenPosition(position);
+    if (nodeHit != null) {
+      return nodeHit.node.nodeTypeName == 'Comment'
+          ? null
+          : CanvasHover.node(nodeHit.node.id, nodeHit.scopeChain);
+    }
+    final wire =
+        NodeNetworkPainter(model, panOffset: _panOffset, zoomLevel: _zoomLevel)
+            .findWireAtPosition(position,
+                includeBodyReturn: true, resolver: resolver);
+    return wire == null ? null : CanvasHover.wire(wire.key);
   }
 
   /// Handle pointer move event for panning (middle mouse or Shift + right mouse) and rectangle selection
@@ -1732,6 +1791,7 @@ class NodeNetworkState extends State<NodeNetwork> {
 
   /// Handle pointer up event to end panning or rectangle selection
   void _handlePointerUp(PointerUpEvent event) {
+    _scheduleHoverUpdate(event.localPosition);
     if (_isMiddleMousePanning || _isShiftRightMousePanning) {
       final didPan = _didPan;
       setState(() {
@@ -1839,6 +1899,8 @@ class NodeNetworkState extends State<NodeNetwork> {
 
   /// Handle mouse scroll for zooming with zoom-to-cursor behavior
   void _handlePointerScroll(PointerScrollEvent event) {
+    // The canvas moves under a still pointer.
+    _scheduleHoverUpdate(event.localPosition);
     // Determine new zoom level
     ZoomLevel newZoomLevel = _zoomLevel;
 
@@ -2027,6 +2089,7 @@ class NodeNetworkState extends State<NodeNetwork> {
               return KeyEventResult.ignored;
             },
             child: MouseRegion(
+              onExit: (_) => _clearHover(),
               onEnter: (event) {
                 // Not while a note is open for in-place editing (issue #421):
                 // the user moving the pointer out to a side panel and back
