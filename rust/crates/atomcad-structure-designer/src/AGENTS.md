@@ -54,6 +54,8 @@ structure_designer/
 ├── node_type_registry.rs      # Central registry of all node types
 ├── declared_inputs.rs         # DeclaredInputs trait (nodes whose inputs are their own data) + open-port name derivation
 ├── declared_input_ops.rs      # Open port (add_input_from_wire) and Take type from wire, for any DeclaredInputs node
+├── splice_plan.rs             # Pure splice planner: which (input, output) arrangements a node offers on a two-node scratch network
+├── splice_ops.rs              # Splice operations (plan + one-step commit): the plan-first wire drop (doc/design_insert_node_on_wire.md)
 ├── record_construct_ops.rs    # record_construct's schema switch, anonymous field-list edit (one NetworkSnapshotCommand each) and promotion to a named def
 ├── record_typed_input.rs      # RecordTypedInput trait (readers whose pins derive from the type of their `record` input)
 ├── record_input_type_ops.rs   # Adopting a reader's type from a wire (connect while uncommitted, Take type from wire), the schema op, the output-wire remap
@@ -485,6 +487,10 @@ The flag (`NetworkEvaluationContext.execute`) and the **central skip rule** that
 `StructureDesigner.print_log: Vec<PrintLogEntry>` accumulates entries pushed by the `print` node (and any future node that wants to surface text to the in-app Console panel). `take_print_log()` drains and returns; `clear_print_log()` empties without returning.
 
 Authoring guidance for effect-node `eval` arms: call effect logic unconditionally — the central rule guarantees `eval` is only invoked under `context.execute == true`. **Do not** add `if context.execute` guards inside individual effect nodes' `eval`. (The UX consequence — per-eval input validation deferring to Execute, recovered via `get_subtitle` — is in `nodes/AGENTS.md`.) Design doc: `doc/design_node_execution.md`.
+
+## Composite operations add nodes through `add_node_core`
+
+An operation that records its own snapshot (`splice_ops.rs`'s commits, and any future one) adds its nodes through `StructureDesigner::add_node_core` — default data adapted to a drag (`create_node_data`), the cache initialized, a top-level `parameter`'s id assigned, and nothing else — never through `add_node` / `add_node_scoped`, which push their own undo step and apply the display policy.
 
 ## Reflow on Footprint Growth
 

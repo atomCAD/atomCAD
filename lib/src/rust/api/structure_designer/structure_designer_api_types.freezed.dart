@@ -167,6 +167,241 @@ class _$APICommentAnchor_WireCopyWithImpl<$Res>
 }
 
 /// @nodoc
+mixin _$APIDraggedPin {
+  BigInt get nodeId;
+
+  /// Create a copy of APIDraggedPin
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  $APIDraggedPinCopyWith<APIDraggedPin> get copyWith =>
+      _$APIDraggedPinCopyWithImpl<APIDraggedPin>(
+          this as APIDraggedPin, _$identity);
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is APIDraggedPin &&
+            (identical(other.nodeId, nodeId) || other.nodeId == nodeId));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, nodeId);
+
+  @override
+  String toString() {
+    return 'APIDraggedPin(nodeId: $nodeId)';
+  }
+}
+
+/// @nodoc
+abstract mixin class $APIDraggedPinCopyWith<$Res> {
+  factory $APIDraggedPinCopyWith(
+          APIDraggedPin value, $Res Function(APIDraggedPin) _then) =
+      _$APIDraggedPinCopyWithImpl;
+  @useResult
+  $Res call({BigInt nodeId});
+}
+
+/// @nodoc
+class _$APIDraggedPinCopyWithImpl<$Res>
+    implements $APIDraggedPinCopyWith<$Res> {
+  _$APIDraggedPinCopyWithImpl(this._self, this._then);
+
+  final APIDraggedPin _self;
+  final $Res Function(APIDraggedPin) _then;
+
+  /// Create a copy of APIDraggedPin
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? nodeId = null,
+  }) {
+    return _then(_self.copyWith(
+      nodeId: null == nodeId
+          ? _self.nodeId
+          : nodeId // ignore: cast_nullable_to_non_nullable
+              as BigInt,
+    ));
+  }
+}
+
+/// @nodoc
+
+class APIDraggedPin_Output extends APIDraggedPin {
+  const APIDraggedPin_Output({required this.nodeId, required this.pin})
+      : super._();
+
+  @override
+  final BigInt nodeId;
+  final APISourcePin pin;
+
+  /// Create a copy of APIDraggedPin
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  $APIDraggedPin_OutputCopyWith<APIDraggedPin_Output> get copyWith =>
+      _$APIDraggedPin_OutputCopyWithImpl<APIDraggedPin_Output>(
+          this, _$identity);
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is APIDraggedPin_Output &&
+            (identical(other.nodeId, nodeId) || other.nodeId == nodeId) &&
+            (identical(other.pin, pin) || other.pin == pin));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, nodeId, pin);
+
+  @override
+  String toString() {
+    return 'APIDraggedPin.output(nodeId: $nodeId, pin: $pin)';
+  }
+}
+
+/// @nodoc
+abstract mixin class $APIDraggedPin_OutputCopyWith<$Res>
+    implements $APIDraggedPinCopyWith<$Res> {
+  factory $APIDraggedPin_OutputCopyWith(APIDraggedPin_Output value,
+          $Res Function(APIDraggedPin_Output) _then) =
+      _$APIDraggedPin_OutputCopyWithImpl;
+  @override
+  @useResult
+  $Res call({BigInt nodeId, APISourcePin pin});
+
+  $APISourcePinCopyWith<$Res> get pin;
+}
+
+/// @nodoc
+class _$APIDraggedPin_OutputCopyWithImpl<$Res>
+    implements $APIDraggedPin_OutputCopyWith<$Res> {
+  _$APIDraggedPin_OutputCopyWithImpl(this._self, this._then);
+
+  final APIDraggedPin_Output _self;
+  final $Res Function(APIDraggedPin_Output) _then;
+
+  /// Create a copy of APIDraggedPin
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @pragma('vm:prefer-inline')
+  $Res call({
+    Object? nodeId = null,
+    Object? pin = null,
+  }) {
+    return _then(APIDraggedPin_Output(
+      nodeId: null == nodeId
+          ? _self.nodeId
+          : nodeId // ignore: cast_nullable_to_non_nullable
+              as BigInt,
+      pin: null == pin
+          ? _self.pin
+          : pin // ignore: cast_nullable_to_non_nullable
+              as APISourcePin,
+    ));
+  }
+
+  /// Create a copy of APIDraggedPin
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @pragma('vm:prefer-inline')
+  $APISourcePinCopyWith<$Res> get pin {
+    return $APISourcePinCopyWith<$Res>(_self.pin, (value) {
+      return _then(_self.copyWith(pin: value));
+    });
+  }
+}
+
+/// @nodoc
+
+class APIDraggedPin_Input extends APIDraggedPin {
+  const APIDraggedPin_Input(
+      {required this.nodeId, required this.kind, required this.index})
+      : super._();
+
+  @override
+  final BigInt nodeId;
+  final APIArgumentKind kind;
+  final int index;
+
+  /// Create a copy of APIDraggedPin
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  $APIDraggedPin_InputCopyWith<APIDraggedPin_Input> get copyWith =>
+      _$APIDraggedPin_InputCopyWithImpl<APIDraggedPin_Input>(this, _$identity);
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is APIDraggedPin_Input &&
+            (identical(other.nodeId, nodeId) || other.nodeId == nodeId) &&
+            (identical(other.kind, kind) || other.kind == kind) &&
+            (identical(other.index, index) || other.index == index));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, nodeId, kind, index);
+
+  @override
+  String toString() {
+    return 'APIDraggedPin.input(nodeId: $nodeId, kind: $kind, index: $index)';
+  }
+}
+
+/// @nodoc
+abstract mixin class $APIDraggedPin_InputCopyWith<$Res>
+    implements $APIDraggedPinCopyWith<$Res> {
+  factory $APIDraggedPin_InputCopyWith(
+          APIDraggedPin_Input value, $Res Function(APIDraggedPin_Input) _then) =
+      _$APIDraggedPin_InputCopyWithImpl;
+  @override
+  @useResult
+  $Res call({BigInt nodeId, APIArgumentKind kind, int index});
+}
+
+/// @nodoc
+class _$APIDraggedPin_InputCopyWithImpl<$Res>
+    implements $APIDraggedPin_InputCopyWith<$Res> {
+  _$APIDraggedPin_InputCopyWithImpl(this._self, this._then);
+
+  final APIDraggedPin_Input _self;
+  final $Res Function(APIDraggedPin_Input) _then;
+
+  /// Create a copy of APIDraggedPin
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @pragma('vm:prefer-inline')
+  $Res call({
+    Object? nodeId = null,
+    Object? kind = null,
+    Object? index = null,
+  }) {
+    return _then(APIDraggedPin_Input(
+      nodeId: null == nodeId
+          ? _self.nodeId
+          : nodeId // ignore: cast_nullable_to_non_nullable
+              as BigInt,
+      kind: null == kind
+          ? _self.kind
+          : kind // ignore: cast_nullable_to_non_nullable
+              as APIArgumentKind,
+      index: null == index
+          ? _self.index
+          : index // ignore: cast_nullable_to_non_nullable
+              as int,
+    ));
+  }
+}
+
+/// @nodoc
 mixin _$APIFieldEditorHint {
   @override
   bool operator ==(Object other) {
@@ -373,6 +608,112 @@ class _$APIFieldEditorHint_RangeCopyWithImpl<$Res>
           : max // ignore: cast_nullable_to_non_nullable
               as double,
     ));
+  }
+}
+
+/// @nodoc
+mixin _$APIInputChoice {
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType && other is APIInputChoice);
+  }
+
+  @override
+  int get hashCode => runtimeType.hashCode;
+
+  @override
+  String toString() {
+    return 'APIInputChoice()';
+  }
+}
+
+/// @nodoc
+class $APIInputChoiceCopyWith<$Res> {
+  $APIInputChoiceCopyWith(APIInputChoice _, $Res Function(APIInputChoice) __);
+}
+
+/// @nodoc
+
+class APIInputChoice_Pin extends APIInputChoice {
+  const APIInputChoice_Pin({required this.index}) : super._();
+
+  final int index;
+
+  /// Create a copy of APIInputChoice
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  $APIInputChoice_PinCopyWith<APIInputChoice_Pin> get copyWith =>
+      _$APIInputChoice_PinCopyWithImpl<APIInputChoice_Pin>(this, _$identity);
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is APIInputChoice_Pin &&
+            (identical(other.index, index) || other.index == index));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, index);
+
+  @override
+  String toString() {
+    return 'APIInputChoice.pin(index: $index)';
+  }
+}
+
+/// @nodoc
+abstract mixin class $APIInputChoice_PinCopyWith<$Res>
+    implements $APIInputChoiceCopyWith<$Res> {
+  factory $APIInputChoice_PinCopyWith(
+          APIInputChoice_Pin value, $Res Function(APIInputChoice_Pin) _then) =
+      _$APIInputChoice_PinCopyWithImpl;
+  @useResult
+  $Res call({int index});
+}
+
+/// @nodoc
+class _$APIInputChoice_PinCopyWithImpl<$Res>
+    implements $APIInputChoice_PinCopyWith<$Res> {
+  _$APIInputChoice_PinCopyWithImpl(this._self, this._then);
+
+  final APIInputChoice_Pin _self;
+  final $Res Function(APIInputChoice_Pin) _then;
+
+  /// Create a copy of APIInputChoice
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  $Res call({
+    Object? index = null,
+  }) {
+    return _then(APIInputChoice_Pin(
+      index: null == index
+          ? _self.index
+          : index // ignore: cast_nullable_to_non_nullable
+              as int,
+    ));
+  }
+}
+
+/// @nodoc
+
+class APIInputChoice_OpenPort extends APIInputChoice {
+  const APIInputChoice_OpenPort() : super._();
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType && other is APIInputChoice_OpenPort);
+  }
+
+  @override
+  int get hashCode => runtimeType.hashCode;
+
+  @override
+  String toString() {
+    return 'APIInputChoice.openPort()';
   }
 }
 

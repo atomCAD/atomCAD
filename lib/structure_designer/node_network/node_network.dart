@@ -1,12 +1,11 @@
 import 'dart:math' as math;
 
-import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
-    show Uint64List;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_cad/structure_designer/node_network/add_node_popup.dart';
+import 'package:flutter_cad/structure_designer/node_network/arrangement_labels.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_widget.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network_content.dart';
@@ -653,21 +652,21 @@ class NodeNetworkState extends State<NodeNetwork> {
     return nodes[nodeId];
   }
 
-  /// Handles wire dropped in empty space - shows filtered Add Node popup.
-  /// The new node lands in the body whose interior the drop hit. Auto-connect
-  /// runs in both same-scope and cross-scope cases (U5): a same-scope drop
-  /// uses the Rust `getCompatiblePinsForAutoConnect` shortcut for top-level
-  /// pairs; a cross-scope drop falls back to per-pin `canConnectPins` checks
-  /// (which now route through `can_connect_wire_scoped` for captures) so the
-  /// dropped node receives a capture wire to the outer source.
+  /// Handles a wire dropped in empty space (`doc/design_insert_node_on_wire.md`
+  /// Phase 0): the Add Node popup filtered by the dragged pin's type, then a
+  /// Rust plan of the ways the chosen node can connect, the
+  /// [ArrangementDialog] only when there is more than one, and one commit —
+  /// one undo step. The new node lands in the body whose interior the drop
+  /// hit; Rust works out the wire's scope depth. Cancelling at any point
+  /// leaves the network untouched.
   void _handleWireDropInEmptySpace(
       PinReference startPin, Offset dropPosition) async {
     final isOutput = startPin.isOutput;
     // For a drag *off* an input pin, the declared pin type may be deliberately
     // lossy (e.g. `map.f`'s `AnyFunction`, which carries the parameter prefix
     // but not the return type). Prefer the pin's concrete `dragHintType` when
-    // present so both the popup filter and the created node's type inference
-    // see the full signature. See `doc/design_drag_aware_add_node.md` (Tier 2).
+    // present so the popup filter sees the full signature (Rust's plan reads
+    // the same hint). See `doc/design_drag_aware_add_node.md` (Tier 2).
     final dataType = _dragSourceTypeFor(startPin);
 
     // Resolve the drop target's scope *before* opening the popup: the list is
@@ -689,162 +688,65 @@ class NodeNetworkState extends State<NodeNetwork> {
 
     if (selectedNodeType == null || !mounted) return;
 
-    final newNodeId = widget.graphModel.createNode(
-      selectedNodeType,
-      logicalPosition,
-      dragSource: APIDragSource(
-        sourcePinType: dataType,
-        draggingFromOutput: isOutput,
-      ),
-      scopeChain: scope.scopeChain,
-    );
-    if (newNodeId == BigInt.zero) return;
-
-    // Top-level same-scope drops still use the existing Rust shortcut so the
-    // path is unchanged for non-zone authoring (the shortcut returns
-    // `Vec::new()` for non-empty `scope_path`, so it can't be used for body
-    // scopes — those fall through to the Flutter-side per-pin check below).
-    final sourceScope = startPin.scopeChain;
-    final sameScope = sourceScope.length == scope.scopeChain.length &&
-        () {
-          for (int i = 0; i < sourceScope.length; i++) {
-            if (sourceScope[i] != scope.scopeChain[i]) return false;
-          }
-          return true;
-        }();
-
-    List<(int, String, String)> compatiblePins;
-    if (sameScope && scope.scopeChain.isEmpty) {
-      compatiblePins = sd_api.getCompatiblePinsForAutoConnect(
-        scopePath: _scopeChainToBytes(scope.scopeChain),
-        sourceNodeId: startPin.nodeId,
-        sourcePinIndex: startPin.pinIndex,
-        sourceIsOutput: isOutput,
-        targetNodeId: newNodeId,
-      );
-    } else {
-      // Body-scope or cross-scope drop. Look up the new node in the refreshed
-      // view and probe each of its pins with `canConnectPins` (which handles
-      // capture / iteration-value / body-return semantics).
-      compatiblePins = _findCompatiblePinsCrossScope(
-        startPin,
-        newNodeId,
-        scope.scopeChain,
-        isOutput,
-      );
-    }
-
-    if (compatiblePins.isEmpty) {
-      // No pin to connect to, but the new node declares its own inputs (a
-      // zero-field anonymous `record_construct` made from an output drag):
-      // connect through its open port instead, which declares the input from
-      // the wire (`doc/design_wire_declared_inputs.md`).
-      final newNode = _lookupNodeInScope(newNodeId, scope.scopeChain);
-      if (isOutput && newNode != null && newNode.hasOpenInputPort) {
-        final error = widget.graphModel.addInputFromWire(startPin, newNodeId,
-            scopeChain: scope.scopeChain);
-        if (error != null && mounted) showErrorSnackBar(context, error);
-      }
+    final model = widget.graphModel;
+    final plan =
+        model.planWireDrop(startPin, scope.scopeChain, selectedNodeType);
+    final refusal = plan.refusal;
+    if (refusal != null) {
+      showErrorSnackBar(context, refusal);
       return;
     }
 
-    int targetPinIndex;
-    if (compatiblePins.length == 1) {
-      targetPinIndex = compatiblePins.first.$1;
-    } else {
-      if (!mounted) return;
-      final pinOptions = compatiblePins
-          .map((p) => CompatiblePinOption(
-                pinIndex: p.$1,
-                pinName: p.$2,
-                dataType: p.$3,
-              ))
-          .toList();
+    if (plan.arrangements.isEmpty) {
+      // Nothing on the new node can take the wire: place it unconnected, as
+      // the popup's choice still asks for it.
+      model.createNode(
+        selectedNodeType,
+        logicalPosition,
+        dragSource: APIDragSource(
+          sourcePinType: dataType,
+          draggingFromOutput: isOutput,
+        ),
+        scopeChain: scope.scopeChain,
+      );
+      return;
+    }
 
-      final selectedPinIndex = await showPinSelectionDialog(
+    APIArrangement arrangement = plan.arrangements.first;
+    if (plan.arrangements.length > 1) {
+      final labels = arrangementRowLabels([
+        for (final a in plan.arrangements)
+          ArrangementSides(
+            inputName: a.input?.name,
+            inputType: a.input?.dataType,
+            outputName: a.output?.name,
+            outputType: a.output?.dataType,
+          ),
+      ]);
+      final index = await showArrangementDialog(
         context,
-        pins: pinOptions,
-        nodeTypeName: selectedNodeType,
+        title: 'Connect to $selectedNodeType',
+        rows: [
+          for (final label in labels)
+            ArrangementRow(
+              label: label.label,
+              typeLabel: label.typeLabel,
+              color: getDataTypeColor(label.typeLabel),
+            ),
+        ],
       );
-
-      if (selectedPinIndex == null || !mounted) return;
-      targetPinIndex = selectedPinIndex;
+      if (index == null || !mounted) return;
+      arrangement = plan.arrangements[index];
     }
 
-    if (isOutput) {
-      widget.graphModel.connectPins(
-        startPin,
-        PinReference(
-          nodeId: newNodeId,
-          scopeChain: scope.scopeChain,
-          pinKind: PinKind.externalInput,
-          pinIndex: targetPinIndex,
-          dataType: '',
-        ),
-      );
-    } else {
-      widget.graphModel.connectPins(
-        PinReference(
-          nodeId: newNodeId,
-          scopeChain: scope.scopeChain,
-          pinKind: PinKind.externalOutput,
-          pinIndex: targetPinIndex,
-          dataType: '',
-        ),
-        startPin,
-      );
-    }
-  }
-
-  /// Walk the freshly-created [newNodeId] in [targetScope] and return its
-  /// pins that pass `canConnectPins` against [sourcePin]. Used when the Rust
-  /// `getCompatiblePinsForAutoConnect` shortcut doesn't apply (body-scope
-  /// drop, or cross-scope drop with an outer source).
-  ///
-  /// The return shape mirrors `getCompatiblePinsForAutoConnect`:
-  /// `(pinIndex, pinName, dataType)`.
-  List<(int, String, String)> _findCompatiblePinsCrossScope(
-    PinReference sourcePin,
-    BigInt newNodeId,
-    List<BigInt> targetScope,
-    bool sourceIsOutput,
-  ) {
-    final newNode = _lookupNodeInScope(newNodeId, targetScope);
-    if (newNode == null) return const [];
-    final result = <(int, String, String)>[];
-    if (sourceIsOutput) {
-      // Source is an output (or zone-input); find compatible inputs on the
-      // new node.
-      for (int i = 0; i < newNode.inputPins.length; i++) {
-        final pin = newNode.inputPins[i];
-        final candidate = PinReference(
-          nodeId: newNodeId,
-          scopeChain: targetScope,
-          pinKind: PinKind.externalInput,
-          pinIndex: i,
-          dataType: pin.dataType,
-        );
-        if (widget.graphModel.canConnectPins(sourcePin, candidate)) {
-          result.add((i, pin.name, pin.dataType));
-        }
-      }
-    } else {
-      // Source is an input; test each output pin on the new node.
-      for (int i = 0; i < newNode.outputPins.length; i++) {
-        final pin = newNode.outputPins[i];
-        final candidate = PinReference(
-          nodeId: newNodeId,
-          scopeChain: targetScope,
-          pinKind: PinKind.externalOutput,
-          pinIndex: pin.index,
-          dataType: pin.effectiveDataType,
-        );
-        if (widget.graphModel.canConnectPins(candidate, sourcePin)) {
-          result.add((pin.index, pin.name, pin.effectiveDataType));
-        }
-      }
-    }
-    return result;
+    final error = model.addNodeAndConnect(
+      startPin,
+      scope.scopeChain,
+      selectedNodeType,
+      logicalPosition,
+      arrangement,
+    );
+    if (error != null && mounted) showErrorSnackBar(context, error);
   }
 
   /// The type to use as the drag source when a wire is dragged off [startPin].
@@ -878,15 +780,6 @@ class NodeNetworkState extends State<NodeNetwork> {
       current = zone.nodes;
     }
     return current[nodeId];
-  }
-
-  /// Convert a Dart scope chain to the Rust API's `Uint64List` representation.
-  Uint64List _scopeChainToBytes(List<BigInt> scopeChain) {
-    final result = Uint64List(scopeChain.length);
-    for (int i = 0; i < scopeChain.length; i++) {
-      result[i] = scopeChain[i].toUnsigned(64);
-    }
-    return result;
   }
 
   /// Construct a ScopeResolver tied to the current frame's view + transform.

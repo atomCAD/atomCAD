@@ -782,3 +782,9 @@ mod record_destructure_anonymous_test;
 mod expr_named_record_node_test;
 #[path = "structure_designer/record_get_anonymous_test.rs"]
 mod record_get_anonymous_test;
+#[path = "structure_designer/splice_plan_test.rs"]
+mod splice_plan_test;
+#[path = "structure_designer/splice_support.rs"]
+mod splice_support;
+#[path = "structure_designer/wire_drop_plan_test.rs"]
+mod wire_drop_plan_test;

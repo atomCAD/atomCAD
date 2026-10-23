@@ -391,7 +391,7 @@ detach the note (right-click → **Remove anchor** does the same). See
 Left-click and drag from an output pin to an input pin to create a wire. To disconnect a wire, select it and press `Del` (see Selection below).
 
 **Quick-add node from wire**
-If you drag a wire from a pin and release it in empty space, the **Add Node** window opens filtered to show only nodes with compatible pins. After selecting a node type, the new node is created at the drop location and the wire is automatically connected. If multiple pins are compatible, a dialog lets you choose which one.
+If you drag a wire from a pin and release it in empty space, the **Add Node** window opens filtered to show only nodes with compatible pins. After selecting a node type, the new node is created at the drop location and the wire is automatically connected. If the wire could connect to the new node in more than one way — several inputs that accept it, or (dragging off an input) several outputs that fit, such as `atom_edit`'s `result` and `diff` — a small list asks which one: click a row, or use Up/Down and Enter. Cancelling (Esc, or clicking outside) adds nothing. Creating the node and its wire is a single undo step, so one Ctrl+Z removes both.
 
 **Selection**
 Multiple nodes and wires can be selected. Selection is used for:

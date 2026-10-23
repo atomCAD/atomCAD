@@ -44,6 +44,41 @@ BigInt addNode(
         position: position,
         dragSource: dragSource);
 
+/// The arrangements a new `node_type_name` node offers when a wire dragged off
+/// `pin` (on a node in `pin_scope`) is dropped in `drop_scope`. Read-only. See
+/// `StructureDesigner::plan_wire_drop` and `doc/design_insert_node_on_wire.md`
+/// Phase 0.
+APIArrangementPlan planWireDrop(
+        {required Uint64List pinScope,
+        required APIDraggedPin pin,
+        required Uint64List dropScope,
+        required String nodeTypeName}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiPlanWireDrop(
+            pinScope: pinScope,
+            pin: pin,
+            dropScope: dropScope,
+            nodeTypeName: nodeTypeName);
+
+/// Add a `node_type_name` node at `position` in `drop_scope` and make the one
+/// wire to `pin` that `arrangement` (from [`plan_wire_drop`]) describes — one
+/// undo step. See `StructureDesigner::add_node_and_connect`.
+APISpliceResult addNodeAndConnect(
+        {required Uint64List pinScope,
+        required APIDraggedPin pin,
+        required Uint64List dropScope,
+        required String nodeTypeName,
+        required APIVec2 position,
+        required APIArrangement arrangement}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiAddNodeAndConnect(
+            pinScope: pinScope,
+            pin: pin,
+            dropScope: dropScope,
+            nodeTypeName: nodeTypeName,
+            position: position,
+            arrangement: arrangement);
+
 /// Duplicate a node within `scope_path`'s network. Phase U4 — body-scope
 /// dispatch routes through `duplicate_node_scoped`.
 BigInt duplicateNode({required Uint64List scopePath, required BigInt nodeId}) =>
@@ -235,24 +270,6 @@ bool autoConnectToNode(
         required BigInt targetNodeId}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiAutoConnectToNode(
-            scopePath: scopePath,
-            sourceNodeId: sourceNodeId,
-            sourcePinIndex: sourcePinIndex,
-            sourceIsOutput: sourceIsOutput,
-            targetNodeId: targetNodeId);
-
-/// Returns all compatible pins on the target node for auto-connection.
-/// Each element contains (pin_index, pin_name, data_type_string).
-/// When source_is_output is true, returns compatible INPUT pins on target.
-/// When source_is_output is false, returns the OUTPUT pin if compatible.
-List<(int, String, String)> getCompatiblePinsForAutoConnect(
-        {required Uint64List scopePath,
-        required BigInt sourceNodeId,
-        required int sourcePinIndex,
-        required bool sourceIsOutput,
-        required BigInt targetNodeId}) =>
-    RustLib.instance.api
-        .crateApiStructureDesignerStructureDesignerApiGetCompatiblePinsForAutoConnect(
             scopePath: scopePath,
             sourceNodeId: sourceNodeId,
             sourcePinIndex: sourcePinIndex,

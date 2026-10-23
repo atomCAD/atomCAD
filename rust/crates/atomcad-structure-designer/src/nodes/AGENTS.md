@@ -226,6 +226,12 @@ The text format reads it too: a wire to a name such a node lacks declares it
 (`network_editor.rs`, `declare_input_from_wire`), unless the statement sets
 the node's `declaring_property`.
 
+`DeclaredInputs::make_pass_through(pin_id)` is the splice hook
+(`doc/design_insert_node_on_wire.md` D9): it makes a just-appended input the
+node's identity, so a node spliced into a wire changes nothing until edited.
+The default does nothing and returns `false`; `expr` sets its expression to the
+input's name. Like the other methods it edits data only.
+
 **Naming a new input goes through `declared_inputs::next_declared_input_name`,
 from every path** — the open port, a drag adapter (`expr`'s), the panel's add
 button (`StructureDesigner::next_declared_input_name`). A node with a

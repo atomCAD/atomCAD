@@ -82,6 +82,8 @@ pub mod scene_tessellator;
 pub mod scoped_validation_errors;
 pub mod selection_factoring;
 pub mod serialization;
+pub mod splice_ops;
+pub mod splice_plan;
 pub mod structure_designer;
 pub mod structure_designer_changes;
 pub mod structure_designer_scene;

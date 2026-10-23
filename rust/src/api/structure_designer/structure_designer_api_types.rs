@@ -508,6 +508,158 @@ pub enum APISourcePin {
     ZoneInput { pin_index: u32 },
 }
 
+impl From<APISourcePin> for atomcad_structure_designer::node_network::SourcePin {
+    fn from(pin: APISourcePin) -> Self {
+        use atomcad_structure_designer::node_network::SourcePin;
+        match pin {
+            APISourcePin::NodeOutput { pin_index } => SourcePin::NodeOutput { pin_index },
+            APISourcePin::ZoneInput { pin_index } => SourcePin::ZoneInput {
+                pin_index: pin_index as usize,
+            },
+        }
+    }
+}
+
+/// Mirrors `splice_ops::DraggedPin`: the pin a wire was dragged from
+/// (`doc/design_insert_node_on_wire.md` Phase 0).
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum APIDraggedPin {
+    /// A node output (`-1` = function pin) or an HOF's zone-input pin.
+    Output { node_id: u64, pin: APISourcePin },
+    /// An input slot, of either argument kind.
+    Input {
+        node_id: u64,
+        kind: APIArgumentKind,
+        index: u32,
+    },
+}
+
+impl From<APIDraggedPin> for atomcad_structure_designer::splice_ops::DraggedPin {
+    fn from(pin: APIDraggedPin) -> Self {
+        use atomcad_structure_designer::splice_ops::DraggedPin;
+        match pin {
+            APIDraggedPin::Output { node_id, pin } => DraggedPin::Output {
+                node_id,
+                pin: pin.into(),
+            },
+            APIDraggedPin::Input {
+                node_id,
+                kind,
+                index,
+            } => DraggedPin::Input {
+                node_id,
+                kind: kind.into(),
+                index: index as usize,
+            },
+        }
+    }
+}
+
+/// Mirrors `splice_plan::InputChoice`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum APIInputChoice {
+    /// An existing input pin.
+    Pin { index: u32 },
+    /// The open port: a new declared input.
+    OpenPort,
+}
+
+/// Mirrors `splice_plan::ArrangementInput`. Types travel as their text form
+/// (`DataType::to_string`), which `DataType::from_string` reads back.
+#[derive(Clone)]
+pub struct APIArrangementInput {
+    pub choice: APIInputChoice,
+    /// The pin's name; for the open port, the name the new input will get.
+    pub name: String,
+    pub data_type: String,
+}
+
+/// Mirrors `splice_plan::ArrangementOutput`.
+#[derive(Clone)]
+pub struct APIArrangementOutput {
+    /// Never `-1`: the function pin is not offered.
+    pub pin: i32,
+    pub name: String,
+    pub data_type: String,
+}
+
+/// Mirrors `splice_plan::Arrangement`: one valid `(input, output pin)` pair.
+/// A side is `None` when the plan had nothing on it (a wire drop).
+#[derive(Clone)]
+pub struct APIArrangement {
+    pub input: Option<APIArrangementInput>,
+    pub output: Option<APIArrangementOutput>,
+}
+
+impl From<&atomcad_structure_designer::splice_plan::Arrangement> for APIArrangement {
+    fn from(arrangement: &atomcad_structure_designer::splice_plan::Arrangement) -> Self {
+        use atomcad_structure_designer::splice_plan::InputChoice;
+        APIArrangement {
+            input: arrangement.input.as_ref().map(|input| APIArrangementInput {
+                choice: match input.choice {
+                    InputChoice::Pin(index) => APIInputChoice::Pin {
+                        index: index as u32,
+                    },
+                    InputChoice::OpenPort => APIInputChoice::OpenPort,
+                },
+                name: input.name.clone(),
+                data_type: input.data_type.to_string(),
+            }),
+            output: arrangement
+                .output
+                .as_ref()
+                .map(|output| APIArrangementOutput {
+                    pin: output.pin,
+                    name: output.name.clone(),
+                    data_type: output.data_type.to_string(),
+                }),
+        }
+    }
+}
+
+impl From<&APIArrangement> for atomcad_structure_designer::splice_plan::Arrangement {
+    /// A type that does not parse back becomes `DataType::None`, which no
+    /// plan offers, so the commit refuses it as stale rather than guessing.
+    fn from(arrangement: &APIArrangement) -> Self {
+        use atomcad_structure_designer::data_type::DataType;
+        use atomcad_structure_designer::splice_plan::{
+            ArrangementInput, ArrangementOutput, InputChoice,
+        };
+        let parse = |text: &str| DataType::from_string(text).unwrap_or(DataType::None);
+        atomcad_structure_designer::splice_plan::Arrangement {
+            input: arrangement.input.as_ref().map(|input| ArrangementInput {
+                choice: match input.choice {
+                    APIInputChoice::Pin { index } => InputChoice::Pin(index as usize),
+                    APIInputChoice::OpenPort => InputChoice::OpenPort,
+                },
+                name: input.name.clone(),
+                data_type: parse(&input.data_type),
+            }),
+            output: arrangement.output.as_ref().map(|output| ArrangementOutput {
+                pin: output.pin,
+                name: output.name.clone(),
+                data_type: parse(&output.data_type),
+            }),
+        }
+    }
+}
+
+/// A splice plan: the valid arrangements, or why the request was refused.
+/// An empty list with no refusal means "nothing fits here".
+pub struct APIArrangementPlan {
+    pub arrangements: Vec<APIArrangement>,
+    /// `SpliceRefusal`'s `Display` text.
+    pub refusal: Option<String>,
+}
+
+/// A splice commit: the id of the node now connected, or why it was refused
+/// (nothing changed then).
+pub struct APISpliceResult {
+    pub node_id: Option<u64>,
+    /// `SpliceRefusal`'s `Display` text.
+    pub refusal: Option<String>,
+}
+
 /// Wire identifier for batch selection operations
 pub struct WireIdentifier {
     pub source_node_id: u64,

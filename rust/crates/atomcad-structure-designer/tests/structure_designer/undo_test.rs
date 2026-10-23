@@ -33,7 +33,7 @@ fn setup_designer_with_network(network_name: &str) -> StructureDesigner {
 /// Uses the same codepath as CNND file saving, but returns the Value
 /// instead of writing to disk.
 /// Normalizes HashMap-derived arrays for deterministic comparison.
-fn snapshot_all_networks(registry: &mut NodeTypeRegistry) -> Value {
+pub(crate) fn snapshot_all_networks(registry: &mut NodeTypeRegistry) -> Value {
     let mut serializable_networks = Vec::new();
 
     // Collect network names first to avoid borrow conflict

@@ -156,6 +156,47 @@ pub struct DragSource {
     pub direction: DragDirection,
 }
 
+/// The data a new node of `node_type_name` starts with: the type's default,
+/// adapted to `drag_source` (`NodeData::adapt_for_drag_source`) when there is
+/// one. `None` for an unknown type. Pure: it reads the registry only, so the
+/// splice planner (`splice_plan.rs`) builds its scratch nodes with it too.
+///
+/// The adapted data is used only when the adapted node still statically
+/// matches the drag under the *strict* predicate (mirrors the popup filter's
+/// Stage-2 verification — rejects matches that would only land via
+/// scalar→collection broadcast). Protects callers that bypass the popup (CLI,
+/// direct API, stale popups after concurrent network mutations) and keeps
+/// create-time behavior in lockstep with the picker: an over-promising
+/// adapter is silently dropped to default data rather than producing a
+/// mis-typed node. See `doc/design_drag_aware_add_node.md` §"Asymmetric
+/// verification".
+pub fn create_node_data(
+    node_type_name: &str,
+    drag_source: Option<&DragSource>,
+    registry: &NodeTypeRegistry,
+) -> Option<Box<dyn NodeData>> {
+    let node_type = registry.get_node_type(node_type_name)?;
+    let node_data = (node_type.node_data_creator)();
+    if let Some(drag) = drag_source
+        && let Some(mut adapted) =
+            node_data.adapt_for_drag_source(&drag.source_type, drag.direction, registry)
+    {
+        // The adapter has no defs to type with; settle what needs them
+        // before the adapted type is checked against the drag.
+        adapted.refresh_with_record_defs(registry.record_defs());
+        let resolved = registry.resolve_drag_candidate_type(node_type, adapted.as_ref());
+        if crate::node_type_registry::static_match_strict(
+            &resolved,
+            &drag.source_type,
+            drag.direction,
+            registry,
+        ) {
+            return Some(adapted);
+        }
+    }
+    Some(node_data)
+}
+
 /// One network affected by a namespace rename/move: its current name and the
 /// name it would take. `conflict` is `true` when `new_name` collides with an
 /// existing user type (network, record def, or built-in) that is *not* itself
@@ -281,7 +322,7 @@ pub struct StructureDesigner {
     pub has_unsaved_thumbnails: bool,
     pub file_path: Option<String>,
     // Tracks pending changes since last refresh to determine what needs to be refreshed
-    pending_changes: StructureDesignerChanges,
+    pub(crate) pending_changes: StructureDesignerChanges,
     // Temporary storage for CLI parameters during evaluation (used in headless mode)
     pub cli_top_level_parameters: Option<HashMap<String, NetworkResult>>,
     // Navigation history for back/forward functionality
@@ -901,7 +942,7 @@ impl StructureDesigner {
     /// nodes so every unpacked value is hover-inspectable the moment the node
     /// is dropped (their outputs draw no viewport geometry). See
     /// `doc/design_structure_lattice_unpack_nodes.md`.
-    fn apply_default_all_pin_display(
+    pub(crate) fn apply_default_all_pin_display(
         &mut self,
         scope_path: &[u64],
         node_type_name: &str,
@@ -3747,10 +3788,10 @@ impl StructureDesigner {
 
     /// Scope-aware variant of [`add_node`]. With an empty `scope_path` falls
     /// through to [`add_node_with_drag_source`] (existing top-level behavior).
-    /// With a non-empty `scope_path` adds the node directly into the named
-    /// body via the scope-network helper — no display-policy / undo /
-    /// validation orchestration is run, since those are top-level concerns
-    /// that U4 will redo on the body level. Phase U2 of
+    /// With a non-empty `scope_path` adds the node into the named body through
+    /// [`Self::add_node_core`] (adapted to `drag_source` like a top-level add)
+    /// and records one whole-body undo step; the top-level display policy is
+    /// not run, since body display is per-body. Phase U2 of
     /// `doc/design_zones_ui.md`.
     pub fn add_node_scoped(
         &mut self,
@@ -3780,63 +3821,11 @@ impl StructureDesigner {
         // may cascade up. Capture the owning HOF's pre-edit footprint chain now,
         // before the add — once the body has grown it can't be re-derived.
         let old_ancestor_sizes = self.capture_body_owner_footprint_chain(scope_path);
-        // Body scope: drag-source adaptation and per-node-type bookkeeping
-        // (parameter `param_id` / param_name) are top-level concerns and not
-        // exercised inside an HOF body in U2. Add the node with default data
-        // and rely on U4 to re-introduce the richer adapter pass under a
-        // scope-aware add path.
-        let (num_parameters, node_data) =
-            match self.node_type_registry.get_node_type(node_type_name) {
-                Some(node_type) => {
-                    let data_creator = &node_type.node_data_creator;
-                    (node_type.parameters.len(), (data_creator)())
-                }
-                None => return 0,
-            };
-        let node_id = match self.get_scope_network_mut(scope_path) {
-            Some(network) => network.add_node(node_type_name, position, num_parameters, node_data),
-            None => return 0,
-        };
+        // A node added in a body is adapted to the drag source exactly as at
+        // top level (`doc/design_insert_node_on_wire.md` Phase 0).
+        let node_id =
+            self.add_node_core(scope_path, node_type_name, position, drag_source.as_ref());
         if node_id != 0 {
-            // Initialize custom-node-type cache (incl. `ensure_zone_init` for
-            // nested HOFs). Mirrors the split-borrow pattern in
-            // `add_node_with_drag_source`'s top-level path: the read-only
-            // maps and the mutable `node_networks` are *sibling fields* of
-            // `node_type_registry`, so disjoint access through field
-            // destructuring is allowed by the borrow checker. We walk the
-            // scope path manually here (rather than through
-            // `get_scope_network_mut`, which borrows all of `self`) so the
-            // splits compose.
-            let active_name = match self.active_node_network_name.as_ref() {
-                Some(name) => name.clone(),
-                None => return node_id,
-            };
-            let (built_in_types, record_type_defs, built_in_record_type_defs, node_networks) = (
-                &self.node_type_registry.built_in_node_types,
-                &self.node_type_registry.record_type_defs,
-                &self.node_type_registry.built_in_record_type_defs,
-                &mut self.node_type_registry.node_networks,
-            );
-            if let Some(top) = node_networks.get_mut(&active_name) {
-                let mut current: Option<&mut NodeNetwork> = Some(top);
-                for hof_id in scope_path {
-                    current = match current {
-                        Some(net) => net.nodes.get_mut(hof_id).and_then(|n| n.zone_mut()),
-                        None => None,
-                    };
-                }
-                if let Some(network) = current
-                    && let Some(node) = network.nodes.get_mut(&node_id)
-                {
-                    NodeTypeRegistry::populate_custom_node_type_cache_with_types(
-                        built_in_types,
-                        record_type_defs,
-                        built_in_record_type_defs,
-                        node,
-                        true,
-                    );
-                }
-            }
             self.set_dirty(true);
             // A zone-bearing node added inside a body starts with an empty body
             // (its zone-output pin has no incoming wire), so re-validate to
@@ -3864,6 +3853,69 @@ impl StructureDesigner {
         node_id
     }
 
+    /// Add a node of `node_type_name` to the network at `scope_path` (any
+    /// scope) with [`create_node_data`]'s data, adapted to `drag_source`, and
+    /// initialize its custom-node-type cache. A top-level `parameter` also
+    /// gets its `param_id` and default name and sort order here, since those
+    /// are part of what makes it a valid node.
+    ///
+    /// It does nothing else: no read-only guard, no undo push, no display
+    /// policy, no validation, no reflow. The two add paths
+    /// ([`Self::add_node_with_drag_source`], [`Self::add_node_scoped`]) are
+    /// this plus their bookkeeping, and a composite operation that records its
+    /// own snapshot (`splice_ops.rs`) adds its nodes through it, never through
+    /// the recording paths. Returns `0` when nothing was added: an unknown
+    /// type, a missing scope, or a type not allowed in a body.
+    pub fn add_node_core(
+        &mut self,
+        scope_path: &[u64],
+        node_type_name: &str,
+        position: DVec2,
+        drag_source: Option<&DragSource>,
+    ) -> u64 {
+        if !scope_path.is_empty() && !allowed_in_zone_body(node_type_name) {
+            return 0;
+        }
+        let Some(mut node_data) =
+            create_node_data(node_type_name, drag_source, &self.node_type_registry)
+        else {
+            return 0;
+        };
+        let num_parameters = self
+            .node_type_registry
+            .get_node_type(node_type_name)
+            .map(|node_type| node_type.parameters.len())
+            .unwrap_or(0);
+
+        // A parameter declares an input of the enclosing network, so it exists
+        // only at top level (`allowed_in_zone_body`).
+        if node_type_name == "parameter"
+            && let Some(node_network) = self.get_scope_network_mut(scope_path)
+        {
+            let current_param_count = node_network.node_type.parameters.len();
+            // Assign a unique param_id from the network's counter
+            let param_id = node_network.next_param_id;
+            node_network.next_param_id += 1;
+            if let Some(param_data) = node_data
+                .as_any_mut()
+                .downcast_mut::<crate::nodes::parameter::ParameterData>()
+            {
+                param_data.param_id = Some(param_id); // Assign unique ID for wire preservation
+                param_data.param_name = format!("param{}", current_param_count);
+                param_data.sort_order = current_param_count as i32;
+            }
+        }
+
+        let node_id = match self.get_scope_network_mut(scope_path) {
+            Some(network) => network.add_node(node_type_name, position, num_parameters, node_data),
+            None => return 0,
+        };
+        // Initialize the custom-node-type cache (incl. `ensure_zone_init` for
+        // a zone-bearing node).
+        self.rederive_node_type(scope_path, node_id);
+        node_id
+    }
+
     /// Variant of `add_node` that pre-configures the new node's type
     /// properties to match a dragged source pin.
     ///
@@ -3872,8 +3924,8 @@ impl StructureDesigner {
     /// `NodeData::adapt_for_drag_source`; the adapter's claim is verified by
     /// re-running the static-pin compatibility check against the resolved
     /// node type, so an over-promising adapter is silently dropped to
-    /// default data rather than producing a mis-typed node. See
-    /// `doc/design_drag_aware_add_node.md`.
+    /// default data rather than producing a mis-typed node
+    /// ([`create_node_data`]). See `doc/design_drag_aware_add_node.md`.
     pub fn add_node_with_drag_source(
         &mut self,
         node_type_name: &str,
@@ -3889,47 +3941,10 @@ impl StructureDesigner {
             Some(name) => name.clone(),
             None => return 0,
         };
-        // First get the node type info
-        let (num_parameters, mut node_data) =
-            match self.node_type_registry.get_node_type(node_type_name) {
-                Some(node_type) => {
-                    let data_creator = &node_type.node_data_creator;
-                    (node_type.parameters.len(), (data_creator)())
-                }
-                None => return 0,
-            };
-
-        // Drag-source adapter: only applied when the adapted node still
-        // statically matches the drag under the *strict* predicate (mirrors
-        // the popup filter's Stage-2 verification — rejects matches that
-        // would only land via scalar→collection broadcast). Protects
-        // callers that bypass the popup (CLI, direct API, stale popups
-        // after concurrent network mutations) and keeps create-time
-        // behavior in lockstep with the picker. See
-        // `doc/design_drag_aware_add_node.md` §"Asymmetric verification".
-        if let Some(drag) = drag_source.as_ref()
-            && let Some(node_type) = self.node_type_registry.get_node_type(node_type_name)
-            && let Some(mut adapted) = node_data.adapt_for_drag_source(
-                &drag.source_type,
-                drag.direction,
-                &self.node_type_registry,
-            )
-        {
-            // The adapter has no defs to type with; settle what needs them
-            // before the adapted type is checked against the drag.
-            adapted.refresh_with_record_defs(self.node_type_registry.record_defs());
-            let resolved = self
-                .node_type_registry
-                .resolve_drag_candidate_type(node_type, adapted.as_ref());
-            if crate::node_type_registry::static_match_strict(
-                &resolved,
-                &drag.source_type,
-                drag.direction,
-                &self.node_type_registry,
-            ) {
-                node_data = adapted;
-            }
-        }
+        let num_parameters = match self.node_type_registry.get_node_type(node_type_name) {
+            Some(node_type) => node_type.parameters.len(),
+            None => return 0,
+        };
 
         // Capture counters before node creation (for undo)
         let (next_node_id_before, next_param_id_before) = self
@@ -3939,64 +3954,20 @@ impl StructureDesigner {
             .map(|n| (n.next_node_id, n.next_param_id))
             .unwrap_or((0, 0));
 
-        // Special handling for parameter nodes
-        let mut assigned_param_id: Option<u64> = None;
-        if node_type_name == "parameter"
-            && let Some(node_network) = self
-                .node_type_registry
-                .node_networks
-                .get_mut(&node_network_name)
-        {
-            let current_param_count = node_network.node_type.parameters.len();
+        let node_id = self.add_node_core(&[], node_type_name, position, drag_source.as_ref());
 
-            // Assign a unique param_id from the network's counter
-            let param_id = node_network.next_param_id;
-            node_network.next_param_id += 1;
-            assigned_param_id = Some(param_id);
-
-            // Downcast to ParameterData and set properties
-            if let Some(param_data) = node_data
-                .as_any_mut()
-                .downcast_mut::<crate::nodes::parameter::ParameterData>()
-            {
-                param_data.param_id = Some(param_id); // Assign unique ID for wire preservation
-                param_data.param_name = format!("param{}", current_param_count);
-                param_data.sort_order = current_param_count as i32;
-            }
-        }
-
-        // Early return if the node network doesn't exist
-        let node_id = self
+        // The param_id `add_node_core` gave a parameter node, for undo.
+        let assigned_param_id = self
             .node_type_registry
             .node_networks
-            .get_mut(&node_network_name)
-            .map(|node_network| {
-                node_network.add_node(node_type_name, position, num_parameters, node_data)
+            .get(&node_network_name)
+            .and_then(|network| network.nodes.get(&node_id))
+            .and_then(|node| {
+                node.data
+                    .as_any_ref()
+                    .downcast_ref::<crate::nodes::parameter::ParameterData>()
             })
-            .unwrap_or(0);
-
-        // If we successfully added a node, initialize custom node type if needed
-        if node_id != 0 {
-            // Split the borrow to avoid conflicts
-            let (built_in_types, record_type_defs, built_in_record_type_defs, node_networks) = (
-                &self.node_type_registry.built_in_node_types,
-                &self.node_type_registry.record_type_defs,
-                &self.node_type_registry.built_in_record_type_defs,
-                &mut self.node_type_registry.node_networks,
-            );
-            if let Some(network) = node_networks.get_mut(&node_network_name)
-                && let Some(node) = network.nodes.get_mut(&node_id)
-            {
-                // Call the populate function with the split borrows
-                NodeTypeRegistry::populate_custom_node_type_cache_with_types(
-                    built_in_types,
-                    record_type_defs,
-                    built_in_record_type_defs,
-                    node,
-                    true,
-                );
-            }
-        }
+            .and_then(|param_data| param_data.param_id);
 
         // If we successfully added a node, apply the display policy with this node as dirty
         if node_id != 0 {
@@ -5372,107 +5343,6 @@ impl StructureDesigner {
         }
 
         false
-    }
-
-    /// Returns all compatible pins on the target node for auto-connection.
-    /// Each tuple contains (pin_index, pin_name, data_type_string).
-    /// When source_is_output is true, returns compatible INPUT pins on target.
-    /// When source_is_output is false, returns the OUTPUT pin if compatible.
-    pub fn get_compatible_pins_for_auto_connect(
-        &self,
-        source_node_id: u64,
-        source_pin_index: i32,
-        source_is_output: bool,
-        target_node_id: u64,
-    ) -> Vec<(i32, String, String)> {
-        let node_network_name = match &self.active_node_network_name {
-            Some(name) => name.clone(),
-            None => return Vec::new(),
-        };
-
-        let network = match self
-            .node_type_registry
-            .node_networks
-            .get(&node_network_name)
-        {
-            Some(network) => network,
-            None => return Vec::new(),
-        };
-
-        let source_node = match network.nodes.get(&source_node_id) {
-            Some(node) => node,
-            None => return Vec::new(),
-        };
-
-        let target_node = match network.nodes.get(&target_node_id) {
-            Some(node) => node,
-            None => return Vec::new(),
-        };
-
-        let source_node_type = match self.node_type_registry.get_node_type_for_node(source_node) {
-            Some(nt) => nt,
-            None => return Vec::new(),
-        };
-
-        let target_node_type = match self.node_type_registry.get_node_type_for_node(target_node) {
-            Some(nt) => nt,
-            None => return Vec::new(),
-        };
-
-        let mut compatible_pins = Vec::new();
-
-        let _ = source_node_type;
-
-        if source_is_output {
-            // Source is output, find all compatible input parameters on target.
-            let source_output_type = match self.node_type_registry.resolve_output_type(
-                source_node,
-                network,
-                source_pin_index,
-            ) {
-                Some(t) => t,
-                None => return Vec::new(),
-            };
-
-            for (param_idx, param) in target_node_type.parameters.iter().enumerate() {
-                if DataType::can_be_converted_to(
-                    &source_output_type,
-                    &param.data_type,
-                    &self.node_type_registry,
-                ) {
-                    compatible_pins.push((
-                        param_idx as i32,
-                        param.name.clone(),
-                        param.data_type.to_string(),
-                    ));
-                }
-            }
-        } else {
-            let _ = target_node_type;
-            // Source is input, check if target's output is compatible
-            let target_output_type =
-                match self
-                    .node_type_registry
-                    .resolve_output_type(target_node, network, 0)
-                {
-                    Some(t) => t,
-                    None => return Vec::new(),
-                };
-            let source_param_type = self
-                .node_type_registry
-                .get_node_param_data_type(source_node, source_pin_index as usize);
-
-            if DataType::can_be_converted_to(
-                &target_output_type,
-                &source_param_type,
-                &self.node_type_registry,
-            ) {
-                // Output pin is always index 0 with name "output"
-                compatible_pins.push((0, "output".to_string(), target_output_type.to_string()));
-            }
-        }
-
-        compatible_pins
     }
 
     /// Top-level convenience wrapper. Equivalent to

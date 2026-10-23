@@ -70,6 +70,7 @@ use super::structure_designer_api_types::APIRegPolyData;
 use super::structure_designer_api_types::APISequenceData;
 use super::structure_designer_api_types::APISimpleParamType;
 use super::structure_designer_api_types::APISourcePin;
+use super::structure_designer_api_types::APISpliceResult;
 use super::structure_designer_api_types::APISwitchData;
 use super::structure_designer_api_types::APITextEditResult;
 use super::structure_designer_api_types::APITextError;
@@ -78,6 +79,7 @@ use super::structure_designer_api_types::APIZipWithData;
 use super::structure_designer_api_types::ARRAY_ELEMENT_VALUE_ROW;
 use super::structure_designer_api_types::OutputPinView;
 use super::structure_designer_api_types::ZoneView;
+use super::structure_designer_api_types::{APIArrangement, APIArrangementPlan, APIDraggedPin};
 use super::structure_designer_api_types::{APITracePick, APITraceResult};
 use super::structure_designer_preferences::StructureDesignerPreferences;
 use crate::api::api_common::apply_camera_settings;
@@ -1135,6 +1137,87 @@ pub fn add_node(
     }
 }
 
+/// The arrangements a new `node_type_name` node offers when a wire dragged off
+/// `pin` (on a node in `pin_scope`) is dropped in `drop_scope`. Read-only. See
+/// `StructureDesigner::plan_wire_drop` and `doc/design_insert_node_on_wire.md`
+/// Phase 0.
+#[flutter_rust_bridge::frb(sync)]
+pub fn plan_wire_drop(
+    pin_scope: Vec<u64>,
+    pin: APIDraggedPin,
+    drop_scope: Vec<u64>,
+    node_type_name: String,
+) -> APIArrangementPlan {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| match cad_instance.structure_designer.plan_wire_drop(
+                &pin_scope,
+                &pin.into(),
+                &drop_scope,
+                &node_type_name,
+            ) {
+                Ok(arrangements) => APIArrangementPlan {
+                    arrangements: arrangements.iter().map(APIArrangement::from).collect(),
+                    refusal: None,
+                },
+                Err(refusal) => APIArrangementPlan {
+                    arrangements: Vec::new(),
+                    refusal: Some(refusal.to_string()),
+                },
+            },
+            APIArrangementPlan {
+                arrangements: Vec::new(),
+                refusal: Some("no active design".to_string()),
+            },
+        )
+    }
+}
+
+/// Add a `node_type_name` node at `position` in `drop_scope` and make the one
+/// wire to `pin` that `arrangement` (from [`plan_wire_drop`]) describes — one
+/// undo step. See `StructureDesigner::add_node_and_connect`.
+#[flutter_rust_bridge::frb(sync)]
+pub fn add_node_and_connect(
+    pin_scope: Vec<u64>,
+    pin: APIDraggedPin,
+    drop_scope: Vec<u64>,
+    node_type_name: String,
+    position: APIVec2,
+    arrangement: APIArrangement,
+) -> APISpliceResult {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let result = cad_instance.structure_designer.add_node_and_connect(
+                    &pin_scope,
+                    &pin.into(),
+                    &drop_scope,
+                    &node_type_name,
+                    from_api_vec2(&position),
+                    &(&arrangement).into(),
+                );
+                match result {
+                    Ok(node_id) => {
+                        refresh_structure_designer_auto(cad_instance);
+                        APISpliceResult {
+                            node_id: Some(node_id),
+                            refusal: None,
+                        }
+                    }
+                    Err(refusal) => APISpliceResult {
+                        node_id: None,
+                        refusal: Some(refusal.to_string()),
+                    },
+                }
+            },
+            APISpliceResult {
+                node_id: None,
+                refusal: Some("no active design".to_string()),
+            },
+        )
+    }
+}
+
 /// Duplicate a node within `scope_path`'s network. Phase U4 — body-scope
 /// dispatch routes through `duplicate_node_scoped`.
 #[flutter_rust_bridge::frb(sync)]
@@ -1501,38 +1584,6 @@ pub fn auto_connect_to_node(
                 result
             },
             false,
-        )
-    }
-}
-
-/// Returns all compatible pins on the target node for auto-connection.
-/// Each element contains (pin_index, pin_name, data_type_string).
-/// When source_is_output is true, returns compatible INPUT pins on target.
-/// When source_is_output is false, returns the OUTPUT pin if compatible.
-#[flutter_rust_bridge::frb(sync)]
-pub fn get_compatible_pins_for_auto_connect(
-    scope_path: Vec<u64>,
-    source_node_id: u64,
-    source_pin_index: i32,
-    source_is_output: bool,
-    target_node_id: u64,
-) -> Vec<(i32, String, String)> {
-    unsafe {
-        with_cad_instance_or(
-            |cad_instance| {
-                if !scope_path.is_empty() {
-                    return Vec::new();
-                }
-                cad_instance
-                    .structure_designer
-                    .get_compatible_pins_for_auto_connect(
-                        source_node_id,
-                        source_pin_index,
-                        source_is_output,
-                        target_node_id,
-                    )
-            },
-            Vec::new(),
         )
     }
 }

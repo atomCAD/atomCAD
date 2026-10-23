@@ -43,11 +43,11 @@ pub struct AddedInput {
 
 /// Everything the drop needs, gathered by the read-only checks
 /// ([`StructureDesigner::check_add_input_from_wire`]).
-struct AddInputPlan {
-    network_name: String,
-    data_type: DataType,
-    name: String,
-    source_name: Option<String>,
+pub(crate) struct AddInputPlan {
+    pub(crate) network_name: String,
+    pub(crate) data_type: DataType,
+    pub(crate) name: String,
+    pub(crate) source_name: Option<String>,
 }
 
 /// The offered type for one declared input, or `None`: the four conditions of
@@ -295,7 +295,7 @@ impl StructureDesigner {
     /// `(node name, pin name, prefer pin)` for [`NameSource`]: the node is the
     /// source node (for a zone input, the HOF), the pin its output pin (for a
     /// zone input, the zone-input pin). `None` when the source does not exist.
-    fn open_port_name_source(
+    pub(crate) fn open_port_name_source(
         &self,
         dest_scope_path: &[u64],
         source_node_id: u64,
@@ -394,7 +394,7 @@ impl StructureDesigner {
 
     /// Step 6 of [`Self::add_input_from_wire`]. The plan has passed every
     /// check, so a failure here means the network changed underneath it.
-    fn append_declared_input_and_connect(
+    pub(crate) fn append_declared_input_and_connect(
         &mut self,
         dest_scope_path: &[u64],
         dest_node_id: u64,

@@ -177,6 +177,44 @@ fn alphabet() -> Vec<(&'static str, OpFn)> {
             assert_eq!(hover_refused, drop_refused, "hover check and drop disagree");
             Some(drop_refused)
         }),
+        ("add node and connect", |d, t| {
+            use atomcad_structure_designer::data_type::DataType;
+            use atomcad_structure_designer::node_network::SourcePin;
+            use atomcad_structure_designer::splice_ops::DraggedPin;
+            use atomcad_structure_designer::splice_plan::{
+                Arrangement, ArrangementInput, InputChoice,
+            };
+            let x = id(d, t, "x");
+            let pin = DraggedPin::Output {
+                node_id: x,
+                pin: SourcePin::NodeOutput { pin_index: 0 },
+            };
+            // The plan refuses on linked content; the commit must refuse too,
+            // so it is called with the arrangement the local plan gives.
+            let arrangement = d
+                .plan_wire_drop(&[], &pin, &[], "expr")
+                .ok()
+                .and_then(|plan| plan.into_iter().next())
+                .unwrap_or(Arrangement {
+                    input: Some(ArrangementInput {
+                        choice: InputChoice::Pin(0),
+                        name: "x".to_string(),
+                        data_type: DataType::Int,
+                    }),
+                    output: None,
+                });
+            Some(
+                d.add_node_and_connect(
+                    &[],
+                    &pin,
+                    &[],
+                    "expr",
+                    DVec2::new(900.0, 900.0),
+                    &arrangement,
+                )
+                .is_err(),
+            )
+        }),
         ("take types from wires", |d, t| {
             let e = id(d, t, "t");
             Some(d.take_types_from_wires(&[], e, &[0]).is_err())

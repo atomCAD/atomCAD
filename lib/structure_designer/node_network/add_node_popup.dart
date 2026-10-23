@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_cad/common/draggable_dialog.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart';
@@ -363,129 +364,161 @@ Future<String?> showAddNodePopup(
   );
 }
 
-/// Represents a compatible pin option for auto-connection
-class CompatiblePinOption {
-  final int pinIndex;
-  final String pinName;
-  final String dataType;
+/// One row of the [ArrangementDialog]: a label (see `arrangementRowLabels`),
+/// the type printed beside it, and the pin dot's colour.
+class ArrangementRow {
+  final String label;
+  final String typeLabel;
+  final Color color;
 
-  CompatiblePinOption({
-    required this.pinIndex,
-    required this.pinName,
-    required this.dataType,
+  const ArrangementRow({
+    required this.label,
+    required this.typeLabel,
+    required this.color,
   });
 }
 
-/// Shows a dialog for selecting which pin to connect to when multiple are compatible.
-/// Returns the selected pin index, or null if cancelled.
-Future<int?> showPinSelectionDialog(
+/// Asks which arrangement to splice with (`doc/design_insert_node_on_wire.md`
+/// D3): a flat list of the valid ones, one click to commit. Returns the chosen
+/// row's index, or null if cancelled.
+Future<int?> showArrangementDialog(
   BuildContext context, {
-  required List<CompatiblePinOption> pins,
-  required String nodeTypeName,
+  required String title,
+  required List<ArrangementRow> rows,
 }) {
   return showDialog<int>(
     context: context,
-    barrierDismissible: true,
-    builder: (context) => PinSelectionDialog(
-      pins: pins,
-      nodeTypeName: nodeTypeName,
-    ),
+    barrierDismissible: false,
+    builder: (context) => ArrangementDialog(title: title, rows: rows),
   );
 }
 
-class PinSelectionDialog extends StatelessWidget {
-  final List<CompatiblePinOption> pins;
-  final String nodeTypeName;
+/// The arrangement picker. It takes keyboard focus: Up/Down move the
+/// highlight, Enter commits it, Esc cancels.
+class ArrangementDialog extends StatefulWidget {
+  final String title;
+  final List<ArrangementRow> rows;
 
-  const PinSelectionDialog({
+  const ArrangementDialog({
     super.key,
-    required this.pins,
-    required this.nodeTypeName,
+    required this.title,
+    required this.rows,
   });
 
   @override
+  State<ArrangementDialog> createState() => _ArrangementDialogState();
+}
+
+class _ArrangementDialogState extends State<ArrangementDialog> {
+  final FocusNode _focusNode = FocusNode();
+  int _highlight = 0;
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.arrowDown) {
+      setState(() => _highlight = (_highlight + 1) % widget.rows.length);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.arrowUp) {
+      setState(() => _highlight =
+          (_highlight - 1 + widget.rows.length) % widget.rows.length);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter) {
+      Navigator.of(context).pop(_highlight);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.escape) {
+      Navigator.of(context).pop();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return DraggableDialog(
-      backgroundColor: const Color(0xFF2D2D2D),
-      width: 280,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: const BoxDecoration(
-              color: Color(0xFF383838),
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(8),
-                topRight: Radius.circular(8),
+    return Focus(
+      focusNode: _focusNode,
+      autofocus: true,
+      onKeyEvent: _handleKey,
+      child: DraggableDialog(
+        backgroundColor: const Color(0xFF2D2D2D),
+        width: 280,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: const BoxDecoration(
+                color: Color(0xFF383838),
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(8),
+                  topRight: Radius.circular(8),
+                ),
+              ),
+              child: Text(
+                widget.title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
-            child: Text(
-              'Connect to $nodeTypeName',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
+            const SizedBox(height: 4),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: widget.rows.length,
+                itemBuilder: (context, index) => _ArrangementListItem(
+                  row: widget.rows[index],
+                  highlighted: index == _highlight,
+                  onHover: () => setState(() => _highlight = index),
+                  onTap: () => Navigator.of(context).pop(index),
+                ),
               ),
             ),
-          ),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Text(
-              'Select input pin:',
-              style: TextStyle(
-                color: Colors.white70,
-                fontSize: 12,
-              ),
-            ),
-          ),
-          Flexible(
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: pins.length,
-              itemBuilder: (context, index) {
-                final pin = pins[index];
-                return _PinListItem(
-                  pin: pin,
-                  onTap: () => Navigator.of(context).pop(pin.pinIndex),
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 8),
-        ],
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _PinListItem extends StatefulWidget {
-  final CompatiblePinOption pin;
+class _ArrangementListItem extends StatelessWidget {
+  final ArrangementRow row;
+  final bool highlighted;
+  final VoidCallback onHover;
   final VoidCallback onTap;
 
-  const _PinListItem({
-    required this.pin,
+  const _ArrangementListItem({
+    required this.row,
+    required this.highlighted,
+    required this.onHover,
     required this.onTap,
   });
 
   @override
-  State<_PinListItem> createState() => _PinListItemState();
-}
-
-class _PinListItemState extends State<_PinListItem> {
-  bool _isHovered = false;
-
-  @override
   Widget build(BuildContext context) {
     return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
+      onEnter: (_) => onHover(),
       child: GestureDetector(
-        onTap: widget.onTap,
+        onTap: onTap,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          color: _isHovered ? const Color(0xFF404040) : Colors.transparent,
+          color: highlighted ? const Color(0xFF404040) : Colors.transparent,
           child: Row(
             children: [
               Container(
@@ -493,14 +526,14 @@ class _PinListItemState extends State<_PinListItem> {
                 height: 10,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: _getDataTypeColor(widget.pin.dataType),
+                  color: row.color,
                   border: Border.all(color: Colors.white54, width: 1),
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  widget.pin.pinName,
+                  row.label,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 13,
@@ -508,7 +541,7 @@ class _PinListItemState extends State<_PinListItem> {
                 ),
               ),
               Text(
-                widget.pin.dataType,
+                row.typeLabel,
                 style: const TextStyle(
                   color: Colors.white54,
                   fontSize: 11,
@@ -519,23 +552,5 @@ class _PinListItemState extends State<_PinListItem> {
         ),
       ),
     );
-  }
-
-  Color _getDataTypeColor(String dataType) {
-    switch (dataType.toLowerCase()) {
-      case 'float':
-        return const Color(0xFF7FCF7F);
-      case 'int':
-        return const Color(0xFF7F7FCF);
-      case 'vec2':
-      case 'vec3':
-        return const Color(0xFFCF7FCF);
-      case 'geometry':
-        return const Color(0xFFCFCF7F);
-      case 'atomic':
-        return const Color(0xFF7FCFCF);
-      default:
-        return const Color(0xFFAAAAAA);
-    }
   }
 }

@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'structure_designer_api_types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `hash`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `hash`, `hash`
 
 /// The outcome of a tab switch (activate, or close of the active tab).
 /// `library_report` is what the dependency check did on activation
@@ -218,6 +218,108 @@ enum APIArgumentKind {
   /// from a body node's output into its containing HOF's zone-output pin).
   zoneOutput,
   ;
+}
+
+/// Mirrors `splice_plan::Arrangement`: one valid `(input, output pin)` pair.
+/// A side is `None` when the plan had nothing on it (a wire drop).
+class APIArrangement {
+  final APIArrangementInput? input;
+  final APIArrangementOutput? output;
+
+  const APIArrangement({
+    this.input,
+    this.output,
+  });
+
+  @override
+  int get hashCode => input.hashCode ^ output.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIArrangement &&
+          runtimeType == other.runtimeType &&
+          input == other.input &&
+          output == other.output;
+}
+
+/// Mirrors `splice_plan::ArrangementInput`. Types travel as their text form
+/// (`DataType::to_string`), which `DataType::from_string` reads back.
+class APIArrangementInput {
+  final APIInputChoice choice;
+
+  /// The pin's name; for the open port, the name the new input will get.
+  final String name;
+  final String dataType;
+
+  const APIArrangementInput({
+    required this.choice,
+    required this.name,
+    required this.dataType,
+  });
+
+  @override
+  int get hashCode => choice.hashCode ^ name.hashCode ^ dataType.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIArrangementInput &&
+          runtimeType == other.runtimeType &&
+          choice == other.choice &&
+          name == other.name &&
+          dataType == other.dataType;
+}
+
+/// Mirrors `splice_plan::ArrangementOutput`.
+class APIArrangementOutput {
+  /// Never `-1`: the function pin is not offered.
+  final int pin;
+  final String name;
+  final String dataType;
+
+  const APIArrangementOutput({
+    required this.pin,
+    required this.name,
+    required this.dataType,
+  });
+
+  @override
+  int get hashCode => pin.hashCode ^ name.hashCode ^ dataType.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIArrangementOutput &&
+          runtimeType == other.runtimeType &&
+          pin == other.pin &&
+          name == other.name &&
+          dataType == other.dataType;
+}
+
+/// A splice plan: the valid arrangements, or why the request was refused.
+/// An empty list with no refusal means "nothing fits here".
+class APIArrangementPlan {
+  final List<APIArrangement> arrangements;
+
+  /// `SpliceRefusal`'s `Display` text.
+  final String? refusal;
+
+  const APIArrangementPlan({
+    required this.arrangements,
+    this.refusal,
+  });
+
+  @override
+  int get hashCode => arrangements.hashCode ^ refusal.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIArrangementPlan &&
+          runtimeType == other.runtimeType &&
+          arrangements == other.arrangements &&
+          refusal == other.refusal;
 }
 
 /// Stored shape of an `array_append` node: the element type shared by the
@@ -2373,6 +2475,24 @@ class APIDragSource {
           draggingFromOutput == other.draggingFromOutput;
 }
 
+@freezed
+sealed class APIDraggedPin with _$APIDraggedPin {
+  const APIDraggedPin._();
+
+  /// A node output (`-1` = function pin) or an HOF's zone-input pin.
+  const factory APIDraggedPin.output({
+    required BigInt nodeId,
+    required APISourcePin pin,
+  }) = APIDraggedPin_Output;
+
+  /// An input slot, of either argument kind.
+  const factory APIDraggedPin.input({
+    required BigInt nodeId,
+    required APIArgumentKind kind,
+    required int index,
+  }) = APIDraggedPin_Input;
+}
+
 class APIDrawingPlaneData {
   final int maxMillerIndex;
 
@@ -3425,6 +3545,19 @@ class APIInferBondsData {
           runtimeType == other.runtimeType &&
           additive == other.additive &&
           bondTolerance == other.bondTolerance;
+}
+
+@freezed
+sealed class APIInputChoice with _$APIInputChoice {
+  const APIInputChoice._();
+
+  /// An existing input pin.
+  const factory APIInputChoice.pin({
+    required int index,
+  }) = APIInputChoice_Pin;
+
+  /// The open port: a new declared input.
+  const factory APIInputChoice.openPort() = APIInputChoice_OpenPort;
 }
 
 class APIIntData {
@@ -6913,6 +7046,31 @@ class APISphereData {
           runtimeType == other.runtimeType &&
           center == other.center &&
           radius == other.radius;
+}
+
+/// A splice commit: the id of the node now connected, or why it was refused
+/// (nothing changed then).
+class APISpliceResult {
+  final BigInt? nodeId;
+
+  /// `SpliceRefusal`'s `Display` text.
+  final String? refusal;
+
+  const APISpliceResult({
+    this.nodeId,
+    this.refusal,
+  });
+
+  @override
+  int get hashCode => nodeId.hashCode ^ refusal.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APISpliceResult &&
+          runtimeType == other.runtimeType &&
+          nodeId == other.nodeId &&
+          refusal == other.refusal;
 }
 
 class APIStringData {

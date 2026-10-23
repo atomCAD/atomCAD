@@ -64,6 +64,16 @@ pub trait DeclaredInputs {
     /// position are kept. Errors when the pin is not declared or
     /// `accepts_type` refuses `data_type`.
     fn retype(&mut self, pin_id: u64, data_type: DataType) -> Result<(), String>;
+
+    /// Make the node pass the declared input `pin_id` (the id `append`
+    /// returned) straight through to its output, so a node spliced into a
+    /// wire changes nothing until the user edits it
+    /// (`doc/design_insert_node_on_wire.md` D9). Returns whether it did.
+    /// The default does nothing and returns `false`; `expr` sets its
+    /// expression to the input's name.
+    fn make_pass_through(&mut self, _pin_id: u64) -> bool {
+        false
+    }
 }
 
 /// What the source of a dropped wire offers as a name for the new input.

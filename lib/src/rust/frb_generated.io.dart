@@ -94,6 +94,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIArgumentKind dco_decode_api_argument_kind(dynamic raw);
 
   @protected
+  APIArrangement dco_decode_api_arrangement(dynamic raw);
+
+  @protected
+  APIArrangementInput dco_decode_api_arrangement_input(dynamic raw);
+
+  @protected
+  APIArrangementOutput dco_decode_api_arrangement_output(dynamic raw);
+
+  @protected
+  APIArrangementPlan dco_decode_api_arrangement_plan(dynamic raw);
+
+  @protected
   APIArrayAppendData dco_decode_api_array_append_data(dynamic raw);
 
   @protected
@@ -293,6 +305,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIDragSource dco_decode_api_drag_source(dynamic raw);
 
   @protected
+  APIDraggedPin dco_decode_api_dragged_pin(dynamic raw);
+
+  @protected
   APIDrawingPlaneData dco_decode_api_drawing_plane_data(dynamic raw);
 
   @protected
@@ -415,6 +430,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIInferBondsData dco_decode_api_infer_bonds_data(dynamic raw);
+
+  @protected
+  APIInputChoice dco_decode_api_input_choice(dynamic raw);
 
   @protected
   APIIntData dco_decode_api_int_data(dynamic raw);
@@ -705,6 +723,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APISphereData dco_decode_api_sphere_data(dynamic raw);
 
   @protected
+  APISpliceResult dco_decode_api_splice_result(dynamic raw);
+
+  @protected
   APIStringData dco_decode_api_string_data(dynamic raw);
 
   @protected
@@ -853,6 +874,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIApplyDiffData dco_decode_box_autoadd_api_apply_diff_data(dynamic raw);
 
   @protected
+  APIArrangement dco_decode_box_autoadd_api_arrangement(dynamic raw);
+
+  @protected
+  APIArrangementInput dco_decode_box_autoadd_api_arrangement_input(dynamic raw);
+
+  @protected
+  APIArrangementOutput dco_decode_box_autoadd_api_arrangement_output(
+      dynamic raw);
+
+  @protected
   APIArrayAppendData dco_decode_box_autoadd_api_array_append_data(dynamic raw);
 
   @protected
@@ -951,6 +982,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIDragSource dco_decode_box_autoadd_api_drag_source(dynamic raw);
+
+  @protected
+  APIDraggedPin dco_decode_box_autoadd_api_dragged_pin(dynamic raw);
 
   @protected
   APIDrawingPlaneData dco_decode_box_autoadd_api_drawing_plane_data(
@@ -1392,6 +1426,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<APIAiEditSummary> dco_decode_list_api_ai_edit_summary(dynamic raw);
 
   @protected
+  List<APIArrangement> dco_decode_list_api_arrangement(dynamic raw);
+
+  @protected
   List<APIArrayElement> dco_decode_list_api_array_element(dynamic raw);
 
   @protected
@@ -1620,10 +1657,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
-  List<(int, String, String)> dco_decode_list_record_i_32_string_string(
-      dynamic raw);
-
-  @protected
   List<(String, bool)> dco_decode_list_record_string_bool(dynamic raw);
 
   @protected
@@ -1682,6 +1715,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIApplyDiffData? dco_decode_opt_box_autoadd_api_apply_diff_data(dynamic raw);
+
+  @protected
+  APIArrangementInput? dco_decode_opt_box_autoadd_api_arrangement_input(
+      dynamic raw);
+
+  @protected
+  APIArrangementOutput? dco_decode_opt_box_autoadd_api_arrangement_output(
+      dynamic raw);
 
   @protected
   APIArrayAppendData? dco_decode_opt_box_autoadd_api_array_append_data(
@@ -2187,9 +2228,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PointerUpResult dco_decode_pointer_up_result(dynamic raw);
 
   @protected
-  (int, String, String) dco_decode_record_i_32_string_string(dynamic raw);
-
-  @protected
   (String, bool) dco_decode_record_string_bool(dynamic raw);
 
   @protected
@@ -2303,6 +2341,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIArgumentKind sse_decode_api_argument_kind(SseDeserializer deserializer);
+
+  @protected
+  APIArrangement sse_decode_api_arrangement(SseDeserializer deserializer);
+
+  @protected
+  APIArrangementInput sse_decode_api_arrangement_input(
+      SseDeserializer deserializer);
+
+  @protected
+  APIArrangementOutput sse_decode_api_arrangement_output(
+      SseDeserializer deserializer);
+
+  @protected
+  APIArrangementPlan sse_decode_api_arrangement_plan(
+      SseDeserializer deserializer);
 
   @protected
   APIArrayAppendData sse_decode_api_array_append_data(
@@ -2533,6 +2586,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIDragSource sse_decode_api_drag_source(SseDeserializer deserializer);
 
   @protected
+  APIDraggedPin sse_decode_api_dragged_pin(SseDeserializer deserializer);
+
+  @protected
   APIDrawingPlaneData sse_decode_api_drawing_plane_data(
       SseDeserializer deserializer);
 
@@ -2671,6 +2727,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   APIInferBondsData sse_decode_api_infer_bonds_data(
       SseDeserializer deserializer);
+
+  @protected
+  APIInputChoice sse_decode_api_input_choice(SseDeserializer deserializer);
 
   @protected
   APIIntData sse_decode_api_int_data(SseDeserializer deserializer);
@@ -3003,6 +3062,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APISphereData sse_decode_api_sphere_data(SseDeserializer deserializer);
 
   @protected
+  APISpliceResult sse_decode_api_splice_result(SseDeserializer deserializer);
+
+  @protected
   APIStringData sse_decode_api_string_data(SseDeserializer deserializer);
 
   @protected
@@ -3171,6 +3233,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIArrangement sse_decode_box_autoadd_api_arrangement(
+      SseDeserializer deserializer);
+
+  @protected
+  APIArrangementInput sse_decode_box_autoadd_api_arrangement_input(
+      SseDeserializer deserializer);
+
+  @protected
+  APIArrangementOutput sse_decode_box_autoadd_api_arrangement_output(
+      SseDeserializer deserializer);
+
+  @protected
   APIArrayAppendData sse_decode_box_autoadd_api_array_append_data(
       SseDeserializer deserializer);
 
@@ -3291,6 +3365,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIDragSource sse_decode_box_autoadd_api_drag_source(
+      SseDeserializer deserializer);
+
+  @protected
+  APIDraggedPin sse_decode_box_autoadd_api_dragged_pin(
       SseDeserializer deserializer);
 
   @protected
@@ -3822,6 +3900,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  List<APIArrangement> sse_decode_list_api_arrangement(
+      SseDeserializer deserializer);
+
+  @protected
   List<APIArrayElement> sse_decode_list_api_array_element(
       SseDeserializer deserializer);
 
@@ -4094,10 +4176,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
-  List<(int, String, String)> sse_decode_list_record_i_32_string_string(
-      SseDeserializer deserializer);
-
-  @protected
   List<(String, bool)> sse_decode_list_record_string_bool(
       SseDeserializer deserializer);
 
@@ -4167,6 +4245,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIApplyDiffData? sse_decode_opt_box_autoadd_api_apply_diff_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIArrangementInput? sse_decode_opt_box_autoadd_api_arrangement_input(
+      SseDeserializer deserializer);
+
+  @protected
+  APIArrangementOutput? sse_decode_opt_box_autoadd_api_arrangement_output(
       SseDeserializer deserializer);
 
   @protected
@@ -4758,10 +4844,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PointerUpResult sse_decode_pointer_up_result(SseDeserializer deserializer);
 
   @protected
-  (int, String, String) sse_decode_record_i_32_string_string(
-      SseDeserializer deserializer);
-
-  @protected
   (String, bool) sse_decode_record_string_bool(SseDeserializer deserializer);
 
   @protected
@@ -4886,6 +4968,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_argument_kind(
       APIArgumentKind self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_arrangement(
+      APIArrangement self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_arrangement_input(
+      APIArrangementInput self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_arrangement_output(
+      APIArrangementOutput self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_arrangement_plan(
+      APIArrangementPlan self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_array_append_data(
@@ -5140,6 +5238,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_drag_source(APIDragSource self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_dragged_pin(APIDraggedPin self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_drawing_plane_data(
       APIDrawingPlaneData self, SseSerializer serializer);
 
@@ -5294,6 +5395,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_infer_bonds_data(
       APIInferBondsData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_input_choice(
+      APIInputChoice self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_int_data(APIIntData self, SseSerializer serializer);
@@ -5654,6 +5759,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_sphere_data(APISphereData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_splice_result(
+      APISpliceResult self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_string_data(APIStringData self, SseSerializer serializer);
 
   @protected
@@ -5827,6 +5936,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIApplyDiffData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_api_arrangement(
+      APIArrangement self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_arrangement_input(
+      APIArrangementInput self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_arrangement_output(
+      APIArrangementOutput self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_api_array_append_data(
       APIArrayAppendData self, SseSerializer serializer);
 
@@ -5949,6 +6070,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_drag_source(
       APIDragSource self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_dragged_pin(
+      APIDraggedPin self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_drawing_plane_data(
@@ -6490,6 +6615,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<APIAiEditSummary> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_api_arrangement(
+      List<APIArrangement> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_api_array_element(
       List<APIArrayElement> self, SseSerializer serializer);
 
@@ -6769,10 +6898,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       Uint8List self, SseSerializer serializer);
 
   @protected
-  void sse_encode_list_record_i_32_string_string(
-      List<(int, String, String)> self, SseSerializer serializer);
-
-  @protected
   void sse_encode_list_record_string_bool(
       List<(String, bool)> self, SseSerializer serializer);
 
@@ -6846,6 +6971,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_apply_diff_data(
       APIApplyDiffData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_arrangement_input(
+      APIArrangementInput? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_arrangement_output(
+      APIArrangementOutput? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_array_append_data(
@@ -7430,10 +7563,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_pointer_up_result(
       PointerUpResult self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_record_i_32_string_string(
-      (int, String, String) self, SseSerializer serializer);
 
   @protected
   void sse_encode_record_string_bool(

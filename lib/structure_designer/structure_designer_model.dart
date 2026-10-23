@@ -130,6 +130,37 @@ class PinReference {
   bool get isInput =>
       pinKind == PinKind.externalInput || pinKind == PinKind.zoneOutput;
 
+  /// This pin as the splice API names a dragged pin. Its node lives in
+  /// [scopeChain] (for a zone pin, that is the HOF's own scope).
+  APIDraggedPin toDraggedPin() {
+    switch (pinKind) {
+      case PinKind.externalOutput:
+      case PinKind.functionPin:
+        return APIDraggedPin.output(
+          nodeId: nodeId,
+          pin: APISourcePin.nodeOutput(
+              pinIndex: pinKind == PinKind.functionPin ? -1 : pinIndex),
+        );
+      case PinKind.zoneInput:
+        return APIDraggedPin.output(
+          nodeId: nodeId,
+          pin: APISourcePin.zoneInput(pinIndex: pinIndex),
+        );
+      case PinKind.externalInput:
+        return APIDraggedPin.input(
+          nodeId: nodeId,
+          kind: APIArgumentKind.external_,
+          index: pinIndex,
+        );
+      case PinKind.zoneOutput:
+        return APIDraggedPin.input(
+          nodeId: nodeId,
+          kind: APIArgumentKind.zoneOutput,
+          index: pinIndex,
+        );
+    }
+  }
+
   @override
   String toString() {
     return 'PinReference(nodeId: $nodeId, scopeChain: $scopeChain, pinKind: $pinKind, pinIndex: $pinIndex, dataType: $dataType)';
@@ -3284,6 +3315,47 @@ class StructureDesignerModel extends ChangeNotifier {
     );
     refreshFromKernel();
     return nodeId;
+  }
+
+  /// The arrangements a new [nodeTypeName] node offers when a wire dragged off
+  /// [pin] is dropped in [dropScope] (`doc/design_insert_node_on_wire.md`
+  /// Phase 0). Read-only: nothing changes, so it may be called before any
+  /// dialog is shown.
+  APIArrangementPlan planWireDrop(
+      PinReference pin, List<BigInt> dropScope, String nodeTypeName) {
+    if (activeNetworkReadOnly) {
+      return const APIArrangementPlan(
+          arrangements: [], refusal: 'This network is read-only');
+    }
+    return structure_designer_api.planWireDrop(
+      pinScope: scopeChainToBytes(pin.scopeChain),
+      pin: pin.toDraggedPin(),
+      dropScope: scopeChainToBytes(dropScope),
+      nodeTypeName: nodeTypeName,
+    );
+  }
+
+  /// Adds a [nodeTypeName] node at [position] in [dropScope] and makes the one
+  /// wire to [pin] that [arrangement] (from [planWireDrop]) describes, as one
+  /// undo step. Returns the refusal text, or null on success.
+  String? addNodeAndConnect(
+    PinReference pin,
+    List<BigInt> dropScope,
+    String nodeTypeName,
+    Offset position,
+    APIArrangement arrangement,
+  ) {
+    if (activeNetworkReadOnly) return 'This network is read-only';
+    final result = structure_designer_api.addNodeAndConnect(
+      pinScope: scopeChainToBytes(pin.scopeChain),
+      pin: pin.toDraggedPin(),
+      dropScope: scopeChainToBytes(dropScope),
+      nodeTypeName: nodeTypeName,
+      position: APIVec2(x: position.dx, y: position.dy),
+      arrangement: arrangement,
+    );
+    refreshFromKernel();
+    return result.refusal;
   }
 
   BigInt duplicateNode(BigInt nodeId, {List<BigInt> scopeChain = const []}) {

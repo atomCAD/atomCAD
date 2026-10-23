@@ -250,6 +250,16 @@ impl DeclaredInputs for ExprData {
         self.parse_and_validate(0);
         Ok(())
     }
+
+    fn make_pass_through(&mut self, pin_id: u64) -> bool {
+        let Some(param) = self.parameters.iter().find(|p| p.id == Some(pin_id)) else {
+            return false;
+        };
+        // The identity: the output is the input, so its type is the input's.
+        self.expression = param.name.clone();
+        self.parse_and_validate(0);
+        true
+    }
 }
 
 impl NodeData for ExprData {

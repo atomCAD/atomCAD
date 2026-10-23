@@ -1,6 +1,6 @@
 # Insert node on wire, and dissolve node
 
-## Status: design draft (2026-10-23, revised after review), not implemented
+## Status: Phase 0 implemented (2026-10-23); Phases 1–6 not started
 
 ## Motivation
 
@@ -757,6 +757,28 @@ orphan node. When dragging off an input, the top-level shortcut
   - `drag_adapter_test.rs` (api harness) passes unchanged.
 
 *Tests (Dart):* the row-label rule (one side varies / both vary).
+
+*Implementation notes (Phase 0, where the code differs from the text above):*
+- **The open port is tried only when no input pin takes the source.** Offering
+  it beside a fitting pin gave every `expr` drop a second, equivalent row:
+  `PlannedNode::new_of_type` adapts a fresh `expr` to an identity over `x`
+  already, so its pin `x` is the D9 pass-through and the open port would add
+  `y`. The open port remains the fallback (a fresh anonymous
+  `record_construct`, an existing `expr` in Phase 4).
+- **A fresh `expr`'s body is the constant `0`, not empty** (D9's rationale says
+  empty). The identity is still needed, but for the *value*: without it an
+  `expr` type-checks into an Int or Float wire and outputs `0`.
+- `ArrangementInput` also carries `data_type` (the pin's declared type, or the
+  source's for the open port), for the dialog's type label and pin colour.
+- `SpliceRefusal` gained `PinNotFound` (the dragged pin's node or index is
+  gone); `ScopeNotFound` covers a missing pin or drop scope.
+- The wire drop's adaptation type off an input is the pin's drag hint
+  (`NodeData::drag_hint_for_input_pin`, e.g. `map.f`) when it has one; the
+  target the outputs must convert to is the pin's declared type.
+- A plan with no arrangements still places the chosen node, unconnected, as
+  before (the popup's filter and the plan can disagree).
+- The FRB wrappers return `APIArrangementPlan { arrangements, refusal }` and
+  `APISpliceResult { node_id, refusal }` rather than a Dart exception.
 
 ### Phase 1 — Rust insertion: plan, types, commit
 
