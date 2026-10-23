@@ -1,6 +1,6 @@
 # Insert node on wire, and dissolve node
 
-## Status: Phases 0–1 implemented (2026-10-23); Phases 2–6 not started
+## Status: Phases 0–2 implemented (2026-10-23); Phases 3–6 not started
 
 ## Motivation
 
@@ -895,6 +895,21 @@ section.
 
 *Tests:* none automated beyond Phase 0's Dart unit test. This is thin editor
 UI over Phase 1's tested calls, verified by the Phase 6 walkthrough.
+
+*Implementation notes (Phase 2, where the code differs from the text above):*
+- `WireHitResult` gains `destArgumentKind` and two getters: `anchor` (the
+  `APIWireAnchor`) and `wireScope`. The painter lists a body-return wire under
+  its body's scope, but Rust stores it in the HOF's network, so `wireScope`
+  drops the HOF id for a `ZoneOutput` wire.
+- `findWireAtPosition` takes `includeBodyReturn`. The default stays the
+  selectable-wires-only test, so clicks and comment anchoring are unchanged.
+- `AddNodePopup` takes a precomputed `categories` list. The insertion passes
+  no `inZoneBody`, since Rust already filtered against `S`, which can be
+  shallower than the clicked scope.
+- **Delete wire** is offered only on selectable (`External`) wires; the menu
+  on a body-return wire has only **Insert node…**.
+- No type fits → a transient snackbar (`No node type can be inserted here`)
+  instead of an empty popup.
 
 ### Phase 3 — Dissolve
 

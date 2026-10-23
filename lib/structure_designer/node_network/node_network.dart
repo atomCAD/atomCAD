@@ -712,32 +712,9 @@ class NodeNetworkState extends State<NodeNetwork> {
       return;
     }
 
-    APIArrangement arrangement = plan.arrangements.first;
-    if (plan.arrangements.length > 1) {
-      final labels = arrangementRowLabels([
-        for (final a in plan.arrangements)
-          ArrangementSides(
-            inputName: a.input?.name,
-            inputType: a.input?.dataType,
-            outputName: a.output?.name,
-            outputType: a.output?.dataType,
-          ),
-      ]);
-      final index = await showArrangementDialog(
-        context,
-        title: 'Connect to $selectedNodeType',
-        rows: [
-          for (final label in labels)
-            ArrangementRow(
-              label: label.label,
-              typeLabel: label.typeLabel,
-              color: getDataTypeColor(label.typeLabel),
-            ),
-        ],
-      );
-      if (index == null || !mounted) return;
-      arrangement = plan.arrangements[index];
-    }
+    final arrangement = await _pickArrangement(
+        plan.arrangements, 'Connect to $selectedNodeType');
+    if (arrangement == null || !mounted) return;
 
     final error = model.addNodeAndConnect(
       startPin,
@@ -746,6 +723,125 @@ class NodeNetworkState extends State<NodeNetwork> {
       logicalPosition,
       arrangement,
     );
+    if (error != null && mounted) showErrorSnackBar(context, error);
+  }
+
+  /// The arrangement to commit: the only one, or the user's pick in the
+  /// [ArrangementDialog] when there are several (D3). Null when cancelled.
+  Future<APIArrangement?> _pickArrangement(
+      List<APIArrangement> arrangements, String title) async {
+    if (arrangements.length == 1) return arrangements.first;
+    final labels = arrangementRowLabels([
+      for (final a in arrangements)
+        ArrangementSides(
+          inputName: a.input?.name,
+          inputType: a.input?.dataType,
+          outputName: a.output?.name,
+          outputType: a.output?.dataType,
+        ),
+    ]);
+    final index = await showArrangementDialog(
+      context,
+      title: title,
+      rows: [
+        for (final label in labels)
+          ArrangementRow(
+            label: label.label,
+            typeLabel: label.typeLabel,
+            color: getDataTypeColor(label.typeLabel),
+          ),
+      ],
+    );
+    return index == null ? null : arrangements[index];
+  }
+
+  /// The wire context menu (`doc/design_insert_node_on_wire.md` Phase 2):
+  /// **Insert node…** on any wire, **Delete wire** on the ones the selection
+  /// model can address (not body-return wires). The wire is selected first,
+  /// as a left click would.
+  Future<void> _showWireMenu(WireHitResult hit, TapDownDetails details,
+      BuildContext context, StructureDesignerModel model) async {
+    final deletable = hit.destArgumentKind == APIArgumentKind.external_;
+    model.setActiveScopeChain(hit.scopeChain);
+    if (deletable) {
+      model.setSelectedWire(
+        hit.sourceNodeId,
+        hit.sourcePinIndex,
+        hit.destNodeId,
+        hit.destParamIndex,
+        scopeChain: hit.scopeChain,
+      );
+    }
+
+    final RenderBox overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox;
+    final value = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromRect(
+        Rect.fromPoints(details.globalPosition, details.globalPosition),
+        Offset.zero & overlay.size,
+      ),
+      items: [
+        const PopupMenuItem(
+          value: 'insert_node',
+          child: Text('Insert node...'),
+        ),
+        if (deletable)
+          const PopupMenuItem(
+            value: 'delete_wire',
+            child: Text('Delete wire'),
+          ),
+      ],
+    );
+    if (!mounted) return;
+    if (value == 'insert_node') {
+      await _insertNodeOnWire(hit, details.localPosition, model);
+    } else if (value == 'delete_wire') {
+      model.removeSelected(scopeChain: hit.scopeChain);
+    }
+  }
+
+  /// Insert node on wire: the Add Node popup over exactly the types Rust can
+  /// splice here (D10), a plan for the chosen one, the [ArrangementDialog]
+  /// only when it is ambiguous, and one commit — one undo step. Flutter passes
+  /// the clicked scope `C`; Rust derives the insertion scope from it (D6).
+  /// Cancelling at any point leaves the network untouched.
+  Future<void> _insertNodeOnWire(WireHitResult hit, Offset clickPosition,
+      StructureDesignerModel model) async {
+    final resolver = _makeResolver();
+    if (resolver == null) return;
+    final clickedScope = resolver.findContainingScope(clickPosition).scopeChain;
+    final wireScope = hit.wireScope;
+    final wire = hit.anchor;
+
+    final categories = model.insertableNodeTypes(wireScope, wire, clickedScope);
+    if (categories.isEmpty) {
+      showTransientSnackBar(context, 'No node type can be inserted here');
+      return;
+    }
+    // Rust has already dropped the types that may not live in the insertion
+    // scope, which can be shallower than the clicked one, so no `inZoneBody`.
+    final nodeType = await showAddNodePopup(context, categories: categories);
+    if (nodeType == null || !mounted) return;
+
+    final plan =
+        model.planInsertOnWire(wireScope, wire, clickedScope, nodeType);
+    final refusal = plan.refusal;
+    if (refusal != null) {
+      showErrorSnackBar(context, refusal);
+      return;
+    }
+    if (plan.arrangements.isEmpty) {
+      // The list said it fits; the network changed in between.
+      showErrorSnackBar(context, '$nodeType no longer fits this wire');
+      return;
+    }
+    final arrangement =
+        await _pickArrangement(plan.arrangements, 'Insert $nodeType');
+    if (arrangement == null || !mounted) return;
+
+    final error = model.insertNodeOnWire(
+        wireScope, wire, clickedScope, nodeType, arrangement);
     if (error != null && mounted) showErrorSnackBar(context, error);
   }
 
@@ -1174,6 +1270,17 @@ class NodeNetworkState extends State<NodeNetwork> {
     // Only show context menu if clicked on empty space (not on a node)
     // The nodes have their own context menu handling
     if (!_isClickOnNode(model, details.localPosition)) {
+      // A wire under the click gets the wire menu instead of the background
+      // one. Body-return wires count too: they take an inserted node.
+      final wireHit = NodeNetworkPainter(model,
+              panOffset: _panOffset, zoomLevel: _zoomLevel)
+          .findWireAtPosition(details.localPosition, includeBodyReturn: true);
+      if (wireHit != null) {
+        await _showWireMenu(wireHit, details, context, model);
+        focusNode.requestFocus();
+        return;
+      }
+
       final resolver = _makeResolver();
       // The scope the click landed in. Right-clicking inside an HOF body
       // resolves to that body's scope so the new node is created inside the

@@ -45,8 +45,32 @@ class WireHitResult {
   /// invariant in `structure_designer.rs::clear_selection_in_other_scopes`.
   final List<BigInt> scopeChain;
 
+  /// `External` for a wire into an input pin, `ZoneOutput` for a body-return
+  /// wire. Only `findWireAtPosition(includeBodyReturn: true)` reports the
+  /// latter.
+  final APIArgumentKind destArgumentKind;
+
   WireHitResult(this.sourceNodeId, this.sourcePinIndex, this.destNodeId,
-      this.destParamIndex, this.scopeChain);
+      this.destParamIndex, this.scopeChain,
+      {this.destArgumentKind = APIArgumentKind.external_});
+
+  /// The scope the wire is *stored* in, as Rust addresses it. A body-return
+  /// wire is listed with its body ([scopeChain] ends in the HOF's id) but
+  /// stored on the HOF, in the HOF's own network.
+  List<BigInt> get wireScope =>
+      destArgumentKind == APIArgumentKind.zoneOutput && scopeChain.isNotEmpty
+          ? scopeChain.sublist(0, scopeChain.length - 1)
+          : scopeChain;
+
+  /// The wire's address for the splice APIs. The canvas knows no persistent
+  /// parameter ids; Rust resolves the slot by index when none is given.
+  APIWireAnchor get anchor => APIWireAnchor(
+        destinationNodeId: destNodeId,
+        destinationArgumentKind: destArgumentKind,
+        destinationArgumentIndex: destParamIndex,
+        destinationParamId: null,
+        sourceNodeId: sourceNodeId,
+      );
 }
 
 /// A boundary-crossing wire of a hidden (collapsed/compact) body, resolved to
@@ -720,6 +744,9 @@ class NodeNetworkPainter extends CustomPainter {
   static bool _isSelectableWire(WireView wire) =>
       wire.destinationArgumentKind == APIArgumentKind.external_;
 
+  static bool _isHittableWire(WireView wire, bool includeBodyReturn) =>
+      includeBodyReturn || _isSelectableWire(wire);
+
   /// Hit-test wires across every scope. `position` is in screen coordinates and
   /// the resolver returns pin endpoints in screen coordinates, so no transform
   /// is needed. Bodies are tested before the top level (deepest first), mirroring
@@ -728,7 +755,12 @@ class NodeNetworkPainter extends CustomPainter {
   /// must never select a top-level wire passing invisibly beneath it. Collapsed
   /// bodies expose only their boundary-crossing wires (the visible clipped
   /// portion outside the placeholder), mirroring the paint pass.
-  WireHitResult? findWireAtPosition(Offset position) {
+  ///
+  /// [includeBodyReturn] also reports body-return (`ZoneOutput`) wires, which
+  /// cannot be selected but can take an inserted node
+  /// (`doc/design_insert_node_on_wire.md`, wire context menu).
+  WireHitResult? findWireAtPosition(Offset position,
+      {bool includeBodyReturn = false}) {
     final resolver = _makeResolver();
     if (resolver == null) return null;
 
@@ -737,18 +769,19 @@ class NodeNetworkPainter extends CustomPainter {
       if (zone == null) continue;
       final innerChain = <BigInt>[node.id];
       if (resolver.isBodyCollapsed(innerChain)) {
-        final hit = _hitCollapsedBodyCrossingWires(
-            resolver, node, zone, const <BigInt>[], position);
+        final hit = _hitCollapsedBodyCrossingWires(resolver, node, zone,
+            const <BigInt>[], position, includeBodyReturn);
         if (hit != null) return hit;
         continue;
       }
-      final hit = _hitWiresInZone(resolver, zone, innerChain, position);
+      final hit = _hitWiresInZone(
+          resolver, zone, innerChain, position, includeBodyReturn);
       if (hit != null) return hit;
     }
 
     // Top-level wires last.
-    return _hitWiresAtScope(
-        resolver, resolver.root.wires, const <BigInt>[], position);
+    return _hitWiresAtScope(resolver, resolver.root.wires, const <BigInt>[],
+        position, includeBodyReturn);
   }
 
   /// Recursively hit-test a body's wires (deepest nested body first), then the
@@ -758,6 +791,7 @@ class NodeNetworkPainter extends CustomPainter {
     ZoneView zone,
     List<BigInt> scopeChain,
     Offset position,
+    bool includeBodyReturn,
   ) {
     for (final node in zone.nodes.values) {
       final inner = node.zone;
@@ -765,14 +799,16 @@ class NodeNetworkPainter extends CustomPainter {
       final innerChain = [...scopeChain, node.id];
       if (resolver.isBodyCollapsed(innerChain)) {
         final hit = _hitCollapsedBodyCrossingWires(
-            resolver, node, inner, scopeChain, position);
+            resolver, node, inner, scopeChain, position, includeBodyReturn);
         if (hit != null) return hit;
         continue;
       }
-      final deep = _hitWiresInZone(resolver, inner, innerChain, position);
+      final deep = _hitWiresInZone(
+          resolver, inner, innerChain, position, includeBodyReturn);
       if (deep != null) return deep;
     }
-    return _hitWiresAtScope(resolver, zone.wires, scopeChain, position);
+    return _hitWiresAtScope(
+        resolver, zone.wires, scopeChain, position, includeBodyReturn);
   }
 
   /// Hit-test the boundary-crossing wires of a hidden body. Only the clipped,
@@ -785,6 +821,7 @@ class NodeNetworkPainter extends CustomPainter {
     ZoneView zone,
     List<BigInt> parentChain,
     Offset position,
+    bool includeBodyReturn,
   ) {
     final bodyChain = [...parentChain, hof.id];
     if (resolver.isBodyFunctionOverridden(bodyChain)) return null;
@@ -793,7 +830,7 @@ class NodeNetworkPainter extends CustomPainter {
     if (clipRect.contains(position)) return null;
     for (final c in _collectCollapsedCrossingWires(
         resolver, zone, bodyChain, bodyChain.length, clipRect)) {
-      if (!_isSelectableWire(c.wire)) continue;
+      if (!_isHittableWire(c.wire, includeBodyReturn)) continue;
       final band = _getBand(c.sourcePos, c.destPos, HIT_TEST_WIRE_WIDTH);
       if (band.contains(position)) {
         return WireHitResult(
@@ -802,6 +839,7 @@ class NodeNetworkPainter extends CustomPainter {
           c.wire.destNodeId,
           c.wire.destParamIndex,
           c.scopeChain,
+          destArgumentKind: c.wire.destinationArgumentKind,
         );
       }
     }
@@ -814,9 +852,10 @@ class NodeNetworkPainter extends CustomPainter {
     List<WireView> wires,
     List<BigInt> scopeChain,
     Offset position,
+    bool includeBodyReturn,
   ) {
     for (final wire in wires) {
-      if (!_isSelectableWire(wire)) continue;
+      if (!_isHittableWire(wire, includeBodyReturn)) continue;
       final source =
           resolver.tryPinScreenPosition(_wireSourcePin(wire, scopeChain));
       final dest =
@@ -831,6 +870,7 @@ class NodeNetworkPainter extends CustomPainter {
           wire.destNodeId,
           wire.destParamIndex,
           scopeChain,
+          destArgumentKind: wire.destinationArgumentKind,
         );
       }
     }

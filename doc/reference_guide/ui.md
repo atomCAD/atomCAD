@@ -393,6 +393,13 @@ Left-click and drag from an output pin to an input pin to create a wire. To disc
 **Quick-add node from wire**
 If you drag a wire from a pin and release it in empty space, the **Add Node** window opens filtered to show only nodes with compatible pins. After selecting a node type, the new node is created at the drop location and the wire is automatically connected. If the wire could connect to the new node in more than one way — several inputs that accept it, or (dragging off an input) several outputs that fit, such as `atom_edit`'s `result` and `diff` — a small list asks which one: click a row, or use Up/Down and Enter. Cancelling (Esc, or clicking outside) adds nothing. Creating the node and its wire is a single undo step, so one Ctrl+Z removes both.
 
+**Insert a node into a wire**
+Right-click a wire and choose **Insert node…** to put a step between two connected nodes — a `structure_move` before a `materialize`, a `relax` after a `passivate`. The **Add Node** window lists only the node types that can actually go there: ones with an input that takes what the wire carries *and* an output that the wire's destination accepts. Pick one and it is spliced in: the wire's source feeds the new node, the new node feeds the old destination (in the same position, so the inputs of a `union` keep their order), and the node is placed between its neighbours — if there is no room, the nodes downstream slide right together. A comment note anchored to the wire stays anchored to the part that leads into the destination. The whole insertion is a single undo step.
+
+If the node could be spliced in more than one way — `diff` takes a Blueprint on either `base` or `sub` — a small list asks which: click a row, or use Up/Down and Enter. Esc, or clicking outside, leaves the wire as it was. An `expr` goes in as `x` (it passes the value through unchanged), so the result is the same until you edit the expression, say into `2 * x`.
+
+Wires inside a higher-order function's or closure's body work the same, including the wire into the body's return pin. A wire that reaches *into* a body from outside can take the node on either side of the body's border: right-click its part outside the body to put the node outside (computed once), or its part inside to put it in the body (computed once per element). The wire menu also has **Delete wire**. Nothing can be inserted in a linked, read-only network.
+
 **Selection**
 Multiple nodes and wires can be selected. Selection is used for:
 

@@ -283,6 +283,28 @@ grouping and reads as an untitled stray. Every existing item's `value` and gate
 `canExtractToNetwork`, `isCollapsableHof`) is preserved by the grouping — the
 reshuffle changed only order and headers, not behavior.
 
+## Wire context menu
+
+Right-clicking a wire (`_handleSecondaryTapDown` → `_showWireMenu`, ahead of
+the background menu) offers **Insert node…** and, on a selectable wire,
+**Delete wire** (`doc/design_insert_node_on_wire.md` Phase 2). Three things to
+know:
+
+1. **The hit test is `findWireAtPosition(…, includeBodyReturn: true)`.**
+   Body-return (`ZoneOutput`) wires stay unselectable for clicks, but they take
+   an inserted node. `WireHitResult.scopeChain` is the scope the wire is
+   *listed* under — the body, for a body-return wire — while
+   `WireHitResult.wireScope` is where Rust *stores* it (the HOF's network).
+   Every splice call takes `wireScope` and `WireHitResult.anchor`.
+2. **Flutter passes the clicked scope, never the insertion scope.**
+   `findContainingScope(click)` is `C`; Rust clamps it into the wire's scope
+   range (D6). For the same reason the Add Node popup gets Rust's exact list
+   (`insertableNodeTypes`, passed as `categories:`) and no `inZoneBody` filter:
+   Rust filtered against the insertion scope, which may be shallower than `C`.
+3. **Plan, pick, commit** — the same `_pickArrangement` the wire drop uses, so
+   the dialog only appears when the plan has several rows and a cancel changes
+   nothing.
+
 ## Constants (must match Rust `node_layout.rs`)
 
 - `BASE_NODE_WIDTH = 160`

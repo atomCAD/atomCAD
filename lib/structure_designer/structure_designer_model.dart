@@ -3358,6 +3358,58 @@ class StructureDesignerModel extends ChangeNotifier {
     return result.refusal;
   }
 
+  /// The node types that can be spliced into [wire] (stored in [wireScope])
+  /// when the user clicked in [clickedScope]: only those Rust's plan finds an
+  /// arrangement for (`doc/design_insert_node_on_wire.md` D10). Empty on a
+  /// read-only network or a refused request.
+  List<APINodeCategoryView> insertableNodeTypes(
+      List<BigInt> wireScope, APIWireAnchor wire, List<BigInt> clickedScope) {
+    if (activeNetworkReadOnly) return const [];
+    return structure_designer_api.insertableNodeTypes(
+      wireScope: scopeChainToBytes(wireScope),
+      wire: wire,
+      clickedScope: scopeChainToBytes(clickedScope),
+    );
+  }
+
+  /// The arrangements a new [nodeTypeName] node offers spliced into [wire].
+  /// Read-only, like [planWireDrop].
+  APIArrangementPlan planInsertOnWire(List<BigInt> wireScope,
+      APIWireAnchor wire, List<BigInt> clickedScope, String nodeTypeName) {
+    if (activeNetworkReadOnly) {
+      return const APIArrangementPlan(
+          arrangements: [], refusal: 'This network is read-only');
+    }
+    return structure_designer_api.planInsertOnWire(
+      wireScope: scopeChainToBytes(wireScope),
+      wire: wire,
+      clickedScope: scopeChainToBytes(clickedScope),
+      node: APINodeSource.new_(nodeTypeName: nodeTypeName),
+    );
+  }
+
+  /// Splices a new [nodeTypeName] node into [wire] with [arrangement] (from
+  /// [planInsertOnWire]), as one undo step; Rust places it and selects it.
+  /// Returns the refusal text, or null on success.
+  String? insertNodeOnWire(
+    List<BigInt> wireScope,
+    APIWireAnchor wire,
+    List<BigInt> clickedScope,
+    String nodeTypeName,
+    APIArrangement arrangement,
+  ) {
+    if (activeNetworkReadOnly) return 'This network is read-only';
+    final result = structure_designer_api.insertNodeOnWire(
+      wireScope: scopeChainToBytes(wireScope),
+      wire: wire,
+      clickedScope: scopeChainToBytes(clickedScope),
+      node: APINodeSource.new_(nodeTypeName: nodeTypeName),
+      arrangement: arrangement,
+    );
+    refreshFromKernel();
+    return result.refusal;
+  }
+
   BigInt duplicateNode(BigInt nodeId, {List<BigInt> scopeChain = const []}) {
     if (activeNetworkReadOnly) return BigInt.zero;
     if (nodeNetworkView == null) return BigInt.zero;

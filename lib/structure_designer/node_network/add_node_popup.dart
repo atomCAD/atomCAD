@@ -55,11 +55,18 @@ class AddNodePopup extends StatefulWidget {
   /// menu.
   final bool inZoneBody;
 
+  /// A list computed by the caller, shown instead of the registry's (and
+  /// instead of [filterByCompatibleType]'s). Insert node on wire passes the
+  /// exact list Rust's plan accepts (`doc/design_insert_node_on_wire.md`
+  /// D10). The [inZoneBody] filter still applies.
+  final List<APINodeCategoryView>? categories;
+
   const AddNodePopup({
     super.key,
     this.filterByCompatibleType,
     this.draggingFromOutput,
     this.inZoneBody = false,
+    this.categories,
   });
 
   @override
@@ -76,7 +83,9 @@ class _AddNodePopupState extends State<AddNodePopup> {
   void initState() {
     super.initState();
     List<APINodeCategoryView>? categories;
-    if (widget.filterByCompatibleType != null) {
+    if (widget.categories != null) {
+      categories = widget.categories;
+    } else if (widget.filterByCompatibleType != null) {
       categories = getCompatibleNodeTypes(
         sourceTypeStr: widget.filterByCompatibleType!,
         draggingFromOutput: widget.draggingFromOutput ?? true,
@@ -352,6 +361,7 @@ Future<String?> showAddNodePopup(
   String? filterByCompatibleType,
   bool? draggingFromOutput,
   bool inZoneBody = false,
+  List<APINodeCategoryView>? categories,
 }) {
   return showDialog<String>(
     context: context,
@@ -360,6 +370,7 @@ Future<String?> showAddNodePopup(
       filterByCompatibleType: filterByCompatibleType,
       draggingFromOutput: draggingFromOutput,
       inZoneBody: inZoneBody,
+      categories: categories,
     ),
   );
 }
