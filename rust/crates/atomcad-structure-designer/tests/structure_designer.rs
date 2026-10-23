@@ -778,6 +778,8 @@ mod ambient_occlusion_cache_test;
 #[path = "structure_designer/record_destructure_anonymous_test.rs"]
 mod record_destructure_anonymous_test;
 
+#[path = "structure_designer/dissolve_node_test.rs"]
+mod dissolve_node_test;
 #[path = "structure_designer/expr_named_record_node_test.rs"]
 mod expr_named_record_node_test;
 #[path = "structure_designer/insert_dissolve_corpus_test.rs"]

@@ -400,10 +400,15 @@ If the node could be spliced in more than one way — `diff` takes a Blueprint o
 
 Wires inside a higher-order function's or closure's body work the same, including the wire into the body's return pin. A wire that reaches *into* a body from outside can take the node on either side of the body's border: right-click its part outside the body to put the node outside (computed once), or its part inside to put it in the body (computed once per element). The wire menu also has **Delete wire**. Nothing can be inserted in a linked, read-only network.
 
+**Dissolve a node**
+The inverse of inserting: right-click a node and choose **Dissolve** (or select it and press **Ctrl+Delete**). The node is removed and the chain closes over the gap — the wire that went into it now goes straight to everything its output fed, each in the same input slot as before, and a comment note anchored to one of those wires stays anchored to it. Nothing else moves, and the whole thing is one undo step. A `structure_move` between a blueprint and a `materialize` dissolves even with its `translation` wired, because only the blueprint wire can feed the `materialize`.
+
+Dissolve is offered only when there is exactly one way to do it, so the menu item is simply absent otherwise. Ctrl+Delete never deletes instead: when the node cannot be dissolved, it stays where it is and a short message says why — for example `Can't dissolve diff: 2 input wires could replace it (base, sub)`, or that nothing uses its output (use plain Delete then). A node used through its function pin, the network's return node, a `parameter` (it is part of the network's interface), and a node whose removal would feed the same source into one input twice are not dissolved either; neither is anything in a linked, read-only network. With no node or several nodes selected, Ctrl+Delete just asks you to select one.
+
 **Selection**
 Multiple nodes and wires can be selected. Selection is used for:
 
-- Deleting selected nodes or wires with the `Del` key.
+- Deleting selected nodes or wires with the `Del` key (`Ctrl+Del` dissolves the one selected node instead; see *Dissolve a node*).
 - Editing the *active* node’s properties in the **Node Properties** panel.
 - Enabling viewport interactions for the *active* node: many node types expose interactive *gadgets* in the viewport; the exact interactions depend on the node type (see the Nodes Reference section).
 

@@ -42,7 +42,7 @@ Three discrete levels with different detail:
 - **Wire creation:** Drag from pin → drop on compatible pin
 - **Auto-connect:** Drop wire in empty space → opens `AddNodePopup` filtered by type, then **plans before it changes anything** (`doc/design_insert_node_on_wire.md` Phase 0): `model.planWireDrop` returns the valid arrangements (which input takes the wire, or which output feeds the slot — every non-function output, not only pin 0, and the open port when no pin fits), `ArrangementDialog` asks only when there is more than one, and `model.addNodeAndConnect` commits node + wire as one undo step. Rust computes the scope depth; cancelling leaves the network untouched. Row labels come from the pure `arrangementRowLabels` (`arrangement_labels.dart`, tested in `test/arrangement_labels_test.dart`)
 - **Open port:** while a wire is dragged, nodes with `hasOpenInputPort` show a `+` tab below them; dropping on it declares an input from the wire (see "Open-port tabs" below)
-- **Keyboard:** Ctrl+C/X/V (copy/cut/paste), Del (delete), Ctrl+D (duplicate)
+- **Keyboard:** Ctrl+C/X/V (copy/cut/paste), Del (delete), Ctrl+Del (dissolve the one selected node; handled *before* the Del branch and never falls through to it — a refusal is a transient snackbar), Ctrl+D (duplicate)
 
 ## The canvas is rendered twice (live editor + image export)
 

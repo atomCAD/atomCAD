@@ -8,7 +8,7 @@
 //! [`StructureDesigner::add_node_core`] inside their own snapshot, never
 //! through the recording add paths.
 //!
-//! Two operations live here so far:
+//! Three operations live here:
 //!
 //! - the **wire drop** (Phase 0): a wire dragged off a pin and dropped in
 //!   empty space adds a node there and connects it. Planning first means a
@@ -17,14 +17,20 @@
 //! - **insertion** (Phase 1): a node spliced into an existing wire. The source
 //!   is wired into the new node, and the old wire's slot is re-pointed at the
 //!   new node through [`StructureDesigner::replace_wire_source`], the one
-//!   primitive that edits an existing wire (D5, D11).
+//!   primitive that edits an existing wire (D5, D11);
+//! - **dissolve** (Phase 3): the inverse. A node is removed and every wire
+//!   that read it is re-pointed, through the same primitive, at the one input
+//!   wire's source that fits them all (D13, D14). A plan, not a dialog: when
+//!   there is not exactly one answer, the refusal says why (D15).
 
 use crate::data_type::DataType;
 use crate::declared_input_ops::AddInputPlan;
 use crate::declared_inputs::NameSource;
 use crate::layout;
 use crate::node_data::DragDirection;
-use crate::node_network::{Argument, ArgumentKind, IncomingWire, SourcePin, Wire, WireAnchor};
+use crate::node_network::{
+    Argument, ArgumentKind, IncomingWire, Node, NodeNetwork, SourcePin, Wire, WireAnchor,
+};
 use crate::node_type_registry::{
     NodeTypeRegistry, accepts_drag_source, allowed_in_zone_body, offered_in_add_node,
 };
@@ -35,6 +41,7 @@ use crate::splice_plan::{
 };
 use crate::structure_designer::{DragSource, StructureDesigner};
 use crate::text_format::snapshot_node_positions;
+use crate::undo::commands::network_snapshot::NetworkSnapshotCommand;
 use glam::f64::DVec2;
 use std::collections::HashSet;
 
@@ -1098,5 +1105,450 @@ impl StructureDesigner {
         registry
             .resolve_output_type_scoped(node, network, pin, &ancestors, &ancestor_hof_ids)
             .is_some_and(|data_type| DataType::can_be_converted_to(&data_type, target, registry))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Dissolve
+// ---------------------------------------------------------------------------
+
+/// The undo-history label of a dissolve (D8).
+pub const DISSOLVE_NODE_DESCRIPTION: &str = "Dissolve node";
+
+/// The pins of a node that hold dissolve candidates, in pin order, each with
+/// its number of candidate wires. `Display` is the tail of the
+/// [`DissolveRefusal::SeveralCandidates`] message:
+/// `2 input wires could replace it (base, sub)`, where a pin holding several
+/// reads `3 wires into shapes`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CandidateList(pub Vec<(String, usize)>);
+
+impl std::fmt::Display for CandidateList {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let total: usize = self.0.iter().map(|(_, count)| count).sum();
+        let pins: Vec<String> = self
+            .0
+            .iter()
+            .map(|(pin, count)| {
+                if *count == 1 {
+                    pin.clone()
+                } else {
+                    format!("{count} wires into {pin}")
+                }
+            })
+            .collect();
+        write!(
+            f,
+            "{total} input wires could replace it ({})",
+            pins.join(", ")
+        )
+    }
+}
+
+/// The one way to dissolve a node: the input wire whose source takes over,
+/// and every wire that read the node's outputs.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DissolvePlan {
+    /// The one input wire into `N` whose source is kept (stored in `N`'s
+    /// scope).
+    pub candidate: Wire,
+    /// `(storage scope, wire)` for each wire to re-point. A body-return
+    /// consumer is stored in the HOF's network, like any `ZoneOutput` wire.
+    pub consumers: Vec<(Vec<u64>, WireAnchor)>,
+}
+
+/// Why a node cannot be dissolved. One variant per row of the design's
+/// checks table, in check order; `Display` is the snackbar text, with the
+/// node's name (its `custom_name`, else its type name) filled in.
+#[derive(Debug, thiserror::Error, PartialEq)]
+pub enum DissolveRefusal {
+    #[error("Can't dissolve {node}: this network is read-only (linked library)")]
+    ReadOnly { node: String },
+    #[error("Can't dissolve {node}: nothing uses its output — use Delete")]
+    NoConsumer { node: String },
+    #[error("Can't dissolve {node}: it is used as a function")]
+    UsedAsFunction { node: String },
+    #[error("Can't dissolve {node}: it is the network's return node")]
+    ReturnNode { node: String },
+    /// A `parameter` is an input pin of its network: dissolving it would
+    /// remove that pin, and the wires into it at every call site with it,
+    /// which the one-network undo step cannot bring back.
+    #[error("Can't dissolve {node}: it is one of the network's parameters")]
+    Parameter { node: String },
+    #[error("Can't dissolve {node}: no input wire fits where its output goes")]
+    NoCandidate { node: String },
+    #[error("Can't dissolve {node}: {candidates}")]
+    SeveralCandidates {
+        node: String,
+        candidates: CandidateList,
+    },
+    #[error("Can't dissolve {node}: {consumer} would receive {source_name} twice")]
+    DuplicateSource {
+        node: String,
+        consumer: String,
+        /// The candidate's source. (Not `source`: thiserror reads a field of
+        /// that name as the error's cause.)
+        source_name: String,
+    },
+    #[error("Can't dissolve: the node no longer exists")]
+    NodeNotFound,
+}
+
+/// What the dissolve messages call a node.
+fn display_name(node: &Node) -> String {
+    node.custom_name
+        .clone()
+        .unwrap_or_else(|| node.node_type_name.clone())
+}
+
+/// Every wire stored in `network` (at `scope`) or in a body below it whose
+/// source is an output of node `node_id` in `node_scope`, as `(storage scope,
+/// wire)`, in a stable order. The function pin's wires are included. Node
+/// `node_id` itself and its body are skipped: they go with it.
+fn collect_consumers(
+    network: &NodeNetwork,
+    scope: &mut Vec<u64>,
+    node_scope: &[u64],
+    node_id: u64,
+    out: &mut Vec<(Vec<u64>, Wire)>,
+) {
+    let mut ids: Vec<u64> = network.nodes.keys().copied().collect();
+    ids.sort_unstable();
+    let at_node_scope = scope.as_slice() == node_scope;
+    for id in &ids {
+        if at_node_scope && *id == node_id {
+            continue;
+        }
+        let node = &network.nodes[id];
+        let lists = [
+            (ArgumentKind::External, &node.arguments),
+            (ArgumentKind::ZoneOutput, &node.zone_output_arguments),
+        ];
+        for (kind, arguments) in lists {
+            // A wire's depth counts up from the destination's effective
+            // scope: the body, for a body-return wire.
+            let dst_len = scope.len() + usize::from(kind == ArgumentKind::ZoneOutput);
+            for (index, argument) in arguments.iter().enumerate() {
+                for incoming in &argument.incoming_wires {
+                    let depth = incoming.source_scope_depth as usize;
+                    let reads_node = incoming.source_node_id == node_id
+                        && matches!(incoming.source_pin, SourcePin::NodeOutput { .. })
+                        && depth <= dst_len
+                        && dst_len - depth == node_scope.len();
+                    if reads_node {
+                        out.push((
+                            scope.clone(),
+                            Wire {
+                                source_node_id: incoming.source_node_id,
+                                source_pin: incoming.source_pin,
+                                source_scope_depth: incoming.source_scope_depth,
+                                destination_node_id: *id,
+                                destination_argument_index: index,
+                                destination_argument_kind: kind,
+                            },
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    for id in ids {
+        if at_node_scope && id == node_id {
+            continue;
+        }
+        if let Some(body) = network.nodes[&id].zone.as_deref() {
+            scope.push(id);
+            collect_consumers(body, scope, node_scope, node_id, out);
+            scope.pop();
+        }
+    }
+}
+
+impl StructureDesigner {
+    /// How node `node_id` in `scope` would be dissolved: removed, with the one
+    /// input wire that fits every consumer joined to whatever its outputs fed
+    /// (D13, D14). Read-only. The checks run in the order of
+    /// [`DissolveRefusal`]'s variants, and the first that fails is the answer.
+    ///
+    /// "No consumer" counts every wire leaving the node, its function pin's
+    /// included, so a node used only as a function is refused as
+    /// `UsedAsFunction` rather than sent to Delete.
+    pub fn plan_dissolve_node(
+        &self,
+        scope: &[u64],
+        node_id: u64,
+    ) -> Result<DissolvePlan, DissolveRefusal> {
+        let network = self
+            .get_scope_network(scope)
+            .ok_or(DissolveRefusal::NodeNotFound)?;
+        let node = network
+            .nodes
+            .get(&node_id)
+            .ok_or(DissolveRefusal::NodeNotFound)?;
+        let name = display_name(node);
+        if self.ensure_active_editable().is_err() {
+            return Err(DissolveRefusal::ReadOnly { node: name });
+        }
+
+        // The consumers, walked from `N`'s scope down: no shallower scope can
+        // see `N`.
+        let mut consumers = Vec::new();
+        collect_consumers(network, &mut scope.to_vec(), scope, node_id, &mut consumers);
+        if consumers.is_empty() {
+            return Err(DissolveRefusal::NoConsumer { node: name });
+        }
+        if consumers
+            .iter()
+            .any(|(_, wire)| wire.source_pin == SourcePin::NodeOutput { pin_index: -1 })
+        {
+            return Err(DissolveRefusal::UsedAsFunction { node: name });
+        }
+        if network.return_node_id == Some(node_id) {
+            return Err(DissolveRefusal::ReturnNode { node: name });
+        }
+        if node.node_type_name == "parameter" {
+            return Err(DissolveRefusal::Parameter { node: name });
+        }
+
+        // Each consumer's pin type (`None` when it cannot be read, which no
+        // candidate fits).
+        let registry = &self.node_type_registry;
+        let destination_of = |storage_scope: &[u64], wire: &Wire| {
+            self.get_scope_network(storage_scope)
+                .and_then(|network| network.nodes.get(&wire.destination_node_id))
+        };
+        let pin_types: Vec<Option<DataType>> = consumers
+            .iter()
+            .map(|(storage_scope, wire)| {
+                let node_type =
+                    registry.get_node_type_for_node(destination_of(storage_scope, wire)?)?;
+                let index = wire.destination_argument_index;
+                match wire.destination_argument_kind {
+                    ArgumentKind::External => {
+                        node_type.parameters.get(index).map(|p| p.data_type.clone())
+                    }
+                    ArgumentKind::ZoneOutput => node_type
+                        .zone_output_pins
+                        .get(index)
+                        .map(|p| p.data_type.clone()),
+                }
+            })
+            .collect();
+
+        // The candidates: wires into `N` (each wire of an array pin on its
+        // own) whose source fits every consumer.
+        let node_type = registry.get_node_type_for_node(node);
+        let mut candidates: Vec<Wire> = Vec::new();
+        let mut per_pin: Vec<(String, usize)> = Vec::new();
+        for (index, argument) in node.arguments.iter().enumerate() {
+            let mut count = 0;
+            for incoming in &argument.incoming_wires {
+                let Some(source_type) = self.resolve_wire_source_type(
+                    scope,
+                    incoming.source_node_id,
+                    incoming.source_pin,
+                    incoming.source_scope_depth,
+                ) else {
+                    continue;
+                };
+                let fits = pin_types.iter().all(|pin_type| {
+                    pin_type.as_ref().is_some_and(|pin_type| {
+                        DataType::can_be_converted_to(&source_type, pin_type, registry)
+                    })
+                });
+                if fits {
+                    count += 1;
+                    candidates.push(Wire {
+                        source_node_id: incoming.source_node_id,
+                        source_pin: incoming.source_pin,
+                        source_scope_depth: incoming.source_scope_depth,
+                        destination_node_id: node_id,
+                        destination_argument_index: index,
+                        destination_argument_kind: ArgumentKind::External,
+                    });
+                }
+            }
+            if count > 0 {
+                let pin = node_type
+                    .and_then(|t| t.parameters.get(index))
+                    .map(|p| p.name.clone())
+                    .unwrap_or_else(|| format!("input {index}"));
+                per_pin.push((pin, count));
+            }
+        }
+        let candidate = match candidates.len() {
+            0 => return Err(DissolveRefusal::NoCandidate { node: name }),
+            1 => candidates.remove(0),
+            _ => {
+                return Err(DissolveRefusal::SeveralCandidates {
+                    node: name,
+                    candidates: CandidateList(per_pin),
+                });
+            }
+        };
+
+        // Every consumer's slot must keep one wire per source node.
+        for (storage_scope, wire) in &consumers {
+            let destination =
+                destination_of(storage_scope, wire).ok_or(DissolveRefusal::NodeNotFound)?;
+            let arguments = match wire.destination_argument_kind {
+                ArgumentKind::External => &destination.arguments,
+                ArgumentKind::ZoneOutput => &destination.zone_output_arguments,
+            };
+            let accepts = arguments
+                .get(wire.destination_argument_index)
+                .is_some_and(|argument| {
+                    slot_accepts_source(argument, node_id, candidate.source_node_id)
+                });
+            if !accepts {
+                return Err(self.duplicate_source(scope, node_id, &candidate, storage_scope, wire));
+            }
+        }
+
+        let consumers = consumers
+            .iter()
+            .map(|(storage_scope, wire)| {
+                let storage = self
+                    .get_scope_network(storage_scope)
+                    .ok_or(DissolveRefusal::NodeNotFound)?;
+                Ok((storage_scope.clone(), WireAnchor::from_wire(wire, storage)))
+            })
+            .collect::<Result<_, DissolveRefusal>>()?;
+        Ok(DissolvePlan {
+            candidate,
+            consumers,
+        })
+    }
+
+    /// Dissolve node `node_id` in `scope` as one undo step ("Dissolve node",
+    /// D8): every consumer is re-pointed at the candidate's source in its own
+    /// slot (D5), with its comment anchors (D11), and the node (with its body)
+    /// is deleted. Nothing else moves. A refusal is the one
+    /// [`Self::plan_dissolve_node`] gives now, and changes nothing.
+    pub fn dissolve_node(&mut self, scope: &[u64], node_id: u64) -> Result<(), DissolveRefusal> {
+        let plan = self.plan_dissolve_node(scope, node_id)?;
+        let network_name = self
+            .active_node_network_name
+            .clone()
+            .ok_or(DissolveRefusal::NodeNotFound)?;
+
+        // 1. Snapshot for undo, and a copy to roll back to.
+        let before = self
+            .snapshot_network(&network_name)
+            .ok_or(DissolveRefusal::NodeNotFound)?;
+        let rollback = self
+            .node_type_registry
+            .node_networks
+            .get(&network_name)
+            .ok_or(DissolveRefusal::NodeNotFound)?
+            .clone();
+
+        // 2. Re-point each consumer. Its depth counts up to `N`'s scope, the
+        //    candidate's from there to the source's frame; the sum counts the
+        //    whole way.
+        let candidate = plan.candidate;
+        for (storage_scope, anchor) in &plan.consumers {
+            let consumer = self
+                .get_scope_network(storage_scope)
+                .and_then(|network| anchor.resolve(network));
+            let replaced = consumer.as_ref().is_some_and(|wire| {
+                self.replace_wire_source(
+                    storage_scope,
+                    anchor,
+                    candidate.source_node_id,
+                    candidate.source_pin,
+                    wire.source_scope_depth + candidate.source_scope_depth,
+                )
+                .is_ok()
+            });
+            if !replaced {
+                // The plan checked every slot, so the two disagree.
+                let refusal = match &consumer {
+                    Some(wire) => {
+                        self.duplicate_source(scope, node_id, &candidate, storage_scope, wire)
+                    }
+                    None => DissolveRefusal::NodeNotFound,
+                };
+                self.node_type_registry
+                    .node_networks
+                    .insert(network_name, rollback);
+                return Err(refusal);
+            }
+        }
+
+        // 3. Delete the node and its body. Every wire out of it now reads the
+        //    candidate's source, and the wires into it are stored on it.
+        let mut dirty: HashSet<u64> = HashSet::new();
+        if scope.is_empty() {
+            dirty.extend(
+                plan.consumers
+                    .iter()
+                    .filter(|(storage_scope, _)| storage_scope.is_empty())
+                    .map(|(_, anchor)| anchor.destination_node_id),
+            );
+            if candidate.source_scope_depth == 0 {
+                dirty.insert(candidate.source_node_id);
+            }
+        }
+        if let Some(network) = self.get_scope_network_mut(scope) {
+            network.nodes.remove(&node_id);
+            network.displayed_nodes.remove(&node_id);
+            network.selected_node_ids.remove(&node_id);
+            network
+                .selected_wires
+                .retain(|w| w.source_node_id != node_id && w.destination_node_id != node_id);
+            if network.active_node_id == Some(node_id) {
+                network.active_node_id = None;
+            }
+            // A comment on `N` or on the candidate wire loses that anchor.
+            crate::nodes::comment::drop_dangling_anchors(network);
+        }
+
+        // 4. Display, revalidate, one step.
+        for (storage_scope, anchor) in &plan.consumers {
+            self.mark_node_data_changed_scoped(storage_scope, anchor.destination_node_id);
+        }
+        if !dirty.is_empty() {
+            self.apply_node_display_policy(Some(&dirty));
+        }
+        self.validate_active_network();
+        self.set_dirty(true);
+        self.mark_full_refresh();
+        if let Some(after) = self.snapshot_network(&network_name) {
+            self.push_command(NetworkSnapshotCommand {
+                network_name,
+                description: DISSOLVE_NODE_DESCRIPTION.to_string(),
+                before_snapshot: before,
+                after_snapshot: after,
+            });
+        }
+        Ok(())
+    }
+
+    /// The `DuplicateSource` refusal for dissolving `node_id` (in `scope`)
+    /// into `consumer` (stored in `storage_scope`): the consumer named first,
+    /// then the candidate's source.
+    fn duplicate_source(
+        &self,
+        scope: &[u64],
+        node_id: u64,
+        candidate: &Wire,
+        storage_scope: &[u64],
+        consumer: &Wire,
+    ) -> DissolveRefusal {
+        let name_in = |scope: &[u64], id: u64| {
+            self.get_scope_network(scope)
+                .and_then(|network| network.nodes.get(&id))
+                .map(display_name)
+                .unwrap_or_default()
+        };
+        let frame_len = scope
+            .len()
+            .saturating_sub(candidate.source_scope_depth as usize);
+        DissolveRefusal::DuplicateSource {
+            node: name_in(scope, node_id),
+            consumer: name_in(storage_scope, consumer.destination_node_id),
+            source_name: name_in(&scope[..frame_len], candidate.source_node_id),
+        }
     }
 }

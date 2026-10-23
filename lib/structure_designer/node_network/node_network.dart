@@ -1891,6 +1891,22 @@ class NodeNetworkState extends State<NodeNetwork> {
                 model.cutSelection(scopeChain: model.activeScopeChain);
                 return KeyEventResult.handled;
               }
+              // Ctrl+Delete: Dissolve the one selected node
+              // (`doc/design_insert_node_on_wire.md` D15). Ahead of the plain
+              // Delete branch, and it never falls through to deleting: a
+              // refusal leaves the network untouched and says why.
+              if (HardwareKeyboard.instance.isControlPressed &&
+                  (event.logicalKey == LogicalKeyboardKey.delete ||
+                      event.physicalKey == PhysicalKeyboardKey.delete)) {
+                final scopeChain = model.activeScopeChain;
+                final selected = model.selectedNodeIdsAt(scopeChain);
+                final refusal = selected.length == 1
+                    ? model.dissolveNode(selected.single,
+                        scopeChain: scopeChain)
+                    : 'Select one node to dissolve';
+                if (refusal != null) showTransientSnackBar(context, refusal);
+                return KeyEventResult.handled;
+              }
               if (event.logicalKey == LogicalKeyboardKey.delete ||
                   event.logicalKey == LogicalKeyboardKey.backspace ||
                   event.physicalKey == PhysicalKeyboardKey.delete) {

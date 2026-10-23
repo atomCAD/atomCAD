@@ -1,6 +1,6 @@
 # Insert node on wire, and dissolve node
 
-## Status: Phases 0–2 implemented (2026-10-23); Phases 3–6 not started
+## Status: Phases 0–3 implemented (2026-10-23); Phases 4–6 not started
 
 ## Motivation
 
@@ -521,6 +521,7 @@ source in the last row.
 | there is no consumer | `Can't dissolve N: nothing uses its output — use Delete` | With no consumer, Dissolve is just Delete. |
 | something consumes `N`'s function pin (`-1`) | `Can't dissolve N: it is used as a function` | That consumer wants `N` *as a function*; no input wire can stand in for it. |
 | `N` is its network's return node | `Can't dissolve N: it is the network's return node` | The return node is the custom network's interface. Moving it is a separate decision. |
+| `N` is a `parameter` | `Can't dissolve N: it is one of the network's parameters` | Also the interface: removing the pin drops every caller's wire into it, in other networks, beyond the reach of the one-network undo step (Phase 3 notes). |
 | there is no candidate | `Can't dissolve N: no input wire fits where its output goes` | — |
 | there is more than one candidate | `Can't dissolve N: 2 input wires could replace it (base, sub)`. The list names each pin with candidates in pin order, and a pin holding several reads `3 wires into shapes`, as in `Can't dissolve union: 3 input wires could replace it (3 wires into shapes)` | D13, D14 |
 | a consumer's slot would get two wires from the candidate's source node (`slot_accepts_source` is false) | `Can't dissolve N: union would receive a twice` (consumer, then source) | `Argument::incoming_wires` holds at most one wire per source node, so `union(a, move(a))` → `union(a, a)` cannot be represented. |
@@ -561,6 +562,8 @@ pub enum DissolveRefusal {
     UsedAsFunction { node: String },
     #[error("Can't dissolve {node}: it is the network's return node")]
     ReturnNode { node: String },
+    #[error("Can't dissolve {node}: it is one of the network's parameters")]
+    Parameter { node: String },
     #[error("Can't dissolve {node}: no input wire fits where its output goes")]
     NoCandidate { node: String },
     #[error("Can't dissolve {node}: {candidates}")]
@@ -953,6 +956,33 @@ keyboard list in `node_network/AGENTS.md` → Interaction Model.
   - It joins the read-only alphabet.
 - **The corpus run, dissolve half**, plus the insert-then-dissolve round trip
   over the corpus (method in Testing).
+
+*Implementation notes (Phase 3, where the code differs from the text above):*
+- **A `parameter` is refused too** (`DissolveRefusal::Parameter`, after
+  `ReturnNode`: `Can't dissolve N: it is one of the network's parameters`).
+  Found by the corpus run. A `parameter` is an input pin of its network, like
+  the return node is its output: dissolving one removes the pin, the repair
+  then drops every caller's wire into it in *other* networks, and the
+  one-network `NetworkSnapshotCommand` cannot bring those wires back. Undo left
+  the callers disconnected.
+- **"No consumer" counts the function pin's wires too.** Read literally, the
+  checks table sends a node used *only* as a function to `NoConsumer` ("use
+  Delete"), which would lose the function wire. Counting every wire leaving the
+  node lets that node reach `UsedAsFunction`, as it should.
+- `DissolveRefusal::DuplicateSource` names its last field `source_name`, not
+  `source`: thiserror treats a field called `source` as the error's cause.
+- The FRB wrappers are `dissolve_node_refusal(scope, node) -> Option<String>`
+  (the menu gate, `None` = dissolvable) and `dissolve_node(scope, node) ->
+  Option<String>`; the model's `canDissolveNode` wraps the first.
+- The menu item is shown when at most one node is selected (the right-clicked
+  node may not be the selected one); Ctrl+Delete requires exactly one in
+  `activeScopeChain`.
+- The insert-then-dissolve round trip ignores node positions, body sizes and
+  the `next_node_id` / `next_param_id` counters, which an insert advances and
+  a dissolve does not take back. An inserted `parameter` is skipped (see the
+  first note).
+- The demolib run plans 979 nodes and dissolves 114; with the 150 sampled
+  inserts it takes about a minute in a debug build.
 
 ### Phase 4 — drag an unconnected node onto a wire
 

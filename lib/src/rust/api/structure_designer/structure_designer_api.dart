@@ -123,6 +123,24 @@ APISpliceResult insertNodeOnWire(
             node: node,
             arrangement: arrangement);
 
+/// Why node `node_id` in `scope_path` cannot be dissolved, as the snackbar
+/// text, or `None` when it can. Read-only; gates the node menu's Dissolve
+/// item. See `StructureDesigner::plan_dissolve_node` and
+/// `doc/design_insert_node_on_wire.md` Phase 3.
+String? dissolveNodeRefusal(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiDissolveNodeRefusal(
+            scopePath: scopePath, nodeId: nodeId);
+
+/// Dissolve node `node_id` in `scope_path` — one undo step. Returns the
+/// refusal text when it cannot be dissolved (nothing changes then), `None` on
+/// success. See `StructureDesigner::dissolve_node`.
+String? dissolveNode({required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiDissolveNode(
+            scopePath: scopePath, nodeId: nodeId);
+
 /// Duplicate a node within `scope_path`'s network. Phase U4 — body-scope
 /// dispatch routes through `duplicate_node_scoped`.
 BigInt duplicateNode({required Uint64List scopePath, required BigInt nodeId}) =>

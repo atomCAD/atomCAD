@@ -23,7 +23,9 @@ use std::path::{Path, PathBuf};
 /// `mp` (a `map` with a body node `g`), `cl` (a `closure`), and `t` (an
 /// `expr` whose `{a: Float}` parameter is fed by the wider record `w` — a
 /// valid wire but a stale type, so Take type from wire has something to take),
-/// and `rc` (an anonymous `record_construct` with one field, `a`).
+/// `rc` (an anonymous `record_construct` with one field, `a`), and `dv`, an
+/// identity over its own source `dx` read by `dw`, so Dissolve has something
+/// to dissolve.
 fn target_code(instance_type: &str) -> String {
     format!(
         "x = int {{ value: 1 }}
@@ -36,6 +38,9 @@ cl = closure {{ kind: \"custom\", params: [\"q\"], type_args: [Int, Int], body {
 w = expr {{ expression: \"{{a: 1.0, b: 2.0}}\", parameters: [] }}
 t = expr {{ a: w, expression: \"a.a\", parameters: [{{ name: \"a\", data_type: {{a: Float}} }}] }}
 rc = record_construct {{ fields: [{{ name: \"a\", data_type: Int }}] }}
+dx = int {{ value: 5 }}
+dv = expr {{ a: dx, expression: \"a\", parameters: [{{ name: \"a\", data_type: Int }}] }}
+dw = expr {{ b: dv, expression: \"b\", parameters: [{{ name: \"b\", data_type: Int }}] }}
 output s
 ",
         instance_type
@@ -254,6 +259,10 @@ fn alphabet() -> Vec<(&'static str, OpFn)> {
                     .is_err(),
             )
         }),
+        ("dissolve node", |d, t| {
+            let dv = id(d, t, "dv");
+            Some(d.dissolve_node(&[], dv).is_err())
+        }),
         ("take types from wires", |d, t| {
             let e = id(d, t, "t");
             Some(d.take_types_from_wires(&[], e, &[0]).is_err())
@@ -457,6 +466,33 @@ fn open_at(host: &Path, t: &Target) -> StructureDesigner {
     let mut d = open(host);
     d.set_active_node_network_name(Some(t.net.clone()));
     d
+}
+
+/// The read-only check comes first among dissolve's refusals: a linked
+/// network's return node is refused as read-only, not as the return node (or
+/// as unused).
+#[test]
+fn dissolving_a_linked_return_node_reports_read_only() {
+    use atomcad_structure_designer::splice_ops::DissolveRefusal;
+    let (_ws, host) = alphabet_workspace();
+    let t = linked_target();
+    let d = open_at(&host, &t);
+    let s = id(&d, &t, "s");
+    let expected = DissolveRefusal::ReadOnly {
+        node: "s".to_string(),
+    };
+    assert_eq!(d.plan_dissolve_node(&[], s), Err(expected));
+    // The local twin gets past the read-only check (to the first check `s`
+    // fails there: nothing reads it).
+    let t = local_target();
+    let d = open_at(&host, &t);
+    let s = id(&d, &t, "s");
+    assert_eq!(
+        d.plan_dissolve_node(&[], s),
+        Err(DissolveRefusal::NoConsumer {
+            node: "s".to_string()
+        })
+    );
 }
 
 #[test]

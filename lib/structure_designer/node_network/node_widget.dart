@@ -1913,6 +1913,13 @@ class NodeWidget extends StatelessWidget {
     final bool canExtractToNetwork = node.nodeTypeName == 'closure' &&
         model.canExtractClosureToNetwork(node.id, scopeChain: scopeChain);
 
+    // Dissolve (`doc/design_insert_node_on_wire.md` D13): offered on a single
+    // selected node only when Rust finds exactly one way to do it, so the item
+    // is absent rather than greyed out. The menu needs no refusal message.
+    final bool canDissolve = !readOnly &&
+        model.selectedNodeIdsAt(scopeChain).length <= 1 &&
+        model.canDissolveNode(node.id, scopeChain: scopeChain);
+
     // Take type from wire (`doc/design_wire_declared_inputs.md`): the indices
     // of this node's stale declared inputs, computed now like the other gates.
     // Empty for a node without declared inputs, so the item stays hidden.
@@ -1998,6 +2005,11 @@ class NodeWidget extends StatelessWidget {
         const PopupMenuItem(
           value: 'cut',
           child: Text('Cut (Ctrl+X)'),
+        ),
+      if (canDissolve)
+        const PopupMenuItem(
+          value: 'dissolve',
+          child: Text('Dissolve (Ctrl+Del)'),
         ),
       // Issue #359. The canvas error surface is a `Tooltip`, which is an
       // overlay that dismisses on pointer-exit and does not accept
@@ -2175,6 +2187,11 @@ class NodeWidget extends StatelessWidget {
         final model =
             Provider.of<StructureDesignerModel>(context, listen: false);
         model.cutSelection();
+      } else if (value == 'dissolve') {
+        final model =
+            Provider.of<StructureDesignerModel>(context, listen: false);
+        final refusal = model.dissolveNode(node.id, scopeChain: scopeChain);
+        if (refusal != null) showTransientSnackBar(context, refusal);
       } else if (value == 'promote_to_parameter') {
         final model =
             Provider.of<StructureDesignerModel>(context, listen: false);

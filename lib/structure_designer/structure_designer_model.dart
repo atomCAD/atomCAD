@@ -3457,6 +3457,39 @@ class StructureDesignerModel extends ChangeNotifier {
     return result;
   }
 
+  /// Whether `nodeId` (in scope `scopeChain`) can be dissolved: removed, with
+  /// its one fitting input wire joined to whatever its output fed. Gates the
+  /// context-menu item. See `doc/design_insert_node_on_wire.md` (Dissolve).
+  bool canDissolveNode(BigInt nodeId, {List<BigInt> scopeChain = const []}) {
+    return structure_designer_api.dissolveNodeRefusal(
+          scopePath: scopeChainToBytes(scopeChain),
+          nodeId: nodeId,
+        ) ==
+        null;
+  }
+
+  /// Dissolve `nodeId` (in scope `scopeChain`) as one undo step. Returns null
+  /// on success, else the reason it cannot be dissolved (the network is then
+  /// untouched), written to be shown as-is in a snackbar.
+  String? dissolveNode(BigInt nodeId, {List<BigInt> scopeChain = const []}) {
+    final refusal = structure_designer_api.dissolveNode(
+      scopePath: scopeChainToBytes(scopeChain),
+      nodeId: nodeId,
+    );
+    if (refusal == null) refreshFromKernel();
+    return refusal;
+  }
+
+  /// The ids of the selected nodes in [scopeChain] (top level if empty).
+  List<BigInt> selectedNodeIdsAt(List<BigInt> scopeChain) {
+    final nodes = _nodesAtScope(scopeChain);
+    if (nodes == null) return const [];
+    return [
+      for (final entry in nodes.entries)
+        if (entry.value.selected) entry.key
+    ];
+  }
+
   /// Whether `nodeId` (in scope `scopeChain`) can be converted to a closure —
   /// a custom-network instance used as a function (or unconsumed) with a return
   /// node. Gates the context-menu item.

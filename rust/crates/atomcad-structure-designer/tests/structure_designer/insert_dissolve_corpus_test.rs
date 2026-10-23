@@ -1,4 +1,4 @@
-//! Insert (and, from Phase 3, dissolve) against real drawings
+//! Insert and dissolve against real drawings
 //! (`doc/design_insert_node_on_wire.md` §Testing, the corpus run).
 //!
 //! Hand-written fixtures cover the shapes someone thought of. This covers
@@ -6,21 +6,25 @@
 //! insertable-types query offers there, and real overlaps. It checks
 //! plan/commit agreement across every node type — a planned type must commit,
 //! and `ResultMismatch` (the scratch network and the live one disagreeing)
-//! must never occur.
+//! must never occur. Every node a dissolve plan accepts must dissolve, and
+//! dissolving a node right after inserting it must give back the wiring the
+//! insert started from.
 //!
 //! The corpus is `demolib/baselib_with_demos.cnnd`, loaded through the real
 //! loader as `layout_corpus_test.rs` does, or the file `ATOMCAD_LAYOUT_CORPUS`
 //! names. A failure names its seed and triple. Reproduce it as a named test
-//! in `insert_node_on_wire_test.rs` before fixing it: this file is a net, not
-//! a workbench.
+//! in `insert_node_on_wire_test.rs` or `dissolve_node_test.rs` before fixing
+//! it: this file is a net, not a workbench.
 
 use super::layout_corpus_test::{Rng, demolib_path, load, private_corpus_path};
 use super::layout_oracle::{Drawing, check_bodies, check_no_new_overlap, check_no_wire_flipped};
-use super::splice_support::{assert_no_mutation, assert_one_step_round_trip};
+use super::splice_support::{assert_no_mutation, assert_one_step_round_trip, json_diff};
 use atomcad_structure_designer::node_network::{ArgumentKind, NodeNetwork, Wire, WireAnchor};
-use atomcad_structure_designer::splice_ops::NodeSource;
+use atomcad_structure_designer::serialization::node_networks_serialization::node_network_to_serializable;
+use atomcad_structure_designer::splice_ops::{DissolveRefusal, NodeSource};
 use atomcad_structure_designer::splice_plan::Arrangement;
 use atomcad_structure_designer::structure_designer::StructureDesigner;
+use std::collections::HashSet;
 
 /// How many `(wire, type, arrangement)` triples are committed.
 const SAMPLE: usize = 150;
@@ -173,6 +177,8 @@ fn run_insert_half(d: &mut StructureDesigner, seed: u64) {
             &d.node_type_registry.node_networks[&wire.network],
             &d.node_type_registry,
         );
+        let nodes_before = nodes_of(&d.node_type_registry.node_networks[&wire.network]);
+        let wiring_before = wiring(d, &wire.network);
         assert_one_step_round_trip(d, |d| {
             d.insert_node_on_wire(
                 &wire.wire_scope,
@@ -190,14 +196,139 @@ fn run_insert_half(d: &mut StructureDesigner, seed: u64) {
         check_no_new_overlap(&before, &after);
         check_no_wire_flipped(&before, &after);
         check_bodies(&after);
+
+        // Round trip: dissolving the inserted node gives the wiring back.
+        let added: Vec<(Vec<u64>, u64)> =
+            nodes_of(&d.node_type_registry.node_networks[&wire.network])
+                .difference(&nodes_before)
+                .cloned()
+                .collect();
+        assert_eq!(added.len(), 1, "{context}: one node added");
+        // An inserted `parameter` is the one node a dissolve refuses: it is
+        // part of the network's interface.
+        let (scope, inserted) = &added[0];
+        match d.dissolve_node(scope, *inserted) {
+            Ok(()) => {
+                let wiring_after = wiring(d, &wire.network);
+                assert!(
+                    wiring_before == wiring_after,
+                    "{context}: dissolve after insert differs at {:?}",
+                    json_diff(&wiring_before, &wiring_after)
+                );
+                assert!(d.undo(), "{context}: undo the dissolve");
+            }
+            Err(DissolveRefusal::Parameter { .. }) if type_name == "parameter" => {}
+            Err(refusal) => panic!("{context}: dissolve: {refusal:?}"),
+        }
         assert!(d.undo(), "{context}: undo");
     }
+}
+
+/// Every node of `network` and of every body inside it, as `(scope, id)`.
+fn nodes_of(network: &NodeNetwork) -> HashSet<(Vec<u64>, u64)> {
+    fn walk(network: &NodeNetwork, scope: &mut Vec<u64>, out: &mut HashSet<(Vec<u64>, u64)>) {
+        for (id, node) in &network.nodes {
+            out.insert((scope.clone(), *id));
+            if let Some(body) = node.zone.as_deref() {
+                scope.push(*id);
+                walk(body, scope, out);
+                scope.pop();
+            }
+        }
+    }
+    let mut out = HashSet::new();
+    walk(network, &mut Vec::new(), &mut out);
+    out
+}
+
+/// The serialized network without what an insert may move and a dissolve
+/// does not move back: node positions, body sizes and the id counters.
+fn wiring(d: &mut StructureDesigner, network: &str) -> serde_json::Value {
+    fn strip(value: &mut serde_json::Value) {
+        match value {
+            serde_json::Value::Object(map) => {
+                for key in [
+                    "position",
+                    "next_node_id",
+                    "next_param_id",
+                    "body_width",
+                    "body_height",
+                ] {
+                    map.remove(key);
+                }
+                map.values_mut().for_each(strip);
+            }
+            serde_json::Value::Array(items) => items.iter_mut().for_each(strip),
+            _ => {}
+        }
+    }
+    let registry = &mut d.node_type_registry;
+    let serializable = node_network_to_serializable(
+        registry.node_networks.get_mut(network).unwrap(),
+        &registry.built_in_node_types,
+        None,
+        false,
+    )
+    .unwrap();
+    let mut value = serde_json::to_value(serializable).unwrap();
+    strip(&mut value);
+    value
+}
+
+/// Every node of every network (body nodes included) through
+/// `plan_dissolve_node`; each accepted one is dissolved, with the oracles,
+/// and undone.
+fn run_dissolve_half(d: &mut StructureDesigner) {
+    let mut names: Vec<String> = d.node_type_registry.node_networks.keys().cloned().collect();
+    names.sort();
+    let (mut planned, mut accepted) = (0, 0);
+    for name in &names {
+        activate(d, name);
+        let mut nodes: Vec<(Vec<u64>, u64)> = nodes_of(&d.node_type_registry.node_networks[name])
+            .into_iter()
+            .collect();
+        nodes.sort();
+        for (scope, node_id) in nodes {
+            let context = format!("dissolve {node_id} in {name}{scope:?}");
+            planned += 1;
+            let plan = assert_no_mutation(d, |d| d.plan_dissolve_node(&scope, node_id));
+            match plan {
+                Err(DissolveRefusal::NodeNotFound) => panic!("{context}: NodeNotFound"),
+                Err(_) => continue,
+                Ok(_) => {}
+            }
+            accepted += 1;
+            println!("{context}");
+            assert_one_step_round_trip(d, |d| {
+                d.dissolve_node(&scope, node_id)
+                    .unwrap_or_else(|refusal| panic!("{context}: {refusal:?}"))
+            });
+            assert!(d.undo(), "{context}: undo");
+        }
+    }
+    assert!(accepted > 20, "only {accepted} of {planned} nodes dissolve");
+    println!("dissolve corpus: {planned} nodes planned, {accepted} dissolved");
 }
 
 #[test]
 fn insert_over_the_demolib_corpus() {
     let mut d = load(&demolib_path());
     run_insert_half(&mut d, SEED);
+}
+
+#[test]
+fn dissolve_over_the_demolib_corpus() {
+    let mut d = load(&demolib_path());
+    run_dissolve_half(&mut d);
+}
+
+#[test]
+fn dissolve_over_the_private_corpus() {
+    let Some(path) = private_corpus_path() else {
+        return;
+    };
+    let mut d = load(&path);
+    run_dissolve_half(&mut d);
 }
 
 #[test]

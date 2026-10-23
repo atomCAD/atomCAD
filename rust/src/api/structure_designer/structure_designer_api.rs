@@ -1323,6 +1323,48 @@ pub fn insert_node_on_wire(
     }
 }
 
+/// Why node `node_id` in `scope_path` cannot be dissolved, as the snackbar
+/// text, or `None` when it can. Read-only; gates the node menu's Dissolve
+/// item. See `StructureDesigner::plan_dissolve_node` and
+/// `doc/design_insert_node_on_wire.md` Phase 3.
+#[flutter_rust_bridge::frb(sync)]
+pub fn dissolve_node_refusal(scope_path: Vec<u64>, node_id: u64) -> Option<String> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                cad_instance
+                    .structure_designer
+                    .plan_dissolve_node(&scope_path, node_id)
+                    .err()
+                    .map(|refusal| refusal.to_string())
+            },
+            Some("no active design".to_string()),
+        )
+    }
+}
+
+/// Dissolve node `node_id` in `scope_path` — one undo step. Returns the
+/// refusal text when it cannot be dissolved (nothing changes then), `None` on
+/// success. See `StructureDesigner::dissolve_node`.
+#[flutter_rust_bridge::frb(sync)]
+pub fn dissolve_node(scope_path: Vec<u64>, node_id: u64) -> Option<String> {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| match cad_instance
+                .structure_designer
+                .dissolve_node(&scope_path, node_id)
+            {
+                Ok(()) => {
+                    refresh_structure_designer_auto(cad_instance);
+                    None
+                }
+                Err(refusal) => Some(refusal.to_string()),
+            },
+            Some("no active design".to_string()),
+        )
+    }
+}
+
 /// Duplicate a node within `scope_path`'s network. Phase U4 — body-scope
 /// dispatch routes through `duplicate_node_scoped`.
 #[flutter_rust_bridge::frb(sync)]
