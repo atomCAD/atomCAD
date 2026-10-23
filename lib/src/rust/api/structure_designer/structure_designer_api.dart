@@ -79,6 +79,50 @@ APISpliceResult addNodeAndConnect(
             position: position,
             arrangement: arrangement);
 
+/// The arrangements `node` offers spliced into `wire` (stored in
+/// `wire_scope`) when the user clicked in `clicked_scope`. Read-only. See
+/// `StructureDesigner::plan_insert_on_wire` and
+/// `doc/design_insert_node_on_wire.md` Phase 1.
+APIArrangementPlan planInsertOnWire(
+        {required Uint64List wireScope,
+        required APIWireAnchor wire,
+        required Uint64List clickedScope,
+        required APINodeSource node}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiPlanInsertOnWire(
+            wireScope: wireScope,
+            wire: wire,
+            clickedScope: clickedScope,
+            node: node);
+
+/// The node types an insertion into `wire` offers, grouped for the Add Node
+/// popup: only types with at least one arrangement there (D10). Empty when the
+/// request is refused. See `StructureDesigner::insertable_node_type_names`.
+List<APINodeCategoryView> insertableNodeTypes(
+        {required Uint64List wireScope,
+        required APIWireAnchor wire,
+        required Uint64List clickedScope}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiInsertableNodeTypes(
+            wireScope: wireScope, wire: wire, clickedScope: clickedScope);
+
+/// Splice `node` into `wire` with `arrangement` (from
+/// [`plan_insert_on_wire`]) — one undo step. See
+/// `StructureDesigner::insert_node_on_wire`.
+APISpliceResult insertNodeOnWire(
+        {required Uint64List wireScope,
+        required APIWireAnchor wire,
+        required Uint64List clickedScope,
+        required APINodeSource node,
+        required APIArrangement arrangement}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiInsertNodeOnWire(
+            wireScope: wireScope,
+            wire: wire,
+            clickedScope: clickedScope,
+            node: node,
+            arrangement: arrangement);
+
 /// Duplicate a node within `scope_path`'s network. Phase U4 — body-scope
 /// dispatch routes through `duplicate_node_scoped`.
 BigInt duplicateNode({required Uint64List scopePath, required BigInt nodeId}) =>

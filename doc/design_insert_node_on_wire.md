@@ -1,6 +1,6 @@
 # Insert node on wire, and dissolve node
 
-## Status: Phase 0 implemented (2026-10-23); Phases 1–6 not started
+## Status: Phases 0–1 implemented (2026-10-23); Phases 2–6 not started
 
 ## Motivation
 
@@ -849,6 +849,40 @@ off the `dst` chain).
 - **The corpus run, insert half** (`insert_dissolve_corpus_test.rs`, method in
   Testing). Plan/commit agreement is tested here, over real drawings, rather
   than on a hand-picked fixture.
+
+*Implementation notes (Phase 1, where the code differs from the text above):*
+- **`NodeSource` has only `New` so far**, and so does its twin `APINodeSource`.
+  `Existing(id)` and its refusals (`NodeNotFound`, `NodeHasWires`,
+  `WrongScope`) arrive with Phase 4; the refusal variants already exist.
+- **A wire's depth counts from `dst`, not from its storage scope.** That is
+  the same scope for an `External` wire, but a body-return wire is stored on the
+  HOF in the HOF's network while its depth (0 for a body-internal source) is
+  counted from the body. The plan therefore resolves the frame, the source type
+  and the source's name from `dst`.
+- `insertion_scope` returns `Option<InsertionScope>`: `None` when the arguments
+  describe no wire (a frame off the `dst` chain, a zone input whose `dst` does
+  not reach into the HOF's body). The plan reports that as `WireNotFound`.
+- `replace_wire_source` is `pub` (the operation tests call it directly) and
+  returns `Result<WireAnchor, ReplaceWireSourceError>`, with `WireNotFound`
+  beside `SourceAlreadyInSlot`. `slot_accepts_source` is a free function in
+  `splice_ops.rs` and also requires the replaced source to be in the slot.
+- `offered_in_add_node` moved down with `accepts_drag_source`: the
+  insertable-types query needs the same candidate set as the Add Node popup.
+- **The commit rolls back from a clone, not the undo snapshot.** On a
+  `ResultMismatch` (or a connect that fails after a fresh plan), the top-level
+  network is put back from a `NodeNetwork` clone taken in step 2.
+- **Undo restores callers too (found by the corpus run).** Inserting a
+  `parameter`, or a node that changes the network's output type, changes the
+  interface its instances elsewhere were repaired against. A restored snapshot
+  carried its own stored interface, so the validator saw no change and the
+  callers kept the extra argument slot or the stale type.
+  `NetworkSnapshotCommand::restore_network` now keeps the live interface, and
+  the Full refresh's validation propagates the restored one (`undo/AGENTS.md`
+  → Known Pitfalls). `PromoteToParameterCommand` has the same flaw and is not
+  fixed here.
+- The corpus run commits a seeded sample of 150 triples (about 27 s in a debug
+  build); the plan pass covers every wire (about 1,060 wires and 17,000 triples
+  in demolib).
 
 ### Phase 2 — Flutter: the wire context menu
 

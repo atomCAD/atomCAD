@@ -328,3 +328,71 @@ impl Scratch {
             .collect()
     }
 }
+
+/// What kind of source a spliced wire has, for the depth convention of
+/// [`insertion_scope`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SourceKind {
+    /// A node's output pin, visible from the node's own scope down.
+    NodeOutput,
+    /// An HOF's zone-input pin (`element`, `acc`), visible only inside the
+    /// HOF's body.
+    ZoneInput,
+}
+
+/// Where a node spliced into a wire lives, and the depths of its two new
+/// wires.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct InsertionScope {
+    /// `S`: the scope the new node is added to.
+    pub scope: Vec<u64>,
+    /// The depth of the wire from the old source into the new node (stored
+    /// in `S`).
+    pub depth_in: u8,
+    /// The depth of the wire from the new node into the old wire's slot,
+    /// counted from the slot's effective scope `dst`.
+    pub depth_out: u8,
+}
+
+/// D6 of `doc/design_insert_node_on_wire.md`: the scope a node spliced into a
+/// wire lives in, clamped to lie between where the source is visible and the
+/// destination's effective scope, and as close to `clicked` as that allows.
+///
+/// `frame` is the scope the wire's depth counts up to: where a `NodeOutput`
+/// source lives, or the network containing the HOF of a `ZoneInput` source.
+/// `dst` is the destination's effective scope (`dest scope ++ [dest id]` for a
+/// body-return wire). The source is visible from `src` down — `frame` for a
+/// node output, the HOF's body (`dst[..len(frame) + 1]`) for a zone input —
+/// and every valid scope `S` satisfies `src ⊑ S ⊑ dst`:
+///
+/// - `S` is the longest prefix of `clicked` that is also a prefix of `dst`;
+/// - if that is shorter than `src`, `S = src`.
+///
+/// Then `depth_in = len(S) − len(frame)` (never 0 for a zone input) and
+/// `depth_out = len(dst) − len(S)`. `None` when the arguments describe no
+/// wire: `frame` not a prefix of `dst`, or a zone input whose `dst` does not
+/// reach into the HOF's body.
+pub fn insertion_scope(
+    kind: SourceKind,
+    frame: &[u64],
+    dst: &[u64],
+    clicked: &[u64],
+) -> Option<InsertionScope> {
+    if !dst.starts_with(frame) {
+        return None;
+    }
+    let src_len = match kind {
+        SourceKind::NodeOutput => frame.len(),
+        SourceKind::ZoneInput => frame.len() + 1,
+    };
+    if src_len > dst.len() {
+        return None;
+    }
+    let common = dst.iter().zip(clicked).take_while(|(a, b)| a == b).count();
+    let scope_len = common.max(src_len);
+    Some(InsertionScope {
+        scope: dst[..scope_len].to_vec(),
+        depth_in: u8::try_from(scope_len - frame.len()).ok()?,
+        depth_out: u8::try_from(dst.len() - scope_len).ok()?,
+    })
+}

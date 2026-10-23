@@ -4415,6 +4415,59 @@ pub fn allowed_in_zone_body(node_type_name: &str) -> bool {
     node_type_name != "parameter"
 }
 
+/// Whether the add-node popups offer the type named `name`. A network is
+/// offered unless it lies under a **transitive** library mount: the host should
+/// only use its direct links (`doc/design_library_linking.md` D4). Transitive
+/// networks stay browsable in the user-types panel. Built-in types are offered
+/// by their own `public` flag, not by this.
+pub fn offered_in_add_node(registry: &NodeTypeRegistry, name: &str) -> bool {
+    registry
+        .library_links
+        .mount_containing(name)
+        .is_none_or(|mount| mount.is_direct())
+}
+
+/// Whether the drag-aware add-node popup offers `node_type` for a wire of
+/// `source_type` dragged in `direction`; also the candidate filter of the
+/// insertable-types query (`doc/design_insert_node_on_wire.md` D10).
+///
+/// Three tests, cheapest first:
+/// 1. the permissive [`static_match`] — every node with no type properties.
+///    Author-declared collection pins keep their `S → Array[T]` /
+///    `S → Iter[T]` broadcast affordance;
+/// 2. off an output, declared inputs that `accept_type` the source: the drop
+///    declares the input from the wire through the open port, so the node
+///    needs no pin of the source's type beforehand — a fresh anonymous
+///    `record_construct` has none (`doc/design_wire_declared_inputs.md`);
+/// 3. a drag adapter, whose claim is verified by [`static_match_strict`]
+///    against the resolved node type, which rejects matches that only land via
+///    scalar broadcast (`doc/design_drag_aware_add_node.md` §"Asymmetric
+///    verification").
+pub fn accepts_drag_source(
+    node_type: &NodeType,
+    source_type: &DataType,
+    direction: crate::node_data::DragDirection,
+    registry: &NodeTypeRegistry,
+) -> bool {
+    use crate::node_data::DragDirection;
+    if static_match(node_type, source_type, direction, registry) {
+        return true;
+    }
+    let default_data = (node_type.node_data_creator)();
+    if direction == DragDirection::FromOutput
+        && default_data
+            .declared_inputs()
+            .is_some_and(|declared| declared.accepts_type(source_type).is_ok())
+    {
+        return true;
+    }
+    let Some(adapted) = default_data.adapt_for_drag_source(source_type, direction, registry) else {
+        return false;
+    };
+    let resolved = registry.resolve_drag_candidate_type(node_type, adapted.as_ref());
+    static_match_strict(&resolved, source_type, direction, registry)
+}
+
 /// Pure static-pin compatibility check for the drag-aware add-node popup.
 ///
 /// `FromOutput`: the user dragged from an output pin of `source_type`; we

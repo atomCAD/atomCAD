@@ -54,12 +54,13 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use glam::DVec2;
 
 use crate::data_type::DataType;
+use crate::node_network::WireAnchor;
 use crate::node_network::{
     Argument, ArgumentKind, CollapseMode, FunctionPinRole, IncomingWire, NodeDisplayState,
     NodeDisplayType, NodeNetwork, SourcePin, Wire,
 };
 use crate::node_type_registry::NodeTypeRegistry;
-use crate::nodes::comment::{ANCHOR_PROPERTY, CommentAnchor, CommentData, WireAnchor};
+use crate::nodes::comment::{ANCHOR_PROPERTY, CommentAnchor, CommentData};
 use crate::nodes::parameter::ParameterData;
 use crate::text_format::TextValue;
 use crate::text_format::auto_layout;

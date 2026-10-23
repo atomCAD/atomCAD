@@ -1,9 +1,10 @@
 use atomcad_structure_designer::data_type::DataType;
+use atomcad_structure_designer::node_network::WireAnchor;
 use atomcad_structure_designer::node_network::{
     ArgumentKind, CollapseMode, FunctionPinRole, SourcePin,
 };
 use atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
-use atomcad_structure_designer::nodes::comment::{CommentAnchor, CommentData, WireAnchor};
+use atomcad_structure_designer::nodes::comment::{CommentAnchor, CommentData};
 use atomcad_structure_designer::nodes::expr::{ExprData, ExprParameter};
 use atomcad_structure_designer::nodes::float::FloatData;
 use atomcad_structure_designer::nodes::structure_move::StructureMoveData;

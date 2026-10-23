@@ -2006,6 +2006,138 @@ class _$APIMeasurement_AtomInfoCopyWithImpl<$Res>
 }
 
 /// @nodoc
+mixin _$APINodeSource {
+  String get nodeTypeName;
+
+  /// Create a copy of APINodeSource
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  $APINodeSourceCopyWith<APINodeSource> get copyWith =>
+      _$APINodeSourceCopyWithImpl<APINodeSource>(
+          this as APINodeSource, _$identity);
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is APINodeSource &&
+            (identical(other.nodeTypeName, nodeTypeName) ||
+                other.nodeTypeName == nodeTypeName));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, nodeTypeName);
+
+  @override
+  String toString() {
+    return 'APINodeSource(nodeTypeName: $nodeTypeName)';
+  }
+}
+
+/// @nodoc
+abstract mixin class $APINodeSourceCopyWith<$Res> {
+  factory $APINodeSourceCopyWith(
+          APINodeSource value, $Res Function(APINodeSource) _then) =
+      _$APINodeSourceCopyWithImpl;
+  @useResult
+  $Res call({String nodeTypeName});
+}
+
+/// @nodoc
+class _$APINodeSourceCopyWithImpl<$Res>
+    implements $APINodeSourceCopyWith<$Res> {
+  _$APINodeSourceCopyWithImpl(this._self, this._then);
+
+  final APINodeSource _self;
+  final $Res Function(APINodeSource) _then;
+
+  /// Create a copy of APINodeSource
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? nodeTypeName = null,
+  }) {
+    return _then(_self.copyWith(
+      nodeTypeName: null == nodeTypeName
+          ? _self.nodeTypeName
+          : nodeTypeName // ignore: cast_nullable_to_non_nullable
+              as String,
+    ));
+  }
+}
+
+/// @nodoc
+
+class APINodeSource_New extends APINodeSource {
+  const APINodeSource_New({required this.nodeTypeName}) : super._();
+
+  @override
+  final String nodeTypeName;
+
+  /// Create a copy of APINodeSource
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  $APINodeSource_NewCopyWith<APINodeSource_New> get copyWith =>
+      _$APINodeSource_NewCopyWithImpl<APINodeSource_New>(this, _$identity);
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is APINodeSource_New &&
+            (identical(other.nodeTypeName, nodeTypeName) ||
+                other.nodeTypeName == nodeTypeName));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, nodeTypeName);
+
+  @override
+  String toString() {
+    return 'APINodeSource.new_(nodeTypeName: $nodeTypeName)';
+  }
+}
+
+/// @nodoc
+abstract mixin class $APINodeSource_NewCopyWith<$Res>
+    implements $APINodeSourceCopyWith<$Res> {
+  factory $APINodeSource_NewCopyWith(
+          APINodeSource_New value, $Res Function(APINodeSource_New) _then) =
+      _$APINodeSource_NewCopyWithImpl;
+  @override
+  @useResult
+  $Res call({String nodeTypeName});
+}
+
+/// @nodoc
+class _$APINodeSource_NewCopyWithImpl<$Res>
+    implements $APINodeSource_NewCopyWith<$Res> {
+  _$APINodeSource_NewCopyWithImpl(this._self, this._then);
+
+  final APINodeSource_New _self;
+  final $Res Function(APINodeSource_New) _then;
+
+  /// Create a copy of APINodeSource
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @pragma('vm:prefer-inline')
+  $Res call({
+    Object? nodeTypeName = null,
+  }) {
+    return _then(APINodeSource_New(
+      nodeTypeName: null == nodeTypeName
+          ? _self.nodeTypeName
+          : nodeTypeName // ignore: cast_nullable_to_non_nullable
+              as String,
+    ));
+  }
+}
+
+/// @nodoc
 mixin _$APISourcePin {
   int get pinIndex;
 

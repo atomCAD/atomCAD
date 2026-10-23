@@ -12,8 +12,9 @@ use glam::DVec2;
 use atomcad_structure_designer::layout::common::LayoutAlgorithm;
 use atomcad_structure_designer::layout::compute_layout;
 use atomcad_structure_designer::node_layout;
+use atomcad_structure_designer::node_network::WireAnchor;
 use atomcad_structure_designer::node_network::{ArgumentKind, NodeNetwork};
-use atomcad_structure_designer::nodes::comment::{CommentAnchor, CommentData, WireAnchor};
+use atomcad_structure_designer::nodes::comment::{CommentAnchor, CommentData};
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 
 const BOTH: [LayoutAlgorithm; 2] = [LayoutAlgorithm::TopologicalGrid, LayoutAlgorithm::Sugiyama];

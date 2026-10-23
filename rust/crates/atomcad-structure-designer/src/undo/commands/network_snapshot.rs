@@ -42,12 +42,38 @@ impl std::fmt::Debug for NetworkSnapshotCommand {
 
 impl NetworkSnapshotCommand {
     /// Replace a network in the registry with one deserialized from a snapshot.
+    ///
+    /// The restored network keeps the **live** interface — `node_type`'s
+    /// `parameters` and `output_pins` — rather than the snapshot's. The
+    /// validator repairs call sites and re-validates the networks that use
+    /// this one only when the interface it derives from the nodes differs from
+    /// the stored one, and the users were last repaired against the live
+    /// interface. Restoring the snapshot's interface as well would hide an edit
+    /// that added or removed a `parameter`, or changed the output type
+    /// (inserting a node on a wire, `doc/design_insert_node_on_wire.md`, does
+    /// both): the callers would keep an argument slot, or an output type, the
+    /// restored network no longer has. The Full refresh's validation then
+    /// derives the snapshot's interface again and propagates it.
     fn restore_network(ctx: &mut UndoContext, name: &str, snapshot: &SerializableNodeNetwork) {
-        if let Ok(network) = serializable_to_node_network(
+        let live_interface = ctx
+            .node_type_registry
+            .node_networks
+            .get(name)
+            .map(|network| {
+                (
+                    network.node_type.parameters.clone(),
+                    network.node_type.output_pins.clone(),
+                )
+            });
+        if let Ok(mut network) = serializable_to_node_network(
             snapshot,
             &ctx.node_type_registry.built_in_node_types,
             None,
         ) {
+            if let Some((parameters, output_pins)) = live_interface {
+                network.node_type.parameters = parameters;
+                network.node_type.output_pins = output_pins;
+            }
             ctx.node_type_registry
                 .replace_network_keeping_thumbnail(name.to_string(), network);
         }

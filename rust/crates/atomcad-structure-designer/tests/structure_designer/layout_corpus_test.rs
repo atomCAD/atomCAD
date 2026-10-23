@@ -48,13 +48,13 @@ use super::layout_test_support::touched_between;
 
 /// `demolib/baselib_with_demos.cnnd`, resolved from this crate's manifest
 /// directory so it does not depend on `cargo test`'s working directory.
-fn demolib_path() -> PathBuf {
+pub fn demolib_path() -> PathBuf {
     Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../.."))
         .join("demolib/baselib_with_demos.cnnd")
 }
 
 /// The private corpus, if the environment names one.
-fn private_corpus_path() -> Option<PathBuf> {
+pub fn private_corpus_path() -> Option<PathBuf> {
     let raw = std::env::var("ATOMCAD_LAYOUT_CORPUS").ok()?;
     let raw = raw.trim();
     if raw.is_empty() {
@@ -64,7 +64,7 @@ fn private_corpus_path() -> Option<PathBuf> {
 }
 
 /// Load a `.cnnd` through the real loader into a fresh designer.
-fn load(path: &Path) -> StructureDesigner {
+pub fn load(path: &Path) -> StructureDesigner {
     let mut sd = StructureDesigner::new();
     sd.load_node_networks(&path.to_string_lossy())
         .unwrap_or_else(|e| panic!("failed to load corpus `{}`: {e}", path.display()));
@@ -92,15 +92,15 @@ fn editable_networks(sd: &StructureDesigner) -> Vec<String> {
 /// A seeded xorshift, so a failure is reproducible from the seed the panic
 /// prints. Deliberately not a dependency: the sequence has to stay identical
 /// across `rand` versions for a printed seed to mean anything a year from now.
-struct Rng(u64);
+pub struct Rng(u64);
 
 impl Rng {
-    fn new(seed: u64) -> Self {
+    pub fn new(seed: u64) -> Self {
         // Zero is the xorshift fixed point.
         Self(seed | 1)
     }
 
-    fn next(&mut self) -> u64 {
+    pub fn next(&mut self) -> u64 {
         let mut x = self.0;
         x ^= x << 13;
         x ^= x >> 7;
@@ -110,7 +110,7 @@ impl Rng {
     }
 
     /// A uniform-ish index into `0..n`. `n == 0` yields `0`.
-    fn below(&mut self, n: usize) -> usize {
+    pub fn below(&mut self, n: usize) -> usize {
         if n == 0 {
             0
         } else {

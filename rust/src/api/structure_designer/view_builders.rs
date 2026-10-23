@@ -47,9 +47,10 @@ use atomcad_structure_designer::eval_errors::RootCauseRef;
 use atomcad_structure_designer::library_links::{LibraryMount, MountStatus};
 use atomcad_structure_designer::library_refresh::{RefreshReport, ReportedNode, ReportedWire};
 use atomcad_structure_designer::network_usages::node_label;
-use atomcad_structure_designer::node_type::NodeTypeCategory;
+use atomcad_structure_designer::node_network::WireAnchor;
+use atomcad_structure_designer::node_type::{NodeType, NodeTypeCategory};
 use atomcad_structure_designer::node_type_registry::{
-    NodeTypeRegistry, allowed_in_zone_body, static_match, static_match_strict,
+    NodeTypeRegistry, accepts_drag_source, allowed_in_zone_body, offered_in_add_node,
 };
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 use atomcad_structure_designer::structure_designer::{DisplayedPick, overlapping_hits};
@@ -94,17 +95,6 @@ fn group_into_category_views(
     result
 }
 
-/// A network is offered in the add-node popups unless it lies under a
-/// **transitive** library mount: the host should only use its direct links
-/// (`doc/design_library_linking.md` D4). Transitive networks stay browsable
-/// in the user-types panel.
-fn offered_in_add_node(registry: &NodeTypeRegistry, name: &str) -> bool {
-    registry
-        .library_links
-        .mount_containing(name)
-        .is_none_or(|mount| mount.is_direct())
-}
-
 /// Returns node types that have at least one pin compatible with the given source type.
 ///
 /// - When `dragging_from_output` is true: find nodes with compatible INPUT pins
@@ -135,64 +125,56 @@ pub fn get_compatible_node_types(
         .filter(|network| offered_in_add_node(registry, &network.node_type.name))
         .map(|network| (&network.node_type, NodeTypeCategory::Custom));
 
-    // Two-step compatibility check per candidate node type:
-    // 1. Static fast path (permissive `static_match`) — covers every
-    //    node with no type properties. Author-declared collection pins
-    //    keep their `S → Array[T]` / `S → Iter[T]` broadcast affordance.
-    // 2. Adapter slow path — only allocates for type-parameterized nodes
-    //    whose static defaults didn't match. The adapter's claim is
-    //    verified by `static_match_strict` against the resolved node
-    //    type, which rejects matches that only land via scalar
-    //    broadcast. Adapter-shapeshifted collection pins therefore do
-    //    not surface when the user dragged a scalar — see
-    //    `doc/design_drag_aware_add_node.md` §"Asymmetric verification".
-    let all_views: Vec<(NodeTypeCategory, APINodeTypeView)> = built_in_iter
-        .chain(custom_iter)
-        .filter(|(node_type, _)| {
-            if static_match(node_type, source_type, direction, registry) {
-                return true;
-            }
-            let default_data = (node_type.node_data_creator)();
-            // A node that declares its own inputs takes an output drag through
-            // its open port: the auto-connect declares the input from the wire
-            // (`add_input_from_wire`), so it needs no pin of the source's type
-            // beforehand — a fresh anonymous `record_construct` has none
-            // (`doc/design_wire_declared_inputs.md`).
-            if direction == atomcad_structure_designer::node_data::DragDirection::FromOutput
-                && default_data
-                    .declared_inputs()
-                    .is_some_and(|declared| declared.accepts_type(source_type).is_ok())
-            {
-                return true;
-            }
-            let Some(adapted) =
-                default_data.adapt_for_drag_source(source_type, direction, registry)
-            else {
-                return false;
-            };
-            let resolved = registry.resolve_drag_candidate_type(node_type, adapted.as_ref());
-            static_match_strict(&resolved, source_type, direction, registry)
-        })
-        .map(|(node_type, category)| {
-            (
-                category.clone(),
-                APINodeTypeView {
-                    name: node_type.name.clone(),
-                    description: node_type.description.clone(),
-                    summary: node_type.summary.clone(),
-                    category: category.into(),
-                    allowed_in_zone_body: allowed_in_zone_body(&node_type.name),
-                },
-            )
-        })
-        .collect();
+    group_offered_node_types(
+        built_in_iter.chain(custom_iter).filter(|(node_type, _)| {
+            accepts_drag_source(node_type, source_type, direction, registry)
+        }),
+    )
+}
 
-    // Group by category
+/// The node types an insertion into `wire` (stored in `wire_scope`) offers,
+/// grouped like the Add Node popup: exactly the types
+/// `StructureDesigner::insertable_node_type_names` lists. Empty on a refusal.
+/// See `doc/design_insert_node_on_wire.md` D10.
+pub fn insertable_node_types(
+    designer: &StructureDesigner,
+    wire_scope: &[u64],
+    wire: &WireAnchor,
+    clicked_scope: &[u64],
+) -> Vec<APINodeCategoryView> {
+    let Ok(names) = designer.insertable_node_type_names(wire_scope, wire, clicked_scope) else {
+        return Vec::new();
+    };
+    let registry = &designer.node_type_registry;
+    group_offered_node_types(names.iter().filter_map(|name| {
+        if let Some(node_type) = registry.built_in_node_types.get(name) {
+            return Some((node_type, node_type.category.clone()));
+        }
+        registry
+            .node_networks
+            .get(name)
+            .map(|network| (&network.node_type, NodeTypeCategory::Custom))
+    }))
+}
+
+/// The views of `node_types` (each with the category it is listed under),
+/// grouped by category in the palette's order.
+fn group_offered_node_types<'a>(
+    node_types: impl Iterator<Item = (&'a NodeType, NodeTypeCategory)>,
+) -> Vec<APINodeCategoryView> {
     let mut category_map: HashMap<NodeTypeCategory, Vec<APINodeTypeView>> = HashMap::new();
-    for (category, view) in all_views {
-        category_map.entry(category).or_default().push(view);
+    for (node_type, category) in node_types {
+        category_map
+            .entry(category.clone())
+            .or_default()
+            .push(APINodeTypeView {
+                name: node_type.name.clone(),
+                description: node_type.description.clone(),
+                summary: node_type.summary.clone(),
+                category: category.into(),
+                allowed_in_zone_body: allowed_in_zone_body(&node_type.name),
+            });
     }
-
     group_into_category_views(category_map)
 }
 

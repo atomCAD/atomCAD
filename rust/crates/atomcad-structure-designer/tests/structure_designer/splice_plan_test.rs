@@ -1,6 +1,7 @@
 //! The pure splice planner (`splice_plan.rs`,
 //! `doc/design_insert_node_on_wire.md` Phase 0), driven without a designer:
-//! a registry, a planned node, and the two sides.
+//! a registry, a planned node, and the two sides. Also D6's
+//! `insertion_scope` (Phase 1), as a table.
 
 use atomcad_structure_designer::data_type::{DataType, FunctionType};
 use atomcad_structure_designer::declared_inputs::NameSource;
@@ -10,8 +11,8 @@ use atomcad_structure_designer::nodes::expr::ExprData;
 use atomcad_structure_designer::nodes::map::MapData;
 use atomcad_structure_designer::nodes::record_construct::RecordConstructData;
 use atomcad_structure_designer::splice_plan::{
-    Arrangement, ArrangementInput, ArrangementOutput, InputChoice, PlannedNode, SpliceSource,
-    plan_arrangements,
+    Arrangement, ArrangementInput, ArrangementOutput, InputChoice, InsertionScope, PlannedNode,
+    SourceKind, SpliceSource, insertion_scope, plan_arrangements,
 };
 use atomcad_structure_designer::structure_designer::DragSource;
 
@@ -358,4 +359,144 @@ fn make_pass_through_defaults_to_doing_nothing() {
             .make_pass_through(pin_id)
     );
     assert_eq!(before, serde_json::to_string(&data).unwrap());
+}
+
+// ---------------------------------------------------------------------------
+// insertion_scope (D6)
+// ---------------------------------------------------------------------------
+
+/// `(what, source kind, frame, dst, clicked) → (S, depth_in, depth_out)`.
+/// Scope ids: `7` is a `map` at top level, `8` an HOF inside its body, `9`
+/// an unrelated HOF at top level.
+#[test]
+fn insertion_scope_table() {
+    use SourceKind::{NodeOutput, ZoneInput};
+    type Row = (
+        &'static str,
+        SourceKind,
+        &'static [u64],
+        &'static [u64],
+        &'static [u64],
+        (&'static [u64], u8, u8),
+    );
+    let table: &[Row] = &[
+        ("top-level wire", NodeOutput, &[], &[], &[], (&[], 0, 0)),
+        (
+            "wire inside a body",
+            NodeOutput,
+            &[7],
+            &[7],
+            &[7],
+            (&[7], 0, 0),
+        ),
+        // A capture: the source at top level, the destination in the body.
+        (
+            "capture, clicked outside",
+            NodeOutput,
+            &[],
+            &[7],
+            &[],
+            (&[], 0, 1),
+        ),
+        (
+            "capture, clicked inside",
+            NodeOutput,
+            &[],
+            &[7],
+            &[7],
+            (&[7], 1, 0),
+        ),
+        (
+            "deep capture, clicked between",
+            NodeOutput,
+            &[],
+            &[7, 8],
+            &[7],
+            (&[7], 1, 1),
+        ),
+        // A zone input: visible only in the HOF's body, depth counted from the
+        // network that holds the HOF, so `depth_in` is never 0.
+        ("element wire", ZoneInput, &[], &[7], &[7], (&[7], 1, 0)),
+        (
+            "element wire into a deeper body",
+            ZoneInput,
+            &[],
+            &[7, 8],
+            &[7, 8],
+            (&[7, 8], 2, 0),
+        ),
+        // A body-return wire: `dst` is the body.
+        (
+            "body-return wire",
+            NodeOutput,
+            &[7],
+            &[7],
+            &[7],
+            (&[7], 0, 0),
+        ),
+        // Clamped below: a click shallower than where the source is visible.
+        (
+            "clicked above the source",
+            NodeOutput,
+            &[7],
+            &[7, 8],
+            &[],
+            (&[7], 0, 1),
+        ),
+        (
+            "element wire clicked outside",
+            ZoneInput,
+            &[],
+            &[7],
+            &[],
+            (&[7], 1, 0),
+        ),
+        // Clamped above: a click off the `dst` chain, or below it.
+        (
+            "clicked in another body",
+            NodeOutput,
+            &[],
+            &[7],
+            &[9],
+            (&[], 0, 1),
+        ),
+        (
+            "clicked in a sibling of dst",
+            NodeOutput,
+            &[],
+            &[7, 8],
+            &[7, 3],
+            (&[7], 1, 1),
+        ),
+        (
+            "clicked below dst",
+            NodeOutput,
+            &[],
+            &[7],
+            &[7, 8],
+            (&[7], 1, 0),
+        ),
+    ];
+    for (what, kind, frame, dst, clicked, (scope, depth_in, depth_out)) in table {
+        assert_eq!(
+            insertion_scope(*kind, frame, dst, clicked),
+            Some(InsertionScope {
+                scope: scope.to_vec(),
+                depth_in: *depth_in,
+                depth_out: *depth_out,
+            }),
+            "{what}"
+        );
+    }
+}
+
+#[test]
+fn insertion_scope_refuses_arguments_that_describe_no_wire() {
+    // The frame is not on the destination's chain.
+    assert_eq!(
+        insertion_scope(SourceKind::NodeOutput, &[9], &[7], &[7]),
+        None
+    );
+    // A zone input whose destination is not inside the HOF's body.
+    assert_eq!(insertion_scope(SourceKind::ZoneInput, &[], &[], &[]), None);
 }

@@ -79,7 +79,9 @@ use super::structure_designer_api_types::APIZipWithData;
 use super::structure_designer_api_types::ARRAY_ELEMENT_VALUE_ROW;
 use super::structure_designer_api_types::OutputPinView;
 use super::structure_designer_api_types::ZoneView;
-use super::structure_designer_api_types::{APIArrangement, APIArrangementPlan, APIDraggedPin};
+use super::structure_designer_api_types::{
+    APIArrangement, APIArrangementPlan, APIDraggedPin, APINodeSource, APIWireAnchor,
+};
 use super::structure_designer_api_types::{APITracePick, APITraceResult};
 use super::structure_designer_preferences::StructureDesignerPreferences;
 use crate::api::api_common::apply_camera_settings;
@@ -1194,6 +1196,109 @@ pub fn add_node_and_connect(
                     &drop_scope,
                     &node_type_name,
                     from_api_vec2(&position),
+                    &(&arrangement).into(),
+                );
+                match result {
+                    Ok(node_id) => {
+                        refresh_structure_designer_auto(cad_instance);
+                        APISpliceResult {
+                            node_id: Some(node_id),
+                            refusal: None,
+                        }
+                    }
+                    Err(refusal) => APISpliceResult {
+                        node_id: None,
+                        refusal: Some(refusal.to_string()),
+                    },
+                }
+            },
+            APISpliceResult {
+                node_id: None,
+                refusal: Some("no active design".to_string()),
+            },
+        )
+    }
+}
+
+/// The arrangements `node` offers spliced into `wire` (stored in
+/// `wire_scope`) when the user clicked in `clicked_scope`. Read-only. See
+/// `StructureDesigner::plan_insert_on_wire` and
+/// `doc/design_insert_node_on_wire.md` Phase 1.
+#[flutter_rust_bridge::frb(sync)]
+pub fn plan_insert_on_wire(
+    wire_scope: Vec<u64>,
+    wire: APIWireAnchor,
+    clicked_scope: Vec<u64>,
+    node: APINodeSource,
+) -> APIArrangementPlan {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| match cad_instance.structure_designer.plan_insert_on_wire(
+                &wire_scope,
+                &(&wire).into(),
+                &clicked_scope,
+                &(&node).into(),
+            ) {
+                Ok(arrangements) => APIArrangementPlan {
+                    arrangements: arrangements.iter().map(APIArrangement::from).collect(),
+                    refusal: None,
+                },
+                Err(refusal) => APIArrangementPlan {
+                    arrangements: Vec::new(),
+                    refusal: Some(refusal.to_string()),
+                },
+            },
+            APIArrangementPlan {
+                arrangements: Vec::new(),
+                refusal: Some("no active design".to_string()),
+            },
+        )
+    }
+}
+
+/// The node types an insertion into `wire` offers, grouped for the Add Node
+/// popup: only types with at least one arrangement there (D10). Empty when the
+/// request is refused. See `StructureDesigner::insertable_node_type_names`.
+#[flutter_rust_bridge::frb(sync)]
+pub fn insertable_node_types(
+    wire_scope: Vec<u64>,
+    wire: APIWireAnchor,
+    clicked_scope: Vec<u64>,
+) -> Vec<APINodeCategoryView> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                view_builders::insertable_node_types(
+                    &cad_instance.structure_designer,
+                    &wire_scope,
+                    &(&wire).into(),
+                    &clicked_scope,
+                )
+            },
+            Vec::new(),
+        )
+    }
+}
+
+/// Splice `node` into `wire` with `arrangement` (from
+/// [`plan_insert_on_wire`]) — one undo step. See
+/// `StructureDesigner::insert_node_on_wire`.
+#[flutter_rust_bridge::frb(sync)]
+pub fn insert_node_on_wire(
+    wire_scope: Vec<u64>,
+    wire: APIWireAnchor,
+    clicked_scope: Vec<u64>,
+    node: APINodeSource,
+    arrangement: APIArrangement,
+) -> APISpliceResult {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let result = cad_instance.structure_designer.insert_node_on_wire(
+                    &wire_scope,
+                    &(&wire).into(),
+                    &clicked_scope,
+                    &(&node).into(),
                     &(&arrangement).into(),
                 );
                 match result {

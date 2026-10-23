@@ -17,6 +17,7 @@ use atomcad_crystolecule::chemisorption::sequential::{
 };
 use atomcad_crystolecule::structure_compare::Motion as DomainMotion;
 use atomcad_structure_designer::node_jobs::{JobOutcome, JobOutcomeKind, JobPoll, JobStatus};
+use atomcad_structure_designer::node_network::WireAnchor as DomainWireAnchor;
 use atomcad_structure_designer::node_type::NodeTypeCategory as DomainNodeTypeCategory;
 use atomcad_structure_designer::nodes::atom_edit::atom_edit::{
     DragFrozenStatus as DomainDragFrozenStatus, PointerDownResult as DomainPointerDownResult,
@@ -28,9 +29,7 @@ use atomcad_structure_designer::nodes::chemisorb::{
     ChemisorbData, ChemisorbDebugRowKind, ChemisorbDebugRowView, ChemisorbEvalCache,
     ChemisorbLevelView,
 };
-use atomcad_structure_designer::nodes::comment::{
-    CommentAnchor as DomainCommentAnchor, WireAnchor as DomainWireAnchor,
-};
+use atomcad_structure_designer::nodes::comment::CommentAnchor as DomainCommentAnchor;
 use atomcad_structure_designer::nodes::compare_atoms::CompareAtomsData;
 use atomcad_structure_designer::nodes::proxy::{ProxyData, ProxyStats};
 use atomcad_structure_designer::structure_designer::{
@@ -515,6 +514,35 @@ impl From<APISourcePin> for atomcad_structure_designer::node_network::SourcePin 
             APISourcePin::NodeOutput { pin_index } => SourcePin::NodeOutput { pin_index },
             APISourcePin::ZoneInput { pin_index } => SourcePin::ZoneInput {
                 pin_index: pin_index as usize,
+            },
+        }
+    }
+}
+
+/// Mirrors `splice_ops::NodeSource`: the node an insertion splices into a
+/// wire (`doc/design_insert_node_on_wire.md` Phase 1). Only new nodes so far;
+/// an existing wireless node joins in Phase 4.
+#[derive(Clone, PartialEq, Eq)]
+pub enum APINodeSource {
+    /// A new node of the named type.
+    New { node_type_name: String },
+}
+
+impl From<&APINodeSource> for atomcad_structure_designer::splice_ops::NodeSource {
+    fn from(source: &APINodeSource) -> Self {
+        use atomcad_structure_designer::splice_ops::NodeSource;
+        match source {
+            APINodeSource::New { node_type_name } => NodeSource::New(node_type_name.clone()),
+        }
+    }
+}
+
+impl From<&atomcad_structure_designer::splice_ops::NodeSource> for APINodeSource {
+    fn from(source: &atomcad_structure_designer::splice_ops::NodeSource) -> Self {
+        use atomcad_structure_designer::splice_ops::NodeSource;
+        match source {
+            NodeSource::New(node_type_name) => APINodeSource::New {
+                node_type_name: node_type_name.clone(),
             },
         }
     }
@@ -3120,6 +3148,18 @@ pub struct APIWireAnchor {
     pub source_node_id: u64,
 }
 
+impl From<&APIWireAnchor> for DomainWireAnchor {
+    fn from(anchor: &APIWireAnchor) -> Self {
+        DomainWireAnchor {
+            destination_node_id: anchor.destination_node_id,
+            destination_argument_kind: anchor.destination_argument_kind.into(),
+            destination_argument_index: anchor.destination_argument_index,
+            destination_param_id: anchor.destination_param_id,
+            source_node_id: anchor.source_node_id,
+        }
+    }
+}
+
 impl From<&DomainCommentAnchor> for APICommentAnchor {
     fn from(anchor: &DomainCommentAnchor) -> Self {
         match anchor {
@@ -3141,13 +3181,7 @@ impl From<&APICommentAnchor> for DomainCommentAnchor {
     fn from(anchor: &APICommentAnchor) -> Self {
         match anchor {
             APICommentAnchor::Node { node_id } => DomainCommentAnchor::Node(*node_id),
-            APICommentAnchor::Wire { anchor } => DomainCommentAnchor::Wire(DomainWireAnchor {
-                destination_node_id: anchor.destination_node_id,
-                destination_argument_kind: anchor.destination_argument_kind.into(),
-                destination_argument_index: anchor.destination_argument_index,
-                destination_param_id: anchor.destination_param_id,
-                source_node_id: anchor.source_node_id,
-            }),
+            APICommentAnchor::Wire { anchor } => DomainCommentAnchor::Wire(anchor.into()),
         }
     }
 }

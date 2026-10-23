@@ -16,13 +16,13 @@
 //!   only two outcomes are "the same target" or "no anchor".
 
 use atomcad_structure_designer::data_type::DataType;
-use atomcad_structure_designer::node_network::{ArgumentKind, IncomingWire, NodeNetwork};
+use atomcad_structure_designer::node_network::{
+    ArgumentKind, IncomingWire, NodeNetwork, WireAnchor,
+};
 use atomcad_structure_designer::node_type_registry::{
     FieldId, NodeTypeRegistry, RecordFieldEdit, RecordTypeDef,
 };
-use atomcad_structure_designer::nodes::comment::{
-    CommentAnchor, CommentData, ResolvedAnchor, WireAnchor,
-};
+use atomcad_structure_designer::nodes::comment::{CommentAnchor, CommentData, ResolvedAnchor};
 use atomcad_structure_designer::serialization::node_networks_serialization::{
     node_network_to_serializable, serializable_to_node_network,
 };

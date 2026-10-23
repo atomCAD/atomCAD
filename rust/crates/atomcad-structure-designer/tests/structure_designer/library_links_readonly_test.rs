@@ -215,6 +215,45 @@ fn alphabet() -> Vec<(&'static str, OpFn)> {
                 .is_err(),
             )
         }),
+        ("insert node on wire", |d, t| {
+            use atomcad_structure_designer::data_type::DataType;
+            use atomcad_structure_designer::node_network::{ArgumentKind, WireAnchor};
+            use atomcad_structure_designer::splice_ops::NodeSource;
+            use atomcad_structure_designer::splice_plan::{
+                Arrangement, ArrangementInput, ArrangementOutput, InputChoice,
+            };
+            // The wire `x → s.a`.
+            let wire = WireAnchor {
+                destination_node_id: id(d, t, "s"),
+                destination_argument_kind: ArgumentKind::External,
+                destination_argument_index: 0,
+                destination_param_id: None,
+                source_node_id: id(d, t, "x"),
+            };
+            let node = NodeSource::New("expr".to_string());
+            // As above: the local plan's arrangement, so the linked commit is
+            // refused for being read-only and not for a stale arrangement.
+            let arrangement = d
+                .plan_insert_on_wire(&[], &wire, &[], &node)
+                .ok()
+                .and_then(|plan| plan.into_iter().next())
+                .unwrap_or(Arrangement {
+                    input: Some(ArrangementInput {
+                        choice: InputChoice::Pin(0),
+                        name: "x".to_string(),
+                        data_type: DataType::Int,
+                    }),
+                    output: Some(ArrangementOutput {
+                        pin: 0,
+                        name: "result".to_string(),
+                        data_type: DataType::Int,
+                    }),
+                });
+            Some(
+                d.insert_node_on_wire(&[], &wire, &[], &node, &arrangement)
+                    .is_err(),
+            )
+        }),
         ("take types from wires", |d, t| {
             let e = id(d, t, "t");
             Some(d.take_types_from_wires(&[], e, &[0]).is_err())

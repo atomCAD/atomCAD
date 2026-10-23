@@ -54,18 +54,57 @@ pub fn assert_one_step_round_trip<R>(
     let after = snapshot_all_networks(&mut d.node_type_registry);
 
     assert!(d.undo());
-    assert_eq!(
-        before,
-        snapshot_all_networks(&mut d.node_type_registry),
-        "undo restores the design"
+    let undone = snapshot_all_networks(&mut d.node_type_registry);
+    assert!(
+        before == undone,
+        "undo restores the design; differs at {:?}",
+        json_diff(&before, &undone)
     );
     check_invariants(d).unwrap();
     assert!(d.redo());
-    assert_eq!(
-        after,
-        snapshot_all_networks(&mut d.node_type_registry),
-        "redo restores the commit"
+    let redone = snapshot_all_networks(&mut d.node_type_registry);
+    assert!(
+        after == redone,
+        "redo restores the commit; differs at {:?}",
+        json_diff(&after, &redone)
     );
     check_invariants(d).unwrap();
     result
+}
+
+/// The paths at which two JSON values differ, with both sides, for a failure
+/// message that names the difference instead of printing two whole designs.
+pub fn json_diff(a: &serde_json::Value, b: &serde_json::Value) -> Vec<String> {
+    fn walk(a: &serde_json::Value, b: &serde_json::Value, path: &str, out: &mut Vec<String>) {
+        use serde_json::Value;
+        match (a, b) {
+            (Value::Object(x), Value::Object(y)) => {
+                for key in x.keys().chain(y.keys().filter(|k| !x.contains_key(*k))) {
+                    let null = Value::Null;
+                    walk(
+                        x.get(key).unwrap_or(&null),
+                        y.get(key).unwrap_or(&null),
+                        &format!("{path}.{key}"),
+                        out,
+                    );
+                }
+            }
+            (Value::Array(x), Value::Array(y)) if x.len() == y.len() => {
+                for (i, (x, y)) in x.iter().zip(y).enumerate() {
+                    walk(x, y, &format!("{path}[{i}]"), out);
+                }
+            }
+            _ if a != b => {
+                let short = |v: &Value| {
+                    let text = v.to_string();
+                    text.chars().take(2000).collect::<String>()
+                };
+                out.push(format!("{path}: {} vs {}", short(a), short(b)));
+            }
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    walk(a, b, "", &mut out);
+    out
 }

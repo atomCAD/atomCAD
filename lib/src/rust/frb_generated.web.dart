@@ -588,6 +588,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APINodeRef dco_decode_api_node_ref(dynamic raw);
 
   @protected
+  APINodeSource dco_decode_api_node_source(dynamic raw);
+
+  @protected
   APINodeTypeProfileRecord dco_decode_api_node_type_profile_record(dynamic raw);
 
   @protected
@@ -1144,6 +1147,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APINodeRef dco_decode_box_autoadd_api_node_ref(dynamic raw);
+
+  @protected
+  APINodeSource dco_decode_box_autoadd_api_node_source(dynamic raw);
 
   @protected
   APIOpsLibraryData dco_decode_box_autoadd_api_ops_library_data(dynamic raw);
@@ -2908,6 +2914,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APINodeRef sse_decode_api_node_ref(SseDeserializer deserializer);
 
   @protected
+  APINodeSource sse_decode_api_node_source(SseDeserializer deserializer);
+
+  @protected
   APINodeTypeProfileRecord sse_decode_api_node_type_profile_record(
       SseDeserializer deserializer);
 
@@ -3567,6 +3576,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APINodeRef sse_decode_box_autoadd_api_node_ref(SseDeserializer deserializer);
+
+  @protected
+  APINodeSource sse_decode_box_autoadd_api_node_source(
+      SseDeserializer deserializer);
 
   @protected
   APIOpsLibraryData sse_decode_box_autoadd_api_ops_library_data(
@@ -5591,6 +5604,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_node_ref(APINodeRef self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_node_source(APINodeSource self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_node_type_profile_record(
       APINodeTypeProfileRecord self, SseSerializer serializer);
 
@@ -6276,6 +6292,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_node_ref(
       APINodeRef self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_node_source(
+      APINodeSource self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_ops_library_data(
