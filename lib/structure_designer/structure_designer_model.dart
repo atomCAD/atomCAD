@@ -579,11 +579,13 @@ class StructureDesignerModel extends ChangeNotifier {
 
   /// The wire the dragged node would be spliced into if released now, or
   /// null. Called by both painter layers on every paint; computed once per
-  /// [dragRepaint] tick. [hitTest] finds the wire under the node's title bar
-  /// (the painter owns the geometry); the per-drag memo decides whether the
-  /// node fits it. Non-notifying: the painters are already repainting.
+  /// [dragRepaint] tick. [hitTest] finds the wires crossing the node, top
+  /// first (the painter owns the geometry); the per-drag memo decides which
+  /// the node fits, and the first that fits wins. Non-notifying: the painters
+  /// are already repainting.
   WireHitResult? spliceDropTargetForTick(
-      WireHitResult? Function(List<BigInt> scopeChain, BigInt nodeId) hitTest) {
+      List<WireHitResult> Function(List<BigInt> scopeChain, BigInt nodeId)
+          hitTest) {
     final tick = dragRepaint.value;
     if (tick == _spliceTargetTick) return _spliceDropTarget;
     _spliceTargetTick = tick;
@@ -591,8 +593,8 @@ class StructureDesignerModel extends ChangeNotifier {
     final dragged = _spliceDragNode;
     if (dragged == null) return null;
     final (scope, nodeId) = dragged;
-    final hit = hitTest(scope, nodeId);
-    if (hit == null) return null;
+    final hits = hitTest(scope, nodeId);
+    if (hits.isEmpty) return null;
     final memo = _spliceMemo ??= PerDragPlanMemo<WireHitResult>(
       (wire) => planInsertOnWire(wire.wireScope, wire.anchor, scope,
               APINodeSource.existing(nodeId: nodeId))
@@ -600,8 +602,10 @@ class StructureDesignerModel extends ChangeNotifier {
           .isNotEmpty,
       (wire) => wire.key,
     );
-    if (memo.accepts(hit)) _spliceDropTarget = hit;
-    return _spliceDropTarget;
+    for (final hit in hits) {
+      if (memo.accepts(hit)) return _spliceDropTarget = hit;
+    }
+    return null;
   }
 
   /// The highlighted wire at the moment a node drag is released, taken

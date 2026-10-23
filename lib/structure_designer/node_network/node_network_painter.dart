@@ -106,8 +106,38 @@ class _CollapsedCrossingWire {
 const Color WIRE_COLOR_SPLICE_TARGET = Color(0xFF00C853);
 
 /// Logical distance from a node's top edge to its title bar's centre line:
-/// where the drag-onto-wire gesture hit-tests.
+/// where the drag-onto-wire gesture's probe line starts.
 const double SPLICE_DROP_TITLE_OFFSET = 15.0;
+
+/// Screen-space spacing of the drag-onto-wire probe points down a node. Under
+/// the wire hit band's width, so a wire crossing the line cannot slip between
+/// two probes.
+const double SPLICE_DROP_PROBE_SPACING = 8.0;
+
+/// One wire hit test over a set of probe points. Each wire's hit band is built
+/// once and tested against every point; a hit remembers the first point that
+/// found it, so hits can be ordered by it.
+class _WireProbe {
+  _WireProbe(this.points, {required this.firstOnly});
+
+  final List<Offset> points;
+
+  /// Stop at the first wire hit (a click), rather than collecting them all.
+  final bool firstOnly;
+  final List<(int, WireHitResult)> hits = [];
+
+  bool get done => firstOnly && hits.isNotEmpty;
+
+  /// The index of the first point inside [band] and outside [exclude], or -1.
+  int test(Path band, {Rect? exclude}) {
+    for (var i = 0; i < points.length; i++) {
+      final p = points[i];
+      if (exclude != null && exclude.contains(p)) continue;
+      if (band.contains(p)) return i;
+    }
+    return -1;
+  }
+}
 
 // Grid appearance constants
 const double GRID_MAJOR_SPACING = 100.0;
@@ -316,8 +346,9 @@ class NodeNetworkPainter extends CustomPainter {
 
   /// The wire the node being dragged would be spliced into if released now
   /// (`doc/design_insert_node_on_wire.md` Phase 4), or null. Runs in the drag
-  /// fast path: a hit test of the dragged node's title-bar centre against the
-  /// wires, with this frame's resolver. Whether the wire can take the node is
+  /// fast path: a hit test of a vertical line down the dragged node's centre,
+  /// from the title bar to the bottom edge, against the wires, with this
+  /// frame's resolver. Whether the wire can take the node is
   /// the model's per-drag memo, so Rust is asked once per wire touched, not
   /// once per tick. The image export has no drag, so it never gets one.
   WireHitResult? _spliceDropTarget(ScopeResolver resolver) {
@@ -328,13 +359,20 @@ class NodeNetworkPainter extends CustomPainter {
     if (panelTarget != null) return panelTarget;
     return graphModel.spliceDropTargetForTick((scopeChain, nodeId) {
       final node = resolver.findNodeInScope(scopeChain, nodeId);
-      if (node == null) return null;
+      if (node == null) return const [];
       final topLeft = resolver.scopedToScreen(
           scopeChain, Offset(node.position.x, node.position.y));
       final size = resolver.effectiveNodeSizeScreen(node, scopeChain);
-      final titleCentre = topLeft +
-          Offset(size.width / 2, SPLICE_DROP_TITLE_OFFSET * resolver.scale);
-      return findWireAtPosition(titleCentre,
+      final x = topLeft.dx + size.width / 2;
+      final top = topLeft.dy + SPLICE_DROP_TITLE_OFFSET * resolver.scale;
+      final bottom = topLeft.dy + size.height;
+      final points = <Offset>[Offset(x, top)];
+      for (var y = top + SPLICE_DROP_PROBE_SPACING;
+          y < bottom;
+          y += SPLICE_DROP_PROBE_SPACING) {
+        points.add(Offset(x, y));
+      }
+      return findWiresAlong(points,
           includeBodyReturn: true, resolver: resolver);
     });
   }
@@ -832,102 +870,126 @@ class NodeNetworkPainter extends CustomPainter {
   /// [resolver] reuses one the caller already built for this frame.
   WireHitResult? findWireAtPosition(Offset position,
       {bool includeBodyReturn = false, ScopeResolver? resolver}) {
+    final probe = _WireProbe([position], firstOnly: true);
+    _probeWires(probe, includeBodyReturn, resolver);
+    return probe.hits.isEmpty ? null : probe.hits.first.$2;
+  }
+
+  /// Every wire that any of [points] hits, each once, ordered by the first
+  /// point that hit it (ties keep [findWireAtPosition]'s scope order). The
+  /// drag-onto-wire gesture passes a line of points down the dragged node.
+  List<WireHitResult> findWiresAlong(List<Offset> points,
+      {bool includeBodyReturn = false, ScopeResolver? resolver}) {
+    final probe = _WireProbe(points, firstOnly: false);
+    _probeWires(probe, includeBodyReturn, resolver);
+    final order = List<int>.generate(probe.hits.length, (i) => i);
+    order.sort((a, b) {
+      final byPoint = probe.hits[a].$1.compareTo(probe.hits[b].$1);
+      return byPoint != 0 ? byPoint : a.compareTo(b);
+    });
+    return [for (final i in order) probe.hits[i].$2];
+  }
+
+  void _probeWires(
+      _WireProbe probe, bool includeBodyReturn, ScopeResolver? resolver) {
     resolver ??= _makeResolver();
-    if (resolver == null) return null;
+    if (resolver == null) return;
 
     for (final node in resolver.root.nodes.values) {
+      if (probe.done) return;
       final zone = node.zone;
       if (zone == null) continue;
       final innerChain = <BigInt>[node.id];
       if (resolver.isBodyCollapsed(innerChain)) {
-        final hit = _hitCollapsedBodyCrossingWires(resolver, node, zone,
-            const <BigInt>[], position, includeBodyReturn);
-        if (hit != null) return hit;
+        _hitCollapsedBodyCrossingWires(
+            resolver, node, zone, const <BigInt>[], probe, includeBodyReturn);
         continue;
       }
-      final hit = _hitWiresInZone(
-          resolver, zone, innerChain, position, includeBodyReturn);
-      if (hit != null) return hit;
+      _hitWiresInZone(resolver, zone, innerChain, probe, includeBodyReturn);
     }
 
     // Top-level wires last.
-    return _hitWiresAtScope(resolver, resolver.root.wires, const <BigInt>[],
-        position, includeBodyReturn);
+    if (probe.done) return;
+    _hitWiresAtScope(resolver, resolver.root.wires, const <BigInt>[], probe,
+        includeBodyReturn);
   }
 
   /// Recursively hit-test a body's wires (deepest nested body first), then the
   /// body's own wires. Mirrors [_drawWiresInZone].
-  WireHitResult? _hitWiresInZone(
+  void _hitWiresInZone(
     ScopeResolver resolver,
     ZoneView zone,
     List<BigInt> scopeChain,
-    Offset position,
+    _WireProbe probe,
     bool includeBodyReturn,
   ) {
     for (final node in zone.nodes.values) {
+      if (probe.done) return;
       final inner = node.zone;
       if (inner == null) continue;
       final innerChain = [...scopeChain, node.id];
       if (resolver.isBodyCollapsed(innerChain)) {
-        final hit = _hitCollapsedBodyCrossingWires(
-            resolver, node, inner, scopeChain, position, includeBodyReturn);
-        if (hit != null) return hit;
+        _hitCollapsedBodyCrossingWires(
+            resolver, node, inner, scopeChain, probe, includeBodyReturn);
         continue;
       }
-      final deep = _hitWiresInZone(
-          resolver, inner, innerChain, position, includeBodyReturn);
-      if (deep != null) return deep;
+      _hitWiresInZone(resolver, inner, innerChain, probe, includeBodyReturn);
     }
-    return _hitWiresAtScope(
-        resolver, zone.wires, scopeChain, position, includeBodyReturn);
+    if (probe.done) return;
+    _hitWiresAtScope(
+        resolver, zone.wires, scopeChain, probe, includeBodyReturn);
   }
 
   /// Hit-test the boundary-crossing wires of a hidden body. Only the clipped,
   /// visible portion (outside the placeholder rect) is hittable — a click
   /// inside the rect belongs to the node/placeholder. Mirrors
   /// [_drawCollapsedBodyCrossingWires].
-  WireHitResult? _hitCollapsedBodyCrossingWires(
+  void _hitCollapsedBodyCrossingWires(
     ScopeResolver resolver,
     NodeView hof,
     ZoneView zone,
     List<BigInt> parentChain,
-    Offset position,
+    _WireProbe probe,
     bool includeBodyReturn,
   ) {
     final bodyChain = [...parentChain, hof.id];
-    if (resolver.isBodyFunctionOverridden(bodyChain)) return null;
+    if (resolver.isBodyFunctionOverridden(bodyChain)) return;
     final clipRect = _hiddenBodyClipRect(resolver, hof, parentChain);
-    if (clipRect == null) return null;
-    if (clipRect.contains(position)) return null;
+    if (clipRect == null) return;
     for (final c in _collectCollapsedCrossingWires(
         resolver, zone, bodyChain, bodyChain.length, clipRect)) {
+      if (probe.done) return;
       if (!_isHittableWire(c.wire, includeBodyReturn)) continue;
       final band = _getBand(c.sourcePos, c.destPos, HIT_TEST_WIRE_WIDTH);
-      if (band.contains(position)) {
-        return WireHitResult(
-          c.wire.sourceNodeId,
-          BigInt.from(c.wire.sourceOutputPinIndex),
-          c.wire.destNodeId,
-          c.wire.destParamIndex,
-          c.scopeChain,
-          destArgumentKind: c.wire.destinationArgumentKind,
-          sourcePos: c.sourcePos,
-          destPos: c.destPos,
-        );
+      final at = probe.test(band, exclude: clipRect);
+      if (at >= 0) {
+        probe.hits.add((
+          at,
+          WireHitResult(
+            c.wire.sourceNodeId,
+            BigInt.from(c.wire.sourceOutputPinIndex),
+            c.wire.destNodeId,
+            c.wire.destParamIndex,
+            c.scopeChain,
+            destArgumentKind: c.wire.destinationArgumentKind,
+            sourcePos: c.sourcePos,
+            destPos: c.destPos,
+          )
+        ));
       }
     }
-    return null;
   }
 
-  /// Hit-test the [wires] stored at [scopeChain] against [position].
-  WireHitResult? _hitWiresAtScope(
+  /// Hit-test the [wires] stored at [scopeChain] against [probe].
+  void _hitWiresAtScope(
     ScopeResolver resolver,
     List<WireView> wires,
     List<BigInt> scopeChain,
-    Offset position,
+    _WireProbe probe,
     bool includeBodyReturn,
   ) {
     for (final wire in wires) {
+      if (probe.done) return;
       if (!_isHittableWire(wire, includeBodyReturn)) continue;
       final source =
           resolver.tryPinScreenPosition(_wireSourcePin(wire, scopeChain));
@@ -936,20 +998,23 @@ class NodeNetworkPainter extends CustomPainter {
       if (source == null || dest == null) continue;
 
       final hitTestPath = _getBand(source.$1, dest.$1, HIT_TEST_WIRE_WIDTH);
-      if (hitTestPath.contains(position)) {
-        return WireHitResult(
-          wire.sourceNodeId,
-          BigInt.from(wire.sourceOutputPinIndex),
-          wire.destNodeId,
-          wire.destParamIndex,
-          scopeChain,
-          destArgumentKind: wire.destinationArgumentKind,
-          sourcePos: source.$1,
-          destPos: dest.$1,
-        );
+      final at = probe.test(hitTestPath);
+      if (at >= 0) {
+        probe.hits.add((
+          at,
+          WireHitResult(
+            wire.sourceNodeId,
+            BigInt.from(wire.sourceOutputPinIndex),
+            wire.destNodeId,
+            wire.destParamIndex,
+            scopeChain,
+            destArgumentKind: wire.destinationArgumentKind,
+            sourcePos: source.$1,
+            destPos: dest.$1,
+          )
+        ));
       }
     }
-    return null;
   }
 
   /// Draw a grid pattern that scales with zoom level

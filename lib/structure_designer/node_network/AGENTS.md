@@ -310,9 +310,11 @@ splice with `APINodeSource.existing`. It lives in the drag fast path, so:
 
 - **The hit test runs in the painters, the decision in the model.** Each
   painter layer calls `model.spliceDropTargetForTick` from `paint`; it computes
-  once per `dragRepaint` tick (whichever layer paints first), hit-testing the
-  dragged node's title-bar centre with that frame's resolver
-  (`findWireAtPosition(…, resolver:)`). Nothing notifies.
+  once per `dragRepaint` tick (whichever layer paints first), hit-testing a
+  vertical line of points down the dragged node's centre, title bar to bottom
+  edge, with that frame's resolver (`findWiresAlong(…, resolver:)`, which
+  builds each wire's hit band once for all the points). The highest wire the
+  node fits wins. Nothing notifies.
 - **Rust is asked once per wire per drag**, through `PerDragPlanMemo`
   (`splice_drop_memo.dart`, tested in `test/splice_drop_memo_test.dart`),
   keyed by `WireHitResult.key`. Only a single-node drag with no wire in its

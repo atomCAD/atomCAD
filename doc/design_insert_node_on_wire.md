@@ -1029,6 +1029,11 @@ would be silent: a plan per tick still works, only slowly.
   a deeper body is refused by Rust (`NodeHasWires`) and remembered as "no".
 - The highlight is green (`WIRE_COLOR_SPLICE_TARGET`), drawn by the overlay
   layer above the nodes, so it stays visible under the dragged node.
+- **The hit test covers the node's whole height, not the title-bar centre.**
+  After testing, a tall node only lit a wire that crossed its title bar. The
+  painters probe a vertical line down the node's centre, title bar to bottom
+  edge, spaced under the wire hit band's width (`findWiresAlong`); of the
+  wires crossing it, the highest one the node fits is the target.
 
 ### Phase 5 — drop a network from the user-types panel onto a wire
 
