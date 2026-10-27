@@ -1,6 +1,6 @@
 # Moving wires between pins, and edge auto-pan (issue #435)
 
-## Status: Phase 1a done (275e510c, 2026-10-27); Phase 1b next
+## Status: Phase 1a done (275e510c, 2026-10-27); Phase 1b done (2026-10-27); Phase 2 next
 
 ## Motivation
 
@@ -218,6 +218,9 @@ Per side:
   input, the body that zone input feeds (the HOF's scope plus the HOF) must
   be a prefix too. The new depth is the length of the new effective scope
   minus the length of the source's scope.
+  A wire landing on a zone-output pin (a body-return wire) must read a node
+  output of the body itself (depth 0), as Flutter's `canConnectPins`
+  requires of a fresh body-return wire.
   The type check is `can_be_converted_to(source type, new pin type)`, with
   the source type resolved as `can_connect_wire_scoped` resolves it. The new
   slot must not already read any moved wire's source node, unless that is
@@ -249,19 +252,27 @@ pub fn move_wires(&mut self, from: &PinAddress, to: &PinAddress)
    sources. The capture must come before step 2, because moving a wire can
    already change a footprint (an HOF whose `f` loses its wire).
 2. Move the wires:
-   - **input side**: if the target is a single input, remove its displaced
-     wire. Then call `replace_wire_destination` (D10) on each moved wire, in
-     order. It removes the wire from the old slot, appends it to the new one
-     with its new depth, and retargets the comment anchors on it when the
-     storage scope is unchanged. Like `replace_wire_source`, it finds those
-     anchors before it changes anything;
+   - **input side**: the two halves of `replace_wire_destination` (D10),
+     `detach_wire` and `attach_wire`. Detach every moved wire, in order;
+     run the disconnect reflow (step 4's first bullet); remove the wire a
+     single-input target displaces; then attach the moved wires, in order.
+     Attaching appends each to the new slot with its new depth, and
+     retargets the comment anchors on it when the storage scope is
+     unchanged; detaching found those anchors before it changed anything.
+     The reflow has to run between the halves: run after the wires land, it
+     measures the new destination as it is *after* the connect (a `map`
+     whose `f` just got a wire is already collapsed), where a delete
+     measures it as it is before, and the neighbours end up in different
+     places (`a_wire_moved_off_a_map_f_expands_it_as_a_delete_would`);
    - **output side**, and **input → output** (D16): `replace_wire_source` on
-     every consumer, or on the one held wire.
+     every consumer, or on the one held wire. No wire leaves a slot, so
+     there is no disconnect reflow.
 3. Drop the moved wires from `selected_wires`.
 4. Run the passes for both ends of the move (D17), reflowing against the
    footprints captured in step 1.
    - **Where wires leave** (old destinations; on the output side, the old
-     source): the passes a delete of the wire runs. That is
+     source): the passes a delete of the wire runs. (The footprint reflow
+     among them runs inside step 2, see there.) That is
      `rederive_node_type` where a derived layout depended on it (`apply`,
      `map`, and the repair that follows it). For an HOF whose `f` was wired,
      the inline body comes back, with its footprint reflow. A `-1` source
@@ -514,7 +525,8 @@ check they pass **before** the refactor starts:
 
 - `wire_move_ops.rs`: `PinAddress`, `HeldWire` and `pin_wires`,
   `plan_move_wires`, `move_wires`, and `WireMoveRefusal` with its `Display`.
-- `replace_wire_destination` beside `replace_wire_source`.
+- `replace_wire_destination` beside `replace_wire_source`, with its two
+  halves `detach_wire` / `attach_wire` (see the commit's step 2).
 - The three FRB functions and their api twins; codegen.
 
 Tests, in `atomcad-structure-designer/tests/structure_designer/move_wires_test.rs`

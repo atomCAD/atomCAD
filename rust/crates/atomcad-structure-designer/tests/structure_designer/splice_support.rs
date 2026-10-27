@@ -1,6 +1,7 @@
 //! The shared oracles of `doc/design_insert_node_on_wire.md` (Testing), used
 //! by every splice operation's test file: *no mutation* for plans and
-//! refusals, *round trip* and *invariants* for commits.
+//! refusals, *round trip* and *invariants* for commits, and *equivalence*
+//! for two edits that must agree.
 
 use crate::library_links_support::check_invariants;
 use crate::undo_test::snapshot_all_networks;
@@ -70,6 +71,17 @@ pub fn assert_one_step_round_trip<R>(
     );
     check_invariants(d).unwrap();
     result
+}
+
+/// Asserts that two designers, built by the same fixture and edited two
+/// different ways, ended up with identical networks, node positions included
+/// (*equivalence*: a wire move against a delete and a connect,
+/// `doc/design_move_wires.md` D17).
+#[track_caller]
+pub fn assert_same_networks(a: &mut StructureDesigner, b: &mut StructureDesigner) {
+    let a = snapshot_all_networks(&mut a.node_type_registry);
+    let b = snapshot_all_networks(&mut b.node_type_registry);
+    assert!(a == b, "the two differ at {:?}", json_diff(&a, &b));
 }
 
 /// The paths at which two JSON values differ, with both sides, for a failure

@@ -302,6 +302,21 @@ fn alphabet() -> Vec<(&'static str, OpFn)> {
             let dv = id(d, t, "dv");
             Some(d.dissolve_node(&[], dv).is_err())
         }),
+        ("move wires", |d, t| {
+            use atomcad_structure_designer::node_network::ArgumentKind;
+            use atomcad_structure_designer::wire_move_ops::{PinAddress, PinSide};
+            // `s.a`'s wire from `x` onto `s.b`, displacing `y`.
+            let s = id(d, t, "s");
+            let pin = |index| PinAddress {
+                scope: Vec::new(),
+                node_id: s,
+                side: PinSide::Input {
+                    kind: ArgumentKind::External,
+                    index,
+                },
+            };
+            Some(d.move_wires(&pin(0), &pin(1)).is_err())
+        }),
         ("take types from wires", |d, t| {
             let e = id(d, t, "t");
             Some(d.take_types_from_wires(&[], e, &[0]).is_err())

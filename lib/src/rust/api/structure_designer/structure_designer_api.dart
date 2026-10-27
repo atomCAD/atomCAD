@@ -141,6 +141,29 @@ String? dissolveNode({required Uint64List scopePath, required BigInt nodeId}) =>
         .crateApiStructureDesignerStructureDesignerApiDissolveNode(
             scopePath: scopePath, nodeId: nodeId);
 
+/// The wires a pick-up of `pin` would hold, each with its identity and the
+/// end that stays put. Empty for an unconnected pin. Read-only; called once
+/// per drag start, and its length is the "is this pin connected" answer. See
+/// `StructureDesigner::pin_wires` and `doc/design_move_wires.md`.
+List<APIWireEnd> pinWires({required APIPinAddress pin}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiPinWires(pin: pin);
+
+/// Why the wires of `from` cannot move to `to`, or `None` when they can.
+/// Read-only; gates a move drag's drop targets. The text is not shown. See
+/// `StructureDesigner::plan_move_wires`.
+String? moveWiresRefusal(
+        {required APIPinAddress from, required APIPinAddress to}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiMoveWiresRefusal(
+            from: from, to: to);
+
+/// Move the wires of `from` to `to` — one undo step. Returns the refusal
+/// text when they cannot move (nothing changes then), `None` on success. See
+/// `StructureDesigner::move_wires`.
+String? moveWires({required APIPinAddress from, required APIPinAddress to}) =>
+    RustLib.instance.api.crateApiStructureDesignerStructureDesignerApiMoveWires(
+        from: from, to: to);
+
 /// Duplicate a node within `scope_path`'s network. Phase U4 — body-scope
 /// dispatch routes through `duplicate_node_scoped`.
 BigInt duplicateNode({required Uint64List scopePath, required BigInt nodeId}) =>

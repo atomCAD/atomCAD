@@ -55,7 +55,8 @@ structure_designer/
 ├── declared_inputs.rs         # DeclaredInputs trait (nodes whose inputs are their own data) + open-port name derivation
 ├── declared_input_ops.rs      # Open port (add_input_from_wire) and Take type from wire, for any DeclaredInputs node
 ├── splice_plan.rs             # Pure splice planner: which (input, output) arrangements a node offers on a two-node scratch network; D6 insertion scope
-├── splice_ops.rs              # Splice operations (plan + one-step commit): the plan-first wire drop, insert node on wire, dissolve node, and `replace_wire_source`, the one primitive that re-points an existing wire (doc/design_insert_node_on_wire.md)
+├── splice_ops.rs              # Splice operations (plan + one-step commit): the plan-first wire drop, insert node on wire, dissolve node, and the two primitives that edit an existing wire: `replace_wire_source` (re-points it) and `replace_wire_destination` (moves it to another slot) (doc/design_insert_node_on_wire.md)
+├── wire_move_ops.rs           # Move the wires of one pin to another (plan + one-step commit), through those two primitives (doc/design_move_wires.md)
 ├── record_construct_ops.rs    # record_construct's schema switch, anonymous field-list edit (one NetworkSnapshotCommand each) and promotion to a named def
 ├── record_typed_input.rs      # RecordTypedInput trait (readers whose pins derive from the type of their `record` input)
 ├── record_input_type_ops.rs   # Adopting a reader's type from a wire (connect while uncommitted, Take type from wire), the schema op, the output-wire remap

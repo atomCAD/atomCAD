@@ -104,15 +104,28 @@ impl NodeSource {
     }
 }
 
-/// Why [`StructureDesigner::replace_wire_source`] refused. On either, nothing
+/// Why [`StructureDesigner::replace_wire_source`] or
+/// [`StructureDesigner::replace_wire_destination`] refused. On either, nothing
 /// has changed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ReplaceWireSourceError {
-    /// The anchor does not resolve in the given scope.
+    /// The anchor does not resolve in the given scope, or the new slot does
+    /// not exist.
     WireNotFound,
     /// The slot already holds a wire from the new source node, and
     /// `Argument::incoming_wires` holds at most one per source.
     SourceAlreadyInSlot,
+}
+
+/// A wire [`StructureDesigner::detach_wire`] took out of its slot, on its way
+/// to [`StructureDesigner::attach_wire`].
+pub(crate) struct DetachedWire {
+    wire_scope: Vec<u64>,
+    /// The wire as it was.
+    wire: Wire,
+    /// `(comment node, anchor position)` of each comment in `wire_scope`
+    /// anchored to it.
+    anchored: Vec<(u64, usize)>,
 }
 
 /// Read-only twin of [`StructureDesigner::replace_wire_source`], for plans:
@@ -1003,6 +1016,216 @@ impl StructureDesigner {
         Ok(WireAnchor::from_wire(&new_wire, network))
     }
 
+    /// Move `wire` (stored in `wire_scope`) out of its slot and append it to
+    /// slot `(destination_node_id, kind, index)` stored in `new_scope`, with
+    /// its source unchanged and its depth now `source_scope_depth`
+    /// (`doc/design_move_wires.md` D10). The comments in `wire_scope` anchored
+    /// to it follow it when `new_scope == wire_scope`; otherwise they are left
+    /// dangling, for the caller's `drop_dangling_anchors`. Returns the wire's
+    /// new address. On `Err` nothing has changed.
+    ///
+    /// The sibling of [`Self::replace_wire_source`]: neither caller touches
+    /// `incoming_wires` or comment anchors directly. A single-wire target slot
+    /// is not cleared here; the caller removes the wire it displaces first.
+    /// Records nothing: the caller's snapshot covers it.
+    ///
+    /// Its two halves, [`Self::detach_wire`] and [`Self::attach_wire`], are
+    /// for a caller with work to do while the wire is in neither slot (the
+    /// move's disconnect reflow, which must not see the wire landed yet).
+    #[allow(clippy::too_many_arguments)]
+    pub fn replace_wire_destination(
+        &mut self,
+        wire_scope: &[u64],
+        wire: &WireAnchor,
+        new_scope: &[u64],
+        destination_node_id: u64,
+        kind: ArgumentKind,
+        index: usize,
+        source_scope_depth: u8,
+    ) -> Result<WireAnchor, ReplaceWireSourceError> {
+        let source_node_id = self
+            .get_scope_network(wire_scope)
+            .and_then(|network| wire.resolve(network))
+            .ok_or(ReplaceWireSourceError::WireNotFound)?
+            .source_node_id;
+        self.check_attach(new_scope, destination_node_id, kind, index, source_node_id)?;
+        let detached = self.detach_wire(wire_scope, wire)?;
+        self.attach_wire(
+            detached,
+            new_scope,
+            destination_node_id,
+            kind,
+            index,
+            source_scope_depth,
+        )
+    }
+
+    /// The first half of [`Self::replace_wire_destination`]: take `wire`
+    /// (stored in `wire_scope`) out of its slot, remembering the comments
+    /// anchored to it. On `Err` nothing has changed.
+    pub(crate) fn detach_wire(
+        &mut self,
+        wire_scope: &[u64],
+        wire: &WireAnchor,
+    ) -> Result<DetachedWire, ReplaceWireSourceError> {
+        // The wire, and the comments anchored to it, found before it changes.
+        let (resolved, anchored) = {
+            let network = self
+                .get_scope_network(wire_scope)
+                .ok_or(ReplaceWireSourceError::WireNotFound)?;
+            let resolved = wire
+                .resolve(network)
+                .ok_or(ReplaceWireSourceError::WireNotFound)?;
+            let mut anchored: Vec<(u64, usize)> = Vec::new();
+            for (id, node) in &network.nodes {
+                if let Some(comment) = node.data.as_any_ref().downcast_ref::<CommentData>() {
+                    for (position, anchor) in comment.anchors.iter().enumerate() {
+                        if let CommentAnchor::Wire(anchor) = anchor
+                            && anchor.resolve(network).is_some_and(|other| {
+                                other.destination_node_id == resolved.destination_node_id
+                                    && other.destination_argument_kind
+                                        == resolved.destination_argument_kind
+                                    && other.destination_argument_index
+                                        == resolved.destination_argument_index
+                                    && other.source_node_id == resolved.source_node_id
+                            })
+                        {
+                            anchored.push((*id, position));
+                        }
+                    }
+                }
+            }
+            (resolved, anchored)
+        };
+
+        let network = self
+            .get_scope_network_mut(wire_scope)
+            .ok_or(ReplaceWireSourceError::WireNotFound)?;
+        let destination = network
+            .nodes
+            .get_mut(&resolved.destination_node_id)
+            .ok_or(ReplaceWireSourceError::WireNotFound)?;
+        let arguments = match resolved.destination_argument_kind {
+            ArgumentKind::External => &mut destination.arguments,
+            ArgumentKind::ZoneOutput => &mut destination.zone_output_arguments,
+        };
+        let argument = arguments
+            .get_mut(resolved.destination_argument_index)
+            .ok_or(ReplaceWireSourceError::WireNotFound)?;
+        let position = argument
+            .incoming_wires
+            .iter()
+            .position(|w| w.source_node_id == resolved.source_node_id)
+            .ok_or(ReplaceWireSourceError::WireNotFound)?;
+        argument.incoming_wires.remove(position);
+        Ok(DetachedWire {
+            wire_scope: wire_scope.to_vec(),
+            wire: resolved,
+            anchored,
+        })
+    }
+
+    /// The second half of [`Self::replace_wire_destination`]: append a
+    /// detached wire to slot `(destination_node_id, kind, index)` stored in
+    /// `new_scope`, with depth `source_scope_depth`, and retarget its comments
+    /// when it stays in its scope. On `Err` the wire is still detached, and
+    /// the caller rolls back.
+    pub(crate) fn attach_wire(
+        &mut self,
+        detached: DetachedWire,
+        new_scope: &[u64],
+        destination_node_id: u64,
+        kind: ArgumentKind,
+        index: usize,
+        source_scope_depth: u8,
+    ) -> Result<WireAnchor, ReplaceWireSourceError> {
+        let resolved = detached.wire;
+        self.check_attach(
+            new_scope,
+            destination_node_id,
+            kind,
+            index,
+            resolved.source_node_id,
+        )?;
+        let network = self
+            .get_scope_network_mut(new_scope)
+            .ok_or(ReplaceWireSourceError::WireNotFound)?;
+        let destination = network
+            .nodes
+            .get_mut(&destination_node_id)
+            .ok_or(ReplaceWireSourceError::WireNotFound)?;
+        let arguments = match kind {
+            ArgumentKind::External => &mut destination.arguments,
+            ArgumentKind::ZoneOutput => {
+                while destination.zone_output_arguments.len() <= index {
+                    destination.zone_output_arguments.push(Argument::new());
+                }
+                &mut destination.zone_output_arguments
+            }
+        };
+        arguments[index].incoming_wires.push(IncomingWire {
+            source_node_id: resolved.source_node_id,
+            source_pin: resolved.source_pin,
+            source_scope_depth,
+        });
+
+        let new_wire = Wire {
+            source_node_id: resolved.source_node_id,
+            source_pin: resolved.source_pin,
+            source_scope_depth,
+            destination_node_id,
+            destination_argument_index: index,
+            destination_argument_kind: kind,
+        };
+        let new_anchor = WireAnchor::from_wire(&new_wire, network);
+
+        // The comments follow the wire within its scope.
+        if new_scope == detached.wire_scope.as_slice() {
+            for (comment_id, position) in detached.anchored {
+                if let Some(CommentAnchor::Wire(anchor)) = network
+                    .nodes
+                    .get_mut(&comment_id)
+                    .and_then(|node| node.data.as_any_mut().downcast_mut::<CommentData>())
+                    .and_then(|comment| comment.anchors.get_mut(position))
+                {
+                    *anchor = new_anchor.clone();
+                }
+            }
+        }
+        Ok(new_anchor)
+    }
+
+    /// Whether slot `(destination_node_id, kind, index)` stored in `scope`
+    /// can take a wire from `source_node_id`: it exists (a zone-output slot
+    /// list grows on demand, as on a connect), and it reads no wire from that
+    /// node yet.
+    fn check_attach(
+        &self,
+        scope: &[u64],
+        destination_node_id: u64,
+        kind: ArgumentKind,
+        index: usize,
+        source_node_id: u64,
+    ) -> Result<(), ReplaceWireSourceError> {
+        let destination = self
+            .get_scope_network(scope)
+            .and_then(|network| network.nodes.get(&destination_node_id))
+            .ok_or(ReplaceWireSourceError::WireNotFound)?;
+        let slot = match kind {
+            ArgumentKind::External => Some(
+                destination
+                    .arguments
+                    .get(index)
+                    .ok_or(ReplaceWireSourceError::WireNotFound)?,
+            ),
+            ArgumentKind::ZoneOutput => destination.zone_output_arguments.get(index),
+        };
+        if slot.is_some_and(|argument| argument.has_source(source_node_id)) {
+            return Err(ReplaceWireSourceError::SourceAlreadyInSlot);
+        }
+        Ok(())
+    }
+
     /// The live half of an insertion: every refusal, `S`, and the types on
     /// both sides of the wire. `Ok(None)` when the source's type cannot be
     /// resolved, which plans to nothing.
@@ -1266,7 +1489,7 @@ pub enum DissolveRefusal {
 }
 
 /// What the dissolve messages call a node.
-fn display_name(node: &Node) -> String {
+pub(crate) fn display_name(node: &Node) -> String {
     node.custom_name
         .clone()
         .unwrap_or_else(|| node.node_type_name.clone())

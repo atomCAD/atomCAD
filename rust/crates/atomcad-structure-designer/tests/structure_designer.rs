@@ -782,6 +782,8 @@ mod record_destructure_anonymous_test;
 mod call_site_undo_test;
 #[path = "structure_designer/dissolve_node_test.rs"]
 mod dissolve_node_test;
+#[path = "structure_designer/move_wires_test.rs"]
+mod move_wires_test;
 #[path = "structure_designer/expr_named_record_node_test.rs"]
 mod expr_named_record_node_test;
 #[path = "structure_designer/insert_dissolve_corpus_test.rs"]

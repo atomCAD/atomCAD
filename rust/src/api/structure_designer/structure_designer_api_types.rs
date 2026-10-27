@@ -587,6 +587,95 @@ impl From<APIDraggedPin> for atomcad_structure_designer::splice_ops::DraggedPin 
     }
 }
 
+/// Mirrors `wire_move_ops::PinSide`: which pin of a node an
+/// [`APIPinAddress`] names (`doc/design_move_wires.md`).
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum APIPinSide {
+    /// A wire destination: an external input, or an HOF's zone-output pin.
+    Input { kind: APIArgumentKind, index: u32 },
+    /// A wire source: a regular output (`-1` = function pin) or a zone input.
+    Output { pin: APISourcePin },
+}
+
+/// Mirrors `wire_move_ops::PinAddress`: one pin of one node, addressed the
+/// way Flutter's `PinReference` addresses it.
+#[derive(Clone, PartialEq, Eq)]
+pub struct APIPinAddress {
+    /// Scope of the pin's owner node.
+    pub scope: Vec<u64>,
+    pub node_id: u64,
+    pub side: APIPinSide,
+}
+
+impl From<&APIPinAddress> for atomcad_structure_designer::wire_move_ops::PinAddress {
+    fn from(pin: &APIPinAddress) -> Self {
+        use atomcad_structure_designer::wire_move_ops::{PinAddress, PinSide};
+        PinAddress {
+            scope: pin.scope.clone(),
+            node_id: pin.node_id,
+            side: match pin.side {
+                APIPinSide::Input { kind, index } => PinSide::Input {
+                    kind: kind.into(),
+                    index: index as usize,
+                },
+                APIPinSide::Output { pin } => PinSide::Output(pin.into()),
+            },
+        }
+    }
+}
+
+impl From<&atomcad_structure_designer::wire_move_ops::PinAddress> for APIPinAddress {
+    fn from(pin: &atomcad_structure_designer::wire_move_ops::PinAddress) -> Self {
+        use atomcad_structure_designer::node_network::SourcePin;
+        use atomcad_structure_designer::wire_move_ops::PinSide;
+        APIPinAddress {
+            scope: pin.scope.clone(),
+            node_id: pin.node_id,
+            side: match pin.side {
+                PinSide::Input { kind, index } => APIPinSide::Input {
+                    kind: kind.into(),
+                    index: index as u32,
+                },
+                PinSide::Output(SourcePin::NodeOutput { pin_index }) => APIPinSide::Output {
+                    pin: APISourcePin::NodeOutput { pin_index },
+                },
+                PinSide::Output(SourcePin::ZoneInput { pin_index }) => APIPinSide::Output {
+                    pin: APISourcePin::ZoneInput {
+                        pin_index: pin_index as u32,
+                    },
+                },
+            },
+        }
+    }
+}
+
+/// Mirrors `wire_move_ops::HeldWire`: one wire a pick-up holds. The storage
+/// scope and the anchor are the wire's identity (the fields the painters key
+/// a wire by); `fixed_end` is the pin that stays put, where the rubber band
+/// is drawn from.
+#[derive(Clone, PartialEq, Eq)]
+pub struct APIWireEnd {
+    pub storage_scope: Vec<u64>,
+    pub anchor: APIWireAnchor,
+    pub fixed_end: APIPinAddress,
+}
+
+impl From<&atomcad_structure_designer::wire_move_ops::HeldWire> for APIWireEnd {
+    fn from(wire: &atomcad_structure_designer::wire_move_ops::HeldWire) -> Self {
+        APIWireEnd {
+            storage_scope: wire.storage_scope.clone(),
+            anchor: APIWireAnchor {
+                destination_node_id: wire.anchor.destination_node_id,
+                destination_argument_kind: wire.anchor.destination_argument_kind.into(),
+                destination_argument_index: wire.anchor.destination_argument_index,
+                destination_param_id: wire.anchor.destination_param_id,
+                source_node_id: wire.anchor.source_node_id,
+            },
+            fixed_end: (&wire.fixed_end).into(),
+        }
+    }
+}
+
 /// Mirrors `splice_plan::InputChoice`.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum APIInputChoice {

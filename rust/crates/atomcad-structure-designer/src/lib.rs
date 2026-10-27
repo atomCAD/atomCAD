@@ -84,6 +84,7 @@ pub mod selection_factoring;
 pub mod serialization;
 pub mod splice_ops;
 pub mod splice_plan;
+pub mod wire_move_ops;
 pub mod structure_designer;
 pub mod structure_designer_changes;
 pub mod structure_designer_scene;

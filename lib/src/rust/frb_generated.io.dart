@@ -628,6 +628,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIPatchLatticeFillData dco_decode_api_patch_lattice_fill_data(dynamic raw);
 
   @protected
+  APIPinAddress dco_decode_api_pin_address(dynamic raw);
+
+  @protected
+  APIPinSide dco_decode_api_pin_side(dynamic raw);
+
+  @protected
   APIPlaneTilingVectorsData dco_decode_api_plane_tiling_vectors_data(
       dynamic raw);
 
@@ -804,6 +810,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIWireAnchor dco_decode_api_wire_anchor(dynamic raw);
+
+  @protected
+  APIWireEnd dco_decode_api_wire_end(dynamic raw);
 
   @protected
   APIXrayData dco_decode_api_xray_data(dynamic raw);
@@ -1164,6 +1173,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   APIPatchLatticeFillData dco_decode_box_autoadd_api_patch_lattice_fill_data(
       dynamic raw);
+
+  @protected
+  APIPinAddress dco_decode_box_autoadd_api_pin_address(dynamic raw);
 
   @protected
   APIPlaneTilingVectorsData
@@ -1625,6 +1637,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APIValidationError> dco_decode_list_api_validation_error(dynamic raw);
+
+  @protected
+  List<APIWireEnd> dco_decode_list_api_wire_end(dynamic raw);
 
   @protected
   List<ElementSummary> dco_decode_list_element_summary(dynamic raw);
@@ -2963,6 +2978,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIPinAddress sse_decode_api_pin_address(SseDeserializer deserializer);
+
+  @protected
+  APIPinSide sse_decode_api_pin_side(SseDeserializer deserializer);
+
+  @protected
   APIPlaneTilingVectorsData sse_decode_api_plane_tiling_vectors_data(
       SseDeserializer deserializer);
 
@@ -3156,6 +3177,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIWireAnchor sse_decode_api_wire_anchor(SseDeserializer deserializer);
+
+  @protected
+  APIWireEnd sse_decode_api_wire_end(SseDeserializer deserializer);
 
   @protected
   APIXrayData sse_decode_api_xray_data(SseDeserializer deserializer);
@@ -3597,6 +3621,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIPatchLatticeFillData sse_decode_box_autoadd_api_patch_lattice_fill_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIPinAddress sse_decode_box_autoadd_api_pin_address(
       SseDeserializer deserializer);
 
   @protected
@@ -4145,6 +4173,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   List<APIValidationError> sse_decode_list_api_validation_error(
       SseDeserializer deserializer);
+
+  @protected
+  List<APIWireEnd> sse_decode_list_api_wire_end(SseDeserializer deserializer);
 
   @protected
   List<ElementSummary> sse_decode_list_element_summary(
@@ -5657,6 +5688,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIPatchLatticeFillData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_pin_address(APIPinAddress self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_pin_side(APIPinSide self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_plane_tiling_vectors_data(
       APIPlaneTilingVectorsData self, SseSerializer serializer);
 
@@ -5864,6 +5901,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_api_wire_anchor(APIWireAnchor self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_wire_end(APIWireEnd self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_xray_data(APIXrayData self, SseSerializer serializer);
@@ -6314,6 +6354,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_patch_lattice_fill_data(
       APIPatchLatticeFillData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_pin_address(
+      APIPinAddress self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_plane_tiling_vectors_data(
@@ -6868,6 +6912,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_api_validation_error(
       List<APIValidationError> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_api_wire_end(
+      List<APIWireEnd> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_element_summary(

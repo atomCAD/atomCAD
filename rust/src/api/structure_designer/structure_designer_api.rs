@@ -82,6 +82,7 @@ use super::structure_designer_api_types::ZoneView;
 use super::structure_designer_api_types::{
     APIArrangement, APIArrangementPlan, APIDraggedPin, APINodeSource, APIWireAnchor,
 };
+use super::structure_designer_api_types::{APIPinAddress, APIWireEnd};
 use super::structure_designer_api_types::{APITracePick, APITraceResult};
 use super::structure_designer_preferences::StructureDesignerPreferences;
 use crate::api::api_common::apply_camera_settings;
@@ -1353,6 +1354,68 @@ pub fn dissolve_node(scope_path: Vec<u64>, node_id: u64) -> Option<String> {
             |cad_instance| match cad_instance
                 .structure_designer
                 .dissolve_node(&scope_path, node_id)
+            {
+                Ok(()) => {
+                    refresh_structure_designer_auto(cad_instance);
+                    None
+                }
+                Err(refusal) => Some(refusal.to_string()),
+            },
+            Some("no active design".to_string()),
+        )
+    }
+}
+
+/// The wires a pick-up of `pin` would hold, each with its identity and the
+/// end that stays put. Empty for an unconnected pin. Read-only; called once
+/// per drag start, and its length is the "is this pin connected" answer. See
+/// `StructureDesigner::pin_wires` and `doc/design_move_wires.md`.
+#[flutter_rust_bridge::frb(sync)]
+pub fn pin_wires(pin: APIPinAddress) -> Vec<APIWireEnd> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                cad_instance
+                    .structure_designer
+                    .pin_wires(&(&pin).into())
+                    .iter()
+                    .map(APIWireEnd::from)
+                    .collect()
+            },
+            Vec::new(),
+        )
+    }
+}
+
+/// Why the wires of `from` cannot move to `to`, or `None` when they can.
+/// Read-only; gates a move drag's drop targets. The text is not shown. See
+/// `StructureDesigner::plan_move_wires`.
+#[flutter_rust_bridge::frb(sync)]
+pub fn move_wires_refusal(from: APIPinAddress, to: APIPinAddress) -> Option<String> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                cad_instance
+                    .structure_designer
+                    .plan_move_wires(&(&from).into(), &(&to).into())
+                    .err()
+                    .map(|refusal| refusal.to_string())
+            },
+            Some("no active design".to_string()),
+        )
+    }
+}
+
+/// Move the wires of `from` to `to` — one undo step. Returns the refusal
+/// text when they cannot move (nothing changes then), `None` on success. See
+/// `StructureDesigner::move_wires`.
+#[flutter_rust_bridge::frb(sync)]
+pub fn move_wires(from: APIPinAddress, to: APIPinAddress) -> Option<String> {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| match cad_instance
+                .structure_designer
+                .move_wires(&(&from).into(), &(&to).into())
             {
                 Ok(()) => {
                     refresh_structure_designer_auto(cad_instance);
