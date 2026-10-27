@@ -15,15 +15,15 @@ Some rewiring already works without reaching the far end. A drop onto a
 connected single input **replaces** its wire (`NodeNetwork::connect_nodes`),
 so *feeding B from a nearby D* is a drag between D and B. What is missing is
 the other half: moving a wire's end **away from** the pin it is on, while its
-far end stays put. Array inputs have neither: a drop adds a wire, so
+far end stays put. Array inputs have neither half: a drop adds a wire, so
 replacing one is a delete followed by a draw.
 
 This doc adds one gesture: **picking up the wires of a pin and dropping them
-on another pin.** It also adds **edge auto-pan**: while anything is dragged
-on the canvas, holding the pointer near the canvas edge, or past it, pans the
-canvas that way. That attacks the same "far end" problem from the other side,
-for new wires and node drags too. It is an independent phase (Phase 3) and
-can land before or after the move gesture.
+on another pin.** It also adds **edge auto-pan**: while a wire, a node or a
+selection rectangle is dragged, holding the pointer near the canvas edge, or
+past it, pans the canvas that way. That attacks the same "far end" problem
+from the other side, for new wires and node drags too. It is an independent
+phase (Phase 3) and can land before or after the move gesture.
 
 ### The rule
 
@@ -77,18 +77,18 @@ Out of scope:
 |---|---|---|
 | D1 | **The gesture rule is the table above.** No Alt variant, and no right-drag. | One rule, one modifier. The only thing a plain drag from a connected single input did that the reverse drag cannot was a drop in empty space creating a replacement upstream node, which is rare and is a delete and a drag by hand. Right-press on a node opens its context menu, Shift+right-drag pans, and Flutter's `Draggable` answers only the primary button. |
 | D2 | **A move takes all of the pin's wires, or none.** Every wire must be valid at the new pin, or nothing changes and the target does not accept the drop. | A move that silently leaves some wires behind is worse than one that refuses. |
-| D3 | **A moved wire is judged exactly like a fresh connect to the new pin.** Same type rule (`DataType::can_be_converted_to`), same scope rule (`doc/design_zones_ui.md` §"Computing source_scope_depth at wire creation"), same zone-input rule (`_zoneInputSourceInScope`). Cycles are not refused, because a plain connect does not refuse them either: validation flags them. | The user should not have to learn a second set of rules. |
+| D3 | **A moved wire is judged like a fresh connect to the new pin.** It uses the same type rule (`DataType::can_be_converted_to`), the same scope rule (`doc/design_zones_ui.md` §"Computing source_scope_depth at wire creation"), and the same zone-input rule (today enforced in Flutter's `_zoneInputSourceInScope`). The only additions are D4's wire count and D6's duplicate rule, which a single new wire cannot hit. Cycles are not refused, because a plain connect does not refuse them either: validation flags them. | The user should not have to learn a second set of rules. |
 | D4 | **Input-side targets.** A single input accepts a move of exactly one wire. If it already holds a wire, that wire is displaced, as on any drop onto a connected single input. An array input appends the moved wires after its own, in their original order. | Array pins concatenate in order (`doc/design_insert_node_on_wire.md` D5). Appending keeps the target's existing order, and the moved wires keep theirs. |
 | D5 | **Output-side moves re-source every consumer.** Each wire keeps its slot, and its position in that slot, and only its source changes, through `StructureDesigner::replace_wire_source`. | The consumers' arguments, including array order, are what the user built. A move changes only where the value comes from. |
 | D6 | **A move never makes a wire vanish, apart from the one a single input displaces (D4).** When a target slot already holds a wire from the moved wire's source node, the move is refused (`DuplicateSource`), not merged. | `Argument::incoming_wires` holds at most one wire per source node. A plain connect merges into the existing wire. For a move, merging would delete a wire the user is holding, which D2 promises never happens. Dissolve refuses the same case the same way. |
-| D7 | **Dropping in empty space, or on the starting pin, does nothing.** So does Escape during the drag, or a release over an invalid target. | A missed drop is a common outcome, as `node_network/AGENTS.md` notes for comment anchors, and a miss must not be indistinguishable from a deletion. The Add Node popup does not fit a drag that can hold several wires. |
+| D7 | **Dropping in empty space, or on the starting pin, does nothing.** So does Escape during the drag, or a release over an invalid target. | A missed drop is a common outcome, as `node_network/AGENTS.md` notes for comment anchors, and a miss must not delete wires. The Add Node popup does not fit a drag that can hold several wires. |
 | D8 | **One Rust command, plan then commit, one undo step.** `plan_move_wires` is read-only. `move_wires` re-plans, refuses if the plan refuses, and records one `NetworkSnapshotCommand` over the top-level network, labelled "Move wire" or "Move wires". | One snapshot covers wires in any body, displaced wires, comment anchors and adoption. A delete followed by a connect would be two undo steps and two refreshes, and the first would leave a half-done network if the second were refused. |
 | D9 | **Rust owns every rule.** Unlike `can_connect_wire_scoped`, the plan checks the scope and zone-input rules itself rather than leaving them to Flutter. Flutter decides only the gesture (D1). | The plan must be authoritative, or a target can accept the drop and the commit refuse it. |
-| D10 | **Comment anchors follow the wires.** Output-side: `replace_wire_source` already retargets them (`doc/design_insert_node_on_wire.md` D11). Input-side: a new sibling primitive `replace_wire_destination` rewrites the anchor's destination fields, provided the wire stays in the same storage scope. A wire moved into another scope loses its anchor, because the comment cannot come with it. A displaced wire's anchors are dropped by `drop_dangling_anchors`. | A note about a wire should still be about that wire after a move. Putting the rewrite in the primitive means no caller can forget it. |
+| D10 | **Comment anchors follow the wires.** Output-side: `replace_wire_source` already retargets them (`doc/design_insert_node_on_wire.md` D11). Input-side: a new sibling primitive, `replace_wire_destination`, moves one wire to a new slot. It also rewrites the destination fields of the comment anchors on that wire, provided the wire stays in the same storage scope. A wire moved into another scope loses its anchor, because the comment cannot come with it. A displaced wire's anchors are dropped by `drop_dangling_anchors`. | A note about a wire should still be about that wire after a move. Putting the rewrite in the primitive means no caller can forget it. |
 | D11 | **Read-only (linked) networks: the pick-up is inert**, like every other canvas edit gesture (`lib/structure_designer/AGENTS.md` → Linked libraries). Rust refuses too. | — |
 | D12 | **Edge auto-pan runs during wire drags (new and moved), node drags and rectangle selection**, and only while the pointer is inside an edge band of the canvas or past its edge. Its speed grows with how deep the pointer is in the band, and with how far past the edge it is, up to a cap. It is in screen pixels per second, so it feels the same at every zoom level. | These are the drags whose target can be off screen. A band rather than a hard edge lets the user control the speed. Past the edge has to count too, or a fast pointer flies over the band and stops panning. |
 | D13 | **The dragged thing stays under the cursor while the canvas pans.** Each pan step moves dragged nodes by the same logical amount (through `dragSelectedNodes` / `dragNodePosition`) and shifts a selection rectangle's start corner by the same screen amount. A wire's free end needs nothing, because it is stored in canvas-local pixels. | Without it, a node dragged into the band slides away from the pointer and the selection rectangle stretches the wrong way. |
-| D14 | **A wire drop goes to the pin actually under the cursor at release.** If the canvas panned since the last pointer move and that pin is not the one `Draggable` last hit-tested, the drop does nothing. | `Draggable` re-checks its targets only on pointer moves. A release after panning with a still pointer would otherwise connect to the pin that *was* under the cursor before the pan, which may be off screen by now. |
+| D14 | **A wire release never acts on a pin that is no longer under the cursor.** If the canvas panned since the last pointer move, and the pin under the cursor now differs from the one `Draggable` last hit-tested (either one may be "no pin"), the release does nothing: no connect, no move, no Add Node popup. | `Draggable` re-checks its targets only on pointer moves. A release after panning with a still pointer would otherwise connect to the pin that *was* under the cursor before the pan, which may be off screen by now. |
 | D15 | **Auto-pan is view state.** It is not undoable. The viewport is persisted once, when the drag ends (`_syncCanvasViewportToKernel`), as after a manual pan. | Same status as every other pan and zoom. |
 
 ## Rust: the operation
@@ -179,7 +179,8 @@ Per side:
 
 - **Input → input.** For each moved wire, the source's scope must be a
   prefix of the new destination's effective scope. If the source is a zone
-  input, the body it lives in must be a prefix too. The new depth is the
+  input, the body that zone input feeds (the HOF's scope plus the HOF) must
+  be a prefix too. The new depth is the
   length of the new effective scope minus the length of the source's scope.
   The type check is `can_be_converted_to(source type, new pin type)`, with
   the source type resolved as `can_connect_wire_scoped` resolves it. The new
@@ -202,10 +203,12 @@ pub fn move_wires(&mut self, from: &PinAddress, to: &PinAddress)
 
 1. Re-plan, then snapshot the top-level network for undo.
 2. Move the wires:
-   - **input side**: remove them from the old slot. Clear the target if it
-     is a single input. Append the moved wires with their new depths, in
-     order. Then `replace_wire_destination` (D10) for each one that stays in
-     its storage scope;
+   - **input side**: if the target is a single input, remove its displaced
+     wire. Then call `replace_wire_destination` (D10) on each moved wire, in
+     order. It removes the wire from the old slot, appends it to the new one
+     with its new depth, and retargets the comment anchors on it when the
+     storage scope is unchanged. Like `replace_wire_source`, it finds those
+     anchors before it changes anything;
    - **output side**: `replace_wire_source` on every consumer.
 3. Drop the moved wires from `selected_wires`, and `drop_dangling_anchors` in
    every touched scope.
@@ -227,11 +230,14 @@ In `rust/src/api/structure_designer/structure_designer_api.rs`, following the
 dissolve pair:
 
 - `pin_wires(pin: APIPinAddress) -> Vec<APIWireEnd>`: the wires a pick-up
-  would hold, each as its **fixed** end (the pin that stays where it is),
-  which is what the rubber bands are drawn from. It is read-only and called
-  once per drag start. Its length is also the "is this pin connected"
-  answer, so Flutter never re-derives a pin's consumers across scopes.
+  would hold. Each one carries the wire's identity (the fields the painters
+  key wires by, so they can hide it) and its **fixed** end (the pin that
+  stays where it is, which the rubber band is drawn from). It is read-only
+  and called once per drag start. Its length is also the "is this pin
+  connected" answer, so Flutter never re-derives a pin's consumers across
+  scopes.
 - `move_wires_refusal(from, to) -> Option<String>`: the plan as a gate.
+  `None` means the target accepts. The text is not shown (see above).
 - `move_wires(from, to) -> Option<String>`: the commit, then
   `refresh_structure_designer_auto`.
 
@@ -314,9 +320,10 @@ covers them. That is also why panel drags are out of scope.
 
 `_handlePointerMove` records the last canvas-local pointer position while one
 of the D12 drags is active. Whether one is active is read from state the model
-and the canvas already hold: `draggedWire`, `wireMove`, the model's node-drag
-state (`_draggedNodeIds`, set by `dragSelectedNodes`), and
-`_selectionRectStart`.
+and the canvas already hold: `draggedWire`, `wireMove`, whether a node drag is
+in progress, and `_selectionRectStart`. The model already tracks the dragged
+node ids for the drag fast path (`_draggedNodeIds`); it needs a public getter
+for this.
 
 ### The speed
 
@@ -324,7 +331,8 @@ A pure function, so it can be unit-tested:
 
 ```dart
 /// Pan velocity, in screen px/s, for a pointer at [pointer] (canvas-local)
-/// on a canvas of [size]. Zero outside the edge band.
+/// on a canvas of [size]. It points toward the edge the pointer is at, and
+/// is zero outside the edge band.
 Offset edgePanVelocity(Offset pointer, Size size);
 ```
 
@@ -340,26 +348,29 @@ runs only while a D12 drag is active **and** the velocity is non-zero. It
 starts from `_handlePointerMove` and stops when the velocity drops to zero or
 the drag ends. Each tick:
 
-1. `logicalStep = velocity * dt / scale`. The pan offset moves the content
-   *opposite* to the pointer's edge, so the hidden part comes into view.
-2. `setState` updates `_panOffset`. That is the same full-canvas rebuild a
-   middle-mouse pan already does on every pointer move, so the cost is
-   existing cost.
-3. D13: a node drag gets the step pushed into the dragged nodes, through the
-   existing model drag methods. Those carry `_clampZoneBodyDragDelta`, so a
-   body node still cannot be pushed out of its body. A selection rectangle's
-   start corner shifts by `logicalStep * scale`.
-4. A wire drag bumps `dragRepaint`, so the rubber band is redrawn against the
-   moved pins.
+1. `logicalStep = velocity * dt / scale`.
+2. `setState` sets `_panOffset -= logicalStep`. The content slides away from
+   the edge the pointer is at, and what lies beyond that edge comes into
+   view. This is the same full-canvas rebuild a middle-mouse pan already
+   does on every pointer move, so the cost is existing cost, and the rebuild
+   redraws wires and rubber bands against the moved pins.
+3. D13: a node drag gets `+logicalStep` pushed into the dragged nodes,
+   through the existing model drag methods. Those apply
+   `_clampZoneBodyDragDelta`, so a body node still cannot be pushed out of
+   its body. A selection rectangle's start corner moves with the content (by
+   `-logicalStep * scale` in screen space), and the rectangle is recomputed
+   from it and the last pointer position.
 
 ### The drop
 
-D14: the wire-drop paths (`PinWidget.onAcceptWithDetails`, and Phase 2's move
-drop) first compare the accepting pin with
-`resolver.findPinAtScreenPosition(releasePosition)`, a small helper over the
-resolver's existing pin positions. They do this only when a pan happened
-since the last pointer move, and drop nothing on a mismatch. D15: when a drag
-that panned ends, `_syncCanvasViewportToKernel` runs once.
+D14: when a pan happened since the last pointer move, every wire release first
+compares the pin `Draggable` chose (none, for a drop in empty space) with
+`resolver.findPinAtScreenPosition(releasePosition)`. That is a small new
+helper over the resolver's existing pin positions. On a mismatch the release
+does nothing. This covers all three paths: `PinWidget.onAcceptWithDetails`,
+the empty-space drop in `onDragEnd`, and Phase 2's move drop.
+
+D15: when a drag that panned ends, `_syncCanvasViewportToKernel` runs once.
 
 ## Phases
 
@@ -378,8 +389,7 @@ Tests, in `atomcad-structure-designer/tests/structure_designer/move_wires_test.r
 (registered in `tests/structure_designer.rs`), reusing the no-mutation,
 round-trip and invariants oracles of `splice_support.rs`:
 
-- each table row of the rule as a Rust-level case: a single input to a
-  single input; an array input with three wires to an empty array input
+- each source/target combination: a single input to a single input; an array input with three wires to an empty array input
   (order kept), to an array input that already has wires (appended after
   them), and to a single input (`TooManyWires`); an output with consumers
   in two scopes (top level and a `map` body capture) to another output;
@@ -408,8 +418,7 @@ for the two refactors.
 ### Phase 2: Flutter drag
 
 - `wireDragMode` in its own small file under `node_network/`, unit-tested in
-  `test/wire_drag_mode_test.dart` (every row of the rule table, plus Ctrl
-  on an unconnected pin).
+  `test/wire_drag_mode_test.dart` (every cell of the rule table).
 - `WireMove` state on the model, `beginWireMove` / `updateWireMove` /
   `cancelWireMove` / `moveWires` / `canMoveWiresTo`, the memo, the Escape
   handling, and the painters (hidden wires and rubber bands).
@@ -482,7 +491,7 @@ The operation is tested at the domain level in `atomcad-structure-designer`'s
 variants, never as strings. The FRB wrappers are thin and untested, per
 `rust/AGENTS.md`. The Flutter side's two pieces of pure logic, the mode
 decision and the edge-pan velocity, are Dart unit tests. Everything else (the
-rubber bands, the target feedback, Escape, the ticker, compensation,
+rubber bands, target acceptance, Escape, the ticker, compensation,
 smoothness, the tuning) is the Phase 4 walkthrough.
 
 ## Open questions
