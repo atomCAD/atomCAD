@@ -1,6 +1,6 @@
 # Moving wires between pins, and edge auto-pan (issue #435)
 
-## Status: Design (2026-10-27); not implemented
+## Status: Phase 1a done (275e510c, 2026-10-27); Phase 1b next
 
 ## Motivation
 
@@ -133,10 +133,12 @@ pub enum PinSide {
   from is the owner's scope, plus the owner itself for `ZoneOutput`.
 - **Output pin**: every wire, in the owner's scope or any body below it,
   whose source resolves to exactly this `(node, SourcePin)`. That is
-  `splice_ops::collect_consumers` with a pin filter, and with `ZoneInput`
-  sources matched as well. Dissolve today matches all of a node's
-  `NodeOutput` pins. Generalise that function rather than copying it, and
-  move it to wherever both modules can reach it.
+  `node_network::collect_consumers` with `ConsumedPins::One(pin)` (Phase
+  1a; dissolve passes `ConsumedPins::AllOutputs`). It walks network by
+  network, a network's own wires before its bodies', so `pin_wires` sorts
+  its answer into the order below. For any pin but a zone input it skips
+  the node's own body, so a capture of a node's output inside that node's
+  own body (a cycle) is not held.
 
 The domain query behind the `pin_wires` API (below), which the commit also
 uses:
@@ -274,11 +276,18 @@ pub fn move_wires(&mut self, from: &PinAddress, to: &PinAddress)
      destination, `apply_node_display_policy` over the touched top-level
      nodes, `validate_active_network`, `set_dirty`, `mark_full_refresh`.
 
-   Today the connect half is spread across `connect_nodes`,
-   `connect_nodes_scoped` and `connect_wire_scoped`, and the disconnect half
-   sits inside `delete_selected[_scoped]`'s wire branch. Factor each half into
-   one helper that those paths and this one share; do not add another copy.
-   That refactor lands first, on its own (Phase 1a).
+   Phase 1a factored both halves out of the connect and delete paths; use
+   them, do not add another copy. The disconnect half is
+   `plan_disconnect_reflow` (before the wires go: the HOFs that expand and
+   their footprint chains) and `reflow_after_disconnect` (after). The
+   connect half is `plan_connect_landing` (before the wire lands: whether
+   the pin holds several wires, and the record reader's adoption) and
+   `install_connect_adoption` (after). The `apply` / `map` re-layout, the
+   repair that drops arg wires, and leaving function mode are not separate
+   passes: `validate_active_network` does them. A delete or connect that
+   changes an `apply`'s `f` records a snapshot (`removal_reshapes_apply`)
+   because its own command would not undo the dropped arg wires; a move
+   records one in any case (step 5).
 5. Push the `NetworkSnapshotCommand` (D8).
 
 ### API
@@ -495,8 +504,8 @@ check they pass **before** the refactor starts:
   wired. The layout goes back to the bare `[f]` default, so no arg wire
   survives, and one undo restores them all. (Writing this test found that
   the layout used to outlive the wire until the next reload, and that the
-  wire commands could not undo the dropped arg wires. Both were fixed, with
-  the same undo gap on a lower-arity rewire of `f`, before the refactor.)
+  wire commands could not undo the dropped arg wires. Both were fixed in the
+  Phase 1a commit, with the same undo gap on a lower-arity rewire of `f`.)
 - `function_pin_test.rs`: delete the last consumer of a `-1` pin. The source
   leaves function mode (`function_pin_consumed` is false), and its errors and
   layout follow.
