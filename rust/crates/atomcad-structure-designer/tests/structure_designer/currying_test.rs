@@ -1335,6 +1335,155 @@ fn apply_phase3_rewire_f_to_lower_arity_shrinks_arg_pins() {
 }
 
 // ----------------------------------------------------------------------------
+// An `apply` losing or changing its `f` while its arg pins are wired. With `f`
+// unwired the layout is the bare `[f]` default, as on a fresh `apply` and after
+// a reload, so the arg wires go; whatever the edit, one undo brings every wire
+// back. Pins down the `apply.f` leg of the disconnect passes
+// (`doc/design_move_wires.md` D17, Phase 1a).
+// ----------------------------------------------------------------------------
+
+/// `apply` with `f` ← a 3-arg closure and `arg0..arg2` ← three ints. Returns
+/// `(designer, apply, f source, [arg sources])`.
+fn apply_with_wired_args() -> (StructureDesigner, u64, u64, [u64; 3]) {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("main");
+    designer.set_active_node_network_name(Some("main".to_string()));
+
+    let g3 =
+        phase3_add_custom_int_closure(&mut designer, "main", &["a", "b", "c"], "a + b + c", -250.0);
+    let a = phase3_add_int(&mut designer, "main", 2, -100.0);
+    let b = phase3_add_int(&mut designer, "main", 3, -50.0);
+    let c = phase3_add_int(&mut designer, "main", 4, 0.0);
+    let app = phase3_add_apply(&mut designer, "main", 50.0);
+    designer.connect_nodes(g3, 0, app, 0);
+    designer.connect_nodes(a, 0, app, 1);
+    designer.connect_nodes(b, 0, app, 2);
+    designer.connect_nodes(c, 0, app, 3);
+    assert_eq!(
+        apply_slot_sources(&designer, "main", app),
+        vec![vec![g3], vec![a], vec![b], vec![c]]
+    );
+    (designer, app, g3, [a, b, c])
+}
+
+/// The source node ids in each of `node_id`'s argument slots.
+fn apply_slot_sources(designer: &StructureDesigner, network: &str, node_id: u64) -> Vec<Vec<u64>> {
+    designer.node_type_registry.node_networks[network].nodes[&node_id]
+        .arguments
+        .iter()
+        .map(|arg| {
+            arg.incoming_wires
+                .iter()
+                .map(|w| w.source_node_id)
+                .collect()
+        })
+        .collect()
+}
+
+fn apply_param_count(designer: &StructureDesigner, network: &str, node_id: u64) -> usize {
+    let net = &designer.node_type_registry.node_networks[network];
+    designer
+        .node_type_registry
+        .get_node_type_for_node(&net.nodes[&node_id])
+        .unwrap()
+        .parameters
+        .len()
+}
+
+#[test]
+fn apply_f_disconnect_restores_bare_layout() {
+    let (mut designer, app, g3, [a, b, c]) = apply_with_wired_args();
+    {
+        let net = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap();
+        assert!(
+            net.select_wire(g3, 0, app, 0),
+            "failed to select the f wire"
+        );
+    }
+    designer.delete_selected();
+
+    assert_eq!(apply_param_count(&designer, "main", app), 1, "just `f`");
+    assert_eq!(
+        apply_slot_sources(&designer, "main", app),
+        vec![Vec::<u64>::new()]
+    );
+
+    // What a reload of the edited network gives is what the edit left.
+    let dir = std::env::temp_dir().join("atomcad_currying_test_apply_f_disconnect");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("apply_f_disconnect.cnnd");
+    let path = path.to_str().unwrap();
+    designer.save_node_networks_as(path).unwrap();
+    let mut reloaded = StructureDesigner::new();
+    reloaded.load_node_networks(path).unwrap();
+    assert_eq!(apply_param_count(&reloaded, "main", app), 1);
+    assert_eq!(
+        apply_slot_sources(&reloaded, "main", app),
+        vec![Vec::<u64>::new()]
+    );
+
+    // One undo step brings the whole layout and every wire back; redo
+    // removes them again.
+    designer.undo();
+    assert_eq!(apply_param_count(&designer, "main", app), 4);
+    assert_eq!(
+        apply_slot_sources(&designer, "main", app),
+        vec![vec![g3], vec![a], vec![b], vec![c]]
+    );
+    designer.redo();
+    assert_eq!(
+        apply_slot_sources(&designer, "main", app),
+        vec![Vec::<u64>::new()]
+    );
+}
+
+#[test]
+fn apply_f_source_node_delete_undo_restores_arg_wires() {
+    let (mut designer, app, g3, [a, b, c]) = apply_with_wired_args();
+    assert!(designer.select_node(g3));
+    designer.delete_selected();
+    assert_eq!(
+        apply_slot_sources(&designer, "main", app),
+        vec![Vec::<u64>::new()]
+    );
+
+    designer.undo();
+    assert_eq!(
+        apply_slot_sources(&designer, "main", app),
+        vec![vec![g3], vec![a], vec![b], vec![c]]
+    );
+}
+
+/// Rewiring `f` to a lower-arity source drops the arg wires past the new
+/// arity (`apply_phase3_rewire_f_to_lower_arity_shrinks_arg_pins`); the undo
+/// must bring them back, not only the old `f` wire.
+#[test]
+fn apply_f_rewire_to_lower_arity_undo_restores_arg_wires() {
+    let (mut designer, app, g3, [a, b, c]) = apply_with_wired_args();
+    let g1 = phase3_add_custom_int_closure(&mut designer, "main", &["a"], "a + 100", -350.0);
+    designer.connect_nodes(g1, 0, app, 0);
+    assert_eq!(
+        apply_slot_sources(&designer, "main", app),
+        vec![vec![g1], vec![a]]
+    );
+
+    designer.undo();
+    assert_eq!(
+        apply_slot_sources(&designer, "main", app),
+        vec![vec![g3], vec![a], vec![b], vec![c]]
+    );
+    designer.redo();
+    assert_eq!(
+        apply_slot_sources(&designer, "main", app),
+        vec![vec![g1], vec![a]]
+    );
+}
+
+// ----------------------------------------------------------------------------
 // Test 7: apply's output pin retypes to Function on partial wiring.
 // ----------------------------------------------------------------------------
 

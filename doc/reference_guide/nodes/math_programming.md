@@ -967,7 +967,7 @@ Calls a function value, and either runs it to completion (full application) or p
 
 **Properties**
 
-`apply` has no user-set kind or shape property. Its pin layout is **entirely derived from the connected `f`**: when nothing is wired into `f`, only the `f` pin is shown. The moment a `Function` source is wired into `f`, argument pins materialize matching that source's canonical (flat) signature.
+`apply` has no user-set kind or shape property. Its pin layout is **entirely derived from the connected `f`**: when nothing is wired into `f`, only the `f` pin is shown. The moment a `Function` source is wired into `f`, argument pins materialize matching that source's canonical (flat) signature. Disconnecting `f`, or rewiring it to a function with fewer parameters, removes the argument pins that no longer exist together with their wires; one undo brings them all back.
 
 **Input pins**
 

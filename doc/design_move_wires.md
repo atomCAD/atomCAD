@@ -491,9 +491,12 @@ is already pinned down: `reflow_test.rs`'s
 Two legs have no test yet. Write them first, in the files that own them, and
 check they pass **before** the refactor starts:
 
-- `currying_test.rs`: delete the wire into `apply.f` while `arg0` is wired.
-  The layout re-derives from `ApplyData`, and the test asserts exactly which
-  arg wires survive.
+- `currying_test.rs`: delete the wire into `apply.f` while its arg pins are
+  wired. The layout goes back to the bare `[f]` default, so no arg wire
+  survives, and one undo restores them all. (Writing this test found that
+  the layout used to outlive the wire until the next reload, and that the
+  wire commands could not undo the dropped arg wires. Both were fixed, with
+  the same undo gap on a lower-arity rewire of `f`, before the refactor.)
 - `function_pin_test.rs`: delete the last consumer of a `-1` pin. The source
   leaves function mode (`function_pin_consumed` is false), and its errors and
   layout follow.

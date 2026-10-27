@@ -9,9 +9,12 @@
 //! not the stored `ApplyData` — drives the arg-pin enumeration and the
 //! output-pin type. The pin layout is updated by a post-pass in
 //! `NodeTypeRegistry::repair_node_network` after the wire connects/disconnects
-//! and validation runs. When `f` is disconnected, `ApplyData.kind` /
-//! `type_args` drive the default layout exactly as today (the user-set
-//! kind-picker default — Open Question 2 in `doc/design_currying.md`).
+//! and validation runs. When `f` is disconnected the post-pass puts the bare
+//! `[f]` default back (`NodeTypeRegistry::compute_apply_custom_type`), so the
+//! arg wires go with their pins — the layout a fresh `apply` has and a reload
+//! gives. A top-level edit that does this records a network snapshot, since
+//! the wire commands restore only their own wire
+//! (`StructureDesigner::removal_reshapes_apply`).
 //!
 //! `apply.eval` consumes the underlying closure's **body** arity per step
 //! (`ZoneClosure.param_types.len()`), which is *decoupled* from the closure's

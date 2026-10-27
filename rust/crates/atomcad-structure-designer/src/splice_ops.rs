@@ -31,7 +31,8 @@ use crate::declared_inputs::NameSource;
 use crate::layout;
 use crate::node_data::DragDirection;
 use crate::node_network::{
-    Argument, ArgumentKind, IncomingWire, Node, NodeNetwork, SourcePin, Wire, WireAnchor,
+    Argument, ArgumentKind, ConsumedPins, IncomingWire, Node, SourcePin, Wire, WireAnchor,
+    collect_consumers,
 };
 use crate::node_type_registry::{
     NodeTypeRegistry, accepts_drag_source, allowed_in_zone_body, offered_in_add_node,
@@ -1147,7 +1148,14 @@ impl StructureDesigner {
             .get(&node_id)
             .ok_or(SpliceRefusal::NodeNotFound)?;
         let mut consumers = Vec::new();
-        collect_consumers(network, &mut scope.clone(), scope, node_id, &mut consumers);
+        collect_consumers(
+            network,
+            &mut scope.clone(),
+            scope,
+            node_id,
+            ConsumedPins::AllOutputs,
+            &mut consumers,
+        );
         if node.arguments.iter().any(|argument| !argument.is_empty()) || !consumers.is_empty() {
             return Err(SpliceRefusal::NodeHasWires);
         }
@@ -1264,69 +1272,6 @@ fn display_name(node: &Node) -> String {
         .unwrap_or_else(|| node.node_type_name.clone())
 }
 
-/// Every wire stored in `network` (at `scope`) or in a body below it whose
-/// source is an output of node `node_id` in `node_scope`, as `(storage scope,
-/// wire)`, in a stable order. The function pin's wires are included. Node
-/// `node_id` itself and its body are skipped: they go with it.
-fn collect_consumers(
-    network: &NodeNetwork,
-    scope: &mut Vec<u64>,
-    node_scope: &[u64],
-    node_id: u64,
-    out: &mut Vec<(Vec<u64>, Wire)>,
-) {
-    let mut ids: Vec<u64> = network.nodes.keys().copied().collect();
-    ids.sort_unstable();
-    let at_node_scope = scope.as_slice() == node_scope;
-    for id in &ids {
-        if at_node_scope && *id == node_id {
-            continue;
-        }
-        let node = &network.nodes[id];
-        let lists = [
-            (ArgumentKind::External, &node.arguments),
-            (ArgumentKind::ZoneOutput, &node.zone_output_arguments),
-        ];
-        for (kind, arguments) in lists {
-            // A wire's depth counts up from the destination's effective
-            // scope: the body, for a body-return wire.
-            let dst_len = scope.len() + usize::from(kind == ArgumentKind::ZoneOutput);
-            for (index, argument) in arguments.iter().enumerate() {
-                for incoming in &argument.incoming_wires {
-                    let depth = incoming.source_scope_depth as usize;
-                    let reads_node = incoming.source_node_id == node_id
-                        && matches!(incoming.source_pin, SourcePin::NodeOutput { .. })
-                        && depth <= dst_len
-                        && dst_len - depth == node_scope.len();
-                    if reads_node {
-                        out.push((
-                            scope.clone(),
-                            Wire {
-                                source_node_id: incoming.source_node_id,
-                                source_pin: incoming.source_pin,
-                                source_scope_depth: incoming.source_scope_depth,
-                                destination_node_id: *id,
-                                destination_argument_index: index,
-                                destination_argument_kind: kind,
-                            },
-                        ));
-                    }
-                }
-            }
-        }
-    }
-    for id in ids {
-        if at_node_scope && id == node_id {
-            continue;
-        }
-        if let Some(body) = network.nodes[&id].zone.as_deref() {
-            scope.push(id);
-            collect_consumers(body, scope, node_scope, node_id, out);
-            scope.pop();
-        }
-    }
-}
-
 impl StructureDesigner {
     /// How node `node_id` in `scope` would be dissolved: removed, with the one
     /// input wire that fits every consumer joined to whatever its outputs fed
@@ -1356,7 +1301,14 @@ impl StructureDesigner {
         // The consumers, walked from `N`'s scope down: no shallower scope can
         // see `N`.
         let mut consumers = Vec::new();
-        collect_consumers(network, &mut scope.to_vec(), scope, node_id, &mut consumers);
+        collect_consumers(
+            network,
+            &mut scope.to_vec(),
+            scope,
+            node_id,
+            ConsumedPins::AllOutputs,
+            &mut consumers,
+        );
         if consumers.is_empty() {
             return Err(DissolveRefusal::NoConsumer { node: name });
         }

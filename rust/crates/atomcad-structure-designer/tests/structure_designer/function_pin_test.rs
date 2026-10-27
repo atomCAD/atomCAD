@@ -2078,6 +2078,77 @@ fn roles_supplied_required_warning_is_gated_on_consumption() {
     );
 }
 
+/// Deleting the last consumer of a `-1` pin, through the UI's wire delete
+/// (no hand validation): the source leaves function mode and its
+/// consumption-gated warning goes. One undo brings both back. Pins down the
+/// `-1` leg of the disconnect passes (`doc/design_move_wires.md` D17, Phase
+/// 1a). The consumer's side (`apply` back to its bare `[f]`) is
+/// `currying_test.rs`'s `apply_f_disconnect_restores_bare_layout`.
+#[test]
+fn deleting_last_function_pin_consumer_leaves_function_mode() {
+    let mut designer = setup_designer_with_network("main");
+    // `x` Supplied and unwired is a required pin with nothing to bake in: the
+    // warning, gated on consumption. The `-1` signature is `(y: Int) -> Int`.
+    let mv_id = add_expr(
+        &mut designer,
+        "main",
+        "x + y",
+        vec![("x", DataType::Int), ("y", DataType::Int)],
+        -160.0,
+    );
+    set_role_raw(&mut designer, "main", mv_id, 0, FunctionPinRole::Supplied);
+    let apply_id = designer.add_node("apply", DVec2::new(500.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        apply_id,
+        Box::new(ApplyData {
+            kind: ClosureKind::Map,
+            type_args: vec![],
+            param_names: vec![],
+        }),
+    );
+    designer.validate_active_network();
+
+    let consumed = |designer: &StructureDesigner| {
+        designer.node_type_registry.node_networks["main"].function_pin_consumed(mv_id)
+    };
+    let warns = |designer: &StructureDesigner| {
+        read_validity(designer, "main")
+            .1
+            .iter()
+            .any(|e| e.contains("marked Supplied"))
+    };
+    assert!(!consumed(&designer));
+    assert!(!warns(&designer));
+
+    designer.connect_nodes(mv_id, -1, apply_id, 0);
+    assert!(consumed(&designer));
+    assert!(
+        warns(&designer),
+        "a consumed Supplied+required+unwired pin warns"
+    );
+
+    {
+        let net = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap();
+        assert!(net.select_wire(mv_id, -1, apply_id, 0));
+    }
+    designer.delete_selected();
+    assert!(!consumed(&designer), "the source leaves function mode");
+    assert!(
+        !warns(&designer),
+        "the delete re-validated: the consumption-gated warning is gone"
+    );
+
+    designer.undo();
+    assert!(consumed(&designer));
+    assert!(warns(&designer));
+}
+
 // --- Repair ------------------------------------------------------------------
 
 /// Out-of-range role entries (a stale index after a pin-layout change) are

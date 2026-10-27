@@ -553,6 +553,89 @@ impl Wire {
     }
 }
 
+/// Which source pins of a node [`collect_consumers`] matches.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ConsumedPins {
+    /// Every output, the function pin included (dissolve).
+    AllOutputs,
+    /// One pin: an output, or a zone input whose readers are in the node's
+    /// own body.
+    One(SourcePin),
+}
+
+/// Every wire stored in `network` (at `scope`) or in a body below it whose
+/// source is one of `pins` on node `node_id` in `node_scope`, as `(storage
+/// scope, wire)`, in a stable order: a network's own wires before its bodies',
+/// nodes by id. Node `node_id` itself and its body are skipped (they go with
+/// it), unless `pins` is a zone input: its readers are the node's body and
+/// the node's own body-return wires.
+/// A zone input's source node is its HOF, which lives `depth` frames up from
+/// the reading wire's destination, exactly like an output's node.
+pub fn collect_consumers(
+    network: &NodeNetwork,
+    scope: &mut Vec<u64>,
+    node_scope: &[u64],
+    node_id: u64,
+    pins: ConsumedPins,
+    out: &mut Vec<(Vec<u64>, Wire)>,
+) {
+    let mut ids: Vec<u64> = network.nodes.keys().copied().collect();
+    ids.sort_unstable();
+    let at_node_scope = scope.as_slice() == node_scope;
+    let skip_own = at_node_scope && !matches!(pins, ConsumedPins::One(SourcePin::ZoneInput { .. }));
+    let matches_pin = |pin: SourcePin| match pins {
+        ConsumedPins::AllOutputs => matches!(pin, SourcePin::NodeOutput { .. }),
+        ConsumedPins::One(wanted) => pin == wanted,
+    };
+    for id in &ids {
+        if skip_own && *id == node_id {
+            continue;
+        }
+        let node = &network.nodes[id];
+        let lists = [
+            (ArgumentKind::External, &node.arguments),
+            (ArgumentKind::ZoneOutput, &node.zone_output_arguments),
+        ];
+        for (kind, arguments) in lists {
+            // A wire's depth counts up from the destination's effective
+            // scope: the body, for a body-return wire.
+            let dst_len = scope.len() + usize::from(kind == ArgumentKind::ZoneOutput);
+            for (index, argument) in arguments.iter().enumerate() {
+                for incoming in &argument.incoming_wires {
+                    let depth = incoming.source_scope_depth as usize;
+                    let reads_node = incoming.source_node_id == node_id
+                        && matches_pin(incoming.source_pin)
+                        && depth <= dst_len
+                        && dst_len - depth == node_scope.len();
+                    if reads_node {
+                        out.push((
+                            scope.clone(),
+                            Wire {
+                                source_node_id: incoming.source_node_id,
+                                source_pin: incoming.source_pin,
+                                source_scope_depth: incoming.source_scope_depth,
+                                destination_node_id: *id,
+                                destination_argument_index: index,
+                                destination_argument_kind: kind,
+                            },
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    for id in ids {
+        if skip_own && id == node_id {
+            continue;
+        }
+        if let Some(body) = network.nodes[&id].zone.as_deref() {
+            scope.push(id);
+            collect_consumers(body, scope, node_scope, node_id, pins, out);
+            scope.pop();
+        }
+    }
+}
+
 /// The identity of a wire: how comments anchor to one
 /// (`doc/design_wire_annotations.md`) and how the splice operations address
 /// one (`doc/design_insert_node_on_wire.md`).

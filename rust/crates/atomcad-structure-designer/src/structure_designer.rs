@@ -56,6 +56,27 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Instant;
 
+/// Whether pin `pin` of node `node_id` is an `apply`'s `f` (pin 0) while the
+/// `apply` holds arg wires: changing that pin's wire re-derives the arg pins,
+/// and repair drops the arg wires that no longer fit.
+fn apply_args_follow_pin(network: &NodeNetwork, node_id: u64, pin: usize) -> bool {
+    pin == 0
+        && network.nodes.get(&node_id).is_some_and(|node| {
+            node.node_type_name == "apply"
+                && node.arguments.iter().skip(1).any(|arg| !arg.is_empty())
+        })
+}
+
+/// What [`StructureDesigner::plan_connect_landing`] decides before a wire
+/// lands.
+pub(crate) struct ConnectLanding {
+    /// The pin holds several wires (an array pin); otherwise the new wire
+    /// replaces the one it holds.
+    pub dest_param_is_multi: bool,
+    /// The data a record reader adopts from the wire.
+    pub adoption: Option<Box<dyn NodeData>>,
+}
+
 /// A ray hit result associated with a specific node.
 ///
 /// Returned by `StructureDesigner::raytrace_per_node()` to identify which
@@ -4529,118 +4550,65 @@ impl StructureDesigner {
         if self.ensure_active_editable().is_err() {
             return;
         }
-        // Early return if active_node_network_name is None
-        let node_network_name = match &self.active_node_network_name {
-            Some(name) => name,
-            None => return,
+        let Some(network_name_owned) = self.active_node_network_name.clone() else {
+            return;
         };
-        // First validate the connection
-        let dest_param_is_multi = {
-            // Get the network
-            let network = match self.node_type_registry.node_networks.get(node_network_name) {
-                Some(network) => network,
-                None => return,
-            };
-
-            // Get the destination node
-            let dest_node = match network.nodes.get(&dest_node_id) {
-                Some(node) => node,
-                None => return,
-            };
-
-            // Get the node type and check parameter
-            match self.node_type_registry.get_node_type_for_node(dest_node) {
-                Some(node_type) => {
-                    if dest_param_index >= node_type.parameters.len() {
-                        return;
-                    }
-                    node_type.parameters[dest_param_index].data_type.is_array()
-                }
-                None => return,
-            }
+        let wire =
+            crate::node_network::IncomingWire::node_output(source_node_id, source_output_pin_index);
+        let Some(landing) = self.plan_connect_landing(&[], dest_node_id, dest_param_index, &wire)
+        else {
+            return;
         };
 
         // Capture the existing wire on this pin before connecting (for undo)
-        let replaced_wire = if !dest_param_is_multi {
-            if let Some(network) = self.node_type_registry.node_networks.get(node_network_name) {
-                if let Some(dest_node) = network.nodes.get(&dest_node_id) {
-                    if let Some(arg) = dest_node.arguments.get(dest_param_index) {
-                        if !arg.is_empty() {
-                            // There's an existing wire that will be replaced
-                            arg.iter_source_pins().next().map(|(src_id, src_pin)| {
-                                super::undo::snapshot::WireSnapshot {
-                                    source_node_id: src_id,
-                                    source_output_pin_index: src_pin,
-                                    dest_node_id,
-                                    dest_param_index,
-                                }
-                            })
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
+        let replaced_wire = if landing.dest_param_is_multi {
+            None
+        } else {
+            self.get_scope_network(&[])
+                .and_then(|network| network.nodes.get(&dest_node_id))
+                .and_then(|dest_node| dest_node.arguments.get(dest_param_index))
+                .and_then(|arg| arg.iter_source_pins().next())
+                .map(|(src_id, src_pin)| super::undo::snapshot::WireSnapshot {
+                    source_node_id: src_id,
+                    source_output_pin_index: src_pin,
+                    dest_node_id,
+                    dest_param_index,
+                })
+        };
+
+        // A record reader adopting the wire's type, or a new `f` re-deriving
+        // an `apply`'s arg pins (whose wires can go with them), makes the whole
+        // connect one network snapshot, because `ConnectWireCommand` restores
+        // the wire only.
+        let reshapes_apply = !landing.dest_param_is_multi
+            && self.get_scope_network(&[]).is_some_and(|network| {
+                apply_args_follow_pin(network, dest_node_id, dest_param_index)
+            });
+        let snapshot_before = if landing.adoption.is_some() || reshapes_apply {
+            self.snapshot_network(&network_name_owned)
         } else {
             None
         };
 
-        let network_name_owned = node_network_name.clone();
-
-        // A record reader nothing depends on yet adopts the type of the record
-        // wired into it (`doc/design_anonymous_record_readers.md`). Decided
-        // before the wire exists; then the whole connect is one network
-        // snapshot, because `ConnectWireCommand` restores the wire only.
-        let adoption = self.connect_adoption(
+        self.land_wire(
             &[],
             dest_node_id,
             dest_param_index,
-            &crate::node_network::IncomingWire::node_output(
-                source_node_id,
-                source_output_pin_index,
-            ),
+            &wire,
+            landing.dest_param_is_multi,
         );
-        let adoption_before = match adoption {
-            Some(_) => self.snapshot_network(&network_name_owned),
-            None => None,
-        };
+        // Mark design as dirty since we connected nodes
+        self.set_dirty(true);
+        // Mark the destination node as having data changed (new input connection)
+        self.mark_node_data_changed(dest_node_id);
+        // Apply display policy considering only the source and destination as dirty
+        let dirty_nodes = HashSet::from([source_node_id, dest_node_id]);
+        self.apply_node_display_policy(Some(&dirty_nodes));
 
-        // Then make the connection
-        if let Some(node_network) = self
-            .node_type_registry
-            .node_networks
-            .get_mut(&network_name_owned)
-        {
-            node_network.connect_nodes(
-                source_node_id,
-                source_output_pin_index,
-                dest_node_id,
-                dest_param_index,
-                dest_param_is_multi,
-            );
-
-            // Mark design as dirty since we connected nodes
-            self.set_dirty(true);
-            // Mark the destination node as having data changed (new input connection)
-            self.mark_node_data_changed(dest_node_id);
-
-            // Create a HashSet with the source and destination nodes marked as dirty
-            let mut dirty_nodes = HashSet::new();
-            dirty_nodes.insert(source_node_id);
-            dirty_nodes.insert(dest_node_id);
-
-            // Apply display policy considering only these nodes as dirty
-            self.apply_node_display_policy(Some(&dirty_nodes));
-        }
-
-        if let (Some(data), Some(before)) = (adoption, adoption_before) {
-            self.install_connect_adoption(&[], dest_node_id, data);
+        if let Some(before) = snapshot_before {
+            if let Some(data) = landing.adoption {
+                self.install_connect_adoption(&[], dest_node_id, data);
+            }
             // Revalidates, marks dirty and records the one step.
             self.finish_declared_input_edit(
                 &[],
@@ -4742,70 +4710,11 @@ impl StructureDesigner {
             );
             return;
         }
-        let before = self.snapshot_zone_body(scope_path);
-        // Case C reflow (doc/design_reflow_on_footprint_change.md): a wire can
-        // grow an in-body node's footprint (e.g. an `apply`/`map` gaining arg
-        // pins from the post-pass), growing the owning HOF in the parent and
-        // possibly cascading up. Capture the owning HOF's pre-edit footprint
-        // chain now; reflow sees `delta == 0` and moves nothing if it doesn't.
-        let old_ancestor_sizes = self.capture_body_owner_footprint_chain(scope_path);
-        let dest_param_is_multi = {
-            let network = match self.get_scope_network(scope_path) {
-                Some(n) => n,
-                None => return,
-            };
-            let dest_node = match network.nodes.get(&dest_node_id) {
-                Some(n) => n,
-                None => return,
-            };
-            match self.node_type_registry.get_node_type_for_node(dest_node) {
-                Some(node_type) => {
-                    if dest_param_index >= node_type.parameters.len() {
-                        return;
-                    }
-                    node_type.parameters[dest_param_index].data_type.is_array()
-                }
-                None => return,
-            }
-        };
-        // A record reader adopts the wire's type inside the body's own undo
-        // step (`doc/design_anonymous_record_readers.md`).
-        let adoption = self.connect_adoption(
+        self.connect_wire_in_body(
             scope_path,
+            crate::node_network::IncomingWire::node_output(source_node_id, source_output_pin_index),
             dest_node_id,
             dest_param_index,
-            &crate::node_network::IncomingWire::node_output(
-                source_node_id,
-                source_output_pin_index,
-            ),
-        );
-        if let Some(network) = self.get_scope_network_mut(scope_path) {
-            network.connect_nodes(
-                source_node_id,
-                source_output_pin_index,
-                dest_node_id,
-                dest_param_index,
-                dest_param_is_multi,
-            );
-        }
-        if let Some(data) = adoption {
-            self.install_connect_adoption(scope_path, dest_node_id, data);
-        }
-        self.set_dirty(true);
-        // Mark the destination dirty at its actual scope so the partial-refresh
-        // path picks it up (and lifts it to the enclosing HOF via the synthetic
-        // body→HOF edge). Without this, an intra-body wire add would never
-        // trigger re-evaluation of the enclosing HOF.
-        self.pending_changes
-            .mark_node_data_changed_scoped(scope_path, dest_node_id);
-        // Re-validate so zone-rule errors raised by a previous pass clear once
-        // the user adds the wire that satisfies them.
-        self.validate_active_network();
-        self.push_zone_body_command_with_ancestor_reflow(
-            scope_path,
-            "Connect wire".to_string(),
-            before,
-            &old_ancestor_sizes,
         );
     }
 
@@ -4852,64 +4761,111 @@ impl StructureDesigner {
             );
             return;
         }
-        // Cross-scope / ZoneInput wire — capture the destination body's
-        // before-state for undo (the wire is stored on a body-internal node).
-        let before = self.snapshot_zone_body(dest_scope_path);
-        // Case C reflow (doc/design_reflow_on_footprint_change.md): the wire can
-        // grow the destination node (e.g. an `apply`/`map` gaining arg pins),
-        // growing the owning HOF in the parent and possibly cascading up.
-        // Capture the owning HOF's pre-edit footprint chain now (delta == 0 ⇒
-        // no moves if the wire doesn't grow anything).
-        let old_ancestor_sizes = self.capture_body_owner_footprint_chain(dest_scope_path);
-        // Resolve dest pin's multi-ness against the dest node's type.
-        let dest_param_is_multi = {
-            let network = match self.get_scope_network(dest_scope_path) {
-                Some(n) => n,
-                None => return,
-            };
-            let dest_node = match network.nodes.get(&dest_node_id) {
-                Some(n) => n,
-                None => return,
-            };
-            match self.node_type_registry.get_node_type_for_node(dest_node) {
-                Some(node_type) => {
-                    if dest_param_index >= node_type.parameters.len() {
-                        return;
-                    }
-                    node_type.parameters[dest_param_index].data_type.is_array()
-                }
-                None => return,
-            }
-        };
-        // A capture into a record reader's `record` pin adopts its type, as a
-        // same-scope wire does in `connect_nodes_scoped`.
-        let adoption = self.connect_adoption(
+        // Cross-scope / ZoneInput wire: stored on a body-internal node.
+        self.connect_wire_in_body(
             dest_scope_path,
-            dest_node_id,
-            dest_param_index,
-            &crate::node_network::IncomingWire {
+            crate::node_network::IncomingWire {
                 source_node_id,
                 source_pin,
                 source_scope_depth,
             },
+            dest_node_id,
+            dest_param_index,
         );
+    }
+
+    /// The connect half of a wiring edit, decided before the wire lands
+    /// (`doc/design_move_wires.md`, the commit's step 4): whether pin
+    /// `dest_param_index` of node `dest_node_id` in `dest_scope_path` holds
+    /// several wires, and the data a record reader adopts from `wire`
+    /// ([`Self::connect_adoption`]). `None` when the node or the pin does not
+    /// exist. Read-only.
+    pub(crate) fn plan_connect_landing(
+        &self,
+        dest_scope_path: &[u64],
+        dest_node_id: u64,
+        dest_param_index: usize,
+        wire: &crate::node_network::IncomingWire,
+    ) -> Option<ConnectLanding> {
+        let network = self.get_scope_network(dest_scope_path)?;
+        let dest_node = network.nodes.get(&dest_node_id)?;
+        let node_type = self.node_type_registry.get_node_type_for_node(dest_node)?;
+        let dest_param_is_multi = node_type
+            .parameters
+            .get(dest_param_index)?
+            .data_type
+            .is_array();
+        let adoption = self.connect_adoption(dest_scope_path, dest_node_id, dest_param_index, wire);
+        Some(ConnectLanding {
+            dest_param_is_multi,
+            adoption,
+        })
+    }
+
+    /// Store `wire` in pin `dest_param_index` of node `dest_node_id` in
+    /// `dest_scope_path`, replacing a single pin's wire. The planned adoption
+    /// is installed by the caller ([`Self::install_connect_adoption`]), which
+    /// orders it among its own bookkeeping.
+    fn land_wire(
+        &mut self,
+        dest_scope_path: &[u64],
+        dest_node_id: u64,
+        dest_param_index: usize,
+        wire: &crate::node_network::IncomingWire,
+        dest_param_is_multi: bool,
+    ) {
         if let Some(network) = self.get_scope_network_mut(dest_scope_path) {
             network.connect_wire(
-                source_node_id,
-                source_pin,
-                source_scope_depth,
+                wire.source_node_id,
+                wire.source_pin,
+                wire.source_scope_depth,
                 dest_node_id,
                 dest_param_index,
                 dest_param_is_multi,
             );
         }
-        if let Some(data) = adoption {
+    }
+
+    /// A wire into a node in the body `dest_scope_path` (non-empty), recorded
+    /// as one whole-body `EditZoneBodyCommand` (no top-level display-policy
+    /// orchestration; body display is per-body). The body half of
+    /// [`Self::connect_nodes_scoped`] and [`Self::connect_wire_scoped`].
+    fn connect_wire_in_body(
+        &mut self,
+        dest_scope_path: &[u64],
+        wire: crate::node_network::IncomingWire,
+        dest_node_id: u64,
+        dest_param_index: usize,
+    ) {
+        let before = self.snapshot_zone_body(dest_scope_path);
+        // Case C reflow (doc/design_reflow_on_footprint_change.md): a wire can
+        // grow an in-body node's footprint (e.g. an `apply`/`map` gaining arg
+        // pins from the post-pass), growing the owning HOF in the parent and
+        // possibly cascading up. Capture the owning HOF's pre-edit footprint
+        // chain now; reflow sees `delta == 0` and moves nothing if it doesn't.
+        let old_ancestor_sizes = self.capture_body_owner_footprint_chain(dest_scope_path);
+        // A record reader adopts the wire's type inside the body's own undo
+        // step (`doc/design_anonymous_record_readers.md`).
+        let Some(landing) =
+            self.plan_connect_landing(dest_scope_path, dest_node_id, dest_param_index, &wire)
+        else {
+            return;
+        };
+        self.land_wire(
+            dest_scope_path,
+            dest_node_id,
+            dest_param_index,
+            &wire,
+            landing.dest_param_is_multi,
+        );
+        if let Some(data) = landing.adoption {
             self.install_connect_adoption(dest_scope_path, dest_node_id, data);
         }
         self.set_dirty(true);
-        // Mark the destination dirty so the partial-refresh path picks up the
-        // new wire and re-evaluates the consuming body (and, via the synthetic
-        // body→HOF edge, the enclosing HOF and its downstream).
+        // Mark the destination dirty at its actual scope so the partial-refresh
+        // path picks it up (and lifts it to the enclosing HOF via the synthetic
+        // body→HOF edge). Without this, a body wire add would never trigger
+        // re-evaluation of the enclosing HOF.
         self.pending_changes
             .mark_node_data_changed_scoped(dest_scope_path, dest_node_id);
         // Re-validate so zone-rule errors raised by a previous pass clear once
@@ -7693,27 +7649,19 @@ impl StructureDesigner {
             // no-op command.
             let before = self.snapshot_zone_body(scope_path);
 
-            // Case A reflow (doc/design_reflow_on_footprint_change.md): predict
-            // HOFs in this body that will expand when their `f` wire is removed,
-            // and snapshot their compact footprint chains — both must be read
-            // before the deletion applies.
-            let mut reflow_targets: Vec<(u64, Vec<DVec2>)> = Vec::new();
-            if let Some(network) = self.get_scope_network(scope_path) {
-                let info = network.collect_deletion_info();
-                let removed_wires = if info.is_node_deletion {
-                    &info.deleted_wires
-                } else {
-                    &info.selected_wires
-                };
-                let expanding = self.predict_f_disconnect_expansions(
-                    network,
-                    removed_wires,
-                    &info.deleted_node_ids,
-                );
-                for hof_id in expanding {
-                    reflow_targets.push((hof_id, self.capture_footprint_chain(scope_path, hof_id)));
+            // The disconnect half, before the deletion applies.
+            let reflow_targets = match self.get_scope_network(scope_path) {
+                Some(network) => {
+                    let info = network.collect_deletion_info();
+                    let removed_wires = if info.is_node_deletion {
+                        &info.deleted_wires
+                    } else {
+                        &info.selected_wires
+                    };
+                    self.plan_disconnect_reflow(scope_path, removed_wires, &info.deleted_node_ids)
                 }
-            }
+                None => Vec::new(),
+            };
 
             if let Some(network) = self.get_scope_network_mut(scope_path) {
                 network.delete_selected();
@@ -7735,14 +7683,11 @@ impl StructureDesigner {
             // land in the body scope itself ride the fresh after-snapshot taken
             // by `build_zone_body_command`, so only the ANCESTOR cascade (if the
             // body grew past its stored size) needs explicit bundling.
-            let mut ancestor_moves: Vec<ScopedMoves> = Vec::new();
-            for (hof_id, old_sizes) in &reflow_targets {
-                for sm in self.reflow_for_footprint_change(scope_path, *hof_id, old_sizes) {
-                    if sm.scope_path.as_slice() != scope_path {
-                        ancestor_moves.push(sm);
-                    }
-                }
-            }
+            let ancestor_moves: Vec<ScopedMoves> = self
+                .reflow_after_disconnect(scope_path, &reflow_targets)
+                .into_iter()
+                .filter(|sm| sm.scope_path.as_slice() != scope_path)
+                .collect();
 
             let Some(edit_cmd) =
                 self.build_zone_body_command(scope_path, "Delete".to_string(), before)
@@ -7851,32 +7796,49 @@ impl StructureDesigner {
             }
         }
 
-        // Case A reflow (doc/design_reflow_on_footprint_change.md): predict which
-        // collapsable HOFs will expand once this deletion removes their `f` wire,
-        // and snapshot their *compact* footprints — both must be read before the
-        // deletion applies. The moves themselves are computed after deletion (the
-        // flip is a post-deletion fact) and bundled with the delete command.
-        let mut reflow_targets: Vec<(u64, Vec<DVec2>)> = Vec::new();
-        if let (Some(info), Some(network)) = (
-            deletion_info.as_ref(),
-            self.node_type_registry
-                .node_networks
-                .get(&node_network_name),
-        ) {
-            let removed_wires = if info.is_node_deletion {
-                &info.deleted_wires
-            } else {
-                &info.selected_wires
-            };
-            let expanding = self.predict_f_disconnect_expansions(
-                network,
-                removed_wires,
-                &info.deleted_node_ids,
-            );
-            for hof_id in expanding {
-                reflow_targets.push((hof_id, self.capture_footprint_chain(&[], hof_id)));
+        // The disconnect half, before the deletion applies. The moves
+        // themselves are computed after deletion (the flip is a post-deletion
+        // fact) and bundled with the delete command.
+        let reflow_targets = match deletion_info.as_ref() {
+            Some(info) => {
+                let removed_wires = if info.is_node_deletion {
+                    &info.deleted_wires
+                } else {
+                    &info.selected_wires
+                };
+                self.plan_disconnect_reflow(&[], removed_wires, &info.deleted_node_ids)
             }
-        }
+            None => Vec::new(),
+        };
+        // A deletion that takes an `apply`'s `f` re-derives its arg pins, and
+        // the arg wires go with them. The node and wire commands restore only
+        // their own wires, so such a deletion is one network snapshot instead.
+        let reshape_before = match deletion_info.as_ref() {
+            Some(info) => {
+                let removed_wires = if info.is_node_deletion {
+                    &info.deleted_wires
+                } else {
+                    &info.selected_wires
+                };
+                if self.removal_reshapes_apply(&[], removed_wires, &info.deleted_node_ids) {
+                    self.snapshot_network(&node_network_name)
+                } else {
+                    None
+                }
+            }
+            None => None,
+        };
+        let description = match deletion_info.as_ref() {
+            Some(info) if info.is_node_deletion => {
+                if deleted_node_snapshots.len() == 1 {
+                    format!("Delete {}", deleted_node_snapshots[0].node_type_name)
+                } else {
+                    format!("Delete {} nodes", deleted_node_snapshots.len())
+                }
+            }
+            _ => "Delete wires".to_string(),
+        };
+        let mut call_sites = call_sites;
 
         // Perform the deletion
         let mut orphaned_anchors: Vec<crate::nodes::comment::AnchorChange> = Vec::new();
@@ -7902,7 +7864,7 @@ impl StructureDesigner {
         // Build the delete command (don't push yet — Case A reflow may bundle it
         // with the neighbour moves into one undo step).
         let mut delete_command: Option<Box<dyn UndoCommand>> = None;
-        if let Some(info) = deletion_info {
+        if let Some(info) = deletion_info.filter(|_| reshape_before.is_none()) {
             use super::undo::snapshot::WireSnapshot;
 
             if info.is_node_deletion && !deleted_node_snapshots.is_empty() {
@@ -7917,11 +7879,6 @@ impl StructureDesigner {
                     })
                     .collect();
 
-                let description = if deleted_node_snapshots.len() == 1 {
-                    format!("Delete {}", deleted_node_snapshots[0].node_type_name)
-                } else {
-                    format!("Delete {} nodes", deleted_node_snapshots.len())
-                };
                 delete_command = Some(Box::new(
                     super::undo::commands::delete_nodes::DeleteNodesCommand {
                         network_name: node_network_name.clone(),
@@ -7929,8 +7886,8 @@ impl StructureDesigner {
                         deleted_wires,
                         was_return_node: info.was_return_node,
                         display_states: info.display_states,
-                        description,
-                        call_sites,
+                        description: description.clone(),
+                        call_sites: std::mem::take(&mut call_sites),
                     },
                 ));
             } else if !info.is_node_deletion && !info.selected_wires.is_empty() {
@@ -7958,10 +7915,7 @@ impl StructureDesigner {
         // its `f` wire and flipped to expanded, and bundle the resulting
         // neighbour moves with the delete command so they undo/redo as one step.
         if let Some(delete_command) = delete_command {
-            let mut scoped_moves: Vec<ScopedMoves> = Vec::new();
-            for (hof_id, old_sizes) in &reflow_targets {
-                scoped_moves.extend(self.reflow_for_footprint_change(&[], *hof_id, old_sizes));
-            }
+            let scoped_moves = self.reflow_after_disconnect(&[], &reflow_targets);
             // Children to bundle with the deletion so the whole thing is one
             // undo step: the reflow moves, plus one anchor-clear per comment the
             // deletion orphaned.
@@ -8002,6 +7956,9 @@ impl StructureDesigner {
                     },
                 ));
             }
+        } else if reshape_before.is_some() {
+            // The moves and the cleared anchors ride the after-snapshot.
+            self.reflow_after_disconnect(&[], &reflow_targets);
         }
 
         // Only apply display policy if there were dirty nodes
@@ -8018,10 +7975,25 @@ impl StructureDesigner {
         // only requested when the network's validity or interface flips.
         // Regression tests: `wiring_revalidation_test.rs`.
         self.validate_active_network();
+
+        // Taken after the validation, which is what drops the arg wires.
+        if let Some(before) = reshape_before
+            && let Some(after) = self.snapshot_network(&node_network_name)
+        {
+            self.push_command(
+                super::undo::commands::network_snapshot::NetworkSnapshotCommand {
+                    network_name: node_network_name,
+                    description,
+                    before_snapshot: before,
+                    after_snapshot: after,
+                    call_sites,
+                },
+            );
+        }
     }
 
     // -------------------------------------------------------------------------------------------------------------------------
-    // --- Raytracing methods                                                                                              ---
+    // --- Raytracing methods                                                                                             ---
     // -------------------------------------------------------------------------------------------------------------------------
 
     /// Traces a ray into the current scene, checking both atomic structures and implicit geometry
@@ -10061,6 +10033,72 @@ impl StructureDesigner {
             path.truncate(len - 1);
         }
         sizes
+    }
+
+    /// The disconnect half of a wiring edit, read before the wires go
+    /// (`doc/design_move_wires.md`, the commit's step 4): every collapsable
+    /// HOF in `scope_path` that expands once `removed_wires` are gone, with
+    /// its *compact* pre-edit footprint chain (Case A of
+    /// `doc/design_reflow_on_footprint_change.md`). Nodes in
+    /// `deleted_node_ids` are going too and are left out. Hand the result to
+    /// [`Self::reflow_after_disconnect`] once the wires are gone.
+    ///
+    /// The rest of what losing a wire does needs no prediction: `apply` and
+    /// `map` layouts, repair and function mode all follow from the
+    /// re-validation every wiring edit runs.
+    pub(crate) fn plan_disconnect_reflow(
+        &self,
+        scope_path: &[u64],
+        removed_wires: &[Wire],
+        deleted_node_ids: &[u64],
+    ) -> Vec<(u64, Vec<DVec2>)> {
+        let Some(network) = self.get_scope_network(scope_path) else {
+            return Vec::new();
+        };
+        self.predict_f_disconnect_expansions(network, removed_wires, deleted_node_ids)
+            .into_iter()
+            .map(|hof_id| (hof_id, self.capture_footprint_chain(scope_path, hof_id)))
+            .collect()
+    }
+
+    /// Whether removing `removed_wires` (with the nodes `deleted_node_ids`)
+    /// from `scope_path` takes the `f` of an `apply` that holds arg wires. Its
+    /// arg pins derive from `f`, so they re-derive and their wires go: an edit
+    /// for which this holds must be recorded as a network snapshot, because
+    /// the wire and node commands restore only their own wires.
+    pub(crate) fn removal_reshapes_apply(
+        &self,
+        scope_path: &[u64],
+        removed_wires: &[Wire],
+        deleted_node_ids: &[u64],
+    ) -> bool {
+        let Some(network) = self.get_scope_network(scope_path) else {
+            return false;
+        };
+        removed_wires.iter().any(|wire| {
+            wire.destination_argument_kind == crate::node_network::ArgumentKind::External
+                && !deleted_node_ids.contains(&wire.destination_node_id)
+                && apply_args_follow_pin(
+                    network,
+                    wire.destination_node_id,
+                    wire.destination_argument_index,
+                )
+        })
+    }
+
+    /// Reflow around each HOF [`Self::plan_disconnect_reflow`] found, now
+    /// that its wires are gone. Returns the moves of every scope the cascade
+    /// reached, for the caller to bundle into its undo step.
+    pub(crate) fn reflow_after_disconnect(
+        &mut self,
+        scope_path: &[u64],
+        targets: &[(u64, Vec<DVec2>)],
+    ) -> Vec<ScopedMoves> {
+        let mut moves = Vec::new();
+        for (hof_id, old_sizes) in targets {
+            moves.extend(self.reflow_for_footprint_change(scope_path, *hof_id, old_sizes));
+        }
+        moves
     }
 
     /// Predict which collapsable HOF nodes in `network` will flip from compact

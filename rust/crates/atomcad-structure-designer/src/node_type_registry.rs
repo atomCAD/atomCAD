@@ -2569,7 +2569,8 @@ impl NodeTypeRegistry {
     /// `apply` node in `network` whose `f` pin is wired to a resolvable
     /// `Function` source, override the node's `custom_node_type` from the
     /// wired source's declared (canonical, flat) function type and the count
-    /// of wired arg pins on this apply.
+    /// of wired arg pins on this apply; an `apply` whose `f` is unwired gets
+    /// its bare `[f]` default back ([`Self::compute_apply_custom_type`]).
     ///
     /// Called from `repair_node_network` (heavyweight repair entry, e.g.
     /// `.cnnd` load) and from `network_validator::validate_network` (every
@@ -2632,12 +2633,9 @@ impl NodeTypeRegistry {
             if crate::library_links::is_frozen(node, self) {
                 continue;
             }
-            if let Some(custom) = self.compute_apply_custom_type_from_wired_f(
-                node,
-                network,
-                ancestors,
-                ancestor_hof_ids,
-            ) {
+            if let Some(custom) =
+                self.compute_apply_custom_type(node, network, ancestors, ancestor_hof_ids)
+            {
                 overrides.push((id, custom));
             }
         }
@@ -2683,6 +2681,43 @@ impl NodeTypeRegistry {
         }
     }
 
+    /// Resolves the custom_node_type for an `apply` node, by the same rule as
+    /// [`Self::compute_map_custom_type`]:
+    /// - `f` wired and derivable → the derived layout.
+    /// - `f` disconnected → the bare `[f]` default
+    ///   (`ApplyData::calculate_custom_node_type`), the layout a fresh `apply`
+    ///   has and a reload gives. Without it the layout derived from the
+    ///   previous `f` outlived the wire, with all its arg wires, until the next
+    ///   reload dropped them.
+    /// - `f` wired but **unresolvable** → `None`, "leave the existing layout
+    ///   untouched" (the source may be in a not-yet-loaded network, or need an
+    ///   ancestor chain this call lacks).
+    fn compute_apply_custom_type(
+        &self,
+        apply_node: &Node,
+        network: &NodeNetwork,
+        ancestors: &[&NodeNetwork],
+        ancestor_hof_ids: &[u64],
+    ) -> Option<NodeType> {
+        if let Some(derived) = self.compute_apply_custom_type_from_wired_f(
+            apply_node,
+            network,
+            ancestors,
+            ancestor_hof_ids,
+        ) {
+            return Some(derived);
+        }
+        let f_wired = apply_node
+            .arguments
+            .first()
+            .is_some_and(|a| !a.incoming_wires.is_empty());
+        if f_wired {
+            return None;
+        }
+        let base = self.built_in_node_types.get("apply")?;
+        apply_node.data.calculate_custom_node_type(base)
+    }
+
     /// Computes the dynamic `custom_node_type` for an `apply` node whose `f`
     /// pin is wired, derived from the wired source's declared (canonical, flat)
     /// function type and the count of wired arg pins on this apply.
@@ -2691,7 +2726,7 @@ impl NodeTypeRegistry {
     /// 1. The apply's `f` pin (argument index 0) carries an incoming wire.
     /// 2. The wired source's output pin resolves to a `Function(_)`.
     ///
-    /// Returns `None` to fall back to today's `ApplyData`-driven layout when:
+    /// Returns `None` (see [`Self::compute_apply_custom_type`]) when:
     /// - `f` is disconnected, or
     /// - the source type doesn't resolve (unresolved polymorphic upstream,
     ///   stale wire, cross-scope source with an incomplete ancestor chain), or
