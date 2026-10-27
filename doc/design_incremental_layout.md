@@ -72,8 +72,10 @@ alignment, spacing and whitespace within the translated set exactly.
 The same one scope down: a body that shrinks leaves its HOF's footprint where
 it was (bounded below by the stored body size); the parent never moves inward.
 
-**D5 — `Node.hand_moved: bool`**, set on drag in any scope, persisted,
-undoable, `#[serde(default)]`. A tiebreaker, never a hard constraint.
+**D5 — `Node.hand_moved: bool`**, set on drag in any scope and on every node
+a GUI action creates (`design_deliberate_node_placement.md` D12), persisted,
+undoable, `#[serde(default)]`. It means "a human placed or moved this"; nodes
+an AI edit creates never carry it. A tiebreaker, never a hard constraint.
 
 **D6 — Exactly two motion primitives, one per axis.** The **horizontal
 half-plane shift** (rigid, global) and the **vertical cascade** (minimal,
@@ -569,9 +571,13 @@ A tiebreaker in three places, never a hard constraint:
 3. **Explicit full reflow:** a "respect manually placed nodes" option treats
    them as fixed. Off by default.
 
-Set in the drag handler in whatever scope the node lives, persisted in `.cnnd`,
-carried through copy/paste and the name match (D14), and recorded inside the
-existing move command rather than as its own undo entry.
+Set in the drag handler in whatever scope the node lives, and on every GUI
+creation path (add node, panel drop, paste/duplicate, insert-on-wire,
+promote/factor/inline; `design_deliberate_node_placement.md` D12). Persisted
+in `.cnnd`, carried through the name match (D14), and recorded
+inside the existing move or creation command rather than as its own undo entry.
+Nodes created in the GUI before creation paths set it load with `false`, an
+accepted legacy gap.
 
 ---
 
